@@ -13,6 +13,16 @@
 
 namespace sequant {
 
+bool assert_enabled() {
+#ifdef SEQUANT_ASSERT_ENABLED
+  return true;
+#else
+  return false;
+#endif
+}
+
+int assert_behavior() { return SEQUANT_ASSERT_BEHAVIOR; }
+
 #ifdef SEQUANT_ASSERT_ENABLED
 void assert_failed(const std::string &errmsg,
                    const std::source_location location) {

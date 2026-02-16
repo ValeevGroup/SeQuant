@@ -711,17 +711,17 @@ TEST_CASE("utilities", "[utilities]") {
         REQUIRE(get_bra_idx(group_view) == Index(L"i_1"));
         REQUIRE(get_ket_idx(group_view) == Index(L"a_1"));
       }
-#if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
-      SECTION("const") {
-        indices = {{L"a_1", SlotType::Ket}, {L"i_1", SlotType::Bra}};
+      if (sequant::assert_behavior() == SEQUANT_ASSERT_THROW) {
+        SECTION("const") {
+          indices = {{L"a_1", SlotType::Ket}, {L"i_1", SlotType::Bra}};
 
-        // Since the indices are not in the expected order but the range is
-        // passed as const, the assertions will trigger due to uncorrectable
-        // ordering.
-        REQUIRE_THROWS_AS(as_index_group_view(std::as_const(indices)),
-                          Exception);
+          // Since the indices are not in the expected order but the range is
+          // passed as const, the assertions will trigger due to uncorrectable
+          // ordering.
+          REQUIRE_THROWS_AS(as_index_group_view(std::as_const(indices)),
+                            Exception);
+        }
       }
-#endif
     }
   }
 
@@ -783,9 +783,9 @@ TEST_CASE("utilities", "[utilities]") {
         REQUIRE(get_bra_idx(groups_view[0]) == Index(L"a_1"));
         REQUIRE(get_ket_idx(groups_view[0]) == Index(L"i_1"));
 
-#if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
-        REQUIRE_THROWS_AS(get_bra_idx(groups_view[1]), Exception);
-#endif
+        if (sequant::assert_behavior() == SEQUANT_ASSERT_THROW) {
+          REQUIRE_THROWS_AS(get_bra_idx(groups_view[1]), Exception);
+        }
       }
     }
   }

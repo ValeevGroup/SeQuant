@@ -191,40 +191,40 @@ TEST_CASE("tensor", "[elements]") {
       REQUIRE(t6.num_indices() == 5);
 
       // check errors
-#if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
-      // no null indices in antisymmetric bra or ket
-      REQUIRE_THROWS_AS(
-          Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::Antisymm),
-          sequant::Exception);
-      REQUIRE_THROWS_AS(
-          Tensor(L"N", bra{L"i_1"}, ket{L""}, aux{}, Symmetry::Antisymm),
-          sequant::Exception);
+      if (sequant::assert_behavior() == SEQUANT_ASSERT_THROW) {
+        // no null indices in antisymmetric bra or ket
+        REQUIRE_THROWS_AS(
+            Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::Antisymm),
+            sequant::Exception);
+        REQUIRE_THROWS_AS(
+            Tensor(L"N", bra{L"i_1"}, ket{L""}, aux{}, Symmetry::Antisymm),
+            sequant::Exception);
 
-      // no null indices in symmetric bra or ket
-      REQUIRE_THROWS_AS(
-          Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::Symm),
-          sequant::Exception);
-      REQUIRE_THROWS_AS(
-          Tensor(L"N", bra{L"i_1"}, ket{L""}, aux{}, Symmetry::Symm),
-          sequant::Exception);
+        // no null indices in symmetric bra or ket
+        REQUIRE_THROWS_AS(
+            Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::Symm),
+            sequant::Exception);
+        REQUIRE_THROWS_AS(
+            Tensor(L"N", bra{L"i_1"}, ket{L""}, aux{}, Symmetry::Symm),
+            sequant::Exception);
 
-      // no paired null indices in asymmetric bra/ket
-      REQUIRE_THROWS_AS(Tensor(L"N", bra{L"i_2", L""}, ket{L"i_1", L""}, aux{},
-                               Symmetry::Nonsymm),
-                        sequant::Exception);
+        // no paired null indices in asymmetric bra/ket
+        REQUIRE_THROWS_AS(Tensor(L"N", bra{L"i_2", L""}, ket{L"i_1", L""},
+                                 aux{}, Symmetry::Nonsymm),
+                          sequant::Exception);
 
-      // no unpaired null indices in asymmetric bra/ket
-      REQUIRE_THROWS_AS(
-          Tensor(L"N", bra{L"i_2"}, ket{L"i_1", L""}, aux{}, Symmetry::Nonsymm),
-          sequant::Exception);
-      REQUIRE_THROWS_AS(
-          Tensor(L"N", bra{L"i_2", L""}, ket{L"i_1"}, aux{}, Symmetry::Nonsymm),
-          sequant::Exception);
+        // no unpaired null indices in asymmetric bra/ket
+        REQUIRE_THROWS_AS(Tensor(L"N", bra{L"i_2"}, ket{L"i_1", L""}, aux{},
+                                 Symmetry::Nonsymm),
+                          sequant::Exception);
+        REQUIRE_THROWS_AS(Tensor(L"N", bra{L"i_2", L""}, ket{L"i_1"}, aux{},
+                                 Symmetry::Nonsymm),
+                          sequant::Exception);
 
-      // no null aux indices
-      REQUIRE_THROWS_AS(Tensor(L"N", bra{L"i_1"}, ket{}, aux{L""}),
-                        sequant::Exception);
-#endif
+        // no null aux indices
+        REQUIRE_THROWS_AS(Tensor(L"N", bra{L"i_1"}, ket{}, aux{L""}),
+                          sequant::Exception);
+      }
     }
 
     SECTION("duplicate indices") {
@@ -234,14 +234,14 @@ TEST_CASE("tensor", "[elements]") {
       // null indices are ignored in duplicate checks
       REQUIRE_NOTHROW(Tensor(L"N", bra{L"", L"", L"i_1"},
                              ket{L"i_1", L"i_2", L""}, aux{L"i_3"}));
-#if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
-      REQUIRE_THROWS_AS(Tensor(L"N", bra{L"i_1", L"i_1"}, ket{}, aux{}),
-                        sequant::Exception);
-      REQUIRE_THROWS_AS(Tensor(L"N", bra{}, ket{L"i_1", L"i_1"}, aux{}),
-                        sequant::Exception);
-      REQUIRE_THROWS_AS(Tensor(L"N", bra{}, ket{}, aux{L"i_1", L"i_1"}),
-                        sequant::Exception);
-#endif
+      if (sequant::assert_behavior() == SEQUANT_ASSERT_THROW) {
+        REQUIRE_THROWS_AS(Tensor(L"N", bra{L"i_1", L"i_1"}, ket{}, aux{}),
+                          sequant::Exception);
+        REQUIRE_THROWS_AS(Tensor(L"N", bra{}, ket{L"i_1", L"i_1"}, aux{}),
+                          sequant::Exception);
+        REQUIRE_THROWS_AS(Tensor(L"N", bra{}, ket{}, aux{L"i_1", L"i_1"}),
+                          sequant::Exception);
+      }
     }
   }  // SECTION("constructors")
 
