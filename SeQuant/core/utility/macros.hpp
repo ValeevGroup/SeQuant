@@ -72,6 +72,13 @@
 
 namespace sequant {
 
+/// @return true if `SEQUANT_ASSERT_ENABLED` is #defined
+bool assert_enabled();
+
+/// @return `SEQUANT_ASSERT_THROW`, `SEQUANT_ASSERT_ABORT`, or
+/// `SEQUANT_ASSERT_IGNORE`
+int assert_behavior();
+
 #ifdef SEQUANT_ASSERT_ENABLED
 [[noreturn]]
 #endif

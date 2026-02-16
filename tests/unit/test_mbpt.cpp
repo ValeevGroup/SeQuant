@@ -91,23 +91,23 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE(registry.ops().empty());
     }
 
-#if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
-    SECTION("reserved-labels") {
-      OpRegistry registry;
-      // should not be able to add reserved labels
-      REQUIRE_THROWS(
-          registry.add(sequant::reserved::antisymm_label(), OpClass::gen));
-      REQUIRE_THROWS(
-          registry.add(sequant::reserved::symm_label(), OpClass::gen));
-    }
+    if (sequant::assert_behavior() == SEQUANT_ASSERT_THROW) {
+      SECTION("reserved-labels") {
+        OpRegistry registry;
+        // should not be able to add reserved labels
+        REQUIRE_THROWS(
+            registry.add(sequant::reserved::antisymm_label(), OpClass::gen));
+        REQUIRE_THROWS(
+            registry.add(sequant::reserved::symm_label(), OpClass::gen));
+      }
 
-    SECTION("duplicate-operators") {
-      OpRegistry registry;
-      registry.add(L"T", OpClass::ex);
-      // should not be able to add duplicate
-      REQUIRE_THROWS(registry.add(L"T", OpClass::deex));
+      SECTION("duplicate-operators") {
+        OpRegistry registry;
+        registry.add(L"T", OpClass::ex);
+        // should not be able to add duplicate
+        REQUIRE_THROWS(registry.add(L"T", OpClass::deex));
+      }
     }
-#endif
   }  // SECTION("registry")
 
   SECTION("context") {
@@ -730,9 +730,9 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE_NOTHROW(Hʼ(2, {.order = 2}));
       REQUIRE_NOTHROW(Λʼ(3, {.order = 5, .skip1 = true}));
       REQUIRE_NOTHROW(Tʼ(2, {.order = 9}));
-#if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
-      REQUIRE_THROWS(Hʼ(1, {.order = 10}));  // invalid order
-#endif
+      if (sequant::assert_behavior() == SEQUANT_ASSERT_THROW) {
+        REQUIRE_THROWS(Hʼ(1, {.order = 10}));  // invalid order
+      }
 
       auto h0 = Hʼ(1);
       REQUIRE(to_latex(h0) == L"{\\hat{h¹}}");
@@ -769,18 +769,18 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE_NOTHROW(op::Tʼ(1, {.order = 1, .nbatch = 20}));
 
       // invalid usages
-#if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
-      // cannot set both nbatch and batch_ordinals
-      REQUIRE_THROWS_AS(
-          op::Hʼ(2, {.order = 1, .nbatch = 2, .batch_ordinals = {1, 2}}),
-          sequant::Exception);
-      // all ordinals must be unique
-      REQUIRE_THROWS_AS(op::Hʼ(2, {.order = 1, .batch_ordinals = {1, 2, 2}}),
-                        sequant::Exception);
-      // ordinals must be sorted
-      REQUIRE_THROWS_AS(op::Hʼ(1, {.order = 1, .batch_ordinals = {3, 2}}),
-                        sequant::Exception);
-#endif
+      if (sequant::assert_behavior() == SEQUANT_ASSERT_THROW) {
+        // cannot set both nbatch and batch_ordinals
+        REQUIRE_THROWS_AS(
+            op::Hʼ(2, {.order = 1, .nbatch = 2, .batch_ordinals = {1, 2}}),
+            sequant::Exception);
+        // all ordinals must be unique
+        REQUIRE_THROWS_AS(op::Hʼ(2, {.order = 1, .batch_ordinals = {1, 2, 2}}),
+                          sequant::Exception);
+        // ordinals must be sorted
+        REQUIRE_THROWS_AS(op::Hʼ(1, {.order = 1, .batch_ordinals = {3, 2}}),
+                          sequant::Exception);
+      }
 
       // operations
       auto h0 = op::Hʼ(1);
