@@ -34,6 +34,12 @@ enum class Symmetry { Symm, Antisymm, Nonsymm };
 ///       index for a single particle, only whole bra-ket swaps are considered.
 enum class BraKetSymmetry { Symm, Conjugate, Nonsymm };
 
+/// describes whether to ignore the vector space semantics of bra/ket slots,
+/// i.e. treat them as aux indices.
+/// @note StrictBraKetSymmetry::No is a bad idea if working with complex-valued
+/// tensors, or nonunit metric, or in general
+enum class StrictBraKetSymmetry { Yes, No };
+
 /// describes type of single-particle basis
 enum class SPBasis { Spinor, Spinfree };
 
