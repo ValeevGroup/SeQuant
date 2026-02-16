@@ -40,13 +40,13 @@ struct DeserializationOptions {
   /// The Symmetry (within bra and ket) to use, if none is specified in the
   /// input explicitly. The Context is queried in case this is not provided
   /// explicitly.
-  std::optional<Symmetry> def_perm_symm = {};
+  std::optional<Symmetry> def_perm_symm = std::nullopt;
   /// The BraKetSymmetry to use, if none is specified in the input explicitly.
   /// The Context is queried in case this is not provided explicitly.
-  std::optional<BraKetSymmetry> def_braket_symm = {};
+  std::optional<BraKetSymmetry> def_braket_symm = std::nullopt;
   /// The ColumnSymmetry to use, if none is specified in the input explicitly.
   /// The Context is queried in case this is not provided explicitly.
-  std::optional<ColumnSymmetry> def_col_symm = {};
+  std::optional<ColumnSymmetry> def_col_symm = std::nullopt;
   /// The expected syntax version of the input
   SerializationSyntax syntax = SerializationSyntax::Latest;
 };
