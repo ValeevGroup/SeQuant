@@ -303,19 +303,19 @@ struct ExprWithHash {
   size_t hash;
 };
 
-void aux_indices(IndexSet& result, ExprPtr const& expr) {
+void all_indices(IndexSet& result, ExprPtr const& expr) {
   if (!expr) return;
   if (expr->is<Tensor>())
-    for (auto&& ix : expr->as<Tensor>().aux()) result.emplace(ix);
+    for (auto&& ix : expr->as<Tensor>().const_indices()) result.emplace(ix);
   else if (expr->is<Sum>() && !expr->empty())
-    aux_indices(result, expr->front());
+    all_indices(result, expr->front());
   else if (expr->is<Product>())
-    for (auto&& fac : *expr) aux_indices(result, fac);
+    for (auto&& fac : *expr) all_indices(result, fac);
 }
 
-IndexSet aux_indices(ExprPtr const& expr) {
+IndexSet all_indices(ExprPtr const& expr) {
   IndexSet result;
-  aux_indices(result, expr);
+  all_indices(result, expr);
   return result;
 }
 
@@ -402,10 +402,10 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract) {
   }
 
   auto const ltr_uncontr_idxs = [&]() {
-    auto aux_idxs = prod.factors() |
-                    transform([](auto&& xpr) { return aux_indices(xpr); }) |
-                    ranges::to_vector;
-    return left_to_right_binarization_indices<Index, IndexSet>(aux_idxs,
+    auto factor_idxs = prod.factors() |
+                       transform([](auto&& xpr) { return all_indices(xpr); }) |
+                       ranges::to_vector;
+    return left_to_right_binarization_indices<Index, IndexSet>(factor_idxs,
                                                                uncontract);
   }();
 
@@ -453,10 +453,43 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract) {
       auto ts = subfacs | transform([](auto&& t) { return t.expr; });
       auto idxs = get_unique_indices(Product(ts));
       {
-        auto amend_aux_idxs = uncontracted_idxs;
-        for (auto&& idx : idxs.aux) amend_aux_idxs.emplace(idx);
-        idxs.aux = amend_aux_idxs |
-                   ranges::to<std::remove_cvref_t<decltype(idxs.aux)>>;
+        // route each surviving hyperindex to its correct slot
+        // (bra, ket, or aux) based on which slot it occupies in
+        // the factor tensors .. if appears in multiple slots put into aux
+        for (auto const& idx : uncontracted_idxs) {
+          if (ranges::find(idxs.bra, idx) != idxs.bra.end() ||
+              ranges::find(idxs.ket, idx) != idxs.ket.end() ||
+              ranges::find(idxs.aux, idx) != idxs.aux.end())
+            continue;
+
+          bool in_bra = false, in_ket = false, in_aux = false;
+          for (auto const& sf : subfacs) {
+            if (!sf.expr->is<Tensor>()) continue;
+            auto const& t = sf.expr->as<Tensor>();
+            for (auto const& ix : t.bra())
+              if (ix == idx) {
+                in_bra = true;
+                break;
+              }
+            for (auto const& ix : t.ket())
+              if (ix == idx) {
+                in_ket = true;
+                break;
+              }
+            for (auto const& ix : t.aux())
+              if (ix == idx) {
+                in_aux = true;
+                break;
+              }
+          }
+
+          if (in_bra && !in_ket && !in_aux)
+            idxs.bra.push_back(idx);
+          else if (in_ket && !in_bra && !in_aux)
+            idxs.ket.push_back(idx);
+          else
+            idxs.aux.push_back(idx);
+        }
       }
       auto tn = TensorNetwork(ts);
       auto named_indices = tn.ext_indices();
