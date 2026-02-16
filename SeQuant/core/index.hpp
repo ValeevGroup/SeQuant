@@ -1020,30 +1020,30 @@ inline const IndexSpace::Attr Index::default_space_attr{
 inline const Index Index::null;
 
 void Index::validate_proto_indices() const {
-#ifdef SEQUANT_ASSERT_ENABLED
-  if (!proto_indices_.empty()) {
-    SEQUANT_ASSERT(!ranges::contains(proto_indices_, null) && "Index ctor: null proto index detected");
-    if (!symmetric_proto_indices_) {  // if proto indices not symmetric, sort
-                                      // via
-      // ptrs
-      container::svector<Index const *> vp;
-      vp.reserve(proto_indices_.size());
-      for (size_t i = 0; i < proto_indices_.size(); ++i)
-        vp.push_back(&proto_indices_[i]);
-      std::sort(vp.begin(), vp.end(),
-                [](Index const *l, Index const *r) { return *l < *r; });
-      SEQUANT_ASSERT(std::adjacent_find(vp.begin(), vp.end(),
-                             [](Index const *l, Index const *r) {
-                               return *l == *r;
-                             }) == vp.end() &&
-            "Index ctor: duplicate proto indices detected");
-    } else {  // else search directly
-      SEQUANT_ASSERT(std::adjacent_find(begin(proto_indices_), end(proto_indices_)) ==
-          proto_indices_.end() &&
-            "Index ctor: duplicate proto indices detected");
+  if constexpr (assert_enabled()) {
+    if (!proto_indices_.empty()) {
+      SEQUANT_ASSERT(!ranges::contains(proto_indices_, null) && "Index ctor: null proto index detected");
+      if (!symmetric_proto_indices_) {  // if proto indices not symmetric, sort
+        // via
+        // ptrs
+        container::svector<Index const *> vp;
+        vp.reserve(proto_indices_.size());
+        for (size_t i = 0; i < proto_indices_.size(); ++i)
+          vp.push_back(&proto_indices_[i]);
+        std::sort(vp.begin(), vp.end(),
+                  [](Index const *l, Index const *r) { return *l < *r; });
+        SEQUANT_ASSERT(std::adjacent_find(vp.begin(), vp.end(),
+                               [](Index const *l, Index const *r) {
+                                 return *l == *r;
+                               }) == vp.end() &&
+              "Index ctor: duplicate proto indices detected");
+      } else {  // else search directly
+        SEQUANT_ASSERT(std::adjacent_find(begin(proto_indices_), end(proto_indices_)) ==
+            proto_indices_.end() &&
+              "Index ctor: duplicate proto indices detected");
+      }
     }
   }
-#endif
 }
 
 void Index::canonicalize_proto_indices() noexcept {

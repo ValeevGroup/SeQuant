@@ -711,7 +711,7 @@ TEST_CASE("utilities", "[utilities]") {
         REQUIRE(get_bra_idx(group_view) == Index(L"i_1"));
         REQUIRE(get_ket_idx(group_view) == Index(L"a_1"));
       }
-      if (sequant::assert_behavior() == SEQUANT_ASSERT_THROW) {
+      if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
         SECTION("const") {
           indices = {{L"a_1", SlotType::Ket}, {L"i_1", SlotType::Bra}};
 
@@ -783,7 +783,7 @@ TEST_CASE("utilities", "[utilities]") {
         REQUIRE(get_bra_idx(groups_view[0]) == Index(L"a_1"));
         REQUIRE(get_ket_idx(groups_view[0]) == Index(L"i_1"));
 
-        if (sequant::assert_behavior() == SEQUANT_ASSERT_THROW) {
+        if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
           REQUIRE_THROWS_AS(get_bra_idx(groups_view[1]), Exception);
         }
       }

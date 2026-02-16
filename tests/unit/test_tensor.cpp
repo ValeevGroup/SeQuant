@@ -191,7 +191,7 @@ TEST_CASE("tensor", "[elements]") {
       REQUIRE(t6.num_indices() == 5);
 
       // check errors
-      if (sequant::assert_behavior() == SEQUANT_ASSERT_THROW) {
+      if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
         // no null indices in antisymmetric bra or ket
         REQUIRE_THROWS_AS(
             Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::Antisymm),
@@ -234,7 +234,7 @@ TEST_CASE("tensor", "[elements]") {
       // null indices are ignored in duplicate checks
       REQUIRE_NOTHROW(Tensor(L"N", bra{L"", L"", L"i_1"},
                              ket{L"i_1", L"i_2", L""}, aux{L"i_3"}));
-      if (sequant::assert_behavior() == SEQUANT_ASSERT_THROW) {
+      if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
         REQUIRE_THROWS_AS(Tensor(L"N", bra{L"i_1", L"i_1"}, ket{}, aux{}),
                           sequant::Exception);
         REQUIRE_THROWS_AS(Tensor(L"N", bra{}, ket{L"i_1", L"i_1"}, aux{}),

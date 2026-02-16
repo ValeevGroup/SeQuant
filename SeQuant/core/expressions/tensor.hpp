@@ -102,83 +102,86 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// validates bra, ket, and aux indices
 
   // clang-format off
-  /// @pre if SEQUANT_ASSERT_ENABLED is defined uses SEQUANT_ASSERT to assert that
+  /// @pre if assert_enabled() returns true uses SEQUANT_ASSERT to assert that
   ///        - if `symmetry()==Symmetry::Antisymm` `bra()` and `ket()` do not contain null indices, and
   ///        - `aux()` does not contains null indices, or
   ///        - there are no duplicate indices within bra, within ket, or within aux
   // clang-format on
   void validate_indices() const {
-#ifdef SEQUANT_ASSERT_ENABLED
-    // antisymmetric bra or ket cannot support null indices (because it is not
-    // clear what antisymmetry means if some slots can be empty; permutation of
-    // 2 empty slots is supposed to do what?)
-    // by analogy symmetric bra or ket should not have null indices, but limited
-    // circumstances do allow null indices in such context ... but no use cases
-    if (symmetry() != Symmetry::Nonsymm) {
-      SEQUANT_ASSERT(
-          !ranges::contains(bra_, Index::null) &&
-          "Tensor ctor: found null indices in symmetric/antisymmetric bra");
-      SEQUANT_ASSERT(
-          !ranges::contains(ket_, Index::null) &&
-          "Tensor ctor: found null indices in symmetric/antisymmetric ket");
-    } else {  // asymmetric tensor
-
-      // matching bra and ket slots cannot be both empty
-      const auto braket_rank = std::min(bra_rank(), ket_rank());
-      for (std::size_t r = 0; r != braket_rank; ++r) {
+    if constexpr (assert_enabled()) {
+      // antisymmetric bra or ket cannot support null indices (because it is not
+      // clear what antisymmetry means if some slots can be empty; permutation
+      // of 2 empty slots is supposed to do what?) by analogy symmetric bra or
+      // ket should not have null indices, but limited circumstances do allow
+      // null indices in such context ... but no use cases
+      if (symmetry() != Symmetry::Nonsymm) {
         SEQUANT_ASSERT(
-            !(bra_[r] == Index::null && ket_[r] == Index::null) &&
-            "Tensor ctor: found null indices in both matching slots of "
-            "asymmetric bra and ket");
-      }
+            !ranges::contains(bra_, Index::null) &&
+            "Tensor ctor: found null indices in symmetric/antisymmetric bra");
+        SEQUANT_ASSERT(
+            !ranges::contains(ket_, Index::null) &&
+            "Tensor ctor: found null indices in symmetric/antisymmetric ket");
+      } else {  // asymmetric tensor
 
-      // if bra and ket differ in size, make sure unpaired slots are not empty
-      if (bra_rank() != ket_rank()) {
-        const auto longer_bundle_type =
-            bra_rank() > ket_rank() ? SlotType::Bra : SlotType::Ket;
-        auto *longer_bundle = longer_bundle_type == SlotType::Bra
-                                  ? &bra_[0]
-                                  : &ket_[0];  // n.b. these are contiguous
-        const auto rank = std::max(bra_rank(), ket_rank());
-
-        for (std::size_t r = braket_rank; r != rank; ++r) {
+        // matching bra and ket slots cannot be both empty
+        const auto braket_rank = std::min(bra_rank(), ket_rank());
+        for (std::size_t r = 0; r != braket_rank; ++r) {
           SEQUANT_ASSERT(
-              !(longer_bundle[r] == Index::null) &&
-              ((std::string("Tensor ctor: found null index in a slot of "
-                            "asymmetric ") +
-                (longer_bundle_type == SlotType::Bra ? "bra" : "ket") +
-                " that does have a matching " +
-                (longer_bundle_type == SlotType::Bra ? "ket" : "bra") + " slot")
-                   .c_str()));
+              !(bra_[r] == Index::null && ket_[r] == Index::null) &&
+              "Tensor ctor: found null indices in both matching slots of "
+              "asymmetric bra and ket");
+        }
+
+        // if bra and ket differ in size, make sure unpaired slots are not empty
+        if (bra_rank() != ket_rank()) {
+          const auto longer_bundle_type =
+              bra_rank() > ket_rank() ? SlotType::Bra : SlotType::Ket;
+          [[maybe_unused]] auto *longer_bundle =
+              longer_bundle_type == SlotType::Bra
+                  ? &bra_[0]
+                  : &ket_[0];  // n.b. these are contiguous
+          const auto rank = std::max(bra_rank(), ket_rank());
+
+          for (std::size_t r = braket_rank; r != rank; ++r) {
+            SEQUANT_ASSERT(
+                !(longer_bundle[r] == Index::null) &&
+                ((std::string("Tensor ctor: found null index in a slot of "
+                              "asymmetric ") +
+                  (longer_bundle_type == SlotType::Bra ? "bra" : "ket") +
+                  " that does have a matching " +
+                  (longer_bundle_type == SlotType::Bra ? "ket" : "bra") +
+                  " slot")
+                     .c_str()));
+          }
         }
       }
-    }
-    SEQUANT_ASSERT(!ranges::contains(aux_, Index::null) &&
-                   "Tensor ctor: found null aux indices");
-    // check for duplicates
-    {
-      auto assert_that_contains_no_duplicates = [](const auto &indices,
-                                                   const char *id) -> void {
-        // sort via ptrs
-        auto index_ptrs = indices |
-                          ranges::views::transform(
-                              [&](const Index &index) { return &index; }) |
-                          ranges::to<container::svector<Index const *>>;
-        ranges::sort(index_ptrs,
-                     [](Index const *l, Index const *r) { return *l < *r; });
-        SEQUANT_ASSERT(
-            ranges::adjacent_find(index_ptrs,
-                                  [](Index const *l, Index const *r) {
-                                    // N.B. multiple null indices OK
-                                    return *l == *r && *l != Index::null;
-                                  }) == index_ptrs.end() &&
-            (std::string("Tensor ctor: duplicate ") + id + " indices").c_str());
-      };
-      assert_that_contains_no_duplicates(bra_, "bra");
-      assert_that_contains_no_duplicates(ket_, "ket");
-      assert_that_contains_no_duplicates(aux_, "aux");
-    }
-#endif
+      SEQUANT_ASSERT(!ranges::contains(aux_, Index::null) &&
+                     "Tensor ctor: found null aux indices");
+      // check for duplicates
+      {
+        auto assert_that_contains_no_duplicates =
+            [](const auto &indices, [[maybe_unused]] const char *id) -> void {
+          // sort via ptrs
+          auto index_ptrs = indices |
+                            ranges::views::transform(
+                                [&](const Index &index) { return &index; }) |
+                            ranges::to<container::svector<Index const *>>;
+          ranges::sort(index_ptrs,
+                       [](Index const *l, Index const *r) { return *l < *r; });
+          SEQUANT_ASSERT(
+              ranges::adjacent_find(index_ptrs,
+                                    [](Index const *l, Index const *r) {
+                                      // N.B. multiple null indices OK
+                                      return *l == *r && *l != Index::null;
+                                    }) == index_ptrs.end() &&
+              (std::string("Tensor ctor: duplicate ") + id + " indices")
+                  .c_str());
+        };
+        assert_that_contains_no_duplicates(bra_, "bra");
+        assert_that_contains_no_duplicates(ket_, "ket");
+        assert_that_contains_no_duplicates(aux_, "aux");
+      }
+    }  // if constexpr (assert_enabled())
   }
 
   /// put slots/slot bundles in canonical order:
