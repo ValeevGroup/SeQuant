@@ -449,46 +449,24 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract) {
       collect_tensor_factors(left, subfacs);
       collect_tensor_factors(right, subfacs);
       auto ts = subfacs | transform([](auto&& t) { return t.expr; });
-      auto idxs = get_unique_indices(Product(ts));
-      {
+      IndexGroups<IndexVec> const target_indices = [prod = ex<Product>(ts),
+                                                    &uncontracted_idxs]() {
         // route each surviving hyperindex to its correct slot
         // (bra, ket, or aux) based on which slot it occupies in
         // the factor tensors .. if appears in multiple slots put into aux
-        for (auto const& idx : uncontracted_idxs) {
-          if (ranges::find(idxs.bra, idx) != idxs.bra.end() ||
-              ranges::find(idxs.ket, idx) != idxs.ket.end() ||
-              ranges::find(idxs.aux, idx) != idxs.aux.end())
+        auto counts = get_used_indices_with_counts(prod);
+        IndexGroups<IndexVec> result;
+        for (auto&& [k, v] : counts) {
+          if (v.total() > 1) {
+            if (uncontracted_idxs.contains(k)) result.aux.emplace_back(k);
             continue;
-
-          bool in_bra = false, in_ket = false, in_aux = false;
-          for (auto const& sf : subfacs) {
-            if (!sf.expr->is<Tensor>()) continue;
-            auto const& t = sf.expr->as<Tensor>();
-            for (auto const& ix : t.bra())
-              if (ix == idx) {
-                in_bra = true;
-                break;
-              }
-            for (auto const& ix : t.ket())
-              if (ix == idx) {
-                in_ket = true;
-                break;
-              }
-            for (auto const& ix : t.aux())
-              if (ix == idx) {
-                in_aux = true;
-                break;
-              }
           }
-
-          if (in_bra && !in_ket && !in_aux)
-            idxs.bra.push_back(idx);
-          else if (in_ket && !in_bra && !in_aux)
-            idxs.ket.push_back(idx);
-          else
-            idxs.aux.push_back(idx);
+          auto& group = v.bra ? result.bra : v.ket ? result.ket : result.aux;
+          group.emplace_back(k);
         }
-      }
+        return result;
+      }();
+
       auto tn = TensorNetwork(ts);
       auto named_indices = tn.ext_indices();
       for (auto&& ix : uncontracted_idxs) named_indices.emplace(ix);
@@ -508,8 +486,9 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract) {
       } else {
         return {EvalOp::Product,     //
                 ResultType::Tensor,  //
-                detail::make_tensor_wo_symmetries(bra(idxs.bra), ket(idxs.ket),
-                                                  aux(idxs.aux)),
+                detail::make_tensor_wo_symmetries(bra(target_indices.bra),
+                                                  ket(target_indices.ket),
+                                                  aux(target_indices.aux)),
                 canon.get_indices<Index::index_vector>(),  //
                 canon.phase,                               //
                 h,
