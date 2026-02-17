@@ -128,7 +128,7 @@ TEST_CASE("index", "[elements][index]") {
       REQUIRE_NOTHROW(Index{} = std::move(i7_copy));
       REQUIRE(i7_copy.nonnull() == false);
 
-      if (sequant::assert_behavior() == SEQUANT_ASSERT_THROW) {
+      if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
         REQUIRE_THROWS_AS(Index(isr->retrieve(L"i"), 4, {i1, i1}),
                           sequant::Exception);
         REQUIRE_THROWS_AS(Index(L"i_5", {L"i_1", L"i_1"}), sequant::Exception);

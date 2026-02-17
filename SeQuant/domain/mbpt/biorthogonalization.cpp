@@ -371,11 +371,11 @@ ExprPtr create_expr_for(const ParticlePairings& ref_pairing,
   ExprPtr expr = base_exprs.at(idx)->clone();
 
   if (!replacements.empty()) {
-#ifdef SEQUANT_ASSERT_ENABLED
-    for (const auto& [first, second] : replacements) {
-      SEQUANT_ASSERT(first.space() == second.space());
+    if constexpr (assert_enabled()) {
+      for ([[maybe_unused]] const auto& [first, second] : replacements) {
+        SEQUANT_ASSERT(first.space() == second.space());
+      }
     }
-#endif
     expr = transform_expr(expr, replacements);
   }
 

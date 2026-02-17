@@ -1209,47 +1209,47 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     }
 
     // strict bra-ket sanity checks
-#ifdef SEQUANT_ASSERT_ENABLED
-    if (get_default_context().strict_braket_symmetry() ==
-        StrictBraKetSymmetry::Yes) {
-      // dummy (anonymous) edges to
-      // - involve at most 2 bra and/or ket indices (if BraKetSymmetry::Symm) or
-      // 1 bra and 1 ket index
-      // - can involve any number of aux indices
-      if (current_edge.vertex_count() > 1) {
-        // ignore if named index
-        if (!this->ext_indices_.contains(current_edge.idx())) {
-          std::size_t nbra = 0;
-          std::size_t nket = 0;
-          [[maybe_unused]] std::size_t naux = 0;
-          for (std::size_t v = 0; v < current_edge.vertex_count(); ++v) {
-            const Vertex &vertex = current_edge.vertex(v);
-            switch (vertex.getOrigin()) {
-              case Origin::Bra:
-                ++nbra;
-                break;
-              case Origin::Ket:
-                ++nket;
-                break;
-              case Origin::Aux:
-                ++naux;
-                break;
-              case Origin::Proto:
-                SEQUANT_UNREACHABLE;
+    if constexpr (assert_enabled()) {
+      if (get_default_context().strict_braket_symmetry() ==
+          StrictBraKetSymmetry::Yes) {
+        // dummy (anonymous) edges to
+        // - involve at most 2 bra and/or ket indices (if BraKetSymmetry::Symm)
+        // or 1 bra and 1 ket index
+        // - can involve any number of aux indices
+        if (current_edge.vertex_count() > 1) {
+          // ignore if named index
+          if (!this->ext_indices_.contains(current_edge.idx())) {
+            [[maybe_unused]] std::size_t nbra = 0;
+            [[maybe_unused]] std::size_t nket = 0;
+            [[maybe_unused]] std::size_t naux = 0;
+            for (std::size_t v = 0; v < current_edge.vertex_count(); ++v) {
+              const Vertex &vertex = current_edge.vertex(v);
+              switch (vertex.getOrigin()) {
+                case Origin::Bra:
+                  ++nbra;
+                  break;
+                case Origin::Ket:
+                  ++nket;
+                  break;
+                case Origin::Aux:
+                  ++naux;
+                  break;
+                case Origin::Proto:
+                  SEQUANT_UNREACHABLE;
+              }
             }
+            // if braket symmetry == BraKetSymmetry::Symm there is no
+            // distinction between bra and ket, but still can have at most 2 of
+            // them total if braket symmetry != BraKetSymmetry::Symm at most 1
+            // bra and 1 ket can connect to aux
+            SEQUANT_ASSERT(get_default_context().braket_symmetry() ==
+                                   BraKetSymmetry::Symm
+                               ? (nbra + nket <= 2)
+                               : (nbra <= 1 && nket <= 1));
           }
-          // if braket symmetry == BraKetSymmetry::Symm there is no distinction
-          // between bra and ket, but still can have at most 2 of them total if
-          // braket symmetry != BraKetSymmetry::Symm at most 1 bra and 1 ket can
-          // connect to aux
-          SEQUANT_ASSERT(get_default_context().braket_symmetry() ==
-                                 BraKetSymmetry::Symm
-                             ? (nbra + nket <= 2)
-                             : (nbra <= 1 && nket <= 1));
         }
       }
     }
-#endif
 
     // Connect index to the tensor(s) it is connected to
     for (std::size_t i = 0; i < current_edge.vertex_count(); ++i) {

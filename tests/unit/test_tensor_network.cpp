@@ -1533,7 +1533,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       REQUIRE_THROWS_AS(TN(*t1_x_t2_p_t2), std::invalid_argument);
 
       // must be covariant: no bra to bra or ket to ket
-      if (sequant::assert_behavior() == SEQUANT_ASSERT_THROW) {
+      if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
         t2->adjoint();
         auto t1_x_t2_adjoint = t1 * t2;
         REQUIRE_THROWS_AS(TN(t1_x_t2_adjoint).create_graph(), Exception);

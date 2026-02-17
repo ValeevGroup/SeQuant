@@ -561,18 +561,18 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
 
   if (!dep && csv) {
     if (opclass == OpClass::ex) {
-#ifdef SEQUANT_ASSERT_ENABLED
-      for (auto&& s : cre_spaces_) {
-        SEQUANT_ASSERT(isr->contains_unoccupied(s));
+      if constexpr (assert_enabled()) {
+        for (auto&& s : cre_spaces_) {
+          SEQUANT_ASSERT(isr->contains_unoccupied(s));
+        }
       }
-#endif
       dep = UseDepIdx::Bra;
     } else if (opclass == OpClass::deex) {
-#ifdef SEQUANT_ASSERT_ENABLED
-      for (auto&& s : ann_spaces_) {
-        SEQUANT_ASSERT(isr->contains_unoccupied(s));
+      if constexpr (assert_enabled()) {
+        for (auto&& s : ann_spaces_) {
+          SEQUANT_ASSERT(isr->contains_unoccupied(s));
+        }
       }
-#endif
       dep = UseDepIdx::Ket;
     } else {
       dep = UseDepIdx::None;

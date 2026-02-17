@@ -418,16 +418,14 @@ ExprPtr TensorNetworkV1::canonicalize(
     }
   }
 
-#ifdef SEQUANT_ASSERT_ENABLED
-  // assert that tensors' indices are not tagged since going to tag indices
-  {
-    for (const auto &tensor : tensors_) {
+  if constexpr (assert_enabled()) {
+    // assert that tensors' indices are not tagged since going to tag indices
+    for ([[maybe_unused]] const auto &tensor : tensors_) {
       SEQUANT_ASSERT(ranges::none_of(braket(*tensor), [](const Index &idx) {
         return idx.tag().has_value();
       }));
     }
   }
-#endif
   bool pass_mutated = false;
   [[maybe_unused]] bool mutated = false;
   do {
