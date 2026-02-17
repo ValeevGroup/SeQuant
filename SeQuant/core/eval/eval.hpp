@@ -39,7 +39,8 @@ template <typename... T>
   return Bytes{(args->size_in_bytes() + ...)};
 }
 
-[[nodiscard]] inline auto bytes(CacheManager const& cman) {
+template <typename N, bool F>
+[[nodiscard]] inline auto bytes(CacheManager<N, F> const& cman) {
   return cman.size_in_bytes();
 }
 
@@ -143,13 +144,14 @@ auto cache(CacheStat const& stat, Args const&... args) {
       args...);
 }
 
-template <typename... Args>
-auto cache(size_t key, CacheManager const& cm, Args const&... args) {
+template <typename N, bool F, typename... Args>
+auto cache(N const& node, CacheManager<N, F>& cm, Args const&... args) {
   using CacheMode::Access;
   using CacheMode::Release;
   using CacheMode::Store;
-  auto const cur_l = cm.life(key);
-  auto const max_l = cm.max_life(key);
+  auto const key = hash::value(*node);
+  auto const cur_l = cm.life(node);
+  auto const max_l = cm.max_life(node);
   bool const release = cur_l == 0;
   bool const store = cur_l + 1 == max_l;
   cache(CacheStat{.mode = store     ? Store
@@ -195,10 +197,15 @@ template <typename F, typename... Args>
   return {tend - tstart};
 }
 
+template <typename T>
+constexpr bool is_cache_manager_v = false;
+
+template <typename N, bool F>
+constexpr bool is_cache_manager_v<CacheManager<N, F>> = true;
+
 template <typename... Args>
-concept last_type_is_cache_manager =
-    std::same_as<CacheManager, std::remove_cvref_t<std::tuple_element_t<
-                                   sizeof...(Args) - 1, std::tuple<Args...>>>>;
+concept last_type_is_cache_manager = is_cache_manager_v<std::remove_cvref_t<
+    std::tuple_element_t<sizeof...(Args) - 1, std::tuple<Args...>>>>;
 
 template <typename... Args>
 auto&& arg0(Args&&... args) {
@@ -246,11 +253,11 @@ namespace {
 ///
 template <Trace EvalTrace = Trace::Default,
           CacheCheck Cache = CacheCheck::Checked, meta::can_evaluate Node,
-          typename F>
+          typename F, typename N, bool FHC>
   requires meta::leaf_node_evaluator<Node, F>
 ResultPtr evaluate(Node const& node,  //
                    F const& le,       //
-                   CacheManager& cache) {
+                   CacheManager<N, FHC>& cache) {
   if constexpr (Cache == CacheCheck::Checked) {  // return from cache if found
 
     auto mult_by_phase = [&node](ResultPtr res) {
@@ -270,16 +277,15 @@ ResultPtr evaluate(Node const& node,  //
       return post;
     };
 
-    auto const h = hash::value(*node);
-    if (auto ptr = cache.access(h); ptr) {
-      if constexpr (trace(EvalTrace)) log::cache(h, cache);
+    if (auto ptr = cache.access(node); ptr) {
+      if constexpr (trace(EvalTrace)) log::cache(node, cache);
 
       return mult_by_phase(ptr);
-    } else if (cache.exists(h)) {
+    } else if (cache.exists(node)) {
       auto ptr = cache.store(
-          h, mult_by_phase(
-                 evaluate<EvalTrace, CacheCheck::Unchecked>(node, le, cache)));
-      if constexpr (trace(EvalTrace)) log::cache(h, cache);
+          node, mult_by_phase(evaluate<EvalTrace, CacheCheck::Unchecked>(
+                    node, le, cache)));
+      if constexpr (trace(EvalTrace)) log::cache(node, cache);
 
       return mult_by_phase(ptr);
     } else {
@@ -344,12 +350,13 @@ ResultPtr evaluate(Node const& node,  //
 /// \param cache The cache for common sub-expression elimination.
 /// \return Evaluated result as ResultPtr.
 ///
-template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename F>
+template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename F,
+          typename N, bool FHC>
   requires meta::leaf_node_evaluator<Node, F>  //
 ResultPtr evaluate(Node const& node,           //
                    auto const& layout,         //
                    F const& le,                //
-                   CacheManager& cache) {
+                   CacheManager<N, FHC>& cache) {
   // if the layout is not the default constructed value need to permute
   bool const perm = layout != decltype(layout){};
 
@@ -405,11 +412,11 @@ ResultPtr evaluate(Node const& node,           //
 /// \return Evaluated result as ResultPtr.
 ///
 template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
-          typename F>
+          typename F, typename N, bool FHC>
   requires meta::leaf_node_evaluator<std::ranges::range_value_t<Nodes>, F>
 ResultPtr evaluate(Nodes const& nodes,  //
                    auto const& layout,  //
-                   F const& le, CacheManager& cache) {
+                   F const& le, CacheManager<N, FHC>& cache) {
   ResultPtr result;
 
   for (auto&& n : nodes) {
@@ -450,10 +457,10 @@ ResultPtr evaluate(Nodes const& nodes,  //
 ///       are scalar results.
 ///
 template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
-          typename F>
+          typename F, typename N, bool FHC>
   requires meta::leaf_node_evaluator<std::ranges::range_value_t<Nodes>, F>
 ResultPtr evaluate(Nodes const& nodes,  //
-                   F const& le, CacheManager& cache) {
+                   F const& le, CacheManager<N, FHC>& cache) {
   using annot_type = decltype([](std::ranges::range_value_t<Nodes> const& n) {
     return n->annot();
   });
@@ -474,7 +481,9 @@ ResultPtr evaluate(Nodes const& nodes,  //
 template <Trace EvalTrace = Trace::Default, typename... Args>
   requires(!last_type_is_cache_manager<Args...>)
 ResultPtr evaluate(Args&&... args) {
-  auto cache = CacheManager::empty();
+  using Node =
+      std::remove_cvref_t<decltype(node0(arg0(std::forward<Args>(args)...)))>;
+  auto cache = CacheManager<Node>::empty();
   return evaluate<EvalTrace>(std::forward<Args>(args)..., cache);
 }
 

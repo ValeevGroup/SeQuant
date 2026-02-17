@@ -32,7 +32,7 @@ class SequantEvalScfBTAS final : public SequantEvalScf {
 
  private:
   container::vector<container::vector<EvalNodeBTAS>> nodes_;
-  CacheManager cman_;
+  CacheManager<EvalNodeBTAS> cman_;
   DataWorldBTAS<Tensor_t> data_world_;
 
   Tensor_t const& f_vo() const {
@@ -90,7 +90,7 @@ class SequantEvalScfBTAS final : public SequantEvalScf {
 
     using Evaluator = ResultPtr (*)(
         std::vector<EvalNodeBTAS> const&, EvalExprBTAS::annot_t const&,
-        DataWorldBTAS<Tensor_t> const&, CacheManager&);
+        DataWorldBTAS<Tensor_t> const&, CacheManager<EvalNodeBTAS>&);
 
     constexpr auto funcs =
         std::array{std::array<Evaluator, 2>{evaluate_antisymm<Trace::Off>,
@@ -128,7 +128,7 @@ class SequantEvalScfBTAS final : public SequantEvalScf {
  public:
   SequantEvalScfBTAS(CalcInfo const& calc_info)
       : SequantEvalScf{calc_info},
-        cman_{{}},
+        cman_{CacheManager<EvalNodeBTAS>::empty()},
         data_world_{calc_info.fock_eri, calc_info.eqn_opts.excit} {
     assert(info_.eqn_opts.excit >= 2 &&
            "At least double excitation (CCSD) is required!");

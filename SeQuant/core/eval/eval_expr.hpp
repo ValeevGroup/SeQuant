@@ -129,6 +129,11 @@ class EvalExpr {
   [[nodiscard]] std::wstring to_latex() const noexcept;
 
   ///
+  /// \return The type id of the Expr held by this object.
+  ///
+  [[nodiscard]] Expr::type_id_type type_id() const noexcept;
+
+  ///
   /// \return True if the ExprPtr held by this object is Tensor and equivalently
   ///         the result of evaluation is tensor.
   ///

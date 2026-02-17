@@ -198,6 +198,10 @@ bool EvalExpr::tot() const noexcept {
 
 std::wstring EvalExpr::to_latex() const noexcept { return expr_->to_latex(); }
 
+Expr::type_id_type EvalExpr::type_id() const noexcept {
+  return expr_->type_id();
+}
+
 bool EvalExpr::is_tensor() const noexcept {
   return expr().is<Tensor>() && result_type() == ResultType::Tensor;
 }
