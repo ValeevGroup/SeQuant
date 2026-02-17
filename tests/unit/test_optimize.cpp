@@ -248,6 +248,24 @@ TEST_CASE("optimize", "[optimize]") {
                 {L"CSE1{;;a3,a1,i2,i3} = GAM0{a1,a3;a4,a5} T2g{a4,a5;i2,i3}",
                  L"R{a1,a3;i2,i3} = 2 CSE1{;;a3,a1,i2,i3} - "
                  L"CSE1{;;a3,a1,i3,i2}"}},
+               // Scalar CSE with proto-index tensors
+               {{L"R1 = (f{i1;a1<i1>} t{a1<i1>;i1}) A",
+                 L"R2 = B (f{i1;a1<i1>} t{a1<i1>;i1})"},
+                {L"CSE1 = f{i1;a1<i1>} t{a1<i1>;i1}", L"R1 = CSE1 A",
+                 L"R2 = B CSE1"}},
+               // Tensor CSE with proto-index tensors: reused
+               // contraction with different external indexing
+               {{L"R{i1;i2} = 2 g{i1;a1<i1>} t{a1<i1>;i2} - "
+                 L"g{i2;a1<i2>} t{a1<i2>;i1}"},
+                {L"CSE1{;;i1,i2} = g{i1;a1<i1>} t{a1<i1>;i2}",
+                 L"R{i1;i2} = 2 CSE1{;;i1,i2} - CSE1{;;i2,i1}"}},
+               // ToT CSE: the intermediate itself has proto-indexed
+               // indices (tensor-of-tensor)
+               {{L"R1{i1;i2} = (g{i1;a1} C{a1;a1<i1>}) h{a1<i1>;i2}",
+                 L"R2{i1;i2} = (g{i1;a1} C{a1;a1<i1>}) k{a1<i1>;i2}"},
+                {L"CSE1{;;i1,a1<i1>} = g{i1;a1} C{a1;a1<i1>}",
+                 L"R1{i1;i2} = CSE1{;;i1,a1<i1>} h{a1<i1>;i2}",
+                 L"R2{i1;i2} = CSE1{;;i1,a1<i1>} k{a1<i1>;i2}"}},
                // In this case it is important that the computation of the
                // subexpression isn't simply thrown at the beginning of the
                // expression list as it depends on B, which has to be computed
