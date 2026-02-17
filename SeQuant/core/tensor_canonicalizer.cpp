@@ -189,22 +189,22 @@ TensorCanonicalizer::cardinal_tensor_labels_accessor() {
 void TensorCanonicalizer::set_cardinal_tensor_labels(
     const container::vector<std::wstring>& labels) {
   // check for duplicates
-#ifdef SEQUANT_ASSERT_ENABLED
-  // check for duplicates within user provided labels
-  auto sorted_labels = labels;
-  ranges::sort(sorted_labels);
-  auto duplicate = ranges::adjacent_find(sorted_labels);
-  SEQUANT_ASSERT(duplicate == sorted_labels.end() &&
-                 "cardinal tensor labels must not contain duplicates");
-
-  // check if any label conflicts with existing ones
-  const auto& existing = cardinal_tensor_labels_accessor();
-  for (const auto& label : labels) {
-    auto conflict = ranges::find(existing, label);
-    SEQUANT_ASSERT(conflict == existing.end() &&
+  if constexpr (assert_enabled()) {
+    // check for duplicates within user provided labels
+    auto sorted_labels = labels;
+    ranges::sort(sorted_labels);
+    [[maybe_unused]] auto duplicate = ranges::adjacent_find(sorted_labels);
+    SEQUANT_ASSERT(duplicate == sorted_labels.end() &&
                    "cardinal tensor labels must not contain duplicates");
+
+    // check if any label conflicts with existing ones
+    const auto& existing = cardinal_tensor_labels_accessor();
+    for (const auto& label : labels) {
+      [[maybe_unused]] auto conflict = ranges::find(existing, label);
+      SEQUANT_ASSERT(conflict == existing.end() &&
+                     "cardinal tensor labels must not contain duplicates");
+    }
   }
-#endif
   auto& ctlabels = cardinal_tensor_labels_accessor();
   // get defaults
   ctlabels = default_cardinal_tensor_labels_accessor();

@@ -442,20 +442,18 @@ inline bool apply_index_replacement_rules(
 
   /// this recursively applies replacement rules until result does not
   /// change removes the deltas that are no longer needed
-#ifdef SEQUANT_ASSERT_ENABLED
-  // assert that tensors_ indices are not tagged since going to tag indices
-  {
+  if constexpr (assert_enabled()) {
+    // assert that tensors_ indices are not tagged since going to tag indices
     for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
       const auto &factor = *it;
       if (factor->is<AbstractTensor>()) {
-        auto &tensor = factor->as<AbstractTensor>();
+        [[maybe_unused]] auto &tensor = factor->as<AbstractTensor>();
         SEQUANT_ASSERT(ranges::none_of(tensor._slots(), [](const Index &idx) {
           return idx.tag().has_value();
         }));
       }
     }
   }
-#endif
   bool mutated = false;
   bool pass_mutated = false;
   do {

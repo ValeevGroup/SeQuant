@@ -69,15 +69,31 @@
 #define SEQUANT_ASSERT_ABORT 3
 #define SEQUANT_ASSERT_IGNORE 4
 #define SEQUANT_STRINGIFY(x) #x
+#define SEQUANT_ASSERT_BEHAVIOR \
+  SEQUANT_CONCAT(SEQUANT_ASSERT_, SEQUANT_ASSERT_BEHAVIOR_)
 
 namespace sequant {
 
-/// @return true if `SEQUANT_ASSERT_ENABLED` is #defined
-bool assert_enabled();
+/// Enumerates the possible assert behaviors
+enum class AssertBehavior : int {
+  Throw = SEQUANT_ASSERT_THROW,
+  Abort = SEQUANT_ASSERT_ABORT,
+  Ignore = SEQUANT_ASSERT_IGNORE
+};
 
-/// @return `SEQUANT_ASSERT_THROW`, `SEQUANT_ASSERT_ABORT`, or
-/// `SEQUANT_ASSERT_IGNORE`
-int assert_behavior();
+/// @return true if `SEQUANT_ASSERT_ENABLED` is #defined
+constexpr bool assert_enabled() {
+#ifdef SEQUANT_ASSERT_ENABLED
+  return true;
+#else
+  return false;
+#endif
+}
+
+/// @return the assert behavior configured at build time
+constexpr AssertBehavior assert_behavior() {
+  return static_cast<AssertBehavior>(SEQUANT_ASSERT_BEHAVIOR);
+}
 
 #ifdef SEQUANT_ASSERT_ENABLED
 [[noreturn]]

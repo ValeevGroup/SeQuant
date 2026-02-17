@@ -1208,38 +1208,38 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     }
 
     // hyperedges must involve aux indices
-#ifdef SEQUANT_ASSERT_ENABLED
-    if (current_edge.vertex_count() > 2) {
-      std::size_t nbra = 0;
-      std::size_t nket = 0;
-      std::size_t naux = 0;
-      for (std::size_t i = 0; i < current_edge.vertex_count(); ++i) {
-        const Vertex &vertex = current_edge.vertex(i);
-        switch (vertex.getOrigin()) {
-          case Origin::Bra:
-            ++nbra;
-            break;
-          case Origin::Ket:
-            ++nket;
-            break;
-          case Origin::Aux:
-            ++naux;
-            break;
-          case Origin::Proto:
-            SEQUANT_UNREACHABLE;
+    if constexpr (assert_enabled()) {
+      if (current_edge.vertex_count() > 2) {
+        [[maybe_unused]] std::size_t nbra = 0;
+        [[maybe_unused]] std::size_t nket = 0;
+        [[maybe_unused]] std::size_t naux = 0;
+        for (std::size_t i = 0; i < current_edge.vertex_count(); ++i) {
+          const Vertex &vertex = current_edge.vertex(i);
+          switch (vertex.getOrigin()) {
+            case Origin::Bra:
+              ++nbra;
+              break;
+            case Origin::Ket:
+              ++nket;
+              break;
+            case Origin::Aux:
+              ++naux;
+              break;
+            case Origin::Proto:
+              SEQUANT_UNREACHABLE;
+          }
         }
+        // if braket symmetry == BraKetSymmetry::Symm there is no distinction
+        // between bra and ket, but still can have at most 2 of them total if
+        // braket symmetry != BraKetSymmetry::Symm at most 1 bra and 1 ket can
+        // connect to aux
+        SEQUANT_ASSERT(get_default_context().braket_symmetry() ==
+                               BraKetSymmetry::Symm
+                           ? (nbra + nket <= 2)
+                           : (nbra <= 1 && nket <= 1));
+        SEQUANT_ASSERT(naux >= 1);  // at least 1 aux
       }
-      // if braket symmetry == BraKetSymmetry::Symm there is no distinction
-      // between bra and ket, but still can have at most 2 of them total if
-      // braket symmetry != BraKetSymmetry::Symm at most 1 bra and 1 ket can
-      // connect to aux
-      SEQUANT_ASSERT(get_default_context().braket_symmetry() ==
-                             BraKetSymmetry::Symm
-                         ? (nbra + nket <= 2)
-                         : (nbra <= 1 && nket <= 1));
-      SEQUANT_ASSERT(naux >= 1);  // at least 1 aux
     }
-#endif
 
     // Connect index to the tensor(s) it is connected to
     for (std::size_t i = 0; i < current_edge.vertex_count(); ++i) {

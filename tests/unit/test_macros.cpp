@@ -10,7 +10,7 @@
 
 TEST_CASE("macros", "[elements]") {
   SECTION("SEQUANT_ASSERT") {
-    if (sequant::assert_behavior() == SEQUANT_ASSERT_THROW) {
+    if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
       try {
         // clang-format off
 #line 1000  // to make sure the line number of the next line is fixed

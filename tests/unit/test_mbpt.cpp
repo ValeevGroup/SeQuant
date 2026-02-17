@@ -91,7 +91,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE(registry.ops().empty());
     }
 
-    if (sequant::assert_behavior() == SEQUANT_ASSERT_THROW) {
+    if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
       SECTION("reserved-labels") {
         OpRegistry registry;
         // should not be able to add reserved labels
@@ -730,7 +730,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE_NOTHROW(Hʼ(2, {.order = 2}));
       REQUIRE_NOTHROW(Λʼ(3, {.order = 5, .skip1 = true}));
       REQUIRE_NOTHROW(Tʼ(2, {.order = 9}));
-      if (sequant::assert_behavior() == SEQUANT_ASSERT_THROW) {
+      if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
         REQUIRE_THROWS(Hʼ(1, {.order = 10}));  // invalid order
       }
 
@@ -769,7 +769,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE_NOTHROW(op::Tʼ(1, {.order = 1, .nbatch = 20}));
 
       // invalid usages
-      if (sequant::assert_behavior() == SEQUANT_ASSERT_THROW) {
+      if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
         // cannot set both nbatch and batch_ordinals
         REQUIRE_THROWS_AS(
             op::Hʼ(2, {.order = 1, .nbatch = 2, .batch_ordinals = {1, 2}}),
