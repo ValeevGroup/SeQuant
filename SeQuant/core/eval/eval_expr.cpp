@@ -31,8 +31,6 @@ namespace sequant {
 
 using EvalExprNode = FullBinaryNode<EvalExpr>;
 
-using impl::IndexSet;
-
 namespace {
 
 size_t hash_terminal_tensor(Tensor const&) noexcept;

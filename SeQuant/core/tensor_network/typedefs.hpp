@@ -12,7 +12,7 @@
 namespace sequant {
 
 namespace tensor_network {
-using NamedIndexSet = container::set<Index, Index::FullLabelCompare>;
+using NamedIndexSet = IndexSet;
 using VertexColor = std::uint32_t;
 }  // namespace tensor_network
 
