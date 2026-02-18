@@ -8,6 +8,7 @@
 #include <SeQuant/core/eval/backends/tiledarray/result.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
@@ -78,9 +79,8 @@ struct NestedTensorIndices {
   }
 };
 
-auto eval_node(sequant::ExprPtr const& expr) {
+auto to_ta_node(sequant::FullBinaryNode<sequant::EvalExpr> node) {
   using namespace sequant;
-  auto node = binarize(expr);
   return transform_node(node, [](auto&& val) {
     if (val.is_tensor()) {
       return EvalExprTA(*val.op_type(), val.result_type(), val.expr(),
@@ -91,6 +91,14 @@ auto eval_node(sequant::ExprPtr const& expr) {
     } else
       return EvalExprTA(val);
   });
+}
+
+auto eval_node(sequant::ExprPtr const& expr) {
+  return to_ta_node(sequant::binarize(expr));
+}
+
+auto eval_node(sequant::ResultExpr const& res) {
+  return to_ta_node(sequant::binarize(res));
 }
 
 auto tensor_to_key(sequant::Tensor const& tnsr) {
@@ -696,6 +704,23 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
         return TA::einsum("aby,cdy->abcd", X12Y, X34);
       }();
       REQUIRE(equal_tarrays(eval1, man1, "a1,a2,a3,a4"));
+
+      // cluster-specific RDM: γ{a2;a1;i1,i2} = t{i1,i2;a1,a3} T2{a2,a3;i1,i2}
+      // i1,i2 form standard bra-ket pairs across factors but are external
+      // (in aux of result); binarize(ResultExpr) must keep them uncontracted
+      {
+        auto res = deserialize<sequant::ResultExpr>(
+            L"GAM{a2;a1;i1,i2} = t{i1,i2;a1,a3} T2{a2,a3;i1,i2}");
+        auto node = eval_node(res);
+        auto eval_rdm = evaluate(node, std::string("a_2,a_1,i_1,i_2"), yield_)
+                            ->get<TA::TArrayD>();
+        auto man_rdm = [&]() {
+          auto t = yield(L"t{i1,i2;a1,a3}");
+          auto T2 = yield(L"T2{a2,a3;i1,i2}");
+          return TA::einsum("ijab,cbij->caij", t, T2);
+        }();
+        REQUIRE(equal_tarrays(eval_rdm, man_rdm, "a2,a1,i1,i2"));
+      }
 
       {  // multiple bra or ket indices require StrictBraKetSymm::No
         auto ctx_resetter = sequant::set_scoped_default_context(
