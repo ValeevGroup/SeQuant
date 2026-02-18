@@ -646,62 +646,87 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       REQUIRE(equal_tarrays(eval1, eval2));
     }
-  }
 
-  SECTION("non-covariant indices") {
-    using sequant::deserialize;
-    using sequant::EvalExprTA;
-    using sequant::evaluate;
+    SECTION("non-covariant indices") {
+      using sequant::deserialize;
+      using sequant::EvalExprTA;
+      using sequant::evaluate;
 
-    using TA::TArrayD;
-    auto& world = TA::get_default_world();
-    const size_t nocc = 2, nvirt = 4, naux = 12;
+      using TA::TArrayD;
+      auto& world = TA::get_default_world();
+      const size_t nocc = 2, nvirt = 4, naux = 12;
 
-    auto yield_ =
-        rand_tensor_yield<double, TA::DensePolicy>{world, nocc, nvirt, naux};
-    auto yield = [&yield_](std::wstring_view lbl) -> TA::TArrayD const& {
-      return yield_(lbl)->get<TA::TArrayD>();
-    };
+      auto yield_ =
+          rand_tensor_yield<double, TA::DensePolicy>{world, nocc, nvirt, naux};
+      auto yield = [&yield_](std::wstring_view lbl) -> TA::TArrayD const& {
+        return yield_(lbl)->get<TA::TArrayD>();
+      };
 
-    auto yield_d = [&yield_](std::wstring_view lbl) ->
-        typename TA::TArrayD::numeric_type {
-          return yield_(lbl)->get<typename TA::TArrayD::numeric_type>();
-        };
+      auto eval = [&yield_](sequant::ExprPtr const& expr,
+                            std::string const& target_labels) {
+        return evaluate(eval_node(expr), target_labels, yield_)
+            ->get<TA::TArrayD>();
+      };
 
-    auto eval = [&yield_](sequant::ExprPtr const& expr,
-                          std::string const& target_labels) {
-      return evaluate(eval_node(expr), target_labels, yield_)
-          ->get<TA::TArrayD>();
-    };
+      auto expr1 = deserialize(
+          L"((X{a1;;x1} X{;a2;x1}) Y{;;x1,x2})(X{a3;;x2} X{;a4;x2})");
+      auto eval1 = eval(expr1, "a_1,a_2,a_3,a_4");
+      auto man1 = [&]() {
+        auto X1 = yield(L"X{a1;;x1}");
+        REQUIRE(X1.trange().elements_range().extent(0) == nvirt);
+        REQUIRE(X1.trange().elements_range().extent(1) == naux);
+        auto X2 = yield(L"X{;a2;x1}");
+        REQUIRE(X2.trange().elements_range().extent(0) == nvirt);
+        REQUIRE(X2.trange().elements_range().extent(1) == naux);
+        auto X3 = yield(L"X{a3;;x2}");
+        REQUIRE(X3.trange().elements_range().extent(0) == nvirt);
+        REQUIRE(X3.trange().elements_range().extent(1) == naux);
+        auto X4 = yield(L"X{;a4;x2}");
+        REQUIRE(X4.trange().elements_range().extent(0) == nvirt);
+        REQUIRE(X4.trange().elements_range().extent(1) == naux);
+        auto Y = yield(L"Y{;;x1,x2}");
+        REQUIRE(Y.trange().elements_range().extent(0) == naux);
+        REQUIRE(Y.trange().elements_range().extent(1) == naux);
+        auto X12 = TA::einsum("ax,bx->abx", X1, X2);
+        REQUIRE(X12.trange().elements_range().extent(0) == nvirt);
+        REQUIRE(X12.trange().elements_range().extent(1) == nvirt);
+        REQUIRE(X12.trange().elements_range().extent(2) == naux);
+        auto X12Y = TA::einsum("abx,xy->aby", X12, Y);
+        auto X34 = TA::einsum("cy,dy->cdy", X3, X4);
+        return TA::einsum("aby,cdy->abcd", X12Y, X34);
+      }();
+      REQUIRE(equal_tarrays(eval1, man1, "a1,a2,a3,a4"));
 
-    auto expr1 =
-        deserialize(L"((X{a1;;x1} X{;a2;x1}) Y{;;x1,x2})(X{a3;;x2} X{;a4;x2})");
-    auto eval1 = eval(expr1, "a_1,a_2,a_3,a_4");
-    auto man1 = [&]() {
-      auto X1 = yield(L"X{a1;;x1}");
-      REQUIRE(X1.trange().elements_range().extent(0) == nvirt);
-      REQUIRE(X1.trange().elements_range().extent(1) == naux);
-      auto X2 = yield(L"X{;a2;x1}");
-      REQUIRE(X2.trange().elements_range().extent(0) == nvirt);
-      REQUIRE(X2.trange().elements_range().extent(1) == naux);
-      auto X3 = yield(L"X{a3;;x2}");
-      REQUIRE(X3.trange().elements_range().extent(0) == nvirt);
-      REQUIRE(X3.trange().elements_range().extent(1) == naux);
-      auto X4 = yield(L"X{;a4;x2}");
-      REQUIRE(X4.trange().elements_range().extent(0) == nvirt);
-      REQUIRE(X4.trange().elements_range().extent(1) == naux);
-      auto Y = yield(L"Y{;;x1,x2}");
-      REQUIRE(Y.trange().elements_range().extent(0) == naux);
-      REQUIRE(Y.trange().elements_range().extent(1) == naux);
-      auto X12 = TA::einsum("ax,bx->abx", X1, X2);
-      REQUIRE(X12.trange().elements_range().extent(0) == nvirt);
-      REQUIRE(X12.trange().elements_range().extent(1) == nvirt);
-      REQUIRE(X12.trange().elements_range().extent(2) == naux);
-      auto X12Y = TA::einsum("abx,xy->aby", X12, Y);
-      auto X34 = TA::einsum("cy,dy->cdy", X3, X4);
-      return TA::einsum("aby,cdy->abcd", X12Y, X34);
-    }();
-    REQUIRE(equal_tarrays(eval1, man1, "a1,a2,a3,a4"));
+      {  // multiple bra or ket indices require StrictBraKetSymm::No
+        auto ctx_resetter = sequant::set_scoped_default_context(
+            sequant::Context{sequant::get_default_context()}.set(
+                sequant::StrictBraKetSymmetry::No));
+
+        // hyperindex i1 in ket slots of 3 tensors
+        auto expr2 = deserialize(L"T{a1;i1} T{a2;i1} T{a3;i1}");
+        auto eval2 = eval(expr2, "a_1,a_2,a_3");
+        auto man2 = [&]() {
+          auto T1 = yield(L"T{a1;i1}");
+          auto T2 = yield(L"T{a2;i1}");
+          auto T3 = yield(L"T{a3;i1}");
+          auto T12 = TA::einsum("ai,bi->abi", T1, T2);
+          return TA::einsum("abi,ci->abc", T12, T3);
+        }();
+        REQUIRE(equal_tarrays(eval2, man2, "a1,a2,a3"));
+
+        // hyperindex a1 in bra slots of 3 tensors
+        auto expr3 = deserialize(L"T{a1;i1} T{a1;i2} T{a1;i3}");
+        auto eval3 = eval(expr3, "i_1,i_2,i_3");
+        auto man3 = [&]() {
+          auto T1 = yield(L"T{a1;i1}");
+          auto T2 = yield(L"T{a1;i2}");
+          auto T3 = yield(L"T{a1;i3}");
+          auto T12 = TA::einsum("ai,aj->aij", T1, T2);
+          return TA::einsum("aij,ak->ijk", T12, T3);
+        }();
+        REQUIRE(equal_tarrays(eval3, man3, "i1,i2,i3"));
+      }
+    }  // multiple bra or ket indices
   }
 
   SECTION("complex") {

@@ -1015,6 +1015,9 @@ class Index : public Taggable {
 
 };  // class Index
 
+using IndexSet = container::set<Index, Index::FullLabelCompare>;
+using IndexVec = Index::index_vector;
+
 inline const IndexSpace::Attr Index::default_space_attr{
     IndexSpace::Attr::reserved};
 inline const Index Index::null;

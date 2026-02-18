@@ -1476,8 +1476,6 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
     Edge e5(v8, &dummy);
     e5.connect_to(v6);
     Edge e6(v8, &dummy);
-    // ket cannot connect to ket
-    REQUIRE_THROWS_AS(e6.connect_to(v7), std::invalid_argument);
 
     // Due to tensor symmetries, these edges are considered equal
     REQUIRE(e1 == e2);
@@ -1535,9 +1533,11 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       REQUIRE_THROWS_AS(TN(*t1_x_t2_p_t2), std::invalid_argument);
 
       // must be covariant: no bra to bra or ket to ket
-      t2->adjoint();
-      auto t1_x_t2_adjoint = t1 * t2;
-      REQUIRE_THROWS_AS(TN(t1_x_t2_adjoint), std::invalid_argument);
+      if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
+        t2->adjoint();
+        auto t1_x_t2_adjoint = t1 * t2;
+        REQUIRE_THROWS_AS(TN(t1_x_t2_adjoint).create_graph(), Exception);
+      }
 
       // can use hyperedges with aux indices
       {

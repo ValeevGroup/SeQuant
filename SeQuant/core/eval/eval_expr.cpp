@@ -31,8 +31,6 @@ namespace sequant {
 
 using EvalExprNode = FullBinaryNode<EvalExpr>;
 
-using impl::IndexSet;
-
 namespace {
 
 size_t hash_terminal_tensor(Tensor const&) noexcept;
@@ -307,19 +305,19 @@ struct ExprWithHash {
   size_t hash;
 };
 
-void aux_indices(IndexSet& result, ExprPtr const& expr) {
+void all_indices(IndexSet& result, ExprPtr const& expr) {
   if (!expr) return;
   if (expr->is<Tensor>())
-    for (auto&& ix : expr->as<Tensor>().aux()) result.emplace(ix);
+    for (auto&& ix : expr->as<Tensor>().const_indices()) result.emplace(ix);
   else if (expr->is<Sum>() && !expr->empty())
-    aux_indices(result, expr->front());
+    all_indices(result, expr->front());
   else if (expr->is<Product>())
-    for (auto&& fac : *expr) aux_indices(result, fac);
+    for (auto&& fac : *expr) all_indices(result, fac);
 }
 
-IndexSet aux_indices(ExprPtr const& expr) {
+IndexSet all_indices(ExprPtr const& expr) {
   IndexSet result;
-  aux_indices(result, expr);
+  all_indices(result, expr);
   return result;
 }
 
@@ -406,10 +404,10 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract) {
   }
 
   auto const ltr_uncontr_idxs = [&]() {
-    auto aux_idxs = prod.factors() |
-                    transform([](auto&& xpr) { return aux_indices(xpr); }) |
-                    ranges::to_vector;
-    return left_to_right_binarization_indices<Index, IndexSet>(aux_idxs,
+    auto factor_idxs = prod.factors() |
+                       transform([](auto&& xpr) { return all_indices(xpr); }) |
+                       ranges::to_vector;
+    return left_to_right_binarization_indices<Index, IndexSet>(factor_idxs,
                                                                uncontract);
   }();
 
@@ -455,13 +453,24 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract) {
       collect_tensor_factors(left, subfacs);
       collect_tensor_factors(right, subfacs);
       auto ts = subfacs | transform([](auto&& t) { return t.expr; });
-      auto idxs = get_unique_indices(Product(ts));
-      {
-        auto amend_aux_idxs = uncontracted_idxs;
-        for (auto&& idx : idxs.aux) amend_aux_idxs.emplace(idx);
-        idxs.aux = amend_aux_idxs |
-                   ranges::to<std::remove_cvref_t<decltype(idxs.aux)>>;
-      }
+      IndexGroups<IndexVec> const target_indices = [prod = ex<Product>(ts),
+                                                    &uncontracted_idxs]() {
+        // route each surviving hyperindex to its correct slot
+        // (bra, ket, or aux) based on which slot it occupies in
+        // the factor tensors .. if appears in multiple slots put into aux
+        auto counts = get_used_indices_with_counts(prod);
+        IndexGroups<IndexVec> result;
+        for (auto&& [k, v] : counts) {
+          if (v.total() > 1) {
+            if (uncontracted_idxs.contains(k)) result.aux.emplace_back(k);
+            continue;
+          }
+          auto& group = v.bra ? result.bra : v.ket ? result.ket : result.aux;
+          group.emplace_back(k);
+        }
+        return result;
+      }();
+
       auto tn = TensorNetwork(ts);
       auto named_indices = tn.ext_indices();
       for (auto&& ix : uncontracted_idxs) named_indices.emplace(ix);
@@ -481,8 +490,9 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract) {
       } else {
         return {EvalOp::Product,     //
                 ResultType::Tensor,  //
-                detail::make_tensor_wo_symmetries(bra(idxs.bra), ket(idxs.ket),
-                                                  aux(idxs.aux)),
+                detail::make_tensor_wo_symmetries(bra(target_indices.bra),
+                                                  ket(target_indices.ket),
+                                                  aux(target_indices.aux)),
                 canon.get_indices<Index::index_vector>(),  //
                 canon.phase,                               //
                 h,

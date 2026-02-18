@@ -339,7 +339,6 @@ concept leaf_node_evaluator =
 }  // namespace meta
 
 namespace impl {
-using IndexSet = container::set<Index, Index::FullLabelCompare>;
 
 FullBinaryNode<EvalExpr> binarize(ExprPtr const&, IndexSet const& uncontract);
 }  // namespace impl
