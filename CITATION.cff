@@ -2,8 +2,8 @@ cff-version: 1.2.0
 title: "SeQuant: Symbolic Tensor Algebra in C++"
 message: "If you use this software, please cite the preferred-citation article below."
 type: software
-version: 2.1.0
-date-released: 2026-02-14
+version: 2.2.0
+date-released: 2026-02-18
 license: LGPL-3.0
 repository-code: https://github.com/ValeevGroup/SeQuant
 url: https://valeevgroup.github.io/SeQuant
