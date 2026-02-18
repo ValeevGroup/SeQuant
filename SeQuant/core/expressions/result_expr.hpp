@@ -9,6 +9,9 @@
 #include <SeQuant/core/slotted_index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <range/v3/view/concat.hpp>
+#include <range/v3/view/filter.hpp>
+
 #include <initializer_list>
 #include <optional>
 #include <string>
@@ -27,6 +30,8 @@ namespace sequant {
 ///
 /// Importantly, it is possible to track the result without giving
 /// an explicit name (label) to it.
+///
+/// @note see AbstractTensor for the description of the model of slots/indices
 class ResultExpr {
  public:
   using IndexContainer = container::svector<Index>;
@@ -70,9 +75,23 @@ class ResultExpr {
   ColumnSymmetry column_symmetry() const;
   void set_column_symmetry(ColumnSymmetry symm);
 
+  /// @return bra slots
   const IndexContainer &bra() const;
+  /// @return ket slots
   const IndexContainer &ket() const;
+  /// @return aux slots
   const IndexContainer &aux() const;
+
+  /// @return concatenated view of all slots (bra, ket, aux)
+  auto slots() const {
+    return ranges::views::concat(m_braIndices, m_ketIndices, m_auxIndices);
+  }
+
+  /// @return view of all non-null indices across all slots (bra, ket, aux)
+  auto indices() const {
+    return ranges::views::filter(
+        slots(), [](const Index &idx) { return idx.nonnull(); });
+  }
 
   const ExprPtr &expression() const;
   ExprPtr &expression();

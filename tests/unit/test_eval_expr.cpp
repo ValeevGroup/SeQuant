@@ -183,6 +183,48 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
                                              ket(IndexList{L"a_1"})));
   }
 
+  SECTION("external hyperindices") {
+    // t{i1,i2;a1,a3} T2{a2,a3;i1,i2}: i1,i2 appear in bra of t and ket of
+    // T2 (multiply-appearing), a3 also multiply-appearing
+    auto expr = deserialize(L"t{i1,i2;a1,a3} T2{a2,a3;i1,i2}");
+
+    // without external indices: i1,i2,a3 are all contracted
+    // result has only {a1,a2}
+    {
+      auto tree = binarize(expr);
+      REQUIRE(tree->is_tensor());
+      auto const& ixs = tree->as_tensor().const_braket() |
+                        ranges::views::transform(&Index::label) |
+                        ranges::to<container::set<std::wstring_view>>;
+      auto expected = std::initializer_list<std::wstring_view>{L"a_1", L"a_2"} |
+                      ranges::to<container::set<std::wstring_view>>;
+      REQUIRE(ixs == expected);
+    }
+
+    // with external={i1,i2}: only a3 is contracted
+    // result has {a1,a2,i1,i2} with i1,i2 in aux
+    {
+      IndexSet ext;
+      ext.emplace(Index{L"i_1"});
+      ext.emplace(Index{L"i_2"});
+      auto tree = binarize(expr, ext);
+      REQUIRE(tree->is_tensor());
+      auto const& t = tree->as_tensor();
+      auto all_labels = t.const_indices() |
+                        ranges::views::transform(&Index::label) |
+                        ranges::to<container::set<std::wstring_view>>;
+      auto expected = std::initializer_list<std::wstring_view>{L"a_1", L"a_2",
+                                                               L"i_1", L"i_2"} |
+                      ranges::to<container::set<std::wstring_view>>;
+      REQUIRE(all_labels == expected);
+      // hyperindices should be in aux (they appear in multiple slots)
+      auto aux_labels = t.aux() | ranges::views::transform(&Index::label) |
+                        ranges::to<container::set<std::wstring_view>>;
+      REQUIRE(aux_labels.contains(L"i_1"));
+      REQUIRE(aux_labels.contains(L"i_2"));
+    }
+  }
+
   SECTION("Sequant expression") {
     const auto& str_t1 = L"g_{a1,a2}^{a3,a4}";
     const auto& str_t2 = L"t_{a3,a4}^{i1,i2}";
