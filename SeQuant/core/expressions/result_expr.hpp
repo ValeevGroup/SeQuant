@@ -9,6 +9,9 @@
 #include <SeQuant/core/slotted_index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <range/v3/view/concat.hpp>
+#include <range/v3/view/filter.hpp>
+
 #include <initializer_list>
 #include <optional>
 #include <string>
@@ -78,6 +81,17 @@ class ResultExpr {
   const IndexContainer &ket() const;
   /// @return aux slots
   const IndexContainer &aux() const;
+
+  /// @return concatenated view of all slots (bra, ket, aux)
+  auto slots() const {
+    return ranges::views::concat(m_braIndices, m_ketIndices, m_auxIndices);
+  }
+
+  /// @return view of all non-null indices across all slots (bra, ket, aux)
+  auto indices() const {
+    return ranges::views::filter(
+        slots(), [](const Index &idx) { return idx.nonnull(); });
+  }
 
   const ExprPtr &expression() const;
   ExprPtr &expression();
