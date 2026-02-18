@@ -22,7 +22,8 @@ bool operator==(const Context& ctx1, const Context& ctx2) {
   else
     return ctx1.vacuum() == ctx2.vacuum() && ctx1.metric() == ctx2.metric() &&
            ctx1.braket_symmetry() == ctx2.braket_symmetry() &&
-           ctx1.strict_braket_symmetry() == ctx2.strict_braket_symmetry() &&
+           ctx1.assert_strict_braket_symmetry() ==
+               ctx2.assert_strict_braket_symmetry() &&
            ctx1.spbasis() == ctx2.spbasis() &&
            ctx1.first_dummy_index_ordinal() ==
                ctx2.first_dummy_index_ordinal() &&
@@ -128,7 +129,7 @@ Context::Context(Options options)
       vacuum_(options.vacuum),
       metric_(options.metric),
       braket_symmetry_(options.braket_symmetry),
-      strict_braket_symmetry_(options.strict_braket_symmetry),
+      assert_strict_braket_symmetry_(options.assert_strict_braket_symmetry),
       spbasis_(options.spbasis),
       first_dummy_index_ordinal_(options.first_dummy_index_ordinal),
       canonicalization_options_(options.canonicalization_options),
@@ -158,8 +159,8 @@ IndexSpaceMetric Context::metric() const { return metric_; }
 
 BraKetSymmetry Context::braket_symmetry() const { return braket_symmetry_; }
 
-StrictBraKetSymmetry Context::strict_braket_symmetry() const {
-  return strict_braket_symmetry_;
+bool Context::assert_strict_braket_symmetry() const {
+  return assert_strict_braket_symmetry_;
 }
 
 SPBasis Context::spbasis() const { return spbasis_; }
@@ -204,8 +205,10 @@ Context& Context::set(BraKetSymmetry braket_symmetry) {
   return *this;
 }
 
-Context& Context::set(StrictBraKetSymmetry strict_braket_symmetry) {
-  strict_braket_symmetry_ = strict_braket_symmetry;
+Context& Context::set(
+    AssertStrictBraKetSymmetry assert_strict_braket_symmetry) {
+  assert_strict_braket_symmetry_ =
+      assert_strict_braket_symmetry == AssertStrictBraKetSymmetry::Yes;
   return *this;
 }
 

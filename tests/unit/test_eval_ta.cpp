@@ -722,10 +722,10 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
         REQUIRE(equal_tarrays(eval_rdm, man_rdm, "a2,a1,i1,i2"));
       }
 
-      {  // multiple bra or ket indices require StrictBraKetSymm::No
+      {  // multiple bra or ket indices require AssertStrictBraKetSymmetry::No
         auto ctx_resetter = sequant::set_scoped_default_context(
             sequant::Context{sequant::get_default_context()}.set(
-                sequant::StrictBraKetSymmetry::No));
+                sequant::AssertStrictBraKetSymmetry::No));
 
         // hyperindex i1 in ket slots of 3 tensors
         auto expr2 = deserialize(L"T{a1;i1} T{a2;i1} T{a3;i1}");

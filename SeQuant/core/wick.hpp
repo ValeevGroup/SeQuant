@@ -616,7 +616,7 @@ class WickTheorem {
            get_default_context(S).vacuum() == Vacuum::SingleProduct)))
       throw std::logic_error(
           "WickTheorem::compute: spinfree=true supported only for physical "
-          "vacuum and for Fermi facuum");
+          "vacuum and for Fermi vacuum");
 
     if (!all_indices_) {
       extract_indices(*input_);
