@@ -19,7 +19,7 @@ TEST_CASE("latex", "[util]") {
     using namespace std::string_literals;
     REQUIRE(io::latex::greek_characters_to_string("alpha"s) == "alpha");
     REQUIRE_THROWS_AS(io::latex::greek_characters_to_string("α"s) == "\\alpha",
-                      std::invalid_argument);
+                      Exception);
 
     REQUIRE(io::latex::greek_characters_to_string(std::wstring(L"alpha")) ==
             L"alpha");
@@ -36,10 +36,10 @@ TEST_CASE("latex", "[util]") {
             u8"alpha");
     REQUIRE_THROWS_AS(io::latex::greek_characters_to_string(
                           std::u8string(u8"α")) == u8"\\alpha",
-                      std::invalid_argument);
+                      Exception);
     REQUIRE_THROWS_AS(io::latex::greek_characters_to_string(
                           std::u8string(u8"Γ")) == u8"\\Gamma",
-                      std::invalid_argument);
+                      Exception);
 
     REQUIRE(io::latex::greek_characters_to_string(std::u16string(u"alpha")) ==
             u"alpha");

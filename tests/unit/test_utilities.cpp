@@ -204,7 +204,7 @@ TEST_CASE("utilities", "[utilities]") {
       for (auto&& thr : threads) thr.join();
       for (auto result : thread_results) CHECK(result == 0);
       CHECK_THROWS_AS(Singleton<S<EnableDefaultCtor>>::set_instance(1),
-                      std::logic_error);
+                      sequant::Exception);
       CHECK(Singleton<S<EnableDefaultCtor>>::instance().s() == 0);
     }
     // non-default-constructible Singleton
@@ -216,7 +216,7 @@ TEST_CASE("utilities", "[utilities]") {
           threads.emplace_back([&result = thread_results[t]]() {
             try {
               Singleton<S<DisableDefaultCtor>>::instance().s();
-            } catch (std::logic_error&) {
+            } catch (sequant::Exception&) {
               result = 0;
               return;
             } catch (...) {

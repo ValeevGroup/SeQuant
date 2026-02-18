@@ -41,7 +41,6 @@
 #include <iterator>
 #include <memory>
 #include <numeric>
-#include <stdexcept>
 #include <string_view>
 #include <unordered_map>
 #include <utility>
@@ -248,8 +247,8 @@ ExprPtr swap_bra_ket(const ExprPtr& expr) {
       } else if (term->is<Variable>() || term->is<Constant>()) {
         result->append(1, term);
       } else {
-        throw std::runtime_error("Invalid Expr type in product_swap: " +
-                                 term->type_name());
+        throw Exception("Invalid Expr type in product_swap: " +
+                        term->type_name());
       }
     }
     return result;
@@ -266,8 +265,7 @@ ExprPtr swap_bra_ket(const ExprPtr& expr) {
     }
     return result;
   } else {
-    throw std::runtime_error("Invalid Expr type in swap_bra_ket: " +
-                             expr->type_name());
+    throw Exception("Invalid Expr type in swap_bra_ket: " + expr->type_name());
   }
 }
 
@@ -288,7 +286,7 @@ ExprPtr append_spin(const ExprPtr& expr,
       } else if (term->is<Constant>() || term->is<Variable>()) {
         spin_product->append(1, term);
       } else {
-        throw std::runtime_error(
+        throw Exception(
             "Invalid Expr type in append_spin::add_spin_to_product: " +
             term->type_name());
       }
@@ -310,7 +308,7 @@ ExprPtr append_spin(const ExprPtr& expr,
     return expr;
   }
 
-  throw std::runtime_error("Unsupported Expr type in append_spin");
+  throw Exception("Unsupported Expr type in append_spin");
 }
 
 ExprPtr remove_spin(const ExprPtr& expr) {
@@ -337,7 +335,7 @@ ExprPtr remove_spin(const ExprPtr& expr) {
           } else if (term->is<Constant>() || term->is<Variable>()) {
             result->append(1, term);
           } else {
-            throw std::runtime_error(
+            throw Exception(
                 "Invalid Expr type in remove_spin::remove_spin_from_product: " +
                 term->type_name());
           }
@@ -358,8 +356,7 @@ ExprPtr remove_spin(const ExprPtr& expr) {
   } else if (expr->is<Constant>() || expr->is<Variable>()) {
     return expr;
   } else {
-    throw std::runtime_error("Invalid Expr type in remove_spin: " +
-                             expr->type_name());
+    throw Exception("Invalid Expr type in remove_spin: " + expr->type_name());
   }
 }
 
@@ -498,7 +495,7 @@ ExprPtr expand_antisymm(const ExprPtr& expr, bool skip_spinsymm) {
       } else if (term->is<Variable>() || term->is<Constant>()) {
         temp.append(1, term, Product::Flatten::No);
       } else {
-        throw std::runtime_error(
+        throw Exception(
             "Invalid Expr type in expand_antisymm::expand_product: " +
             term->type_name());
       }
@@ -517,8 +514,8 @@ ExprPtr expand_antisymm(const ExprPtr& expr, bool skip_spinsymm) {
     }
     return result;
   } else {
-    throw std::runtime_error("Invalid Expr type in expand_antisymm: " +
-                             expr->type_name());
+    throw Exception("Invalid Expr type in expand_antisymm: " +
+                    expr->type_name());
   }
 }
 
@@ -701,8 +698,8 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
       } else if (term->is<Constant>() || term->is<Variable>()) {
         new_product.append(1, term);
       } else {
-        throw std::runtime_error("Invalid Expr type in symmetrize_expr: " +
-                                 term->type_name());
+        throw Exception("Invalid Expr type in symmetrize_expr: " +
+                        term->type_name());
       }
     }
     result->append(ex<Product>(new_product));
@@ -723,8 +720,8 @@ ExprPtr symmetrize_expr(const ExprPtr& expr) {
     }
     return result;
   } else {
-    throw std::runtime_error("Invalid Expr type in symmetrize_expr: " +
-                             expr->type_name());
+    throw Exception("Invalid Expr type in symmetrize_expr: " +
+                    expr->type_name());
   }
 }
 
@@ -742,8 +739,7 @@ ExprPtr expand_A_op(const ExprPtr& expr) {
     return result;
   }
 
-  throw std::runtime_error("Invalid Expr type in expand_A_op: " +
-                           expr->type_name());
+  throw Exception("Invalid Expr type in expand_A_op: " + expr->type_name());
 }
 
 container::svector<container::map<Index, Index>> P_maps(const Tensor& P) {
@@ -807,8 +803,8 @@ ExprPtr expand_P_op(const ProductPtr& product) {
       } else if (term->is<Constant>() || term->is<Variable>()) {
         new_product->append(1, term);
       } else {
-        throw std::runtime_error("Invalid Expr type in expand_P_op: " +
-                                 term->type_name());
+        throw Exception("Invalid Expr type in expand_P_op: " +
+                        term->type_name());
       }
     }
     result->append(new_product);
@@ -829,8 +825,7 @@ ExprPtr expand_P_op(const ExprPtr& expr) {
     }
     return result;
   } else {
-    throw std::runtime_error("Invalid Expr type in expand_P_op: " +
-                             expr->type_name());
+    throw Exception("Invalid Expr type in expand_P_op: " + expr->type_name());
   }
 }
 
@@ -1062,8 +1057,8 @@ ExprPtr closed_shell_spintrace_impl(const ExprPtr& expression,
     }
     return result;
   } else {
-    throw std::runtime_error("Invalid Expr type in closed_shell_spintrace: " +
-                             expr->type_name());
+    throw Exception("Invalid Expr type in closed_shell_spintrace: " +
+                    expr->type_name());
   }
 }
 
@@ -1205,8 +1200,8 @@ ExprPtr swap_spin(const ExprPtr& expr) {
       } else if (t->is<Constant>() || t->is<Variable>()) {
         result.append(1, t, Product::Flatten::No);
       } else {
-        throw std::runtime_error(
-            "Invalid Expr type in swap_spin::swap_product: " + t->type_name());
+        throw Exception("Invalid Expr type in swap_spin::swap_product: " +
+                        t->type_name());
       }
     }
     return ex<Product>(result);
@@ -1223,8 +1218,7 @@ ExprPtr swap_spin(const ExprPtr& expr) {
     }
     return ex<Sum>(result);
   } else {
-    throw std::runtime_error("Invalid Expr type in swap_spin: " +
-                             expr->type_name());
+    throw Exception("Invalid Expr type in swap_spin: " + expr->type_name());
   }
 }
 
@@ -1483,7 +1477,7 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
         cBra.insert(cBra.end(), tnsr.bra().begin(), tnsr.bra().end());
         cKet.insert(cKet.end(), tnsr.ket().begin(), tnsr.ket().end());
       } else if (term->is<Product>() || term->is<Sum>()) {
-        throw std::runtime_error(
+        throw Exception(
             "Nested Product and Sum not supported in spin_symm_product");
       }
     }
@@ -1676,7 +1670,7 @@ ExprPtr spintrace_impl(const ExprPtr& expression, IdxGroups&& ext_index_groups,
           return ex<Constant>(0);
         }
       } else if (expr.is<Sum>() || expr.is<Product>()) {
-        throw std::runtime_error(
+        throw Exception(
             "Nested sums/products not supported in spin_trace_product");
       }
     }
@@ -1690,7 +1684,7 @@ ExprPtr spintrace_impl(const ExprPtr& expression, IdxGroups&& ext_index_groups,
       } else {
         // Would need some sort of recursion but it is not clear how that would
         // interact with other code in here yet so prefer to error instead.
-        throw std::runtime_error(
+        throw Exception(
             "spin_trace_product: Nested products or sums inside of a Product "
             "not supported (yet)");
       }
@@ -1833,8 +1827,7 @@ ExprPtr spintrace_impl(const ExprPtr& expression, IdxGroups&& ext_index_groups,
     }
     return result;
   } else {
-    throw std::runtime_error("Invalid Expr type in spintrace: " +
-                             expr->type_name());
+    throw Exception("Invalid Expr type in spintrace: " + expr->type_name());
   }
 
   detail::reset_idx_tags(result);

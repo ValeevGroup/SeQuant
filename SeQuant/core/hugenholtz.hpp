@@ -135,8 +135,7 @@ class HugenholtzVertex {
   void insert(const size_t edge_idx, const Edge& edge) {
     // preconditions
     if (edge_idx > edge_to_group_.size()) {
-      throw std::out_of_range(
-          "HugenholtzVertex::insert : can only insert or append");
+      throw Exception("HugenholtzVertex::insert : can only insert or append");
     }
 
     auto grp_it = std::find_if(

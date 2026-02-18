@@ -5,6 +5,7 @@
 
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/math.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 
 #include <TiledArray/einsum/tiledarray.h>
 #include <tiledarray.h>
@@ -28,7 +29,7 @@ auto column_symmetrize_ta(TA::DistArray<Args...> const& arr) {
 
   size_t const rank = arr.trange().rank();
   if (rank % 2 != 0)
-    throw std::domain_error("This function only supports even-ranked tensors");
+    throw Exception("This function only supports even-ranked tensors");
 
   TA::DistArray<Args...> result;
 

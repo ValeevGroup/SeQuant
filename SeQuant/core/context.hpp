@@ -130,7 +130,7 @@ class Context {
   /// was default constructed)
   std::shared_ptr<const IndexSpaceRegistry> index_space_registry() const;
   /// @return a pointer to the IndexSpaceRegistry for this context.
-  /// @throw std::logic_error if the IndexSpaceRegistry is null
+  /// @throw Exception if the IndexSpaceRegistry is null
   std::shared_ptr<IndexSpaceRegistry> mutable_index_space_registry() const;
   /// \return IndexSpaceMetric of this context
   IndexSpaceMetric metric() const;

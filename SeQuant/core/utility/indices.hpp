@@ -240,7 +240,7 @@ IndexGroups<Container> get_unique_indices(const Expr& expr) {
   } else if (expr.is<Product>()) {
     return get_unique_indices<Container>(expr.as<Product>());
   } else {
-    throw std::runtime_error(
+    throw Exception(
         "Encountered unsupported expression type in get_unique_indices");
   }
 }

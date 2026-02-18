@@ -376,11 +376,10 @@ class IndexSpace {
 
   /// exception type thrown when encountered unknown/invalid
   /// IndexSpace::base_key() or Index::label()
-  struct bad_key : std::invalid_argument {
-    bad_key() : std::invalid_argument("bad key") {}
+  struct bad_key : Exception {
+    bad_key() : Exception("bad key") {}
     template <basic_string_convertible S>
-    bad_key(S &&key)
-        : std::invalid_argument(std::string("bad key: ") + toUtf8(key)) {}
+    bad_key(S &&key) : Exception(std::string("bad key: ") + toUtf8(key)) {}
   };
 
   struct KeyCompare {

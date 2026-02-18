@@ -1170,7 +1170,7 @@ void TensorNetworkV2::init_edges() {
     for (auto &&proto_idx : current.idx().proto_indices()) {
       // for now no recursive proto indices
       if (proto_idx.has_proto_indices())
-        throw std::runtime_error(
+        throw Exception(
             "TensorNetworkV2 does not support recursive protoindices");
       proto_indices.emplace(proto_idx);
     }

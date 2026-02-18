@@ -26,7 +26,6 @@
 #include <iterator>
 #include <memory>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -507,10 +506,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         slots(), [](const Index &idx) { return idx.nonnull(); });
   }
   /// @return number of indices in bra/ket
-  /// @throw std::logic_error if bra and ket ranks do not match
+  /// @throw Exception if bra and ket ranks do not match
   std::size_t rank() const {
     if (bra_rank() != ket_rank()) {
-      throw std::logic_error("Tensor::rank(): bra rank != ket rank");
+      throw Exception("Tensor::rank(): bra rank != ket rank");
     }
     return bra_rank();
   }

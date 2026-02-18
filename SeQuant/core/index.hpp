@@ -27,7 +27,6 @@
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -912,7 +911,7 @@ class Index : public Taggable {
   /// generated Index objects
   inline void check_nonreserved() const {
     if (ordinal_ && *ordinal_ >= min_tmp_index()) {
-      throw std::invalid_argument(
+      throw Exception(
           "Index ctor: ordinal must be less than the value returned by "
           "min_tmp_index()");
     }

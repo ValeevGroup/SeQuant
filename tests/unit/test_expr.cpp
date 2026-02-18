@@ -259,7 +259,7 @@ TEST_CASE("expr", "[elements]") {
     REQUIRE(ex->value() == 2);
     REQUIRE(ex->value<int>() == 2);
     REQUIRE(ex->value<std::complex<int>>() == std::complex<int>{2, 0});
-    REQUIRE_THROWS_AS(ex->value<Dummy>(), std::invalid_argument);
+    REQUIRE_THROWS_AS(ex->value<Dummy>(), Exception);
     // sequant::rational is convertible to bool
     REQUIRE_NOTHROW(ex->value<bool>());
     REQUIRE_THROWS_AS(std::make_shared<Constant>(-2)->value<unsigned int>(),
@@ -287,7 +287,7 @@ TEST_CASE("expr", "[elements]") {
   SECTION("adjoint") {
     {  // not implemented by default
       const auto e = std::make_shared<Dummy>();
-      REQUIRE_THROWS_AS(e->adjoint(), std::logic_error);
+      REQUIRE_THROWS_AS(e->adjoint(), Exception);
     }
     {  // implemented in Adjointable
       const auto e = std::make_shared<Adjointable>();

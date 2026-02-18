@@ -139,7 +139,7 @@ ExprPtr expectation_value_impl(
   } else if (expr.is<Constant>() || expr.is<Variable>()) {
     return expr;  // vacuum is normalized
   }
-  throw std::invalid_argument(
+  throw Exception(
       "mbpt::op::detail::expectation_value_impl(expr): unknown expression "
       "type");
 }

@@ -7,13 +7,13 @@
 
 #include <cstdlib>
 #include <memory>
-#include <stdexcept>
 #include <thread>
 #include <utility>
 #include <vector>
 
 #include <SeQuant/core/ranges.hpp>
 #include <SeQuant/core/utility/conversion.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
 #include <execution>
@@ -41,8 +41,7 @@ inline int& nthreads_accessor() {
 
 /// sets the number of threads to use for concurrent work
 inline void set_num_threads(int nt) {
-  if (nt < 1)
-    throw std::invalid_argument("set_num_threads(nthreads): invalid nthreads");
+  if (nt < 1) throw Exception("set_num_threads(nthreads): invalid nthreads");
   detail::nthreads_accessor() = nt;
 }
 

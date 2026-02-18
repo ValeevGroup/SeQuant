@@ -21,7 +21,6 @@
 #include <ranges>
 #include <set>
 #include <span>
-#include <stdexcept>
 #include <tuple>
 #include <type_traits>
 #include <unordered_map>
@@ -75,7 +74,7 @@ class GenerationVisitor {
       } else if (node->is_variable()) {
         m_generator.persist(node->as_variable(), m_ctx);
       } else {
-        throw std::runtime_error(
+        throw Exception(
             "Root nodes are expected to be of type tensor or variable");
       }
 
@@ -139,7 +138,7 @@ class GenerationVisitor {
       return;
     }
     if (!node->is_tensor() && !node->is_variable()) {
-      throw std::runtime_error(
+      throw Exception(
           "Unexpected expression type in "
           "GenerationVisitor::load_or_create");
     }
@@ -842,14 +841,13 @@ void export_groups(Range groups, Generator<Context> &generator, Context ctx) {
 
   if (size(groups) > 1) {
     if (!generator.supports_named_sections()) {
-      throw std::runtime_error("The generator for '" +
-                               generator.get_format_name() +
-                               "' doesn't support named sections");
+      throw Exception("The generator for '" + generator.get_format_name() +
+                      "' doesn't support named sections");
     }
 
     for (const ExpressionGroup<T> &current : groups) {
       if (!current.is_named()) {
-        throw std::runtime_error(
+        throw Exception(
             "Can't have unnamed groups when exporting multiple groups at once");
       }
     }

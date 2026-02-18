@@ -377,7 +377,7 @@ TEST_CASE("tensor_network", "[elements]") {
       REQUIRE_NOTHROW(TN(*t1_x_t2));
 
       auto t1_x_t2_p_t2 = t1 * (t2 + t2);  // can only use a flat tensor product
-      REQUIRE_THROWS_AS(TN(*t1_x_t2_p_t2), std::logic_error);
+      REQUIRE_THROWS_AS(TN(*t1_x_t2_p_t2), Exception);
     }
 
     {  // with NormalOperators
@@ -882,7 +882,7 @@ TEST_CASE("tensor_network_v2", "[elements][valgrind_skip]") {
     Edge e5(v8, &dummy);
     e5.connect_to(v6);
     Edge e6(v8, &dummy);
-    REQUIRE_THROWS_AS(e6.connect_to(v7), std::logic_error);
+    REQUIRE_THROWS_AS(e6.connect_to(v7), Exception);
 
     // Due to tensor symmetries, these edges are considered equal
     REQUIRE(e1 == e2);
@@ -913,12 +913,12 @@ TEST_CASE("tensor_network_v2", "[elements][valgrind_skip]") {
       REQUIRE_NOTHROW(TensorNetworkV2(*t1_x_t2));
 
       auto t1_x_t2_p_t2 = t1 * (t2 + t2);  // can only use a flat tensor product
-      REQUIRE_THROWS_AS(TensorNetworkV2(*t1_x_t2_p_t2), std::logic_error);
+      REQUIRE_THROWS_AS(TensorNetworkV2(*t1_x_t2_p_t2), Exception);
 
       // must be covariant: no bra to bra or ket to ket
       t2->adjoint();
       auto t1_x_t2_adjoint = t1 * t2;
-      REQUIRE_THROWS_AS(TensorNetworkV2(t1_x_t2_adjoint), std::logic_error);
+      REQUIRE_THROWS_AS(TensorNetworkV2(t1_x_t2_adjoint), Exception);
     }
 
     {  // with NormalOperators
@@ -1470,8 +1470,8 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
     Edge e4({v4, v6}, &dummy);
 
     // can't connect same vertex more than once
-    REQUIRE_THROWS_AS(Edge({v4, v6, v6}), std::invalid_argument);
-    REQUIRE_THROWS_AS(e4.connect_to(v6), std::invalid_argument);
+    REQUIRE_THROWS_AS(Edge({v4, v6, v6}), Exception);
+    REQUIRE_THROWS_AS(e4.connect_to(v6), Exception);
 
     Edge e5(v8, &dummy);
     e5.connect_to(v6);
@@ -1530,7 +1530,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       REQUIRE_NOTHROW(TN(*t1_x_t2));
 
       auto t1_x_t2_p_t2 = t1 * (t2 + t2);  // can only use a flat tensor product
-      REQUIRE_THROWS_AS(TN(*t1_x_t2_p_t2), std::invalid_argument);
+      REQUIRE_THROWS_AS(TN(*t1_x_t2_p_t2), Exception);
 
       // must be covariant: no bra to bra or ket to ket
       if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {

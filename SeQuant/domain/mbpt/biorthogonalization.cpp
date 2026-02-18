@@ -56,7 +56,7 @@ using ParticlePairings = container::svector<IndexPair>;
 ///
 /// \return Vector of rational coefficients representing the first row
 ///
-/// \throw std::runtime_error if n_particles is not in the range [1,5]
+/// \throw Exception if n_particles is not in the range [1,5]
 // clang-format on
 std::vector<sequant::rational> hardcoded_biorthogonalizer_row(
     std::size_t n_particles) {
@@ -127,7 +127,7 @@ std::vector<sequant::rational> hardcoded_biorthogonalizer_row(
           ratio(-13, 7560),  ratio(37, 15120),  ratio(-23, 30240)};
 
     default:
-      throw std::runtime_error(
+      throw Exception(
           "hardcoded biorthogonal coefficients only available for ranks 1-5, "
           "requested rank is : " +
           std::to_string(n_particles));
@@ -323,7 +323,7 @@ ExprPtr create_expr_for(const ParticlePairings& ref_pairing,
       });
 
   if (it == pairings.end()) {
-    throw std::runtime_error(
+    throw Exception(
         "Missing explicit expression for a required index pairing in "
         "biorthogonalization");
   }

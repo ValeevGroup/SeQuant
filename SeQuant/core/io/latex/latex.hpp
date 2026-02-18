@@ -7,6 +7,7 @@
 
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <cmath>
@@ -115,7 +116,7 @@ std::basic_string<Char, Traits, Alloc> greek_characters_to_string_impl(
 /// `[0x3B1,0x3C9]`
 ///         and `[0391,03A9]`replaced with their LaTeX equivalents
 /// @warning if @p str contains non-ASCII characters `Char` must be `wchar_t`
-/// @throw std::invalid_argument if @p Char is narrow and @p str contains
+/// @throw Exception if @p Char is narrow and @p str contains
 /// non-ASCII characters
 template <typename Char, typename Traits>
 std::basic_string<Char, Traits> greek_characters_to_string(
@@ -144,7 +145,7 @@ std::basic_string<Char, Traits, Alloc> diactrics_to_string_impl(
 /// @param str input string
 /// @return with some diactrics replaced with their LaTeX equivalents
 /// @warning if @p str contains non-ASCII characters `Char` must be `wchar_t`
-/// @throw std::invalid_argument if @p Char is narrow and @p str contains
+/// @throw Exception if @p Char is narrow and @p str contains
 /// non-ASCII characters
 /// @note only some combined Unicode characters are currently supported
 template <typename Char, typename Traits>
@@ -167,7 +168,7 @@ std::basic_string<Char, Traits, Alloc> diactrics_to_string(
 /// @return @p str with some Unicode characters replaced by their LaTeX
 /// equivalents
 /// @warning if @p str contains non-ASCII characters `Char` must be `wchar_t`
-/// @throw std::invalid_argument if @p Char is narrow and @p str contains
+/// @throw Exception if @p Char is narrow and @p str contains
 /// non-ASCII characters
 /// @note only some combined Unicode characters are currently supported
 /// @internal useful resources

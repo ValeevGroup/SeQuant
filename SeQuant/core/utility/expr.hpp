@@ -94,7 +94,7 @@ template <typename EqualityComparator = std::equal_to<>>
 ExprPtr &replace(ExprPtr &expr, const ExprPtr &target,
                  const ExprPtr &replacement, EqualityComparator cmp = {}) {
   if (!target->is_atom()) {
-    throw std::runtime_error(
+    throw Exception(
         "Replacement of composite expressions is not yet implemented");
   }
 

@@ -443,7 +443,7 @@ ExprPtr transform_expr(const ExprPtr &expr,
       } else if (term->is<Variable>() || term->is<Constant>()) {
         result->append(1, term->clone());
       } else {
-        throw std::runtime_error("Invalid Expr type in transform_product");
+        throw Exception("Invalid Expr type in transform_product");
       }
     }
     result->scale(scaling_factor);
@@ -466,7 +466,7 @@ ExprPtr transform_expr(const ExprPtr &expr,
     }
     return result;
   } else {
-    throw std::runtime_error("Invalid Expr type in transform_expr");
+    throw Exception("Invalid Expr type in transform_expr");
   }
 }
 
@@ -532,7 +532,7 @@ std::optional<ExprPtr> pop_tensor(ExprPtr &expression,
     return tensor;
   }
 
-  throw std::runtime_error("Unhandled expression type in pop_tensor");
+  throw Exception("Unhandled expression type in pop_tensor");
 }
 
 }  // namespace sequant

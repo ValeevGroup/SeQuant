@@ -753,7 +753,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
         } else {
           ranges::find_if(summands, [this](const auto &summand) {
             if (summand.template is<Sum>())  // summands must not be a Sum
-              throw std::invalid_argument(
+              throw Exception(
                   "WickTheorem<S>::compute(expr): expr is a Sum with one of "
                   "the "
                   "summands also a Sum, WickTheorem can only accept a fully "

@@ -5,7 +5,6 @@
 
 #include <memory>
 #include <sstream>
-#include <stdexcept>
 #include <type_traits>
 #include <utility>
 
@@ -243,7 +242,7 @@ class FullBinaryNode {
     if (n)
       return n;
     else
-      throw std::runtime_error(
+      throw Exception(
           "Dereferenced nullptr: use leaf() or root() methods to check for "
           "leaf and root nodes");
   }

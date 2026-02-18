@@ -7,6 +7,7 @@
 #include <SeQuant/core/eval/backends/tapp/tensor.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/math.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 
 namespace sequant {
 
@@ -27,7 +28,7 @@ auto column_symmetrize_tapp(TAPPTensor<T, Alloc> const& arr) {
   size_t const rank = arr.rank();
 
   if (rank % 2 != 0)
-    throw std::domain_error("This function only supports even-ranked tensors");
+    throw Exception("This function only supports even-ranked tensors");
 
   perm_t perm = iota(size_t{0}, rank) | ranges::to<perm_t>;
 

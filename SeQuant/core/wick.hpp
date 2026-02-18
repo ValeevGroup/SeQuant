@@ -107,7 +107,7 @@ class WickTheorem {
   /// spin-orbital normal-ordered operators By default compute() assumes
   /// spin-orbital operators.
   /// @param sf if true, will complete full contractions only.
-  /// @throw std::invalid_argument if @c sf does not match the contents of
+  /// @throw Exception if @c sf does not match the contents of
   /// get_default_context().spbasis()
   [[deprecated(
       "get_default_context().spbasis() should be used to specify spin-free "
@@ -115,7 +115,7 @@ class WickTheorem {
   spinfree(bool sf) {
     if (!((sf && get_default_context(S).spbasis() == SPBasis::Spinfree) ||
           (!sf && get_default_context(S).spbasis() == SPBasis::Spinor))) {
-      throw std::invalid_argument(
+      throw Exception(
           "WickTheorem<S>::Spinfree(sf): sf must match the contents of "
           "get_default_context(S).spbasis() (N.B. WickTheorem::Spinfree() is "
           "deprecated, no longer should be used)");
@@ -144,7 +144,7 @@ class WickTheorem {
   /// Specifies the external indices; by default assume all indices are summed
   /// over
   /// @param external_indices external (nonsummed) indices
-  /// @throw std::logic_error if WickTheorem::set_external_indices or
+  /// @throw Exception if WickTheorem::set_external_indices or
   /// WickTheorem::compute had already been invoked
   template <typename IndexContainer>
   WickTheorem &set_external_indices(IndexContainer &&external_indices) {
@@ -164,7 +164,7 @@ class WickTheorem {
               ss << L"WickTheorem::set_external_indices: "
                     L"external index " +
                         io::latex::to_string(Index(v)) + L" repeated";
-              throw std::invalid_argument(toUtf8(ss.str()));
+              throw Exception(toUtf8(ss.str()));
             }
           });
     }
@@ -189,7 +189,7 @@ class WickTheorem {
   /// will not constrain connectivity
   /// @param op_index_pairs the list of pairs of op indices to be connected in
   /// the result
-  /// @throw std::invalid_argument if @p op_index_pairs contains duplicates
+  /// @throw Exception if @p op_index_pairs contains duplicates
   ///@{
 
   /// @tparam IndexPairContainer a sequence of std::pair<Integer,Integer>
@@ -206,7 +206,7 @@ class WickTheorem {
       return false;
     };
     if (has_duplicates(op_index_pairs)) {
-      throw std::invalid_argument(
+      throw Exception(
           "WickTheorem::set_nop_connections(arg): arg contains duplicates");
     }
 
@@ -217,12 +217,12 @@ class WickTheorem {
                 decltype(op_index_pairs)>::value_type::first_type>;
         if (static_cast<std::size_t>(opidx_pair.first) >= input_->size() ||
             static_cast<std::size_t>(opidx_pair.second) >= input_->size()) {
-          throw std::invalid_argument(
+          throw Exception(
               "WickTheorem::set_nop_connections: nop index out of range");
         }
         if constexpr (signed_indices) {
           if (opidx_pair.first < 0 || opidx_pair.second < 0) {
-            throw std::invalid_argument(
+            throw Exception(
                 "WickTheorem::set_nop_connections: nop index out of range");
           }
         }
@@ -410,7 +410,7 @@ class WickTheorem {
   /// Product, or a Sum
   /// @note the canonicalization method is controlled by the default Context
   /// @warning this is not reentrant, but is optionally threaded internally
-  /// @throw std::logic_error if input's vacuum does not match the current
+  /// @throw Exception if input's vacuum does not match the current
   /// context vacuum
   ExprPtr compute(bool count_only = false,
                   bool skip_input_canonicalization = false);
@@ -528,7 +528,7 @@ class WickTheorem {
   /// @pre @p expr has been expanded (i.e. cannot contain a Sum as a
   /// subexpression)
   /// @note protoindices of external indices are external
-  /// @throw std::invalid_argument if any of @p expr subexpressions is a Sum
+  /// @throw Exception if any of @p expr subexpressions is a Sum
   void extract_indices(const Expr &expr, bool force_external = false) const;
 
   /// upsizes `{nop,index}_topological_partition_`, filling new entries with
@@ -562,7 +562,7 @@ class WickTheorem {
     input_ = nopseq;
 
     if (input_->vacuum() != get_default_context(S).vacuum())
-      throw std::logic_error(
+      throw Exception(
           "WickTheorem<S>::init_input(): input vacuum "
           "must match the default context vacuum");
 
@@ -614,7 +614,7 @@ class WickTheorem {
         !(get_default_context(S).vacuum() == Vacuum::Physical ||
           (S == Statistics::FermiDirac &&
            get_default_context(S).vacuum() == Vacuum::SingleProduct)))
-      throw std::logic_error(
+      throw Exception(
           "WickTheorem::compute: spinfree=true supported only for physical "
           "vacuum and for Fermi vacuum");
 
