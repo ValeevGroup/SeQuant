@@ -27,6 +27,8 @@ namespace sequant {
 ///
 /// Importantly, it is possible to track the result without giving
 /// an explicit name (label) to it.
+///
+/// @note see AbstractTensor for the description of the model of slots/indices
 class ResultExpr {
  public:
   using IndexContainer = container::svector<Index>;
@@ -70,8 +72,11 @@ class ResultExpr {
   ColumnSymmetry column_symmetry() const;
   void set_column_symmetry(ColumnSymmetry symm);
 
+  /// @return bra slots
   const IndexContainer &bra() const;
+  /// @return ket slots
   const IndexContainer &ket() const;
+  /// @return aux slots
   const IndexContainer &aux() const;
 
   const ExprPtr &expression() const;

@@ -436,7 +436,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// @return concatenated view of all indices of this tensor (bra, ket and
   /// aux)
   auto braketaux() const { return ranges::views::concat(bra_, ket_, aux_); }
-  /// @return concatenated view of all slots
+  /// @return concatenated view of all slots (bra, ket, and aux)
   auto slots() const { return ranges::views::concat(bra_, ket_, aux_); }
   /// @return concatenated view of all nonnull indices of this tensor (bra, ket
   /// and aux)
