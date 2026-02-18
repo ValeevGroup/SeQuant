@@ -5,6 +5,7 @@
 #ifndef SEQUANT_CORE_UTILITY_EXCEPTION_HPP
 #define SEQUANT_CORE_UTILITY_EXCEPTION_HPP
 
+#include <exception>
 #include <string>
 
 namespace sequant {

@@ -374,7 +374,7 @@ class IndexSpace {
   using Type = TypeAttr;
   using QuantumNumbers = QuantumNumbersAttr;
 
-  /// exception type thrown when ancountered unknown/invalid
+  /// exception type thrown when encountered unknown/invalid
   /// IndexSpace::base_key() or Index::label()
   struct bad_key : std::invalid_argument {
     bad_key() : std::invalid_argument("bad key") {}
