@@ -5,6 +5,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 
 #include <range/v3/view/join.hpp>
 #include <range/v3/view/transform.hpp>
@@ -41,7 +42,7 @@ class JuliaITensorGenerator : public JuliaTensorOperationsGenerator<Context> {
   void create(const Tensor &tensor, bool zero_init,
               const Context &ctx) override {
     if (!zero_init) {
-      throw std::runtime_error(
+      throw Exception(
           "In Julia tensors can't be created without being initialized");
     }
 
@@ -78,7 +79,7 @@ class JuliaITensorGenerator : public JuliaTensorOperationsGenerator<Context> {
   void create(const Variable &variable, bool zero_init,
               const Context &ctx) override {
     if (!zero_init) {
-      throw std::runtime_error(
+      throw Exception(
           "Julia doesn't support declaring a variable without initializing it");
     }
 

@@ -52,7 +52,7 @@ Index to_index(const io::serialization::v1::ast::Index &index,
       throw SerializationError(offset, length,
                                "Unknown index space '" + toUtf8(current.label) +
                                    "' in proto index specification");
-    } catch (const std::invalid_argument &e) {
+    } catch (const Exception &e) {
       auto [offset, length] = get_pos(current, position_cache, begin);
       throw SerializationError(offset, length,
                                "Invalid index '" + toUtf8(current.label) + "_" +
@@ -71,7 +71,7 @@ Index to_index(const io::serialization::v1::ast::Index &index,
                              "Unknown index space '" +
                                  toUtf8(index.label.label) +
                                  "' in index specification");
-  } catch (const std::invalid_argument &e) {
+  } catch (const Exception &e) {
     auto [offset, length] = get_pos(index.label, position_cache, begin);
     throw SerializationError(offset, length,
                              "Invalid index '" + toUtf8(index.label.label) +

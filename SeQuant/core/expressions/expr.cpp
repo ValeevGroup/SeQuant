@@ -106,12 +106,12 @@ std::size_t ExprPtr::size() const { return this->get()->size(); }
 
 std::wstring ExprPtr::to_latex() const { return as_shared_ptr()->to_latex(); }
 
-std::logic_error Expr::not_implemented(const char *fn) const {
+Exception Expr::not_implemented(const char *fn) const {
   std::ostringstream oss;
   oss << "Expr::" << fn
       << " not implemented in this derived class (type_name=" << type_name()
       << ")";
-  return std::logic_error(oss.str().c_str());
+  return Exception(oss.str());
 }
 
 std::wstring Expr::to_latex() const { throw not_implemented("to_latex"); }

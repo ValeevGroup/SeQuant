@@ -243,7 +243,7 @@ std::shared_ptr<TensorCanonicalizer> TensorCanonicalizer::instance(
     std::wstring_view label) {
   auto inst_ptr = instance_ptr(label);
   if (!inst_ptr)
-    throw std::runtime_error(
+    throw Exception(
         "must first register canonicalizer via "
         "TensorCanonicalizer::register_instance(...)");
   return inst_ptr;

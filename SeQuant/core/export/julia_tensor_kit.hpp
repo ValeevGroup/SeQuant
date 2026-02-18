@@ -5,6 +5,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 
 #include <range/v3/view/enumerate.hpp>
 
@@ -35,7 +36,7 @@ class JuliaTensorKitGenerator : public JuliaTensorOperationsGenerator<Context> {
   void create(const Tensor &tensor, bool zero_init,
               const Context &ctx) override {
     if (!zero_init) {
-      throw std::runtime_error(
+      throw Exception(
           "In Julia tensors can't be created without being initialized");
     }
 
@@ -79,7 +80,7 @@ class JuliaTensorKitGenerator : public JuliaTensorOperationsGenerator<Context> {
     const std::size_t num_indices = tensor.num_indices();
 
     if (braRank == 0 && num_indices > 0) {
-      throw std::runtime_error(
+      throw Exception(
           "It is not (yet) clear how to represent a zero-dimensional domain "
           "for a tensor in TensorKit");
     }

@@ -97,7 +97,7 @@ std::basic_string<Char, Traits, Alloc> greek_characters_to_string_impl(
 
     const Char ch = *it;
     if (sizeof(Char) == 1 && !is_ascii(ch))
-      throw std::invalid_argument(
+      throw Exception(
           "greek_characters_to_string<Char,...>(str): currently only supports "
           "non-ASCII characters in str if Char is a wide character (wchar_t, "
           "char16_t, or char32_t)");
@@ -153,7 +153,7 @@ std::basic_string<Char, Traits, Alloc> diactrics_to_string_impl(
     if (it + 1 != end) next_ch = *(it + 1);
     if (sizeof(Char) == 1 &&
         ((it == begin && !is_ascii(ch)) || (next_ch && !is_ascii(*next_ch)))) {
-      throw std::invalid_argument(
+      throw Exception(
           "diactrics_to_string<Char,...>(str): currently only supports "
           "non-ASCII characters in str if Char is a wide character (wchar_t, "
           "char16_t, or char32_t)");

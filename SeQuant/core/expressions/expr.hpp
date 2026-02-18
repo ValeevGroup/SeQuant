@@ -337,25 +337,25 @@ class Expr : public std::enable_shared_from_this<Expr>,
 
   /// @brief in-place multiply @c *this by @c that
   /// @return reference to @c *this
-  /// @throw std::logic_error if not implemented for this class, or cannot be
+  /// @throw Exception if not implemented for this class, or cannot be
   /// implemented for the particular @c that
   virtual Expr &operator*=(const Expr &that);
 
   /// @brief in-place non-commutatively-multiply @c *this by @c that
   /// @return reference to @c *this
-  /// @throw std::logic_error if not implemented for this class, or cannot be
+  /// @throw Exception if not implemented for this class, or cannot be
   /// implemented for the particular @c that
   virtual Expr &operator^=(const Expr &that);
 
   /// @brief in-place add @c that to @c *this
   /// @return reference to @c *this
-  /// @throw std::logic_error if not implemented for this class, or cannot be
+  /// @throw Exception if not implemented for this class, or cannot be
   /// implemented for the particular @c that
   virtual Expr &operator+=(const Expr &that);
 
   /// @brief in-place subtract @c that from @c *this
   /// @return reference to @c *this
-  /// @throw std::logic_error if not implemented for this class, or cannot be
+  /// @throw Exception if not implemented for this class, or cannot be
   /// implemented for the particular @c that
   virtual Expr &operator-=(const Expr &that);
 
@@ -369,7 +369,7 @@ class Expr : public std::enable_shared_from_this<Expr>,
       typename = std::enable_if_t<std::is_same_v<std::remove_cvref_t<E>, Expr>>>
   static bool visit_impl(E &&expr, Visitor &&visitor, const bool atoms_only) {
     if (expr.weak_from_this().use_count() == 0)
-      throw std::invalid_argument(
+      throw Exception(
           "Expr::visit: cannot visit expressions not managed by shared_ptr");
     for (auto &subexpr_ptr : expr.expr()) {
       const auto subexpr_is_an_atom = subexpr_ptr->is_atom();
@@ -512,9 +512,9 @@ class Expr : public std::enable_shared_from_this<Expr>,
 
  private:
   /// @input[in] fn the name of function that is missing in this class
-  /// @return a std::logic_error object containing a message describing that @p
+  /// @return an Exception object containing a message describing that @p
   /// fn is missing from this type
-  std::logic_error not_implemented(const char *fn) const;
+  Exception not_implemented(const char *fn) const;
 };  // class Expr
 
 template <>

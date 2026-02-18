@@ -905,7 +905,7 @@ void TensorNetworkV1::init_edges() const {
     // add proto indices to the grand list of proto indices
     for (auto &&proto_idx : terminals.idx().proto_indices()) {
       if (proto_idx.has_proto_indices())
-        throw std::runtime_error(
+        throw Exception(
             "TensorNetworkV1 does not support recursive protoindices");  // for
                                                                          // now
                                                                          // no

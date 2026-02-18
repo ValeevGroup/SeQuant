@@ -78,7 +78,7 @@ ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank, LSTOptions options) {
   } else if (A.is<Constant>() || A.is<Variable>())
     return A;
   else
-    throw std::invalid_argument(
+    throw Exception(
         "mbpt::lst(A, B, commutator_rank, options): Unsupported expression "
         "type");
 }
@@ -89,7 +89,7 @@ ExprPtr screen_vac_av(ExprPtr expr, bool skip_clone) {
 
   auto screen = [](const ExprPtr& term) {
     if (!(term->is<op_t>() || term->is<Product>())) {
-      throw std::invalid_argument("op::screen_terms: Unsupported term type");
+      throw Exception("op::screen_terms: Unsupported term type");
     }
     return op::can_change_qns(term, qns_t{}) ? term : ex<Constant>(0);
   };
@@ -117,8 +117,7 @@ ExprPtr screen_vac_av(ExprPtr expr, bool skip_clone) {
     });
     return result;
   } else
-    throw std::invalid_argument(
-        "mbpt::screen_terms(expr): Unsupported expression type");
+    throw Exception("mbpt::screen_terms(expr): Unsupported expression type");
 }
 
 }  // namespace sequant::mbpt

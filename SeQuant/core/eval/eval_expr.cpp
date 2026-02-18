@@ -545,7 +545,7 @@ EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract) {
   if (expr->is<Product>())  //
     return binarize(expr->as<Product>(), uncontract);
 
-  throw std::logic_error("Encountered unsupported expression in binarize.");
+  throw Exception("Encountered unsupported expression in binarize.");
 }
 
 }  // namespace impl

@@ -50,7 +50,7 @@ class Constant : public Expr {
 
   /// @tparam T the result type; default to the type of value_
   /// @return the value cast to ResultType
-  /// @throw std::invalid_argument if conversion to T is not possible
+  /// @throw Exception if conversion to T is not possible
   /// @throw boost::numeric::positive_overflow or
   /// boost::numeric::negative_overflow if cast fails
   template <typename T = scalar_type>
@@ -62,8 +62,7 @@ class Constant : public Expr {
       return T(numeric_cast<typename T::value_type>(value_.real()),
                numeric_cast<typename T::value_type>(value_.imag()));
     } else
-      throw std::invalid_argument(
-          "Constant::value<T>: cannot convert value to type T");
+      throw Exception("Constant::value<T>: cannot convert value to type T");
   }
 
   std::wstring to_latex() const override {
@@ -81,7 +80,7 @@ class Constant : public Expr {
     if (that.is<Constant>()) {
       value_ *= that.as<Constant>().value();
     } else {
-      throw std::logic_error("Constant::operator*=(that): not valid for that");
+      throw Exception("Constant::operator*=(that): not valid for that");
     }
     return *this;
   }
@@ -90,7 +89,7 @@ class Constant : public Expr {
     if (that.is<Constant>()) {
       value_ += that.as<Constant>().value();
     } else {
-      throw std::logic_error("Constant::operator+=(that): not valid for that");
+      throw Exception("Constant::operator+=(that): not valid for that");
     }
     return *this;
   }
@@ -99,7 +98,7 @@ class Constant : public Expr {
     if (that.is<Constant>()) {
       value_ -= that.as<Constant>().value();
     } else {
-      throw std::logic_error("Constant::operator-=(that): not valid for that");
+      throw Exception("Constant::operator-=(that): not valid for that");
     }
     return *this;
   }

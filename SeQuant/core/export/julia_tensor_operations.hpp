@@ -77,7 +77,7 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
 
   std::string represent(const Index &idx, const Context &) const override {
     if (idx.has_proto_indices()) {
-      throw std::runtime_error("Proto Indices are not (yet) supported!");
+      throw Exception("Proto Indices are not (yet) supported!");
     }
 
     return toUtf8(idx.full_label());
@@ -127,7 +127,7 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
   void create(const Tensor &tensor, bool zero_init,
               const Context &ctx) override {
     if (!zero_init) {
-      throw std::runtime_error(
+      throw Exception(
           "In Julia tensors can't be created without being initialized");
     }
 
@@ -171,7 +171,7 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
   void create(const Variable &variable, bool zero_init,
               const Context &ctx) override {
     if (!zero_init) {
-      throw std::runtime_error(
+      throw Exception(
           "Julia doesn't support declaring a variable without initializing it");
     }
 
@@ -303,7 +303,7 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
       return repr;
     }
 
-    throw std::runtime_error("Unsupported expression type in to_julia_expr");
+    throw Exception("Unsupported expression type in to_julia_expr");
   }
 
   std::string tensor_name(const Tensor &tensor, const Context &ctx) const {

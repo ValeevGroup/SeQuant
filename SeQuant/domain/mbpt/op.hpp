@@ -41,7 +41,6 @@
 #include <iterator>
 #include <map>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -216,7 +215,7 @@ class QuantumNumberChange
       SEQUANT_ASSERT(isr_base_spaces.size() > 0);
       return isr_base_spaces.size() * 2;
     } else {
-      throw std::logic_error("unknown Vacuum type");
+      throw Exception("unknown Vacuum type");
     }
   }
 

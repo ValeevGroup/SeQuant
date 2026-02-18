@@ -42,7 +42,7 @@ class TensorCanonicalizer {
   /// @return a TensorCanonicalizer previously registered via
   /// TensorCanonicalizer::register_instance() with @c label or to the default
   /// canonicalizer
-  /// @throw std::runtime_error if no canonicalizer has been registered
+  /// @throw Exception if no canonicalizer has been registered
   static std::shared_ptr<TensorCanonicalizer> instance(
       std::wstring_view label = L"");
 

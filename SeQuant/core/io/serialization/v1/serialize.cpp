@@ -11,7 +11,6 @@
 #include <range/v3/all.hpp>
 
 #include <cstddef>
-#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -233,7 +232,7 @@ std::wstring to_string(const Expr& expr, const SerializationOptions& options) {
   else if (expr.is<Variable>())
     return details::to_string(expr.as<Variable>(), options);
   else
-    throw std::runtime_error("Unsupported expr type for serialize!");
+    throw Exception("Unsupported expr type for serialize!");
 }
 
 std::wstring to_string(const ResultExpr& result,

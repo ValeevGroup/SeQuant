@@ -50,8 +50,8 @@ std::string ItfContext::get_name(const IndexSpace &space) const {
   auto it = m_space_names.find(space);
 
   if (it == m_space_names.end()) {
-    throw std::runtime_error("No name known for index space '" +
-                             toUtf8(space.base_key()) + "'");
+    throw Exception("No name known for index space '" +
+                    toUtf8(space.base_key()) + "'");
   }
 
   return it->second;
@@ -61,8 +61,8 @@ std::string ItfContext::get_tag(const IndexSpace &space) const {
   auto it = m_tags.find(space);
 
   if (it == m_tags.end()) {
-    throw std::runtime_error("No tag known for index space '" +
-                             toUtf8(space.base_key()) + "'");
+    throw Exception("No tag known for index space '" +
+                    toUtf8(space.base_key()) + "'");
   }
 
   return it->second;

@@ -4,6 +4,7 @@
 #ifdef SEQUANT_HAS_TAPP
 
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 
 #include <tapp.h>
 
@@ -13,7 +14,6 @@
 #include <cstdint>
 #include <memory>
 #include <numeric>
-#include <stdexcept>
 #include <type_traits>
 #include <vector>
 
@@ -60,7 +60,7 @@ inline void check_error(TAPP_error err) {
   if (!TAPP_check_success(err)) {
     char msg[256];
     TAPP_explain_error(err, sizeof(msg), msg);
-    throw std::runtime_error(std::string("TAPP error: ") + msg);
+    throw Exception(std::string("TAPP error: ") + msg);
   }
 }
 

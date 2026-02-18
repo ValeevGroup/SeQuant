@@ -57,7 +57,7 @@ ExprPtr remove_tensor(const ExprPtr& expr, std::wstring label) {
   else if (expr->is<Constant>() || expr->is<Variable>())
     return expr;
   else
-    throw std::runtime_error("Invalid Expr type in remove_tensor");
+    throw Exception("Invalid Expr type in remove_tensor");
 }
 
 }  // namespace sequant

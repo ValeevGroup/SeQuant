@@ -2,6 +2,7 @@
 #define SEQUANT_CORE_RATIONAL_H
 
 #include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <boost/multiprecision/cpp_int.hpp>
@@ -58,9 +59,8 @@ inline rational to_rational(
     T t, T eps = std::sqrt(std::numeric_limits<T>::epsilon()),
     std::size_t max_niter = 1000) {
   if (std::isnan(t) || std::isinf(t)) {
-    throw std::invalid_argument(
-        "sequant::to_rational: cannot make a rational out of " +
-        std::to_string(t));
+    throw Exception("sequant::to_rational: cannot make a rational out of " +
+                    std::to_string(t));
   }
   // e.g.
   // https://gist.github.com/mikeando/7073d62385a34a61a6f7#file-main2-cpp-L42
@@ -93,10 +93,10 @@ inline rational to_rational(
       }
       ++niter;
     }
-    throw std::invalid_argument(
-        "sequant::rationalize: could not rationalize " + std::to_string(f) +
-        " to eps=" + std::to_string(tol) + " in " + std::to_string(max_niter) +
-        " iterations");  // unreachable
+    throw Exception("sequant::rationalize: could not rationalize " +
+                    std::to_string(f) + " to eps=" + std::to_string(tol) +
+                    " in " + std::to_string(max_niter) +
+                    " iterations");  // unreachable
   };
   if (eps == 0)  // exact conversion ... rarely what's desired
     return rational(t);

@@ -141,11 +141,11 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
 
       if (get_default_context().spbasis() == SPBasis::Spinor) {
         REQUIRE_NOTHROW(wick1.spinfree(false));
-        REQUIRE_THROWS_AS(wick1.spinfree(true), std::invalid_argument);
+        REQUIRE_THROWS_AS(wick1.spinfree(true), Exception);
       }
       if (get_default_context().spbasis() == SPBasis::Spinfree) {
         REQUIRE_NOTHROW(wick1.spinfree(true));
-        REQUIRE_THROWS_AS(wick1.spinfree(false), std::invalid_argument);
+        REQUIRE_THROWS_AS(wick1.spinfree(false), Exception);
       }
 
       SEQUANT_PRAGMA_GCC(diagnostic pop)
