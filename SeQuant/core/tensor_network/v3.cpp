@@ -1210,8 +1210,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
 
     // strict bra-ket sanity checks
     if constexpr (assert_enabled()) {
-      if (get_default_context().strict_braket_symmetry() ==
-          StrictBraKetSymmetry::Yes) {
+      if (get_default_context().assert_strict_braket_symmetry()) {
         // dummy (anonymous) edges to
         // - involve at most 2 bra and/or ket indices (if BraKetSymmetry::Symm)
         // or 1 bra and 1 ket index
