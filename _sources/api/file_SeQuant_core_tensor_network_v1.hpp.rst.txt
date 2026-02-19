@@ -1,0 +1,102 @@
+
+.. _file_SeQuant_core_tensor_network_v1.hpp:
+
+File v1.hpp
+===========
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_tensor_network>` (``SeQuant/core/tensor_network``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/tensor_network/v1.hpp``)
+---------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_tensor_network_v1.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/tensor_canonicalizer.hpp`` (:ref:`file_SeQuant_core_tensor_canonicalizer.hpp`)
+
+- ``SeQuant/core/tensor_network/canonicals.hpp`` (:ref:`file_SeQuant_core_tensor_network_canonicals.hpp`)
+
+- ``SeQuant/core/tensor_network/slot.hpp`` (:ref:`file_SeQuant_core_tensor_network_slot.hpp`)
+
+- ``SeQuant/core/tensor_network/vertex.hpp`` (:ref:`file_SeQuant_core_tensor_network_vertex.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``cstdlib``
+
+- ``memory``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``string_view``
+
+- ``tuple`` (:ref:`file_SeQuant_core_utility_tuple.hpp`)
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_atomic.hpp`)
+
+- ``vector``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_tensor_network_v1.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_bliss`
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_std`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_tensor_network_v1_1_1_bliss_graph_options`
+
+- :ref:`exhale_struct_structsequant_1_1_tensor_network_v1_1_1_edge_1_1_terminal`
+
+- :ref:`exhale_struct_structsequant_1_1_tensor_network_v1_1_1_full_label_compare`
+
+- :ref:`exhale_struct_structsequant_1_1_tensor_network_v1_1_1_graph_data`
+
+- :ref:`exhale_struct_structsequant_1_1_tensor_network_v1_1_1_slot_canonicalization_metadata`
+
+- :ref:`exhale_class_classsequant_1_1_tensor_network_v1`
+
+- :ref:`exhale_class_classsequant_1_1_tensor_network_v1_1_1_edge`
+

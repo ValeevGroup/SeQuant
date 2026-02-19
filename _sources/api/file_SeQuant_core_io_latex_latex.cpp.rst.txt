@@ -1,0 +1,103 @@
+
+.. _file_SeQuant_core_io_latex_latex.cpp:
+
+File latex.cpp
+==============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_io_latex>` (``SeQuant/core/io/latex``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/io/latex/latex.cpp``)
+------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_io_latex_latex.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/io/latex/latex.hpp`` (:ref:`file_SeQuant_core_io_latex_latex.hpp`)
+
+- ``SeQuant/core/rational.hpp`` (:ref:`file_SeQuant_core_rational.hpp`)
+
+- ``SeQuant/core/utility/string.hpp`` (:ref:`file_SeQuant_core_utility_string.hpp`)
+
+- ``map``
+
+- ``optional``
+
+- ``vector``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__io`
+
+- :ref:`namespace_sequant__io__latex`
+
+- :ref:`namespace_sequant__io__latex__detail`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1latex_1_1detail_1adebc2cc6cc0a5d45ff504facdc74b8ca`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1latex_1_1detail_1a103dfe4d2a70946f61f94be8876abda1`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1latex_1_1detail_1ac3f774a64385dbd9b7b6de9e77af8f9e`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1latex_1_1detail_1af2f7bc7abbc28061029149690854e0ce`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1latex_1_1detail_1a2e7a5baac8f3ea72fcbd966e16a4bf29`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1latex_1_1detail_1a3e59fdfb47fa4c5fbe54230e050bcb28`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1latex_1_1detail_1a5a92a06f7400bf86df505434a252b82f`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1latex_1_1detail_1adc4c38c02af0329d897fed146da8e28d`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1latex_1_1detail_1a164a50d7133abfef82c17dfefeffe166`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1latex_1_1detail_1ab9f4cf3810b61b34db30ac8ca54675e5`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1latex_1_1detail_1a7811a0a1384a11d7b662ec4d663416bd`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1latex_1_1detail_1a0511249ba22462559d250421ebdecd93`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1latex_1a4aee5b23765b6630f4beb3c5df6dc26f`
+
+
+Defines
+-------
+
+
+- :ref:`exhale_define_latex_8cpp_1ab760ab1eddd4483966e84165082e67a7`
+
+- :ref:`exhale_define_latex_8cpp_1ad1cf33c51a3319055cdaacc324fa7e69`
+

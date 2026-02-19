@@ -1,0 +1,89 @@
+
+.. _file_SeQuant_core_eval_cache_manager.hpp:
+
+File cache_manager.hpp
+======================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_eval>` (``SeQuant/core/eval``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/eval/cache_manager.hpp``)
+----------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_eval_cache_manager.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/asy_cost.hpp`` (:ref:`file_SeQuant_core_asy_cost.hpp`)
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/eval/eval_node.hpp`` (:ref:`file_SeQuant_core_eval_eval_node.hpp`)
+
+- ``SeQuant/core/eval/eval_node_compare.hpp`` (:ref:`file_SeQuant_core_eval_eval_node_compare.hpp`)
+
+- ``SeQuant/core/eval/fwd.hpp`` (:ref:`file_SeQuant_core_eval_fwd.hpp`)
+
+- ``SeQuant/core/eval/result.hpp`` (:ref:`file_SeQuant_core_eval_result.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``memory``
+
+- ``range/v3/view.hpp``
+
+- ``unordered_map``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_eval_cache_manager.cpp`
+
+- :ref:`file_SeQuant_core_eval_eval.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_cache_manager_1_1access__by`
+
+- :ref:`exhale_class_classsequant_1_1_cache_manager`
+
+- :ref:`exhale_class_classsequant_1_1_cache_manager_1_1entry`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a7335095bb702a4e04c30afaf4798ff04`
+

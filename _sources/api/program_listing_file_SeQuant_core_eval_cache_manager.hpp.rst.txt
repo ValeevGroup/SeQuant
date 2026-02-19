@@ -1,0 +1,194 @@
+
+.. _program_listing_file_SeQuant_core_eval_cache_manager.hpp:
+
+Program Listing for File cache_manager.hpp
+==========================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_cache_manager.hpp>` (``SeQuant/core/eval/cache_manager.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_EVAL_CACHE_MANAGER_HPP
+   #define SEQUANT_EVAL_CACHE_MANAGER_HPP
+   
+   #include <SeQuant/core/asy_cost.hpp>
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/eval/eval_node.hpp>
+   #include <SeQuant/core/eval/eval_node_compare.hpp>
+   #include <SeQuant/core/eval/fwd.hpp>
+   #include <SeQuant/core/eval/result.hpp>
+   #include <SeQuant/core/expr.hpp>
+   
+   #include <memory>
+   #include <range/v3/view.hpp>
+   #include <unordered_map>
+   
+   namespace sequant {
+   
+   template <typename TreeNode, bool force_hash_collisions>
+   class CacheManager {
+    public:
+     using key_type = TreeNode;
+   
+    private:
+     using hasher_type = TreeNodeHasher<TreeNode, force_hash_collisions>;
+     using comparator_type = TreeNodeEqualityComparator<TreeNode>;
+   
+     class entry {
+      private:
+       size_t max_life;
+   
+       size_t life_c;
+   
+       ResultPtr data_p;
+   
+      public:
+       explicit entry(size_t count) noexcept
+           : max_life{count}, life_c{count}, data_p{nullptr} {}
+   
+       [[nodiscard]] ResultPtr access() noexcept {
+         if (!data_p) return nullptr;
+         return decay() == 0 ? std::move(data_p) : data_p;
+       }
+   
+       void store(ResultPtr&& data) noexcept { data_p = std::move(data); }
+   
+       void reset() noexcept {
+         life_c = max_life;
+         data_p = nullptr;
+       }
+   
+       [[nodiscard]] size_t life_count() const noexcept { return life_c; }
+   
+       [[nodiscard]] size_t max_life_count() const noexcept { return max_life; }
+   
+       [[nodiscard]] size_t size_in_bytes() const noexcept {
+         return data_p ? data_p->size_in_bytes() : 0;
+       }
+   
+       [[nodiscard]] bool alive() const noexcept { return data_p ? true : false; }
+   
+      private:
+       [[nodiscard]] int decay() noexcept {
+         return life_c > 0 ? static_cast<int>(--life_c) : 0;
+       }
+   
+     };  // entry
+   
+     static ResultPtr store(entry& ent, ResultPtr&& data) noexcept {
+       ent.store(std::move(data));
+       return ent.access();
+     }
+   
+     std::unordered_map<TreeNode, entry, hasher_type, comparator_type> cache_map_;
+   
+    public:
+     template <typename Iterable1>
+     explicit CacheManager(Iterable1&& decaying) noexcept {
+       for (auto&& [k, c] : decaying) cache_map_.try_emplace(k, entry{c});
+     }
+   
+     void reset() noexcept {
+       for (auto&& [k, v] : cache_map_) v.reset();
+     }
+   
+     ResultPtr access(key_type const& key) noexcept {
+       if (auto found = cache_map_.find(key); found != cache_map_.end())
+         return found->second.access();
+       return nullptr;
+     }
+   
+     [[nodiscard]] ResultPtr store(key_type const& key, ResultPtr data) noexcept {
+       if (auto found = cache_map_.find(key); found != cache_map_.end())
+         return store(found->second, std::move(data));
+       return data;
+     }
+   
+     [[nodiscard]] bool exists(key_type const& key) const noexcept {
+       return cache_map_.find(key) != cache_map_.end();
+     }
+   
+     [[nodiscard]] int life(key_type const& key) const noexcept {
+       auto iter = cache_map_.find(key);
+       auto end = cache_map_.end();
+       return iter == end ? -1 : static_cast<int>(iter->second.life_count());
+     }
+   
+     [[nodiscard]] int max_life(key_type const& key) const noexcept {
+       auto iter = cache_map_.find(key);
+       auto end = cache_map_.end();
+       return iter == end ? -1 : static_cast<int>(iter->second.max_life_count());
+     }
+   
+     [[nodiscard]] size_t alive_count() const noexcept {
+       using ranges::views::filter;
+       using ranges::views::transform;
+       using ranges::views::values;
+       return ranges::accumulate(cache_map_                            //
+                                     | values                          //
+                                     | filter(&entry::alive)           //
+                                     | transform(&entry::life_count),  //
+                                 size_t{0});
+     }
+   
+     [[nodiscard]] size_t size_in_bytes() const noexcept {
+       using ranges::views::transform;
+       using ranges::views::values;
+       return ranges::accumulate(
+           cache_map_ | values | transform(&entry::size_in_bytes), size_t{0});
+     }
+   
+     static CacheManager empty() noexcept {
+       using map_type =
+           std::unordered_map<TreeNode, size_t, hasher_type, comparator_type>;
+       return CacheManager{map_type{}};
+     }
+   
+     // for unit testing
+     template <typename T>
+     struct access_by;
+     template <typename T>
+     friend struct access_by;
+   
+   };  // CacheManager
+   
+   template <bool force_hash_collisions = false>
+   auto cache_manager(meta::eval_node_range auto const& nodes,
+                      size_t min_repeats = 2) noexcept {
+     using TreeNode =
+         std::ranges::range_value_t<std::remove_cvref_t<decltype(nodes)>>;
+     using Hasher = TreeNodeHasher<TreeNode, force_hash_collisions>;
+     using Comp = TreeNodeEqualityComparator<TreeNode>;
+   
+     // Phase 1: Scan with pointer-based map (low memory)
+     std::unordered_map<const TreeNode*, size_t, Hasher, Comp> imed_counts;
+   
+     auto imed_visitor = [&imed_counts](auto&& n) -> bool {
+       if (auto found = imed_counts.find(&n); found != imed_counts.end()) {
+         ++found->second;
+         return false;
+       }
+       imed_counts.emplace(&n, 1);
+       return true;
+     };
+   
+     ranges::for_each(nodes, [&imed_visitor](auto&& tree) {
+       tree.visit_internal(imed_visitor);
+     });
+   
+     // Phase 2: Copy repeated entries (node by value)
+     std::unordered_map<TreeNode, size_t, Hasher, Comp> filtered;
+     for (auto&& [ptr, count] : imed_counts) {
+       if (count >= min_repeats) filtered.emplace(*ptr, count);
+     }
+   
+     return CacheManager<TreeNode, force_hash_collisions>{std::move(filtered)};
+   }
+   
+   AsyCost peak_cache(Sum const& expr);
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_EVAL_CACHE_MANAGER_HPP

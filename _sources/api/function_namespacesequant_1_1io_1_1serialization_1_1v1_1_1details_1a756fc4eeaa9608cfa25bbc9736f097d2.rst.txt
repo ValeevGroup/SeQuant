@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1details_1a756fc4eeaa9608cfa25bbc9736f097d2:
+
+Function sequant::io::serialization::v1::details::serialize_symm(BraKetSymmetry, const SerializationOptions&)
+=============================================================================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_serialize.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::io::serialization::v1::details::serialize_symm(BraKetSymmetry, const SerializationOptions&)
+   :project: SeQuant

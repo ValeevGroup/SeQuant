@@ -1,0 +1,126 @@
+
+.. _program_listing_file_SeQuant_core_expressions_expr_ptr.hpp:
+
+Program Listing for File expr_ptr.hpp
+=====================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_expressions_expr_ptr.hpp>` (``SeQuant/core/expressions/expr_ptr.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_EXPRESSIONS_EXPR_PTR_HPP
+   #define SEQUANT_EXPRESSIONS_EXPR_PTR_HPP
+   
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/expr_fwd.hpp>
+   #include <SeQuant/core/expressions/traits.hpp>
+   #include <SeQuant/core/utility/macros.hpp>
+   
+   #include <memory>
+   
+   namespace sequant {
+   
+   
+   class ExprPtr : public std::shared_ptr<Expr> {
+    public:
+     using base_type = std::shared_ptr<Expr>;
+     using base_type::operator->;
+     using base_type::base_type;
+   
+     ExprPtr() = default;
+     ExprPtr(const ExprPtr &) = default;
+     ExprPtr(ExprPtr &&) = default;
+     template <typename E, typename = std::enable_if_t<
+                               std::is_same_v<std::remove_const_t<E>, Expr> ||
+                               std::is_base_of_v<Expr, std::remove_const_t<E>>>>
+     ExprPtr(const std::shared_ptr<E> &other_sptr) : base_type(other_sptr) {}
+     template <typename E, typename = std::enable_if_t<is_an_expr_v<E>>>
+     ExprPtr(std::shared_ptr<E> &&other_sptr) : base_type(std::move(other_sptr)) {}
+     template <typename E, typename = std::enable_if_t<is_an_expr_v<E>>>
+     ExprPtr &operator=(const std::shared_ptr<E> &other_sptr) {
+       as_shared_ptr() = other_sptr;
+       return *this;
+     }
+     template <typename E, typename = std::enable_if_t<is_an_expr_v<E>>>
+     ExprPtr &operator=(std::shared_ptr<E> &&other_sptr) {
+       as_shared_ptr() = std::move(other_sptr);
+       return *this;
+     }
+   
+     ExprPtr &operator=(const ExprPtr &) = default;
+     ExprPtr &operator=(ExprPtr &&) = default;
+   
+     ~ExprPtr() = default;
+   
+     [[nodiscard]] ExprPtr clone() const &;
+     [[nodiscard]] ExprPtr clone() && noexcept;
+   
+     base_type &as_shared_ptr() &;
+     const base_type &as_shared_ptr() const &;
+     base_type &&as_shared_ptr() &&;
+   
+     template <typename E, typename = std::enable_if_t<!is_expr_v<E>>>
+     std::shared_ptr<E> as_shared_ptr() const {
+       SEQUANT_ASSERT(this->is<E>());
+       return std::static_pointer_cast<E>(this->as_shared_ptr());
+     }
+   
+     Expr &operator*() &;
+   
+     const Expr &operator*() const &;
+   
+     Expr &&operator*() &&;
+   
+     // n.b. equality comparison is deep
+   
+     friend inline bool operator==(const ExprPtr &x, std::nullptr_t) {
+       return x.get() == nullptr;
+     }
+   
+     friend bool operator==(const ExprPtr &x, const ExprPtr &y);
+   
+   
+     ExprPtr &operator+=(const ExprPtr &other);
+   
+   
+     ExprPtr &operator-=(const ExprPtr &);
+   
+   
+     ExprPtr &operator*=(const ExprPtr &);
+   
+     template <typename T>
+     bool is() const;
+   
+     template <typename T>
+     const T &as() const;
+   
+     template <typename T>
+     T &as();
+   
+     std::size_t size() const;
+   
+     std::wstring to_latex() const;
+   };  // class ExprPtr
+   
+   template <typename T, typename... Args>
+   ExprPtr ex(Args &&...args) {
+     return std::make_shared<T>(std::forward<Args>(args)...);
+   }
+   
+   // this is needed when using std::make_shared<X>({ExprPtr,ExprPtr}), i.e. must
+   // std::make_shared<X>(ExprPtrList{ExprPtr,ExprPtr})
+   using ExprPtrList = std::initializer_list<ExprPtr>;
+   
+   static auto expr_ptr_comparer = [](const auto &ptr1, const auto &ptr2) {
+     return *ptr1 == *ptr2;
+   };
+   
+   using ExprPtrVector = container::svector<ExprPtr>;
+   
+   ExprPtr adjoint(const ExprPtr &expr);
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_EXPRESSIONS_EXPR_PTR_HPP

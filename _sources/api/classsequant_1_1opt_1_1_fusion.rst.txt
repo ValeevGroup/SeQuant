@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1opt_1_1_fusion:
+
+Class Fusion
+============
+
+- Defined in :ref:`file_SeQuant_core_optimize_fusion.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::opt::Fusion
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

@@ -1,0 +1,117 @@
+
+.. _file_SeQuant_core_index_space_registry.hpp:
+
+File index_space_registry.hpp
+=============================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/index_space_registry.hpp``)
+------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_index_space_registry.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/bitset.hpp`` (:ref:`file_SeQuant_core_bitset.hpp`)
+
+- ``SeQuant/core/space.hpp`` (:ref:`file_SeQuant_core_space.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/core/utility/string.hpp`` (:ref:`file_SeQuant_core_utility_string.hpp`)
+
+- ``boost/hana.hpp``
+
+- ``boost/hana/ext/std/integral_constant.hpp``
+
+- ``mutex``
+
+- ``range/v3/algorithm/sort.hpp``
+
+- ``range/v3/numeric/accumulate.hpp``
+
+- ``range/v3/range/conversion.hpp``
+
+- ``range/v3/view/filter.hpp``
+
+- ``range/v3/view/transform.hpp``
+
+- ``range/v3/view/unique.hpp``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_context.hpp`
+
+- :ref:`file_SeQuant_core_index.hpp`
+
+- :ref:`file_SeQuant_core_index_space_registry.cpp`
+
+- :ref:`file_SeQuant_core_space.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_convention.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__space_tags`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1space__tags_1_1_is_complete`
+
+- :ref:`exhale_struct_structsequant_1_1space__tags_1_1_is_hole`
+
+- :ref:`exhale_struct_structsequant_1_1space__tags_1_1_is_particle`
+
+- :ref:`exhale_struct_structsequant_1_1space__tags_1_1_is_reference_occupied`
+
+- :ref:`exhale_struct_structsequant_1_1space__tags_1_1_is_vacuum_occupied`
+
+- :ref:`exhale_class_classsequant_1_1_index_space_registry`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1_1space__tags_1a3e213491a52064c5c3cf92dcda641fbd`
+
+- :ref:`exhale_variable_namespacesequant_1_1space__tags_1a6c11f0c43b0a1dfd809972c8013d04f3`
+
+- :ref:`exhale_variable_namespacesequant_1_1space__tags_1a453f6692f07fdb3fed4a51c75f555e3b`
+
+- :ref:`exhale_variable_namespacesequant_1_1space__tags_1a1a4caee1489fee7fb8a0589fdc5714e5`
+
+- :ref:`exhale_variable_namespacesequant_1_1space__tags_1a7e1e282301f4660d5251905084be6f54`
+

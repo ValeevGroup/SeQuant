@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1a9dd9244c64ee1b0126e1a58a930a4ec4:
+
+Template Function sequant::opt::eliminate_common_subexpressions
+===============================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_common_subexpression_elimination.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::eliminate_common_subexpressions(VectorLike&, const Transformer&, const Filter&)
+   :project: SeQuant

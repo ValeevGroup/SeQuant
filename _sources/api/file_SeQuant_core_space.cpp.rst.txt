@@ -1,0 +1,66 @@
+
+.. _file_SeQuant_core_space.cpp:
+
+File space.cpp
+==============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/space.cpp``)
+---------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_space.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/context.hpp`` (:ref:`file_SeQuant_core_context.hpp`)
+
+- ``SeQuant/core/index_space_registry.hpp`` (:ref:`file_SeQuant_core_index_space_registry.hpp`)
+
+- ``SeQuant/core/space.hpp`` (:ref:`file_SeQuant_core_space.hpp`)
+
+- ``string_view``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1abe8aa76a4f12ba369f98bf47e8e0b84b`
+
+- :ref:`exhale_function_namespacesequant_1aec49ecb3b23bf805bb37f015ab3225d2`
+
+- :ref:`exhale_function_namespacesequant_1afccb7d64dfc61d28a3fb9d2803441dc0`
+
+- :ref:`exhale_function_namespacesequant_1a6f363de628c7d31a53c7783fe22a5309`
+
+- :ref:`exhale_function_namespacesequant_1ae5ff492d5e2a0ccdd33459c07382669d`
+

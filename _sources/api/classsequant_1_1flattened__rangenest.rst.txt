@@ -1,0 +1,36 @@
+.. _exhale_class_classsequant_1_1flattened__rangenest:
+
+Template Class flattened_rangenest
+==================================
+
+- Defined in :ref:`file_SeQuant_core_ranges.hpp`
+
+
+Nested Relationships
+--------------------
+
+
+Nested Types
+************
+
+- :ref:`exhale_struct_structsequant_1_1flattened__rangenest_1_1cursor`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public ranges::view_facade< flattened_rangenest< RangeNest > >``
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::flattened_rangenest
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

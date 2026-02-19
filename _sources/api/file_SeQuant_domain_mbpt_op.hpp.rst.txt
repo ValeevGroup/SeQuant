@@ -1,0 +1,244 @@
+
+.. _file_SeQuant_domain_mbpt_op.hpp:
+
+File op.hpp
+===========
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_mbpt>` (``SeQuant/domain/mbpt``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/domain/mbpt/op.hpp``)
+-------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_mbpt_op.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/attr.hpp`` (:ref:`file_SeQuant_core_attr.hpp`)
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/context.hpp`` (:ref:`file_SeQuant_core_context.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/hash.hpp`` (:ref:`file_SeQuant_core_hash.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/interval.hpp`` (:ref:`file_SeQuant_core_interval.hpp`)
+
+- ``SeQuant/core/math.hpp`` (:ref:`file_SeQuant_core_math.hpp`)
+
+- ``SeQuant/core/op.hpp`` (:ref:`file_SeQuant_core_op.hpp`)
+
+- ``SeQuant/core/rational.hpp`` (:ref:`file_SeQuant_core_rational.hpp`)
+
+- ``SeQuant/core/space.hpp`` (:ref:`file_SeQuant_core_space.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/core/utility/strong.hpp`` (:ref:`file_SeQuant_core_utility_strong.hpp`)
+
+- ``SeQuant/domain/mbpt/convention.hpp`` (:ref:`file_SeQuant_domain_mbpt_convention.hpp`)
+
+- ``SeQuant/domain/mbpt/fwd.hpp`` (:ref:`file_SeQuant_domain_mbpt_fwd.hpp`)
+
+- ``SeQuant/domain/mbpt/spin.hpp`` (:ref:`file_SeQuant_domain_mbpt_spin.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``array`` (:ref:`file_SeQuant_core_eval_backends_tiledarray_eval_expr.hpp`)
+
+- ``cstddef``
+
+- ``cstdint``
+
+- ``functional``
+
+- ``initializer_list``
+
+- ``iterator``
+
+- ``map``
+
+- ``optional``
+
+- ``range/v3/iterator/basic_iterator.hpp``
+
+- ``range/v3/range/conversion.hpp``
+
+- ``range/v3/range/primitives.hpp``
+
+- ``range/v3/view/map.hpp``
+
+- ``range/v3/view/transform.hpp``
+
+- ``range/v3/view/view.hpp``
+
+- ``range/v3/view/zip.hpp``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``string_view``
+
+- ``type_traits``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_atomic.hpp`)
+
+- ``vector``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_domain_mbpt_convention.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_models_cc.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_models_cc.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_op.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_op.ipp`
+
+- :ref:`file_SeQuant_domain_mbpt_rdm.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_utils.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_vac_av.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__mbpt`
+
+- :ref:`namespace_sequant__mbpt__detail`
+
+- :ref:`namespace_sequant__mbpt__op`
+
+- :ref:`namespace_sequant__mbpt__op__sequant__mbpt__tensor`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1mbpt_1_1default__qns__tag`
+
+- :ref:`exhale_struct_structsequant_1_1mbpt_1_1_op_maker_1_1_op_info`
+
+- :ref:`exhale_struct_structsequant_1_1mbpt_1_1_op_params`
+
+- :ref:`exhale_class_classsequant_1_1mbpt_1_1_operator`
+
+- :ref:`exhale_class_classsequant_1_1mbpt_1_1_operator_3_01void_00_01_s_01_4`
+
+- :ref:`exhale_class_classsequant_1_1mbpt_1_1_op_maker`
+
+- :ref:`exhale_class_classsequant_1_1mbpt_1_1_quantum_number_change`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1afc8c0e61721e9d23ef85730471b7d5ce`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a7cb793919553f2c3387eab53ee55b590`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1detail_1ad83d7bf3d955daafa4dbd3c4d54a531d`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a8ec0f4965fc7e1017a447b9943e299f9`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1ae7b9c61cfe78c3d6ab060af59a220809`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a207af3e4b039b3e78d903dd74e1cca07`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1ad97f824dc8e70f3d08efa66c0f1b1777`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a6c5129991470bb898128bf0afe47fc58`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a71085738dbaeb28335934c1393032a9a`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1acd42ab0ff44948945f5566851b49d67d`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1aeb5122c034369695044f7ea5fef5686f`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1af161234050fe577073b8bbd6c7e84932`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a12250159f02da3558c6ec1242e4bba53`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a932f0714d8883f0aa503e3fb1a56240b`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1aa14652bf5b94eb8a5b9d581b6a2f29d3`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a23b6e48af0173e3a719a6f4659811412`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a28cee5d3740dcb2c47b58c53ee195546`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1ae73803f79b5a220ce58bef248ee9514a`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1af6b4b030942b2d3377fb5935fe3f9b33`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1aeba14ceb736042ab684545ac7debbee9`
+
+
+Defines
+-------
+
+
+- :ref:`exhale_define_domain_2mbpt_2op_8hpp_1a445c980540247f80e555564a896203ab`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1_1mbpt_1ad83f5b80ff81bae0e8b896ce5231f4aa`
+
+- :ref:`exhale_typedef_namespacesequant_1_1mbpt_1a8ca602a8e3a8bc4d915ce62e8f722003`
+
+- :ref:`exhale_typedef_namespacesequant_1_1mbpt_1ad4d78011f83659c0e28bbbbf3a74639a`
+
+- :ref:`exhale_typedef_namespacesequant_1_1mbpt_1aef9f972c2761ae3d27c62f8088f20abb`
+
+- :ref:`exhale_typedef_namespacesequant_1_1mbpt_1aef0af21b7636464962e9c7385ffbf409`
+
+- :ref:`exhale_typedef_namespacesequant_1_1mbpt_1ab5859013a6e9b2ab18d55c9256e7a076`
+
+- :ref:`exhale_typedef_namespacesequant_1_1mbpt_1aac34159cc56d733f575479512de9163e`
+
+- :ref:`exhale_typedef_namespacesequant_1_1mbpt_1a2ece2a4a08b0e2389760406c6f405bf8`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1_1mbpt_1_1detail_1ad226cc657699d642d5bbea7f5a5db6c3`
+

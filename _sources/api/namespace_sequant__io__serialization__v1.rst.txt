@@ -1,0 +1,99 @@
+
+.. _namespace_sequant__io__serialization__v1:
+
+Namespace sequant::io::serialization::v1
+========================================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
+Detailed Description
+--------------------
+
+Get a serialized string from an expression.
+
+An expression that has a flat structure (ie. product does not contain sum or product subexpressions) is guaranteed to be reparsable to itself so that equality comparison holds: x == from_string(to_string(x)). For nested expressions the equality comparison is not guaranteed, however, for such an expression x, its corresponding evaluation node, eval_node(x), and the deserialized evaluation node, eval_node(from_string(to_string(x))) are equivalent.
+
+
+
+expr
+
+
+Expression to serialize 
+
+
+
+
+options
+
+
+Customization options 
+
+
+
+wstring of the expression. 
+
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant__io__serialization__v1__actions`
+
+- :ref:`namespace_sequant__io__serialization__v1__ast`
+
+- :ref:`namespace_sequant__io__serialization__v1__details`
+
+- :ref:`namespace_sequant__io__serialization__v1__parse`
+
+- :ref:`namespace_sequant__io__serialization__v1__transform`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a85186c6c97a568a48c13498b7fe585e1`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a7ac15caf3ce1bc1cc4521404c646170d`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a7c0ad889f5fda1e477a1ba8b2497f817`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a64bf14f8620ab8841d824f8416e012ac`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a04568bac51bd90f34539b5bd75b5f048`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a013b64aeaef41a87e48b4eed50753ccc`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a39e57ba2378387f545591d41191d286e`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1aae311d2a77759e329e25e889fcc5bd2e`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a81633a58ff067a5283282cb97b279a2e`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a932079018da3e4fb50b2438a0b2e7e39`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a227a954de3036f84f82338cd7a158f07`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1adfdd953c42ae01494a75ad6abd75ae61`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1aa8f1f9cf378817e5a7f1dfa2e5b1bb7c`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a67ac20ee2db4c0899846815b06ae69cd`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1a08fa7cd6d8892dd64cfce423c87df709`

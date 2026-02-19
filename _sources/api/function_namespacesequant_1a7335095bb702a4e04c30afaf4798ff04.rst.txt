@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a7335095bb702a4e04c30afaf4798ff04:
+
+Template Function sequant::cache_manager
+========================================
+
+- Defined in :ref:`file_SeQuant_core_eval_cache_manager.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::cache_manager(meta::eval_node_range auto const&, size_t)
+   :project: SeQuant

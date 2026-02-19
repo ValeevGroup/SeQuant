@@ -1,0 +1,118 @@
+
+.. _file_SeQuant_core_binary_node.hpp:
+
+File binary_node.hpp
+====================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/binary_node.hpp``)
+---------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_binary_node.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``memory``
+
+- ``range/v3/numeric/accumulate.hpp``
+
+- ``range/v3/view.hpp``
+
+- ``sstream``
+
+- ``type_traits``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_atomic.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_eval_eval_expr.hpp`
+
+- :ref:`file_SeQuant_core_eval_eval_node.hpp`
+
+- :ref:`file_SeQuant_core_export_export_node.hpp`
+
+- :ref:`file_SeQuant_core_optimize_common_subexpression_elimination.hpp`
+
+- :ref:`file_SeQuant_core_optimize_optimize.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__meta`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_class_classsequant_1_1_full_binary_node`
+
+
+Enums
+-----
+
+
+- :ref:`exhale_enum_namespacesequant_1ac5c40260286cb754211d81ae3baf6ead`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a9c74d51e38e03935b835dbb203884842`
+
+- :ref:`exhale_function_namespacesequant_1a94f59b230b011d696bf220f58e4042e2`
+
+- :ref:`exhale_function_namespacesequant_1aa80fdad4b2d0af57c1000a767bc514d9`
+
+- :ref:`exhale_function_namespacesequant_1ae43772f1d60eff52075e4249a430950a`
+
+- :ref:`exhale_function_namespacesequant_1aabc4cc114ede1b83a47a983782742153`
+
+
+Defines
+-------
+
+
+- :ref:`exhale_define_binary__node_8hpp_1a81a0ec9cd8ea87fb4650316b18cce254`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1_1meta_1adcb303db8cd737ab8a4c7cb2675dd04e`
+
+- :ref:`exhale_variable_namespacesequant_1_1meta_1aa9b134f552d03cc66a152abc90c7deed`
+
