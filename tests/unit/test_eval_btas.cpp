@@ -6,8 +6,8 @@
 #include <SeQuant/core/eval/backends/btas/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/btas/result.hpp>
 #include <SeQuant/core/eval/eval.hpp>
-#include <SeQuant/core/optimize.hpp>
-#include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 
 #include <btas/btas.h>
@@ -31,12 +31,14 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
     return (mo[1].str() == L"i" ? L"o" : L"v") + mo[2].str();
   };
 
-  auto const tnsr_deparsed = sequant::deparse(tnsr.clone(), false);
+  auto const tnsr_deparsed =
+      sequant::serialize(tnsr.clone(), {.annot_symm = false});
   return boost::regex_replace(tnsr_deparsed, idx_rgx, formatter);
 }
 
 [[maybe_unused]] auto tensor_to_key(std::wstring_view spec) {
-  return tensor_to_key(sequant::parse_expr(spec, sequant::Symmetry::Nonsymm)
+  return tensor_to_key(sequant::deserialize<sequant::ExprPtr>(
+                           spec, {.def_perm_symm = sequant::Symmetry::Nonsymm})
                            ->as<sequant::Tensor>());
 }
 
@@ -119,7 +121,7 @@ class rand_tensor_yield {
   ///       otherwise throws assertion error. To avoid that use the other
   ///       overload of operator() that takes sequant::Tensor const&
   sequant::ResultPtr operator()(std::wstring_view label) const {
-    auto&& found = label_to_tnsr_.find(label.data());
+    auto&& found = label_to_tnsr_.find(std::wstring{label});
     if (found == label_to_tnsr_.end()) {
       SEQUANT_ASSERT(false && "attempted access of non-existent tensor!");
     }
@@ -199,7 +201,6 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
 
   auto eval_symm = [&yield_](sequant::ExprPtr const& expr,
                              container::svector<long> const& target_labels) {
-    auto cache = sequant::CacheManager::empty();
     return evaluate_symm(eval_node(expr), target_labels, yield_)
         ->get<BTensorD>();
   };
@@ -215,12 +216,13 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
       [&yield_](sequant::ExprPtr const& expr,
                 container::svector<long> const& target_labels) {
         auto result = evaluate(eval_node(expr), target_labels, yield_);
-        return biorthogonal_nns_project(
+        return mbpt::biorthogonal_nns_project(
             result->get<BTensorD>(), eval_node(expr)->as_tensor().bra_rank());
       };
 
   auto parse_antisymm = [](auto const& xpr) {
-    return parse_expr(xpr, sequant::Symmetry::Antisymm);
+    return deserialize<sequant::ExprPtr>(
+        xpr, {.def_perm_symm = sequant::Symmetry::Antisymm});
   };
 
   SECTION("Summation") {
@@ -440,6 +442,11 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
 
     auto const eval2 = evaluate(nodes1, tidx1, yield_)->get<BTensorD>();
 
-    REQUIRE(norm(eval1) == Catch::Approx(norm(eval1)));
+    REQUIRE(norm(eval1) == Catch::Approx(norm(eval2)));
+
+    BTensorD zero2{eval2.range()};
+    zero2 = eval1 - eval2;
+    REQUIRE(norm(zero2) == Catch::Approx(0).margin(
+                               100 * std::numeric_limits<double>::epsilon()));
   }
 }

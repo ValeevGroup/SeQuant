@@ -10,7 +10,7 @@
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/runtime.hpp>
-#include <SeQuant/core/wstring.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <cmath>
 #include <iostream>
@@ -36,7 +36,7 @@ TEST_CASE("math", "[elements]") {
       REQUIRE(to_rational(1. / 7) == rational{1, 7});
       REQUIRE(to_rational(M_PI) == rational{99023, 31520});
       REQUIRE(to_rational(M_E) == rational{23225, 8544});
-      REQUIRE_THROWS_AS(to_rational(std::nan("NaN")), std::invalid_argument);
+      REQUIRE_THROWS_AS(to_rational(std::nan("NaN")), Exception);
     }
   }
 

@@ -6,4 +6,5 @@ User Guide
 
    operator
    cc
+   io
    evaluation

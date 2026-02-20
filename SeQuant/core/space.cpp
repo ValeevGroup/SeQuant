@@ -14,7 +14,7 @@ IndexSpace retrieve(StrView label) {
   auto registry_ptr = get_default_context().index_space_registry();
 
   if (!registry_ptr) {
-    throw std::runtime_error(
+    throw Exception(
         "Can't use IndexSpace(string) without an active index space registry");
   }
 
@@ -48,7 +48,7 @@ std::string to_string(const IndexSpace& space) {
   std::ostringstream oss;
   oss << "{attr=" << to_string(space.attr());
   if (space.base_key().empty() == false) {
-    oss << ",base_key=" << to_string(space.base_key());
+    oss << ",base_key=" << toUtf8(space.base_key());
   }
   oss << ",approximate_size=" << std::to_string(space.approximate_size())
       << "}";

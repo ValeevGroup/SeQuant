@@ -102,7 +102,7 @@ class compute_eomcc {
     std::wcout << std::boolalpha
                << "EOM-CC Equations [type=" << type2wstr.at(type)
                << ", CC rank=" << N
-               << ", manifold=" << sequant::to_wstring(manifold) << "]"
+               << ", manifold=" << sequant::toUtf16(manifold) << "]"
                << " computed in " << timer_pool.read(N) << " s\n";
     for (auto i = 0; i < eqvec.size(); i++) {
       if (eqvec[i] == nullptr) continue;

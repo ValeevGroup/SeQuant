@@ -104,7 +104,7 @@ class HugenholtzVertex {
 
   /// @param edge_idx the ordinal index of the edge to be removed
   /// @param edge the edge descriptor, only used to assert logic when
-  /// SEQUANT_ASSERT_ENABLED is defined
+  /// assert_enabled() returns true
   void erase(size_t edge_idx, [[maybe_unused]] const Edge& edge) {
     // preconditions
     const auto grp_idx = edge_to_group_.at(edge_idx);
@@ -135,8 +135,7 @@ class HugenholtzVertex {
   void insert(const size_t edge_idx, const Edge& edge) {
     // preconditions
     if (edge_idx > edge_to_group_.size()) {
-      throw std::out_of_range(
-          "HugenholtzVertex::insert : can only insert or append");
+      throw Exception("HugenholtzVertex::insert : can only insert or append");
     }
 
     auto grp_it = std::find_if(

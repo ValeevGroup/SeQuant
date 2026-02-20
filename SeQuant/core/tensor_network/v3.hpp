@@ -18,7 +18,6 @@
 #include <cstdlib>
 #include <iosfwd>
 #include <memory>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -100,30 +99,6 @@ class TensorNetworkV3 {
       if (vertices.empty()) {
         vertices.emplace(vertex);
       } else {
-        // - can't connect bra slot to bra slot or ket slot to ket slot, unless
-        // there is no distinction between primal and dual spaces
-        if (get_default_context().braket_symmetry() != BraKetSymmetry::Symm) {
-          if (vertex.getOrigin() == Origin::Bra) {
-            if (ranges::contains(vertices, Origin::Bra,
-                                 [](const auto &v) { return v.getOrigin(); })) {
-              throw std::invalid_argument(
-                  "TensorNetworkV3::Edge::connect_to: bra slot can only be "
-                  "connected "
-                  "to a bra slot if default context's braket_symmetry() != "
-                  "BraKetSymmetry::Symm");
-            }
-          }
-          if (vertex.getOrigin() == Origin::Ket) {
-            if (ranges::contains(vertices, Origin::Ket,
-                                 [](const auto &v) { return v.getOrigin(); })) {
-              throw std::invalid_argument(
-                  "TensorNetworkV3::Edge::connect_to: ket slot can only be "
-                  "connected "
-                  "to a ket slot if default context's braket_symmetry() != "
-                  "BraKetSymmetry::Symm");
-            }
-          }
-        }
         add_vertex(vertex);
       }
 
@@ -170,12 +145,12 @@ class TensorNetworkV3 {
     const Index *index = nullptr;
 
     /// @param vertex a vertex to be added
-    /// @throw std::invalid_argument if @p vertex is already connected by this
+    /// @throw Exception if @p vertex is already connected by this
     /// Edge
     void add_vertex(const Vertex &vertex) {
       auto [it, inserted] = this->vertices.emplace(vertex);
       if (!inserted)
-        throw std::invalid_argument(
+        throw Exception(
             "TensorNetworkV3::Edge::add_vertex(v): v is already connected by "
             "this Edge");
     }
@@ -492,7 +467,7 @@ class TensorNetworkV3 {
 
     auto tensor_ptr = std::dynamic_pointer_cast<AbstractTensor>(clone);
     if (!tensor_ptr) {
-      throw std::invalid_argument(
+      throw Exception(
           "TensorNetworkV3::TensorNetworkV3: tried to add non-tensor to "
           "network");
     }

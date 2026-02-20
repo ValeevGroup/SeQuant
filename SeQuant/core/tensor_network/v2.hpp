@@ -19,7 +19,6 @@
 #include <cstdlib>
 #include <iosfwd>
 #include <memory>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -106,21 +105,21 @@ class TensorNetworkV2 {
              vertex.getOrigin() != Origin::Aux) ||
             (first->getOrigin() != Origin::Aux &&
              vertex.getOrigin() == Origin::Aux)) {
-          throw std::logic_error(
+          throw Exception(
               "TensorNetworkV2::Edge::connect_to: aux slot cannot be connected "
               "to a non-aux slot");
         }
         // - can connect bra slot to ket slot, and vice versa
         if (first->getOrigin() == Origin::Bra &&
             vertex.getOrigin() != Origin::Ket) {
-          throw std::logic_error(
+          throw Exception(
               "TensorNetworkV2::Edge::connect_to: bra slot can only be "
               "connected "
               "to a ket slot");
         }
         if (first->getOrigin() == Origin::Ket &&
             vertex.getOrigin() != Origin::Bra) {
-          throw std::logic_error(
+          throw Exception(
               "TensorNetworkV2::Edge::connect_to: ket slot can only be "
               "connected "
               "to a bra slot");
@@ -438,7 +437,7 @@ class TensorNetworkV2 {
 
     auto tensor_ptr = std::dynamic_pointer_cast<AbstractTensor>(clone);
     if (!tensor_ptr) {
-      throw std::invalid_argument(
+      throw Exception(
           "TensorNetworkV2::TensorNetworkV2: tried to add non-tensor to "
           "network");
     }

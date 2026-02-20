@@ -11,9 +11,8 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
-#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/meta.hpp>
-#include <SeQuant/core/wolfram.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <algorithm>
@@ -34,7 +33,6 @@
 struct Dummy : public sequant::Expr {
   virtual ~Dummy() = default;
   std::wstring to_latex() const override { return L"{\\text{Dummy}}"; }
-  std::wstring to_wolfram() const override { return L"Dummy[]"; }
   type_id_type type_id() const override { return get_type_id<Dummy>(); };
   sequant::ExprPtr clone() const override { return sequant::ex<Dummy>(); }
   bool static_equal(const sequant::Expr &) const override { return true; }
@@ -63,21 +61,6 @@ struct VecExpr : public std::vector<T>, public sequant::Expr {
       }
     }
     result += L"\\}}";
-    return result;
-  }
-  std::wstring to_wolfram() const override {
-    std::wstring result = L"VecExpr[";
-    size_t count = 1;
-    for (const auto &e : *this) {
-      const auto last_it = count == this->std::vector<T>::size();
-      if constexpr (sequant::Expr::is_shared_ptr_of_expr_or_derived<T>::value) {
-        result += e->to_wolfram() + (last_it ? L"" : L",");
-      } else {
-        result += std::to_wstring(e) + (last_it ? L"" : L",");
-      }
-      ++count;
-    }
-    result += L"]";
     return result;
   }
 
@@ -123,9 +106,6 @@ struct Adjointable : public sequant::Expr {
   virtual ~Adjointable() = default;
   std::wstring to_latex() const override {
     return L"{\\text{Adjointable}{" + std::to_wstring(v) + L"}}";
-  }
-  std::wstring to_wolfram() const override {
-    return L"Adjointable[" + std::to_wstring(v) + L"]";
   }
   type_id_type type_id() const override { return get_type_id<Adjointable>(); };
   sequant::ExprPtr clone() const override {
@@ -279,7 +259,7 @@ TEST_CASE("expr", "[elements]") {
     REQUIRE(ex->value() == 2);
     REQUIRE(ex->value<int>() == 2);
     REQUIRE(ex->value<std::complex<int>>() == std::complex<int>{2, 0});
-    REQUIRE_THROWS_AS(ex->value<Dummy>(), std::invalid_argument);
+    REQUIRE_THROWS_AS(ex->value<Dummy>(), Exception);
     // sequant::rational is convertible to bool
     REQUIRE_NOTHROW(ex->value<bool>());
     REQUIRE_THROWS_AS(std::make_shared<Constant>(-2)->value<unsigned int>(),
@@ -307,7 +287,7 @@ TEST_CASE("expr", "[elements]") {
   SECTION("adjoint") {
     {  // not implemented by default
       const auto e = std::make_shared<Dummy>();
-      REQUIRE_THROWS_AS(e->adjoint(), std::logic_error);
+      REQUIRE_THROWS_AS(e->adjoint(), Exception);
     }
     {  // implemented in Adjointable
       const auto e = std::make_shared<Adjointable>();
@@ -409,7 +389,7 @@ TEST_CASE("expr", "[elements]") {
       e->append(ex<Adjointable>(3));
       e->append(ex<Adjointable>(4));
       // std::wcout << "to_latex(e) = " << to_latex(e) << std::endl;
-      REQUIRE(to_latex(e) ==
+      REQUIRE(to_latex(*e) ==
               L"{ \\bigl({\\text{Adjointable}{1}} + {\\text{Adjointable}{2}} + "
               L"{\\text{Adjointable}{3}} + {\\text{Adjointable}{4}}\\bigr) }");
       // std::wcout << "to_latex_align(e) = " << to_latex_align(e) << std::endl;
@@ -439,22 +419,6 @@ TEST_CASE("expr", "[elements]") {
               "\\end{align}");
     }
   }  // SECTION("latex")
-
-  SECTION("wolfram") {
-    Product sp0{};
-    sp0.append(2, std::make_shared<Dummy>());
-    REQUIRE(to_wolfram(sp0) == L"Times[2,Dummy[]]");
-
-    // VecExpr<ExprPtr>
-    {
-      const auto ex5_init = std::vector<std::shared_ptr<Constant>>{
-          std::make_shared<Constant>(1), std::make_shared<Constant>(2),
-          std::make_shared<Constant>(3)};
-      auto ex6 =
-          std::make_shared<VecExpr<ExprPtr>>(begin(ex5_init), end(ex5_init));
-      REQUIRE(ex6->to_wolfram() == L"VecExpr[1,2,3]");
-    }
-  }
 
   SECTION("visitor") {
     // read-only visitor
@@ -888,33 +852,34 @@ TEST_CASE("expr", "[elements]") {
   SECTION("ResultExpr") {
     SECTION("accessors") {
       SECTION("as_variable") {
-        REQUIRE_THAT(parse_result_expr(L"R = Var").result_as_variable(),
+        REQUIRE_THAT(deserialize<ResultExpr>(L"R = Var").result_as_variable(),
                      EquivalentTo(L"R"));
 
-        REQUIRE_THAT(parse_result_expr(L"R = Var").result_as_tensor(),
+        REQUIRE_THAT(deserialize<ResultExpr>(L"R = Var").result_as_tensor(),
                      EquivalentTo(L"R{}:N-N-N"));
       }
       SECTION("as_tensor") {
-        REQUIRE_THAT(
-            parse_result_expr(L"R{a1;i2;p3} = T{a1;i2;p3}").result_as_tensor(),
-            EquivalentTo(L"R{a1;i2;p3}"));
+        REQUIRE_THAT(deserialize<ResultExpr>(L"R{a1;i2;p3} = T{a1;i2;p3}")
+                         .result_as_tensor(),
+                     EquivalentTo(L"R{a1;i2;p3}"));
       }
     }
     SECTION("particle pairings") {
       std::vector<std::pair<Index, Index>> expected = {{L"a_1", L"i_1"}};
-      auto pairings = parse_result_expr(L"R{a1;i1} = t{a1;i1}")
+      auto pairings = deserialize<ResultExpr>(L"R{a1;i1} = t{a1;i1}")
                           .index_particle_grouping<std::pair<Index, Index>>();
       REQUIRE_THAT(pairings, ::Catch::Matchers::UnorderedRangeEquals(expected));
 
       expected = {{L"a_1", L"i_1"}, {L"a_2", L"i_2"}};
-      pairings = parse_result_expr(L"R{a1,a2;i1,i2} = t{a1,a2;i1,i2}")
+      pairings = deserialize<ResultExpr>(L"R{a1,a2;i1,i2} = t{a1,a2;i1,i2}")
                      .index_particle_grouping<std::pair<Index, Index>>();
       REQUIRE_THAT(pairings, ::Catch::Matchers::UnorderedRangeEquals(expected));
 
       // aux indices are ignored
       expected = {{L"a_1", L"i_1"}, {L"a_2", L"i_2"}};
-      pairings = parse_result_expr(L"R{a1,a2;i1,i2;p1} = t{a1,a2;i1,i2;p1}")
-                     .index_particle_grouping<std::pair<Index, Index>>();
+      pairings =
+          deserialize<ResultExpr>(L"R{a1,a2;i1,i2;p1} = t{a1,a2;i1,i2;p1}")
+              .index_particle_grouping<std::pair<Index, Index>>();
       REQUIRE_THAT(pairings, ::Catch::Matchers::UnorderedRangeEquals(expected));
     }
   }

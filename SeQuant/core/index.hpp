@@ -27,7 +27,6 @@
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -532,15 +531,14 @@ class Index : public Taggable {
   static std::wstring base_label(std::string_view label) {
     auto underscore_position = label.find('_');
     if (underscore_position == std::string::npos)
-      return to_wstring(std::string({label.begin(), label.end()}));
+      return toUtf16(label);
     else
-      return to_wstring(
-          std::string({label.data(), label.data() + underscore_position}));
+      return toUtf16(label.substr(0, underscore_position));
   }
 
   template <typename Char, typename = std::enable_if_t<meta::is_char_v<Char>>>
   static std::wstring base_label(Char label) {
-    return to_wstring(label);
+    return toUtf16(label);
   }
 
   /// @return the memoized label as a UTF-8 encoded wide-character string
@@ -575,7 +573,6 @@ class Index : public Taggable {
 
   /// @return A UTF-8 encoded narrow-character string label
   /// @warning not to be used with proto indices
-  /// @note equivalent to `sequant::to_string(this->label())`
   std::string to_string() const;
 
   /// @return the full label as a UTF-8 encoded wide-character string
@@ -715,37 +712,6 @@ class Index : public Taggable {
   }
 
   std::wstring to_latex() const noexcept;
-
-  /*template <typename... Attrs>
-  std::wstring to_wolfram(Attrs &&...attrs) const {
-    auto protect_subscript = [](const std::wstring_view str) {
-      auto subsc_pos = str.rfind(L'_');
-      if (subsc_pos == std::wstring_view::npos)
-        return std::wstring(str);
-      else {
-        SEQUANT_ASSERT(subsc_pos + 1 < str.size());
-        std::wstring result = L"\\!\\(\\*SubscriptBox[\\(";
-        result += std::wstring(str.substr(0, subsc_pos));
-        result += L"\\), \\(";
-        result += std::wstring(str.substr(subsc_pos + 1));
-        result += L"\\)]\\)";
-        return result;
-      }
-    };
-
-    using namespace std::literals;
-    std::wstring result =
-        L"particleIndex[\""s + protect_subscript(this->label()) + L"\"";
-    if (this->has_proto_indices()) {
-      SEQUANT_ASSERT(false && "not yet supported");
-    }
-    using namespace std::literals;
-    result += L","s + ::sequant::to_wolfram(space());
-    ((result += ((L","s + ::sequant::to_wolfram(std::forward<Attrs>(attrs))))),
-     ...);
-    result += L"]";
-    return result;
-  }*/
 
   /// @param protoindex_range a range of Index objects
   /// @return the color of the protoindices
@@ -945,7 +911,7 @@ class Index : public Taggable {
   /// generated Index objects
   inline void check_nonreserved() const {
     if (ordinal_ && *ordinal_ >= min_tmp_index()) {
-      throw std::invalid_argument(
+      throw Exception(
           "Index ctor: ordinal must be less than the value returned by "
           "min_tmp_index()");
     }
@@ -1048,35 +1014,38 @@ class Index : public Taggable {
 
 };  // class Index
 
+using IndexSet = container::set<Index, Index::FullLabelCompare>;
+using IndexVec = Index::index_vector;
+
 inline const IndexSpace::Attr Index::default_space_attr{
     IndexSpace::Attr::reserved};
 inline const Index Index::null;
 
 void Index::validate_proto_indices() const {
-#ifdef SEQUANT_ASSERT_ENABLED
-  if (!proto_indices_.empty()) {
-    SEQUANT_ASSERT(!ranges::contains(proto_indices_, null) && "Index ctor: null proto index detected");
-    if (!symmetric_proto_indices_) {  // if proto indices not symmetric, sort
-                                      // via
-      // ptrs
-      container::svector<Index const *> vp;
-      vp.reserve(proto_indices_.size());
-      for (size_t i = 0; i < proto_indices_.size(); ++i)
-        vp.push_back(&proto_indices_[i]);
-      std::sort(vp.begin(), vp.end(),
-                [](Index const *l, Index const *r) { return *l < *r; });
-      SEQUANT_ASSERT(std::adjacent_find(vp.begin(), vp.end(),
-                             [](Index const *l, Index const *r) {
-                               return *l == *r;
-                             }) == vp.end() &&
-            "Index ctor: duplicate proto indices detected");
-    } else {  // else search directly
-      SEQUANT_ASSERT(std::adjacent_find(begin(proto_indices_), end(proto_indices_)) ==
-          proto_indices_.end() &&
-            "Index ctor: duplicate proto indices detected");
+  if constexpr (assert_enabled()) {
+    if (!proto_indices_.empty()) {
+      SEQUANT_ASSERT(!ranges::contains(proto_indices_, null) && "Index ctor: null proto index detected");
+      if (!symmetric_proto_indices_) {  // if proto indices not symmetric, sort
+        // via
+        // ptrs
+        container::svector<Index const *> vp;
+        vp.reserve(proto_indices_.size());
+        for (size_t i = 0; i < proto_indices_.size(); ++i)
+          vp.push_back(&proto_indices_[i]);
+        std::sort(vp.begin(), vp.end(),
+                  [](Index const *l, Index const *r) { return *l < *r; });
+        SEQUANT_ASSERT(std::adjacent_find(vp.begin(), vp.end(),
+                               [](Index const *l, Index const *r) {
+                                 return *l == *r;
+                               }) == vp.end() &&
+              "Index ctor: duplicate proto indices detected");
+      } else {  // else search directly
+        SEQUANT_ASSERT(std::adjacent_find(begin(proto_indices_), end(proto_indices_)) ==
+            proto_indices_.end() &&
+              "Index ctor: duplicate proto indices detected");
+      }
     }
   }
-#endif
 }
 
 void Index::canonicalize_proto_indices() noexcept {

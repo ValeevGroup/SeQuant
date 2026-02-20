@@ -4,6 +4,8 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/slotted_index.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/memoize.hpp>
 
 #if defined(SEQUANT_HAS_TILEDARRAY)
@@ -14,6 +16,10 @@
 #include <SeQuant/core/eval/backends/btas/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/btas/result.hpp>
 #endif
+#if defined(SEQUANT_HAS_TAPP)
+#include <SeQuant/core/eval/backends/tapp/ops.hpp>
+#include <SeQuant/core/eval/backends/tapp/tensor.hpp>
+#endif
 
 #include <concepts>
 #include <condition_variable>
@@ -22,7 +28,7 @@
 #include <optional>
 #include <vector>
 
-namespace sequant {
+namespace sequant::mbpt {
 
 static constexpr double default_biorthogonalizer_pseudoinverse_threshold =
     1e-12;
@@ -45,10 +51,61 @@ void biorthogonal_transform(
 ///  an exception)
 [[nodiscard]] ExprPtr biorthogonal_transform(
     const ExprPtr& expr,
+    const container::svector<container::svector<sequant::SlottedIndex>>&
+        ext_index_groups = {},
+    double pseudoinverse_threshold =
+        default_biorthogonalizer_pseudoinverse_threshold);
+[[nodiscard]] ExprPtr biorthogonal_transform(
+    const ExprPtr& expr,
     const container::svector<container::svector<sequant::Index>>&
         ext_index_groups = {},
     double pseudoinverse_threshold =
         default_biorthogonalizer_pseudoinverse_threshold);
+
+/// @brief filters out the nonunique terms in Wang-Knizia biorthogonalization
+/// WK biorthogonalization rewrites biorthogonal expressions as a projector
+/// onto non-null-space (NNS)
+/// applied to the biorthogonal expressions where out of each
+/// group of terms related by permutation of external indices
+/// those with the largest coefficients are selected.
+/// This function performs the selection by forming groups of terms that
+/// are equivalent modulo external index permutation (all terms in a group
+/// have identical graph hashes).
+/// @details This function processes a sum expression, grouping product terms by
+/// hash of their canonicalized tensor network forms. For each group, it
+/// retains only the terms with the largest absolute scalar coefficient.
+/// @param expr The input expression, expected to be a `Sum` of `Product` terms.
+/// @param ext_idxs A vector of external index groups. The function will not
+/// apply the filtering logic if `ext_idxs.size()` is 2 or less.
+/// @return A new `ExprPtr` representing the filtered and compacted expression.
+ExprPtr WK_biorthogonalization_filter(
+    ExprPtr expr,
+    const container::svector<container::svector<SlottedIndex>>& ext_idxs);
+ExprPtr WK_biorthogonalization_filter(
+    ExprPtr expr,
+    const container::svector<container::svector<Index>>& ext_idxs);
+
+/// @brief Performs biorthogonal transformation with factored out NNS projector
+/// @details Applies biorthogonal transformation. When factor_out_nns_projector
+/// is true (default), factors out the NNS projector by applying additional
+/// steps (S_maps and WK_biorthogonalization_filter) to produce compact
+/// biorthogonal equations, necessitating a subsequent numerical NNS-projection
+/// evaluation. When false, the NNS projector is not factored out, so no need to
+/// apply numerical NNS-projection evaluation.
+/// @param expr The input expression.
+/// @param ext_idxs A vector of external index groups.
+/// @param factor_out_nns_projector If true (default), factored out NNS
+/// projector. If false, NNS projector is not factored out.
+/// @return Expression pointer to the biorthogonalized result with leading S
+/// operator.
+ExprPtr biorthogonal_transform_pre_nnsproject(
+    ExprPtr& expr,
+    const container::svector<container::svector<SlottedIndex>>& ext_idxs,
+    bool factor_out_nns_projector = true);
+ExprPtr biorthogonal_transform_pre_nnsproject(
+    ExprPtr& expr,
+    const container::svector<container::svector<Index>>& ext_idxs,
+    bool factor_out_nns_projector = true);
 
 namespace detail {
 
@@ -176,22 +233,23 @@ template <typename T>
 
   CacheKey key{n_particles, pseudoinverse_threshold};
 
-  return memoize(cache, cache_mutex, cache_cv, key, [&]() -> std::vector<T> {
-    constexpr std::size_t max_rank_hardcoded_nns_projector = 5;
-    if (n_particles <= max_rank_hardcoded_nns_projector) {
-      if (auto hardcoded_coeffs = hardcoded_nns_projector<T>(n_particles)) {
-        return std::move(hardcoded_coeffs.value());
-      }
-    }
-    auto coeffs =
-        detail::compute_nns_p_coeffs(n_particles, pseudoinverse_threshold);
-    std::vector<T> nns_p_coeffs;
-    nns_p_coeffs.reserve(coeffs.size());
-    for (const auto& c : coeffs) {
-      nns_p_coeffs.push_back(static_cast<T>(c));
-    }
-    return nns_p_coeffs;
-  });
+  return sequant::detail::memoize(
+      cache, cache_mutex, cache_cv, key, [&]() -> std::vector<T> {
+        constexpr std::size_t max_rank_hardcoded_nns_projector = 5;
+        if (n_particles <= max_rank_hardcoded_nns_projector) {
+          if (auto hardcoded_coeffs = hardcoded_nns_projector<T>(n_particles)) {
+            return std::move(hardcoded_coeffs.value());
+          }
+        }
+        auto coeffs =
+            detail::compute_nns_p_coeffs(n_particles, pseudoinverse_threshold);
+        std::vector<T> nns_p_coeffs;
+        nns_p_coeffs.reserve(coeffs.size());
+        for (const auto& c : coeffs) {
+          nns_p_coeffs.push_back(static_cast<T>(c));
+        }
+        return nns_p_coeffs;
+      });
 }
 
 }  // namespace detail
@@ -338,6 +396,83 @@ auto biorthogonal_nns_project(btas::Tensor<Args...> const& arr,
 
 #endif  // defined(SEQUANT_HAS_BTAS)
 
-}  // namespace sequant
+#if defined(SEQUANT_HAS_TAPP)
+
+/// \brief This function is used to implement
+/// ResultPtr::biorthogonal_nns_project for TAPPTensor
+///
+/// \param arr The tensor to be "cleaned up"
+/// \param bra_rank The rank of the bra indices
+///
+/// \return The cleaned TAPPTensor.
+template <typename T, typename Alloc>
+auto biorthogonal_nns_project_tapp(TAPPTensor<T, Alloc> const& arr,
+                                   size_t bra_rank) {
+  using ranges::views::iota;
+  size_t const rank = arr.rank();
+  SEQUANT_ASSERT(bra_rank <= rank);
+  size_t const ket_rank = rank - bra_rank;
+
+  // Residuals of rank 4 or less have no redundancy and don't require NNS
+  // projection
+  if (rank <= 4) return arr;
+
+  using numeric_type = T;
+
+  const auto& nns_p_coeffs =
+      detail::nns_projection_weights<numeric_type>(ket_rank);
+
+  using perm_type = container::svector<size_t>;
+
+  TAPPTensor<T, Alloc> result;
+
+  perm_type perm = iota(size_t{0}, rank) | ranges::to<perm_type>;
+  perm_type bra_perm = iota(size_t{0}, bra_rank) | ranges::to<perm_type>;
+  perm_type ket_perm = iota(bra_rank, rank) | ranges::to<perm_type>;
+
+  if (ket_rank > 2 && !nns_p_coeffs.empty()) {
+    bool result_initialized = false;
+
+    size_t num_perms = nns_p_coeffs.size();
+    for (size_t perm_rank = 0; perm_rank < num_perms; ++perm_rank) {
+      perm_type permuted_ket =
+          detail::compute_permuted_indices(ket_perm, perm_rank, ket_rank);
+
+      numeric_type coeff = nns_p_coeffs[perm_rank];
+
+      perm_type annot = bra_perm;
+      annot.insert(annot.end(), permuted_ket.begin(), permuted_ket.end());
+
+      container::svector<int64_t> annot_i64(annot.begin(), annot.end());
+      container::svector<int64_t> perm_i64(perm.begin(), perm.end());
+
+      TAPPTensor<T, Alloc> temp;
+      tapp_ops::permute(arr, annot_i64, temp, perm_i64);
+      tapp_ops::scal(coeff, temp);
+
+      if (result_initialized) {
+        result += temp;
+      } else {
+        result = temp;
+        result_initialized = true;
+      }
+    }
+
+  } else {
+    result = arr;
+  }
+
+  return result;
+}
+
+template <typename T, typename Alloc>
+auto biorthogonal_nns_project(TAPPTensor<T, Alloc> const& arr,
+                              size_t bra_rank) {
+  return biorthogonal_nns_project_tapp(arr, bra_rank);
+}
+
+#endif  // defined(SEQUANT_HAS_TAPP)
+
+}  // namespace sequant::mbpt
 
 #endif

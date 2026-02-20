@@ -1,8 +1,6 @@
 #ifndef SEQUANT_CORE_EXPORT_ITF_HPP
 #define SEQUANT_CORE_EXPORT_ITF_HPP
 
-#include <SeQuant/core/parse.hpp>
-
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/export/reordering_context.hpp>
@@ -102,7 +100,7 @@ class ItfContext : public ReorderingContext {
 /// Generator for ITF. ITF (Integrated Tensor Framework) is a domain-specific
 /// language for tensor contractions used by parts of the Molpro quantum
 /// chemistry program.
-/// WIREs Comput Mol Sci 2012, 2: 242–253 doi: 10.1002/wcms.82
+/// WIREs Comput Mol Sci 2012, 2: 242-253 doi: 10.1002/wcms.82
 template <typename Context = ItfContext>
 class ItfGenerator : public Generator<Context> {
  public:
@@ -133,7 +131,7 @@ class ItfGenerator : public Generator<Context> {
 
   std::string represent(const Index &idx, const Context &ctx) const override {
     if (idx.has_proto_indices()) {
-      throw std::runtime_error("ITF doesn't support proto indices");
+      throw Exception("ITF doesn't support proto indices");
     }
 
     const std::size_t ordinal = idx.ordinal().value();
@@ -205,8 +203,7 @@ class ItfGenerator : public Generator<Context> {
   void create(const Tensor &tensor, bool zero_init,
               const Context &ctx) override {
     if (!zero_init) {
-      throw std::runtime_error(
-          "Can't create ITF tensor without setting it to zero");
+      throw Exception("Can't create ITF tensor without setting it to zero");
     }
 
     m_generated += "alloc " + represent(tensor, ctx) + "\n";
@@ -242,8 +239,7 @@ class ItfGenerator : public Generator<Context> {
   void create(const Variable &variable, bool zero_init,
               const Context &ctx) override {
     if (!zero_init) {
-      throw std::runtime_error(
-          "Can't create ITF variable without setting it to zero");
+      throw Exception("Can't create ITF variable without setting it to zero");
     }
 
     m_generated += "alloc " + represent(variable, ctx) + "\n";
@@ -408,8 +404,7 @@ class ItfGenerator : public Generator<Context> {
       const Product &product = expr.as<Product>();
 
       if (product.factors().size() > 2) {
-        std::wcerr << deparse(product) << std::endl;
-        throw std::runtime_error("ITF can only handle binary contractions");
+        throw Exception("ITF can only handle binary contractions");
       }
 
       std::string repr;
@@ -429,11 +424,10 @@ class ItfGenerator : public Generator<Context> {
       return repr;
     } else if (expr.is<Sum>()) {
       // TODO: Handle on-the-fly antisymmetrization (K[abij] - K[baij])
-      throw std::runtime_error("ITF doesn't support explicit summation");
+      throw Exception("ITF doesn't support explicit summation");
     }
 
-    throw std::runtime_error(
-        "Unsupported expression type in ItfGenerator::compute");
+    throw Exception("Unsupported expression type in ItfGenerator::compute");
   }
 };
 

@@ -4,8 +4,8 @@
 
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/latex.hpp>
-#include <SeQuant/core/wstring.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <format>
 #include <unordered_map>
@@ -32,8 +32,8 @@ std::wstring Index::to_latex() const noexcept {
     sfx =
         std::format(L"_{}", *ordinal_ < 10 ? std::to_wstring(*ordinal_)
                                            : std::format(L"{{{}}}", *ordinal_));
-  return std::format(L"{{{}{}{}}}", utf_to_latex(space().base_key()), sfx,
-                     protos);
+  return std::format(L"{{{}{}{}}}",
+                     io::latex::utf_to_string(space().base_key()), sfx, protos);
 }
 
 std::string Index::ascii_label() const {
@@ -67,9 +67,7 @@ std::string Index::ascii_label() const {
   return label_ascii;
 }
 
-std::string Index::to_string() const {
-  return sequant::to_string(this->label());
-}
+std::string Index::to_string() const { return toUtf8(this->label()); }
 
 std::shared_ptr<const IndexSpaceRegistry>
 Index::obtain_default_index_registry() {

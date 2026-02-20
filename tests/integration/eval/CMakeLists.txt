@@ -49,3 +49,21 @@ if (SEQUANT_HAS_BTAS)
 
     build_test_as_needed(eval_btas "${test_name}" test_name)
 endif (SEQUANT_HAS_BTAS)
+
+if (SEQUANT_HAS_TAPP)
+    add_executable(eval_tapp ${BUILD_BY_DEFAULT}
+            "tapp/data_world_tapp.hpp"
+            "tapp/scf_tapp.hpp"
+            "tapp/main.cpp"
+    )
+    target_link_libraries(eval_tapp PRIVATE eval_shared tapp::reference)
+
+    set(test_name "sequant/integration/eval_tapp")
+    add_test(
+            NAME "${test_name}"
+            COMMAND eval_tapp
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    )
+
+    build_test_as_needed(eval_tapp "${test_name}" test_name)
+endif (SEQUANT_HAS_TAPP)

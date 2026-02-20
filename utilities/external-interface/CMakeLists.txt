@@ -12,7 +12,8 @@ add_executable(external_interface
 
 target_link_libraries(external_interface
     PRIVATE
-        SeQuant::SeQuant
+        SeQuant::mbpt
+        SeQuant::export
         nlohmann_json::nlohmann_json
         CLI11::CLI11
         Boost::headers

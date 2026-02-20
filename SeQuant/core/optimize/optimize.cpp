@@ -2,159 +2,89 @@
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
-#include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
-#include <SeQuant/core/optimize.hpp>
+#include <SeQuant/core/optimize/optimize.hpp>
+#include <SeQuant/core/optimize/single_term.hpp>
+#include <SeQuant/core/optimize/sum.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <range/v3/algorithm/all_of.hpp>
 #include <range/v3/iterator/basic_iterator.hpp>
 #include <range/v3/range/access.hpp>
+#include <range/v3/range/conversion.hpp>
 #include <range/v3/view/tail.hpp>
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/view.hpp>
 
-#include <algorithm>
 #include <cstddef>
-#include <memory>
-#include <stack>
+#include <type_traits>
 #include <utility>
-#include <vector>
 
 namespace sequant {
 
-class Tensor;
-
 namespace opt {
 
-ExprPtr tail_factor(ExprPtr const& expr) noexcept {
-  if (expr->is<Tensor>())
-    return expr->clone();
-
-  else if (expr->is<Product>()) {
-    auto scalar = expr->as<Product>().scalar();
-    if (scalar == 1 && expr->size() == 2) {
-      // product with
-      //   -single factor that is a tensor
-      //   -scalar is just 1
-      //  will not be formed because of this block
-      return expr->at(1);
-    }
-    auto facs = ranges::views::tail(*expr);
-    return ex<Product>(Product{scalar, ranges::begin(facs), ranges::end(facs)});
-  } else {
-    // sum
-    auto summands = *expr | ranges::views::transform(
-                                [](auto const& x) { return tail_factor(x); });
-    return ex<Sum>(Sum{ranges::begin(summands), ranges::end(summands)});
-  }
-}
-
-void pull_scalar(ExprPtr expr) noexcept {
-  if (!expr->is<Product>()) return;
-  auto& prod = expr->as<Product>();
-
-  auto scal = prod.scalar();
-  for (auto&& x : *expr)
-    if (x->is<Product>()) {
-      auto& p = x->as<Product>();
-      scal *= p.scalar();
-      p.scale(1 / p.scalar());
-    }
-
-  prod.scale(1 / prod.scalar());
-  prod.scale(scal);
-}
-
-bool has_only_single_atom(const ExprPtr& term) {
-  if (term->is_atom()) {
-    return true;
-  }
-
-  // Recursively check that all elements in the expression tree have only a
-  // single element in them. At this point this means checking for Sum or
-  // Product objects that only have a single addend or factor respectively.
-  return term->size() == 1 && has_only_single_atom(*term->begin());
-}
-
-container::vector<container::vector<size_t>> clusters(Sum const& expr) {
-  using ranges::views::tail;
+///
+/// \param expr  Expression to be optimized.
+/// \param idxsz An invocable object that maps an Index object to size.
+/// \param reorder_sum If true, the summands are reordered so that terms with
+///                    common sub-expressions appear closer to each other.
+/// \return Optimized expression for lower evaluation cost.
+template <typename IdxToSize, typename = std::enable_if_t<std::is_invocable_r_v<
+                                  size_t, IdxToSize, const Index&>>>
+ExprPtr optimize(ExprPtr const& expr, IdxToSize const& idx2size,
+                 bool reorder_sum) {
   using ranges::views::transform;
-  using hash_t = size_t;
-  using pos_t = size_t;
-  using stack_t = std::stack<pos_t, container::vector<pos_t>>;
+  if (expr->is<Product>()) {
+    if (ranges::all_of(*expr, [](auto&& x) {
+          return x->template is<Tensor>() || x->template is<Variable>();
+        }))
+      return opt::single_term_opt(expr->as<Product>(), idx2size);
+    else {
+      auto const& prod = expr->as<Product>();
 
-  container::map<hash_t, container::set<pos_t>> positions;
-  {
-    pos_t pos = 0;
-    auto visitor = [&positions, &pos](auto const& n) {
-      auto h = hash::value(*n);
-      if (auto&& found = positions.find(h); found != positions.end()) {
-        found->second.emplace(pos);
-      } else {
-        positions.emplace(h, decltype(positions)::mapped_type{pos});
-      }
-    };
+      container::svector<ExprPtr> non_tensors(prod.size());
+      container::svector<ExprPtr> new_factors;
 
-    for (auto const& term : expr) {
-      auto const node = binarize(term);
-      if (has_only_single_atom(term)) {
-        visitor(node);
-      } else {
-        node.visit_internal(visitor);
-      }
-      ++pos;
-    }
-  }
-
-  container::map<pos_t, container::vector<pos_t>> connections;
-  {
-    for (auto const& [_, v] : positions) {
-      auto const v0 = ranges::front(v);
-      auto const v_ = ranges::views::tail(v) |
-                      ranges::to<decltype(connections)::mapped_type>;
-      if (auto&& found = connections.find(v0); found != connections.end())
-        for (auto p : v_) found->second.push_back(p);
-      else
-        connections.emplace(v0, v_);
-    }
-  }
-  positions.clear();
-
-  container::vector<container::vector<pos_t>> result;
-  {
-    container::set<pos_t> visited;
-    for (auto k : connections | ranges::views::keys)
-      if (!visited.contains(k)) {
-        stack_t dfs_stack;
-        dfs_stack.push(k);
-        container::vector<pos_t> clstr;
-        while (!dfs_stack.empty()) {
-          auto p = dfs_stack.top();
-          dfs_stack.pop();
-          if (!visited.contains(p)) {
-            clstr.push_back(p);
-            visited.emplace(p);
-          }
-          if (auto&& found = connections.find(p); found != connections.end())
-            for (auto p_ : ranges::views::reverse(found->second))
-              dfs_stack.push(p_);
+      for (auto i = 0; i < prod.size(); ++i) {
+        auto&& f = prod.factor(i);
+        if (f.is<Tensor>() || f.is<Variable>())
+          new_factors.emplace_back(f);
+        else {
+          non_tensors[i] = f;
+          auto target_idxs = get_unique_indices(f);
+          new_factors.emplace_back(
+              ex<Tensor>(L"I_" + std::to_wstring(i), bra(target_idxs.bra),
+                         ket(target_idxs.ket), aux(target_idxs.aux)));
         }
-        result.emplace_back(std::move(clstr));
       }
-  }
-  return result;
-}
 
-Sum reorder(Sum const& sum) {
-  Sum result;
+      auto result = opt::single_term_opt(
+          Product(prod.scalar(), new_factors, Product::Flatten::No), idx2size);
 
-  for (auto const& clstr : clusters(sum))
-    for (auto p : clstr) result.append(sum.at(p));
+      auto replacer = [&non_tensors](ExprPtr& out) {
+        if (!out->is<Tensor>()) return;
+        auto const& tnsr = out->as<Tensor>();
+        auto&& label = tnsr.label();
+        if (label.at(0) == L'I' && label.at(1) == L'_') {
+          size_t suffix = std::stoi(std::wstring(label.data() + 2));
+          out = non_tensors[suffix].clone();
+        }
+      };
 
-  SEQUANT_ASSERT(result.size() == sum.size());
-  return result;
+      result->visit(replacer, /* atoms_only = */ true);
+      return result;
+    }
+  } else if (expr->is<Sum>()) {
+    auto smands = *expr | transform([&idx2size](auto&& s) {
+      return optimize(s, idx2size, /* reorder_sum= */ false);
+    }) | ranges::to_vector;
+    auto sum = Sum{smands.begin(), smands.end()};
+    return reorder_sum ? ex<Sum>(opt::reorder(sum)) : ex<Sum>(std::move(sum));
+  } else
+    return expr->clone();
 }
 
 }  // namespace opt

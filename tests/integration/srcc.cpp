@@ -63,10 +63,11 @@ class compute_cceqvec {
     std::vector<ExprPtr> eqvec;
     switch (type) {
       case EqnType::t:
-        eqvec = CC{N, CC::Ansatz::T, screen, use_topology}.t(4, P, PMIN);
+        eqvec =
+            CC{N, {.screen = screen, .use_topology = use_topology}}.t(P, PMIN);
         break;
       case EqnType::λ:
-        eqvec = CC{N, CC::Ansatz::T, screen, use_topology}.λ(4);
+        eqvec = CC{N, {.screen = screen, .use_topology = use_topology}}.λ();
         break;
     }
     tpool.stop(N);
@@ -85,7 +86,7 @@ class compute_cceqvec {
       std::vector<ExprPtr> eqvec_so;
       switch (type) {
         case EqnType::t:
-          eqvec_so = CC{N}.t(4, P, PMIN);
+          eqvec_so = CC{N}.t(P, PMIN);
           break;
         case EqnType::λ:
           eqvec_so = CC{N}.λ();
@@ -94,15 +95,18 @@ class compute_cceqvec {
 
       eqvec_sf_ref.resize(eqvec_so.size());
       for (size_t R = PMIN; R <= P; ++R) {
-        auto const ext_idxs =
-            external_indices(eqvec_so[R]->at(0)->at(0)->as<Tensor>());
+        auto const ext_idxs = external_indices(eqvec_so[R]->at(0));
         eqvec_sf_ref[R] = closed_shell_spintrace(eqvec_so[R], ext_idxs);
         if (R == 1) {  // closed_shell_spintrace omits 1-body S
           using ranges::views::transform;
-          auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
-          auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
+          auto bixs = ext_idxs | transform([](auto&& group) {
+                        return get_bra_idx(group);
+                      });
+          auto kixs = ext_idxs | transform([](auto&& group) {
+                        return get_ket_idx(group);
+                      });
           auto s_tensor =
-              ex<Tensor>(Tensor{reserved::symm_label(), bra(bixs), ket(kixs)});
+              ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs), ket(bixs)});
           eqvec_sf_ref[R] = s_tensor * eqvec_sf_ref[R];
           expand(eqvec_sf_ref[R]);
         }
@@ -162,53 +166,10 @@ class compute_cceqvec {
 
         // validate sizes of spin-free t equations after biorthogonal transform
         if (type == EqnType::t) {
-          auto const ext_idxs =
-              external_indices(eqvec[R]->at(0)->at(0)->as<Tensor>());
+          auto const ext_idxs = external_indices(eqvec[R]->at(0));
 
-          // Remove S operator
-          for (auto& term : eqvec[R]->expr()) {
-            if (term->is<Product>())
-              term = remove_tensor(term.as_shared_ptr<Product>(),
-                                   reserved::symm_label());
-          }
-
-          // Biorthogonal transformation
-          eqvec[R] = biorthogonal_transform(eqvec[R], ext_idxs);
-
-          // restore the particle symmetrizer to then expand it in order to get
-          // all the raw equations
-          auto bixs = ext_idxs | ranges::views::transform(
-                                     [](auto&& vec) { return vec[0]; });
-          auto kixs = ext_idxs | ranges::views::transform(
-                                     [](auto&& vec) { return vec[1]; });
-          if (bixs.size() > 1) {
-            eqvec[R] = ex<Tensor>(Tensor{reserved::symm_label(), bra(bixs),
-                                         ket(kixs)}) *
-                       eqvec[R];
-          }
-          simplify(eqvec[R]);
-
-          // expand the particle symmetrizer to get all the raw equations
-          eqvec[R] = S_maps(eqvec[R]);
-          canonicalize(eqvec[R]);
-
-          // apply WK_biorthogonalization_filter to get only terms with large
-          // coefficients
-          eqvec[R] = WK_biorthogonalization_filter(eqvec[R], ext_idxs);
-
-          // restore the particle symmetrizer again to get the most compact set
-          // of equations
-          eqvec[R] =
-              ex<Tensor>(Tensor{reserved::symm_label(), bra(bixs), ket(kixs)}) *
-              eqvec[R];
-          eqvec[R] = expand(eqvec[R]);
-          simplify(eqvec[R]);
-
-          // WK_biorthogonalization_filter method removes the redundancy caused
-          // by biorthogonal transformation and gives the most compact set of
-          // equations. However, we need to restore the effects of those deleted
-          // terms. So, after evaluate_symm call in sequant evaluation scope, we
-          // need to call biorthogonal_nns_project_<backend>.
+          // Biorthogonal transformation with factoring out NNS projector
+          eqvec[R] = biorthogonal_transform_pre_nnsproject(eqvec[R], ext_idxs);
 
           std::wcout << "biorthogonal spin-free R" << R << "(expS" << N
                      << ") has " << eqvec[R]->size() << " terms:" << std::endl;

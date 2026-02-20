@@ -142,7 +142,7 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
 
   std::string represent(const Index &idx, const Context &) const override {
     if (idx.has_proto_indices()) {
-      throw std::runtime_error("Proto Indices are not (yet) supported!");
+      throw Exception("Proto Indices are not (yet) supported!");
     }
 
     // Convert index label to a single character for einsum notation
@@ -153,7 +153,7 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
     // If the label is longer, use its first character (this may need
     // customization)
     if (label.empty()) {
-      throw std::runtime_error("Empty index label");
+      throw Exception("Empty index label");
     }
 
     // Return first character preserving case to avoid conflicts
@@ -207,8 +207,7 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
   void create(const Variable &variable, bool zero_init,
               const Context &ctx) override {
     if (!zero_init) {
-      throw std::runtime_error(
-          "Python variables must be initialized when created");
+      throw Exception("Python variables must be initialized when created");
     }
 
     m_generated += m_indent + represent(variable, ctx) + " = 0.0\n";
@@ -412,7 +411,7 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
 
       if (found) {
         // Fallback: use numbered indices (not standard einsum, but necessary)
-        throw std::runtime_error("Too many unique indices for einsum notation");
+        throw Exception("Too many unique indices for einsum notation");
       }
     }
 
@@ -525,7 +524,7 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
       // For sums, we can't use a single einsum call
       // This should be handled at a higher level by generating multiple
       // statements
-      throw std::runtime_error(
+      throw Exception(
           "Sum expressions should be handled by generating multiple einsum "
           "calls");
     }
@@ -589,8 +588,7 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
       return result;
     }
 
-    throw std::runtime_error(
-        "Unsupported expression type for Python scalar expression");
+    throw Exception("Unsupported expression type for Python scalar expression");
   }
 };
 
@@ -623,8 +621,7 @@ class NumPyEinsumGenerator
   void create(const Tensor &tensor, bool zero_init,
               const Context &ctx) override {
     if (!zero_init) {
-      throw std::runtime_error(
-          "Python tensors must be initialized when created");
+      throw Exception("Python tensors must be initialized when created");
     }
 
     m_generated += m_indent + represent(tensor, ctx) + " = " + module_prefix() +
@@ -729,8 +726,7 @@ class PyTorchEinsumGenerator
   void create(const Tensor &tensor, bool zero_init,
               const Context &ctx) override {
     if (!zero_init) {
-      throw std::runtime_error(
-          "PyTorch tensors must be initialized when created");
+      throw Exception("PyTorch tensors must be initialized when created");
     }
 
     // PyTorch doesn't support the 'order' parameter - tensors are always

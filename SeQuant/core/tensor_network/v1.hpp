@@ -16,7 +16,6 @@
 
 #include <cstdlib>
 #include <memory>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -112,7 +111,7 @@ class TensorNetworkV1 {
         switch (t.slot_type) {
           case TensorIndexSlotType::Aux:
             if (second_.slot_type != TensorIndexSlotType::Aux) {
-              throw std::logic_error(
+              throw Exception(
                   "TensorNetworkV1::Edge::connect_to: aux slot cannot be "
                   "connected to a non-aux slot");
             }
@@ -120,14 +119,14 @@ class TensorNetworkV1 {
             // - can connect bra slot to ket slot, and vice versa
           case TensorIndexSlotType::Bra:
             if (second_.slot_type != TensorIndexSlotType::Ket) {
-              throw std::logic_error(
+              throw Exception(
                   "TensorNetworkV1::Edge::connect_to: bra slot can only be "
                   "connected to a ket slot");
             }
             break;
           case TensorIndexSlotType::Ket:
             if (second_.slot_type != TensorIndexSlotType::Bra) {
-              throw std::logic_error(
+              throw Exception(
                   "TensorNetworkV1::Edge::connect_to: ket slot can only be "
                   "connected to a bra slot");
             }
@@ -201,7 +200,7 @@ class TensorNetworkV1 {
   };
 
  public:
-  /// @throw std::logic_error if exprptr_range contains a non-tensor
+  /// @throw Exception if exprptr_range contains a non-tensor
   /// @note uses RTTI
   template <typename ExprPtrRange>
   TensorNetworkV1(ExprPtrRange &exprptr_range) {
@@ -213,7 +212,7 @@ class TensorNetworkV1 {
           tensors_.emplace_back(t);
           tensor_input_ordinals_.emplace_back(count++);
         } else {
-          throw std::logic_error(
+          throw Exception(
               "TensorNetworkV1::TensorNetworkV1: non-tensors in the given "
               "expression range");
         }
@@ -229,7 +228,7 @@ class TensorNetworkV1 {
         }
       }
     }
-    throw std::logic_error(
+    throw Exception(
         "TensorNetworkV1::TensorNetworkV1: non-tensors in the given expression "
         "range");
   }

@@ -8,9 +8,10 @@
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/optimize.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/optimize/common_subexpression_elimination.hpp>
-#include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/optimize/optimize.hpp>
+#include <SeQuant/core/optimize/single_term.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
@@ -61,7 +62,7 @@ TEST_CASE("optimize", "[optimize]") {
     };
 
     auto parse_expr_antisymm = [](auto const& xpr) {
-      return parse_expr(xpr, Symmetry::Antisymm);
+      return deserialize(xpr, {.def_perm_symm = Symmetry::Antisymm});
     };
 
     SECTION("Single term optimization") {
@@ -141,7 +142,7 @@ TEST_CASE("optimize", "[optimize]") {
       //
       // single-term optimization when sequant::Variables appear in a product
       //
-      auto prod6 = parse_expr(
+      auto prod6 = deserialize(
                        L"α * β * γ * "
                        "g_{i3,i4}^{a3,a4}"      // T1
                        " * t_{a1,a2}^{i3,i4}"   // T2
@@ -161,7 +162,7 @@ TEST_CASE("optimize", "[optimize]") {
       //
       // single-term optimization including tensors with auxiliary indices
       //
-      auto prod7 = parse_expr(
+      auto prod7 = deserialize(
                        L"DF{a_1;a_3;x_1} "  // T1
                        "DF{a_2;i_1;x_1} "   // T2
                        "t{a_3;i_2}"         // T3
@@ -177,7 +178,7 @@ TEST_CASE("optimize", "[optimize]") {
       REQUIRE(extract(res7, {1}) == prod7.at(1));
 
       auto prod8 =
-          parse_expr(
+          deserialize(
               L"T1{i_1;i_2;x_1,x_2,x_3,x_4} T2{i_2;i_1;x_5,x_6,x_7,x_8} "
               L"T3{i_3;;x_1,x_2,x_3,x_4} T4{i_4;;x_5,x_6,x_7,x_8}")
               ->as<Product>();
@@ -194,12 +195,40 @@ TEST_CASE("optimize", "[optimize]") {
     SECTION("Ensure single-value sums/products are not discarded") {
       auto sum = ex<Sum>();
       sum->as<Sum>().append(
-          ex<Product>(ExprPtrList{parse_expr(L"f{a_1;i_1}")}));
+          ex<Product>(ExprPtrList{deserialize(L"f{a_1;i_1}")}));
       REQUIRE(sum->as<Sum>().summand(0).as<Product>().factors().size() == 1);
       auto optimized = optimize(sum);
       REQUIRE(optimized->is<Sum>());
       REQUIRE(optimized->as<Sum>().summands().size() == 1);
       REQUIRE(sum->as<Sum>().summand(0).as<Product>().factors().size() == 1);
+    }
+
+    SECTION("Non-covariant indices") {
+      auto uocc = reg->retrieve_ptr(L"a");
+      auto aux = reg->retrieve_ptr(L"x");
+      auto const aux_sz = aux->approximate_size();
+      aux->approximate_size(3 * uocc->approximate_size());
+
+      auto const G_abcd_thc =
+          deserialize(L"X{a1;;x1} X{;a2;x1} Y{;;x1,x2} X{a3;;x2} X{;a4;x2}")
+              ->as<Product>();
+      auto const G_abcd_thc_opt =
+          deserialize(
+              L"((X{a1;;x1} X{;a2;x1}) Y{;;x1,x2})(X{a3;;x2} X{;a4;x2})")
+              ->as<Product>();
+      REQUIRE(single_term_opt(G_abcd_thc)->as<Product>() == G_abcd_thc_opt);
+
+      auto const GT_abij_thc = deserialize(
+                                   L"X{a1;;x1} X{;a2;x1} Y{;;x1,x2} X{a3;;x2} "
+                                   L"X{;a4;x2} T{a2,a4;i1,i2}")
+                                   ->as<Product>();
+      auto const GT_abij_thc_opt = deserialize(
+                                       L"(((X{a1;;x1} X{;a2;x1}) Y{;;x1,x2}) ( "
+                                       L"X{;a4;x2} T{a2,a4;i1,i2} )) X{a3;;x2}")
+                                       ->as<Product>();
+      REQUIRE(single_term_opt(GT_abij_thc)->as<Product>() == GT_abij_thc_opt);
+
+      aux->approximate_size(aux_sz);
     }
   }
 
@@ -219,6 +248,24 @@ TEST_CASE("optimize", "[optimize]") {
                 {L"CSE1{;;a3,a1,i2,i3} = GAM0{a1,a3;a4,a5} T2g{a4,a5;i2,i3}",
                  L"R{a1,a3;i2,i3} = 2 CSE1{;;a3,a1,i2,i3} - "
                  L"CSE1{;;a3,a1,i3,i2}"}},
+               // Scalar CSE with proto-index tensors
+               {{L"R1 = (f{i1;a1<i1>} t{a1<i1>;i1}) A",
+                 L"R2 = B (f{i1;a1<i1>} t{a1<i1>;i1})"},
+                {L"CSE1 = f{i1;a1<i1>} t{a1<i1>;i1}", L"R1 = CSE1 A",
+                 L"R2 = B CSE1"}},
+               // Tensor CSE with proto-index tensors: reused
+               // contraction with different external indexing
+               {{L"R{i1;i2} = 2 g{i1;a1<i1>} t{a1<i1>;i2} - "
+                 L"g{i2;a1<i2>} t{a1<i2>;i1}"},
+                {L"CSE1{;;i1,i2} = g{i1;a1<i1>} t{a1<i1>;i2}",
+                 L"R{i1;i2} = 2 CSE1{;;i1,i2} - CSE1{;;i2,i1}"}},
+               // ToT CSE: the intermediate itself has proto-indexed
+               // indices (tensor-of-tensor)
+               {{L"R1{i1;i2} = (g{i1;a1} C{a1;a1<i1>}) h{a1<i1>;i2}",
+                 L"R2{i1;i2} = (g{i1;a1} C{a1;a1<i1>}) k{a1<i1>;i2}"},
+                {L"CSE1{;;i1,a1<i1>} = g{i1;a1} C{a1;a1<i1>}",
+                 L"R1{i1;i2} = CSE1{;;i1,a1<i1>} h{a1<i1>;i2}",
+                 L"R2{i1;i2} = CSE1{;;i1,a1<i1>} k{a1<i1>;i2}"}},
                // In this case it is important that the computation of the
                // subexpression isn't simply thrown at the beginning of the
                // expression list as it depends on B, which has to be computed
@@ -232,14 +279,16 @@ TEST_CASE("optimize", "[optimize]") {
         std::vector<ResultExpr> expected;
 
         for (const std::wstring& current : inputs) {
-          expressions.push_back(binarize(parse_result_expr(
-              current, Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
-              ColumnSymmetry::Nonsymm)));
+          expressions.push_back(binarize(deserialize<ResultExpr>(
+              current, {.def_perm_symm = Symmetry::Nonsymm,
+                        .def_braket_symm = BraKetSymmetry::Nonsymm,
+                        .def_col_symm = ColumnSymmetry::Nonsymm})));
         }
         for (const std::wstring& current : outputs) {
-          expected.push_back(parse_result_expr(current, Symmetry::Nonsymm,
-                                               BraKetSymmetry::Nonsymm,
-                                               ColumnSymmetry::Nonsymm));
+          expected.push_back(deserialize<ResultExpr>(
+              current, {.def_perm_symm = Symmetry::Nonsymm,
+                        .def_braket_symm = BraKetSymmetry::Nonsymm,
+                        .def_col_symm = ColumnSymmetry::Nonsymm}));
         }
 
         auto binarizer = [](auto&& expr) { return binarize(expr); };
@@ -249,12 +298,12 @@ TEST_CASE("optimize", "[optimize]") {
           // every pair of objects will yield a hash collision which need to be
           // dealt with by using proper comparison operators.
           static constexpr bool force_collisions = true;
-          eliminate_common_subexpressions<
+          opt::eliminate_common_subexpressions<
               decltype(expressions), decltype(binarizer),
-              cse::AcceptAllPredicate, force_collisions>(expressions,
-                                                         binarizer);
+              opt::cse::AcceptAllPredicate, force_collisions>(expressions,
+                                                              binarizer);
         } else {
-          eliminate_common_subexpressions(expressions, binarizer);
+          opt::eliminate_common_subexpressions(expressions, binarizer);
         }
 
         std::vector<ResultExpr> actual;

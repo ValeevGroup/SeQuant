@@ -6,10 +6,10 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/parse.hpp>
-#include <SeQuant/core/parse/ast.hpp>
-#include <SeQuant/core/parse/ast_conversions.hpp>
-#include <SeQuant/core/parse/semantic_actions.hpp>
+#include <SeQuant/core/io/serialization/serialization.hpp>
+#include <SeQuant/core/io/serialization/v1/ast.hpp>
+#include <SeQuant/core/io/serialization/v1/ast_conversions.hpp>
+#include <SeQuant/core/io/serialization/v1/semantic_actions.hpp>
 #include <SeQuant/core/space.hpp>
 
 #define BOOST_SPIRIT_X3_UNICODE
@@ -21,24 +21,15 @@
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
-#include <cstdint>
 #include <functional>
-#include <iostream>
 #include <iterator>
-#include <memory>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <string_view>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
-namespace sequant {
-
-ParseError::ParseError(std::size_t offset, std::size_t length,
-                       std::string message)
-    : std::runtime_error(std::move(message)), offset(offset), length(length) {}
+namespace sequant::io::serialization::v1 {
 
 namespace x3 = boost::spirit::x3;
 
@@ -185,8 +176,6 @@ struct IndexRule : helpers::annotate_position, helpers::error_handler {};
 struct IndexGroupRule : helpers::annotate_position, helpers::error_handler {};
 struct SymmetrySpecRule : helpers::annotate_position, helpers::error_handler {};
 
-}  // namespace parse
-
 template <typename Iterator>
 struct ErrorHandler {
   Iterator begin;
@@ -195,24 +184,24 @@ struct ErrorHandler {
 
   void operator()(Iterator where, std::string expected) const {
     std::size_t offset = std::distance(begin, where);
-    throw ParseError(offset, 1,
-                     std::string("Parse failure at offset ") +
-                         std::to_string(offset) + ": expected " + expected);
+    throw SerializationError(offset, 1,
+                             std::string("Parse failure at offset ") +
+                                 std::to_string(offset) + ": expected " +
+                                 expected);
   }
 };
 
 template <typename AST, typename StartRule, typename PositionCache>
-AST do_parse(const StartRule &start, std::wstring_view input,
-             PositionCache &positions) {
+AST parse(const StartRule &start, std::wstring_view input,
+          PositionCache &positions) {
   using iterator_type = decltype(input)::iterator;
 
   ErrorHandler<iterator_type> error_handler(input.begin());
 
   AST ast;
 
-  const auto parser = x3::with<parse::error_handler_tag>(
-      std::ref(error_handler))[x3::with<parse::position_cache_tag>(
-      std::ref(positions))[start]];
+  const auto parser = x3::with<error_handler_tag>(std::ref(
+      error_handler))[x3::with<position_cache_tag>(std::ref(positions))[start]];
 
   auto begin = input.begin();
   try {
@@ -221,15 +210,15 @@ AST do_parse(const StartRule &start, std::wstring_view input,
 
     if (!success) {
       // Normally, this shouldn't happen as any error should itself throw a
-      // ParseError already
-      throw ParseError(0, input.size(),
-                       "Parsing was unsuccessful for an unknown reason");
+      // SerializationError already
+      throw SerializationError(
+          0, input.size(), "Parsing was unsuccessful for an unknown reason");
     }
     if (begin != input.end()) {
       // This should also not happen as the parser requires matching EOI
-      throw ParseError(std::distance(input.begin(), begin),
-                       std::distance(begin, input.end()),
-                       "Couldn't parse the entire input");
+      throw SerializationError(std::distance(input.begin(), begin),
+                               std::distance(begin, input.end()),
+                               "Couldn't parse the entire input");
     }
   } catch ([[maybe_unused]] const boost::spirit::x3::expectation_failure<
            iterator_type> &e) {
@@ -242,74 +231,61 @@ AST do_parse(const StartRule &start, std::wstring_view input,
   return ast;
 }
 
-parse::transform::DefaultSymmetries to_default_symms(
-    const std::optional<Symmetry> &perm_symm,
-    const std::optional<BraKetSymmetry> &braket_symm,
-    const std::optional<ColumnSymmetry> &column_symm) {
+}  // namespace parse
+
+transform::DefaultSymmetries to_default_symms(
+    const DeserializationOptions &options) {
   const Context &ctx = get_default_context();
 
-  parse::transform::DefaultSymmetries symms{
-      Symmetry::Nonsymm, ctx.braket_symmetry(), ColumnSymmetry::Symm};
+  transform::DefaultSymmetries symms{Symmetry::Nonsymm, ctx.braket_symmetry(),
+                                     ColumnSymmetry::Symm};
 
-  if (perm_symm.has_value()) {
-    std::get<0>(symms) = perm_symm.value();
+  if (options.def_perm_symm.has_value()) {
+    std::get<0>(symms) = options.def_perm_symm.value();
   }
-  if (braket_symm.has_value()) {
-    std::get<1>(symms) = braket_symm.value();
+  if (options.def_braket_symm.has_value()) {
+    std::get<1>(symms) = options.def_braket_symm.value();
   }
-  if (column_symm.has_value()) {
-    std::get<2>(symms) = column_symm.value();
+  if (options.def_col_symm.has_value()) {
+    std::get<2>(symms) = options.def_col_symm.value();
   }
-  if (std::get<0>(symms) !=
-      Symmetry::Nonsymm) {  // antisymmetry/symmetric bra and ket imply particle
-                            // symmetry
+  if (std::get<0>(symms) != Symmetry::Nonsymm) {
+    // antisymmetry/symmetric bra and ket imply particle symmetry
     std::get<2>(symms) = ColumnSymmetry::Symm;
   }
 
   return symms;
 }
 
-ResultExpr parse_result_expr(std::wstring_view input,
-                             std::optional<Symmetry> perm_symm,
-                             std::optional<BraKetSymmetry> braket_symm,
-                             std::optional<ColumnSymmetry> column_symm) {
-  using iterator_type = decltype(input)::iterator;
-  x3::position_cache<std::vector<iterator_type>> positions(input.begin(),
-                                                           input.end());
-  auto ast =
-      do_parse<parse::ast::ResultExpr>(parse::resultExpr, input, positions);
+#define SEQUANT_DESERIALIZATION_SPECIALIZATION(ExprType, StartRule, ASTType, \
+                                               transformFunc)                \
+  template <>                                                                \
+  ExprType from_string<ExprType>(std::wstring_view input,                    \
+                                 const DeserializationOptions &options) {    \
+    using iterator_type = decltype(input)::iterator;                         \
+    x3::position_cache<std::vector<iterator_type>> positions(input.begin(),  \
+                                                             input.end());   \
+    auto ast = parse::parse<ASTType>(StartRule, input, positions);           \
+                                                                             \
+    return transformFunc(ast, positions, input.begin(),                      \
+                         to_default_symms(options));                         \
+  }
 
-  return parse::transform::ast_to_result(
-      ast, positions, input.begin(),
-      to_default_symms(perm_symm, braket_symm, column_symm));
+SEQUANT_DESERIALIZATION_SPECIALIZATION(ResultExpr, parse::resultExpr,
+                                       ast::ResultExpr,
+                                       transform::ast_to_result)
+SEQUANT_DESERIALIZATION_SPECIALIZATION(ExprPtr, parse::expr, ast::Sum,
+                                       transform::ast_to_expr)
+
+template <>
+ResultExpr from_string<ResultExpr>(std::string_view input,
+                                   const DeserializationOptions &options) {
+  return v1::from_string<ResultExpr>(toUtf16(input), options);
+}
+template <>
+ExprPtr from_string<ExprPtr>(std::string_view input,
+                             const DeserializationOptions &options) {
+  return v1::from_string<ExprPtr>(toUtf16(input), options);
 }
 
-ExprPtr parse_expr(std::wstring_view input, std::optional<Symmetry> perm_symm,
-                   std::optional<BraKetSymmetry> braket_symm,
-                   std::optional<ColumnSymmetry> column_symm) {
-  using iterator_type = decltype(input)::iterator;
-  x3::position_cache<std::vector<iterator_type>> positions(input.begin(),
-                                                           input.end());
-  auto ast = do_parse<parse::ast::Sum>(parse::expr, input, positions);
-
-  return parse::transform::ast_to_expr(
-      ast, positions, input.begin(),
-      to_default_symms(perm_symm, braket_symm, column_symm));
-}
-
-ExprPtr parse_expr(std::string_view input, std::optional<Symmetry> perm_symm,
-                   std::optional<BraKetSymmetry> braket_symm,
-                   std::optional<ColumnSymmetry> column_symm) {
-  return parse_expr(sequant::to_wstring(input), perm_symm, braket_symm,
-                    column_symm);
-}
-
-ResultExpr parse_result_expr(std::string_view input,
-                             std::optional<Symmetry> perm_symm,
-                             std::optional<BraKetSymmetry> braket_symm,
-                             std::optional<ColumnSymmetry> column_symm) {
-  return parse_result_expr(sequant::to_wstring(input), perm_symm, braket_symm,
-                           column_symm);
-}
-
-}  // namespace sequant
+}  // namespace sequant::io::serialization::v1

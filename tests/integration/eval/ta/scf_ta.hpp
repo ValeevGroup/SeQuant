@@ -9,7 +9,7 @@
 #include <SeQuant/core/eval/backends/tiledarray/eval_expr.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/eval.hpp>
-#include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <calc_info.hpp>
@@ -29,18 +29,20 @@ class SequantEvalScfTA final : public SequantEvalScf {
 
  private:
   container::vector<container::vector<EvalNodeTA>> nodes_;
-  CacheManager cman_;
+  CacheManager<EvalNodeTA> cman_;
   DataWorldTA<Tensor_t> data_world_;
 
   Tensor_t const& f_vo() const {
-    static Tensor_t tnsr =
-        data_world_(parse_expr(L"f{a1;i1}", Symmetry::Nonsymm)->as<Tensor>());
+    static Tensor_t tnsr = data_world_(
+        deserialize(L"f{a1;i1}", {.def_perm_symm = Symmetry::Nonsymm})
+            ->as<Tensor>());
     return tnsr;
   }
 
   Tensor_t const& g_vvoo() const {
     static Tensor_t tnsr = data_world_(
-        parse_expr(L"g{a1,a2;i1,i2}", Symmetry::Nonsymm)->as<Tensor>());
+        deserialize(L"g{a1,a2;i1,i2}", {.def_perm_symm = Symmetry::Nonsymm})
+            ->as<Tensor>());
     return tnsr;
   }
 
@@ -48,8 +50,8 @@ class SequantEvalScfTA final : public SequantEvalScf {
     static const std::wstring_view energy_expr =
         L"f{i1;a1} * t{a1;i1} + g{i1,i2;a1,a2} * "
         L"(1/4 * t{a1,a2;i1,i2} + 1/2 t{a1;i1} * t{a2;i2})";
-    static auto const node =
-        binarize<EvalExprTA>(parse_expr(energy_expr, Symmetry::Antisymm));
+    static auto const node = binarize<EvalExprTA>(
+        deserialize(energy_expr, {.def_perm_symm = Symmetry::Antisymm}));
 
     return evaluate(node, data_world_)->template get<double>();
   }
@@ -84,7 +86,7 @@ class SequantEvalScfTA final : public SequantEvalScf {
 
     using Evaluator =
         ResultPtr (*)(std::vector<EvalNodeTA> const&, std::string const&,
-                      DataWorldTA<Tensor_t> const&, CacheManager&);
+                      DataWorldTA<Tensor_t> const&, CacheManager<EvalNodeTA>&);
 
     constexpr auto funcs =
         std::array{std::array<Evaluator, 2>{evaluate_antisymm<Trace::Off>,
@@ -115,7 +117,7 @@ class SequantEvalScfTA final : public SequantEvalScf {
  public:
   SequantEvalScfTA(TA::World& ta_world, CalcInfo const& calc_info)
       : SequantEvalScf{calc_info},
-        cman_{{}},
+        cman_{CacheManager<EvalNodeTA>::empty()},
         data_world_{ta_world, calc_info.fock_eri, calc_info.eqn_opts.excit} {
     assert(info_.eqn_opts.excit >= 2 &&
            "At least double excitation (CCSD) is required!");

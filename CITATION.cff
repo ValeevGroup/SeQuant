@@ -1,0 +1,75 @@
+cff-version: 1.2.0
+title: "SeQuant: Symbolic Tensor Algebra in C++"
+message: "If you use this software, please cite the preferred-citation article below."
+type: software
+version: 2.3.0-alpha
+date-released: 2026-xx-yy
+license: LGPL-3.0
+repository-code: https://github.com/ValeevGroup/SeQuant
+url: https://valeevgroup.github.io/SeQuant
+abstract: >-
+  SeQuant is a framework for performing symbolic algebra of tensors over
+  scalar and operator rings. In addition to symbolic manipulation it can
+  numerically evaluate general tensor algebra expressions with an
+  appropriate external tensor backend (TiledArray, BTAS, TAPP) or
+  generate code for an external tensor backend (ITF, Julia, NumPy/Torch)
+authors:
+  - family-names: Valeyev
+    given-names: Eduard
+    email: eduard@valeyev.net
+    affiliation: Virginia Tech
+    orcid: https://orcid.org/0000-0001-9923-6256
+  - family-names: Gaudel
+    given-names: Bimal
+    affiliation: Virginia Tech
+    orcid: https://orcid.org/0000-0003-3938-0277
+  - family-names: Adam
+    given-names: Robert
+    email: dev@robert-adam.de
+    affiliation: University of Stuttgart
+    orcid: https://orcid.org/0000-0003-0829-0148
+  - family-names: Melekamburath
+    given-names: Ajay
+    email: ajaymk22@vt.edu
+    affiliation: Virginia Tech
+    orcid: https://orcid.org/0000-0002-0079-5443
+  - family-names: Teke
+    given-names: Nakul
+    affiliation: Virginia Tech
+    orcid: https://orcid.org/0000-0003-0834-2040
+  - family-names: Besharatnik
+    given-names: Azam
+    email: besharat@vt.edu
+    affiliation: Virginia Tech
+    orcid: https://orcid.org/0009-0008-5694-4138
+  - family-names: Masteran
+    given-names: Conner
+    email: cmasteran1@vt.edu
+    affiliation: Virginia Tech
+    orcid: https://orcid.org/0000-0001-5001-4564
+preferred-citation:
+  type: article
+  title: "SeQuant Framework for Symbolic and Numerical Tensor Algebra. I. Core Capabilities"
+  year: 2025
+  identifiers:
+    - type: other
+      value: "arXiv:2511.09943"
+      description: arXiv preprint
+  url: https://arxiv.org/abs/2511.09943
+  authors:
+    - family-names: Gaudel
+      given-names: Bimal
+    - family-names: Adam
+      given-names: Robert G.
+    - family-names: Melekamburath
+      given-names: Ajay
+    - family-names: Masteran
+      given-names: Conner
+    - family-names: Teke
+      given-names: Nakul
+    - family-names: Besharatnik
+      given-names: Azam
+    - family-names: Köhn
+      given-names: Andreas
+    - family-names: Valeev
+      given-names: Edward F.

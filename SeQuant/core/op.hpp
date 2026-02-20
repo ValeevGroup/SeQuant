@@ -24,7 +24,6 @@
 #include <iterator>
 #include <memory>
 #include <numeric>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -201,8 +200,7 @@ bool is_pure_qpcreator(const Op<S> &op,
               op.action() == Action::Create);
     }
     case Vacuum::MultiProduct:
-      throw std::logic_error(
-          "is_pure_qpcreator: cannot handle MultiProduct vacuum");
+      throw Exception("is_pure_qpcreator: cannot handle MultiProduct vacuum");
   }
 
   SEQUANT_UNREACHABLE;
@@ -224,8 +222,7 @@ bool is_qpcreator(const Op<S> &op,
              (isr->contains_unoccupied(op.index().space()) &&
               op.action() == Action::Create);
       case Vacuum::MultiProduct:
-        throw std::logic_error(
-            "is_qpcreator: cannot handle MultiProduct vacuum");
+        throw Exception("is_qpcreator: cannot handle MultiProduct vacuum");
     }
   }
 
@@ -250,8 +247,7 @@ IndexSpace qpcreator_space(
                        op.index().space(),
                        isr->vacuum_unoccupied_space(op.index().space().qns()));
     case Vacuum::MultiProduct:
-      throw std::logic_error(
-          "qpcreator_space: cannot handle MultiProduct vacuum");
+      throw Exception("qpcreator_space: cannot handle MultiProduct vacuum");
   }
 
   SEQUANT_UNREACHABLE;
@@ -274,7 +270,7 @@ bool is_pure_qpannihilator(
               op.action() == Action::Create);
     }
     case Vacuum::MultiProduct:
-      throw std::logic_error(
+      throw Exception(
           "is_pure_qpannihilator: cannot handle MultiProduct vacuum");
   }
 
@@ -298,8 +294,7 @@ bool is_qpannihilator(const Op<S> &op,
               op.action() == Action::Annihilate);
     }
     case Vacuum::MultiProduct:
-      throw std::logic_error(
-          "is_qpannihilator: cannot handle MultiProduct vacuum");
+      throw Exception("is_qpannihilator: cannot handle MultiProduct vacuum");
   }
 
   SEQUANT_UNREACHABLE;
@@ -323,8 +318,7 @@ IndexSpace qpannihilator_space(
                        op.index().space(),
                        isr->vacuum_unoccupied_space(op.index().space().qns()));
     case Vacuum::MultiProduct:
-      throw std::logic_error(
-          "qpcreator_space: cannot handle MultiProduct vacuum");
+      throw Exception("qpcreator_space: cannot handle MultiProduct vacuum");
   }
 
   SEQUANT_UNREACHABLE;
@@ -593,12 +587,11 @@ class NormalOperator : public Operator<S>,
   }
 
   /// @return number of creators/annihilators
-  /// @throw std::logic_error if the operator is not particle number conserving
+  /// @throw Exception if the operator is not particle number conserving
   /// (i.e. if ncreators() != nannihilators() )
   auto rank() const {
     if (ncreators() != nannihilators()) {
-      throw std::logic_error(
-          "NormalOperator::rank(): ncreators != nannihilators");
+      throw Exception("NormalOperator::rank(): ncreators != nannihilators");
     }
     return ncreators();
   }
@@ -924,18 +917,18 @@ class NormalOperator : public Operator<S>,
 
   void _permute_aux(std::span<const std::size_t> perm) override final {
     if (perm.size() != 0)
-      throw std::invalid_argument(
+      throw Exception(
           "NormalOperator::_permute_aux(p): there are no aux indices, p must "
           "be null");
   }
 };
 
 static_assert(
-    is_tensor_v<NormalOperator<Statistics::FermiDirac>>,
+    is_tensor<NormalOperator<Statistics::FermiDirac>>,
     "The NormalOperator<Statistics::FermiDirac> class does not fulfill the "
     "requirements of the Tensor interface");
 static_assert(
-    is_tensor_v<NormalOperator<Statistics::BoseEinstein>>,
+    is_tensor<NormalOperator<Statistics::BoseEinstein>>,
     "The NormalOperator<Statistics::BoseEinstein> class does not fulfill the "
     "requirements of the Tensor interface");
 
@@ -1052,7 +1045,7 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>,
                                    }) == this->end();
 
     if (!all_same_vaccum) {
-      throw std::invalid_argument(
+      throw Exception(
           "NormalOperatorSequence expects all constituent "
           "NormalOperator objects to use same vacuum");
     }
@@ -1098,16 +1091,6 @@ inline ExprPtr fcrex(Index i, Attr &&...attr) {
 template <typename... Attr>
 inline ExprPtr fannx(Index i, Attr &&...attr) {
   return ex<FNOperator>(cre(), ann({fann(i, std::forward<Attr>(attr)...)}));
-}
-
-template <Statistics S>
-std::wstring to_latex(const NormalOperator<S> &op) {
-  return op.to_latex();
-}
-
-template <Statistics S>
-std::wstring to_latex(const NormalOperatorSequence<S> &opseq) {
-  return opseq.to_latex();
 }
 
 namespace detail {

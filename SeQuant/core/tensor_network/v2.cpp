@@ -10,7 +10,8 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/tag.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
@@ -18,9 +19,9 @@
 #include <SeQuant/core/tensor_network/v2.hpp>
 #include <SeQuant/core/tensor_network/vertex_painter.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/swap.hpp>
 #include <SeQuant/core/utility/tuple.hpp>
-#include <SeQuant/core/wstring.hpp>
 
 #include <algorithm>
 #include <iostream>
@@ -754,7 +755,8 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
     ++nvertex;
     if (options.make_labels) graph.vertex_labels.emplace_back(tlabel);
     if (options.make_texlabels)
-      graph.vertex_texlabels.emplace_back(L"$" + utf_to_latex(tlabel) + L"$");
+      graph.vertex_texlabels.emplace_back(
+          L"$" + io::latex::utf_to_string(tlabel) + L"$");
     graph.vertex_types.emplace_back(VertexType::TensorCore);
     graph.vertex_colors.push_back(colorizer(tensor));
 
@@ -1168,7 +1170,7 @@ void TensorNetworkV2::init_edges() {
     for (auto &&proto_idx : current.idx().proto_indices()) {
       // for now no recursive proto indices
       if (proto_idx.has_proto_indices())
-        throw std::runtime_error(
+        throw Exception(
             "TensorNetworkV2 does not support recursive protoindices");
       proto_indices.emplace(proto_idx);
     }

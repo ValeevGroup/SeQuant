@@ -1,18 +1,21 @@
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
+#include <SeQuant/domain/mbpt/detail/concepts.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
 #include <SeQuant/core/math.hpp>
-#include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/reserved.hpp>
+#include <SeQuant/core/slotted_index.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/overloads.hpp>
 #include <SeQuant/core/utility/permutation.hpp>
 #include <SeQuant/core/utility/swap.hpp>
 
@@ -37,9 +40,7 @@
 #include <functional>
 #include <iterator>
 #include <memory>
-#include <new>
 #include <numeric>
-#include <stdexcept>
 #include <string_view>
 #include <unordered_map>
 #include <utility>
@@ -107,10 +108,10 @@ template <typename Container, typename TraceFunction, typename... Args>
 
   if (!searchForNonEquivalentResults) {
     ResultExpr traced = expr.clone();
-    traced.expression() =
-        tracer(traced.expression(),
-               traced.index_particle_grouping<container::svector<Index>>(),
-               std::forward<Args>(args)...);
+    traced.expression() = tracer(
+        traced.expression(),
+        traced.index_particle_grouping<container::svector<SlottedIndex>>(),
+        std::forward<Args>(args)...);
 
     traced.set_symmetry(Symmetry::Nonsymm);
 
@@ -198,10 +199,10 @@ template <typename Container, typename TraceFunction, typename... Args>
       }
     }();
 
-    result.expression() =
-        tracer(result.expression(),
-               result.index_particle_grouping<container::svector<Index>>(),
-               std::forward<Args>(args)...);
+    result.expression() = tracer(
+        result.expression(),
+        result.index_particle_grouping<container::svector<SlottedIndex>>(),
+        std::forward<Args>(args)...);
 
     result.set_symmetry(Symmetry::Nonsymm);
 
@@ -246,8 +247,8 @@ ExprPtr swap_bra_ket(const ExprPtr& expr) {
       } else if (term->is<Variable>() || term->is<Constant>()) {
         result->append(1, term);
       } else {
-        throw std::runtime_error("Invalid Expr type in product_swap: " +
-                                 term->type_name());
+        throw Exception("Invalid Expr type in product_swap: " +
+                        term->type_name());
       }
     }
     return result;
@@ -264,8 +265,7 @@ ExprPtr swap_bra_ket(const ExprPtr& expr) {
     }
     return result;
   } else {
-    throw std::runtime_error("Invalid Expr type in swap_bra_ket: " +
-                             expr->type_name());
+    throw Exception("Invalid Expr type in swap_bra_ket: " + expr->type_name());
   }
 }
 
@@ -286,7 +286,7 @@ ExprPtr append_spin(const ExprPtr& expr,
       } else if (term->is<Constant>() || term->is<Variable>()) {
         spin_product->append(1, term);
       } else {
-        throw std::runtime_error(
+        throw Exception(
             "Invalid Expr type in append_spin::add_spin_to_product: " +
             term->type_name());
       }
@@ -308,7 +308,7 @@ ExprPtr append_spin(const ExprPtr& expr,
     return expr;
   }
 
-  throw std::runtime_error("Unsupported Expr type in append_spin");
+  throw Exception("Unsupported Expr type in append_spin");
 }
 
 ExprPtr remove_spin(const ExprPtr& expr) {
@@ -335,7 +335,7 @@ ExprPtr remove_spin(const ExprPtr& expr) {
           } else if (term->is<Constant>() || term->is<Variable>()) {
             result->append(1, term);
           } else {
-            throw std::runtime_error(
+            throw Exception(
                 "Invalid Expr type in remove_spin::remove_spin_from_product: " +
                 term->type_name());
           }
@@ -356,8 +356,7 @@ ExprPtr remove_spin(const ExprPtr& expr) {
   } else if (expr->is<Constant>() || expr->is<Variable>()) {
     return expr;
   } else {
-    throw std::runtime_error("Invalid Expr type in remove_spin: " +
-                             expr->type_name());
+    throw Exception("Invalid Expr type in remove_spin: " + expr->type_name());
   }
 }
 
@@ -496,7 +495,7 @@ ExprPtr expand_antisymm(const ExprPtr& expr, bool skip_spinsymm) {
       } else if (term->is<Variable>() || term->is<Constant>()) {
         temp.append(1, term, Product::Flatten::No);
       } else {
-        throw std::runtime_error(
+        throw Exception(
             "Invalid Expr type in expand_antisymm::expand_product: " +
             term->type_name());
       }
@@ -515,8 +514,8 @@ ExprPtr expand_antisymm(const ExprPtr& expr, bool skip_spinsymm) {
     }
     return result;
   } else {
-    throw std::runtime_error("Invalid Expr type in expand_antisymm: " +
-                             expr->type_name());
+    throw Exception("Invalid Expr type in expand_antisymm: " +
+                    expr->type_name());
   }
 }
 
@@ -699,8 +698,8 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
       } else if (term->is<Constant>() || term->is<Variable>()) {
         new_product.append(1, term);
       } else {
-        throw std::runtime_error("Invalid Expr type in symmetrize_expr: " +
-                                 term->type_name());
+        throw Exception("Invalid Expr type in symmetrize_expr: " +
+                        term->type_name());
       }
     }
     result->append(ex<Product>(new_product));
@@ -721,8 +720,8 @@ ExprPtr symmetrize_expr(const ExprPtr& expr) {
     }
     return result;
   } else {
-    throw std::runtime_error("Invalid Expr type in symmetrize_expr: " +
-                             expr->type_name());
+    throw Exception("Invalid Expr type in symmetrize_expr: " +
+                    expr->type_name());
   }
 }
 
@@ -740,8 +739,7 @@ ExprPtr expand_A_op(const ExprPtr& expr) {
     return result;
   }
 
-  throw std::runtime_error("Invalid Expr type in expand_A_op: " +
-                           expr->type_name());
+  throw Exception("Invalid Expr type in expand_A_op: " + expr->type_name());
 }
 
 container::svector<container::map<Index, Index>> P_maps(const Tensor& P) {
@@ -805,8 +803,8 @@ ExprPtr expand_P_op(const ProductPtr& product) {
       } else if (term->is<Constant>() || term->is<Variable>()) {
         new_product->append(1, term);
       } else {
-        throw std::runtime_error("Invalid Expr type in expand_P_op: " +
-                                 term->type_name());
+        throw Exception("Invalid Expr type in expand_P_op: " +
+                        term->type_name());
       }
     }
     result->append(new_product);
@@ -827,8 +825,7 @@ ExprPtr expand_P_op(const ExprPtr& expr) {
     }
     return result;
   } else {
-    throw std::runtime_error("Invalid Expr type in expand_P_op: " +
-                             expr->type_name());
+    throw Exception("Invalid Expr type in expand_P_op: " + expr->type_name());
   }
 }
 
@@ -926,60 +923,10 @@ ExprPtr S_maps(const ExprPtr& expr) {
   return result;
 }
 
-ExprPtr WK_biorthogonalization_filter(
-    ExprPtr expr,
-    const container::svector<container::svector<Index>>& ext_idxs) {
-  if (!expr->is<Sum>()) return expr;
-  if (ext_idxs.size() <= 2) return expr;  // always skip R1 and R2
-
-  // hash filtering logic for R > 2
-  container::map<std::size_t, container::vector<ExprPtr>> largest_coeff_terms;
-
-  for (const auto& term : *expr) {
-    if (!term->is<Product>()) continue;
-
-    auto product = term.as_shared_ptr<Product>();
-    auto scalar = product->scalar();
-
-    sequant::TensorNetwork tn(*product);
-    auto hash =
-        tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels())
-            .hash_value();
-
-    auto it = largest_coeff_terms.find(hash);
-    if (it == largest_coeff_terms.end()) {
-      largest_coeff_terms[hash] = {term};
-    } else {
-      if (!it->second.empty()) {
-        auto existing_scalar = it->second[0]->as<Product>().scalar();
-        auto existing_abs = abs(existing_scalar);
-        auto current_abs = abs(scalar);
-
-        if (current_abs > existing_abs) {
-          it->second.clear();
-          it->second.push_back(term);
-        } else if (current_abs == existing_abs) {
-          it->second.push_back(term);
-        }
-      }
-    }
-  }
-
-  Sum filtered;
-  for (const auto& [_, terms] : largest_coeff_terms) {
-    for (const auto& t : terms) {
-      filtered.append(t);
-    }
-  }
-  auto result = ex<Sum>(filtered);
-
-  return result;
-}
-
-ExprPtr closed_shell_spintrace(
-    const ExprPtr& expression,
-    const container::svector<container::svector<Index>>& ext_index_groups,
-    bool full_expansion) {
+template <detail::index_group_range IdxGroups>
+ExprPtr closed_shell_spintrace_impl(const ExprPtr& expression,
+                                    IdxGroups&& ext_index_groups,
+                                    bool full_expansion) {
   // Symmetrize and expression
   // Partially expand the antisymmetrizer and write it in terms of S operator.
   // See symmetrize_expr(expr) function for implementation details. We want an
@@ -1001,7 +948,7 @@ ExprPtr closed_shell_spintrace(
     rapid_simplify(temp);
     return temp;
   };
-  auto expr = partially_or_fully_expand(expression);
+  ExprPtr expr = partially_or_fully_expand(expression);
 
   // Index tags are cleaned prior to calling the fast canonicalizer
   detail::reset_idx_tags(expr);  // This call is REQUIRED
@@ -1069,11 +1016,11 @@ ExprPtr closed_shell_spintrace(
     };
     auto product_bras = get_bra_indices(temp_product);
 
-    auto substitute_ext_idx = [&product_bras, &product_kets](
-                                  const container::svector<Index>& idx_pair) {
+    auto substitute_ext_idx = [&product_bras,
+                               &product_kets](const auto& idx_pair) {
       SEQUANT_ASSERT(idx_pair.size() == 2);
-      const auto& what = idx_pair[0];
-      const auto& with = idx_pair[1];
+      const auto& what = get_bra_idx(idx_pair);
+      const auto& with = get_ket_idx(idx_pair);
       std::replace(product_bras.begin(), product_bras.end(), what, with);
       std::replace(product_kets.begin(), product_kets.end(), what, with);
     };
@@ -1110,16 +1057,40 @@ ExprPtr closed_shell_spintrace(
     }
     return result;
   } else {
-    throw std::runtime_error("Invalid Expr type in closed_shell_spintrace: " +
-                             expr->type_name());
+    throw Exception("Invalid Expr type in closed_shell_spintrace: " +
+                    expr->type_name());
   }
+}
+
+ExprPtr closed_shell_spintrace(
+    const ExprPtr& expression,
+    const container::svector<container::svector<SlottedIndex>>&
+        ext_index_groups,
+    bool full_expansion) {
+  return closed_shell_spintrace_impl(
+      expression, as_view_of_index_groups(ext_index_groups), full_expansion);
+}
+
+ExprPtr closed_shell_spintrace(const ExprPtr& expression, EmptyInitializerList,
+                               bool full_expansion) {
+  return closed_shell_spintrace_impl(
+      expression, container::svector<container::svector<Index>>{},
+      full_expansion);
+}
+
+ExprPtr closed_shell_spintrace(
+    const ExprPtr& expression,
+    const container::svector<container::svector<Index>>& ext_index_groups,
+    bool full_expansion) {
+  return closed_shell_spintrace_impl(expression, ext_index_groups,
+                                     full_expansion);
 }
 
 container::svector<ResultExpr> closed_shell_spintrace(const ResultExpr& expr,
                                                       bool full_expansion) {
-  using TraceFunction =
-      ExprPtr (*)(const ExprPtr&,
-                  const container::svector<container::svector<Index>>&, bool);
+  using TraceFunction = ExprPtr (*)(
+      const ExprPtr&,
+      const container::svector<container::svector<SlottedIndex>>&, bool);
 
   return detail::wrap_trace<container::svector<ResultExpr>>(
       expr, static_cast<TraceFunction>(&closed_shell_spintrace),
@@ -1138,25 +1109,9 @@ ExprPtr closed_shell_CC_spintrace_v1(ExprPtr const& expr,
   canonicalize(st_expr);
 
   if (!ext_idxs.empty()) {
-    // Remove S operator
-    for (auto& term : *st_expr) {
-      if (term->is<Product>())
-        term = remove_tensor(term.as_shared_ptr<Product>(),
-                             reserved::symm_label());
-    }
-
-    // Biorthogonal transformation
-    st_expr = biorthogonal_transform(st_expr, ext_idxs);
-
-    auto bixs =
-        ext_idxs | transform([](auto&& vec) { return get_bra_idx(vec); });
-    auto kixs =
-        ext_idxs | transform([](auto&& vec) { return get_ket_idx(vec); });
-    st_expr = ex<Tensor>(Tensor{reserved::symm_label(), bra(std::move(kixs)),
-                                ket(std::move(bixs))}) *
-              st_expr;
+    // Biorthogonal transformation without factoring out NNS projector
+    st_expr = biorthogonal_transform_pre_nnsproject(st_expr, ext_idxs, false);
   }
-
   simplify(st_expr);
 
   return st_expr;
@@ -1173,34 +1128,8 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
   canonicalize(st_expr);
 
   if (!ext_idxs.empty()) {
-    // Remove S operator to apply biorthogonal transformation
-    for (auto& term : *st_expr) {
-      if (term->is<Product>())
-        term = remove_tensor(term.as_shared_ptr<Product>(),
-                             reserved::symm_label());
-    }
-    st_expr = biorthogonal_transform(st_expr, ext_idxs);
-
-    // adding S in order to expand it and have all the raw equations
-    auto bixs =
-        ext_idxs | transform([](auto&& vec) { return get_bra_idx(vec); });
-    auto kixs =
-        ext_idxs | transform([](auto&& vec) { return get_ket_idx(vec); });
-    ExprPtr S_tensor =
-        ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs), ket(bixs)});
-
-    if (bixs.size() > 1) {
-      st_expr = S_tensor * st_expr;
-    }
-    simplify(st_expr);
-
-    st_expr = S_maps(st_expr);
-    // canonicalizer must be called before hash-filter to combine terms
-    canonicalize(st_expr);
-
-    st_expr = WK_biorthogonalization_filter(st_expr, ext_idxs);
-
-    st_expr = S_tensor * st_expr;
+    // Biorthogonal transformation with factoring out NNS projector
+    st_expr = biorthogonal_transform_pre_nnsproject(st_expr, ext_idxs);
   }
 
   simplify(st_expr);
@@ -1225,24 +1154,6 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr,
       SEQUANT_ASSERT(false && "unreachable code reached");
       abort();
   }
-}
-
-/// Collect all indices from an expression
-container::set<Index, Index::LabelCompare> index_list(const ExprPtr& expr) {
-  container::set<Index, Index::LabelCompare> grand_idxlist;
-  if (expr->is<Tensor>()) {
-    ranges::for_each(expr->as<Tensor>().const_indices(),
-                     [&grand_idxlist](const Index& idx) {
-                       idx.reset_tag();
-                       grand_idxlist.insert(idx);
-                     });
-  }
-
-  for (const ExprPtr& subExpr : expr) {
-    grand_idxlist.merge(index_list(subExpr));
-  }
-
-  return grand_idxlist;
 }
 
 Tensor swap_spin(const Tensor& t) {
@@ -1289,8 +1200,8 @@ ExprPtr swap_spin(const ExprPtr& expr) {
       } else if (t->is<Constant>() || t->is<Variable>()) {
         result.append(1, t, Product::Flatten::No);
       } else {
-        throw std::runtime_error(
-            "Invalid Expr type in swap_spin::swap_product: " + t->type_name());
+        throw Exception("Invalid Expr type in swap_spin::swap_product: " +
+                        t->type_name());
       }
     }
     return ex<Product>(result);
@@ -1307,8 +1218,7 @@ ExprPtr swap_spin(const ExprPtr& expr) {
     }
     return ex<Sum>(result);
   } else {
-    throw std::runtime_error("Invalid Expr type in swap_spin: " +
-                             expr->type_name());
+    throw Exception("Invalid Expr type in swap_spin: " + expr->type_name());
   }
 }
 
@@ -1453,22 +1363,24 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A) {
   return result_vector;
 }
 
-std::vector<ExprPtr> open_shell_spintrace(
-    const ExprPtr& expr,
-    const container::svector<container::svector<Index>>& ext_index_groups,
-    std::optional<int> target_spin_case) {
+template <detail::index_group_range IdxGroups>
+std::vector<ExprPtr> open_shell_spintrace_impl(
+    const ExprPtr& expr, IdxGroups&& ext_index_groups,
+    const std::optional<int>& target_spin_case) {
   if (expr->is<Constant>() || expr->is<Variable>()) {
     return std::vector<ExprPtr>{expr};
   }
 
   // Grand index list contains both internal and external indices
-  container::set<Index, Index::LabelCompare> grand_idxlist = index_list(expr);
+  container::set<Index, Index::LabelCompare> grand_idxlist =
+      get_used_indices<decltype(grand_idxlist)>(expr);
 
   container::set<Index> ext_idxlist;
-  for (auto&& idxgrp : ext_index_groups) {
-    for (auto&& idx : idxgrp) {
+  for (const auto& idxgrp : ext_index_groups) {
+    for (const Index& current : idxgrp) {
+      Index idx = current;
       idx.reset_tag();
-      ext_idxlist.insert(idx);
+      ext_idxlist.insert(std::move(idx));
     }
   }
 
@@ -1516,26 +1428,25 @@ std::vector<ExprPtr> open_shell_spintrace(
   };
 
   // External index replacement maps
-  auto ext_spin_cases =
-      [&make_spinspecific](const container::svector<IndexGroup>& idx_group) {
-        container::svector<container::map<Index, Index>> all_replacements;
+  auto ext_spin_cases = [&make_spinspecific](const auto& idx_groups) {
+    container::svector<container::map<Index, Index>> all_replacements;
 
-        // container::svector<int> spins(idx_group.size(), 0);
-        for (std::size_t i = 0; i <= idx_group.size(); ++i) {
-          container::svector<int> spins(idx_group.size(), 0);
-          std::fill(spins.end() - i, spins.end(), 1);
+    // container::svector<int> spins(idx_group.size(), 0);
+    for (std::size_t i = 0; i <= idx_groups.size(); ++i) {
+      container::svector<int> spins(idx_groups.size(), 0);
+      std::fill(spins.end() - i, spins.end(), 1);
 
-          container::map<Index, Index> idx_rep;
-          for (std::size_t j = 0; j != idx_group.size(); ++j) {
-            for (auto& idx : idx_group[j]) {
-              auto spin_idx = make_spinspecific(idx, spins[j]);
-              idx_rep.emplace(idx, spin_idx);
-            }
-          }
-          all_replacements.push_back(idx_rep);
+      container::map<Index, Index> idx_rep;
+      for (std::size_t j = 0; j != idx_groups.size(); ++j) {
+        for (const Index& idx : idx_groups[j]) {
+          auto spin_idx = make_spinspecific(idx, spins[j]);
+          idx_rep.emplace(idx, spin_idx);
         }
-        return all_replacements;
-      };
+      }
+      all_replacements.push_back(idx_rep);
+    }
+    return all_replacements;
+  };
 
   // Internal and external index replacements are independent
   auto i_rep = spin_cases(int_index_groups);
@@ -1566,7 +1477,7 @@ std::vector<ExprPtr> open_shell_spintrace(
         cBra.insert(cBra.end(), tnsr.bra().begin(), tnsr.bra().end());
         cKet.insert(cKet.end(), tnsr.ket().begin(), tnsr.ket().end());
       } else if (term->is<Product>() || term->is<Sum>()) {
-        throw std::runtime_error(
+        throw Exception(
             "Nested Product and Sum not supported in spin_symm_product");
       }
     }
@@ -1586,12 +1497,6 @@ std::vector<ExprPtr> open_shell_spintrace(
 
   // Loop over external index replacement maps
   for (auto& e : e_rep) {
-    // std::wcout << "external replacement map:\n";
-    // for (auto& p : e) {
-    //   std::cout << p.first.to_string() << " -> " << p.second.to_string()
-    //             << "\n";
-    // }
-
     // Add spin labels to external indices
     auto spin_expr = append_spin(expanded_expr, e);
     detail::reset_idx_tags(spin_expr);
@@ -1600,14 +1505,8 @@ std::vector<ExprPtr> open_shell_spintrace(
     // Loop over internal index replacement maps
     for (auto& i : i_rep) {
       // Add spin labels to internal indices, expand antisymmetric tensors
-      auto spin_expr_i = append_spin(spin_expr, i);
-      // std::wcout << "after append_spin (internal replaced): "
-      //            << to_latex(spin_expr_i) << "\n";
-
+      ExprPtr spin_expr_i = append_spin(spin_expr, i);
       spin_expr_i = expand_antisymm(spin_expr_i, true);
-      // std::wcout << "after expand_antisymm: " << to_latex(spin_expr_i) <<
-      // "\n";
-
       expand(spin_expr_i);
       detail::reset_idx_tags(spin_expr_i);
       Sum i_result{};
@@ -1644,13 +1543,33 @@ std::vector<ExprPtr> open_shell_spintrace(
   // Canonicalize and simplify all expressions
   for (auto& expression : result) {
     detail::reset_idx_tags(expression);
-    // std::wcout << "before canon: " << to_latex(expression) << "\n";
     canonicalize(expression);
-    // std::wcout << "after canon: " << to_latex(expression) << "\n";
-
     rapid_simplify(expression);
   }
   return result;
+}
+
+std::vector<ExprPtr> open_shell_spintrace(
+    const ExprPtr& expr,
+    const container::svector<container::svector<SlottedIndex>>&
+        ext_index_groups,
+    const std::optional<int>& target_spin_case) {
+  return open_shell_spintrace_impl(
+      expr, as_view_of_index_groups(ext_index_groups), target_spin_case);
+}
+
+std::vector<ExprPtr> open_shell_spintrace(
+    const ExprPtr& expr, EmptyInitializerList,
+    const std::optional<int>& target_spin_case) {
+  return open_shell_spintrace_impl(
+      expr, container::svector<container::svector<Index>>{}, target_spin_case);
+}
+
+std::vector<ExprPtr> open_shell_spintrace(
+    const ExprPtr& expr,
+    const container::svector<container::svector<Index>>& ext_index_groups,
+    const std::optional<int>& target_spin_case) {
+  return open_shell_spintrace_impl(expr, ext_index_groups, target_spin_case);
 }
 
 std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
@@ -1699,48 +1618,35 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
     auto ptr = sequant::ex<Sum>(spin_case);
     expr_vec.push_back(ptr);
   }
-  // std::wcout << "original (spin-orbital): " << expr->size() << " terms\n";
-  // std::wcout << "spin-traced cases: " << expr_vec.size() << "\n";
-  // for (size_t sc = 0; sc < expr_vec.size(); ++sc) {
-  //   if (expr_vec[sc] == nullptr) {
-  //     std::wcout << "case " << sc << ": null\n";
-  //     continue;
-  //   }
-  //   std::wcout << "case " << sc << " : " << expr_vec[sc]->size() << "
-  //   terms\n";
-  // }
 
   return expr_vec;
 }
 
-ExprPtr spintrace(
-    const ExprPtr& expression,
-    const container::svector<container::svector<Index>>& ext_index_groups,
-    bool spinfree_index_spaces) {
+template <detail::index_group_range IdxGroups>
+ExprPtr spintrace_impl(const ExprPtr& expression, IdxGroups&& ext_index_groups,
+                       bool spinfree_index_spaces) {
   // Escape immediately if expression is a constant
   if (expression->is<Constant>() || expression->is<Variable>()) {
     return expression;
   }
 
-#ifdef SEQUANT_ASSERT_ENABLED
-  // Verify that the number of external indices matches the number of indices in
-  // ext_index_groups, UNLESS user overrode external definitions in default
-  // context
-  const auto& copts = get_default_context().canonicalization_options();
-  if (!copts.has_value() || !copts->named_indices) {
-    auto count_indices = [](const auto& range) {
-      auto sizes = range | ranges::views::transform(
-                               [](const auto& list) { return list.size(); });
-      return std::accumulate(sizes.begin(), sizes.end(), 0);
-    };
-    auto determined_externals =
-        external_indices<container::svector<container::svector<Index>>>(
-            expression);
+  if constexpr (assert_enabled()) {
+    // Verify that the number of external indices matches the number of indices
+    // in ext_index_groups, UNLESS user overrode external definitions in default
+    // context
+    const auto& copts = get_default_context().canonicalization_options();
+    if (!copts.has_value() || !copts->named_indices) {
+      auto count_indices = [](const auto& range) {
+        auto sizes = range | ranges::views::transform(
+                                 [](const auto& list) { return list.size(); });
+        return std::accumulate(sizes.begin(), sizes.end(), 0);
+      };
+      auto determined_externals = external_indices(expression);
 
-    SEQUANT_ASSERT(count_indices(ext_index_groups) ==
-                   count_indices(determined_externals));
+      SEQUANT_ASSERT(count_indices(ext_index_groups) ==
+                     count_indices(determined_externals));
+    }
   }
-#endif
 
   // This function must be used for tensors with spin-specific indices only. If
   // the spin-symmetry is conserved: the tensor is expanded; else: zero is
@@ -1764,7 +1670,7 @@ ExprPtr spintrace(
           return ex<Constant>(0);
         }
       } else if (expr.is<Sum>() || expr.is<Product>()) {
-        throw std::runtime_error(
+        throw Exception(
             "Nested sums/products not supported in spin_trace_product");
       }
     }
@@ -1778,7 +1684,7 @@ ExprPtr spintrace(
       } else {
         // Would need some sort of recursion but it is not clear how that would
         // interact with other code in here yet so prefer to error instead.
-        throw std::runtime_error(
+        throw Exception(
             "spin_trace_product: Nested products or sums inside of a Product "
             "not supported (yet)");
       }
@@ -1796,15 +1702,17 @@ ExprPtr spintrace(
                         spinfree_index_spaces](const ProductPtr& product) {
     ExprPtr expr = product->clone();
     // List of all indices in the expression
-    container::set<Index, Index::LabelCompare> grand_idxlist = index_list(expr);
+    container::set<Index, Index::LabelCompare> grand_idxlist =
+        get_used_indices<decltype(grand_idxlist)>(expr);
 
     // List of external indices, i.e. indices that are not summed over Einstein
     // style (indices that are not repeated in an expression)
     container::set<Index> ext_idxlist;
-    for (auto&& idxgrp : ext_index_groups) {
-      for (auto&& idx : idxgrp) {
+    for (const auto& idxgrp : ext_index_groups) {
+      for (const Index& current : idxgrp) {
+        Index idx = current;
         idx.reset_tag();
-        ext_idxlist.insert(idx);
+        ext_idxlist.insert(std::move(idx));
       }
     }
 
@@ -1826,8 +1734,14 @@ ExprPtr spintrace(
     using IndexGroup = container::svector<Index>;
     container::svector<IndexGroup> index_groups;
     for (auto&& i : int_idxlist) index_groups.emplace_back(IndexGroup(1, i));
-    index_groups.insert(index_groups.end(), ext_index_groups.begin(),
-                        ext_index_groups.end());
+    for (const auto& group : ext_index_groups) {
+      IndexGroup target;
+      target.reserve(group.size());
+      for (const Index& current : group) {
+        target.emplace_back(current);
+      }
+      index_groups.emplace_back(std::move(target));
+    }
 
     // EFV: for each spincase (loop over integer from 0 to 2^n-1, n=#of index
     // groups)
@@ -1863,7 +1777,7 @@ ExprPtr spintrace(
         auto st_expr = spintrace_tensor(spin_expr->as<Tensor>());
         result->append(spinfree_index_spaces ? remove_spin(st_expr) : st_expr);
       } else if (spin_expr->is<Product>()) {
-        auto st_expr = spintrace_product(spin_expr.as_shared_ptr<Product>());
+        ExprPtr st_expr = spintrace_product(spin_expr.as_shared_ptr<Product>());
         if (!st_expr->is<Constant>() || st_expr->as<Constant>().value() != 0) {
           result->append(spinfree_index_spaces ? remove_spin(st_expr)
                                                : st_expr);
@@ -1913,19 +1827,40 @@ ExprPtr spintrace(
     }
     return result;
   } else {
-    throw std::runtime_error("Invalid Expr type in spintrace: " +
-                             expr->type_name());
+    throw Exception("Invalid Expr type in spintrace: " + expr->type_name());
   }
 
   detail::reset_idx_tags(result);
   return result;
-}  // ExprPtr spintrace
+}
+
+ExprPtr spintrace(const ExprPtr& expression,
+                  const container::svector<container::svector<SlottedIndex>>&
+                      ext_index_groups,
+                  bool spinfree_index_spaces) {
+  return spintrace_impl(expression, as_view_of_index_groups(ext_index_groups),
+                        spinfree_index_spaces);
+}
+
+ExprPtr spintrace(const ExprPtr& expression, EmptyInitializerList,
+                  bool spinfree_index_spaces) {
+  return spintrace_impl(expression,
+                        container::svector<container::svector<Index>>{},
+                        spinfree_index_spaces);
+}
+
+ExprPtr spintrace(
+    const ExprPtr& expression,
+    const container::svector<container::svector<Index>>& ext_index_groups,
+    bool spinfree_index_spaces) {
+  return spintrace_impl(expression, ext_index_groups, spinfree_index_spaces);
+}
 
 container::svector<ResultExpr> spintrace(const ResultExpr& expr,
                                          bool spinfree_index_spaces) {
-  using TraceFunction =
-      ExprPtr (*)(const ExprPtr&,
-                  const container::svector<container::svector<Index>>&, bool);
+  using TraceFunction = ExprPtr (*)(
+      const ExprPtr&,
+      const container::svector<container::svector<SlottedIndex>>&, bool);
 
   return detail::wrap_trace<container::svector<ResultExpr>>(
       expr, static_cast<TraceFunction>(&spintrace), spinfree_index_spaces);

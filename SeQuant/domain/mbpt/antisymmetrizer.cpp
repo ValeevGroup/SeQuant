@@ -5,7 +5,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/antisymmetrizer.hpp>
 
-namespace sequant {
+namespace sequant::mbpt {
 
 antisymm_element::antisymm_element(ExprPtr ex_) {
   current_product = ex_;
@@ -452,4 +452,4 @@ ExprPtr spin_sum(std::vector<Index> original_upper,
 
 }  // namespace antisymm
 
-}  // namespace sequant
+}  // namespace sequant::mbpt

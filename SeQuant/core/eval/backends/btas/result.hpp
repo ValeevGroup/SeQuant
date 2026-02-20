@@ -5,6 +5,7 @@
 
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/math.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 
 #include <btas/btas.h>
 
@@ -28,7 +29,7 @@ auto column_symmetrize_btas(btas::Tensor<Args...> const& arr) {
   size_t const rank = arr.rank();
 
   if (rank % 2 != 0)
-    throw std::domain_error("This function only supports even-ranked tensors");
+    throw Exception("This function only supports even-ranked tensors");
 
   perm_t perm = iota(size_t{0}, rank) | ranges::to<perm_t>;
 
@@ -210,7 +211,6 @@ class ResultTensorBTAS final : public Result {
 
  private:
   [[nodiscard]] std::size_t size_in_bytes() const final {
-    static_assert(std::is_arithmetic_v<typename T::value_type>);
     const auto& tensor = get<T>();
     // only count data
     return tensor.range().volume() * sizeof(T);

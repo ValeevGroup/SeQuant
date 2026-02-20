@@ -6,6 +6,7 @@
 #define SEQUANT_WICK_IMPL_HPP
 
 #include <SeQuant/core/bliss.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
@@ -441,20 +442,18 @@ inline bool apply_index_replacement_rules(
 
   /// this recursively applies replacement rules until result does not
   /// change removes the deltas that are no longer needed
-#ifdef SEQUANT_ASSERT_ENABLED
-  // assert that tensors_ indices are not tagged since going to tag indices
-  {
+  if constexpr (assert_enabled()) {
+    // assert that tensors_ indices are not tagged since going to tag indices
     for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
       const auto &factor = *it;
       if (factor->is<AbstractTensor>()) {
-        auto &tensor = factor->as<AbstractTensor>();
+        [[maybe_unused]] auto &tensor = factor->as<AbstractTensor>();
         SEQUANT_ASSERT(ranges::none_of(tensor._slots(), [](const Index &idx) {
           return idx.tag().has_value();
         }));
       }
     }
   }
-#endif
   bool mutated = false;
   bool pass_mutated = false;
   do {
@@ -620,8 +619,8 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
       });
       sequant::wprintf("\n  replrules = ");
       ranges::for_each(replacement_rules, [](auto &index) {
-        sequant::wprintf(to_latex(index.first), "\\to", to_latex(index.second),
-                         "\\,");
+        sequant::wprintf(io::latex::to_string(index.first), "\\to",
+                         io::latex::to_string(index.second), "\\,");
       });
     }
 
@@ -754,7 +753,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
         } else {
           ranges::find_if(summands, [this](const auto &summand) {
             if (summand.template is<Sum>())  // summands must not be a Sum
-              throw std::invalid_argument(
+              throw Exception(
                   "WickTheorem<S>::compute(expr): expr is a Sum with one of "
                   "the "
                   "summands also a Sum, WickTheorem can only accept a fully "
@@ -834,7 +833,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           if (Logger::instance().wick_topology)
             std::wcout
                 << "WickTheorem<S>::compute: input to topology computation = "
-                << to_latex(expr_input_) << std::endl;
+                << io::latex::to_string(expr_input_) << std::endl;
 
           // construct graph representation of the tensor product
           using TN = TensorNetwork;
@@ -1233,7 +1232,8 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           if (Logger::instance().wick_contract) {
             std::wcout
                 << "WickTheorem<S>::compute: input to compute_nopseq = {\n";
-            for (auto &&nop : input_) std::wcout << to_latex(nop) << "\n";
+            for (auto &&nop : input_)
+              std::wcout << io::latex::to_string(nop) << "\n";
             std::wcout << "}" << std::endl;
           }
 

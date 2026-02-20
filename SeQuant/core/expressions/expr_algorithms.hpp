@@ -16,8 +16,6 @@
 
 namespace sequant {
 
-std::wstring to_latex(const ExprPtr& exprptr);
-
 /// splits long outer sum into a multiline align
 /// @param exprptr the expression to be converted to a string
 /// @param max_lines_per_align the maximum number of lines in the align before
@@ -26,8 +24,6 @@ std::wstring to_latex(const ExprPtr& exprptr);
 std::wstring to_latex_align(const ExprPtr& exprptr,
                             size_t max_lines_per_align = 0,
                             size_t max_terms_per_line = 1);
-
-std::wstring to_wolfram(const ExprPtr& exprptr);
 
 template <typename Sequence>
 std::decay_t<Sequence> clone(Sequence&& exprseq) {

@@ -8,7 +8,6 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/meta.hpp>
 
-#include <boost/dynamic_bitset.hpp>
 #include <range/v3/view.hpp>
 
 #include <algorithm>
@@ -139,34 +138,6 @@ bool next_permutation_parity(int& parity, BidirIt first, BidirIt last,
 }
 
 ///
-/// Given a size of a container @c n, returns a range of bitsets. The bitsets
-/// represent the sieve that can be used to construct the subsequences of the
-/// size-n container.
-///
-inline auto subset_indices(size_t n) {
-  using ranges::views::iota;
-  using ranges::views::transform;
-  return iota(size_t{1}, size_t(1 << n)) |
-         transform([n](auto i) { return boost::dynamic_bitset<>(n, i); });
-}
-
-///
-/// Given an iterable @c it and a bitset @c bs, select the elements in the
-/// iterable that correspond to an 'on' bit.
-///
-template <typename Iterable>
-auto subsequence(Iterable const& it, boost::dynamic_bitset<> const& bs) {
-  using ranges::views::filter;
-  using ranges::views::iota;
-  using ranges::views::transform;
-  using ranges::views::zip;
-
-  auto bits = iota(size_t{0}) | transform([&bs](auto i) { return bs.at(i); });
-  return zip(it, bits) | filter([](auto&& kv) { return std::get<1>(kv); }) |
-         transform([](auto&& kv) { return std::get<0>(kv); });
-}
-
-///
 /// All elements in the vector belong to the integral range [-1,N)
 /// where N is the length of the [Expr] (ie. the iterable of expressions)
 ///   * only applicable for binary evaluations
@@ -190,6 +161,120 @@ auto inits(Rng const& rng) {
            return slice(rng, 0, ++n);
          });
 }
+
+namespace bits {
+
+///
+/// @brief Generates all ordered bipartitions of the set bits in the mask.
+///
+/// For a given mask representing a set S, this function returns a view of pairs
+/// (A, B) such that A ∪ B = S, A ∩ B = {}, and A, B are subsets of S. The
+/// iteration order results in B descending and A ascending.
+///
+/// @tparam T The unsigned integer type of the mask.
+/// @param mask The bitmask representing the set.
+/// @return A view of pairs of disjoint submasks.
+///
+template <std::unsigned_integral T>
+constexpr auto bipartitions_ordered(T mask) {
+  // number of possible bipartitions
+  size_t const nparts = (size_t{1} << std::popcount(mask));
+  return std::views::iota(size_t{0}, nparts) |
+         std::views::transform([mask, p = mask](auto) mutable {
+           auto p_ = p;
+           p = (p - 1) & mask;
+           return std::pair<T, T>{p_ ^ mask, p_};
+         });
+}
+
+///
+/// @brief Generates unordered bipartitions of the mask.
+///
+/// This function returns a subset of the ordered bipartitions such that for
+/// every pair {A, B}, the pair {B, A} is excluded (unless A == B, which is
+/// handled naturally). Specifically, it takes the first half of the ordered
+/// bipartitions.
+///
+/// @param mask The bitmask representing the set.
+/// @return A view of unordered bipartitions.
+///
+constexpr auto bipartitions_unordered(std::unsigned_integral auto mask) {
+  auto bps = bipartitions_ordered(mask);
+  size_t const nparts = std::ranges::distance(bps) / 2;
+  return bps | std::views::take(nparts);
+}
+
+///
+/// @brief Alias for bipartitions_unordered.
+///
+/// @param mask The bitmask representing the set.
+/// @return A view of unordered bipartitions.
+///
+constexpr auto bipartitions(std::unsigned_integral auto mask) {
+  return bipartitions_unordered(mask);
+}
+
+///
+/// @brief Generates all subsets of the mask in ascending numerical order.
+///
+/// @param mask The bitmask representing the set.
+/// @return A view of submasks sorted ascending.
+///
+constexpr auto subsets_ascending(std::unsigned_integral auto mask) {
+  return bipartitions_ordered(mask) | std::views::elements<0>;
+}
+
+///
+/// @brief Generates all subsets of the mask in descending numerical order.
+///
+/// @param mask The bitmask representing the set.
+/// @return A view of submasks sorted descending.
+///
+constexpr auto subsets_descending(std::unsigned_integral auto mask) {
+  return bipartitions_ordered(mask) | std::views::elements<1>;
+}
+
+///
+/// @brief Generates all subsets of the mask in ascending numerical order.
+///
+/// @param mask The bitmask representing the set.
+/// @return A view of submasks.
+///
+constexpr auto subsets(std::unsigned_integral auto mask) {
+  return subsets_ascending(mask);
+}
+
+///
+/// @brief Generates indices of set bits in the mask.
+/// @param mask The bitmask representing the set.
+/// @return A view of indices of set bits.
+///
+constexpr auto on_bits_index(std::unsigned_integral auto mask) {
+  size_t const nbits = std::popcount(mask);
+  return std::views::iota(size_t{0}, nbits) |
+         std::views::transform([m = mask](auto) mutable {
+           size_t i = std::countr_zero(m);
+           m &= (m - 1);
+           return i;
+         });
+}
+
+///
+/// @brief Creates a view adaptor that selects elements from the input range
+/// based on indices.
+/// This function returns a closure object that, when applied to a range of
+/// indices, maps those indices to elements in the source range `rng`.
+/// @param rng The source range from which elements are selected.
+/// @return A view adaptor that transforms indices into elements from `rng`.
+///
+constexpr auto sieve(std::ranges::viewable_range auto&& rng) {
+  auto elems = std::views::all(std::forward<decltype(rng)>(rng));
+  return std::views::transform([elems](auto i) {
+    return *std::ranges::next(std::ranges::begin(elems), i);
+  });
+}
+
+}  // namespace bits
 
 }  // namespace sequant
 

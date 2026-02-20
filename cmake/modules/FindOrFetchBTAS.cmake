@@ -21,7 +21,7 @@ if (NOT TARGET BTAS::BTAS)
   FetchContent_Declare(
       BTAS
       GIT_REPOSITORY      https://github.com/BTAS/btas.git
-      GIT_TAG             ${TA_TRACKED_BTAS_TAG}
+      GIT_TAG             ${SEQUANT_TRACKED_BTAS_TAG}
       EXCLUDE_FROM_ALL
       SYSTEM
   )

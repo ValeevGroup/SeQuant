@@ -8,7 +8,8 @@
 #include <SeQuant/core/eval/backends/tiledarray/result.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/expressions/result_expr.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -19,6 +20,21 @@
 #include <cstdlib>
 #include <string>
 #include <vector>
+
+namespace TiledArray {
+template <typename>
+constexpr bool is_tnsr_expr_v{};
+
+template <typename Arg, auto... Args>
+constexpr bool is_tnsr_expr_v<expressions::TsrExpr<Arg, Args...>> = true;
+
+template <typename T>
+concept tnsr_expr = is_tnsr_expr_v<T>;
+
+template <typename T>
+concept array = TA::detail::array_tos<T> || TA::detail::array_tot<T>;
+
+}  // namespace TiledArray
 
 namespace {
 
@@ -39,12 +55,6 @@ struct NestedTensorIndices {
     using ranges::views::transform;
     using namespace sequant;
 
-    for (auto&& ix : tnsr.aux()) {
-      SEQUANT_ASSERT(!ix.has_proto_indices() &&
-                     "Aux indices with proto indices not supported");
-      outer.emplace_back(ix);
-    }
-
     auto append_unique = [](auto& cont, auto const& el) {
       if (!ranges::contains(cont, el)) cont.emplace_back(el);
     };
@@ -56,6 +66,12 @@ struct NestedTensorIndices {
     for (Index const& ix :
          tnsr.const_braket_indices() | transform(&Index::proto_indices) | join)
       append_unique(outer, ix);
+
+    for (auto&& ix : tnsr.aux()) {
+      SEQUANT_ASSERT(!ix.has_proto_indices() &&
+                     "Aux indices with proto indices not supported");
+      outer.emplace_back(ix);
+    }
   }
 
   [[nodiscard]] auto outer_inner() const noexcept {
@@ -63,9 +79,8 @@ struct NestedTensorIndices {
   }
 };
 
-auto eval_node(sequant::ExprPtr const& expr) {
+auto to_ta_node(sequant::FullBinaryNode<sequant::EvalExpr> node) {
   using namespace sequant;
-  auto node = binarize(expr);
   return transform_node(node, [](auto&& val) {
     if (val.is_tensor()) {
       return EvalExprTA(*val.op_type(), val.result_type(), val.expr(),
@@ -78,15 +93,27 @@ auto eval_node(sequant::ExprPtr const& expr) {
   });
 }
 
+auto eval_node(sequant::ExprPtr const& expr) {
+  return to_ta_node(sequant::binarize(expr));
+}
+
+auto eval_node(sequant::ResultExpr const& res) {
+  return to_ta_node(sequant::binarize(res));
+}
+
 auto tensor_to_key(sequant::Tensor const& tnsr) {
-  static auto const idx_rgx = boost::wregex{L"([ia])([↑↓])?(_?\\d+)"};
+  static auto const idx_rgx = boost::wregex{L"([iax])([↑↓])?(_?\\d+)"};
   auto formatter = [](boost::wsmatch mo) -> std::wstring {
-    return (mo[1].str() == L"i" ? L"o" : L"v") + mo[2].str();
+    return (mo[1].str() == L"i"   ? L"o"
+            : mo[1].str() == L"a" ? L"v"
+                                  : L"x") +
+           mo[2].str();
   };
 
   NestedTensorIndices oixs{tnsr};
   if (oixs.inner.empty()) {
-    auto const tnsr_deparsed = sequant::deparse(tnsr.clone(), false);
+    auto const tnsr_deparsed =
+        sequant::serialize(tnsr.clone(), {.annot_symm = false});
     return boost::regex_replace(tnsr_deparsed, idx_rgx, formatter);
   } else {
     using ranges::views::intersperse;
@@ -111,7 +138,8 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
 }
 
 auto tensor_to_key(std::wstring_view spec) {
-  return tensor_to_key(sequant::parse_expr(spec, sequant::Symmetry::Nonsymm)
+  return tensor_to_key(sequant::deserialize<sequant::ExprPtr>(
+                           spec, {.def_perm_symm = sequant::Symmetry::Nonsymm})
                            ->as<sequant::Tensor>());
 }
 
@@ -141,6 +169,7 @@ class rand_tensor_yield {
   TA::World& world;
   size_t nocc_;
   size_t nvirt_;
+  size_t naux_;
   mutable sequant::container::map<std::wstring, sequant::ResultPtr>
       label_to_er_;
 
@@ -151,7 +180,10 @@ class rand_tensor_yield {
   using numeric_type = NumericT;
 
   rand_tensor_yield(TA::World& world_, size_t nocc, size_t nvirt)
-      : world{world_}, nocc_{nocc}, nvirt_{nvirt} {}
+      : world{world_}, nocc_{nocc}, nvirt_{nvirt}, naux_{nvirt * 2} {}
+
+  rand_tensor_yield(TA::World& world_, size_t nocc, size_t nvirt, size_t naux)
+      : world{world_}, nocc_{nocc}, nvirt_{nvirt}, naux_{naux} {}
 
   sequant::ResultPtr operator()(sequant::Variable const& var) const {
     using result_t = sequant::ResultScalar<NumericT>;
@@ -197,8 +229,11 @@ class rand_tensor_yield {
     auto make_extents = [this, &isr](auto&& ixs) -> container::svector<size_t> {
       return ixs | transform([this, &isr](auto const& ix) -> size_t {
                SEQUANT_ASSERT(ix.space() == isr->retrieve(L"i") ||
-                              ix.space() == isr->retrieve(L"a"));
-               return ix.space() == isr->retrieve(L"i") ? nocc_ : nvirt_;
+                              ix.space() == isr->retrieve(L"a") ||
+                              ix.space() == isr->retrieve(L"x"));
+               return ix.space() == isr->retrieve(L"i")   ? nocc_
+                      : ix.space() == isr->retrieve(L"a") ? nvirt_
+                                                          : naux_;
              }) |
              ranges::to<container::svector<size_t>>;
     };
@@ -273,6 +308,45 @@ class rand_tensor_yield {
     return found->second;
   }
 };
+
+enum struct ErrorTol : int { Loose = 1000, Normal = 100, Tight = 2 };
+
+using enum ErrorTol;
+
+template <ErrorTol Tol, std::floating_point T>
+constexpr bool approx_equal(T val1, T val2) {
+  constexpr auto margin =
+      static_cast<int>(Tol) * std::numeric_limits<T>::epsilon();
+  return (val1 - val2) == Catch::Approx(0.).margin(margin);
+}
+
+template <ErrorTol Tol = Normal, TA::tnsr_expr ArrExpr>
+bool equal_tarrays(ArrExpr const& arr1, ArrExpr const& arr2) {
+  typename ArrExpr::array_type diff;
+  diff(arr1.annotation()) = arr1 - arr2;
+  return approx_equal<Tol>(TA::norm2(diff), 0.);
+}
+
+template <ErrorTol Tol = Normal, TA::array Array>
+bool equal_tarrays(Array arr1, Array arr2, std::string const& annot1,
+                   std::string const& annot2) {
+  return equal_tarrays<Tol>(arr1(annot1), arr2(annot2));
+}
+
+template <ErrorTol Tol = Normal, TA::array Array>
+bool equal_tarrays(Array const& arr1,  //
+                   Array const& arr2,  //
+                   std::string const& annot) {
+  return equal_tarrays<Tol>(arr1, arr2, annot, annot);
+}
+
+template <ErrorTol Tol = Normal, TA::detail::array_tos Array>
+bool equal_tarrays(Array const& arr1, Array const& arr2) {
+  return equal_tarrays<Tol>(arr1, arr2,
+                            TA::detail::dummy_annotation(rank(arr1)),
+                            TA::detail::dummy_annotation(rank(arr2)));
+}
+
 }  // namespace
 
 TEST_CASE("eval_with_tiledarray", "[eval]") {
@@ -286,11 +360,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     using TA::TArrayD;
 
     auto parse_antisymm = [](auto const& xpr) {
-      return parse_expr(xpr, sequant::Symmetry::Antisymm);
+      return sequant::deserialize<sequant::ExprPtr>(
+          xpr, {.def_perm_symm = sequant::Symmetry::Antisymm});
     };
-
-    // tnsr is assumed to be single-tiled
-    auto norm = [](TArrayD const& tnsr) { return TA::norm2(tnsr); };
 
     auto& world = TA::get_default_world();
 
@@ -328,7 +400,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                                              sequant::ExprPtr const& expr,
                                              std::string const& target_labels) {
       auto result = evaluate(eval_node(expr), target_labels, yield_);
-      return sequant::biorthogonal_nns_project(
+      return sequant::mbpt::biorthogonal_nns_project(
           result->get<TA::TArrayD>(), eval_node(expr)->as_tensor().bra_rank());
     };
 
@@ -341,7 +413,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       sum1_man("i1,a1") =
           yield(L"t{a1;i1}")("a1,i1") + yield(L"f{i1;a1}")("i1,a1");
 
-      REQUIRE(norm(sum1_man) == Catch::Approx(norm(sum1_eval)));
+      REQUIRE(equal_tarrays(sum1_eval, sum1_man));
 
       auto expr2 = parse_antisymm(L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
 
@@ -350,8 +422,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       auto sum2_man = TArrayD{};
       sum2_man("i1,a1") =
           2 * yield(L"t{a1;i1}")("a1,i1") + 1.5 * yield(L"f{i1;a1}")("i1,a1");
-
-      REQUIRE(norm(sum2_man) == Catch::Approx(norm(sum2_eval)));
+      REQUIRE(equal_tarrays(sum2_eval, sum2_man));
     }
 
     SECTION("product") {
@@ -364,7 +435,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                                  yield(L"g{i2,i4;a2,a4}")("i2,i4,a2,a4") *
                                  yield(L"t{a1,a2;i1,i2}")("a1,a2,i1,i2");
 
-      REQUIRE(norm(prod1_man) == Catch::Approx(norm(prod1_eval)));
+      REQUIRE(equal_tarrays(prod1_eval, prod1_man));
 
       auto expr2 = parse_antisymm(
           L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{ i3, "
@@ -377,23 +448,24 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                                  yield(L"t{a2,a4;i1,i2}")("a2,a4,i1,i2") *
                                  yield(L"t{a1,a3;i3,i4}")("a1,a3,i3,i4");
 
-      REQUIRE(norm(prod2_man) == Catch::Approx(norm(prod2_eval)));
+      REQUIRE(equal_tarrays(prod2_eval, prod2_man));
 
-      auto expr3 = sequant::parse_expr(L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
+      auto expr3 = sequant::deserialize<sequant::ExprPtr>(
+          L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
       auto prod3_eval = eval(expr3, "a_1,i_1,i_2");
       auto prod3_man = TArrayD{};
       prod3_man("a1,i1,i2") =
           yield(L"R{a1;i1,i3}")("a1,i1,i3") * yield(L"f{i3;i2}")("i3,i2");
-      REQUIRE(norm(prod3_man) == Catch::Approx(norm(prod3_eval)));
+      REQUIRE(equal_tarrays(prod3_eval, prod3_man));
 
-      auto expr4 = sequant::parse_expr(
+      auto expr4 = sequant::deserialize<sequant::ExprPtr>(
           L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3}");
       auto prod4_eval = eval(expr4, "i_1,a_1,a_2");
       auto prod4_man = TArrayD{};
       prod4_man("i1,a1,a2") = 1 / 4.0 *
                               yield(L"R{a1,a2,a3;i2,i3}")("a1,a2,a3,i2,i3") *
                               yield(L"g{i2,i3;i1,a3}")("i2,i3,i1,a3");
-      REQUIRE(norm(prod4_man) == Catch::Approx(norm(prod4_eval)));
+      REQUIRE(equal_tarrays(prod4_eval, prod4_man));
     }
 
     SECTION("sum and product") {
@@ -410,10 +482,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                             1.0 / 16 * yield(L"g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
                                 yield(L"t{a1,a2;i3,i4}")("a1,a2,i3,i4") *
                                 yield(L"t{a3,a4;i1,i2}")("a3,a4,i1,i2");
+      REQUIRE(equal_tarrays(eval1, man1));
 
-      REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
-
-      auto expr2 = sequant::parse_expr(
+      auto expr2 = sequant::deserialize<sequant::ExprPtr>(
           L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3} + R_{a1,a3}^{i1} * "
           L"f_{i2}^{a3} * t_{a2}^{i2}");
       auto eval2 = eval(expr2, "i_1,a_1,a_2");
@@ -424,7 +495,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
               yield(L"g{i2,i3;i1,a3}")("i2,i3,i1,a3") +
           yield(L"R{a1,a3;i1}")("a1,a3,i1") * yield(L"f{i2;a3}")("i2,a3") *
               yield(L"t{a2;i2}")("a2,i2");
-      REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
+      REQUIRE(equal_tarrays(eval2, man2));
     }
 
     SECTION("variable at leaves") {
@@ -438,7 +509,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           yield_d(L"α") * 2 * yield(L"t{a1;i1}")("a1,i1") * yield_d(L"β") +
           1.5 * yield(L"f{i1;a1}")("i1,a1");
 
-      REQUIRE(norm(sum2_man) == Catch::Approx(norm(sum2_eval)));
+      REQUIRE(equal_tarrays(sum2_eval, sum2_man));
     }
 
     SECTION("Antisymmetrization") {
@@ -452,14 +523,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       man1("0,1,2,3") = 0.25 * man1("0,1,2,3");
 
-      REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
-
-      TArrayD zero1;
-      zero1("0,1,2,3") = man1("0,1,2,3") - eval1("0,1,2,3");
-
-      // https://github.com/catchorg/Catch2/issues/1444
-      REQUIRE(norm(zero1) == Catch::Approx(0).margin(
-                                 100 * std::numeric_limits<double>::epsilon()));
+      REQUIRE(equal_tarrays(eval1, man1));
 
       // odd-ranked tensor
       auto expr2 = parse_antisymm(L"g_{i1, i2, i3}^{a1, a2}");
@@ -472,10 +536,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           arr2("2,1,0,3,4") + arr2("2,0,1,3,4") - arr2("0,2,1,3,4") -
           arr2("0,1,2,4,3") + arr2("1,0,2,4,3") - arr2("1,2,0,4,3") +
           arr2("2,1,0,4,3") - arr2("2,0,1,4,3") + arr2("0,2,1,4,3");
-      TArrayD zero2;
-      zero2("0,1,2,3,4") = man2("0,1,2,3,4") - eval2("0,1,2,3,4");
-      REQUIRE(norm(zero2) == Catch::Approx(0).margin(
-                                 100 * std::numeric_limits<double>::epsilon()));
+
+      REQUIRE(equal_tarrays(eval2, man2));
 
       auto expr3 = parse_antisymm(L"R_{a1,a2}^{}");
       auto eval3 = eval_antisymm(expr3, "a_1,a_2");
@@ -484,10 +546,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       man3("0,1") = arr3("0,1") - arr3("1,0");
       man3("0,1") = 0.5 * man3("0,1");
 
-      TArrayD zero3;
-      zero3("0,1") = man3("0,1") - eval3("0,1");
-      REQUIRE(norm(zero3) == Catch::Approx(0).margin(
-                                 100 * std::numeric_limits<double>::epsilon()));
+      REQUIRE(equal_tarrays(eval3, man3));
     }
 
     SECTION("Symmetrization") {
@@ -499,7 +558,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       man1("0,1,2,3") = arr1("0,1,2,3") + arr1("1,0,3,2");
       man1("0,1,2,3") = 0.5 * man1("0,1,2,3");
 
-      REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
+      REQUIRE(equal_tarrays(eval1, man1));
 
       auto expr2 = parse_antisymm(L"g_{i1,i2,i3}^{a1,a2,a3}");
 
@@ -510,7 +569,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                             arr2("2,0,1,5,3,4") + arr2("2,1,0,5,4,3") +
                             arr2("1,2,0,4,5,3") + arr2("1,0,2,4,3,5");
       man2("0,1,2,3,4,5") = (1.0 / 6.0) * man2("0,1,2,3,4,5");
-      REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
+      REQUIRE(equal_tarrays(eval2, man2));
     }
 
     SECTION("Biorthogonal Cleanup") {
@@ -522,11 +581,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       auto man1 = TArrayD{};
       man1("0,1,2,3") = arr1("0,1,2,3");
 
-      REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
-      TArrayD zero1;
-      zero1("0,1,2,3") = man1("0,1,2,3") - eval1("0,1,2,3");
-      REQUIRE(norm(zero1) == Catch::Approx(0).margin(
-                                 100 * std::numeric_limits<double>::epsilon()));
+      REQUIRE(equal_tarrays(eval1, man1));
 
       // for rank 3 residual, nns applies:
       // result = NNS_P * sum_of_ket_permutations
@@ -542,11 +597,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
               (arr2("0,1,2,3,5,4") + arr2("0,1,2,4,3,5") + arr2("0,1,2,4,5,3") +
                arr2("0,1,2,5,3,4") + arr2("0,1,2,5,4,3"));
 
-      REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
-      TArrayD zero2;
-      zero2("0,1,2,3,4,5") = man2("0,1,2,3,4,5") - eval2("0,1,2,3,4,5");
-      REQUIRE(norm(zero2) == Catch::Approx(0).margin(
-                                 100 * std::numeric_limits<double>::epsilon()));
+      REQUIRE(equal_tarrays(eval2, man2));
 
       // for rank 4 residual, nns applies:
       // result = NNS_P * sum_of_ket_permutations
@@ -581,13 +632,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                                 2.0 / 14.0 * arr3("0,1,2,3,7,6,4,5") +
                                 2.0 / 14.0 * arr3("0,1,2,3,7,6,5,4");
 
-      REQUIRE(norm(man3) == Catch::Approx(norm(eval3)));
-      TArrayD zero3;
-      zero3("0,1,2,3,4,5,6,7") =
-          man3("0,1,2,3,4,5,6,7") - eval3("0,1,2,3,4,5,6,7");
-      REQUIRE(norm(zero3) ==
-              Catch::Approx(0).margin(1000 *
-                                      std::numeric_limits<double>::epsilon()));
+      REQUIRE(equal_tarrays<Loose>(eval3, man3));
     }
 
     SECTION("Others") {
@@ -607,13 +652,110 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       auto eval2 =
           evaluate(nodes1, "i_1,i_2,a_1,a_2"s, yield_)->get<TA::TArrayD>();
 
-      REQUIRE(norm(eval1) == Catch::Approx(norm(eval2)));
+      REQUIRE(equal_tarrays(eval1, eval2));
     }
+
+    SECTION("non-covariant indices") {
+      using sequant::deserialize;
+      using sequant::EvalExprTA;
+      using sequant::evaluate;
+
+      using TA::TArrayD;
+      auto& world = TA::get_default_world();
+      const size_t nocc = 2, nvirt = 4, naux = 12;
+
+      auto yield_ =
+          rand_tensor_yield<double, TA::DensePolicy>{world, nocc, nvirt, naux};
+      auto yield = [&yield_](std::wstring_view lbl) -> TA::TArrayD const& {
+        return yield_(lbl)->get<TA::TArrayD>();
+      };
+
+      auto eval = [&yield_](sequant::ExprPtr const& expr,
+                            std::string const& target_labels) {
+        return evaluate(eval_node(expr), target_labels, yield_)
+            ->get<TA::TArrayD>();
+      };
+
+      auto expr1 = deserialize(
+          L"((X{a1;;x1} X{;a2;x1}) Y{;;x1,x2})(X{a3;;x2} X{;a4;x2})");
+      auto eval1 = eval(expr1, "a_1,a_2,a_3,a_4");
+      auto man1 = [&]() {
+        auto X1 = yield(L"X{a1;;x1}");
+        REQUIRE(X1.trange().elements_range().extent(0) == nvirt);
+        REQUIRE(X1.trange().elements_range().extent(1) == naux);
+        auto X2 = yield(L"X{;a2;x1}");
+        REQUIRE(X2.trange().elements_range().extent(0) == nvirt);
+        REQUIRE(X2.trange().elements_range().extent(1) == naux);
+        auto X3 = yield(L"X{a3;;x2}");
+        REQUIRE(X3.trange().elements_range().extent(0) == nvirt);
+        REQUIRE(X3.trange().elements_range().extent(1) == naux);
+        auto X4 = yield(L"X{;a4;x2}");
+        REQUIRE(X4.trange().elements_range().extent(0) == nvirt);
+        REQUIRE(X4.trange().elements_range().extent(1) == naux);
+        auto Y = yield(L"Y{;;x1,x2}");
+        REQUIRE(Y.trange().elements_range().extent(0) == naux);
+        REQUIRE(Y.trange().elements_range().extent(1) == naux);
+        auto X12 = TA::einsum("ax,bx->abx", X1, X2);
+        REQUIRE(X12.trange().elements_range().extent(0) == nvirt);
+        REQUIRE(X12.trange().elements_range().extent(1) == nvirt);
+        REQUIRE(X12.trange().elements_range().extent(2) == naux);
+        auto X12Y = TA::einsum("abx,xy->aby", X12, Y);
+        auto X34 = TA::einsum("cy,dy->cdy", X3, X4);
+        return TA::einsum("aby,cdy->abcd", X12Y, X34);
+      }();
+      REQUIRE(equal_tarrays(eval1, man1, "a1,a2,a3,a4"));
+
+      // cluster-specific RDM: γ{a2;a1;i1,i2} = t{i1,i2;a1,a3} T2{a2,a3;i1,i2}
+      // i1,i2 form standard bra-ket pairs across factors but are external
+      // (in aux of result); binarize(ResultExpr) must keep them uncontracted
+      {
+        auto res = deserialize<sequant::ResultExpr>(
+            L"GAM{a2;a1;i1,i2} = t{i1,i2;a1,a3} T2{a2,a3;i1,i2}");
+        auto node = eval_node(res);
+        auto eval_rdm = evaluate(node, std::string("a_2,a_1,i_1,i_2"), yield_)
+                            ->get<TA::TArrayD>();
+        auto man_rdm = [&]() {
+          auto t = yield(L"t{i1,i2;a1,a3}");
+          auto T2 = yield(L"T2{a2,a3;i1,i2}");
+          return TA::einsum("ijab,cbij->caij", t, T2);
+        }();
+        REQUIRE(equal_tarrays(eval_rdm, man_rdm, "a2,a1,i1,i2"));
+      }
+
+      {  // multiple bra or ket indices require AssertStrictBraKetSymmetry::No
+        auto ctx_resetter = sequant::set_scoped_default_context(
+            sequant::Context{sequant::get_default_context()}.set(
+                sequant::AssertStrictBraKetSymmetry::No));
+
+        // hyperindex i1 in ket slots of 3 tensors
+        auto expr2 = deserialize(L"T{a1;i1} T{a2;i1} T{a3;i1}");
+        auto eval2 = eval(expr2, "a_1,a_2,a_3");
+        auto man2 = [&]() {
+          auto T1 = yield(L"T{a1;i1}");
+          auto T2 = yield(L"T{a2;i1}");
+          auto T3 = yield(L"T{a3;i1}");
+          auto T12 = TA::einsum("ai,bi->abi", T1, T2);
+          return TA::einsum("abi,ci->abc", T12, T3);
+        }();
+        REQUIRE(equal_tarrays(eval2, man2, "a1,a2,a3"));
+
+        // hyperindex a1 in bra slots of 3 tensors
+        auto expr3 = deserialize(L"T{a1;i1} T{a1;i2} T{a1;i3}");
+        auto eval3 = eval(expr3, "i_1,i_2,i_3");
+        auto man3 = [&]() {
+          auto T1 = yield(L"T{a1;i1}");
+          auto T2 = yield(L"T{a1;i2}");
+          auto T3 = yield(L"T{a1;i3}");
+          auto T12 = TA::einsum("ai,aj->aij", T1, T2);
+          return TA::einsum("aij,ak->ijk", T12, T3);
+        }();
+        REQUIRE(equal_tarrays(eval3, man3, "i1,i2,i3"));
+      }
+    }  // multiple bra or ket indices
   }
 
   SECTION("complex") {
     using TArrayC = TA::DistArray<TA::Tensor<std::complex<double>>>;
-    auto norm = [](TArrayC const& tnsr) { return TA::norm2(tnsr); };
 
     const size_t nocc = 2, nvirt = 20;
     auto& world = TA::get_default_world();
@@ -646,7 +788,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     using namespace std::string_literals;
 
     SECTION("summation") {
-      auto expr1 = parse_expr(L"t_{a1}^{i1} + f_{i1}^{a1}");
+      auto expr1 = deserialize<sequant::ExprPtr>(L"t_{a1}^{i1} + f_{i1}^{a1}");
 
       auto sum1_eval = eval(expr1, "i_1,a_1");
 
@@ -654,10 +796,10 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       sum1_man("i1,a1") =
           yield(L"t{a1;i1}")("a1,i1") + yield(L"f{i1;a1}")("i1,a1");
 
-      // todo:
-      REQUIRE(norm(sum1_man) == Catch::Approx(norm(sum1_eval)));
+      REQUIRE(equal_tarrays(sum1_eval, sum1_man));
 
-      auto expr2 = parse_expr(L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
+      auto expr2 =
+          deserialize<sequant::ExprPtr>(L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
 
       auto sum2_eval = eval(expr2, "i_1,a_1");
 
@@ -666,11 +808,12 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           std::complex<double>{2} * yield(L"t{a1;i1}")("a1,i1") +
           std::complex<double>{1.5} * yield(L"f{i1;a1}")("i1,a1");
 
-      REQUIRE(norm(sum2_man) == Catch::Approx(norm(sum2_eval)));
+      REQUIRE(equal_tarrays(sum2_eval, sum2_man));
     }
 
     SECTION("product") {
-      auto expr1 = parse_expr(L"1/2 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}");
+      auto expr1 = deserialize<sequant::ExprPtr>(
+          L"1/2 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}");
       auto prod1_eval = eval(expr1, "i_4,a_1,a_4,i_1");
 
       TArrayC prod1_man{};
@@ -678,9 +821,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                                  yield(L"g{i2,i4;a2,a4}")("i2,i4,a2,a4") *
                                  yield(L"t{a1,a2;i1,i2}")("a1,a2,i1,i2");
 
-      REQUIRE(norm(prod1_man) == Catch::Approx(norm(prod1_eval)));
+      REQUIRE(equal_tarrays(prod1_eval, prod1_man));
 
-      auto expr2 = parse_expr(
+      auto expr2 = deserialize<sequant::ExprPtr>(
           L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{ i3, "
           L"i4}");
       auto prod2_eval = eval(expr2, "a_1,a_2,i_1,i_2");
@@ -691,27 +834,29 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                                  yield(L"t{a2,a4;i1,i2}")("a2,a4,i1,i2") *
                                  yield(L"t{a1,a3;i3,i4}")("a1,a3,i3,i4");
 
-      REQUIRE(norm(prod2_man) == Catch::Approx(norm(prod2_eval)));
+      REQUIRE(equal_tarrays(prod2_eval, prod2_man));
 
-      auto expr3 = sequant::parse_expr(L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
+      auto expr3 = sequant::deserialize<sequant::ExprPtr>(
+          L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
       auto prod3_eval = eval(expr3, "a_1,i_1,i_2");
       auto prod3_man = TArrayC{};
       prod3_man("a1,i1,i2") =
           yield(L"R{a1;i1,i3}")("a1,i1,i3") * yield(L"f{i3;i2}")("i3,i2");
-      REQUIRE(norm(prod3_man) == Catch::Approx(norm(prod3_eval)));
 
-      auto expr4 = sequant::parse_expr(
+      REQUIRE(equal_tarrays(prod3_eval, prod3_man));
+
+      auto expr4 = sequant::deserialize<sequant::ExprPtr>(
           L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3}");
       auto prod4_eval = eval(expr4, "i_1,a_1,a_2");
       auto prod4_man = TArrayC{};
       prod4_man("i1,a1,a2") = 1 / 4.0 *
                               yield(L"R{a1,a2,a3;i2,i3}")("a1,a2,a3,i2,i3") *
                               yield(L"g{i2,i3;i1,a3}")("i2,i3,i1,a3");
-      REQUIRE(norm(prod4_man) == Catch::Approx(norm(prod4_eval)));
+      REQUIRE(equal_tarrays(prod4_eval, prod4_man));
     }
 
     SECTION("sum and product") {
-      auto expr1 = parse_expr(
+      auto expr1 = deserialize<sequant::ExprPtr>(
           L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
           " + "
           " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
@@ -727,9 +872,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                                 yield(L"t{a1,a2;i3,i4}")("a1,a2,i3,i4") *
                                 yield(L"t{a3,a4;i1,i2}")("a3,a4,i1,i2");
 
-      REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
+      REQUIRE(equal_tarrays(eval1, man1));
 
-      auto expr2 = sequant::parse_expr(
+      auto expr2 = sequant::deserialize<sequant::ExprPtr>(
           L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3} + R_{a1,a3}^{i1} * "
           L"f_{i2}^{a3} * t_{a2}^{i2}");
       auto eval2 = eval(expr2, "i_1,a_1,a_2");
@@ -740,11 +885,11 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
               yield(L"g{i2,i3;i1,a3}")("i2,i3,i1,a3") +
           yield(L"R{a1,a3;i1}")("a1,a3,i1") * yield(L"f{i2;a3}")("i2,a3") *
               yield(L"t{a2;i2}")("a2,i2");
-      REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
+      REQUIRE(equal_tarrays(eval2, man2));
     }
 
     SECTION("Antisymmetrization") {
-      auto expr1 = parse_expr(L"g_{i1, i2}^{a1, a2}");
+      auto expr1 = deserialize<sequant::ExprPtr>(L"g_{i1, i2}^{a1, a2}");
       auto eval1 = eval_antisymm(expr1, "i_1,i_2,a_1,a_2");
       auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
 
@@ -754,16 +899,10 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       man1("0,1,2,3") = std::complex<double>{0.25} * man1("0,1,2,3");
 
-      REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
-
-      TArrayC zero1;
-      zero1("0,1,2,3") = man1("0,1,2,3") - eval1("0,1,2,3");
-
-      // todo: Catch::Approx(0.0) == 0 fails. probably update catch2 version
-      // REQUIRE(Approx(norm(zero1)) == 0);
+      REQUIRE(equal_tarrays(eval1, man1));
 
       // odd-ranked tensor
-      auto expr2 = parse_expr(L"g_{i1, i2, i3}^{a1, a2}");
+      auto expr2 = deserialize<sequant::ExprPtr>(L"g_{i1, i2, i3}^{a1, a2}");
       auto eval2 = eval_antisymm(expr2, "i_1,i_2,i_3,a_1,a_2");
       auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2}");
 
@@ -773,26 +912,21 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           arr2("2,1,0,3,4") + arr2("2,0,1,3,4") - arr2("0,2,1,3,4") -
           arr2("0,1,2,4,3") + arr2("1,0,2,4,3") - arr2("1,2,0,4,3") +
           arr2("2,1,0,4,3") - arr2("2,0,1,4,3") + arr2("0,2,1,4,3");
-      TArrayC zero2;
-      zero2("0,1,2,3,4") = man2("0,1,2,3,4") - eval2("0,1,2,3,4");
-      REQUIRE(norm(zero2) == Catch::Approx(0).margin(
-                                 100 * std::numeric_limits<double>::epsilon()));
 
-      auto expr3 = parse_expr(L"R_{a1,a2}^{}");
+      REQUIRE(equal_tarrays(eval2, man2));
+
+      auto expr3 = deserialize<sequant::ExprPtr>(L"R_{a1,a2}^{}");
       auto eval3 = eval_antisymm(expr3, "a_1,a_2");
       auto const& arr3 = yield(L"R{a1,a2;}");
       auto man3 = TArrayC{};
       man3("0,1") = arr3("0,1") - arr3("1,0");
       man3("0,1") = std::complex<double>{0.5} * man3("0,1");
 
-      TArrayC zero3;
-      zero3("0,1") = man3("0,1") - eval3("0,1");
-      REQUIRE(norm(zero3) == Catch::Approx(0).margin(
-                                 100 * std::numeric_limits<double>::epsilon()));
+      REQUIRE(equal_tarrays(eval3, man3));
     }
 
     SECTION("Symmetrization") {
-      auto expr1 = parse_expr(L"g_{i1, i2}^{a1, a2}");
+      auto expr1 = deserialize<sequant::ExprPtr>(L"g_{i1, i2}^{a1, a2}");
       auto eval1 = eval_symm(expr1, "i_1,i_2,a_1,a_2");
       auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
 
@@ -800,9 +934,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       man1("0,1,2,3") = arr1("0,1,2,3") + arr1("1,0,3,2");
       man1("0,1,2,3") = 0.5 * man1("0,1,2,3");
 
-      REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
+      REQUIRE(equal_tarrays(eval1, man1));
 
-      auto expr2 = parse_expr(L"g_{i1,i2,i3}^{a1,a2,a3}");
+      auto expr2 = deserialize<sequant::ExprPtr>(L"g_{i1,i2,i3}^{a1,a2,a3}");
 
       auto eval2 = eval_symm(expr2, "i_1,i_2,i_3,a_1,a_2,a_3");
       auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2,a3}");
@@ -812,12 +946,12 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                             arr2("1,2,0,4,5,3") + arr2("1,0,2,4,3,5");
       man2("0,1,2,3,4,5") = (1.0 / 6.0) * man2("0,1,2,3,4,5");
 
-      REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
+      REQUIRE(equal_tarrays(eval2, man2));
     }
 
     SECTION("Others") {
       using namespace std::string_literals;
-      auto expr1 = parse_expr(
+      auto expr1 = deserialize<sequant::ExprPtr>(
           L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
           " + "
           " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
@@ -831,7 +965,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       auto eval2 = evaluate(nodes1, "i_1,i_2,a_1,a_2"s, yield_)->get<TArrayC>();
 
-      REQUIRE(norm(eval1) == Catch::Approx(norm(eval2)));
+      REQUIRE(equal_tarrays(eval1, eval2));
     }
   }
 
@@ -872,7 +1006,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           L"f{i3;i1}"
           L" * "
           L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}";
-      auto const node = eval_node(parse_expr(expr_str));
+      auto const node = eval_node(deserialize<sequant::ExprPtr>(expr_str));
       std::string const target_layout{"i_1,i_2,i_3;a_3i_2i_3,a_4i_2i_3"};
       auto result = evaluate(node, target_layout, yield)->get<ArrayToT>();
       ArrayToT ref;
@@ -893,7 +1027,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           L" * "
           L"s{a2<i1,i2>;a4<i2,i3>}";
 
-      auto const node = eval_node(parse_expr(expr_str));
+      auto const node = eval_node(deserialize<sequant::ExprPtr>(expr_str));
       std::string const target_layout{"i_2,i_1;a_1i_1i_2,a_2i_1i_2"};
 
       auto result = evaluate(node, target_layout, yield)->get<ArrayToT>();
@@ -914,7 +1048,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           L"I{a1<i1,i2>,a2<i1,i2>;i1,i2}"
           L" * "
           L"g{i1,i2;a2<i1,i2>,a1<i1,i2>}";
-      auto const node = eval_node(parse_expr(expr_str));
+      auto const node = eval_node(deserialize<sequant::ExprPtr>(expr_str));
 
       auto result = evaluate(node, yield)->get<NumericT>();
 

@@ -1,4 +1,5 @@
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -6,8 +7,6 @@
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/op_registry.hpp>
-
-#include <stdexcept>
 
 namespace sequant::mbpt {
 
@@ -272,7 +271,7 @@ qns_t combine(qns_t a, qns_t b) {
     }
     return result;
   } else {
-    throw std::runtime_error("Unsupported vacuum context.");
+    throw Exception("Unsupported vacuum context.");
   }
 }
 
@@ -306,7 +305,7 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
 
   // base_lbl is used for registry check, it should not have adjoint label or
   // perturbation order
-  auto base_lbl = sequant::to_wstring(op.label());
+  auto base_lbl = std::wstring(op.label());
   SEQUANT_ASSERT(!base_lbl.empty());
   bool is_adjoint = false;
   if (base_lbl.back() == adjoint_label) {
@@ -338,7 +337,7 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
                        base_lbl == reserved::symm_label();
 
   // now start building the output
-  std::wstring label = utf_to_latex(op.label());
+  std::wstring label = io::latex::utf_to_string(op.label());
   auto result = has_hat ? L"{" + label : L"{\\hat{" + label + L"}";
 
   auto op_qns = op();  // operator action i.e. quantum number change
@@ -398,7 +397,7 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
 
     if (!is_definite(nann_p) || !is_definite(ncre_h) || !is_definite(ncre_p) ||
         !is_definite(nann_h)) {
-      throw std::invalid_argument(
+      throw Exception(
           "to_latex(const Operator<qns_t, S>& op): "
           "can only handle generic operators with definite cre/ann numbers");
     }
@@ -560,18 +559,18 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
 
   if (!dep && csv) {
     if (opclass == OpClass::ex) {
-#ifdef SEQUANT_ASSERT_ENABLED
-      for (auto&& s : cre_spaces_) {
-        SEQUANT_ASSERT(isr->contains_unoccupied(s));
+      if constexpr (assert_enabled()) {
+        for (auto&& s : cre_spaces_) {
+          SEQUANT_ASSERT(isr->contains_unoccupied(s));
+        }
       }
-#endif
       dep = UseDepIdx::Bra;
     } else if (opclass == OpClass::deex) {
-#ifdef SEQUANT_ASSERT_ENABLED
-      for (auto&& s : ann_spaces_) {
-        SEQUANT_ASSERT(isr->contains_unoccupied(s));
+      if constexpr (assert_enabled()) {
+        for (auto&& s : ann_spaces_) {
+          SEQUANT_ASSERT(isr->contains_unoccupied(s));
+        }
       }
-#endif
       dep = UseDepIdx::Ket;
     } else {
       dep = UseDepIdx::None;
@@ -1204,7 +1203,7 @@ bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t& target_qns,
     qns = combine(qnc, qns);  // apply the operator qnc on the source qns
     return qns.overlaps_with(target_qns);
   } else
-    throw std::invalid_argument(
+    throw Exception(
         "sequant::mbpt::sr::contains_rank(op_or_op_product): op_or_op_product "
         "must be mbpt::sr::op_t or Product thereof");
 }
@@ -1249,7 +1248,7 @@ ExprPtr expectation_value_impl(ExprPtr expr,
   // N.B. reference < vacuum is not yet supported
   if (isr->reference_occupied_space().intersection(
           isr->vacuum_occupied_space()) != isr->vacuum_occupied_space()) {
-    throw std::invalid_argument(
+    throw Exception(
         "mbpt::tensor::expectation_value_impl: vacuum occupied orbitals must "
         "be same as or "
         "subset of the reference orbital set.");
@@ -1386,8 +1385,8 @@ ExprPtr expectation_value_impl(ExprPtr expr,
           });
           std::wcout << "\n  replrules = ";
           ranges::for_each(replacement_rules, [](auto& index) {
-            std::wcout << to_latex(index.first) << "\\to"
-                       << to_latex(index.second) << "\\,";
+            std::wcout << io::latex::to_string(index.first) << "\\to"
+                       << io::latex::to_string(index.second) << "\\,";
           });
           std::wcout.flush();
         }

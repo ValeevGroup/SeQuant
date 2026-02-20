@@ -7,6 +7,7 @@
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
@@ -105,17 +106,15 @@ std::size_t ExprPtr::size() const { return this->get()->size(); }
 
 std::wstring ExprPtr::to_latex() const { return as_shared_ptr()->to_latex(); }
 
-std::logic_error Expr::not_implemented(const char *fn) const {
+Exception Expr::not_implemented(const char *fn) const {
   std::ostringstream oss;
   oss << "Expr::" << fn
       << " not implemented in this derived class (type_name=" << type_name()
       << ")";
-  return std::logic_error(oss.str().c_str());
+  return Exception(oss.str());
 }
 
 std::wstring Expr::to_latex() const { throw not_implemented("to_latex"); }
-
-std::wstring Expr::to_wolfram() const { throw not_implemented("to_wolfram"); }
 
 ExprPtr Expr::clone() const { throw not_implemented("clone"); }
 
@@ -152,7 +151,7 @@ void Variable::conjugate() { conjugated_ = !conjugated_; }
 bool Variable::conjugated() const { return conjugated_; }
 
 std::wstring Variable::to_latex() const {
-  std::wstring result = L"{" + utf_to_latex(label_) + L"}";
+  std::wstring result = L"{" + io::latex::utf_to_string(label_) + L"}";
   if (conjugated_) result = L"{" + result + L"^*" + L"}";
   return result;
 }

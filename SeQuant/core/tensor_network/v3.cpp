@@ -10,7 +10,8 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/tag.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
@@ -18,7 +19,9 @@
 #include <SeQuant/core/tensor_network/v3.hpp>
 #include <SeQuant/core/tensor_network/vertex_painter.hpp>
 #include <SeQuant/core/utility/debug.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/swap.hpp>
 #include <SeQuant/core/utility/tuple.hpp>
 
@@ -939,7 +942,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     if (options.make_labels) make_label(std::wstring{tlabel});
     if (options.make_xlabels) make_xlabel();
     if (options.make_texlabels)
-      make_texlabel(L"$" + utf_to_latex(tlabel) + L"$");
+      make_texlabel(L"$" + io::latex::utf_to_string(tlabel) + L"$");
     graph.vertex_types.emplace_back(VertexType::TensorCore);
     const auto tensor_color =
         colorizer.apply_shade(tensor);  // subsequent vertices will be shaded by
@@ -1205,39 +1208,47 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
       edges.emplace_back(std::make_pair(index_vertex, proto_vertex));
     }
 
-    // hyperedges must involve aux indices
-#ifdef SEQUANT_ASSERT_ENABLED
-    if (current_edge.vertex_count() > 2) {
-      std::size_t nbra = 0;
-      std::size_t nket = 0;
-      std::size_t naux = 0;
-      for (std::size_t i = 0; i < current_edge.vertex_count(); ++i) {
-        const Vertex &vertex = current_edge.vertex(i);
-        switch (vertex.getOrigin()) {
-          case Origin::Bra:
-            ++nbra;
-            break;
-          case Origin::Ket:
-            ++nket;
-            break;
-          case Origin::Aux:
-            ++naux;
-            break;
-          case Origin::Proto:
-            SEQUANT_UNREACHABLE;
+    // strict bra-ket sanity checks
+    if constexpr (assert_enabled()) {
+      if (get_default_context().assert_strict_braket_symmetry()) {
+        // dummy (anonymous) edges to
+        // - involve at most 2 bra and/or ket indices (if BraKetSymmetry::Symm)
+        // or 1 bra and 1 ket index
+        // - can involve any number of aux indices
+        if (current_edge.vertex_count() > 1) {
+          // ignore if named index
+          if (!this->ext_indices_.contains(current_edge.idx())) {
+            [[maybe_unused]] std::size_t nbra = 0;
+            [[maybe_unused]] std::size_t nket = 0;
+            [[maybe_unused]] std::size_t naux = 0;
+            for (std::size_t v = 0; v < current_edge.vertex_count(); ++v) {
+              const Vertex &vertex = current_edge.vertex(v);
+              switch (vertex.getOrigin()) {
+                case Origin::Bra:
+                  ++nbra;
+                  break;
+                case Origin::Ket:
+                  ++nket;
+                  break;
+                case Origin::Aux:
+                  ++naux;
+                  break;
+                case Origin::Proto:
+                  SEQUANT_UNREACHABLE;
+              }
+            }
+            // if braket symmetry == BraKetSymmetry::Symm there is no
+            // distinction between bra and ket, but still can have at most 2 of
+            // them total if braket symmetry != BraKetSymmetry::Symm at most 1
+            // bra and 1 ket can connect to aux
+            SEQUANT_ASSERT(get_default_context().braket_symmetry() ==
+                                   BraKetSymmetry::Symm
+                               ? (nbra + nket <= 2)
+                               : (nbra <= 1 && nket <= 1));
+          }
         }
       }
-      // if braket symmetry == BraKetSymmetry::Symm there is no distinction
-      // between bra and ket, but still can have at most 2 of them total if
-      // braket symmetry != BraKetSymmetry::Symm at most 1 bra and 1 ket can
-      // connect to aux
-      SEQUANT_ASSERT(get_default_context().braket_symmetry() ==
-                             BraKetSymmetry::Symm
-                         ? (nbra + nket <= 2)
-                         : (nbra <= 1 && nket <= 1));
-      SEQUANT_ASSERT(naux >= 1);  // at least 1 aux
     }
-#endif
 
     // Connect index to the tensor(s) it is connected to
     for (std::size_t i = 0; i < current_edge.vertex_count(); ++i) {
@@ -1442,7 +1453,7 @@ void TensorNetworkV3::init_edges() {
     for (auto &&proto_idx : current.idx().proto_indices()) {
       // for now no recursive proto indices
       if (proto_idx.has_proto_indices())
-        throw std::runtime_error(
+        throw Exception(
             "TensorNetworkV3 does not support recursive protoindices");
       proto_indices.emplace(proto_idx);
     }

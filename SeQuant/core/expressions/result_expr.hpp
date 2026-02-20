@@ -6,7 +6,11 @@
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/expressions/variable.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/slotted_index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+
+#include <range/v3/view/concat.hpp>
+#include <range/v3/view/filter.hpp>
 
 #include <initializer_list>
 #include <optional>
@@ -26,6 +30,8 @@ namespace sequant {
 ///
 /// Importantly, it is possible to track the result without giving
 /// an explicit name (label) to it.
+///
+/// @note see AbstractTensor for the description of the model of slots/indices
 class ResultExpr {
  public:
   using IndexContainer = container::svector<Index>;
@@ -69,9 +75,23 @@ class ResultExpr {
   ColumnSymmetry column_symmetry() const;
   void set_column_symmetry(ColumnSymmetry symm);
 
+  /// @return bra slots
   const IndexContainer &bra() const;
+  /// @return ket slots
   const IndexContainer &ket() const;
+  /// @return aux slots
   const IndexContainer &aux() const;
+
+  /// @return concatenated view of all slots (bra, ket, aux)
+  auto slots() const {
+    return ranges::views::concat(m_braIndices, m_ketIndices, m_auxIndices);
+  }
+
+  /// @return view of all non-null indices across all slots (bra, ket, aux)
+  auto indices() const {
+    return ranges::views::filter(
+        slots(), [](const Index &idx) { return idx.nonnull(); });
+  }
 
   const ExprPtr &expression() const;
   ExprPtr &expression();
@@ -102,15 +122,24 @@ class ResultExpr {
     // based on the particle they belong to and that bra and
     // ket indices are assigned to the same set of particles.
     for (std::size_t i = 0; i < m_braIndices.size(); ++i) {
-      if constexpr (std::is_constructible_v<Group,
-                                            std::initializer_list<Index>>) {
+      if constexpr (std::is_constructible_v<
+                        Group, std::initializer_list<SlottedIndex>>) {
+        groups.emplace_back(std::initializer_list<SlottedIndex>{
+            {m_braIndices.at(i), SlotType::Bra},
+            {m_ketIndices.at(i), SlotType::Ket}});
+      } else if constexpr (std::is_constructible_v<
+                               Group, std::initializer_list<Index>>) {
         groups.emplace_back(std::initializer_list<Index>{m_braIndices.at(i),
                                                          m_ketIndices.at(i)});
+      } else if constexpr (std::is_constructible_v<Group, SlottedIndex,
+                                                   SlottedIndex>) {
+        groups.emplace_back(SlottedIndex{m_braIndices.at(i), SlotType::Bra},
+                            SlottedIndex{m_ketIndices.at(i), SlotType::Ket});
       } else {
         static_assert(
             std::is_constructible_v<Group, Index, Index>,
-            "Group is expected to be constructible from two indices or from an "
-            "initializer_list of indices");
+            "Group is expected to be constructible from two (slotted) indices "
+            "or from an initializer_list of (slotted) indices");
         groups.emplace_back(m_braIndices.at(i), m_ketIndices.at(i));
       }
     }

@@ -8,10 +8,9 @@
 #include <string>
 
 #include <SeQuant/core/hash.hpp>
-#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/macros.hpp>
-#include <SeQuant/core/wolfram.hpp>
 
 namespace sequant {
 
@@ -41,26 +40,16 @@ struct Complex {
   constexpr bool is_identity() const { return real() == 1 && imag() == 0; }
 
   std::wstring to_latex() const {
-    using ::sequant::to_latex;
     std::wstring result = L"{";
-    result += to_latex(this->real());
+    result += io::latex::to_string(this->real());
     if (this->imag() > 0) {
-      result =
-          L"\\bigl(" + result + L" + i " + to_latex(this->imag()) + L"\\bigr)";
+      result = L"\\bigl(" + result + L" + i " +
+               io::latex::to_string(this->imag()) + L"\\bigr)";
     } else if (this->imag() < 0)
-      result =
-          L"\\bigl(" + result + L" - i " + to_latex(-this->imag()) + L"\\bigr)";
+      result = L"\\bigl(" + result + L" - i " +
+               io::latex::to_string(-this->imag()) + L"\\bigr)";
     result += L"}";
     return result;
-  }
-
-  std::wstring to_wolfram() const {
-    using ::sequant::to_wolfram;
-    if (this->imag() == 0)
-      return to_wolfram(this->real());
-    else
-      return std::wstring(L"Complex[") + to_wolfram(this->real()) + L"," +
-             to_wolfram(this->imag()) + L"]";
   }
 
   std::size_t hash_value() const {

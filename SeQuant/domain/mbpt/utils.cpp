@@ -7,8 +7,13 @@
 
 namespace sequant::mbpt {
 
-ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank,
-            const LSTOptions& options) {
+ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank, LSTOptions options) {
+  if (commutator_rank == 0) return A;  // nothing to do here
+
+  // if use_commutators is not set, set to true if unitary is true, else false
+  if (!options.use_commutators.has_value())
+    options.use_commutators = options.unitary;
+
   // use cloned expr to avoid side effects
   if (!options.skip_clone) A = A->clone();
 
@@ -21,7 +26,7 @@ ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank,
     for (size_t k = 1; k <= commutator_rank; ++k) {
       ExprPtr op_Sk_comm_w_S;
 
-      if (options.use_commutators) {
+      if (options.use_commutators.value()) {
         // commutator form: [O,B] = OB - BO
         op_Sk_comm_w_S = op_Sk * B - B * op_Sk;
 
@@ -73,8 +78,8 @@ ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank,
   } else if (A.is<Constant>() || A.is<Variable>())
     return A;
   else
-    throw std::invalid_argument(
-        "mbpt::lst(A, B, commutator_rank, unitary): Unsupported expression "
+    throw Exception(
+        "mbpt::lst(A, B, commutator_rank, options): Unsupported expression "
         "type");
 }
 
@@ -84,7 +89,7 @@ ExprPtr screen_vac_av(ExprPtr expr, bool skip_clone) {
 
   auto screen = [](const ExprPtr& term) {
     if (!(term->is<op_t>() || term->is<Product>())) {
-      throw std::invalid_argument("op::screen_terms: Unsupported term type");
+      throw Exception("op::screen_terms: Unsupported term type");
     }
     return op::can_change_qns(term, qns_t{}) ? term : ex<Constant>(0);
   };
@@ -112,8 +117,7 @@ ExprPtr screen_vac_av(ExprPtr expr, bool skip_clone) {
     });
     return result;
   } else
-    throw std::invalid_argument(
-        "mbpt::screen_terms(expr): Unsupported expression type");
+    throw Exception("mbpt::screen_terms(expr): Unsupported expression type");
 }
 
 }  // namespace sequant::mbpt

@@ -16,6 +16,13 @@
    API reference <api>
 
 .. toctree::
+   :caption: Maintainer
+   :hidden:
+   :maxdepth: 2
+
+   Maintainer docs <maintainer/index>
+
+.. toctree::
    :caption: See Also
    :hidden:
 
@@ -65,6 +72,13 @@ cases. SeQuant is written in C++ and is designed to be as efficient as possible 
       :link-type: doc
 
       Complete API documentation generated from in-source doc comments
+
+
+   .. grid-item-card:: Maintainer guide
+      :link: maintainer/index
+      :link-type: doc
+
+      Release procedures and other guidance for project maintainers.
 
 Developers
 ----------

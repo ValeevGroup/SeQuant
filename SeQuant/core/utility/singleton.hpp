@@ -5,10 +5,11 @@
 #ifndef SEQUANT_CORE_UTILITY_SINGLETON_HPP
 #define SEQUANT_CORE_UTILITY_SINGLETON_HPP
 
+#include <SeQuant/core/utility/exception.hpp>
 #include <cassert>
 #include <memory>
 #include <mutex>
-#include <stdexcept>
+
 #include <type_traits>
 
 namespace sequant {
@@ -51,7 +52,7 @@ class Singleton {
 
  public:
   /// @return reference to the instance
-  /// @throw std::logic_error if the instance has not been constructed (because
+  /// @throw Exception if the instance has not been constructed (because
   /// Derived is not default-constructible and set_instance() had not been
   /// called)
   static Derived& instance() {
@@ -60,7 +61,7 @@ class Singleton {
     if constexpr (derived_is_default_constructible) {
       return set_default_instance();
     } else
-      throw std::logic_error(
+      throw Exception(
           "sequant::Singleton: is not default-constructible and set_instance() "
           "has not been called");
   }
@@ -83,7 +84,7 @@ class Singleton {
   /// @tparam Args a parameter pack type
   /// @param args a parameter pack
   /// @return reference to the newly-created instance
-  /// @throw std::logic_error if the instance has already been constructed
+  /// @throw Exception if the instance has already been constructed
   template <typename... Args>
   static Derived& set_instance(Args&&... args) {
     //    WARNING: can't check constructibility since the ctor may be private
@@ -92,7 +93,7 @@ class Singleton {
     //                  constructible with Args");
     std::scoped_lock lock(instance_mutex());
     if (instance_accessor() != nullptr)
-      throw std::logic_error(
+      throw Exception(
           "sequant::Singleton::set_instance: instance has already been "
           "constructed");
     instance_accessor() = std::move(

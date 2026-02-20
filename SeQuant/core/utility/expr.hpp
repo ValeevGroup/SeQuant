@@ -21,7 +21,7 @@ namespace sequant {
 
 /// @returns A string describing (some of) the difference between the given
 /// expressions. An empty diff means that they are equal. The produced diff is
-/// meant to be (resonably) human-readable.
+/// meant to be (reasonably) human-readable.
 std::string diff(const Expr &lhs, const Expr &rhs);
 
 /// Checks whether the given expression is valid (i.e. uses
@@ -94,7 +94,7 @@ template <typename EqualityComparator = std::equal_to<>>
 ExprPtr &replace(ExprPtr &expr, const ExprPtr &target,
                  const ExprPtr &replacement, EqualityComparator cmp = {}) {
   if (!target->is_atom()) {
-    throw std::runtime_error(
+    throw Exception(
         "Replacement of composite expressions is not yet implemented");
   }
 

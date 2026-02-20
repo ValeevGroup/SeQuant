@@ -13,7 +13,7 @@
 #include <iostream>
 #include <vector>
 
-namespace sequant {
+namespace sequant::mbpt {
 
 /// @brief generates all unique permutations of a product where products
 /// differing only by internal tensor antisymmetry are non-unique. i.e.
@@ -118,6 +118,6 @@ ExprPtr spin_sum(std::vector<Index> original_upper,
                  bool singlet_state = true);
 
 }  // namespace antisymm
-}  // namespace sequant
+}  // namespace sequant::mbpt
 
 #endif  // SEQUANT_DOMAIN_MBPT_ANTISYMMETRIZER_HPP

@@ -1,7 +1,6 @@
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/expressions/variable.hpp>
-#include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 
 namespace sequant {

@@ -41,7 +41,6 @@
 #include <iterator>
 #include <map>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -109,7 +108,7 @@ struct OpParams {
     if (!batch_ordinals.empty()) {
       SEQUANT_ASSERT(ranges::is_sorted(batch_ordinals) &&
                      "OpParams: batch_ordinals must be sorted");
-      auto duplicate = ranges::adjacent_find(batch_ordinals);
+      [[maybe_unused]] auto duplicate = ranges::adjacent_find(batch_ordinals);
       SEQUANT_ASSERT(duplicate == batch_ordinals.end() &&
                      "OpParams: batch_ordinals must contain unique values");
     }
@@ -216,7 +215,7 @@ class QuantumNumberChange
       SEQUANT_ASSERT(isr_base_spaces.size() > 0);
       return isr_base_spaces.size() * 2;
     } else {
-      throw std::logic_error("unknown Vacuum type");
+      throw Exception("unknown Vacuum type");
     }
   }
 
@@ -250,14 +249,14 @@ class QuantumNumberChange
       std::initializer_list<std::initializer_list<I>> i)
       : QuantumNumberChange() {
     SEQUANT_ASSERT(i.size() == size());
-#ifdef SEQUANT_ASSERT_ENABLED
-    SEQUANT_ASSERT(
-        std::find_if(i.begin(), i.end(),
-                     [](const auto& ii) { return ii.size() != 2; }) ==
-            i.end() &&
-        "QuantumNumberChange<N>(initializer_list<initializer_list> i): each "
-        "element of i must contain 2 elements");
-#endif
+    if constexpr (assert_enabled()) {
+      SEQUANT_ASSERT(
+          std::find_if(i.begin(), i.end(),
+                       [](const auto& ii) { return ii.size() != 2; }) ==
+              i.end() &&
+          "QuantumNumberChange<N>(initializer_list<initializer_list> i): each "
+          "element of i must contain 2 elements");
+    }
     for (std::size_t c = 0; c != size(); ++c) {
       this->operator[](c) = interval_t{*((i.begin() + c)->begin()),
                                        *((i.begin() + c)->begin() + 1)};

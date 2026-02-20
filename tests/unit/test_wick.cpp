@@ -9,7 +9,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/debug.hpp>
@@ -51,7 +51,7 @@ auto compute_nontensor_wick(WickTheorem<Statistics::FermiDirac>& wick) {
 }  // namespace sequant
 
 #if 1
-TEST_CASE("wick", "[algorithms][wick]") {
+TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
   using namespace sequant;
 
   TensorCanonicalizer::register_instance(
@@ -141,11 +141,11 @@ TEST_CASE("wick", "[algorithms][wick]") {
 
       if (get_default_context().spbasis() == SPBasis::Spinor) {
         REQUIRE_NOTHROW(wick1.spinfree(false));
-        REQUIRE_THROWS_AS(wick1.spinfree(true), std::invalid_argument);
+        REQUIRE_THROWS_AS(wick1.spinfree(true), Exception);
       }
       if (get_default_context().spbasis() == SPBasis::Spinfree) {
         REQUIRE_NOTHROW(wick1.spinfree(true));
-        REQUIRE_THROWS_AS(wick1.spinfree(false), std::invalid_argument);
+        REQUIRE_THROWS_AS(wick1.spinfree(false), Exception);
       }
 
       SEQUANT_PRAGMA_GCC(diagnostic pop)
@@ -1335,7 +1335,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
         REQUIRE(result.as<Sum>().size() == 5);
 
         // clang-format off
-        auto expected = parse_expr(
+        auto expected = deserialize(
             "- h{;;p_3} ã{p_1<i_1>,p_3;p_2<i_2>,p_3}"
             "+ h{;;p_3} δ{p_1<i_1>;a_1<i_1>} δ{a_2<i_2>;p_2<i_2>} ã{p_3;p_3} s{a_1<i_1>;a_2<i_2>} "
             "- h{;;a_1} δ{a_2<i_2>;p_2<i_2>} ã{p_1<i_1>;a_1} s{a_1;a_2<i_2>} "
@@ -1350,8 +1350,8 @@ TEST_CASE("wick", "[algorithms][wick]") {
       // quasi-diagonal example, with some indices in covariant expression
       // fixed, as in the pair-specific densities used to produce PNOs
       {
-        auto expr = sequant::parse_expr(
-            L"1/16 t{i1,i2;a3,a4}:A-C-S * ã{a3,a4;i1,i2} * ã{;a1} * ã{a2} * "
+        auto expr = sequant::deserialize(
+            L"1/8 t{i1,i2;a3,a4}:A-C-S * ã{a3,a4;i1,i2} * ã{;a1} * ã{a2} * "
             L"t{a5,a6;i3,i4}:A-C-S * ã{i3,i4;a5,a6}");
         auto resetter = sequant::set_scoped_default_context(
             Context(get_default_context())
@@ -1363,7 +1363,8 @@ TEST_CASE("wick", "[algorithms][wick]") {
         // std::wcout << "SO RDM: " << rdm1_so.to_latex() << "\n";
         REQUIRE_THAT(
             rdm1_so,
-            EquivalentTo(L"1/2 t{i1,i2;a3,a1}:A-C-S t{a3,a2;i1,i2;}:A-C-S"));
+            EquivalentTo(
+                L"t{a_2,a_3;i_2,i_1}:A-C-S * t{i_2,i_1;a_1,a_3}:A-C-S"));
 
         // N.B. closed-shell spintrace expects ext groups to consist of pairs of
         // indices
@@ -1374,16 +1375,17 @@ TEST_CASE("wick", "[algorithms][wick]") {
         // std::wcout << "SF RDM: " << rdm1_sf.to_latex() << "\n";
         REQUIRE_THAT(
             rdm1_sf,
-            EquivalentTo(L"2 t{i1,i2;a1,a3}:N-C-S t{a2,a3;i1,i2;}:N-C-S - "
-                         L"t{i1,i2;a3,a1}:N-C-S t{a2,a3;i1,i2;}:N-C-S  + 2 "
-                         L"t{i1,i2;a3,a1}:N-C-S t{a3,a2;i1,i2;}:N-C-S - "
-                         L"t{i1,i2;a1,a3}:N-C-S t{a3,a2;i1,i2;}:N-C-S"));
+            EquivalentTo(
+                L"4 t{i_1,i_2;a_1,a_3}:N-C-S * t{a_3,a_2;i_2,i_1}:N-C-S + 4 "
+                L"t{i_1,i_2;a_3,a_1}:N-C-S * t{a_3,a_2;i_1,i_2}:N-C-S - 2 "
+                L"t{i_1,i_2;a_1,a_3}:N-C-S * t{a_3,a_2;i_1,i_2}:N-C-S - 2 "
+                L"t{i_1,i_2;a_3,a_1}:N-C-S * t{a_3,a_2;i_2,i_1}:N-C-S"));
       }
 
       // triples variant of the previous case
       {
-        auto expr = sequant::parse_expr(
-            L"1/1296 t{i1,i2,i3;a1,a2,a3}:A-C-S * ã{a1,a2,a3;i1,i2,i3} * "
+        auto expr = sequant::deserialize(
+            L"1/216 t{i1,i2,i3;a1,a2,a3}:A-C-S * ã{a1,a2,a3;i1,i2,i3} * "
             L"ã{;a4} * ã{a5} * "
             L"t{a6,a7,a8;i4,i5,i6}:A-C-S * ã{i4,i5,i6;a6,a7,a8}");
         auto resetter = sequant::set_scoped_default_context(
@@ -1395,8 +1397,9 @@ TEST_CASE("wick", "[algorithms][wick]") {
         // std::wcout << expr.to_latex() << "\n";
         auto rdm1_so = sequant::mbpt::tensor::vac_av(expr);
         // std::wcout << "SO RDM: " << rdm1_so.to_latex() << "\n";
-        REQUIRE_THAT(rdm1_so, EquivalentTo(L"1/12 t{i1,i2,i3;a4,a1,a2}:A-C-S "
-                                           L"t{a5,a1,a2;i1,i2,i3;}:A-C-S"));
+        REQUIRE_THAT(rdm1_so,
+                     EquivalentTo(L"1/2 t{a_1,a_2,a_5;i_3,i_2,i_1}:A-C-S * "
+                                  L"t{i_3,i_2,i_1;a_1,a_2,a_4}:A-C-S"));
 
         // N.B. closed-shell spintrace expects ext groups to consist of pairs of
         // indices
@@ -1407,42 +1410,42 @@ TEST_CASE("wick", "[algorithms][wick]") {
         // std::wcout << "ST RDM: " << rdm1_sf.to_latex() << "\n";
 
         const std::wstring expected =
-            L"-2/3 t{i_1,i_2,i_3;a_4,a_1,a_2}:N-C-S * "
-            L"t{a_5,a_1,a_2;i_1,i_3,i_2}:N-C-S - 2/3 "
-            L"t{i_1,i_2,i_3;a_4,a_2,a_1}:N-C-S * "
-            L"t{a_5,a_1,a_2;i_2,i_3,i_1}:N-C-S + 1/3 "
-            L"t{i_2,i_1,i_3;a_4,a_1,a_2}:N-C-S * "
-            L"t{a_5,a_1,a_2;i_1,i_3,i_2}:N-C-S - 2/3 "
-            L"t{i_1,i_2,i_3;a_4,a_2,a_1}:N-C-S * "
-            L"t{a_5,a_1,a_2;i_3,i_1,i_2}:N-C-S + 1/3 "
-            L"t{i_2,i_1,i_3;a_4,a_2,a_1}:N-C-S * "
-            L"t{a_5,a_1,a_2;i_3,i_1,i_2}:N-C-S + 1/3 "
-            L"t{i_1,i_2,i_3;a_4,a_2,a_1}:N-C-S * "
-            L"t{a_5,a_1,a_2;i_2,i_1,i_3}:N-C-S + 1/3 "
-            L"t{i_3,i_1,i_2;a_4,a_1,a_2}:N-C-S * "
-            L"t{a_5,a_1,a_2;i_2,i_3,i_1}:N-C-S - 2/3 "
-            L"t{i_2,i_1,i_3;a_4,a_2,a_1}:N-C-S * "
-            L"t{a_5,a_1,a_2;i_2,i_1,i_3}:N-C-S - 2/3 "
-            L"t{i_3,i_1,i_2;a_4,a_2,a_1}:N-C-S * "
-            L"t{a_5,a_1,a_2;i_3,i_1,i_2}:N-C-S - 2/3 "
-            L"t{i_2,i_1,i_3;a_4,a_1,a_2}:N-C-S * "
-            L"t{a_5,a_1,a_2;i_3,i_1,i_2}:N-C-S - 2/3 "
-            L"t{i_3,i_1,i_2;a_4,a_1,a_2}:N-C-S * "
-            L"t{a_5,a_1,a_2;i_2,i_1,i_3}:N-C-S - 2/3 "
-            L"t{i_2,i_1,i_3;a_4,a_2,a_1}:N-C-S * "
-            L"t{a_5,a_1,a_2;i_1,i_3,i_2}:N-C-S + 1/3 "
-            L"t{i_3,i_1,i_2;a_4,a_2,a_1}:N-C-S * "
-            L"t{a_5,a_1,a_2;i_1,i_3,i_2}:N-C-S - 2/3 "
-            L"t{i_3,i_1,i_2;a_4,a_1,a_2}:N-C-S * "
-            L"t{a_5,a_1,a_2;i_1,i_3,i_2}:N-C-S + 1/3 "
-            L"t{i_1,i_2,i_3;a_4,a_1,a_2}:N-C-S * "
-            L"t{a_5,a_1,a_2;i_3,i_1,i_2}:N-C-S + 4/3 "
-            L"t{i_1,i_2,i_3;a_4,a_2,a_1}:N-C-S * "
-            L"t{a_5,a_1,a_2;i_1,i_3,i_2}:N-C-S + 4/3 "
-            L"t{i_3,i_1,i_2;a_4,a_1,a_2}:N-C-S * "
-            L"t{a_5,a_1,a_2;i_3,i_1,i_2}:N-C-S + 4/3 "
-            L"t{i_2,i_1,i_3;a_4,a_1,a_2}:N-C-S * "
-            L"t{a_5,a_1,a_2;i_2,i_1,i_3}:N-C-S";
+            L"8 t{a_1,a_5,a_2;i_3,i_1,i_2}:N-C-S * "
+            L"t{i_3,i_2,i_1;a_1,a_2,a_4}:N-C-S + 2 "
+            L"t{a_1,a_2,a_5;i_1,i_3,i_2}:N-C-S * "
+            L"t{i_3,i_2,i_1;a_1,a_2,a_4}:N-C-S - 4 "
+            L"t{a_1,a_5,a_2;i_3,i_1,i_2}:N-C-S * "
+            L"t{i_2,i_3,i_1;a_1,a_2,a_4}:N-C-S + 2 "
+            L"t{a_1,a_2,a_5;i_3,i_1,i_2}:N-C-S * "
+            L"t{i_1,i_2,i_3;a_1,a_2,a_4}:N-C-S - 4 "
+            L"t{a_1,a_2,a_5;i_3,i_1,i_2}:N-C-S * "
+            L"t{i_3,i_2,i_1;a_1,a_2,a_4}:N-C-S - 4 "
+            L"t{a_1,a_5,a_2;i_3,i_1,i_2}:N-C-S * "
+            L"t{i_3,i_1,i_2;a_1,a_2,a_4}:N-C-S + 2 "
+            L"t{a_1,a_5,a_2;i_3,i_1,i_2}:N-C-S * "
+            L"t{i_1,i_3,i_2;a_1,a_2,a_4}:N-C-S - 4 "
+            L"t{a_1,a_2,a_5;i_1,i_3,i_2}:N-C-S * "
+            L"t{i_3,i_1,i_2;a_1,a_2,a_4}:N-C-S + 8 "
+            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-C-S * "
+            L"t{i_1,i_2,i_3;a_1,a_2,a_4}:N-C-S - 4 "
+            L"t{a_1,a_2,a_5;i_1,i_3,i_2}:N-C-S * "
+            L"t{i_1,i_2,i_3;a_1,a_2,a_4}:N-C-S + 8 "
+            L"t{a_1,a_2,a_5;i_1,i_3,i_2}:N-C-S * "
+            L"t{i_1,i_3,i_2;a_1,a_2,a_4}:N-C-S - 4 "
+            L"t{a_1,a_5,a_2;i_3,i_1,i_2}:N-C-S * "
+            L"t{i_1,i_2,i_3;a_1,a_2,a_4}:N-C-S - 4 "
+            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-C-S * "
+            L"t{i_3,i_2,i_1;a_1,a_2,a_4}:N-C-S + 2 "
+            L"t{a_1,a_5,a_2;i_3,i_1,i_2}:N-C-S * "
+            L"t{i_2,i_1,i_3;a_1,a_2,a_4}:N-C-S - 4 "
+            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-C-S * "
+            L"t{i_2,i_1,i_3;a_1,a_2,a_4}:N-C-S + 2 "
+            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-C-S * "
+            L"t{i_3,i_1,i_2;a_1,a_2,a_4}:N-C-S + 2 "
+            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-C-S * "
+            L"t{i_2,i_3,i_1;a_1,a_2,a_4}:N-C-S - 4 "
+            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-C-S * "
+            L"t{i_1,i_3,i_2;a_1,a_2,a_4}:N-C-S";
         REQUIRE_THAT(rdm1_sf, EquivalentTo(expected));
       }
     }

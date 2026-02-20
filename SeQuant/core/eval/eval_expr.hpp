@@ -129,6 +129,11 @@ class EvalExpr {
   [[nodiscard]] std::wstring to_latex() const noexcept;
 
   ///
+  /// \return The type id of the Expr held by this object.
+  ///
+  [[nodiscard]] Expr::type_id_type type_id() const noexcept;
+
+  ///
   /// \return True if the ExprPtr held by this object is Tensor and equivalently
   ///         the result of evaluation is tensor.
   ///
@@ -334,8 +339,9 @@ concept leaf_node_evaluator =
 }  // namespace meta
 
 namespace impl {
-FullBinaryNode<EvalExpr> binarize(ExprPtr const&);
-}
+
+FullBinaryNode<EvalExpr> binarize(ExprPtr const&, IndexSet const& uncontract);
+}  // namespace impl
 
 ///
 /// \brief A type alias for the types that satisfy the eval_node concept.
@@ -346,24 +352,36 @@ using EvalNode = FullBinaryNode<T>;
 static_assert(meta::eval_node<EvalNode<EvalExpr>>);
 static_assert(!meta::can_evaluate<EvalNode<EvalExpr>>);
 
-///
 /// Creates a binary tree for evaluation.
-///
+/// @param expr an expression to binarize
+/// @param external additional external (uncontracted) indices; only needed for
+///        indices that appear more than once in @p expr (i.e., hyperindices)
+///        but should not be contracted. Indices appearing once are
+///        automatically treated as external.
 template <typename ExprT = EvalExpr>
   requires std::is_constructible_v<ExprT, EvalExpr>
-FullBinaryNode<ExprT> binarize(ExprPtr const& expr) {
-  if constexpr (std::is_same_v<ExprT, EvalExpr>) return impl::binarize(expr);
-  return transform_node(impl::binarize(expr),
-                        [](auto&& val) { return ExprT{val}; });
+FullBinaryNode<ExprT> binarize(ExprPtr const& expr,
+                               IndexSet const& external = {}) {
+  SEQUANT_ASSERT(
+      ranges::all_of(external, [](const auto& idx) { return idx.nonnull(); }));
+  auto tree = impl::binarize(expr, external);
+  if constexpr (std::is_same_v<ExprT, EvalExpr>)
+    return tree;
+  else
+    return transform_node(std::move(tree),
+                          [](auto&& val) { return ExprT{val}; });
 }
 
-///
-/// Creates a binary tree for evaluation.
-///
+/// Creates a binary tree for evaluation from a ResultExpr.
+/// External indices are deduced from @p res (its non-null slots).
 template <typename ExprT = EvalExpr>
   requires std::is_constructible_v<ExprT, EvalExpr>
 FullBinaryNode<ExprT> binarize(ResultExpr const& res) {
-  FullBinaryNode<ExprT> tree = binarize<ExprT>(res.expression());
+  // collect result indices so they are not contracted in the expression tree
+  IndexSet uncontract;
+  for (auto&& ix : res.indices()) uncontract.emplace(ix);
+
+  FullBinaryNode<ExprT> tree = binarize<ExprT>(res.expression(), uncontract);
 
   const bool is_scalar =
       res.bra().empty() && res.ket().empty() && res.aux().empty();

@@ -7,9 +7,11 @@
 
 #include <complex>
 #include <memory>
+#include <ranges>
+#include <type_traits>
+
 #include <range/v3/range/access.hpp>
 #include <range/v3/range/traits.hpp>
-#include <type_traits>
 
 namespace sequant {
 
@@ -315,19 +317,6 @@ struct has_memfn_to_latex<T, std::void_t<decltype(static_cast<std::wstring>(
 template <typename T>
 static constexpr bool has_memfn_to_latex_v = has_memfn_to_latex<T>::value;
 
-///////// has_memfn_to_wolfram /////////
-
-template <typename T, typename = std::void_t<>>
-struct has_memfn_to_wolfram : public std::false_type {};
-
-template <typename T>
-struct has_memfn_to_wolfram<T, std::void_t<decltype(static_cast<std::wstring>(
-                                   std::declval<const T &>().to_wolfram()))>>
-    : public std::true_type {};
-
-template <typename T>
-static constexpr bool has_memfn_to_wolfram_v = has_memfn_to_wolfram<T>::value;
-
 /// is_range
 
 namespace is_range_impl {  // detects presence of std::{begin,end}
@@ -505,6 +494,127 @@ struct std_array_size<std::array<T, N>>
 
 template <typename T>
 constexpr inline std::size_t std_array_size_v = std_array_size<T>::value;
+
+/// make_immutable_t
+/// Contrary to std::add_const_t, this works as one would expect on reference
+/// types
+template <typename T>
+using make_immutable_t = std::conditional_t<
+    std::is_lvalue_reference_v<T>,
+    std::add_lvalue_reference_t<std::add_const_t<std::remove_reference_t<T>>>,
+    std::conditional_t<std::is_rvalue_reference_v<T>,
+                       std::add_rvalue_reference_t<
+                           std::add_const_t<std::remove_reference_t<T>>>,
+                       std::add_const_t<T>>>;
+static_assert(std::is_const_v<make_immutable_t<float>>);
+static_assert(std::is_const_v<make_immutable_t<const float>>);
+static_assert(std::is_lvalue_reference_v<make_immutable_t<float &>>);
+static_assert(std::is_lvalue_reference_v<make_immutable_t<const float &>>);
+static_assert(
+    std::is_const_v<std::remove_reference_t<make_immutable_t<float &>>>);
+static_assert(
+    std::is_const_v<std::remove_reference_t<make_immutable_t<const float &>>>);
+static_assert(std::is_rvalue_reference_v<make_immutable_t<float &&>>);
+static_assert(std::is_rvalue_reference_v<make_immutable_t<const float &&>>);
+static_assert(
+    std::is_const_v<std::remove_reference_t<make_immutable_t<float &&>>>);
+static_assert(
+    std::is_const_v<std::remove_reference_t<make_immutable_t<const float &&>>>);
+
+/// make_mutable_t
+/// Contrary to std::remove_const_t, this works as one would expect on reference
+/// types
+template <typename T>
+using make_mutable_t = std::conditional_t<
+    std::is_lvalue_reference_v<T>,
+    std::add_lvalue_reference_t<
+        std::remove_const_t<std::remove_reference_t<T>>>,
+    std::conditional_t<std::is_rvalue_reference_v<T>,
+                       std::add_rvalue_reference_t<
+                           std::remove_const_t<std::remove_reference_t<T>>>,
+                       std::remove_const_t<T>>>;
+static_assert(!std::is_const_v<make_mutable_t<float>>);
+static_assert(!std::is_const_v<make_mutable_t<const float>>);
+static_assert(std::is_lvalue_reference_v<make_mutable_t<float &>>);
+static_assert(std::is_lvalue_reference_v<make_mutable_t<const float &>>);
+static_assert(
+    !std::is_const_v<std::remove_reference_t<make_mutable_t<float &>>>);
+static_assert(
+    !std::is_const_v<std::remove_reference_t<make_mutable_t<const float &>>>);
+static_assert(std::is_rvalue_reference_v<make_mutable_t<float &&>>);
+static_assert(std::is_rvalue_reference_v<make_mutable_t<const float &&>>);
+static_assert(
+    !std::is_const_v<std::remove_reference_t<make_mutable_t<float &&>>>);
+static_assert(
+    !std::is_const_v<std::remove_reference_t<make_mutable_t<const float &&>>>);
+
+/// is_immutable_v
+/// Contrary to std::is_const_v, this works as one would expect on reference
+/// types
+template <typename T>
+constexpr bool is_immutable_v = std::is_const_v<std::remove_reference_t<T>>;
+static_assert(is_immutable_v<const float>);
+static_assert(!is_immutable_v<float>);
+static_assert(is_immutable_v<const float &>);
+static_assert(!is_immutable_v<float &>);
+static_assert(is_immutable_v<const float &&>);
+static_assert(!is_immutable_v<float &&>);
+
+/// mimic_constness_t
+/// Makes To const, if From is const, else makes To non-const
+template <typename From, typename To>
+using mimic_constness_t =
+    std::conditional_t<is_immutable_v<From>, make_immutable_t<To>,
+                       make_mutable_t<To>>;
+static_assert(
+    std::same_as<mimic_constness_t<const int &, float &>, const float &>);
+static_assert(std::same_as<mimic_constness_t<int &, const float &>, float &>);
+
+///
+/// True if @p T is a range of rank @p Rank whose value type is convertible to
+/// @p V.
+///
+/// A rank of 0 means @p T is directly convertible to @p V.
+/// A rank of 1 means @p T is a range of values convertible to @p V.
+/// A rank of N means @p T is a range of ranges ... (N times) of values
+/// convertible to @p V.
+///
+template <typename, typename, size_t>
+constexpr bool range_of_rank{};
+
+template <typename T, typename V>
+constexpr bool range_of_rank<T, V, 0> = std::is_convertible_v<T, V>;
+
+template <std::ranges::range Rng, typename V, size_t Rank>
+constexpr bool range_of_rank<Rng, V, Rank> =
+    range_of_rank<std::ranges::range_value_t<Rng>, V, (Rank - 1)>;
+
+///
+/// True if @tparam Rng is a range whose value type is convertible
+/// to @tparam V .
+///
+/// A rank of 0 means @tparam Rng is directly convertible to @tparam V.
+/// A rank of 1 means @tparam Rng is a range of values convertible to @tparam V.
+/// A rank of N means @tparam Rng is a range of ranges ... (N times) of values
+/// convertible to @tparam V.
+///
+template <typename Rng, typename V, size_t Rank = 1>
+concept range_of = range_of_rank<Rng, V, Rank>;
+
+///
+/// True if @tparam Rng is a range whose value type is convertible
+/// to @tparam V and the size (std::ranges::distance) is known in constant time.
+///
+/// A rank of 0 means @tparam Rng is directly convertible to @tparam V.
+/// A rank of 1 means @tparam Rng is a range of values convertible to @tparam V.
+/// A rank of N means @tparam Rng is a range of ranges ... (N times) of values
+/// convertible to @tparam V.
+///
+/// @see https://en.cppreference.com/w/cpp/ranges/sized_range.html
+///
+template <typename Rng, typename V, size_t Rank = 1>
+concept sized_range_of =
+    std::ranges::sized_range<Rng> && range_of<Rng, V, Rank>;
 
 }  // namespace meta
 }  // namespace sequant

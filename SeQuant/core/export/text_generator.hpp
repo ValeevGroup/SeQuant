@@ -307,8 +307,7 @@ class TextGenerator : public Generator<Context> {
       return repr;
     }
 
-    throw std::runtime_error(
-        "Unsupported expression type in TextGenerator::compute");
+    throw Exception("Unsupported expression type in TextGenerator::compute");
   }
 };
 
