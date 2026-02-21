@@ -86,7 +86,6 @@ class compute_eomcc_openshell {
 
   void operator()(bool print) {
     SEQUANT_ASSERT(get_default_context().spbasis() == SPBasis::Spinor);
-    // generate so EOM eqs like how Ajay constructed them
     timer_pool.start(N);
     std::vector<ExprPtr> eqvec;
     switch (type) {
@@ -102,7 +101,7 @@ class compute_eomcc_openshell {
     std::wcout << std::boolalpha
                << "EOM-CC Equations [type=" << type2wstr.at(type)
                << ", CC rank=" << N
-               << ", manifold=" << sequant::to_wstring(manifold) << "]"
+               << ", manifold=" << sequant::toUtf16(manifold) << "]"
                << " computed in " << timer_pool.read(N) << " s\n";
 
     if (print) std::wcout << "\n";
@@ -140,7 +139,7 @@ class compute_all_openshell {
   EqnType type;
 
  public:
-  compute_all_openshell(size_t nmax, const std::string& manifold,
+  compute_all_openshell(size_t nmax, const std::string manifold,
                         EqnType t = EqnType::right)
       : NMAX(nmax), manifold(manifold), type(t) {}
 
@@ -202,6 +201,7 @@ int main(int argc, char* argv[]) {
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 
+  // change to true to print stats
   Logger::instance().wick_stats = false;
 
   // call the compute_all function here
