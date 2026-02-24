@@ -86,6 +86,7 @@ class compute_eomcc_openshell {
 
   void operator()(bool print) {
     SEQUANT_ASSERT(get_default_context().spbasis() == SPBasis::Spinor);
+    // generate so EOM eqs
     timer_pool.start(N);
     std::vector<ExprPtr> eqvec;
     switch (type) {
@@ -108,26 +109,79 @@ class compute_eomcc_openshell {
     // to_latex_align(eqvec[i], 20, 1) << "\n";
 
     std::vector<std::vector<ExprPtr>> os_st_eom;
+    std::vector<container::svector<container::svector<SlottedIndex>>>
+        ext_index_groups_from_A;
+    std::vector<size_t> n_paired_from_A;
 
     for (size_t i = 0; i < eqvec.size(); ++i) {
       if (eqvec[i] == nullptr) continue;
+
+      Tensor A = eqvec[i].is<Sum>() ? eqvec[i]->at(0)->at(0)->as<Tensor>()
+                                    : eqvec[i]->at(0)->as<Tensor>();
+      std::wcout << "\n R[" << i << "]: A tensor (first tensor): \n"
+                 << to_latex_align(ex<Tensor>(A)) << "\n";
+      // std::wcout << "before spintracing: " << to_latex_align(eqvec[i], 20, 1)
+      // << "\n";
+
+      ext_index_groups_from_A.push_back(external_indices(A));
+      n_paired_from_A.push_back(std::min(A.bra_rank(), A.ket_rank()));
+
       std::wcout << "R[" << i << "] has " << eqvec[i].size() << " terms\n";
       os_st_eom.push_back(open_shell_CC_spintrace(eqvec[i]));
+      // std::wcout << to_latex_align(os_st_eom[i][0], 20, 1) << "\n";
     }
 
+    const auto alpha_qns = IndexSpace::QuantumNumbers{1};
     for (size_t i = 0; i < os_st_eom.size(); ++i) {
       const auto& spin_cases = os_st_eom[i];
-
-      if (eqvec[i] != nullptr) {
-        std::wcout << "original (spin-orbital): " << eqvec[i]->size()
-                   << " terms\n";
-      }
+      const auto& ext_from_A = ext_index_groups_from_A[i];
+      const auto n_groups = ext_from_A.size();
+      const size_t n_paired = n_paired_from_A[i];
+      const size_t n_half = n_groups - n_paired;
+      const bool orbit_encoding =
+          (spin_cases.size() == (n_paired + 1) * (n_half + 1));
 
       for (size_t sc = 0; sc < spin_cases.size(); ++sc) {
-        std::wcout << "case [" << sc << "] : " << spin_cases[sc]->size()
+        container::svector<int> spins(n_groups, 0);
+        if (orbit_encoding) {
+          const size_t i_f = sc % (n_paired + 1);
+          const size_t i_h = sc / (n_paired + 1);
+          if (i_f > 0)
+            std::fill(spins.begin() + (n_paired - i_f),
+                      spins.begin() + n_paired, 1);
+          if (i_h > 0)
+            std::fill(spins.begin() + (n_groups - i_h), spins.end(), 1);
+        } else if (sc > 0) {
+          std::fill(spins.end() - sc, spins.end(), 1);
+        }
+
+        std::wstring spin_label;
+        for (size_t g = 0; g < ext_from_A.size(); ++g)
+          for (const auto& slotted : ext_from_A[g]) {
+            const auto spin_idx = spins[g] == 0
+                                      ? make_spinalpha(slotted.index())
+                                      : make_spinbeta(slotted.index());
+            spin_label += (spin_idx.space().qns() == alpha_qns) ? L"α" : L"β";
+          }
+
+        std::wcout << "\n R[" << i << "] case [" << sc << "] spin=("
+                   << spin_label << ") : " << spin_cases[sc]->size()
                    << " terms\n";
-        // std::wcout << "check os_st_eom eqs: "
-        // <<to_latex_align(spin_cases[sc], 20, 1) << "\n";
+
+        std::wcout << "  ext_index_groups (" << ext_from_A.size()
+                   << " groups):\n";
+        for (size_t g = 0; g < ext_from_A.size(); ++g) {
+          std::wcout << "    group[" << g << "]: ";
+          for (const auto& slotted : ext_from_A[g]) {
+            const auto spin_idx = spins[g] == 0
+                                      ? make_spinalpha(slotted.index())
+                                      : make_spinbeta(slotted.index());
+            std::wcout << spin_idx.to_latex() << "("
+                       << ((spin_idx.space().qns() == alpha_qns) ? L"α" : L"β")
+                       << ") ";
+          }
+          std::wcout << "\n";
+        }
       }
     }
   }
@@ -205,5 +259,6 @@ int main(int argc, char* argv[]) {
   Logger::instance().wick_stats = false;
 
   // call the compute_all function here
-  compute_all_openshell{NMAX, exc_manifold, str2type.at(eqn_type)}(print);
+  // compute_all_openshell{NMAX, exc_manifold, str2type.at(eqn_type)}(print);
+  compute_eomcc_openshell{NMAX, exc_manifold, str2type.at(eqn_type)}(print);
 }

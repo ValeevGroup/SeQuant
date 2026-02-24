@@ -206,5 +206,6 @@ int main(int argc, char* argv[]) {
   Logger::instance().wick_stats = false;
 
   // call the compute_all function here
-  compute_all{NMAX, exc_manifold, str2type.at(eqn_type)}(print);
+  // compute_all{NMAX, exc_manifold, str2type.at(eqn_type)}(print);
+  compute_eomcc{NMAX, exc_manifold, str2type.at(eqn_type)}(print);
 }
