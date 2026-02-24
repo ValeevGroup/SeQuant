@@ -481,7 +481,8 @@ Container<Group<SlottedIndex>> external_indices(const Expr& expr) {
       // indices are conjugated (reversed). Hence, we have to swap the
       // determined bra and ket indices.
       for (std::size_t i = 0; i < num_braket; ++i) {
-        std::swap(cont.at(i).at(0).index(), cont.at(i).at(1).index());
+        if (cont.at(i).size() == 2)
+          std::swap(cont.at(i).at(0).index(), cont.at(i).at(1).index());
       }
     }
 
