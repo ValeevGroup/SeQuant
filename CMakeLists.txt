@@ -53,10 +53,6 @@ set(CMAKE_CXX_STANDARD 20 CACHE STRING "C++ ISO Standard version")
 if (CMAKE_CXX_STANDARD LESS 20)
     message(FATAL_ERROR "C++ 2020 ISO Standard or higher is required to build SeQuant")
 endif ()
-# C++20 is only configurable via compile features with cmake 3.12 and older
-if (CMAKE_CXX_STANDARD EQUAL 20 AND CMAKE_VERSION VERSION_LESS 3.12.0)
-    cmake_minimum_required(VERSION 3.12.0)
-endif ()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF CACHE BOOL "Whether to use extensions of C++ ISO Standard version")
 
