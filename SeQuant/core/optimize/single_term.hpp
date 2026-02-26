@@ -6,11 +6,15 @@
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/external/bliss/graph.hh>
 
 #include <range/v3/view.hpp>
 
 #include <bit>
 #include <type_traits>
+#include <unordered_set>
+#include "SeQuant/core/algorithm.hpp"
+#include "SeQuant/core/tensor_canonicalizer.hpp"
 
 namespace sequant::opt {
 ///
@@ -42,7 +46,7 @@ auto constexpr flops_counter(has_index_extent auto&& ixex) {
 ///
 struct OptRes {
   /// Free indices remaining upon evaluation
-  container::svector<sequant::Index> indices;
+  IndexSet indices;
 
   /// The flops count of evaluation
   double flops;
@@ -51,13 +55,37 @@ struct OptRes {
   EvalSequence sequence;
 };
 
+// constexpr auto cse_hasher = [](TNMeta const& data) -> size_t {
+//   return data.hash_value();
+// };
+
+// constexpr auto cse_equal = [](TNMeta const& left,
+//                               TNMeta const& right) -> bool {
+//   return bliss::ConstGraphCmp::cmp(*left.graph, *right.graph) == 0;
+// };
+
+struct SubNetHash {
+  size_t operator()(
+      TensorNetwork::SlotCanonicalizationMetadata const& data) const noexcept {
+    return data.hash_value();
+  }
+};
+
+struct SubNetEqual {
+  bool operator()(
+      TensorNetwork::SlotCanonicalizationMetadata const& left,
+      TensorNetwork::SlotCanonicalizationMetadata const& right) const {
+    return bliss::ConstGraphCmp::cmp(*left.graph, *right.graph) == 0;
+  }
+};
+
 template <typename CostFn>
   requires requires(CostFn&& fn, decltype(OptRes::indices) const& ixs) {
     { std::forward<CostFn>(fn)(ixs, ixs, ixs) } -> std::floating_point;
   }
 EvalSequence single_term_opt_impl(TensorNetwork const& network,
                                   meta::range_of<Index> auto const& tidxs,
-                                  CostFn&& cost_fn) {
+                                  CostFn&& cost_fn, bool subnet_cse) {
   using ranges::views::concat;
   using ranges::views::indirect;
   using ranges::views::transform;
@@ -65,6 +93,10 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
   auto const nt = network.tensors().size();
   if (nt == 1) return EvalSequence{0};
   if (nt == 2) return EvalSequence{0, 1, -1};
+
+  using CanonSubnets =
+      std::unordered_set<TensorNetwork::SlotCanonicalizationMetadata,
+                         SubNetHash, SubNetEqual>;
 
   container::vector<OptRes> results((size_t{1} << nt));
 
@@ -85,6 +117,17 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
       if (std::popcount(i) == 1)
         results[i].sequence.emplace_back(std::countr_zero(i));
       // else results[i].sequence is left uninitialized
+    }
+  }
+
+  {
+    container::vector<CanonSubnets> subnets_for_cse((size_t{1} << nt));
+    for (size_t n = 0; n < subnets_for_cse.size(); ++n) {
+      if (std::popcount(n) < 2) continue;
+      auto ts = bits::on_bits_index(n) | bits::sieve(network.tensors());
+      auto tn = TensorNetwork{ts};
+      subnets_for_cse[n].emplace(tn.canonicalize_slots(
+          TensorCanonicalizer::cardinal_tensor_labels(), &results[n].indices));
     }
   }
 
@@ -126,10 +169,11 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
 ///         the order of tensors in the network as original as possible.
 ///
 template <has_index_extent IdxToSz>
-EvalSequence single_term_opt(TensorNetwork const& network, IdxToSz&& idxsz) {
+EvalSequence single_term_opt(TensorNetwork const& network, IdxToSz&& idxsz,
+                             bool subnet_cse) {
   auto cost_fn = flops_counter(std::forward<IdxToSz>(idxsz));
   decltype(OptRes::indices) tidxs{};
-  return single_term_opt_impl(network, tidxs, cost_fn);
+  return single_term_opt_impl(network, tidxs, cost_fn, subnet_cse);
 }
 
 }  // namespace detail
@@ -142,7 +186,8 @@ EvalSequence single_term_opt(TensorNetwork const& network, IdxToSz&& idxsz) {
 /// @note @c prod is assumed to consist of only Tensor expressions
 ///
 template <has_index_extent IdxToSz>
-ExprPtr single_term_opt(Product const& prod, IdxToSz&& idxsz) {
+ExprPtr single_term_opt(Product const& prod, IdxToSz&& idxsz,
+                        bool subnet_cse = false) {
   using ranges::views::filter;
   using ranges::views::reverse;
 
@@ -152,7 +197,7 @@ ExprPtr single_term_opt(Product const& prod, IdxToSz&& idxsz) {
   auto const tensors =
       prod | filter(&ExprPtr::template is<Tensor>) | ranges::to_vector;
   auto seq = detail::single_term_opt(TensorNetwork{tensors},
-                                     std::forward<IdxToSz>(idxsz));
+                                     std::forward<IdxToSz>(idxsz), subnet_cse);
   auto result = container::svector<ExprPtr>{};
   for (auto i : seq)
     if (i == -1) {
