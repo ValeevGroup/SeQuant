@@ -11,6 +11,8 @@ add_executable(sequant_benchmarks
         "wick.cpp"
 )
 
+set_target_properties(sequant_benchmarks PROPERTIES CXX_SCAN_FOR_MODULES OFF)
+
 # The benchmark implementations contain a bunch of same-name symbol definition that
 # ought to be local to the individual translation unit. Hence, we must not combine
 # all of them into a single translation unit.
