@@ -2,8 +2,8 @@
 // Created by Robert Adam on 2023-09-21
 //
 
-#ifndef SEQUANT_CORE_PARSE_V1_AST_HPP
-#define SEQUANT_CORE_PARSE_V1_AST_HPP
+#ifndef SEQUANT_CORE_IO_SERIALIZATION_V1_AST_HPP
+#define SEQUANT_CORE_IO_SERIALIZATION_V1_AST_HPP
 
 #define BOOST_SPIRIT_X3_UNICODE
 #include <boost/fusion/include/adapt_struct.hpp>
@@ -154,4 +154,4 @@ BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Sum, summands);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::ResultExpr, lhs,
                           rhs);
 
-#endif  // SEQUANT_CORE_PARSE_AST_V1_HPP
+#endif  // SEQUANT_CORE_IO_SERIALIZATION_V1_AST_HPP

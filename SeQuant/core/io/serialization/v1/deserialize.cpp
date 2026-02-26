@@ -9,6 +9,7 @@
 #include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/io/serialization/v1/ast.hpp>
 #include <SeQuant/core/io/serialization/v1/ast_conversions.hpp>
+#include <SeQuant/core/io/serialization/v1/error.hpp>
 #include <SeQuant/core/io/serialization/v1/semantic_actions.hpp>
 #include <SeQuant/core/space.hpp>
 
@@ -184,10 +185,9 @@ struct ErrorHandler {
 
   void operator()(Iterator where, std::string expected) const {
     std::size_t offset = std::distance(begin, where);
-    throw SerializationError(offset, 1,
-                             std::string("Parse failure at offset ") +
-                                 std::to_string(offset) + ": expected " +
-                                 expected);
+    throw Error(offset, 1,
+                std::string("Parse failure at offset ") +
+                    std::to_string(offset) + ": expected " + expected);
   }
 };
 
@@ -210,15 +210,15 @@ AST parse(const StartRule &start, std::wstring_view input,
 
     if (!success) {
       // Normally, this shouldn't happen as any error should itself throw a
-      // SerializationError already
-      throw SerializationError(
-          0, input.size(), "Parsing was unsuccessful for an unknown reason");
+      // Error already
+      throw Error(0, input.size(),
+                  "Parsing was unsuccessful for an unknown reason");
     }
     if (begin != input.end()) {
       // This should also not happen as the parser requires matching EOI
-      throw SerializationError(std::distance(input.begin(), begin),
-                               std::distance(begin, input.end()),
-                               "Couldn't parse the entire input");
+      throw Error(std::distance(input.begin(), begin),
+                  std::distance(begin, input.end()),
+                  "Couldn't parse the entire input");
     }
   } catch ([[maybe_unused]] const boost::spirit::x3::expectation_failure<
            iterator_type> &e) {
