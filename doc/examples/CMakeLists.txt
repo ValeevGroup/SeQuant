@@ -34,6 +34,7 @@ foreach(current IN LISTS EXAMPLE_CODES)
     endif()
 
     target_link_libraries(${current_name} PRIVATE SeQuant)
+    set_target_properties(${current_name} PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 
     # Make sure the user sees as little from these as possible
     set_target_properties(${current_name}
