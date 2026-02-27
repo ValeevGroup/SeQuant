@@ -8,7 +8,7 @@ if (NOT SEQUANT_INTERNAL_SKIP_LONG_TESTS)
         # Single-Reference open-shell equation generation (spin-traced)
         "osstcc.cpp"
         # Equation-of-motion Coupled-Cluster
-        "eomcc.cpp -> 2 2h2p R|2 1h2p R|2 2h1p R|2 3h1p R| 2 4h2p R| 3 3h3p R"
+        "eomcc.cpp -> 2 2h2p R|2 1h2p R|2 2h1p R|2 3h1p R|2 1h3p R|2 4h2p R|3 3h3p R"
     )
 
     if (TARGET Eigen3::Eigen)
