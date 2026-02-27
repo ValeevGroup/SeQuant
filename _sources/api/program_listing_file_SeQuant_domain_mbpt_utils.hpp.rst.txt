@@ -1,0 +1,45 @@
+
+.. _program_listing_file_SeQuant_domain_mbpt_utils.hpp:
+
+Program Listing for File utils.hpp
+==================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_domain_mbpt_utils.hpp>` (``SeQuant/domain/mbpt/utils.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Ajay Melekamburath on 9/26/25.
+   //
+   
+   #ifndef SEQUANT_DOMAIN_MBPT_UTILS_HPP
+   #define SEQUANT_DOMAIN_MBPT_UTILS_HPP
+   
+   #include <SeQuant/core/expr.hpp>
+   #include <SeQuant/core/rational.hpp>
+   #include <SeQuant/core/runtime.hpp>
+   
+   #include <SeQuant/domain/mbpt/op.hpp>
+   
+   #include <range/v3/view.hpp>
+   
+   namespace sequant::mbpt {
+   
+   struct LSTOptions {
+     bool unitary = false;
+     std::optional<bool> use_commutators = std::nullopt;
+     bool skip_clone = false;
+   };
+   
+   // clang-format off
+   // clang-format on
+   ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank,
+               LSTOptions options = {});
+   
+   ExprPtr screen_vac_av(ExprPtr expr, bool skip_clone = false);
+   
+   }  // namespace sequant::mbpt
+   
+   #endif  // SEQUANT_DOMAIN_MBPT_UTILS_HPP

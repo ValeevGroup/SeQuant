@@ -1,0 +1,14 @@
+.. _exhale_define_macros_8hpp_1a3f44aaecfcceca7822356b73e3bcfa77:
+
+Define SEQUANT_STRINGIFY
+========================
+
+- Defined in :ref:`file_SeQuant_core_utility_macros.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SEQUANT_STRINGIFY
+   :project: SeQuant

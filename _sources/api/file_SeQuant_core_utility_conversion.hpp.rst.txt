@@ -1,0 +1,79 @@
+
+.. _file_SeQuant_core_utility_conversion.hpp:
+
+File conversion.hpp
+===================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_utility>` (``SeQuant/core/utility``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/utility/conversion.hpp``)
+----------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_utility_conversion.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/utility/exception.hpp`` (:ref:`file_SeQuant_core_utility_exception.hpp`)
+
+- ``charconv``
+
+- ``concepts`` (:ref:`file_SeQuant_core_io_concepts.hpp`)
+
+- ``string_view``
+
+- ``system_error``
+
+- ``typeinfo``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_index.hpp`
+
+- :ref:`file_SeQuant_core_runtime.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_class_classsequant_1_1_conversion_exception`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1ac5d65486cddd29770d1d001b01c81f8c`
+
+- :ref:`exhale_function_namespacesequant_1a00b0865e063b6f6d15c382750abf9149`
+

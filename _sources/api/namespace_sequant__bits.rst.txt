@@ -1,0 +1,34 @@
+
+.. _namespace_sequant__bits:
+
+Namespace sequant::bits
+=======================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1bits_1a24892a13c74e96a78713f4b3358e91bf`
+
+- :ref:`exhale_function_namespacesequant_1_1bits_1a891e329e5455ed53f805796f3003c94e`
+
+- :ref:`exhale_function_namespacesequant_1_1bits_1a99f473a0ceaeead77adfccb4dab7252e`
+
+- :ref:`exhale_function_namespacesequant_1_1bits_1aeb8fffda94763b6a9dd75e67ab0a6abf`
+
+- :ref:`exhale_function_namespacesequant_1_1bits_1a27643d767f9cb951b83c21314cbb91c4`
+
+- :ref:`exhale_function_namespacesequant_1_1bits_1a035ec45622998247bd8d110842a381b5`
+
+- :ref:`exhale_function_namespacesequant_1_1bits_1aad5c205eac6212ff9e3a04085d20d163`
+
+- :ref:`exhale_function_namespacesequant_1_1bits_1ac4058dc05938571ea579613a657dc87e`

@@ -1,0 +1,78 @@
+
+.. _file_SeQuant_core_export_text_generator.hpp:
+
+File text_generator.hpp
+=======================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_export>` (``SeQuant/core/export``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/export/text_generator.hpp``)
+-------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_export_text_generator.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/export/context.hpp`` (:ref:`file_SeQuant_core_export_context.hpp`)
+
+- ``SeQuant/core/export/generator.hpp`` (:ref:`file_SeQuant_core_export_generator.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/core/utility/string.hpp`` (:ref:`file_SeQuant_core_utility_string.hpp`)
+
+- ``range/v3/view/join.hpp``
+
+- ``range/v3/view/transform.hpp``
+
+- ``sstream``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``string_view``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_export_itf.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_text_generator_context`
+
+- :ref:`exhale_class_classsequant_1_1_text_generator`
+

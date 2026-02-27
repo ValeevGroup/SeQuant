@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ac85d29e6ef81d2006f8d95c4b0990c79:
+
+Template Function sequant::count_cycles
+=======================================
+
+- Defined in :ref:`file_SeQuant_core_utility_permutation.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::count_cycles(Seq0&&, const Seq1&)
+   :project: SeQuant

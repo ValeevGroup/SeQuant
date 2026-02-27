@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1_1antisymm_1a813265822e89cf0e898741935dfc7b55:
+
+Function sequant::mbpt::antisymm::spin_sum
+==========================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_antisymmetrizer.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::antisymm::spin_sum(std::vector<Index>, std::vector<Index>, ExprPtr, bool)
+   :project: SeQuant

@@ -1,0 +1,600 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html">
+        <link rel="prefetch" href="../_static/logo.svg" as="image">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>Struct WickTheorem::NontensorWickState - SeQuant Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/bootstrap-treeview/bootstrap-treeview.min.css?v=8176a87d" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=821744c5" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --sidebar-item-font-size: 0.95em;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">SeQuant Documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="../_static/logo.svg" alt="Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">User</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/getting_started/index.html">Getting started</a><input aria-label="Toggle navigation of Getting started" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/wick.html">Wick’s Theorem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/index_spaces.html">Register Index Spaces</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/operators.html">Operators</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../user/getting_started/installing.html">Installation</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/guide/index.html">User Guide</a><input aria-label="Toggle navigation of User Guide" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/operator.html">Operator Interface for Symbolic Many-Body Algebra</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/cc.html">Coupled-Cluster Class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/io.html">I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/evaluation.html">Evaluation Trace Analysis Using Nushell</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../developer/index.html">Developer docs</a><input aria-label="Toggle navigation of Developer docs" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../developer/documentation.html">Documentation Guide</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">API reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Maintainer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../maintainer/index.html">Maintainer docs</a><input aria-label="Toggle navigation of Maintainer docs" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../maintainer/release.html">Release Guide</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">See Also</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/tiledarray">TiledArray</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/mpqc">Massively Parallel Quantum Chemistry</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io">Valeev Research Group</a></li>
+</ul>
+
+</div></div>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="../_sources/api/structsequant_1_1_wick_theorem_1_1_nontensor_wick_state.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="struct-wicktheorem-nontensorwickstate">
+<span id="exhale-struct-structsequant-1-1-wick-theorem-1-1-nontensor-wick-state"></span><h1>Struct WickTheorem::NontensorWickState<a class="headerlink" href="#struct-wicktheorem-nontensorwickstate" title="Link to this heading">¶</a></h1>
+<ul class="simple">
+<li><p>Defined in <a class="reference internal" href="file_SeQuant_core_wick.hpp.html#file-sequant-core-wick-hpp"><span class="std std-ref">File wick.hpp</span></a></p></li>
+</ul>
+<section id="nested-relationships">
+<h2>Nested Relationships<a class="headerlink" href="#nested-relationships" title="Link to this heading">¶</a></h2>
+<p>This struct is a nested type of <a class="reference internal" href="classsequant_1_1_wick_theorem.html#exhale-class-classsequant-1-1-wick-theorem"><span class="std std-ref">Template Class WickTheorem</span></a>.</p>
+</section>
+<section id="struct-documentation">
+<h2>Struct Documentation<a class="headerlink" href="#struct-documentation" title="Link to this heading">¶</a></h2>
+<dl class="cpp struct">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant11WickTheorem18NontensorWickStateE">
+<span id="_CPPv3N7sequant11WickTheorem18NontensorWickStateE"></span><span id="_CPPv2N7sequant11WickTheorem18NontensorWickStateE"></span><span id="sequant::WickTheorem::NontensorWickState"></span><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state"></span><span class="k"><span class="pre">struct</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">NontensorWickState</span></span></span><a class="headerlink" href="#_CPPv4N7sequant11WickTheorem18NontensorWickStateE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>carries state down the stack of recursive calls </p>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-functions">Public Functions</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4I0ENK7sequant11WickTheorem18NontensorWickState9uptri_nopEDa1T1T">
+<span id="_CPPv3I0ENK7sequant11WickTheorem18NontensorWickState9uptri_nopE1T1T"></span><span id="_CPPv2I0ENK7sequant11WickTheorem18NontensorWickState9uptri_nopE1T1T"></span><span class="k"><span class="pre">template</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">typename</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">T</span></span></span><span class="p"><span class="pre">&gt;</span></span><br /><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1a44ee29246b6b9e272c11bb7cc29543b1"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">uptri_nop</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4I0ENK7sequant11WickTheorem18NontensorWickState9uptri_nopEDa1T1T" title="sequant::WickTheorem::NontensorWickState::uptri_nop::T"><span class="n"><span class="pre">T</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">i</span></span>, <a class="reference internal" href="#_CPPv4I0ENK7sequant11WickTheorem18NontensorWickState9uptri_nopEDa1T1T" title="sequant::WickTheorem::NontensorWickState::uptri_nop::T"><span class="n"><span class="pre">T</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">j</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4I0ENK7sequant11WickTheorem18NontensorWickState9uptri_nopEDa1T1T" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4I0ENK7sequant11WickTheorem18NontensorWickState8uptri_opEDa1T1T">
+<span id="_CPPv3I0ENK7sequant11WickTheorem18NontensorWickState8uptri_opE1T1T"></span><span id="_CPPv2I0ENK7sequant11WickTheorem18NontensorWickState8uptri_opE1T1T"></span><span class="k"><span class="pre">template</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">typename</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">T</span></span></span><span class="p"><span class="pre">&gt;</span></span><br /><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1a7648fc13e90fccbd7659d0e2b8a9c76e"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">uptri_op</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4I0ENK7sequant11WickTheorem18NontensorWickState8uptri_opEDa1T1T" title="sequant::WickTheorem::NontensorWickState::uptri_op::T"><span class="n"><span class="pre">T</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">i</span></span>, <a class="reference internal" href="#_CPPv4I0ENK7sequant11WickTheorem18NontensorWickState8uptri_opEDa1T1T" title="sequant::WickTheorem::NontensorWickState::uptri_op::T"><span class="n"><span class="pre">T</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">j</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4I0ENK7sequant11WickTheorem18NontensorWickState8uptri_opEDa1T1T" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant11WickTheorem18NontensorWickState18NontensorWickStateERK11WickTheoremI1SERK22NormalOperatorSequenceI1SE">
+<span id="_CPPv3N7sequant11WickTheorem18NontensorWickState18NontensorWickStateERK11WickTheoremI1SERK22NormalOperatorSequenceI1SE"></span><span id="_CPPv2N7sequant11WickTheorem18NontensorWickState18NontensorWickStateERK11WickTheoremI1SERK22NormalOperatorSequenceI1SE"></span><span id="sequant::WickTheorem::NontensorWickState::NontensorWickState__WickTheorem:S:CR.NormalOperatorSequence:S:CR"></span><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1a56f6ac865994407a1132c94b5ccfc260"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">NontensorWickState</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="n"><span class="pre">WickTheorem</span></span><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">S</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">wt</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_normal_operator_sequence.html#_CPPv4I_10StatisticsEN7sequant22NormalOperatorSequenceE" title="sequant::NormalOperatorSequence"><span class="n"><span class="pre">NormalOperatorSequence</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">S</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">nopseq</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState18NontensorWickStateERK11WickTheoremI1SERK22NormalOperatorSequenceI1SE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant11WickTheorem18NontensorWickState18NontensorWickStateERK18NontensorWickState">
+<span id="_CPPv3N7sequant11WickTheorem18NontensorWickState18NontensorWickStateERK18NontensorWickState"></span><span id="_CPPv2N7sequant11WickTheorem18NontensorWickState18NontensorWickStateERK18NontensorWickState"></span><span id="sequant::WickTheorem::NontensorWickState::NontensorWickState__NontensorWickStateCR"></span><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1aace304623b5ca54aa872c73508ec8110"></span><span class="sig-name descname"><span class="n"><span class="pre">NontensorWickState</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState18NontensorWickStateERK18NontensorWickState" title="sequant::WickTheorem::NontensorWickState::NontensorWickState"><span class="n"><span class="pre">NontensorWickState</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">delete</span></span><a class="headerlink" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState18NontensorWickStateERK18NontensorWickState" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant11WickTheorem18NontensorWickState18NontensorWickStateERR18NontensorWickState">
+<span id="_CPPv3N7sequant11WickTheorem18NontensorWickState18NontensorWickStateERR18NontensorWickState"></span><span id="_CPPv2N7sequant11WickTheorem18NontensorWickState18NontensorWickStateERR18NontensorWickState"></span><span id="sequant::WickTheorem::NontensorWickState::NontensorWickState__NontensorWickStateRR"></span><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1a7f1ca6eea246acf28105d95c0aec982d"></span><span class="sig-name descname"><span class="n"><span class="pre">NontensorWickState</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState18NontensorWickStateERR18NontensorWickState" title="sequant::WickTheorem::NontensorWickState::NontensorWickState"><span class="n"><span class="pre">NontensorWickState</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">delete</span></span><a class="headerlink" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState18NontensorWickStateERR18NontensorWickState" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant11WickTheorem18NontensorWickStateaSERK18NontensorWickState">
+<span id="_CPPv3N7sequant11WickTheorem18NontensorWickStateaSERK18NontensorWickState"></span><span id="_CPPv2N7sequant11WickTheorem18NontensorWickStateaSERK18NontensorWickState"></span><span id="sequant::WickTheorem::NontensorWickState::assign-operator__NontensorWickStateCR"></span><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1a32e5e836013c37b98f6fd21a1b932663"></span><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickStateE" title="sequant::WickTheorem::NontensorWickState"><span class="n"><span class="pre">NontensorWickState</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="k"><span class="pre">operator</span></span><span class="o"><span class="pre">=</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickStateE" title="sequant::WickTheorem::NontensorWickState"><span class="n"><span class="pre">NontensorWickState</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">delete</span></span><a class="headerlink" href="#_CPPv4N7sequant11WickTheorem18NontensorWickStateaSERK18NontensorWickState" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant11WickTheorem18NontensorWickStateaSERR18NontensorWickState">
+<span id="_CPPv3N7sequant11WickTheorem18NontensorWickStateaSERR18NontensorWickState"></span><span id="_CPPv2N7sequant11WickTheorem18NontensorWickStateaSERR18NontensorWickState"></span><span id="sequant::WickTheorem::NontensorWickState::assign-operator__NontensorWickStateRR"></span><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1a6e58d5ecc1f8f895798295b963392239"></span><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickStateE" title="sequant::WickTheorem::NontensorWickState"><span class="n"><span class="pre">NontensorWickState</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="k"><span class="pre">operator</span></span><span class="o"><span class="pre">=</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickStateE" title="sequant::WickTheorem::NontensorWickState"><span class="n"><span class="pre">NontensorWickState</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">delete</span></span><a class="headerlink" href="#_CPPv4N7sequant11WickTheorem18NontensorWickStateaSERR18NontensorWickState" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant11WickTheorem18NontensorWickState27make_target_partner_indicesEv">
+<span id="_CPPv3NK7sequant11WickTheorem18NontensorWickState27make_target_partner_indicesEv"></span><span id="_CPPv2NK7sequant11WickTheorem18NontensorWickState27make_target_partner_indicesEv"></span><span id="sequant::WickTheorem::NontensorWickState::make_target_partner_indicesC"></span><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1a148773ae32e69e2e80424a52c869940e"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">make_target_partner_indices</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant11WickTheorem18NontensorWickState27make_target_partner_indicesEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>“applies” this-&gt;contractions to the partner index pairs from this-&gt;wick.input_partner_indices_ to produce the current target list of partner indices </p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>std::pair <code class="docutils literal notranslate"><span class="pre">{target_partner_indices,</span> <span class="pre">ncycles}</span></code>, where <code class="docutils literal notranslate"><span class="pre">target_partner_indices</span></code> is the current target list of partner indices and <code class="docutils literal notranslate"><span class="pre">ncycles</span></code> is the number of contraction cycles </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant11WickTheorem18NontensorWickState27init_topological_partitionsEv">
+<span id="_CPPv3N7sequant11WickTheorem18NontensorWickState27init_topological_partitionsEv"></span><span id="_CPPv2N7sequant11WickTheorem18NontensorWickState27init_topological_partitionsEv"></span><span id="sequant::WickTheorem::NontensorWickState::init_topological_partitions"></span><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1aaddf2588561178a4e3a6da3c1de02e04"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">init_topological_partitions</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState27init_topological_partitionsEv" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4I0EN7sequant11WickTheorem18NontensorWickState7connectEbRKN9container7svectorINSt6bitsetI14max_input_sizeEEEERK6CursorRK6Cursor">
+<span id="_CPPv3I0EN7sequant11WickTheorem18NontensorWickState7connectERKN9container7svectorINSt6bitsetI14max_input_sizeEEEERK6CursorRK6Cursor"></span><span id="_CPPv2I0EN7sequant11WickTheorem18NontensorWickState7connectERKN9container7svectorINSt6bitsetI14max_input_sizeEEEERK6CursorRK6Cursor"></span><span class="k"><span class="pre">template</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">typename</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Cursor</span></span></span><span class="p"><span class="pre">&gt;</span></span><br /><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1ae8c539b3f82fa94587d8f92270b29bf1"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">connect</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1a096d649df6109569c16ac6fd1cb6f853.html#_CPPv4I0_NSt6size_tEEN7sequant9container7svectorE" title="sequant::container::svector"><span class="n"><span class="pre">svector</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">bitset</span></span><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">max_input_size</span></span><span class="p"><span class="pre">&gt;</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">target_nop_connections</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant11WickTheorem18NontensorWickState7connectEbRKN9container7svectorINSt6bitsetI14max_input_sizeEEEERK6CursorRK6Cursor" title="sequant::WickTheorem::NontensorWickState::connect::Cursor"><span class="n"><span class="pre">Cursor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">op1_cursor</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant11WickTheorem18NontensorWickState7connectEbRKN9container7svectorINSt6bitsetI14max_input_sizeEEEERK6CursorRK6Cursor" title="sequant::WickTheorem::NontensorWickState::connect::Cursor"><span class="n"><span class="pre">Cursor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">op2_cursor</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I0EN7sequant11WickTheorem18NontensorWickState7connectEbRKN9container7svectorINSt6bitsetI14max_input_sizeEEEERK6CursorRK6Cursor" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Updates connectivity if contraction satisfies target connectivity. </p>
+<p>If the target connectivity will be violated by this contraction, keep the state unchanged and return false </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4I0EN7sequant11WickTheorem18NontensorWickState10disconnectEvRKN9container7svectorINSt6bitsetI14max_input_sizeEEEERK6CursorRK6Cursor">
+<span id="_CPPv3I0EN7sequant11WickTheorem18NontensorWickState10disconnectERKN9container7svectorINSt6bitsetI14max_input_sizeEEEERK6CursorRK6Cursor"></span><span id="_CPPv2I0EN7sequant11WickTheorem18NontensorWickState10disconnectERKN9container7svectorINSt6bitsetI14max_input_sizeEEEERK6CursorRK6Cursor"></span><span class="k"><span class="pre">template</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">typename</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Cursor</span></span></span><span class="p"><span class="pre">&gt;</span></span><br /><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1a46338f9b3cd9487c5d75272a087ac77c"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">disconnect</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1a096d649df6109569c16ac6fd1cb6f853.html#_CPPv4I0_NSt6size_tEEN7sequant9container7svectorE" title="sequant::container::svector"><span class="n"><span class="pre">svector</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">bitset</span></span><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">max_input_size</span></span><span class="p"><span class="pre">&gt;</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">target_nop_connections</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant11WickTheorem18NontensorWickState10disconnectEvRKN9container7svectorINSt6bitsetI14max_input_sizeEEEERK6CursorRK6Cursor" title="sequant::WickTheorem::NontensorWickState::disconnect::Cursor"><span class="n"><span class="pre">Cursor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">op1_cursor</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant11WickTheorem18NontensorWickState10disconnectEvRKN9container7svectorINSt6bitsetI14max_input_sizeEEEERK6CursorRK6Cursor" title="sequant::WickTheorem::NontensorWickState::disconnect::Cursor"><span class="n"><span class="pre">Cursor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">op2_cursor</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I0EN7sequant11WickTheorem18NontensorWickState10disconnectEvRKN9container7svectorINSt6bitsetI14max_input_sizeEEEERK6CursorRK6Cursor" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Updates connectivity when contraction is reversed. </p>
+</dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-members">Public Members</p>
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant11WickTheorem18NontensorWickState4wickE">
+<span id="_CPPv3N7sequant11WickTheorem18NontensorWickState4wickE"></span><span id="_CPPv2N7sequant11WickTheorem18NontensorWickState4wickE"></span><span id="sequant::WickTheorem::NontensorWickState::wick__WickTheorem:S:CR"></span><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1a149c99553960f1173d05f492a7e30bd1"></span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="n"><span class="pre">WickTheorem</span></span><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">S</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">wick</span></span></span><a class="headerlink" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState4wickE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>the <a class="reference internal" href="classsequant_1_1_wick_theorem.html#classsequant_1_1_wick_theorem"><span class="std std-ref">WickTheorem</span></a> object using this </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant11WickTheorem18NontensorWickState6nopseqE">
+<span id="_CPPv3N7sequant11WickTheorem18NontensorWickState6nopseqE"></span><span id="_CPPv2N7sequant11WickTheorem18NontensorWickState6nopseqE"></span><span id="sequant::WickTheorem::NontensorWickState::nopseq__NormalOperatorSequence:S:"></span><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1a6138de91257a9fd89610e908e771238a"></span><a class="reference internal" href="classsequant_1_1_normal_operator_sequence.html#_CPPv4I_10StatisticsEN7sequant22NormalOperatorSequenceE" title="sequant::NormalOperatorSequence"><span class="n"><span class="pre">NormalOperatorSequence</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">S</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">nopseq</span></span></span><a class="headerlink" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState6nopseqE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>current state of operator sequence </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant11WickTheorem18NontensorWickState11nopseq_sizeE">
+<span id="_CPPv3N7sequant11WickTheorem18NontensorWickState11nopseq_sizeE"></span><span id="_CPPv2N7sequant11WickTheorem18NontensorWickState11nopseq_sizeE"></span><span id="sequant::WickTheorem::NontensorWickState::nopseq_size__std::s"></span><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1ab698b6924962719be817edef817a50d8"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">nopseq_size</span></span></span><a class="headerlink" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState11nopseq_sizeE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>current size of nopseq </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant11WickTheorem18NontensorWickState3ctxE">
+<span id="_CPPv3N7sequant11WickTheorem18NontensorWickState3ctxE"></span><span id="_CPPv2N7sequant11WickTheorem18NontensorWickState3ctxE"></span><span id="sequant::WickTheorem::NontensorWickState::ctx__Context"></span><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1a5fab2d20943033b999d746c44ac2dbfa"></span><a class="reference internal" href="classsequant_1_1_context.html#_CPPv4N7sequant7ContextE" title="sequant::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">ctx</span></span></span><a class="headerlink" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState3ctxE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>current context </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant11WickTheorem18NontensorWickState2spE">
+<span id="_CPPv3N7sequant11WickTheorem18NontensorWickState2spE"></span><span id="_CPPv2N7sequant11WickTheorem18NontensorWickState2spE"></span><span id="sequant::WickTheorem::NontensorWickState::sp__Product"></span><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1a0aa7b4b17c01c837a9d9ba5cf497d125"></span><a class="reference internal" href="classsequant_1_1_product.html#_CPPv4N7sequant7ProductE" title="sequant::Product"><span class="n"><span class="pre">Product</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">sp</span></span></span><a class="headerlink" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState2spE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>current prefactor </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant11WickTheorem18NontensorWickState15sp_initial_sizeE">
+<span id="_CPPv3N7sequant11WickTheorem18NontensorWickState15sp_initial_sizeE"></span><span id="_CPPv2N7sequant11WickTheorem18NontensorWickState15sp_initial_sizeE"></span><span id="sequant::WickTheorem::NontensorWickState::sp_initial_size__std::s"></span><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1a318db61b4f1b637d0f5ef3dd65d7fc58"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">sp_initial_size</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">0</span></span><a class="headerlink" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState15sp_initial_sizeE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>size of prefactor at the start </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant11WickTheorem18NontensorWickState12contractionsE">
+<span id="_CPPv3N7sequant11WickTheorem18NontensorWickState12contractionsE"></span><span id="_CPPv2N7sequant11WickTheorem18NontensorWickState12contractionsE"></span><span id="sequant::WickTheorem::NontensorWickState::contractions__container::svector:std::pair:Op:S:.Op:S:::"></span><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1a9c3ac6c4906e914ddccd208a63df8bb6"></span><span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1a096d649df6109569c16ac6fd1cb6f853.html#_CPPv4I0_NSt6size_tEEN7sequant9container7svectorE" title="sequant::container::svector"><span class="n"><span class="pre">svector</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">pair</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="classsequant_1_1_op.html#_CPPv4I_10StatisticsEN7sequant2OpE" title="sequant::Op"><span class="n"><span class="pre">Op</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">S</span></span><span class="p"><span class="pre">&gt;</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_op.html#_CPPv4I_10StatisticsEN7sequant2OpE" title="sequant::Op"><span class="n"><span class="pre">Op</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">S</span></span><span class="p"><span class="pre">&gt;</span></span><span class="p"><span class="pre">&gt;</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">contractions</span></span></span><a class="headerlink" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState12contractionsE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>current list of indices of contracted {qpann,qpcre} ops </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant11WickTheorem18NontensorWickState5levelE">
+<span id="_CPPv3N7sequant11WickTheorem18NontensorWickState5levelE"></span><span id="_CPPv2N7sequant11WickTheorem18NontensorWickState5levelE"></span><span id="sequant::WickTheorem::NontensorWickState::level__i"></span><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1a6324b425a341d43352b816ff703cc5c9"></span><span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">level</span></span></span><a class="headerlink" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState5levelE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>level in recursive wick call stack </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant11WickTheorem18NontensorWickState14left_op_offsetE">
+<span id="_CPPv3N7sequant11WickTheorem18NontensorWickState14left_op_offsetE"></span><span id="_CPPv2N7sequant11WickTheorem18NontensorWickState14left_op_offsetE"></span><span id="sequant::WickTheorem::NontensorWickState::left_op_offset__s"></span><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1a921a950e75f64775cfb93273c2e22366"></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">left_op_offset</span></span></span><a class="headerlink" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState14left_op_offsetE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>where to start looking for contractions (ordinal in the current state of nopseq) </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant11WickTheorem18NontensorWickState10count_onlyE">
+<span id="_CPPv3N7sequant11WickTheorem18NontensorWickState10count_onlyE"></span><span id="_CPPv2N7sequant11WickTheorem18NontensorWickState10count_onlyE"></span><span id="sequant::WickTheorem::NontensorWickState::count_only__b"></span><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1abddbe7640df6c37122537d030ac5f0da"></span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">count_only</span></span></span><a class="headerlink" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState10count_onlyE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>if true, only track the total number of summands in the result (i.e. 1 (the normal product) + the number of contractions (if normal wick result is wanted) or the number of complete constractions (if want complete contractions only) </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant11WickTheorem18NontensorWickState5countE">
+<span id="_CPPv3N7sequant11WickTheorem18NontensorWickState5countE"></span><span id="_CPPv2N7sequant11WickTheorem18NontensorWickState5countE"></span><span id="sequant::WickTheorem::NontensorWickState::count__std::atomic:s:"></span><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1a9b8499d774f0d76b3b352d76a715e99c"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">atomic</span></span><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">size_t</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">count</span></span></span><a class="headerlink" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState5countE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>if count_only is true, will count the total number of terms </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant11WickTheorem18NontensorWickState15nop_connectionsE">
+<span id="_CPPv3N7sequant11WickTheorem18NontensorWickState15nop_connectionsE"></span><span id="_CPPv2N7sequant11WickTheorem18NontensorWickState15nop_connectionsE"></span><span id="sequant::WickTheorem::NontensorWickState::nop_connections__container::svector:std::bitset:max_input_size::"></span><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1a215c061149d180cdb360106e73e20567"></span><span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1a096d649df6109569c16ac6fd1cb6f853.html#_CPPv4I0_NSt6size_tEEN7sequant9container7svectorE" title="sequant::container::svector"><span class="n"><span class="pre">svector</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">bitset</span></span><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">max_input_size</span></span><span class="p"><span class="pre">&gt;</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">nop_connections</span></span></span><a class="headerlink" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState15nop_connectionsE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>bitmask of connections for each nop (1 = connected) </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant11WickTheorem18NontensorWickState20nop_adjacency_matrixE">
+<span id="_CPPv3N7sequant11WickTheorem18NontensorWickState20nop_adjacency_matrixE"></span><span id="_CPPv2N7sequant11WickTheorem18NontensorWickState20nop_adjacency_matrixE"></span><span id="sequant::WickTheorem::NontensorWickState::nop_adjacency_matrix__container::svector:s:"></span><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1ac8ac7ed3108c7e74e0d472ef66dc00d1"></span><span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1a096d649df6109569c16ac6fd1cb6f853.html#_CPPv4I0_NSt6size_tEEN7sequant9container7svectorE" title="sequant::container::svector"><span class="n"><span class="pre">svector</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">size_t</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">nop_adjacency_matrix</span></span></span><a class="headerlink" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState20nop_adjacency_matrixE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>number of connections between each nop, only lower triangle is kept </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant11WickTheorem18NontensorWickState16nop_nconnectionsE">
+<span id="_CPPv3N7sequant11WickTheorem18NontensorWickState16nop_nconnectionsE"></span><span id="_CPPv2N7sequant11WickTheorem18NontensorWickState16nop_nconnectionsE"></span><span id="sequant::WickTheorem::NontensorWickState::nop_nconnections__container::svector:s:"></span><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1a09af40e74e9a40f22f6e912d03f4911d"></span><span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1a096d649df6109569c16ac6fd1cb6f853.html#_CPPv4I0_NSt6size_tEEN7sequant9container7svectorE" title="sequant::container::svector"><span class="n"><span class="pre">svector</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">size_t</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">nop_nconnections</span></span></span><a class="headerlink" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState16nop_nconnectionsE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>for each <a class="reference internal" href="classsequant_1_1_normal_operator.html#classsequant_1_1_normal_operator"><span class="std std-ref">NormalOperator</span></a> specifies how many connections it currently has </p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>exists to avoid the need to traverse nop_adjacency_matrix </p>
+</div>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant11WickTheorem18NontensorWickState14nop_partitionsE">
+<span id="_CPPv3N7sequant11WickTheorem18NontensorWickState14nop_partitionsE"></span><span id="_CPPv2N7sequant11WickTheorem18NontensorWickState14nop_partitionsE"></span><span id="sequant::WickTheorem::NontensorWickState::nop_partitions__container::svector:container::set:s::"></span><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1a74e57704b05afd5bcd8af00ff8d17cad"></span><span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1a096d649df6109569c16ac6fd1cb6f853.html#_CPPv4I0_NSt6size_tEEN7sequant9container7svectorE" title="sequant::container::svector"><span class="n"><span class="pre">svector</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1a6e1d981e45b5ca1bf699b963962792f8.html#_CPPv4I00EN7sequant9container3setE" title="sequant::container::set"><span class="n"><span class="pre">set</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">size_t</span></span><span class="p"><span class="pre">&gt;</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">nop_partitions</span></span></span><a class="headerlink" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState14nop_partitionsE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>current state of nop partitions (will only match contents of nop_to_partition before any contractions have occurred)<ul class="simple">
+<li><p>when a normal operator is connected it’s removed from the partition</p></li>
+<li><p>when it is disconnected fully it’s re-added to the partition </p></li>
+</ul>
+</p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant11WickTheorem18NontensorWickState24op_partition_cdeg_matrixE">
+<span id="_CPPv3N7sequant11WickTheorem18NontensorWickState24op_partition_cdeg_matrixE"></span><span id="_CPPv2N7sequant11WickTheorem18NontensorWickState24op_partition_cdeg_matrixE"></span><span id="sequant::WickTheorem::NontensorWickState::op_partition_cdeg_matrix__container::svector:s:"></span><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1a902ce5385191e5be6fb75931e269f533"></span><span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1a096d649df6109569c16ac6fd1cb6f853.html#_CPPv4I0_NSt6size_tEEN7sequant9container7svectorE" title="sequant::container::svector"><span class="n"><span class="pre">svector</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">size_t</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">op_partition_cdeg_matrix</span></span></span><a class="headerlink" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState24op_partition_cdeg_matrixE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>contraction degree (number of contractions) between each topologically-equivalent group of <a class="reference internal" href="classsequant_1_1_op.html#classsequant_1_1_op"><span class="std std-ref">Op</span></a></p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant11WickTheorem18NontensorWickState26op_partition_ncontractionsE">
+<span id="_CPPv3N7sequant11WickTheorem18NontensorWickState26op_partition_ncontractionsE"></span><span id="_CPPv2N7sequant11WickTheorem18NontensorWickState26op_partition_ncontractionsE"></span><span id="sequant::WickTheorem::NontensorWickState::op_partition_ncontractions__container::svector:s:"></span><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1a9f805fe00d4009a89be976f63a97a111"></span><span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1a096d649df6109569c16ac6fd1cb6f853.html#_CPPv4I0_NSt6size_tEEN7sequant9container7svectorE" title="sequant::container::svector"><span class="n"><span class="pre">svector</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">size_t</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">op_partition_ncontractions</span></span></span><a class="headerlink" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState26op_partition_ncontractionsE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>for each <a class="reference internal" href="classsequant_1_1_op.html#classsequant_1_1_op"><span class="std std-ref">Op</span></a></p>
+</dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-static-functions">Public Static Functions</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4I0EN7sequant11WickTheorem18NontensorWickState4ntriEDa1T">
+<span id="_CPPv3I0EN7sequant11WickTheorem18NontensorWickState4ntriE1T"></span><span id="_CPPv2I0EN7sequant11WickTheorem18NontensorWickState4ntriE1T"></span><span class="k"><span class="pre">template</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">typename</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">T</span></span></span><span class="p"><span class="pre">&gt;</span></span><br /><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1a9f72ffe2958609b594bd2a943e71efca"></span><span class="k"><span class="pre">static</span></span><span class="w"> </span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">ntri</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4I0EN7sequant11WickTheorem18NontensorWickState4ntriEDa1T" title="sequant::WickTheorem::NontensorWickState::ntri::T"><span class="n"><span class="pre">T</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">n</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I0EN7sequant11WickTheorem18NontensorWickState4ntriEDa1T" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the number of elements in a lower triangle of an <code class="docutils literal notranslate"><span class="pre">n</span></code> by <code class="docutils literal notranslate"><span class="pre">n</span></code> matrix </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4I0EN7sequant11WickTheorem18NontensorWickState10lowtri_idxEDa1T1T">
+<span id="_CPPv3I0EN7sequant11WickTheorem18NontensorWickState10lowtri_idxE1T1T"></span><span id="_CPPv2I0EN7sequant11WickTheorem18NontensorWickState10lowtri_idxE1T1T"></span><span class="k"><span class="pre">template</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">typename</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">T</span></span></span><span class="p"><span class="pre">&gt;</span></span><br /><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1ad064fdab929fd4f91ed96535a37f27ac"></span><span class="k"><span class="pre">static</span></span><span class="w"> </span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">lowtri_idx</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4I0EN7sequant11WickTheorem18NontensorWickState10lowtri_idxEDa1T1T" title="sequant::WickTheorem::NontensorWickState::lowtri_idx::T"><span class="n"><span class="pre">T</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">i</span></span>, <a class="reference internal" href="#_CPPv4I0EN7sequant11WickTheorem18NontensorWickState10lowtri_idxEDa1T1T" title="sequant::WickTheorem::NontensorWickState::lowtri_idx::T"><span class="n"><span class="pre">T</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">j</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I0EN7sequant11WickTheorem18NontensorWickState10lowtri_idxEDa1T1T" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4I00EN7sequant11WickTheorem18NontensorWickState9uptri_idxEDa1T1T1U">
+<span id="_CPPv3I00EN7sequant11WickTheorem18NontensorWickState9uptri_idxE1T1T1U"></span><span id="_CPPv2I00EN7sequant11WickTheorem18NontensorWickState9uptri_idxE1T1T1U"></span><span class="k"><span class="pre">template</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">typename</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">T</span></span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="k"><span class="pre">typename</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">U</span></span></span><span class="p"><span class="pre">&gt;</span></span><br /><span class="target" id="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state_1a3a93cd0f1a638dc0e9ea72f6b0fa20ab"></span><span class="k"><span class="pre">static</span></span><span class="w"> </span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">uptri_idx</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4I00EN7sequant11WickTheorem18NontensorWickState9uptri_idxEDa1T1T1U" title="sequant::WickTheorem::NontensorWickState::uptri_idx::T"><span class="n"><span class="pre">T</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">i</span></span>, <a class="reference internal" href="#_CPPv4I00EN7sequant11WickTheorem18NontensorWickState9uptri_idxEDa1T1T1U" title="sequant::WickTheorem::NontensorWickState::uptri_idx::T"><span class="n"><span class="pre">T</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">j</span></span>, <a class="reference internal" href="#_CPPv4I00EN7sequant11WickTheorem18NontensorWickState9uptri_idxEDa1T1T1U" title="sequant::WickTheorem::NontensorWickState::uptri_idx::U"><span class="n"><span class="pre">U</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">n</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I00EN7sequant11WickTheorem18NontensorWickState9uptri_idxEDa1T1T1U" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+</dd></dl>
+
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, SeQuant developers
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            <div class="last-updated">
+              Last updated on Feb 27, 2026 8:35:02 PM</div>
+          </div>
+          <div class="right-details">
+            <div class="icons">
+              <a class="muted-link fa-brands fa-solid fa-github fa-2x" href="https://github.com/ValeevGroup/SeQuant" aria-label="GitHub"></a>
+              
+            </div>
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Struct WickTheorem::NontensorWickState</a><ul>
+<li><a class="reference internal" href="#nested-relationships">Nested Relationships</a></li>
+<li><a class="reference internal" href="#struct-documentation">Struct Documentation</a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickStateE"><code class="docutils literal notranslate"><span class="pre">sequant::WickTheorem::NontensorWickState</span></code></a><ul>
+<li><a class="reference internal" href="#_CPPv4I0ENK7sequant11WickTheorem18NontensorWickState9uptri_nopEDa1T1T"><code class="docutils literal notranslate"><span class="pre">uptri_nop()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4I0ENK7sequant11WickTheorem18NontensorWickState8uptri_opEDa1T1T"><code class="docutils literal notranslate"><span class="pre">uptri_op()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState18NontensorWickStateERK11WickTheoremI1SERK22NormalOperatorSequenceI1SE"><code class="docutils literal notranslate"><span class="pre">NontensorWickState()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState18NontensorWickStateERK18NontensorWickState"><code class="docutils literal notranslate"><span class="pre">NontensorWickState()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState18NontensorWickStateERR18NontensorWickState"><code class="docutils literal notranslate"><span class="pre">NontensorWickState()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickStateaSERK18NontensorWickState"><code class="docutils literal notranslate"><span class="pre">operator=()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickStateaSERR18NontensorWickState"><code class="docutils literal notranslate"><span class="pre">operator=()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant11WickTheorem18NontensorWickState27make_target_partner_indicesEv"><code class="docutils literal notranslate"><span class="pre">make_target_partner_indices()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState27init_topological_partitionsEv"><code class="docutils literal notranslate"><span class="pre">init_topological_partitions()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4I0EN7sequant11WickTheorem18NontensorWickState7connectEbRKN9container7svectorINSt6bitsetI14max_input_sizeEEEERK6CursorRK6Cursor"><code class="docutils literal notranslate"><span class="pre">connect()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4I0EN7sequant11WickTheorem18NontensorWickState10disconnectEvRKN9container7svectorINSt6bitsetI14max_input_sizeEEEERK6CursorRK6Cursor"><code class="docutils literal notranslate"><span class="pre">disconnect()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState4wickE"><code class="docutils literal notranslate"><span class="pre">wick</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState6nopseqE"><code class="docutils literal notranslate"><span class="pre">nopseq</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState11nopseq_sizeE"><code class="docutils literal notranslate"><span class="pre">nopseq_size</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState3ctxE"><code class="docutils literal notranslate"><span class="pre">ctx</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState2spE"><code class="docutils literal notranslate"><span class="pre">sp</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState15sp_initial_sizeE"><code class="docutils literal notranslate"><span class="pre">sp_initial_size</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState12contractionsE"><code class="docutils literal notranslate"><span class="pre">contractions</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState5levelE"><code class="docutils literal notranslate"><span class="pre">level</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState14left_op_offsetE"><code class="docutils literal notranslate"><span class="pre">left_op_offset</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState10count_onlyE"><code class="docutils literal notranslate"><span class="pre">count_only</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState5countE"><code class="docutils literal notranslate"><span class="pre">count</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState15nop_connectionsE"><code class="docutils literal notranslate"><span class="pre">nop_connections</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState20nop_adjacency_matrixE"><code class="docutils literal notranslate"><span class="pre">nop_adjacency_matrix</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState16nop_nconnectionsE"><code class="docutils literal notranslate"><span class="pre">nop_nconnections</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState14nop_partitionsE"><code class="docutils literal notranslate"><span class="pre">nop_partitions</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState24op_partition_cdeg_matrixE"><code class="docutils literal notranslate"><span class="pre">op_partition_cdeg_matrix</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant11WickTheorem18NontensorWickState26op_partition_ncontractionsE"><code class="docutils literal notranslate"><span class="pre">op_partition_ncontractions</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4I0EN7sequant11WickTheorem18NontensorWickState4ntriEDa1T"><code class="docutils literal notranslate"><span class="pre">ntri()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4I0EN7sequant11WickTheorem18NontensorWickState10lowtri_idxEDa1T1T"><code class="docutils literal notranslate"><span class="pre">lowtri_idx()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4I00EN7sequant11WickTheorem18NontensorWickState9uptri_idxEDa1T1T1U"><code class="docutils literal notranslate"><span class="pre">uptri_idx()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script src="../_static/bootstrap-treeview/bootstrap-treeview.min.js?v=6a1e96b4"></script>
+    </body>
+</html>

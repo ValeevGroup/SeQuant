@@ -1,0 +1,108 @@
+
+.. _program_listing_file_SeQuant_core_io_serialization_serialization.hpp:
+
+Program Listing for File serialization.hpp
+==========================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_io_serialization_serialization.hpp>` (``SeQuant/core/io/serialization/serialization.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_IO_SERIALIZATION_HPP
+   #define SEQUANT_CORE_IO_SERIALIZATION_HPP
+   
+   #include <SeQuant/core/attr.hpp>
+   #include <SeQuant/core/expr_fwd.hpp>
+   #include <SeQuant/core/index.hpp>
+   #include <SeQuant/core/op.hpp>
+   #include <SeQuant/core/utility/exception.hpp>
+   
+   #include <optional>
+   #include <string>
+   #include <string_view>
+   
+   namespace sequant::io::serialization {
+   
+   struct SerializationError : Exception {
+     std::size_t offset;
+     std::size_t length;
+   
+     SerializationError(std::size_t offset, std::size_t length,
+                        std::string message);
+   };
+   
+   enum class SerializationSyntax {
+     V1,
+   
+     Latest = V1
+   };
+   
+   struct DeserializationOptions {
+     std::optional<Symmetry> def_perm_symm = std::nullopt;
+     std::optional<BraKetSymmetry> def_braket_symm = std::nullopt;
+     std::optional<ColumnSymmetry> def_col_symm = std::nullopt;
+     SerializationSyntax syntax = SerializationSyntax::Latest;
+   };
+   
+   struct SerializationOptions {
+     bool annot_symm = true;
+     SerializationSyntax syntax = SerializationSyntax::Latest;
+   };
+   
+   #define SEQUANT_DECLARE_DESERIALIZATION_FUNC                          \
+     template <typename T = ExprPtr>                                     \
+     T from_string(std::string_view input,                               \
+                   const DeserializationOptions &options = {}) = delete; \
+     template <typename T = ExprPtr>                                     \
+     T from_string(std::wstring_view input,                              \
+                   const DeserializationOptions &options = {}) = delete;
+   
+   #define SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ExprType)    \
+     template <>                                                            \
+     ExprType from_string<ExprType>(std::string_view input,                 \
+                                    const DeserializationOptions &options); \
+     template <>                                                            \
+     ExprType from_string<ExprType>(std::wstring_view input,                \
+                                    const DeserializationOptions &options);
+   
+   SEQUANT_DECLARE_DESERIALIZATION_FUNC;
+   
+   SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ExprPtr);
+   SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ResultExpr);
+   
+   #define SEQUANT_DECLARE_SERIALIZATION_FUNC                          \
+     std::wstring to_string(const ResultExpr &expr,                    \
+                            const SerializationOptions &options = {}); \
+     std::wstring to_string(const ExprPtr &expr,                       \
+                            const SerializationOptions &options = {}); \
+     std::wstring to_string(const Expr &expr,                          \
+                            const SerializationOptions &options = {}); \
+     std::wstring to_string(const AbstractTensor &expr,                \
+                            const SerializationOptions &options = {}); \
+     std::wstring to_string(const Index &index,                        \
+                            const SerializationOptions &options = {}); \
+     template <Statistics S>                                           \
+     std::wstring to_string(const NormalOperator<S> &nop,              \
+                            const SerializationOptions &options = {});
+   
+   SEQUANT_DECLARE_SERIALIZATION_FUNC
+   
+   // Versioned variants
+   namespace v1 {
+   SEQUANT_DECLARE_DESERIALIZATION_FUNC;
+   
+   SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ExprPtr);
+   SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ResultExpr);
+   
+   SEQUANT_DECLARE_SERIALIZATION_FUNC
+   }  // namespace v1
+   
+   #undef SEQUANT_DECLARE_DESERIALIZATION_FUNC
+   #undef SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION
+   #undef SEQUANT_DECLARE_SERIALIZATION_FUNC
+   
+   }  // namespace sequant::io::serialization
+   
+   #endif  // SEQUANT_CORE_IO_SERIALIZATION_HPP

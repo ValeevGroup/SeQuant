@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1tensor__network_1af595a3ac0783ec5546089688d505ec69:
+
+Typedef sequant::tensor_network::VertexColor
+============================================
+
+- Defined in :ref:`file_SeQuant_core_tensor_network_typedefs.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::tensor_network::VertexColor
+   :project: SeQuant

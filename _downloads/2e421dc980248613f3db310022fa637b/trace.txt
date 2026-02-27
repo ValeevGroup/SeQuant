@@ -1,0 +1,800 @@
+Term | Begin | f{a_1;i_1}:N-C-S
+Eval | Tensor | 6003295ns | 36768B | f(a_1,i_1)
+Eval | Permute | 195598ns | 73536B | f(a_1,i_1)
+Term | End | f{a_1;i_1}:N-C-S
+Term | Begin | -1 f{i_2;i_1}:N-C-S * t{a_1;i_2}:N-C-S
+Eval | Tensor | 119317395ns | 10752B | f(i_2,i_1)
+Eval | Tensor | 1613ns | 36768B | t(a_1,i_2)
+Eval | Product | 6789630ns | 84288B | f(i_2,i_1) * t(a_1,i_2) -> I(a_1,i_1)
+Eval | Constant | 3296ns | 8B | {{{-1}}}
+Eval | Product | 199284ns | 73544B | I(a_1,i_1) * {{{-1}}} -> I(a_1,i_1)
+Eval | Permute | 755948ns | 73536B | I(a_1,i_1)
+Term | End | -1 f{i_2;i_1}:N-C-S * t{a_1;i_2}:N-C-S
+Eval | SumInplace | 3032326ns | 73536B | I(a_1,i_1)
+Term | Begin | 2 f{i_2;a_2}:N-C-S * t{a_1,a_2;i_1,i_2}:N-C-S
+Eval | Tensor | 6265660ns | 36768B | f(i_2,a_2)
+Eval | Tensor | 992ns | 88751616B | t(a_1,a_2,i_1,i_2)
+Eval | Product | 31665922ns | 88825152B | f(i_2,a_2) * t(a_1,a_2,i_1,i_2) -> I(a_1,i_1)
+Eval | Constant | 1122ns | 8B | {{{2}}}
+Eval | Product | 173254ns | 73544B | I(a_1,i_1) * {{{2}}} -> I(a_1,i_1)
+Eval | Permute | 1399418ns | 73536B | I(a_1,i_1)
+Term | End | 2 f{i_2;a_2}:N-C-S * t{a_1,a_2;i_1,i_2}:N-C-S
+Eval | SumInplace | 4580051ns | 73536B | I(a_1,i_1)
+Term | Begin | -1 g{i_2,a_1;i_1,a_2}:N-C-S * t{a_2;i_2}:N-C-S
+Eval | Tensor | 688998813ns | 88751616B | g(i_2,a_1,i_1,a_2)
+Eval | Tensor | 2424ns | 36768B | t(a_2,i_2)
+Eval | Product | 31669619ns | 88825152B | g(i_2,a_1,i_1,a_2) * t(a_2,i_2) -> I(a_1,i_1)
+Eval | Constant | 1553ns | 8B | {{{-1}}}
+Eval | Product | 181701ns | 73544B | I(a_1,i_1) * {{{-1}}} -> I(a_1,i_1)
+Eval | Permute | 1018213ns | 73536B | I(a_1,i_1)
+Term | End | -1 g{i_2,a_1;i_1,a_2}:N-C-S * t{a_2;i_2}:N-C-S
+Eval | SumInplace | 3777603ns | 73536B | I(a_1,i_1)
+Term | Begin | 2 g{i_2,a_1;a_2,i_1}:N-C-S * t{a_2;i_2}:N-C-S
+Eval | Tensor | 45684750ns | 84920312B | g(i_2,a_1,a_2,i_1)
+Eval | Tensor | 2004ns | 36768B | t(a_2,i_2)
+Eval | Product | 29504525ns | 84993848B | g(i_2,a_1,a_2,i_1) * t(a_2,i_2) -> I(a_1,i_1)
+Eval | Constant | 1362ns | 8B | {{{2}}}
+Eval | Product | 191860ns | 73544B | I(a_1,i_1) * {{{2}}} -> I(a_1,i_1)
+Eval | Permute | 1168743ns | 73536B | I(a_1,i_1)
+Term | End | 2 g{i_2,a_1;a_2,i_1}:N-C-S * t{a_2;i_2}:N-C-S
+Eval | SumInplace | 3525137ns | 73536B | I(a_1,i_1)
+Term | Begin | -2 g{i_2,i_3;i_1,a_2}:N-C-S * t{a_1,a_2;i_2,i_3}:N-C-S
+Eval | Tensor | 63722777ns | 6614112B | g(i_2,i_3,i_1,a_2)
+Eval | Tensor | 1794ns | 88751616B | t(a_1,a_2,i_2,i_3)
+Eval | Product | 88658825ns | 95402496B | g(i_2,i_3,i_1,a_2) * t(a_1,a_2,i_2,i_3) -> I(a_1,i_1)
+Eval | Constant | 1403ns | 8B | {{{-2}}}
+Eval | Product | 179877ns | 73544B | I(a_1,i_1) * {{{-2}}} -> I(a_1,i_1)
+Eval | Permute | 872021ns | 73536B | I(a_1,i_1)
+Term | End | -2 g{i_2,i_3;i_1,a_2}:N-C-S * t{a_1,a_2;i_2,i_3}:N-C-S
+Eval | SumInplace | 3363355ns | 73536B | I(a_1,i_1)
+Term | Begin | 2 g{i_2,a_1;a_2,a_3}:N-C-S * t{a_2,a_3;i_2,i_1}:N-C-S
+Eval | Tensor | 280151443ns | 1152043680B | g(i_2,a_1,a_2,a_3)
+Eval | Tensor | 2104ns | 88751616B | t(a_2,a_3,i_2,i_1)
+Eval | Product | 193736424ns | 1240832064B | g(i_2,a_1,a_2,a_3) * t(a_2,a_3,i_2,i_1) -> I(a_1,i_1)
+Eval | Constant | 1893ns | 8B | {{{2}}}
+Eval | Product | 254230ns | 73544B | I(a_1,i_1) * {{{2}}} -> I(a_1,i_1)
+Eval | Permute | 832185ns | 73536B | I(a_1,i_1)
+Term | End | 2 g{i_2,a_1;a_2,a_3}:N-C-S * t{a_2,a_3;i_2,i_1}:N-C-S
+Eval | SumInplace | 4023177ns | 73536B | I(a_1,i_1)
+Term | Begin | -1 f{i_2;a_2}:N-C-S * t{a_1,a_2;i_2,i_1}:N-C-S
+Eval | Tensor | 22794ns | 36768B | f(i_2,a_2)
+Eval | Tensor | 1432ns | 88751616B | t(a_1,a_2,i_2,i_1)
+Eval | Product | 33803253ns | 88825152B | f(i_2,a_2) * t(a_1,a_2,i_2,i_1) -> I(a_1,i_1)
+Eval | Constant | 932ns | 8B | {{{-1}}}
+Eval | Product | 168325ns | 73544B | I(a_1,i_1) * {{{-1}}} -> I(a_1,i_1)
+Eval | Permute | 1476617ns | 73536B | I(a_1,i_1)
+Term | End | -1 f{i_2;a_2}:N-C-S * t{a_1,a_2;i_2,i_1}:N-C-S
+Eval | SumInplace | 3493626ns | 73536B | I(a_1,i_1)
+Term | Begin | f{a_1;a_2}:N-C-S * t{a_2;i_1}:N-C-S
+Eval | Tensor | 116850349ns | 358056B | f(a_1,a_2)
+Eval | Tensor | 1293ns | 36768B | t(a_2,i_1)
+Eval | Product | 9412768ns | 431592B | f(a_1,a_2) * t(a_2,i_1) -> I(a_1,i_1)
+Eval | Permute | 197610ns | 73536B | I(a_1,i_1)
+Term | End | f{a_1;a_2}:N-C-S * t{a_2;i_1}:N-C-S
+Eval | SumInplace | 3309040ns | 73536B | I(a_1,i_1)
+Term | Begin | -1 g{i_2,a_1;a_2,a_3}:N-C-S * t{a_2,a_3;i_1,i_2}:N-C-S
+Eval | Tensor | 16481ns | 1152043680B | g(i_2,a_1,a_2,a_3)
+Eval | Tensor | 1112ns | 88751616B | t(a_2,a_3,i_1,i_2)
+Eval | Product | 189706986ns | 1240832064B | g(i_2,a_1,a_2,a_3) * t(a_2,a_3,i_1,i_2) -> I(a_1,i_1)
+Eval | Constant | 1402ns | 8B | {{{-1}}}
+Eval | Product | 186990ns | 73544B | I(a_1,i_1) * {{{-1}}} -> I(a_1,i_1)
+Eval | Permute | 1161229ns | 73536B | I(a_1,i_1)
+Term | End | -1 g{i_2,a_1;a_2,a_3}:N-C-S * t{a_2,a_3;i_1,i_2}:N-C-S
+Eval | SumInplace | 4171943ns | 73536B | I(a_1,i_1)
+Term | Begin | g{i_2,i_3;i_1,a_2}:N-C-S * t{a_1,a_2;i_3,i_2}:N-C-S
+Eval | Tensor | 25810ns | 6614112B | g(i_2,i_3,i_1,a_2)
+Eval | Tensor | 1203ns | 88751616B | t(a_1,a_2,i_3,i_2)
+Eval | Product | 89797791ns | 95402496B | g(i_2,i_3,i_1,a_2) * t(a_1,a_2,i_3,i_2) -> I(a_1,i_1)
+Eval | Permute | 204374ns | 73536B | I(a_1,i_1)
+Term | End | g{i_2,i_3;i_1,a_2}:N-C-S * t{a_1,a_2;i_3,i_2}:N-C-S
+Eval | SumInplace | 2892677ns | 73536B | I(a_1,i_1)
+Term | Begin | -2 (g{i_2,i_3;a_2,a_3}:N-C-S * t{a_3;i_3}:N-C-S) * t{a_1,a_2;i_2,i_1}:N-C-S
+Eval | Tensor | 46174846ns | 84920312B | g(i_2,i_3,a_2,a_3)
+Eval | Tensor | 2344ns | 36768B | t(a_3,i_3)
+Eval | Product | 30138557ns | 84993848B | g(i_2,i_3,a_2,a_3) * t(a_3,i_3) -> I(i_2,a_2)
+Cache | Store | 6443766742777296727 | 2/3 | 2 | 36768B
+Eval | Tensor | 1994ns | 88751616B | t(a_1,a_2,i_2,i_1)
+Eval | Product | 35106726ns | 88825152B | I(i_2,a_2) * t(a_1,a_2,i_2,i_1) -> I(a_1,i_1)
+Eval | Constant | 1172ns | 8B | {{{-2}}}
+Eval | Product | 210235ns | 73544B | I(a_1,i_1) * {{{-2}}} -> I(a_1,i_1)
+Eval | Permute | 1409197ns | 73536B | I(a_1,i_1)
+Term | End | -2 (g{i_2,i_3;a_2,a_3}:N-C-S * t{a_3;i_3}:N-C-S) * t{a_1,a_2;i_2,i_1}:N-C-S
+Eval | SumInplace | 3793183ns | 73536B | I(a_1,i_1)
+Term | Begin | (g{i_2,i_3;a_2,a_3}:N-C-S * t{a_2,a_3;i_1,i_2}:N-C-S) * t{a_1;i_3}:N-C-S
+Eval | Tensor | 23886ns | 84920312B | g(i_2,i_3,a_2,a_3)
+Eval | Tensor | 1042ns | 88751616B | t(a_2,a_3,i_1,i_2)
+Eval | Product | 126274688ns | 173682680B | g(i_2,i_3,a_2,a_3) * t(a_2,a_3,i_1,i_2) -> I(i_3,i_1)
+Eval | Tensor | 2575ns | 36768B | t(a_1,i_3)
+Eval | Product | 6325506ns | 84288B | I(i_3,i_1) * t(a_1,i_3) -> I(a_1,i_1)
+Eval | Permute | 1173162ns | 73536B | I(a_1,i_1)
+Term | End | (g{i_2,i_3;a_2,a_3}:N-C-S * t{a_2,a_3;i_1,i_2}:N-C-S) * t{a_1;i_3}:N-C-S
+Eval | SumInplace | 3073004ns | 73536B | I(a_1,i_1)
+Term | Begin | (g{i_2,i_3;a_2,a_3}:N-C-S * t{a_2;i_1}:N-C-S) * t{a_1,a_3;i_3,i_2}:N-C-S
+Eval | Tensor | 22292ns | 84920312B | g(i_2,i_3,a_2,a_3)
+Eval | Tensor | 951ns | 36768B | t(a_2,i_1)
+Eval | Product | 32816931ns | 91890968B | g(i_2,i_3,a_2,a_3) * t(a_2,i_1) -> I(i_2,i_3,i_1,a_3)
+Cache | Store | 14406268377898944426 | 1/2 | 3 | 6970656B
+Eval | Tensor | 2285ns | 88751616B | t(a_1,a_3,i_3,i_2)
+Eval | Product | 93909528ns | 95722272B | I(i_2,i_3,i_1,a_3) * t(a_1,a_3,i_3,i_2) -> I(a_1,i_1)
+Eval | Permute | 185327ns | 73536B | I(a_1,i_1)
+Term | End | (g{i_2,i_3;a_2,a_3}:N-C-S * t{a_2;i_1}:N-C-S) * t{a_1,a_3;i_3,i_2}:N-C-S
+Eval | SumInplace | 3035031ns | 73536B | I(a_1,i_1)
+Term | Begin | -1 (g{i_2,a_1;a_2,a_3}:N-C-S * t{a_3;i_2}:N-C-S) * t{a_2;i_1}:N-C-S
+Eval | Tensor | 28185ns | 1152043680B | g(i_2,a_1,a_2,a_3)
+Eval | Tensor | 1443ns | 36768B | t(a_3,i_2)
+Eval | Product | 70877782ns | 1152438504B | g(i_2,a_1,a_2,a_3) * t(a_3,i_2) -> I(a_1,a_2)
+Eval | Tensor | 2656ns | 36768B | t(a_2,i_1)
+Eval | Product | 13706677ns | 431592B | I(a_1,a_2) * t(a_2,i_1) -> I(a_1,i_1)
+Eval | Constant | 1753ns | 8B | {{{-1}}}
+Eval | Product | 818618ns | 73544B | I(a_1,i_1) * {{{-1}}} -> I(a_1,i_1)
+Eval | Permute | 1738923ns | 73536B | I(a_1,i_1)
+Term | End | -1 (g{i_2,a_1;a_2,a_3}:N-C-S * t{a_3;i_2}:N-C-S) * t{a_2;i_1}:N-C-S
+Eval | SumInplace | 3485229ns | 73536B | I(a_1,i_1)
+Term | Begin | (g{i_2,i_3;a_2,a_3}:N-C-S * t{a_2;i_3}:N-C-S) * t{a_1,a_3;i_2,i_1}:N-C-S
+Eval | Tensor | 24367ns | 84920312B | g(i_2,i_3,a_2,a_3)
+Eval | Tensor | 971ns | 36768B | t(a_2,i_3)
+Eval | Product | 28556397ns | 84993848B | g(i_2,i_3,a_2,a_3) * t(a_2,i_3) -> I(i_2,a_3)
+Cache | Store | 4354995230928331310 | 2/3 | 5 | 7007424B
+Eval | Tensor | 1854ns | 88751616B | t(a_1,a_3,i_2,i_1)
+Eval | Product | 33053277ns | 88825152B | I(i_2,a_3) * t(a_1,a_3,i_2,i_1) -> I(a_1,i_1)
+Eval | Permute | 245132ns | 73536B | I(a_1,i_1)
+Term | End | (g{i_2,i_3;a_2,a_3}:N-C-S * t{a_2;i_3}:N-C-S) * t{a_1,a_3;i_2,i_1}:N-C-S
+Eval | SumInplace | 3252841ns | 73536B | I(a_1,i_1)
+Term | Begin | -2 (g{i_2,i_3;a_2,a_3}:N-C-S * t{a_2,a_3;i_2,i_1}:N-C-S) * t{a_1;i_3}:N-C-S
+Eval | Tensor | 21942ns | 84920312B | g(i_2,i_3,a_2,a_3)
+Eval | Tensor | 932ns | 88751616B | t(a_2,a_3,i_2,i_1)
+Eval | Product | 130516045ns | 173682680B | g(i_2,i_3,a_2,a_3) * t(a_2,a_3,i_2,i_1) -> I(i_3,i_1)
+Eval | Tensor | 2575ns | 36768B | t(a_1,i_3)
+Eval | Product | 6232376ns | 84288B | I(i_3,i_1) * t(a_1,i_3) -> I(a_1,i_1)
+Eval | Constant | 1313ns | 8B | {{{-2}}}
+Eval | Product | 765816ns | 73544B | I(a_1,i_1) * {{{-2}}} -> I(a_1,i_1)
+Eval | Permute | 1214712ns | 73536B | I(a_1,i_1)
+Term | End | -2 (g{i_2,i_3;a_2,a_3}:N-C-S * t{a_2,a_3;i_2,i_1}:N-C-S) * t{a_1;i_3}:N-C-S
+Eval | SumInplace | 2738039ns | 73536B | I(a_1,i_1)
+Term | Begin | -2 (g{i_2,i_3;a_2,a_3}:N-C-S * t{a_2;i_3}:N-C-S) * t{a_1,a_3;i_1,i_2}:N-C-S
+Cache | Access | 4354995230928331310 | 1/3 | 4 | 7007424B
+Eval | Tensor | 1071ns | 88751616B | t(a_1,a_3,i_1,i_2)
+Eval | Product | 32017279ns | 88825152B | I(i_2,a_3) * t(a_1,a_3,i_1,i_2) -> I(a_1,i_1)
+Eval | Constant | 972ns | 8B | {{{-2}}}
+Eval | Product | 169066ns | 73544B | I(a_1,i_1) * {{{-2}}} -> I(a_1,i_1)
+Eval | Permute | 969418ns | 73536B | I(a_1,i_1)
+Term | End | -2 (g{i_2,i_3;a_2,a_3}:N-C-S * t{a_2;i_3}:N-C-S) * t{a_1,a_3;i_1,i_2}:N-C-S
+Eval | SumInplace | 4101828ns | 73536B | I(a_1,i_1)
+Term | Begin | 2 (g{i_2,a_1;a_2,a_3}:N-C-S * t{a_2;i_2}:N-C-S) * t{a_3;i_1}:N-C-S
+Eval | Tensor | 24917ns | 1152043680B | g(i_2,a_1,a_2,a_3)
+Eval | Tensor | 872ns | 36768B | t(a_2,i_2)
+Eval | Product | 69858567ns | 1152438504B | g(i_2,a_1,a_2,a_3) * t(a_2,i_2) -> I(a_1,a_3)
+Eval | Tensor | 2304ns | 36768B | t(a_3,i_1)
+Eval | Product | 13267069ns | 431592B | I(a_1,a_3) * t(a_3,i_1) -> I(a_1,i_1)
+Eval | Constant | 1352ns | 8B | {{{2}}}
+Eval | Product | 1141130ns | 73544B | I(a_1,i_1) * {{{2}}} -> I(a_1,i_1)
+Eval | Permute | 1260310ns | 73536B | I(a_1,i_1)
+Term | End | 2 (g{i_2,a_1;a_2,a_3}:N-C-S * t{a_2;i_2}:N-C-S) * t{a_3;i_1}:N-C-S
+Eval | SumInplace | 3867537ns | 73536B | I(a_1,i_1)
+Term | Begin | -2 (g{i_2,i_3;i_1,a_2}:N-C-S * t{a_2;i_3}:N-C-S) * t{a_1;i_2}:N-C-S
+Eval | Tensor | 24627ns | 6614112B | g(i_2,i_3,i_1,a_2)
+Eval | Tensor | 882ns | 36768B | t(a_2,i_3)
+Eval | Product | 23969012ns | 6661632B | g(i_2,i_3,i_1,a_2) * t(a_2,i_3) -> I(i_2,i_1)
+Eval | Tensor | 992ns | 36768B | t(a_1,i_2)
+Eval | Product | 6143134ns | 84288B | I(i_2,i_1) * t(a_1,i_2) -> I(a_1,i_1)
+Eval | Constant | 862ns | 8B | {{{-2}}}
+Eval | Product | 985019ns | 73544B | I(a_1,i_1) * {{{-2}}} -> I(a_1,i_1)
+Eval | Permute | 1140680ns | 73536B | I(a_1,i_1)
+Term | End | -2 (g{i_2,i_3;i_1,a_2}:N-C-S * t{a_2;i_3}:N-C-S) * t{a_1;i_2}:N-C-S
+Eval | SumInplace | 2957032ns | 73536B | I(a_1,i_1)
+Term | Begin | (g{i_2,i_3;i_1,a_2}:N-C-S * t{a_2;i_2}:N-C-S) * t{a_1;i_3}:N-C-S
+Eval | Tensor | 13636ns | 6614112B | g(i_2,i_3,i_1,a_2)
+Eval | Tensor | 732ns | 36768B | t(a_2,i_2)
+Eval | Product | 19365878ns | 6661632B | g(i_2,i_3,i_1,a_2) * t(a_2,i_2) -> I(i_3,i_1)
+Eval | Tensor | 931ns | 36768B | t(a_1,i_3)
+Eval | Product | 6464663ns | 84288B | I(i_3,i_1) * t(a_1,i_3) -> I(a_1,i_1)
+Eval | Permute | 966894ns | 73536B | I(a_1,i_1)
+Term | End | (g{i_2,i_3;i_1,a_2}:N-C-S * t{a_2;i_2}:N-C-S) * t{a_1;i_3}:N-C-S
+Eval | SumInplace | 2859864ns | 73536B | I(a_1,i_1)
+Term | Begin | -2 (g{i_2,i_3;a_2,a_3}:N-C-S * t{a_3;i_1}:N-C-S) * t{a_1,a_2;i_3,i_2}:N-C-S
+Cache | Release | 14406268377898944426 | 0/2 | 3 | 73536B
+Eval | Tensor | 1032ns | 88751616B | t(a_1,a_2,i_3,i_2)
+Eval | Product | 83594732ns | 95722272B | I(i_3,i_2,i_1,a_2) * t(a_1,a_2,i_3,i_2) -> I(a_1,i_1)
+Eval | Constant | 1422ns | 8B | {{{-2}}}
+Eval | Product | 1166990ns | 73544B | I(a_1,i_1) * {{{-2}}} -> I(a_1,i_1)
+Eval | Permute | 1185536ns | 73536B | I(a_1,i_1)
+Term | End | -2 (g{i_2,i_3;a_2,a_3}:N-C-S * t{a_3;i_1}:N-C-S) * t{a_1,a_2;i_3,i_2}:N-C-S
+Eval | SumInplace | 3005344ns | 73536B | I(a_1,i_1)
+Term | Begin | -1 (f{i_2;a_2}:N-C-S * t{a_2;i_1}:N-C-S) * t{a_1;i_2}:N-C-S
+Eval | Tensor | 24397ns | 36768B | f(i_2,a_2)
+Eval | Tensor | 1653ns | 36768B | t(a_2,i_1)
+Eval | Product | 5986612ns | 84288B | f(i_2,a_2) * t(a_2,i_1) -> I(i_2,i_1)
+Eval | Tensor | 1011ns | 36768B | t(a_1,i_2)
+Eval | Product | 6318792ns | 84288B | I(i_2,i_1) * t(a_1,i_2) -> I(a_1,i_1)
+Eval | Constant | 581ns | 8B | {{{-1}}}
+Eval | Product | 1136832ns | 73544B | I(a_1,i_1) * {{{-1}}} -> I(a_1,i_1)
+Eval | Permute | 1083679ns | 73536B | I(a_1,i_1)
+Term | End | -1 (f{i_2;a_2}:N-C-S * t{a_2;i_1}:N-C-S) * t{a_1;i_2}:N-C-S
+Eval | SumInplace | 3283721ns | 73536B | I(a_1,i_1)
+Term | Begin | 4 (g{i_2,i_3;a_2,a_3}:N-C-S * t{a_3;i_3}:N-C-S) * t{a_1,a_2;i_1,i_2}:N-C-S
+Cache | Access | 6443766742777296727 | 1/3 | 2 | 73536B
+Eval | Tensor | 1252ns | 88751616B | t(a_1,a_2,i_1,i_2)
+Eval | Product | 33623477ns | 88825152B | I(i_2,a_2) * t(a_1,a_2,i_1,i_2) -> I(a_1,i_1)
+Eval | Constant | 732ns | 8B | {{{4}}}
+Eval | Product | 173093ns | 73544B | I(a_1,i_1) * {{{4}}} -> I(a_1,i_1)
+Eval | Permute | 777559ns | 73536B | I(a_1,i_1)
+Term | End | 4 (g{i_2,i_3;a_2,a_3}:N-C-S * t{a_3;i_3}:N-C-S) * t{a_1,a_2;i_1,i_2}:N-C-S
+Eval | SumInplace | 3388764ns | 73536B | I(a_1,i_1)
+Term | Begin | ((g{i_2,i_3;a_2,a_3}:N-C-S * t{a_3;i_2}:N-C-S) * t{a_2;i_1}:N-C-S) * t{a_1;i_3}:N-C-S
+Cache | Release | 4354995230928331310 | 0/3 | 1 | 36768B
+Eval | Tensor | 1183ns | 36768B | t(a_2,i_1)
+Eval | Product | 6357477ns | 84288B | I(i_3,a_2) * t(a_2,i_1) -> I(i_3,i_1)
+Eval | Tensor | 901ns | 36768B | t(a_1,i_3)
+Eval | Product | 6430027ns | 84288B | I(i_3,i_1) * t(a_1,i_3) -> I(a_1,i_1)
+Eval | Permute | 1116974ns | 73536B | I(a_1,i_1)
+Term | End | ((g{i_2,i_3;a_2,a_3}:N-C-S * t{a_3;i_2}:N-C-S) * t{a_2;i_1}:N-C-S) * t{a_1;i_3}:N-C-S
+Eval | SumInplace | 2602468ns | 73536B | I(a_1,i_1)
+Term | Begin | -2 ((g{i_2,i_3;a_2,a_3}:N-C-S * t{a_2;i_2}:N-C-S) * t{a_3;i_1}:N-C-S) * t{a_1;i_3}:N-C-S
+Cache | Release | 6443766742777296727 | 0/3 | 0 | 0B
+Eval | Tensor | 972ns | 36768B | t(a_3,i_1)
+Eval | Product | 7172679ns | 84288B | I(i_3,a_3) * t(a_3,i_1) -> I(i_3,i_1)
+Eval | Tensor | 811ns | 36768B | t(a_1,i_3)
+Eval | Product | 6833926ns | 84288B | I(i_3,i_1) * t(a_1,i_3) -> I(a_1,i_1)
+Eval | Constant | 601ns | 8B | {{{-2}}}
+Eval | Product | 861992ns | 73544B | I(a_1,i_1) * {{{-2}}} -> I(a_1,i_1)
+Eval | Permute | 1557343ns | 73536B | I(a_1,i_1)
+Term | End | -2 ((g{i_2,i_3;a_2,a_3}:N-C-S * t{a_2;i_2}:N-C-S) * t{a_3;i_1}:N-C-S) * t{a_1;i_3}:N-C-S
+Eval | SumInplace | 2466124ns | 73536B | I(a_1,i_1)
+Eval | Symmetrize | 1229290ns | 73536B | f(a_1,i_1)
+Term | Begin | 1/2 g{a_1,a_2;i_1,i_2}:N-C-S
+Eval | Tensor | 45863355ns | 84920312B | g(a_1,a_2,i_1,i_2)
+Eval | Constant | 1563ns | 8B | {{{\frac{1}{2}}}}
+Eval | Product | 566092ns | 169840632B | g(a_1,a_2,i_1,i_2) * {{{\frac{1}{2}}}} -> I(a_1,a_2,i_1,i_2)
+Eval | Permute | 365245ns | 169840624B | I(a_1,a_2,i_1,i_2)
+Term | End | 1/2 g{a_1,a_2;i_1,i_2}:N-C-S
+Term | Begin | -1 f{i_3;i_2}:N-C-S * t{a_1,a_2;i_1,i_3}:N-C-S
+Eval | Tensor | 19507ns | 10752B | f(i_3,i_2)
+Eval | Tensor | 1152ns | 88751616B | t(a_1,a_2,i_1,i_3)
+Eval | Product | 42784328ns | 177513984B | f(i_3,i_2) * t(a_1,a_2,i_1,i_3) -> I(a_1,a_2,i_1,i_2)
+Eval | Constant | 2014ns | 8B | {{{-1}}}
+Eval | Product | 429889ns | 177503240B | I(a_1,a_2,i_1,i_2) * {{{-1}}} -> I(a_1,a_2,i_1,i_2)
+Eval | Permute | 1629041ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | End | -1 f{i_3;i_2}:N-C-S * t{a_1,a_2;i_1,i_3}:N-C-S
+Eval | SumInplace | 21396462ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | Begin | 1/2 g{a_1,a_2;a_3,a_4}:N-C-S * t{a_3,a_4;i_1,i_2}:N-C-S
+Eval | Tensor | 2732827727ns | 14974417512B | g(a_1,a_2,a_3,a_4)
+Eval | Tensor | 7515ns | 88751616B | t(a_3,a_4,i_1,i_2)
+Eval | Product | 1302417788ns | 15151920744B | g(a_1,a_2,a_3,a_4) * t(a_3,a_4,i_1,i_2) -> I(a_2,a_1,i_2,i_1)
+Eval | Constant | 2766ns | 8B | {{{\frac{1}{2}}}}
+Eval | Product | 764013ns | 177503240B | I(a_2,a_1,i_2,i_1) * {{{\frac{1}{2}}}} -> I(a_2,a_1,i_2,i_1)
+Eval | Permute | 1583362ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | End | 1/2 g{a_1,a_2;a_3,a_4}:N-C-S * t{a_3,a_4;i_1,i_2}:N-C-S
+Eval | SumInplace | 24303998ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | Begin | 2 g{i_3,a_1;a_3,i_1}:N-C-S * t{a_2,a_3;i_2,i_3}:N-C-S
+Eval | Tensor | 50099151ns | 84920312B | g(i_3,a_1,a_3,i_1)
+Eval | Tensor | 1894ns | 88751616B | t(a_2,a_3,i_2,i_3)
+Eval | Product | 123116018ns | 262423544B | g(i_3,a_1,a_3,i_1) * t(a_2,a_3,i_2,i_3) -> I(a_2,a_1,i_2,i_1)
+Eval | Constant | 1593ns | 8B | {{{2}}}
+Eval | Product | 341208ns | 177503240B | I(a_2,a_1,i_2,i_1) * {{{2}}} -> I(a_2,a_1,i_2,i_1)
+Eval | Permute | 23273341ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | End | 2 g{i_3,a_1;a_3,i_1}:N-C-S * t{a_2,a_3;i_2,i_3}:N-C-S
+Eval | SumInplace | 3634127ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | Begin | 1/2 g{i_3,i_4;i_1,i_2}:N-C-S * t{a_1,a_2;i_3,i_4}:N-C-S
+Eval | Tensor | 55846493ns | 574912B | g(i_3,i_4,i_1,i_2)
+Eval | Tensor | 1253ns | 88751616B | t(a_1,a_2,i_3,i_4)
+Eval | Product | 112481505ns | 178078144B | g(i_3,i_4,i_1,i_2) * t(a_1,a_2,i_3,i_4) -> I(a_2,a_1,i_2,i_1)
+Eval | Constant | 1894ns | 8B | {{{\frac{1}{2}}}}
+Eval | Product | 856972ns | 177503240B | I(a_2,a_1,i_2,i_1) * {{{\frac{1}{2}}}} -> I(a_2,a_1,i_2,i_1)
+Eval | Permute | 18455783ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | End | 1/2 g{i_3,i_4;i_1,i_2}:N-C-S * t{a_1,a_2;i_3,i_4}:N-C-S
+Eval | SumInplace | 25924172ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | Begin | -1 g{i_3,a_1;i_2,i_1}:N-C-S * t{a_2;i_3}:N-C-S
+Eval | Tensor | 47764961ns | 6614112B | g(i_3,a_1,i_2,i_1)
+Eval | Tensor | 1293ns | 36768B | t(a_2,i_3)
+Eval | Product | 24754397ns | 95402496B | g(i_3,a_1,i_2,i_1) * t(a_2,i_3) -> I(a_1,a_2,i_1,i_2)
+Eval | Constant | 811ns | 8B | {{{-1}}}
+Eval | Product | 349243ns | 177503240B | I(a_1,a_2,i_1,i_2) * {{{-1}}} -> I(a_1,a_2,i_1,i_2)
+Eval | Permute | 1126462ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | End | -1 g{i_3,a_1;i_2,i_1}:N-C-S * t{a_2;i_3}:N-C-S
+Eval | SumInplace | 28531018ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | Begin | -1 g{i_3,a_1;i_1,a_3}:N-C-S * t{a_2,a_3;i_2,i_3}:N-C-S
+Eval | Tensor | 16552ns | 88751616B | g(i_3,a_1,i_1,a_3)
+Eval | Tensor | 1082ns | 88751616B | t(a_2,a_3,i_2,i_3)
+Eval | Product | 132115389ns | 266254848B | g(i_3,a_1,i_1,a_3) * t(a_2,a_3,i_2,i_3) -> I(a_2,a_1,i_2,i_1)
+Eval | Constant | 1514ns | 8B | {{{-1}}}
+Eval | Product | 622691ns | 177503240B | I(a_2,a_1,i_2,i_1) * {{{-1}}} -> I(a_2,a_1,i_2,i_1)
+Eval | Permute | 18255777ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | End | -1 g{i_3,a_1;i_1,a_3}:N-C-S * t{a_2,a_3;i_2,i_3}:N-C-S
+Eval | SumInplace | 3699543ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | Begin | f{a_2;a_3}:N-C-S * t{a_1,a_3;i_1,i_2}:N-C-S
+Eval | Tensor | 28344ns | 358056B | f(a_2,a_3)
+Eval | Tensor | 1714ns | 88751616B | t(a_1,a_3,i_1,i_2)
+Eval | Product | 32730836ns | 177861288B | f(a_2,a_3) * t(a_1,a_3,i_1,i_2) -> I(a_1,a_2,i_1,i_2)
+Eval | Permute | 323874ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | End | f{a_2;a_3}:N-C-S * t{a_1,a_3;i_1,i_2}:N-C-S
+Eval | SumInplace | 21796524ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | Begin | -1 g{i_3,a_1;a_3,i_1}:N-C-S * t{a_2,a_3;i_3,i_2}:N-C-S
+Eval | Tensor | 19387ns | 84920312B | g(i_3,a_1,a_3,i_1)
+Eval | Tensor | 1132ns | 88751616B | t(a_2,a_3,i_3,i_2)
+Eval | Product | 124130915ns | 262423544B | g(i_3,a_1,a_3,i_1) * t(a_2,a_3,i_3,i_2) -> I(a_1,a_2,i_2,i_1)
+Eval | Constant | 1864ns | 8B | {{{-1}}}
+Eval | Product | 369092ns | 177503240B | I(a_1,a_2,i_2,i_1) * {{{-1}}} -> I(a_1,a_2,i_2,i_1)
+Eval | Permute | 6587440ns | 177503232B | I(a_1,a_2,i_2,i_1)
+Term | End | -1 g{i_3,a_1;a_3,i_1}:N-C-S * t{a_2,a_3;i_3,i_2}:N-C-S
+Eval | SumInplace | 3875402ns | 177503232B | I(a_1,a_2,i_2,i_1)
+Term | Begin | -1 g{i_3,a_2;i_1,a_3}:N-C-S * t{a_1,a_3;i_3,i_2}:N-C-S
+Eval | Tensor | 25770ns | 88751616B | g(i_3,a_2,i_1,a_3)
+Eval | Tensor | 1463ns | 88751616B | t(a_1,a_3,i_3,i_2)
+Eval | Product | 121446740ns | 266254848B | g(i_3,a_2,i_1,a_3) * t(a_1,a_3,i_3,i_2) -> I(a_2,a_1,i_2,i_1)
+Eval | Constant | 1593ns | 8B | {{{-1}}}
+Eval | Product | 613463ns | 177503240B | I(a_2,a_1,i_2,i_1) * {{{-1}}} -> I(a_2,a_1,i_2,i_1)
+Eval | Permute | 15821995ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | End | -1 g{i_3,a_2;i_1,a_3}:N-C-S * t{a_1,a_3;i_3,i_2}:N-C-S
+Eval | SumInplace | 4208804ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | Begin | g{a_1,a_2;i_1,a_3}:N-C-S * t{a_3;i_2}:N-C-S
+Eval | Tensor | 152411069ns | 1152043680B | g(a_1,a_2,i_1,a_3)
+Eval | Tensor | 2656ns | 36768B | t(a_3,i_2)
+Eval | Product | 76273536ns | 1240832064B | g(a_1,a_2,i_1,a_3) * t(a_3,i_2) -> I(a_1,a_2,i_1,i_2)
+Eval | Permute | 577474ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | End | g{a_1,a_2;i_1,a_3}:N-C-S * t{a_3;i_2}:N-C-S
+Eval | SumInplace | 26288295ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | Begin | -1 (g{i_3,a_2;a_3,i_2}:N-C-S * t{a_3;i_1}:N-C-S) * t{a_1;i_3}:N-C-S
+Eval | Tensor | 25469ns | 84920312B | g(i_3,a_2,a_3,i_2)
+Eval | Tensor | 1082ns | 36768B | t(a_3,i_1)
+Eval | Product | 30893282ns | 91890968B | g(i_3,a_2,a_3,i_2) * t(a_3,i_1) -> I(i_3,a_2,i_2,i_1)
+Eval | Tensor | 852ns | 36768B | t(a_1,i_3)
+Eval | Product | 31197359ns | 95722272B | I(i_3,a_2,i_2,i_1) * t(a_1,i_3) -> I(a_2,a_1,i_2,i_1)
+Eval | Constant | 1674ns | 8B | {{{-1}}}
+Eval | Product | 1107375ns | 177503240B | I(a_2,a_1,i_2,i_1) * {{{-1}}} -> I(a_2,a_1,i_2,i_1)
+Eval | Permute | 20561934ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | End | -1 (g{i_3,a_2;a_3,i_2}:N-C-S * t{a_3;i_1}:N-C-S) * t{a_1;i_3}:N-C-S
+Eval | SumInplace | 26717761ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | Begin | -2 (g{i_3,i_4;a_3,a_4}:N-C-S * t{a_1,a_4;i_1,i_4}:N-C-S) * t{a_2,a_3;i_3,i_2}:N-C-S
+Eval | Tensor | 44743416ns | 84920312B | g(i_3,i_4,a_3,a_4)
+Eval | Tensor | 2174ns | 88751616B | t(a_1,a_4,i_1,i_4)
+Eval | Product | 126122575ns | 262423544B | g(i_3,i_4,a_3,a_4) * t(a_1,a_4,i_1,i_4) -> I(i_3,a_1,i_1,a_3)
+Cache | Store | 223784662887107466 | 1/2 | 1 | 88751616B
+Eval | Tensor | 2495ns | 88751616B | t(a_2,a_3,i_3,i_2)
+Eval | Product | 127653015ns | 266254848B | I(i_3,a_1,i_1,a_3) * t(a_2,a_3,i_3,i_2) -> I(a_2,a_1,i_2,i_1)
+Eval | Constant | 1884ns | 8B | {{{-2}}}
+Eval | Product | 591921ns | 177503240B | I(a_2,a_1,i_2,i_1) * {{{-2}}} -> I(a_2,a_1,i_2,i_1)
+Eval | Permute | 21742870ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | End | -2 (g{i_3,i_4;a_3,a_4}:N-C-S * t{a_1,a_4;i_1,i_4}:N-C-S) * t{a_2,a_3;i_3,i_2}:N-C-S
+Eval | SumInplace | 3882846ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | Begin | -2 (g{i_3,i_4;i_2,a_3}:N-C-S * t{a_3;i_4}:N-C-S) * t{a_1,a_2;i_1,i_3}:N-C-S
+Eval | Tensor | 38861565ns | 6614112B | g(i_3,i_4,i_2,a_3)
+Eval | Tensor | 1513ns | 36768B | t(a_3,i_4)
+Eval | Product | 24026583ns | 6661632B | g(i_3,i_4,i_2,a_3) * t(a_3,i_4) -> I(i_3,i_2)
+Eval | Tensor | 1373ns | 88751616B | t(a_1,a_2,i_1,i_3)
+Eval | Product | 40321069ns | 177513984B | I(i_3,i_2) * t(a_1,a_2,i_1,i_3) -> I(a_1,a_2,i_1,i_2)
+Eval | Constant | 1413ns | 8B | {{{-2}}}
+Eval | Product | 858335ns | 177503240B | I(a_1,a_2,i_1,i_2) * {{{-2}}} -> I(a_1,a_2,i_1,i_2)
+Eval | Permute | 960863ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | End | -2 (g{i_3,i_4;i_2,a_3}:N-C-S * t{a_3;i_4}:N-C-S) * t{a_1,a_2;i_1,i_3}:N-C-S
+Eval | SumInplace | 22325895ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | Begin | (g{i_3,i_4;i_2,a_3}:N-C-S * t{a_1,a_3;i_4,i_1}:N-C-S) * t{a_2;i_3}:N-C-S
+Eval | Tensor | 25399ns | 6614112B | g(i_3,i_4,i_2,a_3)
+Eval | Tensor | 1102ns | 88751616B | t(a_1,a_3,i_4,i_1)
+Eval | Product | 90370445ns | 102299616B | g(i_3,i_4,i_2,a_3) * t(a_1,a_3,i_4,i_1) -> I(i_3,a_1,i_1,i_2)
+Eval | Tensor | 2415ns | 36768B | t(a_2,i_3)
+Eval | Product | 25050668ns | 95722272B | I(i_3,a_1,i_1,i_2) * t(a_2,i_3) -> I(a_1,a_2,i_1,i_2)
+Eval | Permute | 1279447ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | End | (g{i_3,i_4;i_2,a_3}:N-C-S * t{a_1,a_3;i_4,i_1}:N-C-S) * t{a_2;i_3}:N-C-S
+Eval | SumInplace | 25422685ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | Begin | 1/2 (g{a_1,a_2;a_3,a_4}:N-C-S * t{a_3;i_1}:N-C-S) * t{a_4;i_2}:N-C-S
+Eval | Tensor | 25840ns | 14974417512B | g(a_1,a_2,a_3,a_4)
+Eval | Tensor | 1432ns | 36768B | t(a_3,i_1)
+Eval | Product | 1095839314ns | 16126497960B | g(a_1,a_2,a_3,a_4) * t(a_3,i_1) -> I(a_2,a_1,i_1,a_4)
+Eval | Tensor | 2605ns | 36768B | t(a_4,i_2)
+Eval | Product | 102080180ns | 1240832064B | I(a_2,a_1,i_1,a_4) * t(a_4,i_2) -> I(a_2,a_1,i_2,i_1)
+Eval | Constant | 1543ns | 8B | {{{\frac{1}{2}}}}
+Eval | Product | 818127ns | 177503240B | I(a_2,a_1,i_2,i_1) * {{{\frac{1}{2}}}} -> I(a_2,a_1,i_2,i_1)
+Eval | Permute | 12213648ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | End | 1/2 (g{a_1,a_2;a_3,a_4}:N-C-S * t{a_3;i_1}:N-C-S) * t{a_4;i_2}:N-C-S
+Eval | SumInplace | 24302485ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | Begin | (g{i_3,i_4;a_3,a_4}:N-C-S * t{a_3,a_4;i_4,i_2}:N-C-S) * t{a_1,a_2;i_1,i_3}:N-C-S
+Eval | Tensor | 26531ns | 84920312B | g(i_3,i_4,a_3,a_4)
+Eval | Tensor | 3957ns | 88751616B | t(a_3,a_4,i_4,i_2)
+Eval | Product | 123539195ns | 173682680B | g(i_3,i_4,a_3,a_4) * t(a_3,a_4,i_4,i_2) -> I(i_3,i_2)
+Eval | Tensor | 2265ns | 88751616B | t(a_1,a_2,i_1,i_3)
+Eval | Product | 32384688ns | 177513984B | I(i_3,i_2) * t(a_1,a_2,i_1,i_3) -> I(a_2,a_1,i_2,i_1)
+Eval | Permute | 17751996ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | End | (g{i_3,i_4;a_3,a_4}:N-C-S * t{a_3,a_4;i_4,i_2}:N-C-S) * t{a_1,a_2;i_1,i_3}:N-C-S
+Eval | SumInplace | 22009935ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | Begin | -2 (g{i_3,i_4;i_2,a_3}:N-C-S * t{a_1,a_3;i_1,i_4}:N-C-S) * t{a_2;i_3}:N-C-S
+Eval | Tensor | 25739ns | 6614112B | g(i_3,i_4,i_2,a_3)
+Eval | Tensor | 1172ns | 88751616B | t(a_1,a_3,i_1,i_4)
+Eval | Product | 95934041ns | 102299616B | g(i_3,i_4,i_2,a_3) * t(a_1,a_3,i_1,i_4) -> I(i_3,a_1,i_1,i_2)
+Eval | Tensor | 2214ns | 36768B | t(a_2,i_3)
+Eval | Product | 18441306ns | 95722272B | I(i_3,a_1,i_1,i_2) * t(a_2,i_3) -> I(a_1,a_2,i_1,i_2)
+Eval | Constant | 1273ns | 8B | {{{-2}}}
+Eval | Product | 894124ns | 177503240B | I(a_1,a_2,i_1,i_2) * {{{-2}}} -> I(a_1,a_2,i_1,i_2)
+Eval | Permute | 992183ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | End | -2 (g{i_3,i_4;i_2,a_3}:N-C-S * t{a_1,a_3;i_1,i_4}:N-C-S) * t{a_2;i_3}:N-C-S
+Eval | SumInplace | 27097785ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | Begin | (g{i_3,i_4;i_1,a_3}:N-C-S * t{a_3;i_2}:N-C-S) * t{a_1,a_2;i_3,i_4}:N-C-S
+Eval | Tensor | 27062ns | 6614112B | g(i_3,i_4,i_1,a_3)
+Eval | Tensor | 1022ns | 36768B | t(a_3,i_2)
+Eval | Product | 21680881ns | 7270272B | g(i_3,i_4,i_1,a_3) * t(a_3,i_2) -> I(i_3,i_4,i_1,i_2)
+Cache | Store | 10186165109937716840 | 1/2 | 2 | 89371008B
+Eval | Tensor | 1452ns | 88751616B | t(a_1,a_2,i_3,i_4)
+Eval | Product | 117426639ns | 178122624B | I(i_3,i_4,i_1,i_2) * t(a_1,a_2,i_3,i_4) -> I(a_1,a_2,i_1,i_2)
+Eval | Permute | 410271ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | End | (g{i_3,i_4;i_1,a_3}:N-C-S * t{a_3;i_2}:N-C-S) * t{a_1,a_2;i_3,i_4}:N-C-S
+Eval | SumInplace | 23051874ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | Begin | 2 (g{i_3,a_2;a_3,a_4}:N-C-S * t{a_4;i_2}:N-C-S) * t{a_1,a_3;i_1,i_3}:N-C-S
+Eval | Tensor | 143020665ns | 1152043680B | g(i_3,a_2,a_3,a_4)
+Eval | Tensor | 2344ns | 36768B | t(a_4,i_2)
+Eval | Product | 72421098ns | 1240832064B | g(i_3,a_2,a_3,a_4) * t(a_4,i_2) -> I(i_3,a_2,i_2,a_3)
+Cache | Store | 11539558536615948187 | 1/2 | 3 | 178122624B
+Eval | Tensor | 2435ns | 88751616B | t(a_1,a_3,i_1,i_3)
+Eval | Product | 121820200ns | 266254848B | I(i_3,a_2,i_2,a_3) * t(a_1,a_3,i_1,i_3) -> I(a_1,a_2,i_1,i_2)
+Eval | Constant | 1664ns | 8B | {{{2}}}
+Eval | Product | 278738ns | 177503240B | I(a_1,a_2,i_1,i_2) * {{{2}}} -> I(a_1,a_2,i_1,i_2)
+Eval | Permute | 731501ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | End | 2 (g{i_3,a_2;a_3,a_4}:N-C-S * t{a_4;i_2}:N-C-S) * t{a_1,a_3;i_1,i_3}:N-C-S
+Eval | SumInplace | 3829383ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | Begin | -1 (g{i_3,a_2;a_3,a_4}:N-C-S * t{a_4;i_3}:N-C-S) * t{a_1,a_3;i_1,i_2}:N-C-S
+Eval | Tensor | 28896ns | 1152043680B | g(i_3,a_2,a_3,a_4)
+Eval | Tensor | 1092ns | 36768B | t(a_4,i_3)
+Eval | Product | 70071879ns | 1152438504B | g(i_3,a_2,a_3,a_4) * t(a_4,i_3) -> I(a_2,a_3)
+Eval | Tensor | 2134ns | 88751616B | t(a_1,a_3,i_1,i_2)
+Eval | Product | 29798772ns | 177861288B | I(a_2,a_3) * t(a_1,a_3,i_1,i_2) -> I(a_1,a_2,i_1,i_2)
+Eval | Constant | 1393ns | 8B | {{{-1}}}
+Eval | Product | 1031088ns | 177503240B | I(a_1,a_2,i_1,i_2) * {{{-1}}} -> I(a_1,a_2,i_1,i_2)
+Eval | Permute | 1911786ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | End | -1 (g{i_3,a_2;a_3,a_4}:N-C-S * t{a_4;i_3}:N-C-S) * t{a_1,a_3;i_1,i_2}:N-C-S
+Eval | SumInplace | 22847780ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | Begin | -1 (f{i_3;a_3}:N-C-S * t{a_1,a_3;i_1,i_2}:N-C-S) * t{a_2;i_3}:N-C-S
+Eval | Tensor | 23866ns | 36768B | f(i_3,a_3)
+Eval | Tensor | 1283ns | 88751616B | t(a_1,a_3,i_1,i_2)
+Eval | Product | 33311666ns | 95722272B | f(i_3,a_3) * t(a_1,a_3,i_1,i_2) -> I(i_3,a_1,i_2,i_1)
+Eval | Tensor | 1713ns | 36768B | t(a_2,i_3)
+Eval | Product | 18437608ns | 95722272B | I(i_3,a_1,i_2,i_1) * t(a_2,i_3) -> I(a_1,a_2,i_1,i_2)
+Eval | Constant | 1293ns | 8B | {{{-1}}}
+Eval | Product | 624794ns | 177503240B | I(a_1,a_2,i_1,i_2) * {{{-1}}} -> I(a_1,a_2,i_1,i_2)
+Eval | Permute | 1655362ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | End | -1 (f{i_3;a_3}:N-C-S * t{a_1,a_3;i_1,i_2}:N-C-S) * t{a_2;i_3}:N-C-S
+Eval | SumInplace | 25608533ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | Begin | -1 (g{i_3,a_2;a_3,a_4}:N-C-S * t{a_4;i_2}:N-C-S) * t{a_1,a_3;i_3,i_1}:N-C-S
+Cache | Release | 11539558536615948187 | 0/2 | 2 | 89371008B
+Eval | Tensor | 2254ns | 88751616B | t(a_1,a_3,i_3,i_1)
+Eval | Product | 131665623ns | 266254848B | I(i_3,a_2,i_2,a_3) * t(a_1,a_3,i_3,i_1) -> I(a_1,a_2,i_1,i_2)
+Eval | Constant | 1573ns | 8B | {{{-1}}}
+Eval | Product | 977926ns | 177503240B | I(a_1,a_2,i_1,i_2) * {{{-1}}} -> I(a_1,a_2,i_1,i_2)
+Eval | Permute | 1881157ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | End | -1 (g{i_3,a_2;a_3,a_4}:N-C-S * t{a_4;i_2}:N-C-S) * t{a_1,a_3;i_3,i_1}:N-C-S
+Eval | SumInplace | 3608327ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | Begin | -1 (g{i_3,a_1;a_3,a_4}:N-C-S * t{a_3,a_4;i_2,i_1}:N-C-S) * t{a_2;i_3}:N-C-S
+Eval | Tensor | 28875ns | 1152043680B | g(i_3,a_1,a_3,a_4)
+Eval | Tensor | 1102ns | 88751616B | t(a_3,a_4,i_2,i_1)
+Eval | Product | 188365620ns | 1247729184B | g(i_3,a_1,a_3,a_4) * t(a_3,a_4,i_2,i_1) -> I(i_3,a_1,i_2,i_1)
+Eval | Tensor | 2374ns | 36768B | t(a_2,i_3)
+Eval | Product | 33169531ns | 95722272B | I(i_3,a_1,i_2,i_1) * t(a_2,i_3) -> I(a_1,a_2,i_1,i_2)
+Eval | Constant | 1443ns | 8B | {{{-1}}}
+Eval | Product | 1001511ns | 177503240B | I(a_1,a_2,i_1,i_2) * {{{-1}}} -> I(a_1,a_2,i_1,i_2)
+Eval | Permute | 1205555ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | End | -1 (g{i_3,a_1;a_3,a_4}:N-C-S * t{a_3,a_4;i_2,i_1}:N-C-S) * t{a_2;i_3}:N-C-S
+Eval | SumInplace | 26919180ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | Begin | -1 (g{i_3,a_2;i_1,a_3}:N-C-S * t{a_3;i_2}:N-C-S) * t{a_1;i_3}:N-C-S
+Eval | Tensor | 25820ns | 88751616B | g(i_3,a_2,i_1,a_3)
+Eval | Tensor | 1102ns | 36768B | t(a_3,i_2)
+Eval | Product | 30061960ns | 95722272B | g(i_3,a_2,i_1,a_3) * t(a_3,i_2) -> I(i_3,a_2,i_1,i_2)
+Eval | Tensor | 2124ns | 36768B | t(a_1,i_3)
+Eval | Product | 32135938ns | 95722272B | I(i_3,a_2,i_1,i_2) * t(a_1,i_3) -> I(a_2,a_1,i_2,i_1)
+Eval | Constant | 1373ns | 8B | {{{-1}}}
+Eval | Product | 677837ns | 177503240B | I(a_2,a_1,i_2,i_1) * {{{-1}}} -> I(a_2,a_1,i_2,i_1)
+Eval | Permute | 18656820ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | End | -1 (g{i_3,a_2;i_1,a_3}:N-C-S * t{a_3;i_2}:N-C-S) * t{a_1;i_3}:N-C-S
+Eval | SumInplace | 29481430ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | Begin | (g{i_3,i_4;i_2,a_3}:N-C-S * t{a_1,a_3;i_1,i_3}:N-C-S) * t{a_2;i_4}:N-C-S
+Eval | Tensor | 29907ns | 6614112B | g(i_3,i_4,i_2,a_3)
+Eval | Tensor | 1232ns | 88751616B | t(a_1,a_3,i_1,i_3)
+Eval | Product | 86093479ns | 102299616B | g(i_3,i_4,i_2,a_3) * t(a_1,a_3,i_1,i_3) -> I(i_4,a_1,i_1,i_2)
+Eval | Tensor | 2145ns | 36768B | t(a_2,i_4)
+Eval | Product | 27886485ns | 95722272B | I(i_4,a_1,i_1,i_2) * t(a_2,i_4) -> I(a_1,a_2,i_1,i_2)
+Eval | Permute | 943830ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | End | (g{i_3,i_4;i_2,a_3}:N-C-S * t{a_1,a_3;i_1,i_3}:N-C-S) * t{a_2;i_4}:N-C-S
+Eval | SumInplace | 29804623ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | Begin | -1 (g{i_3,a_2;a_3,a_4}:N-C-S * t{a_3;i_2}:N-C-S) * t{a_1,a_4;i_1,i_3}:N-C-S
+Eval | Tensor | 24006ns | 1152043680B | g(i_3,a_2,a_3,a_4)
+Eval | Tensor | 1082ns | 36768B | t(a_3,i_2)
+Eval | Product | 83241911ns | 1240832064B | g(i_3,a_2,a_3,a_4) * t(a_3,i_2) -> I(i_3,a_2,i_2,a_4)
+Cache | Store | 10515943467231087096 | 2/3 | 4 | 178122624B
+Eval | Tensor | 2585ns | 88751616B | t(a_1,a_4,i_1,i_3)
+Eval | Product | 122063650ns | 266254848B | I(i_3,a_2,i_2,a_4) * t(a_1,a_4,i_1,i_3) -> I(a_1,a_2,i_1,i_2)
+Eval | Constant | 1693ns | 8B | {{{-1}}}
+Eval | Product | 562645ns | 177503240B | I(a_1,a_2,i_1,i_2) * {{{-1}}} -> I(a_1,a_2,i_1,i_2)
+Eval | Permute | 1623320ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | End | -1 (g{i_3,a_2;a_3,a_4}:N-C-S * t{a_3;i_2}:N-C-S) * t{a_1,a_4;i_1,i_3}:N-C-S
+Eval | SumInplace | 3933805ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | Begin | 1/2 (g{i_3,i_4;a_3,a_4}:N-C-S * t{a_1,a_3;i_3,i_1}:N-C-S) * t{a_2,a_4;i_4,i_2}:N-C-S
+Eval | Tensor | 25149ns | 84920312B | g(i_3,i_4,a_3,a_4)
+Eval | Tensor | 1363ns | 88751616B | t(a_1,a_3,i_3,i_1)
+Eval | Product | 117337127ns | 262423544B | g(i_3,i_4,a_3,a_4) * t(a_1,a_3,i_3,i_1) -> I(i_4,a_1,i_1,a_4)
+Eval | Tensor | 2304ns | 88751616B | t(a_2,a_4,i_4,i_2)
+Eval | Product | 121287533ns | 266254848B | I(i_4,a_1,i_1,a_4) * t(a_2,a_4,i_4,i_2) -> I(a_2,a_1,i_2,i_1)
+Eval | Constant | 1693ns | 8B | {{{\frac{1}{2}}}}
+Eval | Product | 889896ns | 177503240B | I(a_2,a_1,i_2,i_1) * {{{\frac{1}{2}}}} -> I(a_2,a_1,i_2,i_1)
+Eval | Permute | 15113659ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | End | 1/2 (g{i_3,i_4;a_3,a_4}:N-C-S * t{a_1,a_3;i_3,i_1}:N-C-S) * t{a_2,a_4;i_4,i_2}:N-C-S
+Eval | SumInplace | 3592888ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | Begin | -1 (g{i_3,a_1;a_3,a_4}:N-C-S * t{a_3;i_2}:N-C-S) * t{a_2,a_4;i_3,i_1}:N-C-S
+Cache | Access | 10515943467231087096 | 1/3 | 3 | 178122624B
+Eval | Tensor | 2385ns | 88751616B | t(a_2,a_4,i_3,i_1)
+Eval | Product | 124956698ns | 266254848B | I(i_3,a_1,i_2,a_4) * t(a_2,a_4,i_3,i_1) -> I(a_1,a_2,i_1,i_2)
+Eval | Constant | 1512ns | 8B | {{{-1}}}
+Eval | Product | 406574ns | 177503240B | I(a_1,a_2,i_1,i_2) * {{{-1}}} -> I(a_1,a_2,i_1,i_2)
+Eval | Permute | 1051497ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | End | -1 (g{i_3,a_1;a_3,a_4}:N-C-S * t{a_3;i_2}:N-C-S) * t{a_2,a_4;i_3,i_1}:N-C-S
+Eval | SumInplace | 3724952ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | Begin | -2 (g{i_3,i_4;a_3,a_4}:N-C-S * t{a_3,a_4;i_2,i_4}:N-C-S) * t{a_1,a_2;i_1,i_3}:N-C-S
+Eval | Tensor | 26261ns | 84920312B | g(i_3,i_4,a_3,a_4)
+Eval | Tensor | 1293ns | 88751616B | t(a_3,a_4,i_2,i_4)
+Eval | Product | 123488707ns | 173682680B | g(i_3,i_4,a_3,a_4) * t(a_3,a_4,i_2,i_4) -> I(i_3,i_2)
+Eval | Tensor | 2023ns | 88751616B | t(a_1,a_2,i_1,i_3)
+Eval | Product | 34841855ns | 177513984B | I(i_3,i_2) * t(a_1,a_2,i_1,i_3) -> I(a_2,a_1,i_2,i_1)
+Eval | Constant | 1653ns | 8B | {{{-2}}}
+Eval | Product | 799933ns | 177503240B | I(a_2,a_1,i_2,i_1) * {{{-2}}} -> I(a_2,a_1,i_2,i_1)
+Eval | Permute | 11514280ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | End | -2 (g{i_3,i_4;a_3,a_4}:N-C-S * t{a_3,a_4;i_2,i_4}:N-C-S) * t{a_1,a_2;i_1,i_3}:N-C-S
+Eval | SumInplace | 22490772ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | Begin | 1/2 (g{i_3,i_4;a_3,a_4}:N-C-S * t{a_3,a_4;i_1,i_2}:N-C-S) * t{a_1,a_2;i_3,i_4}:N-C-S
+Eval | Tensor | 25850ns | 84920312B | g(i_3,i_4,a_3,a_4)
+Eval | Tensor | 1203ns | 88751616B | t(a_3,a_4,i_1,i_2)
+Eval | Product | 114275143ns | 174291320B | g(i_3,i_4,a_3,a_4) * t(a_3,a_4,i_1,i_2) -> I(i_4,i_3,i_2,i_1)
+Cache | Store | 14580268236581494750 | 1/2 | 4 | 178742016B
+Eval | Tensor | 2495ns | 88751616B | t(a_1,a_2,i_3,i_4)
+Eval | Product | 117289034ns | 178122624B | I(i_4,i_3,i_2,i_1) * t(a_1,a_2,i_3,i_4) -> I(a_2,a_1,i_2,i_1)
+Eval | Constant | 1533ns | 8B | {{{\frac{1}{2}}}}
+Eval | Product | 962656ns | 177503240B | I(a_2,a_1,i_2,i_1) * {{{\frac{1}{2}}}} -> I(a_2,a_1,i_2,i_1)
+Eval | Permute | 20401724ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | End | 1/2 (g{i_3,i_4;a_3,a_4}:N-C-S * t{a_3,a_4;i_1,i_2}:N-C-S) * t{a_1,a_2;i_3,i_4}:N-C-S
+Eval | SumInplace | 24044688ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | Begin | -1 (f{i_3;a_3}:N-C-S * t{a_3;i_2}:N-C-S) * t{a_1,a_2;i_1,i_3}:N-C-S
+Eval | Tensor | 24808ns | 36768B | f(i_3,a_3)
+Eval | Tensor | 1122ns | 36768B | t(a_3,i_2)
+Eval | Product | 6780944ns | 84288B | f(i_3,a_3) * t(a_3,i_2) -> I(i_3,i_2)
+Eval | Tensor | 912ns | 88751616B | t(a_1,a_2,i_1,i_3)
+Eval | Product | 39114242ns | 177513984B | I(i_3,i_2) * t(a_1,a_2,i_1,i_3) -> I(a_1,a_2,i_1,i_2)
+Eval | Constant | 1373ns | 8B | {{{-1}}}
+Eval | Product | 918861ns | 177503240B | I(a_1,a_2,i_1,i_2) * {{{-1}}} -> I(a_1,a_2,i_1,i_2)
+Eval | Permute | 858585ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | End | -1 (f{i_3;a_3}:N-C-S * t{a_3;i_2}:N-C-S) * t{a_1,a_2;i_1,i_3}:N-C-S
+Eval | SumInplace | 21583753ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | Begin | -2 (g{i_3,i_4;a_3,a_4}:N-C-S * t{a_2,a_4;i_3,i_4}:N-C-S) * t{a_1,a_3;i_1,i_2}:N-C-S
+Eval | Tensor | 24538ns | 84920312B | g(i_3,i_4,a_3,a_4)
+Eval | Tensor | 1002ns | 88751616B | t(a_2,a_4,i_3,i_4)
+Eval | Product | 108183289ns | 174029984B | g(i_3,i_4,a_3,a_4) * t(a_2,a_4,i_3,i_4) -> I(a_2,a_3)
+Eval | Tensor | 2374ns | 88751616B | t(a_1,a_3,i_1,i_2)
+Eval | Product | 38801710ns | 177861288B | I(a_2,a_3) * t(a_1,a_3,i_1,i_2) -> I(a_2,a_1,i_2,i_1)
+Eval | Constant | 1743ns | 8B | {{{-2}}}
+Eval | Product | 899915ns | 177503240B | I(a_2,a_1,i_2,i_1) * {{{-2}}} -> I(a_2,a_1,i_2,i_1)
+Eval | Permute | 7743630ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | End | -2 (g{i_3,i_4;a_3,a_4}:N-C-S * t{a_2,a_4;i_3,i_4}:N-C-S) * t{a_1,a_3;i_1,i_2}:N-C-S
+Eval | SumInplace | 22649218ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | Begin | (g{i_3,i_4;a_3,a_4}:N-C-S * t{a_1,a_3;i_1,i_4}:N-C-S) * t{a_2,a_4;i_3,i_2}:N-C-S
+Eval | Tensor | 25449ns | 84920312B | g(i_3,i_4,a_3,a_4)
+Eval | Tensor | 1162ns | 88751616B | t(a_1,a_3,i_1,i_4)
+Eval | Product | 123202945ns | 262423544B | g(i_3,i_4,a_3,a_4) * t(a_1,a_3,i_1,i_4) -> I(i_3,a_1,i_1,a_4)
+Cache | Store | 1502144429761737779 | 1/2 | 5 | 267493632B
+Eval | Tensor | 2596ns | 88751616B | t(a_2,a_4,i_3,i_2)
+Eval | Product | 129458908ns | 266254848B | I(i_3,a_1,i_1,a_4) * t(a_2,a_4,i_3,i_2) -> I(a_2,a_1,i_2,i_1)
+Eval | Permute | 17474110ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | End | (g{i_3,i_4;a_3,a_4}:N-C-S * t{a_1,a_3;i_1,i_4}:N-C-S) * t{a_2,a_4;i_3,i_2}:N-C-S
+Eval | SumInplace | 3794636ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | Begin | (g{i_3,i_4;i_2,a_3}:N-C-S * t{a_3;i_3}:N-C-S) * t{a_1,a_2;i_1,i_4}:N-C-S
+Eval | Tensor | 26030ns | 6614112B | g(i_3,i_4,i_2,a_3)
+Eval | Tensor | 1053ns | 36768B | t(a_3,i_3)
+Eval | Product | 18842429ns | 6661632B | g(i_3,i_4,i_2,a_3) * t(a_3,i_3) -> I(i_4,i_2)
+Eval | Tensor | 942ns | 88751616B | t(a_1,a_2,i_1,i_4)
+Eval | Product | 41386113ns | 177513984B | I(i_4,i_2) * t(a_1,a_2,i_1,i_4) -> I(a_1,a_2,i_1,i_2)
+Eval | Permute | 1039264ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | End | (g{i_3,i_4;i_2,a_3}:N-C-S * t{a_3;i_3}:N-C-S) * t{a_1,a_2;i_1,i_4}:N-C-S
+Eval | SumInplace | 23497343ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | Begin | 1/2 (g{i_3,i_4;a_3,a_4}:N-C-S * t{a_1,a_4;i_3,i_2}:N-C-S) * t{a_2,a_3;i_4,i_1}:N-C-S
+Eval | Tensor | 24877ns | 84920312B | g(i_3,i_4,a_3,a_4)
+Eval | Tensor | 1002ns | 88751616B | t(a_1,a_4,i_3,i_2)
+Eval | Product | 116189835ns | 262423544B | g(i_3,i_4,a_3,a_4) * t(a_1,a_4,i_3,i_2) -> I(i_4,a_1,i_2,a_3)
+Eval | Tensor | 2375ns | 88751616B | t(a_2,a_3,i_4,i_1)
+Eval | Product | 133674004ns | 266254848B | I(i_4,a_1,i_2,a_3) * t(a_2,a_3,i_4,i_1) -> I(a_2,a_1,i_1,i_2)
+Eval | Constant | 1302ns | 8B | {{{\frac{1}{2}}}}
+Eval | Product | 683608ns | 177503240B | I(a_2,a_1,i_1,i_2) * {{{\frac{1}{2}}}} -> I(a_2,a_1,i_1,i_2)
+Eval | Permute | 13405897ns | 177503232B | I(a_2,a_1,i_1,i_2)
+Term | End | 1/2 (g{i_3,i_4;a_3,a_4}:N-C-S * t{a_1,a_4;i_3,i_2}:N-C-S) * t{a_2,a_3;i_4,i_1}:N-C-S
+Eval | SumInplace | 3925147ns | 177503232B | I(a_2,a_1,i_1,i_2)
+Term | Begin | (g{i_3,i_4;i_1,a_3}:N-C-S * t{a_1,a_3;i_3,i_2}:N-C-S) * t{a_2;i_4}:N-C-S
+Eval | Tensor | 26631ns | 6614112B | g(i_3,i_4,i_1,a_3)
+Eval | Tensor | 1363ns | 88751616B | t(a_1,a_3,i_3,i_2)
+Eval | Product | 82868982ns | 102299616B | g(i_3,i_4,i_1,a_3) * t(a_1,a_3,i_3,i_2) -> I(i_4,a_1,i_2,i_1)
+Eval | Tensor | 2284ns | 36768B | t(a_2,i_4)
+Eval | Product | 25853786ns | 95722272B | I(i_4,a_1,i_2,i_1) * t(a_2,i_4) -> I(a_1,a_2,i_1,i_2)
+Eval | Permute | 1331507ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | End | (g{i_3,i_4;i_1,a_3}:N-C-S * t{a_1,a_3;i_3,i_2}:N-C-S) * t{a_2;i_4}:N-C-S
+Eval | SumInplace | 25126934ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | Begin | 1/2 (g{i_3,i_4;i_1,i_2}:N-C-S * t{a_1;i_3}:N-C-S) * t{a_2;i_4}:N-C-S
+Eval | Tensor | 29758ns | 574912B | g(i_3,i_4,i_1,i_2)
+Eval | Tensor | 1282ns | 36768B | t(a_1,i_3)
+Eval | Product | 31171158ns | 7545568B | g(i_3,i_4,i_1,i_2) * t(a_1,i_3) -> I(i_4,a_1,i_2,i_1)
+Eval | Tensor | 1282ns | 36768B | t(a_2,i_4)
+Eval | Product | 33928434ns | 95722272B | I(i_4,a_1,i_2,i_1) * t(a_2,i_4) -> I(a_2,a_1,i_2,i_1)
+Eval | Constant | 1282ns | 8B | {{{\frac{1}{2}}}}
+Eval | Product | 882050ns | 177503240B | I(a_2,a_1,i_2,i_1) * {{{\frac{1}{2}}}} -> I(a_2,a_1,i_2,i_1)
+Eval | Permute | 24064105ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | End | 1/2 (g{i_3,i_4;i_1,i_2}:N-C-S * t{a_1;i_3}:N-C-S) * t{a_2;i_4}:N-C-S
+Eval | SumInplace | 30051730ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | Begin | 2 (g{i_3,a_2;a_3,a_4}:N-C-S * t{a_3;i_3}:N-C-S) * t{a_1,a_4;i_1,i_2}:N-C-S
+Eval | Tensor | 25299ns | 1152043680B | g(i_3,a_2,a_3,a_4)
+Eval | Tensor | 1383ns | 36768B | t(a_3,i_3)
+Eval | Product | 69745950ns | 1152438504B | g(i_3,a_2,a_3,a_4) * t(a_3,i_3) -> I(a_2,a_4)
+Eval | Tensor | 2695ns | 88751616B | t(a_1,a_4,i_1,i_2)
+Eval | Product | 32630452ns | 177861288B | I(a_2,a_4) * t(a_1,a_4,i_1,i_2) -> I(a_1,a_2,i_1,i_2)
+Eval | Constant | 1213ns | 8B | {{{2}}}
+Eval | Product | 902540ns | 177503240B | I(a_1,a_2,i_1,i_2) * {{{2}}} -> I(a_1,a_2,i_1,i_2)
+Eval | Permute | 999287ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | End | 2 (g{i_3,a_2;a_3,a_4}:N-C-S * t{a_3;i_3}:N-C-S) * t{a_1,a_4;i_1,i_2}:N-C-S
+Eval | SumInplace | 22757295ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | Begin | -1 (g{i_3,i_4;a_3,a_4}:N-C-S * t{a_1,a_4;i_1,i_3}:N-C-S) * t{a_2,a_3;i_2,i_4}:N-C-S
+Cache | Release | 1502144429761737779 | 0/2 | 4 | 178742016B
+Eval | Tensor | 2455ns | 88751616B | t(a_2,a_3,i_2,i_4)
+Eval | Product | 124384093ns | 266254848B | I(i_4,a_1,i_1,a_3) * t(a_2,a_3,i_2,i_4) -> I(a_2,a_1,i_2,i_1)
+Eval | Constant | 1422ns | 8B | {{{-1}}}
+Eval | Product | 1544838ns | 177503240B | I(a_2,a_1,i_2,i_1) * {{{-1}}} -> I(a_2,a_1,i_2,i_1)
+Eval | Permute | 16662305ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | End | -1 (g{i_3,i_4;a_3,a_4}:N-C-S * t{a_1,a_4;i_1,i_3}:N-C-S) * t{a_2,a_3;i_2,i_4}:N-C-S
+Eval | SumInplace | 3248353ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | Begin | (g{i_3,i_4;a_3,a_4}:N-C-S * t{a_2,a_3;i_3,i_4}:N-C-S) * t{a_1,a_4;i_1,i_2}:N-C-S
+Eval | Tensor | 29346ns | 84920312B | g(i_3,i_4,a_3,a_4)
+Eval | Tensor | 1212ns | 88751616B | t(a_2,a_3,i_3,i_4)
+Eval | Product | 107021538ns | 174029984B | g(i_3,i_4,a_3,a_4) * t(a_2,a_3,i_3,i_4) -> I(a_2,a_4)
+Eval | Tensor | 2394ns | 88751616B | t(a_1,a_4,i_1,i_2)
+Eval | Product | 36367185ns | 177861288B | I(a_2,a_4) * t(a_1,a_4,i_1,i_2) -> I(a_2,a_1,i_2,i_1)
+Eval | Permute | 17591487ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | End | (g{i_3,i_4;a_3,a_4}:N-C-S * t{a_2,a_3;i_3,i_4}:N-C-S) * t{a_1,a_4;i_1,i_2}:N-C-S
+Eval | SumInplace | 21623922ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | Begin | 2 (g{i_3,i_4;a_3,a_4}:N-C-S * t{a_1,a_3;i_1,i_3}:N-C-S) * t{a_2,a_4;i_2,i_4}:N-C-S
+Cache | Release | 223784662887107466 | 0/2 | 3 | 89990400B
+Eval | Tensor | 2875ns | 88751616B | t(a_2,a_4,i_2,i_4)
+Eval | Product | 120865359ns | 266254848B | I(i_4,a_1,i_1,a_4) * t(a_2,a_4,i_2,i_4) -> I(a_2,a_1,i_2,i_1)
+Eval | Constant | 1393ns | 8B | {{{2}}}
+Eval | Product | 989668ns | 177503240B | I(a_2,a_1,i_2,i_1) * {{{2}}} -> I(a_2,a_1,i_2,i_1)
+Eval | Permute | 21278345ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | End | 2 (g{i_3,i_4;a_3,a_4}:N-C-S * t{a_1,a_3;i_1,i_3}:N-C-S) * t{a_2,a_4;i_2,i_4}:N-C-S
+Eval | SumInplace | 4522169ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | Begin | ((g{i_3,i_4;a_3,a_4}:N-C-S * t{a_4;i_2}:N-C-S) * t{a_2,a_3;i_4,i_1}:N-C-S) * t{a_1;i_3}:N-C-S
+Eval | Tensor | 28875ns | 84920312B | g(i_3,i_4,a_3,a_4)
+Eval | Tensor | 1373ns | 36768B | t(a_4,i_2)
+Eval | Product | 36615264ns | 91890968B | g(i_3,i_4,a_3,a_4) * t(a_4,i_2) -> I(i_4,i_3,i_2,a_3)
+Cache | Store | 14406268377898944426 | 4/5 | 7 | 96924288B
+Eval | Tensor | 1834ns | 88751616B | t(a_2,a_3,i_4,i_1)
+Eval | Product | 90152935ns | 102619392B | I(i_4,i_3,i_2,a_3) * t(a_2,a_3,i_4,i_1) -> I(i_3,a_2,i_1,i_2)
+Eval | Tensor | 2344ns | 36768B | t(a_1,i_3)
+Eval | Product | 26913770ns | 95722272B | I(i_3,a_2,i_1,i_2) * t(a_1,i_3) -> I(a_1,a_2,i_1,i_2)
+Eval | Permute | 1312381ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | End | ((g{i_3,i_4;a_3,a_4}:N-C-S * t{a_4;i_2}:N-C-S) * t{a_2,a_3;i_4,i_1}:N-C-S) * t{a_1;i_3}:N-C-S
+Eval | SumInplace | 26789119ns | 177503232B | I(a_1,a_2,i_1,i_2)
+Term | Begin | -2 ((g{i_3,i_4;a_3,a_4}:N-C-S * t{a_3;i_3}:N-C-S) * t{a_4;i_2}:N-C-S) * t{a_1,a_2;i_1,i_4}:N-C-S
+Eval | Tensor | 25509ns | 84920312B | g(i_3,i_4,a_3,a_4)
+Eval | Tensor | 1103ns | 36768B | t(a_3,i_3)
+Eval | Product | 27110990ns | 84993848B | g(i_3,i_4,a_3,a_4) * t(a_3,i_3) -> I(i_4,a_4)
+Cache | Store | 6443766742777296727 | 1/2 | 8 | 96961056B
+Eval | Tensor | 1603ns | 36768B | t(a_4,i_2)
+Eval | Product | 5897891ns | 84288B | I(i_4,a_4) * t(a_4,i_2) -> I(i_4,i_2)
+Eval | Tensor | 1052ns | 88751616B | t(a_1,a_2,i_1,i_4)
+Eval | Product | 33499017ns | 177513984B | I(i_4,i_2) * t(a_1,a_2,i_1,i_4) -> I(a_2,a_1,i_2,i_1)
+Eval | Constant | 1683ns | 8B | {{{-2}}}
+Eval | Product | 1408195ns | 177503240B | I(a_2,a_1,i_2,i_1) * {{{-2}}} -> I(a_2,a_1,i_2,i_1)
+Eval | Permute | 16942706ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | End | -2 ((g{i_3,i_4;a_3,a_4}:N-C-S * t{a_3;i_3}:N-C-S) * t{a_4;i_2}:N-C-S) * t{a_1,a_2;i_1,i_4}:N-C-S
+Eval | SumInplace | 22132391ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | Begin | ((g{i_3,i_4;a_3,a_4}:N-C-S * t{a_3;i_4}:N-C-S) * t{a_4;i_2}:N-C-S) * t{a_1,a_2;i_1,i_3}:N-C-S
+Eval | Tensor | 25910ns | 84920312B | g(i_3,i_4,a_3,a_4)
+Eval | Tensor | 1162ns | 36768B | t(a_3,i_4)
+Eval | Product | 31830980ns | 84993848B | g(i_3,i_4,a_3,a_4) * t(a_3,i_4) -> I(i_3,a_4)
+Cache | Store | 4354995230928331310 | 1/2 | 9 | 96997824B
+Eval | Tensor | 1634ns | 36768B | t(a_4,i_2)
+Eval | Product | 7297369ns | 84288B | I(i_3,a_4) * t(a_4,i_2) -> I(i_3,i_2)
+Eval | Tensor | 911ns | 88751616B | t(a_1,a_2,i_1,i_3)
+Eval | Product | 33080951ns | 177513984B | I(i_3,i_2) * t(a_1,a_2,i_1,i_3) -> I(a_2,a_1,i_2,i_1)
+Eval | Permute | 14774465ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | End | ((g{i_3,i_4;a_3,a_4}:N-C-S * t{a_3;i_4}:N-C-S) * t{a_4;i_2}:N-C-S) * t{a_1,a_2;i_1,i_3}:N-C-S
+Eval | SumInplace | 20644824ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | Begin | ((g{i_3,i_4;a_3,a_4}:N-C-S * t{a_4;i_2}:N-C-S) * t{a_1,a_3;i_1,i_4}:N-C-S) * t{a_2;i_3}:N-C-S
+Cache | Access | 14406268377898944426 | 3/5 | 8 | 96997824B
+Eval | Tensor | 2255ns | 88751616B | t(a_1,a_3,i_1,i_4)
+Eval | Product | 85457002ns | 102619392B | I(i_4,i_3,i_2,a_3) * t(a_1,a_3,i_1,i_4) -> I(i_3,a_1,i_1,i_2)
+Eval | Tensor | 2134ns | 36768B | t(a_2,i_3)
+Eval | Product | 22890904ns | 95722272B | I(i_3,a_1,i_1,i_2) * t(a_2,i_3) -> I(a_2,a_1,i_1,i_2)
+Eval | Permute | 13873037ns | 177503232B | I(a_2,a_1,i_1,i_2)
+Term | End | ((g{i_3,i_4;a_3,a_4}:N-C-S * t{a_4;i_2}:N-C-S) * t{a_1,a_3;i_1,i_4}:N-C-S) * t{a_2;i_3}:N-C-S
+Eval | SumInplace | 25246816ns | 177503232B | I(a_2,a_1,i_1,i_2)
+Term | Begin | -2 ((g{i_3,i_4;a_3,a_4}:N-C-S * t{a_4;i_4}:N-C-S) * t{a_1,a_3;i_1,i_2}:N-C-S) * t{a_2;i_3}:N-C-S
+Cache | Release | 6443766742777296727 | 0/2 | 7 | 96961056B
+Eval | Tensor | 2385ns | 88751616B | t(a_1,a_3,i_1,i_2)
+Eval | Product | 30947297ns | 95722272B | I(i_3,a_3) * t(a_1,a_3,i_1,i_2) -> I(i_3,a_1,i_2,i_1)
+Eval | Tensor | 2053ns | 36768B | t(a_2,i_3)
+Eval | Product | 12500421ns | 95722272B | I(i_3,a_1,i_2,i_1) * t(a_2,i_3) -> I(a_2,a_1,i_1,i_2)
+Eval | Constant | 1393ns | 8B | {{{-2}}}
+Eval | Product | 1087967ns | 177503240B | I(a_2,a_1,i_1,i_2) * {{{-2}}} -> I(a_2,a_1,i_1,i_2)
+Eval | Permute | 12743640ns | 177503232B | I(a_2,a_1,i_1,i_2)
+Term | End | -2 ((g{i_3,i_4;a_3,a_4}:N-C-S * t{a_4;i_4}:N-C-S) * t{a_1,a_3;i_1,i_2}:N-C-S) * t{a_2;i_3}:N-C-S
+Eval | SumInplace | 28793684ns | 177503232B | I(a_2,a_1,i_1,i_2)
+Term | Begin | ((g{i_3,i_4;a_3,a_4}:N-C-S * t{a_4;i_2}:N-C-S) * t{a_1,a_3;i_3,i_1}:N-C-S) * t{a_2;i_4}:N-C-S
+Cache | Access | 14406268377898944426 | 2/5 | 6 | 96961056B
+Eval | Tensor | 2235ns | 88751616B | t(a_1,a_3,i_3,i_1)
+Eval | Product | 85305089ns | 102619392B | I(i_4,i_3,i_2,a_3) * t(a_1,a_3,i_3,i_1) -> I(i_4,a_1,i_1,i_2)
+Eval | Tensor | 2375ns | 36768B | t(a_2,i_4)
+Eval | Product | 22304814ns | 95722272B | I(i_4,a_1,i_1,i_2) * t(a_2,i_4) -> I(a_2,a_1,i_2,i_1)
+Eval | Permute | 20621228ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | End | ((g{i_3,i_4;a_3,a_4}:N-C-S * t{a_4;i_2}:N-C-S) * t{a_1,a_3;i_3,i_1}:N-C-S) * t{a_2;i_4}:N-C-S
+Eval | SumInplace | 28168498ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | Begin | ((g{i_3,i_4;i_2,a_3}:N-C-S * t{a_3;i_1}:N-C-S) * t{a_1;i_4}:N-C-S) * t{a_2;i_3}:N-C-S
+Cache | Release | 10186165109937716840 | 0/2 | 5 | 96341664B
+Eval | Tensor | 2425ns | 36768B | t(a_1,i_4)
+Eval | Product | 27818153ns | 7590048B | I(i_3,i_4,i_2,i_1) * t(a_1,i_4) -> I(i_3,a_1,i_2,i_1)
+Eval | Tensor | 1383ns | 36768B | t(a_2,i_3)
+Eval | Product | 37284354ns | 95722272B | I(i_3,a_1,i_2,i_1) * t(a_2,i_3) -> I(a_2,a_1,i_2,i_1)
+Eval | Permute | 18914247ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | End | ((g{i_3,i_4;i_2,a_3}:N-C-S * t{a_3;i_1}:N-C-S) * t{a_1;i_4}:N-C-S) * t{a_2;i_3}:N-C-S
+Eval | SumInplace | 25921557ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | Begin | ((g{i_3,i_4;a_3,a_4}:N-C-S * t{a_4;i_3}:N-C-S) * t{a_1,a_3;i_1,i_2}:N-C-S) * t{a_2;i_4}:N-C-S
+Cache | Release | 4354995230928331310 | 0/2 | 4 | 96304896B
+Eval | Tensor | 2254ns | 88751616B | t(a_1,a_3,i_1,i_2)
+Eval | Product | 32036226ns | 95722272B | I(i_4,a_3) * t(a_1,a_3,i_1,i_2) -> I(i_4,a_1,i_2,i_1)
+Eval | Tensor | 2635ns | 36768B | t(a_2,i_4)
+Eval | Product | 20068212ns | 95722272B | I(i_4,a_1,i_2,i_1) * t(a_2,i_4) -> I(a_2,a_1,i_1,i_2)
+Eval | Permute | 14438297ns | 177503232B | I(a_2,a_1,i_1,i_2)
+Term | End | ((g{i_3,i_4;a_3,a_4}:N-C-S * t{a_4;i_3}:N-C-S) * t{a_1,a_3;i_1,i_2}:N-C-S) * t{a_2;i_4}:N-C-S
+Eval | SumInplace | 29506939ns | 177503232B | I(a_2,a_1,i_1,i_2)
+Term | Begin | 1/2 ((g{i_3,i_4;a_3,a_4}:N-C-S * t{a_3;i_1}:N-C-S) * t{a_4;i_2}:N-C-S) * t{a_1,a_2;i_3,i_4}:N-C-S
+Cache | Access | 14406268377898944426 | 1/5 | 3 | 96304896B
+Eval | Tensor | 2264ns | 36768B | t(a_4,i_2)
+Eval | Product | 28757244ns | 7590048B | I(i_3,i_4,i_1,a_4) * t(a_4,i_2) -> I(i_4,i_3,i_2,i_1)
+Cache | Store | 13639596688665582564 | 1/2 | 4 | 96924288B
+Eval | Tensor | 1643ns | 88751616B | t(a_1,a_2,i_3,i_4)
+Eval | Product | 115120954ns | 178122624B | I(i_4,i_3,i_2,i_1) * t(a_1,a_2,i_3,i_4) -> I(a_2,a_1,i_2,i_1)
+Eval | Constant | 1623ns | 8B | {{{\frac{1}{2}}}}
+Eval | Product | 875037ns | 177503240B | I(a_2,a_1,i_2,i_1) * {{{\frac{1}{2}}}} -> I(a_2,a_1,i_2,i_1)
+Eval | Permute | 14803171ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | End | 1/2 ((g{i_3,i_4;a_3,a_4}:N-C-S * t{a_3;i_1}:N-C-S) * t{a_4;i_2}:N-C-S) * t{a_1,a_2;i_3,i_4}:N-C-S
+Eval | SumInplace | 22515049ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | Begin | 1/2 ((g{i_3,i_4;a_3,a_4}:N-C-S * t{a_3,a_4;i_1,i_2}:N-C-S) * t{a_1;i_3}:N-C-S) * t{a_2;i_4}:N-C-S
+Cache | Release | 14580268236581494750 | 0/2 | 3 | 96304896B
+Eval | Tensor | 2435ns | 36768B | t(a_1,i_3)
+Eval | Product | 24484576ns | 7590048B | I(i_4,i_3,i_2,i_1) * t(a_1,i_3) -> I(i_4,a_1,i_2,i_1)
+Eval | Tensor | 1392ns | 36768B | t(a_2,i_4)
+Eval | Product | 33570233ns | 95722272B | I(i_4,a_1,i_2,i_1) * t(a_2,i_4) -> I(a_2,a_1,i_2,i_1)
+Eval | Constant | 1603ns | 8B | {{{\frac{1}{2}}}}
+Eval | Product | 809481ns | 177503240B | I(a_2,a_1,i_2,i_1) * {{{\frac{1}{2}}}} -> I(a_2,a_1,i_2,i_1)
+Eval | Permute | 16094770ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | End | 1/2 ((g{i_3,i_4;a_3,a_4}:N-C-S * t{a_3,a_4;i_1,i_2}:N-C-S) * t{a_1;i_3}:N-C-S) * t{a_2;i_4}:N-C-S
+Eval | SumInplace | 26613441ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | Begin | -1 ((g{i_3,a_2;a_3,a_4}:N-C-S * t{a_3;i_1}:N-C-S) * t{a_4;i_2}:N-C-S) * t{a_1;i_3}:N-C-S
+Cache | Release | 10515943467231087096 | 0/3 | 2 | 7553280B
+Eval | Tensor | 2826ns | 36768B | t(a_4,i_2)
+Eval | Product | 31527706ns | 95722272B | I(i_3,a_2,i_1,a_4) * t(a_4,i_2) -> I(i_3,a_2,i_1,i_2)
+Eval | Tensor | 1493ns | 36768B | t(a_1,i_3)
+Eval | Product | 36673837ns | 95722272B | I(i_3,a_2,i_1,i_2) * t(a_1,i_3) -> I(a_2,a_1,i_2,i_1)
+Eval | Constant | 1523ns | 8B | {{{-1}}}
+Eval | Product | 662968ns | 177503240B | I(a_2,a_1,i_2,i_1) * {{{-1}}} -> I(a_2,a_1,i_2,i_1)
+Eval | Permute | 14007988ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | End | -1 ((g{i_3,a_2;a_3,a_4}:N-C-S * t{a_3;i_1}:N-C-S) * t{a_4;i_2}:N-C-S) * t{a_1;i_3}:N-C-S
+Eval | SumInplace | 28352384ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | Begin | -2 ((g{i_3,i_4;a_3,a_4}:N-C-S * t{a_4;i_2}:N-C-S) * t{a_1,a_3;i_1,i_3}:N-C-S) * t{a_2;i_4}:N-C-S
+Cache | Release | 14406268377898944426 | 0/5 | 1 | 619392B
+Eval | Tensor | 2304ns | 88751616B | t(a_1,a_3,i_1,i_3)
+Eval | Product | 90246305ns | 102619392B | I(i_4,i_3,i_2,a_3) * t(a_1,a_3,i_1,i_3) -> I(i_4,a_1,i_1,i_2)
+Eval | Tensor | 2044ns | 36768B | t(a_2,i_4)
+Eval | Product | 23938884ns | 95722272B | I(i_4,a_1,i_1,i_2) * t(a_2,i_4) -> I(a_2,a_1,i_2,i_1)
+Eval | Constant | 1282ns | 8B | {{{-2}}}
+Eval | Product | 698557ns | 177503240B | I(a_2,a_1,i_2,i_1) * {{{-2}}} -> I(a_2,a_1,i_2,i_1)
+Eval | Permute | 18561737ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | End | -2 ((g{i_3,i_4;a_3,a_4}:N-C-S * t{a_4;i_2}:N-C-S) * t{a_1,a_3;i_1,i_3}:N-C-S) * t{a_2;i_4}:N-C-S
+Eval | SumInplace | 28888868ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | Begin | 1/2 (((g{i_3,i_4;a_3,a_4}:N-C-S * t{a_3;i_1}:N-C-S) * t{a_4;i_2}:N-C-S) * t{a_1;i_3}:N-C-S) * t{a_2;i_4}:N-C-S
+Cache | Release | 13639596688665582564 | 0/2 | 0 | 0B
+Eval | Tensor | 2224ns | 36768B | t(a_1,i_3)
+Eval | Product | 30375184ns | 7590048B | I(i_4,i_3,i_2,i_1) * t(a_1,i_3) -> I(i_4,a_1,i_2,i_1)
+Eval | Tensor | 1263ns | 36768B | t(a_2,i_4)
+Eval | Product | 31757258ns | 95722272B | I(i_4,a_1,i_2,i_1) * t(a_2,i_4) -> I(a_2,a_1,i_2,i_1)
+Eval | Constant | 1373ns | 8B | {{{\frac{1}{2}}}}
+Eval | Product | 923321ns | 177503240B | I(a_2,a_1,i_2,i_1) * {{{\frac{1}{2}}}} -> I(a_2,a_1,i_2,i_1)
+Eval | Permute | 22182128ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Term | End | 1/2 (((g{i_3,i_4;a_3,a_4}:N-C-S * t{a_3;i_1}:N-C-S) * t{a_4;i_2}:N-C-S) * t{a_1;i_3}:N-C-S) * t{a_2;i_4}:N-C-S
+Eval | SumInplace | 28545316ns | 177503232B | I(a_2,a_1,i_2,i_1)
+Eval | Symmetrize | 26495984ns | 177503232B | I(a_1,a_2,i_1,i_2)

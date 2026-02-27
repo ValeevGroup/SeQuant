@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1a23f98a731ee924bc0b4342f57a7b57d0:
+
+Function sequant::opt::detail::flops_counter
+============================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_single_term.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::flops_counter(has_index_extent auto&&)
+   :project: SeQuant

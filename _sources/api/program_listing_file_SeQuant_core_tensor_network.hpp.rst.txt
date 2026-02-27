@@ -1,0 +1,28 @@
+
+.. _program_listing_file_SeQuant_core_tensor_network.hpp:
+
+Program Listing for File tensor_network.hpp
+===========================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_tensor_network.hpp>` (``SeQuant/core/tensor_network.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Eduard Valeyev on 9/26/25.
+   //
+   
+   #ifndef SEQUANT_CORE_TENSOR_NETWORK_HPP
+   #define SEQUANT_CORE_TENSOR_NETWORK_HPP
+   
+   #include <SeQuant/core/tensor_network/v3.hpp>
+   
+   namespace sequant {
+   
+   using TensorNetwork = TensorNetworkV3;
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_CORE_TENSOR_NETWORK_HPP

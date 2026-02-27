@@ -1,0 +1,114 @@
+
+.. _file_SeQuant_core_eval_result.hpp:
+
+File result.hpp
+===============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_eval>` (``SeQuant/core/eval``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/eval/result.hpp``)
+---------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_eval_result.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/algorithm.hpp`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/eval/fwd.hpp`` (:ref:`file_SeQuant_core_eval_fwd.hpp`)
+
+- ``SeQuant/core/hash.hpp`` (:ref:`file_SeQuant_core_hash.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/logger.hpp`` (:ref:`file_SeQuant_core_logger.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``any``
+
+- ``memory``
+
+- ``range/v3/numeric.hpp``
+
+- ``range/v3/view.hpp``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_atomic.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_eval_cache_manager.hpp`
+
+- :ref:`file_SeQuant_core_eval_eval.hpp`
+
+- :ref:`file_SeQuant_core_eval_result.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_annot`
+
+- :ref:`exhale_class_classsequant_1_1_result`
+
+- :ref:`exhale_class_classsequant_1_1_result_scalar`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a5967ce75234ba469f02661c3ada775ec`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_result_8hpp_1a75c5d15657caa75d1c6c96766cbdc167`
+
+- :ref:`exhale_variable_result_8hpp_1a5f53b330034a602c8c8b818cbda4fed0`
+
+- :ref:`exhale_variable_result_8hpp_1a528bc2e4543f7a3e17fe8fa8808ec84a`
+
+- :ref:`exhale_variable_result_8hpp_1ace54e762093af58ec956fceb31c188ba`
+
+- :ref:`exhale_variable_result_8hpp_1a821be61f63e2b947c7a925bb3dd9bfd5`
+
+- :ref:`exhale_variable_result_8hpp_1a8133307333be4be0fa29bdddf0dbce5c`
+
+- :ref:`exhale_variable_result_8hpp_1a854352f53b148adc24983a58a1866d66`
+

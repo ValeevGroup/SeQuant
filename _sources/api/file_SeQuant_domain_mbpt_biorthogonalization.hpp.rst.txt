@@ -1,0 +1,95 @@
+
+.. _file_SeQuant_domain_mbpt_biorthogonalization.hpp:
+
+File biorthogonalization.hpp
+============================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_mbpt>` (``SeQuant/domain/mbpt``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/domain/mbpt/biorthogonalization.hpp``)
+------------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_mbpt_biorthogonalization.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/slotted_index.hpp`` (:ref:`file_SeQuant_core_slotted_index.hpp`)
+
+- ``SeQuant/core/utility/indices.hpp`` (:ref:`file_SeQuant_core_utility_indices.hpp`)
+
+- ``SeQuant/core/utility/memoize.hpp`` (:ref:`file_SeQuant_core_utility_memoize.hpp`)
+
+- ``concepts`` (:ref:`file_SeQuant_core_io_concepts.hpp`)
+
+- ``condition_variable``
+
+- ``cstddef``
+
+- ``mutex``
+
+- ``optional``
+
+- ``vector``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_domain_mbpt_biorthogonalization.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__mbpt`
+
+- :ref:`namespace_sequant__mbpt__detail`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1detail_1aab38ea9fdbfa791355005e91691605ab`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1detail_1af2eb64ba6f95dded31a5af99ed02057c`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1_1mbpt_1aed62a7fd9a1f02699a2745223fcf53e4`
+

@@ -1,0 +1,68 @@
+
+.. _file_SeQuant_core_tensor_network.hpp:
+
+File tensor_network.hpp
+=======================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/tensor_network.hpp``)
+------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_tensor_network.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/tensor_network/v3.hpp`` (:ref:`file_SeQuant_core_tensor_network_v3.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_eval_eval_expr.cpp`
+
+- :ref:`file_SeQuant_core_expressions_expr.cpp`
+
+- :ref:`file_SeQuant_core_optimize_single_term.hpp`
+
+- :ref:`file_SeQuant_core_wick.impl.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_biorthogonalization.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1a76768b73f1c0253327883b48d1591fc7`
+

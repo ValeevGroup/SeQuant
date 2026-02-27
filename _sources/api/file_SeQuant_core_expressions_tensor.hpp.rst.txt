@@ -1,0 +1,139 @@
+
+.. _file_SeQuant_core_expressions_tensor.hpp:
+
+File tensor.hpp
+===============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_expressions>` (``SeQuant/core/expressions``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/expressions/tensor.hpp``)
+----------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_expressions_tensor.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/attr.hpp`` (:ref:`file_SeQuant_core_attr.hpp`)
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/context.hpp`` (:ref:`file_SeQuant_core_context.hpp`)
+
+- ``SeQuant/core/expressions/abstract_tensor.hpp`` (:ref:`file_SeQuant_core_expressions_abstract_tensor.hpp`)
+
+- ``SeQuant/core/expressions/expr.hpp`` (:ref:`file_SeQuant_core_expressions_expr.hpp`)
+
+- ``SeQuant/core/expressions/labeled.hpp`` (:ref:`file_SeQuant_core_expressions_labeled.hpp`)
+
+- ``SeQuant/core/hash.hpp`` (:ref:`file_SeQuant_core_hash.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/io/latex/latex.hpp`` (:ref:`file_SeQuant_core_io_latex_latex.hpp`)
+
+- ``SeQuant/core/reserved.hpp`` (:ref:`file_SeQuant_core_reserved.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/core/utility/string.hpp`` (:ref:`file_SeQuant_core_utility_string.hpp`)
+
+- ``SeQuant/core/utility/strong.hpp`` (:ref:`file_SeQuant_core_utility_strong.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``array`` (:ref:`file_SeQuant_core_eval_backends_tiledarray_eval_expr.hpp`)
+
+- ``cstddef``
+
+- ``initializer_list``
+
+- ``iterator``
+
+- ``memory``
+
+- ``optional``
+
+- ``range/v3/all.hpp``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``string_view``
+
+- ``type_traits``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_atomic.hpp`)
+
+- ``vector``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_expr.hpp`
+
+- :ref:`file_SeQuant_core_expressions_expr.cpp`
+
+- :ref:`file_SeQuant_core_expressions_expr_algorithms.cpp`
+
+- :ref:`file_SeQuant_core_expressions_result_expr.cpp`
+
+- :ref:`file_SeQuant_core_expressions_result_expr.hpp`
+
+- :ref:`file_SeQuant_core_expressions_tensor.cpp`
+
+- :ref:`file_SeQuant_core_utility_tensor.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_op_registry.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_tensor_1_1reserved__tag`
+
+- :ref:`exhale_class_classsequant_1_1_tensor`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1ae2c6c0d4c1b036b287a0df7a5752cab8`
+
+- :ref:`exhale_function_namespacesequant_1a38e1e232c0d81c6119d57edc4527a898`
+
+- :ref:`exhale_function_namespacesequant_1aa399e3729d27a657b18529a241e086bb`
+
+- :ref:`exhale_function_namespacesequant_1a8af5b91ce7d4150b1648865642aed0eb`
+
+- :ref:`exhale_function_namespacesequant_1a62fa48844ef915fbcd75f6f9891d3893`
+

@@ -1,0 +1,79 @@
+
+.. _file_SeQuant_domain_mbpt_op_registry.hpp:
+
+File op_registry.hpp
+====================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_mbpt>` (``SeQuant/domain/mbpt``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/domain/mbpt/op_registry.hpp``)
+----------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_mbpt_op_registry.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/expressions/tensor.hpp`` (:ref:`file_SeQuant_core_expressions_tensor.hpp`)
+
+- ``SeQuant/core/reserved.hpp`` (:ref:`file_SeQuant_core_reserved.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``memory``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_domain_mbpt_context.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_op.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_op_registry.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__mbpt`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_class_classsequant_1_1mbpt_1_1_op_registry`
+
+
+Enums
+-----
+
+
+- :ref:`exhale_enum_namespacesequant_1_1mbpt_1a4c0e601427ac8aa692f8ff00aa093802`
+

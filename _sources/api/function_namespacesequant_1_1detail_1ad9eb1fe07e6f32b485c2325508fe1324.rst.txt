@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1ad9eb1fe07e6f32b485c2325508fe1324:
+
+Function sequant::detail::make_tensor(Tensor const&, bool)
+==========================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::make_tensor(Tensor const&, bool)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1io_1_1latex_1_1detail_1ac3f774a64385dbd9b7b6de9e77af8f9e:
+
+Function sequant::io::latex::detail::SQ_IMPL1(char)
+===================================================
+
+- Defined in :ref:`file_SeQuant_core_io_latex_latex.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::io::latex::detail::SQ_IMPL1(char)
+   :project: SeQuant

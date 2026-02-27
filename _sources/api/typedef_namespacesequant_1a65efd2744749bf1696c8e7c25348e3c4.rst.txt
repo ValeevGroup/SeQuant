@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1a65efd2744749bf1696c8e7c25348e3c4:
+
+Typedef sequant::SumPtr
+=======================
+
+- Defined in :ref:`file_SeQuant_core_expr_fwd.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::SumPtr
+   :project: SeQuant

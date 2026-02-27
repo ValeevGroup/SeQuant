@@ -1,0 +1,157 @@
+
+.. _file_SeQuant_core_eval_eval_expr.cpp:
+
+File eval_expr.cpp
+==================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_eval>` (``SeQuant/core/eval``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/eval/eval_expr.cpp``)
+------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_eval_eval_expr.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/attr.hpp`` (:ref:`file_SeQuant_core_attr.hpp`)
+
+- ``SeQuant/core/complex.hpp`` (:ref:`file_SeQuant_core_complex.hpp`)
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/context.hpp`` (:ref:`file_SeQuant_core_context.hpp`)
+
+- ``SeQuant/core/eval/eval_expr.hpp`` (:ref:`file_SeQuant_core_eval_eval_expr.hpp`)
+
+- ``SeQuant/core/eval/eval_node.hpp`` (:ref:`file_SeQuant_core_eval_eval_node.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/hash.hpp`` (:ref:`file_SeQuant_core_hash.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/io/serialization/serialization.hpp`` (:ref:`file_SeQuant_core_io_serialization_serialization.hpp`)
+
+- ``SeQuant/core/tensor_canonicalizer.hpp`` (:ref:`file_SeQuant_core_tensor_canonicalizer.hpp`)
+
+- ``SeQuant/core/tensor_network.hpp`` (:ref:`file_SeQuant_core_tensor_network.hpp`)
+
+- ``SeQuant/core/utility/indices.hpp`` (:ref:`file_SeQuant_core_utility_indices.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/external/bliss/graph.hh``
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``cmath``
+
+- ``range/v3/action.hpp``
+
+- ``range/v3/algorithm.hpp``
+
+- ``range/v3/functional.hpp``
+
+- ``range/v3/iterator.hpp``
+
+- ``range/v3/view.hpp``
+
+- ``ranges`` (:ref:`file_SeQuant_core_ranges.hpp`)
+
+- ``string_view``
+
+- ``type_traits``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_atomic.hpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__detail`
+
+- :ref:`namespace_sequant__impl`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_expr_with_hash`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a6381a4c1ea178eabb06c37d9f56888d8`
+
+- :ref:`exhale_function_namespacesequant_1a784c2ff0f0f8f03c50f97c0f42185dbe`
+
+- :ref:`exhale_function_namespacesequant_1acef35bcc23ec78efaa1439ecea0ee134`
+
+- :ref:`exhale_function_namespacesequant_1a53dff8f561aec0c7c9e877a1b05db11e`
+
+- :ref:`exhale_function_namespacesequant_1aade921b9d1a013a42c0ca72104becbb9`
+
+- :ref:`exhale_function_namespacesequant_1a825ba591538733e7ec751bc424722b18`
+
+- :ref:`exhale_function_namespacesequant_1abf8930f819f23079c5ae3c3f4a8f75b4`
+
+- :ref:`exhale_function_namespacesequant_1a18069ae79cd08320a75c1d427946dc49`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1ad9eb1fe07e6f32b485c2325508fe1324`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1ab308e16d31ff599fa9bc0108ba43b9cf`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a7d313c14b9a0c38623b8e1488e23539a`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a68c20350958ffa00a157608479aecb31`
+
+- :ref:`exhale_function_namespacesequant_1aa8a75c6087354bc7e8105b41e437503f`
+
+- :ref:`exhale_function_namespacesequant_1_1impl_1a3610fba3e4be8d05493e8da8f825a3e4`
+
+- :ref:`exhale_function_namespacesequant_1a77bacfa9b834eb5b0bbb7c44d52b25c1`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1a74afa3535eaf938f0871577ba1b7704f`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1_1detail_1a48da303089c7844feb79e823a09ce11c`
+
+- :ref:`exhale_variable_namespacesequant_1_1detail_1aee878427f59fc50203a4277675aa62c5`
+

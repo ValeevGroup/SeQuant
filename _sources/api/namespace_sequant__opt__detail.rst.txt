@@ -1,0 +1,31 @@
+
+.. _namespace_sequant__opt__detail:
+
+Namespace sequant::opt::detail
+==============================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_opt_res`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a23f98a731ee924bc0b4342f57a7b57d0`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a4389a071cc206f08ceaf205801ec5b12`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a529fb03b2eee23e7acd7a555b8982635`

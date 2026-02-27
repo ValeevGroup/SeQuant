@@ -1,0 +1,89 @@
+
+.. _file_SeQuant_core_optimize_single_term.hpp:
+
+File single_term.hpp
+====================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_optimize>` (``SeQuant/core/optimize``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/optimize/single_term.hpp``)
+------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_optimize_single_term.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/tensor_network.hpp`` (:ref:`file_SeQuant_core_tensor_network.hpp`)
+
+- ``SeQuant/core/utility/indices.hpp`` (:ref:`file_SeQuant_core_utility_indices.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``bit`` (:ref:`file_SeQuant_core_bitset.hpp`)
+
+- ``range/v3/view.hpp``
+
+- ``type_traits``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_optimize_optimize.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__opt`
+
+- :ref:`namespace_sequant__opt__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_opt_res`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a23f98a731ee924bc0b4342f57a7b57d0`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a4389a071cc206f08ceaf205801ec5b12`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a529fb03b2eee23e7acd7a555b8982635`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1a55a1d1e106154fae150f83ee6b1c3265`
+

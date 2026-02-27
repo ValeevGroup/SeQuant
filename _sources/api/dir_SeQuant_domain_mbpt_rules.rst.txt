@@ -1,0 +1,26 @@
+.. _dir_SeQuant_domain_mbpt_rules:
+
+
+Directory rules
+===============
+
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_mbpt>` (``SeQuant/domain/mbpt``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+*Directory path:* ``SeQuant/domain/mbpt/rules``
+
+
+Files
+-----
+
+- :ref:`file_SeQuant_domain_mbpt_rules_csv.cpp`
+- :ref:`file_SeQuant_domain_mbpt_rules_csv.hpp`
+- :ref:`file_SeQuant_domain_mbpt_rules_df.cpp`
+- :ref:`file_SeQuant_domain_mbpt_rules_df.hpp`
+- :ref:`file_SeQuant_domain_mbpt_rules_thc.cpp`
+- :ref:`file_SeQuant_domain_mbpt_rules_thc.hpp`
+
+

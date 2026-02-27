@@ -1,0 +1,14 @@
+.. _exhale_function_namespaceboost_1_1numeric_1a44543b8665ebce19ab7c19636e20ba83:
+
+Template Function boost::numeric::nonnegative
+=============================================
+
+- Defined in :ref:`file_SeQuant_core_interval.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: boost::numeric::nonnegative(const boost::numeric::interval<T>&)
+   :project: SeQuant

@@ -1,0 +1,20 @@
+
+.. _namespace_sequant__impl:
+
+Namespace sequant::impl
+=======================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1impl_1a3610fba3e4be8d05493e8da8f825a3e4`

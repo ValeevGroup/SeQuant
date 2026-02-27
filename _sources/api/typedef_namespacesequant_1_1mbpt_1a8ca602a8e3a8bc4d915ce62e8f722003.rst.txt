@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1mbpt_1a8ca602a8e3a8bc4d915ce62e8f722003:
+
+Typedef sequant::mbpt::BOperatorBase
+====================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::mbpt::BOperatorBase
+   :project: SeQuant

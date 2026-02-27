@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1detail_1_1index__repl__dst__t:
+
+Class index_repl_dst_t
+======================
+
+- Defined in :ref:`file_SeQuant_core_wick.impl.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::detail::index_repl_dst_t
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

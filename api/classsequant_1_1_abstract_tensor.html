@@ -1,0 +1,806 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html">
+        <link rel="prefetch" href="../_static/logo.svg" as="image">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>Class AbstractTensor - SeQuant Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/bootstrap-treeview/bootstrap-treeview.min.css?v=8176a87d" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=821744c5" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --sidebar-item-font-size: 0.95em;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">SeQuant Documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="../_static/logo.svg" alt="Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">User</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/getting_started/index.html">Getting started</a><input aria-label="Toggle navigation of Getting started" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/wick.html">Wick’s Theorem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/index_spaces.html">Register Index Spaces</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/operators.html">Operators</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../user/getting_started/installing.html">Installation</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/guide/index.html">User Guide</a><input aria-label="Toggle navigation of User Guide" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/operator.html">Operator Interface for Symbolic Many-Body Algebra</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/cc.html">Coupled-Cluster Class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/io.html">I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/evaluation.html">Evaluation Trace Analysis Using Nushell</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../developer/index.html">Developer docs</a><input aria-label="Toggle navigation of Developer docs" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../developer/documentation.html">Documentation Guide</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">API reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Maintainer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../maintainer/index.html">Maintainer docs</a><input aria-label="Toggle navigation of Maintainer docs" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../maintainer/release.html">Release Guide</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">See Also</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/tiledarray">TiledArray</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/mpqc">Massively Parallel Quantum Chemistry</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io">Valeev Research Group</a></li>
+</ul>
+
+</div></div>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="../_sources/api/classsequant_1_1_abstract_tensor.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="class-abstracttensor">
+<span id="exhale-class-classsequant-1-1-abstract-tensor"></span><h1>Class AbstractTensor<a class="headerlink" href="#class-abstracttensor" title="Link to this heading">¶</a></h1>
+<ul class="simple">
+<li><p>Defined in <a class="reference internal" href="file_SeQuant_core_expressions_abstract_tensor.hpp.html#file-sequant-core-expressions-abstract-tensor-hpp"><span class="std std-ref">File abstract_tensor.hpp</span></a></p></li>
+</ul>
+<section id="inheritance-relationships">
+<h2>Inheritance Relationships<a class="headerlink" href="#inheritance-relationships" title="Link to this heading">¶</a></h2>
+<section id="derived-types">
+<h3>Derived Types<a class="headerlink" href="#derived-types" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">public</span> <span class="pre">sequant::NormalOperator&lt;</span> <span class="pre">S</span> <span class="pre">&gt;</span></code> (<a class="reference internal" href="classsequant_1_1_normal_operator.html#exhale-class-classsequant-1-1-normal-operator"><span class="std std-ref">Template Class NormalOperator</span></a>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">public</span> <span class="pre">sequant::Tensor</span></code> (<a class="reference internal" href="classsequant_1_1_tensor.html#exhale-class-classsequant-1-1-tensor"><span class="std std-ref">Class Tensor</span></a>)</p></li>
+</ul>
+</section>
+</section>
+<section id="class-documentation">
+<h2>Class Documentation<a class="headerlink" href="#class-documentation" title="Link to this heading">¶</a></h2>
+<dl class="cpp class">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant14AbstractTensorE">
+<span id="_CPPv3N7sequant14AbstractTensorE"></span><span id="_CPPv2N7sequant14AbstractTensorE"></span><span id="sequant::AbstractTensor"></span><span class="target" id="classsequant_1_1_abstract_tensor"></span><span class="k"><span class="pre">class</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">AbstractTensor</span></span></span><a class="headerlink" href="#_CPPv4N7sequant14AbstractTensorE" title="Link to this definition">¶</a><br /></dt>
+<dd><p><a class="reference internal" href="#classsequant_1_1_abstract_tensor"><span class="std std-ref">AbstractTensor</span></a> is a <a class="reference external" href="https://en.wikipedia.org/wiki/Tensor">tensor</a> over general (i.e., not necessarily commutative) rings. A tensor with <span class="math notranslate nohighlight">\( k \geq 0 \)</span> ket (see <a class="reference external" href="https://en.wikipedia.org/wiki/Bra-ket_notation">Dirac notation</a> ) and <span class="math notranslate nohighlight">\( b \geq 0 \)</span> bra modes describes elements of a tensor product of <span class="math notranslate nohighlight">\( b+k \)</span> vector spaces. Equivalently it represents a linear map between the tensor product of <span class="math notranslate nohighlight">\( k \)</span> <em>primal</em> vector spaces to the tensor product of <span class="math notranslate nohighlight">\( b \)</span> <em>dual</em> vector spaces. <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> modes are 1-to-1 represented by unique <a class="reference external" href="https://en.wikipedia.org/wiki/Abstract_index_notation">indices</a>, represented by <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a> objects.</p>
+<p>It is also necessary to support modes that are “array-like” in that they do not refer to a vector space or its dual; such modes can represent ordinal indices (e.g. to treat a collection/sequence of tensors as a single tensor) Thus each tensor has zero or more auxiliary (aux) modes. The aux modes are invariant under the transformations of vector spaces and do not contribute to the tensor symmetries.</p>
+<p>Tensors can have the following symmetries:<ul class="simple">
+<li><p>Tensors can be symmetric or nonsymmetric with respect to the transposition of corresponding {bra,ket} modes in bra/ket mode ranges. This symmetry is used to treat particles as indistinguishable or distinguishable in physical simulation. See more below on how such mode <em>bundles</em> are handled.</p></li>
+<li><p>Tensors can be symmetric, antisymmetric, and nonsymmetric with respect to the transposition of modes within the bra or ket sets. This symmetry is used to model the distinguishable and indistinguishable (bosonic and fermionic) degrees of freedom in many-body quantum mechanics context. More complicated symmetries are not yet supported.</p></li>
+<li><p>Tensors can be symmetric, conjugate, or nonsymmetric with respect to swap of bra with ket. This symmetry corresponds to time reversal in physical simulation.</p></li>
+</ul>
+</p>
+<p>The supporting rings are not assumed to be scalars, hence tensor product supporting the concept of tensor is not necessarily commutative.</p>
+<p>For some applications the pairing of bra and ket modes is important, hence it is necessary to support not only tensors where first bra mode is paired with the first ket, but it is then necessary to support bra and ket modes that are unpaired. This introduces notion of bra/ket <em>slots</em>. A slot is either occupied by a non-null <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a> (hence corresponds to a bra or ket mode), or empty (i.e., occupied by a null <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a>). Tensors with non-symmetric bras and kets can have empty slots in arbitrary positions in bra and ket slot bundles. Such tensors symmetric with respect to reordering of braket bundles (<code class="docutils literal notranslate"><a class="reference internal" href="#classsequant_1_1_abstract_tensor_1afdc27e08bbcc250c0df4b8d56989a50f"><span class="std std-ref"><span class="pre">_column_symmetry()</span></span></a></code>) assume the canonical order of slots, defined as follows:<ul class="simple">
+<li><p>paired braket slot bundles (both bra and ket slots are nonempty) appear first</p></li>
+<li><p>unpaired bra slots appear next (with ket slots empty, or without altogether is there are no unpaired ket slots)</p></li>
+<li><p>unpaired ket slots appear next (without matching bra slots).</p></li>
+</ul>
+</p>
+<p>Empty aux slots are not permitted.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This interface class defines a <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> <em>concept</em>. All <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> objects must fulfill the is_tensor trait (see below). To adapt an existing class intrusively derive it from <a class="reference internal" href="#classsequant_1_1_abstract_tensor"><span class="std std-ref">AbstractTensor</span></a> and implement all member functions. This allows to implement heterogeneous containers of objects that meet the <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> concept. </p>
+</div>
+<p>Subclassed by <a class="reference internal" href="classsequant_1_1_normal_operator.html#classsequant_1_1_normal_operator"><span class="std std-ref">sequant::NormalOperator&lt; S &gt;</span></a>, <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">sequant::Tensor</span></a></p>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-types">Public Types</p>
+<dl class="cpp type">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant14AbstractTensor19const_any_view_randE">
+<span id="_CPPv3N7sequant14AbstractTensor19const_any_view_randE"></span><span id="_CPPv2N7sequant14AbstractTensor19const_any_view_randE"></span><span class="target" id="classsequant_1_1_abstract_tensor_1a4f83d6a10cd905de3daa35d69ac7d2c6"></span><span class="k"><span class="pre">using</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">const_any_view_rand</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="n"><span class="pre">ranges</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">any_view</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="n"><span class="pre">ranges</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">category</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">random_access</span></span><span class="p"><span class="pre">&gt;</span></span><a class="headerlink" href="#_CPPv4N7sequant14AbstractTensor19const_any_view_randE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp type">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant14AbstractTensor21const_any_view_randszE">
+<span id="_CPPv3N7sequant14AbstractTensor21const_any_view_randszE"></span><span id="_CPPv2N7sequant14AbstractTensor21const_any_view_randszE"></span><span class="target" id="classsequant_1_1_abstract_tensor_1ae82771ad66f2105b8e4337b64bf40a1a"></span><span class="k"><span class="pre">using</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">const_any_view_randsz</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="n"><span class="pre">ranges</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">any_view</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="n"><span class="pre">ranges</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">category</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">random_access</span></span><span class="w"> </span><span class="o"><span class="pre">|</span></span><span class="w"> </span><span class="n"><span class="pre">ranges</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">category</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">sized</span></span><span class="p"><span class="pre">&gt;</span></span><a class="headerlink" href="#_CPPv4N7sequant14AbstractTensor21const_any_view_randszE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp type">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant14AbstractTensor13any_view_randE">
+<span id="_CPPv3N7sequant14AbstractTensor13any_view_randE"></span><span id="_CPPv2N7sequant14AbstractTensor13any_view_randE"></span><span class="target" id="classsequant_1_1_abstract_tensor_1a801c71afbaa2638f8cb9bb9a41546415"></span><span class="k"><span class="pre">using</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">any_view_rand</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="n"><span class="pre">ranges</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">any_view</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="n"><span class="pre">ranges</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">category</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">random_access</span></span><span class="p"><span class="pre">&gt;</span></span><a class="headerlink" href="#_CPPv4N7sequant14AbstractTensor13any_view_randE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp type">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant14AbstractTensor15any_view_randszE">
+<span id="_CPPv3N7sequant14AbstractTensor15any_view_randszE"></span><span id="_CPPv2N7sequant14AbstractTensor15any_view_randszE"></span><span class="target" id="classsequant_1_1_abstract_tensor_1a1d87cec7167a264cfed5f4d9bb7c0b80"></span><span class="k"><span class="pre">using</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">any_view_randsz</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="n"><span class="pre">ranges</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">any_view</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="n"><span class="pre">ranges</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">category</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">random_access</span></span><span class="w"> </span><span class="o"><span class="pre">|</span></span><span class="w"> </span><span class="n"><span class="pre">ranges</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">category</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">sized</span></span><span class="p"><span class="pre">&gt;</span></span><a class="headerlink" href="#_CPPv4N7sequant14AbstractTensor15any_view_randszE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-functions">Public Functions</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant14AbstractTensorD0Ev">
+<span id="_CPPv3N7sequant14AbstractTensorD0Ev"></span><span id="_CPPv2N7sequant14AbstractTensorD0Ev"></span><span id="sequant::AbstractTensor::~AbstractTensor"></span><span class="target" id="classsequant_1_1_abstract_tensor_1a977151b73222f7d889c086affdcfd899"></span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">~AbstractTensor</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">default</span></span><a class="headerlink" href="#_CPPv4N7sequant14AbstractTensorD0Ev" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor6_cloneEv">
+<span id="_CPPv3NK7sequant14AbstractTensor6_cloneEv"></span><span id="_CPPv2NK7sequant14AbstractTensor6_cloneEv"></span><span id="sequant::AbstractTensor::_cloneC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1aee9238111c0fcc3d29af50426a7e36e8"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensorE" title="sequant::AbstractTensor"><span class="n"><span class="pre">AbstractTensor</span></span></a><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="sig-name descname"><span class="n"><span class="pre">_clone</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor6_cloneEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>clones this object / </p>
+<dl class="field-list simple">
+<dt class="field-odd">Throws<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span><span class="cpp-expr sig sig-inline cpp"><span class="n">missing_instantiation_for</span></span></span> – if not overloaded </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor13_clone_sharedEv">
+<span id="_CPPv3NK7sequant14AbstractTensor13_clone_sharedEv"></span><span id="_CPPv2NK7sequant14AbstractTensor13_clone_sharedEv"></span><span id="sequant::AbstractTensor::_clone_sharedC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1a94f4090da6e610542f7752f137e89773"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">shared_ptr</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensorE" title="sequant::AbstractTensor"><span class="n"><span class="pre">AbstractTensor</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_clone_shared</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor13_clone_sharedEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>clones this object producing a shared_ptr&lt;AbstractTensor&gt; so that if the derived class is an <a class="reference internal" href="classsequant_1_1_expr.html#classsequant_1_1_expr"><span class="std std-ref">Expr</span></a>, hence derived from <code class="docutils literal notranslate"><span class="pre">std::enable_shared_from_this</span></code>, the weak pointer is set correctly </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor4_braEv">
+<span id="_CPPv3NK7sequant14AbstractTensor4_braEv"></span><span id="_CPPv2NK7sequant14AbstractTensor4_braEv"></span><span id="sequant::AbstractTensor::_braC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1a5d44dde5e2dc1d271062fa4318e2cc94"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensor21const_any_view_randszE" title="sequant::AbstractTensor::const_any_view_randsz"><span class="n"><span class="pre">const_any_view_randsz</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_bra</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor4_braEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>accessor for bra slots </p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>view of a contiguous range of bra <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a> objects; empty slots may be empty (i.e., occupied by null indices). </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor4_ketEv">
+<span id="_CPPv3NK7sequant14AbstractTensor4_ketEv"></span><span id="_CPPv2NK7sequant14AbstractTensor4_ketEv"></span><span id="sequant::AbstractTensor::_ketC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1a69809acbc8e45c03b1e22f8690795251"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensor21const_any_view_randszE" title="sequant::AbstractTensor::const_any_view_randsz"><span class="n"><span class="pre">const_any_view_randsz</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_ket</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor4_ketEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>accesses ket slots </p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>view of a contiguous range of ket <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a> objects; empty slots may be empty (i.e., occupied by null indices). </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor4_auxEv">
+<span id="_CPPv3NK7sequant14AbstractTensor4_auxEv"></span><span id="_CPPv2NK7sequant14AbstractTensor4_auxEv"></span><span id="sequant::AbstractTensor::_auxC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1ae2bf27083342b01431682baf273146b3"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensor21const_any_view_randszE" title="sequant::AbstractTensor::const_any_view_randsz"><span class="n"><span class="pre">const_any_view_randsz</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_aux</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor4_auxEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>accesses aux (non-vector-space) indices </p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>view of a contiguous range of aux <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a> objects </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor7_braketEv">
+<span id="_CPPv3NK7sequant14AbstractTensor7_braketEv"></span><span id="_CPPv2NK7sequant14AbstractTensor7_braketEv"></span><span id="sequant::AbstractTensor::_braketC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1aee142e310fb362a8f0f677c050c348f9"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensor19const_any_view_randE" title="sequant::AbstractTensor::const_any_view_rand"><span class="n"><span class="pre">const_any_view_rand</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_braket</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor7_braketEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>accesses bra and ket slots </p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>concatenated (hence, non contiguous) view of bra and ket slots </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor10_braketauxEv">
+<span id="_CPPv3NK7sequant14AbstractTensor10_braketauxEv"></span><span id="_CPPv2NK7sequant14AbstractTensor10_braketauxEv"></span><span id="sequant::AbstractTensor::_braketauxC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1a739538a7f172b41ed661e868ed987cb5"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensor19const_any_view_randE" title="sequant::AbstractTensor::const_any_view_rand"><span class="n"><span class="pre">const_any_view_rand</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_braketaux</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor10_braketauxEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>accesses bra, ket, and aux slots </p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>view of a not necessarily contiguous view of bra, ket, and aux slots </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor6_slotsEv">
+<span id="_CPPv3NK7sequant14AbstractTensor6_slotsEv"></span><span id="_CPPv2NK7sequant14AbstractTensor6_slotsEv"></span><span id="sequant::AbstractTensor::_slotsC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1a66770f57d2559f4293f1cf461bb05177"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensor19const_any_view_randE" title="sequant::AbstractTensor::const_any_view_rand"><span class="n"><span class="pre">const_any_view_rand</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_slots</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor6_slotsEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>accesses all slots </p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>view of a not necessarily contiguous range of <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a> objects </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor9_bra_rankEv">
+<span id="_CPPv3NK7sequant14AbstractTensor9_bra_rankEv"></span><span id="_CPPv2NK7sequant14AbstractTensor9_bra_rankEv"></span><span id="sequant::AbstractTensor::_bra_rankC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1aec52f2b37a9e24aaceae6a249a04b67e"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_bra_rank</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor9_bra_rankEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the number of bra slots (some may be empty, hence this is the gross rank) </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor13_bra_net_rankEv">
+<span id="_CPPv3NK7sequant14AbstractTensor13_bra_net_rankEv"></span><span id="_CPPv2NK7sequant14AbstractTensor13_bra_net_rankEv"></span><span id="sequant::AbstractTensor::_bra_net_rankC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1a4dc621364225b2b10754b3f322074dc7"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_bra_net_rank</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor13_bra_net_rankEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the number of nonempty bra slots (i.e., nonnull bra indices) </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor9_ket_rankEv">
+<span id="_CPPv3NK7sequant14AbstractTensor9_ket_rankEv"></span><span id="_CPPv2NK7sequant14AbstractTensor9_ket_rankEv"></span><span id="sequant::AbstractTensor::_ket_rankC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1a54357d7ad76f94b601a614e6bc9c7030"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_ket_rank</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor9_ket_rankEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the number of bra slots (some may be empty, hence this is the gross rank) </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor13_ket_net_rankEv">
+<span id="_CPPv3NK7sequant14AbstractTensor13_ket_net_rankEv"></span><span id="_CPPv2NK7sequant14AbstractTensor13_ket_net_rankEv"></span><span id="sequant::AbstractTensor::_ket_net_rankC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1ad5e4f2ca95d76382722529c2a19e23a8"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_ket_net_rank</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor13_ket_net_rankEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the number of nonempty ket slots (i.e., nonnull bra indices) </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor9_aux_rankEv">
+<span id="_CPPv3NK7sequant14AbstractTensor9_aux_rankEv"></span><span id="_CPPv2NK7sequant14AbstractTensor9_aux_rankEv"></span><span id="sequant::AbstractTensor::_aux_rankC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1a718667161d74a1900459ad3dd76b5e8d"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_aux_rank</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor9_aux_rankEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the number of aux slots </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor10_num_slotsEv">
+<span id="_CPPv3NK7sequant14AbstractTensor10_num_slotsEv"></span><span id="_CPPv2NK7sequant14AbstractTensor10_num_slotsEv"></span><span id="sequant::AbstractTensor::_num_slotsC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1a1f4807d00bfd63b24782bae4757a9fdd"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_num_slots</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor10_num_slotsEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the number of slots </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor12_num_indicesEv">
+<span id="_CPPv3NK7sequant14AbstractTensor12_num_indicesEv"></span><span id="_CPPv2NK7sequant14AbstractTensor12_num_indicesEv"></span><span id="sequant::AbstractTensor::_num_indicesC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1a04febeda3dc6a26a01155970201242b1"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_num_indices</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor12_num_indicesEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the number of indices </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor9_symmetryEv">
+<span id="_CPPv3NK7sequant14AbstractTensor9_symmetryEv"></span><span id="_CPPv2NK7sequant14AbstractTensor9_symmetryEv"></span><span id="sequant::AbstractTensor::_symmetryC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1afd3da357f5da9fbeb7c2610d3f028f07"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485.html#_CPPv4N7sequant8SymmetryE" title="sequant::Symmetry"><span class="n"><span class="pre">Symmetry</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_symmetry</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor9_symmetryEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the permutational symmetry of the vector space indices of the tensor </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor16_braket_symmetryEv">
+<span id="_CPPv3NK7sequant14AbstractTensor16_braket_symmetryEv"></span><span id="_CPPv2NK7sequant14AbstractTensor16_braket_symmetryEv"></span><span id="sequant::AbstractTensor::_braket_symmetryC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1ab991a28ab3d8c5ae4122524f499ca18e"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1a8fa350a3e3719764fcc1ce8aeddaea46.html#_CPPv4N7sequant14BraKetSymmetryE" title="sequant::BraKetSymmetry"><span class="n"><span class="pre">BraKetSymmetry</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_braket_symmetry</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor16_braket_symmetryEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the symmetry of tensor under exchange of vectors space (bra) and its dual (ket) </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor16_column_symmetryEv">
+<span id="_CPPv3NK7sequant14AbstractTensor16_column_symmetryEv"></span><span id="_CPPv2NK7sequant14AbstractTensor16_column_symmetryEv"></span><span id="sequant::AbstractTensor::_column_symmetryC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1afdc27e08bbcc250c0df4b8d56989a50f"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1a9a92bdfb62efcda9f7cbe27751bed88f.html#_CPPv4N7sequant14ColumnSymmetryE" title="sequant::ColumnSymmetry"><span class="n"><span class="pre">ColumnSymmetry</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_column_symmetry</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor16_column_symmetryEv" title="Link to this definition">¶</a><br /></dt>
+<dd><div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>slots are left-aligned </p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the symmetry of tensor under exchange of matching {bra,ket} slot pairs </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor6_colorEv">
+<span id="_CPPv3NK7sequant14AbstractTensor6_colorEv"></span><span id="_CPPv2NK7sequant14AbstractTensor6_colorEv"></span><span id="sequant::AbstractTensor::_colorC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1a6cb70975748ec0f194ca6440af31b85b"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_color</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor6_colorEv" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor11_is_cnumberEv">
+<span id="_CPPv3NK7sequant14AbstractTensor11_is_cnumberEv"></span><span id="_CPPv2NK7sequant14AbstractTensor11_is_cnumberEv"></span><span id="sequant::AbstractTensor::_is_cnumberC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1a771132e2d38ee90380be563662c97ad8"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_is_cnumber</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor11_is_cnumberEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p><div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="classsequant_1_1_expr.html#classsequant_1_1_expr_1a4799ce45d21f8b03fd2c8196bcb3a853"><span class="std std-ref">Expr::is_cnumber()</span></a></p>
+</div>
+</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>true if this is a c-number; if false, </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor6_labelEv">
+<span id="_CPPv3NK7sequant14AbstractTensor6_labelEv"></span><span id="_CPPv2NK7sequant14AbstractTensor6_labelEv"></span><span id="sequant::AbstractTensor::_labelC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1a19f39a38422d874125237cac58042396"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">wstring_view</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_label</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor6_labelEv" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor9_to_latexEv">
+<span id="_CPPv3NK7sequant14AbstractTensor9_to_latexEv"></span><span id="_CPPv2NK7sequant14AbstractTensor9_to_latexEv"></span><span id="sequant::AbstractTensor::_to_latexC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1a854a25f14647b5f836f06147c1032d7b"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">wstring</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_to_latex</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor9_to_latexEv" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensorltERK14AbstractTensor">
+<span id="_CPPv3NK7sequant14AbstractTensorltERK14AbstractTensor"></span><span id="_CPPv2NK7sequant14AbstractTensorltERK14AbstractTensor"></span><span id="sequant::AbstractTensor::lt-operator__AbstractTensorCRC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1a949c1ba5c6f4031abf658ad9af3f9504"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="k"><span class="pre">operator</span></span><span class="o"><span class="pre">&lt;</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensorE" title="sequant::AbstractTensor"><span class="n"><span class="pre">AbstractTensor</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensorltERK14AbstractTensor" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor11_hash_valueEv">
+<span id="_CPPv3NK7sequant14AbstractTensor11_hash_valueEv"></span><span id="_CPPv2NK7sequant14AbstractTensor11_hash_valueEv"></span><span id="sequant::AbstractTensor::_hash_valueC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1ace38b9c100d199bb5acf5f366ae2f2bd"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_hash_value</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor11_hash_valueEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>hashes the tensor’s identity , i.e., this includes hashes of the index labels (ordinals) </p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>this hash value is not invariant with respect to tensor symmetries, i.e. permuting bra indices will not leave the hash invariant even if the tensor is </p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>hash of the tensor’s identity </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant14AbstractTensor18_transform_indicesERKN9container3mapI5Index5IndexEE">
+<span id="_CPPv3N7sequant14AbstractTensor18_transform_indicesERKN9container3mapI5Index5IndexEE"></span><span id="_CPPv2N7sequant14AbstractTensor18_transform_indicesERKN9container3mapI5Index5IndexEE"></span><span id="sequant::AbstractTensor::_transform_indices__container::map:Index.Index:CR"></span><span class="target" id="classsequant_1_1_abstract_tensor_1a8b1601921751d6abbdcfa8889b42b7f4"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_transform_indices</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1a8cf49ee47e89d12fc0a09e70ef760674.html#_CPPv4I000EN7sequant9container3mapE" title="sequant::container::map"><span class="n"><span class="pre">map</span></span></a><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant14AbstractTensor18_transform_indicesERKN9container3mapI5Index5IndexEE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant14AbstractTensor11_reset_tagsEv">
+<span id="_CPPv3N7sequant14AbstractTensor11_reset_tagsEv"></span><span id="_CPPv2N7sequant14AbstractTensor11_reset_tagsEv"></span><span id="sequant::AbstractTensor::_reset_tags"></span><span class="target" id="classsequant_1_1_abstract_tensor_1a67d09f50c885095d5efb5c0b7921e360"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_reset_tags</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant14AbstractTensor11_reset_tagsEv" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant14AbstractTensor12_permute_braENSt4spanIKNSt6size_tEEE">
+<span id="_CPPv3N7sequant14AbstractTensor12_permute_braENSt4spanIKNSt6size_tEEE"></span><span id="_CPPv2N7sequant14AbstractTensor12_permute_braENSt4spanIKNSt6size_tEEE"></span><span id="sequant::AbstractTensor::_permute_bra__std::span:std::sC:"></span><span class="target" id="classsequant_1_1_abstract_tensor_1a5c8641d28581e77ac26031a61141530b"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_permute_bra</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">span</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">perm</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant14AbstractTensor12_permute_braENSt4spanIKNSt6size_tEEE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>permutes bra slots according to <code class="docutils literal notranslate"><span class="pre">perm</span></code> </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>perm</strong> – from-permutation, i.e. <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a> in slot <code class="docutils literal notranslate"><span class="pre">permutation[i]</span></code> will be in slot <code class="docutils literal notranslate"><span class="pre">i</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant14AbstractTensor12_permute_ketENSt4spanIKNSt6size_tEEE">
+<span id="_CPPv3N7sequant14AbstractTensor12_permute_ketENSt4spanIKNSt6size_tEEE"></span><span id="_CPPv2N7sequant14AbstractTensor12_permute_ketENSt4spanIKNSt6size_tEEE"></span><span id="sequant::AbstractTensor::_permute_ket__std::span:std::sC:"></span><span class="target" id="classsequant_1_1_abstract_tensor_1acf17546689473c241e84dbff89dde760"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_permute_ket</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">span</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">perm</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant14AbstractTensor12_permute_ketENSt4spanIKNSt6size_tEEE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>permutes ket slots according to <code class="docutils literal notranslate"><span class="pre">perm</span></code> </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>perm</strong> – from-permutation, i.e. <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a> in slot <code class="docutils literal notranslate"><span class="pre">permutation[i]</span></code> will be in slot <code class="docutils literal notranslate"><span class="pre">i</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant14AbstractTensor12_permute_auxENSt4spanIKNSt6size_tEEE">
+<span id="_CPPv3N7sequant14AbstractTensor12_permute_auxENSt4spanIKNSt6size_tEEE"></span><span id="_CPPv2N7sequant14AbstractTensor12_permute_auxENSt4spanIKNSt6size_tEEE"></span><span id="sequant::AbstractTensor::_permute_aux__std::span:std::sC:"></span><span class="target" id="classsequant_1_1_abstract_tensor_1af293eda3167722a0a3ec3054b25f9b4b"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_permute_aux</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">span</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">perm</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant14AbstractTensor12_permute_auxENSt4spanIKNSt6size_tEEE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>permutes aux slots according to <code class="docutils literal notranslate"><span class="pre">perm</span></code> </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>perm</strong> – from-permutation, i.e. <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a> in slot <code class="docutils literal notranslate"><span class="pre">permutation[i]</span></code> will be in slot <code class="docutils literal notranslate"><span class="pre">i</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant14AbstractTensor16_permute_columnsENSt4spanINSt6size_tEEE">
+<span id="_CPPv3N7sequant14AbstractTensor16_permute_columnsENSt4spanINSt6size_tEEE"></span><span id="_CPPv2N7sequant14AbstractTensor16_permute_columnsENSt4spanINSt6size_tEEE"></span><span id="sequant::AbstractTensor::_permute_columns__std::span:std::s:"></span><span class="target" id="classsequant_1_1_abstract_tensor_1a921a49da37741eb154be4dd2b6b3750a"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_permute_columns</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">span</span></span><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">perm</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant14AbstractTensor16_permute_columnsENSt4spanINSt6size_tEEE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>permutes column slot bundles according to <code class="docutils literal notranslate"><span class="pre">perm</span></code> </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>perm</strong> – from-permutation, i.e. <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a> pair in column <code class="docutils literal notranslate"><span class="pre">permutation[i]</span></code> will end up in column <code class="docutils literal notranslate"><span class="pre">i</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant14AbstractTensor13_swap_bra_ketEv">
+<span id="_CPPv3N7sequant14AbstractTensor13_swap_bra_ketEv"></span><span id="_CPPv2N7sequant14AbstractTensor13_swap_bra_ketEv"></span><span id="sequant::AbstractTensor::_swap_bra_ket"></span><span class="target" id="classsequant_1_1_abstract_tensor_1aec138a240fa724f1b3d85c3caab834fb"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_swap_bra_ket</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant14AbstractTensor13_swap_bra_ketEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>swaps bra and ket slots </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant14AbstractTensor12_bra_mutableEv">
+<span id="_CPPv3N7sequant14AbstractTensor12_bra_mutableEv"></span><span id="_CPPv2N7sequant14AbstractTensor12_bra_mutableEv"></span><span id="sequant::AbstractTensor::_bra_mutable"></span><span class="target" id="classsequant_1_1_abstract_tensor_1ab9e3f49eafce6fc4ba62fccb7879b50f"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensor15any_view_randszE" title="sequant::AbstractTensor::any_view_randsz"><span class="n"><span class="pre">any_view_randsz</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_bra_mutable</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant14AbstractTensor12_bra_mutableEv" title="Link to this definition">¶</a><br /></dt>
+<dd><div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>this is used for mutable access, flush memoized state before returning! </p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>mutable view of bra </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant14AbstractTensor12_ket_mutableEv">
+<span id="_CPPv3N7sequant14AbstractTensor12_ket_mutableEv"></span><span id="_CPPv2N7sequant14AbstractTensor12_ket_mutableEv"></span><span id="sequant::AbstractTensor::_ket_mutable"></span><span class="target" id="classsequant_1_1_abstract_tensor_1aeadced33395f3795a2cf183484165d17"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensor15any_view_randszE" title="sequant::AbstractTensor::any_view_randsz"><span class="n"><span class="pre">any_view_randsz</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_ket_mutable</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant14AbstractTensor12_ket_mutableEv" title="Link to this definition">¶</a><br /></dt>
+<dd><div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>this is used for mutable access, flush memoized state before returning! </p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>mutable view to ket </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant14AbstractTensor12_aux_mutableEv">
+<span id="_CPPv3N7sequant14AbstractTensor12_aux_mutableEv"></span><span id="_CPPv2N7sequant14AbstractTensor12_aux_mutableEv"></span><span id="sequant::AbstractTensor::_aux_mutable"></span><span class="target" id="classsequant_1_1_abstract_tensor_1ac5c1ba1b77d545b39e15aa14db04cbc6"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensor15any_view_randszE" title="sequant::AbstractTensor::any_view_randsz"><span class="n"><span class="pre">any_view_randsz</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_aux_mutable</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant14AbstractTensor12_aux_mutableEv" title="Link to this definition">¶</a><br /></dt>
+<dd><div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>this is used for mutable access, flush memoized state before returning! </p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>mutable view of aux indices </p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+</dd></dl>
+
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, SeQuant developers
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            <div class="last-updated">
+              Last updated on Feb 27, 2026 8:35:02 PM</div>
+          </div>
+          <div class="right-details">
+            <div class="icons">
+              <a class="muted-link fa-brands fa-solid fa-github fa-2x" href="https://github.com/ValeevGroup/SeQuant" aria-label="GitHub"></a>
+              
+            </div>
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Class AbstractTensor</a><ul>
+<li><a class="reference internal" href="#inheritance-relationships">Inheritance Relationships</a><ul>
+<li><a class="reference internal" href="#derived-types">Derived Types</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#class-documentation">Class Documentation</a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensorE"><code class="docutils literal notranslate"><span class="pre">sequant::AbstractTensor</span></code></a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensor19const_any_view_randE"><code class="docutils literal notranslate"><span class="pre">const_any_view_rand</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensor21const_any_view_randszE"><code class="docutils literal notranslate"><span class="pre">const_any_view_randsz</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensor13any_view_randE"><code class="docutils literal notranslate"><span class="pre">any_view_rand</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensor15any_view_randszE"><code class="docutils literal notranslate"><span class="pre">any_view_randsz</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensorD0Ev"><code class="docutils literal notranslate"><span class="pre">~AbstractTensor()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor6_cloneEv"><code class="docutils literal notranslate"><span class="pre">_clone()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor13_clone_sharedEv"><code class="docutils literal notranslate"><span class="pre">_clone_shared()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor4_braEv"><code class="docutils literal notranslate"><span class="pre">_bra()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor4_ketEv"><code class="docutils literal notranslate"><span class="pre">_ket()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor4_auxEv"><code class="docutils literal notranslate"><span class="pre">_aux()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor7_braketEv"><code class="docutils literal notranslate"><span class="pre">_braket()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor10_braketauxEv"><code class="docutils literal notranslate"><span class="pre">_braketaux()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor6_slotsEv"><code class="docutils literal notranslate"><span class="pre">_slots()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor9_bra_rankEv"><code class="docutils literal notranslate"><span class="pre">_bra_rank()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor13_bra_net_rankEv"><code class="docutils literal notranslate"><span class="pre">_bra_net_rank()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor9_ket_rankEv"><code class="docutils literal notranslate"><span class="pre">_ket_rank()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor13_ket_net_rankEv"><code class="docutils literal notranslate"><span class="pre">_ket_net_rank()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor9_aux_rankEv"><code class="docutils literal notranslate"><span class="pre">_aux_rank()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor10_num_slotsEv"><code class="docutils literal notranslate"><span class="pre">_num_slots()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor12_num_indicesEv"><code class="docutils literal notranslate"><span class="pre">_num_indices()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor9_symmetryEv"><code class="docutils literal notranslate"><span class="pre">_symmetry()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor16_braket_symmetryEv"><code class="docutils literal notranslate"><span class="pre">_braket_symmetry()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor16_column_symmetryEv"><code class="docutils literal notranslate"><span class="pre">_column_symmetry()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor6_colorEv"><code class="docutils literal notranslate"><span class="pre">_color()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor11_is_cnumberEv"><code class="docutils literal notranslate"><span class="pre">_is_cnumber()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor6_labelEv"><code class="docutils literal notranslate"><span class="pre">_label()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor9_to_latexEv"><code class="docutils literal notranslate"><span class="pre">_to_latex()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensorltERK14AbstractTensor"><code class="docutils literal notranslate"><span class="pre">operator&lt;()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor11_hash_valueEv"><code class="docutils literal notranslate"><span class="pre">_hash_value()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensor18_transform_indicesERKN9container3mapI5Index5IndexEE"><code class="docutils literal notranslate"><span class="pre">_transform_indices()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensor11_reset_tagsEv"><code class="docutils literal notranslate"><span class="pre">_reset_tags()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensor12_permute_braENSt4spanIKNSt6size_tEEE"><code class="docutils literal notranslate"><span class="pre">_permute_bra()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensor12_permute_ketENSt4spanIKNSt6size_tEEE"><code class="docutils literal notranslate"><span class="pre">_permute_ket()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensor12_permute_auxENSt4spanIKNSt6size_tEEE"><code class="docutils literal notranslate"><span class="pre">_permute_aux()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensor16_permute_columnsENSt4spanINSt6size_tEEE"><code class="docutils literal notranslate"><span class="pre">_permute_columns()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensor13_swap_bra_ketEv"><code class="docutils literal notranslate"><span class="pre">_swap_bra_ket()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensor12_bra_mutableEv"><code class="docutils literal notranslate"><span class="pre">_bra_mutable()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensor12_ket_mutableEv"><code class="docutils literal notranslate"><span class="pre">_ket_mutable()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensor12_aux_mutableEv"><code class="docutils literal notranslate"><span class="pre">_aux_mutable()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script src="../_static/bootstrap-treeview/bootstrap-treeview.min.js?v=6a1e96b4"></script>
+    <script>window.MathJax = {"options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4.0.0-beta.3/tex-mml-chtml.js"></script>
+    </body>
+</html>

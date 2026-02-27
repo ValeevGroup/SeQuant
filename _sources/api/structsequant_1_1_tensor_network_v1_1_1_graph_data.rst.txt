@@ -1,0 +1,23 @@
+.. _exhale_struct_structsequant_1_1_tensor_network_v1_1_1_graph_data:
+
+Struct TensorNetworkV1::GraphData
+=================================
+
+- Defined in :ref:`file_SeQuant_core_tensor_network_v1.hpp`
+
+
+Nested Relationships
+--------------------
+
+This struct is a nested type of :ref:`exhale_class_classsequant_1_1_tensor_network_v1`.
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::TensorNetworkV1::GraphData
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

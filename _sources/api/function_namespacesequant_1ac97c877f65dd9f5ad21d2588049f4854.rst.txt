@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ac97c877f65dd9f5ad21d2588049f4854:
+
+Template Function sequant::bann(Index, std::initializer_list<I>)
+================================================================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::bann(Index, std::initializer_list<I>)
+   :project: SeQuant

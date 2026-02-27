@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a601fd271d49ad5820d9e57e94a193fca:
+
+Function sequant::operator<=>
+=============================
+
+- Defined in :ref:`file_SeQuant_core_space.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::operator<=>(const IndexSpace&, const IndexSpace&)
+   :project: SeQuant

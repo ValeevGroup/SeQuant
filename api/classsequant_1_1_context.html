@@ -1,0 +1,926 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html">
+        <link rel="prefetch" href="../_static/logo.svg" as="image">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>Class Context - SeQuant Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/bootstrap-treeview/bootstrap-treeview.min.css?v=8176a87d" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=821744c5" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --sidebar-item-font-size: 0.95em;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">SeQuant Documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="../_static/logo.svg" alt="Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">User</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/getting_started/index.html">Getting started</a><input aria-label="Toggle navigation of Getting started" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/wick.html">Wick’s Theorem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/index_spaces.html">Register Index Spaces</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/operators.html">Operators</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../user/getting_started/installing.html">Installation</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/guide/index.html">User Guide</a><input aria-label="Toggle navigation of User Guide" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/operator.html">Operator Interface for Symbolic Many-Body Algebra</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/cc.html">Coupled-Cluster Class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/io.html">I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/evaluation.html">Evaluation Trace Analysis Using Nushell</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../developer/index.html">Developer docs</a><input aria-label="Toggle navigation of Developer docs" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../developer/documentation.html">Documentation Guide</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">API reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Maintainer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../maintainer/index.html">Maintainer docs</a><input aria-label="Toggle navigation of Maintainer docs" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../maintainer/release.html">Release Guide</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">See Also</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/tiledarray">TiledArray</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/mpqc">Massively Parallel Quantum Chemistry</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io">Valeev Research Group</a></li>
+</ul>
+
+</div></div>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="../_sources/api/classsequant_1_1_context.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="class-context">
+<span id="exhale-class-classsequant-1-1-context"></span><h1>Class Context<a class="headerlink" href="#class-context" title="Link to this heading">¶</a></h1>
+<ul class="simple">
+<li><p>Defined in <a class="reference internal" href="file_SeQuant_core_context.hpp.html#file-sequant-core-context-hpp"><span class="std std-ref">File context.hpp</span></a></p></li>
+</ul>
+<section id="nested-relationships">
+<h2>Nested Relationships<a class="headerlink" href="#nested-relationships" title="Link to this heading">¶</a></h2>
+<section id="nested-types">
+<h3>Nested Types<a class="headerlink" href="#nested-types" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><a class="reference internal" href="structsequant_1_1_context_1_1_defaults.html#exhale-struct-structsequant-1-1-context-1-1-defaults"><span class="std std-ref">Struct Context::Defaults</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_context_1_1_options.html#exhale-struct-structsequant-1-1-context-1-1-options"><span class="std std-ref">Struct Context::Options</span></a></p></li>
+</ul>
+</section>
+</section>
+<section id="class-documentation">
+<h2>Class Documentation<a class="headerlink" href="#class-documentation" title="Link to this heading">¶</a></h2>
+<dl class="cpp class">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7ContextE">
+<span id="_CPPv3N7sequant7ContextE"></span><span id="_CPPv2N7sequant7ContextE"></span><span id="sequant::Context"></span><span class="target" id="classsequant_1_1_context"></span><span class="k"><span class="pre">class</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Context</span></span></span><a class="headerlink" href="#_CPPv4N7sequant7ContextE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Specifies SeQuant context, such as vacuum choice, whether index spaces are orthonormal, sizes of index spaces, etc. </p>
+<p>SeQuant context contains the following information:<ul class="simple">
+<li><p>a <a class="reference internal" href="classsequant_1_1_index_space_registry.html#classsequant_1_1_index_space_registry"><span class="std std-ref">IndexSpaceRegistry</span></a> object: contains information about the known <a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space"><span class="std std-ref">IndexSpace</span></a> objects and their attributes; managed by shared_ptr and can be shared by multiple contexts.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">vacuum</span></code>: the vacuum state used to define normal ordering of <code class="docutils literal notranslate"><a class="reference internal" href="classsequant_1_1_normal_operator.html#classsequant_1_1_normal_operator"><span class="std std-ref"><span class="pre">NormalOperator</span></span></a></code>s</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">metric</span></code>: whether the plain basis of vector space (ket) modes are orthonormal to their dual (bra) counterparts (<code class="docutils literal notranslate"><a class="reference internal" href="enum_namespacesequant_1a03158c7d13fd7e3c714b834bf3492164.html#namespacesequant_1a03158c7d13fd7e3c714b834bf3492164a19c562a36aeb455d09534f93b4f5236f"><span class="std std-ref"><span class="pre">IndexSpaceMetric::Unit</span></span></a></code>) or not (<code class="docutils literal notranslate"><a class="reference internal" href="enum_namespacesequant_1a03158c7d13fd7e3c714b834bf3492164.html#namespacesequant_1a03158c7d13fd7e3c714b834bf3492164a0db377921f4ce762c62526131097968f"><span class="std std-ref"><span class="pre">IndexSpaceMetric::General</span></span></a></code>); this affects the value of Wick contractions.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">braket_symmetry</span></code>: whether the primal (ket) and dual (bra) vector space <em>bases</em> are “equivalent” (homogenous to each other; <code class="docutils literal notranslate"><a class="reference internal" href="enum_namespacesequant_1a8fa350a3e3719764fcc1ce8aeddaea46.html#namespacesequant_1a8fa350a3e3719764fcc1ce8aeddaea46a386de00ab1fb80295030de7050690544"><span class="std std-ref"><span class="pre">BraKetSymmetry::Symm</span></span></a></code>), “conjugate to each other” (<a class="reference external" href="https://en.wikipedia.org/wiki/Antilinear_map">conjugate-homogenous</a> to each other; <code class="docutils literal notranslate"><a class="reference internal" href="enum_namespacesequant_1a8fa350a3e3719764fcc1ce8aeddaea46.html#namespacesequant_1a8fa350a3e3719764fcc1ce8aeddaea46a3f0bc1b9dd5d41af7f4455a291aa4e9b"><span class="std std-ref"><span class="pre">BraKetSymmetry::Conjugate</span></span></a></code>) or are “nonequivalent” (not homogeneous; <code class="docutils literal notranslate"><a class="reference internal" href="enum_namespacesequant_1a8fa350a3e3719764fcc1ce8aeddaea46.html#namespacesequant_1a8fa350a3e3719764fcc1ce8aeddaea46ae3ace38d497f2f918e49303270d373dc"><span class="std std-ref"><span class="pre">BraKetSymmetry::Nonsymm</span></span></a></code>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">spbasis</span></code>: whether the bra/ket bases are spinor (<code class="docutils literal notranslate"><a class="reference internal" href="enum_namespacesequant_1a78aab8bd907ae4e1585c729c79703fd3.html#namespacesequant_1a78aab8bd907ae4e1585c729c79703fd3a9fc3490188fcaec1fe25f831ea07a2f0"><span class="std std-ref"><span class="pre">SPBasis::Spinor</span></span></a></code>) or spin-free (<code class="docutils literal notranslate"><a class="reference internal" href="enum_namespacesequant_1a78aab8bd907ae4e1585c729c79703fd3.html#namespacesequant_1a78aab8bd907ae4e1585c729c79703fd3a5f1613ef91a10bc76fcb3cb9d18c82cd"><span class="std std-ref"><span class="pre">SPBasis::Spinfree</span></span></a></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">first_dummy_index_ordinal</span></code>: during its operation SeQuant will generate temporary indices with orbitals greater or equal to this; to avoid duplicates user <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a> objects should have ordinals smaller than this</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">canonicalization_options</span></code>: if set, this specifies the default options to use for canonicalization of expressions.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">braket_typesetting</span></code>: whether <code class="docutils literal notranslate"><span class="pre">to_latex()</span></code> typesets tensor indices of ket (covariant, primal) modes as superscript (<code class="docutils literal notranslate"><a class="reference internal" href="enum_namespacesequant_1afaf36e29c08df83949893832f3979dad.html#namespacesequant_1afaf36e29c08df83949893832f3979dadadc08b2be92c47168da5d610a4e610bf9"><span class="std std-ref"><span class="pre">BraKetTypesetting::KetSuper</span></span></a></code>, default)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">braket_slot_typesetting</span></code>: whether <code class="docutils literal notranslate"><span class="pre">to_latex()</span></code> typesets tensor indices using <code class="docutils literal notranslate"><span class="pre">tensor</span></code> LaTeX package (<code class="docutils literal notranslate"><a class="reference internal" href="enum_namespacesequant_1aaeac2e7fab3fe003406f0355e1dc771d.html#namespacesequant_1aaeac2e7fab3fe003406f0355e1dc771da8cbef0f13166f39780e7763e474df2f0"><span class="std std-ref"><span class="pre">BraKetSlotTypesetting::TensorPackage</span></span></a></code>, default) or native typesetting (<code class="docutils literal notranslate"><a class="reference internal" href="enum_namespacesequant_1aaeac2e7fab3fe003406f0355e1dc771d.html#namespacesequant_1aaeac2e7fab3fe003406f0355e1dc771da512d6102506da4ae0c35312fafcf7376"><span class="std std-ref"><span class="pre">BraKetSlotTypesetting::Naive</span></span></a></code>); the former is preferred for alignment of superscript with subscript slots. </p></li>
+</ul>
+</p>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-functions">Public Functions</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context7ContextE7Options">
+<span id="_CPPv3N7sequant7Context7ContextE7Options"></span><span id="_CPPv2N7sequant7Context7ContextE7Options"></span><span id="sequant::Context::Context__Options"></span><span class="target" id="classsequant_1_1_context_1ab8d61d37ccf199884a6409624176ded4"></span><span class="sig-name descname"><span class="n"><span class="pre">Context</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N7sequant7Context7OptionsE" title="sequant::Context::Options"><span class="n"><span class="pre">Options</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">options</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant7Context20make_default_optionsEv" title="sequant::Context::make_default_options"><span class="n"><span class="pre">make_default_options</span></span></a><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant7Context7ContextE7Options" title="Link to this definition">¶</a><br /></dt>
+<dd><p>standard named-parameter constructor </p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>default constructor does not create an <a class="reference internal" href="classsequant_1_1_index_space_registry.html#classsequant_1_1_index_space_registry"><span class="std std-ref">IndexSpaceRegistry</span></a>, thus <code class="docutils literal notranslate"><span class="pre">this-&gt;</span><a class="reference internal" href="#classsequant_1_1_context_1afeb9a1ecb92d87495cb3d8049decc0e7"><span class="std std-ref"><span class="pre">index_space_registry()</span></span></a></code> will return nullptr Example: <div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">Context</span><span class="w"> </span><span class="nf">ctx</span><span class="p">({.</span><span class="n">vacuum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Vacuum</span><span class="o">::</span><span class="n">SingleReference</span><span class="p">,</span><span class="w"> </span><span class="p">.</span><span class="n">spbasis</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">SPBasis</span><span class="o">::</span><span class="n">Spinfree</span><span class="p">});</span>
+</pre></div>
+</div>
+</p>
+</div>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7ContextD0Ev">
+<span id="_CPPv3N7sequant7ContextD0Ev"></span><span id="_CPPv2N7sequant7ContextD0Ev"></span><span id="sequant::Context::~Context"></span><span class="target" id="classsequant_1_1_context_1a26bfe3fcfaa9e4d2131b3a43d5f93d6b"></span><span class="sig-name descname"><span class="n"><span class="pre">~Context</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">default</span></span><a class="headerlink" href="#_CPPv4N7sequant7ContextD0Ev" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context7ContextERK7Context">
+<span id="_CPPv3N7sequant7Context7ContextERK7Context"></span><span id="_CPPv2N7sequant7Context7ContextERK7Context"></span><span id="sequant::Context::Context__ContextCR"></span><span class="target" id="classsequant_1_1_context_1ae3d305ecb952049f953b056406996ba9"></span><span class="sig-name descname"><span class="n"><span class="pre">Context</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant7Context7ContextERK7Context" title="sequant::Context::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">default</span></span><a class="headerlink" href="#_CPPv4N7sequant7Context7ContextERK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>copy constructor <div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#classsequant_1_1_context_1a57f130da321acc14e9a04f5cb7558e38"><span class="std std-ref">clone()</span></a></p>
+</div>
+</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>created <a class="reference internal" href="#classsequant_1_1_context"><span class="std std-ref">Context</span></a> uses the same index space registry as <code class="docutils literal notranslate"><span class="pre">ctx</span></code></p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>ctx</strong> – <strong>[in]</strong> a <a class="reference internal" href="#classsequant_1_1_context"><span class="std std-ref">Context</span></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7ContextaSERK7Context">
+<span id="_CPPv3N7sequant7ContextaSERK7Context"></span><span id="_CPPv2N7sequant7ContextaSERK7Context"></span><span id="sequant::Context::assign-operator__ContextCR"></span><span class="target" id="classsequant_1_1_context_1ac12c35c182917a8917e1c6b962e2e45f"></span><a class="reference internal" href="#_CPPv4N7sequant7ContextE" title="sequant::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="k"><span class="pre">operator</span></span><span class="o"><span class="pre">=</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant7ContextE" title="sequant::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">default</span></span><a class="headerlink" href="#_CPPv4N7sequant7ContextaSERK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>copy assignment <div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#classsequant_1_1_context_1a57f130da321acc14e9a04f5cb7558e38"><span class="std std-ref">clone()</span></a></p>
+</div>
+</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>this object will use the same index space registry as <code class="docutils literal notranslate"><span class="pre">ctx</span></code></p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>ctx</strong> – <strong>[in]</strong> a <a class="reference internal" href="#classsequant_1_1_context"><span class="std std-ref">Context</span></a></p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>reference to this object </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant7Context5cloneEv">
+<span id="_CPPv3NK7sequant7Context5cloneEv"></span><span id="_CPPv2NK7sequant7Context5cloneEv"></span><span id="sequant::Context::cloneC"></span><span class="target" id="classsequant_1_1_context_1a57f130da321acc14e9a04f5cb7558e38"></span><a class="reference internal" href="#_CPPv4N7sequant7ContextE" title="sequant::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">clone</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant7Context5cloneEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>clones this object AND its index space registry </p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>created <a class="reference internal" href="#classsequant_1_1_context"><span class="std std-ref">Context</span></a> does not use this object’s index space registry </p>
+</div>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context7ContextERR7Context">
+<span id="_CPPv3N7sequant7Context7ContextERR7Context"></span><span id="_CPPv2N7sequant7Context7ContextERR7Context"></span><span id="sequant::Context::Context__ContextRR"></span><span class="target" id="classsequant_1_1_context_1a68d9cd1457e6e25f7c1eb6b24bfaa22b"></span><span class="sig-name descname"><span class="n"><span class="pre">Context</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N7sequant7Context7ContextERR7Context" title="sequant::Context::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">default</span></span><a class="headerlink" href="#_CPPv4N7sequant7Context7ContextERR7Context" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant7Context6vacuumEv">
+<span id="_CPPv3NK7sequant7Context6vacuumEv"></span><span id="_CPPv2NK7sequant7Context6vacuumEv"></span><span id="sequant::Context::vacuumC"></span><span class="target" id="classsequant_1_1_context_1a802dde6df2fa72ce277ee15216dd8cf8"></span><a class="reference internal" href="enum_namespacesequant_1a27c1015914fed77818b3cd447345f196.html#_CPPv4N7sequant6VacuumE" title="sequant::Vacuum"><span class="n"><span class="pre">Vacuum</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">vacuum</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant7Context6vacuumEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Vacuum of this context </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant7Context20index_space_registryEv">
+<span id="_CPPv3NK7sequant7Context20index_space_registryEv"></span><span id="_CPPv2NK7sequant7Context20index_space_registryEv"></span><span id="sequant::Context::index_space_registryC"></span><span class="target" id="classsequant_1_1_context_1afeb9a1ecb92d87495cb3d8049decc0e7"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">shared_ptr</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_index_space_registry.html#_CPPv4N7sequant18IndexSpaceRegistryE" title="sequant::IndexSpaceRegistry"><span class="n"><span class="pre">IndexSpaceRegistry</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">index_space_registry</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant7Context20index_space_registryEv" title="Link to this definition">¶</a><br /></dt>
+<dd><div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>can be null when user did not provide one to <a class="reference internal" href="#classsequant_1_1_context"><span class="std std-ref">Context</span></a> (i.e., it was default constructed) </p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>a constant pointer to the <a class="reference internal" href="classsequant_1_1_index_space_registry.html#classsequant_1_1_index_space_registry"><span class="std std-ref">IndexSpaceRegistry</span></a> for this context </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant7Context28mutable_index_space_registryEv">
+<span id="_CPPv3NK7sequant7Context28mutable_index_space_registryEv"></span><span id="_CPPv2NK7sequant7Context28mutable_index_space_registryEv"></span><span id="sequant::Context::mutable_index_space_registryC"></span><span class="target" id="classsequant_1_1_context_1a9af739896ddbf5624e656760bebb84ab"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">shared_ptr</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="classsequant_1_1_index_space_registry.html#_CPPv4N7sequant18IndexSpaceRegistryE" title="sequant::IndexSpaceRegistry"><span class="n"><span class="pre">IndexSpaceRegistry</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">mutable_index_space_registry</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant7Context28mutable_index_space_registryEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Throws<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span><span class="cpp-expr sig sig-inline cpp"><a class="reference internal" href="classsequant_1_1_exception.html#_CPPv4N7sequant9ExceptionE" title="sequant::Exception"><span class="n">Exception</span></a></span></span> – if the <a class="reference internal" href="classsequant_1_1_index_space_registry.html#classsequant_1_1_index_space_registry"><span class="std std-ref">IndexSpaceRegistry</span></a> is null </p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>a pointer to the <a class="reference internal" href="classsequant_1_1_index_space_registry.html#classsequant_1_1_index_space_registry"><span class="std std-ref">IndexSpaceRegistry</span></a> for this context. </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant7Context6metricEv">
+<span id="_CPPv3NK7sequant7Context6metricEv"></span><span id="_CPPv2NK7sequant7Context6metricEv"></span><span id="sequant::Context::metricC"></span><span class="target" id="classsequant_1_1_context_1aaf3b4218da4566868493fdc1ec095810"></span><a class="reference internal" href="enum_namespacesequant_1a03158c7d13fd7e3c714b834bf3492164.html#_CPPv4N7sequant16IndexSpaceMetricE" title="sequant::IndexSpaceMetric"><span class="n"><span class="pre">IndexSpaceMetric</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">metric</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant7Context6metricEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>IndexSpaceMetric of this context </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant7Context15braket_symmetryEv">
+<span id="_CPPv3NK7sequant7Context15braket_symmetryEv"></span><span id="_CPPv2NK7sequant7Context15braket_symmetryEv"></span><span id="sequant::Context::braket_symmetryC"></span><span class="target" id="classsequant_1_1_context_1a1fa61d2b9c3c22066ccb748ac139153a"></span><a class="reference internal" href="enum_namespacesequant_1a8fa350a3e3719764fcc1ce8aeddaea46.html#_CPPv4N7sequant14BraKetSymmetryE" title="sequant::BraKetSymmetry"><span class="n"><span class="pre">BraKetSymmetry</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">braket_symmetry</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant7Context15braket_symmetryEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>BraKetSymmetry of this context </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant7Context29assert_strict_braket_symmetryEv">
+<span id="_CPPv3NK7sequant7Context29assert_strict_braket_symmetryEv"></span><span id="_CPPv2NK7sequant7Context29assert_strict_braket_symmetryEv"></span><span id="sequant::Context::assert_strict_braket_symmetryC"></span><span class="target" id="classsequant_1_1_context_1a2795999f60436846eda5ecd7b7197871"></span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">assert_strict_braket_symmetry</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant7Context29assert_strict_braket_symmetryEv" title="Link to this definition">¶</a><br /></dt>
+<dd><div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>disabling strict bra-ket symmetry assertions is a bad idea if working with complex-valued tensors, or nonunit metric, or in general </p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>if SeQuant was configured with <code class="docutils literal notranslate"><span class="pre">SEQUANT_ASSERT_BEHAVIOR=IGNORE</span></code> the strict bra-ket contraction checks are turned off even if this returns true </p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>true if strict bra-ket symmetry is asserted; setting this to false (via <code class="docutils literal notranslate"><span class="pre">Context::set(AssertStrictBraKetSymmetry::No)</span></code>) allows arbitrary contractions of bra/ket modes as if they were aux indices. </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant7Context7spbasisEv">
+<span id="_CPPv3NK7sequant7Context7spbasisEv"></span><span id="_CPPv2NK7sequant7Context7spbasisEv"></span><span id="sequant::Context::spbasisC"></span><span class="target" id="classsequant_1_1_context_1a53f5df5d232c78cae8993b9258636b13"></span><a class="reference internal" href="enum_namespacesequant_1a78aab8bd907ae4e1585c729c79703fd3.html#_CPPv4N7sequant7SPBasisE" title="sequant::SPBasis"><span class="n"><span class="pre">SPBasis</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">spbasis</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant7Context7spbasisEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>SPBasis of this context </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant7Context25first_dummy_index_ordinalEv">
+<span id="_CPPv3NK7sequant7Context25first_dummy_index_ordinalEv"></span><span id="_CPPv2NK7sequant7Context25first_dummy_index_ordinalEv"></span><span id="sequant::Context::first_dummy_index_ordinalC"></span><span class="target" id="classsequant_1_1_context_1a4befe02aaeb0291368037f931e8b048a"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">first_dummy_index_ordinal</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant7Context25first_dummy_index_ordinalEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>first ordinal of the dummy indices generated by calls to <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index_1a5dafbe02bf592789208b3d6e5ce9eed6"><span class="std std-ref">Index::next_tmp_index</span></a> when this context is active </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant7Context24canonicalization_optionsEv">
+<span id="_CPPv3NK7sequant7Context24canonicalization_optionsEv"></span><span id="_CPPv2NK7sequant7Context24canonicalization_optionsEv"></span><span id="sequant::Context::canonicalization_optionsC"></span><span class="target" id="classsequant_1_1_context_1a1f54a3d0a676dc5d8b96895031b2bbb7"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">optional</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="structsequant_1_1_canonicalize_options.html#_CPPv4N7sequant19CanonicalizeOptionsE" title="sequant::CanonicalizeOptions"><span class="n"><span class="pre">CanonicalizeOptions</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">canonicalization_options</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant7Context24canonicalization_optionsEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>canonicalization options to use by default, if nonnull </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant7Context18braket_typesettingEv">
+<span id="_CPPv3NK7sequant7Context18braket_typesettingEv"></span><span id="_CPPv2NK7sequant7Context18braket_typesettingEv"></span><span id="sequant::Context::braket_typesettingC"></span><span class="target" id="classsequant_1_1_context_1ac0ea6a4564644c5ca9fe6a241d6b93e7"></span><a class="reference internal" href="enum_namespacesequant_1afaf36e29c08df83949893832f3979dad.html#_CPPv4N7sequant17BraKetTypesettingE" title="sequant::BraKetTypesetting"><span class="n"><span class="pre">BraKetTypesetting</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">braket_typesetting</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant7Context18braket_typesettingEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>BraKetTypesetting of this context; if this returns <a class="reference internal" href="enum_namespacesequant_1afaf36e29c08df83949893832f3979dad.html#namespacesequant_1afaf36e29c08df83949893832f3979dada9fb2df179deaacc6f45552e2dfb6079a"><span class="std std-ref">BraKetTypesetting::ContraSub</span></a> covariant (ket, creation) and contravariant (bra, annihilation) indices are typeset in superscript and subscript LaTeX, respectively. </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant7Context23braket_slot_typesettingEv">
+<span id="_CPPv3NK7sequant7Context23braket_slot_typesettingEv"></span><span id="_CPPv2NK7sequant7Context23braket_slot_typesettingEv"></span><span id="sequant::Context::braket_slot_typesettingC"></span><span class="target" id="classsequant_1_1_context_1ae5ea32465a01da80514ed8393bc2ee3b"></span><a class="reference internal" href="enum_namespacesequant_1aaeac2e7fab3fe003406f0355e1dc771d.html#_CPPv4N7sequant21BraKetSlotTypesettingE" title="sequant::BraKetSlotTypesetting"><span class="n"><span class="pre">BraKetSlotTypesetting</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">braket_slot_typesetting</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant7Context23braket_slot_typesettingEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>BraKetSlotTypesetting of this context; see BraKetSlotTypesetting for the meaning of the possible values </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context3setE6Vacuum">
+<span id="_CPPv3N7sequant7Context3setE6Vacuum"></span><span id="_CPPv2N7sequant7Context3setE6Vacuum"></span><span id="sequant::Context::set__Vacuum"></span><span class="target" id="classsequant_1_1_context_1aeaa6a848beb24b6b025a5b73fa51e9ca"></span><a class="reference internal" href="#_CPPv4N7sequant7ContextE" title="sequant::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">set</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="enum_namespacesequant_1a27c1015914fed77818b3cd447345f196.html#_CPPv4N7sequant6VacuumE" title="sequant::Vacuum"><span class="n"><span class="pre">Vacuum</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">vacuum</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant7Context3setE6Vacuum" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Sets the Vacuum for this context, convenient for chaining </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>vacuum</strong> – Vacuum </p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>ref to <code class="docutils literal notranslate"><span class="pre">*this</span></code>, for chaining </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context3setE18IndexSpaceRegistry">
+<span id="_CPPv3N7sequant7Context3setE18IndexSpaceRegistry"></span><span id="_CPPv2N7sequant7Context3setE18IndexSpaceRegistry"></span><span id="sequant::Context::set__IndexSpaceRegistry"></span><span class="target" id="classsequant_1_1_context_1a4240b2ea5e183326bcaddc3cb2cd762b"></span><a class="reference internal" href="#_CPPv4N7sequant7ContextE" title="sequant::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">set</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="classsequant_1_1_index_space_registry.html#_CPPv4N7sequant18IndexSpaceRegistryE" title="sequant::IndexSpaceRegistry"><span class="n"><span class="pre">IndexSpaceRegistry</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">ISR</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant7Context3setE18IndexSpaceRegistry" title="Link to this definition">¶</a><br /></dt>
+<dd><p>sets the <a class="reference internal" href="classsequant_1_1_index_space_registry.html#classsequant_1_1_index_space_registry"><span class="std std-ref">IndexSpaceRegistry</span></a> for this context </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>ISR</strong> – an <a class="reference internal" href="classsequant_1_1_index_space_registry.html#classsequant_1_1_index_space_registry"><span class="std std-ref">IndexSpaceRegistry</span></a></p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>ref to ‘*this’ for chaining </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context3setENSt10shared_ptrI18IndexSpaceRegistryEE">
+<span id="_CPPv3N7sequant7Context3setENSt10shared_ptrI18IndexSpaceRegistryEE"></span><span id="_CPPv2N7sequant7Context3setENSt10shared_ptrI18IndexSpaceRegistryEE"></span><span id="sequant::Context::set__std::shared_ptr:IndexSpaceRegistry:"></span><span class="target" id="classsequant_1_1_context_1a88c2dcb19dcf766793d0b7df4e72851b"></span><a class="reference internal" href="#_CPPv4N7sequant7ContextE" title="sequant::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">set</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">shared_ptr</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="classsequant_1_1_index_space_registry.html#_CPPv4N7sequant18IndexSpaceRegistryE" title="sequant::IndexSpaceRegistry"><span class="n"><span class="pre">IndexSpaceRegistry</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">ISR</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant7Context3setENSt10shared_ptrI18IndexSpaceRegistryEE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>sets the <a class="reference internal" href="classsequant_1_1_index_space_registry.html#classsequant_1_1_index_space_registry"><span class="std std-ref">IndexSpaceRegistry</span></a> for this context </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>ISR</strong> – a <a class="reference internal" href="classsequant_1_1_index_space_registry.html#classsequant_1_1_index_space_registry"><span class="std std-ref">IndexSpaceRegistry</span></a> shared_ptr </p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>ref to ‘*this’ for chaining </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context3setE16IndexSpaceMetric">
+<span id="_CPPv3N7sequant7Context3setE16IndexSpaceMetric"></span><span id="_CPPv2N7sequant7Context3setE16IndexSpaceMetric"></span><span id="sequant::Context::set__IndexSpaceMetric"></span><span class="target" id="classsequant_1_1_context_1a7a4ca729628e5087403117491fe24c61"></span><a class="reference internal" href="#_CPPv4N7sequant7ContextE" title="sequant::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">set</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="enum_namespacesequant_1a03158c7d13fd7e3c714b834bf3492164.html#_CPPv4N7sequant16IndexSpaceMetricE" title="sequant::IndexSpaceMetric"><span class="n"><span class="pre">IndexSpaceMetric</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">metric</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant7Context3setE16IndexSpaceMetric" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Sets the IndexSpaceMetric for this context, convenient for chaining </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>metric</strong> – IndexSpaceMetric </p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>ref to <code class="docutils literal notranslate"><span class="pre">*this</span></code>, for chaining </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context3setE14BraKetSymmetry">
+<span id="_CPPv3N7sequant7Context3setE14BraKetSymmetry"></span><span id="_CPPv2N7sequant7Context3setE14BraKetSymmetry"></span><span id="sequant::Context::set__BraKetSymmetry"></span><span class="target" id="classsequant_1_1_context_1a0520ec860eb33e6f275dcbca99bcb21b"></span><a class="reference internal" href="#_CPPv4N7sequant7ContextE" title="sequant::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">set</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="enum_namespacesequant_1a8fa350a3e3719764fcc1ce8aeddaea46.html#_CPPv4N7sequant14BraKetSymmetryE" title="sequant::BraKetSymmetry"><span class="n"><span class="pre">BraKetSymmetry</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">braket_symmetry</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant7Context3setE14BraKetSymmetry" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Sets the BraKetSymmetry for this context, convenient for chaining </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>braket_symmetry</strong> – BraKetSymmetry </p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>ref to <code class="docutils literal notranslate"><span class="pre">*this</span></code>, for chaining </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context3setE26AssertStrictBraKetSymmetry">
+<span id="_CPPv3N7sequant7Context3setE26AssertStrictBraKetSymmetry"></span><span id="_CPPv2N7sequant7Context3setE26AssertStrictBraKetSymmetry"></span><span id="sequant::Context::set__AssertStrictBraKetSymmetry"></span><span class="target" id="classsequant_1_1_context_1ae4177357b01e69e640c09d43c630c0d6"></span><a class="reference internal" href="#_CPPv4N7sequant7ContextE" title="sequant::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">set</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="enum_namespacesequant_1ada618a858658d047ae0d7e5bc059bc3d.html#_CPPv4N7sequant26AssertStrictBraKetSymmetryE" title="sequant::AssertStrictBraKetSymmetry"><span class="n"><span class="pre">AssertStrictBraKetSymmetry</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">assert_strict_braket_symmetry</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant7Context3setE26AssertStrictBraKetSymmetry" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Sets the bra-ket strict assertion flag for this context, convenient for chaining </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>assert_strict_braket_symmetry</strong> – AssertStrictBraKetSymmetry </p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>ref to <code class="docutils literal notranslate"><span class="pre">*this</span></code>, for chaining </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context3setE7SPBasis">
+<span id="_CPPv3N7sequant7Context3setE7SPBasis"></span><span id="_CPPv2N7sequant7Context3setE7SPBasis"></span><span id="sequant::Context::set__SPBasis"></span><span class="target" id="classsequant_1_1_context_1af2ed41779a34fd7a9ef88b63217610f7"></span><a class="reference internal" href="#_CPPv4N7sequant7ContextE" title="sequant::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">set</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="enum_namespacesequant_1a78aab8bd907ae4e1585c729c79703fd3.html#_CPPv4N7sequant7SPBasisE" title="sequant::SPBasis"><span class="n"><span class="pre">SPBasis</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">spbasis</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant7Context3setE7SPBasis" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Sets the SPBasis for this context, convenient for chaining </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>spbasis</strong> – SPBasis </p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>ref to <code class="docutils literal notranslate"><span class="pre">*this</span></code>, for chaining </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context29set_first_dummy_index_ordinalENSt6size_tE">
+<span id="_CPPv3N7sequant7Context29set_first_dummy_index_ordinalENSt6size_tE"></span><span id="_CPPv2N7sequant7Context29set_first_dummy_index_ordinalENSt6size_tE"></span><span id="sequant::Context::set_first_dummy_index_ordinal__std::s"></span><span class="target" id="classsequant_1_1_context_1a372b923ce965739ae412c97b82dd2306"></span><a class="reference internal" href="#_CPPv4N7sequant7ContextE" title="sequant::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">set_first_dummy_index_ordinal</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">first_dummy_index_ordinal</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant7Context29set_first_dummy_index_ordinalENSt6size_tE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Sets the first dummy index ordinal for this context, convenient for chaining</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>first_dummy_index_ordinal</strong> – the first dummy index ordinal </p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>ref to <code class="docutils literal notranslate"><span class="pre">*this</span></code>, for chaining </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context3setE19CanonicalizeOptions">
+<span id="_CPPv3N7sequant7Context3setE19CanonicalizeOptions"></span><span id="_CPPv2N7sequant7Context3setE19CanonicalizeOptions"></span><span id="sequant::Context::set__CanonicalizeOptions"></span><span class="target" id="classsequant_1_1_context_1a25c43f1fb118e303d83a8daa07c0f575"></span><a class="reference internal" href="#_CPPv4N7sequant7ContextE" title="sequant::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">set</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="structsequant_1_1_canonicalize_options.html#_CPPv4N7sequant19CanonicalizeOptionsE" title="sequant::CanonicalizeOptions"><span class="n"><span class="pre">CanonicalizeOptions</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">copt</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant7Context3setE19CanonicalizeOptions" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Specifies the canonicalization options </p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>ref to <code class="docutils literal notranslate"><span class="pre">*this</span></code>, for chaining </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context3setE17BraKetTypesetting">
+<span id="_CPPv3N7sequant7Context3setE17BraKetTypesetting"></span><span id="_CPPv2N7sequant7Context3setE17BraKetTypesetting"></span><span id="sequant::Context::set__BraKetTypesetting"></span><span class="target" id="classsequant_1_1_context_1a6973d233630ccf54490f2b9bf046aa94"></span><a class="reference internal" href="#_CPPv4N7sequant7ContextE" title="sequant::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">set</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="enum_namespacesequant_1afaf36e29c08df83949893832f3979dad.html#_CPPv4N7sequant17BraKetTypesettingE" title="sequant::BraKetTypesetting"><span class="n"><span class="pre">BraKetTypesetting</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">braket_typeset</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant7Context3setE17BraKetTypesetting" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Sets the BraKetTypesetting for this context, convenient for chaining </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>braket_typeset</strong> – BraKetTypesetting </p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>ref to <code class="docutils literal notranslate"><span class="pre">*this</span></code>, for chaining </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context3setE21BraKetSlotTypesetting">
+<span id="_CPPv3N7sequant7Context3setE21BraKetSlotTypesetting"></span><span id="_CPPv2N7sequant7Context3setE21BraKetSlotTypesetting"></span><span id="sequant::Context::set__BraKetSlotTypesetting"></span><span class="target" id="classsequant_1_1_context_1ae7770265de6fb5884c7b3ce79235bd48"></span><a class="reference internal" href="#_CPPv4N7sequant7ContextE" title="sequant::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">set</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="enum_namespacesequant_1aaeac2e7fab3fe003406f0355e1dc771d.html#_CPPv4N7sequant21BraKetSlotTypesettingE" title="sequant::BraKetSlotTypesetting"><span class="n"><span class="pre">BraKetSlotTypesetting</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">braket_slot_typeset</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant7Context3setE21BraKetSlotTypesetting" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Sets the BraKetSlotTypesetting for this context, convenient for chaining </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>braket_slot_typeset</strong> – BraKetSlotTypesetting </p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>ref to <code class="docutils literal notranslate"><span class="pre">*this</span></code>, for chaining </p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-static-functions">Public Static Functions</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context20make_default_optionsEv">
+<span id="_CPPv3N7sequant7Context20make_default_optionsEv"></span><span id="_CPPv2N7sequant7Context20make_default_optionsEv"></span><span id="sequant::Context::make_default_options"></span><span class="target" id="classsequant_1_1_context_1a97bd544c90d237894a503ed83d83c5da"></span><span class="k"><span class="pre">static</span></span><span class="w"> </span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant7Context7OptionsE" title="sequant::Context::Options"><span class="n"><span class="pre">Options</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">make_default_options</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant7Context20make_default_optionsEv" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<dl class="cpp struct">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context8DefaultsE">
+<span id="_CPPv3N7sequant7Context8DefaultsE"></span><span id="_CPPv2N7sequant7Context8DefaultsE"></span><span id="sequant::Context::Defaults"></span><span class="target" id="structsequant_1_1_context_1_1_defaults"></span><span class="k"><span class="pre">struct</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Defaults</span></span></span><a class="headerlink" href="#_CPPv4N7sequant7Context8DefaultsE" title="Link to this definition">¶</a><br /></dt>
+<dd><div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-static-attributes">Public Static Attributes</p>
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context8Defaults6vacuumE">
+<span id="_CPPv3N7sequant7Context8Defaults6vacuumE"></span><span id="_CPPv2N7sequant7Context8Defaults6vacuumE"></span><span id="sequant::Context::Defaults::vacuum__auto"></span><span class="target" id="structsequant_1_1_context_1_1_defaults_1a78d178f64250f354c2c98aaeff2aae78"></span><span class="k"><span class="pre">static</span></span><span class="w"> </span><span class="k"><span class="pre">constexpr</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">vacuum</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1a27c1015914fed77818b3cd447345f196.html#_CPPv4N7sequant6VacuumE" title="sequant::Vacuum"><span class="n"><span class="pre">Vacuum</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="enum_namespacesequant_1a27c1015914fed77818b3cd447345f196.html#_CPPv4N7sequant6Vacuum8PhysicalE" title="sequant::Vacuum::Physical"><span class="n"><span class="pre">Physical</span></span></a><a class="headerlink" href="#_CPPv4N7sequant7Context8Defaults6vacuumE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context8Defaults6metricE">
+<span id="_CPPv3N7sequant7Context8Defaults6metricE"></span><span id="_CPPv2N7sequant7Context8Defaults6metricE"></span><span id="sequant::Context::Defaults::metric__auto"></span><span class="target" id="structsequant_1_1_context_1_1_defaults_1a7d7ea307cefeb6703021340aa1857661"></span><span class="k"><span class="pre">static</span></span><span class="w"> </span><span class="k"><span class="pre">constexpr</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">metric</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1a03158c7d13fd7e3c714b834bf3492164.html#_CPPv4N7sequant16IndexSpaceMetricE" title="sequant::IndexSpaceMetric"><span class="n"><span class="pre">IndexSpaceMetric</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="enum_namespacesequant_1a03158c7d13fd7e3c714b834bf3492164.html#_CPPv4N7sequant16IndexSpaceMetric4UnitE" title="sequant::IndexSpaceMetric::Unit"><span class="n"><span class="pre">Unit</span></span></a><a class="headerlink" href="#_CPPv4N7sequant7Context8Defaults6metricE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context8Defaults15braket_symmetryE">
+<span id="_CPPv3N7sequant7Context8Defaults15braket_symmetryE"></span><span id="_CPPv2N7sequant7Context8Defaults15braket_symmetryE"></span><span id="sequant::Context::Defaults::braket_symmetry__auto"></span><span class="target" id="structsequant_1_1_context_1_1_defaults_1aa3ef6db9b00101867012dcf8960a8535"></span><span class="k"><span class="pre">static</span></span><span class="w"> </span><span class="k"><span class="pre">constexpr</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">braket_symmetry</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1a8fa350a3e3719764fcc1ce8aeddaea46.html#_CPPv4N7sequant14BraKetSymmetryE" title="sequant::BraKetSymmetry"><span class="n"><span class="pre">BraKetSymmetry</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="enum_namespacesequant_1a8fa350a3e3719764fcc1ce8aeddaea46.html#_CPPv4N7sequant14BraKetSymmetry9ConjugateE" title="sequant::BraKetSymmetry::Conjugate"><span class="n"><span class="pre">Conjugate</span></span></a><a class="headerlink" href="#_CPPv4N7sequant7Context8Defaults15braket_symmetryE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context8Defaults29assert_strict_braket_symmetryE">
+<span id="_CPPv3N7sequant7Context8Defaults29assert_strict_braket_symmetryE"></span><span id="_CPPv2N7sequant7Context8Defaults29assert_strict_braket_symmetryE"></span><span id="sequant::Context::Defaults::assert_strict_braket_symmetry__auto"></span><span class="target" id="structsequant_1_1_context_1_1_defaults_1a53a0385a7840d6cf0d5684fa553c116c"></span><span class="k"><span class="pre">static</span></span><span class="w"> </span><span class="k"><span class="pre">constexpr</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">assert_strict_braket_symmetry</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">true</span></span><a class="headerlink" href="#_CPPv4N7sequant7Context8Defaults29assert_strict_braket_symmetryE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context8Defaults7spbasisE">
+<span id="_CPPv3N7sequant7Context8Defaults7spbasisE"></span><span id="_CPPv2N7sequant7Context8Defaults7spbasisE"></span><span id="sequant::Context::Defaults::spbasis__auto"></span><span class="target" id="structsequant_1_1_context_1_1_defaults_1a0f5fa9c8bf3121c432cb3e286497e2d8"></span><span class="k"><span class="pre">static</span></span><span class="w"> </span><span class="k"><span class="pre">constexpr</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">spbasis</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1a78aab8bd907ae4e1585c729c79703fd3.html#_CPPv4N7sequant7SPBasisE" title="sequant::SPBasis"><span class="n"><span class="pre">SPBasis</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="enum_namespacesequant_1a78aab8bd907ae4e1585c729c79703fd3.html#_CPPv4N7sequant7SPBasis6SpinorE" title="sequant::SPBasis::Spinor"><span class="n"><span class="pre">Spinor</span></span></a><a class="headerlink" href="#_CPPv4N7sequant7Context8Defaults7spbasisE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context8Defaults25first_dummy_index_ordinalE">
+<span id="_CPPv3N7sequant7Context8Defaults25first_dummy_index_ordinalE"></span><span id="_CPPv2N7sequant7Context8Defaults25first_dummy_index_ordinalE"></span><span id="sequant::Context::Defaults::first_dummy_index_ordinal__auto"></span><span class="target" id="structsequant_1_1_context_1_1_defaults_1a51ab288d7f50d2a01560ca869bb31122"></span><span class="k"><span class="pre">static</span></span><span class="w"> </span><span class="k"><span class="pre">constexpr</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">first_dummy_index_ordinal</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">100</span></span><a class="headerlink" href="#_CPPv4N7sequant7Context8Defaults25first_dummy_index_ordinalE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context8Defaults18braket_typesettingE">
+<span id="_CPPv3N7sequant7Context8Defaults18braket_typesettingE"></span><span id="_CPPv2N7sequant7Context8Defaults18braket_typesettingE"></span><span id="sequant::Context::Defaults::braket_typesetting__auto"></span><span class="target" id="structsequant_1_1_context_1_1_defaults_1a39ac89b79106f77be2c2b19a3acb9fda"></span><span class="k"><span class="pre">static</span></span><span class="w"> </span><span class="k"><span class="pre">constexpr</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">braket_typesetting</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1afaf36e29c08df83949893832f3979dad.html#_CPPv4N7sequant17BraKetTypesettingE" title="sequant::BraKetTypesetting"><span class="n"><span class="pre">BraKetTypesetting</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="enum_namespacesequant_1afaf36e29c08df83949893832f3979dad.html#_CPPv4N7sequant17BraKetTypesetting9ContraSubE" title="sequant::BraKetTypesetting::ContraSub"><span class="n"><span class="pre">ContraSub</span></span></a><a class="headerlink" href="#_CPPv4N7sequant7Context8Defaults18braket_typesettingE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context8Defaults23braket_slot_typesettingE">
+<span id="_CPPv3N7sequant7Context8Defaults23braket_slot_typesettingE"></span><span id="_CPPv2N7sequant7Context8Defaults23braket_slot_typesettingE"></span><span id="sequant::Context::Defaults::braket_slot_typesetting__auto"></span><span class="target" id="structsequant_1_1_context_1_1_defaults_1af0a06374921e424f22d4ba04ad604b9b"></span><span class="k"><span class="pre">static</span></span><span class="w"> </span><span class="k"><span class="pre">constexpr</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">braket_slot_typesetting</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1aaeac2e7fab3fe003406f0355e1dc771d.html#_CPPv4N7sequant21BraKetSlotTypesettingE" title="sequant::BraKetSlotTypesetting"><span class="n"><span class="pre">BraKetSlotTypesetting</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="enum_namespacesequant_1aaeac2e7fab3fe003406f0355e1dc771d.html#_CPPv4N7sequant21BraKetSlotTypesetting13TensorPackageE" title="sequant::BraKetSlotTypesetting::TensorPackage"><span class="n"><span class="pre">TensorPackage</span></span></a><a class="headerlink" href="#_CPPv4N7sequant7Context8Defaults23braket_slot_typesettingE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+</dd></dl>
+
+<dl class="cpp struct">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context7OptionsE">
+<span id="_CPPv3N7sequant7Context7OptionsE"></span><span id="_CPPv2N7sequant7Context7OptionsE"></span><span id="sequant::Context::Options"></span><span class="target" id="structsequant_1_1_context_1_1_options"></span><span class="k"><span class="pre">struct</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Options</span></span></span><a class="headerlink" href="#_CPPv4N7sequant7Context7OptionsE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>helper for the named-parameter constructor of <a class="reference internal" href="#classsequant_1_1_context"><span class="std std-ref">Context</span></a></p>
+<p>see the <a class="reference internal" href="#classsequant_1_1_context"><span class="std std-ref">Context</span></a> documentation for detailed description </p>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-members">Public Members</p>
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context7Options31index_space_registry_shared_ptrE">
+<span id="_CPPv3N7sequant7Context7Options31index_space_registry_shared_ptrE"></span><span id="_CPPv2N7sequant7Context7Options31index_space_registry_shared_ptrE"></span><span id="sequant::Context::Options::index_space_registry_shared_ptr__std::shared_ptr:IndexSpaceRegistry:"></span><span class="target" id="structsequant_1_1_context_1_1_options_1aa8acc5bf36e0c609c7a426dcf578211e"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">shared_ptr</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="classsequant_1_1_index_space_registry.html#_CPPv4N7sequant18IndexSpaceRegistryE" title="sequant::IndexSpaceRegistry"><span class="n"><span class="pre">IndexSpaceRegistry</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">index_space_registry_shared_ptr</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">nullptr</span></span><a class="headerlink" href="#_CPPv4N7sequant7Context7Options31index_space_registry_shared_ptrE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>a shared_ptr to an <a class="reference internal" href="classsequant_1_1_index_space_registry.html#classsequant_1_1_index_space_registry"><span class="std std-ref">IndexSpaceRegistry</span></a> object </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context7Options20index_space_registryE">
+<span id="_CPPv3N7sequant7Context7Options20index_space_registryE"></span><span id="_CPPv2N7sequant7Context7Options20index_space_registryE"></span><span id="sequant::Context::Options::index_space_registry__std::optional:IndexSpaceRegistry:"></span><span class="target" id="structsequant_1_1_context_1_1_options_1a665d69148c69217ed91cf502240a6ed2"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">optional</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="classsequant_1_1_index_space_registry.html#_CPPv4N7sequant18IndexSpaceRegistryE" title="sequant::IndexSpaceRegistry"><span class="n"><span class="pre">IndexSpaceRegistry</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">index_space_registry</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">nullopt</span></span><a class="headerlink" href="#_CPPv4N7sequant7Context7Options20index_space_registryE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>an <a class="reference internal" href="classsequant_1_1_index_space_registry.html#classsequant_1_1_index_space_registry"><span class="std std-ref">IndexSpaceRegistry</span></a> object; used if index_space_registry_shared_ptr is null and it is nonnull </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context7Options6vacuumE">
+<span id="_CPPv3N7sequant7Context7Options6vacuumE"></span><span id="_CPPv2N7sequant7Context7Options6vacuumE"></span><span id="sequant::Context::Options::vacuum__Vacuum"></span><span class="target" id="structsequant_1_1_context_1_1_options_1a66bb93aa59d0622374c1ae6fdf212695"></span><a class="reference internal" href="enum_namespacesequant_1a27c1015914fed77818b3cd447345f196.html#_CPPv4N7sequant6VacuumE" title="sequant::Vacuum"><span class="n"><span class="pre">Vacuum</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">vacuum</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant7Context8DefaultsE" title="sequant::Context::Defaults"><span class="n"><span class="pre">Defaults</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="#_CPPv4N7sequant7Context8Defaults6vacuumE" title="sequant::Context::Defaults::vacuum"><span class="n"><span class="pre">vacuum</span></span></a><a class="headerlink" href="#_CPPv4N7sequant7Context7Options6vacuumE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>the Vacuum object </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context7Options6metricE">
+<span id="_CPPv3N7sequant7Context7Options6metricE"></span><span id="_CPPv2N7sequant7Context7Options6metricE"></span><span id="sequant::Context::Options::metric__IndexSpaceMetric"></span><span class="target" id="structsequant_1_1_context_1_1_options_1a2fbe1c3cc38cafa60432cdf8ecac87ae"></span><a class="reference internal" href="enum_namespacesequant_1a03158c7d13fd7e3c714b834bf3492164.html#_CPPv4N7sequant16IndexSpaceMetricE" title="sequant::IndexSpaceMetric"><span class="n"><span class="pre">IndexSpaceMetric</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">metric</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant7Context8DefaultsE" title="sequant::Context::Defaults"><span class="n"><span class="pre">Defaults</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="#_CPPv4N7sequant7Context8Defaults6metricE" title="sequant::Context::Defaults::metric"><span class="n"><span class="pre">metric</span></span></a><a class="headerlink" href="#_CPPv4N7sequant7Context7Options6metricE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>the IndexSpaceMetric object </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context7Options15braket_symmetryE">
+<span id="_CPPv3N7sequant7Context7Options15braket_symmetryE"></span><span id="_CPPv2N7sequant7Context7Options15braket_symmetryE"></span><span id="sequant::Context::Options::braket_symmetry__BraKetSymmetry"></span><span class="target" id="structsequant_1_1_context_1_1_options_1a4a060c38db62deacc5268e616c96bf49"></span><a class="reference internal" href="enum_namespacesequant_1a8fa350a3e3719764fcc1ce8aeddaea46.html#_CPPv4N7sequant14BraKetSymmetryE" title="sequant::BraKetSymmetry"><span class="n"><span class="pre">BraKetSymmetry</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">braket_symmetry</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant7Context8DefaultsE" title="sequant::Context::Defaults"><span class="n"><span class="pre">Defaults</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="#_CPPv4N7sequant7Context8Defaults15braket_symmetryE" title="sequant::Context::Defaults::braket_symmetry"><span class="n"><span class="pre">braket_symmetry</span></span></a><a class="headerlink" href="#_CPPv4N7sequant7Context7Options15braket_symmetryE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>the BraKetSymmetry object </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context7Options29assert_strict_braket_symmetryE">
+<span id="_CPPv3N7sequant7Context7Options29assert_strict_braket_symmetryE"></span><span id="_CPPv2N7sequant7Context7Options29assert_strict_braket_symmetryE"></span><span id="sequant::Context::Options::assert_strict_braket_symmetry__b"></span><span class="target" id="structsequant_1_1_context_1_1_options_1a705e4ca766a2c3227924e057989bcef7"></span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">assert_strict_braket_symmetry</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant7Context8DefaultsE" title="sequant::Context::Defaults"><span class="n"><span class="pre">Defaults</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="#_CPPv4N7sequant7Context8Defaults29assert_strict_braket_symmetryE" title="sequant::Context::Defaults::assert_strict_braket_symmetry"><span class="n"><span class="pre">assert_strict_braket_symmetry</span></span></a><a class="headerlink" href="#_CPPv4N7sequant7Context7Options29assert_strict_braket_symmetryE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>the flag that controls the strictness of bra-ket checks in tensor network construction </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context7Options7spbasisE">
+<span id="_CPPv3N7sequant7Context7Options7spbasisE"></span><span id="_CPPv2N7sequant7Context7Options7spbasisE"></span><span id="sequant::Context::Options::spbasis__SPBasis"></span><span class="target" id="structsequant_1_1_context_1_1_options_1a64c7325207c1ea1a3ddd13904f798a17"></span><a class="reference internal" href="enum_namespacesequant_1a78aab8bd907ae4e1585c729c79703fd3.html#_CPPv4N7sequant7SPBasisE" title="sequant::SPBasis"><span class="n"><span class="pre">SPBasis</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">spbasis</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant7Context8DefaultsE" title="sequant::Context::Defaults"><span class="n"><span class="pre">Defaults</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="#_CPPv4N7sequant7Context8Defaults7spbasisE" title="sequant::Context::Defaults::spbasis"><span class="n"><span class="pre">spbasis</span></span></a><a class="headerlink" href="#_CPPv4N7sequant7Context7Options7spbasisE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>the SPBasis object </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context7Options25first_dummy_index_ordinalE">
+<span id="_CPPv3N7sequant7Context7Options25first_dummy_index_ordinalE"></span><span id="_CPPv2N7sequant7Context7Options25first_dummy_index_ordinalE"></span><span id="sequant::Context::Options::first_dummy_index_ordinal__std::s"></span><span class="target" id="structsequant_1_1_context_1_1_options_1a100a5c98ca7f961b03d2e3c72b5b0efa"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">first_dummy_index_ordinal</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant7Context8DefaultsE" title="sequant::Context::Defaults"><span class="n"><span class="pre">Defaults</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="#_CPPv4N7sequant7Context8Defaults25first_dummy_index_ordinalE" title="sequant::Context::Defaults::first_dummy_index_ordinal"><span class="n"><span class="pre">first_dummy_index_ordinal</span></span></a><a class="headerlink" href="#_CPPv4N7sequant7Context7Options25first_dummy_index_ordinalE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>the first dummy index ordinal </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context7Options24canonicalization_optionsE">
+<span id="_CPPv3N7sequant7Context7Options24canonicalization_optionsE"></span><span id="_CPPv2N7sequant7Context7Options24canonicalization_optionsE"></span><span id="sequant::Context::Options::canonicalization_options__std::optional:CanonicalizeOptions:"></span><span class="target" id="structsequant_1_1_context_1_1_options_1ac8c81ec6e64c14927e60e25b75ab8535"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">optional</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="structsequant_1_1_canonicalize_options.html#_CPPv4N7sequant19CanonicalizeOptionsE" title="sequant::CanonicalizeOptions"><span class="n"><span class="pre">CanonicalizeOptions</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">canonicalization_options</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">nullopt</span></span><a class="headerlink" href="#_CPPv4N7sequant7Context7Options24canonicalization_optionsE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>the default canonicalization options </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context7Options18braket_typesettingE">
+<span id="_CPPv3N7sequant7Context7Options18braket_typesettingE"></span><span id="_CPPv2N7sequant7Context7Options18braket_typesettingE"></span><span id="sequant::Context::Options::braket_typesetting__BraKetTypesetting"></span><span class="target" id="structsequant_1_1_context_1_1_options_1adc9ed86857f39f3b85c043d782a2884e"></span><a class="reference internal" href="enum_namespacesequant_1afaf36e29c08df83949893832f3979dad.html#_CPPv4N7sequant17BraKetTypesettingE" title="sequant::BraKetTypesetting"><span class="n"><span class="pre">BraKetTypesetting</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">braket_typesetting</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant7Context8DefaultsE" title="sequant::Context::Defaults"><span class="n"><span class="pre">Defaults</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="#_CPPv4N7sequant7Context8Defaults18braket_typesettingE" title="sequant::Context::Defaults::braket_typesetting"><span class="n"><span class="pre">braket_typesetting</span></span></a><a class="headerlink" href="#_CPPv4N7sequant7Context7Options18braket_typesettingE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>the BraKetTypesetting object </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant7Context7Options23braket_slot_typesettingE">
+<span id="_CPPv3N7sequant7Context7Options23braket_slot_typesettingE"></span><span id="_CPPv2N7sequant7Context7Options23braket_slot_typesettingE"></span><span id="sequant::Context::Options::braket_slot_typesetting__BraKetSlotTypesetting"></span><span class="target" id="structsequant_1_1_context_1_1_options_1af8a38d2bb807c840297abc7f91be1898"></span><a class="reference internal" href="enum_namespacesequant_1aaeac2e7fab3fe003406f0355e1dc771d.html#_CPPv4N7sequant21BraKetSlotTypesettingE" title="sequant::BraKetSlotTypesetting"><span class="n"><span class="pre">BraKetSlotTypesetting</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">braket_slot_typesetting</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant7Context8DefaultsE" title="sequant::Context::Defaults"><span class="n"><span class="pre">Defaults</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="#_CPPv4N7sequant7Context8Defaults23braket_slot_typesettingE" title="sequant::Context::Defaults::braket_slot_typesetting"><span class="n"><span class="pre">braket_slot_typesetting</span></span></a><a class="headerlink" href="#_CPPv4N7sequant7Context7Options23braket_slot_typesettingE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>the BraKetSlotTypesetting object </p>
+</dd></dl>
+
+</div>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, SeQuant developers
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            <div class="last-updated">
+              Last updated on Feb 27, 2026 8:35:02 PM</div>
+          </div>
+          <div class="right-details">
+            <div class="icons">
+              <a class="muted-link fa-brands fa-solid fa-github fa-2x" href="https://github.com/ValeevGroup/SeQuant" aria-label="GitHub"></a>
+              
+            </div>
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Class Context</a><ul>
+<li><a class="reference internal" href="#nested-relationships">Nested Relationships</a><ul>
+<li><a class="reference internal" href="#nested-types">Nested Types</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#class-documentation">Class Documentation</a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant7ContextE"><code class="docutils literal notranslate"><span class="pre">sequant::Context</span></code></a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context7ContextE7Options"><code class="docutils literal notranslate"><span class="pre">Context()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7ContextD0Ev"><code class="docutils literal notranslate"><span class="pre">~Context()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context7ContextERK7Context"><code class="docutils literal notranslate"><span class="pre">Context()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7ContextaSERK7Context"><code class="docutils literal notranslate"><span class="pre">operator=()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant7Context5cloneEv"><code class="docutils literal notranslate"><span class="pre">clone()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context7ContextERR7Context"><code class="docutils literal notranslate"><span class="pre">Context()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant7Context6vacuumEv"><code class="docutils literal notranslate"><span class="pre">vacuum()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant7Context20index_space_registryEv"><code class="docutils literal notranslate"><span class="pre">index_space_registry()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant7Context28mutable_index_space_registryEv"><code class="docutils literal notranslate"><span class="pre">mutable_index_space_registry()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant7Context6metricEv"><code class="docutils literal notranslate"><span class="pre">metric()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant7Context15braket_symmetryEv"><code class="docutils literal notranslate"><span class="pre">braket_symmetry()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant7Context29assert_strict_braket_symmetryEv"><code class="docutils literal notranslate"><span class="pre">assert_strict_braket_symmetry()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant7Context7spbasisEv"><code class="docutils literal notranslate"><span class="pre">spbasis()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant7Context25first_dummy_index_ordinalEv"><code class="docutils literal notranslate"><span class="pre">first_dummy_index_ordinal()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant7Context24canonicalization_optionsEv"><code class="docutils literal notranslate"><span class="pre">canonicalization_options()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant7Context18braket_typesettingEv"><code class="docutils literal notranslate"><span class="pre">braket_typesetting()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant7Context23braket_slot_typesettingEv"><code class="docutils literal notranslate"><span class="pre">braket_slot_typesetting()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context3setE6Vacuum"><code class="docutils literal notranslate"><span class="pre">set()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context3setE18IndexSpaceRegistry"><code class="docutils literal notranslate"><span class="pre">set()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context3setENSt10shared_ptrI18IndexSpaceRegistryEE"><code class="docutils literal notranslate"><span class="pre">set()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context3setE16IndexSpaceMetric"><code class="docutils literal notranslate"><span class="pre">set()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context3setE14BraKetSymmetry"><code class="docutils literal notranslate"><span class="pre">set()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context3setE26AssertStrictBraKetSymmetry"><code class="docutils literal notranslate"><span class="pre">set()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context3setE7SPBasis"><code class="docutils literal notranslate"><span class="pre">set()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context29set_first_dummy_index_ordinalENSt6size_tE"><code class="docutils literal notranslate"><span class="pre">set_first_dummy_index_ordinal()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context3setE19CanonicalizeOptions"><code class="docutils literal notranslate"><span class="pre">set()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context3setE17BraKetTypesetting"><code class="docutils literal notranslate"><span class="pre">set()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context3setE21BraKetSlotTypesetting"><code class="docutils literal notranslate"><span class="pre">set()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context20make_default_optionsEv"><code class="docutils literal notranslate"><span class="pre">make_default_options()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context8DefaultsE"><code class="docutils literal notranslate"><span class="pre">sequant::Context::Defaults</span></code></a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context8Defaults6vacuumE"><code class="docutils literal notranslate"><span class="pre">vacuum</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context8Defaults6metricE"><code class="docutils literal notranslate"><span class="pre">metric</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context8Defaults15braket_symmetryE"><code class="docutils literal notranslate"><span class="pre">braket_symmetry</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context8Defaults29assert_strict_braket_symmetryE"><code class="docutils literal notranslate"><span class="pre">assert_strict_braket_symmetry</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context8Defaults7spbasisE"><code class="docutils literal notranslate"><span class="pre">spbasis</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context8Defaults25first_dummy_index_ordinalE"><code class="docutils literal notranslate"><span class="pre">first_dummy_index_ordinal</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context8Defaults18braket_typesettingE"><code class="docutils literal notranslate"><span class="pre">braket_typesetting</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context8Defaults23braket_slot_typesettingE"><code class="docutils literal notranslate"><span class="pre">braket_slot_typesetting</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context7OptionsE"><code class="docutils literal notranslate"><span class="pre">sequant::Context::Options</span></code></a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context7Options31index_space_registry_shared_ptrE"><code class="docutils literal notranslate"><span class="pre">index_space_registry_shared_ptr</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context7Options20index_space_registryE"><code class="docutils literal notranslate"><span class="pre">index_space_registry</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context7Options6vacuumE"><code class="docutils literal notranslate"><span class="pre">vacuum</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context7Options6metricE"><code class="docutils literal notranslate"><span class="pre">metric</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context7Options15braket_symmetryE"><code class="docutils literal notranslate"><span class="pre">braket_symmetry</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context7Options29assert_strict_braket_symmetryE"><code class="docutils literal notranslate"><span class="pre">assert_strict_braket_symmetry</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context7Options7spbasisE"><code class="docutils literal notranslate"><span class="pre">spbasis</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context7Options25first_dummy_index_ordinalE"><code class="docutils literal notranslate"><span class="pre">first_dummy_index_ordinal</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context7Options24canonicalization_optionsE"><code class="docutils literal notranslate"><span class="pre">canonicalization_options</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context7Options18braket_typesettingE"><code class="docutils literal notranslate"><span class="pre">braket_typesetting</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant7Context7Options23braket_slot_typesettingE"><code class="docutils literal notranslate"><span class="pre">braket_slot_typesetting</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script src="../_static/bootstrap-treeview/bootstrap-treeview.min.js?v=6a1e96b4"></script>
+    </body>
+</html>

@@ -1,0 +1,418 @@
+
+.. _program_listing_file_SeQuant_core_tensor_network_v1.hpp:
+
+Program Listing for File v1.hpp
+===============================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_tensor_network_v1.hpp>` (``SeQuant/core/tensor_network/v1.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Eduard Valeyev on 2019-02-02.
+   //
+   
+   #ifndef SEQUANT_CORE_TENSOR_NETWORK_V1_H
+   #define SEQUANT_CORE_TENSOR_NETWORK_V1_H
+   
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/expr.hpp>
+   #include <SeQuant/core/index.hpp>
+   #include <SeQuant/core/tensor_canonicalizer.hpp>
+   #include <SeQuant/core/tensor_network/canonicals.hpp>
+   #include <SeQuant/core/tensor_network/slot.hpp>
+   #include <SeQuant/core/tensor_network/vertex.hpp>
+   #include <SeQuant/core/utility/macros.hpp>
+   
+   #include <cstdlib>
+   #include <memory>
+   #include <string>
+   #include <string_view>
+   #include <tuple>
+   #include <utility>
+   #include <vector>
+   
+   // forward declarations
+   namespace bliss {
+   class Graph;
+   }
+   
+   namespace sequant {
+   
+   
+   class TensorNetworkV1 {
+    public:
+     constexpr static int version() { return 1; }
+   
+     constexpr static size_t max_rank = 256;
+   
+     // clang-format off
+   
+     // clang-format on
+     class Edge {
+      public:
+       struct Terminal {
+         int tensor_ord = -1;
+         TensorIndexSlotType slot_type;
+         // index slots are grouped according to degrees of freedom and/or
+         // symmetry. E.g. bra/ket slots for same particle of a nonsymmetric tensor
+         // are grouped together. Bra and ket slots of a symmetric/antisymmetric
+         // tensor are also grouped into their own slot groups. Each aux slot for
+         // now is its own slot group. The slot groups are indexed 0, 1, ...
+         int slot_group_ord = -1;
+   
+         Terminal() noexcept {};
+         Terminal(int tensor_ord, TensorIndexSlotType slot_type,
+                  int slot_group_ord) noexcept
+             : tensor_ord(tensor_ord),
+               slot_type(slot_type),
+               slot_group_ord(slot_group_ord) {
+           SEQUANT_ASSERT(tensor_ord >= 0 && slot_group_ord >= 0);
+         }
+   
+         friend bool operator==(const Terminal &a, const Terminal &b) {
+           return a.tensor_ord == b.tensor_ord && a.slot_type == b.slot_type &&
+                  a.slot_group_ord == b.slot_group_ord;
+         }
+         friend bool operator<(const Terminal &a, const Terminal &b) {
+           return std::tie(a.tensor_ord, a.slot_type, a.slot_group_ord) <
+                  std::tie(b.tensor_ord, b.slot_type, b.slot_group_ord);
+         }
+   
+         explicit operator bool() const { return tensor_ord >= 0; }
+         bool null() const { return tensor_ord < 0; }
+         bool nonnull() const { return tensor_ord >= 0; }
+       };
+   
+       Edge() = default;
+       explicit Edge(const Terminal &t) : second_(t) {}
+       Edge(const Terminal &t, const Index *idxptr)
+           : second_(t), idxptr_(idxptr) {}
+       //    Edge(const Edge&) = default;
+       //    Edge(Edge&&) = default;
+       //    Edge& operator=(const Edge&) = default;
+       //    Edge& operator=(Edge&&) = default;
+   
+       Edge &connect_to(const Terminal &t) {
+         SEQUANT_ASSERT(first_.null() ||
+                        second_.null());  // not fully connected yet
+         if (second_.null()) {
+           SEQUANT_ASSERT(first_.null());  // unconnected Edge
+           second_ = t;
+         } else {
+           // - cannot connect braket slot to aux slot
+           switch (t.slot_type) {
+             case TensorIndexSlotType::Aux:
+               if (second_.slot_type != TensorIndexSlotType::Aux) {
+                 throw Exception(
+                     "TensorNetworkV1::Edge::connect_to: aux slot cannot be "
+                     "connected to a non-aux slot");
+               }
+               break;
+               // - can connect bra slot to ket slot, and vice versa
+             case TensorIndexSlotType::Bra:
+               if (second_.slot_type != TensorIndexSlotType::Ket) {
+                 throw Exception(
+                     "TensorNetworkV1::Edge::connect_to: bra slot can only be "
+                     "connected to a ket slot");
+               }
+               break;
+             case TensorIndexSlotType::Ket:
+               if (second_.slot_type != TensorIndexSlotType::Bra) {
+                 throw Exception(
+                     "TensorNetworkV1::Edge::connect_to: ket slot can only be "
+                     "connected to a bra slot");
+               }
+               break;
+           }
+   
+           first_ = t;
+           // ensure first_ < second_
+           if (second_ < first_) {
+             std::swap(first_, second_);
+           }
+         }
+         return *this;
+       }
+   
+       bool operator<(const Edge &other) const {
+         return std::tie(first_, second_) < std::tie(other.first_, other.second_);
+       }
+   
+       friend bool operator==(const Edge &a, const Edge &b) {
+         return a.first_ == b.first_ && a.second_ == b.second_;
+       }
+   
+       const auto &first() const {
+         SEQUANT_ASSERT(first_.nonnull());
+         return first_;
+       }
+       const auto &second() const {
+         SEQUANT_ASSERT(second_.nonnull());
+         return second_;
+       }
+       const auto &operator[](std::size_t i) const {
+         SEQUANT_ASSERT(i == 0 || i == 1);
+         if (i == 0) {
+           if (first_.nonnull())
+             return first_;
+           else if (second_.nonnull())
+             return second_;
+           else
+             return null_terminal_;
+         } else {  // i == 1
+           if (second_.nonnull())
+             return second_;
+           else
+             return null_terminal_;
+         }
+       }
+   
+       auto size() const {
+         return first_.nonnull() ? 2 : (second_.nonnull() ? 1 : 0);
+       }
+   
+       const Index &idx() const {
+         SEQUANT_ASSERT(idxptr_ != nullptr);
+         return *idxptr_;
+       }
+   
+      private:
+       // if only connected to 1 terminal, this is always null
+       Terminal first_;
+       // invariant: first_.tensor_order <= second_.tensor_order
+       Terminal second_;
+       const Index *idxptr_ = nullptr;
+   
+       static inline Terminal null_terminal_ = {};
+     };
+   
+    public:
+     template <typename ExprPtrRange>
+     TensorNetworkV1(ExprPtrRange &exprptr_range) {
+       if (exprptr_range.size() > 0) {
+         for (auto &&ex : exprptr_range) {
+           auto t = std::dynamic_pointer_cast<AbstractTensor>(ex);
+           std::size_t count = 0;
+           if (t) {
+             tensors_.emplace_back(t);
+             tensor_input_ordinals_.emplace_back(count++);
+           } else {
+             throw Exception(
+                 "TensorNetworkV1::TensorNetworkV1: non-tensors in the given "
+                 "expression range");
+           }
+         }
+         return;
+       } else {
+         if constexpr (Expr::is_shared_ptr_of_expr<ExprPtrRange>::value) {
+           if (auto tensor =
+                   std::dynamic_pointer_cast<AbstractTensor>(exprptr_range)) {
+             tensors_.emplace_back(tensor);
+             tensor_input_ordinals_.emplace_back(0);
+             return;
+           }
+         }
+       }
+       throw Exception(
+           "TensorNetworkV1::TensorNetworkV1: non-tensors in the given expression "
+           "range");
+     }
+   
+     const auto &tensors() const { return tensors_; }
+   
+     const auto &tensor_input_ordinals() const { return tensor_input_ordinals_; }
+   
+     using named_indices_t = container::set<Index, Index::FullLabelCompare>;
+   
+     ExprPtr canonicalize(
+         const container::vector<std::wstring> &cardinal_tensor_labels = {},
+         bool fast = true, const named_indices_t *named_indices = nullptr);
+   
+     struct SlotCanonicalizationMetadata {
+       named_indices_t named_indices;
+   
+       using named_index_compare_t =
+           std::function<bool(const std::pair<const Index *, IndexSlotType> &,
+                              const std::pair<const Index *, IndexSlotType> &)>;
+   
+       named_index_compare_t named_index_compare;
+   
+       container::svector<named_indices_t::const_iterator> named_indices_canonical;
+   
+       std::shared_ptr<bliss::Graph> graph;
+   
+       [[nodiscard]] size_t hash_value() const;
+   
+       [[nodiscard]] inline auto get_index_view() const {
+         return named_indices_canonical  //
+                | ranges::views::indirect;
+       }
+   
+       template <typename Cont>
+       auto get_indices() const {
+         return get_index_view() | ranges::to<Cont>;
+       }
+   
+       std::int8_t phase = +1;  // +1 or -1
+     };
+   
+     SlotCanonicalizationMetadata canonicalize_slots(
+         const container::vector<std::wstring> &cardinal_tensor_labels = {},
+         const named_indices_t *named_indices = nullptr,
+         SlotCanonicalizationMetadata::named_index_compare_t named_index_compare =
+             default_idxptr_slottype_lesscompare{});
+   
+     container::svector<std::pair<long, long>> factorize();
+   
+    private:
+     container::svector<AbstractTensorPtr> tensors_;
+     container::svector<std::size_t> tensor_input_ordinals_;
+   
+     struct FullLabelCompare {
+       using is_transparent = void;
+       bool operator()(const Edge &first, const Edge &second) const {
+         return Index::FullLabelCompare{}(first.idx(), second.idx());
+       }
+       bool operator()(const Index &first, const Index &second) const {
+         return Index::FullLabelCompare{}(first, second);
+       }
+       bool operator()(const Edge &first, const Index &second) const {
+         return Index::FullLabelCompare{}(first.idx(), second);
+       }
+       bool operator()(const Index &first, const Edge &second) const {
+         return Index::FullLabelCompare{}(first, second.idx());
+       }
+     };
+     // Index -> Edge, sorted by full label
+     using edges_t = container::set<Edge, FullLabelCompare>;
+     mutable edges_t edges_;
+     // set to true by init_edges();
+     mutable bool have_edges_ = false;
+     mutable named_indices_t ext_indices_;
+     mutable named_indices_t pure_proto_indices_;
+   
+     // replacements of anonymous indices produced by the last call to
+     // canonicalize()
+     container::map<Index, Index> idxrepl_;
+   
+     void init_edges() const;
+   
+    public:
+     const auto &edges() const {
+       init_edges();
+       return edges_;
+     }
+   
+   
+     const auto &ext_indices() const {
+       if (edges_.empty()) init_edges();
+       return ext_indices_;
+     }
+   
+     const auto &idxrepl() const { return idxrepl_; };
+   
+    public:
+     struct GraphData {
+       using VertexColor = unsigned int;
+   
+       std::shared_ptr<bliss::Graph> graph;
+       std::vector<std::wstring> vertex_labels;
+       std::vector<std::optional<std::wstring>> vertex_texlabels;
+       std::vector<VertexColor> vertex_colors;
+       std::vector<VertexType> vertex_types;
+   
+       std::optional<std::size_t> vertex_to_tensor_cluster(
+           std::size_t vertex) const;
+   
+       template <std::size_t Index>
+       auto &&get() & {
+         return get_helper<Index>(*this);
+       }
+   
+       template <std::size_t Index>
+       auto &&get() && {
+         return get_helper<Index>(*this);
+       }
+   
+       template <std::size_t Index>
+       auto &&get() const & {
+         return get_helper<Index>(*this);
+       }
+   
+       template <std::size_t Index>
+       auto &&get() const && {
+         return get_helper<Index>(*this);
+       }
+   
+      private:
+       template <std::size_t Index, typename T>
+       static auto &&get_helper(T &&t) {
+         static_assert(Index < 5,
+                       "Index out of bounds for TensorNetworkV1::GraphData");
+         if constexpr (Index == 0) return std::forward<T>(t).graph;
+         if constexpr (Index == 1) return std::forward<T>(t).vertex_labels;
+         if constexpr (Index == 2) return std::forward<T>(t).vertex_texlabels;
+         if constexpr (Index == 3) return std::forward<T>(t).vertex_colors;
+         if constexpr (Index == 4) return std::forward<T>(t).vertex_types;
+       }
+     };
+   
+     struct BlissGraphOptions {
+       const named_indices_t *named_indices = nullptr;
+   
+       bool distinct_named_indices = true;
+   
+       bool make_labels = true;
+   
+       bool make_texlabels = true;
+     };
+     static BlissGraphOptions make_default_bliss_graph_options() { return {}; }
+   
+   
+     GraphData make_bliss_graph(const BlissGraphOptions &options =
+                                    make_default_bliss_graph_options()) const;
+   };
+   
+   }  // namespace sequant
+   
+   namespace std {
+   template <>
+   struct tuple_size<sequant::TensorNetworkV1::GraphData>
+       : integral_constant<size_t, 5> {};
+   
+   template <>
+   struct tuple_element<0, sequant::TensorNetworkV1::GraphData> {
+     using type =
+         decltype(std::declval<sequant::TensorNetworkV1::GraphData>().graph);
+   };
+   
+   template <>
+   struct tuple_element<1, sequant::TensorNetworkV1::GraphData> {
+     using type = decltype(std::declval<sequant::TensorNetworkV1::GraphData>()
+                               .vertex_labels);
+   };
+   
+   template <>
+   struct tuple_element<2, sequant::TensorNetworkV1::GraphData> {
+     using type = decltype(std::declval<sequant::TensorNetworkV1::GraphData>()
+                               .vertex_texlabels);
+   };
+   
+   template <>
+   struct tuple_element<3, sequant::TensorNetworkV1::GraphData> {
+     using type = decltype(std::declval<sequant::TensorNetworkV1::GraphData>()
+                               .vertex_colors);
+   };
+   
+   template <>
+   struct tuple_element<4, sequant::TensorNetworkV1::GraphData> {
+     using type = decltype(std::declval<sequant::TensorNetworkV1::GraphData>()
+                               .vertex_types);
+   };
+   
+   }  // namespace std
+   
+   #endif  // SEQUANT_CORE_TENSOR_NETWORK_V1_H

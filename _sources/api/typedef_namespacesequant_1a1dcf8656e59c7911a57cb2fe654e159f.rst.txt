@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1a1dcf8656e59c7911a57cb2fe654e159f:
+
+Typedef sequant::SubexpressionNames
+===================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_node_compare.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::SubexpressionNames
+   :project: SeQuant

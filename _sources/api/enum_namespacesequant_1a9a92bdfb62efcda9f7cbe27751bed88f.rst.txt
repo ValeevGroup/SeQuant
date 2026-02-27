@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1a9a92bdfb62efcda9f7cbe27751bed88f:
+
+Enum ColumnSymmetry
+===================
+
+- Defined in :ref:`file_SeQuant_core_attr.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::ColumnSymmetry
+   :project: SeQuant

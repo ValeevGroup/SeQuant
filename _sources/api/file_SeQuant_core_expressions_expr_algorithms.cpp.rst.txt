@@ -1,0 +1,135 @@
+
+.. _file_SeQuant_core_expressions_expr_algorithms.cpp:
+
+File expr_algorithms.cpp
+========================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_expressions>` (``SeQuant/core/expressions``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/expressions/expr_algorithms.cpp``)
+-------------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_expressions_expr_algorithms.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/expressions/constant.hpp`` (:ref:`file_SeQuant_core_expressions_constant.hpp`)
+
+- ``SeQuant/core/expressions/expr_algorithms.hpp`` (:ref:`file_SeQuant_core_expressions_expr_algorithms.hpp`)
+
+- ``SeQuant/core/expressions/expr_operators.hpp`` (:ref:`file_SeQuant_core_expressions_expr_operators.hpp`)
+
+- ``SeQuant/core/expressions/product.hpp`` (:ref:`file_SeQuant_core_expressions_product.hpp`)
+
+- ``SeQuant/core/expressions/result_expr.hpp`` (:ref:`file_SeQuant_core_expressions_result_expr.hpp`)
+
+- ``SeQuant/core/expressions/sum.hpp`` (:ref:`file_SeQuant_core_expressions_sum.hpp`)
+
+- ``SeQuant/core/expressions/tensor.hpp`` (:ref:`file_SeQuant_core_expressions_tensor.hpp`)
+
+- ``SeQuant/core/io/latex/latex.hpp`` (:ref:`file_SeQuant_core_io_latex_latex.hpp`)
+
+- ``SeQuant/core/logger.hpp`` (:ref:`file_SeQuant_core_logger.hpp`)
+
+- ``SeQuant/core/options.hpp`` (:ref:`file_SeQuant_core_options.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``iostream``
+
+- ``range/v3/range/primitives.hpp``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_atomic.hpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_expand_visitor`
+
+- :ref:`exhale_struct_structsequant_1_1_rapid_simplify_visitor`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1ab0d879b53a5383bbea81b77b2c8b02a5`
+
+- :ref:`exhale_function_namespacesequant_1a9254790057d5334a3ace020ac9cf2eec`
+
+- :ref:`exhale_function_namespacesequant_1a99488239bd0d6f74f70250adacdbebdd`
+
+- :ref:`exhale_function_namespacesequant_1afafe375c70da0bc0ac234820860df7a1`
+
+- :ref:`exhale_function_namespacesequant_1a4707bc59cef2a682942534231a7357e8`
+
+- :ref:`exhale_function_namespacesequant_1a046c20d81ebc0e26a2e6d7f279807fd6`
+
+- :ref:`exhale_function_namespacesequant_1aa92afcc273aa4909023368df460ea3e2`
+
+- :ref:`exhale_function_namespacesequant_1af62672d9a36d78a6f42ea045dff8a442`
+
+- :ref:`exhale_function_namespacesequant_1a97ad4e5e5b28a0b29c5b232726968dc4`
+
+- :ref:`exhale_function_namespacesequant_1a459ada604346153073774ab11f38d948`
+
+- :ref:`exhale_function_namespacesequant_1a0636d78f537107a5db880464da24fd62`
+
+- :ref:`exhale_function_namespacesequant_1a54d970db0c9613c312bb7b2335c0fa1e`
+
+- :ref:`exhale_function_namespacesequant_1afaf2130fadf95c2f3c1173dc7467b356`
+
+- :ref:`exhale_function_namespacesequant_1aabe9737895e799a8bf7bd97282bc67a1`
+
+- :ref:`exhale_function_namespacesequant_1ad07fe0798a5ceaefb12ec9ad3834a5fe`
+
+- :ref:`exhale_function_namespacesequant_1af84c90a37e4bb24b10de5b4e13c0ec48`
+
+- :ref:`exhale_function_namespacesequant_1a17bd108f3fc0037ecd15bd342d816410`
+
+- :ref:`exhale_function_namespacesequant_1abad7e3ee2d4bbce98c63894c4a41833c`
+
+- :ref:`exhale_function_namespacesequant_1a44157aad44993f7663575296a714fe7f`
+
+- :ref:`exhale_function_namespacesequant_1a1ba8a6bb6e80265df6972e892adb604b`
+
+- :ref:`exhale_function_namespacesequant_1ae562a27682e344f8d022a53d28f516d6`
+
+- :ref:`exhale_function_namespacesequant_1af0948cfc462ccc7967a31e2cf87318f6`
+
+- :ref:`exhale_function_namespacesequant_1a437ad10a56bd65379c519b985070f255`
+
+- :ref:`exhale_function_namespacesequant_1a0aff40b3eb0bf6a6648b22b23d814510`
+

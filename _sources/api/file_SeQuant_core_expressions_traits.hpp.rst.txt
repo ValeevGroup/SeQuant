@@ -1,0 +1,80 @@
+
+.. _file_SeQuant_core_expressions_traits.hpp:
+
+File traits.hpp
+===============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_expressions>` (``SeQuant/core/expressions``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/expressions/traits.hpp``)
+----------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_expressions_traits.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/expr_fwd.hpp`` (:ref:`file_SeQuant_core_expr_fwd.hpp`)
+
+- ``SeQuant/core/meta.hpp``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_expr.hpp`
+
+- :ref:`file_SeQuant_core_expressions_expr_ptr.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1a4214099de09c034f1745bf08d8cdaa5c`
+
+- :ref:`exhale_variable_namespacesequant_1a7c3c84f70997fdc620dce5594e712d87`
+
+- :ref:`exhale_variable_namespacesequant_1a8833c61cbab3ac101c3bc5f0042ac1fa`
+
+- :ref:`exhale_variable_namespacesequant_1a459960c1b108aab1fa229736ab8f2b11`
+
+- :ref:`exhale_variable_namespacesequant_1ac3b6b60b77c342f382f24d89c7244b2c`
+
+- :ref:`exhale_variable_namespacesequant_1ab672cbe75f90033335a6e84804351fc9`
+
+- :ref:`exhale_variable_namespacesequant_1aa9fea7006f62a0eed32be8719ab9ca1b`
+
+- :ref:`exhale_variable_namespacesequant_1acf2e0e3e869af92b90ca3fb8f5c116ff`
+
+- :ref:`exhale_variable_namespacesequant_1a5f6aae65fe96f8e12876ebb8df86f484`
+
+- :ref:`exhale_variable_namespacesequant_1a9ed8265a9b2d3fe4370cac5bf387d2c8`
+

@@ -1,0 +1,78 @@
+
+.. _file_SeQuant_domain_mbpt_vac_av.cpp:
+
+File vac_av.cpp
+===============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_mbpt>` (``SeQuant/domain/mbpt``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/domain/mbpt/vac_av.cpp``)
+-----------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_mbpt_vac_av.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/context.hpp`` (:ref:`file_SeQuant_core_context.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/op.hpp`` (:ref:`file_SeQuant_core_op.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/domain/mbpt/vac_av.hpp`` (:ref:`file_SeQuant_domain_mbpt_vac_av.hpp`)
+
+- ``range/v3/algorithm/any_of.hpp``
+
+- ``range/v3/algorithm/for_each.hpp``
+
+- ``range/v3/range/conversion.hpp``
+
+- ``range/v3/view/filter.hpp``
+
+- ``vector``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__mbpt`
+
+- :ref:`namespace_sequant__mbpt__op`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1ad25323394e9f1767d18314376ea5a8f7`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a5bcdff71f31e071323c2ba380df2e9b1`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a269a18617fad2e65ca2d8cba40e48493`
+

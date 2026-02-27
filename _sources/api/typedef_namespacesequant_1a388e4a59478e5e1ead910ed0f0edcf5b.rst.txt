@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1a388e4a59478e5e1ead910ed0f0edcf5b:
+
+Typedef sequant::ExprPtrVector
+==============================
+
+- Defined in :ref:`file_SeQuant_core_expressions_expr_ptr.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::ExprPtrVector
+   :project: SeQuant

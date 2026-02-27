@@ -1,0 +1,14 @@
+.. _exhale_function_ast_8hpp_1a90f0b9115361b8001bd3f2c49b144c8f:
+
+Function BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Product, factors)
+=========================================================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_ast.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Product, factors)
+   :project: SeQuant

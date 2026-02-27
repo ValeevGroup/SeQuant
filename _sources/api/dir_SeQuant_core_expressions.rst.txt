@@ -1,0 +1,39 @@
+.. _dir_SeQuant_core_expressions:
+
+
+Directory expressions
+=====================
+
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+*Directory path:* ``SeQuant/core/expressions``
+
+
+Files
+-----
+
+- :ref:`file_SeQuant_core_expressions_abstract_tensor.cpp`
+- :ref:`file_SeQuant_core_expressions_abstract_tensor.hpp`
+- :ref:`file_SeQuant_core_expressions_constant.hpp`
+- :ref:`file_SeQuant_core_expressions_expr.cpp`
+- :ref:`file_SeQuant_core_expressions_expr.hpp`
+- :ref:`file_SeQuant_core_expressions_expr_algorithms.cpp`
+- :ref:`file_SeQuant_core_expressions_expr_algorithms.hpp`
+- :ref:`file_SeQuant_core_expressions_expr_operators.hpp`
+- :ref:`file_SeQuant_core_expressions_expr_ptr.hpp`
+- :ref:`file_SeQuant_core_expressions_expr_range.hpp`
+- :ref:`file_SeQuant_core_expressions_labeled.hpp`
+- :ref:`file_SeQuant_core_expressions_product.hpp`
+- :ref:`file_SeQuant_core_expressions_result_expr.cpp`
+- :ref:`file_SeQuant_core_expressions_result_expr.hpp`
+- :ref:`file_SeQuant_core_expressions_sum.hpp`
+- :ref:`file_SeQuant_core_expressions_tensor.cpp`
+- :ref:`file_SeQuant_core_expressions_tensor.hpp`
+- :ref:`file_SeQuant_core_expressions_traits.hpp`
+- :ref:`file_SeQuant_core_expressions_variable.hpp`
+
+

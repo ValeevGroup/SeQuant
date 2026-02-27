@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1io_1_1serialization_1_1v1_1_1ast_1a5c6e5d4c4945b641c8d992ecf8770657:
+
+Typedef sequant::io::serialization::v1::ast::NullaryValue
+=========================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_ast.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::io::serialization::v1::ast::NullaryValue
+   :project: SeQuant

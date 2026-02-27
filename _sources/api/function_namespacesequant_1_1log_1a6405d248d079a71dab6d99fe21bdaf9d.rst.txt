@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1log_1a6405d248d079a71dab6d99fe21bdaf9d:
+
+Template Function sequant::log::cache(CacheStat const&, Args const&...)
+=======================================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::log::cache(CacheStat const&, Args const&...)
+   :project: SeQuant

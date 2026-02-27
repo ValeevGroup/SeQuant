@@ -1,0 +1,100 @@
+
+.. _file_SeQuant_core_optimize_optimize.cpp:
+
+File optimize.cpp
+=================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_optimize>` (``SeQuant/core/optimize``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/optimize/optimize.cpp``)
+---------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_optimize_optimize.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/binary_node.hpp`` (:ref:`file_SeQuant_core_binary_node.hpp`)
+
+- ``SeQuant/core/complex.hpp`` (:ref:`file_SeQuant_core_complex.hpp`)
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/eval/eval_expr.hpp`` (:ref:`file_SeQuant_core_eval_eval_expr.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/hash.hpp`` (:ref:`file_SeQuant_core_hash.hpp`)
+
+- ``SeQuant/core/optimize/optimize.hpp`` (:ref:`file_SeQuant_core_optimize_optimize.hpp`)
+
+- ``SeQuant/core/optimize/single_term.hpp`` (:ref:`file_SeQuant_core_optimize_single_term.hpp`)
+
+- ``SeQuant/core/optimize/sum.hpp`` (:ref:`file_SeQuant_core_optimize_sum.hpp`)
+
+- ``SeQuant/core/utility/indices.hpp`` (:ref:`file_SeQuant_core_utility_indices.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``cstddef``
+
+- ``range/v3/algorithm/all_of.hpp``
+
+- ``range/v3/iterator/basic_iterator.hpp``
+
+- ``range/v3/range/access.hpp``
+
+- ``range/v3/range/conversion.hpp``
+
+- ``range/v3/view/tail.hpp``
+
+- ``range/v3/view/transform.hpp``
+
+- ``range/v3/view/view.hpp``
+
+- ``type_traits``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_atomic.hpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__opt`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1a0d0a1695c09f0cfbd340392eb5934b3b`
+
+- :ref:`exhale_function_namespacesequant_1a8917580ad024d1ad4b563db273203c64`
+
+- :ref:`exhale_function_namespacesequant_1a96251fe8d2da2db7e52fec05c905c1c1`
+
+- :ref:`exhale_function_namespacesequant_1a6a47c1ab725085d55ef36a21ad9ad9b7`
+

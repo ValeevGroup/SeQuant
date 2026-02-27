@@ -1,0 +1,60 @@
+
+.. _file_SeQuant_core_utility_atomic.hpp:
+
+File atomic.hpp
+===============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_utility>` (``SeQuant/core/utility``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/utility/atomic.hpp``)
+------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_utility_atomic.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``atomic`` (:ref:`file_SeQuant_core_utility_atomic.hpp`)
+
+- ``concepts`` (:ref:`file_SeQuant_core_io_concepts.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_export_export_expr.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a37bd0d1afe5d3b7b129c247403d1989d`
+

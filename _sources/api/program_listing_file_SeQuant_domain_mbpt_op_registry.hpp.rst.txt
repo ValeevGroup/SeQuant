@@ -1,0 +1,76 @@
+
+.. _program_listing_file_SeQuant_domain_mbpt_op_registry.hpp:
+
+Program Listing for File op_registry.hpp
+========================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_domain_mbpt_op_registry.hpp>` (``SeQuant/domain/mbpt/op_registry.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Ajay Melekamburath on 12/14/25.
+   //
+   
+   #ifndef SEQUANT_DOMAIN_MBPT_OP_REGISTRY_HPP
+   #define SEQUANT_DOMAIN_MBPT_OP_REGISTRY_HPP
+   
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/expressions/tensor.hpp>
+   #include <SeQuant/core/reserved.hpp>
+   #include <SeQuant/core/utility/macros.hpp>
+   
+   #include <memory>
+   
+   namespace sequant::mbpt {
+   
+   enum class OpClass { ex, deex, gen };
+   
+   class OpRegistry {
+    public:
+     OpRegistry()
+         : ops_(std::make_shared<container::map<std::wstring, OpClass>>()) {}
+   
+     OpRegistry(std::shared_ptr<container::map<std::wstring, OpClass>> ops)
+         : ops_(std::move(ops)) {}
+   
+     OpRegistry(const OpRegistry& other) : ops_(other.ops_) {}
+   
+     OpRegistry(OpRegistry&& other) noexcept : ops_(std::move(other.ops_)) {}
+   
+     OpRegistry& operator=(const OpRegistry& other);
+   
+     OpRegistry& operator=(OpRegistry&& other) noexcept;
+   
+     [[nodiscard]] decltype(auto) begin() const { return ops_->cbegin(); }
+   
+     [[nodiscard]] decltype(auto) end() const { return ops_->cend(); }
+   
+     OpRegistry clone() const;
+   
+     OpRegistry& add(const std::wstring& op, OpClass action);
+   
+     OpRegistry& remove(const std::wstring& op);
+   
+     bool contains(const std::wstring& op) const;
+   
+     [[nodiscard]] OpClass to_class(const std::wstring& op) const;
+   
+     [[nodiscard]] auto ops() const { return ranges::views::keys(*ops_); }
+   
+     void purge() { ops_->clear(); }
+   
+    private:
+     std::shared_ptr<container::map<std::wstring, OpClass>> ops_;
+   
+     void validate_op(const std::wstring& op) const;
+   
+     friend bool operator==(const OpRegistry& reg1, const OpRegistry& reg2) {
+       return *reg1.ops_ == *reg2.ops_;
+     }
+   };  // class OpRegistry
+   }  // namespace sequant::mbpt
+   
+   #endif  // SEQUANT_DOMAIN_MBPT_OP_REGISTRY_HPP

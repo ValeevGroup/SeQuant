@@ -1,0 +1,134 @@
+
+.. _file_SeQuant_core_io_serialization_serialization.hpp:
+
+File serialization.hpp
+======================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_io_serialization>` (``SeQuant/core/io/serialization``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/io/serialization/serialization.hpp``)
+----------------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_io_serialization_serialization.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/attr.hpp`` (:ref:`file_SeQuant_core_attr.hpp`)
+
+- ``SeQuant/core/expr_fwd.hpp`` (:ref:`file_SeQuant_core_expr_fwd.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/op.hpp`` (:ref:`file_SeQuant_core_op.hpp`)
+
+- ``SeQuant/core/utility/exception.hpp`` (:ref:`file_SeQuant_core_utility_exception.hpp`)
+
+- ``optional``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``string_view``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_eval_eval.hpp`
+
+- :ref:`file_SeQuant_core_eval_eval_expr.cpp`
+
+- :ref:`file_SeQuant_core_io_concepts.hpp`
+
+- :ref:`file_SeQuant_core_io_serialization_serialization.cpp`
+
+- :ref:`file_SeQuant_core_io_serialization_v1_deserialize.cpp`
+
+- :ref:`file_SeQuant_core_io_serialization_v1_serialize.cpp`
+
+- :ref:`file_SeQuant_core_io_shorthands.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__io`
+
+- :ref:`namespace_sequant__io__serialization`
+
+- :ref:`namespace_sequant__io__serialization__v1`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1_deserialization_options`
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1_serialization_error`
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1_serialization_options`
+
+
+Enums
+-----
+
+
+- :ref:`exhale_enum_namespacesequant_1_1io_1_1serialization_1a781a756eea82bb5ba140db677806745a`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1af2f2a53fe6eb46db8defae04594c631f`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1a1f34c0295bbd53ba9c4beb8f1b6b6a9d`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a64bf14f8620ab8841d824f8416e012ac`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a7c0ad889f5fda1e477a1ba8b2497f817`
+
+
+Defines
+-------
+
+
+- :ref:`exhale_define_serialization_8hpp_1aae6714d097902a644a05ff364c74f279`
+
+- :ref:`exhale_define_serialization_8hpp_1acef273b7581cc22029136a20209fc7bf`
+
+- :ref:`exhale_define_serialization_8hpp_1a68194bd0a1f168adb2e8cf190b56b32c`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1a97aff59cbc4d3ee4cbe7f0edaebd7530`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1a08fa7cd6d8892dd64cfce423c87df709`
+

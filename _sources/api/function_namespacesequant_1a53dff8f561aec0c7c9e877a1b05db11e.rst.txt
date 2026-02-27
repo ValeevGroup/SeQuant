@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a53dff8f561aec0c7c9e877a1b05db11e:
+
+Function sequant::binarize(Sum const&, IndexSet const&)
+=======================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::binarize(Sum const&, IndexSet const&)
+   :project: SeQuant

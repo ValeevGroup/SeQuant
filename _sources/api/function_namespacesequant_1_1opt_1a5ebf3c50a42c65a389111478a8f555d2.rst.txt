@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1a5ebf3c50a42c65a389111478a8f555d2:
+
+Function sequant::opt::clusters
+===============================
+
+- Defined in :ref:`file_SeQuant_core_optimize_sum.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::clusters(Sum const&)
+   :project: SeQuant

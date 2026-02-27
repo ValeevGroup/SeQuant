@@ -1,0 +1,154 @@
+
+.. _file_SeQuant_domain_mbpt_biorthogonalization.cpp:
+
+File biorthogonalization.cpp
+============================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_mbpt>` (``SeQuant/domain/mbpt``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/domain/mbpt/biorthogonalization.cpp``)
+------------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_mbpt_biorthogonalization.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``Eigen/Core``
+
+- ``Eigen/Eigenvalues``
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/math.hpp`` (:ref:`file_SeQuant_core_math.hpp`)
+
+- ``SeQuant/core/reserved.hpp`` (:ref:`file_SeQuant_core_reserved.hpp`)
+
+- ``SeQuant/core/tensor_canonicalizer.hpp`` (:ref:`file_SeQuant_core_tensor_canonicalizer.hpp`)
+
+- ``SeQuant/core/tensor_network.hpp`` (:ref:`file_SeQuant_core_tensor_network.hpp`)
+
+- ``SeQuant/core/utility/expr.hpp`` (:ref:`file_SeQuant_core_utility_expr.hpp`)
+
+- ``SeQuant/core/utility/indices.hpp`` (:ref:`file_SeQuant_core_utility_indices.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/core/utility/permutation.hpp`` (:ref:`file_SeQuant_core_utility_permutation.hpp`)
+
+- ``SeQuant/domain/mbpt/biorthogonalization.hpp`` (:ref:`file_SeQuant_domain_mbpt_biorthogonalization.hpp`)
+
+- ``SeQuant/domain/mbpt/detail/concepts.hpp`` (:ref:`file_SeQuant_domain_mbpt_detail_concepts.hpp`)
+
+- ``SeQuant/domain/mbpt/spin.hpp`` (:ref:`file_SeQuant_domain_mbpt_spin.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``libperm/Permutation.hpp``
+
+- ``libperm/Rank.hpp``
+
+- ``libperm/Utils.hpp``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__mbpt`
+
+- :ref:`namespace_sequant__mbpt__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1mbpt_1_1compare__first__less`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1ad4897c17a2439dab9702de37926af553`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a0913df7c80852d861fe325b91b3c7458`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1aad6de1b5aec73996d8ea679752277229`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a29f9037a3d22a095f79a1705b5a2c5ce`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a9f66bd208378089edf876e4e241087a1`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1ae7c02a7e743927b41461af4b4f893ee9`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1afd4c381247efee32cbd2922b7ed312f0`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a4e2b71d9380ee82b40bedaac41fb33c0`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a379e7e1e7b69980caeaaadd479a986f9`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a45283961b67016d597f53a15d8f0be93`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a88f985aaf726a83c482c61c14a41e93c`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a3c68700978cfc0bbe57d244acf50bffc`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1detail_1a19633b884c5d6ece22feadfbd30e604b`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1detail_1a735946f2ac62628e53ca2485c40314ff`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a0cc87d1a70403d31ad07c9ae3e7f3a93`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1acee6baac5d945a3e143eb3b979932ee1`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a048adecb28e195faf13d7fc86416036e`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1ad75a571e49779a42cec242e7a069f9bd`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a2eec65f351b274f0720c2432a6221d00`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a9f62fba19d71d3f83fb87201b6706d89`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1aeda27b5035be17ab33b1c2fd9017e5ee`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1ace4599c4cd331f632e10baeac40b7717`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1ad543dcadee945117137b4ee4b7e04101`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1_1mbpt_1a8cd197760e9cd561f364c61d36c502f3`
+
+- :ref:`exhale_typedef_namespacesequant_1_1mbpt_1a32ae58f47dd23870dccaa5339dfb5114`
+

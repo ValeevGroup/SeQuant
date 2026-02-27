@@ -1,0 +1,135 @@
+
+.. _program_listing_file_SeQuant_core_attr.hpp:
+
+Program Listing for File attr.hpp
+=================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_attr.hpp>` (``SeQuant/core/attr.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Eduard Valeyev on 2019-02-13.
+   //
+   
+   #ifndef SEQUANT_ATTR_HPP
+   #define SEQUANT_ATTR_HPP
+   
+   #include <SeQuant/core/utility/macros.hpp>
+   
+   #include <cassert>
+   #include <cstdlib>
+   #include <ostream>
+   #include <string>
+   
+   namespace sequant {
+   
+   enum class IndexSpaceMetric { Unit, General };
+   
+   // clang-format off
+   // clang-format on
+   enum class ColumnSymmetry { Symm, Nonsymm };
+   
+   // clang-format off
+   // clang-format on
+   enum class Symmetry { Symm, Antisymm, Nonsymm };
+   
+   enum class BraKetSymmetry { Symm, Conjugate, Nonsymm };
+   
+   enum class AssertStrictBraKetSymmetry { Yes, No };
+   
+   enum class SPBasis { Spinor, Spinfree };
+   
+   inline std::wstring to_wstring(Symmetry sym) {
+     switch (sym) {
+       case Symmetry::Symm:
+         return L"symmetric";
+       case Symmetry::Antisymm:
+         return L"antisymmetric";
+       case Symmetry::Nonsymm:
+         return L"nonsymmetric";
+     }
+   
+     SEQUANT_UNREACHABLE;
+   }
+   
+   enum class BraKetPos {
+     Bra,
+     Ket,
+   };
+   
+   enum class SlotType {
+     Bra,
+     Ket,
+     Aux,
+     Proto,
+   };
+   
+   template <typename CharT, typename Traits>
+   std::basic_ostream<CharT, Traits>& operator<<(
+       std::basic_ostream<CharT, Traits>& stream, SlotType origin) {
+     switch (origin) {
+       case SlotType::Bra:
+         stream << "Bra";
+         break;
+       case SlotType::Ket:
+         stream << "Ket";
+         break;
+       case SlotType::Aux:
+         stream << "Aux";
+         break;
+       case SlotType::Proto:
+         stream << "Proto";
+         break;
+     }
+     return stream;
+   }
+   
+   enum class Statistics {
+     FermiDirac,
+     BoseEinstein,
+     Arbitrary,
+   };
+   
+   enum class Action { Create, Annihilate };
+   
+   inline Action adjoint(Action action) {
+     return action == Action::Create ? Action::Annihilate : Action::Create;
+   }
+   
+   enum class Vacuum { Physical, SingleProduct, MultiProduct };
+   
+   inline std::wstring to_string(Vacuum V) {
+     switch (V) {
+       case Vacuum::Physical:
+         return L"PhysicalVacuum";
+       case Vacuum::SingleProduct:
+         return L"SingleProductVacuum";
+       case Vacuum::MultiProduct:
+         return L"MultiProductVacuum";
+     }
+   
+     SEQUANT_UNREACHABLE;
+   }
+   
+   enum class BraKetTypesetting {
+     ContraSub,
+     CoSuper = ContraSub,
+     BraSub = ContraSub,
+     KetSuper = ContraSub,
+     CoSub,
+     ContraSuper = CoSub,
+     BraSuper = CoSub,
+     KetSub = CoSub,
+   };
+   
+   enum class BraKetSlotTypesetting {
+     Naive,
+     TensorPackage
+   };
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_ATTR_HPP

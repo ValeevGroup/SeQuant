@@ -1,0 +1,99 @@
+
+.. _file_SeQuant_core_wick.hpp:
+
+File wick.hpp
+=============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/wick.hpp``)
+--------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_wick.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/io/latex/latex.hpp`` (:ref:`file_SeQuant_core_io_latex_latex.hpp`)
+
+- ``SeQuant/core/logger.hpp`` (:ref:`file_SeQuant_core_logger.hpp`)
+
+- ``SeQuant/core/math.hpp`` (:ref:`file_SeQuant_core_math.hpp`)
+
+- ``SeQuant/core/op.hpp`` (:ref:`file_SeQuant_core_op.hpp`)
+
+- ``SeQuant/core/ranges.hpp`` (:ref:`file_SeQuant_core_ranges.hpp`)
+
+- ``SeQuant/core/runtime.hpp`` (:ref:`file_SeQuant_core_runtime.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/core/utility/string.hpp`` (:ref:`file_SeQuant_core_utility_string.hpp`)
+
+- ``SeQuant/core/wick.impl.hpp`` (:ref:`file_SeQuant_core_wick.impl.hpp`)
+
+- ``bitset`` (:ref:`file_SeQuant_core_bitset.hpp`)
+
+- ``mutex``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_atomic.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_wick.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_op.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_wick_theorem_1_1access__by`
+
+- :ref:`exhale_struct_structsequant_1_1_wick_theorem_1_1_nontensor_wick_state`
+
+- :ref:`exhale_class_classsequant_1_1_wick_theorem`
+
+- :ref:`exhale_class_classsequant_1_1_wick_theorem_1_1_stats`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1a8853c32b310892f0fa900466d95e3798`
+
+- :ref:`exhale_typedef_namespacesequant_1ab78692b9307cc06a9ab029b7b63d9c1e`
+

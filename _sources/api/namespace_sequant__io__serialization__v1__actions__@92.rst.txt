@@ -1,0 +1,18 @@
+
+.. _namespace_sequant__io__serialization__v1__actions__@92:
+
+Namespace sequant::io::serialization::v1::actions::@92
+======================================================
+
+
+Auxiliary type traits. 
+
+
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+

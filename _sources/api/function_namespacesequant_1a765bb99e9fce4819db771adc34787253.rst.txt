@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a765bb99e9fce4819db771adc34787253:
+
+Template Function sequant::get_used_indices(const ExprPtr&)
+===========================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_indices.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::get_used_indices(const ExprPtr&)
+   :project: SeQuant

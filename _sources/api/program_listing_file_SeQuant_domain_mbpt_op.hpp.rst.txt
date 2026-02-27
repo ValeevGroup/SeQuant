@@ -1,0 +1,878 @@
+
+.. _program_listing_file_SeQuant_domain_mbpt_op.hpp:
+
+Program Listing for File op.hpp
+===============================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_domain_mbpt_op.hpp>` (``SeQuant/domain/mbpt/op.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Eduard Valeyev on 2019-03-26.
+   //
+   
+   #ifndef SEQUANT_DOMAIN_MBPT_OP_HPP
+   #define SEQUANT_DOMAIN_MBPT_OP_HPP
+   
+   #include <SeQuant/domain/mbpt/fwd.hpp>
+   
+   #include <SeQuant/domain/mbpt/convention.hpp>
+   #include <SeQuant/domain/mbpt/spin.hpp>
+   
+   #include <SeQuant/core/attr.hpp>
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/context.hpp>
+   #include <SeQuant/core/expr.hpp>
+   #include <SeQuant/core/hash.hpp>
+   #include <SeQuant/core/index.hpp>
+   #include <SeQuant/core/interval.hpp>
+   #include <SeQuant/core/math.hpp>
+   #include <SeQuant/core/op.hpp>
+   #include <SeQuant/core/rational.hpp>
+   #include <SeQuant/core/space.hpp>
+   #include <SeQuant/core/utility/macros.hpp>
+   #include <SeQuant/core/utility/strong.hpp>
+   
+   #include <range/v3/iterator/basic_iterator.hpp>
+   #include <range/v3/range/conversion.hpp>
+   #include <range/v3/range/primitives.hpp>
+   #include <range/v3/view/map.hpp>
+   #include <range/v3/view/transform.hpp>
+   #include <range/v3/view/view.hpp>
+   #include <range/v3/view/zip.hpp>
+   
+   #include <algorithm>
+   #include <array>
+   #include <cstddef>
+   #include <cstdint>
+   #include <functional>
+   #include <initializer_list>
+   #include <iterator>
+   #include <map>
+   #include <optional>
+   #include <string>
+   #include <string_view>
+   #include <type_traits>
+   #include <utility>
+   #include <vector>
+   
+   namespace sequant {
+   namespace mbpt {
+   
+   namespace detail {
+   inline constexpr std::wstring_view pert_superscripts = L"⁰¹²³⁴⁵⁶⁷⁸⁹";
+   
+   inline std::wstring decorate_with_pert_order(std::wstring_view base_label,
+                                                int pert_order = 0) {
+     if (pert_order == 0) return std::wstring(base_label);
+     SEQUANT_ASSERT(
+         pert_order >= 0 && pert_order <= 9,
+         "decorate_with_pert_order: perturbation order out of range [0,9]");
+   
+     std::wstring result(base_label);
+     result += detail::pert_superscripts[pert_order];
+     return result;
+   }
+   }  // namespace detail
+   
+   DEFINE_STRONG_TYPE_FOR_INTEGER(nₚ, std::int64_t);  // define nₚ
+   DEFINE_STRONG_TYPE_FOR_INTEGER(nₕ, std::int64_t);  // define nₕ
+   
+   #ifndef DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT
+   #define DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(OP)                      \
+     inline ExprPtr OP(std::int64_t Rank) { return OP(nₚ(Rank), nₕ(Rank)); } \
+     inline ExprPtr OP(nₚ Rank) { return OP(Rank, nₕ(Rank)); }
+   #endif  // DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT
+   
+   template <typename QuantumNumbers>
+   bool is_vacuum(QuantumNumbers qns);
+   
+   inline IndexSpace make_space(const IndexSpace::Type& type) {
+     return get_default_context().index_space_registry()->retrieve(type,
+                                                                   Spin::any);
+   }
+   
+   struct OpParams {
+     std::size_t order = 0;  
+     std::optional<size_t> nbatch = std::nullopt;  
+     container::svector<std::size_t> batch_ordinals{};
+     bool skip1 = false;  
+   
+     void validate() const {
+       SEQUANT_ASSERT(order <= 9 &&
+                      "OpParams: perturbation order must be in range [0,9]");
+       SEQUANT_ASSERT(!(nbatch && !batch_ordinals.empty()) &&
+                      "OpParams: Cannot specify both nbatch and batch_ordinals");
+       // ensure batch ordinals are unique
+       if (!batch_ordinals.empty()) {
+         SEQUANT_ASSERT(ranges::is_sorted(batch_ordinals) &&
+                        "OpParams: batch_ordinals must be sorted");
+         [[maybe_unused]] auto duplicate = ranges::adjacent_find(batch_ordinals);
+         SEQUANT_ASSERT(duplicate == batch_ordinals.end() &&
+                        "OpParams: batch_ordinals must contain unique values");
+       }
+     }
+   };
+   
+   std::vector<std::wstring> cardinal_tensor_labels();
+   
+   
+   
+   template <typename QuantumNumbers, Statistics S = Statistics::FermiDirac>
+   class Operator;
+   
+   template <typename QuantumNumbers>
+   using FOperator = Operator<QuantumNumbers, Statistics::FermiDirac>;
+   template <typename QuantumNumbers>
+   using BOperator = Operator<QuantumNumbers, Statistics::BoseEinstein>;
+   
+   template <Statistics S>
+   class Operator<void, S> : public Expr, public Labeled {
+    protected:
+     Operator() = default;
+   
+     Operator(std::function<std::wstring_view()> label_generator,
+              std::function<ExprPtr()> tensor_form_generator)
+         : label_generator_(std::move(label_generator)),
+           tensor_form_generator_(tensor_form_generator) {}
+   
+    public:
+     virtual ~Operator() = default;
+   
+     std::wstring_view label() const override {
+       SEQUANT_ASSERT(label_generator_);
+       return label_generator_();
+     }
+   
+     virtual ExprPtr tensor_form() const {
+       SEQUANT_ASSERT(tensor_form_generator_);
+       return tensor_form_generator_();
+     }
+   
+     bool is_cnumber() const override { return false; }
+   
+    protected:
+     std::function<std::wstring_view()> label_generator_;
+     std::function<ExprPtr()> tensor_form_generator_;
+   };
+   
+   using FOperatorBase = FOperator<void>;
+   using BOperatorBase = BOperator<void>;
+   
+   struct default_qns_tag {};
+   
+   // clang-format off
+   
+   // clang-format on
+   template <typename QNV = std::int64_t, typename Tag = default_qns_tag>
+   class QuantumNumberChange
+       : public container::svector<
+             boost::numeric::interval<std::make_signed_t<QNV>>, 8> {
+    public:
+     using QNC = std::make_signed_t<QNV>;  // change in quantum numbers
+     using interval_t = boost::numeric::interval<QNC>;
+     using base_type =
+         container::svector<boost::numeric::interval<std::make_signed_t<QNV>>, 8>;
+     using this_type = QuantumNumberChange<QNV, Tag>;
+   
+     std::size_t size() const {
+       if (get_default_context().vacuum() == Vacuum::Physical) {
+         return 2;
+       } else if (get_default_context().vacuum() == Vacuum::SingleProduct) {
+         auto isr = get_default_context().index_space_registry();
+         const auto& isr_base_spaces = isr->base_spaces();
+         SEQUANT_ASSERT(isr_base_spaces.size() > 0);
+         return isr_base_spaces.size() * 2;
+       } else {
+         throw Exception("unknown Vacuum type");
+       }
+     }
+   
+     QuantumNumberChange() {
+       this->resize(this->size());
+       SEQUANT_ASSERT(this->base().size() != 0);
+       std::fill(this->begin(), this->end(), interval_t{});
+     }
+   
+     template <typename I, typename Range,
+               typename = std::enable_if_t<
+                   meta::is_range_v<std::remove_reference_t<Range>> &&
+                   std::is_convertible_v<I, interval_t>>>
+     explicit QuantumNumberChange(Range&& i) : QuantumNumberChange() {
+       SEQUANT_ASSERT(i.size() == size());
+       std::copy(i.begin(), i.end(), this->begin());
+     }
+   
+     template <typename I, typename = std::enable_if_t<std::is_convertible_v<
+                               std::initializer_list<I>, interval_t>>>
+     explicit QuantumNumberChange(
+         std::initializer_list<std::initializer_list<I>> i)
+         : QuantumNumberChange() {
+       SEQUANT_ASSERT(i.size() == size());
+       if constexpr (assert_enabled()) {
+         SEQUANT_ASSERT(
+             std::find_if(i.begin(), i.end(),
+                          [](const auto& ii) { return ii.size() != 2; }) ==
+                 i.end() &&
+             "QuantumNumberChange<N>(initializer_list<initializer_list> i): each "
+             "element of i must contain 2 elements");
+       }
+       for (std::size_t c = 0; c != size(); ++c) {
+         this->operator[](c) = interval_t{*((i.begin() + c)->begin()),
+                                          *((i.begin() + c)->begin() + 1)};
+       }
+     }
+   
+     QuantumNumberChange& operator+=(const QuantumNumberChange& other) {
+       for (std::size_t c = 0; c != size(); ++c) this->operator[](c) += other[c];
+       return *this;
+     }
+   
+     bool operator==(const this_type& b) const {
+       return std::equal(
+           this->begin(), this->end(), b.begin(),
+           [](const auto& ia, const auto& ib) { return equal(ia, ib); });
+     }
+     bool operator!=(const this_type& b) const { return !this->operator==(b); }
+   
+     bool operator<(const this_type& that) const {
+       return ranges::lexicographical_compare(
+           *this, that, [](const interval_t& a, const interval_t& b) {
+             if (a.lower() != b.lower()) return a.lower() < b.lower();
+             return a.upper() < b.upper();
+           });
+     }
+   
+     // determines the number of physical vacuum creators and annihilators for the
+     // active particle and hole space from the Context. for general operators this
+     // is not defined. for example: O_{e_1}^{i_1 m_1} a_{i_1 m_1}^{e_1} asking for
+     // the active particle annihilators in this example is nonsense and will
+     // return -1.
+   
+     interval_t ncre_particles() {
+       const auto& qnvec = this->base();
+       auto isr = get_default_context().index_space_registry();
+       const auto& base_spaces = isr->base_spaces();
+       interval_t result = 0;
+       for (unsigned int i = 0; i < base_spaces.size(); i++) {
+         const auto& base_space = base_spaces[i];
+         const auto intersect_type =
+             base_space.attr()
+                 .intersection(isr->particle_space(base_space.qns()).attr())
+                 .type();
+         if (IndexSpace::Type{} != intersect_type) {
+           result += qnvec[2 * i];
+         }
+       }
+       return result;
+     }
+   
+     interval_t nann_particles() {
+       const auto& qnvec = this->base();
+       auto isr = get_default_context().index_space_registry();
+       const auto& base_spaces = isr->base_spaces();
+       interval_t result = 0;
+       for (unsigned int i = 0; i < base_spaces.size(); i++) {
+         const auto& base_space = base_spaces[i];
+         const auto intersect_type =
+             base_space.attr()
+                 .intersection(isr->particle_space(base_space.qns()).attr())
+                 .type();
+         if (IndexSpace::Type{} != intersect_type) {
+           result += qnvec[2 * i + 1];
+         }
+       }
+       return result;
+     }
+   
+     interval_t ncre_holes() {
+       const auto& qnvec = this->base();
+       auto isr = get_default_context().index_space_registry();
+       const auto& base_spaces = isr->base_spaces();
+       interval_t result = 0;
+       for (unsigned int i = 0; i < base_spaces.size(); i++) {
+         const auto& base_space = base_spaces[i];
+         const auto intersect_type =
+             base_space.attr()
+                 .intersection(isr->hole_space(base_space.qns()).attr())
+                 .type();
+         if (IndexSpace::Type{} != intersect_type) {
+           result += qnvec[2 * i];
+         }
+       }
+       return result;
+     }
+   
+     interval_t nann_holes() {
+       const auto& qnvec = this->base();
+       auto isr = get_default_context().index_space_registry();
+       const auto& base_spaces = isr->base_spaces();
+       interval_t result = 0;
+       for (unsigned int i = 0; i < base_spaces.size(); i++) {
+         const auto& base_space = base_spaces[i];
+         const auto intersect_type =
+             base_space.attr()
+                 .intersection(isr->hole_space(base_space.qns()).attr())
+                 .type();
+         if (IndexSpace::Type{} != intersect_type) {
+           result += qnvec[2 * i + 1];
+         }
+       }
+       return result;
+     }
+   
+     template <typename I>
+     bool in(I i) {
+       return boost::numeric::in(static_cast<int64_t>(i), this->front());
+     }
+   
+     template <typename I, typename = std::enable_if_t<std::is_integral_v<I>>>
+     bool in(std::initializer_list<I> i) {
+       SEQUANT_ASSERT(i.size() == size());
+       std::array<I, 4> i_arr;
+       std::copy(i.begin(), i.end(), i_arr.begin());
+       return this->in(i_arr);
+     }
+   
+     bool overlaps_with(base_type i) {
+       for (std::size_t c = 0; c != this->size(); ++c) {
+         if (!boost::numeric::overlap(i[c], this->operator[](c))) {
+           return false;
+         }
+       }
+       return true;
+     }
+   
+     auto hash_value() const {
+       SEQUANT_ASSERT(size() > 0);
+       auto val = sequant::hash::value(this->operator[](0));
+       for (std::size_t c = 1; c != size(); ++c) {
+         sequant::hash::combine(val, sequant::hash::value(this->operator[](c)));
+       }
+       return val;
+     }
+   
+    private:
+     auto& base() { return static_cast<base_type&>(*this); }
+   };
+   
+   template <std::size_t N, typename Tag, typename QNV>
+   inline bool operator==(const QuantumNumberChange<Tag, QNV>& a,
+                          const QuantumNumberChange<Tag, QNV>& b) {
+     return a.operator==(b);
+   }
+   
+   template <std::size_t N, typename Tag, typename QNV>
+   inline bool operator!=(const QuantumNumberChange<Tag, QNV>& a,
+                          const QuantumNumberChange<Tag, QNV>& b) {
+     return !(a == b);
+   }
+   
+   template <std::size_t N, typename Tag, typename QNV, typename I,
+             typename = std::enable_if_t<N == 1 && std::is_integral_v<I>>>
+   inline bool operator==(const QuantumNumberChange<Tag, QNV>& a, I b) {
+     return a.operator==(b);
+   }
+   
+   template <std::size_t N, typename Tag, typename QNV>
+   inline bool equal(const QuantumNumberChange<Tag, QNV>& a,
+                     const QuantumNumberChange<Tag, QNV>& b) {
+     return operator==(a, b);
+   }
+   
+   template <std::size_t N, typename Tag, typename QNV, typename I,
+             typename = std::enable_if_t<N == 1 && std::is_integral_v<I>>>
+   inline bool operator!=(const QuantumNumberChange<Tag, QNV>& a, I b) {
+     return a.operator!=(b);
+   }
+   
+   // clang-format off
+   // clang-format on
+   using qns_t = mbpt::QuantumNumberChange<>;
+   using qninterval_t = typename qns_t::interval_t;
+   using qnc_t = qns_t;
+   using op_t = mbpt::Operator<qnc_t>;
+   
+   qns_t combine(qns_t, qns_t);
+   
+   qns_t excitation_type_qns(std::size_t k,
+                             IndexSpace::QuantumNumbers SQN = Spin::any);
+   
+   qns_t interval_excitation_type_qns(std::size_t k,
+                                      IndexSpace::QuantumNumbers SQN = Spin::any);
+   
+   qns_t deexcitation_type_qns(std::size_t k,
+                               IndexSpace::QuantumNumbers SQN = Spin::any);
+   
+   qns_t interval_deexcitation_type_qns(
+       std::size_t k, IndexSpace::QuantumNumbers SQN = Spin::any);
+   
+   qns_t general_type_qns(std::size_t k);
+   
+   qns_t generic_excitation_qns(std::size_t particle_rank, std::size_t hole_rank,
+                                IndexSpace particle_space, IndexSpace hole_space,
+                                IndexSpace::QuantumNumbers SQN = Spin::any);
+   
+   qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
+                                  IndexSpace particle_space, IndexSpace hole_space,
+                                  IndexSpace::QuantumNumbers SQN = Spin::any);
+   
+   inline namespace op {
+   namespace tensor {
+   ExprPtr expectation_value_impl(ExprPtr expr,
+                                  std::vector<std::pair<int, int>> nop_connections,
+                                  bool use_top, bool full_contractions);
+   
+   ExprPtr ref_av(ExprPtr expr,
+                  std::vector<std::pair<int, int>> nop_connections = {},
+                  bool use_top = true);
+   
+   ExprPtr vac_av(ExprPtr expr,
+                  std::vector<std::pair<int, int>> nop_connections = {},
+                  bool use_top = true);
+   }  // namespace tensor
+   }  // namespace op
+   
+   }  // namespace mbpt
+   
+   mbpt::qns_t adjoint(mbpt::qns_t qns);
+   
+   namespace mbpt {
+   
+   // clang-format off
+   
+   // clang-format on
+   template <Statistics S>
+   class OpMaker {
+     using IndexContainer = container::svector<Index>;
+     using IndexSpaceContainer = container::svector<IndexSpace>;
+   
+    public:
+     template <typename IndexSpaceTypeRange1, typename IndexSpaceTypeRange2>
+     OpMaker(const std::wstring& label, const cre<IndexSpaceTypeRange1>& cre_list,
+             const ann<IndexSpaceTypeRange2>& ann_list, size_t order = 0)
+         : label_(label),
+           order_(order),
+           cre_spaces_(cre_list.begin(), cre_list.end()),
+           ann_spaces_(ann_list.begin(), ann_list.end()) {
+       SEQUANT_ASSERT(ncreators() > 0 || nannihilators() > 0);
+     }
+   
+     OpMaker(const std::wstring& label, ncre nc, nann na);
+   
+     OpMaker(const std::wstring& label, std::size_t rank);
+   
+     OpMaker(const std::wstring& label, ncre nc, nann na,
+             const cre<IndexSpace>& cre_space, const ann<IndexSpace>& ann_space);
+   
+     OpMaker(const std::wstring& label, ncre nc, nann na, const OpParams& params);
+   
+     enum class UseDepIdx {
+       Bra,
+       Ket,
+       None
+     };
+   
+     enum class Normalization { Default, Implicit };
+   
+     struct OpInfo {
+       container::svector<Index> creidxs;  
+       container::svector<Index> annidxs;  
+       sequant::intmax_t mult;             
+       Symmetry opsymm;                    
+       UseDepIdx dep;                      
+     };
+   
+     // clang-format off
+     // clang-format on
+     ExprPtr operator()(std::optional<UseDepIdx> dep_opt = {},
+                        std::optional<Symmetry> opsymm_opt = {}) const;
+   
+     static OpInfo build_op_info(const IndexSpaceContainer& cre_spaces,
+                                 const IndexSpaceContainer& ann_spaces,
+                                 UseDepIdx dep = UseDepIdx::None) {
+       const bool symm = get_default_context().spbasis() ==
+                         SPBasis::Spinor;  // antisymmetrize if spin-orbital basis
+       const auto dep_bra = dep == UseDepIdx::Bra;
+       const auto dep_ket = dep == UseDepIdx::Ket;
+   
+       // not sure what it means to use nonsymmetric operator if nbra != nket
+       if (!symm)
+         SEQUANT_ASSERT(ranges::size(cre_spaces) == ranges::size(ann_spaces));
+   
+       auto make_idx_vector = [](const auto& spaces) {
+         return spaces | ranges::views::transform([](const IndexSpace& space) {
+                  return Index::make_tmp_index(space);
+                }) |
+                ranges::to<container::svector<Index>>();
+       };
+   
+       auto make_depidx_vector = [](const auto& spaces, auto&& protoidxs) {
+         return spaces |
+                ranges::views::transform([&protoidxs](const IndexSpace& space) {
+                  return Index::make_tmp_index(space, protoidxs, true);
+                }) |
+                ranges::to<container::svector<Index>>();
+       };
+   
+       container::svector<Index> creidxs, annidxs;
+       if (dep_bra) {
+         annidxs = make_idx_vector(ann_spaces);
+         creidxs = make_depidx_vector(cre_spaces, annidxs);
+       } else if (dep_ket) {
+         creidxs = make_idx_vector(cre_spaces);
+         annidxs = make_depidx_vector(ann_spaces, creidxs);
+       } else {
+         creidxs = make_idx_vector(cre_spaces);
+         annidxs = make_idx_vector(ann_spaces);
+       }
+   
+       using ranges::size;
+       const auto mult =
+           symm ? factorial(size(cre_spaces)) * factorial(size(ann_spaces))
+                : factorial(size(cre_spaces));
+       const auto opsymm = symm ? (S == Statistics::FermiDirac ? Symmetry::Antisymm
+                                                               : Symmetry::Symm)
+                                : Symmetry::Nonsymm;
+   
+       return OpInfo{creidxs, annidxs, mult, opsymm, dep};
+     }
+   
+     template <typename TensorGenerator>
+     static ExprPtr make(const IndexSpaceContainer& cre_spaces,
+                         const IndexSpaceContainer& ann_spaces,
+                         TensorGenerator&& tensor_generator,
+                         UseDepIdx dep = UseDepIdx::None,
+                         Normalization normalization = Normalization::Default) {
+       const auto op_info = build_op_info(cre_spaces, ann_spaces, dep);
+   
+       const auto t =
+           tensor_generator(op_info.creidxs, op_info.annidxs, op_info.opsymm);
+       auto result =
+           t * ex<NormalOperator<S>>(cre(op_info.creidxs), ann(op_info.annidxs),
+                                     get_default_context().vacuum());
+       switch (normalization) {
+         case Normalization::Default:
+           result = ex<Constant>(rational{1, op_info.mult}) * result;
+           break;
+         case Normalization::Implicit:
+           break;
+         default:
+           abort();
+       }
+       return result;
+     }
+   
+     template <typename TensorGenerator>
+     static ExprPtr make(std::initializer_list<IndexSpace::Type> cre_spaces,
+                         std::initializer_list<IndexSpace::Type> ann_spaces,
+                         TensorGenerator&& tensor_generator,
+                         UseDepIdx csv = UseDepIdx::None,
+                         Normalization normalization = Normalization::Default) {
+       IndexSpaceContainer cre_vec(cre_spaces.begin(), cre_spaces.end());
+       IndexSpaceContainer ann_vec(ann_spaces.begin(), ann_spaces.end());
+       return OpMaker::make(cre_vec, ann_vec,
+                            std::forward<TensorGenerator>(tensor_generator), csv,
+                            normalization);
+     }
+   
+     template <typename TensorGenerator>
+     static ExprPtr make(const IndexSpaceContainer& cre_spaces,
+                         const IndexSpaceContainer& ann_spaces,
+                         const IndexContainer& batch_indices,
+                         TensorGenerator&& tensor_generator,
+                         UseDepIdx dep = UseDepIdx::None,
+                         Normalization normalization = Normalization::Default) {
+       mbpt::check_for_batching_space();
+       SEQUANT_ASSERT(!batch_indices.empty());
+       [[maybe_unused]] auto batch_space =
+           get_default_context().index_space_registry()->retrieve(L"z");
+       // assumes that there are no more than one type of batch space
+       for ([[maybe_unused]] const auto& idx : batch_indices) {
+         SEQUANT_ASSERT(idx.space() == batch_space);
+       }
+   
+       const auto op_info = build_op_info(cre_spaces, ann_spaces, dep);
+       const auto t = tensor_generator(op_info.creidxs, op_info.annidxs,
+                                       batch_indices, op_info.opsymm);
+   
+       auto result =
+           t * ex<NormalOperator<S>>(cre(op_info.creidxs), ann(op_info.annidxs),
+                                     get_default_context().vacuum());
+       switch (normalization) {
+         case Normalization::Default:
+           result = ex<Constant>(rational{1, op_info.mult}) * result;
+           break;
+         case Normalization::Implicit:
+           break;
+         default:
+           abort();
+       }
+       return result;
+     }
+   
+     template <typename TensorGenerator>
+     static ExprPtr make(std::initializer_list<IndexSpace::Type> creators,
+                         std::initializer_list<IndexSpace::Type> annihilators,
+                         std::initializer_list<Index> batch_indices,
+                         TensorGenerator&& tensor_generator,
+                         UseDepIdx csv = UseDepIdx::None,
+                         Normalization normalization = Normalization::Default) {
+       IndexSpaceContainer cre_vec(creators.begin(), creators.end());
+       IndexSpaceContainer ann_vec(annihilators.begin(), annihilators.end());
+       IndexContainer batchidx_vec(batch_indices.begin(), batch_indices.end());
+       return OpMaker::make(cre_vec, ann_vec, batchidx_vec,
+                            std::forward<TensorGenerator>(tensor_generator), csv,
+                            normalization);
+     }
+   
+    protected:
+     std::wstring label_;
+     size_t order_ = 0;
+     IndexSpaceContainer cre_spaces_;
+     IndexSpaceContainer ann_spaces_;
+     std::optional<IndexContainer> batch_indices_ = std::nullopt;
+   
+     OpMaker(const std::wstring& op);
+   
+     [[nodiscard]] auto ncreators() const { return cre_spaces_.size(); };
+     [[nodiscard]] auto nannihilators() const { return ann_spaces_.size(); };
+   };
+   
+   extern template class OpMaker<Statistics::FermiDirac>;
+   extern template class OpMaker<Statistics::BoseEinstein>;
+   
+   template <typename QuantumNumbers, Statistics S>
+   class Operator : public Operator<void, S> {
+     using this_type = Operator<QuantumNumbers, S>;
+     using base_type = Operator<void, S>;
+   
+    protected:
+     Operator();
+   
+    public:
+     Operator(std::function<std::wstring_view()> label_generator,
+              std::function<ExprPtr()> tensor_form_generator,
+              std::function<void(QuantumNumbers&)> qn_action);
+   
+     Operator(std::function<std::wstring_view()> label_generator,
+              std::function<ExprPtr()> tensor_form_generator,
+              std::function<void(QuantumNumbers&)> qn_action,
+              const OpParams& params);
+   
+     virtual ~Operator();
+   
+     QuantumNumbers operator()(const QuantumNumbers& qns = {}) const;
+   
+     template <typename I, typename = std::enable_if_t<std::is_integral_v<I>>>
+     QuantumNumbers operator()(std::initializer_list<I> qns) const {
+       QuantumNumbers result(qns);
+       this->apply_to(result);
+       return result;
+     }
+   
+     virtual QuantumNumbers& apply_to(QuantumNumbers& qns) const;
+   
+     bool static_less_than(const Expr& that) const override;
+   
+     bool commutes_with_atom(const Expr& that) const override;
+   
+     void adjoint() override;
+   
+     std::optional<container::svector<std::size_t>> batch_ordinals() const {
+       return batch_ordinals_;
+     }
+   
+     [[nodiscard]] size_t order() const { return order_; }
+   
+    private:
+     std::function<void(QuantumNumbers&)> qn_action_;
+   
+     bool is_adjoint_ = false;
+   
+     std::optional<container::svector<std::size_t>> batch_ordinals_ = std::nullopt;
+   
+     size_t order_ = 0;
+   
+     bool less_than_rank_of(const this_type& that) const;
+   
+     Expr::type_id_type type_id() const override;
+   
+     ExprPtr clone() const override;
+   
+     std::wstring to_latex() const override;
+   
+     Expr::hash_type memoizing_hash() const override;
+   
+     bool static_equal(const Expr& other) const override;
+   
+   };  // class Operator
+   
+   extern template class Operator<qns_t, Statistics::FermiDirac>;
+   extern template class Operator<qns_t, Statistics::BoseEinstein>;
+   
+   inline namespace op {
+   namespace tensor {
+   
+   using mbpt::nₕ;
+   using mbpt::nₚ;
+   
+   // clang-format off
+   // clang-format on
+   ExprPtr h(std::size_t k);
+   
+   ExprPtr H(std::size_t k = 2);
+   
+   ExprPtr F(bool use_tensor = true,
+             const IndexSpace& reference_occupied = {L"", 0});
+   
+   ExprPtr θ(std::size_t K);
+   
+   ExprPtr t(std::size_t K);
+   
+   ExprPtr T(std::size_t K, bool skip1 = false);
+   
+   ExprPtr λ(std::size_t K);
+   
+   ExprPtr Λ(std::size_t K, bool skip1 = false);
+   
+   ExprPtr r(nann na, ncre nc,
+             const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
+             const ann<IndexSpace>& ann_space = ann(get_hole_space(Spin::any)));
+   
+   ExprPtr r(nₚ np, nₕ nh);
+   DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(r);
+   
+   ExprPtr l(
+       nann na, ncre nc,
+       const cre<IndexSpace>& cre_space = cre(get_hole_space(Spin::any)),
+       const ann<IndexSpace>& ann_space = ann(get_particle_space(Spin::any)));
+   
+   ExprPtr l(nₚ np, nₕ nh);
+   DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(l);
+   
+   // clang-format off
+   // clang-format on
+   ExprPtr P(nₚ np, nₕ nh);
+   DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(P);
+   
+   // clang-format off
+   // clang-format on
+   ExprPtr A(nₚ np, nₕ nh);
+   DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(A);
+   
+   ExprPtr S(std::int64_t K);
+   
+   ExprPtr Hʼ(std::size_t R, const OpParams& params = {.order = 1});
+   
+   ExprPtr tʼ(std::size_t K, const OpParams& params = {.order = 1});
+   
+   ExprPtr Tʼ(std::size_t K,
+              const OpParams& params = {.order = 1, .skip1 = false});
+   
+   ExprPtr λʼ(std::size_t K, const OpParams& params = {.order = 1});
+   
+   ExprPtr Λʼ(std::size_t K,
+              const OpParams& params = {.order = 1, .skip1 = false});
+   }  // namespace tensor
+   }  // namespace op
+   
+   inline namespace op {
+   // clang-format off
+   // clang-format on
+   ExprPtr h(std::size_t k);
+   
+   ExprPtr H(std::size_t k = 2);
+   
+   ExprPtr F(bool use_tensor = true,
+             const IndexSpace& reference_occupied = {L"", 0});
+   
+   ExprPtr θ(std::size_t K);
+   
+   ExprPtr t(std::size_t K);
+   
+   ExprPtr T(std::size_t K, bool skip1 = false);
+   
+   ExprPtr λ(std::size_t K);
+   
+   ExprPtr Λ(std::size_t K, bool skip1 = false);
+   
+   ExprPtr r(nann na, ncre nc,
+             const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
+             const ann<IndexSpace>& ann_space = ann(get_hole_space(Spin::any)));
+   
+   ExprPtr r(nₚ np, nₕ nh);
+   DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(r);
+   
+   ExprPtr l(
+       nann na, ncre nc,
+       const cre<IndexSpace>& cre_space = cre(get_hole_space(Spin::any)),
+       const ann<IndexSpace>& ann_space = ann(get_particle_space(Spin::any)));
+   
+   ExprPtr l(nₚ np, nₕ nh);
+   DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(l);
+   
+   ExprPtr R(nann na, ncre nc,
+             const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
+             const ann<IndexSpace>& ann_space = ann(get_hole_space(Spin::any)));
+   
+   ExprPtr R(nₚ np, nₕ nh);
+   DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(R);
+   
+   ExprPtr L(
+       nann na, ncre nc,
+       const cre<IndexSpace>& cre_space = cre(get_hole_space(Spin::any)),
+       const ann<IndexSpace>& ann_space = ann(get_particle_space(Spin::any)));
+   
+   ExprPtr L(nₚ np, nₕ nh);
+   DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(L);
+   
+   // clang-format off
+   // clang-format on
+   ExprPtr P(nₚ np, nₕ nh);
+   DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(P);
+   
+   // clang-format off
+   // clang-format on
+   ExprPtr A(nₚ np, nₕ nh);
+   DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(A);
+   
+   ExprPtr S(std::int64_t K);
+   
+   ExprPtr Hʼ(std::size_t R, const OpParams& params = {.order = 1});
+   
+   ExprPtr tʼ(std::size_t K, const OpParams& params = {.order = 1});
+   
+   ExprPtr Tʼ(std::size_t K,
+              const OpParams& params = {.order = 1, .skip1 = false});
+   
+   ExprPtr λʼ(std::size_t K, const OpParams& params = {.order = 1});
+   
+   ExprPtr Λʼ(std::size_t K,
+              const OpParams& params = {.order = 1, .skip1 = false});
+   
+   qns_t apply_to_vac(const ExprPtr& expr);
+   
+   bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t& target_qns,
+                       const qns_t& source_qns = {});
+   
+   bool raises_vacuum_up_to_rank(const ExprPtr& op_or_op_product,
+                                 const unsigned long k);
+   
+   bool lowers_rank_or_lower_to_vacuum(const ExprPtr& op_or_op_product,
+                                       const unsigned long k);
+   
+   bool raises_vacuum_to_rank(const ExprPtr& op_or_op_product,
+                              const unsigned long k);
+   
+   bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
+                              const unsigned long k);
+   
+   }  // namespace op
+   }  // namespace mbpt
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_DOMAIN_MBPT_OP_HPP

@@ -1,0 +1,23 @@
+.. _exhale_class_classsequant_1_1_generation_optimizer_1_1_abstract_operation:
+
+Class GenerationOptimizer::AbstractOperation
+============================================
+
+- Defined in :ref:`file_SeQuant_core_export_generation_optimizer.hpp`
+
+
+Nested Relationships
+--------------------
+
+This class is a nested type of :ref:`exhale_class_classsequant_1_1_generation_optimizer`.
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::GenerationOptimizer::AbstractOperation
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

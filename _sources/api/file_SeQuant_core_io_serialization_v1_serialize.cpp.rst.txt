@@ -1,0 +1,120 @@
+
+.. _file_SeQuant_core_io_serialization_v1_serialize.cpp:
+
+File serialize.cpp
+==================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_io_serialization_v1>` (``SeQuant/core/io/serialization/v1``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/io/serialization/v1/serialize.cpp``)
+---------------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_io_serialization_v1_serialize.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/attr.hpp`` (:ref:`file_SeQuant_core_attr.hpp`)
+
+- ``SeQuant/core/complex.hpp`` (:ref:`file_SeQuant_core_complex.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/io/serialization/serialization.hpp`` (:ref:`file_SeQuant_core_io_serialization_serialization.hpp`)
+
+- ``SeQuant/core/op.hpp`` (:ref:`file_SeQuant_core_op.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/core/utility/string.hpp`` (:ref:`file_SeQuant_core_utility_string.hpp`)
+
+- ``cstddef``
+
+- ``range/v3/all.hpp``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_atomic.hpp`)
+
+- ``vector``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__io`
+
+- :ref:`namespace_sequant__io__serialization`
+
+- :ref:`namespace_sequant__io__serialization__v1`
+
+- :ref:`namespace_sequant__io__serialization__v1__details`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1details_1a009670e157ae3aaf7141992920ec4a2a`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1details_1ae7af2ef89cbce47d56fe5202f2beec4a`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1details_1ac93993b44146cff3e257a034b52b83d9`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1details_1a886b3ef9324058d8c8cca80a170b4ed6`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1details_1a756fc4eeaa9608cfa25bbc9736f097d2`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1details_1a70bcfed55e6b6586981b4464d22c1789`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1details_1a3fba26e7841db1ba8a98f3d3d86f5db5`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1details_1a80184f072f65f549ad6b37b50e7d9fc8`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1details_1a53d448cb98d6790ef7029b1daa3c7f32`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1details_1afef15f2ef9bc5c77dce8fdd9f4b081e8`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1details_1a3cb6c2816c1ddd94d9a3e941f40b26ac`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a39e57ba2378387f545591d41191d286e`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1aae311d2a77759e329e25e889fcc5bd2e`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a81633a58ff067a5283282cb97b279a2e`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a932079018da3e4fb50b2438a0b2e7e39`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a227a954de3036f84f82338cd7a158f07`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1adfdd953c42ae01494a75ad6abd75ae61`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1aa8f1f9cf378817e5a7f1dfa2e5b1bb7c`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a67ac20ee2db4c0899846815b06ae69cd`
+

@@ -1,0 +1,579 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../../genindex.html"><link rel="search" title="Search" href="../../search.html"><link rel="next" title="Coupled-Cluster Class" href="cc.html"><link rel="prev" title="User Guide" href="index.html">
+        <link rel="prefetch" href="../../_static/logo.svg" as="image">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>Operator Interface for Symbolic Many-Body Algebra - SeQuant Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../_static/bootstrap-treeview/bootstrap-treeview.min.css?v=8176a87d" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/custom.css?v=821744c5" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --sidebar-item-font-size: 0.95em;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../index.html"><div class="brand">SeQuant Documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="../../_static/logo.svg" alt="Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">User</span></p>
+<ul class="current">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../getting_started/index.html">Getting started</a><input aria-label="Toggle navigation of Getting started" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../getting_started/wick.html">Wick’s Theorem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../getting_started/index_spaces.html">Register Index Spaces</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../getting_started/operators.html">Operators</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/installing.html">Installation</a></li>
+<li class="toctree-l1 current has-children"><a class="reference internal" href="index.html">User Guide</a><input aria-label="Toggle navigation of User Guide" checked="" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">Operator Interface for Symbolic Many-Body Algebra</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cc.html">Coupled-Cluster Class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="io.html">I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="evaluation.html">Evaluation Trace Analysis Using Nushell</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../developer/index.html">Developer docs</a><input aria-label="Toggle navigation of Developer docs" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../developer/documentation.html">Documentation Guide</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../api.html">API reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Maintainer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../maintainer/index.html">Maintainer docs</a><input aria-label="Toggle navigation of Maintainer docs" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../maintainer/release.html">Release Guide</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">See Also</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/tiledarray">TiledArray</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/mpqc">Massively Parallel Quantum Chemistry</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io">Valeev Research Group</a></li>
+</ul>
+
+</div></div>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="../../_sources/user/guide/operator.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="operator-interface-for-symbolic-many-body-algebra">
+<h1>Operator Interface for Symbolic Many-Body Algebra<a class="headerlink" href="#operator-interface-for-symbolic-many-body-algebra" title="Link to this heading">¶</a></h1>
+<section id="motivation">
+<h2>Motivation<a class="headerlink" href="#motivation" title="Link to this heading">¶</a></h2>
+<p>The <a class="reference internal" href="../../api/classsequant_1_1mbpt_1_1_operator.html#_CPPv4I0_10StatisticsEN7sequant4mbpt8OperatorE" title="sequant::mbpt::Operator"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">mbpt::Operator</span></code></a> class represents an abstract Fock-space many-body operator, such as the Hamiltonian operator, that can be used within SeQuant expressions.
+We already saw <a class="reference external" href="../getting_started/operators.html">earlier</a> that
+the lower-level <em>tensor</em> representation of such operators involves specific index labels which makes tensor
+representation inconvenient when multiple instances of the same operator occur.
+For example, consider a general 1-body operator</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\hat{o}_1 \equiv o^{p_1}_{p_2} a_{p_2}^{p_1}.\]</div>
+</div>
+<p>The abstract representation <span class="math notranslate nohighlight">\(\hat{o}_1\)</span> is convenient for efficient algebraic manipulations such as expansion and simplication:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\left(1 + \hat{o}_1\right)^2 \equiv = 1 + \hat{o}_1 + \hat{o}_1 + \hat{o}_1^2 = 1 + 2 \hat{o}_1 + \hat{o}_1^2\]</div>
+</div>
+<p>The tensor form is less convenient for such manipulations for 2 reasons:</p>
+<ul>
+<li><p>lowering multiple instances of <span class="math notranslate nohighlight">\(\hat{o}_1\)</span> such as in its square <span class="math notranslate nohighlight">\(\hat{o}_1^2 \equiv \hat{o}_1 \hat{o}_1\)</span> to the tensor form is context-sensitive since one must avoid index reuse:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\hat{o}_1^2 = o^{p_1}_ {p_2} a_{p_2}^{p_1} o^{p_3}_{p_4} a_{p_4}^{p_3}\]</div>
+</div>
+</li>
+<li><p>operating on tensor forms of many-body operators involves frequent use of canonicalization, such as to be able to simplify <span class="math notranslate nohighlight">\(\hat{o}_1 + \hat{o}_1\)</span> in the following tensor form</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\hat{o}_1 + \hat{o}_1 = o^{p_1}_ {p_2} a_{p_2}^{p_1} + o^{p_3}_{p_4} a_{p_4}^{p_3}\]</div>
+</div>
+<p>to</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[2 \hat{o}_1 = 2 o^{p_1}_ {p_2} a_{p_2}^{p_1}\]</div>
+</div>
+<p>requires canonicalization of each term before attempting simplification. In the abstract form simplifying <span class="math notranslate nohighlight">\(\hat{o}_1 + \hat{o}_1\)</span> to <span class="math notranslate nohighlight">\(2 \hat{o}_1\)</span> is as simple as if <span class="math notranslate nohighlight">\(\hat{o}_1\)</span> were a scalar.</p>
+</li>
+</ul>
+<p>To be useful for more than just algebraic simplification the abstract operator form
+must include enough detail to determine what products of such operators do to quantum numbers (e.g., occupation numbers)
+of a Fock-space state. Each <code class="docutils literal notranslate"><span class="pre">mbpt::Operator</span></code> thus denotes its effect on the quantum numbers. This allows efficient evaluation of
+vacuum averages of products of <code class="docutils literal notranslate"><span class="pre">mbpt::Operator</span></code> objects by identifying
+only the non-zero contributions.</p>
+</section>
+<section id="mbpt-operator-anatomy">
+<h2><code class="docutils literal notranslate"><span class="pre">mbpt::Operator</span></code> Anatomy<a class="headerlink" href="#mbpt-operator-anatomy" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">mbpt::Operator</span></code> is constructed from 3 callables (e.g., lambdas):</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">void</span> <span class="pre">-&gt;</span> <span class="pre">std::wstring_view</span></code>: returns the operator label such as “t” or “λ”</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">void</span> <span class="pre">-&gt;</span> <span class="pre">ExptPtr</span></code>: returns the tensor form of the operator, and</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">QuantumNumberChange&lt;&gt;&amp;</span> <span class="pre">-&gt;</span> <span class="pre">void</span></code>: encodes the action on the given input state by mutating its quantum numbers given as the argument to the lambda.</p></li>
+</ul>
+<p>The quantum numbers of a state and their changes are represented by the same class, <a class="reference internal" href="../../api/classsequant_1_1mbpt_1_1_quantum_number_change.html#_CPPv4I00EN7sequant4mbpt19QuantumNumberChangeE" title="sequant::mbpt::QuantumNumberChange"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">mbpt::QuantumNumberChange</span></code></a>.
+For the Fock-space states the quantum numbers are the number of creators/annihilators. In general context the number of creators/annihilators
+must be tracked separately for multiple <code class="docutils literal notranslate"><span class="pre">IndexSpaces</span></code> (e.g., for each hole and particle states in the particle-hole context). To support
+general operators which can create a variable number of particles and holes the numbers of creators/annihilators must be encoded
+by <em>intervals</em>. For example, if space <span class="math notranslate nohighlight">\(\{p\}\)</span> is a union of hole (fully occupied in the vacuum) space <span class="math notranslate nohighlight">\(\{i\}\)</span>
+and particle (fully empty in the vacuum) space <span class="math notranslate nohighlight">\(\{a\}\)</span> operator <span class="math notranslate nohighlight">\(\hat{o}_1\)</span> includes 4 components,</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[o^{p_1}_{p_2} a_{p_2}^{p_1} = o^{i_1}_{i_2} a_{i_2}^{i_1} + o^{i_1}_{a_2} a_{a_2}^{i_1} + o^{a_1}_{i_2} a_{i_2}^{a_1} + o^{a_1}_{a_2} a_{a_2}^{a_1},\]</div>
+</div>
+<p>each of which is has 1 (particle or hole) creator and 1 (particle or hole) annihilator.
+The net effect of this operator on a Fock-space state is to leave its number of hole/particle
+creators/annihilators unchanged or increased by 1. E.g., its effect on a state with <span class="math notranslate nohighlight">\(n\)</span>
+particle creators is produce a state with <span class="math notranslate nohighlight">\([n,n+1]\)</span> particle creators; similarly,
+action on a state with <span class="math notranslate nohighlight">\([n,m]\)</span> hole annihilators (<span class="math notranslate nohighlight">\(n \leq m\)</span>) will produce a state with <span class="math notranslate nohighlight">\([n,m+1]\)</span> hole annihilators.</p>
+<p>Finally, for a product of <code class="docutils literal notranslate"><span class="pre">mbpt::Operator</span></code> it is possible to determine its effect on the quantum numbers of the input state using simple rules based on Wick’s theorem.
+This enables SeQuant to <strong>screen out expressions that would yield zero</strong>, before applying Wick’s theorem without much computational overhead.
+This logic can also be used to <strong>check if two operators commute with each other</strong>, which is crucial for reducing the expression to their compact canonical form.</p>
+<p>The use of interval arithmetic for quantum number changes allows to treat operators in their natural compact form as long as possible. E.g., <span class="math notranslate nohighlight">\(\hat{o}_1\)</span> can be kept as a single term <span class="math notranslate nohighlight">\(o^{p_1}_{p_2} a_{p_2}^{p_1}\)</span> rather than having to decompose
+it into individual contributions, each with definite effect on quantum numbers. This is especially useful when the number of index spaces increases.</p>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<ul class="simple">
+<li><p>Although the user can construct <code class="docutils literal notranslate"><span class="pre">mbpt::Operator</span></code> directly, SeQuant predefines factories for many commonly-used operators. For example, functions <code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">H_</span></code>, <code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">T_</span></code>, <code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">Λ_</span></code>, <code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">R_</span></code>, and <code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">L_</span></code>  in the <code class="docutils literal notranslate"><span class="pre">mbpt::op</span></code> namespace all return instances of <code class="docutils literal notranslate"><span class="pre">Operator</span></code> (or expressions built from them), each representing a specific type of many-body operator (Hamiltonian, excitation, deexcitation, etc).</p></li>
+<li><p>There are convenient helper functions available in <code class="docutils literal notranslate"><span class="pre">sequant::mbpt</span></code> namespace for constructing different types of <code class="docutils literal notranslate"><span class="pre">QuantumNumberChange</span></code> objects. For example, see <code class="docutils literal notranslate"><span class="pre">sequant::mbpt::excitation_type_qns</span></code>.</p></li>
+</ul>
+</div>
+</section>
+<section id="operator-registry">
+<h2>Operator Registry<a class="headerlink" href="#operator-registry" title="Link to this heading">¶</a></h2>
+<p>The <a class="reference internal" href="../../api/classsequant_1_1mbpt_1_1_op_registry.html#_CPPv4N7sequant4mbpt10OpRegistryE" title="sequant::mbpt::OpRegistry"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">mbpt::OpRegistry</span></code></a> maintains a mapping from operator labels to their operator classes. In this section we describe how to use and extend the operator registry.</p>
+<p>Each operator must be registered with one of three classes:</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="../../api/enum_namespacesequant_1_1mbpt_1a4c0e601427ac8aa692f8ff00aa093802.html#_CPPv4N7sequant4mbpt7OpClass2exE" title="sequant::mbpt::OpClass::ex"><code class="xref cpp cpp-enumerator docutils literal notranslate"><span class="pre">OpClass::ex</span></code></a>: Excitation operators (e.g., cluster excitation operator)</p></li>
+<li><p><a class="reference internal" href="../../api/enum_namespacesequant_1_1mbpt_1a4c0e601427ac8aa692f8ff00aa093802.html#_CPPv4N7sequant4mbpt7OpClass4deexE" title="sequant::mbpt::OpClass::deex"><code class="xref cpp cpp-enumerator docutils literal notranslate"><span class="pre">OpClass::deex</span></code></a>: De-excitation operators (e.g., cluster de-excitation operator)</p></li>
+<li><p><a class="reference internal" href="../../api/enum_namespacesequant_1_1mbpt_1a4c0e601427ac8aa692f8ff00aa093802.html#_CPPv4N7sequant4mbpt7OpClass3genE" title="sequant::mbpt::OpClass::gen"><code class="xref cpp cpp-enumerator docutils literal notranslate"><span class="pre">OpClass::gen</span></code></a>: General operators (e.g., Hamiltonian-like operators)</p></li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Some operator labels are reserved for SeQuant’s internal MBPT and core functionalities and cannot be registered. See <code class="docutils literal notranslate"><span class="pre">SeQuant/core/reserved.hpp</span></code> for more details.</p>
+</div>
+<p>SeQuant provides two predefined registries:</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="../../api/function_namespacesequant_1_1mbpt_1adbac4dcc4a3f7fde0669fdc8774935b5.html#_CPPv4N7sequant4mbpt21make_minimal_registryEv" title="sequant::mbpt::make_minimal_registry"><code class="xref cpp cpp-func docutils literal notranslate"><span class="pre">make_minimal_registry()</span></code></a>: Contains only a minimal set of operators</p></li>
+<li><p><a class="reference internal" href="../../api/function_namespacesequant_1_1mbpt_1a4f3c0b7c21ccdb88c5cba4f377602d35.html#_CPPv4N7sequant4mbpt20make_legacy_registryEv" title="sequant::mbpt::make_legacy_registry"><code class="xref cpp cpp-func docutils literal notranslate"><span class="pre">make_legacy_registry()</span></code></a>: A backward-compatible registry that includes all operators used in legacy MBPT module.</p></li>
+</ul>
+<p>Custom operators can be registered to extend SeQuant’s vocabulary. Once registered, operators can be used with both <a class="reference internal" href="../../api/classsequant_1_1mbpt_1_1_op_maker.html#_CPPv4I_10StatisticsEN7sequant4mbpt7OpMakerE" title="sequant::mbpt::OpMaker"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">OpMaker</span></code></a> and <a class="reference internal" href="../../api/classsequant_1_1mbpt_1_1_operator.html#_CPPv4I0_10StatisticsEN7sequant4mbpt8OperatorE" title="sequant::mbpt::Operator"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">mbpt::Operator</span></code></a>:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="c1">// Create a custom operator registry with a new operator</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">custom_registry</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_shared</span><span class="o">&lt;</span><span class="n">OpRegistry</span><span class="o">&gt;</span><span class="p">();</span>
+
+<span class="n">custom_registry</span><span class="o">-&gt;</span><span class="n">add</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;f&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">OpClass</span><span class="o">::</span><span class="n">gen</span><span class="p">)</span>
+<span class="w">    </span><span class="p">.</span><span class="n">add</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;g&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">OpClass</span><span class="o">::</span><span class="n">gen</span><span class="p">)</span>
+<span class="w">    </span><span class="p">.</span><span class="n">add</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;t&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">OpClass</span><span class="o">::</span><span class="n">ex</span><span class="p">)</span>
+<span class="w">    </span><span class="p">.</span><span class="n">add</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;λ&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">OpClass</span><span class="o">::</span><span class="n">deex</span><span class="p">)</span>
+<span class="w">    </span><span class="p">.</span><span class="n">add</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;X&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">OpClass</span><span class="o">::</span><span class="n">ex</span><span class="p">);</span><span class="w">  </span><span class="c1">// Custom excitation operator</span>
+
+<span class="c1">// Use the custom registry to set the default MBPT context</span>
+<span class="n">set_default_mbpt_context</span><span class="p">({.</span><span class="n">op_registry_ptr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">custom_registry</span><span class="p">});</span>
+
+<span class="c1">// Create custom operator using OpMaker</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">X2_tensor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">OpMaker</span><span class="o">&lt;</span><span class="n">Statistics</span><span class="o">::</span><span class="n">FermiDirac</span><span class="o">&gt;</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;X&quot;</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">)();</span>
+
+<span class="c1">// Create custom operator using mbpt::Operator</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">X2_op</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">op_t</span><span class="o">&gt;</span><span class="p">(</span>
+<span class="w">    </span><span class="p">[]()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">wstring_view</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;X&quot;</span><span class="p">;</span><span class="w"> </span><span class="p">},</span>
+<span class="w">    </span><span class="p">[]()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">ExprPtr</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">OpMaker</span><span class="o">&lt;</span><span class="n">Statistics</span><span class="o">::</span><span class="n">FermiDirac</span><span class="o">&gt;</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;X&quot;</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">)();</span><span class="w"> </span><span class="p">},</span>
+<span class="w">    </span><span class="p">[](</span><span class="n">qns_t</span><span class="o">&amp;</span><span class="w"> </span><span class="n">qns</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">qns</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">excitation_type_qns</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span><span class="w"> </span><span class="p">});</span>
+
+<span class="c1">// Use in expressions</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">custom_expr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">X2_op</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">t</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>The registry is stored in the <a class="reference internal" href="../../api/classsequant_1_1mbpt_1_1_context.html#_CPPv4N7sequant4mbpt7ContextE" title="sequant::mbpt::Context"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">mbpt::Context</span></code></a>. See the unit test cases for further manipulations with <a class="reference internal" href="../../api/classsequant_1_1mbpt_1_1_context.html#_CPPv4N7sequant4mbpt7ContextE" title="sequant::mbpt::Context"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">mbpt::Context</span></code></a> and <a class="reference internal" href="../../api/classsequant_1_1mbpt_1_1_op_registry.html#_CPPv4N7sequant4mbpt10OpRegistryE" title="sequant::mbpt::OpRegistry"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">mbpt::OpRegistry</span></code></a>.</p>
+</section>
+<section id="examples">
+<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
+<p>Let’s look at some examples using the following SeQuant context:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="k">using</span><span class="w"> </span><span class="k">namespace</span><span class="w"> </span><span class="nn">sequant</span><span class="p">;</span>
+<span class="k">using</span><span class="w"> </span><span class="k">namespace</span><span class="w"> </span><span class="nn">sequant</span><span class="o">::</span><span class="nn">mbpt</span><span class="p">;</span>
+<span class="n">set_default_context</span><span class="p">({.</span><span class="n">index_space_registry_shared_ptr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">make_min_sr_spaces</span><span class="p">(),</span>
+<span class="w">                     </span><span class="p">.</span><span class="n">vacuum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Vacuum</span><span class="o">::</span><span class="n">SingleProduct</span><span class="p">});</span>
+<span class="n">set_default_mbpt_context</span><span class="p">({.</span><span class="n">op_registry_ptr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">make_legacy_registry</span><span class="p">()});</span>
+</pre></div>
+</div>
+<section id="constructing-an-operator">
+<h3>Constructing an <code class="docutils literal notranslate"><span class="pre">Operator</span></code><a class="headerlink" href="#constructing-an-operator" title="Link to this heading">¶</a></h3>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="k">using</span><span class="w"> </span><span class="n">sequant</span><span class="o">::</span><span class="n">mbpt</span><span class="o">::</span><span class="n">op_t</span><span class="p">;</span>
+<span class="k">using</span><span class="w"> </span><span class="n">sequant</span><span class="o">::</span><span class="n">mbpt</span><span class="o">::</span><span class="n">qns_t</span><span class="p">;</span>
+
+<span class="c1">// constructor takes label, tensor form and QuantumNumberChange</span>
+<span class="n">op_t</span><span class="w"> </span><span class="nf">fock_op</span><span class="p">([]()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">wstring_view</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;f&quot;</span><span class="p">;</span><span class="w"> </span><span class="p">},</span>
+<span class="w">             </span><span class="p">[]()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">ExprPtr</span><span class="w"> </span><span class="p">{</span>
+<span class="w">               </span><span class="k">return</span><span class="w"> </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">Tensor</span><span class="o">&gt;</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;f&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">bra</span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;p_1&quot;</span><span class="p">},</span><span class="w"> </span><span class="n">ket</span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;p_2&quot;</span><span class="p">})</span><span class="w"> </span><span class="o">*</span>
+<span class="w">                      </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">FNOperator</span><span class="o">&gt;</span><span class="p">(</span><span class="n">cre</span><span class="p">({</span><span class="sa">L</span><span class="s">&quot;p_1&quot;</span><span class="p">}),</span><span class="w"> </span><span class="n">ann</span><span class="p">({</span><span class="sa">L</span><span class="s">&quot;p_2&quot;</span><span class="p">}));</span>
+<span class="w">             </span><span class="p">},</span>
+<span class="w">             </span><span class="p">[](</span><span class="n">qns_t</span><span class="o">&amp;</span><span class="w"> </span><span class="n">qns</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">qns</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">sequant</span><span class="o">::</span><span class="n">mbpt</span><span class="o">::</span><span class="n">general_type_qns</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span><span class="w"> </span><span class="p">});</span>
+</pre></div>
+</div>
+<p>The components of the <code class="docutils literal notranslate"><span class="pre">Operator</span></code> can be accessed as follows:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="c1">// get the label</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">label</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fock_op</span><span class="p">.</span><span class="n">label</span><span class="p">();</span>
+
+<span class="c1">// apply operator to another state</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">vac</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">qns_t</span><span class="p">{};</span><span class="w">  </span><span class="c1">// vacuum state for example</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">modified</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fock_op</span><span class="p">(</span><span class="n">vac</span><span class="p">);</span>
+
+<span class="c1">// access the tensor form</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">fock_tensor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fock_op</span><span class="p">.</span><span class="n">tensor_form</span><span class="p">();</span>
+</pre></div>
+</div>
+</section>
+<section id="expression-construction-and-screening">
+<h3>Expression construction and screening<a class="headerlink" href="#expression-construction-and-screening" title="Link to this heading">¶</a></h3>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="k">using</span><span class="w"> </span><span class="k">namespace</span><span class="w"> </span><span class="nn">sequant</span><span class="o">::</span><span class="nn">mbpt</span><span class="o">::</span><span class="nn">op</span><span class="p">;</span>
+
+<span class="c1">// Construct a double excitation operator (T2)</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">t2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">t</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+
+<span class="c1">// Construct a two-body Hamiltonian</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">h2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+
+<span class="c1">// Product: h2 * t2 * t2</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">expr1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h2</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">t2</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">t2</span><span class="p">;</span>
+
+<span class="c1">// Screening: can an expression raise the vacuum to double excitation?</span>
+<span class="kt">bool</span><span class="w"> </span><span class="n">raises_to_double</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">raises_vacuum_to_rank</span><span class="p">(</span><span class="n">expr1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">);</span><span class="w">  </span><span class="c1">// true</span>
+
+<span class="c1">// Screening: can an expression raise the vacuum up to double excitation?</span>
+<span class="kt">bool</span><span class="w"> </span><span class="n">raises_up_to_double</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">raises_vacuum_up_to_rank</span><span class="p">(</span><span class="n">expr1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">);</span><span class="w">  </span><span class="c1">// true</span>
+
+<span class="c1">// Screening: can an expression lower a double excitation to the vacuum?</span>
+<span class="kt">bool</span><span class="w"> </span><span class="n">lowers_to_vacuum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">lowers_rank_to_vacuum</span><span class="p">(</span><span class="n">λ</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">h</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="mi">2</span><span class="p">);</span><span class="w">  </span><span class="c1">// true</span>
+</pre></div>
+</div>
+</section>
+<section id="vacuum-averaging-and-final-expression">
+<h3>Vacuum averaging and final expression<a class="headerlink" href="#vacuum-averaging-and-final-expression" title="Link to this heading">¶</a></h3>
+<p>The <code class="docutils literal notranslate"><span class="pre">sequant::mbpt::op::vac_av</span></code> function can be used to compute the vacuum average of an operator level expression.
+If reference state differs from the Wick vacuum <code class="docutils literal notranslate"><span class="pre">sequant::mbpt::op::ref_av</span></code> function should be used instead to
+compute the reference average.</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="k">using</span><span class="w"> </span><span class="k">namespace</span><span class="w"> </span><span class="nn">sequant</span><span class="o">::</span><span class="nn">mbpt</span><span class="p">;</span>
+
+<span class="k">auto</span><span class="w"> </span><span class="n">expr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">op</span><span class="o">::</span><span class="n">H</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">op</span><span class="o">::</span><span class="n">T</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">op</span><span class="o">::</span><span class="n">T</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">op</span><span class="o">::</span><span class="n">vac_av</span><span class="p">(</span><span class="n">op</span><span class="o">::</span><span class="n">P</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">expr</span><span class="p">);</span>
+<span class="c1">// vac_av is equivalent to ref_av for single-determinant reference:</span>
+<span class="c1">// auto result = op::ref_av(op::P(2) * expr);</span>
+
+<span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;Result: &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">result</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">;</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><code class="docutils literal notranslate"><span class="pre">op::P</span></code> is a projection operator which can be used to construct an excited bra or ket manifold based on the input.</p>
+</div>
+</section>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="cc.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Coupled-Cluster Class</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="index.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">User Guide</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, SeQuant developers
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            <div class="last-updated">
+              Last updated on Feb 27, 2026 8:35:02 PM</div>
+          </div>
+          <div class="right-details">
+            <div class="icons">
+              <a class="muted-link fa-brands fa-solid fa-github fa-2x" href="https://github.com/ValeevGroup/SeQuant" aria-label="GitHub"></a>
+              
+            </div>
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Operator Interface for Symbolic Many-Body Algebra</a><ul>
+<li><a class="reference internal" href="#motivation">Motivation</a></li>
+<li><a class="reference internal" href="#mbpt-operator-anatomy"><code class="docutils literal notranslate"><span class="pre">mbpt::Operator</span></code> Anatomy</a></li>
+<li><a class="reference internal" href="#operator-registry">Operator Registry</a></li>
+<li><a class="reference internal" href="#examples">Examples</a><ul>
+<li><a class="reference internal" href="#constructing-an-operator">Constructing an <code class="docutils literal notranslate"><span class="pre">Operator</span></code></a></li>
+<li><a class="reference internal" href="#expression-construction-and-screening">Expression construction and screening</a></li>
+<li><a class="reference internal" href="#vacuum-averaging-and-final-expression">Vacuum averaging and final expression</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=f281be69"></script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script src="../../_static/bootstrap-treeview/bootstrap-treeview.min.js?v=6a1e96b4"></script>
+    <script>window.MathJax = {"options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4.0.0-beta.3/tex-mml-chtml.js"></script>
+    </body>
+</html>

@@ -1,0 +1,55 @@
+
+.. _file_SeQuant_core_export_export_expr.cpp:
+
+File export_expr.cpp
+====================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_export>` (``SeQuant/core/export``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/export/export_expr.cpp``)
+----------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_export_export_expr.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/eval/eval_expr.hpp`` (:ref:`file_SeQuant_core_eval_eval_expr.hpp`)
+
+- ``SeQuant/core/export/compute_selection.hpp`` (:ref:`file_SeQuant_core_export_compute_selection.hpp`)
+
+- ``SeQuant/core/export/export_expr.hpp`` (:ref:`file_SeQuant_core_export_export_expr.hpp`)
+
+- ``SeQuant/core/utility/atomic.hpp`` (:ref:`file_SeQuant_core_utility_atomic.hpp`)
+
+- ``atomic`` (:ref:`file_SeQuant_core_utility_atomic.hpp`)
+
+- ``cstddef``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+

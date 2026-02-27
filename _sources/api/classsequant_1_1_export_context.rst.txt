@@ -1,0 +1,29 @@
+.. _exhale_class_classsequant_1_1_export_context:
+
+Class ExportContext
+===================
+
+- Defined in :ref:`file_SeQuant_core_export_context.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Derived Types
+*************
+
+- ``public sequant::JuliaTensorOperationsGeneratorContext`` (:ref:`exhale_class_classsequant_1_1_julia_tensor_operations_generator_context`)
+- ``public sequant::PythonEinsumGeneratorContext`` (:ref:`exhale_class_classsequant_1_1_python_einsum_generator_context`)
+- ``public sequant::ReorderingContext`` (:ref:`exhale_class_classsequant_1_1_reordering_context`)
+- ``public sequant::TextGeneratorContext`` (:ref:`exhale_struct_structsequant_1_1_text_generator_context`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::ExportContext
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

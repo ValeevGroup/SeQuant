@@ -1,0 +1,14 @@
+.. _exhale_define_macros_8hpp_1a28aa0a9b0b9e13322991aa5d073259c9:
+
+Define SEQUANT_CXX_COMPILER_ID_Intel
+====================================
+
+- Defined in :ref:`file_SeQuant_core_utility_macros.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SEQUANT_CXX_COMPILER_ID_Intel
+   :project: SeQuant

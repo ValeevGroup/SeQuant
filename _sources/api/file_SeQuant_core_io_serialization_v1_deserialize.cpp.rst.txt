@@ -1,0 +1,227 @@
+
+.. _file_SeQuant_core_io_serialization_v1_deserialize.cpp:
+
+File deserialize.cpp
+====================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_io_serialization_v1>` (``SeQuant/core/io/serialization/v1``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/io/serialization/v1/deserialize.cpp``)
+-----------------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_io_serialization_v1_deserialize.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/attr.hpp`` (:ref:`file_SeQuant_core_attr.hpp`)
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/io/serialization/serialization.hpp`` (:ref:`file_SeQuant_core_io_serialization_serialization.hpp`)
+
+- ``SeQuant/core/io/serialization/v1/ast.hpp`` (:ref:`file_SeQuant_core_io_serialization_v1_ast.hpp`)
+
+- ``SeQuant/core/io/serialization/v1/ast_conversions.hpp`` (:ref:`file_SeQuant_core_io_serialization_v1_ast_conversions.hpp`)
+
+- ``SeQuant/core/io/serialization/v1/semantic_actions.hpp`` (:ref:`file_SeQuant_core_io_serialization_v1_semantic_actions.hpp`)
+
+- ``SeQuant/core/space.hpp`` (:ref:`file_SeQuant_core_space.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``boost/core/demangle.hpp``
+
+- ``boost/spirit/home/x3.hpp``
+
+- ``boost/spirit/home/x3/support/utility/error_reporting.hpp``
+
+- ``boost/variant.hpp``
+
+- ``cassert``
+
+- ``cstddef``
+
+- ``functional``
+
+- ``iterator``
+
+- ``optional``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``string_view``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_atomic.hpp`)
+
+- ``vector``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__io`
+
+- :ref:`namespace_sequant__io__serialization`
+
+- :ref:`namespace_sequant__io__serialization__v1`
+
+- :ref:`namespace_sequant__io__serialization__v1__parse`
+
+- :ref:`namespace_sequant__io__serialization__v1__parse__helpers`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_error_handler`
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_expr_rule`
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1helpers_1_1annotate__position`
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1helpers_1_1error__handler`
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_index_group_rule`
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_index_label_rule`
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_index_rule`
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_number_rule`
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_product_rule`
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_result_rule`
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_sum_rule`
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_symmetry_spec_rule`
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_tensor_rule`
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_variable_rule`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a85186c6c97a568a48c13498b7fe585e1`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a7ac15caf3ce1bc1cc4521404c646170d`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a24d5e06203598d49f06cc928544d16c5`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a50b2364c46b0f8e0a786f591d2765ade`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a04568bac51bd90f34539b5bd75b5f048`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a013b64aeaef41a87e48b4eed50753ccc`
+
+
+Defines
+-------
+
+
+- :ref:`exhale_define_deserialize_8cpp_1a4d6f7f1e18b9eab7b16fe0f0b6ebe5df`
+
+- :ref:`exhale_define_deserialize_8cpp_1aaa703a8d1860285647b13a1bf9a81b40`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a64bb9eb3c5ebf87ec703f074f53d4dbf`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a83ada5f3a103b2772c17f235a350093c`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a26e6c1cc778a121f844a7bafba2724a4`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1ae78e330b2c85807d62445a80e78ba722`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1afffc7bc32519454757bd206885e42ae8`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1afee12e03d7996739d463b1c225ea5d73`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a394a3c0d7970aa8b210ad6686c2c24a5`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a72c282fe4ebc77087f7a104743316af9`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a2ef9d650b95886b1a3823571027b7fb5`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a436ae226c9b9729d395ccf600d63134d`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1ad6c593d511dac035c6f39723d16e06a9`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a57fbca9884d28b3906254475272be593`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a49e0aadd799e62348513353cff2aae3f`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1aec71ea8199f774c39871edb53f020b81`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a4faec041223c585355768d65327bc0d4`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a64eeb7940f45e25affd3064f5b89567d`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a07df8c8878d8651c756437b89d3c2cf3`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a0154a2238b93990fdad86ea5cc4b9877`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a60f8d9634b0cba6f8f33e784dae22bb6`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a79359f9f492791d226ad10e9d324de04`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a36c1de9281963898e1d74ae2c4e4c40b`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a20e49ef984fce5570d91d0018d65317b`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a48a1b60826353a172d80e41be11c396c`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a7944f5d200c371fda5bac08be37d351a`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a5125dc87ef8758e92dbc314c84e1ea60`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a909599677ea6f3df07f03669c19efcf9`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1ae5b8e562d6216d13dc58fbce56faaaa3`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a0f50ec216e7730cb7d14dc756c281506`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a9e8784828bda86c5cf9b513d578ffd40`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a39dbfce8cae1131598f5f9aa94381bb0`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1aaa9ddcea938eff07475dbb9ad9a22d41`
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1ad8fd96b486ae08915fcf5fbe2d24b838`
+

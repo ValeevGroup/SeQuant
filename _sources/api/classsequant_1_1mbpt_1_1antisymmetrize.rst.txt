@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1mbpt_1_1antisymmetrize:
+
+Class antisymmetrize
+====================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_antisymmetrizer.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::mbpt::antisymmetrize
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

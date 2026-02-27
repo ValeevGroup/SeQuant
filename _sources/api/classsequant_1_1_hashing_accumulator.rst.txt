@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1_hashing_accumulator:
+
+Class HashingAccumulator
+========================
+
+- Defined in :ref:`file_SeQuant_core_expressions_sum.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::HashingAccumulator
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

@@ -1,0 +1,186 @@
+
+.. _file_SeQuant_core_container.hpp:
+
+File container.hpp
+==================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/container.hpp``)
+-------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_container.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/hash.hpp`` (:ref:`file_SeQuant_core_hash.hpp`)
+
+- ``boost/container/flat_map.hpp``
+
+- ``boost/container/flat_set.hpp``
+
+- ``boost/container/small_vector.hpp``
+
+- ``boost/range.hpp``
+
+- ``boost/unordered/unordered_map.hpp``
+
+- ``boost/unordered/unordered_set.hpp``
+
+- ``map``
+
+- ``set`` (:ref:`file_SeQuant_core_bitset.hpp`)
+
+- ``vector``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_algorithm.hpp`
+
+- :ref:`file_SeQuant_core_asy_cost.cpp`
+
+- :ref:`file_SeQuant_core_asy_cost.hpp`
+
+- :ref:`file_SeQuant_core_eval_cache_manager.hpp`
+
+- :ref:`file_SeQuant_core_eval_eval.hpp`
+
+- :ref:`file_SeQuant_core_eval_eval_expr.cpp`
+
+- :ref:`file_SeQuant_core_eval_eval_expr.hpp`
+
+- :ref:`file_SeQuant_core_eval_result.hpp`
+
+- :ref:`file_SeQuant_core_export_export.hpp`
+
+- :ref:`file_SeQuant_core_export_expression_group.hpp`
+
+- :ref:`file_SeQuant_core_export_generation_optimizer.hpp`
+
+- :ref:`file_SeQuant_core_export_itf.hpp`
+
+- :ref:`file_SeQuant_core_expressions_abstract_tensor.hpp`
+
+- :ref:`file_SeQuant_core_expressions_expr_ptr.hpp`
+
+- :ref:`file_SeQuant_core_expressions_product.hpp`
+
+- :ref:`file_SeQuant_core_expressions_result_expr.hpp`
+
+- :ref:`file_SeQuant_core_expressions_sum.hpp`
+
+- :ref:`file_SeQuant_core_expressions_tensor.hpp`
+
+- :ref:`file_SeQuant_core_hugenholtz.hpp`
+
+- :ref:`file_SeQuant_core_index.hpp`
+
+- :ref:`file_SeQuant_core_io_latex_latex.cpp`
+
+- :ref:`file_SeQuant_core_io_serialization_v1_ast_conversions.hpp`
+
+- :ref:`file_SeQuant_core_io_serialization_v1_deserialize.cpp`
+
+- :ref:`file_SeQuant_core_op.cpp`
+
+- :ref:`file_SeQuant_core_op.hpp`
+
+- :ref:`file_SeQuant_core_optimize_common_subexpression_elimination.hpp`
+
+- :ref:`file_SeQuant_core_optimize_fusion.cpp`
+
+- :ref:`file_SeQuant_core_optimize_optimize.cpp`
+
+- :ref:`file_SeQuant_core_optimize_single_term.hpp`
+
+- :ref:`file_SeQuant_core_optimize_sum.cpp`
+
+- :ref:`file_SeQuant_core_optimize_sum.hpp`
+
+- :ref:`file_SeQuant_core_space.hpp`
+
+- :ref:`file_SeQuant_core_tensor_canonicalizer.cpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v1.cpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v1.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v2.cpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v2.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v3.cpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v3.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network_vertex_painter.hpp`
+
+- :ref:`file_SeQuant_core_utility_expr.cpp`
+
+- :ref:`file_SeQuant_core_utility_expr.hpp`
+
+- :ref:`file_SeQuant_core_utility_indices.hpp`
+
+- :ref:`file_SeQuant_core_utility_memoize.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_biorthogonalization.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_biorthogonalization.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_op_registry.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_spin.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__container`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1_1container_1a8cf49ee47e89d12fc0a09e70ef760674`
+
+- :ref:`exhale_typedef_namespacesequant_1_1container_1a9fe590ac77bfb48f40d4c07e20b54dca`
+
+- :ref:`exhale_typedef_namespacesequant_1_1container_1a6e1d981e45b5ca1bf699b963962792f8`
+
+- :ref:`exhale_typedef_namespacesequant_1_1container_1a096d649df6109569c16ac6fd1cb6f853`
+
+- :ref:`exhale_typedef_namespacesequant_1_1container_1a99e42a7ebf925cfdcf99eebbe39d129e`
+
+- :ref:`exhale_typedef_namespacesequant_1_1container_1a7373780672af18edad84f2477fe3f0e5`
+
+- :ref:`exhale_typedef_namespacesequant_1_1container_1aaa8384c5d22396ccd9a2368a088e24bd`
+

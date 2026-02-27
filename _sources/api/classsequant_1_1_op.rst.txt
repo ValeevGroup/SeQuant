@@ -1,0 +1,28 @@
+.. _exhale_class_classsequant_1_1_op:
+
+Template Class Op
+=================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Nested Relationships
+--------------------
+
+
+Nested Types
+************
+
+- :ref:`exhale_struct_structsequant_1_1_op_1_1_type_compare`
+- :ref:`exhale_struct_structsequant_1_1_op_1_1_type_equality`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::Op
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

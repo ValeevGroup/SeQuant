@@ -1,0 +1,964 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html">
+        <link rel="prefetch" href="../_static/logo.svg" as="image">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>Class Tensor - SeQuant Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/bootstrap-treeview/bootstrap-treeview.min.css?v=8176a87d" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=821744c5" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --sidebar-item-font-size: 0.95em;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">SeQuant Documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="../_static/logo.svg" alt="Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">User</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/getting_started/index.html">Getting started</a><input aria-label="Toggle navigation of Getting started" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/wick.html">Wick’s Theorem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/index_spaces.html">Register Index Spaces</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/operators.html">Operators</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../user/getting_started/installing.html">Installation</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/guide/index.html">User Guide</a><input aria-label="Toggle navigation of User Guide" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/operator.html">Operator Interface for Symbolic Many-Body Algebra</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/cc.html">Coupled-Cluster Class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/io.html">I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/evaluation.html">Evaluation Trace Analysis Using Nushell</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../developer/index.html">Developer docs</a><input aria-label="Toggle navigation of Developer docs" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../developer/documentation.html">Documentation Guide</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">API reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Maintainer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../maintainer/index.html">Maintainer docs</a><input aria-label="Toggle navigation of Maintainer docs" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../maintainer/release.html">Release Guide</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">See Also</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/tiledarray">TiledArray</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/mpqc">Massively Parallel Quantum Chemistry</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io">Valeev Research Group</a></li>
+</ul>
+
+</div></div>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="../_sources/api/classsequant_1_1_tensor.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="class-tensor">
+<span id="exhale-class-classsequant-1-1-tensor"></span><h1>Class Tensor<a class="headerlink" href="#class-tensor" title="Link to this heading">¶</a></h1>
+<ul class="simple">
+<li><p>Defined in <a class="reference internal" href="file_SeQuant_core_expressions_tensor.hpp.html#file-sequant-core-expressions-tensor-hpp"><span class="std std-ref">File tensor.hpp</span></a></p></li>
+</ul>
+<section id="nested-relationships">
+<h2>Nested Relationships<a class="headerlink" href="#nested-relationships" title="Link to this heading">¶</a></h2>
+<section id="nested-types">
+<h3>Nested Types<a class="headerlink" href="#nested-types" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><a class="reference internal" href="structsequant_1_1_tensor_1_1reserved__tag.html#exhale-struct-structsequant-1-1-tensor-1-1reserved-tag"><span class="std std-ref">Struct Tensor::reserved_tag</span></a></p></li>
+</ul>
+</section>
+</section>
+<section id="inheritance-relationships">
+<h2>Inheritance Relationships<a class="headerlink" href="#inheritance-relationships" title="Link to this heading">¶</a></h2>
+<section id="base-types">
+<h3>Base Types<a class="headerlink" href="#base-types" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">public</span> <span class="pre">sequant::Expr</span></code> (<a class="reference internal" href="classsequant_1_1_expr.html#exhale-class-classsequant-1-1-expr"><span class="std std-ref">Class Expr</span></a>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">public</span> <span class="pre">sequant::AbstractTensor</span></code> (<a class="reference internal" href="classsequant_1_1_abstract_tensor.html#exhale-class-classsequant-1-1-abstract-tensor"><span class="std std-ref">Class AbstractTensor</span></a>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">public</span> <span class="pre">sequant::MutatableLabeled</span></code> (<a class="reference internal" href="classsequant_1_1_mutatable_labeled.html#exhale-class-classsequant-1-1-mutatable-labeled"><span class="std std-ref">Class MutatableLabeled</span></a>)</p></li>
+</ul>
+</section>
+</section>
+<section id="class-documentation">
+<h2>Class Documentation<a class="headerlink" href="#class-documentation" title="Link to this heading">¶</a></h2>
+<dl class="cpp class">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant6TensorE">
+<span id="_CPPv3N7sequant6TensorE"></span><span id="_CPPv2N7sequant6TensorE"></span><span id="sequant::Tensor"></span><span class="target" id="classsequant_1_1_tensor"></span><span class="k"><span class="pre">class</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Tensor</span></span></span><span class="w"> </span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="k"><span class="pre">public</span></span><span class="w"> </span><span class="n"><span class="pre">sequant</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="classsequant_1_1_expr.html#_CPPv4N7sequant4ExprE" title="sequant::Expr"><span class="n"><span class="pre">Expr</span></span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="k"><span class="pre">public</span></span><span class="w"> </span><span class="n"><span class="pre">sequant</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="classsequant_1_1_abstract_tensor.html#_CPPv4N7sequant14AbstractTensorE" title="sequant::AbstractTensor"><span class="n"><span class="pre">AbstractTensor</span></span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="k"><span class="pre">public</span></span><span class="w"> </span><span class="n"><span class="pre">sequant</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="classsequant_1_1_mutatable_labeled.html#_CPPv4N7sequant16MutatableLabeledE" title="sequant::MutatableLabeled"><span class="n"><span class="pre">MutatableLabeled</span></span></a><a class="headerlink" href="#_CPPv4N7sequant6TensorE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>a <a class="reference internal" href="#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> is an instance of <a class="reference internal" href="classsequant_1_1_abstract_tensor.html#classsequant_1_1_abstract_tensor"><span class="std std-ref">AbstractTensor</span></a> over a scalar field, i.e. Tensors have commutative addition and product operations </p>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-nontrivial-constructors">nontrivial constructors</p>
+<p><div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>if <code class="docutils literal notranslate"><span class="pre">SEQUANT_ASSERT_ENABLED</span></code> is <code class="docutils literal notranslate"><span class="pre">#define</span></code>d and invalid combinations of indices are found, these will assert via SEQUANT_ASSERT that these conditions do not occur:<ul class="simple">
+<li><p>null indices are found in any slot of antisymmetric bra or ket (it’s not clear what permutation of 2 empty slots is supposed to do in general)</p></li>
+<li><p>null indices are found in any slot of symmetric bra or ket: can assign consistent semantics if have empty slots in the shorter of the bra/ket, but not clear if there is a use case that demands this</p></li>
+<li><p>null indices are found in both slots of bra-ket slot pairs (meaning is unclear)</p></li>
+<li><p>null indices are found in any aux slot (why would empty slots be needed?)</p></li>
+<li><p>asymmetric tensor has a bra/ket slot without a matching ket/bra slot; this is primarily to make operations (such as canonicalization) easier on such tensors; null indices can be used to ensure complete bra/ket bundles in asymmetric tensors</p></li>
+<li><p>duplicate indices are found within bra, within ket, or within aux (but same index can appear in bra and ket, for example). </p></li>
+</ul>
+</p>
+</div>
+</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4I_24basic_string_convertible_27range_of_castables_to_index_27range_of_castables_to_indexEN7sequant6Tensor6TensorERR1SRK3braI11IndexRange1ERK3ketI11IndexRange2E8Symmetry14BraKetSymmetry14ColumnSymmetry">
+<span id="_CPPv3I_24basic_string_convertible_27range_of_castables_to_index_27range_of_castables_to_indexEN7sequant6Tensor6TensorERR1SRK3braI11IndexRange1ERK3ketI11IndexRange2E8Symmetry14BraKetSymmetry14ColumnSymmetry"></span><span id="_CPPv2I_24basic_string_convertible_27range_of_castables_to_index_27range_of_castables_to_indexEN7sequant6Tensor6TensorERR1SRK3braI11IndexRange1ERK3ketI11IndexRange2E8Symmetry14BraKetSymmetry14ColumnSymmetry"></span><span class="k"><span class="pre">template</span></span><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">basic_string_convertible</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">S</span></span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="n"><span class="pre">range_of_castables_to_index</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">IndexRange1</span></span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="n"><span class="pre">range_of_castables_to_index</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">IndexRange2</span></span></span><span class="p"><span class="pre">&gt;</span></span><br /><span class="target" id="classsequant_1_1_tensor_1a5a0d47838f3001bd40a6ec90c0602f39"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Tensor</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4I_24basic_string_convertible_27range_of_castables_to_index_27range_of_castables_to_indexEN7sequant6Tensor6TensorERR1SRK3braI11IndexRange1ERK3ketI11IndexRange2E8Symmetry14BraKetSymmetry14ColumnSymmetry" title="sequant::Tensor::Tensor::S"><span class="n"><span class="pre">S</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">label</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4NK7sequant6Tensor3braEv" title="sequant::Tensor::bra"><span class="n"><span class="pre">bra</span></span></a><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="#_CPPv4I_24basic_string_convertible_27range_of_castables_to_index_27range_of_castables_to_indexEN7sequant6Tensor6TensorERR1SRK3braI11IndexRange1ERK3ketI11IndexRange2E8Symmetry14BraKetSymmetry14ColumnSymmetry" title="sequant::Tensor::Tensor::IndexRange1"><span class="n"><span class="pre">IndexRange1</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">bra_indices</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4NK7sequant6Tensor3ketEv" title="sequant::Tensor::ket"><span class="n"><span class="pre">ket</span></span></a><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="#_CPPv4I_24basic_string_convertible_27range_of_castables_to_index_27range_of_castables_to_indexEN7sequant6Tensor6TensorERR1SRK3braI11IndexRange1ERK3ketI11IndexRange2E8Symmetry14BraKetSymmetry14ColumnSymmetry" title="sequant::Tensor::Tensor::IndexRange2"><span class="n"><span class="pre">IndexRange2</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ket_indices</span></span>, <a class="reference internal" href="enum_namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485.html#_CPPv4N7sequant8SymmetryE" title="sequant::Symmetry"><span class="n"><span class="pre">Symmetry</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">s</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485.html#_CPPv4N7sequant8SymmetryE" title="sequant::Symmetry"><span class="n"><span class="pre">Symmetry</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="enum_namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485.html#_CPPv4N7sequant8Symmetry7NonsymmE" title="sequant::Symmetry::Nonsymm"><span class="n"><span class="pre">Nonsymm</span></span></a>, <a class="reference internal" href="enum_namespacesequant_1a8fa350a3e3719764fcc1ce8aeddaea46.html#_CPPv4N7sequant14BraKetSymmetryE" title="sequant::BraKetSymmetry"><span class="n"><span class="pre">BraKetSymmetry</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">bks</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="n"><span class="pre">get_default_context</span></span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span><span class="p"><span class="pre">.</span></span><span class="n"><span class="pre">braket_symmetry</span></span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span>, <a class="reference internal" href="enum_namespacesequant_1a9a92bdfb62efcda9f7cbe27751bed88f.html#_CPPv4N7sequant14ColumnSymmetryE" title="sequant::ColumnSymmetry"><span class="n"><span class="pre">ColumnSymmetry</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">ps</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1a9a92bdfb62efcda9f7cbe27751bed88f.html#_CPPv4N7sequant14ColumnSymmetryE" title="sequant::ColumnSymmetry"><span class="n"><span class="pre">ColumnSymmetry</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="enum_namespacesequant_1a9a92bdfb62efcda9f7cbe27751bed88f.html#_CPPv4N7sequant14ColumnSymmetry4SymmE" title="sequant::ColumnSymmetry::Symm"><span class="n"><span class="pre">Symm</span></span></a><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I_24basic_string_convertible_27range_of_castables_to_index_27range_of_castables_to_indexEN7sequant6Tensor6TensorERR1SRK3braI11IndexRange1ERK3ketI11IndexRange2E8Symmetry14BraKetSymmetry14ColumnSymmetry" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>label</strong> – the tensor label </p></li>
+<li><p><strong>bra_indices</strong> – list of bra indices (or objects that can be converted to indices) </p></li>
+<li><p><strong>ket_indices</strong> – list of ket indices (or objects that can be converted to indices) </p></li>
+<li><p><strong>s</strong> – the symmetry of bra or ket </p></li>
+<li><p><strong>bks</strong> – the symmetry with respect to bra-ket exchange </p></li>
+<li><p><strong>ps</strong> – the symmetry under exchange of particles </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4I_24basic_string_convertible_27range_of_castables_to_index_27range_of_castables_to_index_27range_of_castables_to_indexEN7sequant6Tensor6TensorERR1SRK3braI11IndexRange1ERK3ketI11IndexRange2ERK3auxI11IndexRange3E8Symmetry14BraKetSymmetry14ColumnSymmetry">
+<span id="_CPPv3I_24basic_string_convertible_27range_of_castables_to_index_27range_of_castables_to_index_27range_of_castables_to_indexEN7sequant6Tensor6TensorERR1SRK3braI11IndexRange1ERK3ketI11IndexRange2ERK3auxI11IndexRange3E8Symmetry14BraKetSymmetry14ColumnSymmetry"></span><span id="_CPPv2I_24basic_string_convertible_27range_of_castables_to_index_27range_of_castables_to_index_27range_of_castables_to_indexEN7sequant6Tensor6TensorERR1SRK3braI11IndexRange1ERK3ketI11IndexRange2ERK3auxI11IndexRange3E8Symmetry14BraKetSymmetry14ColumnSymmetry"></span><span class="k"><span class="pre">template</span></span><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">basic_string_convertible</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">S</span></span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="n"><span class="pre">range_of_castables_to_index</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">IndexRange1</span></span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="n"><span class="pre">range_of_castables_to_index</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">IndexRange2</span></span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="n"><span class="pre">range_of_castables_to_index</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">IndexRange3</span></span></span><span class="p"><span class="pre">&gt;</span></span><br /><span class="target" id="classsequant_1_1_tensor_1aed5ffe7e7137058759437dc9327cc58e"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Tensor</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4I_24basic_string_convertible_27range_of_castables_to_index_27range_of_castables_to_index_27range_of_castables_to_indexEN7sequant6Tensor6TensorERR1SRK3braI11IndexRange1ERK3ketI11IndexRange2ERK3auxI11IndexRange3E8Symmetry14BraKetSymmetry14ColumnSymmetry" title="sequant::Tensor::Tensor::S"><span class="n"><span class="pre">S</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">label</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4NK7sequant6Tensor3braEv" title="sequant::Tensor::bra"><span class="n"><span class="pre">bra</span></span></a><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="#_CPPv4I_24basic_string_convertible_27range_of_castables_to_index_27range_of_castables_to_index_27range_of_castables_to_indexEN7sequant6Tensor6TensorERR1SRK3braI11IndexRange1ERK3ketI11IndexRange2ERK3auxI11IndexRange3E8Symmetry14BraKetSymmetry14ColumnSymmetry" title="sequant::Tensor::Tensor::IndexRange1"><span class="n"><span class="pre">IndexRange1</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">bra_indices</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4NK7sequant6Tensor3ketEv" title="sequant::Tensor::ket"><span class="n"><span class="pre">ket</span></span></a><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="#_CPPv4I_24basic_string_convertible_27range_of_castables_to_index_27range_of_castables_to_index_27range_of_castables_to_indexEN7sequant6Tensor6TensorERR1SRK3braI11IndexRange1ERK3ketI11IndexRange2ERK3auxI11IndexRange3E8Symmetry14BraKetSymmetry14ColumnSymmetry" title="sequant::Tensor::Tensor::IndexRange2"><span class="n"><span class="pre">IndexRange2</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ket_indices</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4NK7sequant6Tensor3auxEv" title="sequant::Tensor::aux"><span class="n"><span class="pre">aux</span></span></a><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="#_CPPv4I_24basic_string_convertible_27range_of_castables_to_index_27range_of_castables_to_index_27range_of_castables_to_indexEN7sequant6Tensor6TensorERR1SRK3braI11IndexRange1ERK3ketI11IndexRange2ERK3auxI11IndexRange3E8Symmetry14BraKetSymmetry14ColumnSymmetry" title="sequant::Tensor::Tensor::IndexRange3"><span class="n"><span class="pre">IndexRange3</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">aux_indices</span></span>, <a class="reference internal" href="enum_namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485.html#_CPPv4N7sequant8SymmetryE" title="sequant::Symmetry"><span class="n"><span class="pre">Symmetry</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">s</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485.html#_CPPv4N7sequant8SymmetryE" title="sequant::Symmetry"><span class="n"><span class="pre">Symmetry</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="enum_namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485.html#_CPPv4N7sequant8Symmetry7NonsymmE" title="sequant::Symmetry::Nonsymm"><span class="n"><span class="pre">Nonsymm</span></span></a>, <a class="reference internal" href="enum_namespacesequant_1a8fa350a3e3719764fcc1ce8aeddaea46.html#_CPPv4N7sequant14BraKetSymmetryE" title="sequant::BraKetSymmetry"><span class="n"><span class="pre">BraKetSymmetry</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">bks</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="n"><span class="pre">get_default_context</span></span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span><span class="p"><span class="pre">.</span></span><span class="n"><span class="pre">braket_symmetry</span></span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span>, <a class="reference internal" href="enum_namespacesequant_1a9a92bdfb62efcda9f7cbe27751bed88f.html#_CPPv4N7sequant14ColumnSymmetryE" title="sequant::ColumnSymmetry"><span class="n"><span class="pre">ColumnSymmetry</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">ps</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1a9a92bdfb62efcda9f7cbe27751bed88f.html#_CPPv4N7sequant14ColumnSymmetryE" title="sequant::ColumnSymmetry"><span class="n"><span class="pre">ColumnSymmetry</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="enum_namespacesequant_1a9a92bdfb62efcda9f7cbe27751bed88f.html#_CPPv4N7sequant14ColumnSymmetry4SymmE" title="sequant::ColumnSymmetry::Symm"><span class="n"><span class="pre">Symm</span></span></a><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I_24basic_string_convertible_27range_of_castables_to_index_27range_of_castables_to_index_27range_of_castables_to_indexEN7sequant6Tensor6TensorERR1SRK3braI11IndexRange1ERK3ketI11IndexRange2ERK3auxI11IndexRange3E8Symmetry14BraKetSymmetry14ColumnSymmetry" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>label</strong> – the tensor label </p></li>
+<li><p><strong>bra_indices</strong> – list of bra indices (or objects that can be converted to indices) </p></li>
+<li><p><strong>ket_indices</strong> – list of ket indices (or objects that can be converted to indices) </p></li>
+<li><p><strong>aux_indices</strong> – list of aux indices (or objects that can be converted to indices) </p></li>
+<li><p><strong>s</strong> – the symmetry of bra or ket </p></li>
+<li><p><strong>bks</strong> – the symmetry with respect to bra-ket exchange </p></li>
+<li><p><strong>ps</strong> – the symmetry under exchange of particles </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4I_24basic_string_convertibleEN7sequant6Tensor6TensorERR1SRR3braI20index_container_typeERR3ketI20index_container_typeE8Symmetry14BraKetSymmetry14ColumnSymmetry">
+<span id="_CPPv3I_24basic_string_convertibleEN7sequant6Tensor6TensorERR1SRR3braI20index_container_typeERR3ketI20index_container_typeE8Symmetry14BraKetSymmetry14ColumnSymmetry"></span><span id="_CPPv2I_24basic_string_convertibleEN7sequant6Tensor6TensorERR1SRR3braI20index_container_typeERR3ketI20index_container_typeE8Symmetry14BraKetSymmetry14ColumnSymmetry"></span><span class="k"><span class="pre">template</span></span><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">basic_string_convertible</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">S</span></span></span><span class="p"><span class="pre">&gt;</span></span><br /><span class="target" id="classsequant_1_1_tensor_1aeaec096c67992c7c71ec84efb048bf34"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Tensor</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4I_24basic_string_convertibleEN7sequant6Tensor6TensorERR1SRR3braI20index_container_typeERR3ketI20index_container_typeE8Symmetry14BraKetSymmetry14ColumnSymmetry" title="sequant::Tensor::Tensor::S"><span class="n"><span class="pre">S</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">label</span></span>, <a class="reference internal" href="#_CPPv4NK7sequant6Tensor3braEv" title="sequant::Tensor::bra"><span class="n"><span class="pre">bra</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">index_container_type</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">bra_indices</span></span>, <a class="reference internal" href="#_CPPv4NK7sequant6Tensor3ketEv" title="sequant::Tensor::ket"><span class="n"><span class="pre">ket</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">index_container_type</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ket_indices</span></span>, <a class="reference internal" href="enum_namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485.html#_CPPv4N7sequant8SymmetryE" title="sequant::Symmetry"><span class="n"><span class="pre">Symmetry</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">s</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485.html#_CPPv4N7sequant8SymmetryE" title="sequant::Symmetry"><span class="n"><span class="pre">Symmetry</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="enum_namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485.html#_CPPv4N7sequant8Symmetry7NonsymmE" title="sequant::Symmetry::Nonsymm"><span class="n"><span class="pre">Nonsymm</span></span></a>, <a class="reference internal" href="enum_namespacesequant_1a8fa350a3e3719764fcc1ce8aeddaea46.html#_CPPv4N7sequant14BraKetSymmetryE" title="sequant::BraKetSymmetry"><span class="n"><span class="pre">BraKetSymmetry</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">bks</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="n"><span class="pre">get_default_context</span></span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span><span class="p"><span class="pre">.</span></span><span class="n"><span class="pre">braket_symmetry</span></span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span>, <a class="reference internal" href="enum_namespacesequant_1a9a92bdfb62efcda9f7cbe27751bed88f.html#_CPPv4N7sequant14ColumnSymmetryE" title="sequant::ColumnSymmetry"><span class="n"><span class="pre">ColumnSymmetry</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">ps</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1a9a92bdfb62efcda9f7cbe27751bed88f.html#_CPPv4N7sequant14ColumnSymmetryE" title="sequant::ColumnSymmetry"><span class="n"><span class="pre">ColumnSymmetry</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="enum_namespacesequant_1a9a92bdfb62efcda9f7cbe27751bed88f.html#_CPPv4N7sequant14ColumnSymmetry4SymmE" title="sequant::ColumnSymmetry::Symm"><span class="n"><span class="pre">Symm</span></span></a><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I_24basic_string_convertibleEN7sequant6Tensor6TensorERR1SRR3braI20index_container_typeERR3ketI20index_container_typeE8Symmetry14BraKetSymmetry14ColumnSymmetry" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>label</strong> – the tensor label </p></li>
+<li><p><strong>bra_indices</strong> – list of bra indices (or objects that can be converted to indices) </p></li>
+<li><p><strong>ket_indices</strong> – list of ket indices (or objects that can be converted to indices) </p></li>
+<li><p><strong>s</strong> – the symmetry of bra or ket </p></li>
+<li><p><strong>bks</strong> – the symmetry with respect to bra-ket exchange </p></li>
+<li><p><strong>ps</strong> – the symmetry under exchange of particles </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4I_24basic_string_convertibleEN7sequant6Tensor6TensorERR1SRR3braI20index_container_typeERR3ketI20index_container_typeERR3auxI20index_container_typeE8Symmetry14BraKetSymmetry14ColumnSymmetry">
+<span id="_CPPv3I_24basic_string_convertibleEN7sequant6Tensor6TensorERR1SRR3braI20index_container_typeERR3ketI20index_container_typeERR3auxI20index_container_typeE8Symmetry14BraKetSymmetry14ColumnSymmetry"></span><span id="_CPPv2I_24basic_string_convertibleEN7sequant6Tensor6TensorERR1SRR3braI20index_container_typeERR3ketI20index_container_typeERR3auxI20index_container_typeE8Symmetry14BraKetSymmetry14ColumnSymmetry"></span><span class="k"><span class="pre">template</span></span><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">basic_string_convertible</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">S</span></span></span><span class="p"><span class="pre">&gt;</span></span><br /><span class="target" id="classsequant_1_1_tensor_1ac5361ab8ad983d58776af654b5a7bd98"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Tensor</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4I_24basic_string_convertibleEN7sequant6Tensor6TensorERR1SRR3braI20index_container_typeERR3ketI20index_container_typeERR3auxI20index_container_typeE8Symmetry14BraKetSymmetry14ColumnSymmetry" title="sequant::Tensor::Tensor::S"><span class="n"><span class="pre">S</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">label</span></span>, <a class="reference internal" href="#_CPPv4NK7sequant6Tensor3braEv" title="sequant::Tensor::bra"><span class="n"><span class="pre">bra</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">index_container_type</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">bra_indices</span></span>, <a class="reference internal" href="#_CPPv4NK7sequant6Tensor3ketEv" title="sequant::Tensor::ket"><span class="n"><span class="pre">ket</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">index_container_type</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ket_indices</span></span>, <a class="reference internal" href="#_CPPv4NK7sequant6Tensor3auxEv" title="sequant::Tensor::aux"><span class="n"><span class="pre">aux</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">index_container_type</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">aux_indices</span></span>, <a class="reference internal" href="enum_namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485.html#_CPPv4N7sequant8SymmetryE" title="sequant::Symmetry"><span class="n"><span class="pre">Symmetry</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">s</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485.html#_CPPv4N7sequant8SymmetryE" title="sequant::Symmetry"><span class="n"><span class="pre">Symmetry</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="enum_namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485.html#_CPPv4N7sequant8Symmetry7NonsymmE" title="sequant::Symmetry::Nonsymm"><span class="n"><span class="pre">Nonsymm</span></span></a>, <a class="reference internal" href="enum_namespacesequant_1a8fa350a3e3719764fcc1ce8aeddaea46.html#_CPPv4N7sequant14BraKetSymmetryE" title="sequant::BraKetSymmetry"><span class="n"><span class="pre">BraKetSymmetry</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">bks</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="n"><span class="pre">get_default_context</span></span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span><span class="p"><span class="pre">.</span></span><span class="n"><span class="pre">braket_symmetry</span></span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span>, <a class="reference internal" href="enum_namespacesequant_1a9a92bdfb62efcda9f7cbe27751bed88f.html#_CPPv4N7sequant14ColumnSymmetryE" title="sequant::ColumnSymmetry"><span class="n"><span class="pre">ColumnSymmetry</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">ps</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1a9a92bdfb62efcda9f7cbe27751bed88f.html#_CPPv4N7sequant14ColumnSymmetryE" title="sequant::ColumnSymmetry"><span class="n"><span class="pre">ColumnSymmetry</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="enum_namespacesequant_1a9a92bdfb62efcda9f7cbe27751bed88f.html#_CPPv4N7sequant14ColumnSymmetry4SymmE" title="sequant::ColumnSymmetry::Symm"><span class="n"><span class="pre">Symm</span></span></a><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I_24basic_string_convertibleEN7sequant6Tensor6TensorERR1SRR3braI20index_container_typeERR3ketI20index_container_typeERR3auxI20index_container_typeE8Symmetry14BraKetSymmetry14ColumnSymmetry" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>label</strong> – the tensor label </p></li>
+<li><p><strong>bra_indices</strong> – list of bra indices (or objects that can be converted to indices) </p></li>
+<li><p><strong>ket_indices</strong> – list of ket indices (or objects that can be converted to indices) </p></li>
+<li><p><strong>aux_indices</strong> – list of aux indices (or objects that can be converted to indices) </p></li>
+<li><p><strong>s</strong> – the symmetry of bra or ket </p></li>
+<li><p><strong>bks</strong> – the symmetry with respect to bra-ket exchange </p></li>
+<li><p><strong>ps</strong> – the symmetry under exchange of particles </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-functions">Public Functions</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant6Tensor6TensorEv">
+<span id="_CPPv3N7sequant6Tensor6TensorEv"></span><span id="_CPPv2N7sequant6Tensor6TensorEv"></span><span id="sequant::Tensor::Tensor"></span><span class="target" id="classsequant_1_1_tensor_1ae420b032508183cd96fc36d4653a9e20"></span><span class="sig-name descname"><span class="n"><span class="pre">Tensor</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">default</span></span><a class="headerlink" href="#_CPPv4N7sequant6Tensor6TensorEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>constructs an uninitialized <a class="reference internal" href="#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> <div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#classsequant_1_1_tensor_1a1334db08dfd9d3401756a587963ed62f"><span class="std std-ref">Tensor::operator bool()</span></a></p>
+</div>
+</p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant6TensorD0Ev">
+<span id="_CPPv3N7sequant6TensorD0Ev"></span><span id="_CPPv2N7sequant6TensorD0Ev"></span><span id="sequant::Tensor::~Tensor"></span><span class="target" id="classsequant_1_1_tensor_1a60d545984db592cf8ef1400a0d3ab10c"></span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">~Tensor</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant6TensorD0Ev" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6TensorcvbEv">
+<span id="_CPPv3NK7sequant6TensorcvbEv"></span><span id="_CPPv2NK7sequant6TensorcvbEv"></span><span id="sequant::Tensor::castto-b-operatorC"></span><span class="target" id="classsequant_1_1_tensor_1a1334db08dfd9d3401756a587963ed62f"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">explicit</span></span><span class="w"> </span><span class="sig-name descname"><span class="k"><span class="pre">operator</span></span><span class="w"> </span><span class="kt"><span class="pre">bool</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6TensorcvbEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>true if the <a class="reference internal" href="#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> is initialized </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor5labelEv">
+<span id="_CPPv3NK7sequant6Tensor5labelEv"></span><span id="_CPPv2NK7sequant6Tensor5labelEv"></span><span id="sequant::Tensor::labelC"></span><span class="target" id="classsequant_1_1_tensor_1a0c02dd942a517426dd2b777b5ff5f8a8"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">wstring_view</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">label</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor5labelEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>“core” label of the tensor </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant6Tensor9set_labelENSt7wstringE">
+<span id="_CPPv3N7sequant6Tensor9set_labelENSt7wstringE"></span><span id="_CPPv2N7sequant6Tensor9set_labelENSt7wstringE"></span><span id="sequant::Tensor::set_label__std::wstring"></span><span class="target" id="classsequant_1_1_tensor_1a0c5398de36ac36f29f92997be150e902"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">set_label</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">wstring</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">label</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant6Tensor9set_labelENSt7wstringE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Sets the label of this object </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>label</strong> – The new label of this object </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor3braEv">
+<span id="_CPPv3NK7sequant6Tensor3braEv"></span><span id="_CPPv2NK7sequant6Tensor3braEv"></span><span id="sequant::Tensor::braC"></span><span class="target" id="classsequant_1_1_tensor_1aa6894823e3a56e2c4df193fa04badab2"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">bra</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor3braEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the bra slot range (empty slots are occupied by null indices) </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant6Tensor7set_braE20index_container_type">
+<span id="_CPPv3N7sequant6Tensor7set_braE20index_container_type"></span><span id="_CPPv2N7sequant6Tensor7set_braE20index_container_type"></span><span id="sequant::Tensor::set_bra__index_container_type"></span><span class="target" id="classsequant_1_1_tensor_1a8b4dd85cb41d703af269583a04c6b0b9"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">set_bra</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">index_container_type</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">indices</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant6Tensor7set_braE20index_container_type" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor3ketEv">
+<span id="_CPPv3NK7sequant6Tensor3ketEv"></span><span id="_CPPv2NK7sequant6Tensor3ketEv"></span><span id="sequant::Tensor::ketC"></span><span class="target" id="classsequant_1_1_tensor_1a09ab61fb5924b28d44820939610d6ee7"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">ket</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor3ketEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the ket slot range (empty slots are occupied by null indices) </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant6Tensor7set_ketE20index_container_type">
+<span id="_CPPv3N7sequant6Tensor7set_ketE20index_container_type"></span><span id="_CPPv2N7sequant6Tensor7set_ketE20index_container_type"></span><span id="sequant::Tensor::set_ket__index_container_type"></span><span class="target" id="classsequant_1_1_tensor_1a282fcdbf006f829dc57e8d36f27ce81f"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">set_ket</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">index_container_type</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">indices</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant6Tensor7set_ketE20index_container_type" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor3auxEv">
+<span id="_CPPv3NK7sequant6Tensor3auxEv"></span><span id="_CPPv2NK7sequant6Tensor3auxEv"></span><span id="sequant::Tensor::auxC"></span><span class="target" id="classsequant_1_1_tensor_1a0562b36f66729e29a1e9bf73b4b8e131"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">aux</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor3auxEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the aux slot range (empty slots are occupied by null indices) </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant6Tensor7set_auxE20index_container_type">
+<span id="_CPPv3N7sequant6Tensor7set_auxE20index_container_type"></span><span id="_CPPv2N7sequant6Tensor7set_auxE20index_container_type"></span><span id="sequant::Tensor::set_aux__index_container_type"></span><span class="target" id="classsequant_1_1_tensor_1a3fa02676bac96e730725458a7a3599d0"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">set_aux</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">index_container_type</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">indices</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant6Tensor7set_auxE20index_container_type" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor6braketEv">
+<span id="_CPPv3NK7sequant6Tensor6braketEv"></span><span id="_CPPv2NK7sequant6Tensor6braketEv"></span><span id="sequant::Tensor::braketC"></span><span class="target" id="classsequant_1_1_tensor_1a89a6c605e522fbf0c4f7d05b07597ad9"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">braket</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor6braketEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>concatenated view of the bra and ket slot ranges </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor14braket_indicesEv">
+<span id="_CPPv3NK7sequant6Tensor14braket_indicesEv"></span><span id="_CPPv2NK7sequant6Tensor14braket_indicesEv"></span><span id="sequant::Tensor::braket_indicesC"></span><span class="target" id="classsequant_1_1_tensor_1ae1f2b851b588dedbbd8d96571d6da5ec"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">braket_indices</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor14braket_indicesEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>concatenated view of the bra and ket index ranges (i.e., nonempty slots) </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor9braketauxEv">
+<span id="_CPPv3NK7sequant6Tensor9braketauxEv"></span><span id="_CPPv2NK7sequant6Tensor9braketauxEv"></span><span id="sequant::Tensor::braketauxC"></span><span class="target" id="classsequant_1_1_tensor_1a86af9be409a080c6a645f7cf4948fe8a"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">braketaux</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor9braketauxEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>concatenated view of all indices of this tensor (bra, ket and aux) </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor5slotsEv">
+<span id="_CPPv3NK7sequant6Tensor5slotsEv"></span><span id="_CPPv2NK7sequant6Tensor5slotsEv"></span><span id="sequant::Tensor::slotsC"></span><span class="target" id="classsequant_1_1_tensor_1a29591c418320b4785fb42ff995f19882"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">slots</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor5slotsEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>concatenated view of all slots (bra, ket, and aux) </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor17braketaux_indicesEv">
+<span id="_CPPv3NK7sequant6Tensor17braketaux_indicesEv"></span><span id="_CPPv2NK7sequant6Tensor17braketaux_indicesEv"></span><span id="sequant::Tensor::braketaux_indicesC"></span><span class="target" id="classsequant_1_1_tensor_1ae166a5effc91c69c4f513212ffd48f38"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">braketaux_indices</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor17braketaux_indicesEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>concatenated view of all nonnull indices of this tensor (bra, ket and aux) </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor7indicesEv">
+<span id="_CPPv3NK7sequant6Tensor7indicesEv"></span><span id="_CPPv2NK7sequant6Tensor7indicesEv"></span><span id="sequant::Tensor::indicesC"></span><span class="target" id="classsequant_1_1_tensor_1a4022b281f1d202d3be57b64c6492e21c"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">indices</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor7indicesEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>concatenated view of all nonnull indices of this tensor </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor12const_braketEv">
+<span id="_CPPv3NK7sequant6Tensor12const_braketEv"></span><span id="_CPPv2NK7sequant6Tensor12const_braketEv"></span><span id="sequant::Tensor::const_braketC"></span><span class="target" id="classsequant_1_1_tensor_1a8939eb2ea557da894f1febf2b34525bd"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">const_braket</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor12const_braketEv" title="Link to this definition">¶</a><br /></dt>
+<dd><div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>this is to work around broken lookup rules </p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>view of the bra+ket slots </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor20const_braket_indicesEv">
+<span id="_CPPv3NK7sequant6Tensor20const_braket_indicesEv"></span><span id="_CPPv2NK7sequant6Tensor20const_braket_indicesEv"></span><span id="sequant::Tensor::const_braket_indicesC"></span><span class="target" id="classsequant_1_1_tensor_1abeb6a6b5efef8b409ed765fa2a223efb"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">const_braket_indices</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor20const_braket_indicesEv" title="Link to this definition">¶</a><br /></dt>
+<dd><div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>this is to work around broken lookup rules </p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>view of the bra+ket indices </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor15const_braketauxEv">
+<span id="_CPPv3NK7sequant6Tensor15const_braketauxEv"></span><span id="_CPPv2NK7sequant6Tensor15const_braketauxEv"></span><span id="sequant::Tensor::const_braketauxC"></span><span class="target" id="classsequant_1_1_tensor_1a44bacc90cc510a3ce4e2dd40ea6e827f"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">const_braketaux</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor15const_braketauxEv" title="Link to this definition">¶</a><br /></dt>
+<dd><div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>this is to work around broken lookup rules </p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>const view of all slots </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor11const_slotsEv">
+<span id="_CPPv3NK7sequant6Tensor11const_slotsEv"></span><span id="_CPPv2NK7sequant6Tensor11const_slotsEv"></span><span id="sequant::Tensor::const_slotsC"></span><span class="target" id="classsequant_1_1_tensor_1ae77a2d87574769c17ffab55ba09f11ec"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">const_slots</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor11const_slotsEv" title="Link to this definition">¶</a><br /></dt>
+<dd><div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>this is to work around broken lookup rules </p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>const view of all slots </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor23const_braketaux_indicesEv">
+<span id="_CPPv3NK7sequant6Tensor23const_braketaux_indicesEv"></span><span id="_CPPv2NK7sequant6Tensor23const_braketaux_indicesEv"></span><span id="sequant::Tensor::const_braketaux_indicesC"></span><span class="target" id="classsequant_1_1_tensor_1ad078a1d854211d35320254415517f353"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">const_braketaux_indices</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor23const_braketaux_indicesEv" title="Link to this definition">¶</a><br /></dt>
+<dd><div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>this is to work around broken lookup rules </p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>const view of all indices </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor13const_indicesEv">
+<span id="_CPPv3NK7sequant6Tensor13const_indicesEv"></span><span id="_CPPv2NK7sequant6Tensor13const_indicesEv"></span><span id="sequant::Tensor::const_indicesC"></span><span class="target" id="classsequant_1_1_tensor_1a77450e5b831fa7bbd72ea77720a63403"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">const_indices</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor13const_indicesEv" title="Link to this definition">¶</a><br /></dt>
+<dd><div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>this is to work around broken lookup rules </p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>const view of all indices </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor8symmetryEv">
+<span id="_CPPv3NK7sequant6Tensor8symmetryEv"></span><span id="_CPPv2NK7sequant6Tensor8symmetryEv"></span><span id="sequant::Tensor::symmetryC"></span><span class="target" id="classsequant_1_1_tensor_1a533ac85c0ea9379e0c8fcbbafecfa9c2"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485.html#_CPPv4N7sequant8SymmetryE" title="sequant::Symmetry"><span class="n"><span class="pre">Symmetry</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">symmetry</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor8symmetryEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Returns the Symmetry object describing the symmetry of the bra and ket of the <a class="reference internal" href="#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a>, i.e. what effect swapping indices in positions <code class="docutils literal notranslate"><span class="pre">i</span></code> and <code class="docutils literal notranslate"><span class="pre">j</span></code> in <em>either bra or ket</em> has on the elements of the <a class="reference internal" href="#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a>; <a class="reference internal" href="#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a>’s are <em>always assumed</em> to be particle-symmetric, i.e. swapping indices in positions <code class="docutils literal notranslate"><span class="pre">i</span></code> and <code class="docutils literal notranslate"><span class="pre">j</span></code> in <strong>both bra and ket</strong>; The allowed values are <a class="reference internal" href="enum_namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485.html#namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485a386de00ab1fb80295030de7050690544"><span class="std std-ref">Symmetry::Symm</span></a>, <a class="reference internal" href="enum_namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485.html#namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485a95ecdf3325b09349c78f321b3aea57de"><span class="std std-ref">Symmetry::Antisymm</span></a>, and <a class="reference internal" href="enum_namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485.html#namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485ae3ace38d497f2f918e49303270d373dc"><span class="std std-ref">Symmetry::Nonsymm</span></a> </p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the Symmetry object describing the symmetry of the bra and ket of the <a class="reference internal" href="#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a>. </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor15braket_symmetryEv">
+<span id="_CPPv3NK7sequant6Tensor15braket_symmetryEv"></span><span id="_CPPv2NK7sequant6Tensor15braket_symmetryEv"></span><span id="sequant::Tensor::braket_symmetryC"></span><span class="target" id="classsequant_1_1_tensor_1ac23b52042b585ebaa367cba7b376c9fd"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1a8fa350a3e3719764fcc1ce8aeddaea46.html#_CPPv4N7sequant14BraKetSymmetryE" title="sequant::BraKetSymmetry"><span class="n"><span class="pre">BraKetSymmetry</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">braket_symmetry</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor15braket_symmetryEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the BraKetSymmetry object describing the symmetry of the <a class="reference internal" href="#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> under exchange of bra and ket. </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor15column_symmetryEv">
+<span id="_CPPv3NK7sequant6Tensor15column_symmetryEv"></span><span id="_CPPv2NK7sequant6Tensor15column_symmetryEv"></span><span id="sequant::Tensor::column_symmetryC"></span><span class="target" id="classsequant_1_1_tensor_1addd08536bcbef3c798d81d4855c09e0e"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1a9a92bdfb62efcda9f7cbe27751bed88f.html#_CPPv4N7sequant14ColumnSymmetryE" title="sequant::ColumnSymmetry"><span class="n"><span class="pre">ColumnSymmetry</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">column_symmetry</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor15column_symmetryEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the ColumnSymmetry object describing the symmetry of the <a class="reference internal" href="#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> under exchange of <em>columns</em> (i.e., pairs of matching {bra[i],ket[i]} slot bundles). </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor8bra_rankEv">
+<span id="_CPPv3NK7sequant6Tensor8bra_rankEv"></span><span id="_CPPv2NK7sequant6Tensor8bra_rankEv"></span><span id="sequant::Tensor::bra_rankC"></span><span class="target" id="classsequant_1_1_tensor_1a1bb66cbd2d4521ddcb065223eda23e0f"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">bra_rank</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor8bra_rankEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>number of bra slots (some may be occupied by null indices, hence this is the gross rank) </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor12bra_net_rankEv">
+<span id="_CPPv3NK7sequant6Tensor12bra_net_rankEv"></span><span id="_CPPv2NK7sequant6Tensor12bra_net_rankEv"></span><span id="sequant::Tensor::bra_net_rankC"></span><span class="target" id="classsequant_1_1_tensor_1af1668fc966a02da2217901c2dee95b75"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">bra_net_rank</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor12bra_net_rankEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>number of nonnull bra indices (i.e. non-empty slots) </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor8ket_rankEv">
+<span id="_CPPv3NK7sequant6Tensor8ket_rankEv"></span><span id="_CPPv2NK7sequant6Tensor8ket_rankEv"></span><span id="sequant::Tensor::ket_rankC"></span><span class="target" id="classsequant_1_1_tensor_1a63533e637e86995a96eb3df589711d16"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">ket_rank</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor8ket_rankEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>number of ket slots (some may be occupied by null indices, hence this is the gross rank) </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor12ket_net_rankEv">
+<span id="_CPPv3NK7sequant6Tensor12ket_net_rankEv"></span><span id="_CPPv2NK7sequant6Tensor12ket_net_rankEv"></span><span id="sequant::Tensor::ket_net_rankC"></span><span class="target" id="classsequant_1_1_tensor_1acb38a44c3c4e9b5cd430d61d209c9166"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">ket_net_rank</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor12ket_net_rankEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>number of nonnull ket indices (i.e. non-empty slots) </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor8aux_rankEv">
+<span id="_CPPv3NK7sequant6Tensor8aux_rankEv"></span><span id="_CPPv2NK7sequant6Tensor8aux_rankEv"></span><span id="sequant::Tensor::aux_rankC"></span><span class="target" id="classsequant_1_1_tensor_1a92e1cd74bb78789e7765ad497c746a71"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">aux_rank</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor8aux_rankEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>number of aux indices </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor9num_slotsEv">
+<span id="_CPPv3NK7sequant6Tensor9num_slotsEv"></span><span id="_CPPv2NK7sequant6Tensor9num_slotsEv"></span><span id="sequant::Tensor::num_slotsC"></span><span class="target" id="classsequant_1_1_tensor_1a94e0250773024b73eed7b8e961c2ba77"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">num_slots</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor9num_slotsEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>number of slots </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor11num_indicesEv">
+<span id="_CPPv3NK7sequant6Tensor11num_indicesEv"></span><span id="_CPPv2NK7sequant6Tensor11num_indicesEv"></span><span id="sequant::Tensor::num_indicesC"></span><span class="target" id="classsequant_1_1_tensor_1aa218af7cd9ec501e8068107d40ba5a49"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">num_indices</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor11num_indicesEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>number of indices </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor4rankEv">
+<span id="_CPPv3NK7sequant6Tensor4rankEv"></span><span id="_CPPv2NK7sequant6Tensor4rankEv"></span><span id="sequant::Tensor::rankC"></span><span class="target" id="classsequant_1_1_tensor_1a494e5378467490f685d87f02ae56577d"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">rank</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor4rankEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Throws<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span><span class="cpp-expr sig sig-inline cpp"><a class="reference internal" href="classsequant_1_1_exception.html#_CPPv4N7sequant9ExceptionE" title="sequant::Exception"><span class="n">Exception</span></a></span></span> – if bra and ket ranks do not match </p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>number of indices in bra/ket </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor8to_latexEv">
+<span id="_CPPv3NK7sequant6Tensor8to_latexEv"></span><span id="_CPPv2NK7sequant6Tensor8to_latexEv"></span><span id="sequant::Tensor::to_latexC"></span><span class="target" id="classsequant_1_1_tensor_1ad340b843250a5c2c971bb8052bd8c0a4"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">wstring</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">to_latex</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor8to_latexEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the string representation of <code class="docutils literal notranslate"><span class="pre">this</span></code> in the LaTeX format </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant6Tensor12canonicalizeE19CanonicalizeOptions">
+<span id="_CPPv3N7sequant6Tensor12canonicalizeE19CanonicalizeOptions"></span><span id="_CPPv2N7sequant6Tensor12canonicalizeE19CanonicalizeOptions"></span><span id="sequant::Tensor::canonicalize__CanonicalizeOptions"></span><span class="target" id="classsequant_1_1_tensor_1a2c94e1c7f141d0a46e6130082a663cc8"></span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_expr_ptr.html#_CPPv4N7sequant7ExprPtrE" title="sequant::ExprPtr"><span class="n"><span class="pre">ExprPtr</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">canonicalize</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="structsequant_1_1_canonicalize_options.html#_CPPv4N7sequant19CanonicalizeOptionsE" title="sequant::CanonicalizeOptions"><span class="n"><span class="pre">CanonicalizeOptions</span></span></a><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="p"><span class="pre">{</span></span><span class="p"><span class="pre">}</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant6Tensor12canonicalizeE19CanonicalizeOptions" title="Link to this definition">¶</a><br /></dt>
+<dd><div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>this performs rapid canonicalization only </p>
+</div>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant6Tensor7adjointEv">
+<span id="_CPPv3N7sequant6Tensor7adjointEv"></span><span id="_CPPv2N7sequant6Tensor7adjointEv"></span><span id="sequant::Tensor::adjoint"></span><span class="target" id="classsequant_1_1_tensor_1a6aa64e238c63a9ecfb6705a22d5f0af2"></span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">adjoint</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant6Tensor7adjointEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>adjoint of a <a class="reference internal" href="#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> swaps its bra and ket </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4II00DpE0DpEN7sequant6Tensor17transform_indicesEbRK3MapI5Index5IndexDp4ArgsE">
+<span id="_CPPv3II00DpE0DpEN7sequant6Tensor17transform_indicesERK3MapI5Index5IndexDp4ArgsE"></span><span id="_CPPv2II00DpE0DpEN7sequant6Tensor17transform_indicesERK3MapI5Index5IndexDp4ArgsE"></span><span class="k"><span class="pre">template</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">template</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">typename</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="k"><span class="pre">typename</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="k"><span class="pre">typename</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="n"><span class="pre">Args</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="k"><span class="pre">class</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Map</span></span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="k"><span class="pre">typename</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="sig-name descname"><span class="n"><span class="pre">Args</span></span></span><span class="p"><span class="pre">&gt;</span></span><br /><span class="target" id="classsequant_1_1_tensor_1a37e34de6e941b8c7aa619492c8ffec5c"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">transform_indices</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4II00DpE0DpEN7sequant6Tensor17transform_indicesEbRK3MapI5Index5IndexDp4ArgsE" title="sequant::Tensor::transform_indices::Map"><span class="n"><span class="pre">Map</span></span></a><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4II00DpE0DpEN7sequant6Tensor17transform_indicesEbRK3MapI5Index5IndexDp4ArgsE" title="sequant::Tensor::transform_indices::Args"><span class="n"><span class="pre">Args</span></span></a><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">index_map</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4II00DpE0DpEN7sequant6Tensor17transform_indicesEbRK3MapI5Index5IndexDp4ArgsE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Replaces indices using the index map </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>index_map</strong> – maps <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a> to <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a></p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>true if one or more indices changed </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor7type_idEv">
+<span id="_CPPv3NK7sequant6Tensor7type_idEv"></span><span id="_CPPv2NK7sequant6Tensor7type_idEv"></span><span id="sequant::Tensor::type_idC"></span><span class="target" id="classsequant_1_1_tensor_1ab3d6a6af05fa3628add62f67f8ee3486"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">type_id_type</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">type_id</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor7type_idEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Computes and returns the derived type identifier <div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="classsequant_1_1_expr.html#classsequant_1_1_expr_1a11971a85b7a115d063b1d4c7e5b36ce9"><span class="std std-ref">Expr::get_type_id</span></a></p>
+</div>
+</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>this function must be overridden in the derived class </p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the hash value for this <a class="reference internal" href="classsequant_1_1_expr.html#classsequant_1_1_expr"><span class="std std-ref">Expr</span></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor5cloneEv">
+<span id="_CPPv3NK7sequant6Tensor5cloneEv"></span><span id="_CPPv2NK7sequant6Tensor5cloneEv"></span><span id="sequant::Tensor::cloneC"></span><span class="target" id="classsequant_1_1_tensor_1a18206224d78a903cd9875984c4e16241"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_expr_ptr.html#_CPPv4N7sequant7ExprPtrE" title="sequant::ExprPtr"><span class="n"><span class="pre">ExprPtr</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">clone</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor5cloneEv" title="Link to this definition">¶</a><br /></dt>
+<dd><div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>- must be overridden in the derived class.<ul class="simple">
+<li><p>the default implementation throws an exception </p></li>
+</ul>
+</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>a clone of this object, i.e. an object that is equal to <code class="docutils literal notranslate"><span class="pre">this</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor10reset_tagsEv">
+<span id="_CPPv3NK7sequant6Tensor10reset_tagsEv"></span><span id="_CPPv2NK7sequant6Tensor10reset_tagsEv"></span><span id="sequant::Tensor::reset_tagsC"></span><span class="target" id="classsequant_1_1_tensor_1a5adb7781837d2c0706e1a1cfcc52da6f"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">reset_tags</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor10reset_tagsEv" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6Tensor14bra_hash_valueEv">
+<span id="_CPPv3NK7sequant6Tensor14bra_hash_valueEv"></span><span id="_CPPv2NK7sequant6Tensor14bra_hash_valueEv"></span><span id="sequant::Tensor::bra_hash_valueC"></span><span class="target" id="classsequant_1_1_tensor_1ae9369d532f18a0a97c5cdf07b92ae844"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="n"><span class="pre">hash_type</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">bra_hash_value</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant6Tensor14bra_hash_valueEv" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant6TensorltERK14AbstractTensor">
+<span id="_CPPv3NK7sequant6TensorltERK14AbstractTensor"></span><span id="_CPPv2NK7sequant6TensorltERK14AbstractTensor"></span><span id="sequant::Tensor::lt-operator__AbstractTensorCRC"></span><span class="target" id="classsequant_1_1_tensor_1aadb7e833acacebd69426e316d1fd2ca2"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="k"><span class="pre">operator</span></span><span class="o"><span class="pre">&lt;</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_abstract_tensor.html#_CPPv4N7sequant14AbstractTensorE" title="sequant::AbstractTensor"><span class="n"><span class="pre">AbstractTensor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">other</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">final</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant6TensorltERK14AbstractTensor" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+</dd></dl>
+
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, SeQuant developers
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            <div class="last-updated">
+              Last updated on Feb 27, 2026 8:35:02 PM</div>
+          </div>
+          <div class="right-details">
+            <div class="icons">
+              <a class="muted-link fa-brands fa-solid fa-github fa-2x" href="https://github.com/ValeevGroup/SeQuant" aria-label="GitHub"></a>
+              
+            </div>
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Class Tensor</a><ul>
+<li><a class="reference internal" href="#nested-relationships">Nested Relationships</a><ul>
+<li><a class="reference internal" href="#nested-types">Nested Types</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#inheritance-relationships">Inheritance Relationships</a><ul>
+<li><a class="reference internal" href="#base-types">Base Types</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#class-documentation">Class Documentation</a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant6TensorE"><code class="docutils literal notranslate"><span class="pre">sequant::Tensor</span></code></a><ul>
+<li><a class="reference internal" href="#_CPPv4I_24basic_string_convertible_27range_of_castables_to_index_27range_of_castables_to_indexEN7sequant6Tensor6TensorERR1SRK3braI11IndexRange1ERK3ketI11IndexRange2E8Symmetry14BraKetSymmetry14ColumnSymmetry"><code class="docutils literal notranslate"><span class="pre">Tensor()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4I_24basic_string_convertible_27range_of_castables_to_index_27range_of_castables_to_index_27range_of_castables_to_indexEN7sequant6Tensor6TensorERR1SRK3braI11IndexRange1ERK3ketI11IndexRange2ERK3auxI11IndexRange3E8Symmetry14BraKetSymmetry14ColumnSymmetry"><code class="docutils literal notranslate"><span class="pre">Tensor()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4I_24basic_string_convertibleEN7sequant6Tensor6TensorERR1SRR3braI20index_container_typeERR3ketI20index_container_typeE8Symmetry14BraKetSymmetry14ColumnSymmetry"><code class="docutils literal notranslate"><span class="pre">Tensor()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4I_24basic_string_convertibleEN7sequant6Tensor6TensorERR1SRR3braI20index_container_typeERR3ketI20index_container_typeERR3auxI20index_container_typeE8Symmetry14BraKetSymmetry14ColumnSymmetry"><code class="docutils literal notranslate"><span class="pre">Tensor()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant6Tensor6TensorEv"><code class="docutils literal notranslate"><span class="pre">Tensor()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant6TensorD0Ev"><code class="docutils literal notranslate"><span class="pre">~Tensor()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6TensorcvbEv"><code class="docutils literal notranslate"><span class="pre">operator</span> <span class="pre">bool()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor5labelEv"><code class="docutils literal notranslate"><span class="pre">label()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant6Tensor9set_labelENSt7wstringE"><code class="docutils literal notranslate"><span class="pre">set_label()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor3braEv"><code class="docutils literal notranslate"><span class="pre">bra()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant6Tensor7set_braE20index_container_type"><code class="docutils literal notranslate"><span class="pre">set_bra()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor3ketEv"><code class="docutils literal notranslate"><span class="pre">ket()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant6Tensor7set_ketE20index_container_type"><code class="docutils literal notranslate"><span class="pre">set_ket()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor3auxEv"><code class="docutils literal notranslate"><span class="pre">aux()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant6Tensor7set_auxE20index_container_type"><code class="docutils literal notranslate"><span class="pre">set_aux()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor6braketEv"><code class="docutils literal notranslate"><span class="pre">braket()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor14braket_indicesEv"><code class="docutils literal notranslate"><span class="pre">braket_indices()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor9braketauxEv"><code class="docutils literal notranslate"><span class="pre">braketaux()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor5slotsEv"><code class="docutils literal notranslate"><span class="pre">slots()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor17braketaux_indicesEv"><code class="docutils literal notranslate"><span class="pre">braketaux_indices()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor7indicesEv"><code class="docutils literal notranslate"><span class="pre">indices()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor12const_braketEv"><code class="docutils literal notranslate"><span class="pre">const_braket()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor20const_braket_indicesEv"><code class="docutils literal notranslate"><span class="pre">const_braket_indices()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor15const_braketauxEv"><code class="docutils literal notranslate"><span class="pre">const_braketaux()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor11const_slotsEv"><code class="docutils literal notranslate"><span class="pre">const_slots()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor23const_braketaux_indicesEv"><code class="docutils literal notranslate"><span class="pre">const_braketaux_indices()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor13const_indicesEv"><code class="docutils literal notranslate"><span class="pre">const_indices()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor8symmetryEv"><code class="docutils literal notranslate"><span class="pre">symmetry()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor15braket_symmetryEv"><code class="docutils literal notranslate"><span class="pre">braket_symmetry()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor15column_symmetryEv"><code class="docutils literal notranslate"><span class="pre">column_symmetry()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor8bra_rankEv"><code class="docutils literal notranslate"><span class="pre">bra_rank()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor12bra_net_rankEv"><code class="docutils literal notranslate"><span class="pre">bra_net_rank()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor8ket_rankEv"><code class="docutils literal notranslate"><span class="pre">ket_rank()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor12ket_net_rankEv"><code class="docutils literal notranslate"><span class="pre">ket_net_rank()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor8aux_rankEv"><code class="docutils literal notranslate"><span class="pre">aux_rank()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor9num_slotsEv"><code class="docutils literal notranslate"><span class="pre">num_slots()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor11num_indicesEv"><code class="docutils literal notranslate"><span class="pre">num_indices()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor4rankEv"><code class="docutils literal notranslate"><span class="pre">rank()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor8to_latexEv"><code class="docutils literal notranslate"><span class="pre">to_latex()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant6Tensor12canonicalizeE19CanonicalizeOptions"><code class="docutils literal notranslate"><span class="pre">canonicalize()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant6Tensor7adjointEv"><code class="docutils literal notranslate"><span class="pre">adjoint()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4II00DpE0DpEN7sequant6Tensor17transform_indicesEbRK3MapI5Index5IndexDp4ArgsE"><code class="docutils literal notranslate"><span class="pre">transform_indices()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor7type_idEv"><code class="docutils literal notranslate"><span class="pre">type_id()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor5cloneEv"><code class="docutils literal notranslate"><span class="pre">clone()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor10reset_tagsEv"><code class="docutils literal notranslate"><span class="pre">reset_tags()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6Tensor14bra_hash_valueEv"><code class="docutils literal notranslate"><span class="pre">bra_hash_value()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant6TensorltERK14AbstractTensor"><code class="docutils literal notranslate"><span class="pre">operator&lt;()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script src="../_static/bootstrap-treeview/bootstrap-treeview.min.js?v=6a1e96b4"></script>
+    </body>
+</html>

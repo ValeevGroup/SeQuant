@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a64bb9eb3c5ebf87ec703f074f53d4dbf:
+
+Variable sequant::io::serialization::v1::parse::addend
+======================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_deserialize.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::io::serialization::v1::parse::addend
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1opt_1a48a8bef6af07122aed95dc25a3441546:
+
+Variable sequant::opt::lift_tensor
+==================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_fusion.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::opt::lift_tensor
+   :project: SeQuant

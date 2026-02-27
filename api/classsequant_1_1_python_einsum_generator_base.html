@@ -1,0 +1,820 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html">
+        <link rel="prefetch" href="../_static/logo.svg" as="image">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>Template Class PythonEinsumGeneratorBase - SeQuant Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/bootstrap-treeview/bootstrap-treeview.min.css?v=8176a87d" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=821744c5" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --sidebar-item-font-size: 0.95em;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">SeQuant Documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="../_static/logo.svg" alt="Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">User</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/getting_started/index.html">Getting started</a><input aria-label="Toggle navigation of Getting started" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/wick.html">Wick’s Theorem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/index_spaces.html">Register Index Spaces</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/operators.html">Operators</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../user/getting_started/installing.html">Installation</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/guide/index.html">User Guide</a><input aria-label="Toggle navigation of User Guide" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/operator.html">Operator Interface for Symbolic Many-Body Algebra</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/cc.html">Coupled-Cluster Class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/io.html">I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/evaluation.html">Evaluation Trace Analysis Using Nushell</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../developer/index.html">Developer docs</a><input aria-label="Toggle navigation of Developer docs" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../developer/documentation.html">Documentation Guide</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">API reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Maintainer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../maintainer/index.html">Maintainer docs</a><input aria-label="Toggle navigation of Maintainer docs" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../maintainer/release.html">Release Guide</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">See Also</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/tiledarray">TiledArray</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/mpqc">Massively Parallel Quantum Chemistry</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io">Valeev Research Group</a></li>
+</ul>
+
+</div></div>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="../_sources/api/classsequant_1_1_python_einsum_generator_base.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="template-class-pythoneinsumgeneratorbase">
+<span id="exhale-class-classsequant-1-1-python-einsum-generator-base"></span><h1>Template Class PythonEinsumGeneratorBase<a class="headerlink" href="#template-class-pythoneinsumgeneratorbase" title="Link to this heading">¶</a></h1>
+<ul class="simple">
+<li><p>Defined in <a class="reference internal" href="file_SeQuant_core_export_python_einsum.hpp.html#file-sequant-core-export-python-einsum-hpp"><span class="std std-ref">File python_einsum.hpp</span></a></p></li>
+</ul>
+<section id="inheritance-relationships">
+<h2>Inheritance Relationships<a class="headerlink" href="#inheritance-relationships" title="Link to this heading">¶</a></h2>
+<section id="base-type">
+<h3>Base Type<a class="headerlink" href="#base-type" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">public</span> <span class="pre">sequant::Generator&lt;</span> <span class="pre">Context</span> <span class="pre">&gt;</span></code> (<a class="reference internal" href="classsequant_1_1_generator.html#exhale-class-classsequant-1-1-generator"><span class="std std-ref">Template Class Generator</span></a>)</p></li>
+</ul>
+</section>
+</section>
+<section id="class-documentation">
+<h2>Class Documentation<a class="headerlink" href="#class-documentation" title="Link to this heading">¶</a></h2>
+<dl class="cpp class">
+<dt class="sig sig-object cpp" id="_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE">
+<span id="_CPPv3I0EN7sequant25PythonEinsumGeneratorBaseE"></span><span id="_CPPv2I0EN7sequant25PythonEinsumGeneratorBaseE"></span><span class="k"><span class="pre">template</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">typename</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Context</span></span></span><span class="p"><span class="pre">&gt;</span></span><br /><span class="target" id="classsequant_1_1_python_einsum_generator_base"></span><span class="k"><span class="pre">class</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">PythonEinsumGeneratorBase</span></span></span><span class="w"> </span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="k"><span class="pre">public</span></span><span class="w"> </span><span class="n"><span class="pre">sequant</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="classsequant_1_1_generator.html#_CPPv4I0EN7sequant9GeneratorE" title="sequant::Generator"><span class="n"><span class="pre">Generator</span></span></a><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&gt;</span></span><a class="headerlink" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Base generator for producing Python code using einsum Provides common functionality shared by NumPy and PyTorch backends </p>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-functions">Public Functions</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant25PythonEinsumGeneratorBase25PythonEinsumGeneratorBaseEv">
+<span id="_CPPv3N7sequant25PythonEinsumGeneratorBase25PythonEinsumGeneratorBaseEv"></span><span id="_CPPv2N7sequant25PythonEinsumGeneratorBase25PythonEinsumGeneratorBaseEv"></span><span id="sequant::PythonEinsumGeneratorBase::PythonEinsumGeneratorBase"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a1c6e8e70edccdb02d472b4f5b915d630"></span><span class="sig-name descname"><span class="n"><span class="pre">PythonEinsumGeneratorBase</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">default</span></span><a class="headerlink" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase25PythonEinsumGeneratorBaseEv" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant25PythonEinsumGeneratorBaseD0Ev">
+<span id="_CPPv3N7sequant25PythonEinsumGeneratorBaseD0Ev"></span><span id="_CPPv2N7sequant25PythonEinsumGeneratorBaseD0Ev"></span><span id="sequant::PythonEinsumGeneratorBase::~PythonEinsumGeneratorBase"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a1a712e6078a8773d53052480c6b80ee7"></span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">~PythonEinsumGeneratorBase</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">default</span></span><a class="headerlink" href="#_CPPv4N7sequant25PythonEinsumGeneratorBaseD0Ev" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant25PythonEinsumGeneratorBase23supports_named_sectionsEv">
+<span id="_CPPv3NK7sequant25PythonEinsumGeneratorBase23supports_named_sectionsEv"></span><span id="_CPPv2NK7sequant25PythonEinsumGeneratorBase23supports_named_sectionsEv"></span><span id="sequant::PythonEinsumGeneratorBase::supports_named_sectionsC"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a6355d5e1eabaf3f6f312d8ee8d7c3239"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">supports_named_sections</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase23supports_named_sectionsEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Whether this generator supports named sections </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant25PythonEinsumGeneratorBase23requires_named_sectionsEv">
+<span id="_CPPv3NK7sequant25PythonEinsumGeneratorBase23requires_named_sectionsEv"></span><span id="_CPPv2NK7sequant25PythonEinsumGeneratorBase23requires_named_sectionsEv"></span><span id="sequant::PythonEinsumGeneratorBase::requires_named_sectionsC"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1af2a03d5b5a5366a920eee271c670fdc7"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">requires_named_sections</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase23requires_named_sectionsEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Whether this generator requires names (that is, it can’t deal with code outside of named sections) </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant25PythonEinsumGeneratorBase23index_declaration_scopeEv">
+<span id="_CPPv3NK7sequant25PythonEinsumGeneratorBase23index_declaration_scopeEv"></span><span id="_CPPv2NK7sequant25PythonEinsumGeneratorBase23index_declaration_scopeEv"></span><span id="sequant::PythonEinsumGeneratorBase::index_declaration_scopeC"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1aec35c2684ada5ac25892da2bb560c894"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1ad8b7e1b22081ba146172f0dbcdefc90f.html#_CPPv4N7sequant16DeclarationScopeE" title="sequant::DeclarationScope"><span class="n"><span class="pre">DeclarationScope</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">index_declaration_scope</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase23index_declaration_scopeEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The scope at which this generator would like declare indices </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant25PythonEinsumGeneratorBase26variable_declaration_scopeEv">
+<span id="_CPPv3NK7sequant25PythonEinsumGeneratorBase26variable_declaration_scopeEv"></span><span id="_CPPv2NK7sequant25PythonEinsumGeneratorBase26variable_declaration_scopeEv"></span><span id="sequant::PythonEinsumGeneratorBase::variable_declaration_scopeC"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a041c36187d9a6d559e434c0825474b6c"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1ad8b7e1b22081ba146172f0dbcdefc90f.html#_CPPv4N7sequant16DeclarationScopeE" title="sequant::DeclarationScope"><span class="n"><span class="pre">DeclarationScope</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">variable_declaration_scope</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase26variable_declaration_scopeEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The scope at which this generator would like declare variables </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant25PythonEinsumGeneratorBase24tensor_declaration_scopeEv">
+<span id="_CPPv3NK7sequant25PythonEinsumGeneratorBase24tensor_declaration_scopeEv"></span><span id="_CPPv2NK7sequant25PythonEinsumGeneratorBase24tensor_declaration_scopeEv"></span><span id="sequant::PythonEinsumGeneratorBase::tensor_declaration_scopeC"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a63924f8b36f4b67be9cf4f23e4013c08"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1ad8b7e1b22081ba146172f0dbcdefc90f.html#_CPPv4N7sequant16DeclarationScopeE" title="sequant::DeclarationScope"><span class="n"><span class="pre">DeclarationScope</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">tensor_declaration_scope</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase24tensor_declaration_scopeEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The scope at which this generator would like declare tensors </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant25PythonEinsumGeneratorBase16prunable_scalarsEv">
+<span id="_CPPv3NK7sequant25PythonEinsumGeneratorBase16prunable_scalarsEv"></span><span id="_CPPv2NK7sequant25PythonEinsumGeneratorBase16prunable_scalarsEv"></span><span id="sequant::PythonEinsumGeneratorBase::prunable_scalarsC"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a7586d51dcf153e8d49d282995784219a"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1ab2436bb536653f532de6de891bc4430f.html#_CPPv4N7sequant15PrunableScalarsE" title="sequant::PrunableScalars"><span class="n"><span class="pre">PrunableScalars</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">prunable_scalars</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase16prunable_scalarsEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>What kinds of scalars may be pruned from the expression tree in order to avoid binary computation steps for them. Instead, all pruned scalars will be multiplied with whatever binary expression remains after pruning. This means that scalar pruning may lead to non-binary expressions that need to be exported by this generator. </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant25PythonEinsumGeneratorBase9representERK5IndexRK7Context">
+<span id="_CPPv3NK7sequant25PythonEinsumGeneratorBase9representERK5IndexRK7Context"></span><span id="_CPPv2NK7sequant25PythonEinsumGeneratorBase9representERK5IndexRK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::represent__IndexCR.ContextCRC"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1af16abf7387acc333b01b491206bc4fe8"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">represent</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">idx</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase9representERK5IndexRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A backend-specific string representation of the given <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant25PythonEinsumGeneratorBase9representERK6TensorRK7Context">
+<span id="_CPPv3NK7sequant25PythonEinsumGeneratorBase9representERK6TensorRK7Context"></span><span id="_CPPv2NK7sequant25PythonEinsumGeneratorBase9representERK6TensorRK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::represent__TensorCR.ContextCRC"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a92ad8a0678fec99b610075eaa157321d"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">represent</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor.html#_CPPv4N7sequant6TensorE" title="sequant::Tensor"><span class="n"><span class="pre">Tensor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">tensor</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase9representERK6TensorRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A backend-specific string representation of the given <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant25PythonEinsumGeneratorBase9representERK8VariableRK7Context">
+<span id="_CPPv3NK7sequant25PythonEinsumGeneratorBase9representERK8VariableRK7Context"></span><span id="_CPPv2NK7sequant25PythonEinsumGeneratorBase9representERK8VariableRK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::represent__VariableCR.ContextCRC"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a7522be1da53fec7984fa4f4d4401d3b6"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">represent</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_variable.html#_CPPv4N7sequant8VariableE" title="sequant::Variable"><span class="n"><span class="pre">Variable</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">variable</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase9representERK8VariableRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A backend-specific string representation of the given <a class="reference internal" href="classsequant_1_1_variable.html#classsequant_1_1_variable"><span class="std std-ref">Variable</span></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant25PythonEinsumGeneratorBase9representERK8ConstantRK7Context">
+<span id="_CPPv3NK7sequant25PythonEinsumGeneratorBase9representERK8ConstantRK7Context"></span><span id="_CPPv2NK7sequant25PythonEinsumGeneratorBase9representERK8ConstantRK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::represent__ConstantCR.ContextCRC"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a12f1701855c7965856b3469f36d23414"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">represent</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_constant.html#_CPPv4N7sequant8ConstantE" title="sequant::Constant"><span class="n"><span class="pre">Constant</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">constant</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase9representERK8ConstantRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A backend-specific string representation of the given <a class="reference internal" href="classsequant_1_1_constant.html#classsequant_1_1_constant"><span class="std std-ref">Constant</span></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant25PythonEinsumGeneratorBase6unloadERK6TensorRK7Context">
+<span id="_CPPv3N7sequant25PythonEinsumGeneratorBase6unloadERK6TensorRK7Context"></span><span id="_CPPv2N7sequant25PythonEinsumGeneratorBase6unloadERK6TensorRK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::unload__TensorCR.ContextCR"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1ae39c8f49bc38c8f80a378f0ebd59d636"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">unload</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor.html#_CPPv4N7sequant6TensorE" title="sequant::Tensor"><span class="n"><span class="pre">Tensor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">tensor</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase6unloadERK6TensorRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for unloading the given tensor. This is expected to discard the tensor without saving its current value. However, the tensor must still be loadable afterwards. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant25PythonEinsumGeneratorBase7destroyERK6TensorRK7Context">
+<span id="_CPPv3N7sequant25PythonEinsumGeneratorBase7destroyERK6TensorRK7Context"></span><span id="_CPPv2N7sequant25PythonEinsumGeneratorBase7destroyERK6TensorRK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::destroy__TensorCR.ContextCR"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1ab012795dc0232502b221c1ff0220c988"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">destroy</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor.html#_CPPv4N7sequant6TensorE" title="sequant::Tensor"><span class="n"><span class="pre">Tensor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">tensor</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase7destroyERK6TensorRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for destroying the given tensor. Destroying means that this tensor will never be needed again and is no longer required to be loadable. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant25PythonEinsumGeneratorBase6createERK8VariablebRK7Context">
+<span id="_CPPv3N7sequant25PythonEinsumGeneratorBase6createERK8VariablebRK7Context"></span><span id="_CPPv2N7sequant25PythonEinsumGeneratorBase6createERK8VariablebRK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::create__VariableCR.b.ContextCR"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a295ddcf21e96dcb27b89bee5ed7a4030"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">create</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_variable.html#_CPPv4N7sequant8VariableE" title="sequant::Variable"><span class="n"><span class="pre">Variable</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">variable</span></span>, <span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">zero_init</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase6createERK8VariablebRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for creating the given variable. This is expected to make the created variable available for further use. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant25PythonEinsumGeneratorBase11set_to_zeroERK8VariableRK7Context">
+<span id="_CPPv3N7sequant25PythonEinsumGeneratorBase11set_to_zeroERK8VariableRK7Context"></span><span id="_CPPv2N7sequant25PythonEinsumGeneratorBase11set_to_zeroERK8VariableRK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::set_to_zero__VariableCR.ContextCR"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a5bf7db5edf8298a9a39861c4a23c53eb"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">set_to_zero</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_variable.html#_CPPv4N7sequant8VariableE" title="sequant::Variable"><span class="n"><span class="pre">Variable</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">variable</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase11set_to_zeroERK8VariableRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for setting the given variable to zero. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant25PythonEinsumGeneratorBase6unloadERK8VariableRK7Context">
+<span id="_CPPv3N7sequant25PythonEinsumGeneratorBase6unloadERK8VariableRK7Context"></span><span id="_CPPv2N7sequant25PythonEinsumGeneratorBase6unloadERK8VariableRK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::unload__VariableCR.ContextCR"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1aecdbf158afebeed588062c51c832ac30"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">unload</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_variable.html#_CPPv4N7sequant8VariableE" title="sequant::Variable"><span class="n"><span class="pre">Variable</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">variable</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase6unloadERK8VariableRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for unloading the given variable. This is expected to discard the variable without saving its current value. However, the variable must still be loadable afterwards. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant25PythonEinsumGeneratorBase7destroyERK8VariableRK7Context">
+<span id="_CPPv3N7sequant25PythonEinsumGeneratorBase7destroyERK8VariableRK7Context"></span><span id="_CPPv2N7sequant25PythonEinsumGeneratorBase7destroyERK8VariableRK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::destroy__VariableCR.ContextCR"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1affc0999eec3c25bbf7af8c33ca8ee850"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">destroy</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_variable.html#_CPPv4N7sequant8VariableE" title="sequant::Variable"><span class="n"><span class="pre">Variable</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">variable</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase7destroyERK8VariableRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for destroying the given variable. Destroying means that this variable will never be needed again and is no longer required to be loadable. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant25PythonEinsumGeneratorBase7computeERK4ExprRK6TensorRK7Context">
+<span id="_CPPv3N7sequant25PythonEinsumGeneratorBase7computeERK4ExprRK6TensorRK7Context"></span><span id="_CPPv2N7sequant25PythonEinsumGeneratorBase7computeERK4ExprRK6TensorRK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::compute__ExprCR.TensorCR.ContextCR"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a622c4f8fbb82268cace6aa19db3edf00"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">compute</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_expr.html#_CPPv4N7sequant4ExprE" title="sequant::Expr"><span class="n"><span class="pre">Expr</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">expression</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor.html#_CPPv4N7sequant6TensorE" title="sequant::Tensor"><span class="n"><span class="pre">Tensor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">result</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase7computeERK4ExprRK6TensorRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for encoding the computation of the given expression. The result is expected to be written into the provided <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a>. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant25PythonEinsumGeneratorBase7computeERK4ExprRK8VariableRK7Context">
+<span id="_CPPv3N7sequant25PythonEinsumGeneratorBase7computeERK4ExprRK8VariableRK7Context"></span><span id="_CPPv2N7sequant25PythonEinsumGeneratorBase7computeERK4ExprRK8VariableRK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::compute__ExprCR.VariableCR.ContextCR"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1ae9d1f00f129fac4da34e43102791a451"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">compute</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_expr.html#_CPPv4N7sequant4ExprE" title="sequant::Expr"><span class="n"><span class="pre">Expr</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">expression</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_variable.html#_CPPv4N7sequant8VariableE" title="sequant::Variable"><span class="n"><span class="pre">Variable</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">result</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase7computeERK4ExprRK8VariableRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for encoding the computation of the given expression. The result is expected to be written into the provided <a class="reference internal" href="classsequant_1_1_variable.html#classsequant_1_1_variable"><span class="std std-ref">Variable</span></a>. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant25PythonEinsumGeneratorBase7declareERK5IndexRK7Context">
+<span id="_CPPv3N7sequant25PythonEinsumGeneratorBase7declareERK5IndexRK7Context"></span><span id="_CPPv2N7sequant25PythonEinsumGeneratorBase7declareERK5IndexRK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::declare__IndexCR.ContextCR"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a27a6317b0889689780efda622615877c"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">declare</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="p"><span class="pre">&amp;</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase7declareERK5IndexRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for declaring the provided <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a>. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant25PythonEinsumGeneratorBase7declareERK8Variable8UsageSetRK7Context">
+<span id="_CPPv3N7sequant25PythonEinsumGeneratorBase7declareERK8Variable8UsageSetRK7Context"></span><span id="_CPPv2N7sequant25PythonEinsumGeneratorBase7declareERK8Variable8UsageSetRK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::declare__VariableCR.UsageSet.ContextCR"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a3460484f836e00997a526119e9eeee28"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">declare</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_variable.html#_CPPv4N7sequant8VariableE" title="sequant::Variable"><span class="n"><span class="pre">Variable</span></span></a><span class="p"><span class="pre">&amp;</span></span>, <a class="reference internal" href="classsequant_1_1_usage_set.html#_CPPv4N7sequant8UsageSetE" title="sequant::UsageSet"><span class="n"><span class="pre">UsageSet</span></span></a>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase7declareERK8Variable8UsageSetRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for declaring the provided <a class="reference internal" href="classsequant_1_1_variable.html#classsequant_1_1_variable"><span class="std std-ref">Variable</span></a> </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>variable</strong> – The <a class="reference internal" href="classsequant_1_1_variable.html#classsequant_1_1_variable"><span class="std std-ref">Variable</span></a> to declare </p></li>
+<li><p><strong>usage</strong> – A <a class="reference internal" href="classsequant_1_1_usage_set.html#classsequant_1_1_usage_set"><span class="std std-ref">UsageSet</span></a> describing how the <a class="reference internal" href="classsequant_1_1_variable.html#classsequant_1_1_variable"><span class="std std-ref">Variable</span></a> will be used in the code </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant25PythonEinsumGeneratorBase7declareERK6Tensor8UsageSetRK7Context">
+<span id="_CPPv3N7sequant25PythonEinsumGeneratorBase7declareERK6Tensor8UsageSetRK7Context"></span><span id="_CPPv2N7sequant25PythonEinsumGeneratorBase7declareERK6Tensor8UsageSetRK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::declare__TensorCR.UsageSet.ContextCR"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1aa18edf74247d8fb25456ec2293d49254"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">declare</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor.html#_CPPv4N7sequant6TensorE" title="sequant::Tensor"><span class="n"><span class="pre">Tensor</span></span></a><span class="p"><span class="pre">&amp;</span></span>, <a class="reference internal" href="classsequant_1_1_usage_set.html#_CPPv4N7sequant8UsageSetE" title="sequant::UsageSet"><span class="n"><span class="pre">UsageSet</span></span></a>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase7declareERK6Tensor8UsageSetRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for declaring the provided <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>variable</strong> – The <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> to declare </p></li>
+<li><p><strong>usage</strong> – A <a class="reference internal" href="classsequant_1_1_usage_set.html#classsequant_1_1_usage_set"><span class="std std-ref">UsageSet</span></a> describing how the <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> will be used in the code </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant25PythonEinsumGeneratorBase20all_indices_declaredENSt6size_tERK7Context">
+<span id="_CPPv3N7sequant25PythonEinsumGeneratorBase20all_indices_declaredENSt6size_tERK7Context"></span><span id="_CPPv2N7sequant25PythonEinsumGeneratorBase20all_indices_declaredENSt6size_tERK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::all_indices_declared__std::s.ContextCR"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1aa47468ab02f71100d70f740509de5ab6"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">all_indices_declared</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase20all_indices_declaredENSt6size_tERK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Callback signalling that all indices have been declared </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>amount</strong> – The amount of indices that have been declared </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant25PythonEinsumGeneratorBase22all_variables_declaredENSt6size_tERK7Context">
+<span id="_CPPv3N7sequant25PythonEinsumGeneratorBase22all_variables_declaredENSt6size_tERK7Context"></span><span id="_CPPv2N7sequant25PythonEinsumGeneratorBase22all_variables_declaredENSt6size_tERK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::all_variables_declared__std::s.ContextCR"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a2d91d1485c1fceaedfe9477b09c6353f"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">all_variables_declared</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase22all_variables_declaredENSt6size_tERK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Callback signalling that all variables have been declared </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>amount</strong> – The amount of variables that have been declared </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant25PythonEinsumGeneratorBase20all_tensors_declaredENSt6size_tERK7Context">
+<span id="_CPPv3N7sequant25PythonEinsumGeneratorBase20all_tensors_declaredENSt6size_tERK7Context"></span><span id="_CPPv2N7sequant25PythonEinsumGeneratorBase20all_tensors_declaredENSt6size_tERK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::all_tensors_declared__std::s.ContextCR"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1aabe579c3c65d4efd8e10b9772618a2fe"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">all_tensors_declared</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase20all_tensors_declaredENSt6size_tERK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Callback signalling that all tensors have been declared </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>amount</strong> – The amount of tensors that have been declared </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant25PythonEinsumGeneratorBase18begin_declarationsE16DeclarationScopeRK7Context">
+<span id="_CPPv3N7sequant25PythonEinsumGeneratorBase18begin_declarationsE16DeclarationScopeRK7Context"></span><span id="_CPPv2N7sequant25PythonEinsumGeneratorBase18begin_declarationsE16DeclarationScopeRK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::begin_declarations__DeclarationScope.ContextCR"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a49f19d6c0352d9eecaf7a8a3757b703f"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">begin_declarations</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="enum_namespacesequant_1ad8b7e1b22081ba146172f0dbcdefc90f.html#_CPPv4N7sequant16DeclarationScopeE" title="sequant::DeclarationScope"><span class="n"><span class="pre">DeclarationScope</span></span></a>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase18begin_declarationsE16DeclarationScopeRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Callback signalling that we now start declarations for the given scope. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant25PythonEinsumGeneratorBase16end_declarationsE16DeclarationScopeRK7Context">
+<span id="_CPPv3N7sequant25PythonEinsumGeneratorBase16end_declarationsE16DeclarationScopeRK7Context"></span><span id="_CPPv2N7sequant25PythonEinsumGeneratorBase16end_declarationsE16DeclarationScopeRK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::end_declarations__DeclarationScope.ContextCR"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1abd63efca06775748630af8ea3a49dbbc"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">end_declarations</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="enum_namespacesequant_1ad8b7e1b22081ba146172f0dbcdefc90f.html#_CPPv4N7sequant16DeclarationScopeE" title="sequant::DeclarationScope"><span class="n"><span class="pre">DeclarationScope</span></span></a>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase16end_declarationsE16DeclarationScopeRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Callback signalling that all declarations for the given scope have been performed </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant25PythonEinsumGeneratorBase14insert_commentERKNSt6stringERK7Context">
+<span id="_CPPv3N7sequant25PythonEinsumGeneratorBase14insert_commentERKNSt6stringERK7Context"></span><span id="_CPPv2N7sequant25PythonEinsumGeneratorBase14insert_commentERKNSt6stringERK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::insert_comment__ssCR.ContextCR"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a6aeaefbca67db9eeddda22d0fa8bc6a9"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">insert_comment</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">comment</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase14insert_commentERKNSt6stringERK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for inserting a comment at the current position in the generated code </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>comment</strong> – The comment to insert </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant25PythonEinsumGeneratorBase19begin_named_sectionENSt11string_viewERK7Context">
+<span id="_CPPv3N7sequant25PythonEinsumGeneratorBase19begin_named_sectionENSt11string_viewERK7Context"></span><span id="_CPPv2N7sequant25PythonEinsumGeneratorBase19begin_named_sectionENSt11string_viewERK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::begin_named_section__std::string_view.ContextCR"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a329e743b901792f9635e0dcbe5a8e69e"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">begin_named_section</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string_view</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">name</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase19begin_named_sectionENSt11string_viewERK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback that we are starting a new named section </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>name</strong> – The name of the named section </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant25PythonEinsumGeneratorBase17end_named_sectionENSt11string_viewERK7Context">
+<span id="_CPPv3N7sequant25PythonEinsumGeneratorBase17end_named_sectionENSt11string_viewERK7Context"></span><span id="_CPPv2N7sequant25PythonEinsumGeneratorBase17end_named_sectionENSt11string_viewERK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::end_named_section__std::string_view.ContextCR"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a122fc700143484df35a3bac5c789d886"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">end_named_section</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string_view</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase17end_named_sectionENSt11string_viewERK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback to signal that we have reached the end of the current named section </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>name</strong> – The name of the named section that is ending now </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant25PythonEinsumGeneratorBase16begin_expressionERK7Context">
+<span id="_CPPv3N7sequant25PythonEinsumGeneratorBase16begin_expressionERK7Context"></span><span id="_CPPv2N7sequant25PythonEinsumGeneratorBase16begin_expressionERK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::begin_expression__ContextCR"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a5779cc523f7b718711b7b3b5b2e973a5"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">begin_expression</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase16begin_expressionERK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Callback signalling that we now begin export of a new (high-level) expression </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant25PythonEinsumGeneratorBase14end_expressionERK7Context">
+<span id="_CPPv3N7sequant25PythonEinsumGeneratorBase14end_expressionERK7Context"></span><span id="_CPPv2N7sequant25PythonEinsumGeneratorBase14end_expressionERK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::end_expression__ContextCR"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1aec5b08ad97b457e372f099ae7faff49e"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">end_expression</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase14end_expressionERK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Callback signalling that the export of the current (high-level) expression is finished </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant25PythonEinsumGeneratorBase12begin_exportERK7Context">
+<span id="_CPPv3N7sequant25PythonEinsumGeneratorBase12begin_exportERK7Context"></span><span id="_CPPv2N7sequant25PythonEinsumGeneratorBase12begin_exportERK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::begin_export__ContextCR"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a151939b1aba1b2dca4b322445dd27225"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">begin_export</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase12begin_exportERK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Callback signalling that we now begin with the export process. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant25PythonEinsumGeneratorBase10end_exportERK7Context">
+<span id="_CPPv3N7sequant25PythonEinsumGeneratorBase10end_exportERK7Context"></span><span id="_CPPv2N7sequant25PythonEinsumGeneratorBase10end_exportERK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::end_export__ContextCR"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a394e82c0b2c0a3e0f9f2bbb6547455eb"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">end_export</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase10end_exportERK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Callback signalling that the export process is finished. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant25PythonEinsumGeneratorBase18get_generated_codeEv">
+<span id="_CPPv3NK7sequant25PythonEinsumGeneratorBase18get_generated_codeEv"></span><span id="_CPPv2NK7sequant25PythonEinsumGeneratorBase18get_generated_codeEv"></span><span id="sequant::PythonEinsumGeneratorBase::get_generated_codeC"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a9e4a224b3b8051e50b74f67d1a44cf4c"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">get_generated_code</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase18get_generated_codeEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The generated code that corresponds to all semantic actions encountered during the current export </p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-protected-functions">Protected Functions</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant25PythonEinsumGeneratorBase11tensor_nameERK6TensorRK7Context">
+<span id="_CPPv3NK7sequant25PythonEinsumGeneratorBase11tensor_nameERK6TensorRK7Context"></span><span id="_CPPv2NK7sequant25PythonEinsumGeneratorBase11tensor_nameERK6TensorRK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::tensor_name__TensorCR.ContextCRC"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1afbe4d66094a0d22402a60c23eabb070d"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">tensor_name</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor.html#_CPPv4N7sequant6TensorE" title="sequant::Tensor"><span class="n"><span class="pre">Tensor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">tensor</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase11tensor_nameERK6TensorRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Get the tensor name (without indices) </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant25PythonEinsumGeneratorBase13module_prefixEv">
+<span id="_CPPv3NK7sequant25PythonEinsumGeneratorBase13module_prefixEv"></span><span id="_CPPv2NK7sequant25PythonEinsumGeneratorBase13module_prefixEv"></span><span id="sequant::PythonEinsumGeneratorBase::module_prefixC"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a2391448364cc689d9b44e4f880190dad"></span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">module_prefix</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">0</span></span><a class="headerlink" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase13module_prefixEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Backend-specific methods to be overridden by derived classes. </p>
+<p>Get the module prefix (np., torch., etc.) </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant25PythonEinsumGeneratorBase14file_extensionEv">
+<span id="_CPPv3NK7sequant25PythonEinsumGeneratorBase14file_extensionEv"></span><span id="_CPPv2NK7sequant25PythonEinsumGeneratorBase14file_extensionEv"></span><span id="sequant::PythonEinsumGeneratorBase::file_extensionC"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a6f9b8c270d499b53101a38ec48ff89f0"></span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">file_extension</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">0</span></span><a class="headerlink" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase14file_extensionEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Get the file extension for persistence (.npy, .pt, etc.) </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant25PythonEinsumGeneratorBase21available_index_charsEv">
+<span id="_CPPv3NK7sequant25PythonEinsumGeneratorBase21available_index_charsEv"></span><span id="_CPPv2NK7sequant25PythonEinsumGeneratorBase21available_index_charsEv"></span><span id="sequant::PythonEinsumGeneratorBase::available_index_charsC"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a79df9dd6a593e0ab87a402d76f591597"></span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">available_index_chars</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">0</span></span><a class="headerlink" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase21available_index_charsEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Get the available characters for einsum indices. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant25PythonEinsumGeneratorBase22use_optimize_parameterEv">
+<span id="_CPPv3NK7sequant25PythonEinsumGeneratorBase22use_optimize_parameterEv"></span><span id="_CPPv2NK7sequant25PythonEinsumGeneratorBase22use_optimize_parameterEv"></span><span id="sequant::PythonEinsumGeneratorBase::use_optimize_parameterC"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a3a079363e6807f63e0e255654991a1c4"></span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">use_optimize_parameter</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">0</span></span><a class="headerlink" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase22use_optimize_parameterEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Backend-specific flag for optimize parameter in einsum. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant25PythonEinsumGeneratorBase16get_order_stringERK7Context">
+<span id="_CPPv3NK7sequant25PythonEinsumGeneratorBase16get_order_stringERK7Context"></span><span id="_CPPv2NK7sequant25PythonEinsumGeneratorBase16get_order_stringERK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::get_order_string__ContextCRC"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1aca8e078378bbf47144802b96571456b6"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">get_order_string</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase16get_order_stringERK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Get the Python order string from memory layout. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant25PythonEinsumGeneratorBase20sanitize_python_nameENSt12wstring_viewE">
+<span id="_CPPv3NK7sequant25PythonEinsumGeneratorBase20sanitize_python_nameENSt12wstring_viewE"></span><span id="_CPPv2NK7sequant25PythonEinsumGeneratorBase20sanitize_python_nameENSt12wstring_viewE"></span><span id="sequant::PythonEinsumGeneratorBase::sanitize_python_name__std::wstring_viewC"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a76bc767c5ca241c7e12cebeb9ee7fe6d"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">sanitize_python_name</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">wstring_view</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">label</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase20sanitize_python_nameENSt12wstring_viewE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Sanitize a label to be a valid Python identifier. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant25PythonEinsumGeneratorBase16get_einsum_indexERK5IndexRK7ContextRN5boost9unordered13unordered_mapINSt6stringENSt6stringEEERN5boost9unordered13unordered_setINSt6stringEEE">
+<span id="_CPPv3NK7sequant25PythonEinsumGeneratorBase16get_einsum_indexERK5IndexRK7ContextRN5boost9unordered13unordered_mapINSt6stringENSt6stringEEERN5boost9unordered13unordered_setINSt6stringEEE"></span><span id="_CPPv2NK7sequant25PythonEinsumGeneratorBase16get_einsum_indexERK5IndexRK7ContextRN5boost9unordered13unordered_mapINSt6stringENSt6stringEEERN5boost9unordered13unordered_setINSt6stringEEE"></span><span id="sequant::PythonEinsumGeneratorBase::get_einsum_index__IndexCR.ContextCR.boost::unordered::unordered_map:ss.ss:R.boost::unordered::unordered_set:ss:RC"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1aa292b7d9ac4f9f1931f18909d415c6f6"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">get_einsum_index</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">idx</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span>, <span class="n"><span class="pre">boost</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">unordered</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">unordered_map</span></span><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">index_map</span></span>, <span class="n"><span class="pre">boost</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">unordered</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">unordered_set</span></span><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">used_chars</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase16get_einsum_indexERK5IndexRK7ContextRN5boost9unordered13unordered_mapINSt6stringENSt6stringEEERN5boost9unordered13unordered_setINSt6stringEEE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Get or create a single-character einsum index for a given <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a>. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant25PythonEinsumGeneratorBase26tensor_to_einsum_subscriptERK6TensorRK7ContextRN5boost9unordered13unordered_mapINSt6stringENSt6stringEEERN5boost9unordered13unordered_setINSt6stringEEE">
+<span id="_CPPv3NK7sequant25PythonEinsumGeneratorBase26tensor_to_einsum_subscriptERK6TensorRK7ContextRN5boost9unordered13unordered_mapINSt6stringENSt6stringEEERN5boost9unordered13unordered_setINSt6stringEEE"></span><span id="_CPPv2NK7sequant25PythonEinsumGeneratorBase26tensor_to_einsum_subscriptERK6TensorRK7ContextRN5boost9unordered13unordered_mapINSt6stringENSt6stringEEERN5boost9unordered13unordered_setINSt6stringEEE"></span><span id="sequant::PythonEinsumGeneratorBase::tensor_to_einsum_subscript__TensorCR.ContextCR.boost::unordered::unordered_map:ss.ss:R.boost::unordered::unordered_set:ss:RC"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1a19b7289f005fc626b14daf53746af6c4"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">tensor_to_einsum_subscript</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor.html#_CPPv4N7sequant6TensorE" title="sequant::Tensor"><span class="n"><span class="pre">Tensor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">tensor</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span>, <span class="n"><span class="pre">boost</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">unordered</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">unordered_map</span></span><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">index_map</span></span>, <span class="n"><span class="pre">boost</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">unordered</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">unordered_set</span></span><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">used_chars</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase26tensor_to_einsum_subscriptERK6TensorRK7ContextRN5boost9unordered13unordered_mapINSt6stringENSt6stringEEERN5boost9unordered13unordered_setINSt6stringEEE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Convert a tensor to its einsum subscript notation. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant25PythonEinsumGeneratorBase14to_einsum_exprERK4ExprRK6TensorRK7Context">
+<span id="_CPPv3NK7sequant25PythonEinsumGeneratorBase14to_einsum_exprERK4ExprRK6TensorRK7Context"></span><span id="_CPPv2NK7sequant25PythonEinsumGeneratorBase14to_einsum_exprERK4ExprRK6TensorRK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::to_einsum_expr__ExprCR.TensorCR.ContextCRC"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1aeb1f832a57677cc38d16cd7dae38c4e3"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">to_einsum_expr</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_expr.html#_CPPv4N7sequant4ExprE" title="sequant::Expr"><span class="n"><span class="pre">Expr</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">expr</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor.html#_CPPv4N7sequant6TensorE" title="sequant::Tensor"><span class="n"><span class="pre">Tensor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">result</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase14to_einsum_exprERK4ExprRK6TensorRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Convert an expression to an einsum call. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant25PythonEinsumGeneratorBase25extract_einsum_componentsERK4ExprRNSt6stringERNSt6vectorINSt6stringEEERNSt6stringERK7ContextRN5boost9unordered13unordered_mapINSt6stringENSt6stringEEERN5boost9unordered13unordered_setINSt6stringEEE">
+<span id="_CPPv3NK7sequant25PythonEinsumGeneratorBase25extract_einsum_componentsERK4ExprRNSt6stringERNSt6vectorINSt6stringEEERNSt6stringERK7ContextRN5boost9unordered13unordered_mapINSt6stringENSt6stringEEERN5boost9unordered13unordered_setINSt6stringEEE"></span><span id="_CPPv2NK7sequant25PythonEinsumGeneratorBase25extract_einsum_componentsERK4ExprRNSt6stringERNSt6vectorINSt6stringEEERNSt6stringERK7ContextRN5boost9unordered13unordered_mapINSt6stringENSt6stringEEERN5boost9unordered13unordered_setINSt6stringEEE"></span><span id="sequant::PythonEinsumGeneratorBase::extract_einsum_components__ExprCR.ssR.std::vector:ss:R.ssR.ContextCR.boost::unordered::unordered_map:ss.ss:R.boost::unordered::unordered_set:ss:RC"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1aa1b3d956d7a8164e6f3143997addfb77"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">extract_einsum_components</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_expr.html#_CPPv4N7sequant4ExprE" title="sequant::Expr"><span class="n"><span class="pre">Expr</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">expr</span></span>, <span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">einsum_spec</span></span>, <span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">vector</span></span><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">tensor_names</span></span>, <span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">scalar_factor</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span>, <span class="n"><span class="pre">boost</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">unordered</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">unordered_map</span></span><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">index_map</span></span>, <span class="n"><span class="pre">boost</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">unordered</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">unordered_set</span></span><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">used_chars</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase25extract_einsum_componentsERK4ExprRNSt6stringERNSt6vectorINSt6stringEEERNSt6stringERK7ContextRN5boost9unordered13unordered_mapINSt6stringENSt6stringEEERN5boost9unordered13unordered_setINSt6stringEEE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Extract einsum components from an expression. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant25PythonEinsumGeneratorBase21to_python_scalar_exprERK4ExprRK7Context">
+<span id="_CPPv3NK7sequant25PythonEinsumGeneratorBase21to_python_scalar_exprERK4ExprRK7Context"></span><span id="_CPPv2NK7sequant25PythonEinsumGeneratorBase21to_python_scalar_exprERK4ExprRK7Context"></span><span id="sequant::PythonEinsumGeneratorBase::to_python_scalar_expr__ExprCR.ContextCRC"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1ad540761d7e03ba33b7694f821e01d5f5"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">to_python_scalar_expr</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_expr.html#_CPPv4N7sequant4ExprE" title="sequant::Expr"><span class="n"><span class="pre">Expr</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">expr</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE" title="sequant::PythonEinsumGeneratorBase::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase21to_python_scalar_exprERK4ExprRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Convert expression to Python scalar expression (for variable results) </p>
+</dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-protected-attributes">Protected Attributes</p>
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant25PythonEinsumGeneratorBase11m_generatedE">
+<span id="_CPPv3N7sequant25PythonEinsumGeneratorBase11m_generatedE"></span><span id="_CPPv2N7sequant25PythonEinsumGeneratorBase11m_generatedE"></span><span id="sequant::PythonEinsumGeneratorBase::m_generated__ss"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1affb739dd1bd25a84396ca4ff3cb807b1"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">m_generated</span></span></span><a class="headerlink" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase11m_generatedE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant25PythonEinsumGeneratorBase8m_indentE">
+<span id="_CPPv3N7sequant25PythonEinsumGeneratorBase8m_indentE"></span><span id="_CPPv2N7sequant25PythonEinsumGeneratorBase8m_indentE"></span><span id="sequant::PythonEinsumGeneratorBase::m_indent__ss"></span><span class="target" id="classsequant_1_1_python_einsum_generator_base_1acbc8961e0cdba2db54d23c9735644671"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">m_indent</span></span></span><a class="headerlink" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase8m_indentE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+</dd></dl>
+
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, SeQuant developers
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            <div class="last-updated">
+              Last updated on Feb 27, 2026 8:35:02 PM</div>
+          </div>
+          <div class="right-details">
+            <div class="icons">
+              <a class="muted-link fa-brands fa-solid fa-github fa-2x" href="https://github.com/ValeevGroup/SeQuant" aria-label="GitHub"></a>
+              
+            </div>
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Template Class PythonEinsumGeneratorBase</a><ul>
+<li><a class="reference internal" href="#inheritance-relationships">Inheritance Relationships</a><ul>
+<li><a class="reference internal" href="#base-type">Base Type</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#class-documentation">Class Documentation</a><ul>
+<li><a class="reference internal" href="#_CPPv4I0EN7sequant25PythonEinsumGeneratorBaseE"><code class="docutils literal notranslate"><span class="pre">sequant::PythonEinsumGeneratorBase</span></code></a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase25PythonEinsumGeneratorBaseEv"><code class="docutils literal notranslate"><span class="pre">PythonEinsumGeneratorBase()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant25PythonEinsumGeneratorBaseD0Ev"><code class="docutils literal notranslate"><span class="pre">~PythonEinsumGeneratorBase()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase23supports_named_sectionsEv"><code class="docutils literal notranslate"><span class="pre">supports_named_sections()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase23requires_named_sectionsEv"><code class="docutils literal notranslate"><span class="pre">requires_named_sections()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase23index_declaration_scopeEv"><code class="docutils literal notranslate"><span class="pre">index_declaration_scope()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase26variable_declaration_scopeEv"><code class="docutils literal notranslate"><span class="pre">variable_declaration_scope()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase24tensor_declaration_scopeEv"><code class="docutils literal notranslate"><span class="pre">tensor_declaration_scope()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase16prunable_scalarsEv"><code class="docutils literal notranslate"><span class="pre">prunable_scalars()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase9representERK5IndexRK7Context"><code class="docutils literal notranslate"><span class="pre">represent()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase9representERK6TensorRK7Context"><code class="docutils literal notranslate"><span class="pre">represent()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase9representERK8VariableRK7Context"><code class="docutils literal notranslate"><span class="pre">represent()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase9representERK8ConstantRK7Context"><code class="docutils literal notranslate"><span class="pre">represent()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase6unloadERK6TensorRK7Context"><code class="docutils literal notranslate"><span class="pre">unload()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase7destroyERK6TensorRK7Context"><code class="docutils literal notranslate"><span class="pre">destroy()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase6createERK8VariablebRK7Context"><code class="docutils literal notranslate"><span class="pre">create()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase11set_to_zeroERK8VariableRK7Context"><code class="docutils literal notranslate"><span class="pre">set_to_zero()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase6unloadERK8VariableRK7Context"><code class="docutils literal notranslate"><span class="pre">unload()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase7destroyERK8VariableRK7Context"><code class="docutils literal notranslate"><span class="pre">destroy()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase7computeERK4ExprRK6TensorRK7Context"><code class="docutils literal notranslate"><span class="pre">compute()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase7computeERK4ExprRK8VariableRK7Context"><code class="docutils literal notranslate"><span class="pre">compute()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase7declareERK5IndexRK7Context"><code class="docutils literal notranslate"><span class="pre">declare()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase7declareERK8Variable8UsageSetRK7Context"><code class="docutils literal notranslate"><span class="pre">declare()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase7declareERK6Tensor8UsageSetRK7Context"><code class="docutils literal notranslate"><span class="pre">declare()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase20all_indices_declaredENSt6size_tERK7Context"><code class="docutils literal notranslate"><span class="pre">all_indices_declared()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase22all_variables_declaredENSt6size_tERK7Context"><code class="docutils literal notranslate"><span class="pre">all_variables_declared()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase20all_tensors_declaredENSt6size_tERK7Context"><code class="docutils literal notranslate"><span class="pre">all_tensors_declared()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase18begin_declarationsE16DeclarationScopeRK7Context"><code class="docutils literal notranslate"><span class="pre">begin_declarations()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase16end_declarationsE16DeclarationScopeRK7Context"><code class="docutils literal notranslate"><span class="pre">end_declarations()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase14insert_commentERKNSt6stringERK7Context"><code class="docutils literal notranslate"><span class="pre">insert_comment()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase19begin_named_sectionENSt11string_viewERK7Context"><code class="docutils literal notranslate"><span class="pre">begin_named_section()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase17end_named_sectionENSt11string_viewERK7Context"><code class="docutils literal notranslate"><span class="pre">end_named_section()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase16begin_expressionERK7Context"><code class="docutils literal notranslate"><span class="pre">begin_expression()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase14end_expressionERK7Context"><code class="docutils literal notranslate"><span class="pre">end_expression()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase12begin_exportERK7Context"><code class="docutils literal notranslate"><span class="pre">begin_export()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase10end_exportERK7Context"><code class="docutils literal notranslate"><span class="pre">end_export()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase18get_generated_codeEv"><code class="docutils literal notranslate"><span class="pre">get_generated_code()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase11tensor_nameERK6TensorRK7Context"><code class="docutils literal notranslate"><span class="pre">tensor_name()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase13module_prefixEv"><code class="docutils literal notranslate"><span class="pre">module_prefix()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase14file_extensionEv"><code class="docutils literal notranslate"><span class="pre">file_extension()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase21available_index_charsEv"><code class="docutils literal notranslate"><span class="pre">available_index_chars()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase22use_optimize_parameterEv"><code class="docutils literal notranslate"><span class="pre">use_optimize_parameter()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase16get_order_stringERK7Context"><code class="docutils literal notranslate"><span class="pre">get_order_string()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase20sanitize_python_nameENSt12wstring_viewE"><code class="docutils literal notranslate"><span class="pre">sanitize_python_name()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase16get_einsum_indexERK5IndexRK7ContextRN5boost9unordered13unordered_mapINSt6stringENSt6stringEEERN5boost9unordered13unordered_setINSt6stringEEE"><code class="docutils literal notranslate"><span class="pre">get_einsum_index()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase26tensor_to_einsum_subscriptERK6TensorRK7ContextRN5boost9unordered13unordered_mapINSt6stringENSt6stringEEERN5boost9unordered13unordered_setINSt6stringEEE"><code class="docutils literal notranslate"><span class="pre">tensor_to_einsum_subscript()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase14to_einsum_exprERK4ExprRK6TensorRK7Context"><code class="docutils literal notranslate"><span class="pre">to_einsum_expr()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase25extract_einsum_componentsERK4ExprRNSt6stringERNSt6vectorINSt6stringEEERNSt6stringERK7ContextRN5boost9unordered13unordered_mapINSt6stringENSt6stringEEERN5boost9unordered13unordered_setINSt6stringEEE"><code class="docutils literal notranslate"><span class="pre">extract_einsum_components()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant25PythonEinsumGeneratorBase21to_python_scalar_exprERK4ExprRK7Context"><code class="docutils literal notranslate"><span class="pre">to_python_scalar_expr()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase11m_generatedE"><code class="docutils literal notranslate"><span class="pre">m_generated</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant25PythonEinsumGeneratorBase8m_indentE"><code class="docutils literal notranslate"><span class="pre">m_indent</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script src="../_static/bootstrap-treeview/bootstrap-treeview.min.js?v=6a1e96b4"></script>
+    </body>
+</html>

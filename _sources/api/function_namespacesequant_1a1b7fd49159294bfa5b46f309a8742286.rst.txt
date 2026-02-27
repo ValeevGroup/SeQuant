@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a1b7fd49159294bfa5b46f309a8742286:
+
+Template Function sequant::operator<(const Op<S1>&, const Op<S2>&)
+==================================================================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::operator<(const Op<S1>&, const Op<S2>&)
+   :project: SeQuant

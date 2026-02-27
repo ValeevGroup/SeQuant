@@ -1,0 +1,423 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html">
+        <link rel="prefetch" href="../_static/logo.svg" as="image">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>Namespace sequant::io::serialization::v1::parse - SeQuant Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/bootstrap-treeview/bootstrap-treeview.min.css?v=8176a87d" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=821744c5" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --sidebar-item-font-size: 0.95em;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">SeQuant Documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="../_static/logo.svg" alt="Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">User</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/getting_started/index.html">Getting started</a><input aria-label="Toggle navigation of Getting started" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/wick.html">Wick’s Theorem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/index_spaces.html">Register Index Spaces</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/operators.html">Operators</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../user/getting_started/installing.html">Installation</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/guide/index.html">User Guide</a><input aria-label="Toggle navigation of User Guide" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/operator.html">Operator Interface for Symbolic Many-Body Algebra</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/cc.html">Coupled-Cluster Class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/io.html">I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/evaluation.html">Evaluation Trace Analysis Using Nushell</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../developer/index.html">Developer docs</a><input aria-label="Toggle navigation of Developer docs" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../developer/documentation.html">Documentation Guide</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">API reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Maintainer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../maintainer/index.html">Maintainer docs</a><input aria-label="Toggle navigation of Maintainer docs" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../maintainer/release.html">Release Guide</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">See Also</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/tiledarray">TiledArray</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/mpqc">Massively Parallel Quantum Chemistry</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io">Valeev Research Group</a></li>
+</ul>
+
+</div></div>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="../_sources/api/namespace_sequant__io__serialization__v1__parse.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="namespace-sequant-io-serialization-v1-parse">
+<span id="id1"></span><h1>Namespace sequant::io::serialization::v1::parse<a class="headerlink" href="#namespace-sequant-io-serialization-v1-parse" title="Link to this heading">¶</a></h1>
+<nav class="contents local" id="contents">
+<p class="topic-title">Contents</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="#namespaces" id="id2">Namespaces</a></p></li>
+<li><p><a class="reference internal" href="#classes" id="id3">Classes</a></p></li>
+<li><p><a class="reference internal" href="#functions" id="id4">Functions</a></p></li>
+<li><p><a class="reference internal" href="#variables" id="id5">Variables</a></p></li>
+</ul>
+</nav>
+<section id="namespaces">
+<h2>Namespaces<a class="headerlink" href="#namespaces" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="namespace_sequant__io__serialization__v1__parse__helpers.html#namespace-sequant-io-serialization-v1-parse-helpers"><span class="std std-ref">Namespace sequant::io::serialization::v1::parse::helpers</span></a></p></li>
+</ul>
+</section>
+<section id="classes">
+<h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_error_handler.html#exhale-struct-structsequant-1-1io-1-1serialization-1-1v1-1-1parse-1-1-error-handler"><span class="std std-ref">Template Struct ErrorHandler</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_expr_rule.html#exhale-struct-structsequant-1-1io-1-1serialization-1-1v1-1-1parse-1-1-expr-rule"><span class="std std-ref">Struct ExprRule</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_index_group_rule.html#exhale-struct-structsequant-1-1io-1-1serialization-1-1v1-1-1parse-1-1-index-group-rule"><span class="std std-ref">Struct IndexGroupRule</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_index_label_rule.html#exhale-struct-structsequant-1-1io-1-1serialization-1-1v1-1-1parse-1-1-index-label-rule"><span class="std std-ref">Struct IndexLabelRule</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_index_rule.html#exhale-struct-structsequant-1-1io-1-1serialization-1-1v1-1-1parse-1-1-index-rule"><span class="std std-ref">Struct IndexRule</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_number_rule.html#exhale-struct-structsequant-1-1io-1-1serialization-1-1v1-1-1parse-1-1-number-rule"><span class="std std-ref">Struct NumberRule</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_product_rule.html#exhale-struct-structsequant-1-1io-1-1serialization-1-1v1-1-1parse-1-1-product-rule"><span class="std std-ref">Struct ProductRule</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_result_rule.html#exhale-struct-structsequant-1-1io-1-1serialization-1-1v1-1-1parse-1-1-result-rule"><span class="std std-ref">Struct ResultRule</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_sum_rule.html#exhale-struct-structsequant-1-1io-1-1serialization-1-1v1-1-1parse-1-1-sum-rule"><span class="std std-ref">Struct SumRule</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_symmetry_spec_rule.html#exhale-struct-structsequant-1-1io-1-1serialization-1-1v1-1-1parse-1-1-symmetry-spec-rule"><span class="std std-ref">Struct SymmetrySpecRule</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_tensor_rule.html#exhale-struct-structsequant-1-1io-1-1serialization-1-1v1-1-1parse-1-1-tensor-rule"><span class="std std-ref">Struct TensorRule</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_variable_rule.html#exhale-struct-structsequant-1-1io-1-1serialization-1-1v1-1-1parse-1-1-variable-rule"><span class="std std-ref">Struct VariableRule</span></a></p></li>
+</ul>
+</section>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a24d5e06203598d49f06cc928544d16c5.html#exhale-function-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1a24d5e06203598d49f06cc928544d16c5"><span class="std std-ref">Function sequant::io::serialization::v1::parse::BOOST_SPIRIT_DEFINE</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a50b2364c46b0f8e0a786f591d2765ade.html#exhale-function-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1a50b2364c46b0f8e0a786f591d2765ade"><span class="std std-ref">Template Function sequant::io::serialization::v1::parse::parse</span></a></p></li>
+</ul>
+</section>
+<section id="variables">
+<h2>Variables<a class="headerlink" href="#variables" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a64bb9eb3c5ebf87ec703f074f53d4dbf.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1a64bb9eb3c5ebf87ec703f074f53d4dbf"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::addend</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a83ada5f3a103b2772c17f235a350093c.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1a83ada5f3a103b2772c17f235a350093c"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::expr</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a26e6c1cc778a121f844a7bafba2724a4.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1a26e6c1cc778a121f844a7bafba2724a4"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::expr_def</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1ae78e330b2c85807d62445a80e78ba722.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1ae78e330b2c85807d62445a80e78ba722"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::first_addend</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1afffc7bc32519454757bd206885e42ae8.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1afffc7bc32519454757bd206885e42ae8"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::grouped</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1afee12e03d7996739d463b1c225ea5d73.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1afee12e03d7996739d463b1c225ea5d73"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::index</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a394a3c0d7970aa8b210ad6686c2c24a5.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1a394a3c0d7970aa8b210ad6686c2c24a5"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::index_def</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a72c282fe4ebc77087f7a104743316af9.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1a72c282fe4ebc77087f7a104743316af9"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::index_groups</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a2ef9d650b95886b1a3823571027b7fb5.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1a2ef9d650b95886b1a3823571027b7fb5"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::index_groups_def</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a436ae226c9b9729d395ccf600d63134d.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1a436ae226c9b9729d395ccf600d63134d"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::index_label</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1ad6c593d511dac035c6f39723d16e06a9.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1ad6c593d511dac035c6f39723d16e06a9"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::index_label_def</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a57fbca9884d28b3906254475272be593.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1a57fbca9884d28b3906254475272be593"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::index_name</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a49e0aadd799e62348513353cff2aae3f.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1a49e0aadd799e62348513353cff2aae3f"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::name</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1aec71ea8199f774c39871edb53f020b81.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1aec71ea8199f774c39871edb53f020b81"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::name_def</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a4faec041223c585355768d65327bc0d4.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1a4faec041223c585355768d65327bc0d4"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::noIndices</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a64eeb7940f45e25affd3064f5b89567d.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1a64eeb7940f45e25affd3064f5b89567d"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::nullary</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a07df8c8878d8651c756437b89d3c2cf3.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1a07df8c8878d8651c756437b89d3c2cf3"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::number</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a0154a2238b93990fdad86ea5cc4b9877.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1a0154a2238b93990fdad86ea5cc4b9877"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::number_def</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a60f8d9634b0cba6f8f33e784dae22bb6.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1a60f8d9634b0cba6f8f33e784dae22bb6"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::product</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a79359f9f492791d226ad10e9d324de04.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1a79359f9f492791d226ad10e9d324de04"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::product_def</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a36c1de9281963898e1d74ae2c4e4c40b.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1a36c1de9281963898e1d74ae2c4e4c40b"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::resultExpr</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a20e49ef984fce5570d91d0018d65317b.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1a20e49ef984fce5570d91d0018d65317b"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::resultExpr_def</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a48a1b60826353a172d80e41be11c396c.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1a48a1b60826353a172d80e41be11c396c"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::sum</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a7944f5d200c371fda5bac08be37d351a.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1a7944f5d200c371fda5bac08be37d351a"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::sum_def</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a5125dc87ef8758e92dbc314c84e1ea60.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1a5125dc87ef8758e92dbc314c84e1ea60"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::symmetry_spec</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a909599677ea6f3df07f03669c19efcf9.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1a909599677ea6f3df07f03669c19efcf9"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::symmetry_spec_def</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1ae5b8e562d6216d13dc58fbce56faaaa3.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1ae5b8e562d6216d13dc58fbce56faaaa3"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::tensor</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a0f50ec216e7730cb7d14dc756c281506.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1a0f50ec216e7730cb7d14dc756c281506"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::tensor_def</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a9e8784828bda86c5cf9b513d578ffd40.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1a9e8784828bda86c5cf9b513d578ffd40"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::to_char_type</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a39dbfce8cae1131598f5f9aa94381bb0.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1a39dbfce8cae1131598f5f9aa94381bb0"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::variable</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1aaa9ddcea938eff07475dbb9ad9a22d41.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1aaa9ddcea938eff07475dbb9ad9a22d41"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::variable_def</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1ad8fd96b486ae08915fcf5fbe2d24b838.html#exhale-variable-namespacesequant-1-1io-1-1serialization-1-1v1-1-1parse-1ad8fd96b486ae08915fcf5fbe2d24b838"><span class="std std-ref">Variable sequant::io::serialization::v1::parse::word_components</span></a></p></li>
+</ul>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, SeQuant developers
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            <div class="last-updated">
+              Last updated on Feb 27, 2026 8:35:02 PM</div>
+          </div>
+          <div class="right-details">
+            <div class="icons">
+              <a class="muted-link fa-brands fa-solid fa-github fa-2x" href="https://github.com/ValeevGroup/SeQuant" aria-label="GitHub"></a>
+              
+            </div>
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Namespace sequant::io::serialization::v1::parse</a><ul>
+<li><a class="reference internal" href="#namespaces">Namespaces</a></li>
+<li><a class="reference internal" href="#classes">Classes</a></li>
+<li><a class="reference internal" href="#functions">Functions</a></li>
+<li><a class="reference internal" href="#variables">Variables</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script src="../_static/bootstrap-treeview/bootstrap-treeview.min.js?v=6a1e96b4"></script>
+    </body>
+</html>

@@ -1,0 +1,290 @@
+
+.. _file_SeQuant_core_utility_macros.hpp:
+
+File macros.hpp
+===============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_utility>` (``SeQuant/core/utility``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/utility/macros.hpp``)
+------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_utility_macros.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/utility/exception.hpp`` (:ref:`file_SeQuant_core_utility_exception.hpp`)
+
+- ``cstdlib``
+
+- ``source_location``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_attr.hpp`
+
+- :ref:`file_SeQuant_core_binary_node.hpp`
+
+- :ref:`file_SeQuant_core_bliss.hpp`
+
+- :ref:`file_SeQuant_core_complex.hpp`
+
+- :ref:`file_SeQuant_core_eval_eval.hpp`
+
+- :ref:`file_SeQuant_core_eval_eval_expr.cpp`
+
+- :ref:`file_SeQuant_core_eval_eval_expr.hpp`
+
+- :ref:`file_SeQuant_core_eval_eval_node.hpp`
+
+- :ref:`file_SeQuant_core_eval_eval_node_compare.hpp`
+
+- :ref:`file_SeQuant_core_eval_result.hpp`
+
+- :ref:`file_SeQuant_core_export_export.cpp`
+
+- :ref:`file_SeQuant_core_export_export.hpp`
+
+- :ref:`file_SeQuant_core_export_expression_group.hpp`
+
+- :ref:`file_SeQuant_core_export_generation_optimizer.hpp`
+
+- :ref:`file_SeQuant_core_export_itf.cpp`
+
+- :ref:`file_SeQuant_core_export_itf.hpp`
+
+- :ref:`file_SeQuant_core_export_julia_tensor_operations.hpp`
+
+- :ref:`file_SeQuant_core_export_python_einsum.hpp`
+
+- :ref:`file_SeQuant_core_export_reordering_context.cpp`
+
+- :ref:`file_SeQuant_core_export_text_generator.hpp`
+
+- :ref:`file_SeQuant_core_expressions_abstract_tensor.hpp`
+
+- :ref:`file_SeQuant_core_expressions_constant.hpp`
+
+- :ref:`file_SeQuant_core_expressions_expr.cpp`
+
+- :ref:`file_SeQuant_core_expressions_expr.hpp`
+
+- :ref:`file_SeQuant_core_expressions_expr_algorithms.cpp`
+
+- :ref:`file_SeQuant_core_expressions_expr_algorithms.hpp`
+
+- :ref:`file_SeQuant_core_expressions_expr_operators.hpp`
+
+- :ref:`file_SeQuant_core_expressions_expr_ptr.hpp`
+
+- :ref:`file_SeQuant_core_expressions_expr_range.hpp`
+
+- :ref:`file_SeQuant_core_expressions_product.hpp`
+
+- :ref:`file_SeQuant_core_expressions_result_expr.hpp`
+
+- :ref:`file_SeQuant_core_expressions_sum.hpp`
+
+- :ref:`file_SeQuant_core_expressions_tensor.cpp`
+
+- :ref:`file_SeQuant_core_expressions_tensor.hpp`
+
+- :ref:`file_SeQuant_core_expressions_variable.hpp`
+
+- :ref:`file_SeQuant_core_hugenholtz.hpp`
+
+- :ref:`file_SeQuant_core_index.hpp`
+
+- :ref:`file_SeQuant_core_index_space_registry.hpp`
+
+- :ref:`file_SeQuant_core_interval.hpp`
+
+- :ref:`file_SeQuant_core_io_serialization_serialization.cpp`
+
+- :ref:`file_SeQuant_core_io_serialization_v1_ast_conversions.hpp`
+
+- :ref:`file_SeQuant_core_io_serialization_v1_serialize.cpp`
+
+- :ref:`file_SeQuant_core_math.hpp`
+
+- :ref:`file_SeQuant_core_op.hpp`
+
+- :ref:`file_SeQuant_core_optimize_common_subexpression_elimination.hpp`
+
+- :ref:`file_SeQuant_core_optimize_fusion.cpp`
+
+- :ref:`file_SeQuant_core_optimize_optimize.cpp`
+
+- :ref:`file_SeQuant_core_optimize_single_term.hpp`
+
+- :ref:`file_SeQuant_core_ranges.hpp`
+
+- :ref:`file_SeQuant_core_space.hpp`
+
+- :ref:`file_SeQuant_core_tag.hpp`
+
+- :ref:`file_SeQuant_core_tensor_canonicalizer.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network_utils.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v1.cpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v1.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v2.cpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v2.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v3.cpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v3.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network_vertex_painter.cpp`
+
+- :ref:`file_SeQuant_core_utility_expr.cpp`
+
+- :ref:`file_SeQuant_core_utility_expr.hpp`
+
+- :ref:`file_SeQuant_core_utility_indices.hpp`
+
+- :ref:`file_SeQuant_core_utility_macros.cpp`
+
+- :ref:`file_SeQuant_core_utility_permutation.hpp`
+
+- :ref:`file_SeQuant_core_utility_string.cpp`
+
+- :ref:`file_SeQuant_core_utility_string.hpp`
+
+- :ref:`file_SeQuant_core_utility_strong.hpp`
+
+- :ref:`file_SeQuant_core_utility_tensor.hpp`
+
+- :ref:`file_SeQuant_core_wick.hpp`
+
+- :ref:`file_SeQuant_core_wick.impl.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_antisymmetrizer.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_biorthogonalization.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_context.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_models_cc.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_op.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_op_registry.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_rdm.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_rules_csv.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_rules_df.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_rules_thc.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_spin.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_utils.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_vac_av.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Enums
+-----
+
+
+- :ref:`exhale_enum_namespacesequant_1af5be1bbfcc27d53e2ca030117f44d7a8`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a663081b1bebbfcc6accba38c5aa9651d`
+
+- :ref:`exhale_function_namespacesequant_1afde67a424dee023f30d3824cae859ce7`
+
+
+Defines
+-------
+
+
+- :ref:`exhale_define_macros_8hpp_1abd1ea203819c2a073e5a75d5da1e895d`
+
+- :ref:`exhale_define_macros_8hpp_1a417e019963821a97c694c83402a4e3dd`
+
+- :ref:`exhale_define_macros_8hpp_1a9090882dd6ee96735f6d829f1ca7765a`
+
+- :ref:`exhale_define_macros_8hpp_1a3aff04dc0040247c9f4475c9df889e9d`
+
+- :ref:`exhale_define_macros_8hpp_1ad0c6b8178774d7f0fe2fba26c323a107`
+
+- :ref:`exhale_define_macros_8hpp_1a4f6226748a98a992f04f19244c102ea0`
+
+- :ref:`exhale_define_macros_8hpp_1a7f38eba691e292d48d05a428b371f55f`
+
+- :ref:`exhale_define_macros_8hpp_1a5edfff4d4464dfeb7d2cc370b838c03c`
+
+- :ref:`exhale_define_macros_8hpp_1a495c41183e48779e12eb8e5d9e8bc8d9`
+
+- :ref:`exhale_define_macros_8hpp_1ad84d8156c21dc4e5204e9ba6daf23c10`
+
+- :ref:`exhale_define_macros_8hpp_1aeb52e4ed05337a83fff8fa9daeeb2cfc`
+
+- :ref:`exhale_define_macros_8hpp_1ae5f3f3d823d2807e0967773351b8939a`
+
+- :ref:`exhale_define_macros_8hpp_1a28aa0a9b0b9e13322991aa5d073259c9`
+
+- :ref:`exhale_define_macros_8hpp_1aaaf0427fa5d580701f5966ac06a1ca08`
+
+- :ref:`exhale_define_macros_8hpp_1a061d310e111004cae906a24611d4c087`
+
+- :ref:`exhale_define_macros_8hpp_1a7b15ec618bbfca510235e6958edd93a2`
+
+- :ref:`exhale_define_macros_8hpp_1a39e8f4ac897eef6b64a5f9fba373c719`
+
+- :ref:`exhale_define_macros_8hpp_1a3f44aaecfcceca7822356b73e3bcfa77`
+
+- :ref:`exhale_define_macros_8hpp_1a6f66602e762e2b539d059c048509cacb`
+
+- :ref:`exhale_define_macros_8hpp_1a831ed846d542e6d130093b9480435cca`
+
+- :ref:`exhale_define_macros_8hpp_1a6168d7f72981ac76cf1b72936049d8dc`
+

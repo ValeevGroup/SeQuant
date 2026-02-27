@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1_1mbpt_1a88986aa6f85fe2236852f151c691cde0:
+
+Enum BatchingQNS
+================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_space_qns.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::mbpt::BatchingQNS
+   :project: SeQuant

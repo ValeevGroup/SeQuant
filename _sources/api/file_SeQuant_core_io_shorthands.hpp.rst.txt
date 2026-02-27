@@ -1,0 +1,76 @@
+
+.. _file_SeQuant_core_io_shorthands.hpp:
+
+File shorthands.hpp
+===================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_io>` (``SeQuant/core/io``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/io/shorthands.hpp``)
+-----------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_io_shorthands.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/expr_fwd.hpp`` (:ref:`file_SeQuant_core_expr_fwd.hpp`)
+
+- ``SeQuant/core/io/concepts.hpp`` (:ref:`file_SeQuant_core_io_concepts.hpp`)
+
+- ``SeQuant/core/io/latex/latex.hpp`` (:ref:`file_SeQuant_core_io_latex_latex.hpp`)
+
+- ``SeQuant/core/io/serialization/serialization.hpp`` (:ref:`file_SeQuant_core_io_serialization_serialization.hpp`)
+
+- ``string_view``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_tensor_network_v1.cpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v2.cpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v3.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1adee4f3d822724518bce4307bc784f4f9`
+
+- :ref:`exhale_function_namespacesequant_1a4e3ca91d2391ef1d7b470f560995759d`
+
+- :ref:`exhale_function_namespacesequant_1a44483e7618b1c2a40cef39612f2fb8a5`
+
+- :ref:`exhale_function_namespacesequant_1aef3fdd12d14329d50546fead147d778a`
+

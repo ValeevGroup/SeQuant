@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a5638892c48571a0b6cf19d74a642205e:
+
+Template Function sequant::detail::make_scope_exit
+==================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_scope.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::make_scope_exit(EF&&)
+   :project: SeQuant

@@ -1,0 +1,99 @@
+
+.. _file_SeQuant_core_tensor_network_v1.cpp:
+
+File v1.cpp
+===========
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_tensor_network>` (``SeQuant/core/tensor_network``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/tensor_network/v1.cpp``)
+---------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_tensor_network_v1.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/algorithm.hpp`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``SeQuant/core/attr.hpp`` (:ref:`file_SeQuant_core_attr.hpp`)
+
+- ``SeQuant/core/bliss.hpp`` (:ref:`file_SeQuant_core_bliss.hpp`)
+
+- ``SeQuant/core/complex.hpp`` (:ref:`file_SeQuant_core_complex.hpp`)
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/hash.hpp`` (:ref:`file_SeQuant_core_hash.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/io/latex/latex.hpp`` (:ref:`file_SeQuant_core_io_latex_latex.hpp`)
+
+- ``SeQuant/core/io/shorthands.hpp`` (:ref:`file_SeQuant_core_io_shorthands.hpp`)
+
+- ``SeQuant/core/logger.hpp`` (:ref:`file_SeQuant_core_logger.hpp`)
+
+- ``SeQuant/core/tag.hpp`` (:ref:`file_SeQuant_core_tag.hpp`)
+
+- ``SeQuant/core/tensor_network/v1.hpp`` (:ref:`file_SeQuant_core_tensor_network_v1.hpp`)
+
+- ``SeQuant/core/tensor_network/vertex_painter.hpp`` (:ref:`file_SeQuant_core_tensor_network_vertex_painter.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/core/utility/string.hpp`` (:ref:`file_SeQuant_core_utility_string.hpp`)
+
+- ``SeQuant/core/utility/tuple.hpp`` (:ref:`file_SeQuant_core_utility_tuple.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``iostream``
+
+- ``iterator``
+
+- ``range/v3/algorithm/for_each.hpp``
+
+- ``range/v3/algorithm/none_of.hpp``
+
+- ``range/v3/functional/identity.hpp``
+
+- ``range/v3/iterator/basic_iterator.hpp``
+
+- ``range/v3/view/any_view.hpp``
+
+- ``range/v3/view/view.hpp``
+
+- ``sstream``
+
+- ``type_traits``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+

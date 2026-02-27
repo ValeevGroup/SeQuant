@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1a529fb03b2eee23e7acd7a555b8982635:
+
+Template Function sequant::opt::detail::single_term_opt_impl
+============================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_single_term.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::single_term_opt_impl(TensorNetwork const&, meta::range_of<Index> auto const&, CostFn&&)
+   :project: SeQuant

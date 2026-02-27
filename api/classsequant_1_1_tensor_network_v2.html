@@ -1,0 +1,929 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html">
+        <link rel="prefetch" href="../_static/logo.svg" as="image">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>Class TensorNetworkV2 - SeQuant Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/bootstrap-treeview/bootstrap-treeview.min.css?v=8176a87d" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=821744c5" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --sidebar-item-font-size: 0.95em;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">SeQuant Documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="../_static/logo.svg" alt="Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">User</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/getting_started/index.html">Getting started</a><input aria-label="Toggle navigation of Getting started" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/wick.html">Wick’s Theorem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/index_spaces.html">Register Index Spaces</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/operators.html">Operators</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../user/getting_started/installing.html">Installation</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/guide/index.html">User Guide</a><input aria-label="Toggle navigation of User Guide" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/operator.html">Operator Interface for Symbolic Many-Body Algebra</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/cc.html">Coupled-Cluster Class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/io.html">I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/evaluation.html">Evaluation Trace Analysis Using Nushell</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../developer/index.html">Developer docs</a><input aria-label="Toggle navigation of Developer docs" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../developer/documentation.html">Documentation Guide</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">API reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Maintainer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../maintainer/index.html">Maintainer docs</a><input aria-label="Toggle navigation of Maintainer docs" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../maintainer/release.html">Release Guide</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">See Also</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/tiledarray">TiledArray</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/mpqc">Massively Parallel Quantum Chemistry</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io">Valeev Research Group</a></li>
+</ul>
+
+</div></div>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="../_sources/api/classsequant_1_1_tensor_network_v2.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="class-tensornetworkv2">
+<span id="exhale-class-classsequant-1-1-tensor-network-v2"></span><h1>Class TensorNetworkV2<a class="headerlink" href="#class-tensornetworkv2" title="Link to this heading">¶</a></h1>
+<ul class="simple">
+<li><p>Defined in <a class="reference internal" href="file_SeQuant_core_tensor_network_v2.hpp.html#file-sequant-core-tensor-network-v2-hpp"><span class="std std-ref">File v2.hpp</span></a></p></li>
+</ul>
+<section id="nested-relationships">
+<h2>Nested Relationships<a class="headerlink" href="#nested-relationships" title="Link to this heading">¶</a></h2>
+<section id="nested-types">
+<h3>Nested Types<a class="headerlink" href="#nested-types" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><a class="reference internal" href="structsequant_1_1_tensor_network_v2_1_1_create_graph_options.html#exhale-struct-structsequant-1-1-tensor-network-v2-1-1-create-graph-options"><span class="std std-ref">Struct TensorNetworkV2::CreateGraphOptions</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_tensor_network_v2_1_1_edge.html#exhale-class-classsequant-1-1-tensor-network-v2-1-1-edge"><span class="std std-ref">Class TensorNetworkV2::Edge</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_tensor_network_v2_1_1_graph.html#exhale-struct-structsequant-1-1-tensor-network-v2-1-1-graph"><span class="std std-ref">Struct TensorNetworkV2::Graph</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_tensor_network_v2_1_1_slot_canonicalization_metadata.html#exhale-struct-structsequant-1-1-tensor-network-v2-1-1-slot-canonicalization-metadata"><span class="std std-ref">Struct TensorNetworkV2::SlotCanonicalizationMetadata</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_tensor_network_v2_1_1_vertex.html#exhale-class-classsequant-1-1-tensor-network-v2-1-1-vertex"><span class="std std-ref">Class TensorNetworkV2::Vertex</span></a></p></li>
+</ul>
+</section>
+</section>
+<section id="class-documentation">
+<h2>Class Documentation<a class="headerlink" href="#class-documentation" title="Link to this heading">¶</a></h2>
+<dl class="cpp class">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV2E">
+<span id="_CPPv3N7sequant15TensorNetworkV2E"></span><span id="_CPPv2N7sequant15TensorNetworkV2E"></span><span id="sequant::TensorNetworkV2"></span><span class="target" id="classsequant_1_1_tensor_network_v2"></span><span class="k"><span class="pre">class</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">TensorNetworkV2</span></span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV2E" title="Link to this definition">¶</a><br /></dt>
+<dd><p>A (non-directed) graph view of a sequence of <a class="reference internal" href="classsequant_1_1_abstract_tensor.html#classsequant_1_1_abstract_tensor"><span class="std std-ref">AbstractTensor</span></a> objects. </p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The main role of this is to canonize itself. Since <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> objects can be connected by multiple <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a>’es (thus edges are colored), what is canonized is actually the graph of indices (roughly the dual of the tensor graph), with <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> objects represented by one or more vertices. </p>
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-types">Public Types</p>
+<dl class="cpp enum-class">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV26OriginE">
+<span id="_CPPv3N7sequant15TensorNetworkV26OriginE"></span><span id="_CPPv2N7sequant15TensorNetworkV26OriginE"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1ab489da7ae7a6c029485bce352ab9272b"></span><span class="k"><span class="pre">enum</span></span><span class="w"> </span><span class="k"><span class="pre">class</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Origin</span></span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV26OriginE" title="Link to this definition">¶</a><br /></dt>
+<dd><p><em>Values:</em></p>
+<dl class="cpp enumerator">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV26Origin3BraE">
+<span id="_CPPv3N7sequant15TensorNetworkV26Origin3BraE"></span><span id="_CPPv2N7sequant15TensorNetworkV26Origin3BraE"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1ab489da7ae7a6c029485bce352ab9272ba524238c55890641a82d9f6d090ae2a65"></span><span class="k"><span class="pre">enumerator</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Bra</span></span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV26Origin3BraE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp enumerator">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV26Origin3KetE">
+<span id="_CPPv3N7sequant15TensorNetworkV26Origin3KetE"></span><span id="_CPPv2N7sequant15TensorNetworkV26Origin3KetE"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1ab489da7ae7a6c029485bce352ab9272bae81a3429a0520a72b2e5bca7215b6338"></span><span class="k"><span class="pre">enumerator</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Ket</span></span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV26Origin3KetE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp enumerator">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV26Origin3AuxE">
+<span id="_CPPv3N7sequant15TensorNetworkV26Origin3AuxE"></span><span id="_CPPv2N7sequant15TensorNetworkV26Origin3AuxE"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1ab489da7ae7a6c029485bce352ab9272ba3342cbe2cf0266817b8ab6e82f5345da"></span><span class="k"><span class="pre">enumerator</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Aux</span></span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV26Origin3AuxE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="cpp type">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV213NamedIndexSetE">
+<span id="_CPPv3N7sequant15TensorNetworkV213NamedIndexSetE"></span><span id="_CPPv2N7sequant15TensorNetworkV213NamedIndexSetE"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1ae958dc8b7c0c9355381c5a7d3f94bce2"></span><span class="k"><span class="pre">using</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">NamedIndexSet</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="n"><span class="pre">tensor_network</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1tensor__network_1a8f560120fa2c6ca805f352a11fa9711f.html#_CPPv4N7sequant14tensor_network13NamedIndexSetE" title="sequant::tensor_network::NamedIndexSet"><span class="n"><span class="pre">NamedIndexSet</span></span></a><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV213NamedIndexSetE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-functions">Public Functions</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV215TensorNetworkV2ERK4Expr">
+<span id="_CPPv3N7sequant15TensorNetworkV215TensorNetworkV2ERK4Expr"></span><span id="_CPPv2N7sequant15TensorNetworkV215TensorNetworkV2ERK4Expr"></span><span id="sequant::TensorNetworkV2::TensorNetworkV2__ExprCR"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1a4b2dfc217e94df7bcbdcf53db4312693"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">TensorNetworkV2</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_expr.html#_CPPv4N7sequant4ExprE" title="sequant::Expr"><span class="n"><span class="pre">Expr</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">expr</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV215TensorNetworkV2ERK4Expr" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV215TensorNetworkV2ERK7ExprPtr">
+<span id="_CPPv3N7sequant15TensorNetworkV215TensorNetworkV2ERK7ExprPtr"></span><span id="_CPPv2N7sequant15TensorNetworkV215TensorNetworkV2ERK7ExprPtr"></span><span id="sequant::TensorNetworkV2::TensorNetworkV2__ExprPtrCR"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1a91413d7f81acd51b8a6f4914cf91b920"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">TensorNetworkV2</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_expr_ptr.html#_CPPv4N7sequant7ExprPtrE" title="sequant::ExprPtr"><span class="n"><span class="pre">ExprPtr</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">expr</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV215TensorNetworkV2ERK7ExprPtr" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4I00EN7sequant15TensorNetworkV215TensorNetworkV2ERK12ExprPtrRange">
+<span id="_CPPv3I00EN7sequant15TensorNetworkV215TensorNetworkV2ERK12ExprPtrRange"></span><span id="_CPPv2I00EN7sequant15TensorNetworkV215TensorNetworkV2ERK12ExprPtrRange"></span><span class="k"><span class="pre">template</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">typename</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">ExprPtrRange</span></span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="k"><span class="pre">typename</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">enable_if_t</span></span><span class="p"><span class="pre">&lt;</span></span><span class="o"><span class="pre">!</span></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">is_base_of_v</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="classsequant_1_1_expr_ptr.html#_CPPv4N7sequant7ExprPtrE" title="sequant::ExprPtr"><span class="n"><span class="pre">ExprPtr</span></span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I00EN7sequant15TensorNetworkV215TensorNetworkV2ERK12ExprPtrRange" title="sequant::TensorNetworkV2::TensorNetworkV2::ExprPtrRange"><span class="n"><span class="pre">ExprPtrRange</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="o"><span class="pre">&amp;&amp;</span></span><span class="w"> </span><span class="o"><span class="pre">!</span></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">is_base_of_v</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="classsequant_1_1_expr.html#_CPPv4N7sequant4ExprE" title="sequant::Expr"><span class="n"><span class="pre">Expr</span></span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I00EN7sequant15TensorNetworkV215TensorNetworkV2ERK12ExprPtrRange" title="sequant::TensorNetworkV2::TensorNetworkV2::ExprPtrRange"><span class="n"><span class="pre">ExprPtrRange</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="p"><span class="pre">&gt;</span></span><span class="p"><span class="pre">&gt;</span></span><br /><span class="target" id="classsequant_1_1_tensor_network_v2_1a28cae878e8f1fcc050de033d118c11ca"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">TensorNetworkV2</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I00EN7sequant15TensorNetworkV215TensorNetworkV2ERK12ExprPtrRange" title="sequant::TensorNetworkV2::TensorNetworkV2::ExprPtrRange"><span class="n"><span class="pre">ExprPtrRange</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">exprptr_range</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I00EN7sequant15TensorNetworkV215TensorNetworkV2ERK12ExprPtrRange" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant15TensorNetworkV27tensorsEv">
+<span id="_CPPv3NK7sequant15TensorNetworkV27tensorsEv"></span><span id="_CPPv2NK7sequant15TensorNetworkV27tensorsEv"></span><span id="sequant::TensorNetworkV2::tensorsC"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1a0b69f97a01f1b008fcaa6f2b8977e410"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">tensors</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant15TensorNetworkV27tensorsEv" title="Link to this definition">¶</a><br /></dt>
+<dd><div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>after invoking <a class="reference internal" href="#classsequant_1_1_tensor_network_v2_1ad81d2fd31ed9cbd67004b8d8d1f8abff"><span class="std std-ref">TensorNetworkV2::canonicalize()</span></a> the order of tensors may be different from that provided as input; use <a class="reference internal" href="#classsequant_1_1_tensor_network_v2_1a0357676949baea97f7cd8367177219f1"><span class="std std-ref">tensor_input_ordinals()</span></a> to obtain the input ordinals of the tensors in the result </p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>const reference to the sequence of tensors </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant15TensorNetworkV221tensor_input_ordinalsEv">
+<span id="_CPPv3NK7sequant15TensorNetworkV221tensor_input_ordinalsEv"></span><span id="_CPPv2NK7sequant15TensorNetworkV221tensor_input_ordinalsEv"></span><span id="sequant::TensorNetworkV2::tensor_input_ordinalsC"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1a0357676949baea97f7cd8367177219f1"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">tensor_input_ordinals</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant15TensorNetworkV221tensor_input_ordinalsEv" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV212canonicalizeERKN9container6vectorINSt7wstringEEEbPK13NamedIndexSet">
+<span id="_CPPv3N7sequant15TensorNetworkV212canonicalizeERKN9container6vectorINSt7wstringEEEbPK13NamedIndexSet"></span><span id="_CPPv2N7sequant15TensorNetworkV212canonicalizeERKN9container6vectorINSt7wstringEEEbPK13NamedIndexSet"></span><span id="sequant::TensorNetworkV2::canonicalize__container::vector:std::wstring:CR.b.NamedIndexSetCP"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1ad81d2fd31ed9cbd67004b8d8d1f8abff"></span><a class="reference internal" href="classsequant_1_1_expr_ptr.html#_CPPv4N7sequant7ExprPtrE" title="sequant::ExprPtr"><span class="n"><span class="pre">ExprPtr</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">canonicalize</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1aaa8384c5d22396ccd9a2368a088e24bd.html#_CPPv4I0EN7sequant9container6vectorE" title="sequant::container::vector"><span class="n"><span class="pre">vector</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">wstring</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">cardinal_tensor_labels</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="p"><span class="pre">{</span></span><span class="p"><span class="pre">}</span></span>, <span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">fast</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">true</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV213NamedIndexSetE" title="sequant::TensorNetworkV2::NamedIndexSet"><span class="n"><span class="pre">NamedIndexSet</span></span></a><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="n sig-param"><span class="pre">named_indices</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">nullptr</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV212canonicalizeERKN9container6vectorINSt7wstringEEEbPK13NamedIndexSet" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>cardinal_tensor_labels</strong> – move all tensors with these labels to the front before canonicalizing indices </p></li>
+<li><p><strong>fast</strong> – if true (default), does fast canonicalization that is only optimal if all tensors are distinct; set to false to perform complete canonicalization </p></li>
+<li><p><strong>named_indices</strong> – specifies the indices that cannot be renamed, i.e. their labels are meaningful; default is nullptr, which results in external indices treated as named indices </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>byproduct of canonicalization (e.g. phase); if none, returns nullptr </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV218canonicalize_slotsERKN9container6vectorINSt7wstringEEEPK13NamedIndexSetN28SlotCanonicalizationMetadata21named_index_compare_tE">
+<span id="_CPPv3N7sequant15TensorNetworkV218canonicalize_slotsERKN9container6vectorINSt7wstringEEEPK13NamedIndexSetN28SlotCanonicalizationMetadata21named_index_compare_tE"></span><span id="_CPPv2N7sequant15TensorNetworkV218canonicalize_slotsERKN9container6vectorINSt7wstringEEEPK13NamedIndexSetN28SlotCanonicalizationMetadata21named_index_compare_tE"></span><span id="sequant::TensorNetworkV2::canonicalize_slots__container::vector:std::wstring:CR.NamedIndexSetCP.SlotCanonicalizationMetadata::named_index_compare_t"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1abe9af290f1b4b0a641a94ecb4d63194a"></span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadataE" title="sequant::TensorNetworkV2::SlotCanonicalizationMetadata"><span class="n"><span class="pre">SlotCanonicalizationMetadata</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">canonicalize_slots</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1aaa8384c5d22396ccd9a2368a088e24bd.html#_CPPv4I0EN7sequant9container6vectorE" title="sequant::container::vector"><span class="n"><span class="pre">vector</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">wstring</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">cardinal_tensor_labels</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="p"><span class="pre">{</span></span><span class="p"><span class="pre">}</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV213NamedIndexSetE" title="sequant::TensorNetworkV2::NamedIndexSet"><span class="n"><span class="pre">NamedIndexSet</span></span></a><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="n sig-param"><span class="pre">named_indices</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">nullptr</span></span>, <a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadataE" title="sequant::TensorNetworkV2::SlotCanonicalizationMetadata"><span class="n"><span class="pre">SlotCanonicalizationMetadata</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata21named_index_compare_tE" title="sequant::TensorNetworkV2::SlotCanonicalizationMetadata::named_index_compare_t"><span class="n"><span class="pre">named_index_compare_t</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">named_index_compare</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="structsequant_1_1default__idxptr__slottype__lesscompare.html#_CPPv4N7sequant35default_idxptr_slottype_lesscompareE" title="sequant::default_idxptr_slottype_lesscompare"><span class="n"><span class="pre">default_idxptr_slottype_lesscompare</span></span></a><span class="p"><span class="pre">{</span></span><span class="p"><span class="pre">}</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV218canonicalize_slotsERKN9container6vectorINSt7wstringEEEPK13NamedIndexSetN28SlotCanonicalizationMetadata21named_index_compare_tE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Like <a class="reference internal" href="#classsequant_1_1_tensor_network_v2_1ad81d2fd31ed9cbd67004b8d8d1f8abff"><span class="std std-ref">canonicalize()</span></a>, but only use graph-based canonicalization to produce canonical list of slots occupied by named indices. This is sufficient to be able to match 2 tensor networks that differ in anonymous and named indices. </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>cardinal_tensor_labels</strong> – move all tensors with these labels to the front before canonicalizing indices </p></li>
+<li><p><strong>named_indices</strong> – specifies the indices that cannot be renamed, i.e. their labels are meaningful; default is nullptr, which results in external indices treated as named indices </p></li>
+<li><p><strong>named_index_compare</strong> – less-than comparison function for named indices, used for coarse-grained sorting of named indices, before sorting to canonical order; the default is to sort by <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index_1afd455d2c415a7e903a9f7a63a84cd257"><span class="std std-ref">Index::space()</span></a></p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>the computed canonicalization metadata </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV29factorizeEv">
+<span id="_CPPv3N7sequant15TensorNetworkV29factorizeEv"></span><span id="_CPPv2N7sequant15TensorNetworkV29factorizeEv"></span><span id="sequant::TensorNetworkV2::factorize"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1a5249bd578c3ef92022c8b234b603ba5f"></span><span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1a096d649df6109569c16ac6fd1cb6f853.html#_CPPv4I0_NSt6size_tEEN7sequant9container7svectorE" title="sequant::container::svector"><span class="n"><span class="pre">svector</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">pair</span></span><span class="p"><span class="pre">&lt;</span></span><span class="kt"><span class="pre">long</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="kt"><span class="pre">long</span></span><span class="p"><span class="pre">&gt;</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">factorize</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV29factorizeEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Factorizes tensor network </p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>sequence of binary products; each element encodes the tensors to be multiplied (values &gt;0 refer to the tensors in <a class="reference internal" href="#classsequant_1_1_tensor_network_v2_1a0b69f97a01f1b008fcaa6f2b8977e410"><span class="std std-ref">tensors()</span></a>, values &lt;0 refer to the elements of this sequence. E.g. sequences <code class="docutils literal notranslate"><span class="pre">{{0</span></code>,1},{-1,2},{-2,3}} , <code class="docutils literal notranslate"><span class="pre">{{0</span></code>,2},{1,3},{-1,-2}} , <code class="docutils literal notranslate"><span class="pre">{{3</span></code>,1},{2,-1},{0,-2}} encode the following respective factorizations <code class="docutils literal notranslate"></code>(((T0*T1)*T2)*T3) , <code class="docutils literal notranslate"></code>((T0*T2)*(T1*T3)) , and <code class="docutils literal notranslate"></code>(((T3*T1)*T2)*T0) . </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant15TensorNetworkV25edgesEv">
+<span id="_CPPv3NK7sequant15TensorNetworkV25edgesEv"></span><span id="_CPPv2NK7sequant15TensorNetworkV25edgesEv"></span><span id="sequant::TensorNetworkV2::edgesC"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1a585ad57b8dfde21004428f98ee16f655"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">edges</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant15TensorNetworkV25edgesEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>accessor for the <a class="reference internal" href="classsequant_1_1_tensor_network_v2_1_1_edge.html#classsequant_1_1_tensor_network_v2_1_1_edge"><span class="std std-ref">Edge</span></a> object sequence <div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="classsequant_1_1_tensor_network_v2_1_1_edge.html#classsequant_1_1_tensor_network_v2_1_1_edge"><span class="std std-ref">Edge</span></a></p>
+</div>
+</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>const reference to the sequence container of <a class="reference internal" href="classsequant_1_1_tensor_network_v2_1_1_edge.html#classsequant_1_1_tensor_network_v2_1_1_edge"><span class="std std-ref">Edge</span></a> objects, sorted by their <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a>’s full label </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant15TensorNetworkV211ext_indicesEv">
+<span id="_CPPv3NK7sequant15TensorNetworkV211ext_indicesEv"></span><span id="_CPPv2NK7sequant15TensorNetworkV211ext_indicesEv"></span><span id="sequant::TensorNetworkV2::ext_indicesC"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1a365af715125a2851cc810b8ec4dfd908"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">ext_indices</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant15TensorNetworkV211ext_indicesEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Returns a range of external indices, i.e. those indices that do not connect tensors. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant15TensorNetworkV212create_graphERK18CreateGraphOptions">
+<span id="_CPPv3NK7sequant15TensorNetworkV212create_graphERK18CreateGraphOptions"></span><span id="_CPPv2NK7sequant15TensorNetworkV212create_graphERK18CreateGraphOptions"></span><span id="sequant::TensorNetworkV2::create_graph__CreateGraphOptionsCRC"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1a716ce84d9dc6b8c6714c096de30cf7ef"></span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV25GraphE" title="sequant::TensorNetworkV2::Graph"><span class="n"><span class="pre">Graph</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">create_graph</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV218CreateGraphOptionsE" title="sequant::TensorNetworkV2::CreateGraphOptions"><span class="n"><span class="pre">CreateGraphOptions</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">options</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV226make_default_graph_optionsEv" title="sequant::TensorNetworkV2::make_default_graph_options"><span class="n"><span class="pre">make_default_graph_options</span></span></a><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant15TensorNetworkV212create_graphERK18CreateGraphOptions" title="Link to this definition">¶</a><br /></dt>
+<dd><p>converts the network into a Bliss graph whose vertices are indices and tensor vertex representations </p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Rules for constructing the graph:<ul class="simple">
+<li><p>Indices with protoindices are connected to their protoindices, either directly or (if protoindices are symmetric) via a protoindex vertex.</p></li>
+<li><p>Indices are colored by their space, which in general encodes also the space of the protoindices.</p></li>
+<li><p>An anti/symmetric n-body tensor has 2 terminals, each connected to each other + to n index vertices.</p></li>
+<li><p>A nonsymmetric n-body tensor has n terminals, each connected to 2 indices and 1 tensor vertex which is connected to all n terminal indices.</p></li>
+<li><p>tensor vertices are colored by the label+rank+symmetry of the tensor; terminal vertices are colored by the color of its tensor, with the color of symm/antisymm terminals augmented by the terminal’s type (bra/ket). </p></li>
+</ul>
+</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>options</strong> – <strong>[in]</strong> the options for generating the graph </p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The created <a class="reference internal" href="structsequant_1_1_tensor_network_v2_1_1_graph.html#structsequant_1_1_tensor_network_v2_1_1_graph"><span class="std std-ref">Graph</span></a> object </p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-static-functions">Public Static Functions</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV27versionEv">
+<span id="_CPPv3N7sequant15TensorNetworkV27versionEv"></span><span id="_CPPv2N7sequant15TensorNetworkV27versionEv"></span><span id="sequant::TensorNetworkV2::versionCE"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1af1034957ac0478014f62ff0d298088c7"></span><span class="k"><span class="pre">static</span></span><span class="w"> </span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">constexpr</span></span><span class="w"> </span><span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">version</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV27versionEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the implementation version of TN </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV226make_default_graph_optionsEv">
+<span id="_CPPv3N7sequant15TensorNetworkV226make_default_graph_optionsEv"></span><span id="_CPPv2N7sequant15TensorNetworkV226make_default_graph_optionsEv"></span><span id="sequant::TensorNetworkV2::make_default_graph_options"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1a4b5e50e171abf59dbdffcbb1217a951e"></span><span class="k"><span class="pre">static</span></span><span class="w"> </span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV218CreateGraphOptionsE" title="sequant::TensorNetworkV2::CreateGraphOptions"><span class="n"><span class="pre">CreateGraphOptions</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">make_default_graph_options</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV226make_default_graph_optionsEv" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-friends">Friends</p>
+<dl>
+<dt class="sig sig-object cpp">
+<span class="property"><span class="pre">friend</span> <span class="pre">class</span></span> <span class="pre">TensorNetworkV2Accessor</span></dt>
+</dl>
+
+</div>
+<dl class="cpp struct">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV218CreateGraphOptionsE">
+<span id="_CPPv3N7sequant15TensorNetworkV218CreateGraphOptionsE"></span><span id="_CPPv2N7sequant15TensorNetworkV218CreateGraphOptionsE"></span><span id="sequant::TensorNetworkV2::CreateGraphOptions"></span><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_create_graph_options"></span><span class="k"><span class="pre">struct</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">CreateGraphOptions</span></span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV218CreateGraphOptionsE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>options for generating <a class="reference internal" href="structsequant_1_1_tensor_network_v2_1_1_graph.html#structsequant_1_1_tensor_network_v2_1_1_graph"><span class="std std-ref">Graph</span></a> from an object of this type </p>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-members">Public Members</p>
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV218CreateGraphOptions13named_indicesE">
+<span id="_CPPv3N7sequant15TensorNetworkV218CreateGraphOptions13named_indicesE"></span><span id="_CPPv2N7sequant15TensorNetworkV218CreateGraphOptions13named_indicesE"></span><span id="sequant::TensorNetworkV2::CreateGraphOptions::named_indices__NamedIndexSetCP"></span><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_create_graph_options_1ab12b94832d696dda6c4362b058f518c3"></span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV213NamedIndexSetE" title="sequant::TensorNetworkV2::NamedIndexSet"><span class="n"><span class="pre">NamedIndexSet</span></span></a><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="sig-name descname"><span class="n"><span class="pre">named_indices</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">nullptr</span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV218CreateGraphOptions13named_indicesE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>pointer to the set of named indices (ordinarily, this includes all external indices); default is nullptr, which means use all external indices for named indices </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV218CreateGraphOptions22distinct_named_indicesE">
+<span id="_CPPv3N7sequant15TensorNetworkV218CreateGraphOptions22distinct_named_indicesE"></span><span id="_CPPv2N7sequant15TensorNetworkV218CreateGraphOptions22distinct_named_indicesE"></span><span id="sequant::TensorNetworkV2::CreateGraphOptions::distinct_named_indices__b"></span><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_create_graph_options_1ae4e5c2f113d6714603025eebc28698fb"></span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">distinct_named_indices</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">false</span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV218CreateGraphOptions22distinct_named_indicesE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>if false, will use same color for all named indices that have same <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index_1ae348f056ca506bf2d71e933b7ae7b2d9"><span class="std std-ref">Index::color()</span></a>, else will use distinct color for each </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV218CreateGraphOptions11make_labelsE">
+<span id="_CPPv3N7sequant15TensorNetworkV218CreateGraphOptions11make_labelsE"></span><span id="_CPPv2N7sequant15TensorNetworkV218CreateGraphOptions11make_labelsE"></span><span id="sequant::TensorNetworkV2::CreateGraphOptions::make_labels__b"></span><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_create_graph_options_1a350b20229c131bd0af19100dfc8fb8e5"></span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">make_labels</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">true</span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV218CreateGraphOptions11make_labelsE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>if false, will not generate the labels </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV218CreateGraphOptions14make_texlabelsE">
+<span id="_CPPv3N7sequant15TensorNetworkV218CreateGraphOptions14make_texlabelsE"></span><span id="_CPPv2N7sequant15TensorNetworkV218CreateGraphOptions14make_texlabelsE"></span><span id="sequant::TensorNetworkV2::CreateGraphOptions::make_texlabels__b"></span><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_create_graph_options_1aca479a0378373f3681013bb79296c6c5"></span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">make_texlabels</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">true</span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV218CreateGraphOptions14make_texlabelsE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>if false, will not generate the TeX labels </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV218CreateGraphOptions18make_idx_to_vertexE">
+<span id="_CPPv3N7sequant15TensorNetworkV218CreateGraphOptions18make_idx_to_vertexE"></span><span id="_CPPv2N7sequant15TensorNetworkV218CreateGraphOptions18make_idx_to_vertexE"></span><span id="sequant::TensorNetworkV2::CreateGraphOptions::make_idx_to_vertex__b"></span><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_create_graph_options_1a260b767ac5af7689a1fb3dacb877a276"></span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">make_idx_to_vertex</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">false</span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV218CreateGraphOptions18make_idx_to_vertexE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>if false, will not generate the Index-&gt;vertex map </p>
+</dd></dl>
+
+</div>
+</dd></dl>
+
+<dl class="cpp class">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV24EdgeE">
+<span id="_CPPv3N7sequant15TensorNetworkV24EdgeE"></span><span id="_CPPv2N7sequant15TensorNetworkV24EdgeE"></span><span id="sequant::TensorNetworkV2::Edge"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1_1_edge"></span><span class="k"><span class="pre">class</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Edge</span></span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV24EdgeE" title="Link to this definition">¶</a><br /></dt>
+<dd><p><a class="reference internal" href="classsequant_1_1_tensor_network_v2_1_1_edge.html#classsequant_1_1_tensor_network_v2_1_1_edge"><span class="std std-ref">Edge</span></a> in a <a class="reference internal" href="#classsequant_1_1_tensor_network_v2"><span class="std std-ref">TensorNetworkV2</span></a> = the <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a> annotating it + a pair of indices to identify which <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> terminals it’s connected to. </p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>tensor terminals in a sequence of tensors are indexed as follows:<ul class="simple">
+<li><p>&gt;0 for bra terminals (i.e. “+7” indicated connection to a bra terminal of 7th tensor object in the sequence)</p></li>
+<li><p>&lt;0 for ket terminals</p></li>
+<li><p>0 if free (not attached to any tensor objects)</p></li>
+<li><p>position records the terminal’s location in the sequence of bra/ket terminals (always 0 for symmetric/antisymmetric tensors) Terminal indices are sorted by the tensor index (i.e. by the absolute value of the terminal index), followed by position </p></li>
+</ul>
+</p>
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-functions">Public Functions</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV24Edge4EdgeEv">
+<span id="_CPPv3N7sequant15TensorNetworkV24Edge4EdgeEv"></span><span id="_CPPv2N7sequant15TensorNetworkV24Edge4EdgeEv"></span><span id="sequant::TensorNetworkV2::Edge::Edge"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1_1_edge_1a8a3c07a4d8194bd31da94cc9b0c61a5f"></span><span class="sig-name descname"><span class="n"><span class="pre">Edge</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">default</span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV24Edge4EdgeEv" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV24Edge4EdgeE6Vertex">
+<span id="_CPPv3N7sequant15TensorNetworkV24Edge4EdgeE6Vertex"></span><span id="_CPPv2N7sequant15TensorNetworkV24Edge4EdgeE6Vertex"></span><span id="sequant::TensorNetworkV2::Edge::Edge__Vertex"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1_1_edge_1abdf334d834bf662742cc3ccf217f5f92"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">explicit</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Edge</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV26VertexE" title="sequant::TensorNetworkV2::Vertex"><span class="n"><span class="pre">Vertex</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">vertex</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV24Edge4EdgeE6Vertex" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV24Edge4EdgeE6VertexPK5Index">
+<span id="_CPPv3N7sequant15TensorNetworkV24Edge4EdgeE6VertexPK5Index"></span><span id="_CPPv2N7sequant15TensorNetworkV24Edge4EdgeE6VertexPK5Index"></span><span id="sequant::TensorNetworkV2::Edge::Edge__Vertex.IndexCP"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1_1_edge_1a62d8d47393da431a25315f10434d352b"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Edge</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV26VertexE" title="sequant::TensorNetworkV2::Vertex"><span class="n"><span class="pre">Vertex</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">vertex</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="n sig-param"><span class="pre">index</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV24Edge4EdgeE6VertexPK5Index" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV24Edge10connect_toE6Vertex">
+<span id="_CPPv3N7sequant15TensorNetworkV24Edge10connect_toE6Vertex"></span><span id="_CPPv2N7sequant15TensorNetworkV24Edge10connect_toE6Vertex"></span><span id="sequant::TensorNetworkV2::Edge::connect_to__Vertex"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1_1_edge_1a174e39fdd0b9f521e6d70029a89d5dbb"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV24EdgeE" title="sequant::TensorNetworkV2::Edge"><span class="n"><span class="pre">Edge</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">connect_to</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV26VertexE" title="sequant::TensorNetworkV2::Vertex"><span class="n"><span class="pre">Vertex</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">vertex</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV24Edge10connect_toE6Vertex" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant15TensorNetworkV24EdgeltERK4Edge">
+<span id="_CPPv3NK7sequant15TensorNetworkV24EdgeltERK4Edge"></span><span id="_CPPv2NK7sequant15TensorNetworkV24EdgeltERK4Edge"></span><span id="sequant::TensorNetworkV2::Edge::lt-operator__EdgeCRC"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1_1_edge_1a5231b4132452e204aaa604483ae00528"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="k"><span class="pre">operator</span></span><span class="o"><span class="pre">&lt;</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV24EdgeE" title="sequant::TensorNetworkV2::Edge"><span class="n"><span class="pre">Edge</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">other</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant15TensorNetworkV24EdgeltERK4Edge" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant15TensorNetworkV24EdgeeqERK4Edge">
+<span id="_CPPv3NK7sequant15TensorNetworkV24EdgeeqERK4Edge"></span><span id="_CPPv2NK7sequant15TensorNetworkV24EdgeeqERK4Edge"></span><span id="sequant::TensorNetworkV2::Edge::eq-operator__EdgeCRC"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1_1_edge_1aa2bd10f15c877ce6835baf2e3bea05dd"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="k"><span class="pre">operator</span></span><span class="o"><span class="pre">==</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV24EdgeE" title="sequant::TensorNetworkV2::Edge"><span class="n"><span class="pre">Edge</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">other</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant15TensorNetworkV24EdgeeqERK4Edge" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant15TensorNetworkV24Edge12first_vertexEv">
+<span id="_CPPv3NK7sequant15TensorNetworkV24Edge12first_vertexEv"></span><span id="_CPPv2NK7sequant15TensorNetworkV24Edge12first_vertexEv"></span><span id="sequant::TensorNetworkV2::Edge::first_vertexC"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1_1_edge_1abda83c9a7d52f1a6e87684fa58c491d6"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV26VertexE" title="sequant::TensorNetworkV2::Vertex"><span class="n"><span class="pre">Vertex</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">first_vertex</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant15TensorNetworkV24Edge12first_vertexEv" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant15TensorNetworkV24Edge13second_vertexEv">
+<span id="_CPPv3NK7sequant15TensorNetworkV24Edge13second_vertexEv"></span><span id="_CPPv2NK7sequant15TensorNetworkV24Edge13second_vertexEv"></span><span id="sequant::TensorNetworkV2::Edge::second_vertexC"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1_1_edge_1a2a720863a901c7845b6450f663d59611"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV26VertexE" title="sequant::TensorNetworkV2::Vertex"><span class="n"><span class="pre">Vertex</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">second_vertex</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant15TensorNetworkV24Edge13second_vertexEv" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant15TensorNetworkV24Edge12vertex_countEv">
+<span id="_CPPv3NK7sequant15TensorNetworkV24Edge12vertex_countEv"></span><span id="_CPPv2NK7sequant15TensorNetworkV24Edge12vertex_countEv"></span><span id="sequant::TensorNetworkV2::Edge::vertex_countC"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1_1_edge_1a0faff78d2a18ce5de6abde4f1fd3bd9e"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">vertex_count</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant15TensorNetworkV24Edge12vertex_countEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the number of attached terminals (0, 1, or 2) </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant15TensorNetworkV24Edge3idxEv">
+<span id="_CPPv3NK7sequant15TensorNetworkV24Edge3idxEv"></span><span id="_CPPv2NK7sequant15TensorNetworkV24Edge3idxEv"></span><span id="sequant::TensorNetworkV2::Edge::idxC"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1_1_edge_1a56c374c3af3ab359744659ed81b92bb0"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">idx</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant15TensorNetworkV24Edge3idxEv" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+</dd></dl>
+
+<dl class="cpp struct">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV25GraphE">
+<span id="_CPPv3N7sequant15TensorNetworkV25GraphE"></span><span id="_CPPv2N7sequant15TensorNetworkV25GraphE"></span><span id="sequant::TensorNetworkV2::Graph"></span><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_graph"></span><span class="k"><span class="pre">struct</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Graph</span></span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV25GraphE" title="Link to this definition">¶</a><br /></dt>
+<dd><div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-types">Public Types</p>
+<dl class="cpp type">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV25Graph11VertexColorE">
+<span id="_CPPv3N7sequant15TensorNetworkV25Graph11VertexColorE"></span><span id="_CPPv2N7sequant15TensorNetworkV25Graph11VertexColorE"></span><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_graph_1adb0ee7e2b516854ec497abb9a6167fee"></span><span class="k"><span class="pre">using</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">VertexColor</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="n"><span class="pre">tensor_network</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1tensor__network_1af595a3ac0783ec5546089688d505ec69.html#_CPPv4N7sequant14tensor_network11VertexColorE" title="sequant::tensor_network::VertexColor"><span class="n"><span class="pre">VertexColor</span></span></a><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV25Graph11VertexColorE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>The type used to encode the color of a vertex. The restriction of this being as 32-bit integer comes from how BLISS is trying to convert these into RGB values. </p>
+</dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-functions">Public Functions</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV25Graph5GraphEv">
+<span id="_CPPv3N7sequant15TensorNetworkV25Graph5GraphEv"></span><span id="_CPPv2N7sequant15TensorNetworkV25Graph5GraphEv"></span><span id="sequant::TensorNetworkV2::Graph::Graph"></span><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_graph_1afac9b2a7a48067415961b44b3064ace5"></span><span class="sig-name descname"><span class="n"><span class="pre">Graph</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">default</span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV25Graph5GraphEv" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant15TensorNetworkV25Graph19vertex_to_index_idxENSt6size_tE">
+<span id="_CPPv3NK7sequant15TensorNetworkV25Graph19vertex_to_index_idxENSt6size_tE"></span><span id="_CPPv2NK7sequant15TensorNetworkV25Graph19vertex_to_index_idxENSt6size_tE"></span><span id="sequant::TensorNetworkV2::Graph::vertex_to_index_idx__std::sC"></span><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_graph_1ac2c3082761aee43cb3f716eeb26ebc73"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">vertex_to_index_idx</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">vertex</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant15TensorNetworkV25Graph19vertex_to_index_idxENSt6size_tE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant15TensorNetworkV25Graph20vertex_to_tensor_idxENSt6size_tE">
+<span id="_CPPv3NK7sequant15TensorNetworkV25Graph20vertex_to_tensor_idxENSt6size_tE"></span><span id="_CPPv2NK7sequant15TensorNetworkV25Graph20vertex_to_tensor_idxENSt6size_tE"></span><span id="sequant::TensorNetworkV2::Graph::vertex_to_tensor_idx__std::sC"></span><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_graph_1ad104da0448dd9fa919cfa8c7a8b2aaed"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">vertex_to_tensor_idx</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">vertex</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant15TensorNetworkV25Graph20vertex_to_tensor_idxENSt6size_tE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-members">Public Members</p>
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV25Graph11bliss_graphE">
+<span id="_CPPv3N7sequant15TensorNetworkV25Graph11bliss_graphE"></span><span id="_CPPv2N7sequant15TensorNetworkV25Graph11bliss_graphE"></span><span id="sequant::TensorNetworkV2::Graph::bliss_graph__std::unique_ptr:bliss::Graph:"></span><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_graph_1a7ba6a4db0c2b2b189ed2419ef19ff9b9"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">unique_ptr</span></span><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">bliss</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">Graph</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">bliss_graph</span></span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV25Graph11bliss_graphE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV25Graph13vertex_labelsE">
+<span id="_CPPv3N7sequant15TensorNetworkV25Graph13vertex_labelsE"></span><span id="_CPPv2N7sequant15TensorNetworkV25Graph13vertex_labelsE"></span><span id="sequant::TensorNetworkV2::Graph::vertex_labels__std::vector:std::wstring:"></span><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_graph_1a91f24aec3bd31d81531be1c7befda78b"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">vector</span></span><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">wstring</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">vertex_labels</span></span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV25Graph13vertex_labelsE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV25Graph16vertex_texlabelsE">
+<span id="_CPPv3N7sequant15TensorNetworkV25Graph16vertex_texlabelsE"></span><span id="_CPPv2N7sequant15TensorNetworkV25Graph16vertex_texlabelsE"></span><span id="sequant::TensorNetworkV2::Graph::vertex_texlabels__std::vector:std::optional:std::wstring::"></span><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_graph_1a687a7263309eb13934acfd2d8b833ca6"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">vector</span></span><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">optional</span></span><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">wstring</span></span><span class="p"><span class="pre">&gt;</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">vertex_texlabels</span></span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV25Graph16vertex_texlabelsE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV25Graph13vertex_colorsE">
+<span id="_CPPv3N7sequant15TensorNetworkV25Graph13vertex_colorsE"></span><span id="_CPPv2N7sequant15TensorNetworkV25Graph13vertex_colorsE"></span><span id="sequant::TensorNetworkV2::Graph::vertex_colors__std::vector:VertexColor:"></span><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_graph_1ad8b9739052aa36f17dd537f6d17fc89e"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">vector</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV25Graph11VertexColorE" title="sequant::TensorNetworkV2::Graph::VertexColor"><span class="n"><span class="pre">VertexColor</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">vertex_colors</span></span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV25Graph13vertex_colorsE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV25Graph12vertex_typesE">
+<span id="_CPPv3N7sequant15TensorNetworkV25Graph12vertex_typesE"></span><span id="_CPPv2N7sequant15TensorNetworkV25Graph12vertex_typesE"></span><span id="sequant::TensorNetworkV2::Graph::vertex_types__std::vector:VertexType:"></span><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_graph_1a6344ab6cf5b65201a525d39fe01a2489"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">vector</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="enum_namespacesequant_1abc1f577f3e668a1f2fe7cc88e9f01104.html#_CPPv4N7sequant10VertexTypeE" title="sequant::VertexType"><span class="n"><span class="pre">VertexType</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">vertex_types</span></span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV25Graph12vertex_typesE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV25Graph13idx_to_vertexE">
+<span id="_CPPv3N7sequant15TensorNetworkV25Graph13idx_to_vertexE"></span><span id="_CPPv2N7sequant15TensorNetworkV25Graph13idx_to_vertexE"></span><span id="sequant::TensorNetworkV2::Graph::idx_to_vertex__container::map:Index.std::s:"></span><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_graph_1ab40433264a53f6fe1b1b8b280b36cf35"></span><span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1a8cf49ee47e89d12fc0a09e70ef760674.html#_CPPv4I000EN7sequant9container3mapE" title="sequant::container::map"><span class="n"><span class="pre">map</span></span></a><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">idx_to_vertex</span></span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV25Graph13idx_to_vertexE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+</dd></dl>
+
+<dl class="cpp struct">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadataE">
+<span id="_CPPv3N7sequant15TensorNetworkV228SlotCanonicalizationMetadataE"></span><span id="_CPPv2N7sequant15TensorNetworkV228SlotCanonicalizationMetadataE"></span><span id="sequant::TensorNetworkV2::SlotCanonicalizationMetadata"></span><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_slot_canonicalization_metadata"></span><span class="k"><span class="pre">struct</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">SlotCanonicalizationMetadata</span></span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadataE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>metadata produced by <a class="reference internal" href="#classsequant_1_1_tensor_network_v2_1abe9af290f1b4b0a641a94ecb4d63194a"><span class="std std-ref">canonicalize_slots()</span></a></p>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-types">Public Types</p>
+<dl class="cpp type">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata21named_index_compare_tE">
+<span id="_CPPv3N7sequant15TensorNetworkV228SlotCanonicalizationMetadata21named_index_compare_tE"></span><span id="_CPPv2N7sequant15TensorNetworkV228SlotCanonicalizationMetadata21named_index_compare_tE"></span><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_slot_canonicalization_metadata_1a1eb7f0510a09e8c0e5975559519e362f"></span><span class="k"><span class="pre">using</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">named_index_compare_t</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">function</span></span><span class="p"><span class="pre">&lt;</span></span><span class="kt"><span class="pre">bool</span></span><span class="p"><span class="pre">(</span></span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">pair</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="p"><span class="pre">*</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1ab2a0753a7ea201ff961c26c581dfb192.html#_CPPv4N7sequant13IndexSlotTypeE" title="sequant::IndexSlotType"><span class="n"><span class="pre">IndexSlotType</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">pair</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="p"><span class="pre">*</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1ab2a0753a7ea201ff961c26c581dfb192.html#_CPPv4N7sequant13IndexSlotTypeE" title="sequant::IndexSlotType"><span class="n"><span class="pre">IndexSlotType</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">)</span></span><span class="p"><span class="pre">&gt;</span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata21named_index_compare_tE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>type of less-than comparison function for named indices, receives {<a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a> ptr, its slot type} </p>
+</dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-functions">Public Functions</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant15TensorNetworkV228SlotCanonicalizationMetadata10hash_valueEv">
+<span id="_CPPv3NK7sequant15TensorNetworkV228SlotCanonicalizationMetadata10hash_valueEv"></span><span id="_CPPv2NK7sequant15TensorNetworkV228SlotCanonicalizationMetadata10hash_valueEv"></span><span id="sequant::TensorNetworkV2::SlotCanonicalizationMetadata::hash_valueC"></span><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_slot_canonicalization_metadata_1a95971297fbaa69914f18264c88ce7e6b"></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">hash_value</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant15TensorNetworkV228SlotCanonicalizationMetadata10hash_valueEv" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant15TensorNetworkV228SlotCanonicalizationMetadata14get_index_viewEv">
+<span id="_CPPv3NK7sequant15TensorNetworkV228SlotCanonicalizationMetadata14get_index_viewEv"></span><span id="_CPPv2NK7sequant15TensorNetworkV228SlotCanonicalizationMetadata14get_index_viewEv"></span><span id="sequant::TensorNetworkV2::SlotCanonicalizationMetadata::get_index_viewC"></span><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_slot_canonicalization_metadata_1a0e99e9023f95d6e75b51ed2be1aa1da6"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">get_index_view</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant15TensorNetworkV228SlotCanonicalizationMetadata14get_index_viewEv" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4I0ENK7sequant15TensorNetworkV228SlotCanonicalizationMetadata11get_indicesEDav">
+<span id="_CPPv3I0ENK7sequant15TensorNetworkV228SlotCanonicalizationMetadata11get_indicesEv"></span><span id="_CPPv2I0ENK7sequant15TensorNetworkV228SlotCanonicalizationMetadata11get_indicesEv"></span><span class="k"><span class="pre">template</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">typename</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Cont</span></span></span><span class="p"><span class="pre">&gt;</span></span><br /><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_slot_canonicalization_metadata_1a85e11a0e3b7ea95edeabfd09ae0ab91f"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">get_indices</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4I0ENK7sequant15TensorNetworkV228SlotCanonicalizationMetadata11get_indicesEDav" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-members">Public Members</p>
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata13named_indicesE">
+<span id="_CPPv3N7sequant15TensorNetworkV228SlotCanonicalizationMetadata13named_indicesE"></span><span id="_CPPv2N7sequant15TensorNetworkV228SlotCanonicalizationMetadata13named_indicesE"></span><span id="sequant::TensorNetworkV2::SlotCanonicalizationMetadata::named_indices__NamedIndexSet"></span><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_slot_canonicalization_metadata_1af4d247e199ba45f96e675bf4b8804592"></span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV213NamedIndexSetE" title="sequant::TensorNetworkV2::NamedIndexSet"><span class="n"><span class="pre">NamedIndexSet</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">named_indices</span></span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata13named_indicesE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>list of named indices </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata19named_index_compareE">
+<span id="_CPPv3N7sequant15TensorNetworkV228SlotCanonicalizationMetadata19named_index_compareE"></span><span id="_CPPv2N7sequant15TensorNetworkV228SlotCanonicalizationMetadata19named_index_compareE"></span><span id="sequant::TensorNetworkV2::SlotCanonicalizationMetadata::named_index_compare__named_index_compare_t"></span><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_slot_canonicalization_metadata_1a09dd992e6261e3fbd3bac6c6a4217be9"></span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata21named_index_compare_tE" title="sequant::TensorNetworkV2::SlotCanonicalizationMetadata::named_index_compare_t"><span class="n"><span class="pre">named_index_compare_t</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">named_index_compare</span></span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata19named_index_compareE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>less-than comparison function for named indices, used for coarse-grained sorting of named indices, before sorting to canonical order </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata23named_indices_canonicalE">
+<span id="_CPPv3N7sequant15TensorNetworkV228SlotCanonicalizationMetadata23named_indices_canonicalE"></span><span id="_CPPv2N7sequant15TensorNetworkV228SlotCanonicalizationMetadata23named_indices_canonicalE"></span><span id="sequant::TensorNetworkV2::SlotCanonicalizationMetadata::named_indices_canonical__container::svector:NamedIndexSet::const_iterator:"></span><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_slot_canonicalization_metadata_1a70d09cb421394bd25069f2552ee64300"></span><span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1a096d649df6109569c16ac6fd1cb6f853.html#_CPPv4I0_NSt6size_tEEN7sequant9container7svectorE" title="sequant::container::svector"><span class="n"><span class="pre">svector</span></span></a><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV213NamedIndexSetE" title="sequant::TensorNetworkV2::NamedIndexSet"><span class="n"><span class="pre">NamedIndexSet</span></span></a><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">const_iterator</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">named_indices_canonical</span></span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata23named_indices_canonicalE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>list of named indices, sorted first by named_index_compare, then by canonical order; iterators point to named_indices </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata5graphE">
+<span id="_CPPv3N7sequant15TensorNetworkV228SlotCanonicalizationMetadata5graphE"></span><span id="_CPPv2N7sequant15TensorNetworkV228SlotCanonicalizationMetadata5graphE"></span><span id="sequant::TensorNetworkV2::SlotCanonicalizationMetadata::graph__std::shared_ptr:bliss::Graph:"></span><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_slot_canonicalization_metadata_1a6c10c43c5afc8122959496257ddf897a"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">shared_ptr</span></span><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">bliss</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">Graph</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">graph</span></span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata5graphE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>canonicalized colored graph, use graph-&gt;cmp to compare against another to detect equivalence </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata5phaseE">
+<span id="_CPPv3N7sequant15TensorNetworkV228SlotCanonicalizationMetadata5phaseE"></span><span id="_CPPv2N7sequant15TensorNetworkV228SlotCanonicalizationMetadata5phaseE"></span><span id="sequant::TensorNetworkV2::SlotCanonicalizationMetadata::phase__std::int8_t"></span><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_slot_canonicalization_metadata_1aa4bf31995974ee083316819ad704dc89"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">int8_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">phase</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="o"><span class="pre">+</span></span><span class="m"><span class="pre">1</span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata5phaseE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>if tensor network contains tensors with antisymmetric bra/ket this reports the phase change due to permutation of slots relative to their input order </p>
+</dd></dl>
+
+</div>
+</dd></dl>
+
+<dl class="cpp class">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV26VertexE">
+<span id="_CPPv3N7sequant15TensorNetworkV26VertexE"></span><span id="_CPPv2N7sequant15TensorNetworkV26VertexE"></span><span id="sequant::TensorNetworkV2::Vertex"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1_1_vertex"></span><span class="k"><span class="pre">class</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Vertex</span></span></span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV26VertexE" title="Link to this definition">¶</a><br /></dt>
+<dd><div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-functions">Public Functions</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV26Vertex6VertexE6OriginNSt6size_tENSt6size_tE8Symmetry">
+<span id="_CPPv3N7sequant15TensorNetworkV26Vertex6VertexE6OriginNSt6size_tENSt6size_tE8Symmetry"></span><span id="_CPPv2N7sequant15TensorNetworkV26Vertex6VertexE6OriginNSt6size_tENSt6size_tE8Symmetry"></span><span id="sequant::TensorNetworkV2::Vertex::Vertex__Origin.std::s.std::s.Symmetry"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1_1_vertex_1a214b10f980a5bdd2a57fbbb8607c97bc"></span><span class="sig-name descname"><span class="n"><span class="pre">Vertex</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV26OriginE" title="sequant::TensorNetworkV2::Origin"><span class="n"><span class="pre">Origin</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">origin</span></span>, <span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">terminal_idx</span></span>, <span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">index_slot</span></span>, <a class="reference internal" href="enum_namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485.html#_CPPv4N7sequant8SymmetryE" title="sequant::Symmetry"><span class="n"><span class="pre">Symmetry</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">terminal_symm</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant15TensorNetworkV26Vertex6VertexE6OriginNSt6size_tENSt6size_tE8Symmetry" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant15TensorNetworkV26Vertex9getOriginEv">
+<span id="_CPPv3NK7sequant15TensorNetworkV26Vertex9getOriginEv"></span><span id="_CPPv2NK7sequant15TensorNetworkV26Vertex9getOriginEv"></span><span id="sequant::TensorNetworkV2::Vertex::getOriginC"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1_1_vertex_1a0e5445649791d33742033698ba6b314b"></span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV26OriginE" title="sequant::TensorNetworkV2::Origin"><span class="n"><span class="pre">Origin</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">getOrigin</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant15TensorNetworkV26Vertex9getOriginEv" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant15TensorNetworkV26Vertex16getTerminalIndexEv">
+<span id="_CPPv3NK7sequant15TensorNetworkV26Vertex16getTerminalIndexEv"></span><span id="_CPPv2NK7sequant15TensorNetworkV26Vertex16getTerminalIndexEv"></span><span id="sequant::TensorNetworkV2::Vertex::getTerminalIndexC"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1_1_vertex_1aa66670e0a24a8ed12e162873664cb82c"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">getTerminalIndex</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant15TensorNetworkV26Vertex16getTerminalIndexEv" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant15TensorNetworkV26Vertex12getIndexSlotEv">
+<span id="_CPPv3NK7sequant15TensorNetworkV26Vertex12getIndexSlotEv"></span><span id="_CPPv2NK7sequant15TensorNetworkV26Vertex12getIndexSlotEv"></span><span id="sequant::TensorNetworkV2::Vertex::getIndexSlotC"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1_1_vertex_1a14d90f7a144c875831f05a44e157ce73"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">getIndexSlot</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant15TensorNetworkV26Vertex12getIndexSlotEv" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant15TensorNetworkV26Vertex19getTerminalSymmetryEv">
+<span id="_CPPv3NK7sequant15TensorNetworkV26Vertex19getTerminalSymmetryEv"></span><span id="_CPPv2NK7sequant15TensorNetworkV26Vertex19getTerminalSymmetryEv"></span><span id="sequant::TensorNetworkV2::Vertex::getTerminalSymmetryC"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1_1_vertex_1a36566f97a887d31141b33820eb57e619"></span><a class="reference internal" href="enum_namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485.html#_CPPv4N7sequant8SymmetryE" title="sequant::Symmetry"><span class="n"><span class="pre">Symmetry</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">getTerminalSymmetry</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant15TensorNetworkV26Vertex19getTerminalSymmetryEv" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant15TensorNetworkV26VertexltERK6Vertex">
+<span id="_CPPv3NK7sequant15TensorNetworkV26VertexltERK6Vertex"></span><span id="_CPPv2NK7sequant15TensorNetworkV26VertexltERK6Vertex"></span><span id="sequant::TensorNetworkV2::Vertex::lt-operator__VertexCRC"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1_1_vertex_1a8e76eed10eb4987742fac31af25babe4"></span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="k"><span class="pre">operator</span></span><span class="o"><span class="pre">&lt;</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV26VertexE" title="sequant::TensorNetworkV2::Vertex"><span class="n"><span class="pre">Vertex</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">rhs</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant15TensorNetworkV26VertexltERK6Vertex" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant15TensorNetworkV26VertexeqERK6Vertex">
+<span id="_CPPv3NK7sequant15TensorNetworkV26VertexeqERK6Vertex"></span><span id="_CPPv2NK7sequant15TensorNetworkV26VertexeqERK6Vertex"></span><span id="sequant::TensorNetworkV2::Vertex::eq-operator__VertexCRC"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1_1_vertex_1a06dfe5dbc10e90c94bb891bcb97d4094"></span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="k"><span class="pre">operator</span></span><span class="o"><span class="pre">==</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV26VertexE" title="sequant::TensorNetworkV2::Vertex"><span class="n"><span class="pre">Vertex</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">rhs</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant15TensorNetworkV26VertexeqERK6Vertex" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, SeQuant developers
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            <div class="last-updated">
+              Last updated on Feb 27, 2026 8:35:02 PM</div>
+          </div>
+          <div class="right-details">
+            <div class="icons">
+              <a class="muted-link fa-brands fa-solid fa-github fa-2x" href="https://github.com/ValeevGroup/SeQuant" aria-label="GitHub"></a>
+              
+            </div>
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Class TensorNetworkV2</a><ul>
+<li><a class="reference internal" href="#nested-relationships">Nested Relationships</a><ul>
+<li><a class="reference internal" href="#nested-types">Nested Types</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#class-documentation">Class Documentation</a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV2E"><code class="docutils literal notranslate"><span class="pre">sequant::TensorNetworkV2</span></code></a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV26OriginE"><code class="docutils literal notranslate"><span class="pre">Origin</span></code></a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV26Origin3BraE"><code class="docutils literal notranslate"><span class="pre">Bra</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV26Origin3KetE"><code class="docutils literal notranslate"><span class="pre">Ket</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV26Origin3AuxE"><code class="docutils literal notranslate"><span class="pre">Aux</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV213NamedIndexSetE"><code class="docutils literal notranslate"><span class="pre">NamedIndexSet</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV215TensorNetworkV2ERK4Expr"><code class="docutils literal notranslate"><span class="pre">TensorNetworkV2()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV215TensorNetworkV2ERK7ExprPtr"><code class="docutils literal notranslate"><span class="pre">TensorNetworkV2()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4I00EN7sequant15TensorNetworkV215TensorNetworkV2ERK12ExprPtrRange"><code class="docutils literal notranslate"><span class="pre">TensorNetworkV2()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant15TensorNetworkV27tensorsEv"><code class="docutils literal notranslate"><span class="pre">tensors()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant15TensorNetworkV221tensor_input_ordinalsEv"><code class="docutils literal notranslate"><span class="pre">tensor_input_ordinals()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV212canonicalizeERKN9container6vectorINSt7wstringEEEbPK13NamedIndexSet"><code class="docutils literal notranslate"><span class="pre">canonicalize()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV218canonicalize_slotsERKN9container6vectorINSt7wstringEEEPK13NamedIndexSetN28SlotCanonicalizationMetadata21named_index_compare_tE"><code class="docutils literal notranslate"><span class="pre">canonicalize_slots()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV29factorizeEv"><code class="docutils literal notranslate"><span class="pre">factorize()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant15TensorNetworkV25edgesEv"><code class="docutils literal notranslate"><span class="pre">edges()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant15TensorNetworkV211ext_indicesEv"><code class="docutils literal notranslate"><span class="pre">ext_indices()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant15TensorNetworkV212create_graphERK18CreateGraphOptions"><code class="docutils literal notranslate"><span class="pre">create_graph()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV27versionEv"><code class="docutils literal notranslate"><span class="pre">version()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV226make_default_graph_optionsEv"><code class="docutils literal notranslate"><span class="pre">make_default_graph_options()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV218CreateGraphOptionsE"><code class="docutils literal notranslate"><span class="pre">sequant::TensorNetworkV2::CreateGraphOptions</span></code></a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV218CreateGraphOptions13named_indicesE"><code class="docutils literal notranslate"><span class="pre">named_indices</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV218CreateGraphOptions22distinct_named_indicesE"><code class="docutils literal notranslate"><span class="pre">distinct_named_indices</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV218CreateGraphOptions11make_labelsE"><code class="docutils literal notranslate"><span class="pre">make_labels</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV218CreateGraphOptions14make_texlabelsE"><code class="docutils literal notranslate"><span class="pre">make_texlabels</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV218CreateGraphOptions18make_idx_to_vertexE"><code class="docutils literal notranslate"><span class="pre">make_idx_to_vertex</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV24EdgeE"><code class="docutils literal notranslate"><span class="pre">sequant::TensorNetworkV2::Edge</span></code></a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV24Edge4EdgeEv"><code class="docutils literal notranslate"><span class="pre">Edge()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV24Edge4EdgeE6Vertex"><code class="docutils literal notranslate"><span class="pre">Edge()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV24Edge4EdgeE6VertexPK5Index"><code class="docutils literal notranslate"><span class="pre">Edge()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV24Edge10connect_toE6Vertex"><code class="docutils literal notranslate"><span class="pre">connect_to()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant15TensorNetworkV24EdgeltERK4Edge"><code class="docutils literal notranslate"><span class="pre">operator&lt;()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant15TensorNetworkV24EdgeeqERK4Edge"><code class="docutils literal notranslate"><span class="pre">operator==()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant15TensorNetworkV24Edge12first_vertexEv"><code class="docutils literal notranslate"><span class="pre">first_vertex()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant15TensorNetworkV24Edge13second_vertexEv"><code class="docutils literal notranslate"><span class="pre">second_vertex()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant15TensorNetworkV24Edge12vertex_countEv"><code class="docutils literal notranslate"><span class="pre">vertex_count()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant15TensorNetworkV24Edge3idxEv"><code class="docutils literal notranslate"><span class="pre">idx()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV25GraphE"><code class="docutils literal notranslate"><span class="pre">sequant::TensorNetworkV2::Graph</span></code></a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV25Graph11VertexColorE"><code class="docutils literal notranslate"><span class="pre">VertexColor</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV25Graph5GraphEv"><code class="docutils literal notranslate"><span class="pre">Graph()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant15TensorNetworkV25Graph19vertex_to_index_idxENSt6size_tE"><code class="docutils literal notranslate"><span class="pre">vertex_to_index_idx()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant15TensorNetworkV25Graph20vertex_to_tensor_idxENSt6size_tE"><code class="docutils literal notranslate"><span class="pre">vertex_to_tensor_idx()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV25Graph11bliss_graphE"><code class="docutils literal notranslate"><span class="pre">bliss_graph</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV25Graph13vertex_labelsE"><code class="docutils literal notranslate"><span class="pre">vertex_labels</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV25Graph16vertex_texlabelsE"><code class="docutils literal notranslate"><span class="pre">vertex_texlabels</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV25Graph13vertex_colorsE"><code class="docutils literal notranslate"><span class="pre">vertex_colors</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV25Graph12vertex_typesE"><code class="docutils literal notranslate"><span class="pre">vertex_types</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV25Graph13idx_to_vertexE"><code class="docutils literal notranslate"><span class="pre">idx_to_vertex</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadataE"><code class="docutils literal notranslate"><span class="pre">sequant::TensorNetworkV2::SlotCanonicalizationMetadata</span></code></a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata21named_index_compare_tE"><code class="docutils literal notranslate"><span class="pre">named_index_compare_t</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant15TensorNetworkV228SlotCanonicalizationMetadata10hash_valueEv"><code class="docutils literal notranslate"><span class="pre">hash_value()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant15TensorNetworkV228SlotCanonicalizationMetadata14get_index_viewEv"><code class="docutils literal notranslate"><span class="pre">get_index_view()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4I0ENK7sequant15TensorNetworkV228SlotCanonicalizationMetadata11get_indicesEDav"><code class="docutils literal notranslate"><span class="pre">get_indices()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata13named_indicesE"><code class="docutils literal notranslate"><span class="pre">named_indices</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata19named_index_compareE"><code class="docutils literal notranslate"><span class="pre">named_index_compare</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata23named_indices_canonicalE"><code class="docutils literal notranslate"><span class="pre">named_indices_canonical</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata5graphE"><code class="docutils literal notranslate"><span class="pre">graph</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata5phaseE"><code class="docutils literal notranslate"><span class="pre">phase</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV26VertexE"><code class="docutils literal notranslate"><span class="pre">sequant::TensorNetworkV2::Vertex</span></code></a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV26Vertex6VertexE6OriginNSt6size_tENSt6size_tE8Symmetry"><code class="docutils literal notranslate"><span class="pre">Vertex()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant15TensorNetworkV26Vertex9getOriginEv"><code class="docutils literal notranslate"><span class="pre">getOrigin()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant15TensorNetworkV26Vertex16getTerminalIndexEv"><code class="docutils literal notranslate"><span class="pre">getTerminalIndex()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant15TensorNetworkV26Vertex12getIndexSlotEv"><code class="docutils literal notranslate"><span class="pre">getIndexSlot()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant15TensorNetworkV26Vertex19getTerminalSymmetryEv"><code class="docutils literal notranslate"><span class="pre">getTerminalSymmetry()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant15TensorNetworkV26VertexltERK6Vertex"><code class="docutils literal notranslate"><span class="pre">operator&lt;()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant15TensorNetworkV26VertexeqERK6Vertex"><code class="docutils literal notranslate"><span class="pre">operator==()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script src="../_static/bootstrap-treeview/bootstrap-treeview.min.js?v=6a1e96b4"></script>
+    </body>
+</html>

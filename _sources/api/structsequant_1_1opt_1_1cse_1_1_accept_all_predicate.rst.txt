@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1opt_1_1cse_1_1_accept_all_predicate:
+
+Struct AcceptAllPredicate
+=========================
+
+- Defined in :ref:`file_SeQuant_core_optimize_common_subexpression_elimination.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::opt::cse::AcceptAllPredicate
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

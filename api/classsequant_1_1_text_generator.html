@@ -1,0 +1,770 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html">
+        <link rel="prefetch" href="../_static/logo.svg" as="image">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>Template Class TextGenerator - SeQuant Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/bootstrap-treeview/bootstrap-treeview.min.css?v=8176a87d" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=821744c5" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --sidebar-item-font-size: 0.95em;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">SeQuant Documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="../_static/logo.svg" alt="Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">User</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/getting_started/index.html">Getting started</a><input aria-label="Toggle navigation of Getting started" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/wick.html">Wick’s Theorem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/index_spaces.html">Register Index Spaces</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/operators.html">Operators</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../user/getting_started/installing.html">Installation</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/guide/index.html">User Guide</a><input aria-label="Toggle navigation of User Guide" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/operator.html">Operator Interface for Symbolic Many-Body Algebra</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/cc.html">Coupled-Cluster Class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/io.html">I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/evaluation.html">Evaluation Trace Analysis Using Nushell</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../developer/index.html">Developer docs</a><input aria-label="Toggle navigation of Developer docs" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../developer/documentation.html">Documentation Guide</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">API reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Maintainer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../maintainer/index.html">Maintainer docs</a><input aria-label="Toggle navigation of Maintainer docs" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../maintainer/release.html">Release Guide</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">See Also</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/tiledarray">TiledArray</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/mpqc">Massively Parallel Quantum Chemistry</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io">Valeev Research Group</a></li>
+</ul>
+
+</div></div>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="../_sources/api/classsequant_1_1_text_generator.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="template-class-textgenerator">
+<span id="exhale-class-classsequant-1-1-text-generator"></span><h1>Template Class TextGenerator<a class="headerlink" href="#template-class-textgenerator" title="Link to this heading">¶</a></h1>
+<ul class="simple">
+<li><p>Defined in <a class="reference internal" href="file_SeQuant_core_export_text_generator.hpp.html#file-sequant-core-export-text-generator-hpp"><span class="std std-ref">File text_generator.hpp</span></a></p></li>
+</ul>
+<section id="inheritance-relationships">
+<h2>Inheritance Relationships<a class="headerlink" href="#inheritance-relationships" title="Link to this heading">¶</a></h2>
+<section id="base-type">
+<h3>Base Type<a class="headerlink" href="#base-type" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">public</span> <span class="pre">sequant::Generator&lt;</span> <span class="pre">TextGeneratorContext</span> <span class="pre">&gt;</span></code> (<a class="reference internal" href="classsequant_1_1_generator.html#exhale-class-classsequant-1-1-generator"><span class="std std-ref">Template Class Generator</span></a>)</p></li>
+</ul>
+</section>
+</section>
+<section id="class-documentation">
+<h2>Class Documentation<a class="headerlink" href="#class-documentation" title="Link to this heading">¶</a></h2>
+<dl class="cpp class">
+<dt class="sig sig-object cpp" id="_CPPv4I0EN7sequant13TextGeneratorE">
+<span id="_CPPv3I0EN7sequant13TextGeneratorE"></span><span id="_CPPv2I0EN7sequant13TextGeneratorE"></span><span class="k"><span class="pre">template</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">typename</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Context</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="structsequant_1_1_text_generator_context.html#_CPPv4N7sequant20TextGeneratorContextE" title="sequant::TextGeneratorContext"><span class="n"><span class="pre">TextGeneratorContext</span></span></a><span class="p"><span class="pre">&gt;</span></span><br /><span class="target" id="classsequant_1_1_text_generator"></span><span class="k"><span class="pre">class</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">TextGenerator</span></span></span><span class="w"> </span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="k"><span class="pre">public</span></span><span class="w"> </span><span class="n"><span class="pre">sequant</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="classsequant_1_1_generator.html#_CPPv4I0EN7sequant9GeneratorE" title="sequant::Generator"><span class="n"><span class="pre">Generator</span></span></a><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="structsequant_1_1_text_generator_context.html#_CPPv4N7sequant20TextGeneratorContextE" title="sequant::TextGeneratorContext"><span class="n"><span class="pre">TextGeneratorContext</span></span></a><span class="p"><span class="pre">&gt;</span></span><a class="headerlink" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>A dummy generator producing a plain text representation of the code. Mostly intended for having a convenient backend for tests available but it is also very useful for debugging or other cases in which a human-readable version of the code is required. </p>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-functions">Public Functions</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator13TextGeneratorEv">
+<span id="_CPPv3N7sequant13TextGenerator13TextGeneratorEv"></span><span id="_CPPv2N7sequant13TextGenerator13TextGeneratorEv"></span><span id="sequant::TextGenerator::TextGenerator"></span><span class="target" id="classsequant_1_1_text_generator_1a29b890a64cd235b904d626ceb3575e6f"></span><span class="sig-name descname"><span class="n"><span class="pre">TextGenerator</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">default</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator13TextGeneratorEv" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGeneratorD0Ev">
+<span id="_CPPv3N7sequant13TextGeneratorD0Ev"></span><span id="_CPPv2N7sequant13TextGeneratorD0Ev"></span><span id="sequant::TextGenerator::~TextGenerator"></span><span class="target" id="classsequant_1_1_text_generator_1a21e8d1d60bcab0c5ec755221dd99edf8"></span><span class="sig-name descname"><span class="n"><span class="pre">~TextGenerator</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">default</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGeneratorD0Ev" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant13TextGenerator15get_format_nameEv">
+<span id="_CPPv3NK7sequant13TextGenerator15get_format_nameEv"></span><span id="_CPPv2NK7sequant13TextGenerator15get_format_nameEv"></span><span id="sequant::TextGenerator::get_format_nameC"></span><span class="target" id="classsequant_1_1_text_generator_1af56453b78ed257c33dda5ed9ea67df7e"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">get_format_name</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant13TextGenerator15get_format_nameEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The name of the format this generator will produce (i.e. the name of the programming language and/or framework) </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant13TextGenerator23supports_named_sectionsEv">
+<span id="_CPPv3NK7sequant13TextGenerator23supports_named_sectionsEv"></span><span id="_CPPv2NK7sequant13TextGenerator23supports_named_sectionsEv"></span><span id="sequant::TextGenerator::supports_named_sectionsC"></span><span class="target" id="classsequant_1_1_text_generator_1a8df5efffa332298ca76fe2687ac498f1"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">supports_named_sections</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant13TextGenerator23supports_named_sectionsEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Whether this generator supports named sections </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant13TextGenerator23requires_named_sectionsEv">
+<span id="_CPPv3NK7sequant13TextGenerator23requires_named_sectionsEv"></span><span id="_CPPv2NK7sequant13TextGenerator23requires_named_sectionsEv"></span><span id="sequant::TextGenerator::requires_named_sectionsC"></span><span class="target" id="classsequant_1_1_text_generator_1a46161f05c465b890aca6e318f5ec6b95"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">requires_named_sections</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant13TextGenerator23requires_named_sectionsEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Whether this generator requires names (that is, it can’t deal with code outside of named sections) </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant13TextGenerator23index_declaration_scopeEv">
+<span id="_CPPv3NK7sequant13TextGenerator23index_declaration_scopeEv"></span><span id="_CPPv2NK7sequant13TextGenerator23index_declaration_scopeEv"></span><span id="sequant::TextGenerator::index_declaration_scopeC"></span><span class="target" id="classsequant_1_1_text_generator_1afb454a6837146b3dc16295bbc1136a18"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1ad8b7e1b22081ba146172f0dbcdefc90f.html#_CPPv4N7sequant16DeclarationScopeE" title="sequant::DeclarationScope"><span class="n"><span class="pre">DeclarationScope</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">index_declaration_scope</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant13TextGenerator23index_declaration_scopeEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The scope at which this generator would like declare indices </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant13TextGenerator26variable_declaration_scopeEv">
+<span id="_CPPv3NK7sequant13TextGenerator26variable_declaration_scopeEv"></span><span id="_CPPv2NK7sequant13TextGenerator26variable_declaration_scopeEv"></span><span id="sequant::TextGenerator::variable_declaration_scopeC"></span><span class="target" id="classsequant_1_1_text_generator_1afebe78c96300de29a37d1bd417174784"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1ad8b7e1b22081ba146172f0dbcdefc90f.html#_CPPv4N7sequant16DeclarationScopeE" title="sequant::DeclarationScope"><span class="n"><span class="pre">DeclarationScope</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">variable_declaration_scope</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant13TextGenerator26variable_declaration_scopeEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The scope at which this generator would like declare variables </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant13TextGenerator24tensor_declaration_scopeEv">
+<span id="_CPPv3NK7sequant13TextGenerator24tensor_declaration_scopeEv"></span><span id="_CPPv2NK7sequant13TextGenerator24tensor_declaration_scopeEv"></span><span id="sequant::TextGenerator::tensor_declaration_scopeC"></span><span class="target" id="classsequant_1_1_text_generator_1a747c0eb2aa2295d90cb39510f7fe9f8a"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1ad8b7e1b22081ba146172f0dbcdefc90f.html#_CPPv4N7sequant16DeclarationScopeE" title="sequant::DeclarationScope"><span class="n"><span class="pre">DeclarationScope</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">tensor_declaration_scope</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant13TextGenerator24tensor_declaration_scopeEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The scope at which this generator would like declare tensors </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant13TextGenerator16prunable_scalarsEv">
+<span id="_CPPv3NK7sequant13TextGenerator16prunable_scalarsEv"></span><span id="_CPPv2NK7sequant13TextGenerator16prunable_scalarsEv"></span><span id="sequant::TextGenerator::prunable_scalarsC"></span><span class="target" id="classsequant_1_1_text_generator_1a740a6f18dbfe9084ca22a65388be78d0"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1ab2436bb536653f532de6de891bc4430f.html#_CPPv4N7sequant15PrunableScalarsE" title="sequant::PrunableScalars"><span class="n"><span class="pre">PrunableScalars</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">prunable_scalars</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant13TextGenerator16prunable_scalarsEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>What kinds of scalars may be pruned from the expression tree in order to avoid binary computation steps for them. Instead, all pruned scalars will be multiplied with whatever binary expression remains after pruning. This means that scalar pruning may lead to non-binary expressions that need to be exported by this generator. </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant13TextGenerator9representERK5IndexRK7Context">
+<span id="_CPPv3NK7sequant13TextGenerator9representERK5IndexRK7Context"></span><span id="_CPPv2NK7sequant13TextGenerator9representERK5IndexRK7Context"></span><span id="sequant::TextGenerator::represent__IndexCR.ContextCRC"></span><span class="target" id="classsequant_1_1_text_generator_1ac0cc4abfee8fc188ee03a5ef9dea54e7"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">represent</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">idx</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant13TextGenerator9representERK5IndexRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A backend-specific string representation of the given <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant13TextGenerator9representERK6TensorRK7Context">
+<span id="_CPPv3NK7sequant13TextGenerator9representERK6TensorRK7Context"></span><span id="_CPPv2NK7sequant13TextGenerator9representERK6TensorRK7Context"></span><span id="sequant::TextGenerator::represent__TensorCR.ContextCRC"></span><span class="target" id="classsequant_1_1_text_generator_1a4fdbd5f83bcf8dffe0a4966f766d7696"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">represent</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor.html#_CPPv4N7sequant6TensorE" title="sequant::Tensor"><span class="n"><span class="pre">Tensor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">tensor</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant13TextGenerator9representERK6TensorRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A backend-specific string representation of the given <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant13TextGenerator9representERK8VariableRK7Context">
+<span id="_CPPv3NK7sequant13TextGenerator9representERK8VariableRK7Context"></span><span id="_CPPv2NK7sequant13TextGenerator9representERK8VariableRK7Context"></span><span id="sequant::TextGenerator::represent__VariableCR.ContextCRC"></span><span class="target" id="classsequant_1_1_text_generator_1a141777972ec8a36268f3ef34acbc5ab0"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">represent</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_variable.html#_CPPv4N7sequant8VariableE" title="sequant::Variable"><span class="n"><span class="pre">Variable</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">variable</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant13TextGenerator9representERK8VariableRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A backend-specific string representation of the given <a class="reference internal" href="classsequant_1_1_variable.html#classsequant_1_1_variable"><span class="std std-ref">Variable</span></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant13TextGenerator9representERK8ConstantRK7Context">
+<span id="_CPPv3NK7sequant13TextGenerator9representERK8ConstantRK7Context"></span><span id="_CPPv2NK7sequant13TextGenerator9representERK8ConstantRK7Context"></span><span id="sequant::TextGenerator::represent__ConstantCR.ContextCRC"></span><span class="target" id="classsequant_1_1_text_generator_1abf22320a50eebe32542837d61a70c54d"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">represent</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_constant.html#_CPPv4N7sequant8ConstantE" title="sequant::Constant"><span class="n"><span class="pre">Constant</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">constant</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant13TextGenerator9representERK8ConstantRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A backend-specific string representation of the given <a class="reference internal" href="classsequant_1_1_constant.html#classsequant_1_1_constant"><span class="std std-ref">Constant</span></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator6createERK6TensorbRK7Context">
+<span id="_CPPv3N7sequant13TextGenerator6createERK6TensorbRK7Context"></span><span id="_CPPv2N7sequant13TextGenerator6createERK6TensorbRK7Context"></span><span id="sequant::TextGenerator::create__TensorCR.b.ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1aa0bae6d4ec39675cc190da3ba936ffd0"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">create</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor.html#_CPPv4N7sequant6TensorE" title="sequant::Tensor"><span class="n"><span class="pre">Tensor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">tensor</span></span>, <span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">zero_init</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator6createERK6TensorbRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for creating the given tensor. This is expected to make the created tensor available for further use. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator4loadERK6TensorbRK7Context">
+<span id="_CPPv3N7sequant13TextGenerator4loadERK6TensorbRK7Context"></span><span id="_CPPv2N7sequant13TextGenerator4loadERK6TensorbRK7Context"></span><span id="sequant::TextGenerator::load__TensorCR.b.ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1a9fdfbe612d28aa1377d99b32741fbc66"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">load</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor.html#_CPPv4N7sequant6TensorE" title="sequant::Tensor"><span class="n"><span class="pre">Tensor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">tensor</span></span>, <span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">set_to_zero</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator4loadERK6TensorbRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for loading the given tensor. Loading implies making the tensor available for subsequent use (e.g. by reading it from disk in order to bring it into RAM). </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator11set_to_zeroERK6TensorRK7Context">
+<span id="_CPPv3N7sequant13TextGenerator11set_to_zeroERK6TensorRK7Context"></span><span id="_CPPv2N7sequant13TextGenerator11set_to_zeroERK6TensorRK7Context"></span><span id="sequant::TextGenerator::set_to_zero__TensorCR.ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1a3335e3d978da02ee7253b6f9212570be"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">set_to_zero</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor.html#_CPPv4N7sequant6TensorE" title="sequant::Tensor"><span class="n"><span class="pre">Tensor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">tensor</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator11set_to_zeroERK6TensorRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for setting the given tensor to zero. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator6unloadERK6TensorRK7Context">
+<span id="_CPPv3N7sequant13TextGenerator6unloadERK6TensorRK7Context"></span><span id="_CPPv2N7sequant13TextGenerator6unloadERK6TensorRK7Context"></span><span id="sequant::TextGenerator::unload__TensorCR.ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1a6451e9d0aeac5072d18b5888aa5d7452"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">unload</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor.html#_CPPv4N7sequant6TensorE" title="sequant::Tensor"><span class="n"><span class="pre">Tensor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">tensor</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator6unloadERK6TensorRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for unloading the given tensor. This is expected to discard the tensor without saving its current value. However, the tensor must still be loadable afterwards. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator7destroyERK6TensorRK7Context">
+<span id="_CPPv3N7sequant13TextGenerator7destroyERK6TensorRK7Context"></span><span id="_CPPv2N7sequant13TextGenerator7destroyERK6TensorRK7Context"></span><span id="sequant::TextGenerator::destroy__TensorCR.ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1a54e87c687770ed3916fd22b3374cc73f"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">destroy</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor.html#_CPPv4N7sequant6TensorE" title="sequant::Tensor"><span class="n"><span class="pre">Tensor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">tensor</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator7destroyERK6TensorRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for destroying the given tensor. Destroying means that this tensor will never be needed again and is no longer required to be loadable. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator7persistERK6TensorRK7Context">
+<span id="_CPPv3N7sequant13TextGenerator7persistERK6TensorRK7Context"></span><span id="_CPPv2N7sequant13TextGenerator7persistERK6TensorRK7Context"></span><span id="sequant::TextGenerator::persist__TensorCR.ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1a85cc46e986e17e6726a760011479466f"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">persist</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor.html#_CPPv4N7sequant6TensorE" title="sequant::Tensor"><span class="n"><span class="pre">Tensor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">tensor</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator7persistERK6TensorRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for persisting the given tensor. Persisting means that the current value of the tensor is stored in some way that makes its value available at a later time. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator6createERK8VariablebRK7Context">
+<span id="_CPPv3N7sequant13TextGenerator6createERK8VariablebRK7Context"></span><span id="_CPPv2N7sequant13TextGenerator6createERK8VariablebRK7Context"></span><span id="sequant::TextGenerator::create__VariableCR.b.ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1a8b5b1ac3751dda98c620a276485ea72f"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">create</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_variable.html#_CPPv4N7sequant8VariableE" title="sequant::Variable"><span class="n"><span class="pre">Variable</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">variable</span></span>, <span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">zero_init</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator6createERK8VariablebRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for creating the given variable. This is expected to make the created variable available for further use. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator4loadERK8VariablebRK7Context">
+<span id="_CPPv3N7sequant13TextGenerator4loadERK8VariablebRK7Context"></span><span id="_CPPv2N7sequant13TextGenerator4loadERK8VariablebRK7Context"></span><span id="sequant::TextGenerator::load__VariableCR.b.ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1a553f111aed6d9acdb02c622362260fd6"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">load</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_variable.html#_CPPv4N7sequant8VariableE" title="sequant::Variable"><span class="n"><span class="pre">Variable</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">variable</span></span>, <span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">set_to_zero</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator4loadERK8VariablebRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for loading the given variable. Loading implies making the variable available for subsequent use (e.g. by reading it from disk in order to bring it into RAM). </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator11set_to_zeroERK8VariableRK7Context">
+<span id="_CPPv3N7sequant13TextGenerator11set_to_zeroERK8VariableRK7Context"></span><span id="_CPPv2N7sequant13TextGenerator11set_to_zeroERK8VariableRK7Context"></span><span id="sequant::TextGenerator::set_to_zero__VariableCR.ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1a5aa68e0d966b0e020de26a36947a2f21"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">set_to_zero</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_variable.html#_CPPv4N7sequant8VariableE" title="sequant::Variable"><span class="n"><span class="pre">Variable</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">variable</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator11set_to_zeroERK8VariableRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for setting the given variable to zero. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator6unloadERK8VariableRK7Context">
+<span id="_CPPv3N7sequant13TextGenerator6unloadERK8VariableRK7Context"></span><span id="_CPPv2N7sequant13TextGenerator6unloadERK8VariableRK7Context"></span><span id="sequant::TextGenerator::unload__VariableCR.ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1aa7823829e08f1baaf287567906dc0b4d"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">unload</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_variable.html#_CPPv4N7sequant8VariableE" title="sequant::Variable"><span class="n"><span class="pre">Variable</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">variable</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator6unloadERK8VariableRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for unloading the given variable. This is expected to discard the variable without saving its current value. However, the variable must still be loadable afterwards. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator7destroyERK8VariableRK7Context">
+<span id="_CPPv3N7sequant13TextGenerator7destroyERK8VariableRK7Context"></span><span id="_CPPv2N7sequant13TextGenerator7destroyERK8VariableRK7Context"></span><span id="sequant::TextGenerator::destroy__VariableCR.ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1a866d00fa0f0848ebb557643d09ca9d0c"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">destroy</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_variable.html#_CPPv4N7sequant8VariableE" title="sequant::Variable"><span class="n"><span class="pre">Variable</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">variable</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator7destroyERK8VariableRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for destroying the given variable. Destroying means that this variable will never be needed again and is no longer required to be loadable. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator7persistERK8VariableRK7Context">
+<span id="_CPPv3N7sequant13TextGenerator7persistERK8VariableRK7Context"></span><span id="_CPPv2N7sequant13TextGenerator7persistERK8VariableRK7Context"></span><span id="sequant::TextGenerator::persist__VariableCR.ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1a23222f521ae56901417112f0af375268"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">persist</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_variable.html#_CPPv4N7sequant8VariableE" title="sequant::Variable"><span class="n"><span class="pre">Variable</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">variable</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator7persistERK8VariableRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for persisting the given variable. Persisting means that the current value of the variable is stored in some way that makes its value available at a later time. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator7computeERK4ExprRK8VariableRK7Context">
+<span id="_CPPv3N7sequant13TextGenerator7computeERK4ExprRK8VariableRK7Context"></span><span id="_CPPv2N7sequant13TextGenerator7computeERK4ExprRK8VariableRK7Context"></span><span id="sequant::TextGenerator::compute__ExprCR.VariableCR.ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1a481cef8762c18889105c313f677bf03f"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">compute</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_expr.html#_CPPv4N7sequant4ExprE" title="sequant::Expr"><span class="n"><span class="pre">Expr</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">expression</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_variable.html#_CPPv4N7sequant8VariableE" title="sequant::Variable"><span class="n"><span class="pre">Variable</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">result</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator7computeERK4ExprRK8VariableRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for encoding the computation of the given expression. The result is expected to be written into the provided <a class="reference internal" href="classsequant_1_1_variable.html#classsequant_1_1_variable"><span class="std std-ref">Variable</span></a>. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator7computeERK4ExprRK6TensorRK7Context">
+<span id="_CPPv3N7sequant13TextGenerator7computeERK4ExprRK6TensorRK7Context"></span><span id="_CPPv2N7sequant13TextGenerator7computeERK4ExprRK6TensorRK7Context"></span><span id="sequant::TextGenerator::compute__ExprCR.TensorCR.ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1aceee919ac7540e694343a724a9402790"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">compute</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_expr.html#_CPPv4N7sequant4ExprE" title="sequant::Expr"><span class="n"><span class="pre">Expr</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">expression</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor.html#_CPPv4N7sequant6TensorE" title="sequant::Tensor"><span class="n"><span class="pre">Tensor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">result</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator7computeERK4ExprRK6TensorRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for encoding the computation of the given expression. The result is expected to be written into the provided <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a>. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator7declareERK5IndexRK7Context">
+<span id="_CPPv3N7sequant13TextGenerator7declareERK5IndexRK7Context"></span><span id="_CPPv2N7sequant13TextGenerator7declareERK5IndexRK7Context"></span><span id="sequant::TextGenerator::declare__IndexCR.ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1a0eb958080844f29c42366b69adab11ef"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">declare</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">idx</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator7declareERK5IndexRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for declaring the provided <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a>. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator7declareERK8Variable8UsageSetRK7Context">
+<span id="_CPPv3N7sequant13TextGenerator7declareERK8Variable8UsageSetRK7Context"></span><span id="_CPPv2N7sequant13TextGenerator7declareERK8Variable8UsageSetRK7Context"></span><span id="sequant::TextGenerator::declare__VariableCR.UsageSet.ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1a6e8b265ce000544fb700b5274a49e543"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">declare</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_variable.html#_CPPv4N7sequant8VariableE" title="sequant::Variable"><span class="n"><span class="pre">Variable</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">variable</span></span>, <a class="reference internal" href="classsequant_1_1_usage_set.html#_CPPv4N7sequant8UsageSetE" title="sequant::UsageSet"><span class="n"><span class="pre">UsageSet</span></span></a>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator7declareERK8Variable8UsageSetRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for declaring the provided <a class="reference internal" href="classsequant_1_1_variable.html#classsequant_1_1_variable"><span class="std std-ref">Variable</span></a> </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>variable</strong> – The <a class="reference internal" href="classsequant_1_1_variable.html#classsequant_1_1_variable"><span class="std std-ref">Variable</span></a> to declare </p></li>
+<li><p><strong>usage</strong> – A <a class="reference internal" href="classsequant_1_1_usage_set.html#classsequant_1_1_usage_set"><span class="std std-ref">UsageSet</span></a> describing how the <a class="reference internal" href="classsequant_1_1_variable.html#classsequant_1_1_variable"><span class="std std-ref">Variable</span></a> will be used in the code </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator7declareERK6Tensor8UsageSetRK7Context">
+<span id="_CPPv3N7sequant13TextGenerator7declareERK6Tensor8UsageSetRK7Context"></span><span id="_CPPv2N7sequant13TextGenerator7declareERK6Tensor8UsageSetRK7Context"></span><span id="sequant::TextGenerator::declare__TensorCR.UsageSet.ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1ab4a53281c0661438318c09a6944f45a1"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">declare</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor.html#_CPPv4N7sequant6TensorE" title="sequant::Tensor"><span class="n"><span class="pre">Tensor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">tensor</span></span>, <a class="reference internal" href="classsequant_1_1_usage_set.html#_CPPv4N7sequant8UsageSetE" title="sequant::UsageSet"><span class="n"><span class="pre">UsageSet</span></span></a>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator7declareERK6Tensor8UsageSetRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for declaring the provided <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>variable</strong> – The <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> to declare </p></li>
+<li><p><strong>usage</strong> – A <a class="reference internal" href="classsequant_1_1_usage_set.html#classsequant_1_1_usage_set"><span class="std std-ref">UsageSet</span></a> describing how the <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> will be used in the code </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator20all_indices_declaredENSt6size_tERK7Context">
+<span id="_CPPv3N7sequant13TextGenerator20all_indices_declaredENSt6size_tERK7Context"></span><span id="_CPPv2N7sequant13TextGenerator20all_indices_declaredENSt6size_tERK7Context"></span><span id="sequant::TextGenerator::all_indices_declared__std::s.ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1a2d297b1f0ad65ad4f6955d996430ae36"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">all_indices_declared</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">amount</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator20all_indices_declaredENSt6size_tERK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Callback signalling that all indices have been declared </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>amount</strong> – The amount of indices that have been declared </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator22all_variables_declaredENSt6size_tERK7Context">
+<span id="_CPPv3N7sequant13TextGenerator22all_variables_declaredENSt6size_tERK7Context"></span><span id="_CPPv2N7sequant13TextGenerator22all_variables_declaredENSt6size_tERK7Context"></span><span id="sequant::TextGenerator::all_variables_declared__std::s.ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1a90a5aa8a1c5a42acc3e3af4b964e6324"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">all_variables_declared</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">amount</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator22all_variables_declaredENSt6size_tERK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Callback signalling that all variables have been declared </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>amount</strong> – The amount of variables that have been declared </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator20all_tensors_declaredENSt6size_tERK7Context">
+<span id="_CPPv3N7sequant13TextGenerator20all_tensors_declaredENSt6size_tERK7Context"></span><span id="_CPPv2N7sequant13TextGenerator20all_tensors_declaredENSt6size_tERK7Context"></span><span id="sequant::TextGenerator::all_tensors_declared__std::s.ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1a2a3f99d319061d81dfd74356c82440f7"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">all_tensors_declared</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">amount</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator20all_tensors_declaredENSt6size_tERK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Callback signalling that all tensors have been declared </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>amount</strong> – The amount of tensors that have been declared </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator18begin_declarationsE16DeclarationScopeRK7Context">
+<span id="_CPPv3N7sequant13TextGenerator18begin_declarationsE16DeclarationScopeRK7Context"></span><span id="_CPPv2N7sequant13TextGenerator18begin_declarationsE16DeclarationScopeRK7Context"></span><span id="sequant::TextGenerator::begin_declarations__DeclarationScope.ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1add07d1346af43e02ad072986eef42c49"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">begin_declarations</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="enum_namespacesequant_1ad8b7e1b22081ba146172f0dbcdefc90f.html#_CPPv4N7sequant16DeclarationScopeE" title="sequant::DeclarationScope"><span class="n"><span class="pre">DeclarationScope</span></span></a>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator18begin_declarationsE16DeclarationScopeRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Callback signalling that we now start declarations for the given scope. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator16end_declarationsE16DeclarationScopeRK7Context">
+<span id="_CPPv3N7sequant13TextGenerator16end_declarationsE16DeclarationScopeRK7Context"></span><span id="_CPPv2N7sequant13TextGenerator16end_declarationsE16DeclarationScopeRK7Context"></span><span id="sequant::TextGenerator::end_declarations__DeclarationScope.ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1a208ce07dc6eb5ce5970f04fc82d7ee28"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">end_declarations</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="enum_namespacesequant_1ad8b7e1b22081ba146172f0dbcdefc90f.html#_CPPv4N7sequant16DeclarationScopeE" title="sequant::DeclarationScope"><span class="n"><span class="pre">DeclarationScope</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">scope</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator16end_declarationsE16DeclarationScopeRK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Callback signalling that all declarations for the given scope have been performed </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator14insert_commentERKNSt6stringERK7Context">
+<span id="_CPPv3N7sequant13TextGenerator14insert_commentERKNSt6stringERK7Context"></span><span id="_CPPv2N7sequant13TextGenerator14insert_commentERKNSt6stringERK7Context"></span><span id="sequant::TextGenerator::insert_comment__ssCR.ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1a7e6cb5520a87aeeff119ebc51fd0300f"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">insert_comment</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">comment</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator14insert_commentERKNSt6stringERK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback for inserting a comment at the current position in the generated code </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>comment</strong> – The comment to insert </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator19begin_named_sectionENSt11string_viewERK7Context">
+<span id="_CPPv3N7sequant13TextGenerator19begin_named_sectionENSt11string_viewERK7Context"></span><span id="_CPPv2N7sequant13TextGenerator19begin_named_sectionENSt11string_viewERK7Context"></span><span id="sequant::TextGenerator::begin_named_section__std::string_view.ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1a64f1bb35c7403885f525c4c5ea0885d3"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">begin_named_section</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string_view</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">name</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator19begin_named_sectionENSt11string_viewERK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback that we are starting a new named section </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>name</strong> – The name of the named section </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator17end_named_sectionENSt11string_viewERK7Context">
+<span id="_CPPv3N7sequant13TextGenerator17end_named_sectionENSt11string_viewERK7Context"></span><span id="_CPPv2N7sequant13TextGenerator17end_named_sectionENSt11string_viewERK7Context"></span><span id="sequant::TextGenerator::end_named_section__std::string_view.ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1a39f830738084ebe5035a47c8c2d820fb"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">end_named_section</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string_view</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator17end_named_sectionENSt11string_viewERK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Semantic callback to signal that we have reached the end of the current named section </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>name</strong> – The name of the named section that is ending now </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator16begin_expressionERK7Context">
+<span id="_CPPv3N7sequant13TextGenerator16begin_expressionERK7Context"></span><span id="_CPPv2N7sequant13TextGenerator16begin_expressionERK7Context"></span><span id="sequant::TextGenerator::begin_expression__ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1aed4cf8d97ca2a447e14225e062659db3"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">begin_expression</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator16begin_expressionERK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Callback signalling that we now begin export of a new (high-level) expression </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator12begin_exportERK7Context">
+<span id="_CPPv3N7sequant13TextGenerator12begin_exportERK7Context"></span><span id="_CPPv2N7sequant13TextGenerator12begin_exportERK7Context"></span><span id="sequant::TextGenerator::begin_export__ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1a5a533d33c8a456bcfe6e92495895d65d"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">begin_export</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator12begin_exportERK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Callback signalling that we now begin with the export process. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator10end_exportERK7Context">
+<span id="_CPPv3N7sequant13TextGenerator10end_exportERK7Context"></span><span id="_CPPv2N7sequant13TextGenerator10end_exportERK7Context"></span><span id="sequant::TextGenerator::end_export__ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1a87b851acd932e2e58897faa4e64aecb8"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">end_export</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator10end_exportERK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Callback signalling that the export process is finished. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TextGenerator14end_expressionERK7Context">
+<span id="_CPPv3N7sequant13TextGenerator14end_expressionERK7Context"></span><span id="_CPPv2N7sequant13TextGenerator14end_expressionERK7Context"></span><span id="sequant::TextGenerator::end_expression__ContextCR"></span><span class="target" id="classsequant_1_1_text_generator_1ae44bd082b0ad2ad3e3a0a4b9f1f5a8b4"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">end_expression</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE" title="sequant::TextGenerator::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant13TextGenerator14end_expressionERK7Context" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Callback signalling that the export of the current (high-level) expression is finished </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant13TextGenerator18get_generated_codeEv">
+<span id="_CPPv3NK7sequant13TextGenerator18get_generated_codeEv"></span><span id="_CPPv2NK7sequant13TextGenerator18get_generated_codeEv"></span><span id="sequant::TextGenerator::get_generated_codeC"></span><span class="target" id="classsequant_1_1_text_generator_1ad8e161984ae1b9bf6778eedcbd725a7f"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">string</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">get_generated_code</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant13TextGenerator18get_generated_codeEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The generated code that corresponds to all semantic actions encountered during the current export </p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+</dd></dl>
+
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, SeQuant developers
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            <div class="last-updated">
+              Last updated on Feb 27, 2026 8:35:02 PM</div>
+          </div>
+          <div class="right-details">
+            <div class="icons">
+              <a class="muted-link fa-brands fa-solid fa-github fa-2x" href="https://github.com/ValeevGroup/SeQuant" aria-label="GitHub"></a>
+              
+            </div>
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Template Class TextGenerator</a><ul>
+<li><a class="reference internal" href="#inheritance-relationships">Inheritance Relationships</a><ul>
+<li><a class="reference internal" href="#base-type">Base Type</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#class-documentation">Class Documentation</a><ul>
+<li><a class="reference internal" href="#_CPPv4I0EN7sequant13TextGeneratorE"><code class="docutils literal notranslate"><span class="pre">sequant::TextGenerator</span></code></a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator13TextGeneratorEv"><code class="docutils literal notranslate"><span class="pre">TextGenerator()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGeneratorD0Ev"><code class="docutils literal notranslate"><span class="pre">~TextGenerator()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant13TextGenerator15get_format_nameEv"><code class="docutils literal notranslate"><span class="pre">get_format_name()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant13TextGenerator23supports_named_sectionsEv"><code class="docutils literal notranslate"><span class="pre">supports_named_sections()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant13TextGenerator23requires_named_sectionsEv"><code class="docutils literal notranslate"><span class="pre">requires_named_sections()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant13TextGenerator23index_declaration_scopeEv"><code class="docutils literal notranslate"><span class="pre">index_declaration_scope()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant13TextGenerator26variable_declaration_scopeEv"><code class="docutils literal notranslate"><span class="pre">variable_declaration_scope()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant13TextGenerator24tensor_declaration_scopeEv"><code class="docutils literal notranslate"><span class="pre">tensor_declaration_scope()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant13TextGenerator16prunable_scalarsEv"><code class="docutils literal notranslate"><span class="pre">prunable_scalars()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant13TextGenerator9representERK5IndexRK7Context"><code class="docutils literal notranslate"><span class="pre">represent()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant13TextGenerator9representERK6TensorRK7Context"><code class="docutils literal notranslate"><span class="pre">represent()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant13TextGenerator9representERK8VariableRK7Context"><code class="docutils literal notranslate"><span class="pre">represent()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant13TextGenerator9representERK8ConstantRK7Context"><code class="docutils literal notranslate"><span class="pre">represent()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator6createERK6TensorbRK7Context"><code class="docutils literal notranslate"><span class="pre">create()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator4loadERK6TensorbRK7Context"><code class="docutils literal notranslate"><span class="pre">load()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator11set_to_zeroERK6TensorRK7Context"><code class="docutils literal notranslate"><span class="pre">set_to_zero()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator6unloadERK6TensorRK7Context"><code class="docutils literal notranslate"><span class="pre">unload()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator7destroyERK6TensorRK7Context"><code class="docutils literal notranslate"><span class="pre">destroy()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator7persistERK6TensorRK7Context"><code class="docutils literal notranslate"><span class="pre">persist()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator6createERK8VariablebRK7Context"><code class="docutils literal notranslate"><span class="pre">create()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator4loadERK8VariablebRK7Context"><code class="docutils literal notranslate"><span class="pre">load()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator11set_to_zeroERK8VariableRK7Context"><code class="docutils literal notranslate"><span class="pre">set_to_zero()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator6unloadERK8VariableRK7Context"><code class="docutils literal notranslate"><span class="pre">unload()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator7destroyERK8VariableRK7Context"><code class="docutils literal notranslate"><span class="pre">destroy()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator7persistERK8VariableRK7Context"><code class="docutils literal notranslate"><span class="pre">persist()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator7computeERK4ExprRK8VariableRK7Context"><code class="docutils literal notranslate"><span class="pre">compute()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator7computeERK4ExprRK6TensorRK7Context"><code class="docutils literal notranslate"><span class="pre">compute()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator7declareERK5IndexRK7Context"><code class="docutils literal notranslate"><span class="pre">declare()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator7declareERK8Variable8UsageSetRK7Context"><code class="docutils literal notranslate"><span class="pre">declare()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator7declareERK6Tensor8UsageSetRK7Context"><code class="docutils literal notranslate"><span class="pre">declare()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator20all_indices_declaredENSt6size_tERK7Context"><code class="docutils literal notranslate"><span class="pre">all_indices_declared()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator22all_variables_declaredENSt6size_tERK7Context"><code class="docutils literal notranslate"><span class="pre">all_variables_declared()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator20all_tensors_declaredENSt6size_tERK7Context"><code class="docutils literal notranslate"><span class="pre">all_tensors_declared()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator18begin_declarationsE16DeclarationScopeRK7Context"><code class="docutils literal notranslate"><span class="pre">begin_declarations()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator16end_declarationsE16DeclarationScopeRK7Context"><code class="docutils literal notranslate"><span class="pre">end_declarations()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator14insert_commentERKNSt6stringERK7Context"><code class="docutils literal notranslate"><span class="pre">insert_comment()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator19begin_named_sectionENSt11string_viewERK7Context"><code class="docutils literal notranslate"><span class="pre">begin_named_section()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator17end_named_sectionENSt11string_viewERK7Context"><code class="docutils literal notranslate"><span class="pre">end_named_section()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator16begin_expressionERK7Context"><code class="docutils literal notranslate"><span class="pre">begin_expression()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator12begin_exportERK7Context"><code class="docutils literal notranslate"><span class="pre">begin_export()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator10end_exportERK7Context"><code class="docutils literal notranslate"><span class="pre">end_export()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TextGenerator14end_expressionERK7Context"><code class="docutils literal notranslate"><span class="pre">end_expression()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant13TextGenerator18get_generated_codeEv"><code class="docutils literal notranslate"><span class="pre">get_generated_code()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script src="../_static/bootstrap-treeview/bootstrap-treeview.min.js?v=6a1e96b4"></script>
+    </body>
+</html>

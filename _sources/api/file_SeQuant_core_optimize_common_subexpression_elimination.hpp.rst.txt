@@ -1,0 +1,89 @@
+
+.. _file_SeQuant_core_optimize_common_subexpression_elimination.hpp:
+
+File common_subexpression_elimination.hpp
+=========================================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_optimize>` (``SeQuant/core/optimize``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/optimize/common_subexpression_elimination.hpp``)
+---------------------------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_optimize_common_subexpression_elimination.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/binary_node.hpp`` (:ref:`file_SeQuant_core_binary_node.hpp`)
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/eval/eval_expr.hpp`` (:ref:`file_SeQuant_core_eval_eval_expr.hpp`)
+
+- ``SeQuant/core/eval/eval_node.hpp`` (:ref:`file_SeQuant_core_eval_eval_node.hpp`)
+
+- ``SeQuant/core/eval/eval_node_compare.hpp`` (:ref:`file_SeQuant_core_eval_eval_node_compare.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``concepts`` (:ref:`file_SeQuant_core_io_concepts.hpp`)
+
+- ``format``
+
+- ``optional``
+
+- ``ranges`` (:ref:`file_SeQuant_core_ranges.hpp`)
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__opt`
+
+- :ref:`namespace_sequant__opt__cse`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1cse_1_1_accept_all_predicate`
+
+- :ref:`exhale_class_classsequant_1_1opt_1_1cse_1_1_subexpression_identifier`
+
+- :ref:`exhale_class_classsequant_1_1opt_1_1cse_1_1_subexpression_replacer`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1a9dd9244c64ee1b0126e1a58a930a4ec4`
+

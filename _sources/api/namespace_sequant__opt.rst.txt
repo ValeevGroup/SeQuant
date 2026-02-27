@@ -1,0 +1,53 @@
+
+.. _namespace_sequant__opt:
+
+Namespace sequant::opt
+======================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant__opt__cse`
+
+- :ref:`namespace_sequant__opt__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_class_classsequant_1_1opt_1_1_fusion`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1a5ebf3c50a42c65a389111478a8f555d2`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1a9dd9244c64ee1b0126e1a58a930a4ec4`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1af6fc7be814aa005561ba962d5b4c3212`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1a0d0a1695c09f0cfbd340392eb5934b3b`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1aa2ed928de76a1fcb60bba05f6fabc5b8`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1a55a1d1e106154fae150f83ee6b1c3265`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1_1opt_1a48a8bef6af07122aed95dc25a3441546`

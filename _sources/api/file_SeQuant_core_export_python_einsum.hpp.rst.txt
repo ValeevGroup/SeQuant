@@ -1,0 +1,103 @@
+
+.. _file_SeQuant_core_export_python_einsum.hpp:
+
+File python_einsum.hpp
+======================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_export>` (``SeQuant/core/export``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/export/python_einsum.hpp``)
+------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_export_python_einsum.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/export/context.hpp`` (:ref:`file_SeQuant_core_export_context.hpp`)
+
+- ``SeQuant/core/export/generator.hpp`` (:ref:`file_SeQuant_core_export_generator.hpp`)
+
+- ``SeQuant/core/export/reordering_context.hpp`` (:ref:`file_SeQuant_core_export_reordering_context.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/space.hpp`` (:ref:`file_SeQuant_core_space.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/core/utility/string.hpp`` (:ref:`file_SeQuant_core_utility_string.hpp`)
+
+- ``boost/unordered/unordered_map.hpp``
+
+- ``boost/unordered/unordered_set.hpp``
+
+- ``cctype``
+
+- ``cstdlib``
+
+- ``range/v3/view/join.hpp``
+
+- ``range/v3/view/transform.hpp``
+
+- ``sstream``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``string_view``
+
+- ``vector``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_class_classsequant_1_1_num_py_einsum_generator`
+
+- :ref:`exhale_class_classsequant_1_1_num_py_einsum_generator_context`
+
+- :ref:`exhale_class_classsequant_1_1_python_einsum_generator_base`
+
+- :ref:`exhale_class_classsequant_1_1_python_einsum_generator_context`
+
+- :ref:`exhale_class_classsequant_1_1_py_torch_einsum_generator`
+
+- :ref:`exhale_class_classsequant_1_1_py_torch_einsum_generator_context`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1af0e57e9b355ca9023473b1e41414dfa8`
+

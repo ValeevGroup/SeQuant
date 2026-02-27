@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aef83cec256560574ec11e77f271ff615:
+
+Template Function sequant::linearize_eval_node
+==============================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_node.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::linearize_eval_node(Node const&)
+   :project: SeQuant

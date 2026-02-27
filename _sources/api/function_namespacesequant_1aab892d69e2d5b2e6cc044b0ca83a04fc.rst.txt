@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aab892d69e2d5b2e6cc044b0ca83a04fc:
+
+Function sequant::permute_ket
+=============================
+
+- Defined in :ref:`file_SeQuant_core_expressions_abstract_tensor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::permute_ket()
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1a0d0a1695c09f0cfbd340392eb5934b3b:
+
+Template Function sequant::opt::optimize
+========================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_optimize.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::optimize(ExprPtr const&, IdxToSize const&, bool)
+   :project: SeQuant

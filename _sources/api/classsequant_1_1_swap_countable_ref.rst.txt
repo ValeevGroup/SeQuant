@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1_swap_countable_ref:
+
+Template Class SwapCountableRef
+===============================
+
+- Defined in :ref:`file_SeQuant_core_utility_swap.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::SwapCountableRef
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

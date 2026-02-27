@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ac9a9921e63b7afafc2338aa9e7317189:
+
+Template Function sequant::fann(Index, std::initializer_list<I>)
+================================================================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::fann(Index, std::initializer_list<I>)
+   :project: SeQuant

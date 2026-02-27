@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a0fbe69c6b4c8fa9ced9b2a65cab2f306:
+
+Template Function sequant::is_qpannihilator
+===========================================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::is_qpannihilator(const Op<S>&, Vacuum, const std::shared_ptr<const IndexSpaceRegistry>&)
+   :project: SeQuant

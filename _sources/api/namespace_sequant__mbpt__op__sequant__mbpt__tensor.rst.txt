@@ -1,0 +1,77 @@
+
+.. _namespace_sequant__mbpt__op__sequant__mbpt__tensor:
+
+Namespace sequant::mbpt::op::sequant::mbpt::tensor
+==================================================
+
+
+the namespace containing tensor form of MBPT operators 
+
+
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a4ac6e9d3992f8c36a87a58b30982578b`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a12250159f02da3558c6ec1242e4bba53`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a932f0714d8883f0aa503e3fb1a56240b`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1aa14652bf5b94eb8a5b9d581b6a2f29d3`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a23b6e48af0173e3a719a6f4659811412`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a3d859f251012043236a9f6e236f6c0c3`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a6edf78ee4773d1beada57aa907a27529`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1ace6bf2c33303fc40abcdb9d4844441de`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1af475241af0939fa50b4eb05f27dcca65`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a71d1058bdb90c554bc537eb4c78ba3ea`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a51186e2c4e9747f84ddbfb5cfb52db89`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1ab30281a179c1acd7a094501af55bacbb`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a49fe51c3dc9743caf8cf38990ca3eeb7`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1ab2ac27c3dd5fb5e42bd1afefe55e7563`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a7add14048944497f39997d2d4ab24eba`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1acb9c596576fb0ac51a523d0e53990aec`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a71f3c48da665ff20b615e3df93bd5869`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1ad327681c4d9f70efb2dd419651806050`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1adede6d276ce6c1da0038c04a1a973e5f`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1ac4d9e7ba63955da12e554ad293aac029`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a9f4eaa8aaa88a014049ac8247fbe9fd5`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a31f61a38ae6bb6fcfa503fdbe8996ca2`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1ae23dc07f7a143edf733e4878cfac28e7`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a1f35c029373067dafe84821c2154ff2e`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a3fd3b571962803d72871fc98c78dd8c9`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1aeeb19f8cacf3bd09c6df97bf7483bf1d`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1afd74e2df63819ec20dc46e4f6b8d0f42`

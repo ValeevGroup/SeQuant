@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1a4389a071cc206f08ceaf205801ec5b12:
+
+Template Function sequant::opt::detail::single_term_opt
+=======================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_single_term.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::single_term_opt(TensorNetwork const&, IdxToSz&&)
+   :project: SeQuant

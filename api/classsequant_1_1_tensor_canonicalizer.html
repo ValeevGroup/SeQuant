@@ -1,0 +1,617 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html">
+        <link rel="prefetch" href="../_static/logo.svg" as="image">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>Class TensorCanonicalizer - SeQuant Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/bootstrap-treeview/bootstrap-treeview.min.css?v=8176a87d" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=821744c5" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --sidebar-item-font-size: 0.95em;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">SeQuant Documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="../_static/logo.svg" alt="Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">User</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/getting_started/index.html">Getting started</a><input aria-label="Toggle navigation of Getting started" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/wick.html">Wick’s Theorem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/index_spaces.html">Register Index Spaces</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/operators.html">Operators</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../user/getting_started/installing.html">Installation</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/guide/index.html">User Guide</a><input aria-label="Toggle navigation of User Guide" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/operator.html">Operator Interface for Symbolic Many-Body Algebra</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/cc.html">Coupled-Cluster Class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/io.html">I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/evaluation.html">Evaluation Trace Analysis Using Nushell</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../developer/index.html">Developer docs</a><input aria-label="Toggle navigation of Developer docs" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../developer/documentation.html">Documentation Guide</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">API reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Maintainer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../maintainer/index.html">Maintainer docs</a><input aria-label="Toggle navigation of Maintainer docs" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../maintainer/release.html">Release Guide</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">See Also</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/tiledarray">TiledArray</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/mpqc">Massively Parallel Quantum Chemistry</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io">Valeev Research Group</a></li>
+</ul>
+
+</div></div>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="../_sources/api/classsequant_1_1_tensor_canonicalizer.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="class-tensorcanonicalizer">
+<span id="exhale-class-classsequant-1-1-tensor-canonicalizer"></span><h1>Class TensorCanonicalizer<a class="headerlink" href="#class-tensorcanonicalizer" title="Link to this heading">¶</a></h1>
+<ul class="simple">
+<li><p>Defined in <a class="reference internal" href="file_SeQuant_core_tensor_canonicalizer.hpp.html#file-sequant-core-tensor-canonicalizer-hpp"><span class="std std-ref">File tensor_canonicalizer.hpp</span></a></p></li>
+</ul>
+<section id="inheritance-relationships">
+<h2>Inheritance Relationships<a class="headerlink" href="#inheritance-relationships" title="Link to this heading">¶</a></h2>
+<section id="derived-types">
+<h3>Derived Types<a class="headerlink" href="#derived-types" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">public</span> <span class="pre">sequant::DefaultTensorCanonicalizer</span></code> (<a class="reference internal" href="classsequant_1_1_default_tensor_canonicalizer.html#exhale-class-classsequant-1-1-default-tensor-canonicalizer"><span class="std std-ref">Class DefaultTensorCanonicalizer</span></a>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">public</span> <span class="pre">sequant::NullTensorCanonicalizer</span></code> (<a class="reference internal" href="classsequant_1_1_null_tensor_canonicalizer.html#exhale-class-classsequant-1-1-null-tensor-canonicalizer"><span class="std std-ref">Class NullTensorCanonicalizer</span></a>)</p></li>
+</ul>
+</section>
+</section>
+<section id="class-documentation">
+<h2>Class Documentation<a class="headerlink" href="#class-documentation" title="Link to this heading">¶</a></h2>
+<dl class="cpp class">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant19TensorCanonicalizerE">
+<span id="_CPPv3N7sequant19TensorCanonicalizerE"></span><span id="_CPPv2N7sequant19TensorCanonicalizerE"></span><span id="sequant::TensorCanonicalizer"></span><span class="target" id="classsequant_1_1_tensor_canonicalizer"></span><span class="k"><span class="pre">class</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">TensorCanonicalizer</span></span></span><a class="headerlink" href="#_CPPv4N7sequant19TensorCanonicalizerE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Base class for <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> canonicalizers To make custom canonicalizer make a derived class and register an instance of that class with <a class="reference internal" href="#classsequant_1_1_tensor_canonicalizer_1addd464137a1f6215c224525383546b09"><span class="std std-ref">TensorCanonicalizer::register_instance</span></a>. </p>
+<p>Subclassed by <a class="reference internal" href="classsequant_1_1_default_tensor_canonicalizer.html#classsequant_1_1_default_tensor_canonicalizer"><span class="std std-ref">sequant::DefaultTensorCanonicalizer</span></a>, <a class="reference internal" href="classsequant_1_1_null_tensor_canonicalizer.html#classsequant_1_1_null_tensor_canonicalizer"><span class="std std-ref">sequant::NullTensorCanonicalizer</span></a></p>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-types">Public Types</p>
+<dl class="cpp type">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant19TensorCanonicalizer16index_comparer_tE">
+<span id="_CPPv3N7sequant19TensorCanonicalizer16index_comparer_tE"></span><span id="_CPPv2N7sequant19TensorCanonicalizer16index_comparer_tE"></span><span class="target" id="classsequant_1_1_tensor_canonicalizer_1aa0e45216f1c759aa4addd0243804fbf0"></span><span class="k"><span class="pre">using</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">index_comparer_t</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">function</span></span><span class="p"><span class="pre">&lt;</span></span><span class="kt"><span class="pre">bool</span></span><span class="p"><span class="pre">(</span></span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">)</span></span><span class="p"><span class="pre">&gt;</span></span><a class="headerlink" href="#_CPPv4N7sequant19TensorCanonicalizer16index_comparer_tE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp type">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant19TensorCanonicalizer12index_pair_tE">
+<span id="_CPPv3N7sequant19TensorCanonicalizer12index_pair_tE"></span><span id="_CPPv2N7sequant19TensorCanonicalizer12index_pair_tE"></span><span class="target" id="classsequant_1_1_tensor_canonicalizer_1acc52756fae8c33d0167c4abf1c5f7050"></span><span class="k"><span class="pre">using</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">index_pair_t</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">pair</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="p"><span class="pre">&gt;</span></span><a class="headerlink" href="#_CPPv4N7sequant19TensorCanonicalizer12index_pair_tE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp type">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant19TensorCanonicalizer21index_pair_comparer_tE">
+<span id="_CPPv3N7sequant19TensorCanonicalizer21index_pair_comparer_tE"></span><span id="_CPPv2N7sequant19TensorCanonicalizer21index_pair_comparer_tE"></span><span class="target" id="classsequant_1_1_tensor_canonicalizer_1aa07f8cb6eee17b133faf4e2655776345"></span><span class="k"><span class="pre">using</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">index_pair_comparer_t</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">function</span></span><span class="p"><span class="pre">&lt;</span></span><span class="kt"><span class="pre">bool</span></span><span class="p"><span class="pre">(</span></span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant19TensorCanonicalizer12index_pair_tE" title="sequant::TensorCanonicalizer::index_pair_t"><span class="n"><span class="pre">index_pair_t</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant19TensorCanonicalizer12index_pair_tE" title="sequant::TensorCanonicalizer::index_pair_t"><span class="n"><span class="pre">index_pair_t</span></span></a><span class="p"><span class="pre">)</span></span><span class="p"><span class="pre">&gt;</span></span><a class="headerlink" href="#_CPPv4N7sequant19TensorCanonicalizer21index_pair_comparer_tE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-functions">Public Functions</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant19TensorCanonicalizerD0Ev">
+<span id="_CPPv3N7sequant19TensorCanonicalizerD0Ev"></span><span id="_CPPv2N7sequant19TensorCanonicalizerD0Ev"></span><span id="sequant::TensorCanonicalizer::~TensorCanonicalizer"></span><span class="target" id="classsequant_1_1_tensor_canonicalizer_1a24693a744886b69761ce4db3dbabe3ed"></span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">~TensorCanonicalizer</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant19TensorCanonicalizerD0Ev" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant19TensorCanonicalizer5applyER14AbstractTensor">
+<span id="_CPPv3NK7sequant19TensorCanonicalizer5applyER14AbstractTensor"></span><span id="_CPPv2NK7sequant19TensorCanonicalizer5applyER14AbstractTensor"></span><span id="sequant::TensorCanonicalizer::apply__AbstractTensorRC"></span><span class="target" id="classsequant_1_1_tensor_canonicalizer_1a5ac8d129b9efc5941634ffb7a98c618e"></span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_expr_ptr.html#_CPPv4N7sequant7ExprPtrE" title="sequant::ExprPtr"><span class="n"><span class="pre">ExprPtr</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">apply</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="classsequant_1_1_abstract_tensor.html#_CPPv4N7sequant14AbstractTensorE" title="sequant::AbstractTensor"><span class="n"><span class="pre">AbstractTensor</span></span></a><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">0</span></span><a class="headerlink" href="#_CPPv4NK7sequant19TensorCanonicalizer5applyER14AbstractTensor" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>a side effect of canonicalization (e.g. phase), or nullptr if none </p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-static-functions">Public Static Functions</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp">
+<span class="target" id="classsequant_1_1_tensor_canonicalizer_1af8f15a6fa7a941205909a27becee42f2"></span><span class="sig-name descname"><span class="pre">static</span> <span class="pre">std::shared_ptr&lt;</span> <span class="pre">TensorCanonicalizer</span> <span class="pre">&gt;</span> <span class="pre">instance_ptr</span> <span class="pre">(std::wstring_view</span> <span class="pre">label=L&quot;&quot;)</span></span></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>ptr to the <a class="reference internal" href="#classsequant_1_1_tensor_canonicalizer"><span class="std std-ref">TensorCanonicalizer</span></a> object, if any, that had been previously registered via <a class="reference internal" href="#classsequant_1_1_tensor_canonicalizer_1addd464137a1f6215c224525383546b09"><span class="std std-ref">TensorCanonicalizer::register_instance()</span></a> with <code class="docutils literal notranslate"><span class="pre">label</span></code> , or to the default canonicalizer, if any </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant19TensorCanonicalizer23nondefault_instance_ptrENSt12wstring_viewE">
+<span id="_CPPv3N7sequant19TensorCanonicalizer23nondefault_instance_ptrENSt12wstring_viewE"></span><span id="_CPPv2N7sequant19TensorCanonicalizer23nondefault_instance_ptrENSt12wstring_viewE"></span><span id="sequant::TensorCanonicalizer::nondefault_instance_ptr__std::wstring_view"></span><span class="target" id="classsequant_1_1_tensor_canonicalizer_1a211148501cb12c66959005a74dc72250"></span><span class="k"><span class="pre">static</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">shared_ptr</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="#_CPPv4N7sequant19TensorCanonicalizerE" title="sequant::TensorCanonicalizer"><span class="n"><span class="pre">TensorCanonicalizer</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">nondefault_instance_ptr</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">wstring_view</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">label</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant19TensorCanonicalizer23nondefault_instance_ptrENSt12wstring_viewE" title="Link to this definition">¶</a><br /></dt>
+<dd><p><div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#classsequant_1_1_tensor_canonicalizer_1af8f15a6fa7a941205909a27becee42f2"><span class="std std-ref">instance_ptr</span></a></p>
+</div>
+</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>ptr to the <a class="reference internal" href="#classsequant_1_1_tensor_canonicalizer"><span class="std std-ref">TensorCanonicalizer</span></a> object, if any, that had been previously registered via <a class="reference internal" href="#classsequant_1_1_tensor_canonicalizer_1addd464137a1f6215c224525383546b09"><span class="std std-ref">TensorCanonicalizer::register_instance()</span></a> with <code class="docutils literal notranslate"><span class="pre">label</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp">
+<span class="target" id="classsequant_1_1_tensor_canonicalizer_1a3a381ffc360f3372b5f7d2feb1eb312d"></span><span class="sig-name descname"><span class="pre">static</span> <span class="pre">std::shared_ptr&lt;</span> <span class="pre">TensorCanonicalizer</span> <span class="pre">&gt;</span> <span class="pre">instance</span> <span class="pre">(std::wstring_view</span> <span class="pre">label=L&quot;&quot;)</span></span></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Throws<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span><span class="cpp-expr sig sig-inline cpp"><a class="reference internal" href="classsequant_1_1_exception.html#_CPPv4N7sequant9ExceptionE" title="sequant::Exception"><span class="n">Exception</span></a></span></span> – if no canonicalizer has been registered </p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>a <a class="reference internal" href="#classsequant_1_1_tensor_canonicalizer"><span class="std std-ref">TensorCanonicalizer</span></a> previously registered via <a class="reference internal" href="#classsequant_1_1_tensor_canonicalizer_1addd464137a1f6215c224525383546b09"><span class="std std-ref">TensorCanonicalizer::register_instance()</span></a> with <code class="docutils literal notranslate"><span class="pre">label</span></code> or to the default canonicalizer </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp">
+<span class="target" id="classsequant_1_1_tensor_canonicalizer_1addd464137a1f6215c224525383546b09"></span><span class="sig-name descname"><span class="pre">static</span> <span class="pre">void</span> <span class="pre">register_instance</span> <span class="pre">(std::shared_ptr&lt;</span> <span class="pre">TensorCanonicalizer</span> <span class="pre">&gt;</span> <span class="pre">canonicalizer,</span> <span class="pre">std::wstring_view</span> <span class="pre">label=L&quot;&quot;)</span></span></dt>
+<dd><p>registers <code class="docutils literal notranslate"><span class="pre">canonicalizer</span></code> to be applied to <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> objects with label <code class="docutils literal notranslate"><span class="pre">label</span></code> ; leave the label empty if <code class="docutils literal notranslate"><span class="pre">canonicalizer</span></code> is to apply to <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> objects with any label </p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>if a canonicalizer registered with label <code class="docutils literal notranslate"><span class="pre">label</span></code> exists, it is replaced </p>
+</div>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp">
+<span class="target" id="classsequant_1_1_tensor_canonicalizer_1ad9c46cb86e2e260c52abbe7fe8cf4b47"></span><span class="sig-name descname"><span class="pre">static</span> <span class="pre">bool</span> <span class="pre">try_register_instance</span> <span class="pre">(std::shared_ptr&lt;</span> <span class="pre">TensorCanonicalizer</span> <span class="pre">&gt;</span> <span class="pre">canonicalizer,</span> <span class="pre">std::wstring_view</span> <span class="pre">label=L&quot;&quot;)</span></span></dt>
+<dd><p>tries to register <code class="docutils literal notranslate"><span class="pre">canonicalizer</span></code> to be applied to <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> objects with label <code class="docutils literal notranslate"><span class="pre">label</span></code> ; leave the label empty if <code class="docutils literal notranslate"><span class="pre">canonicalizer</span></code> is to apply to <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> objects with any label <div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p>regiter_instance </p>
+</div>
+</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>false if there is already a canonicalizer registered with <code class="docutils literal notranslate"><span class="pre">label</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp">
+<span class="target" id="classsequant_1_1_tensor_canonicalizer_1a58966841aeb202272c32850f1026f155"></span><span class="sig-name descname"><span class="pre">static</span> <span class="pre">void</span> <span class="pre">deregister_instance</span> <span class="pre">(std::wstring_view</span> <span class="pre">label=L&quot;&quot;)</span></span></dt>
+<dd><p>deregisters canonicalizer (if any) registered previously to be applied to tensors with label <code class="docutils literal notranslate"><span class="pre">label</span></code></p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant19TensorCanonicalizer22cardinal_tensor_labelsEv">
+<span id="_CPPv3N7sequant19TensorCanonicalizer22cardinal_tensor_labelsEv"></span><span id="_CPPv2N7sequant19TensorCanonicalizer22cardinal_tensor_labelsEv"></span><span id="sequant::TensorCanonicalizer::cardinal_tensor_labels"></span><span class="target" id="classsequant_1_1_tensor_canonicalizer_1afe8078f1a366a6a1a523ac0e23e7d44c"></span><span class="k"><span class="pre">static</span></span><span class="w"> </span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">cardinal_tensor_labels</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant19TensorCanonicalizer22cardinal_tensor_labelsEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>a list of <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> labels with lexicographic preference (in order) </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant19TensorCanonicalizer26set_cardinal_tensor_labelsERKN9container6vectorINSt7wstringEEE">
+<span id="_CPPv3N7sequant19TensorCanonicalizer26set_cardinal_tensor_labelsERKN9container6vectorINSt7wstringEEE"></span><span id="_CPPv2N7sequant19TensorCanonicalizer26set_cardinal_tensor_labelsERKN9container6vectorINSt7wstringEEE"></span><span id="sequant::TensorCanonicalizer::set_cardinal_tensor_labels__container::vector:std::wstring:CR"></span><span class="target" id="classsequant_1_1_tensor_canonicalizer_1a54fe164aee49c9abb9d732c8b9c8fa85"></span><span class="k"><span class="pre">static</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">set_cardinal_tensor_labels</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1aaa8384c5d22396ccd9a2368a088e24bd.html#_CPPv4I0EN7sequant9container6vectorE" title="sequant::container::vector"><span class="n"><span class="pre">vector</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">wstring</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">labels</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant19TensorCanonicalizer26set_cardinal_tensor_labelsERKN9container6vectorINSt7wstringEEE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Sets cardinal tensor labels by appending to defaults. </p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The default labels are always prepended to the provided labels </p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>To restore defaults only, use <a class="reference internal" href="#classsequant_1_1_tensor_canonicalizer_1a5dfb5b77eadb3eacfb0802bfbec9c135"><span class="std std-ref">reset_cardinal_tensor_labels()</span></a></p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>labels</strong> – a list of additional <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> labels with lexicographic preference (in order) </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant19TensorCanonicalizer28reset_cardinal_tensor_labelsEv">
+<span id="_CPPv3N7sequant19TensorCanonicalizer28reset_cardinal_tensor_labelsEv"></span><span id="_CPPv2N7sequant19TensorCanonicalizer28reset_cardinal_tensor_labelsEv"></span><span id="sequant::TensorCanonicalizer::reset_cardinal_tensor_labels"></span><span class="target" id="classsequant_1_1_tensor_canonicalizer_1a5dfb5b77eadb3eacfb0802bfbec9c135"></span><span class="k"><span class="pre">static</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">reset_cardinal_tensor_labels</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant19TensorCanonicalizer28reset_cardinal_tensor_labelsEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Resets cardinal tensor labels to default values only. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant19TensorCanonicalizer32clear_all_cardinal_tensor_labelsEv">
+<span id="_CPPv3N7sequant19TensorCanonicalizer32clear_all_cardinal_tensor_labelsEv"></span><span id="_CPPv2N7sequant19TensorCanonicalizer32clear_all_cardinal_tensor_labelsEv"></span><span id="sequant::TensorCanonicalizer::clear_all_cardinal_tensor_labels"></span><span class="target" id="classsequant_1_1_tensor_canonicalizer_1aebf84c94746228b0783c865fa39481d1"></span><span class="k"><span class="pre">static</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">clear_all_cardinal_tensor_labels</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant19TensorCanonicalizer32clear_all_cardinal_tensor_labelsEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Clears all cardinal tensor labels including defaults (sets to empty list) </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant19TensorCanonicalizer14index_comparerEv">
+<span id="_CPPv3N7sequant19TensorCanonicalizer14index_comparerEv"></span><span id="_CPPv2N7sequant19TensorCanonicalizer14index_comparerEv"></span><span id="sequant::TensorCanonicalizer::index_comparer"></span><span class="target" id="classsequant_1_1_tensor_canonicalizer_1a3281afd535add375fe79ba43907d7915"></span><span class="k"><span class="pre">static</span></span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant19TensorCanonicalizer16index_comparer_tE" title="sequant::TensorCanonicalizer::index_comparer_t"><span class="n"><span class="pre">index_comparer_t</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">index_comparer</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant19TensorCanonicalizer14index_comparerEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>reference to the object used to compare <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a> objects </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant19TensorCanonicalizer14index_comparerE16index_comparer_t">
+<span id="_CPPv3N7sequant19TensorCanonicalizer14index_comparerE16index_comparer_t"></span><span id="_CPPv2N7sequant19TensorCanonicalizer14index_comparerE16index_comparer_t"></span><span id="sequant::TensorCanonicalizer::index_comparer__index_comparer_t"></span><span class="target" id="classsequant_1_1_tensor_canonicalizer_1ace0e9511fc9b3425365b768b49ecf301"></span><span class="k"><span class="pre">static</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">index_comparer</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N7sequant19TensorCanonicalizer16index_comparer_tE" title="sequant::TensorCanonicalizer::index_comparer_t"><span class="n"><span class="pre">index_comparer_t</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">comparer</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant19TensorCanonicalizer14index_comparerE16index_comparer_t" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>comparer</strong> – the compare object to be used by this </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant19TensorCanonicalizer19index_pair_comparerEv">
+<span id="_CPPv3N7sequant19TensorCanonicalizer19index_pair_comparerEv"></span><span id="_CPPv2N7sequant19TensorCanonicalizer19index_pair_comparerEv"></span><span id="sequant::TensorCanonicalizer::index_pair_comparer"></span><span class="target" id="classsequant_1_1_tensor_canonicalizer_1a9f847e9e07e82ccae098305f5b02e590"></span><span class="k"><span class="pre">static</span></span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant19TensorCanonicalizer21index_pair_comparer_tE" title="sequant::TensorCanonicalizer::index_pair_comparer_t"><span class="n"><span class="pre">index_pair_comparer_t</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">index_pair_comparer</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant19TensorCanonicalizer19index_pair_comparerEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>reference to the object used to compare <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a> objects </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant19TensorCanonicalizer19index_pair_comparerE21index_pair_comparer_t">
+<span id="_CPPv3N7sequant19TensorCanonicalizer19index_pair_comparerE21index_pair_comparer_t"></span><span id="_CPPv2N7sequant19TensorCanonicalizer19index_pair_comparerE21index_pair_comparer_t"></span><span id="sequant::TensorCanonicalizer::index_pair_comparer__index_pair_comparer_t"></span><span class="target" id="classsequant_1_1_tensor_canonicalizer_1ad070b26a58748d180d8e9cccfab1342e"></span><span class="k"><span class="pre">static</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">index_pair_comparer</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N7sequant19TensorCanonicalizer21index_pair_comparer_tE" title="sequant::TensorCanonicalizer::index_pair_comparer_t"><span class="n"><span class="pre">index_pair_comparer_t</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">comparer</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant19TensorCanonicalizer19index_pair_comparerE21index_pair_comparer_t" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>comparer</strong> – the compare object to be used by this </p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-protected-functions">Protected Functions</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant19TensorCanonicalizer17mutable_bra_rangeER14AbstractTensor">
+<span id="_CPPv3NK7sequant19TensorCanonicalizer17mutable_bra_rangeER14AbstractTensor"></span><span id="_CPPv2NK7sequant19TensorCanonicalizer17mutable_bra_rangeER14AbstractTensor"></span><span id="sequant::TensorCanonicalizer::mutable_bra_range__AbstractTensorRC"></span><span class="target" id="classsequant_1_1_tensor_canonicalizer_1a8f00bb308b6a6dd7bfefe7304172d38f"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">mutable_bra_range</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="classsequant_1_1_abstract_tensor.html#_CPPv4N7sequant14AbstractTensorE" title="sequant::AbstractTensor"><span class="n"><span class="pre">AbstractTensor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">t</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant19TensorCanonicalizer17mutable_bra_rangeER14AbstractTensor" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant19TensorCanonicalizer17mutable_ket_rangeER14AbstractTensor">
+<span id="_CPPv3NK7sequant19TensorCanonicalizer17mutable_ket_rangeER14AbstractTensor"></span><span id="_CPPv2NK7sequant19TensorCanonicalizer17mutable_ket_rangeER14AbstractTensor"></span><span id="sequant::TensorCanonicalizer::mutable_ket_range__AbstractTensorRC"></span><span class="target" id="classsequant_1_1_tensor_canonicalizer_1a6d80a5eb92878887f6865a4a7f0e1abb"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">mutable_ket_range</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="classsequant_1_1_abstract_tensor.html#_CPPv4N7sequant14AbstractTensorE" title="sequant::AbstractTensor"><span class="n"><span class="pre">AbstractTensor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">t</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant19TensorCanonicalizer17mutable_ket_rangeER14AbstractTensor" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant19TensorCanonicalizer17mutable_aux_rangeER14AbstractTensor">
+<span id="_CPPv3NK7sequant19TensorCanonicalizer17mutable_aux_rangeER14AbstractTensor"></span><span id="_CPPv2NK7sequant19TensorCanonicalizer17mutable_aux_rangeER14AbstractTensor"></span><span id="sequant::TensorCanonicalizer::mutable_aux_range__AbstractTensorRC"></span><span class="target" id="classsequant_1_1_tensor_canonicalizer_1aa245f3dab5e85ce7f6cf40081075ef62"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">mutable_aux_range</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="classsequant_1_1_abstract_tensor.html#_CPPv4N7sequant14AbstractTensorE" title="sequant::AbstractTensor"><span class="n"><span class="pre">AbstractTensor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">t</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant19TensorCanonicalizer17mutable_aux_rangeER14AbstractTensor" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-protected-static-attributes">Protected Static Attributes</p>
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant19TensorCanonicalizer15index_comparer_E">
+<span id="_CPPv3N7sequant19TensorCanonicalizer15index_comparer_E"></span><span id="_CPPv2N7sequant19TensorCanonicalizer15index_comparer_E"></span><span id="sequant::TensorCanonicalizer::index_comparer___index_comparer_t"></span><span class="target" id="classsequant_1_1_tensor_canonicalizer_1a0cd40ff65cef0f2e376d51c409fcbfaa"></span><span class="k"><span class="pre">static</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant19TensorCanonicalizer16index_comparer_tE" title="sequant::TensorCanonicalizer::index_comparer_t"><span class="n"><span class="pre">index_comparer_t</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">index_comparer_</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="structsequant_1_1_tensor_index_comparer.html#_CPPv4N7sequant19TensorIndexComparerE" title="sequant::TensorIndexComparer"><span class="n"><span class="pre">TensorIndexComparer</span></span></a><span class="p"><span class="pre">{</span></span><span class="p"><span class="pre">}</span></span><a class="headerlink" href="#_CPPv4N7sequant19TensorCanonicalizer15index_comparer_E" title="Link to this definition">¶</a><br /></dt>
+<dd><p>the object used to compare indices </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant19TensorCanonicalizer20index_pair_comparer_E">
+<span id="_CPPv3N7sequant19TensorCanonicalizer20index_pair_comparer_E"></span><span id="_CPPv2N7sequant19TensorCanonicalizer20index_pair_comparer_E"></span><span id="sequant::TensorCanonicalizer::index_pair_comparer___index_pair_comparer_t"></span><span class="target" id="classsequant_1_1_tensor_canonicalizer_1a5eadee5987bc85f1207752df5a82c7c3"></span><span class="k"><span class="pre">static</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant19TensorCanonicalizer21index_pair_comparer_tE" title="sequant::TensorCanonicalizer::index_pair_comparer_t"><span class="n"><span class="pre">index_pair_comparer_t</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">index_pair_comparer_</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="structsequant_1_1_tensor_index_comparer.html#_CPPv4N7sequant19TensorIndexComparerE" title="sequant::TensorIndexComparer"><span class="n"><span class="pre">TensorIndexComparer</span></span></a><span class="p"><span class="pre">{</span></span><span class="p"><span class="pre">}</span></span><a class="headerlink" href="#_CPPv4N7sequant19TensorCanonicalizer20index_pair_comparer_E" title="Link to this definition">¶</a><br /></dt>
+<dd><p>the object used to compare pairs of indices </p>
+</dd></dl>
+
+</div>
+</dd></dl>
+
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, SeQuant developers
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            <div class="last-updated">
+              Last updated on Feb 27, 2026 8:35:02 PM</div>
+          </div>
+          <div class="right-details">
+            <div class="icons">
+              <a class="muted-link fa-brands fa-solid fa-github fa-2x" href="https://github.com/ValeevGroup/SeQuant" aria-label="GitHub"></a>
+              
+            </div>
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Class TensorCanonicalizer</a><ul>
+<li><a class="reference internal" href="#inheritance-relationships">Inheritance Relationships</a><ul>
+<li><a class="reference internal" href="#derived-types">Derived Types</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#class-documentation">Class Documentation</a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant19TensorCanonicalizerE"><code class="docutils literal notranslate"><span class="pre">sequant::TensorCanonicalizer</span></code></a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant19TensorCanonicalizer16index_comparer_tE"><code class="docutils literal notranslate"><span class="pre">index_comparer_t</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant19TensorCanonicalizer12index_pair_tE"><code class="docutils literal notranslate"><span class="pre">index_pair_t</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant19TensorCanonicalizer21index_pair_comparer_tE"><code class="docutils literal notranslate"><span class="pre">index_pair_comparer_t</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant19TensorCanonicalizerD0Ev"><code class="docutils literal notranslate"><span class="pre">~TensorCanonicalizer()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant19TensorCanonicalizer5applyER14AbstractTensor"><code class="docutils literal notranslate"><span class="pre">apply()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant19TensorCanonicalizer23nondefault_instance_ptrENSt12wstring_viewE"><code class="docutils literal notranslate"><span class="pre">nondefault_instance_ptr()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant19TensorCanonicalizer22cardinal_tensor_labelsEv"><code class="docutils literal notranslate"><span class="pre">cardinal_tensor_labels()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant19TensorCanonicalizer26set_cardinal_tensor_labelsERKN9container6vectorINSt7wstringEEE"><code class="docutils literal notranslate"><span class="pre">set_cardinal_tensor_labels()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant19TensorCanonicalizer28reset_cardinal_tensor_labelsEv"><code class="docutils literal notranslate"><span class="pre">reset_cardinal_tensor_labels()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant19TensorCanonicalizer32clear_all_cardinal_tensor_labelsEv"><code class="docutils literal notranslate"><span class="pre">clear_all_cardinal_tensor_labels()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant19TensorCanonicalizer14index_comparerEv"><code class="docutils literal notranslate"><span class="pre">index_comparer()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant19TensorCanonicalizer14index_comparerE16index_comparer_t"><code class="docutils literal notranslate"><span class="pre">index_comparer()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant19TensorCanonicalizer19index_pair_comparerEv"><code class="docutils literal notranslate"><span class="pre">index_pair_comparer()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant19TensorCanonicalizer19index_pair_comparerE21index_pair_comparer_t"><code class="docutils literal notranslate"><span class="pre">index_pair_comparer()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant19TensorCanonicalizer17mutable_bra_rangeER14AbstractTensor"><code class="docutils literal notranslate"><span class="pre">mutable_bra_range()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant19TensorCanonicalizer17mutable_ket_rangeER14AbstractTensor"><code class="docutils literal notranslate"><span class="pre">mutable_ket_range()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant19TensorCanonicalizer17mutable_aux_rangeER14AbstractTensor"><code class="docutils literal notranslate"><span class="pre">mutable_aux_range()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant19TensorCanonicalizer15index_comparer_E"><code class="docutils literal notranslate"><span class="pre">index_comparer_</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant19TensorCanonicalizer20index_pair_comparer_E"><code class="docutils literal notranslate"><span class="pre">index_pair_comparer_</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script src="../_static/bootstrap-treeview/bootstrap-treeview.min.js?v=6a1e96b4"></script>
+    </body>
+</html>

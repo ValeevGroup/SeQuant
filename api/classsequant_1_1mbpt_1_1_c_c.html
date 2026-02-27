@@ -1,0 +1,650 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html">
+        <link rel="prefetch" href="../_static/logo.svg" as="image">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>Class CC - SeQuant Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/bootstrap-treeview/bootstrap-treeview.min.css?v=8176a87d" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=821744c5" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --sidebar-item-font-size: 0.95em;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">SeQuant Documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="../_static/logo.svg" alt="Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">User</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/getting_started/index.html">Getting started</a><input aria-label="Toggle navigation of Getting started" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/wick.html">Wick’s Theorem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/index_spaces.html">Register Index Spaces</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/operators.html">Operators</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../user/getting_started/installing.html">Installation</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/guide/index.html">User Guide</a><input aria-label="Toggle navigation of User Guide" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/operator.html">Operator Interface for Symbolic Many-Body Algebra</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/cc.html">Coupled-Cluster Class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/io.html">I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/evaluation.html">Evaluation Trace Analysis Using Nushell</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../developer/index.html">Developer docs</a><input aria-label="Toggle navigation of Developer docs" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../developer/documentation.html">Documentation Guide</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">API reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Maintainer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../maintainer/index.html">Maintainer docs</a><input aria-label="Toggle navigation of Maintainer docs" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../maintainer/release.html">Release Guide</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">See Also</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/tiledarray">TiledArray</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/mpqc">Massively Parallel Quantum Chemistry</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io">Valeev Research Group</a></li>
+</ul>
+
+</div></div>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="../_sources/api/classsequant_1_1mbpt_1_1_c_c.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="class-cc">
+<span id="exhale-class-classsequant-1-1mbpt-1-1-c-c"></span><h1>Class CC<a class="headerlink" href="#class-cc" title="Link to this heading">¶</a></h1>
+<ul class="simple">
+<li><p>Defined in <a class="reference internal" href="file_SeQuant_domain_mbpt_models_cc.hpp.html#file-sequant-domain-mbpt-models-cc-hpp"><span class="std std-ref">File cc.hpp</span></a></p></li>
+</ul>
+<section id="nested-relationships">
+<h2>Nested Relationships<a class="headerlink" href="#nested-relationships" title="Link to this heading">¶</a></h2>
+<section id="nested-types">
+<h3>Nested Types<a class="headerlink" href="#nested-types" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><a class="reference internal" href="structsequant_1_1mbpt_1_1_c_c_1_1_options.html#exhale-struct-structsequant-1-1mbpt-1-1-c-c-1-1-options"><span class="std std-ref">Struct CC::Options</span></a></p></li>
+</ul>
+</section>
+</section>
+<section id="class-documentation">
+<h2>Class Documentation<a class="headerlink" href="#class-documentation" title="Link to this heading">¶</a></h2>
+<dl class="cpp class">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant4mbpt2CCE">
+<span id="_CPPv3N7sequant4mbpt2CCE"></span><span id="_CPPv2N7sequant4mbpt2CCE"></span><span id="sequant::mbpt::CC"></span><span class="target" id="classsequant_1_1mbpt_1_1_c_c"></span><span class="k"><span class="pre">class</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">CC</span></span></span><a class="headerlink" href="#_CPPv4N7sequant4mbpt2CCE" title="Link to this definition">¶</a><br /></dt>
+<dd><p><a class="reference internal" href="#classsequant_1_1mbpt_1_1_c_c"><span class="std std-ref">CC</span></a> is a derivation engine for the coupled-cluster method. </p>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-types">Public Types</p>
+<dl class="cpp enum-class">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant4mbpt2CC6AnsatzE">
+<span id="_CPPv3N7sequant4mbpt2CC6AnsatzE"></span><span id="_CPPv2N7sequant4mbpt2CC6AnsatzE"></span><span class="target" id="classsequant_1_1mbpt_1_1_c_c_1ae407594ec7426f1186856ab138dfecc4"></span><span class="k"><span class="pre">enum</span></span><span class="w"> </span><span class="k"><span class="pre">class</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Ansatz</span></span></span><a class="headerlink" href="#_CPPv4N7sequant4mbpt2CC6AnsatzE" title="Link to this definition">¶</a><br /></dt>
+<dd><p><em>Values:</em></p>
+<dl class="cpp enumerator">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant4mbpt2CC6Ansatz1TE">
+<span id="_CPPv3N7sequant4mbpt2CC6Ansatz1TE"></span><span id="_CPPv2N7sequant4mbpt2CC6Ansatz1TE"></span><span class="target" id="classsequant_1_1mbpt_1_1_c_c_1ae407594ec7426f1186856ab138dfecc4ab9ece18c950afbfa6b0fdbfa4ff731d3"></span><span class="k"><span class="pre">enumerator</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">T</span></span></span><a class="headerlink" href="#_CPPv4N7sequant4mbpt2CC6Ansatz1TE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>traditional ansatz </p>
+</dd></dl>
+
+<dl class="cpp enumerator">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant4mbpt2CC6Ansatz2oTE">
+<span id="_CPPv3N7sequant4mbpt2CC6Ansatz2oTE"></span><span id="_CPPv2N7sequant4mbpt2CC6Ansatz2oTE"></span><span class="target" id="classsequant_1_1mbpt_1_1_c_c_1ae407594ec7426f1186856ab138dfecc4a71baf1e6a8516d5be38add24c4ec2c86"></span><span class="k"><span class="pre">enumerator</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">oT</span></span></span><a class="headerlink" href="#_CPPv4N7sequant4mbpt2CC6Ansatz2oTE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>traditional orbital-optimized (singles-free) ansatz </p>
+</dd></dl>
+
+<dl class="cpp enumerator">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant4mbpt2CC6Ansatz1UE">
+<span id="_CPPv3N7sequant4mbpt2CC6Ansatz1UE"></span><span id="_CPPv2N7sequant4mbpt2CC6Ansatz1UE"></span><span class="target" id="classsequant_1_1mbpt_1_1_c_c_1ae407594ec7426f1186856ab138dfecc4a4c614360da93c0a041b22e537de151eb"></span><span class="k"><span class="pre">enumerator</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">U</span></span></span><a class="headerlink" href="#_CPPv4N7sequant4mbpt2CC6Ansatz1UE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>unitary ansatz </p>
+</dd></dl>
+
+<dl class="cpp enumerator">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant4mbpt2CC6Ansatz2oUE">
+<span id="_CPPv3N7sequant4mbpt2CC6Ansatz2oUE"></span><span id="_CPPv2N7sequant4mbpt2CC6Ansatz2oUE"></span><span class="target" id="classsequant_1_1mbpt_1_1_c_c_1ae407594ec7426f1186856ab138dfecc4ab5251b7138fe3de12d729b84800a34a6"></span><span class="k"><span class="pre">enumerator</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">oU</span></span></span><a class="headerlink" href="#_CPPv4N7sequant4mbpt2CC6Ansatz2oUE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>unitary orbital-optimized (singles-free) ansatz </p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-functions">Public Functions</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant4mbpt2CC2CCE6size_t">
+<span id="_CPPv3N7sequant4mbpt2CC2CCE6size_t"></span><span id="_CPPv2N7sequant4mbpt2CC2CCE6size_t"></span><span id="sequant::mbpt::CC::CC__s"></span><span class="target" id="classsequant_1_1mbpt_1_1_c_c_1a84866453d004a2b820bee03f291d2d54"></span><span class="k"><span class="pre">explicit</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">CC</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">n</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant4mbpt2CC2CCE6size_t" title="Link to this definition">¶</a><br /></dt>
+<dd><p>constructs <a class="reference internal" href="#classsequant_1_1mbpt_1_1_c_c"><span class="std std-ref">CC</span></a> engine with default options (traditional ansatz, screening enabled, topological optimization enabled) </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>n</strong> – coupled cluster excitation rank </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant4mbpt2CC2CCE6size_tRK7Options">
+<span id="_CPPv3N7sequant4mbpt2CC2CCE6size_tRK7Options"></span><span id="_CPPv2N7sequant4mbpt2CC2CCE6size_tRK7Options"></span><span id="sequant::mbpt::CC::CC__s.OptionsCR"></span><span class="target" id="classsequant_1_1mbpt_1_1_c_c_1a714049a1fa06d3f4e6b09a385ce2e7cb"></span><span class="k"><span class="pre">explicit</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">CC</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">n</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant4mbpt2CC7OptionsE" title="sequant::mbpt::CC::Options"><span class="n"><span class="pre">Options</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">opts</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant4mbpt2CC2CCE6size_tRK7Options" title="Link to this definition">¶</a><br /></dt>
+<dd><p>constructs <a class="reference internal" href="#classsequant_1_1mbpt_1_1_c_c"><span class="std std-ref">CC</span></a> engine with custom options </p>
+<p><div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="structsequant_1_1mbpt_1_1_c_c_1_1_options.html#structsequant_1_1mbpt_1_1_c_c_1_1_options"><span class="std std-ref">CC::Options</span></a></p>
+</div>
+</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>n</strong> – coupled cluster excitation rank </p></li>
+<li><p><strong>opts</strong> – configuration options </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant4mbpt2CC6ansatzEv">
+<span id="_CPPv3NK7sequant4mbpt2CC6ansatzEv"></span><span id="_CPPv2NK7sequant4mbpt2CC6ansatzEv"></span><span id="sequant::mbpt::CC::ansatzC"></span><span class="target" id="classsequant_1_1mbpt_1_1_c_c_1a5a056c62c416323c0794f4394b23d324"></span><a class="reference internal" href="#_CPPv4N7sequant4mbpt2CC6AnsatzE" title="sequant::mbpt::CC::Ansatz"><span class="n"><span class="pre">Ansatz</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">ansatz</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant4mbpt2CC6ansatzEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the type of ansatz </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant4mbpt2CC7unitaryEv">
+<span id="_CPPv3NK7sequant4mbpt2CC7unitaryEv"></span><span id="_CPPv2NK7sequant4mbpt2CC7unitaryEv"></span><span id="sequant::mbpt::CC::unitaryC"></span><span class="target" id="classsequant_1_1mbpt_1_1_c_c_1a0c852b6bcce69362dc2c373d17105d89"></span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">unitary</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant4mbpt2CC7unitaryEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>true if the ansatz is unitary </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant4mbpt2CC6screenEv">
+<span id="_CPPv3NK7sequant4mbpt2CC6screenEv"></span><span id="_CPPv2NK7sequant4mbpt2CC6screenEv"></span><span id="sequant::mbpt::CC::screenC"></span><span class="target" id="classsequant_1_1mbpt_1_1_c_c_1a3e84bb19d40a8a423161603c8d221ba0"></span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">screen</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant4mbpt2CC6screenEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>whether screening is on or not </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant4mbpt2CC12use_topologyEv">
+<span id="_CPPv3NK7sequant4mbpt2CC12use_topologyEv"></span><span id="_CPPv2NK7sequant4mbpt2CC12use_topologyEv"></span><span id="sequant::mbpt::CC::use_topologyC"></span><span class="target" id="classsequant_1_1mbpt_1_1_c_c_1a58869d5fafcd9d945024e4de8f3ab595"></span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">use_topology</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant4mbpt2CC12use_topologyEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>whether topological optimization is used in <a class="reference internal" href="classsequant_1_1_wick_theorem.html#classsequant_1_1_wick_theorem"><span class="std std-ref">WickTheorem</span></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant4mbpt2CC1tE6size_t6size_t">
+<span id="_CPPv3N7sequant4mbpt2CC1tE6size_t6size_t"></span><span id="_CPPv2N7sequant4mbpt2CC1tE6size_t6size_t"></span><span id="sequant::mbpt::CC::t__s.s"></span><span class="target" id="classsequant_1_1mbpt_1_1_c_c_1ad94d8b0c6427b97b60f114b75aea9124"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">vector</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="classsequant_1_1_expr_ptr.html#_CPPv4N7sequant7ExprPtrE" title="sequant::ExprPtr"><span class="n"><span class="pre">ExprPtr</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">t</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">pmax</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">numeric_limits</span></span><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">size_t</span></span><span class="p"><span class="pre">&gt;</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">max</span></span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span>, <span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">pmin</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">0</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant4mbpt2CC1tE6size_t6size_t" title="Link to this definition">¶</a><br /></dt>
+<dd><p>derives t amplitude equations, <span class="math notranslate nohighlight">\( \langle P|\bar{H}|0 \rangle = 0
+\)</span></p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>pmax</strong> – highest particle rank of the projector manifold <code class="docutils literal notranslate"><span class="pre">\f</span> <span class="pre">\langle</span> <span class="pre">P</span> <span class="pre">|</span> <span class="pre">\f</span></code>; the default value is to use the cluster operator rank of this engine </p></li>
+<li><p><strong>pmin</strong> – lowest particle rank of the projector manifold <code class="docutils literal notranslate"><span class="pre">\f</span> <span class="pre">\langle</span> <span class="pre">P</span> <span class="pre">|</span> <span class="pre">\f</span></code>; the default value is 0 </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>vector of t amplitude equations, with element <code class="docutils literal notranslate"><span class="pre">k</span></code> containing equation <span class="math notranslate nohighlight">\( \langle k |\bar{H}|0 \rangle = 0 \)</span> for <code class="docutils literal notranslate"><span class="pre">k</span></code> in the [<code class="docutils literal notranslate"><span class="pre">pmin</span></code>,<code class="docutils literal notranslate"><span class="pre">pmax</span></code>] range, and null value otherwise </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp">
+<span class="target" id="classsequant_1_1mbpt_1_1_c_c_1a8694ee66e213139a70652610dd92c690"></span><span class="sig-name descname"><span class="pre">std::vector&lt;</span> <span class="pre">ExprPtr</span> <span class="pre">&gt;</span> <span class="pre">λ</span> <span class="pre">()</span></span></dt>
+<dd><p>derives λ amplitude equations,  <span class="math notranslate nohighlight">\( \langle 0| (1 + \hat{\Lambda}) \frac{d \bar{H}}{d \hat{T}_P} |0
+\rangle = 0 \)</span></p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>vector of λ amplitude equations, with element <code class="docutils literal notranslate"><span class="pre">k</span></code> containing equation  <span class="math notranslate nohighlight">\( \langle 0| (1 + \hat{\Lambda}) \frac{d \bar{H}}{d \hat{T}_k} |0
+  \rangle = 0 \)</span> for <code class="docutils literal notranslate"><span class="pre">k</span></code> in the [1,N] range; element 0 is always null </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp">
+<span class="target" id="classsequant_1_1mbpt_1_1_c_c_1a754619a7e3f88fba051a58ef6cbeee4b"></span><span class="sig-name descname"><span class="pre">std::vector&lt;</span> <span class="pre">ExprPtr</span> <span class="pre">&gt;</span> <span class="pre">tʼ</span> <span class="pre">(size_t</span> <span class="pre">rank=1,</span> <span class="pre">size_t</span> <span class="pre">order=1,</span> <span class="pre">std::optional&lt;</span> <span class="pre">size_t</span> <span class="pre">&gt;</span> <span class="pre">nbatch=std::nullopt)</span></span></dt>
+<dd><p>derives perturbed t amplitude equations </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>rank</strong> – rank of perturbation operator. r = 1 means one-body perturbation operator </p></li>
+<li><p><strong>order</strong> – order of perturbation </p></li>
+<li><p><strong>nbatch</strong> – optional batching index rank for perturbation operators </p></li>
+</ul>
+</dd>
+<dt class="field-even">Pre<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">rank==1</span> <span class="pre">&amp;&amp;</span> <span class="pre">order==1</span></code>, only first order perturbation and one-body perturbation operator is supported now </p>
+</dd>
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>std::vector of perturbed t amplitude equations </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp">
+<span class="target" id="classsequant_1_1mbpt_1_1_c_c_1a92df57d8fe91fb604b57a3d28053279a"></span><span class="sig-name descname"><span class="pre">std::vector&lt;</span> <span class="pre">ExprPtr</span> <span class="pre">&gt;</span> <span class="pre">λʼ</span> <span class="pre">(size_t</span> <span class="pre">rank=1,</span> <span class="pre">size_t</span> <span class="pre">order=1,</span> <span class="pre">std::optional&lt;</span> <span class="pre">size_t</span> <span class="pre">&gt;</span> <span class="pre">nbatch=std::nullopt)</span></span></dt>
+<dd><p>derives perturbed λ amplitude equations </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>rank</strong> – rank of perturbation operator. r = 1 means one-body perturbation operator </p></li>
+<li><p><strong>order</strong> – order of perturbation </p></li>
+<li><p><strong>nbatch</strong> – optional batching index rank for perturbation operators </p></li>
+</ul>
+</dd>
+<dt class="field-even">Pre<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">rank==1</span> <span class="pre">&amp;&amp;</span> <span class="pre">order==1</span></code>, only first order perturbation and one-body perturbation operator is supported now </p>
+</dd>
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>std::vector of perturbed λ amplitude equations </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp">
+<span class="target" id="classsequant_1_1mbpt_1_1_c_c_1adad2d952f2e08d7374175dee6f7db2d6"></span><span class="sig-name descname"><span class="pre">std::vector&lt;</span> <span class="pre">ExprPtr</span> <span class="pre">&gt;</span> <span class="pre">eom_r</span> <span class="pre">(nₚ</span> <span class="pre">np,</span> <span class="pre">nₕ</span> <span class="pre">nh)</span></span></dt>
+<dd><p>derives right-side sigma equations for EOM-CC </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>np</strong> – number of particle creators in R operator </p></li>
+<li><p><strong>nh</strong> – number of hole creators in R operator </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>vector of right side sigma equations, element 0 is always null </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp">
+<span class="target" id="classsequant_1_1mbpt_1_1_c_c_1aea49a29276abfd3b794529d188884a10"></span><span class="sig-name descname"><span class="pre">std::vector&lt;</span> <span class="pre">ExprPtr</span> <span class="pre">&gt;</span> <span class="pre">eom_l</span> <span class="pre">(nₚ</span> <span class="pre">np,</span> <span class="pre">nₕ</span> <span class="pre">nh)</span></span></dt>
+<dd><p>derives left-side sigma equations for EOM-CC </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>np</strong> – number of particle annihilators in L operator </p></li>
+<li><p><strong>nh</strong> – number of hole annihilators in L operator </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>vector of left side sigma equations, element 0 is always null </p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<dl class="cpp struct">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant4mbpt2CC7OptionsE">
+<span id="_CPPv3N7sequant4mbpt2CC7OptionsE"></span><span id="_CPPv2N7sequant4mbpt2CC7OptionsE"></span><span id="sequant::mbpt::CC::Options"></span><span class="target" id="structsequant_1_1mbpt_1_1_c_c_1_1_options"></span><span class="k"><span class="pre">struct</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Options</span></span></span><a class="headerlink" href="#_CPPv4N7sequant4mbpt2CC7OptionsE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Configuration options for <a class="reference internal" href="#classsequant_1_1mbpt_1_1_c_c"><span class="std std-ref">CC</span></a> class. </p>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-members">Public Members</p>
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant4mbpt2CC7Options6ansatzE">
+<span id="_CPPv3N7sequant4mbpt2CC7Options6ansatzE"></span><span id="_CPPv2N7sequant4mbpt2CC7Options6ansatzE"></span><span id="sequant::mbpt::CC::Options::ansatz__Ansatz"></span><span class="target" id="structsequant_1_1mbpt_1_1_c_c_1_1_options_1a7fc04a7a9bee6ddb3946a64b7412b7fc"></span><a class="reference internal" href="#_CPPv4N7sequant4mbpt2CC6AnsatzE" title="sequant::mbpt::CC::Ansatz"><span class="n"><span class="pre">Ansatz</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">ansatz</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant4mbpt2CC6AnsatzE" title="sequant::mbpt::CC::Ansatz"><span class="n"><span class="pre">Ansatz</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="#_CPPv4N7sequant4mbpt2CC6Ansatz1TE" title="sequant::mbpt::CC::Ansatz::T"><span class="n"><span class="pre">T</span></span></a><a class="headerlink" href="#_CPPv4N7sequant4mbpt2CC7Options6ansatzE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>type of <a class="reference internal" href="#classsequant_1_1mbpt_1_1_c_c"><span class="std std-ref">CC</span></a> ansatz. see <a class="reference internal" href="#classsequant_1_1mbpt_1_1_c_c_1ae407594ec7426f1186856ab138dfecc4"><span class="std std-ref">CC::Ansatz</span></a></p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant4mbpt2CC7Options6screenE">
+<span id="_CPPv3N7sequant4mbpt2CC7Options6screenE"></span><span id="_CPPv2N7sequant4mbpt2CC7Options6screenE"></span><span id="sequant::mbpt::CC::Options::screen__b"></span><span class="target" id="structsequant_1_1mbpt_1_1_c_c_1_1_options_1acb7766130348864724aafc6f94edf135"></span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">screen</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">true</span></span><a class="headerlink" href="#_CPPv4N7sequant4mbpt2CC7Options6screenE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>if true, uses <a class="reference internal" href="classsequant_1_1mbpt_1_1_operator.html#classsequant_1_1mbpt_1_1_operator"><span class="std std-ref">Operator</span></a> level screening before applying <a class="reference internal" href="classsequant_1_1_wick_theorem.html#classsequant_1_1_wick_theorem"><span class="std std-ref">WickTheorem</span></a>. This propagates to all ref_av() calls </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant4mbpt2CC7Options12use_topologyE">
+<span id="_CPPv3N7sequant4mbpt2CC7Options12use_topologyE"></span><span id="_CPPv2N7sequant4mbpt2CC7Options12use_topologyE"></span><span id="sequant::mbpt::CC::Options::use_topology__b"></span><span class="target" id="structsequant_1_1mbpt_1_1_c_c_1_1_options_1a04efb2979211ecccd485817e8daa3d7c"></span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">use_topology</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">true</span></span><a class="headerlink" href="#_CPPv4N7sequant4mbpt2CC7Options12use_topologyE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>if true, uses topological optimizations in <a class="reference internal" href="classsequant_1_1_wick_theorem.html#classsequant_1_1_wick_theorem"><span class="std std-ref">WickTheorem</span></a></p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant4mbpt2CC7Options14hbar_comm_rankE">
+<span id="_CPPv3N7sequant4mbpt2CC7Options14hbar_comm_rankE"></span><span id="_CPPv2N7sequant4mbpt2CC7Options14hbar_comm_rankE"></span><span id="sequant::mbpt::CC::Options::hbar_comm_rank__std::optional:s:"></span><span class="target" id="structsequant_1_1mbpt_1_1_c_c_1_1_options_1afc950ad0b8f8fb6b3c815579a23ca08c"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">optional</span></span><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">size_t</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">hbar_comm_rank</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">nullopt</span></span><a class="headerlink" href="#_CPPv4N7sequant4mbpt2CC7Options14hbar_comm_rankE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>maximum order of nested commutators in H̄; must be specified if unitary ansatz is used </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant4mbpt2CC7Options17pertbar_comm_rankE">
+<span id="_CPPv3N7sequant4mbpt2CC7Options17pertbar_comm_rankE"></span><span id="_CPPv2N7sequant4mbpt2CC7Options17pertbar_comm_rankE"></span><span id="sequant::mbpt::CC::Options::pertbar_comm_rank__std::optional:s:"></span><span class="target" id="structsequant_1_1mbpt_1_1_c_c_1_1_options_1a3ea285bb96fe4db501d7043e9999e400"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">optional</span></span><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">size_t</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">pertbar_comm_rank</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">nullopt</span></span><a class="headerlink" href="#_CPPv4N7sequant4mbpt2CC7Options17pertbar_comm_rankE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>maximum order of nested commutators in the similarity transformed perturbation operator; must be specified if unitary ansatz is used in perturbed amplitude derivation </p>
+</dd></dl>
+
+</div>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, SeQuant developers
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            <div class="last-updated">
+              Last updated on Feb 27, 2026 8:35:02 PM</div>
+          </div>
+          <div class="right-details">
+            <div class="icons">
+              <a class="muted-link fa-brands fa-solid fa-github fa-2x" href="https://github.com/ValeevGroup/SeQuant" aria-label="GitHub"></a>
+              
+            </div>
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Class CC</a><ul>
+<li><a class="reference internal" href="#nested-relationships">Nested Relationships</a><ul>
+<li><a class="reference internal" href="#nested-types">Nested Types</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#class-documentation">Class Documentation</a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant4mbpt2CCE"><code class="docutils literal notranslate"><span class="pre">sequant::mbpt::CC</span></code></a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant4mbpt2CC6AnsatzE"><code class="docutils literal notranslate"><span class="pre">Ansatz</span></code></a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant4mbpt2CC6Ansatz1TE"><code class="docutils literal notranslate"><span class="pre">T</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant4mbpt2CC6Ansatz2oTE"><code class="docutils literal notranslate"><span class="pre">oT</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant4mbpt2CC6Ansatz1UE"><code class="docutils literal notranslate"><span class="pre">U</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant4mbpt2CC6Ansatz2oUE"><code class="docutils literal notranslate"><span class="pre">oU</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#_CPPv4N7sequant4mbpt2CC2CCE6size_t"><code class="docutils literal notranslate"><span class="pre">CC()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant4mbpt2CC2CCE6size_tRK7Options"><code class="docutils literal notranslate"><span class="pre">CC()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant4mbpt2CC6ansatzEv"><code class="docutils literal notranslate"><span class="pre">ansatz()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant4mbpt2CC7unitaryEv"><code class="docutils literal notranslate"><span class="pre">unitary()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant4mbpt2CC6screenEv"><code class="docutils literal notranslate"><span class="pre">screen()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant4mbpt2CC12use_topologyEv"><code class="docutils literal notranslate"><span class="pre">use_topology()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant4mbpt2CC1tE6size_t6size_t"><code class="docutils literal notranslate"><span class="pre">t()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant4mbpt2CC7OptionsE"><code class="docutils literal notranslate"><span class="pre">sequant::mbpt::CC::Options</span></code></a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant4mbpt2CC7Options6ansatzE"><code class="docutils literal notranslate"><span class="pre">ansatz</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant4mbpt2CC7Options6screenE"><code class="docutils literal notranslate"><span class="pre">screen</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant4mbpt2CC7Options12use_topologyE"><code class="docutils literal notranslate"><span class="pre">use_topology</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant4mbpt2CC7Options14hbar_comm_rankE"><code class="docutils literal notranslate"><span class="pre">hbar_comm_rank</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant4mbpt2CC7Options17pertbar_comm_rankE"><code class="docutils literal notranslate"><span class="pre">pertbar_comm_rank</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script src="../_static/bootstrap-treeview/bootstrap-treeview.min.js?v=6a1e96b4"></script>
+    <script>window.MathJax = {"options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4.0.0-beta.3/tex-mml-chtml.js"></script>
+    </body>
+</html>

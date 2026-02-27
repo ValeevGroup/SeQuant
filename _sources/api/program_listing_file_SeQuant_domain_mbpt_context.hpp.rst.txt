@@ -1,0 +1,98 @@
+
+.. _program_listing_file_SeQuant_domain_mbpt_context.hpp:
+
+Program Listing for File context.hpp
+====================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_domain_mbpt_context.hpp>` (``SeQuant/domain/mbpt/context.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   
+   #ifndef SEQUANT_DOMAIN_MBPT_CONTEXT_HPP
+   #define SEQUANT_DOMAIN_MBPT_CONTEXT_HPP
+   
+   #include <SeQuant/domain/mbpt/fwd.hpp>
+   
+   #include <SeQuant/core/utility/context.hpp>
+   #include <SeQuant/domain/mbpt/op_registry.hpp>
+   
+   namespace sequant::mbpt {
+   
+   enum class CSV { Yes, No };
+   
+   // clang-format off
+   // clang-format on
+   class Context {
+    public:
+     struct Defaults {
+       constexpr static auto csv = CSV::No;
+     };
+   
+     struct Options {
+       CSV csv = Defaults::csv;
+       std::shared_ptr<OpRegistry> op_registry_ptr = nullptr;
+       std::optional<OpRegistry> op_registry = std::nullopt;
+     };
+   
+     static Options make_default_options() { return Options{}; }
+   
+     Context(Options options = make_default_options());
+   
+     ~Context() = default;
+   
+     Context(Context&&) = default;
+   
+     Context(Context const& other) = default;
+   
+     Context& operator=(Context const& other) = default;
+   
+     Context clone() const;
+   
+     CSV csv() const;
+   
+     std::shared_ptr<const OpRegistry> op_registry() const;
+   
+     std::shared_ptr<OpRegistry> mutable_op_registry() const;
+   
+     Context& set(const OpRegistry& op_registry);
+   
+     Context& set(std::shared_ptr<OpRegistry> op_registry);
+   
+     Context& set(CSV csv);
+   
+    private:
+     CSV csv_ = Defaults::csv;
+     std::shared_ptr<OpRegistry> op_registry_;
+   
+     friend bool operator==(Context const& left, Context const& right);
+   };
+   
+   bool operator!=(Context const& left, Context const& right);
+   
+   const Context& get_default_mbpt_context();
+   
+   void set_default_mbpt_context(const Context& ctx);
+   
+   void set_default_mbpt_context(const Context::Options& options);
+   
+   void reset_default_mbpt_context();
+   
+   [[nodiscard]] sequant::detail::ImplicitContextResetter<Context>
+   set_scoped_default_mbpt_context(const Context& ctx);
+   
+   [[nodiscard]] sequant::detail::ImplicitContextResetter<Context>
+   set_scoped_default_mbpt_context(const Context::Options& options);
+   
+   
+   std::shared_ptr<OpRegistry> make_minimal_registry();
+   
+   std::shared_ptr<OpRegistry> make_legacy_registry();
+   
+   OpClass to_op_class(const std::wstring& op);
+   
+   }  // namespace sequant::mbpt
+   
+   #endif  // SEQUANT_DOMAIN_MBPT_CONTEXT_HPP

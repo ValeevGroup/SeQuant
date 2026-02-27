@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a03523d3171c423bc6167444ea26e4ba4:
+
+Template Function sequant::export_groups
+========================================
+
+- Defined in :ref:`file_SeQuant_core_export_export.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::export_groups(Range, Generator<Context>&, Context)
+   :project: SeQuant

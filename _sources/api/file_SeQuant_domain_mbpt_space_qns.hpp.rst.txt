@@ -1,0 +1,99 @@
+
+.. _file_SeQuant_domain_mbpt_space_qns.hpp:
+
+File space_qns.hpp
+==================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_mbpt>` (``SeQuant/domain/mbpt``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/domain/mbpt/space_qns.hpp``)
+--------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_mbpt_space_qns.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/fwd.hpp`` (:ref:`file_SeQuant_core_fwd.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_domain_mbpt_convention.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_rules_csv.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_spin.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__mbpt`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1mbpt_1_1mask`
+
+- :ref:`exhale_struct_structsequant_1_1mbpt_1_1mask_3_01_batching_q_n_s_01_4`
+
+- :ref:`exhale_struct_structsequant_1_1mbpt_1_1mask_3_01_l_c_a_o_q_n_s_01_4`
+
+- :ref:`exhale_struct_structsequant_1_1mbpt_1_1mask_3_01_spin_01_4`
+
+- :ref:`exhale_struct_structsequant_1_1mbpt_1_1mask_3_01_tensor_factorization_q_n_s_01_4`
+
+
+Enums
+-----
+
+
+- :ref:`exhale_enum_namespacesequant_1_1mbpt_1a88986aa6f85fe2236852f151c691cde0`
+
+- :ref:`exhale_enum_namespacesequant_1_1mbpt_1abb4359e83c62738a2d089e812e469123`
+
+- :ref:`exhale_enum_namespacesequant_1_1mbpt_1aa81103a146de75a6c3517274e9f931f7`
+
+- :ref:`exhale_enum_namespacesequant_1_1mbpt_1adc92e568f231470cc948d380c324dbc8`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1_1mbpt_1a55318ac01e35e7b554d3c6f3638a80ab`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1_1mbpt_1ad72c42fd020f040b29fcca860bf19ad3`
+

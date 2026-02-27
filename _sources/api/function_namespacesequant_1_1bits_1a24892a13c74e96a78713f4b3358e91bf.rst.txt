@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1bits_1a24892a13c74e96a78713f4b3358e91bf:
+
+Function sequant::bits::bipartitions
+====================================
+
+- Defined in :ref:`file_SeQuant_core_algorithm.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::bits::bipartitions(std::unsigned_integral auto)
+   :project: SeQuant

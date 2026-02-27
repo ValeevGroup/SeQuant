@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_tensor_of_tensor_indices:
+
+Template Struct TensorOfTensorIndices
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_utility_indices.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::TensorOfTensorIndices
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

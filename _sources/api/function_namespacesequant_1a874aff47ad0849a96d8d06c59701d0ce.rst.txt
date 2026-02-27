@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a874aff47ad0849a96d8d06c59701d0ce:
+
+Template Function sequant::is_creator
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::is_creator(const Op<S>&)
+   :project: SeQuant
