@@ -114,8 +114,8 @@ class compute_eomcc {
           if (i == 2) runtime_assert(eqvec[i].size() == 53);
         }
         if (np == 2 && nh == 1) {  // EA-EOM-CCSD(1h2p)
-          if (i == 1) runtime_assert(eqvec[i].size() == 9);
-          if (i == 2) runtime_assert(eqvec[i].size() == 32);
+          if (i == 0) runtime_assert(eqvec[i].size() == 9);
+          if (i == 1) runtime_assert(eqvec[i].size() == 32);
         }
         if (np == 1 && nh == 2) {  // IP-EOM-CCSD(2h1p)
           if (i == 0) runtime_assert(eqvec[i].size() == 9);
@@ -124,6 +124,15 @@ class compute_eomcc {
         if (np == 1 && nh == 3) {  // DIP-EOM-CCSD(3h1p)
           if (i == 0) runtime_assert(eqvec[i].size() == 13);
           if (i == 1) runtime_assert(eqvec[i].size() == 34);
+        }
+        if (np == 3 && nh == 1) {  // DEA-EOM-CCSD(1h3p)
+          if (i == 0) runtime_assert(eqvec[i].size() == 13);
+          if (i == 1) runtime_assert(eqvec[i].size() == 34);
+        }
+        if (np == 2 && nh == 4) {  // DIP-EOM-CCSD(4h2p)
+          if (i == 0) runtime_assert(eqvec[i].size() == 14);
+          if (i == 1) runtime_assert(eqvec[i].size() == 40);
+          if (i == 2) runtime_assert(eqvec[i].size() == 65);
         }
       }
       if (N == 3 && type == EqnType::right) {
