@@ -53,10 +53,6 @@ set(CMAKE_CXX_STANDARD 20 CACHE STRING "C++ ISO Standard version")
 if (CMAKE_CXX_STANDARD LESS 20)
     message(FATAL_ERROR "C++ 2020 ISO Standard or higher is required to build SeQuant")
 endif ()
-# C++20 is only configurable via compile features with cmake 3.12 and older
-if (CMAKE_CXX_STANDARD EQUAL 20 AND CMAKE_VERSION VERSION_LESS 3.12.0)
-    cmake_minimum_required(VERSION 3.12.0)
-endif ()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF CACHE BOOL "Whether to use extensions of C++ ISO Standard version")
 
@@ -90,6 +86,7 @@ include(compiler)
 macro(sequant_add_library _module)
     add_library(SeQuant-${_module} ${ARGN})
     set_target_properties(SeQuant-${_module} PROPERTIES EXPORT_NAME ${_module})
+    set_target_properties(SeQuant-${_module} PROPERTIES CXX_SCAN_FOR_MODULES OFF)
     add_library(SeQuant::${_module} ALIAS SeQuant-${_module})
     get_target_property(_type SeQuant-${_module} TYPE)
     if (NOT _type STREQUAL "INTERFACE_LIBRARY")
@@ -247,6 +244,9 @@ include(FindOrFetchUtfcpp)
 # Eigen
 include(FindOrFetchEigen)
 
+# cpp-peglib
+include(FindOrFetchCppPeglib)
+
 # embedded bliss-0.73
 add_library(SeQuant-bliss
         SeQuant/external/bliss/defs.cc
@@ -269,6 +269,7 @@ add_library(SeQuant-bliss
         SeQuant/external/bliss/bliss_C.h
         )
 set_target_properties(SeQuant-bliss PROPERTIES EXPORT_NAME bliss)
+set_target_properties(SeQuant-bliss PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 add_library(SeQuant::bliss ALIAS SeQuant-bliss)
 target_link_libraries(SeQuant-bliss PUBLIC range-v3::range-v3 Boost::headers)
 if (SEQUANT_USE_SYSTEM_BOOST_HASH)
@@ -339,8 +340,16 @@ set(SeQuant_symb_src
         SeQuant/core/io/serialization/v1/ast.hpp
         SeQuant/core/io/serialization/v1/ast_conversions.hpp
         SeQuant/core/io/serialization/v1/deserialize.cpp
+        SeQuant/core/io/serialization/v1/error.cpp
+        SeQuant/core/io/serialization/v1/error.hpp
         SeQuant/core/io/serialization/v1/semantic_actions.hpp
         SeQuant/core/io/serialization/v1/serialize.cpp
+        SeQuant/core/io/serialization/v2/ast_conversions.cpp
+        SeQuant/core/io/serialization/v2/ast_conversions.hpp
+        SeQuant/core/io/serialization/v2/deserialize.cpp
+        SeQuant/core/io/serialization/v2/error.cpp
+        SeQuant/core/io/serialization/v2/error.hpp
+        SeQuant/core/io/serialization/v2/serialize.cpp
         SeQuant/core/ranges.hpp
         SeQuant/core/rational.hpp
         SeQuant/core/runtime.cpp
@@ -568,6 +577,7 @@ target_link_libraries(SeQuant-symb
         Threads::Threads
         libperm::libperm
         $<BUILD_LOCAL_INTERFACE:utfcpp>
+        $<BUILD_LOCAL_INTERFACE:peglib>
         Eigen3::Eigen)
 if (Boost_IS_MODULARIZED)
     target_link_libraries(SeQuant-symb PUBLIC
@@ -608,6 +618,7 @@ target_link_libraries(SeQuant-optimize PUBLIC SeQuant-eval SeQuant-symb SeQuant-
 if (SEQUANT_HAS_TILEDARRAY)
     add_library(SeQuant-eval-ta ${SeQuant_eval_ta_src})
     set_target_properties(SeQuant-eval-ta PROPERTIES EXPORT_NAME eval::ta)
+    set_target_properties(SeQuant-eval-ta PROPERTIES CXX_SCAN_FOR_MODULES OFF)
     add_library(SeQuant::eval::ta ALIAS SeQuant-eval-ta)
     target_link_libraries(SeQuant-eval-ta PUBLIC SeQuant-eval SeQuant-symb tiledarray)
     target_compile_definitions(SeQuant-eval-ta PUBLIC SEQUANT_HAS_TILEDARRAY=1)
@@ -619,6 +630,7 @@ endif()
 if (SEQUANT_HAS_BTAS)
     add_library(SeQuant-eval-btas INTERFACE)
     set_target_properties(SeQuant-eval-btas PROPERTIES EXPORT_NAME eval::btas)
+    set_target_properties(SeQuant-eval-btas PROPERTIES CXX_SCAN_FOR_MODULES OFF)
     add_library(SeQuant::eval::btas ALIAS SeQuant-eval-btas)
     target_link_libraries(SeQuant-eval-btas INTERFACE SeQuant-eval SeQuant-symb BTAS::BTAS)
     target_compile_definitions(SeQuant-eval-btas INTERFACE SEQUANT_HAS_BTAS=1)
@@ -630,6 +642,7 @@ endif()
 if (SEQUANT_HAS_TAPP)
     add_library(SeQuant-eval-tapp INTERFACE)
     set_target_properties(SeQuant-eval-tapp PROPERTIES EXPORT_NAME eval::tapp)
+    set_target_properties(SeQuant-eval-tapp PROPERTIES CXX_SCAN_FOR_MODULES OFF)
     add_library(SeQuant::eval::tapp ALIAS SeQuant-eval-tapp)
     target_link_libraries(SeQuant-eval-tapp INTERFACE SeQuant-eval SeQuant-symb tapp::reference)
     target_compile_definitions(SeQuant-eval-tapp INTERFACE SEQUANT_HAS_TAPP=1)

@@ -5,6 +5,7 @@
 
 #include <charconv>
 #include <concepts>
+#include <sstream>
 #include <string_view>
 #include <system_error>
 #include <typeinfo>
@@ -55,7 +56,7 @@ T string_to_impl(std::string_view str, Arg &&arg) {
 }  // namespace
 
 template <typename T>
-concept string_to_supports =
+concept from_chars_supports =
     requires(const char *c, T &v) { std::from_chars(c, c + 1, v); };
 
 /// Converts the provided string to the desired integral type.
@@ -74,7 +75,7 @@ concept string_to_supports =
 /// the parsed value can't be represented as a T.
 template <std::integral T>
 T string_to(std::string_view str, int base = 10) {
-  static_assert(string_to_supports<T>,
+  static_assert(from_chars_supports<T>,
                 "Your C++ standard library is missing a std::from_chars "
                 "implementation for this integral type");
   return string_to_impl<T>(str, base);
@@ -97,11 +98,28 @@ T string_to(std::string_view str, int base = 10) {
 template <std::floating_point T>
 T string_to(std::string_view str,
             std::chars_format fmt = std::chars_format::general) {
-  static_assert(string_to_supports<T>,
+#ifndef __APPLE__
+  static_assert(from_chars_supports<T>,
                 "Your C++ standard library is missing a std::from_chars "
                 "implementation for this floating point type");
 
   return string_to_impl<T>(str, fmt);
+#else
+  // For some reason it seems that Apple is unable to supply an implementation
+  // of std::from_chars so we need to work around its (potential) absence
+  if constexpr (from_chars_supports<T>) {
+    // In case they update their standard lib…
+    return string_to_impl<T>(str, fmt);
+  }
+
+  // Workaround implementation that doesn't do any error checking - not great
+  // but better than not being able to use this function at all
+  std::stringstream stream{std::string(str)};
+  T val = 0;
+  stream >> val;
+
+  return val;
+#endif
 }
 
 }  // namespace sequant

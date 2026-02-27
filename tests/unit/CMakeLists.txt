@@ -18,8 +18,8 @@ set(symb_test_sources
     "test_math.cpp"
     "test_meta.cpp"
     "test_op.cpp"
-    "test_parse.cpp"
     "test_runtime.cpp"
+    "test_serialization.cpp"
     "test_space.cpp"
     "test_tensor.cpp"
     "test_tensor_network.cpp"
@@ -28,6 +28,7 @@ set(symb_test_sources
 )
 
 add_library(unit_tests-sequant-symb-obj OBJECT ${symb_test_sources})
+set_target_properties(unit_tests-sequant-symb-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 target_link_libraries(unit_tests-sequant-symb-obj
     PUBLIC SeQuant::symb SeQuant::bliss
     PRIVATE Catch2::Catch2 dtl::dtl)
@@ -42,6 +43,7 @@ set(eval_test_sources
     "test_eval_node.cpp"
 )
 add_library(unit_tests-sequant-eval-obj OBJECT ${eval_test_sources})
+set_target_properties(unit_tests-sequant-eval-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 target_link_libraries(unit_tests-sequant-eval-obj
     PUBLIC SeQuant::eval
     PRIVATE Catch2::Catch2 dtl::dtl)
@@ -56,6 +58,7 @@ set(optimize_test_sources
     "test_optimize.cpp"
 )
 add_library(unit_tests-sequant-optimize-obj OBJECT ${optimize_test_sources})
+set_target_properties(unit_tests-sequant-optimize-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 target_link_libraries(unit_tests-sequant-optimize-obj
     PUBLIC SeQuant::optimize SeQuant::bliss
     PRIVATE Catch2::Catch2 dtl::dtl)
@@ -71,6 +74,7 @@ set(export_test_sources
     "test_export_python.cpp"
 )
 add_library(unit_tests-sequant-export-obj OBJECT ${export_test_sources})
+set_target_properties(unit_tests-sequant-export-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 target_link_libraries(unit_tests-sequant-export-obj
     PUBLIC SeQuant::export SeQuant::optimize
     PRIVATE Catch2::Catch2 dtl::dtl Eigen3::Eigen)
@@ -88,6 +92,7 @@ set(mbpt_test_sources
 )
 
 add_library(unit_tests-sequant-mbpt-obj OBJECT ${mbpt_test_sources})
+set_target_properties(unit_tests-sequant-mbpt-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 target_link_libraries(unit_tests-sequant-mbpt-obj
     PUBLIC SeQuant::mbpt
     PRIVATE Catch2::Catch2 dtl::dtl)
@@ -103,6 +108,7 @@ if (SEQUANT_HAS_TILEDARRAY)
         "test_cache_manager.cpp"
     )
     add_library(unit_tests-sequant-eval-ta-obj OBJECT ${eval_ta_test_sources})
+    set_target_properties(unit_tests-sequant-eval-ta-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
     target_link_libraries(unit_tests-sequant-eval-ta-obj
         PUBLIC SeQuant::eval::ta SeQuant::mbpt
         PRIVATE Catch2::Catch2 dtl::dtl)
@@ -122,6 +128,7 @@ if (SEQUANT_HAS_BTAS)
         list(APPEND eval_btas_test_sources "test_cache_manager.cpp")
     endif()
     add_library(unit_tests-sequant-eval-btas-obj OBJECT ${eval_btas_test_sources})
+    set_target_properties(unit_tests-sequant-eval-btas-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
     target_link_libraries(unit_tests-sequant-eval-btas-obj
         PUBLIC SeQuant::eval::btas SeQuant::mbpt
         PRIVATE Catch2::Catch2 dtl::dtl)
@@ -137,6 +144,7 @@ endif()
 if (SEQUANT_HAS_TAPP)
     set(eval_tapp_test_sources "test_eval_tapp.cpp")
     add_library(unit_tests-sequant-eval-tapp-obj OBJECT ${eval_tapp_test_sources})
+    set_target_properties(unit_tests-sequant-eval-tapp-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
     target_link_libraries(unit_tests-sequant-eval-tapp-obj
         PUBLIC SeQuant::eval::tapp SeQuant::mbpt
         PRIVATE Catch2::Catch2 dtl::dtl)
@@ -155,6 +163,7 @@ endif()
 add_executable(unit_tests-sequant ${BUILD_BY_DEFAULT}
     "test_main.cpp"
 )
+set_target_properties(unit_tests-sequant PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 target_link_libraries(unit_tests-sequant PRIVATE
     unit_tests-sequant-symb-obj
     unit_tests-sequant-eval-obj

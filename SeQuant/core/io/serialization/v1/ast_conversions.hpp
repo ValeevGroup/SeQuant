@@ -2,13 +2,14 @@
 // Created by Robert Adam on 2023-09-22
 //
 
-#ifndef SEQUANT_CORE_PARSE_AST_CONVERSIONS_HPP
-#define SEQUANT_CORE_PARSE_AST_CONVERSIONS_HPP
+#ifndef SEQUANT_CORE_IO_SERIALIZATION_V1_AST_CONVERSIONS_HPP
+#define SEQUANT_CORE_IO_SERIALIZATION_V1_AST_CONVERSIONS_HPP
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/serialization/v1/ast.hpp>
+#include <SeQuant/core/io/serialization/v1/error.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -49,15 +50,14 @@ Index to_index(const io::serialization::v1::ast::Index &index,
       protoIndices.push_back(Index(std::move(label), std::move(space)));
     } catch (const IndexSpace::bad_key &) {
       auto [offset, length] = get_pos(current, position_cache, begin);
-      throw SerializationError(offset, length,
-                               "Unknown index space '" + toUtf8(current.label) +
-                                   "' in proto index specification");
+      throw Error(offset, length,
+                  "Unknown index space '" + toUtf8(current.label) +
+                      "' in proto index specification");
     } catch (const Exception &e) {
       auto [offset, length] = get_pos(current, position_cache, begin);
-      throw SerializationError(offset, length,
-                               "Invalid index '" + toUtf8(current.label) + "_" +
-                                   std::to_string(current.id) + ": " +
-                                   e.what());
+      throw Error(offset, length,
+                  "Invalid index '" + toUtf8(current.label) + "_" +
+                      std::to_string(current.id) + ": " + e.what());
     }
   }
 
@@ -67,16 +67,14 @@ Index to_index(const io::serialization::v1::ast::Index &index,
     return Index(std::move(space), index.label.id, std::move(protoIndices));
   } catch (const IndexSpace::bad_key &e) {
     auto [offset, length] = get_pos(index.label, position_cache, begin);
-    throw SerializationError(offset, length,
-                             "Unknown index space '" +
-                                 toUtf8(index.label.label) +
-                                 "' in index specification");
+    throw Error(offset, length,
+                "Unknown index space '" + toUtf8(index.label.label) +
+                    "' in index specification");
   } catch (const Exception &e) {
     auto [offset, length] = get_pos(index.label, position_cache, begin);
-    throw SerializationError(offset, length,
-                             "Invalid index '" + toUtf8(index.label.label) +
-                                 "_" + std::to_string(index.label.id) + ": " +
-                                 e.what());
+    throw Error(offset, length,
+                "Invalid index '" + toUtf8(index.label.label) + "_" +
+                    std::to_string(index.label.id) + ": " + e.what());
   }
 }
 
@@ -136,8 +134,7 @@ Symmetry to_perm_symmetry(char c, std::size_t offset, const Iterator &,
       return Symmetry::Nonsymm;
   }
 
-  throw SerializationError(
-      offset, 1, std::string("Invalid symmetry specifier '") + c + "'");
+  throw Error(offset, 1, std::string("Invalid symmetry specifier '") + c + "'");
 }
 
 template <typename Iterator>
@@ -159,8 +156,8 @@ BraKetSymmetry to_braket_symmetry(char c, std::size_t offset, const Iterator &,
       return BraKetSymmetry::Nonsymm;
   }
 
-  throw SerializationError(
-      offset, 1, std::string("Invalid BraKet symmetry specifier '") + c + "'");
+  throw Error(offset, 1,
+              std::string("Invalid BraKet symmetry specifier '") + c + "'");
 }
 
 template <typename Iterator>
@@ -179,9 +176,8 @@ ColumnSymmetry to_column_symmetry(char c, std::size_t offset, const Iterator &,
       return ColumnSymmetry::Nonsymm;
   }
 
-  throw SerializationError(
-      offset, 1,
-      std::string("Invalid particle symmetry specifier '") + c + "'");
+  throw Error(offset, 1,
+              std::string("Invalid particle symmetry specifier '") + c + "'");
 }
 
 template <typename PositionCache, typename Iterator>
@@ -412,11 +408,11 @@ ResultExpr ast_to_result(const io::serialization::v1::ast::ResultExpr &result,
     return {std::move(lhs.as<Variable>()), std::move(rhs)};
   } else {
     auto [offset, length] = get_pos(result.lhs, position_cache, begin);
-    throw SerializationError(
-        offset, length, "LHS of a ResultExpr must be a Tensor or a Variable");
+    throw Error(offset, length,
+                "LHS of a ResultExpr must be a Tensor or a Variable");
   }
 }
 
 }  // namespace sequant::io::serialization::v1::transform
 
-#endif  // SEQUANT_CORE_PARSE_AST_CONVERSIONS_HPP
+#endif  // SEQUANT_CORE_IO_SERIALIZATION_V1_AST_CONVERSIONS_HPP
