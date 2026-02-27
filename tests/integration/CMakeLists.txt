@@ -8,7 +8,7 @@ if (NOT SEQUANT_INTERNAL_SKIP_LONG_TESTS)
         # Single-Reference open-shell equation generation (spin-traced)
         "osstcc.cpp"
         # Equation-of-motion Coupled-Cluster
-        "eomcc.cpp"
+        "eomcc.cpp -> 2 2h2p R|2 1h2p R|2 2h1p R|2 3h1p R| 2 4h2p R| 3 3h3p R"
     )
 
     if (TARGET Eigen3::Eigen)
@@ -22,6 +22,8 @@ else()
     list(APPEND TEST_CASES
         # Single-Reference Coupled-Cluster equation generation (reduced test set)
         "srcc.cpp ->  |2 t csv sf"
+        # Equation-of-motion Coupled-Cluster (reduced test set)
+        "eomcc.cpp -> 2 2h1p R"
     )
     if (TARGET Eigen3::Eigen)
         # these examples require Eigen for full functionality
