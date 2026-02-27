@@ -354,7 +354,11 @@ std::vector<ExprPtr> open_shell_spintrace(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups,
     const std::optional<int>& target_spin_case = std::nullopt);
-
+std::vector<ExprPtr> open_shell_spintrace(
+    const ExprPtr& expr,
+    const container::svector<container::svector<Index>>& ext_index_groups,
+    const std::optional<int>& target_spin_case, bool nonparticle_conserving,
+    std::optional<std::size_t> n_paired_columns);
 // clang-format off
 /// @brief Like open_shell_spintrace but uses minimal expansion of the antisymmetrizer
 /// @details This function is designed for integrating spin out of
