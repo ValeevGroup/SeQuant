@@ -137,35 +137,6 @@ class compute_eomcc {
   }
 };  // class compute_eomcc
 
-class compute_all {
-  size_t NMAX;
-  std::string manifold;
-  EqnType type;
-
- public:
-  compute_all(size_t nmax, const std::string manifold,
-              EqnType t = EqnType::right)
-      : NMAX(nmax), manifold(manifold), type(t) {}
-
-  void operator()(bool print = false) {
-    for (size_t N = 1; N <= NMAX; ++N) {
-      std::vector<std::string> manifold_vec;
-      auto [Nh, Np] = parse_excitation_manifold(manifold);
-      // generate all possible manifolds
-      while (Nh > 0 || Np > 0) {
-        if (Nh == 0 && Np == 0) break;
-        manifold_vec.push_back(std::to_string(Nh) + "h" + std::to_string(Np) +
-                               "p");
-        if (Nh == 0 || Np == 0) break;
-        Nh--;
-        Np--;
-      }
-      for (auto it = manifold_vec.rbegin(); it != manifold_vec.rend(); ++it) {
-        compute_eomcc{N, *it, type}(print);
-      }
-    }
-  }
-};  // class compute_all
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -175,23 +146,6 @@ int main(int argc, char* argv[]) {
 
   std::cout << "SeQuant revision: " << sequant::git_revision() << "\n";
   std::cout << "Number of threads: " << sequant::num_threads() << "\n\n";
-
-#ifndef NDEBUG
-  constexpr size_t DEFAULT_NMAX = 3;
-#else
-  constexpr size_t DEFAULT_NMAX = 4;
-#endif
-
-  // read command line arguments
-  const size_t NMAX = argc > 1 ? std::stoi(argv[1]) : DEFAULT_NMAX;
-  SEQUANT_ASSERT(NMAX > 0 && "Invalid NMAX");
-  const std::string exc_manifold =
-      argc > 2 ? argv[2]
-               : (std::to_string(NMAX) + "h" + std::to_string(NMAX) + "p");
-  SEQUANT_ASSERT(!exc_manifold.empty() && "Invalid excitation manifold");
-  const std::string eqn_type = argc > 3 ? argv[3] : "R";
-  const std::string print_str = argc > 4 ? argv[4] : "noprint";
-  const bool print = print_str == "print";
 
   sequant::detail::OpIdRegistrar op_id_registrar;
   sequant::set_default_context(
@@ -205,6 +159,21 @@ int main(int argc, char* argv[]) {
   // change to true to print stats
   Logger::instance().wick_stats = false;
 
-  // call the compute_all function here
-  compute_all{NMAX, exc_manifold, str2type.at(eqn_type)}(print);
+  if (argc > 1) {
+    // Usage: eomcc <N> <manifold> [R|L] [print]
+    const size_t N = std::stoi(argv[1]);
+    SEQUANT_ASSERT(N > 0 && "Invalid N");
+    std::string exc_manifold =
+        argc > 2 ? argv[2]
+                 : (std::to_string(N) + "h" + std::to_string(N) + "p");
+    SEQUANT_ASSERT(!exc_manifold.empty() && "Invalid excitation manifold");
+    const std::string eqn_type = argc > 3 ? argv[3] : "R";
+    const std::string print_str = argc > 4 ? argv[4] : "noprint";
+    const bool print = print_str == "print";
+
+    compute_eomcc{N, exc_manifold, str2type.at(eqn_type)}(print);
+  } else {
+    // default: EE-EOM-CCSD right
+    compute_eomcc{2, "2h2p", EqnType::right}(false);
+  }
 }
