@@ -1,0 +1,143 @@
+
+.. _file_SeQuant_core_io_serialization_v1_ast.hpp:
+
+File ast.hpp
+============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_io_serialization_v1>` (``SeQuant/core/io/serialization/v1``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/io/serialization/v1/ast.hpp``)
+---------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_io_serialization_v1_ast.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``boost/fusion/include/adapt_struct.hpp``
+
+- ``boost/optional.hpp``
+
+- ``boost/spirit/home/x3.hpp``
+
+- ``boost/spirit/home/x3/support/ast/position_tagged.hpp``
+
+- ``boost/variant.hpp``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``variant``
+
+- ``vector``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_io_serialization_v1_ast.cpp`
+
+- :ref:`file_SeQuant_core_io_serialization_v1_ast_conversions.hpp`
+
+- :ref:`file_SeQuant_core_io_serialization_v1_deserialize.cpp`
+
+- :ref:`file_SeQuant_core_io_serialization_v1_semantic_actions.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__io`
+
+- :ref:`namespace_sequant__io__serialization`
+
+- :ref:`namespace_sequant__io__serialization__v1`
+
+- :ref:`namespace_sequant__io__serialization__v1__ast`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1ast_1_1_index`
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1ast_1_1_index_groups`
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1ast_1_1_index_label`
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1ast_1_1_number`
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1ast_1_1_product`
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1ast_1_1_result_expr`
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1ast_1_1_sum`
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1ast_1_1_symmetry_spec`
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1ast_1_1_tensor`
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1ast_1_1_variable`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_ast_8hpp_1a2384edbd81659ef3896de56b16b7a384`
+
+- :ref:`exhale_function_ast_8hpp_1a90f0b9115361b8001bd3f2c49b144c8f`
+
+- :ref:`exhale_function_ast_8hpp_1af0c200e38a55f5565077720cda7919ff`
+
+- :ref:`exhale_function_ast_8hpp_1a1cd5bb14d4650609b89ff8ec6c92d1ad`
+
+- :ref:`exhale_function_ast_8hpp_1aae9f55d16a100db18492db7d8215b166`
+
+- :ref:`exhale_function_ast_8hpp_1a33edd89ca3b420809f1b9190ebd16cee`
+
+- :ref:`exhale_function_ast_8hpp_1a457e8df28acc94e069d4158b077c5395`
+
+- :ref:`exhale_function_ast_8hpp_1aa0321b47eecd981442f47f697784a1ed`
+
+- :ref:`exhale_function_ast_8hpp_1a85995d1bde8fe1c0e70c1b63b10c4023`
+
+- :ref:`exhale_function_ast_8hpp_1a12e748dace75c00ff58df38b68f44671`
+
+
+Defines
+-------
+
+
+- :ref:`exhale_define_ast_8hpp_1a4d6f7f1e18b9eab7b16fe0f0b6ebe5df`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1_1io_1_1serialization_1_1v1_1_1ast_1a5c6e5d4c4945b641c8d992ecf8770657`
+

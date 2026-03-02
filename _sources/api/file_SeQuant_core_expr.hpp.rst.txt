@@ -1,0 +1,182 @@
+
+.. _file_SeQuant_core_expr.hpp:
+
+File expr.hpp
+=============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/expr.hpp``)
+--------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_expr.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/expressions/abstract_tensor.hpp`` (:ref:`file_SeQuant_core_expressions_abstract_tensor.hpp`)
+
+- ``SeQuant/core/expressions/constant.hpp`` (:ref:`file_SeQuant_core_expressions_constant.hpp`)
+
+- ``SeQuant/core/expressions/expr.hpp`` (:ref:`file_SeQuant_core_expressions_expr.hpp`)
+
+- ``SeQuant/core/expressions/expr_algorithms.hpp`` (:ref:`file_SeQuant_core_expressions_expr_algorithms.hpp`)
+
+- ``SeQuant/core/expressions/expr_operators.hpp`` (:ref:`file_SeQuant_core_expressions_expr_operators.hpp`)
+
+- ``SeQuant/core/expressions/expr_ptr.hpp`` (:ref:`file_SeQuant_core_expressions_expr_ptr.hpp`)
+
+- ``SeQuant/core/expressions/expr_range.hpp`` (:ref:`file_SeQuant_core_expressions_expr_range.hpp`)
+
+- ``SeQuant/core/expressions/labeled.hpp`` (:ref:`file_SeQuant_core_expressions_labeled.hpp`)
+
+- ``SeQuant/core/expressions/product.hpp`` (:ref:`file_SeQuant_core_expressions_product.hpp`)
+
+- ``SeQuant/core/expressions/result_expr.hpp`` (:ref:`file_SeQuant_core_expressions_result_expr.hpp`)
+
+- ``SeQuant/core/expressions/sum.hpp`` (:ref:`file_SeQuant_core_expressions_sum.hpp`)
+
+- ``SeQuant/core/expressions/tensor.hpp`` (:ref:`file_SeQuant_core_expressions_tensor.hpp`)
+
+- ``SeQuant/core/expressions/traits.hpp`` (:ref:`file_SeQuant_core_expressions_traits.hpp`)
+
+- ``SeQuant/core/expressions/variable.hpp`` (:ref:`file_SeQuant_core_expressions_variable.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_eval_cache_manager.hpp`
+
+- :ref:`file_SeQuant_core_eval_eval.hpp`
+
+- :ref:`file_SeQuant_core_eval_eval_expr.cpp`
+
+- :ref:`file_SeQuant_core_eval_eval_expr.hpp`
+
+- :ref:`file_SeQuant_core_eval_eval_node.hpp`
+
+- :ref:`file_SeQuant_core_export_context.hpp`
+
+- :ref:`file_SeQuant_core_export_export.cpp`
+
+- :ref:`file_SeQuant_core_export_export.hpp`
+
+- :ref:`file_SeQuant_core_export_generation_optimizer.hpp`
+
+- :ref:`file_SeQuant_core_export_itf.cpp`
+
+- :ref:`file_SeQuant_core_export_itf.hpp`
+
+- :ref:`file_SeQuant_core_export_julia_itensor.hpp`
+
+- :ref:`file_SeQuant_core_export_julia_tensor_kit.hpp`
+
+- :ref:`file_SeQuant_core_export_julia_tensor_operations.cpp`
+
+- :ref:`file_SeQuant_core_export_julia_tensor_operations.hpp`
+
+- :ref:`file_SeQuant_core_export_python_einsum.hpp`
+
+- :ref:`file_SeQuant_core_export_text_generator.hpp`
+
+- :ref:`file_SeQuant_core_hash.cpp`
+
+- :ref:`file_SeQuant_core_io_serialization_serialization.cpp`
+
+- :ref:`file_SeQuant_core_io_serialization_v1_ast_conversions.hpp`
+
+- :ref:`file_SeQuant_core_io_serialization_v1_deserialize.cpp`
+
+- :ref:`file_SeQuant_core_io_serialization_v1_serialize.cpp`
+
+- :ref:`file_SeQuant_core_op.cpp`
+
+- :ref:`file_SeQuant_core_op.hpp`
+
+- :ref:`file_SeQuant_core_optimize_common_subexpression_elimination.hpp`
+
+- :ref:`file_SeQuant_core_optimize_fusion.cpp`
+
+- :ref:`file_SeQuant_core_optimize_fusion.hpp`
+
+- :ref:`file_SeQuant_core_optimize_optimize.cpp`
+
+- :ref:`file_SeQuant_core_optimize_single_term.hpp`
+
+- :ref:`file_SeQuant_core_optimize_sum.cpp`
+
+- :ref:`file_SeQuant_core_tensor_canonicalizer.cpp`
+
+- :ref:`file_SeQuant_core_tensor_canonicalizer.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network_utils.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v1.cpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v1.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v2.cpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v2.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v3.cpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v3.hpp`
+
+- :ref:`file_SeQuant_core_utility_expr.cpp`
+
+- :ref:`file_SeQuant_core_utility_expr.hpp`
+
+- :ref:`file_SeQuant_core_utility_indices.hpp`
+
+- :ref:`file_SeQuant_core_wick.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_antisymmetrizer.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_biorthogonalization.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_biorthogonalization.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_models_cc.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_op.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_rules_csv.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_rules_csv.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_rules_df.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_rules_thc.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_spin.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_utils.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_vac_av.cpp`
+
+
+

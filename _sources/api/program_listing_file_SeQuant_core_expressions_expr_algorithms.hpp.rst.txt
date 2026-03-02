@@ -1,0 +1,157 @@
+
+.. _program_listing_file_SeQuant_core_expressions_expr_algorithms.hpp:
+
+Program Listing for File expr_algorithms.hpp
+============================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_expressions_expr_algorithms.hpp>` (``SeQuant/core/expressions/expr_algorithms.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Eduard Valeyev on 3/30/18.
+   //
+   
+   #ifndef SEQUANT_EXPRESSIONS_ALGORITHMS_HPP
+   #define SEQUANT_EXPRESSIONS_ALGORITHMS_HPP
+   
+   #include <SeQuant/core/expr_fwd.hpp>
+   #include <SeQuant/core/expressions/expr.hpp>
+   #include <SeQuant/core/expressions/expr_ptr.hpp>
+   #include <SeQuant/core/utility/macros.hpp>
+   
+   #include <range/v3/range/access.hpp>
+   
+   #include <string>
+   
+   namespace sequant {
+   
+   std::wstring to_latex_align(const ExprPtr& exprptr,
+                               size_t max_lines_per_align = 0,
+                               size_t max_terms_per_line = 1);
+   
+   template <typename Sequence>
+   std::decay_t<Sequence> clone(Sequence&& exprseq) {
+     auto cloned_seq = exprseq | ranges::views::transform([](const ExprPtr& ptr) {
+                         return ptr ? ptr->clone() : nullptr;
+                       });
+     return std::decay_t<Sequence>(ranges::begin(cloned_seq),
+                                   ranges::end(cloned_seq));
+   }
+   
+   std::size_t size(const Expr& expr);
+   
+   std::size_t size(const ExprPtr& exprptr);
+   
+   inline decltype(auto) begin(const ExprPtr& exprptr) {
+     SEQUANT_ASSERT(exprptr);
+     return ranges::begin(*exprptr);
+   }
+   
+   inline decltype(auto) begin(ExprPtr& exprptr) {
+     SEQUANT_ASSERT(exprptr);
+     return ranges::begin(*exprptr);
+   }
+   
+   inline decltype(auto) cbegin(const ExprPtr& exprptr) {
+     SEQUANT_ASSERT(exprptr);
+     return ranges::cbegin(*exprptr);
+   }
+   
+   inline decltype(auto) end(const ExprPtr& exprptr) {
+     SEQUANT_ASSERT(exprptr);
+     return ranges::end(*exprptr);
+   }
+   
+   inline decltype(auto) end(ExprPtr& exprptr) {
+     SEQUANT_ASSERT(exprptr);
+     return ranges::end(*exprptr);
+   }
+   
+   inline decltype(auto) cend(const ExprPtr& exprptr) {
+     SEQUANT_ASSERT(exprptr);
+     return ranges::cend(*exprptr);
+   }
+   
+   template <typename T>
+   bool ExprPtr::is() const {
+     return as_shared_ptr()->is<T>();
+   }
+   
+   template <typename T>
+   const T& ExprPtr::as() const {
+     return as_shared_ptr()->as<T>();
+   }
+   
+   template <typename T>
+   T& ExprPtr::as() {
+     return as_shared_ptr()->as<T>();
+   }
+   
+   ExprPtr& canonicalize(
+       ExprPtr& expr,
+       CanonicalizeOptions opts = CanonicalizeOptions::default_options());
+   
+   ExprPtr canonicalize(
+       ExprPtr&& expr_rv,
+       CanonicalizeOptions opts = CanonicalizeOptions::default_options());
+   
+   ResultExpr& canonicalize(
+       ResultExpr& expr,
+       CanonicalizeOptions opts = CanonicalizeOptions::default_options());
+   
+   [[nodiscard]] ResultExpr& canonicalize(
+       ResultExpr&& expr,
+       CanonicalizeOptions opts = CanonicalizeOptions::default_options());
+   
+   ExprPtr& expand(ExprPtr& expr);
+   
+   ExprPtr expand(ExprPtr&& expr);
+   
+   ResultExpr& expand(ResultExpr& expr);
+   
+   [[nodiscard]] ResultExpr& expand(ResultExpr&& expr);
+   
+   ExprPtr& flatten(ExprPtr& expr);
+   
+   ExprPtr flatten(ExprPtr&& expr);
+   
+   ResultExpr& flatten(ResultExpr& expr);
+   
+   [[nodiscard]] ResultExpr& flatten(ResultExpr&& expr);
+   
+   ExprPtr& rapid_simplify(
+       ExprPtr& expr, SimplifyOptions opts = SimplifyOptions::default_options());
+   
+   ResultExpr& rapid_simplify(
+       ResultExpr& expr,
+       SimplifyOptions opts = SimplifyOptions::default_options());
+   
+   [[nodiscard]] ResultExpr& rapid_simplify(
+       ResultExpr&& expr,
+       SimplifyOptions opts = SimplifyOptions::default_options());
+   
+   ExprPtr& simplify(ExprPtr& expr,
+                     SimplifyOptions opts = SimplifyOptions::default_options());
+   
+   ExprPtr simplify(ExprPtr&& expr_rv,
+                    SimplifyOptions opts = SimplifyOptions::default_options());
+   
+   ResultExpr& simplify(ResultExpr& expr,
+                        SimplifyOptions opts = SimplifyOptions::default_options());
+   
+   [[nodiscard]] ResultExpr& simplify(
+       ResultExpr&& expr,
+       SimplifyOptions opts = SimplifyOptions::default_options());
+   
+   ExprPtr& non_canon_simplify(ExprPtr& expr);
+   
+   ResultExpr& non_canon_simplify(ResultExpr& expr);
+   
+   [[nodiscard]] ResultExpr non_canon_simplify(ResultExpr&& expr);
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_EXPRESSIONS_ALGORITHMS_HPP

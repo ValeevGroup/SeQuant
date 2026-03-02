@@ -1,0 +1,36 @@
+.. _exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1helpers_1_1error__handler:
+
+Struct error_handler
+====================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_deserialize.cpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Derived Types
+*************
+
+- ``public sequant::io::serialization::v1::parse::ExprRule`` (:ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_expr_rule`)
+- ``public sequant::io::serialization::v1::parse::IndexGroupRule`` (:ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_index_group_rule`)
+- ``public sequant::io::serialization::v1::parse::IndexLabelRule`` (:ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_index_label_rule`)
+- ``public sequant::io::serialization::v1::parse::IndexRule`` (:ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_index_rule`)
+- ``public sequant::io::serialization::v1::parse::NumberRule`` (:ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_number_rule`)
+- ``public sequant::io::serialization::v1::parse::ProductRule`` (:ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_product_rule`)
+- ``public sequant::io::serialization::v1::parse::ResultRule`` (:ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_result_rule`)
+- ``public sequant::io::serialization::v1::parse::SumRule`` (:ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_sum_rule`)
+- ``public sequant::io::serialization::v1::parse::SymmetrySpecRule`` (:ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_symmetry_spec_rule`)
+- ``public sequant::io::serialization::v1::parse::TensorRule`` (:ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_tensor_rule`)
+- ``public sequant::io::serialization::v1::parse::VariableRule`` (:ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_variable_rule`)
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::io::serialization::v1::parse::helpers::error_handler
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ae47079fe17bd46e8bd8012fb4bd67787:
+
+Template Function sequant::adjoint(T&&, std::void_t<decltype(std::declval<T&>().adjoint())> \*)
+===============================================================================================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::adjoint(T&&, std::void_t<decltype(std::declval<T&>().adjoint())> *)
+   :project: SeQuant

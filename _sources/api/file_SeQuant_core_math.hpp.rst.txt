@@ -1,0 +1,78 @@
+
+.. _file_SeQuant_core_math.hpp:
+
+File math.hpp
+=============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/math.hpp``)
+--------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_math.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/rational.hpp`` (:ref:`file_SeQuant_core_rational.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``atomic`` (:ref:`file_SeQuant_core_utility_atomic.hpp`)
+
+- ``cstddef``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_eval_eval_node.hpp`
+
+- :ref:`file_SeQuant_core_wick.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_antisymmetrizer.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_biorthogonalization.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_op.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a31f8e61063f41557e50dfa059c13b22d`
+
+- :ref:`exhale_function_namespacesequant_1a4575e3b14bbd6a2c855b7ffc610159fb`
+

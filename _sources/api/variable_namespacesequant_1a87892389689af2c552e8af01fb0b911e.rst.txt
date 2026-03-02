@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1a87892389689af2c552e8af01fb0b911e:
+
+Variable sequant::is_tuple_like_v
+=================================
+
+- Defined in :ref:`file_SeQuant_core_tensor_canonicalizer.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::is_tuple_like_v
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ae39d27e0af6490c0232db53c0137a60d:
+
+Template Function sequant::get_bra_idx
+======================================
+
+- Defined in :ref:`file_SeQuant_core_utility_indices.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::get_bra_idx(Group&&)
+   :project: SeQuant

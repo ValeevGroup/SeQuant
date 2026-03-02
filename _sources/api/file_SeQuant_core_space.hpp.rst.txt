@@ -1,0 +1,143 @@
+
+.. _file_SeQuant_core_space.hpp:
+
+File space.hpp
+==============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/space.hpp``)
+---------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_space.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/attr.hpp`` (:ref:`file_SeQuant_core_attr.hpp`)
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/fwd.hpp`` (:ref:`file_SeQuant_core_fwd.hpp`)
+
+- ``SeQuant/core/hash.hpp`` (:ref:`file_SeQuant_core_hash.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/core/utility/string.hpp`` (:ref:`file_SeQuant_core_utility_string.hpp`)
+
+- ``cmath``
+
+- ``range/v3/algorithm/any_of.hpp``
+
+- ``string_view``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_export_itf.cpp`
+
+- :ref:`file_SeQuant_core_export_itf.hpp`
+
+- :ref:`file_SeQuant_core_export_julia_itensor.hpp`
+
+- :ref:`file_SeQuant_core_export_julia_tensor_kit.hpp`
+
+- :ref:`file_SeQuant_core_export_julia_tensor_operations.cpp`
+
+- :ref:`file_SeQuant_core_export_julia_tensor_operations.hpp`
+
+- :ref:`file_SeQuant_core_export_python_einsum.hpp`
+
+- :ref:`file_SeQuant_core_index.hpp`
+
+- :ref:`file_SeQuant_core_index_space_registry.hpp`
+
+- :ref:`file_SeQuant_core_io_serialization_v1_ast_conversions.hpp`
+
+- :ref:`file_SeQuant_core_io_serialization_v1_deserialize.cpp`
+
+- :ref:`file_SeQuant_core_op.hpp`
+
+- :ref:`file_SeQuant_core_space.cpp`
+
+- :ref:`file_SeQuant_core_utility_tensor.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_convention.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_rules_df.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_rules_df.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_rules_thc.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_rules_thc.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_index_space_1_1_attr`
+
+- :ref:`exhale_struct_structsequant_1_1_index_space_1_1_attr_compare`
+
+- :ref:`exhale_struct_structsequant_1_1_index_space_1_1bad__key`
+
+- :ref:`exhale_struct_structsequant_1_1_index_space_1_1_key_compare`
+
+- :ref:`exhale_class_classsequant_1_1_index_space`
+
+- :ref:`exhale_class_classsequant_1_1_quantum_numbers_attr`
+
+- :ref:`exhale_class_classsequant_1_1_type_attr`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a6f0a07cbff281a2ea6e5969fc260f11c`
+
+- :ref:`exhale_function_namespacesequant_1a3e63e86bb1509bbbd71fe2fc6cf71407`
+
+- :ref:`exhale_function_namespacesequant_1ac94cc3e379ab122665b37951d20ea907`
+
+- :ref:`exhale_function_namespacesequant_1af457c712ea93671abc344a6696e2e657`
+
+- :ref:`exhale_function_namespacesequant_1a601fd271d49ad5820d9e57e94a193fca`
+
+- :ref:`exhale_function_namespacesequant_1aa25b5f265546eb9d0fa08516436e21d6`
+

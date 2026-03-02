@@ -1,0 +1,70 @@
+
+.. _file_SeQuant_core_export_context.cpp:
+
+File context.cpp
+================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_export>` (``SeQuant/core/export``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/export/context.cpp``)
+------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_export_context.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/export/context.hpp`` (:ref:`file_SeQuant_core_export_context.hpp`)
+
+- ``type_traits``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1aa61a7d88b3e7af9da1f0e49a12cac5e2`
+
+- :ref:`exhale_function_namespacesequant_1a5a29020fea16df187fc0a7e2468e6f21`
+
+- :ref:`exhale_function_namespacesequant_1aa8fd03f14efd82fa36f1a0e74c3a0a5e`
+
+- :ref:`exhale_function_namespacesequant_1af4ef8d3abd25611f067d70588d9e8d9d`
+
+- :ref:`exhale_function_namespacesequant_1ab2cdc31098ed9f26dce221e10e8832e3`
+
+- :ref:`exhale_function_namespacesequant_1a67a7f752e517d396dbfbd719a501c773`
+
+- :ref:`exhale_function_namespacesequant_1a215823ba17ce026778163b81c9015ce9`
+
+- :ref:`exhale_function_namespacesequant_1a89e75df142a70ece3636303ed830524f`
+
+- :ref:`exhale_function_namespacesequant_1af72d66f0d914b109b8ddfdc8359edaa9`
+

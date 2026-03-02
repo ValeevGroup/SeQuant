@@ -1,0 +1,54 @@
+
+.. _file_SeQuant_core_eval_cache_manager.cpp:
+
+File cache_manager.cpp
+======================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_eval>` (``SeQuant/core/eval``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/eval/cache_manager.cpp``)
+----------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_eval_cache_manager.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/eval/cache_manager.hpp`` (:ref:`file_SeQuant_core_eval_cache_manager.hpp`)
+
+- ``SeQuant/core/eval/eval_node.hpp`` (:ref:`file_SeQuant_core_eval_eval_node.hpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1ae55da56ce85f7d3d869769dd4f1cbf5e`
+

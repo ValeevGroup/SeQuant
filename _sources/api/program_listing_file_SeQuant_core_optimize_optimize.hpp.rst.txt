@@ -1,0 +1,28 @@
+
+.. _program_listing_file_SeQuant_core_optimize_optimize.hpp:
+
+Program Listing for File optimize.hpp
+=====================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_optimize_optimize.hpp>` (``SeQuant/core/optimize/optimize.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_OPTIMIZE_OPTIMIZE_HPP
+   #define SEQUANT_OPTIMIZE_OPTIMIZE_HPP
+   
+   #include <SeQuant/core/expr_fwd.hpp>
+   
+   namespace sequant {
+   
+   ExprPtr optimize(ExprPtr const& expr, bool reorder_sum = true);
+   
+   ResultExpr& optimize(ResultExpr& expr, bool reorder_sum = true);
+   
+   [[nodiscard]] ResultExpr& optimize(ResultExpr&& expr, bool reorder_sum = true);
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_OPTIMIZE_OPTIMIZE_HPP

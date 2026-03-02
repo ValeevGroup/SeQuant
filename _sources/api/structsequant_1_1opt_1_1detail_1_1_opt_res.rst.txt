@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1opt_1_1detail_1_1_opt_res:
+
+Struct OptRes
+=============
+
+- Defined in :ref:`file_SeQuant_core_optimize_single_term.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::opt::detail::OptRes
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

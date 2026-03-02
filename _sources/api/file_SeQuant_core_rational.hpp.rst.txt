@@ -1,0 +1,123 @@
+
+.. _file_SeQuant_core_rational.hpp:
+
+File rational.hpp
+=================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/rational.hpp``)
+------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_rational.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/hash.hpp`` (:ref:`file_SeQuant_core_hash.hpp`)
+
+- ``SeQuant/core/utility/exception.hpp`` (:ref:`file_SeQuant_core_utility_exception.hpp`)
+
+- ``SeQuant/core/utility/string.hpp`` (:ref:`file_SeQuant_core_utility_string.hpp`)
+
+- ``boost/multiprecision/cpp_int.hpp``
+
+- ``boost/multiprecision/rational_adaptor.hpp``
+
+- ``boost/numeric/conversion/cast.hpp``
+
+- ``memory``
+
+- ``mutex``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_asy_cost.cpp`
+
+- :ref:`file_SeQuant_core_asy_cost.hpp`
+
+- :ref:`file_SeQuant_core_complex.hpp`
+
+- :ref:`file_SeQuant_core_expressions_constant.hpp`
+
+- :ref:`file_SeQuant_core_io_latex_latex.cpp`
+
+- :ref:`file_SeQuant_core_io_latex_latex.hpp`
+
+- :ref:`file_SeQuant_core_math.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_models_cc.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_utils.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_boost`
+
+- :ref:`namespace_sequant`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespaceboost_1acbcbb98cfab51b10ffc1a6a0f590f8b1`
+
+- :ref:`exhale_function_namespacesequant_1a1b8cd87c5902d9c1d7f74b0deab67566`
+
+- :ref:`exhale_function_namespacesequant_1aa43664dd75c601fc533ce7d549610eff`
+
+- :ref:`exhale_function_namespacesequant_1a77b3e24a128d11cf0b016193dd9e68b7`
+
+- :ref:`exhale_function_namespacesequant_1ab6e3d096b7f17459531d00a378dc5e80`
+
+- :ref:`exhale_function_namespacesequant_1a14ccb9838626818330084a10cdc496b8`
+
+- :ref:`exhale_function_namespacesequant_1a7ee778d62320741894ca0634ac8112d6`
+
+- :ref:`exhale_function_namespacesequant_1ac810dbe124845f316ba0ba1a81cf976c`
+
+- :ref:`exhale_function_namespacesequant_1a871fc070f6d873bd78e2e202a616afea`
+
+- :ref:`exhale_function_namespacesequant_1a89c1a5a9ae96434a872d2211898ecaad`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1a817e0c1244b279fe920e3368db52d311`
+
+- :ref:`exhale_typedef_namespacesequant_1a53573d914a7d5e14b2ab04622b02fd6d`
+
+- :ref:`exhale_typedef_namespacesequant_1a324a4bdc4d7d8c50e962ef65395851a3`
+
