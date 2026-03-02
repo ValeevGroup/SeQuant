@@ -1,17 +1,15 @@
 #ifndef SEQUANT_PERMUTATION_HPP
 #define SEQUANT_PERMUTATION_HPP
 
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
-
-#include <range/v3/algorithm.hpp>
 
 #include <algorithm>
 #include <cstddef>
 #include <cstdlib>
+#include <ranges>
 #include <set>
-#include <type_traits>
-#include <utility>
 
 namespace sequant {
 
@@ -21,63 +19,58 @@ namespace sequant {
 /// by stacking \p v0 and \p v1 on top of each other.
 /// @tparam Seq0 (reference to) a container type
 /// @tparam Seq1 (reference to) a container type
-/// @param v0 first sequence; if passed as an rvalue reference, it is moved from
-/// @param[in] v1 second sequence
+/// @param v0 first range
+/// @param v1 second range
 /// @pre \p v0 is a permutation of \p v1
 /// @return the number of cycles
 template <typename Seq0, typename Seq1>
-std::size_t count_cycles(Seq0&& v0, const Seq1& v1) {
-  std::remove_reference_t<Seq0> v(std::forward<Seq0>(v0));
-  using T = std::decay_t<decltype(v[0])>;
-  SEQUANT_ASSERT(ranges::is_permutation(v, v1));
+std::size_t count_cycles(Seq0&& v0, Seq1&& v1) {
+  using std::ranges::begin;
+  using std::ranges::end;
+  using std::ranges::size;
+  SEQUANT_ASSERT(std::ranges::is_permutation(v0, v1));
   // This function can't deal with duplicate entries in v0 or v1
-  SEQUANT_ASSERT(std::set(std::begin(v0), std::end(v0)).size() == v0.size());
-  SEQUANT_ASSERT(std::set(std::begin(v1), std::end(v1)).size() == v1.size());
+  SEQUANT_ASSERT(std::set(begin(v0), end(v0)).size() == size(v0));
+  SEQUANT_ASSERT(std::set(begin(v1), end(v1)).size() == size(v1));
 
-  auto make_null = []() -> T {
-    if constexpr (std::is_arithmetic_v<T>) {
-      return -1;
-    } else if constexpr (std::is_same_v<T, Index>) {
-      return L"p_50";
-    }
-
-    SEQUANT_UNREACHABLE;
-  };
-
-  const auto null = make_null();
-  SEQUANT_ASSERT(ranges::contains(v, null) == false);
-  SEQUANT_ASSERT(ranges::contains(v1, null) == false);
+  container::set<decltype(begin(v0))> visited;
+  visited.reserve(size(v0));
 
   std::size_t n_cycles = 0;
-  for (auto it = v.begin(); it != v.end(); ++it) {
-    if (*it == null) {
+  for (auto it = begin(v0); it != end(v0); ++it) {
+    if (visited.find(it) != end(visited)) {
       continue;
     }
 
     n_cycles++;
 
-    auto idx = std::distance(v.begin(), it);
+    auto idx = std::distance(begin(v0), it);
     SEQUANT_ASSERT(idx >= 0);
 
     auto it0 = it;
 
-    auto it1 = std::find(v1.begin(), v1.end(), *it0);
-    SEQUANT_ASSERT(it1 != v1.end());
+    auto it1 = std::find(begin(v1), end(v1), *it0);
+    SEQUANT_ASSERT(it1 != end(v1));
 
-    auto idx1 = std::distance(v1.begin(), it1);
+    auto idx1 = std::distance(begin(v1), it1);
     SEQUANT_ASSERT(idx1 >= 0);
 
     do {
-      it0 = std::find(v.begin(), v.end(), v[idx1]);
-      SEQUANT_ASSERT(it0 != v.end());
+      auto val_it = begin(v0);
+      std::advance(val_it, idx1);
+      SEQUANT_ASSERT(val_it != end(v0));
 
-      it1 = std::find(v1.begin(), v1.end(), *it0);
-      SEQUANT_ASSERT(it1 != v1.end());
+      it0 = std::find(begin(v0), end(v0), *val_it);
+      SEQUANT_ASSERT(it0 != end(v0));
 
-      idx1 = std::distance(v1.begin(), it1);
+      it1 = std::find(begin(v1), end(v1), *it0);
+      SEQUANT_ASSERT(it1 != end(v1));
+
+      idx1 = std::distance(begin(v1), it1);
       SEQUANT_ASSERT(idx1 >= 0);
 
-      *it0 = null;
+      SEQUANT_ASSERT(visited.find(it0) == end(visited));
+      visited.insert(it0);
     } while (idx1 != idx);
   }
   return n_cycles;
@@ -107,7 +100,7 @@ int permutation_parity(std::span<T> p, bool overwrite = false) {
   }
 
   if (overwrite) {
-    ranges::for_each(p, [N](auto& e) { e -= N; });
+    std::ranges::for_each(p, [N](auto& e) { e -= N; });
   }
 
   return parity;
