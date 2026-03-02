@@ -53,10 +53,6 @@ set(CMAKE_CXX_STANDARD 20 CACHE STRING "C++ ISO Standard version")
 if (CMAKE_CXX_STANDARD LESS 20)
     message(FATAL_ERROR "C++ 2020 ISO Standard or higher is required to build SeQuant")
 endif ()
-# C++20 is only configurable via compile features with cmake 3.12 and older
-if (CMAKE_CXX_STANDARD EQUAL 20 AND CMAKE_VERSION VERSION_LESS 3.12.0)
-    cmake_minimum_required(VERSION 3.12.0)
-endif ()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF CACHE BOOL "Whether to use extensions of C++ ISO Standard version")
 
@@ -248,6 +244,9 @@ include(FindOrFetchUtfcpp)
 # Eigen
 include(FindOrFetchEigen)
 
+# cpp-peglib
+include(FindOrFetchCppPeglib)
+
 # embedded bliss-0.73
 add_library(SeQuant-bliss
         SeQuant/external/bliss/defs.cc
@@ -341,8 +340,16 @@ set(SeQuant_symb_src
         SeQuant/core/io/serialization/v1/ast.hpp
         SeQuant/core/io/serialization/v1/ast_conversions.hpp
         SeQuant/core/io/serialization/v1/deserialize.cpp
+        SeQuant/core/io/serialization/v1/error.cpp
+        SeQuant/core/io/serialization/v1/error.hpp
         SeQuant/core/io/serialization/v1/semantic_actions.hpp
         SeQuant/core/io/serialization/v1/serialize.cpp
+        SeQuant/core/io/serialization/v2/ast_conversions.cpp
+        SeQuant/core/io/serialization/v2/ast_conversions.hpp
+        SeQuant/core/io/serialization/v2/deserialize.cpp
+        SeQuant/core/io/serialization/v2/error.cpp
+        SeQuant/core/io/serialization/v2/error.hpp
+        SeQuant/core/io/serialization/v2/serialize.cpp
         SeQuant/core/ranges.hpp
         SeQuant/core/rational.hpp
         SeQuant/core/runtime.cpp
@@ -570,6 +577,7 @@ target_link_libraries(SeQuant-symb
         Threads::Threads
         libperm::libperm
         $<BUILD_LOCAL_INTERFACE:utfcpp>
+        $<BUILD_LOCAL_INTERFACE:peglib>
         Eigen3::Eigen)
 if (Boost_IS_MODULARIZED)
     target_link_libraries(SeQuant-symb PUBLIC
