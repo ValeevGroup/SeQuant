@@ -50,33 +50,35 @@ std::size_t count_cycles(Seq0&& v0, const Seq1& v1) {
 
   std::size_t n_cycles = 0;
   for (auto it = v.begin(); it != v.end(); ++it) {
-    if (*it != null) {
-      n_cycles++;
+    if (*it == null) {
+      continue;
+    }
 
-      auto idx = std::distance(v.begin(), it);
-      SEQUANT_ASSERT(idx >= 0);
+    n_cycles++;
 
-      auto it0 = it;
+    auto idx = std::distance(v.begin(), it);
+    SEQUANT_ASSERT(idx >= 0);
 
-      auto it1 = std::find(v1.begin(), v1.end(), *it0);
+    auto it0 = it;
+
+    auto it1 = std::find(v1.begin(), v1.end(), *it0);
+    SEQUANT_ASSERT(it1 != v1.end());
+
+    auto idx1 = std::distance(v1.begin(), it1);
+    SEQUANT_ASSERT(idx1 >= 0);
+
+    do {
+      it0 = std::find(v.begin(), v.end(), v[idx1]);
+      SEQUANT_ASSERT(it0 != v.end());
+
+      it1 = std::find(v1.begin(), v1.end(), *it0);
       SEQUANT_ASSERT(it1 != v1.end());
 
-      auto idx1 = std::distance(v1.begin(), it1);
+      idx1 = std::distance(v1.begin(), it1);
       SEQUANT_ASSERT(idx1 >= 0);
 
-      do {
-        it0 = std::find(v.begin(), v.end(), v[idx1]);
-        SEQUANT_ASSERT(it0 != v.end());
-
-        it1 = std::find(v1.begin(), v1.end(), *it0);
-        SEQUANT_ASSERT(it1 != v1.end());
-
-        idx1 = std::distance(v1.begin(), it1);
-        SEQUANT_ASSERT(idx1 >= 0);
-
-        *it0 = null;
-      } while (idx1 != idx);
-    }
+      *it0 = null;
+    } while (idx1 != idx);
   }
   return n_cycles;
 };
