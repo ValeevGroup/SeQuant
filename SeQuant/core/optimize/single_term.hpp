@@ -118,7 +118,7 @@ struct SubNetEqual {
 ///
 template <typename CostFn>
   requires requires(CostFn&& fn, decltype(OptRes::indices) const& ixs) {
-    { std::forward<CostFn>(fn)(ixs, ixs, ixs) } -> std::floating_point;
+    { fn(ixs, ixs, ixs) } -> std::floating_point;
   }
 EvalSequence single_term_opt_impl(TensorNetwork const& network,
                                   meta::range_of<Index> auto const& tidxs,
@@ -197,16 +197,16 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
         std::set_union(results[lp].subnets.begin(), results[lp].subnets.end(),
                        results[rp].subnets.begin(), results[rp].subnets.end(),
                        std::back_inserter(combined_subnets));
-        new_cost = std::forward<CostFn>(cost_fn)(results[lp].indices,  //
-                                                 results[rp].indices,  //
-                                                 results[n].indices);
+        new_cost = cost_fn(results[lp].indices,  //
+                           results[rp].indices,  //
+                           results[n].indices);
         for (auto id : combined_subnets) {
           new_cost += unique_meta_costs[id];
         }
       } else {
-        new_cost = std::forward<CostFn>(cost_fn)(results[lp].indices,  //
-                                                 results[rp].indices,  //
-                                                 results[n].indices)   //
+        new_cost = cost_fn(results[lp].indices,  //
+                           results[rp].indices,  //
+                           results[n].indices)   //
                    + results[lp].flops + results[rp].flops;
       }
 
@@ -222,9 +222,9 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
 
     if (subnet_cse) {
       auto mid = meta_ids[n];
-      unique_meta_costs[mid] = std::forward<CostFn>(cost_fn)(
-          results[results[n].lp].indices, results[results[n].rp].indices,
-          results[n].indices);
+      unique_meta_costs[mid] =
+          cost_fn(results[results[n].lp].indices,
+                  results[results[n].rp].indices, results[n].indices);
       auto it = std::lower_bound(results[n].subnets.begin(),
                                  results[n].subnets.end(), mid);
       if (it == results[n].subnets.end() || *it != mid) {
