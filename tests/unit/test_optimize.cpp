@@ -353,16 +353,21 @@ TEST_CASE("optimize", "[optimize]") {
     auto prod9 =
         deserialize("X{i1;a1} X{i2;a4} Y{a3;i3} Y{a1;i4}")->as<Product>();
     auto res9 = single_term_opt(prod9);
-    // take a look at res9_ for a result with subnet_cse disabled
-    // should give different result
-    // auto res9_ = single_term_opt(prod9, false);
-    // std::wcout << "res9_\n" << serialize(res9_) << std::endl;
     // this is the one we want to find
     // (X Y) (X Y)
     REQUIRE(extract(res9, {0, 0}) == prod9.at(0));
     REQUIRE(extract(res9, {0, 1}) == prod9.at(3));
     REQUIRE(extract(res9, {1, 0}) == prod9.at(1));
     REQUIRE(extract(res9, {1, 1}) == prod9.at(2));
+
+    // take a look at res9_ for a result with subnet_cse disabled
+    // should give different result
+    // std::wcout << "res9_\n" << serialize(res9_) << std::endl;
+    auto res9_no_cse = single_term_opt(prod9, false);
+    REQUIRE(extract(res9_no_cse, {0, 0, 0}) == prod9.at(0));
+    REQUIRE(extract(res9_no_cse, {0, 0, 1}) == prod9.at(3));
+    REQUIRE(extract(res9_no_cse, {0, 1}) == prod9.at(1));
+    REQUIRE(extract(res9_no_cse, {1}) == prod9.at(2));
   }
 
   /// verify that space changes did not leak
@@ -370,28 +375,4 @@ TEST_CASE("optimize", "[optimize]") {
   auto uocc = reg->retrieve_ptr(L"a");
   REQUIRE(uocc);
   REQUIRE(uocc->approximate_size() == 10);
-}
-
-TEST_CASE("feature optimize", "[feature]") {
-  using namespace sequant;
-  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
-  auto reg = get_default_context().mutable_index_space_registry();
-  mbpt::add_df_spaces(reg);
-  mbpt::add_pao_spaces(reg);
-  mbpt::add_ao_spaces(reg);
-  // i 10
-  // a 40
-  // μ̃ 50
-  // Κ 90
-  for (auto&& [k, v] :
-       std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 10}, {L"a", 40}, {L"μ̃", 50}, {L"Κ", 90}}) {
-    reg->retrieve_ptr(k)->approximate_size(v);
-  }
-
-  for (auto&& ix :
-       std::initializer_list<std::wstring_view>{L"i", L"a", L"μ̃", L"Κ"}) {
-    std::wcout << std::format(L"{}: {}\n", ix,
-                              reg->retrieve_ptr(ix)->approximate_size());
-  }
 }

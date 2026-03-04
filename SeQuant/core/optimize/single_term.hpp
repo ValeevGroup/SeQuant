@@ -62,15 +62,6 @@ struct OptRes {
   container::vector<uint16_t> subnets;
 };
 
-// constexpr auto cse_hasher = [](TNMeta const& data) -> size_t {
-//   return data.hash_value();
-// };
-
-// constexpr auto cse_equal = [](TNMeta const& left,
-//                               TNMeta const& right) -> bool {
-//   return bliss::ConstGraphCmp::cmp(*left.graph, *right.graph) == 0;
-// };
-
 struct SubNetHash {
   size_t operator()(
       TensorNetwork::SlotCanonicalizationMetadata const& data) const noexcept {
@@ -95,30 +86,35 @@ struct SubNetEqual {
 ///
 /// \tparam CostFn A function object type that computes the cost of a single
 /// binary contraction.
-///                Expected signature: \code double(meta::range_of<Index> auto
-///                const& lhs, meta::range_of<Index> auto const& rhs,
-///                meta::range_of<Index> auto const& res) \endcode
+/// Expected signature:
+// \code double(meta::range_of<Index> auto const& lhs,
+//              meta::range_of<Index> auto const& rhs,
+///             meta::range_of<Index> auto const& res)
+// \endcode
 ///
 /// \param network The \ref TensorNetwork containing the tensors to be
-/// contracted. \param tidxs The set of indices that should remain open in the
-/// final result. \param cost_fn The cost model used to evaluate contractions
-/// (e.g., flop count). \param subnet_cse If true, enables Common Subexpression
+/// contracted.
+//  \param tidxs The set of indices that should remain open in the
+/// final result.
+//  \param cost_fn The cost model used to evaluate contractions
+/// (e.g., flop count).
+//  \param subnet_cse If true, enables Common Subexpression
 /// Elimination (CSE) for
-///                   equivalent subnetworks. When enabled, the cost of
-///                   evaluating structurally identical subnetworks is counted
-///                   only once in the total cost of a contraction tree.
-///                   Equivalence is determined by canonicalizing the subnetwork
-///                   graph.
+/// equivalent subnetworks. When enabled, the cost of
+/// evaluating structurally identical subnetworks is counted
+/// only once in the total cost of a contraction tree.
+/// Equivalence is determined by canonicalizing the subnetwork
+/// graph.
 ///
 /// \return An \ref EvalSequence representing the optimal contraction order.
 ///
 /// \details The optimization uses a bitmask-based dynamic programming approach
-///          where each state represents a subnetwork (subset of tensors).
-///          If \p subnet_cse is enabled, the algorithm precomputes canonical
-///          metadata for every possible subnetwork to identify common
-///          structures. This allows it to find trees that benefit from reusing
-///          intermediate results, which is particularly effective for
-///          expressions with repeating tensor patterns.
+///  where each state represents a subnetwork (subset of tensors).
+///  If \p subnet_cse is enabled, the algorithm precomputes canonical
+///  metadata for every possible subnetwork to identify common
+///  structures. This allows it to find trees that benefit from reusing
+///  intermediate results, which is particularly effective for
+///  expressions with repeating tensor patterns.
 ///
 template <typename CostFn>
   requires requires(CostFn&& fn, decltype(OptRes::indices) const& ixs) {
