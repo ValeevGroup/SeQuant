@@ -158,8 +158,8 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
   container::vector<double> unique_meta_costs;
   if (subnet_cse) {
     meta_ids.resize(results.size(), 0);
-    container::map<TensorNetwork::SlotCanonicalizationMetadata, uint16_t,
-                   SubNetEqual>
+    container::unordered_map<TensorNetwork::SlotCanonicalizationMetadata,
+                             uint16_t, SubNetHash, SubNetEqual>
         meta_to_id;
 
     for (size_t n = 0; n < results.size(); ++n) {
