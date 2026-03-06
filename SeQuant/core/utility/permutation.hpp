@@ -5,11 +5,12 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <range/v3/view/enumerate.hpp>
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdlib>
 #include <ranges>
-#include <set>
 
 namespace sequant {
 
@@ -33,46 +34,44 @@ std::size_t count_cycles(Seq0&& v0, Seq1&& v1) {
   SEQUANT_ASSERT(std::set(begin(v0), end(v0)).size() == size(v0));
   SEQUANT_ASSERT(std::set(begin(v1), end(v1)).size() == size(v1));
 
-  container::set<decltype(begin(v0))> visited;
-  visited.reserve(size(v0));
+  container::svector<bool> visited;
+  visited.resize(size(v0), false);
 
   std::size_t n_cycles = 0;
-  for (auto it = begin(v0); it != end(v0); ++it) {
-    if (visited.find(it) != end(visited)) {
+  std::size_t start_col = 0;
+  for (auto it = begin(v0); it != end(v0); ++it, ++start_col) {
+    if (visited.at(start_col)) {
+      // This column has already been part of a previous cycle
       continue;
     }
 
     n_cycles++;
 
-    auto idx = std::distance(begin(v0), it);
-    SEQUANT_ASSERT(idx >= 0);
-
+    std::size_t current_col = 0;
     auto it0 = it;
-
-    auto it1 = std::find(begin(v1), end(v1), *it0);
-    SEQUANT_ASSERT(it1 != end(v1));
-
-    auto idx1 = std::distance(begin(v1), it1);
-    SEQUANT_ASSERT(idx1 >= 0);
-
     do {
-      auto val_it = begin(v0);
-      std::advance(val_it, idx1);
-      SEQUANT_ASSERT(val_it != end(v0));
+      // Find corresponding element in v1
+      auto it1 = std::ranges::find(v1, *it0);
+      SEQUANT_ASSERT(std::distance(begin(v1), it1) >= 0);
 
-      it0 = std::find(begin(v0), end(v0), *val_it);
-      SEQUANT_ASSERT(it0 != end(v0));
+      // Determine column of the determined corresponding element
+      current_col = static_cast<std::size_t>(std::distance(begin(v1), it1));
+      SEQUANT_ASSERT(current_col < size(v0));
 
-      it1 = std::find(begin(v1), end(v1), *it0);
-      SEQUANT_ASSERT(it1 != end(v1));
+      // Set it0 to the element in the determined column in v0
+      it0 = begin(v0);
+      std::advance(it0, current_col);
 
-      idx1 = std::distance(begin(v1), it1);
-      SEQUANT_ASSERT(idx1 >= 0);
-
-      SEQUANT_ASSERT(visited.find(it0) == end(visited));
-      visited.insert(it0);
-    } while (idx1 != idx);
+      // Mark current_col as visited
+      SEQUANT_ASSERT(!visited.at(current_col));
+      visited.at(current_col) = true;
+    } while (start_col != current_col);
   }
+
+  // All columns must have been visited (otherwise, we'll have missed
+  // at least one cycle)
+  SEQUANT_ASSERT(std::ranges::all_of(visited, [](bool val) { return val; }));
+
   return n_cycles;
 };
 
