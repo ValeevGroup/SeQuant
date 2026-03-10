@@ -1,8 +1,10 @@
 #ifndef SEQUANT_CORE_OPTIMIZE_SINGLE_TERM_HPP
 #define SEQUANT_CORE_OPTIMIZE_SINGLE_TERM_HPP
 
+#include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -10,10 +12,9 @@
 
 #include <range/v3/view.hpp>
 
-#include <SeQuant/core/algorithm.hpp>
-#include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <algorithm>
 #include <bit>
+#include <limits>
 #include <type_traits>
 
 namespace sequant::opt {
@@ -87,18 +88,18 @@ struct SubNetEqual {
 /// \tparam CostFn A function object type that computes the cost of a single
 /// binary contraction.
 /// Expected signature:
-// \code double(meta::range_of<Index> auto const& lhs,
-//              meta::range_of<Index> auto const& rhs,
+/// \code double(meta::range_of<Index> auto const& lhs,
+///              meta::range_of<Index> auto const& rhs,
 ///             meta::range_of<Index> auto const& res)
-// \endcode
+/// \endcode
 ///
 /// \param network The \ref TensorNetwork containing the tensors to be
 /// contracted.
-//  \param tidxs The set of indices that should remain open in the
+///  \param tidxs The set of indices that should remain open in the
 /// final result.
-//  \param cost_fn The cost model used to evaluate contractions
+///  \param cost_fn The cost model used to evaluate contractions
 /// (e.g., flop count).
-//  \param subnet_cse If true, enables Common Subexpression
+///  \param subnet_cse If true, enables Common Subexpression
 /// Elimination (CSE) for
 /// equivalent subnetworks. When enabled, the cost of
 /// evaluating structurally identical subnetworks is counted
@@ -154,10 +155,14 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
   }
 
   // precompute all subnet_meta if subnet_cse is true
+  // Note: the O(2^n) cost is bounded in practice — subset_target_indices above
+  // asserts n <= 24, capping the number of subsets at ~16M.
   container::vector<uint16_t> meta_ids;
   container::vector<double> unique_meta_costs;
   if (subnet_cse) {
-    meta_ids.resize(results.size(), 0);
+    // Use max as sentinel for entries with popcount < 2 (singletons/empty),
+    // which are skipped below and never assigned a real meta ID.
+    meta_ids.resize(results.size(), std::numeric_limits<uint16_t>::max());
     container::unordered_map<TensorNetwork::SlotCanonicalizationMetadata,
                              uint16_t, SubNetHash, SubNetEqual>
         meta_to_id;
@@ -194,6 +199,8 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
       double new_cost = 0;
       container::vector<uint16_t> combined_subnets;
       if (subnet_cse) {
+        // subnets is always kept sorted; set_union requires sorted inputs and
+        // produces sorted output — this invariant is maintained throughout.
         std::set_union(results[lp].subnets.begin(), results[lp].subnets.end(),
                        results[rp].subnets.begin(), results[rp].subnets.end(),
                        std::back_inserter(combined_subnets));
@@ -222,6 +229,9 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
 
     if (subnet_cse) {
       auto mid = meta_ids[n];
+      // Canonically equivalent subnetworks share the same topology and index
+      // sizes, so their cost is identical. Overwriting with a later bitmask's
+      // cost is intentional and benign.
       unique_meta_costs[mid] =
           cost_fn(results[results[n].lp].indices,
                   results[results[n].rp].indices, results[n].indices);
