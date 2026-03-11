@@ -60,7 +60,7 @@ struct OptRes {
   size_t rp = 0;
 
   /// unique canonical subnets in the optimal tree for this bitmask
-  container::vector<uint16_t> subnets;
+  container::vector<size_t> subnets;
 };
 
 struct SubNetHash {
@@ -157,14 +157,14 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
   // precompute all subnet_meta if subnet_cse is true
   // Note: the O(2^n) cost is bounded in practice — subset_target_indices above
   // asserts n <= 24, capping the number of subsets at ~16M.
-  container::vector<uint16_t> meta_ids;
+  container::vector<size_t> meta_ids;
   container::vector<double> unique_meta_costs;
   if (subnet_cse) {
     // Use max as sentinel for entries with popcount < 2 (singletons/empty),
     // which are skipped below and never assigned a real meta ID.
-    meta_ids.resize(results.size(), std::numeric_limits<uint16_t>::max());
+    meta_ids.resize(results.size(), std::numeric_limits<size_t>::max());
     container::unordered_map<TensorNetwork::SlotCanonicalizationMetadata,
-                             uint16_t, SubNetHash, SubNetEqual>
+                             size_t, SubNetHash, SubNetEqual>
         meta_to_id;
 
     for (size_t n = 0; n < results.size(); ++n) {
@@ -197,7 +197,7 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
       if (lp == 0 || rp == 0) continue;
 
       double new_cost = 0;
-      container::vector<uint16_t> combined_subnets;
+      container::vector<size_t> combined_subnets;
       if (subnet_cse) {
         // subnets is always kept sorted; set_union requires sorted inputs and
         // produces sorted output — this invariant is maintained throughout.
