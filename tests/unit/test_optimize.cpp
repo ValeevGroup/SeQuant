@@ -18,7 +18,6 @@
 #include <cstddef>
 #include <initializer_list>
 #include <memory>
-#include <stdexcept>
 
 #include <range/v3/all.hpp>
 
@@ -323,9 +322,103 @@ TEST_CASE("optimize", "[optimize]") {
     }
   }
 
+  SECTION("Single term optimization with CSE") {
+    auto ctx_resetter =
+        set_scoped_default_context(get_default_context().clone());
+    auto reg = get_default_context().mutable_index_space_registry();
+    mbpt::add_df_spaces(reg);
+    mbpt::add_pao_spaces(reg);
+    mbpt::add_ao_spaces(reg);
+    // i 10
+    // a 40
+    // μ̃ 50
+    // Κ 90
+    for (auto&& [k, v] :
+         std::initializer_list<std::pair<std::wstring_view, size_t>>{
+             {L"i", 10}, {L"a", 40}, {L"μ̃", 50}, {L"Κ", 90}}) {
+      reg->retrieve_ptr(k)->approximate_size(v);
+    }
+
+    auto single_term_opt = [](Product const& prod, bool cse = true) {
+      return opt::single_term_opt(
+          prod,
+          [](Index const& ix) {
+            // null space contributes x1 to the size
+            auto sz = ix.nonnull() ? ix.space().approximate_size() : 1;
+            return sz;
+          },
+          /*subnet_cse=*/cse);
+    };
+
+    auto prod9 =
+        deserialize("X{i1;a1} X{i2;a2} Y{a2;i3} Y{a1;i4}")->as<Product>();
+    auto res9 = single_term_opt(prod9);
+    auto res9_no_cse = single_term_opt(prod9, false);
+    // this is the one we want to find
+    // (X Y) (X Y)
+    REQUIRE(extract(res9, {0, 0}) == prod9.at(0));
+    REQUIRE(extract(res9, {0, 1}) == prod9.at(3));
+    REQUIRE(extract(res9, {1, 0}) == prod9.at(1));
+    REQUIRE(extract(res9, {1, 1}) == prod9.at(2));
+
+    // take a look at res9_no_cse for a result with subnet_cse disabled
+    // should give the same result in this case as it's already optimal
+    REQUIRE(extract(res9_no_cse, {0, 0}) == prod9.at(0));
+    REQUIRE(extract(res9_no_cse, {0, 1}) == prod9.at(3));
+    REQUIRE(extract(res9_no_cse, {1, 0}) == prod9.at(1));
+    REQUIRE(extract(res9_no_cse, {1, 1}) == prod9.at(2));
+
+    SECTION("CSE effect on optimization result") {
+      auto ctx_resetter =
+          set_scoped_default_context(get_default_context().clone());
+      auto reg = get_default_context().mutable_index_space_registry();
+      // Use sizes that make the unbalanced tree better without CSE,
+      // but the balanced tree better with CSE.
+      // Balanced: ( (X1 Y1) (X2 Y2) )
+      // Cost(X1*Y1) = size(i)*size(a)*size(j) = 12*10*12 = 1440.
+      // Cost(Inter) = 12^3 = 1728.
+      // Total no-CSE: 2*1440 + 1728 = 4608.
+      // Total CSE: 1440 + 1728 = 3168.
+      // Unbalanced: ( ( (X1 Y1) X2 ) Y2 )
+      // Cost(X1*Y1) = 12*10*12 = 1440.
+      // Cost((X1*Y1)*X2) = size(i)*size(i)*size(a) = 12*12*10 = 1440.
+      // Cost(...) * Y2 = 12*10*12 = 1440.
+      // Total Unbalanced: 1440 + 1440 + 1440 = 4320.
+      // 3168 < 4320 < 4608.
+      reg->retrieve_ptr(L"i")->approximate_size(12);
+      reg->retrieve_ptr(L"a")->approximate_size(10);
+
+      auto single_term_opt = [](Product const& prod, bool cse) {
+        return opt::single_term_opt(
+            prod,
+            [](Index const& ix) {
+              return ix.nonnull() ? ix.space().approximate_size() : 1;
+            },
+            cse);
+      };
+
+      // X{i1;a1} Y{a1;i2} X{i2;a2} Y{a2;i3}
+      auto prod =
+          deserialize(L"X{i1;a1} Y{a1;i2} X{i2;a2} Y{a2;i3}")->as<Product>();
+
+      auto res_cse = single_term_opt(prod, true);
+      auto res_no_cse = single_term_opt(prod, false);
+
+      // With CSE: Balanced tree
+      REQUIRE(res_cse->as<Product>().factors().size() == 2);
+      REQUIRE(res_cse->at(0)->is<Product>());
+      REQUIRE(res_cse->at(1)->is<Product>());
+
+      // Without CSE: Unbalanced tree
+      bool is_unbalanced =
+          (res_no_cse->at(0)->is<Tensor>() || res_no_cse->at(1)->is<Tensor>());
+      REQUIRE(is_unbalanced);
+    }
+  }
+
   /// verify that space changes did not leak
-  auto reg = get_default_context().index_space_registry();
-  auto uocc = reg->retrieve_ptr(L"a");
-  REQUIRE(uocc);
-  REQUIRE(uocc->approximate_size() == 10);
+  auto reg_check = get_default_context().index_space_registry();
+  auto uocc_check = reg_check->retrieve_ptr(L"a");
+  REQUIRE(uocc_check);
+  REQUIRE(uocc_check->approximate_size() == 10);
 }

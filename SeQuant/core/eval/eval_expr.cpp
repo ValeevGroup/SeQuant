@@ -461,6 +461,7 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract) {
         auto counts = get_used_indices_with_counts(prod);
         IndexGroups<IndexVec> result;
         for (auto&& [k, v] : counts) {
+          if (v.nonproto() == 0) continue;
           if (v.total() > 1) {
             if (uncontracted_idxs.contains(k)) result.aux.emplace_back(k);
             continue;
