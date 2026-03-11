@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1_nonconstructible:
+
+Class Nonconstructible
+======================
+
+- Defined in :ref:`file_SeQuant_core_utility_overloads.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::Nonconstructible
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

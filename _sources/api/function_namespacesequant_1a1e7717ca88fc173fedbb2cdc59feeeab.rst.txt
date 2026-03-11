@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a1e7717ca88fc173fedbb2cdc59feeeab:
+
+Function sequant::toUtf8(wchar_t)
+=================================
+
+- Defined in :ref:`file_SeQuant_core_utility_string.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::toUtf8(wchar_t)
+   :project: SeQuant

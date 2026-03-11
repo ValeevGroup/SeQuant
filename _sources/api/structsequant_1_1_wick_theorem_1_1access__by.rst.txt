@@ -1,0 +1,23 @@
+.. _exhale_struct_structsequant_1_1_wick_theorem_1_1access__by:
+
+Template Struct WickTheorem::access_by
+======================================
+
+- Defined in :ref:`file_SeQuant_core_wick.hpp`
+
+
+Nested Relationships
+--------------------
+
+This struct is a nested type of :ref:`exhale_class_classsequant_1_1_wick_theorem`.
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::WickTheorem::access_by
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

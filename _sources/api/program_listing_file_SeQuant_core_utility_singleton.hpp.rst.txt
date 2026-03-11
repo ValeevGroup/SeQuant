@@ -1,0 +1,106 @@
+
+.. _program_listing_file_SeQuant_core_utility_singleton.hpp:
+
+Program Listing for File singleton.hpp
+======================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_utility_singleton.hpp>` (``SeQuant/core/utility/singleton.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Eduard Valeyev on 2019-03-11.
+   //
+   
+   #ifndef SEQUANT_CORE_UTILITY_SINGLETON_HPP
+   #define SEQUANT_CORE_UTILITY_SINGLETON_HPP
+   
+   #include <SeQuant/core/utility/exception.hpp>
+   #include <cassert>
+   #include <memory>
+   #include <mutex>
+   
+   #include <type_traits>
+   
+   namespace sequant {
+   
+   // clang-format off
+   // clang-format on
+   template <typename Derived>
+   class Singleton {
+     // can't use std::is_default_constructible since Derived's ctors should be
+     // private
+     template <typename T, typename Enabler = void>
+     struct is_default_constructible_helper : public std::false_type {};
+     template <typename T>
+     struct is_default_constructible_helper<T, std::void_t<decltype(T{})>>
+         : public std::true_type {};
+     constexpr static bool derived_is_default_constructible =
+         is_default_constructible_helper<Derived>::value;
+   
+    public:
+     static Derived& instance() {
+       const auto& result_ptr = instance_accessor();
+       if (result_ptr != nullptr) return *result_ptr;
+       if constexpr (derived_is_default_constructible) {
+         return set_default_instance();
+       } else
+         throw Exception(
+             "sequant::Singleton: is not default-constructible and set_instance() "
+             "has not been called");
+     }
+   
+     static Derived* instance_ptr() {
+       const auto& result_ptr = instance_accessor();
+       if (result_ptr != nullptr) return result_ptr.get();
+       if constexpr (derived_is_default_constructible) {
+         return set_default_instance();
+       } else
+         return nullptr;
+     }
+   
+     template <typename... Args>
+     static Derived& set_instance(Args&&... args) {
+       //    WARNING: can't check constructibility since the ctor may be private
+       //    static_assert(std::is_constructible_v<Derived, Args...>,
+       //                  "sequant::Singleton::set_instance: Derived is not
+       //                  constructible with Args");
+       std::scoped_lock lock(instance_mutex());
+       if (instance_accessor() != nullptr)
+         throw Exception(
+             "sequant::Singleton::set_instance: instance has already been "
+             "constructed");
+       instance_accessor() = std::move(
+           std::unique_ptr<Derived>(new Derived(std::forward<Args>(args)...)));
+       return *instance_accessor();
+     }
+   
+    protected:
+     template <typename... Args>
+     Singleton(Args&&...) {}  // all constructors are private
+   
+     static auto& instance_accessor() {
+       static std::unique_ptr<Derived> instance;
+       return instance;
+     }
+     // provides mutex that controls access to instance_accessor()'s object
+     static auto& instance_mutex() {
+       static std::mutex mtx;
+       return mtx;
+     }
+   
+    private:
+     static Derived& set_default_instance() {
+       std::scoped_lock lock(instance_mutex());
+       if (!instance_accessor()) {
+         instance_accessor() = std::move(std::unique_ptr<Derived>(new Derived));
+       }
+       return *instance_accessor();
+     }
+   };
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_CORE_UTILITY_SINGLETON_HPP

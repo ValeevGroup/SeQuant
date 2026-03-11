@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1io_1_1latex_1a5b5e1484bc1ccdf6af0e5651295b092b:
+
+Template Function sequant::io::latex::utf_to_string(const std::basic_string<Char, Traits, Alloc>&)
+==================================================================================================
+
+- Defined in :ref:`file_SeQuant_core_io_latex_latex.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::io::latex::utf_to_string(const std::basic_string<Char, Traits, Alloc>&)
+   :project: SeQuant

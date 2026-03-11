@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a9063ab0ae74d35345b98849368e00671:
+
+Template Function sequant::bcre(Index, std::initializer_list<I>)
+================================================================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::bcre(Index, std::initializer_list<I>)
+   :project: SeQuant

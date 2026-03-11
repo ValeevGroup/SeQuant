@@ -1,0 +1,27 @@
+
+.. _program_listing_file_SeQuant_core_optimize_sum.hpp:
+
+Program Listing for File sum.hpp
+================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_optimize_sum.hpp>` (``SeQuant/core/optimize/sum.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_OPTIMIZE_SUM_HPP
+   #define SEQUANT_CORE_OPTIMIZE_SUM_HPP
+   
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/expr_fwd.hpp>
+   
+   namespace sequant::opt {
+   
+   container::vector<container::vector<size_t>> clusters(Sum const& expr);
+   
+   Sum reorder(Sum const& sum);
+   
+   }  // namespace sequant::opt
+   
+   #endif  // SEQUANT_CORE_OPTIMIZE_SUM_HPP

@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1io_1_1serialization_1_1v1_1_1transform_1a794cfd7ffe613d20b56ea2cba1984467:
+
+Typedef sequant::io::serialization::v1::transform::DefaultSymmetries
+====================================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_ast_conversions.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::io::serialization::v1::transform::DefaultSymmetries
+   :project: SeQuant

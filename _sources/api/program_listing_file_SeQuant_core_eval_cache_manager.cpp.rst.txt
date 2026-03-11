@@ -1,0 +1,64 @@
+
+.. _program_listing_file_SeQuant_core_eval_cache_manager.cpp:
+
+Program Listing for File cache_manager.cpp
+==========================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_cache_manager.cpp>` (``SeQuant/core/eval/cache_manager.cpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Bimal Gaudel on 9/26/23.
+   //
+   
+   #include <SeQuant/core/eval/cache_manager.hpp>
+   
+   #include <SeQuant/core/eval/eval_node.hpp>
+   
+   namespace sequant {
+   
+   namespace {
+   
+   template <meta::eval_node Node, typename N, bool F>
+   void max_cache(Node const& node,        //
+                  CacheManager<N, F>& cm,  //
+                  AsyCost& curr,           //
+                  AsyCost& max) {
+     if (auto ptr = cm.access(node); ptr) {
+       if (cm.life(node) == 0) {
+         curr -= Memory{}(node);
+       }
+       return;
+     }
+     if (!node.leaf()) {
+       max_cache(node.left(), cm, curr, max);
+       max_cache(node.right(), cm, curr, max);
+       if (cm.exists(node)) {
+         curr += Memory{}(node);
+         max = std::max(curr, max);
+         // simulate cache store
+         auto s = cm.store(node, nullptr);
+       }
+     }
+   }
+   
+   }  // namespace
+   
+   AsyCost peak_cache(Sum const& expr) {
+     // Materialize into a vector so that nodes have stable addresses for
+     // pointer-based scanning in cache_manager()
+     auto const nodes_vec = expr | ranges::views::transform([](const auto& expr) {
+                              return binarize<EvalExpr>(expr);
+                            }) |
+                            ranges::to_vector;
+     auto cm = cache_manager(nodes_vec);
+     auto max = AsyCost::zero();
+     auto curr = AsyCost::zero();
+     for (auto const& n : nodes_vec) max_cache(n, cm, curr, max);
+     return max;
+   }
+   
+   }  // namespace sequant

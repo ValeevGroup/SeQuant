@@ -1,0 +1,134 @@
+
+.. _file_SeQuant_core_eval_eval_expr.hpp:
+
+File eval_expr.hpp
+==================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_eval>` (``SeQuant/core/eval``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/eval/eval_expr.hpp``)
+------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_eval_eval_expr.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/binary_node.hpp`` (:ref:`file_SeQuant_core_binary_node.hpp`)
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/eval/fwd.hpp`` (:ref:`file_SeQuant_core_eval_fwd.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/external/bliss/graph.hh``
+
+- ``cstddef``
+
+- ``memory``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_eval_eval_expr.cpp`
+
+- :ref:`file_SeQuant_core_eval_eval_node.hpp`
+
+- :ref:`file_SeQuant_core_export_export.hpp`
+
+- :ref:`file_SeQuant_core_export_export_expr.cpp`
+
+- :ref:`file_SeQuant_core_export_export_expr.hpp`
+
+- :ref:`file_SeQuant_core_optimize_common_subexpression_elimination.hpp`
+
+- :ref:`file_SeQuant_core_optimize_optimize.cpp`
+
+- :ref:`file_SeQuant_core_optimize_sum.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__impl`
+
+- :ref:`namespace_sequant__meta`
+
+- :ref:`namespace_sequant__meta__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_eval_op_setter`
+
+- :ref:`exhale_class_classsequant_1_1_eval_expr`
+
+
+Enums
+-----
+
+
+- :ref:`exhale_enum_namespacesequant_1a7bf79a2794f3cc1f2f2ab156a5242c0c`
+
+- :ref:`exhale_enum_namespacesequant_1a9517b28099d86f3b2c0d4799125f5931`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1af1ccfe084e56de98ac20a01807a2c8ef`
+
+- :ref:`exhale_function_namespacesequant_1aa315bf8eeae68c594fd11ed70bb8a7c1`
+
+- :ref:`exhale_function_namespacesequant_1a113162cb7fd937a9cfbfdf1bb47a4a01`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1a1a5f729f49e32e272bc8feaed6efb15b`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1_1meta_1_1detail_1a9ecac57f3ab312a889b8952becb14dec`
+
+- :ref:`exhale_variable_namespacesequant_1_1meta_1_1detail_1a978e2b869c1917781266622cbed996fe`
+

@@ -1,0 +1,140 @@
+
+.. _program_listing_file_SeQuant_core_asy_cost.hpp:
+
+Program Listing for File asy_cost.hpp
+=====================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_asy_cost.hpp>` (``SeQuant/core/asy_cost.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_ASY_COST_HPP
+   #define SEQUANT_ASY_COST_HPP
+   
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/rational.hpp>
+   
+   #include <cstddef>
+   #include <string>
+   #include <utility>
+   
+   namespace sequant {
+   
+   class AsyCost {
+    private:
+     class AsyCostEntry {
+       size_t occ_;              // power of active_occupied
+       size_t virt_;             // power of the rest orbitals
+       mutable rational count_;  // count of this asymptotic symbol
+   
+      public:
+       static std::ostream &stream_out_rational(std::ostream &os,
+                                                rational const &r);
+   
+       static AsyCostEntry max();
+   
+       static AsyCostEntry const &zero();
+   
+       AsyCostEntry(size_t nocc, size_t nvirt, rational count);
+   
+       AsyCostEntry(AsyCostEntry const &) = default;
+   
+       AsyCostEntry(AsyCostEntry &&) = default;
+   
+       AsyCostEntry &operator=(AsyCostEntry const &) = default;
+   
+       AsyCostEntry &operator=(AsyCostEntry &&) = default;
+   
+       size_t occ() const;
+   
+       size_t virt() const;
+   
+       rational count() const;
+   
+       void set_count(rational n) const;
+   
+       bool operator<(AsyCostEntry const &rhs) const;
+   
+       bool operator==(AsyCostEntry const &rhs) const;
+   
+       bool operator!=(AsyCostEntry const &rhs) const;
+   
+       std::string text() const;
+   
+       std::string to_latex() const;
+     };
+   
+    private:
+     container::set<AsyCostEntry> cost_;
+   
+     explicit AsyCost(AsyCostEntry);
+   
+    public:
+     static AsyCost const &max();
+   
+     static AsyCost const &zero();
+   
+     AsyCost();
+   
+     AsyCost(rational count, size_t nocc, size_t nvirt);
+   
+     AsyCost(size_t nocc, size_t nvirt);
+   
+     explicit AsyCost(std::pair<size_t, size_t> const &ov);
+   
+     AsyCost(AsyCost const &) = default;
+   
+     AsyCost(AsyCost &&) = default;
+   
+     AsyCost &operator=(AsyCost const &) = default;
+   
+     AsyCost &operator=(AsyCost &&) = default;
+   
+     [[nodiscard]] double ops(size_t nocc, size_t nvirt) const;
+   
+     [[nodiscard]] std::wstring to_latex() const;
+   
+     [[nodiscard]] std::string text() const;
+   
+     AsyCost &operator+=(AsyCost const &);
+   
+     AsyCost &operator-=(AsyCost const &);
+   
+     friend AsyCost operator+(AsyCost const &lhs, AsyCost const &rhs);
+   
+     friend AsyCost operator*(AsyCost const &lhs, rational scale);
+   
+     friend AsyCost operator*(rational scale, AsyCost const &lhs);
+   
+     friend bool operator<(AsyCost const &lhs, AsyCost const &rhs);
+   
+     friend bool operator==(AsyCost const &lhs, AsyCost const &rhs);
+   
+     friend bool operator<=(AsyCost const &lhs, AsyCost const &rhs);
+   
+     friend bool operator>=(AsyCost const &lhs, AsyCost const &rhs);
+   };
+   
+   AsyCost operator+(AsyCost const &lhs, AsyCost const &rhs);
+   
+   AsyCost operator-(AsyCost const &lhs, AsyCost const &rhs);
+   
+   AsyCost operator*(AsyCost const &cost, rational scale);
+   
+   AsyCost operator*(rational scale, AsyCost const &cost);
+   
+   AsyCost operator/(AsyCost const &cost, rational scale);
+   
+   bool operator==(AsyCost const &lhs, AsyCost const &rhs);
+   
+   bool operator!=(AsyCost const &lhs, AsyCost const &rhs);
+   
+   bool operator<(AsyCost const &lhs, AsyCost const &rhs);
+   
+   bool operator>(AsyCost const &lhs, AsyCost const &rhs);
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_ASY_COST_HPP

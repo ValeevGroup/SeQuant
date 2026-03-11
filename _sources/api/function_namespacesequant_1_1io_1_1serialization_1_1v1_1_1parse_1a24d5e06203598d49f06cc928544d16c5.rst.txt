@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a24d5e06203598d49f06cc928544d16c5:
+
+Function sequant::io::serialization::v1::parse::BOOST_SPIRIT_DEFINE
+===================================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_deserialize.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::io::serialization::v1::parse::BOOST_SPIRIT_DEFINE(name, number, variable, index_label, index, index_groups, tensor, product, sum, expr, symmetry_spec, resultExpr)
+   :project: SeQuant

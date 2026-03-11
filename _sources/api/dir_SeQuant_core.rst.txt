@@ -1,0 +1,74 @@
+.. _dir_SeQuant_core:
+
+
+Directory core
+==============
+
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant>` (``SeQuant``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+*Directory path:* ``SeQuant/core``
+
+Subdirectories
+--------------
+
+- :ref:`dir_SeQuant_core_eval`
+- :ref:`dir_SeQuant_core_export`
+- :ref:`dir_SeQuant_core_expressions`
+- :ref:`dir_SeQuant_core_io`
+- :ref:`dir_SeQuant_core_optimize`
+- :ref:`dir_SeQuant_core_tensor_network`
+- :ref:`dir_SeQuant_core_utility`
+
+
+Files
+-----
+
+- :ref:`file_SeQuant_core_algorithm.hpp`
+- :ref:`file_SeQuant_core_asy_cost.cpp`
+- :ref:`file_SeQuant_core_asy_cost.hpp`
+- :ref:`file_SeQuant_core_attr.hpp`
+- :ref:`file_SeQuant_core_binary_node.hpp`
+- :ref:`file_SeQuant_core_bitset.hpp`
+- :ref:`file_SeQuant_core_bliss.hpp`
+- :ref:`file_SeQuant_core_complex.hpp`
+- :ref:`file_SeQuant_core_container.hpp`
+- :ref:`file_SeQuant_core_context.cpp`
+- :ref:`file_SeQuant_core_context.hpp`
+- :ref:`file_SeQuant_core_expr.hpp`
+- :ref:`file_SeQuant_core_expr_fwd.hpp`
+- :ref:`file_SeQuant_core_fwd.hpp`
+- :ref:`file_SeQuant_core_hash.cpp`
+- :ref:`file_SeQuant_core_hash.hpp`
+- :ref:`file_SeQuant_core_hugenholtz.hpp`
+- :ref:`file_SeQuant_core_index.cpp`
+- :ref:`file_SeQuant_core_index.hpp`
+- :ref:`file_SeQuant_core_index_space_registry.cpp`
+- :ref:`file_SeQuant_core_index_space_registry.hpp`
+- :ref:`file_SeQuant_core_interval.hpp`
+- :ref:`file_SeQuant_core_logger.hpp`
+- :ref:`file_SeQuant_core_math.hpp`
+- :ref:`file_SeQuant_core_op.cpp`
+- :ref:`file_SeQuant_core_op.hpp`
+- :ref:`file_SeQuant_core_options.cpp`
+- :ref:`file_SeQuant_core_options.hpp`
+- :ref:`file_SeQuant_core_ranges.hpp`
+- :ref:`file_SeQuant_core_rational.hpp`
+- :ref:`file_SeQuant_core_reserved.hpp`
+- :ref:`file_SeQuant_core_runtime.cpp`
+- :ref:`file_SeQuant_core_runtime.hpp`
+- :ref:`file_SeQuant_core_slotted_index.hpp`
+- :ref:`file_SeQuant_core_space.cpp`
+- :ref:`file_SeQuant_core_space.hpp`
+- :ref:`file_SeQuant_core_tag.hpp`
+- :ref:`file_SeQuant_core_tensor_canonicalizer.cpp`
+- :ref:`file_SeQuant_core_tensor_canonicalizer.hpp`
+- :ref:`file_SeQuant_core_tensor_network.hpp`
+- :ref:`file_SeQuant_core_wick.cpp`
+- :ref:`file_SeQuant_core_wick.hpp`
+- :ref:`file_SeQuant_core_wick.impl.hpp`
+
+
