@@ -35,14 +35,15 @@ void max_cache(Node const& node,        //
 
 }  // namespace
 
-AsyCost peak_cache(Sum const& expr) {
+AsyCost peak_cache(Sum const& expr, std::optional<size_t> min_repeats) {
   // Materialize into a vector so that nodes have stable addresses for
   // pointer-based scanning in cache_manager()
   auto const nodes_vec = expr | ranges::views::transform([](const auto& expr) {
                            return binarize<EvalExpr>(expr);
                          }) |
                          ranges::to_vector;
-  auto cm = cache_manager(nodes_vec);
+  auto cm = min_repeats ? cache_manager(nodes_vec, min_repeats.value())
+                        : cache_manager(nodes_vec);
   auto max = AsyCost::zero();
   auto curr = AsyCost::zero();
   for (auto const& n : nodes_vec) max_cache(n, cm, curr, max);

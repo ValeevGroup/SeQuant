@@ -9,8 +9,10 @@
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/expr.hpp>
 
-#include <memory>
 #include <range/v3/view.hpp>
+
+#include <memory>
+#include <optional>
 #include <unordered_map>
 
 namespace sequant {
@@ -235,11 +237,14 @@ auto cache_manager(meta::eval_node_range auto const& nodes,
 /// \note Reordering the terms in a Sum affects the peak cache memory.
 ///
 /// \param expr A Sum whose terms will be evaluated by reusing intermediates.
+/// \param min_repeats Minimum number of repeats for a node to be cached. If not
+/// provided, will use the default of \c cache_manager().
 /// \return AsyCost object that represents the memory in terms of powers of
 ///         active occupied and active unoccupied index extents of stored
 ///         tensor.
 ///
-AsyCost peak_cache(Sum const& expr);
+AsyCost peak_cache(Sum const& expr,
+                   std::optional<size_t> min_repeats = std::nullopt);
 
 }  // namespace sequant
 
