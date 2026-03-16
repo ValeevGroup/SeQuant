@@ -462,10 +462,10 @@ bool can_expand(const AbstractTensor& tensor) {
     return a_bra == a_ket;
   }
 }
-// a trial to make expand_antisymm compact
 
-// #define compactness
-#ifdef compactness
+// a trial to make expand_antisymm compact
+#define make_it_compact
+#ifdef make_it_compact
 // the compact NPC version with ms conserving
 ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
   if (tensor.bra_rank() <= 1 && tensor.ket_rank() <= 1) {
@@ -628,64 +628,6 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
     return expr_sum;
   }
 }
-// // the master version (I need it for comparison)
-//   ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
-//   SEQUANT_ASSERT(tensor.bra_rank() == tensor.ket_rank());
-//   // Return non-symmetric tensor if rank is 1
-//   if (tensor.bra_rank() <= 1) {
-//     Tensor new_tensor(tensor.label(), tensor.bra(), tensor.ket(),
-//     tensor.aux(),
-//                       Symmetry::Nonsymm, tensor.braket_symmetry(),
-//                       tensor.column_symmetry());
-//     return std::make_shared<Tensor>(new_tensor);
-//   }
-//
-//   // If all indices have the same spin label,
-//   // return the antisymm tensor
-//   if (skip_spinsymm && ms_uniform_tensor(tensor)) {
-//     return std::make_shared<Tensor>(tensor);
-//   }
-//
-//   SEQUANT_ASSERT(tensor.bra_rank() > 1 && tensor.ket_rank() > 1);
-//
-//   auto get_phase = [](const Tensor& t) {
-//     container::svector<Index> bra(t.bra().begin(), t.bra().end());
-//     container::svector<Index> ket(t.ket().begin(), t.ket().end());
-//     reset_ts_swap_counter<Index>();
-//     bubble_sort(std::begin(bra), std::end(bra));
-//     bubble_sort(std::begin(ket), std::end(ket));
-//     return ts_swap_counter_is_even<Index>() ? 1 : -1;
-//   };
-//
-//   // Generate a sum of asymmetric tensors if the input tensor is
-//   antisymmetric
-//   // and greater than one body otherwise, return the tensor
-//   if (tensor.symmetry() == Symmetry::Antisymm) {
-//     const auto prefactor = get_phase(tensor);
-//     container::set<Index> bra_list(tensor.bra().begin(), tensor.bra().end());
-//     container::set<Index> ket_list(tensor.ket().begin(), tensor.ket().end());
-//     auto expr_sum = std::make_shared<Sum>();
-//     do {
-//       // N.B. must copy
-//       auto new_tensor =
-//           Tensor(tensor.label(), bra(bra_list), ket(ket_list), tensor.aux(),
-//                  Symmetry::Nonsymm, tensor.braket_symmetry(),
-//                  tensor.column_symmetry());
-//
-//       if (ms_conserving_columns(new_tensor)) {
-//         auto new_tensor_product = std::make_shared<Product>();
-//         new_tensor_product->append(get_phase(new_tensor),
-//                                    ex<Tensor>(new_tensor));
-//         new_tensor_product->scale(prefactor);
-//         expr_sum->append(new_tensor_product);
-//       }
-//     } while (std::next_permutation(bra_list.begin(), bra_list.end()));
-//
-//     return expr_sum;
-//   } else {
-//     return std::make_shared<Tensor>(tensor);
-//   }
-// }
 #endif
 
 ExprPtr expand_antisymm(const ExprPtr& expr, bool skip_spinsymm) {
