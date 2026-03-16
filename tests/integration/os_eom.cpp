@@ -129,6 +129,8 @@ class compute_eomcc_openshell {
       std::wcout << "R[" << i << "] has " << eqvec[i].size() << " terms\n";
       os_st_eom.push_back(open_shell_CC_spintrace(eqvec[i]));
       // std::wcout << to_latex_align(os_st_eom[i][0], 20, 1) << "\n";
+      // std::wcout << "how many elements does it have? " << os_st_eom[i].size()
+      // << "\n";
     }
 
     const auto alpha_qns = IndexSpace::QuantumNumbers{1};
@@ -167,21 +169,23 @@ class compute_eomcc_openshell {
         std::wcout << "\n R[" << i << "] case [" << sc << "] spin=("
                    << spin_label << ") : " << spin_cases[sc]->size()
                    << " terms\n";
+        // std::wcout << to_latex_align(spin_cases[sc]) << std::endl;
 
-        std::wcout << "  ext_index_groups (" << ext_from_A.size()
-                   << " groups):\n";
-        for (size_t g = 0; g < ext_from_A.size(); ++g) {
-          std::wcout << "    group[" << g << "]: ";
-          for (const auto& slotted : ext_from_A[g]) {
-            const auto spin_idx = spins[g] == 0
-                                      ? make_spinalpha(slotted.index())
-                                      : make_spinbeta(slotted.index());
-            std::wcout << spin_idx.to_latex() << "("
-                       << ((spin_idx.space().qns() == alpha_qns) ? L"α" : L"β")
-                       << ") ";
-          }
-          std::wcout << "\n";
-        }
+        // std::wcout << "  ext_index_groups (" << ext_from_A.size()
+        //            << " groups):\n";
+        // for (size_t g = 0; g < ext_from_A.size(); ++g) {
+        //   std::wcout << "    group[" << g << "]: ";
+        //   for (const auto& slotted : ext_from_A[g]) {
+        //     const auto spin_idx = spins[g] == 0
+        //                               ? make_spinalpha(slotted.index())
+        //                               : make_spinbeta(slotted.index());
+        //     std::wcout << spin_idx.to_latex() << "("
+        //                << ((spin_idx.space().qns() == alpha_qns) ? L"α" :
+        //                L"β")
+        //                << ") ";
+        //   }
+        //   std::wcout << "\n";
+        // }
       }
     }
   }
