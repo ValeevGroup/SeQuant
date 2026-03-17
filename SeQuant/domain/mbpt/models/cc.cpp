@@ -55,16 +55,25 @@ bool CC::screen() const { return screen_; }
 
 bool CC::use_topology() const { return use_topology_; }
 
+ExprPtr CC::hbar(std::optional<size_t> truncation_rank) const {
+  const bool skip_singles = ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU;
+  // if truncation_rank is not provided, use hbar_comm_rank if provided,
+  // otherwise default to 4 (traditional CC)
+  const auto def_truncation = hbar_comm_rank_ ? hbar_comm_rank_.value() : 4;
+  const auto truncation =
+      truncation_rank ? truncation_rank.value() : def_truncation;
+
+  auto hbar =
+      mbpt::lst(H(), T(N, skip_singles), truncation, {.unitary = unitary()});
+  return hbar;
+}
+
 std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) {
   pmax = (pmax == std::numeric_limits<size_t>::max() ? N : pmax);
-  const bool skip_singles = ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU;
-
   SEQUANT_ASSERT(pmax >= pmin && "pmax should be >= pmin");
-  const auto commutator_rank = hbar_comm_rank_.value_or(4);
 
   // 1. construct hbar(op) in canonical form
-  auto hbar = mbpt::lst(H(), T(N, skip_singles), commutator_rank,
-                        {.unitary = unitary()});
+  auto hbar = this->hbar();
 
   // connectivity: empty for unitary ansatz, default otherwise
   const auto connectivity = this->unitary()
@@ -113,15 +122,9 @@ std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) {
 
 std::vector<ExprPtr> CC::λ() {
   SEQUANT_ASSERT(!unitary() && "there is no need for CC::λ for unitary ansatz");
-  const bool skip_singles = ansatz_ == Ansatz::oT;
-
-  const auto commutator_rank =
-      hbar_comm_rank_.value_or(4);  // default truncation rank is 4
 
   // construct hbar
-  SEQUANT_ASSERT(commutator_rank >= 1 &&
-                 "commutator_rank should be at least 1");
-  auto hbar = mbpt::lst(H(), T(N, skip_singles), commutator_rank - 1);
+  auto hbar = this->hbar(hbar_comm_rank_.value_or(4) - 1);
 
   auto lhbar = simplify((1 + Λ(N)) * hbar);
 
@@ -201,8 +204,7 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
       3);  // notice 3 instead of 4 here, this is because of the commutator with
            // T'(1). In case 4 is used, it will generate more terms but they
            // will not contribute.
-  const auto hbar =
-      mbpt::lst(H(), T(N), hbar_truncate_at, {.unitary = unitary()});
+  const auto hbar = this->hbar(hbar_truncate_at);
 
   ExprPtr hbar_pert;
   if (unitary()) {
@@ -251,8 +253,7 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
                  "CC::λʼ: only traditional ansatz is supported");
 
   // construct hbar
-  const auto hbar_truncate_at = hbar_comm_rank_.value_or(4);
-  const auto hbar = mbpt::lst(H(), T(N), hbar_truncate_at);
+  const auto hbar = this->hbar();
 
   // construct h1_bar
   // truncate h1_bar at rank 2 for one-body perturbation operator and at rank 4
@@ -264,7 +265,7 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
 
   // construct [hbar, T(1)]
   const auto hbar_pert =
-      mbpt::lst(H(), T(N), 3) * Tʼ(N, {.order = order, .nbatch = nbatch});
+      this->hbar(3) * Tʼ(N, {.order = order, .nbatch = nbatch});
 
   // [Eq. 35, WIREs Comput Mol Sci. 2019; 9:e1406]
   const auto expr = simplify((1 + Λ(N)) * (h1_bar + hbar_pert) +
@@ -309,12 +310,9 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
     SEQUANT_ASSERT(hbar_comm_rank_ &&
                    "hbar_comm_rank must be specified for unitary ansatz "
                    "in CC::eom_r");
-  const bool skip_singles = ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU;
 
   // construct hbar
-  const auto hbar_truncate_at = hbar_comm_rank_.value_or(4);
-  const auto hbar = mbpt::lst(H(), T(N, skip_singles), hbar_truncate_at,
-                              {.unitary = unitary()});
+  const auto hbar = this->hbar();
 
   // construct [hbar, R]
   ExprPtr hbar_R;
@@ -362,11 +360,9 @@ std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) {
     SEQUANT_ASSERT(
         get_default_context().spbasis() != SPBasis::Spinfree &&
         "spin-free basis does not support non particle-conserving cases");
-  const bool skip_singles = ansatz_ == Ansatz::oT;
 
   // construct hbar
-  const auto hbar_truncate_at = hbar_comm_rank_.value_or(4);
-  const auto hbar = mbpt::lst(H(), T(N, skip_singles), hbar_truncate_at);
+  const auto hbar = this->hbar();
 
   // L * hbar
   const auto L_hbar = L(np, nh) * hbar;

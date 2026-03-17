@@ -70,6 +70,16 @@ class CC {
   /// @return whether topological optimization is used in WickTheorem
   [[nodiscard]] bool use_topology() const;
 
+  /// @brief computes similarity transformed Hamiltonian, \f$ \bar{H} =
+  /// e^{-\hat{\sigma}} \hat{H} e^{\hat{\sigma}} \f$. The form of \f$ \sigma \f$
+  /// depends on the Ansatz choice.
+  /// @param truncation_rank maximum order of nested commutators to include in
+  /// the expansion; if not specified, will use the value of `hbar_comm_rank`.
+  /// If that is also not specified, will use 4 as the default value. If
+  /// provided, will override all defaults.
+  [[nodiscard]] ExprPtr hbar(
+      std::optional<size_t> truncation_rank = std::nullopt) const;
+
   /// @brief derives t amplitude equations, \f$ \langle P|\bar{H}|0 \rangle = 0
   /// \f$
   /// @param pmax highest particle rank of the projector manifold `\f \langle P
