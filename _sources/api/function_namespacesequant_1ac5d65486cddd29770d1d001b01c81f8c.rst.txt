@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ac5d65486cddd29770d1d001b01c81f8c:
+
+Template Function sequant::string_to(std::string_view, int)
+===========================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_conversion.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::string_to(std::string_view, int)
+   :project: SeQuant

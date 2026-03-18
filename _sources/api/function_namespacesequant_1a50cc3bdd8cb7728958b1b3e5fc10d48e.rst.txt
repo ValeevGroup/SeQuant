@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a50cc3bdd8cb7728958b1b3e5fc10d48e:
+
+Function sequant::braket
+========================
+
+- Defined in :ref:`file_SeQuant_core_expressions_abstract_tensor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::braket()
+   :project: SeQuant

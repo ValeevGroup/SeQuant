@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1af6fc7be814aa005561ba962d5b4c3212:
+
+Function sequant::opt::has_only_single_atom
+===========================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_sum.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::has_only_single_atom(const ExprPtr&)
+   :project: SeQuant

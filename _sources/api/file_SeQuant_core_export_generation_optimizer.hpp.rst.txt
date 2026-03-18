@@ -1,0 +1,88 @@
+
+.. _file_SeQuant_core_export_generation_optimizer.hpp:
+
+File generation_optimizer.hpp
+=============================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_export>` (``SeQuant/core/export``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/export/generation_optimizer.hpp``)
+-------------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_export_generation_optimizer.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/export/generator.hpp`` (:ref:`file_SeQuant_core_export_generator.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/core/utility/tensor.hpp`` (:ref:`file_SeQuant_core_utility_tensor.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``pv/polymorphic_variant.hpp``
+
+- ``stack``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_atomic.hpp`)
+
+- ``variant``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_class_classsequant_1_1_generation_optimizer`
+
+- :ref:`exhale_class_classsequant_1_1_generation_optimizer_1_1_abstract_operation`
+
+- :ref:`exhale_class_classsequant_1_1_generation_optimizer_1_1_compute_operation`
+
+- :ref:`exhale_class_classsequant_1_1_generation_optimizer_1_1_create_operation`
+
+- :ref:`exhale_class_classsequant_1_1_generation_optimizer_1_1_destroy_operation`
+
+- :ref:`exhale_class_classsequant_1_1_generation_optimizer_1_1_load_and_zero_operation`
+
+- :ref:`exhale_class_classsequant_1_1_generation_optimizer_1_1_load_operation`
+
+- :ref:`exhale_class_classsequant_1_1_generation_optimizer_1_1_persist_operation`
+
+- :ref:`exhale_class_classsequant_1_1_generation_optimizer_1_1_unload_operation`
+
+- :ref:`exhale_class_classsequant_1_1_generation_optimizer_1_1_zero_operation`
+

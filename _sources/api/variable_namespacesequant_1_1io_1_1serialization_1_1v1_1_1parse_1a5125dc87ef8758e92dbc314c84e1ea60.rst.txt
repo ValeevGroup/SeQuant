@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a5125dc87ef8758e92dbc314c84e1ea60:
+
+Variable sequant::io::serialization::v1::parse::symmetry_spec
+=============================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_deserialize.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::io::serialization::v1::parse::symmetry_spec
+   :project: SeQuant

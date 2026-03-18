@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1a0248265022a5b013c2921ce601d65ed1:
+
+Function sequant::mbpt::density_fit
+===================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_rules_df.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::density_fit(ExprPtr const&, IndexSpace, std::wstring_view, std::wstring_view)
+   :project: SeQuant

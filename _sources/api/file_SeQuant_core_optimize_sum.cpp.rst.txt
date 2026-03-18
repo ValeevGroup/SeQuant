@@ -1,0 +1,66 @@
+
+.. _file_SeQuant_core_optimize_sum.cpp:
+
+File sum.cpp
+============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_optimize>` (``SeQuant/core/optimize``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/optimize/sum.cpp``)
+----------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_optimize_sum.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/eval/eval_expr.hpp`` (:ref:`file_SeQuant_core_eval_eval_expr.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/optimize/sum.hpp`` (:ref:`file_SeQuant_core_optimize_sum.hpp`)
+
+- ``stack``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__opt`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1a5ebf3c50a42c65a389111478a8f555d2`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1af6fc7be814aa005561ba962d5b4c3212`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1aa2ed928de76a1fcb60bba05f6fabc5b8`
+

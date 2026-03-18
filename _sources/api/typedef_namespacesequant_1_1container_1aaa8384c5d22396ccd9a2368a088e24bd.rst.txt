@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1container_1aaa8384c5d22396ccd9a2368a088e24bd:
+
+Typedef sequant::container::vector
+==================================
+
+- Defined in :ref:`file_SeQuant_core_container.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::container::vector
+   :project: SeQuant

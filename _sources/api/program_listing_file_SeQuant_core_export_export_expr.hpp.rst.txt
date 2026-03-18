@@ -1,0 +1,54 @@
+
+.. _program_listing_file_SeQuant_core_export_export_expr.hpp:
+
+Program Listing for File export_expr.hpp
+========================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_export_export_expr.hpp>` (``SeQuant/core/export/export_expr.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_EXPORT_EXPORT_EXPR_HPP
+   #define SEQUANT_CORE_EXPORT_EXPORT_EXPR_HPP
+   
+   #include <SeQuant/core/eval/eval_expr.hpp>
+   #include <SeQuant/core/export/compute_selection.hpp>
+   
+   #include <cstddef>
+   
+   namespace sequant {
+   
+   namespace detail {
+   std::size_t next_export_expr_id();
+   }  // namespace detail
+   
+   class ExportExpr : public EvalExpr {
+    public:
+     using EvalExpr::EvalExpr;
+   
+     ExportExpr(const EvalExpr &other);
+   
+     [[nodiscard]] std::size_t id() const;
+     void set_id(std::size_t id);
+   
+     [[nodiscard]] ComputeSelection compute_selection() const;
+     void set_compute_selection(ComputeSelection selection);
+     void select_left();
+     void deselect_left();
+     void select_right();
+     void deselect_right();
+   
+     void set_expr(ExprPtr expr);
+   
+     bool operator==(const ExportExpr &other) const;
+   
+    private:
+     ComputeSelection m_selection = ComputeSelection::Both;
+     std::size_t m_id = detail::next_export_expr_id();
+   };
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_CORE_EXPORT_EXPORT_EXPR_HPP

@@ -1,0 +1,34 @@
+
+.. _namespace_sequant__io__serialization__v1__actions:
+
+Namespace sequant::io::serialization::v1::actions
+=================================================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant__io__serialization__v1__actions__@92`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1actions_1_1process__addend`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1actions_1aa8b7cf9bf474c4f83c11de02e8b33681`
