@@ -28,6 +28,8 @@ The produced LaTeX code is not self-contained. It needs to be embedded in a suit
 
 
 
+.. _io-Serialization:
+
 Serialization
 =============
 
