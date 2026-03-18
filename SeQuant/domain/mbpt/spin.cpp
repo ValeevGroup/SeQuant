@@ -44,6 +44,7 @@
 #include <string_view>
 #include <unordered_map>
 #include <utility>
+#define restore_antisymm
 
 namespace sequant::mbpt {
 
@@ -212,6 +213,8 @@ template <typename Container, typename TraceFunction, typename... Args>
   return resultSet;
 }
 
+#ifdef restore_antisymm
+// naive solution for now
 // to restore antisym on R tensors with 2 or more ket or bra indices so
 // canonicalize applies the correct sign when reordering (avoids wrong
 // cancellation in αβ 2h/2p, 3h/3p, that gave zero terms after expand_antisymm
@@ -244,7 +247,7 @@ ExprPtr restore_R_ket_antisymmetry(const ExprPtr& expr) {
   }
   return expr->clone();
 }
-
+#endif
 }  // namespace detail
 
 Index make_spinalpha(const Index& idx) {
@@ -1406,10 +1409,10 @@ std::vector<ExprPtr> open_shell_A_op(const Tensor& A) {
     // unpaired
     container::svector<int> group_spin(n_groups, 0);
     if (npc) {
-      // const auto n_paired_beta = sc % (n_paired + 1);
-      // const auto n_unpaired_beta = sc / (n_paired + 1);
-      const auto n_unpaired_beta = sc % (n_unpaired + 1);
-      const auto n_paired_beta = sc / (n_unpaired + 1);
+      const auto n_paired_beta = sc % (n_paired + 1);
+      const auto n_unpaired_beta = sc / (n_paired + 1);
+      // const auto n_unpaired_beta = sc % (n_unpaired + 1);
+      // const auto n_paired_beta = sc / (n_unpaired + 1);
       std::fill(group_spin.begin() + (n_paired - n_paired_beta),
                 group_spin.begin() + n_paired, 1);
       std::fill(group_spin.begin() + (n_groups - n_unpaired_beta),
@@ -1459,10 +1462,10 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A) {
   for (size_t sc = 0; sc < n_spin_cases; ++sc) {
     container::svector<int> group_spins(n_groups, 0);
     if (nonparticle_conserving) {
-      // const std::size_t n_paired_beta = sc % (n_paired + 1);
-      // const std::size_t n_unpaired_beta = sc / (n_paired + 1);
-      const std::size_t n_unpaired_beta = sc % (n_unpaired + 1);
-      const std::size_t n_paired_beta = sc / (n_unpaired + 1);
+      const std::size_t n_paired_beta = sc % (n_paired + 1);
+      const std::size_t n_unpaired_beta = sc / (n_paired + 1);
+      // const std::size_t n_unpaired_beta = sc % (n_unpaired + 1);
+      // const std::size_t n_paired_beta = sc / (n_unpaired + 1);
       if (n_paired_beta > 0)
         std::fill(group_spins.begin() + (n_paired - n_paired_beta),
                   group_spins.begin() + n_paired, 1);
@@ -1637,7 +1640,6 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
   SEQUANT_ASSERT(grand_idxlist.size() ==
                  int_idxlist.size() + ext_idxlist.size());
 
-  // Infer NPC structure from external index groups:
   // paired groups have size 2 (bra + ket), unpaired have size 1
   const std::size_t n_ext_groups = ext_index_groups.size();
   const std::size_t n_paired = ranges::count_if(
@@ -1674,7 +1676,7 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
 
   // External index replacement maps
   auto ext_spin_cases = [&make_spinspecific, nonparticle_conserving, n_paired,
-                         n_unpaired, n_ext_groups](const auto& idx_groups) {
+                         n_ext_groups](const auto& idx_groups) {
     container::svector<container::map<Index, Index>> all_replacements;
 
     const uint64_t ncases =
@@ -1686,10 +1688,8 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
       container::svector<int> spins(idx_groups.size(), 0);
 
       if (nonparticle_conserving) {
-        // const std::size_t n_paired_beta = i % (n_paired + 1);
-        // const std::size_t n_unpaired_beta = i / (n_paired + 1);
-        const std::size_t n_unpaired_beta = i % (n_unpaired + 1);
-        const std::size_t n_paired_beta = i / (n_unpaired + 1);
+        const std::size_t n_paired_beta = i % (n_paired + 1);
+        const std::size_t n_unpaired_beta = i / (n_paired + 1);
         if (n_paired_beta > 0)
           std::fill(spins.begin() + (n_paired - n_paired_beta),
                     spins.begin() + n_paired, 1);
@@ -1833,13 +1833,15 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
   for (auto& expression : result) {
     detail::reset_idx_tags(expression);
     if (target_spin_case && *target_spin_case == 1) {
-      std::wcout << "before canon (sc=4): " << to_latex_align(expression)
+      std::wcout << "before canon (sc=1): " << to_latex_align(expression)
                  << "\n";
     }
+#ifdef restore_antisymm
     expression = detail::restore_R_ket_antisymmetry(expression);
+#endif
     canonicalize(expression);
     if (target_spin_case && *target_spin_case == 1) {
-      std::wcout << "after canon (sc=4): " << to_latex_align(expression)
+      std::wcout << "after canon (sc=1): " << to_latex_align(expression)
                  << "\n";
     }
     rapid_simplify(expression);
@@ -1872,6 +1874,8 @@ std::vector<ExprPtr> open_shell_spintrace(
 }
 
 std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
+  std::wcout << "expr at the beginning " << to_latex_align(expr) << "\n";
+
   SEQUANT_ASSERT(expr->is<Sum>() || expr->is<Product>());
   Tensor A = expr.is<Sum>() ? expr->at(0)->at(0)->as<Tensor>()
                             : expr->at(0)->as<Tensor>();
@@ -1912,7 +1916,7 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
               .at(0);
 
       if (s == 1) {
-        std::wcout << "R sc=4 after spintrace: " << to_latex_align(os_st.at(s))
+        std::wcout << "R sc=1 after spintrace: " << to_latex_align(os_st.at(s))
                    << "\n";
       }
 
