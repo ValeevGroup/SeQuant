@@ -44,7 +44,6 @@
 #include <string_view>
 #include <unordered_map>
 #include <utility>
-#define restore_antisymm
 
 namespace sequant::mbpt {
 
@@ -213,41 +212,6 @@ template <typename Container, typename TraceFunction, typename... Args>
   return resultSet;
 }
 
-#ifdef restore_antisymm
-// naive solution for now
-// to restore antisym on R tensors with 2 or more ket or bra indices so
-// canonicalize applies the correct sign when reordering (avoids wrong
-// cancellation in αβ 2h/2p, 3h/3p, that gave zero terms after expand_antisymm
-// turns R into Nonsymm).
-ExprPtr restore_R_ket_antisymmetry(const ExprPtr& expr) {
-  if (expr->is<Constant>() || expr->is<Variable>()) return expr;
-  if (expr->is<Tensor>()) {
-    const auto& t = expr->as<Tensor>();
-    if (t.label() == L"R" && (t.ket_rank() >= 2 || t.bra_rank() >= 2)) {
-      return ex<Tensor>(t.label(), bra(t.bra()), ket(t.ket()), t.aux(),
-                        Symmetry::Antisymm, t.braket_symmetry(),
-                        ColumnSymmetry::Symm);
-    }
-    return expr->clone();
-  }
-  if (expr->is<Product>()) {
-    auto prod = std::make_shared<Product>();
-    prod->scale(expr->as<Product>().scalar());
-    for (const auto& f : expr->as<Product>()) {
-      prod->append(1, restore_R_ket_antisymmetry(f), Product::Flatten::No);
-    }
-    return prod;
-  }
-  if (expr->is<Sum>()) {
-    auto sum = std::make_shared<Sum>();
-    for (const auto& s : expr->as<Sum>()) {
-      sum->append(restore_R_ket_antisymmetry(s));
-    }
-    return sum;
-  }
-  return expr->clone();
-}
-#endif
 }  // namespace detail
 
 Index make_spinalpha(const Index& idx) {
@@ -478,6 +442,15 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
   }
 
   if (skip_spinsymm && ms_uniform_tensor(tensor)) {
+    return std::make_shared<Tensor>(tensor);
+  }
+
+  // keep antisymm label for R, but should I do it for all R or only some of
+  // them. need to have a test for it.
+  if (skip_spinsymm && tensor.label() == L"R" &&
+      (tensor.bra_rank() >= 2 || tensor.ket_rank() >= 2) &&
+      (tensor.bra_rank() == 0 || tensor.ket_rank() == 0) &&
+      tensor.symmetry() == Symmetry::Antisymm) {
     return std::make_shared<Tensor>(tensor);
   }
 
@@ -1836,9 +1809,6 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
       std::wcout << "before canon (sc=1): " << to_latex_align(expression)
                  << "\n";
     }
-#ifdef restore_antisymm
-    expression = detail::restore_R_ket_antisymmetry(expression);
-#endif
     canonicalize(expression);
     if (target_spin_case && *target_spin_case == 1) {
       std::wcout << "after canon (sc=1): " << to_latex_align(expression)
