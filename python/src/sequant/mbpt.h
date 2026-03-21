@@ -29,10 +29,11 @@ ExprPtr VacuumAverage(const ExprPtr& e) { return sequant::mbpt::op::vac_av(e); }
 ExprPtr VacuumAverage(
     const ExprPtr& e,
     const std::vector<std::pair<std::string, std::string>>& op_connections) {
-  sequant::mbpt::OpConnections<std::wstring> wop_connections;
-  wop_connections.reserve(op_connections.size());
+  sequant::mbpt::OpConnectivity<std::wstring> wop_connections;
+  wop_connections.connect.reserve(op_connections.size());
   for (const auto& [op1, op2] : op_connections) {
-    wop_connections.emplace_back(sequant::toUtf16(op1), sequant::toUtf16(op2));
+    wop_connections.connect.emplace_back(sequant::toUtf16(op1),
+                                         sequant::toUtf16(op2));
   }
   return sequant::mbpt::op::vac_av(e, wop_connections);
 }

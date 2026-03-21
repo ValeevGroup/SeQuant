@@ -125,13 +125,12 @@ std::vector<ExprPtr> CC::λ() {
 
   auto lhbar = simplify((1 + Λ(N)) * hbar);
 
-  const auto op_connect = concat(default_op_connections(),
-                                 OpConnections<std::wstring>{{L"h", asymm},
-                                                             {L"f", asymm},
-                                                             {L"g", asymm},
-                                                             {L"h", symm},
-                                                             {L"f", symm},
-                                                             {L"g", symm}});
+  const auto op_connect = concat(default_op_connections(), {{L"h", asymm},
+                                                            {L"f", asymm},
+                                                            {L"g", asymm},
+                                                            {L"h", symm},
+                                                            {L"f", symm},
+                                                            {L"g", symm}});
 
   // 2. project onto each manifold, screen, lower to tensor form and wick it
   std::vector<ExprPtr> result(N + 1);
@@ -217,14 +216,13 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
   const auto expr = simplify(h1_bar + hbar_pert);
 
   // connectivity: empty for unitary ansatz, build otherwise
-  OpConnections<std::wstring> op_connect = {};
+  OpConnections<std::wstring> op_connect;
   if (!this->unitary()) {
     // connect t and t1 with {h,f,g}
     // connect h1 with t
     op_connect =
         concat(default_op_connections(),
-               OpConnections<std::wstring>{
-                   {L"h", L"t¹"}, {L"f", L"t¹"}, {L"g", L"t¹"}, {L"h¹", L"t"}});
+               {{L"h", L"t¹"}, {L"f", L"t¹"}, {L"g", L"t¹"}, {L"h¹", L"t"}});
   }
 
   std::vector<ExprPtr> result(N + 1);
@@ -275,19 +273,18 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
   // projectors with {h,f,g}
   // h1 with t
   // h1 with projectors
-  const auto op_connect = concat(default_op_connections(),
-                                 OpConnections<std::wstring>{{L"h", L"t¹"},
-                                                             {L"f", L"t¹"},
-                                                             {L"g", L"t¹"},
-                                                             {L"h¹", L"t"},
-                                                             {L"h", asymm},
-                                                             {L"f", asymm},
-                                                             {L"g", asymm},
-                                                             {L"h", symm},
-                                                             {L"f", symm},
-                                                             {L"g", symm},
-                                                             {L"h¹", asymm},
-                                                             {L"h¹", symm}});
+  const auto op_connect = concat(default_op_connections(), {{L"h", L"t¹"},
+                                                            {L"f", L"t¹"},
+                                                            {L"g", L"t¹"},
+                                                            {L"h¹", L"t"},
+                                                            {L"h", asymm},
+                                                            {L"f", asymm},
+                                                            {L"g", asymm},
+                                                            {L"h", symm},
+                                                            {L"f", symm},
+                                                            {L"g", symm},
+                                                            {L"h¹", asymm},
+                                                            {L"h¹", symm}});
 
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
@@ -327,12 +324,11 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
   }
 
   // connectivity: empty for unitary ansatz, build otherwise
-  OpConnections<std::wstring> op_connect = {};
+  OpConnections<std::wstring> op_connect;
   if (!this->unitary()) {
     // default connections + connect R with {h,f,g}
-    op_connect = concat(
-        default_op_connections(),
-        OpConnections<std::wstring>{{L"h", L"R"}, {L"f", L"R"}, {L"g", L"R"}});
+    op_connect = concat(default_op_connections(),
+                        {{L"h", L"R"}, {L"f", L"R"}, {L"g", L"R"}});
   }
   // initialize result vector
   std::vector<ExprPtr> result;
@@ -373,13 +369,12 @@ std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) {
 
   // connectivity:
   // default connections + connect H with projectors
-  const auto op_connect = concat(default_op_connections(),
-                                 OpConnections<std::wstring>{{L"h", asymm},
-                                                             {L"f", asymm},
-                                                             {L"g", asymm},
-                                                             {L"h", symm},
-                                                             {L"f", symm},
-                                                             {L"g", symm}});
+  const auto op_connect = concat(default_op_connections(), {{L"h", asymm},
+                                                            {L"f", asymm},
+                                                            {L"g", asymm},
+                                                            {L"h", symm},
+                                                            {L"f", symm},
+                                                            {L"g", symm}});
 
   // initialize result vector
   std::vector<ExprPtr> result;
