@@ -1280,4 +1280,19 @@ SECTION("manuscript-examples") {
             L"ã{i1,i2;a1,a2} ã{i3;a3,a4}"));
   }
 }  // SECTION("manuscript-examples")
+
+SECTION("avoided-connections") {
+  using namespace sequant::mbpt::op;
+  using sequant::reserved::antisymm_label;
+
+  // operator-level: <P| H t t |P> with projectors on both sides
+  // avoiding projector-projector contraction
+  {
+    auto expr = P(1) * H() * T(2) * P(-1);
+    auto result = ref_av(expr);
+    auto result_avoid =
+        ref_av(expr, {.connect = default_op_connections(),
+                      .avoid = {{antisymm_label(), antisymm_label()}}});
+  }
+}
 }
