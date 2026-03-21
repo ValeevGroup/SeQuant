@@ -1180,7 +1180,7 @@ SECTION("manuscript-examples") {
 
     auto θ̅ = lst(θ(1), T(N), 2);
     auto expr = (1 + Λ(N)) * θ̅ * Tʼ(N) + Λʼ(N) * θ̅;
-    auto result = ref_av(expr, {{L"θ", L"t"}, {L"θ", L"t¹"}});
+    auto result = ref_av(expr, OpConnections<>{{L"θ", L"t"}, {L"θ", L"t¹"}});
     // number of terms is verified against MPQC4 implementation
     REQUIRE(result.size() == 21);
   }
