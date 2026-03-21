@@ -511,28 +511,68 @@ qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
                                IndexSpace particle_space, IndexSpace hole_space,
                                IndexSpace::QuantumNumbers SQN = Spin::any);
 
+/// @brief Specifies operator connectivity constraints for expectation values.
+///
+/// Contains two lists of operator label pairs:
+/// - `connect`: pairs of operators that must be connected (at least one
+///   contraction between them)
+/// - `avoid`: pairs of operators that must never be directly contracted
+///
+/// Connections are directional (left-to-right): pair `{opL, opR}` declares
+/// that `opL` and `opR` are to be connected when `opR` precedes `opL`,
+/// i.e. `opL` is to the left of `opR`.
+template <typename T = std::wstring>
+struct OpConnectivity {
+  using pair_type = std::pair<T, T>;
+  using container_type = std::vector<pair_type>;
+
+  container_type connect = {};
+  container_type avoid = {};
+};
+
+/// convenience alias for operator connectivity constraints
+template <typename T = std::wstring>
+using OpConnections = typename OpConnectivity<T>::container_type;
+
 inline namespace op {
 namespace tensor {
-ExprPtr expectation_value_impl(ExprPtr expr,
-                               std::vector<std::pair<int, int>> nop_connections,
+ExprPtr expectation_value_impl(ExprPtr expr, OpConnectivity<int> connectivity,
                                bool use_top, bool full_contractions);
 
+/// @name ref_av
 /// @brief computes the reference expectation value of a tensor-level expression
 /// @param expr input expression
-/// @param nop_connections connectivity information
+/// @param connectivity operator connectivity constraints
 /// @param use_top if true, WickTheorem uses topological equivalence of terms
-ExprPtr ref_av(ExprPtr expr,
-               std::vector<std::pair<int, int>> nop_connections = {},
+///@{
+ExprPtr ref_av(ExprPtr expr, OpConnectivity<int> connectivity = {},
                bool use_top = true);
+/// @overload
+inline ExprPtr ref_av(ExprPtr expr, OpConnections<int> connections,
+                      bool use_top = true) {
+  return ref_av(std::move(expr),
+                OpConnectivity<int>{.connect = std::move(connections)},
+                use_top);
+}
+///@}
 
+/// @name vac_av
 /// @brief computes the vacuum expectation value of a tensor-level expression,
 /// forces full contractions in WickTheorem
 /// @param expr input expression
-/// @param nop_connections connectivity information
+/// @param connectivity operator connectivity constraints
 /// @param use_top if true, WickTheorem uses topological equivalence of terms
-ExprPtr vac_av(ExprPtr expr,
-               std::vector<std::pair<int, int>> nop_connections = {},
+///@{
+ExprPtr vac_av(ExprPtr expr, OpConnectivity<int> connectivity = {},
                bool use_top = true);
+/// @overload
+inline ExprPtr vac_av(ExprPtr expr, OpConnections<int> connections,
+                      bool use_top = true) {
+  return vac_av(std::move(expr),
+                OpConnectivity<int>{.connect = std::move(connections)},
+                use_top);
+}
+///@}
 }  // namespace tensor
 }  // namespace op
 

@@ -20,8 +20,39 @@ namespace sequant {
 namespace mbpt {
 inline namespace op {
 
+namespace {
+
+/// @brief Lowers operator label pairs to normal-operator position pairs
+/// @param[in] oplbl2pos map from operator labels to their positions in the
+///            product
+/// @param[in] label_pairs the label pairs to lower
+/// @return lowered position pairs
+template <typename Container>
+std::vector<std::pair<int, int>> lower_label_pairs(
+    const container::map<std::wstring, std::vector<int>>& oplbl2pos,
+    const Container& label_pairs) {
+  std::vector<std::pair<int, int>> result;
+  for (const auto& [op1_lbl, op2_lbl] : label_pairs) {
+    auto it1 = oplbl2pos.find(op1_lbl);
+    auto it2 = oplbl2pos.find(op2_lbl);
+    if (it1 == oplbl2pos.end() || it2 == oplbl2pos.end())
+      continue;  // one of the op labels is not present in the product
+    const auto& [dummy1, op1_indices] = *it1;
+    const auto& [dummy2, op2_indices] = *it2;
+    for (const auto& op1_idx : op1_indices) {
+      for (const auto& op2_idx : op2_indices) {
+        if (op1_idx < op2_idx) {  // N.B. connections are directional
+          result.emplace_back(op1_idx, op2_idx);
+        }
+      }
+    }
+  }
+  return result;
+}
+}  // namespace
+
 ExprPtr expectation_value_impl(
-    ExprPtr expr, const OpConnections<std::wstring>& op_connections,
+    ExprPtr expr, const OpConnectivity<std::wstring>& op_connections,
     bool use_topology, bool screen, bool skip_clone, bool full_contractions) {
   // use cloned expr to avoid side effects
   if (!skip_clone) expr = expr->clone();
@@ -47,8 +78,9 @@ ExprPtr expectation_value_impl(
     auto product =
         ex<Product>(scalar, factors_filtered.begin(), factors_filtered.end());
 
-    // compute connections
+    // compute connections (both required and avoided)
     std::vector<std::pair<int, int>> connections;
+    std::vector<std::pair<int, int>> avoided_connections;
     {
       container::map<std::wstring, std::vector<int>>
           oplbl2pos;  // maps operator labels to the operator positions in the
@@ -79,21 +111,9 @@ ExprPtr expectation_value_impl(
         }
       }
 
-      for (const auto& [op1_lbl, op2_lbl] : op_connections) {
-        auto it1 = oplbl2pos.find(op1_lbl);
-        auto it2 = oplbl2pos.find(op2_lbl);
-        if (it1 == oplbl2pos.end() || it2 == oplbl2pos.end())
-          continue;  // one of the op labels is not present in the product
-        const auto& [dummy1, op1_indices] = *it1;
-        const auto& [dummy2, op2_indices] = *it2;
-        for (const auto& op1_idx : op1_indices) {
-          for (const auto& op2_idx : op2_indices) {
-            if (op1_idx < op2_idx) {  // N.B. connections are directional
-              connections.emplace_back(op1_idx, op2_idx);
-            }
-          }
-        }
-      }
+      // assemble connectivity info
+      connections = lower_label_pairs(oplbl2pos, op_connections.connect);
+      avoided_connections = lower_label_pairs(oplbl2pos, op_connections.avoid);
     }
 
     // lower to tensor form
@@ -102,8 +122,11 @@ ExprPtr expectation_value_impl(
 
     // compute expectation value
     // call the tensor-level impl function directly
-    auto vev = tensor::expectation_value_impl(product, connections,
-                                              use_topology, full_contractions);
+    auto vev = tensor::expectation_value_impl(
+        product,
+        OpConnectivity<int>{.connect = std::move(connections),
+                            .avoid = std::move(avoided_connections)},
+        use_topology, full_contractions);
     // restore Variable types to the Product
     if (!variables.empty())
       ranges::for_each(variables, [&vev](const auto& var) { vev *= var; });
@@ -144,7 +167,7 @@ ExprPtr expectation_value_impl(
       "type");
 }
 
-ExprPtr ref_av(ExprPtr expr, const OpConnections<std::wstring>& op_connections,
+ExprPtr ref_av(ExprPtr expr, const OpConnectivity<std::wstring>& op_connections,
                bool use_topology, bool screen, bool skip_clone) {
   auto isr = get_default_context().index_space_registry();
   const bool full_contractions =
@@ -154,7 +177,7 @@ ExprPtr ref_av(ExprPtr expr, const OpConnections<std::wstring>& op_connections,
                                 skip_clone, full_contractions);
 }
 
-ExprPtr vac_av(ExprPtr expr, const OpConnections<std::wstring>& op_connections,
+ExprPtr vac_av(ExprPtr expr, const OpConnectivity<std::wstring>& op_connections,
                bool use_topology, bool screen, bool skip_clone) {
   return expectation_value_impl(expr, op_connections, use_topology, screen,
                                 skip_clone,
