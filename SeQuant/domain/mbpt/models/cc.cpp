@@ -132,7 +132,7 @@ std::vector<ExprPtr> CC::λ() {
   auto hbar = this->hbar(commutator_rank -
                          1);  // -1 because of the connection with the projector
 
-  auto lhbar = simplify((1 + Λ(N)) * hbar);
+  auto lhbar = simplify((1 + Λ(N, skip_singles())) * hbar);
 
   const auto op_connect = concat(default_op_connections(),
                                  OpConnections<std::wstring>{{L"h", asymm},
@@ -202,8 +202,9 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
   // for two-body perturbation operator; unless specified otherwise
   const auto h1_truncate_default = rank == 1 ? 2 : 4;
   const auto h1_truncate_at = pertbar_comm_rank_.value_or(h1_truncate_default);
-  const auto h1_bar = mbpt::lst(Hʼ(rank, {.order = order, .nbatch = nbatch}),
-                                T(N), h1_truncate_at, {.unitary = unitary()});
+  const auto h1_bar =
+      mbpt::lst(Hʼ(rank, {.order = order, .nbatch = nbatch}),
+                T(N, skip_singles()), h1_truncate_at, {.unitary = unitary()});
 
   // construct [hbar, Tʼ(1)]
   const auto hbar_truncate_at = hbar_comm_rank_.value_or(
@@ -267,14 +268,14 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
   const auto h1_truncate_at = (rank == 1) ? pertbar_comm_rank_.value_or(2)
                                           : pertbar_comm_rank_.value_or(4);
   const auto h1_bar = mbpt::lst(Hʼ(rank, {.order = order, .nbatch = nbatch}),
-                                T(N), h1_truncate_at);
+                                T(N, skip_singles()), h1_truncate_at);
 
   // construct [hbar, T(1)]
   const auto hbar_pert =
       this->hbar(3) * Tʼ(N, {.order = order, .nbatch = nbatch});
 
   // [Eq. 35, WIREs Comput Mol Sci. 2019; 9:e1406]
-  const auto expr = simplify((1 + Λ(N)) * (h1_bar + hbar_pert) +
+  const auto expr = simplify((1 + Λ(N, skip_singles())) * (h1_bar + hbar_pert) +
                              Λʼ(N, {.order = order, .nbatch = nbatch}) * hbar);
 
   // connectivity:
