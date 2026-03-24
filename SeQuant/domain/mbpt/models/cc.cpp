@@ -124,10 +124,10 @@ std::vector<ExprPtr> CC::λ() {
   SEQUANT_ASSERT(!unitary() && "there is no need for CC::λ for unitary ansatz");
 
   // construct hbar
-  // default commutator rank for λ is 3
-  const auto commutator_rank = hbar_comm_rank_.value_or(3);
+  const auto commutator_rank = hbar_comm_rank_.value_or(4);
   SEQUANT_ASSERT(commutator_rank >= 1 && "CC::λ: hbar_comm_rank must be >= 1");
-  auto hbar = this->hbar(commutator_rank);
+  auto hbar = this->hbar(commutator_rank -
+                         1);  // -1 because of the connection with the projector
 
   auto lhbar = simplify((1 + Λ(N)) * hbar);
 
