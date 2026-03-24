@@ -51,12 +51,15 @@ bool CC::unitary() const {
   return ansatz_ == Ansatz::U || ansatz_ == Ansatz::oU;
 }
 
+bool CC::skip_singles() const {
+  return ansatz_ == Ansatz::oU || ansatz_ == Ansatz::oT;
+}
+
 bool CC::screen() const { return screen_; }
 
 bool CC::use_topology() const { return use_topology_; }
 
 ExprPtr CC::hbar(std::optional<size_t> truncation_rank) const {
-  const bool skip_singles = ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU;
   // if truncation_rank is not provided, use hbar_comm_rank if provided,
   // otherwise default to 4 (traditional CC)
   const auto def_truncation = hbar_comm_rank_ ? hbar_comm_rank_.value() : 4;
@@ -64,7 +67,7 @@ ExprPtr CC::hbar(std::optional<size_t> truncation_rank) const {
       truncation_rank ? truncation_rank.value() : def_truncation;
 
   auto hbar =
-      mbpt::lst(H(), T(N, skip_singles), truncation, {.unitary = unitary()});
+      mbpt::lst(H(), T(N, skip_singles()), truncation, {.unitary = unitary()});
   return hbar;
 }
 

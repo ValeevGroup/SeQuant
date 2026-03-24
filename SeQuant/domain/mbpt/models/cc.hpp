@@ -64,6 +64,9 @@ class CC {
   /// @return true if the ansatz is unitary
   [[nodiscard]] bool unitary() const;
 
+  /// @return true if singles are skipped (orbital optimized ansatz)
+  [[nodiscard]] bool skip_singles() const;
+
   /// @return whether screening is on or not
   [[nodiscard]] bool screen() const;
 
