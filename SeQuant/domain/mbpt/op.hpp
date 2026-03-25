@@ -539,10 +539,6 @@ struct EVOptions {
 
 inline namespace op {
 namespace tensor {
-ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
-                               OpConnections<int> avoid, bool use_top,
-                               bool full_contractions);
-
 /// @brief computes the reference expectation value of a tensor-level expression
 /// @param expr input expression
 /// @param opts defines the behavior, @see EVOptions

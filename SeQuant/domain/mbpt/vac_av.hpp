@@ -61,11 +61,11 @@ inline ExprPtr lower_to_tensor_form(const ExprPtr& expr_inp) {
   return expr;
 }
 
-ExprPtr expectation_value_impl(ExprPtr expr,
-                               const OpConnections<std::wstring>& connect,
-                               const OpConnections<std::wstring>& avoid,
-                               bool use_topology, bool screen, bool skip_clone,
-                               bool full_contractions);
+// ExprPtr expectation_value_impl(ExprPtr expr,
+//                                const OpConnections<std::wstring>& connect,
+//                                const OpConnections<std::wstring>& avoid,
+//                                bool use_topology, bool screen, bool
+//                                skip_clone, bool full_contractions);
 
 // clang-format off
 /// @brief computes the reference expectation value

@@ -51,6 +51,13 @@ std::vector<std::pair<int, int>> lower_label_pairs(
 }
 }  // namespace
 
+// fwd declare the tensor level impl function
+namespace tensor {
+ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
+                               OpConnections<int> avoid, bool use_top,
+                               bool full_contractions);
+}  // namespace tensor
+
 ExprPtr expectation_value_impl(ExprPtr expr,
                                const OpConnections<std::wstring>& connect,
                                const OpConnections<std::wstring>& avoid,
@@ -162,7 +169,7 @@ ExprPtr expectation_value_impl(ExprPtr expr,
     return expr;  // vacuum is normalized
   }
   throw Exception(
-      "mbpt::op::detail::expectation_value_impl(expr): unknown expression "
+      "mbpt::op::expectation_value_impl(expr): unknown expression "
       "type");
 }
 
