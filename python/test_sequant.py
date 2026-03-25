@@ -30,8 +30,10 @@ class TestSequant(unittest.TestCase):
     self.assertTrue((p+s).latex)
 
   def test_ccsd(self):
-    from _sequant.mbpt import A,H,T,t,VacuumAverage
-    ccd = VacuumAverage( A(-2) * H() * t(2) * t(2), [("h", "t")] );  # explicit list of operator connections ..
+    from _sequant.mbpt import A,H,T,t,VacuumAverage,EVOptions
+    opts = EVOptions()
+    opts.connect = [("h", "t")]
+    ccd = VacuumAverage( A(-2) * H() * t(2) * t(2), opts );  # explicit operator connections via EVOptions ..
     ccsd = VacuumAverage( A(-2) * H() * T(2) * T(2));                  # .. is not needed since H and T are connected by default
     print (ccsd.latex)
 

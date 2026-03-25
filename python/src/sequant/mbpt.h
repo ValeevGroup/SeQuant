@@ -28,7 +28,7 @@ ExprPtr VacuumAverage(const ExprPtr& e) { return sequant::mbpt::op::vac_av(e); }
 
 ExprPtr VacuumAverage(const ExprPtr& e, const PyEVOptions& opts) {
   // helper for converting connections lists
-  auto convert = [](const PyEVOptions::container_type& pairs) {
+  auto convert = [](const sequant::mbpt::OpConnections<std::string>& pairs) {
     sequant::mbpt::OpConnections<std::wstring> result;
     result.reserve(pairs.size());
     for (const auto& [a, b] : pairs) {
