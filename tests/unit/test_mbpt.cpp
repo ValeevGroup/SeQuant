@@ -1288,17 +1288,45 @@ SECTION("manuscript-examples") {
 }  // SECTION("manuscript-examples")
 
 SECTION("avoided-connections") {
-  using namespace sequant::mbpt::op;
+  using namespace sequant::mbpt;
   using sequant::reserved::antisymm_label;
 
-  // operator-level: <P| H t t |P> with projectors on both sides
-  // avoiding projector-projector contraction
-  {
-    auto expr = P(1) * H() * T(2) * P(-1);
-    auto result = ref_av(expr);
-    auto result_avoid =
-        ref_av(expr, {.connect = default_op_connections(),
-                      .avoid = {{antisymm_label(), antisymm_label()}}});
-  }
+  // h(1) * t(1): two operators, avoid the only possible contraction
+  auto expr1 = tensor::h(1) * tensor::t(1);
+  auto res1 = tensor::vac_av(expr1, {.avoid = {{0, 1}}});
+  REQUIRE(res1 == sequant::ex<sequant::Constant>(0));  // result should be zero
+
+  // P(1) * H() * T(2): avoid connections between projector and Hamiltonian
+  auto expr2 = tensor::P(1) * tensor::H() * tensor::T(2);
+  auto res2_full = tensor::vac_av(expr2, {.connect = {{1, 2}}});
+  auto res2 = tensor::vac_av(expr2, {.connect = {{1, 2}}, .avoid = {{0, 1}}});
+  REQUIRE(res2_full.size() == 6);
+  // only one term with no A-{f,g} connection
+  REQUIRE(res2.is<sequant::Product>());
+  const std::wstring expected2 =
+      L"-1 Â{i_1;a_1}:A-C-S t{a_1,a_2;i_2,i_1}:A-C-S f{i_2;a_2}:A-C-S";
+  REQUIRE_THAT(sequant::simplify(res2), EquivalentTo(expected2));
+
+  // same test as above but from Operator level and labels for connectivity
+  using namespace sequant::mbpt::op;
+  auto expr3 = op::P(1) * op::H(2) * op::T(2);
+  auto res3 = op::vac_av(
+      expr3, {.connect = {{L"f", L"t"}, {L"g", L"t"}},
+              .avoid = {{antisymm_label(), L"f"}, {antisymm_label(), L"g"}}});
+  REQUIRE_THAT(sequant::simplify(res3), EquivalentTo(expected2));
+
+  // projectors are never connected
+  auto expr4 = op::P(1) * op::H() * op::t(2) * op::P(-1);
+  auto res4_full = op::vac_av(expr4);
+  auto res4 =
+      op::vac_av(expr4, {.connect = op::default_op_connections(),
+                         .avoid = {{antisymm_label(), antisymm_label()}}});
+  REQUIRE(res4_full.size() == 4);
+  REQUIRE(res4.is<sequant::Product>());  // only single term survives
+  std::wcout << sequant::serialize(simplify(res4)) << std::endl;
+  const std::wstring expected4 =
+      L"Â{i_1;a_2}:A-C-S Â{a_1;i_2}:A-C-S g{i_3,i_2;a_3,a_1}:A-C-S "
+      L"t{a_3,a_2;i3,i_1}:A-C-S";
+  REQUIRE_THAT(simplify(res4), EquivalentTo(expected4));
 }
 }
