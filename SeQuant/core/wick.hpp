@@ -210,6 +210,8 @@ class WickTheorem {
           "WickTheorem::set_nop_connections(arg): arg contains duplicates");
     }
 
+    // process now if input is resolved, or is a deferred call from
+    // compute_nopseq (already cached list)
     if (expr_input_ == nullptr || !nop_connections_input_.empty()) {
       for (const auto &opidx_pair : op_index_pairs) {
         constexpr bool signed_indices =
@@ -287,6 +289,8 @@ class WickTheorem {
           "duplicates");
     }
 
+    // process now if input is resolved, or is a deferred call from
+    // compute_nopseq (already cached list)
     if (expr_input_ == nullptr || !nop_avoided_connections_input_.empty()) {
       for (const auto &opidx_pair : op_index_pairs) {
         constexpr bool signed_indices =

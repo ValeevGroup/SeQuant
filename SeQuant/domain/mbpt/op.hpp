@@ -542,12 +542,16 @@ namespace tensor {
 /// @brief computes the reference expectation value of a tensor-level expression
 /// @param expr input expression
 /// @param opts defines the behavior, @see EVOptions
+/// @note The default `EVOptions<int>{}` has empty connections, unlike the
+///       operator-level overload which defaults to `default_op_connections()`.
 ExprPtr ref_av(ExprPtr expr, EVOptions<int> opts = {});
 
 /// @brief computes the vacuum expectation value of a tensor-level expression,
 /// forces full contractions in WickTheorem
 /// @param expr input expression
 /// @param opts defines the behavior, @see EVOptions
+/// @note The default `EVOptions<int>{}` has empty connections, unlike the
+///       operator-level overload which defaults to `default_op_connections()`.
 ExprPtr vac_av(ExprPtr expr, EVOptions<int> opts = {});
 }  // namespace tensor
 }  // namespace op
