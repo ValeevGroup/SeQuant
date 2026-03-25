@@ -77,7 +77,7 @@ inline void __init__(py::module m) {
         py::arg("expr"));
   m.def("VacuumAverage",
         py::overload_cast<const ExprPtr&, const PyEVOptions&>(&VacuumAverage),
-        py::arg("expr"), py::arg("EVOptions"));
+        py::arg("expr"), py::arg("options"));
 }
 
 }  // namespace sequant::python::mbpt
