@@ -878,7 +878,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
         // H**T12**T12 -> R2
         SECTION("wick(H**T12**T12 -> R2)"){
             auto result = t::vac_av(t::A(nₚ(-2)) * t::H(2) * t::T(2) * t::T(2),
-                                    {{1, 2}, {1, 3}});
+                                    {.connect = {{1, 2}, {1, 3}}});
 
     //      std::wcout << "H*T12*T12 -> R2 = " << to_latex_align(result, 20)
     //                 << std::endl;
@@ -895,8 +895,8 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
   // H2**T3**T3 -> R4
   SECTION("wick(H2**T3**T3 -> R4)") {
-    auto result =
-        t::vac_av(t::A(nₚ(-4)) * t::h(2) * t::t(3) * t::t(3), {{1, 2}, {1, 3}});
+    auto result = t::vac_av(t::A(nₚ(-4)) * t::h(2) * t::t(3) * t::t(3),
+                            {.connect = {{1, 2}, {1, 3}}});
 
     // std::wcout << "H2**T3**T3 -> R4 = " << to_latex_align(result, 20)
     //            << std::endl;
@@ -910,7 +910,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
     ExprPtr ref_result;
     SECTION("wick(H2**T2**T2**T3 -> R5)") {
       ref_result = t::vac_av(t::A(-5) * t::h(2) * t::t(2) * t::t(2) * t::t(3),
-                             {{1, 2}, {1, 3}, {1, 4}});
+                             {.connect = {{1, 2}, {1, 3}, {1, 4}}});
       REQUIRE(ref_result->size() == 7);
     }
   }
@@ -946,8 +946,8 @@ SECTION("SRSO-PNO") {
 
   // H2**T2**T2 -> R2
   SECTION("wick(H2**T2**T2 -> R2)") {
-    auto result =
-        t::vac_av(t::A(nₚ(-2)) * t::h(2) * t::t(2) * t::t(2), {{1, 2}, {1, 3}});
+    auto result = t::vac_av(t::A(nₚ(-2)) * t::h(2) * t::t(2) * t::t(2),
+                            {.connect = {{1, 2}, {1, 3}}});
 
     REQUIRE(result->size() == 4);
   }
@@ -972,7 +972,8 @@ SECTION("SRSF") {
 
   // H2**T2 -> R2
   SECTION("wick(H2**T2 -> R2)") {
-    auto result = t::vac_av(t::S(-2) * t::h(2) * t::t(2), {{1, 2}});
+    auto result =
+        t::vac_av(t::S(-2) * t::h(2) * t::t(2), {.connect = {{1, 2}}});
 
     {
       // std::wcout << "H2**T2 -> R2 = " << to_latex_align(result, 0, 1)
@@ -999,10 +1000,10 @@ SECTION("MRSO") {
 
   SECTION("wick(H2**T2 -> 0)") {
     {
-      auto result = t::ref_av(t::h(2) * t::t(2), {{0, 1}});
+      auto result = t::ref_av(t::h(2) * t::t(2), {.connect = {{0, 1}}});
 
-      auto result_wo_top = t::ref_av(t::h(2) * t::t(2), {{0, 1}},
-                                     /* use_topology = */ false);
+      auto result_wo_top = t::ref_av(
+          t::h(2) * t::t(2), {.connect = {{0, 1}}, .use_topology = false});
       REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
     }
 
@@ -1012,18 +1013,18 @@ SECTION("MRSO") {
       ctx.set(mbpt::make_mr_spaces());
       ctx.set(Vacuum::Physical);
       auto ctx_resetter = set_scoped_default_context(ctx);
-      auto result_phys = t::ref_av(t::h(2) * t::t(2), {{0, 1}});
+      auto result_phys = t::ref_av(t::h(2) * t::t(2), {.connect = {{0, 1}}});
     }
   }
 
   // H2 ** T2 ** T2 -> 0
   SECTION("wick(H2**T2**T2 -> 0)") {
     // first without use of topology
-    auto result = t::ref_av(t::h(2) * t::t(2) * t::t(2), {{0, 1}},
-                            /* use_topology = */ false);
+    auto result = t::ref_av(t::h(2) * t::t(2) * t::t(2),
+                            {.connect = {{0, 1}}, .use_topology = false});
     // now with topology use
-    auto result_top = t::ref_av(t::h(2) * t::t(2) * t ::t(2), {{0, 1}},
-                                /* use_topology = */ true);
+    auto result_top = t::ref_av(t::h(2) * t::t(2) * t ::t(2),
+                                {.connect = {{0, 1}}, .use_topology = true});
 
     REQUIRE(simplify(result - result_top) == ex<Constant>(0));
   }
@@ -1031,7 +1032,7 @@ SECTION("MRSO") {
 #if 0
     // H**T12 -> R2
     SECTION("wick(H**T2 -> R2)") {
-      auto result = t::ref_av(t::A(-2) * t::H() * t::t(2), {{1, 2}});
+      auto result = t::ref_av(t::A(-2) * t::H() * t::t(2), {.connect = {{1, 2}}});
 
       {
         std::wcout << "H*T2 -> R2 = " << to_latex_align(result, 0, 1)
@@ -1049,12 +1050,12 @@ SECTION("MRSF") {
   auto ctx_resetter = set_scoped_default_context(ctx);
 
   SECTION("wick(H2**T2 -> 0)") {
-    auto result = t::ref_av(t::h(2) * t::t(2), {{0, 1}});
+    auto result = t::ref_av(t::h(2) * t::t(2), {.connect = {{0, 1}}});
 
     {
       // make sure get same result without use of topology
-      auto result_wo_top = t::ref_av(t::h(2) * t::t(2), {{0, 1}},
-                                     /* use_topology = */ false);
+      auto result_wo_top = t::ref_av(
+          t::h(2) * t::t(2), {.connect = {{0, 1}}, .use_topology = false});
 
       REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
     }
@@ -1167,8 +1168,8 @@ SECTION("manuscript-examples") {
                                            {L"f", antisymm_label()},
                                            {L"g", antisymm_label()}});
 
-    auto t = ref_av(P(2) * H̅(), t_connect);
-    auto λ = ref_av((1 + Λ(2)) * H̅() * P(-2), l_connect);
+    auto t = ref_av(P(2) * H̅(), {.connect = t_connect});
+    auto λ = ref_av((1 + Λ(2)) * H̅() * P(-2), {.connect = l_connect});
 
     // numer of terms are verified against srcc results
     REQUIRE(t.size() == 31);
@@ -1180,7 +1181,7 @@ SECTION("manuscript-examples") {
 
     auto θ̅ = lst(θ(1), T(N), 2);
     auto expr = (1 + Λ(N)) * θ̅ * Tʼ(N) + Λʼ(N) * θ̅;
-    auto result = ref_av(expr, OpConnections<>{{L"θ", L"t"}, {L"θ", L"t¹"}});
+    auto result = ref_av(expr, {.connect = {{L"θ", L"t"}, {L"θ", L"t¹"}}});
     // number of terms is verified against MPQC4 implementation
     REQUIRE(result.size() == 21);
   }
@@ -1197,14 +1198,18 @@ SECTION("manuscript-examples") {
                                            {L"g", antisymm_label()}});
 
     // EE
-    auto r_EE = ref_av(P(2) * H̅() * R(2), r_connect);
-    auto l_EE = ref_av(L(2) * H̅() * P(-2), l_connect);
+    auto r_EE = ref_av(P(2) * H̅() * R(2), {.connect = r_connect});
+    auto l_EE = ref_av(L(2) * H̅() * P(-2), {.connect = l_connect});
     // EA
-    auto r_EA = ref_av(P(nₚ(2), nₕ(1)) * H̅() * R(nₚ(2), nₕ(1)), r_connect);
-    auto l_EA = ref_av(L(nₚ(2), nₕ(1)) * H̅() * P(nₚ(-2), nₕ(-1)), l_connect);
+    auto r_EA =
+        ref_av(P(nₚ(2), nₕ(1)) * H̅() * R(nₚ(2), nₕ(1)), {.connect = r_connect});
+    auto l_EA = ref_av(L(nₚ(2), nₕ(1)) * H̅() * P(nₚ(-2), nₕ(-1)),
+                       {.connect = l_connect});
     // IP
-    auto r_IP = ref_av(P(nₚ(1), nₕ(2)) * H̅() * R(nₚ(1), nₕ(2)), r_connect);
-    auto l_IP = ref_av(L(nₚ(1), nₕ(2)) * H̅() * P(nₚ(-1), nₕ(-2)), l_connect);
+    auto r_IP =
+        ref_av(P(nₚ(1), nₕ(2)) * H̅() * R(nₚ(1), nₕ(2)), {.connect = r_connect});
+    auto l_IP = ref_av(L(nₚ(1), nₕ(2)) * H̅() * P(nₚ(-1), nₕ(-2)),
+                       {.connect = l_connect});
 
     // number of terms are verified against eomcc results
     REQUIRE(r_EE.size() == 53);
@@ -1234,11 +1239,12 @@ SECTION("manuscript-examples") {
                                            {L"h¹", antisymm_label()}});
 
     // perturbed t amplitudes (Eq 18 in SQ Manuscript #2)
-    auto t = ref_av(P(2) * (H̅(1) + H̅() * Tʼ(2) - "ω" * tʼ(2)), t_connect);
+    auto t = ref_av(P(2) * (H̅(1) + H̅() * Tʼ(2) - "ω" * tʼ(2)),
+                    {.connect = t_connect});
     // perturbed λ amplitudes (Eq 19 in SQ Manuscript #2)
     auto λ = ref_av(
         ((1 + Λ(2)) * (H̅(1) + H̅() * Tʼ(2)) + Λʼ(2) * H̅() + "ω" * λʼ(2)) * P(-2),
-        l_connect);
+        {.connect = l_connect});
 
     // number of terms are verified against MPQC4 implementation
     REQUIRE(t.size() == 58);
