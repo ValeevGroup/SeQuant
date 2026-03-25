@@ -19,13 +19,13 @@ inline OpConnections<std::wstring> default_op_connections() {
       {L"g", L"t"},
       // NBs
       // - for unitary ansatz can also connect t^+ with Hamiltonian
-      // - for exact (non-approximated) unitary ansatz will also
-      // need to connect t^+ with t; for MR unitary ansatz can also
-      // connect t with t and t^+ with t^+, but since adjoint() does
-      // not change OpType all of these are expressed as same
-      // connection ... this points out the need to have a separate
-      // OpType for t^+ and t, and in general the contents of OpType
-      // must be customizable
+      // - for exact (non-approximated) unitary ansatz will also need to connect
+      // t^+ with t;
+      //   for MR unitary ansatz can also connect t with t and t^+ with t^+ ,
+      //   but since adjoint() does not change OpType all of these are expressed
+      //   as same connection ... this points out the need to have a separate
+      //   OpType for t^+ and t, and in general the contents of OpType must be
+      //   customizable
       {L"t", L"h"},
       {L"t", L"f"},
       {L"t", L"f̃"},
@@ -59,12 +59,6 @@ inline ExprPtr lower_to_tensor_form(const ExprPtr& expr_inp) {
   lower_to_tensor_form(expr);
   return expr;
 }
-
-// ExprPtr expectation_value_impl(ExprPtr expr,
-//                                const OpConnections<std::wstring>& connect,
-//                                const OpConnections<std::wstring>& avoid,
-//                                bool use_topology, bool screen, bool
-//                                skip_clone, bool full_contractions);
 
 // clang-format off
 /// @brief computes the reference expectation value
