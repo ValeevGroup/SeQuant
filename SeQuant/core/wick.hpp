@@ -259,8 +259,9 @@ class WickTheorem {
 
   /// @name avoided-connectivity specifiers
   ///
-  /// Ensures that the given pairs of normal operators are never directly
-  /// contracted; by default will not constrain any connectivity
+  /// Ensures that no contraction is ever made between the given pairs of
+  /// normal operators; every individual contraction attempt between an
+  /// avoided pair is rejected.
   /// @param op_index_pairs the list of pairs of op indices that must not be
   /// directly contracted
   /// @throw Exception if @p op_index_pairs contains duplicates
@@ -935,7 +936,8 @@ class WickTheorem {
 
     /// If the target connectivity will be violated by this contraction, keep
     /// the state unchanged and return false.
-    /// Also rejects contractions between avoided operator pairs.
+    /// Also rejects contractions between operator pairs specified via
+    /// set_nop_avoided_connections().
     template <typename Cursor>
     inline bool connect(const container::svector<std::bitset<max_input_size>>
                             &target_nop_connections,
