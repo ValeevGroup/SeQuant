@@ -537,49 +537,22 @@ struct EVOptions {
   bool skip_clone = false;
 };
 
-/// convenience alias for operator connectivity constraints
-template <typename T = std::wstring>
-using OpConnections = typename OpConnectivity<T>::container_type;
-
 inline namespace op {
 namespace tensor {
-ExprPtr expectation_value_impl(ExprPtr expr, OpConnectivity<int> connectivity,
-                               bool use_top, bool full_contractions);
+ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
+                               OpConnections<int> avoid, bool use_top,
+                               bool full_contractions);
 
-/// @name ref_av
 /// @brief computes the reference expectation value of a tensor-level expression
 /// @param expr input expression
-/// @param connectivity operator connectivity constraints
-/// @param use_top if true, WickTheorem uses topological equivalence of terms
-///@{
-ExprPtr ref_av(ExprPtr expr, OpConnectivity<int> connectivity = {},
-               bool use_top = true);
-/// @overload
-inline ExprPtr ref_av(ExprPtr expr, OpConnections<int> connections,
-                      bool use_top = true) {
-  return ref_av(std::move(expr),
-                OpConnectivity<int>{.connect = std::move(connections)},
-                use_top);
-}
-///@}
+/// @param opts defines the behavior, @see EVOptions
+ExprPtr ref_av(ExprPtr expr, EVOptions<int> opts = {});
 
-/// @name vac_av
 /// @brief computes the vacuum expectation value of a tensor-level expression,
 /// forces full contractions in WickTheorem
 /// @param expr input expression
-/// @param connectivity operator connectivity constraints
-/// @param use_top if true, WickTheorem uses topological equivalence of terms
-///@{
-ExprPtr vac_av(ExprPtr expr, OpConnectivity<int> connectivity = {},
-               bool use_top = true);
-/// @overload
-inline ExprPtr vac_av(ExprPtr expr, OpConnections<int> connections,
-                      bool use_top = true) {
-  return vac_av(std::move(expr),
-                OpConnectivity<int>{.connect = std::move(connections)},
-                use_top);
-}
-///@}
+/// @param opts defines the behavior, @see EVOptions
+ExprPtr vac_av(ExprPtr expr, EVOptions<int> opts = {});
 }  // namespace tensor
 }  // namespace op
 

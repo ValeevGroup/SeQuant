@@ -51,13 +51,15 @@ std::vector<std::pair<int, int>> lower_label_pairs(
 }
 }  // namespace
 
-ExprPtr expectation_value_impl(
-    ExprPtr expr, const OpConnectivity<std::wstring>& op_connections,
-    bool use_topology, bool screen, bool skip_clone, bool full_contractions) {
+ExprPtr expectation_value_impl(ExprPtr expr,
+                               const OpConnections<std::wstring>& connect,
+                               const OpConnections<std::wstring>& avoid,
+                               bool use_topology, bool screen, bool skip_clone,
+                               bool full_contractions) {
   // use cloned expr to avoid side effects
   if (!skip_clone) expr = expr->clone();
 
-  auto vac_av_product = [&op_connections, use_topology, screen,
+  auto vac_av_product = [&connect, &avoid, use_topology, screen,
                          full_contractions](ExprPtr expr) {
     SEQUANT_ASSERT(expr.is<Product>());
     // extract scalar and factors
@@ -79,8 +81,8 @@ ExprPtr expectation_value_impl(
         ex<Product>(scalar, factors_filtered.begin(), factors_filtered.end());
 
     // compute connections (both required and avoided)
-    std::vector<std::pair<int, int>> connections;
-    std::vector<std::pair<int, int>> avoided_connections;
+    OpConnections<int> t_connect;
+    OpConnections<int> t_avoid;
     {
       container::map<std::wstring, std::vector<int>>
           oplbl2pos;  // maps operator labels to the operator positions in the
@@ -111,9 +113,9 @@ ExprPtr expectation_value_impl(
         }
       }
 
-      // assemble connectivity info
-      connections = lower_label_pairs(oplbl2pos, op_connections.connect);
-      avoided_connections = lower_label_pairs(oplbl2pos, op_connections.avoid);
+      // assemble connectivity info for tensor level call
+      t_connect = lower_label_pairs(oplbl2pos, connect);
+      t_avoid = lower_label_pairs(oplbl2pos, avoid);
     }
 
     // lower to tensor form
@@ -122,11 +124,8 @@ ExprPtr expectation_value_impl(
 
     // compute expectation value
     // call the tensor-level impl function directly
-    auto vev = tensor::expectation_value_impl(
-        product,
-        OpConnectivity<int>{.connect = std::move(connections),
-                            .avoid = std::move(avoided_connections)},
-        use_topology, full_contractions);
+    auto vev = tensor::expectation_value_impl(product, t_connect, t_avoid,
+                                              use_topology, full_contractions);
     // restore Variable types to the Product
     if (!variables.empty())
       ranges::for_each(variables, [&vev](const auto& var) { vev *= var; });
@@ -142,16 +141,16 @@ ExprPtr expectation_value_impl(
         })) {
       expr = expand(expr);
       simplify(expr);  // condense equivalent terms after expansion
-      return expectation_value_impl(expr, op_connections, use_topology, screen,
+      return expectation_value_impl(expr, connect, avoid, use_topology, screen,
                                     /* skip_clone = */ true, full_contractions);
     } else
       return vac_av_product(expr);
   } else if (expr.is<Sum>()) {
     result = sequant::transform_sum_expr(
-        *expr, [&op_connections, use_topology, screen,
+        *expr, [&connect, &avoid, use_topology, screen,
                 full_contractions](const auto& op_product) {
           return expectation_value_impl(
-              op_product, op_connections, use_topology, screen,
+              op_product, connect, avoid, use_topology, screen,
               /* skip_clone = */ true, full_contractions);
         });
     simplify(result);  // combine possible equivalent summands
@@ -167,20 +166,18 @@ ExprPtr expectation_value_impl(
       "type");
 }
 
-ExprPtr ref_av(ExprPtr expr, const OpConnectivity<std::wstring>& op_connections,
-               bool use_topology, bool screen, bool skip_clone) {
+ExprPtr ref_av(ExprPtr expr, EVOptions<std::wstring> opts) {
   auto isr = get_default_context().index_space_registry();
   const bool full_contractions =
-      (isr->reference_occupied_space() == isr->vacuum_occupied_space()) ? true
-                                                                        : false;
-  return expectation_value_impl(expr, op_connections, use_topology, screen,
-                                skip_clone, full_contractions);
+      isr->reference_occupied_space() == isr->vacuum_occupied_space();
+  return expectation_value_impl(expr, opts.connect, opts.avoid,
+                                opts.use_topology, opts.screen, opts.skip_clone,
+                                full_contractions);
 }
 
-ExprPtr vac_av(ExprPtr expr, const OpConnectivity<std::wstring>& op_connections,
-               bool use_topology, bool screen, bool skip_clone) {
-  return expectation_value_impl(expr, op_connections, use_topology, screen,
-                                skip_clone,
+ExprPtr vac_av(ExprPtr expr, EVOptions<std::wstring> opts) {
+  return expectation_value_impl(expr, opts.connect, opts.avoid,
+                                opts.use_topology, opts.screen, opts.skip_clone,
                                 /* full_contractions */ true);
 }
 

@@ -40,14 +40,6 @@ inline OpConnections<std::wstring> concat(
   return ranges::concat_view(a, b) | ranges::to_vector;
 }
 
-/// concat 2 sets of op connectivity constraints
-inline OpConnectivity<std::wstring> concat(
-    const OpConnectivity<std::wstring>& a,
-    const OpConnectivity<std::wstring>& b) {
-  return {.connect = concat(a.connect, b.connect),
-          .avoid = concat(a.avoid, b.avoid)};
-}
-
 /// @brief lowers an expression composed of Operators to tensor form
 /// @param[in] expr input expression
 /// @return expression with all Operators lowered to tensor form
@@ -69,66 +61,31 @@ inline ExprPtr lower_to_tensor_form(const ExprPtr& expr_inp) {
   return expr;
 }
 
-ExprPtr expectation_value_impl(
-    ExprPtr expr, const OpConnectivity<std::wstring>& op_connections,
-    bool use_topology, bool screen, bool skip_clone, bool full_contractions);
+ExprPtr expectation_value_impl(ExprPtr expr,
+                               const OpConnections<std::wstring>& connect,
+                               const OpConnections<std::wstring>& avoid,
+                               bool use_topology, bool screen, bool skip_clone,
+                               bool full_contractions);
 
 // clang-format off
-/// @name ref_av
 /// @brief computes the reference expectation value
 /// @note equivalent to vac_av if the reference state is the Wick vacuum,
 ///       i.e. if `get_default_context().index_space_registry()->reference_occupied_space() == get_default_context().index_space_registry()->vacuum_occupied_space()`
 /// @param[in] expr input expression
-/// @param[in] op_connections operator connectivity constraints; `connect`
-/// pairs are defined left-to-right, i.e., pair `{opL,opR}` declares that
-/// `opL` and `opR` are to be connected when `opR` precedes `opL`;
-/// `avoid` pairs specify operators that must never be directly contracted
-/// @param[in] use_topology if true, WickTheorem uses topological equivalence of
-/// terms, default is true
-/// @param[in] screen if true, expressions are screened before lowering to
-/// Tensor level and calling WickTheorem, default is true
-/// @param[in] skip_clone if true, will not clone the input expression
-/// @return the reference expectation value
-// clang_format on
-///@{
-ExprPtr ref_av(ExprPtr expr, const OpConnectivity<std::wstring>& op_connections = {.connect = default_op_connections()},
-               bool use_topology = true, bool screen = true,
-               bool skip_clone = false);
-/// @overload
-inline ExprPtr ref_av(ExprPtr expr, const OpConnections<std::wstring>& op_connections,
-                      bool use_topology = true, bool screen = true,
-                      bool skip_clone = false) {
-  return ref_av(std::move(expr), OpConnectivity<std::wstring>{.connect = op_connections},
-                use_topology, screen, skip_clone);
-}
-///@}
+/// @param[in] opts controls the behavior, @see EVOptions
+/// @note Uses `op::default_op_connections()` as default connectivity
+// clang-format on
+ExprPtr ref_av(ExprPtr expr, EVOptions<std::wstring> opts = {
+                                 .connect = default_op_connections()});
 
-/// @name vac_av
 /// @brief computes the vacuum expectation value
 /// @internal evaluates only full contractions in  WickTheorem
 /// @param[in] expr input expression
-/// @param[in] op_connections operator connectivity constraints; `connect`
-/// pairs are defined left-to-right, i.e., pair `{opL,opR}` declares that
-/// `opL` and `opR` are to be connected when `opR` precedes `opL`;
-/// `avoid` pairs specify operators that must never be directly contracted
-/// @param[in] use_topology if true, WickTheorem uses topological equivalence of
-/// terms, default is true
-/// @param[in] screen if true, expressions are screened before lowering to
-/// Tensor level and calling WickTheorem, default is true
-/// @param[in] skip_clone if true, will not clone the input expression
+/// @param[in] opts controls the behavior, @see EVOptions
+/// @note Uses `op::default_op_connections()` as default connectivity
 /// @return the VEV
-///@{
-ExprPtr vac_av(ExprPtr expr, const OpConnectivity<std::wstring>& op_connections = {.connect = default_op_connections()},
-               bool use_topology = true, bool screen = true,
-               bool skip_clone = false);
-/// @overload
-inline ExprPtr vac_av(ExprPtr expr, const OpConnections<std::wstring>& op_connections,
-                      bool use_topology = true, bool screen = true,
-                      bool skip_clone = false) {
-  return vac_av(std::move(expr), OpConnectivity<std::wstring>{.connect = op_connections},
-                use_topology, screen, skip_clone);
-}
-///@}
+ExprPtr vac_av(ExprPtr expr, EVOptions<std::wstring> opts = {
+                                 .connect = default_op_connections()});
 
 }  // namespace op
 }  // namespace sequant::mbpt
