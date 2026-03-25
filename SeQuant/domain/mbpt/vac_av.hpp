@@ -34,9 +34,8 @@ inline OpConnections<std::wstring> default_op_connections() {
 }
 
 /// concat 2 sets of op connections
-inline OpConnections<std::wstring> concat(
-    const OpConnections<std::wstring>& a,
-    const OpConnections<std::wstring>& b) {
+template <typename T>
+OpConnections<T> concat(const OpConnections<T>& a, const OpConnections<T>& b) {
   return ranges::concat_view(a, b) | ranges::to_vector;
 }
 
