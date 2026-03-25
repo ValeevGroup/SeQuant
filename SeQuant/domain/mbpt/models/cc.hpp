@@ -141,13 +141,16 @@ class CC {
   /// @brief computes reference expectation value of an expression. Dispatches
   /// to `mbpt::op::ref_av()`
   /// @param[in] expr input expression
-  /// @param[in] connections list of operator label pairs to connect.
+  /// @param[in] connect list of operator label pairs to connect.
+  /// @param[in] do_not_connect list of operator label pairs to never connect.
   /// @note Uses use_topology() and screen() from the CC instance to set other
   /// EVOptions
-  auto ref_av(const ExprPtr& expr,
-              const OpConnections<std::wstring>& connections =
-                  default_op_connections()) const {
-    return op::ref_av(expr, {.connect = connections,
+  auto ref_av(
+      const ExprPtr& expr,
+      const OpConnections<std::wstring>& connect = default_op_connections(),
+      const OpConnections<std::wstring>& do_not_connect = {}) const {
+    return op::ref_av(expr, {.connect = connect,
+                             .do_not_connect = do_not_connect,
                              .screen = this->screen(),
                              .use_topology = this->use_topology()});
   }
