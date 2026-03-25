@@ -511,23 +511,30 @@ qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
                                IndexSpace particle_space, IndexSpace hole_space,
                                IndexSpace::QuantumNumbers SQN = Spin::any);
 
-/// @brief Specifies operator connectivity constraints for expectation values.
-///
-/// Contains two lists of operator label pairs:
-/// - `connect`: pairs of operators that must be connected (at least one
-///   contraction between them)
-/// - `avoid`: pairs of operators that must never be directly contracted
-///
-/// Connections are directional (left-to-right): pair `{opL, opR}` declares
-/// that `opL` and `opR` are to be connected when `opR` precedes `opL`,
-/// i.e. `opL` is to the left of `opR`.
-template <typename T = std::wstring>
-struct OpConnectivity {
-  using pair_type = std::pair<T, T>;
-  using container_type = std::vector<pair_type>;
+/// type of operator connectivity constraints
+template <typename T>
+using OpConnections = std::vector<std::pair<T, T>>;
 
-  container_type connect = {};
-  container_type avoid = {};
+/// Defines the behavior of expectation value methods
+/// The struct is used by both tensor and operator level methods, but there are
+/// parameters in here which are only meaningful at the operator level.
+template <typename T>
+struct EVOptions {
+  /// List of pairs of operator labels to be connected; connections are defined
+  /// left-to-right, i.e., pair `{opL,opR}` declares that `opL` and `opR` are to
+  /// be connected when `opR` precedes `opL`, i.e. `opL` is to the left of `opR`
+  OpConnections<T> connect = {};
+  /// List of pairs of operator labels that should not be connected, defined
+  /// left-to-right.
+  OpConnections<T> avoid = {};
+  /// If true, expressions are screened before lowering to Tensor level and
+  /// calling WickTheorem. Only valid in Operator level calls
+  bool screen = true;
+  /// If true, WickTheorem uses topological equivalence of terms
+  bool use_topology = true;
+  /// If true, will not clone the input expression. Only valid in Operator level
+  /// calls
+  bool skip_clone = false;
 };
 
 /// convenience alias for operator connectivity constraints
