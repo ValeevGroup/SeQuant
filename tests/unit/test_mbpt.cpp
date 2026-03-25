@@ -1323,7 +1323,6 @@ SECTION("avoided-connections") {
                          .avoid = {{antisymm_label(), antisymm_label()}}});
   REQUIRE(res4_full.size() == 4);
   REQUIRE(res4.is<sequant::Product>());  // only single term survives
-  std::wcout << sequant::serialize(simplify(res4)) << std::endl;
   const std::wstring expected4 =
       L"Â{i_1;a_2}:A-C-S Â{a_1;i_2}:A-C-S g{i_3,i_2;a_3,a_1}:A-C-S "
       L"t{a_3,a_2;i3,i_1}:A-C-S";
