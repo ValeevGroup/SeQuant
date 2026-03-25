@@ -1293,13 +1293,14 @@ SECTION("avoided-connections") {
 
   // h(1) * t(1): two operators, avoid the only possible contraction
   auto expr1 = tensor::h(1) * tensor::t(1);
-  auto res1 = tensor::vac_av(expr1, {.avoid = {{0, 1}}});
+  auto res1 = tensor::vac_av(expr1, {.do_not_connect = {{0, 1}}});
   REQUIRE(res1 == sequant::ex<sequant::Constant>(0));  // result should be zero
 
   // P(1) * H() * T(2): avoid connections between projector and Hamiltonian
   auto expr2 = tensor::P(1) * tensor::H() * tensor::T(2);
   auto res2_full = tensor::vac_av(expr2, {.connect = {{1, 2}}});
-  auto res2 = tensor::vac_av(expr2, {.connect = {{1, 2}}, .avoid = {{0, 1}}});
+  auto res2 =
+      tensor::vac_av(expr2, {.connect = {{1, 2}}, .do_not_connect = {{0, 1}}});
   REQUIRE(res2_full.size() == 6);
   // only one term with no A-{f,g} connection
   REQUIRE(res2.is<sequant::Product>());
@@ -1310,17 +1311,17 @@ SECTION("avoided-connections") {
   // same test as above but from Operator level and labels for connectivity
   using namespace sequant::mbpt::op;
   auto expr3 = op::P(1) * op::H(2) * op::T(2);
-  auto res3 = op::vac_av(
-      expr3, {.connect = {{L"f", L"t"}, {L"g", L"t"}},
-              .avoid = {{antisymm_label(), L"f"}, {antisymm_label(), L"g"}}});
+  auto res3 = op::vac_av(expr3, {.connect = {{L"f", L"t"}, {L"g", L"t"}},
+                                 .do_not_connect = {{antisymm_label(), L"f"},
+                                                    {antisymm_label(), L"g"}}});
   REQUIRE_THAT(sequant::simplify(res3), EquivalentTo(expected2));
 
   // projectors are never connected
   auto expr4 = op::P(1) * op::H() * op::t(2) * op::P(-1);
   auto res4_full = op::vac_av(expr4);
-  auto res4 =
-      op::vac_av(expr4, {.connect = op::default_op_connections(),
-                         .avoid = {{antisymm_label(), antisymm_label()}}});
+  auto res4 = op::vac_av(
+      expr4, {.connect = op::default_op_connections(),
+              .do_not_connect = {{antisymm_label(), antisymm_label()}}});
   REQUIRE(res4_full.size() == 4);
   REQUIRE(res4.is<sequant::Product>());  // only single term survives
   const std::wstring expected4 =

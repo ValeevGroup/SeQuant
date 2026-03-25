@@ -1461,12 +1461,12 @@ ExprPtr ref_av(ExprPtr expr, EVOptions<int> opts) {
   auto isr = get_default_context().index_space_registry();
   const bool full_contractions =
       isr->reference_occupied_space() == isr->vacuum_occupied_space();
-  return expectation_value_impl(expr, opts.connect, opts.avoid,
+  return expectation_value_impl(expr, opts.connect, opts.do_not_connect,
                                 opts.use_topology, full_contractions);
 }
 
 ExprPtr vac_av(ExprPtr expr, EVOptions<int> opts) {
-  return expectation_value_impl(expr, opts.connect, opts.avoid,
+  return expectation_value_impl(expr, opts.connect, opts.do_not_connect,
                                 opts.use_topology,
                                 /* full_contractions*/ true);
 }

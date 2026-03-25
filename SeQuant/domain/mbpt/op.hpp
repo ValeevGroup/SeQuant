@@ -526,7 +526,7 @@ struct EVOptions {
   OpConnections<T> connect = {};
   /// List of pairs of operator labels that should not be connected, defined
   /// left-to-right.
-  OpConnections<T> avoid = {};
+  OpConnections<T> do_not_connect = {};
   /// If true, expressions are screened before lowering to Tensor level and
   /// calling WickTheorem. Only valid in Operator level calls
   bool screen = true;

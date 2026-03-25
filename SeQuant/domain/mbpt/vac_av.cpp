@@ -177,13 +177,13 @@ ExprPtr ref_av(ExprPtr expr, EVOptions<std::wstring> opts) {
   auto isr = get_default_context().index_space_registry();
   const bool full_contractions =
       isr->reference_occupied_space() == isr->vacuum_occupied_space();
-  return expectation_value_impl(expr, opts.connect, opts.avoid,
+  return expectation_value_impl(expr, opts.connect, opts.do_not_connect,
                                 opts.use_topology, opts.screen, opts.skip_clone,
                                 full_contractions);
 }
 
 ExprPtr vac_av(ExprPtr expr, EVOptions<std::wstring> opts) {
-  return expectation_value_impl(expr, opts.connect, opts.avoid,
+  return expectation_value_impl(expr, opts.connect, opts.do_not_connect,
                                 opts.use_topology, opts.screen, opts.skip_clone,
                                 /* full_contractions */ true);
 }

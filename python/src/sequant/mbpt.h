@@ -36,11 +36,12 @@ ExprPtr VacuumAverage(const ExprPtr& e, const PyEVOptions& opts) {
     }
     return result;
   };
-  return sequant::mbpt::op::vac_av(e, {.connect = convert(opts.connect),
-                                       .avoid = convert(opts.avoid),
-                                       .screen = opts.screen,
-                                       .use_topology = opts.use_topology,
-                                       .skip_clone = opts.skip_clone});
+  return sequant::mbpt::op::vac_av(
+      e, {.connect = convert(opts.connect),
+          .do_not_connect = convert(opts.do_not_connect),
+          .screen = opts.screen,
+          .use_topology = opts.use_topology,
+          .skip_clone = opts.skip_clone});
 }
 
 #define SR_OP(OP) \
@@ -68,7 +69,7 @@ inline void __init__(py::module m) {
   py::class_<PyEVOptions>(m, "EVOptions")
       .def(py::init<>())
       .def_readwrite("connect", &PyEVOptions::connect)
-      .def_readwrite("avoid", &PyEVOptions::avoid)
+      .def_readwrite("do_not_connect", &PyEVOptions::do_not_connect)
       .def_readwrite("screen", &PyEVOptions::screen)
       .def_readwrite("use_topology", &PyEVOptions::use_topology)
       .def_readwrite("skip_clone", &PyEVOptions::skip_clone);
