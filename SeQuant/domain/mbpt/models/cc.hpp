@@ -34,6 +34,11 @@ class CC {
   struct Options {
     /// type of CC ansatz. see CC::Ansatz
     Ansatz ansatz = Ansatz::T;
+    /// if true, singles amplitudes are excluded from \f$ \hat{T} \f$ and \f$
+    /// \hat{\Lambda} \f$; if not specified, defaults to true for
+    /// orbital-optimized ansätze (oT, oU) and false otherwise. Must be true
+    /// for orbital-optimized ansätze.
+    std::optional<bool> skip_singles = std::nullopt;
     /// if true, uses Operator level screening before applying WickTheorem.
     /// This propagates to all ref_av() calls
     bool screen = true;
@@ -64,11 +69,25 @@ class CC {
   /// @return true if the ansatz is unitary
   [[nodiscard]] bool unitary() const;
 
+  /// @return true if singles amplitudes are excluded from \f$ \hat{T} \f$ and
+  /// \f$ \hat{\Lambda} \f$
+  [[nodiscard]] bool skip_singles() const;
+
   /// @return whether screening is on or not
   [[nodiscard]] bool screen() const;
 
   /// @return whether topological optimization is used in WickTheorem
   [[nodiscard]] bool use_topology() const;
+
+  /// @brief computes similarity transformed Hamiltonian, \f$ \bar{H} =
+  /// e^{-\hat{\sigma}} \hat{H} e^{\hat{\sigma}} \f$. The form of \f$ \sigma \f$
+  /// depends on the Ansatz choice.
+  /// @param truncation_rank maximum order of nested commutators to include in
+  /// the expansion; if not specified, will use the value of member
+  /// `hbar_comm_rank`. If that is also not specified, will use 4 as the default
+  /// value. If provided, will override all defaults.
+  [[nodiscard]] ExprPtr hbar(
+      std::optional<size_t> truncation_rank = std::nullopt) const;
 
   /// @brief derives t amplitude equations, \f$ \langle P|\bar{H}|0 \rangle = 0
   /// \f$
@@ -133,6 +152,7 @@ class CC {
  private:
   size_t N;
   Ansatz ansatz_ = Ansatz::T;
+  bool skip_singles_ = false;
   bool screen_ = true;
   bool use_topology_ = true;
   std::optional<size_t> hbar_comm_rank_ = std::nullopt;
