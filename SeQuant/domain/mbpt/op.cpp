@@ -1236,9 +1236,9 @@ bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
 
 namespace tensor {
 
-ExprPtr expectation_value_impl(ExprPtr expr,
-                               std::vector<std::pair<int, int>> nop_connections,
-                               bool use_top, bool full_contractions) {
+ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
+                               OpConnections<int> avoid, bool use_top,
+                               bool full_contractions) {
   simplify(expr);
   auto isr = get_default_context().index_space_registry();
   const auto spinor = get_default_context().spbasis() == SPBasis::Spinor;
@@ -1255,7 +1255,8 @@ ExprPtr expectation_value_impl(ExprPtr expr,
   }
 
   FWickTheorem wick{expr};
-  wick.use_topology(use_top).set_nop_connections(nop_connections);
+  wick.use_topology(use_top).set_nop_connections(connect);
+  if (!avoid.empty()) wick.set_nop_avoided_connections(avoid);
   wick.full_contractions(full_contractions);
   auto result = wick.compute(/* count_only = */ false,
                              /* skip_input_canonicalization? true since already
@@ -1456,19 +1457,17 @@ ExprPtr expectation_value_impl(ExprPtr expr,
   }
 }
 
-ExprPtr ref_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
-               bool use_top) {
+ExprPtr ref_av(ExprPtr expr, EVOptions<int> opts) {
   auto isr = get_default_context().index_space_registry();
   const bool full_contractions =
-      (isr->reference_occupied_space() == isr->vacuum_occupied_space()) ? true
-                                                                        : false;
-  return expectation_value_impl(expr, nop_connections, use_top,
-                                full_contractions);
+      isr->reference_occupied_space() == isr->vacuum_occupied_space();
+  return expectation_value_impl(expr, opts.connect, opts.do_not_connect,
+                                opts.use_topology, full_contractions);
 }
 
-ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
-               bool use_top) {
-  return expectation_value_impl(expr, nop_connections, use_top,
+ExprPtr vac_av(ExprPtr expr, EVOptions<int> opts) {
+  return expectation_value_impl(expr, opts.connect, opts.do_not_connect,
+                                opts.use_topology,
                                 /* full_contractions*/ true);
 }
 

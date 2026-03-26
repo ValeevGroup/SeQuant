@@ -210,6 +210,8 @@ class WickTheorem {
           "WickTheorem::set_nop_connections(arg): arg contains duplicates");
     }
 
+    // process now if input is resolved, or is a deferred call from
+    // compute_nopseq (already cached list)
     if (expr_input_ == nullptr || !nop_connections_input_.empty()) {
       for (const auto &opidx_pair : op_index_pairs) {
         constexpr bool signed_indices =
@@ -254,6 +256,86 @@ class WickTheorem {
       std::initializer_list<std::pair<Integer, Integer>> op_index_pairs) {
     return this->set_nop_connections<const decltype(op_index_pairs) &>(
         op_index_pairs);
+  }
+  ///@}
+
+  /// @name avoided-connectivity specifiers
+  ///
+  /// Ensures that no contraction is ever made between the given pairs of
+  /// normal operators; every individual contraction attempt between an
+  /// avoided pair is rejected.
+  /// @param op_index_pairs the list of pairs of op indices that must not be
+  /// directly contracted
+  /// @throw Exception if @p op_index_pairs contains duplicates
+  ///@{
+
+  /// @tparam IndexPairContainer a sequence of std::pair<Integer,Integer>
+  template <typename IndexPairContainer>
+  WickTheorem &set_nop_avoided_connections(
+      IndexPairContainer &&op_index_pairs) {
+    auto has_duplicates = [](const auto &op_index_pairs) {
+      const auto the_end = end(op_index_pairs);
+      for (auto it = begin(op_index_pairs); it != the_end; ++it) {
+        const auto found_dup_it = std::find(it + 1, the_end, *it);
+        if (found_dup_it != the_end) {
+          return true;
+        }
+      }
+      return false;
+    };
+    if (has_duplicates(op_index_pairs)) {
+      throw Exception(
+          "WickTheorem::set_nop_avoided_connections(arg): arg contains "
+          "duplicates");
+    }
+
+    // process now if input is resolved, or is a deferred call from
+    // compute_nopseq (already cached list)
+    if (expr_input_ == nullptr || !nop_avoided_connections_input_.empty()) {
+      for (const auto &opidx_pair : op_index_pairs) {
+        constexpr bool signed_indices =
+            std::is_signed_v<typename std::remove_reference_t<
+                decltype(op_index_pairs)>::value_type::first_type>;
+        if (static_cast<std::size_t>(opidx_pair.first) >= input_->size() ||
+            static_cast<std::size_t>(opidx_pair.second) >= input_->size()) {
+          throw Exception(
+              "WickTheorem::set_nop_avoided_connections: nop index out of "
+              "range");
+        }
+        if constexpr (signed_indices) {
+          if (opidx_pair.first < 0 || opidx_pair.second < 0) {
+            throw Exception(
+                "WickTheorem::set_nop_avoided_connections: nop index out of "
+                "range");
+          }
+        }
+      }
+      if (op_index_pairs.size() != 0ul) {
+        nop_avoided_connections_.resize(input_->size());
+        for (auto &v : nop_avoided_connections_) {
+          v.set();  // 1 = not avoided (same convention as nop_connections_)
+        }
+        for (const auto &opidx_pair : op_index_pairs) {
+          nop_avoided_connections_[opidx_pair.first].reset(opidx_pair.second);
+          nop_avoided_connections_[opidx_pair.second].reset(opidx_pair.first);
+        }
+      }
+      nop_avoided_connections_input_.clear();
+    } else {
+      ranges::for_each(op_index_pairs, [this](const auto &idxpair) {
+        nop_avoided_connections_input_.push_back(idxpair);
+      });
+    }
+
+    return *this;
+  }
+
+  /// @tparam Integer an integral type
+  template <typename Integer = long>
+  WickTheorem &set_nop_avoided_connections(
+      std::initializer_list<std::pair<Integer, Integer>> op_index_pairs) {
+    return this->template set_nop_avoided_connections<
+        const decltype(op_index_pairs) &>(op_index_pairs);
   }
   ///@}
 
@@ -486,7 +568,7 @@ class WickTheorem {
                                //!< act on the same particle
 
   /// for each operator specifies the reverse bitmask of target connections
-  /// (0 = must connect)
+  /// (0 = must connect, 1 = not required or already satisfied)
   container::svector<std::bitset<max_input_size>> nop_connections_;
   std::size_t nop_nconnections_total_ =
       0;  // # of total (bidirectional) connections in nop_connections_ (i.e.
@@ -494,6 +576,13 @@ class WickTheorem {
   container::svector<std::pair<size_t, size_t>>
       nop_connections_input_;  // only used to cache input to
                                // set_nop_connections_
+
+  /// for each operator specifies the reverse bitmask of avoided connections
+  /// (0 = must not directly contract, 1 = allowed)
+  container::svector<std::bitset<max_input_size>> nop_avoided_connections_;
+  container::svector<std::pair<size_t, size_t>>
+      nop_avoided_connections_input_;  // only used to cache input to
+                                       // set_nop_avoided_connections_
 
   enum class TopologicalPartitionType { NormalOperator, Index };
 
@@ -626,6 +715,10 @@ class WickTheorem {
     if (!nop_connections_input_.empty())
       const_cast<WickTheorem<S> &>(*this).set_nop_connections(
           nop_connections_input_);
+    // process cached nop_avoided_connections_input_, if needed
+    if (!nop_avoided_connections_input_.empty())
+      const_cast<WickTheorem<S> &>(*this).set_nop_avoided_connections(
+          nop_avoided_connections_input_);
     // size nop_topological_partition_ to match input_, if needed
     upsize_topological_partitions(input_->size(),
                                   TopologicalPartitionType::NormalOperator);
@@ -846,12 +939,26 @@ class WickTheorem {
     /// @brief Updates connectivity if contraction satisfies target connectivity
 
     /// If the target connectivity will be violated by this contraction, keep
-    /// the state unchanged and return false
+    /// the state unchanged and return false.
+    /// Also rejects contractions between operator pairs specified via
+    /// set_nop_avoided_connections().
     template <typename Cursor>
     inline bool connect(const container::svector<std::bitset<max_input_size>>
                             &target_nop_connections,
+                        const container::svector<std::bitset<max_input_size>>
+                            &avoided_nop_connections,
                         const Cursor &op1_cursor, const Cursor &op2_cursor) {
       SEQUANT_ASSERT(op1_cursor.ordinal() < op2_cursor.ordinal());
+
+      // reject if this pair of normal operators is forbidden from contracting
+      {
+        const auto nop1_idx = op1_cursor.range_ordinal();
+        const auto nop2_idx = op2_cursor.range_ordinal();
+        if (!avoided_nop_connections.empty() &&
+            !avoided_nop_connections[nop1_idx].test(nop2_idx)) {
+          return false;
+        }
+      }
 
       // add contraction to the grand list
       auto register_contraction = [&]() {
@@ -1351,7 +1458,7 @@ class WickTheorem {
                            ctx.index_space_registry())) {
             auto &&[is_unique, nop_top_degen] = is_topologically_unique();
             if (is_unique) {
-              if (state.connect(nop_connections_,
+              if (state.connect(nop_connections_, nop_avoided_connections_,
                                 ranges::get_cursor(op_left_iter),
                                 ranges::get_cursor(op_right_iter))) {
                 if (Logger::instance().wick_contract) {

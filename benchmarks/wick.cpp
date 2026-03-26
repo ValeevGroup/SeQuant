@@ -158,7 +158,8 @@ static void mbpt_vac_av(benchmark::State &state, bool csv) {
   for (auto _ : state) {
     ExprPtr result = [&]() {
       if (input.connections) {
-        return mbpt::tensor::vac_av(input.expr, input.connections.value());
+        return mbpt::tensor::vac_av(input.expr,
+                                    {.connect = input.connections.value()});
       } else {
         return mbpt::tensor::vac_av(input.expr);
       }
