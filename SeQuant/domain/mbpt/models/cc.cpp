@@ -36,6 +36,8 @@ CC::CC(size_t n) : CC(n, Options{}) {}
 CC::CC(size_t n, const Options& opts)
     : N(n),
       ansatz_(opts.ansatz),
+      skip_singles_(opts.skip_singles.value_or(ansatz_ == Ansatz::oT ||
+                                               ansatz_ == Ansatz::oU)),
       screen_(opts.screen),
       use_topology_(opts.use_topology),
       hbar_comm_rank_(opts.hbar_comm_rank),
@@ -43,6 +45,10 @@ CC::CC(size_t n, const Options& opts)
   if (unitary())
     SEQUANT_ASSERT(hbar_comm_rank_ &&
                    "CC: hbar_comm_rank is required for unitary ansatz");
+  if (ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU)
+    SEQUANT_ASSERT(
+        skip_singles_ &&
+        "CC: skip_singles must be true for orbital-optimized ansatz");
 }
 
 CC::Ansatz CC::ansatz() const { return ansatz_; }
@@ -51,24 +57,16 @@ bool CC::unitary() const {
   return ansatz_ == Ansatz::U || ansatz_ == Ansatz::oU;
 }
 
-bool CC::skip_singles() const {
-  return ansatz_ == Ansatz::oU || ansatz_ == Ansatz::oT;
-}
+bool CC::skip_singles() const { return skip_singles_; }
 
 bool CC::screen() const { return screen_; }
 
 bool CC::use_topology() const { return use_topology_; }
 
 ExprPtr CC::hbar(std::optional<size_t> truncation_rank) const {
-  // if truncation_rank is not provided, use hbar_comm_rank if provided,
-  // otherwise default to 4 (traditional CC)
-  const auto def_truncation = hbar_comm_rank_ ? hbar_comm_rank_.value() : 4;
-  const auto truncation =
-      truncation_rank ? truncation_rank.value() : def_truncation;
-
-  auto hbar =
-      mbpt::lst(H(), T(N, skip_singles()), truncation, {.unitary = unitary()});
-  return hbar;
+  const auto truncation = truncation_rank.value_or(hbar_comm_rank_.value_or(4));
+  return mbpt::lst(H(), T(N, skip_singles()), truncation,
+                   {.unitary = unitary()});
 }
 
 std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) {
