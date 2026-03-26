@@ -511,11 +511,13 @@ qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
                                IndexSpace particle_space, IndexSpace hole_space,
                                IndexSpace::QuantumNumbers SQN = Spin::any);
 
+inline namespace op {
+
 /// type of operator connectivity constraints
 template <typename T>
 using OpConnections = std::vector<std::pair<T, T>>;
 
-/// Defines the behavior of expectation value methods
+/// Defines the behavior of expectation value methods.
 /// The struct is used by both tensor and operator level methods, but there are
 /// parameters in here which are only meaningful at the operator level.
 template <typename T>
@@ -536,8 +538,6 @@ struct EVOptions {
   /// calls
   bool skip_clone = false;
 };
-
-inline namespace op {
 namespace tensor {
 /// @brief computes the reference expectation value of a tensor-level expression
 /// @param expr input expression
