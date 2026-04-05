@@ -341,9 +341,10 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
   std::int64_t rp = np, rh = nh;
   while (rp >= 0 && rh >= 0) {
     if (rp == 0 && rh == 0) break;
-    // project with <rp, rh| (i.e., multiply P(rp, rh)) and compute VEV
+    // project with <rp, rh| (i.e., multiply δl(rp, rh)) and compute VEV
+    // use δl for consistent normalization
     result.at(min(rp, rh)) =
-        this->ref_av(P(nₚ(rp), nₕ(rh)) * hbar_R, op_connect);
+        this->ref_av(δl(nₚ(rp), nₕ(rh)) * hbar_R, op_connect);
     if (rp == 0 || rh == 0) break;
     rp--;
     rh--;
@@ -385,9 +386,9 @@ std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) {
   std::int64_t rp = np, rh = nh;
   while (rp >= 0 && rh >= 0) {
     if (rp == 0 && rh == 0) break;
-    // right project with |rp,rh> (i.e., multiply P(-rp, -rh)) and compute VEV
+    // right project with |rp,rh> (i.e., multiply δr(rp, rh)) and compute VEV
     result.at(min(rp, rh)) =
-        this->ref_av(L_hbar * P(nₚ(-rp), nₕ(-rh)), op_connect);
+        this->ref_av(L_hbar * δr(nₚ(rp), nₕ(rh)), op_connect);
     if (rp == 0 || rh == 0) break;
     rp--;
     rh--;
