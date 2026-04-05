@@ -879,6 +879,67 @@ ExprPtr Λʼ(std::size_t K, const OpParams& params) {
   return result;
 }
 
+ExprPtr δr(nₚ np, nₕ nh) {
+  SEQUANT_ASSERT(!(np == 0 && nh == 0));
+  SEQUANT_ASSERT(np >= 0 && nh >= 0);
+  const auto& spbasis = get_default_context().spbasis();
+  if (spbasis == SPBasis::Spinfree) SEQUANT_ASSERT(np == nh);
+
+  container::svector<IndexSpace> creators;
+  container::svector<IndexSpace> annihilators;
+
+  if (nh > 0)
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, nh.value()))
+      annihilators.emplace_back(get_hole_space(Spin::any));
+
+  if (np > 0)
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, np.value()))
+      creators.emplace_back(get_particle_space(Spin::any));
+
+  const auto label = spbasis == SPBasis::Spinor ? reserved::antisymm_label()
+                                                : reserved::symm_label();
+
+  std::optional<OpMaker<Statistics::FermiDirac>::UseDepIdx> dep;
+  if (get_default_mbpt_context().csv() == mbpt::CSV::Yes)
+    dep = OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
+
+  auto symm =
+      (spbasis == SPBasis::Spinor) ? Symmetry::Antisymm : Symmetry::Nonsymm;
+
+  return OpMaker<Statistics::FermiDirac>(label, cre(creators),
+                                         ann(annihilators))(
+      dep, symm, OpMaker<Statistics::FermiDirac>::Normalization::Default);
+}
+
+ExprPtr δl(nₚ np, nₕ nh) {
+  SEQUANT_ASSERT(!(np == 0 && nh == 0));
+  SEQUANT_ASSERT(np >= 0 && nh >= 0);
+  const auto& spbasis = get_default_context().spbasis();
+  if (spbasis == SPBasis::Spinfree) SEQUANT_ASSERT(np == nh);
+
+  container::svector<IndexSpace> creators;
+  container::svector<IndexSpace> annihilators;
+
+  if (nh > 0)
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, nh.value()))
+      creators.emplace_back(get_hole_space(Spin::any));
+  if (np > 0)
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, np.value()))
+      annihilators.emplace_back(get_particle_space(Spin::any));
+
+  const auto label = spbasis == SPBasis::Spinor ? reserved::antisymm_label()
+                                                : reserved::symm_label();
+  std::optional<OpMaker<Statistics::FermiDirac>::UseDepIdx> dep;
+  if (get_default_mbpt_context().csv() == mbpt::CSV::Yes)
+    dep = OpMaker<Statistics::FermiDirac>::UseDepIdx::Bra;
+
+  auto symm =
+      (spbasis == SPBasis::Spinor) ? Symmetry::Antisymm : Symmetry::Nonsymm;
+
+  return OpMaker<Statistics::FermiDirac>(label, cre(creators),
+                                         ann(annihilators))(
+      dep, symm, OpMaker<Statistics::FermiDirac>::Normalization::Default);
+}
 }  // namespace tensor
 
 ExprPtr h(std::size_t k) {
@@ -1181,6 +1242,50 @@ ExprPtr L(nann na, ncre nc, const cre<IndexSpace>& cre_space,
 }
 
 ExprPtr L(nₚ np, nₕ nh) { return L(nann(np), ncre(nh)); }
+
+ExprPtr δr(nₚ np, nₕ nh) {
+  SEQUANT_ASSERT(!(np == 0 && nh == 0));
+  SEQUANT_ASSERT(np >= 0 && nh >= 0);
+  if (get_default_context().spbasis() == SPBasis::Spinfree)
+    SEQUANT_ASSERT(np == nh);
+
+  auto particle_space = get_particle_space(Spin::any);
+  auto hole_space = get_hole_space(Spin::any);
+  return ex<op_t>(
+      []() -> std::wstring_view {
+        return get_default_context().spbasis() == SPBasis::Spinor
+                   ? reserved::antisymm_label()
+                   : reserved::symm_label();
+      },
+      [=]() -> ExprPtr { return tensor::δr(np, nh); },
+      [=](qnc_t& qns) {
+        qnc_t op_qnc_t =
+            generic_excitation_qns(np, nh, particle_space, hole_space);
+        qns = combine(op_qnc_t, qns);
+      });
+}
+
+ExprPtr δl(nₚ np, nₕ nh) {
+  SEQUANT_ASSERT(!(np == 0 && nh == 0));
+  SEQUANT_ASSERT(np >= 0 && nh >= 0);
+  if (get_default_context().spbasis() == SPBasis::Spinfree)
+    SEQUANT_ASSERT(np == nh);
+
+  auto particle_space = get_particle_space(Spin::any);
+  auto hole_space = get_hole_space(Spin::any);
+  return ex<op_t>(
+      []() -> std::wstring_view {
+        return get_default_context().spbasis() == SPBasis::Spinor
+                   ? reserved::antisymm_label()
+                   : reserved::symm_label();
+      },
+      [=]() -> ExprPtr { return tensor::δl(np, nh); },
+      [=](qnc_t& qns) {
+        qnc_t op_qnc_t =
+            generic_deexcitation_qns(np, nh, particle_space, hole_space);
+        qns = combine(op_qnc_t, qns);
+      });
+}
 
 qns_t apply_to_vac(const ExprPtr& expr) {
   SEQUANT_ASSERT(expr.is<op_t>() || expr.is<Product>());
