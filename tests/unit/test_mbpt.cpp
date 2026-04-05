@@ -749,6 +749,36 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
       REQUIRE(to_latex(simplify(h1 * t2)) == L"{{\\hat{h¹}}{\\hat{t²}_{2}}}");
       REQUIRE(to_latex(simplify(h2 * t2)) == L"{{\\hat{h²}}{\\hat{t²}_{2}}}");
+
+      // δl δr ops
+      {  // Spinor basis
+        auto dl2 = tensor::δl(2);
+        REQUIRE(simplify(dl2 - rational{1, 4} * tensor::P(2)) ==
+                ex<Constant>(0));
+        auto dr2 = tensor::δr(2);
+        REQUIRE(simplify(dr2 - rational{1, 4} * tensor::P(-2)) ==
+                ex<Constant>(0));
+
+        auto dl23 = tensor::δl(nₚ(2), nₕ(3));
+        REQUIRE(simplify(dl23 - rational{1, 12} * tensor::P(nₚ(2), nₕ(3))) ==
+                ex<Constant>(0));
+        auto dr24 = tensor::δr(nₚ(2), nₕ(4));
+        REQUIRE(simplify(dr24 - rational{1, 48} * tensor::P(nₚ(-2), nₕ(-4))) ==
+                ex<Constant>(0));
+      }
+
+      {  // spinfree basis
+        auto ctx = get_default_context();
+        auto ctx_resetter =
+            set_scoped_default_context(ctx.set(SPBasis::Spinfree));
+        auto dl2 = tensor::δl(2);
+        REQUIRE(simplify(dl2 - rational{1, 2} * tensor::P(2)) ==
+                ex<Constant>(0));
+        auto dr3 = tensor::δr(3);
+        REQUIRE(simplify(dr3 - rational{1, 6} * tensor::P(-3)) ==
+                ex<Constant>(0));
+      }
+
     }  // SECTION("predefined")
 
     SECTION("batching") {
