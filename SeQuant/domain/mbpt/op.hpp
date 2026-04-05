@@ -1101,6 +1101,13 @@ ExprPtr λʼ(std::size_t K, const OpParams& params = {.order = 1});
 /// @pre If batching is used, ISR must contain batching space
 ExprPtr Λʼ(std::size_t K,
            const OpParams& params = {.order = 1, .skip1 = false});
+
+ExprPtr δr(nₚ np, nₕ nh);
+DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(δr);
+
+ExprPtr δl(nₚ np, nₕ nh);
+DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(δl);
+
 }  // namespace tensor
 }  // namespace op
 
@@ -1267,6 +1274,12 @@ ExprPtr λʼ(std::size_t K, const OpParams& params = {.order = 1});
 /// @pre If batching is used, ISR must contain batching space
 ExprPtr Λʼ(std::size_t K,
            const OpParams& params = {.order = 1, .skip1 = false});
+
+ExprPtr δr(nₚ np, nₕ nh);
+DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(δr);
+
+ExprPtr δl(nₚ np, nₕ nh);
+DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(δl);
 
 /// @brief computes the quantum number change effected by a given Operator or
 /// Operator Product when applied to the vacuum state
