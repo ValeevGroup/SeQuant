@@ -548,8 +548,9 @@ OpMaker<S>::OpMaker(const std::wstring& label, ncre nc, nann na,
 }
 
 template <Statistics S>
-ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
-                               std::optional<Symmetry> opsymm_opt) const {
+ExprPtr OpMaker<S>::operator()(
+    std::optional<UseDepIdx> dep, std::optional<Symmetry> opsymm_opt,
+    std::optional<Normalization> normalization) const {
   auto isr = get_default_context(Statistics::FermiDirac).index_space_registry();
 
   // if not given dep, use mbpt::Context::CSV to determine whether to use
@@ -578,10 +579,12 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
   }
   const auto full_label = detail::decorate_with_pert_order(label_, order_);
 
-  const auto normalization =
-      label_ == reserved::antisymm_label() || label_ == reserved::symm_label()
-          ? Normalization::Implicit
-          : Normalization::Default;
+  if (!normalization) {
+    normalization =
+        label_ == reserved::antisymm_label() || label_ == reserved::symm_label()
+            ? Normalization::Implicit
+            : Normalization::Default;
+  }
 
   // if batching indices are present, use them
   if (batch_indices_) {
@@ -592,7 +595,7 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
           return ex<Tensor>(full_label, bra(creidxs), ket(annidxs),
                             aux(batchidxs), opsymm_opt ? *opsymm_opt : opsymm);
         },
-        dep ? *dep : UseDepIdx::None, normalization);
+        dep ? *dep : UseDepIdx::None, normalization.value());
   }
   // else no batching
   return make(
@@ -602,7 +605,7 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
         return ex<Tensor>(full_label, bra(creidxs), ket(annidxs),
                           opsymm_opt ? *opsymm_opt : opsymm);
       },
-      dep ? *dep : UseDepIdx::None, normalization);
+      dep ? *dep : UseDepIdx::None, normalization.value());
 }
 
 template class OpMaker<Statistics::FermiDirac>;

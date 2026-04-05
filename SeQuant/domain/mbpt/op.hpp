@@ -663,9 +663,11 @@ class OpMaker {
   /// @param[in] opsymm_opt if given, controls whether (anti)symmetric
   /// tensor is returned; if \p opsymm_opt is not given then the default is
   /// determined by the MBPT context.
+  /// @param[in] normalization if given, controls the normalization behavior, else uses internal defaults. @see Normalization
   // clang-format on
   ExprPtr operator()(std::optional<UseDepIdx> dep_opt = {},
-                     std::optional<Symmetry> opsymm_opt = {}) const;
+                     std::optional<Symmetry> opsymm_opt = {},
+                     std::optional<Normalization> normalization = {}) const;
 
   /// @brief Creates an OpInfo struct containing creator and annihilator
   /// indices, normalization factor, symmetry, and dependency information.
@@ -680,7 +682,7 @@ class OpMaker {
                               const IndexSpaceContainer& ann_spaces,
                               UseDepIdx dep = UseDepIdx::None) {
     const bool symm = get_default_context().spbasis() ==
-                      SPBasis::Spinor;  // antisymmetrize if spin-orbital basis
+                      SPBasis::Spinor;  // antisymmetrize if spinor basis
     const auto dep_bra = dep == UseDepIdx::Bra;
     const auto dep_ket = dep == UseDepIdx::Ket;
 
