@@ -638,11 +638,12 @@ class OpMaker {
     None
   };
 
-  /// Op of e.g. rank {c,a} by default includes normalization factor
-  /// of 1/(c! a!) ... sometimes we want to change normalization, e.g.
-  /// A and S include normalization factor in their definition,
-  /// so no need to include it explicitly
-  enum class Normalization { Default, Implicit };
+  enum class Normalization {
+    Default,    /// Include 1/(c! a!) prefactor
+    Implicit,   /// No prefactor, used for Â and Ŝ since their definition
+                /// includes the normalization
+    SquareRoot  /// Include sqrt(1/c! a!) prefactor
+  };
 
   /// struct to hold the information about the operator
   struct OpInfo {
