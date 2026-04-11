@@ -740,26 +740,40 @@ ExprPtr Λ(std::size_t K, bool skip1) {
 ExprPtr r(nann na, ncre nc, const cre<IndexSpace>& cre_space,
           const ann<IndexSpace>& ann_space) {
   SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"R"));
-  return OpMaker<Statistics::FermiDirac>(L"R", nc, na, cre_space, ann_space)();
+
+  const auto prefac =
+      std::sqrt(static_cast<double>(factorial(na) * factorial(nc)));
+
+  return prefac *
+         OpMaker<Statistics::FermiDirac>(L"R", nc, na, cre_space, ann_space)();
 }
 ExprPtr r(nₚ np, nₕ nh) {
   SEQUANT_ASSERT(np >= 0 && nh >= 0);
   SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"R"));
-  return OpMaker<Statistics::FermiDirac>(L"R", ncre(np.value()),
-                                         nann(nh.value()))();
+
+  const auto prefac =
+      std::sqrt(static_cast<double>(factorial(np) * factorial(nh)));
+  return prefac * OpMaker<Statistics::FermiDirac>(L"R", ncre(np.value()),
+                                                  nann(nh.value()))();
 }
 
 ExprPtr l(nann na, ncre nc, const cre<IndexSpace>& cre_space,
           const ann<IndexSpace>& ann_space) {
   SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"L"));
-  return OpMaker<Statistics::FermiDirac>(L"L", nc, na, cre_space, ann_space)();
+  const auto prefac =
+      std::sqrt(static_cast<double>(factorial(na) * factorial(nc)));
+  return prefac *
+         OpMaker<Statistics::FermiDirac>(L"L", nc, na, cre_space, ann_space)();
 }
 
 ExprPtr l(nₚ np, nₕ nh) {
   SEQUANT_ASSERT(np >= 0 && nh >= 0);
   SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"L"));
-  return OpMaker<Statistics::FermiDirac>(L"L", ncre(nh.value()),
-                                         nann(np.value()))();
+  const auto prefac =
+      std::sqrt(static_cast<double>(factorial(np) * factorial(nh)));
+
+  return prefac * OpMaker<Statistics::FermiDirac>(L"L", ncre(nh.value()),
+                                                  nann(np.value()))();
 }
 
 ExprPtr P(nₚ np, nₕ nh) {
@@ -906,9 +920,13 @@ ExprPtr δr(nₚ np, nₕ nh) {
   auto symm =
       (spbasis == SPBasis::Spinor) ? Symmetry::Antisymm : Symmetry::Nonsymm;
 
-  return OpMaker<Statistics::FermiDirac>(label, cre(creators),
-                                         ann(annihilators))(
-      dep, symm, OpMaker<Statistics::FermiDirac>::Normalization::Default);
+  const auto prefac =
+      std::sqrt(static_cast<double>(factorial(np) * factorial(nh)));
+
+  return prefac * OpMaker<Statistics::FermiDirac>(label, cre(creators),
+                                                  ann(annihilators))(
+                      dep, symm,
+                      OpMaker<Statistics::FermiDirac>::Normalization::Default);
 }
 
 ExprPtr δl(nₚ np, nₕ nh) {
@@ -935,10 +953,13 @@ ExprPtr δl(nₚ np, nₕ nh) {
 
   auto symm =
       (spbasis == SPBasis::Spinor) ? Symmetry::Antisymm : Symmetry::Nonsymm;
+  const auto prefac =
+      std::sqrt(static_cast<double>(factorial(np) * factorial(nh)));
 
-  return OpMaker<Statistics::FermiDirac>(label, cre(creators),
-                                         ann(annihilators))(
-      dep, symm, OpMaker<Statistics::FermiDirac>::Normalization::Default);
+  return prefac * OpMaker<Statistics::FermiDirac>(label, cre(creators),
+                                                  ann(annihilators))(
+                      dep, symm,
+                      OpMaker<Statistics::FermiDirac>::Normalization::Default);
 }
 }  // namespace tensor
 
