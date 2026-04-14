@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aaaa96bdc64b8c7aff12cbc11a94777f3:
+
+Function sequant::set_num_threads
+=================================
+
+- Defined in :ref:`file_SeQuant_core_runtime.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::set_num_threads(int)
+   :project: SeQuant

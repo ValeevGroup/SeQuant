@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aa70655df42f82e55ef4603052208611e:
+
+Function sequant::transform_expr
+================================
+
+- Defined in :ref:`file_SeQuant_core_utility_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::transform_expr(const ExprPtr&, const container::map<Index, Index>&, Constant::scalar_type)
+   :project: SeQuant

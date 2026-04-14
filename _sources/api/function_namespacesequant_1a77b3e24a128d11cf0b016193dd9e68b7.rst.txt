@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a77b3e24a128d11cf0b016193dd9e68b7:
+
+Template Function sequant::to_ratio
+===================================
+
+- Defined in :ref:`file_SeQuant_core_rational.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_ratio(T)
+   :project: SeQuant

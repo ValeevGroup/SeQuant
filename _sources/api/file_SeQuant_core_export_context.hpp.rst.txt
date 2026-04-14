@@ -1,0 +1,101 @@
+
+.. _file_SeQuant_core_export_context.hpp:
+
+File context.hpp
+================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_export>` (``SeQuant/core/export``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/export/context.hpp``)
+------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_export_context.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/utility/tensor.hpp`` (:ref:`file_SeQuant_core_utility_tensor.hpp`)
+
+- ``limits``
+
+- ``map``
+
+- ``optional``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``type_traits``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_export_context.cpp`
+
+- :ref:`file_SeQuant_core_export_export.hpp`
+
+- :ref:`file_SeQuant_core_export_generator.cpp`
+
+- :ref:`file_SeQuant_core_export_generator.hpp`
+
+- :ref:`file_SeQuant_core_export_itf.hpp`
+
+- :ref:`file_SeQuant_core_export_julia_tensor_operations.hpp`
+
+- :ref:`file_SeQuant_core_export_python_einsum.hpp`
+
+- :ref:`file_SeQuant_core_export_reordering_context.hpp`
+
+- :ref:`file_SeQuant_core_export_text_generator.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_strategy_pair`
+
+- :ref:`exhale_class_classsequant_1_1_export_context`
+
+- :ref:`exhale_class_classsequant_1_1_usage_set`
+
+
+Enums
+-----
+
+
+- :ref:`exhale_enum_namespacesequant_1ace6165a6cc687cc554bd2309a3520b22`
+
+- :ref:`exhale_enum_namespacesequant_1a925fe535efcfc64380e39919eed6c3cd`
+
+- :ref:`exhale_enum_namespacesequant_1a25696058cac253ca159d475383c514ed`
+

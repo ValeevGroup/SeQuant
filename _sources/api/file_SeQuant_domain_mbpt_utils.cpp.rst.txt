@@ -1,0 +1,58 @@
+
+.. _file_SeQuant_domain_mbpt_utils.cpp:
+
+File utils.cpp
+==============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_mbpt>` (``SeQuant/domain/mbpt``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/domain/mbpt/utils.cpp``)
+----------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_mbpt_utils.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/domain/mbpt/utils.hpp`` (:ref:`file_SeQuant_domain_mbpt_utils.hpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__mbpt`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a734f61eb7d6659273a0b94ba2c5cb76f`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a271e39608ef5de8169b81d42fb32c6b6`
+

@@ -1,0 +1,102 @@
+
+.. _file_SeQuant_core_wick.impl.hpp:
+
+File wick.impl.hpp
+==================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/wick.impl.hpp``)
+-------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_wick.impl.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/bliss.hpp`` (:ref:`file_SeQuant_core_bliss.hpp`)
+
+- ``SeQuant/core/io/latex/latex.hpp`` (:ref:`file_SeQuant_core_io_latex_latex.hpp`)
+
+- ``SeQuant/core/logger.hpp`` (:ref:`file_SeQuant_core_logger.hpp`)
+
+- ``SeQuant/core/reserved.hpp`` (:ref:`file_SeQuant_core_reserved.hpp`)
+
+- ``SeQuant/core/tensor_canonicalizer.hpp`` (:ref:`file_SeQuant_core_tensor_canonicalizer.hpp`)
+
+- ``SeQuant/core/tensor_network.hpp`` (:ref:`file_SeQuant_core_tensor_network.hpp`)
+
+- ``SeQuant/core/tensor_network/vertex.hpp`` (:ref:`file_SeQuant_core_tensor_network_vertex.hpp`)
+
+- ``SeQuant/core/utility/debug.hpp`` (:ref:`file_SeQuant_core_utility_debug.hpp`)
+
+- ``SeQuant/core/utility/indices.hpp`` (:ref:`file_SeQuant_core_utility_indices.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_wick.cpp`
+
+- :ref:`file_SeQuant_core_wick.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1detail_1_1_null_normal_operator_canonicalizer_deregister`
+
+- :ref:`exhale_class_classsequant_1_1detail_1_1index__repl__dst__t`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1ada6639d124527153aae1e9da79205529`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a5e15ea8a1b4723a25b907a76f866a99c`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a78059f18b2515f75c5e7e09136f94ae3`
+
+
+Defines
+-------
+
+
+- :ref:`exhale_define_wick_8impl_8hpp_1a490f1e6b1ffb363d326d8ba9f4a0cfa8`
+
+- :ref:`exhale_define_wick_8impl_8hpp_1a2d651bf38af1355d419c5e38a5ce0db9`
+

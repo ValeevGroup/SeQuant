@@ -1,0 +1,118 @@
+
+.. _file_SeQuant_core_expressions_expr.hpp:
+
+File expr.hpp
+=============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_expressions>` (``SeQuant/core/expressions``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/expressions/expr.hpp``)
+--------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_expressions_expr.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/expressions/expr_ptr.hpp`` (:ref:`file_SeQuant_core_expressions_expr_ptr.hpp`)
+
+- ``SeQuant/core/options.hpp`` (:ref:`file_SeQuant_core_options.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``atomic`` (:ref:`file_SeQuant_core_utility_atomic.hpp`)
+
+- ``boost/core/demangle.hpp``
+
+- ``memory``
+
+- ``optional``
+
+- ``range/v3/all.hpp``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_expr.hpp`
+
+- :ref:`file_SeQuant_core_expressions_constant.hpp`
+
+- :ref:`file_SeQuant_core_expressions_expr.cpp`
+
+- :ref:`file_SeQuant_core_expressions_expr_algorithms.hpp`
+
+- :ref:`file_SeQuant_core_expressions_expr_operators.hpp`
+
+- :ref:`file_SeQuant_core_expressions_expr_range.hpp`
+
+- :ref:`file_SeQuant_core_expressions_product.hpp`
+
+- :ref:`file_SeQuant_core_expressions_sum.hpp`
+
+- :ref:`file_SeQuant_core_expressions_tensor.cpp`
+
+- :ref:`file_SeQuant_core_expressions_tensor.hpp`
+
+- :ref:`file_SeQuant_core_expressions_variable.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_expr_1_1cursor`
+
+- :ref:`exhale_struct_structsequant_1_1_expr_1_1is__shared__ptr__of__expr`
+
+- :ref:`exhale_struct_structsequant_1_1_expr_1_1is__shared__ptr__of__expr_3_01_expr_ptr_00_01void_01_4`
+
+- :ref:`exhale_struct_structsequant_1_1_expr_1_1is__shared__ptr__of__expr__or__derived`
+
+- :ref:`exhale_struct_structsequant_1_1_expr_1_1is__shared__ptr__of__expr__or__derived_3_01_expr_ptr_00_01void_01_4`
+
+- :ref:`exhale_struct_structsequant_1_1proportional__to`
+
+- :ref:`exhale_class_classsequant_1_1_expr`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a4f7a82ef79acb5f9253be6cf51a1bde0`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1a082cfbecb3fa099ac17e21d0714a815b`
+

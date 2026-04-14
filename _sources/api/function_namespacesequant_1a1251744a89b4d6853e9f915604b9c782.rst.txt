@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a1251744a89b4d6853e9f915604b9c782:
+
+Function sequant::subset_index_counts
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_utility_indices.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::subset_index_counts(meta::range_of<Index, 2> auto const&)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aaf7c742d3ac61b03615c69c67e462dc0:
+
+Template Function sequant::operator==(const Operator<S>&, const Operator<S>&)
+=============================================================================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::operator==(const Operator<S>&, const Operator<S>&)
+   :project: SeQuant

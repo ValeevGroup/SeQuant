@@ -1,0 +1,72 @@
+
+.. _program_listing_file_SeQuant_core_options.hpp:
+
+Program Listing for File options.hpp
+====================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_options.hpp>` (``SeQuant/core/options.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Eduard Valeyev on 8/25/25.
+   //
+   
+   #ifndef SEQUANT_CORE_OPTIONS_HPP
+   #define SEQUANT_CORE_OPTIONS_HPP
+   
+   #include <SeQuant/core/index.hpp>
+   
+   #include <optional>
+   #include <string>
+   #include <vector>
+   
+   namespace sequant {
+   
+   enum class CanonicalizationMethod {
+     Topological = 0b01,
+     Lexicographic = 0b10,
+     Complete = Topological | Lexicographic,
+     Rapid = Lexicographic
+   };
+   
+   CanonicalizationMethod operator&(CanonicalizationMethod m1,
+                                    CanonicalizationMethod m2);
+   CanonicalizationMethod operator|(CanonicalizationMethod m1,
+                                    CanonicalizationMethod m2);
+   std::wstring to_wstring(CanonicalizationMethod m);
+   
+   struct CanonicalizeOptions {
+     enum class IgnoreNamedIndexLabel : bool { Yes = true, No = false };
+   
+     CanonicalizationMethod method = CanonicalizationMethod::Complete;
+     std::optional<container::set<Index>> named_indices = std::nullopt;
+     IgnoreNamedIndexLabel ignore_named_index_labels = IgnoreNamedIndexLabel::Yes;
+   
+     static CanonicalizeOptions default_options();
+     CanonicalizeOptions copy_and_set(CanonicalizationMethod) const;
+     CanonicalizeOptions copy_and_set(std::optional<container::set<Index>>) const;
+     CanonicalizeOptions copy_and_set(IgnoreNamedIndexLabel) const;
+   
+     friend constexpr bool operator==(const CanonicalizeOptions& a,
+                                      const CanonicalizeOptions& b) {
+       return a.method == b.method;
+     }
+   };
+   
+   struct SimplifyOptions : public CanonicalizeOptions {
+     static SimplifyOptions default_options();
+     SimplifyOptions(CanonicalizeOptions opts);
+   
+     friend constexpr bool operator==(const SimplifyOptions& a,
+                                      const SimplifyOptions& b) {
+       return static_cast<const CanonicalizeOptions&>(a) ==
+              static_cast<const CanonicalizeOptions&>(b);
+     }
+   };
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_CORE_OPTIONS_HPP
