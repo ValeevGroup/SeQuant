@@ -151,6 +151,12 @@ inline constexpr TA::DeNest to_ta_denest(DeNest d) noexcept {
 void log_ta_tensor_host_memory_use(madness::World& world,
                                    std::string_view label = "");
 
+inline void log_ta_tensor_host_memory_use() {
+#if defined(SEQUANT_EVAL_TRACE)
+  log_ta_tensor_host_memory_use(TA::get_default_world(), "[TA]");
+#endif
+}
+
 ///
 /// \brief Result for a tensor value of TA::DistArray type.
 /// \tparam ArrayT TA::DistArray type. Tile type of ArrayT is regular tensor of
@@ -185,6 +191,7 @@ class ResultTensorTA final : public Result {
     result(a.this_annot) =
         get<ArrayT>()(a.lannot) + other.get<ArrayT>()(a.rannot);
     decltype(result)::wait_for_lazy_cleanup(result.world());
+    log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
 
@@ -202,6 +209,7 @@ class ResultTensorTA final : public Result {
       result(a.this_annot) = scalar * result(a.lannot);
 
       decltype(result)::wait_for_lazy_cleanup(result.world());
+      log_ta_tensor_host_memory_use();
       return eval_result<this_type>(std::move(result));
     }
 
@@ -215,6 +223,7 @@ class ResultTensorTA final : public Result {
 
       log_ta(a.lannot, " * ", a.rannot, " = ", d, "\n");
 
+      log_ta_tensor_host_memory_use();
       return eval_result<ResultScalar<numeric_type>>(d);
     }
 
@@ -234,6 +243,7 @@ class ResultTensorTA final : public Result {
     result = TA::einsum(get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot),
                         a.this_annot);
     decltype(result)::wait_for_lazy_cleanup(result.world());
+    log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
 
@@ -253,6 +263,7 @@ class ResultTensorTA final : public Result {
     ArrayT result;
     result(post_annot) = get<ArrayT>()(pre_annot);
     ArrayT::wait_for_lazy_cleanup(result.world());
+    log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
 
@@ -269,6 +280,7 @@ class ResultTensorTA final : public Result {
 
     t(ann) += o(ann);
     ArrayT::wait_for_lazy_cleanup(t.world());
+    log_ta_tensor_host_memory_use();
   }
 
   [[nodiscard]] ResultPtr symmetrize() const override {
@@ -327,6 +339,7 @@ class ResultTensorOfTensorTA final : public Result {
     result(a.this_annot) =
         get<ArrayT>()(a.lannot) + other.get<ArrayT>()(a.rannot);
     decltype(result)::wait_for_lazy_cleanup(result.world());
+    log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
 
@@ -344,6 +357,7 @@ class ResultTensorOfTensorTA final : public Result {
       result(a.this_annot) = scalar * result(a.lannot);
 
       decltype(result)::wait_for_lazy_cleanup(result.world());
+      log_ta_tensor_host_memory_use();
       return eval_result<this_type>(std::move(result));
     } else if (a.this_annot.empty()) {
       // DOT product
@@ -355,6 +369,7 @@ class ResultTensorOfTensorTA final : public Result {
 
       log_ta(a.lannot, " * ", a.rannot, " = ", d, "\n");
 
+      log_ta_tensor_host_memory_use();
       return eval_result<ResultScalar<numeric_type>>(d);
     }
 
@@ -366,18 +381,21 @@ class ResultTensorOfTensorTA final : public Result {
           TA::einsum(get<ArrayT>()(a.lannot),
                      other.get<compatible_regular_distarray_type>()(a.rannot),
                      a.this_annot);
+      log_ta_tensor_host_memory_use();
       return eval_result<this_type>(std::move(result));
 
     } else if (other.is<this_type>() && DeNestFlag == DeNest::True) {
       // ToT * ToT -> T
       auto result = TA::einsum<TA::DeNest::True>(
           get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot), a.this_annot);
+      log_ta_tensor_host_memory_use();
       return eval_result<that_type>(std::move(result));
 
     } else if (other.is<this_type>() && DeNestFlag == DeNest::False) {
       // ToT * ToT -> ToT
       auto result = TA::einsum(get<ArrayT>()(a.lannot),
                                other.get<ArrayT>()(a.rannot), a.this_annot);
+      log_ta_tensor_host_memory_use();
       return eval_result<this_type>(std::move(result));
     } else {
       throw invalid_operand();
@@ -387,6 +405,7 @@ class ResultTensorOfTensorTA final : public Result {
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
     auto pre = get<ArrayT>();
     TA::scale(pre, numeric_type(factor));
+    log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(pre));
   }
 
@@ -400,6 +419,7 @@ class ResultTensorOfTensorTA final : public Result {
     ArrayT result;
     result(post_annot) = get<ArrayT>()(pre_annot);
     ArrayT::wait_for_lazy_cleanup(result.world());
+    log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
 
@@ -416,6 +436,7 @@ class ResultTensorOfTensorTA final : public Result {
 
     t(ann) += o(ann);
     ArrayT::wait_for_lazy_cleanup(t.world());
+    log_ta_tensor_host_memory_use();
   }
 
   [[nodiscard]] ResultPtr symmetrize() const override {
