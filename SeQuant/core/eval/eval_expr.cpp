@@ -157,6 +157,12 @@ EvalExpr::EvalExpr(Variable const& v)
       expr_{v.clone()},
       hash_value_{hash::value(v)} {}
 
+EvalExpr::EvalExpr(Power const& p)
+    : op_type_{std::nullopt},
+      result_type_{ResultType::Scalar},
+      expr_{p.clone()},
+      hash_value_{hash::value(p)} {}
+
 EvalExpr::EvalExpr(EvalOp op, ResultType res, ExprPtr const& ex,
                    index_vector ixs, std::int8_t p, size_t h,
                    std::shared_ptr<bliss::Graph> connectivity)
@@ -214,6 +220,10 @@ bool EvalExpr::is_variable() const noexcept {
   return expr().is<Variable>() && result_type() == ResultType::Scalar;
 }
 
+bool EvalExpr::is_power() const noexcept {
+  return expr().is<Power>() && result_type() == ResultType::Scalar;
+}
+
 bool EvalExpr::is_primary() const noexcept { return !op_type(); }
 
 bool EvalExpr::is_sum() const noexcept { return op_type() == EvalOp::Sum; }
@@ -228,11 +238,15 @@ Constant const& EvalExpr::as_constant() const { return expr().as<Constant>(); }
 
 Variable const& EvalExpr::as_variable() const { return expr().as<Variable>(); }
 
+Power const& EvalExpr::as_power() const { return expr().as<Power>(); }
+
 std::string EvalExpr::label() const noexcept {
   if (is_tensor())
     return toUtf8(as_tensor().label()) + "(" + indices_annot() + ")";
   else if (is_constant()) {
     return toUtf8(io::serialization::to_string(as_constant()));
+  } else if (is_power()) {
+    return toUtf8(as_power().to_latex());
   } else {
     SEQUANT_ASSERT(is_variable());
     return toUtf8(as_variable().label());
@@ -343,6 +357,8 @@ void collect_tensor_factors(EvalExprNode const& node,  //
 EvalExprNode binarize(Constant const& c) { return EvalExprNode{EvalExpr{c}}; }
 
 EvalExprNode binarize(Variable const& v) { return EvalExprNode{EvalExpr{v}}; }
+
+EvalExprNode binarize(Power const& p) { return EvalExprNode{EvalExpr{p}}; }
 
 EvalExprNode binarize(Tensor const& t) { return EvalExprNode{EvalExpr{t}}; }
 
@@ -545,6 +561,9 @@ EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract) {
 
   if (expr->is<Product>())  //
     return binarize(expr->as<Product>(), uncontract);
+
+  if (expr->is<Power>())  //
+    return binarize(expr->as<Power>());
 
   throw Exception("Encountered unsupported expression in binarize.");
 }

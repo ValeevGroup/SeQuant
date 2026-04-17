@@ -52,6 +52,7 @@ template <typename N, bool F>
 enum struct EvalMode {
   Constant,
   Variable,
+  Power,
   Tensor,
   Permute,
   Product,
@@ -67,6 +68,7 @@ enum struct EvalMode {
   if (node.leaf()) {
     return node->is_constant()   ? EvalMode::Constant
            : node->is_variable() ? EvalMode::Variable
+           : node->is_power()    ? EvalMode::Power
            : node->is_tensor()   ? EvalMode::Tensor
                                  : EvalMode::Unknown;
   } else {
@@ -79,6 +81,7 @@ enum struct EvalMode {
 [[nodiscard]] constexpr auto to_string(EvalMode mode) noexcept {
   return (mode == EvalMode::Constant)         ? "Constant"
          : (mode == EvalMode::Variable)       ? "Variable"
+         : (mode == EvalMode::Power)          ? "Power"
          : (mode == EvalMode::Tensor)         ? "Tensor"
          : (mode == EvalMode::Permute)        ? "Permute"
          : (mode == EvalMode::Product)        ? "Product"
