@@ -247,9 +247,10 @@ std::string EvalExpr::label() const noexcept {
     return toUtf8(io::serialization::to_string(as_constant()));
   } else if (is_power()) {
     return toUtf8(as_power().to_latex());
-  } else {
-    SEQUANT_ASSERT(is_variable());
+  } else if (is_variable()) {
     return toUtf8(as_variable().label());
+  } else {
+    SEQUANT_ABORT("EvalExpr::label: unhandled expression type");
   }
 }
 

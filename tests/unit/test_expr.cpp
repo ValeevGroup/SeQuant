@@ -905,8 +905,24 @@ TEST_CASE("expr", "[elements]") {
     Power pv2(ex<Variable>(L"z"), rational{1, 2});
     pv2.adjoint();
     REQUIRE(pv2.base()->as<Variable>().conjugated());
-    // Exponent unchanged
+    // exponent unchanged
     REQUIRE(pv2.exponent() == rational{1, 2});
+
+    // adjoint must not mutate a base shared with another expression
+    auto shared_base = ex<Variable>(L"w");
+    Power ps1(shared_base, rational{1, 2});
+    Power ps2(shared_base, rational{1, 3});
+    ps1.adjoint();
+    REQUIRE(ps1.base()->as<Variable>().conjugated());
+    REQUIRE(!ps2.base()->as<Variable>().conjugated());
+    REQUIRE(!shared_base->as<Variable>().conjugated());
+
+    // static_less_than
+    Power plt_a(vx, rational{1, 2});
+    Power plt_b(vx, rational{3, 4});
+    REQUIRE(plt_a < plt_b);
+    Power plt_c(vx, rational{1, 2});
+    REQUIRE(!(plt_a < plt_c));
 
     // operator*=
     Power pa(vx, rational{1, 2});
