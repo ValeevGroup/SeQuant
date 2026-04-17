@@ -126,6 +126,14 @@ class Power : public Expr {
     const auto& other = static_cast<const Power&>(that);
     return exponent_ == other.exponent_ && *base_ == *other.base_;
   }
+
+  bool static_less_than(const Expr& that) const override {
+    const auto& other = static_cast<const Power&>(that);
+    if (*base_ != *other.base_) return *base_ < *other.base_;
+    if (exponent_.real() != other.exponent_.real())
+      return exponent_.real() < other.exponent_.real();
+    return exponent_.imag() < other.exponent_.imag();
+  }
 };
 
 }  // namespace sequant
