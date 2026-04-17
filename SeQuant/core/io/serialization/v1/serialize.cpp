@@ -231,6 +231,8 @@ std::wstring to_string(const Expr& expr, const SerializationOptions& options) {
     return details::to_string(expr.as<Constant>(), options);
   else if (expr.is<Variable>())
     return details::to_string(expr.as<Variable>(), options);
+  else if (expr.is<Power>())
+    return expr.to_latex();
   else
     throw Exception("Unsupported expr type for serialize!");
 }
