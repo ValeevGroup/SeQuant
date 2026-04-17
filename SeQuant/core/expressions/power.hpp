@@ -76,10 +76,11 @@ class Power : public Expr {
     return ex<Power>(base_->clone(), exponent_);
   }
 
-  /// @brief adjoint of Power: (base^exp)† = (base†)^(exp*)
+  /// @brief adjoint of Power
   void adjoint() override {
-    base_->adjoint();
+    base_ = ::sequant::adjoint(base_);
     exponent_ = conj(exponent_);
+    reset_hash_value();
   }
 
   /// @brief Combines exponents when bases match:
