@@ -1,6 +1,7 @@
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/expr_operators.hpp>
+#include <SeQuant/core/expressions/power.hpp>
 #include <SeQuant/core/expressions/product.hpp>
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/expressions/sum.hpp>
@@ -341,6 +342,9 @@ struct RapidSimplifyVisitor {
     bool need_to_rebuild = false;
     const auto nsubexpr = size(expr);
     for (std::size_t i = 0; i != nsubexpr; ++i) {
+      // try to flatten Power: mutates Power -> Constant if possible
+      if (expr_ref[i]->is<Power>()) Power::flatten(expr_ref[i]);
+
       const auto expr_i_is_product = expr_ref[i]->is<Product>();
       const auto expr_i_is_constant = expr_ref[i]->is<Constant>();
       if (expr_i_is_product || expr_i_is_constant) {

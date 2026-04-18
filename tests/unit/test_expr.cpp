@@ -868,11 +868,11 @@ TEST_CASE("expr", "[elements]") {
     auto inner = ex<Power>(c2, rational{1, 2});
     Power outer(inner, rational{2, 3});
     REQUIRE(outer.exponent() == rational{1, 3});  // 1/2 * 2/3 = 1/3
-    REQUIRE(*outer.base() == *c2);
+    REQUIRE(outer.base() == c2);
 
     // accessors
     Power p1(c2, rational{1, 2});
-    REQUIRE(*p1.base() == Constant(rational{1, 2}));
+    REQUIRE(p1.base() == ex<Constant>(rational{1, 2}));
     REQUIRE(p1.exponent() == rational{1, 2});
 
     // equality
@@ -971,6 +971,40 @@ TEST_CASE("expr", "[elements]") {
     simplify(sum2);
     REQUIRE(sum2->is<Product>());
     REQUIRE(sum2->as<Product>().scalar() == 5);
+
+    // Power::flatten: Constant base + integer exponent folds in place
+    auto pf1 = ex<Power>(ex<Constant>(2), rational{3});
+    Power::flatten(pf1);
+    REQUIRE(pf1 == ex<Constant>(rational{8}));
+
+    auto pf2 = ex<Power>(ex<Constant>(2), rational{-3});
+    Power::flatten(pf2);
+    REQUIRE(pf2 == ex<Constant>(rational{1, 8}));
+
+    auto pf3 = ex<Power>(ex<Constant>(rational{2, 3}), rational{0});
+    Power::flatten(pf3);
+    REQUIRE(pf3 == ex<Constant>(rational{1}));
+
+    // non-integer exponent on a Constant base is a no-op
+    auto pf4 = ex<Power>(ex<Constant>(2), rational{1, 2});
+    Power::flatten(pf4);
+    REQUIRE(pf4->is<Power>());
+
+    // Variable base is a no-op
+    auto pf5 = ex<Power>(vx, rational{2});
+    Power::flatten(pf5);
+    REQUIRE(pf5->is<Power>());
+
+    // simplify
+    auto pwf = ex<Power>(ex<Constant>(2), rational{2}) * vx;
+    simplify(pwf);
+    REQUIRE(pwf->is<Product>());
+    REQUIRE(pwf->as<Product>().scalar() == 4);
+
+    auto pwnf = ex<Power>(ex<Constant>(2), rational{1, 2}) * vx;
+    simplify(pwnf);
+    REQUIRE(pwnf->is<Product>());
+    REQUIRE(pwnf->as<Product>().scalar() == 1);
   }
 
   SECTION("ResultExpr") {

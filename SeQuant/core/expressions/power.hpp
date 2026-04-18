@@ -60,6 +60,40 @@ class Power : public Expr {
            base_->as<Constant>().is_zero();
   }
 
+  /// @brief Attempts to flatten a Power into a Constant, mutating @p expr
+  /// in place. No-op unless @p expr holds a Power whose:
+  ///   - base is a Constant
+  ///   - exponent is a real integer
+  /// On success, @p expr is rebound to the folded Constant; otherwise it is
+  /// left unchanged.
+  static void flatten(ExprPtr& expr) {
+    if (!expr || !expr->is<Power>()) return;
+    const auto& self = expr->as<Power>();
+    if (!self.base_->is<Constant>()) return;
+    if (self.exponent_.imag() != 0) return;
+    const auto& expr_real = self.exponent_.real();
+    if (denominator(expr_real) != 1) return;
+
+    auto exp_numerator = numerator(expr_real);
+    const auto& base_val = self.base_->as<Constant>().value();
+    using scalar_type = Constant::scalar_type;
+
+    // zero power
+    if (exp_numerator == 0) {
+      expr = ex<Constant>(scalar_type{1});
+      return;
+    }
+    // negative power
+    const bool negate = exp_numerator < 0;
+    if (negate) exp_numerator = -exp_numerator;
+
+    scalar_type value{1};
+    for (auto i = exp_numerator; i > 0; --i) value *= base_val;
+    if (negate) value = scalar_type{1} / value;
+
+    expr = ex<Constant>(std::move(value));
+  }
+
   std::wstring to_latex() const override {
     if (exponent_ == 1) {
       return base_->to_latex();
