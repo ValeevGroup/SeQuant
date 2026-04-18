@@ -281,6 +281,31 @@ TEST_CASE("serialization", "[serialization]") {
       REQUIRE(deserialize<ExprPtr>(L"b^*")->as<Variable>().label() == L"b");
     }
 
+    SECTION("Power") {
+      auto half = deserialize<ExprPtr>(L"2^(1/2)");
+      REQUIRE(half->is<Power>());
+      REQUIRE(half->as<Power>().base()->is<Constant>());
+      REQUIRE(half->as<Power>().base()->as<Constant>().value() == rational{2});
+      REQUIRE(half->as<Power>().exponent() == rational{1, 2});
+
+      auto x_square = deserialize<ExprPtr>(L"x^(2)");
+      REQUIRE(x_square->is<Power>());
+      REQUIRE(x_square->as<Power>().base()->is<Variable>());
+      REQUIRE(x_square->as<Power>().base()->as<Variable>().label() == L"x");
+      REQUIRE(x_square->as<Power>().exponent() == rational{2});
+
+      // whitespace
+      REQUIRE(deserialize<ExprPtr>(L"x ^ ( 1/2 )") ==
+              deserialize<ExprPtr>(L"x^(1/2)"));
+
+      // Power composes inside Products
+      auto prod = deserialize<ExprPtr>(L"3 * x^(1/2) * t{i1;a1}");
+      REQUIRE(prod->is<Product>());
+      REQUIRE(prod->as<Product>().scalar() == rational{3});
+      REQUIRE(prod->as<Product>().factor(0)->is<Power>());
+      REQUIRE(prod->as<Product>().factor(1)->is<Tensor>());
+    }
+
     SECTION("Product") {
       auto expr = deserialize<ExprPtr>(L"-1/2 g{i2,i3; i1,a2} t{a1,a2; i2,i3}");
       REQUIRE(expr->is<Product>());

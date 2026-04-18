@@ -312,6 +312,28 @@ struct Transformer {
   ExprPtr operator()(const io::serialization::v1::ast::Number &number) const {
     return ex<Constant>(to_constant(number, position_cache.get(), begin.get()));
   }
+
+  ExprPtr operator()(const io::serialization::v1::ast::Power &power) const {
+    // build base from Number or Variable
+    ExprPtr base = boost::apply_visitor(*this, power.base);
+
+    // exponent must be a rational, reject otherwise
+    if (static_cast<std::int64_t>(power.exponent.numerator) !=
+            power.exponent.numerator ||
+        static_cast<std::int64_t>(power.exponent.denominator) !=
+            power.exponent.denominator) {
+      auto [offset, length] = get_pos(power, position_cache.get(), begin.get());
+      throw SerializationError(
+          offset, length,
+          "Power exponent must be a rational number (integer numerator and "
+          "denominator)");
+    }
+    sequant::rational exponent(
+        static_cast<std::int64_t>(power.exponent.numerator),
+        static_cast<std::int64_t>(power.exponent.denominator));
+
+    return ex<Power>(std::move(base), std::move(exponent));
+  }
 };
 
 template <typename PositionCache, typename Iterator>

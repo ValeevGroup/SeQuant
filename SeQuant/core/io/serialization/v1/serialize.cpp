@@ -145,6 +145,41 @@ std::wstring to_string(const Variable& variable, const SerializationOptions&) {
   return std::wstring(variable.label()) + (variable.conjugated() ? L"^*" : L"");
 }
 
+std::wstring to_string(const Power& power, const SerializationOptions& options);
+
+std::wstring serialize_rational(const ::sequant::rational& r) {
+  std::string out = numerator(r).str();
+  if (denominator(r) != 1) {
+    out += "/" + denominator(r).str();
+  }
+  return toUtf16(out);
+}
+
+std::wstring to_string(const Power& power,
+                       const SerializationOptions& options) {
+  if (power.exponent().imag() != 0) {
+    throw Exception(
+        "Cannot serialize Power with non-zero imaginary exponent: v1 grammar "
+        "only supports real rational exponents");
+  }
+
+  std::wstring serialized;
+  const ExprPtr& base = power.base();
+  if (base->is<Constant>()) {
+    serialized += to_string(base->as<Constant>(), options);
+  } else if (base->is<Variable>()) {
+    serialized += to_string(base->as<Variable>(), options);
+  } else {
+    throw Exception(
+        "Cannot serialize Power with non-scalar base (expected Constant or "
+        "Variable)");
+  }
+  serialized += L"^(";
+  serialized += serialize_rational(power.exponent().real());
+  serialized += L")";
+  return serialized;
+}
+
 std::wstring to_string(Product const& prod,
                        const SerializationOptions& options) {
   std::wstring serialized;
@@ -232,7 +267,7 @@ std::wstring to_string(const Expr& expr, const SerializationOptions& options) {
   else if (expr.is<Variable>())
     return details::to_string(expr.as<Variable>(), options);
   else if (expr.is<Power>())
-    return expr.to_latex();
+    return details::to_string(expr.as<Power>(), options);
   else
     throw Exception("Unsupported expr type for serialize!");
 }
