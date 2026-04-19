@@ -43,10 +43,20 @@ class Power : public Expr {
     }
   }
 
-  /// @overload
-  /// @param[in] exponent real rational exponent (imaginary part is zero)
-  Power(ExprPtr base, rational exponent)
-      : Power(std::move(base), exponent_type{std::move(exponent), 0}) {}
+  /// @overload constructs a `Variable` base from @p label
+  template <typename L>
+    requires std::constructible_from<std::wstring, L> &&
+             (!std::convertible_to<L, ExprPtr>)
+  Power(L&& label, exponent_type exponent)
+      : Power(ex<Variable>(std::forward<L>(label)), std::move(exponent)) {}
+
+  /// @overload constructs a `Constant` base from scalar @p value
+  template <typename V>
+    requires(!std::constructible_from<std::wstring, V> &&
+             !std::convertible_to<V, ExprPtr> &&
+             std::constructible_from<Constant::scalar_type, V>)
+  Power(V&& value, exponent_type exponent)
+      : Power(ex<Constant>(std::forward<V>(value)), std::move(exponent)) {}
 
   /// @return the base expression
   const ExprPtr& base() const { return base_; }
