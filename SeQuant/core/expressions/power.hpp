@@ -41,6 +41,11 @@ class Power : public Expr {
       SEQUANT_ASSERT(base->is<Constant>() || base->is<Variable>());
       base_ = std::move(base);
     }
+    // 0^z is defined only when Re(z) > 0 (= 0) or z == 0 (= 1 by convention)
+    if (base_->is<Constant>() && base_->as<Constant>().is_zero()) {
+      SEQUANT_ASSERT(exponent_.real() > 0 ||
+                     (exponent_.real() == 0 && exponent_.imag() == 0));
+    }
   }
 
   /// @overload constructs a `Variable` base from @p label
@@ -65,6 +70,8 @@ class Power : public Expr {
   const exponent_type& exponent() const { return exponent_; }
 
   /// @return true if the base is zero and the exponent has positive real part
+  /// @note Construction rejects all undefined 0^z cases; 0^0 is legal and
+  /// treated as 1.
   bool is_zero() const override {
     return exponent_.real() > 0 && base_->is<Constant>() &&
            base_->as<Constant>().is_zero();
