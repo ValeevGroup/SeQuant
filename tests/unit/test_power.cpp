@@ -143,6 +143,21 @@ TEST_CASE("power", "[elements]") {
     Power::flatten(pf5);
     REQUIRE(pf5->is<Power>());
 
+    // large exponents
+    auto pf6 = ex<Power>(2, 1000000);
+    Power::flatten(pf6);
+    REQUIRE(pf6->is<Constant>());
+
+    // 2^20 = 1048576
+    auto pf7 = ex<Power>(2, 20);
+    Power::flatten(pf7);
+    REQUIRE(pf7 == ex<Constant>(rational{1048576}));
+
+    // 2^(-20) = 1/1048576
+    auto pf8 = ex<Power>(2, -20);
+    Power::flatten(pf8);
+    REQUIRE(pf8 == ex<Constant>(rational{1, 1048576}));
+
     // simplify folds a foldable Power-in-Product into the Product scalar
     auto pwf = ex<Power>(2, 2) * ex<Variable>(L"x");
     simplify(pwf);

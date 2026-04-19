@@ -97,8 +97,15 @@ class Power : public Expr {
     const bool negate = exp_numerator < 0;
     if (negate) exp_numerator = -exp_numerator;
 
+    // exponentiation by squaring
     scalar_type value{1};
-    for (auto i = exp_numerator; i > 0; --i) value *= base_val;
+    scalar_type b = base_val;
+    auto n = exp_numerator;
+    while (n > 0) {
+      if (n % 2 != 0) value *= b;
+      n /= 2;
+      if (n > 0) b *= b;
+    }
     if (negate) value = scalar_type{1} / value;
 
     expr = ex<Constant>(std::move(value));
