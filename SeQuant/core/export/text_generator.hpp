@@ -275,6 +275,11 @@ class TextGenerator : public Generator<Context> {
       return represent(expr.as<Variable>(), ctx);
     } else if (expr.is<Constant>()) {
       return represent(expr.as<Constant>(), ctx);
+    } else if (expr.is<Power>()) {
+      const Power &power = expr.as<Power>();
+      return stringify(*power.base(), ctx) + "^" +
+             detail::format_power_exponent(power.exponent(),
+                                           /*double_slash*/ false);
     } else if (expr.is<Product>()) {
       const Product &product = expr.as<Product>();
       std::string repr;
