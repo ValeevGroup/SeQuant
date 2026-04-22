@@ -145,8 +145,9 @@ class EvalExpr {
   [[nodiscard]] bool is_tensor() const noexcept;
 
   ///
-  /// \return True if the ExprPtr held by this object is scalar(Constant, or
-  ///         Variable) and equivalently the result of evaluation is scalar.
+  /// \return True if the ExprPtr held by this object is scalar (Constant,
+  ///         Variable, or Power) and equivalently the result of evaluation
+  ///         is scalar.
   ///
   [[nodiscard]] bool is_scalar() const noexcept;
 
