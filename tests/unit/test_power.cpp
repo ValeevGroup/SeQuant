@@ -94,6 +94,18 @@ TEST_CASE("power", "[elements]") {
     REQUIRE(sequant::hash::value(p1) == sequant::hash::value(p2));
     REQUIRE(sequant::hash::value(p1) != sequant::hash::value(p3));
     REQUIRE(sequant::hash::value(p1) != sequant::hash::value(p4));
+
+    // Power(b, 1) has the same hash as b
+    const auto v = ex<Variable>(L"u");
+    Power p_one(v, rational{1});
+    REQUIRE(sequant::hash::value(p_one) == sequant::hash::value(*v));
+
+    // mutating the ExprPtr not affect the Power's cached hash.
+    auto shared = ex<Variable>(L"s");
+    Power ps(shared, rational{2});
+    const auto ps_hash_before = sequant::hash::value(ps);
+    shared->as<Variable>().conjugate();
+    REQUIRE(sequant::hash::value(ps) == ps_hash_before);
   }
 
   SECTION("adjoint") {

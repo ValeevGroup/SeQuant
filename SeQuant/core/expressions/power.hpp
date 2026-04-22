@@ -32,13 +32,15 @@ class Power : public Expr {
   Power(ExprPtr base, exponent_type exponent)
       : base_{}, exponent_{std::move(exponent)} {
     SEQUANT_ASSERT(base);
+    // clone on construction so that external
+    // mutations of the input cannot invalidate our memoized hash
     if (base->is<Power>()) {
       auto& inner = base->as<Power>();
-      base_ = inner.base();
+      base_ = inner.base()->clone();
       exponent_ = inner.exponent() * exponent_;
     } else {
       SEQUANT_ASSERT(base->is<Constant>() || base->is<Variable>());
-      base_ = std::move(base);
+      base_ = base->clone();
     }
     // 0^n is defined only for n >= 0 (0^0 = 1 by convention)
     if (base_->is<Constant>() && base_->as<Constant>().is_zero()) {
@@ -160,8 +162,12 @@ class Power : public Expr {
   ExprPtr base_;
   exponent_type exponent_;
 
+  /// @return hash of this Power
+  /// @note when exponent is 1 the hash matches the base's, so a
+  /// `Power(b, 1)` is interchangeable with `b` for hash-based lookup.
   hash_type memoizing_hash() const override {
     auto compute_hash = [this]() {
+      if (exponent_ == 1) return hash::value(*base_);
       auto val = hash::value(*base_);
       hash::combine(val, hash::value(exponent_));
       return val;
