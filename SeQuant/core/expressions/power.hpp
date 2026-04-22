@@ -1,7 +1,6 @@
 #ifndef SEQUANT_EXPRESSIONS_POWER_HPP
 #define SEQUANT_EXPRESSIONS_POWER_HPP
 
-#include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
@@ -14,10 +13,10 @@
 namespace sequant {
 
 /// @brief Represents base^exponent where base is a scalar (Constant or
-/// Variable) and exponent is a complex rational number.
+/// Variable) and exponent is a rational number.
 class Power : public Expr {
  public:
-  using exponent_type = Complex<rational>;
+  using exponent_type = rational;
 
   Power() = delete;
   virtual ~Power() = default;
@@ -29,7 +28,7 @@ class Power : public Expr {
   /// @param[in] base the base expression; must be a Constant, Variable, or
   ///   Power (in the last case the result is flattened:
   ///   `Power(Power(b,e1), e2)` → `Power(b, e1*e2)`)
-  /// @param[in] exponent complex rational exponent
+  /// @param[in] exponent rational exponent
   Power(ExprPtr base, exponent_type exponent)
       : base_{}, exponent_{std::move(exponent)} {
     SEQUANT_ASSERT(base);
@@ -41,10 +40,9 @@ class Power : public Expr {
       SEQUANT_ASSERT(base->is<Constant>() || base->is<Variable>());
       base_ = std::move(base);
     }
-    // 0^z is defined only when Re(z) > 0 (= 0) or z == 0 (= 1 by convention)
+    // 0^n is defined only for n >= 0 (0^0 = 1 by convention)
     if (base_->is<Constant>() && base_->as<Constant>().is_zero()) {
-      SEQUANT_ASSERT(exponent_.real() > 0 ||
-                     (exponent_.real() == 0 && exponent_.imag() == 0));
+      SEQUANT_ASSERT(exponent_ >= 0);
     }
   }
 
@@ -66,14 +64,14 @@ class Power : public Expr {
   /// @return the base expression
   const ExprPtr& base() const { return base_; }
 
-  /// @return the complex rational exponent
+  /// @return the rational exponent
   const exponent_type& exponent() const { return exponent_; }
 
-  /// @return true if the base is zero and the exponent has positive real part
-  /// @note Construction rejects all undefined 0^z cases; 0^0 is legal and
+  /// @return true if the base is zero and the exponent is positive
+  /// @note Construction rejects all undefined 0^n cases; 0^0 is legal and
   /// treated as 1.
   bool is_zero() const override {
-    return exponent_.real() > 0 && base_->is<Constant>() &&
+    return exponent_ > 0 && base_->is<Constant>() &&
            base_->as<Constant>().is_zero();
   }
 
@@ -87,11 +85,9 @@ class Power : public Expr {
     if (!expr || !expr->is<Power>()) return;
     const auto& self = expr->as<Power>();
     if (!self.base_->is<Constant>()) return;
-    if (self.exponent_.imag() != 0) return;
-    const auto& expr_real = self.exponent_.real();
-    if (denominator(expr_real) != 1) return;
+    if (denominator(self.exponent_) != 1) return;
 
-    auto exp_numerator = numerator(expr_real);
+    auto exp_numerator = numerator(self.exponent_);
     const auto& base_val = self.base_->as<Constant>().value();
     using scalar_type = Constant::scalar_type;
 
@@ -134,10 +130,9 @@ class Power : public Expr {
     return ex<Power>(base_->clone(), exponent_);
   }
 
-  /// @brief adjoint of Power
+  /// @brief adjoint of Power: calls adjoint on base; exponent is real.
   void adjoint() override {
     base_ = ::sequant::adjoint(base_);
-    exponent_ = conj(exponent_);
     reset_hash_value();
   }
 
@@ -188,9 +183,7 @@ class Power : public Expr {
   bool static_less_than(const Expr& that) const override {
     const auto& other = static_cast<const Power&>(that);
     if (*base_ != *other.base_) return *base_ < *other.base_;
-    if (exponent_.real() != other.exponent_.real())
-      return exponent_.real() < other.exponent_.real();
-    return exponent_.imag() < other.exponent_.imag();
+    return exponent_ < other.exponent_;
   }
 };
 

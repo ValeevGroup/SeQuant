@@ -4,7 +4,6 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/power.hpp>
@@ -30,9 +29,6 @@ TEST_CASE("power", "[elements]") {
     REQUIRE(Power(2, 3) == Power(ex<Constant>(2), rational{3}));
     REQUIRE(Power(rational{2, 3}, 2) ==
             Power(ex<Constant>(rational{2, 3}), rational{2}));
-    REQUIRE(Power(L"x", Power::exponent_type{rational{2}, rational{1}}) ==
-            Power(vx, Power::exponent_type{rational{2}, rational{1}}));
-
     // power-of-power flattens: Power(Power(b, e1), e2) -> Power(b, e1*e2)
     const auto inner = ex<Power>(c2, rational{1, 2});
     Power outer(inner, rational{2, 3});
@@ -44,15 +40,9 @@ TEST_CASE("power", "[elements]") {
       auto bad_base = ex<Product>(Product{});
       REQUIRE_THROWS(Power(bad_base, rational{2}));
 
-      // 0^z is defined only for Re(z) > 0 or z == 0
+      // 0^n is defined only for n >= 0
       REQUIRE_THROWS(Power(ex<Constant>(0), rational{-1}));
       REQUIRE_THROWS(Power(ex<Constant>(0), rational{-1, 2}));
-      // pure imaginary nonzero exponent is undefined
-      REQUIRE_THROWS(Power(ex<Constant>(0),
-                           Power::exponent_type{rational{0}, rational{1}}));
-      // complex with negative real part is undefined
-      REQUIRE_THROWS(Power(ex<Constant>(0),
-                           Power::exponent_type{rational{-1}, rational{1}}));
     }
   }
 

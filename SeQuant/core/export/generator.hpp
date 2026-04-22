@@ -18,28 +18,23 @@ namespace sequant {
 namespace detail {
 
 /// Formats a Power exponent
-/// @param exponent the real rational exponent
+/// @param exponent the rational exponent
 /// @param double_slash if true, use Julia's `//` rational syntax; otherwise
 ///        use `/` (Python/plain-text style)
 /// @return a string such as `2`, `(-3)`, `(1/2)`, `(-1//3)`
 inline std::string format_power_exponent(const Power::exponent_type &exponent,
                                          bool double_slash) {
-  if (exponent.imag() != 0) {
-    throw Exception(
-        "Complex exponents in Power are not supported by this exporter");
-  }
-  const auto &r = exponent.real();
   std::stringstream ss;
-  if (denominator(r) == 1) {
-    const auto n = numerator(r);
+  if (denominator(exponent) == 1) {
+    const auto n = numerator(exponent);
     if (n < 0) {
       ss << "(" << n << ")";
     } else {
       ss << n;
     }
   } else {
-    ss << "(" << numerator(r) << (double_slash ? "//" : "/") << denominator(r)
-       << ")";
+    ss << "(" << numerator(exponent) << (double_slash ? "//" : "/")
+       << denominator(exponent) << ")";
   }
   return ss.str();
 }
