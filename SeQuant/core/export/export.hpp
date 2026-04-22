@@ -230,11 +230,14 @@ class GenerationVisitor {
         SEQUANT_ASSERT(current->is<Constant>() || current->is<Variable>() ||
                        current->is<Power>());
 
+        // Power(Constant, n) is effectively a Constant: no load/drop needed.
         if (current->is<Constant>()) return;
-        if (current->is<Power>() &&
-            !current->as<Power>().base()->is<Variable>())
+        if (current->is<Power>() && current->as<Power>().base()->is<Constant>())
           return;
 
+        SEQUANT_ASSERT(current->is<Variable>() ||
+                       (current->is<Power>() &&
+                        current->as<Power>().base()->is<Variable>()));
         const Variable &var = current->is<Variable>()
                                   ? current->as<Variable>()
                                   : current->as<Power>().base()->as<Variable>();
