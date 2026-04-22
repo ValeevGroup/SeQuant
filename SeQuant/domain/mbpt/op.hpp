@@ -757,6 +757,11 @@ class OpMaker {
         break;
       case Normalization::Implicit:
         break;
+      case Normalization::SquareRoot:
+        result =
+            ex<Power>(ex<Constant>(rational{1, op_info.mult}), rational{1, 2}) *
+            result;
+        break;
       default:
         abort();
     }
@@ -823,6 +828,11 @@ class OpMaker {
         result = ex<Constant>(rational{1, op_info.mult}) * result;
         break;
       case Normalization::Implicit:
+        break;
+      case Normalization::SquareRoot:
+        result =
+            ex<Power>(ex<Constant>(rational{1, op_info.mult}), rational{1, 2}) *
+            result;
         break;
       default:
         abort();
