@@ -116,15 +116,7 @@ class Power : public Expr {
     expr = ex<Constant>(std::move(value));
   }
 
-  std::wstring to_latex() const override {
-    if (exponent_ == 1) {
-      return base_->to_latex();
-    }
-    if (exponent_.imag() == 0) {
-      return base_->to_latex() + L"^" + io::latex::to_string(exponent_.real());
-    }
-    return base_->to_latex() + L"^" + exponent_.to_latex();
-  }
+  std::wstring to_latex() const override;
 
   type_id_type type_id() const override { return get_type_id<Power>(); }
 
@@ -193,6 +185,19 @@ class Power : public Expr {
   }
 };
 
+}  // namespace sequant
+
+namespace sequant::io::latex {
+inline std::wstring to_string(const Power& power) {
+  if (power.exponent() == 1) return power.base()->to_latex();
+  return power.base()->to_latex() + L"^" + to_string(power.exponent());
+}
+}  // namespace sequant::io::latex
+
+namespace sequant {
+inline std::wstring Power::to_latex() const {
+  return io::latex::to_string(*this);
+}
 }  // namespace sequant
 
 #endif  // SEQUANT_EXPRESSIONS_POWER_HPP
