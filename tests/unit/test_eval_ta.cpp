@@ -17,6 +17,7 @@
 #include <tiledarray.h>
 #include <boost/regex.hpp>
 
+#include <cmath>
 #include <cstdlib>
 #include <string>
 #include <vector>

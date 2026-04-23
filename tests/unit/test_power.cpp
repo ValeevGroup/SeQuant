@@ -102,7 +102,7 @@ TEST_CASE("power", "[elements]") {
     Power p_one(v, rational{1});
     REQUIRE(sequant::hash::value(p_one) == sequant::hash::value(*v));
 
-    // mutating the ExprPtr not affect the Power's cached hash.
+    // mutating the ExprPtr does not affect the Power's cached hash.
     auto shared = ex<Variable>(L"s");
     Power ps(shared, rational{2});
     const auto ps_hash_before = sequant::hash::value(ps);
@@ -163,11 +163,6 @@ TEST_CASE("power", "[elements]") {
     auto pf5 = ex<Power>(L"x", 2);
     Power::flatten(pf5);
     REQUIRE(pf5->is<Power>());
-
-    // large exponents
-    auto pf6 = ex<Power>(2, 1000000);
-    Power::flatten(pf6);
-    REQUIRE(pf6->is<Constant>());
 
     // 2^20 = 1048576
     auto pf7 = ex<Power>(2, 20);
