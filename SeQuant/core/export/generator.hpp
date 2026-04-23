@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
+#include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/power.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/rational.hpp>
@@ -37,6 +38,23 @@ inline std::string format_power_exponent(const Power::exponent_type &exponent,
        << denominator(exponent) << ")";
   }
   return ss.str();
+}
+
+/// Parenthesizes an already-stringified Power base when needed to keep
+/// exponentiation precedence unambiguous in the target language.
+/// @param base the Power base expression (Constant, Variable, or Power)
+/// @param base_str @p base already rendered to a string by the caller
+/// @return @p base_str, wrapped in parens iff @p base is a non-integer or
+///         negative real Constant
+inline std::string format_power_base(const Expr &base, std::string base_str) {
+  if (base.is<Constant>()) {
+    const auto &v = base.as<Constant>().value();
+    if (v.imag() == 0 &&
+        (denominator(v.real()) != 1 || numerator(v.real()) < 0)) {
+      return "(" + std::move(base_str) + ")";
+    }
+  }
+  return base_str;
 }
 
 }  // namespace detail

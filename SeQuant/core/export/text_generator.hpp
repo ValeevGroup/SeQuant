@@ -277,7 +277,8 @@ class TextGenerator : public Generator<Context> {
       return represent(expr.as<Constant>(), ctx);
     } else if (expr.is<Power>()) {
       const Power &power = expr.as<Power>();
-      return stringify(*power.base(), ctx) + "^" +
+      const Expr &base = *power.base();
+      return detail::format_power_base(base, stringify(base, ctx)) + "^" +
              detail::format_power_exponent(power.exponent(),
                                            /*double_slash*/ false);
     } else if (expr.is<Product>()) {

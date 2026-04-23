@@ -403,7 +403,8 @@ class ItfGenerator : public Generator<Context> {
     } else if (expr.is<Power>()) {
       // Use Python like syntax for ITF
       const Power &power = expr.as<Power>();
-      return stringify(*power.base(), ctx) + "**" +
+      const Expr &base = *power.base();
+      return detail::format_power_base(base, stringify(base, ctx)) + "**" +
              detail::format_power_exponent(power.exponent(),
                                            /*double_slash*/ false);
     } else if (expr.is<Product>()) {

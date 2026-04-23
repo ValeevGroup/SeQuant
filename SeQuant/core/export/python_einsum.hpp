@@ -488,7 +488,8 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
       if (!base.is<Constant>() && !base.is<Variable>()) {
         throw Exception("Power base must be a Constant or Variable");
       }
-      return stringify_scalar(base, ctx) + "**" +
+      return detail::format_power_base(base, stringify_scalar(base, ctx)) +
+             "**" +
              detail::format_power_exponent(power.exponent(),
                                            /*double_slash*/ false);
     }
