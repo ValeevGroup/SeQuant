@@ -3,6 +3,7 @@
 //
 
 #include <catch2/catch_test_macros.hpp>
+#include "catch2_sequant.hpp"
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
@@ -12,6 +13,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
 
 TEST_CASE("power", "[elements]") {
   using namespace sequant;
@@ -216,11 +218,32 @@ TEST_CASE("power", "[elements]") {
     const auto vx = ex<Variable>(L"x");
 
     // Power should NOT be absorbed into Product::scalar_
-    auto pw = ex<Power>(vx, rational{1, 2});
+    auto p = ex<Power>(vx, rational{1, 2});
     auto prod = ex<Product>(Product{});
-    prod->as<Product>().append(1, pw, Product::Flatten::Yes);
+    prod->as<Product>().append(1, p, Product::Flatten::Yes);
     REQUIRE(prod->as<Product>().factors().size() == 1);
     REQUIRE(prod->as<Product>().scalar() == 1);
+
+    using namespace sequant::mbpt;
+
+    const auto f = tensor::F();
+    const auto t1 = tensor::T(1);
+    const auto pw = ex<Power>(ex<Variable>(L"x"), rational{1, 2});
+
+    auto expr1 = f * t1 * pw;
+    simplify(expr1);
+    REQUIRE_THAT(expr1, EquivalentTo(L"x^(1/2) * ã{p_2;p_1} * ã{i_1;a_1} * "
+                                     L"t{a_1;i_1}:A-C-S * f{p_1;p_2}:A-C-S"));
+
+    auto expr2 = ex<Constant>(rational{1, 2}) * f * t1 * pw;
+    simplify(expr2);
+    REQUIRE_THAT(expr2, EquivalentTo(L"1/2 x^(1/2) * ã{p_2;p_1} * ã{i_1;a_1} * "
+                                     L"t{a_1;i_1}:A-C-S * f{p_1;p_2}:A-C-S"));
+
+    auto expr3 = f * t1 * ex<Power>(2, 3);
+    simplify(expr3);
+    REQUIRE_THAT(expr3, EquivalentTo(L"8 * ã{p_2;p_1} * ã{i_1;a_1} * "
+                                     L"t{a_1;i_1}:A-C-S * f{p_1;p_2}:A-C-S"));
   }
 
   SECTION("in Sum") {

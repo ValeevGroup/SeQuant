@@ -190,25 +190,25 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
                << ") input: " << to_latex() << std::endl;
   }
 
-  // pull out all Variables to the front
-  auto variables = factors_ | ranges::views::filter([](const auto &factor) {
-                     return factor.template is<Variable>();
-                   }) |
-                   ranges::to_vector;
-  // sort variables
-  ranges::sort(variables, [](const auto &first, const auto &second) {
-    return first.template as<Variable>().label() <
-           second.template as<Variable>().label();
+  // pull out all scalar factors (Variables, Powers) to the front
+  auto is_scalar = [](const auto &factor) {
+    return factor.template is<Variable>() || factor.template is<Power>();
+  };
+  auto scalars =
+      factors_ | ranges::views::filter(is_scalar) | ranges::to_vector;
+  // scalars commute, so we can reorder them freely
+  ranges::sort(scalars, [](const auto &first, const auto &second) {
+    return *first < *second;
   });
 
-  factors_ = factors_ | ranges::views::filter([](const auto &factor) {
-               return !factor.template is<Variable>();
+  factors_ = factors_ | ranges::views::filter([&is_scalar](const auto &factor) {
+               return !is_scalar(factor);
              }) |
              ranges::to<decltype(factors_)>;
 
-  // if there are no factors, insert variables back and return
+  // if there are no factors, insert scalars back and return
   if (factors_.empty()) {
-    factors_.insert(factors_.begin(), variables.begin(), variables.end());
+    factors_.insert(factors_.begin(), scalars.begin(), scalars.end());
     return {};
   }
 
@@ -310,8 +310,8 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
           });
     }
   }
-  // reinsert Variables at the front
-  factors_.insert(factors_.begin(), variables.begin(), variables.end());
+  // reinsert scalar factors at the front
+  factors_.insert(factors_.begin(), scalars.begin(), scalars.end());
 
   // TODO evaluate product of Tensors (turn this into Products of Products)
 
