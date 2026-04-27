@@ -1239,6 +1239,26 @@ namespace tensor {
 ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
                                OpConnections<int> avoid, bool use_top,
                                bool full_contractions) {
+  // Pull scalar-type factors (Variable and Power) out of a Product before
+  // WickTheorem sees it. Extracted factors are reattached to the result after
+  // Wick evaluation.
+  auto is_scalar_leaf = [](const ExprPtr& f) {
+    return f->is<Variable>() || f->is<Power>();
+  };
+  container::svector<ExprPtr> scalar_factors;
+  if (expr.is<Product>()) {
+    auto factors = expr.as<Product>().factors();
+    scalar_factors = factors | ranges::views::filter(is_scalar_leaf) |
+                     ranges::to<container::svector<ExprPtr>>;
+    if (!scalar_factors.empty()) {
+      auto kept = factors | ranges::views::filter([&](const auto& f) {
+                    return !is_scalar_leaf(f);
+                  }) |
+                  ranges::to<decltype(factors)>;
+      expr = ex<Product>(expr.as<Product>().scalar(), kept.begin(), kept.end());
+    }
+  }
+
   simplify(expr);
   auto isr = get_default_context().index_space_registry();
   const auto spinor = get_default_context().spbasis() == SPBasis::Spinor;
@@ -1264,6 +1284,13 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
                              true);
   simplify(result);
 
+  auto restore_scalars = [&scalar_factors](ExprPtr& r) {
+    if (!scalar_factors.empty()) {
+      ranges::for_each(scalar_factors, [&r](const auto& s) { r = r * s; });
+      simplify(r);
+    }
+  };
+
   if (Logger::instance().wick_stats) {
     std::wcout << "WickTheorem stats: # of contractions attempted = "
                << wick.stats().num_attempted_contractions
@@ -1278,6 +1305,7 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
   if (isr->reference_occupied_space() == IndexSpace::Type{} ||
       isr->reference_occupied_space(Spin::any) ==
           isr->vacuum_occupied_space(Spin::any)) {
+    restore_scalars(result);
     return result;
   } else {
     const auto target_rdm_space_type =
@@ -1453,6 +1481,7 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
                  << " # of useful contractions = "
                  << wick.stats().num_useful_contractions << std::endl;
     }
+    restore_scalars(result);
     return result;
   }
 }

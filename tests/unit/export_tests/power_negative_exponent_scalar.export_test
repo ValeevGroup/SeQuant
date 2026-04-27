@@ -1,0 +1,36 @@
+e = 2^(1/2) * x^(-2)
+
+=================================================
+Plain Text
+=================================================
+Declare variable x
+Declare variable e
+
+Create e and initialize to zero
+Load x
+Compute e += 2^(1/2) x^(-2)
+Unload x
+Persist e
+
+=================================================
+Python (einsum)
+=================================================
+import numpy as np
+import os
+
+e = 0.0
+x = np.load('x.npy')
+e += 2**(1/2) * x**(-2)
+del x
+np.save('e.npy', e)
+
+=================================================
+Julia (TensorOperations)
+=================================================
+e = 0.0
+x = deserialize("x.jlbin")
+@tensor e += 2^(1//2) * x^(-2)
+x = nothing
+return e
+
+=================================================

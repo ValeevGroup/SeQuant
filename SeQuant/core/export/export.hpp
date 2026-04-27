@@ -137,6 +137,14 @@ class GenerationVisitor {
       // Constants don't need to be loaded/created
       return;
     }
+    if (node->is_power()) {
+      // load the base Variable (if any)
+      const Power &pw = node->as_power();
+      if (pw.base()->is<Variable>()) {
+        load_or_create<Variable>(pw.base()->as<Variable>(), node.leaf());
+      }
+      return;
+    }
     if (!node->is_tensor() && !node->is_variable()) {
       throw Exception(
           "Unexpected expression type in "
@@ -168,6 +176,12 @@ class GenerationVisitor {
 
       if (m_variableUses[variable] == 0) {
         m_generator.unload(variable, m_ctx);
+      }
+    } else if (expr.is<Power>()) {
+      // drop if base is Variable
+      const Power &pw = expr.as<Power>();
+      if (pw.base()->is<Variable>()) {
+        drop(pw.base()->as<Variable>());
       }
     }
   }
@@ -212,27 +226,33 @@ class GenerationVisitor {
     container::svector<Variable> variables;
     if (auto iter = m_scalarFactors.find(node->id());
         iter != m_scalarFactors.end()) {
-      if (iter->second->template is<Product>()) {
-        for (const ExprPtr &current : iter->second->template as<Product>()) {
-          SEQUANT_ASSERT(current->is<Constant>() || current->is<Variable>());
+      auto handle_factor = [&](const ExprPtr &current) {
+        SEQUANT_ASSERT(current->is<Constant>() || current->is<Variable>() ||
+                       current->is<Power>());
 
-          if (current->is<Variable>()) {
-            variables.push_back(current->as<Variable>());
-            if (m_variableUses[variables.back()] == 0) {
-              m_generator.load(variables.back(), false, m_ctx);
-            }
+        // Power(Constant, n) is effectively a Constant: no load/drop needed.
+        if (current->is<Constant>()) return;
+        if (current->is<Power>() && current->as<Power>().base()->is<Constant>())
+          return;
 
-            m_variableUses[variables.back()]++;
-          }
-        }
-      } else if (iter->second->template is<Variable>()) {
-        variables.push_back(iter->second->template as<Variable>());
-
+        SEQUANT_ASSERT(current->is<Variable>() ||
+                       (current->is<Power>() &&
+                        current->as<Power>().base()->is<Variable>()));
+        const Variable &var = current->is<Variable>()
+                                  ? current->as<Variable>()
+                                  : current->as<Power>().base()->as<Variable>();
+        variables.push_back(var);
         if (m_variableUses[variables.back()] == 0) {
           m_generator.load(variables.back(), false, m_ctx);
         }
-
         m_variableUses[variables.back()]++;
+      };
+      if (iter->second->template is<Product>()) {
+        for (const ExprPtr &current : iter->second->template as<Product>()) {
+          handle_factor(current);
+        }
+      } else {
+        handle_factor(iter->second);
       }
 
       for (ExprPtr &current : expressions) {
@@ -304,7 +324,8 @@ bool prune_scalar_factor(ExportNode<T> &node, PreprocessResult &result,
   ExprPtr factor = node->expr();
 
   SEQUANT_ASSERT(factor);
-  SEQUANT_ASSERT(factor->is<Constant>() || factor->is<Variable>());
+  SEQUANT_ASSERT(factor->is<Constant>() || factor->is<Variable>() ||
+                 factor->is<Power>());
 
   if (factor->is<Variable>()) {
     if ((prunable & PrunableScalars::Variables) == PrunableScalars::None) {
@@ -312,6 +333,19 @@ bool prune_scalar_factor(ExportNode<T> &node, PreprocessResult &result,
     }
     result.variables[factor->as<Variable>()] |=
         node.leaf() ? Usage::Terminal : Usage::Intermediate;
+  } else if (factor->is<Power>()) {
+    // treat power based on the base type
+    const Power &pw = factor->as<Power>();
+    if (pw.base()->is<Variable>()) {
+      if ((prunable & PrunableScalars::Variables) == PrunableScalars::None) {
+        return false;
+      }
+      result.variables[pw.base()->as<Variable>()] |=
+          node.leaf() ? Usage::Terminal : Usage::Intermediate;
+    } else if ((prunable & PrunableScalars::Constants) ==
+               PrunableScalars::None) {
+      return false;
+    }
   } else if ((prunable & PrunableScalars::Constants) == PrunableScalars::None) {
     return false;
   }
@@ -588,6 +622,11 @@ class PreprocessVisitor {
       preprocess<Tensor>(node->as_tensor(), m_ctx, node, m_result);
     } else if (node->is_variable()) {
       preprocess<Variable>(node->as_variable(), m_ctx, node, m_result);
+    } else if (node->is_power()) {
+      const Power &pw = node->as_power();
+      if (pw.base()->is<Variable>()) {
+        preprocess<Variable>(pw.base()->as<Variable>(), m_ctx, node, m_result);
+      }
     }
   }
 

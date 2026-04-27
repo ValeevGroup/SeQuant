@@ -145,6 +145,26 @@ std::wstring to_string(const Variable& variable, const SerializationOptions&) {
   return std::wstring(variable.label()) + (variable.conjugated() ? L"^*" : L"");
 }
 
+std::wstring to_string(const Power& power,
+                       const SerializationOptions& options) {
+  if (power.conjugated()) {
+    // TODO: support conjugated Power
+    throw Exception(
+        "Cannot serialize conjugated Power: grammar does not yet support it");
+  }
+  std::wstring serialized;
+  const ExprPtr& base = power.base();
+  const bool parenthesize_base = base->is<Constant>();
+  if (parenthesize_base) serialized += L"(";
+  serialized += v1::to_string(*base, options);
+  if (parenthesize_base) serialized += L")";
+  serialized += L"^(";
+  serialized +=
+      serialize_scalar(Constant::scalar_type{power.exponent()}, options);
+  serialized += L")";
+  return serialized;
+}
+
 std::wstring to_string(Product const& prod,
                        const SerializationOptions& options) {
   std::wstring serialized;
@@ -231,6 +251,8 @@ std::wstring to_string(const Expr& expr, const SerializationOptions& options) {
     return details::to_string(expr.as<Constant>(), options);
   else if (expr.is<Variable>())
     return details::to_string(expr.as<Variable>(), options);
+  else if (expr.is<Power>())
+    return details::to_string(expr.as<Power>(), options);
   else
     throw Exception("Unsupported expr type for serialize!");
 }

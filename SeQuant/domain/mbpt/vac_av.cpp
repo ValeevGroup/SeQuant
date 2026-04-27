@@ -69,23 +69,8 @@ ExprPtr expectation_value_impl(ExprPtr expr,
   auto vac_av_product = [&connect, &avoid, use_topology, screen,
                          full_contractions](ExprPtr expr) {
     SEQUANT_ASSERT(expr.is<Product>());
-    // extract scalar and factors
-    const auto scalar = expr.as<Product>().scalar();
-    auto factors = expr.as<Product>().factors();
-    // remove Variable types from the Product temporarily
-    auto variables = factors | ranges::views::filter([](const auto& factor) {
-                       return factor.template is<Variable>();
-                     }) |
-                     ranges::to_vector;
-
-    auto factors_filtered = factors |
-                            ranges::views::filter([](const auto& factor) {
-                              return !(factor.template is<Variable>());
-                            }) |
-                            ranges::to<decltype(factors)>;
-    // construct Product with filtered factors
-    auto product =
-        ex<Product>(scalar, factors_filtered.begin(), factors_filtered.end());
+    // Note: Non-tensor factors are filtered out at the tensor level (see
+    // tensor::expectation_value_impl) before reaching WickTheorem
 
     // compute connections (both required and avoided)
     OpConnections<int> t_connect;
@@ -96,7 +81,7 @@ ExprPtr expectation_value_impl(ExprPtr expr,
                       // product
       int pos = 0;
       bool ops_only = true;
-      for (const auto& factor : product.as<Product>()) {
+      for (const auto& factor : expr.as<Product>()) {
         if (factor.is<op_t>()) {
           const auto& op = factor.as<op_t>();
           const std::wstring op_lbl = std::wstring(op.label());
@@ -110,12 +95,15 @@ ExprPtr expectation_value_impl(ExprPtr expr,
         } else if (factor.is<FNOperator>() || factor.is<BNOperator>()) {
           ++pos;  // skip FNOperator and BNOperator
           ops_only = false;
+        } else {
+          // any other type
+          ops_only = false;
         }
       }
 
       // if composed of ops only, screen out products with zero VEV
       if (ops_only && screen) {
-        if (!can_change_qns(product, qns_t{})) {
+        if (!can_change_qns(expr, qns_t{})) {
           return ex<Constant>(0);
         }
       }
@@ -126,17 +114,13 @@ ExprPtr expectation_value_impl(ExprPtr expr,
     }
 
     // lower to tensor form
-    lower_to_tensor_form(product);
-    simplify(product);
+    lower_to_tensor_form(expr);
+    simplify(expr);
 
     // compute expectation value
     // call the tensor-level impl function directly
-    auto vev = tensor::expectation_value_impl(product, t_connect, t_avoid,
+    auto vev = tensor::expectation_value_impl(expr, t_connect, t_avoid,
                                               use_topology, full_contractions);
-    // restore Variable types to the Product
-    if (!variables.empty())
-      ranges::for_each(variables, [&vev](const auto& var) { vev *= var; });
-
     return simplify(vev);
   };
 

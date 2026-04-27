@@ -60,6 +60,10 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE_NOTHROW(EvalExpr{Variable{L"λ"}});
 
     REQUIRE_NOTHROW(EvalExpr{Constant{1}});
+
+    REQUIRE_NOTHROW(
+        EvalExpr{Power(ex<Constant>(rational{1, 2}), rational{1, 2})});
+    REQUIRE_NOTHROW(EvalExpr{Power(ex<Variable>(L"x"), rational{3, 1})});
   }
 
   SECTION("EvalExpr::EvalOp types") {
@@ -78,6 +82,9 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE(!x2.op_type());
 
     REQUIRE(!EvalExpr{Variable{L"λ"}}.op_type());
+
+    REQUIRE(!EvalExpr{Power(ex<Constant>(rational{1, 2}), rational{1, 2})}
+                 .op_type());
   }
 
   SECTION("ResultType types") {

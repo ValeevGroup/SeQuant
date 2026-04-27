@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/export/generator.hpp>
+#include <SeQuant/core/export/utils.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -90,6 +91,13 @@ class TextGenerator : public Generator<Context> {
       sstream << constant.value().real();
     }
     return sstream.str();
+  }
+
+  std::string represent(const Power &power, const Context &ctx) const override {
+    const ExprPtr &base = power.base();
+    return detail::format_power_base(base, stringify(*base, ctx)) + "^" +
+           detail::format_power_exponent(power.exponent(),
+                                         /*double_slash*/ false);
   }
 
   void create(const Tensor &tensor, bool zero_init,
@@ -275,6 +283,8 @@ class TextGenerator : public Generator<Context> {
       return represent(expr.as<Variable>(), ctx);
     } else if (expr.is<Constant>()) {
       return represent(expr.as<Constant>(), ctx);
+    } else if (expr.is<Power>()) {
+      return represent(expr.as<Power>(), ctx);
     } else if (expr.is<Product>()) {
       const Product &product = expr.as<Product>();
       std::string repr;

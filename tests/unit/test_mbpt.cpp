@@ -939,6 +939,22 @@ SECTION("SRSO Fock") {
   }
 }  // SECTION("SRSO Fock")
 
+SECTION("vac_av with Power") {
+  auto expr1 = ex<Power>(ex<Variable>(L"α"), rational{2}) * t::h(2) * t::t(2);
+  auto vev1 = t::vac_av(expr1, {.connect = {{0, 1}}});
+  simplify(vev1);
+  REQUIRE_THAT(
+      vev1, EquivalentTo(
+                L"1/4 * α^(2) * g{i1,i2;a1,a2}:A-C-S * t{a1,a2;i1,i2}:A-C-S"));
+
+  auto expr2 = ex<Power>(ex<Constant>(2), rational{2}) * t::h(2) * t::t(2);
+  auto vev2 = op::vac_av(expr2);
+  simplify(vev2);
+  // should not have Power object, 1/4 * 2^{2}
+  REQUIRE_THAT(vev2,
+               EquivalentTo(L"g{i1,i2;a1,a2}:A-C-S * t{a1,a2;i1,i2}:A-C-S"));
+}
+
 SECTION("SRSO-PNO") {
   using sequant::mbpt::Context;
   auto mbpt_ctx = sequant::mbpt::set_scoped_default_mbpt_context(

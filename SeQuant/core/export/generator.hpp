@@ -3,8 +3,13 @@
 
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
+#include <SeQuant/core/expressions/constant.hpp>
+#include <SeQuant/core/expressions/power.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -75,6 +80,10 @@ class Generator {
                                 const Context &ctx) const = 0;
   /// @returns A backend-specific string representation of the given Constant
   virtual std::string represent(const Constant &constant,
+                                const Context &ctx) const = 0;
+
+  /// @returns A backend-specific string representation of the given Power
+  virtual std::string represent(const Power &power,
                                 const Context &ctx) const = 0;
 
   /// Semantic callback for creating the given tensor. This is expected to make

@@ -17,6 +17,7 @@
 #include <tiledarray.h>
 #include <boost/regex.hpp>
 
+#include <cmath>
 #include <cstdlib>
 #include <string>
 #include <vector>
@@ -197,12 +198,34 @@ class rand_tensor_yield {
         .first->second;
   }
 
+  sequant::ResultPtr operator()(sequant::Power const& pw) const {
+    using result_t = sequant::ResultScalar<NumericT>;
+
+    // evaluate base
+    NumericT base_val;
+    if (pw.base()->template is<sequant::Constant>()) {
+      base_val = pw.base()
+                     ->template as<sequant::Constant>()
+                     .template value<NumericT>();
+    } else {
+      SEQUANT_ASSERT(pw.base()->template is<sequant::Variable>());
+      auto base_result = (*this)(pw.base()->template as<sequant::Variable>());
+      base_val = base_result->template get<NumericT>();
+    }
+
+    auto exp_val = static_cast<double>(pw.exponent().real());
+    return sequant::eval_result<result_t>(
+        static_cast<NumericT>(std::pow(base_val, exp_val)));
+  }
+
   sequant::ResultPtr operator()(
       sequant::meta::can_evaluate auto const& node) const {
     using namespace sequant;
     if (node->is_tensor()) return (*this)(node->as_tensor());
 
     if (node->is_variable()) return (*this)(node->as_variable());
+
+    if (node->is_power()) return (*this)(node->as_power());
 
     SEQUANT_ASSERT(node->is_constant());
 
@@ -510,6 +533,67 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           1.5 * yield(L"f{i1;a1}")("i1,a1");
 
       REQUIRE(equal_tarrays(sum2_eval, sum2_man));
+    }
+
+    SECTION("power at leaves") {
+      using sequant::Constant;
+      using sequant::ex;
+      using sequant::Power;
+      using sequant::rational;
+      using sequant::Variable;
+
+      {
+        auto pw = ex<Power>(ex<Constant>(2), rational{1, 2});
+        auto t = parse_antisymm(L"t_{a1}^{i1}");
+        auto expr = pw * t;
+
+        auto eval1 = eval(expr, "i_1,a_1");
+
+        auto man1 = TArrayD{};
+        man1("i1,a1") = std::sqrt(2.0) * yield(L"t{a1;i1}")("a1,i1");
+        REQUIRE(equal_tarrays(eval1, man1));
+      }
+
+      {
+        auto pw = ex<Power>(ex<Variable>(L"α"), rational{2, 1});
+        auto f = parse_antisymm(L"f_{i1}^{a1}");
+        auto expr = pw * f;
+        auto eval1 = eval(expr, "i_1,a_1");
+
+        auto alpha_val = yield_d(L"α");
+        auto man1 = TArrayD{};
+        man1("i1,a1") = (alpha_val * alpha_val) * yield(L"f{i1;a1}")("i1,a1");
+        REQUIRE(equal_tarrays(eval1, man1));
+      }
+
+      {
+        auto pw = ex<Power>(ex<Constant>(2), rational{1, 2});
+        auto t = parse_antisymm(L"t_{a1}^{i1}");
+        auto alpha = ex<Variable>(L"α");
+        auto f = parse_antisymm(L"f_{i1}^{a1}");
+
+        auto expr = pw * t + alpha * f;
+
+        auto eval1 = eval(expr, "i_1,a_1");
+
+        auto man1 = TArrayD{};
+        man1("i1,a1") = std::sqrt(2.0) * yield(L"t{a1;i1}")("a1,i1") +
+                        yield_d(L"α") * yield(L"f{i1;a1}")("i1,a1");
+        REQUIRE(equal_tarrays(eval1, man1));
+      }
+
+      {
+        auto pw = ex<Power>(ex<Constant>(rational{1, 3}), rational{2, 1});
+        auto g = parse_antisymm(L"g_{i1, i2}^{a1, a2}");
+        auto expr = pw * g;
+
+        auto eval1 = eval(expr, "i_1,i_2,a_1,a_2");
+
+        auto man1 = TArrayD{};
+        man1("i1,i2,a1,a2") =
+            std::pow(1.0 / 3.0, 2.0) * yield(L"g{i1,i2;a1,a2}")("i1,i2,a1,a2");
+        REQUIRE(equal_tarrays(eval1, man1));
+      }
     }
 
     SECTION("Antisymmetrization") {

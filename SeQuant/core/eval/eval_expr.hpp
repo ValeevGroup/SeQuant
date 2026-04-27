@@ -73,6 +73,11 @@ class EvalExpr {
   explicit EvalExpr(Variable const& v);
 
   ///
+  /// \brief Construct an EvalExpr object from a Power.
+  ///
+  explicit EvalExpr(Power const& p);
+
+  ///
   /// @param op Evaluation operation resulting to this object.
   /// @param res Evaluation result type that will be produced.
   /// @param expr A SeQuant expression corresponding to @c res.
@@ -140,8 +145,9 @@ class EvalExpr {
   [[nodiscard]] bool is_tensor() const noexcept;
 
   ///
-  /// \return True if the ExprPtr held by this object is scalar(Constant, or
-  ///         Variable) and equivalently the result of evaluation is scalar.
+  /// \return True if the ExprPtr held by this object is scalar (Constant,
+  ///         Variable, or Power) and equivalently the result of evaluation
+  ///         is scalar.
   ///
   [[nodiscard]] bool is_scalar() const noexcept;
 
@@ -154,6 +160,11 @@ class EvalExpr {
   /// \return True if ExprPtr held by this object is Variable.
   ///
   [[nodiscard]] bool is_variable() const noexcept;
+
+  ///
+  /// \return True if ExprPtr held by this object is Power.
+  ///
+  [[nodiscard]] bool is_power() const noexcept;
 
   ///
   /// \return True if this is a primary expression (i.e. a leaf on expression
@@ -191,6 +202,13 @@ class EvalExpr {
   /// \return Variable const&
   ///
   [[nodiscard]] Variable const& as_variable() const;
+
+  ///
+  /// \brief Calls to<Power>() on ExprPtr held by this object.
+  ///
+  /// \return Power const&
+  ///
+  [[nodiscard]] Power const& as_power() const;
 
   ///
   /// \brief Get the label for this object useful for logging.
