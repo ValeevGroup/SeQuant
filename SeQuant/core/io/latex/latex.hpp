@@ -17,6 +17,10 @@
 #include <string_view>
 #include <type_traits>
 
+namespace sequant {
+class Power;
+}
+
 namespace sequant::io::latex {
 
 template <typename T>
@@ -98,6 +102,8 @@ std::wstring to_string(const std::complex<T>& t) {
 }
 
 std::wstring to_string(const rational& num);
+
+std::wstring to_string(const Power& power);
 
 namespace detail {
 

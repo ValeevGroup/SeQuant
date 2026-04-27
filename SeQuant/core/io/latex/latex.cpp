@@ -3,6 +3,7 @@
 //
 
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/expressions/power.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -34,6 +35,17 @@ std::wstring to_string(const rational& t) {
   }
   // n.b.
   // result += L"}";
+  return result;
+}
+
+std::wstring to_string(const Power& power) {
+  std::wstring result;
+  if (power.exponent() == 1) {
+    result = power.base()->to_latex();
+  } else {
+    result = power.base()->to_latex() + L"^" + to_string(power.exponent());
+  }
+  if (power.conjugated()) result = L"{" + result + L"^*}";
   return result;
 }
 
