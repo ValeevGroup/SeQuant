@@ -16,49 +16,6 @@
 
 namespace sequant {
 
-namespace detail {
-
-/// Formats a Power exponent
-/// @param exponent the rational exponent
-/// @param double_slash if true, use Julia's `//` rational syntax; otherwise
-///        use `/` (Python/plain-text style)
-/// @return a string such as `2`, `(-3)`, `(1/2)`, `(-1//3)`
-inline std::string format_power_exponent(const Power::exponent_type &exponent,
-                                         bool double_slash) {
-  std::stringstream ss;
-  if (denominator(exponent) == 1) {
-    const auto n = numerator(exponent);
-    if (n < 0) {
-      ss << "(" << n << ")";
-    } else {
-      ss << n;
-    }
-  } else {
-    ss << "(" << numerator(exponent) << (double_slash ? "//" : "/")
-       << denominator(exponent) << ")";
-  }
-  return ss.str();
-}
-
-/// Parenthesizes an already-stringified Power base when needed to keep
-/// exponentiation precedence unambiguous in the target language.
-/// @param base the Power base expression (Constant, Variable, or Power)
-/// @param base_str @p base already rendered to a string by the caller
-/// @return @p base_str, wrapped in parens iff @p base is a non-integer or
-///         negative real Constant
-inline std::string format_power_base(const Expr &base, std::string base_str) {
-  if (base.is<Constant>()) {
-    const auto &v = base.as<Constant>().value();
-    if (v.imag() == 0 &&
-        (denominator(v.real()) != 1 || numerator(v.real()) < 0)) {
-      return "(" + std::move(base_str) + ")";
-    }
-  }
-  return base_str;
-}
-
-}  // namespace detail
-
 /// The scope at which declarations may happen
 enum class DeclarationScope {
   Global,
@@ -123,6 +80,10 @@ class Generator {
                                 const Context &ctx) const = 0;
   /// @returns A backend-specific string representation of the given Constant
   virtual std::string represent(const Constant &constant,
+                                const Context &ctx) const = 0;
+
+  /// @returns A backend-specific string representation of the given Power
+  virtual std::string represent(const Power &power,
                                 const Context &ctx) const = 0;
 
   /// Semantic callback for creating the given tensor. This is expected to make

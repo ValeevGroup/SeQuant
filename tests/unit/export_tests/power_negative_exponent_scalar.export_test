@@ -20,7 +20,7 @@ import os
 
 e = 0.0
 x = np.load('x.npy')
-e += 2**(1/2) * x**(-2) * np.einsum('->', optimize=True)
+e += 2**(1/2) * x**(-2)
 del x
 np.save('e.npy', e)
 

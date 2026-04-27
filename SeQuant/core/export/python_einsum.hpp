@@ -4,6 +4,7 @@
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/export/generator.hpp>
 #include <SeQuant/core/export/reordering_context.hpp>
+#include <SeQuant/core/export/utils.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
@@ -191,6 +192,14 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
     }
 
     return sstream.str();
+  }
+
+  std::string represent(const Power &power, const Context &ctx) const override {
+    const ExprPtr &base = power.base();
+    return detail::format_power_base(base, stringify_scalar(*base, ctx)) +
+           "**" +
+           detail::format_power_exponent(power.exponent(),
+                                         /*double_slash*/ false);
   }
 
   void unload(const Tensor &tensor, const Context &ctx) override {
@@ -453,6 +462,11 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
     einsum_spec +=
         "->" + tensor_to_einsum_subscript(result, ctx, index_map, used_chars);
 
+    // make sure there is at least one tensor, else return the scalar
+    if (tensor_names.empty()) {
+      return scalar_factor.empty() ? std::string{"1"} : scalar_factor;
+    }
+
     // Build einsum call
     std::string einsum_call = module_prefix() + "einsum('" + einsum_spec + "'";
 
@@ -483,19 +497,10 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
     } else if (expr.is<Constant>()) {
       return represent(expr.as<Constant>(), ctx);
     } else if (expr.is<Power>()) {
-      const Power &power = expr.as<Power>();
-      const Expr &base = *power.base();
-      if (!base.is<Constant>() && !base.is<Variable>()) {
-        throw Exception("Power base must be a Constant or Variable");
-      }
-      return detail::format_power_base(base, stringify_scalar(base, ctx)) +
-             "**" +
-             detail::format_power_exponent(power.exponent(),
-                                           /*double_slash*/ false);
+      return represent(expr.as<Power>(), ctx);
     }
-    throw Exception(
-        "stringify_scalar: expression is not a scalar leaf "
-        "(Variable/Constant/Power)");
+    throw Exception("stringify_scalar: expression is not a scalar leaf, got " +
+                    expr.type_name());
   }
 
   /// Extract einsum components from an expression
@@ -566,6 +571,11 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
 
       extract_einsum_components(expr, einsum_spec, tensor_names, scalar_factor,
                                 ctx, index_map, used_chars);
+
+      // make sure there is at least one tensor, else return the scalar
+      if (tensor_names.empty()) {
+        return scalar_factor.empty() ? std::string{"1"} : scalar_factor;
+      }
 
       // For scalar result, use "->" or "->..."
       einsum_spec += "->";
