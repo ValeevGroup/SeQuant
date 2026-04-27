@@ -111,20 +111,33 @@ TEST_CASE("power", "[elements]") {
   }
 
   SECTION("adjoint") {
-    // adjoint conjugates the base; exponent unchanged
+    // adjoint flips the conjugation flag; base and exponent unchanged
     Power pv(ex<Variable>(L"z"), rational{1, 2});
+    REQUIRE(!pv.conjugated());
     pv.adjoint();
-    REQUIRE(pv.base()->as<Variable>().conjugated());
+    REQUIRE(pv.conjugated());
+    REQUIRE(!pv.base()->as<Variable>().conjugated());
     REQUIRE(pv.exponent() == rational{1, 2});
+    // double adjoint is identity
+    pv.adjoint();
+    REQUIRE(!pv.conjugated());
 
-    // adjoint must not mutate a base shared with another expression
-    auto shared_base = ex<Variable>(L"w");
-    Power ps1(shared_base, rational{1, 2});
-    Power ps2(shared_base, rational{1, 3});
-    ps1.adjoint();
-    REQUIRE(ps1.base()->as<Variable>().conjugated());
-    REQUIRE(!ps2.base()->as<Variable>().conjugated());
-    REQUIRE(!shared_base->as<Variable>().conjugated());
+    using scalar_type = Constant::scalar_type;
+    // i^{2} = -1
+    auto i_sq = ex<Power>(ex<Constant>(scalar_type{0, 1}), 2);
+    Power::flatten(i_sq);
+    REQUIRE(i_sq->is<Constant>());
+    REQUIRE(i_sq->as<Constant>().value() == scalar_type{-1});
+
+    // (1+i)^{2} = 2i; ((1+i)^{2})* = -2i
+    auto one_plus_i = ex<Constant>(scalar_type{1, 1});  // (1+i)
+    auto square = ex<Power>(one_plus_i, 2);             // (1+i)^{2}
+    square->as<Power>().adjoint();
+    REQUIRE(square->as<Power>().conjugated());
+    Power::flatten(square);
+    REQUIRE(square->is<Constant>());
+    REQUIRE(square->as<Constant>().value() ==
+            scalar_type{0, -2});  // (2i)^{*} = -2i
   }
 
   SECTION("latex") {

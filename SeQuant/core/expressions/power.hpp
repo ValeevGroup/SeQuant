@@ -68,6 +68,17 @@ class Power : public Expr {
   /// @return the rational exponent
   const exponent_type& exponent() const { return exponent_; }
 
+  /// @return whether this Power has been complex-conjugated via adjoint()
+  /// @note Conjugation is tracked as a flag because, in general,
+  /// `conj(base^exponent) != conj(base)^exponent`
+  bool conjugated() const { return conjugated_; }
+
+  /// @brief toggles the conjugation flag
+  void conjugate() {
+    conjugated_ = !conjugated_;
+    reset_hash_value();
+  }
+
   /// @return true if the base is zero and the exponent is positive
   /// @note Construction rejects all undefined 0^n cases; 0^0 is legal and
   /// treated as 1.
@@ -112,6 +123,9 @@ class Power : public Expr {
     }
     if (negate) value = scalar_type{1} / value;
 
+    // apply conjugation if needed
+    if (self.conjugated_) value = conj(value);
+
     expr = ex<Constant>(std::move(value));
   }
 
@@ -120,28 +134,31 @@ class Power : public Expr {
   type_id_type type_id() const override { return get_type_id<Power>(); }
 
   ExprPtr clone() const override {
-    return ex<Power>(base_->clone(), exponent_);
+    auto cloned = ex<Power>(base_->clone(), exponent_);
+    if (conjugated_) cloned->as<Power>().conjugate();
+    return cloned;
   }
 
-  /// @brief adjoint of Power: calls adjoint on base; exponent is real.
-  void adjoint() override {
-    base_ = ::sequant::adjoint(base_);
-    reset_hash_value();
-  }
+  /// @brief adjoint of Power: flips the conjugation flag.
+  void adjoint() override { conjugate(); }
 
-  /// @brief Combines exponents when bases match:
-  ///   - `b^e1 *= b^e2` → `b^(e1+e2)`
-  ///   - `b^e *= b` → `b^(e+1)` (treats bare base as base^1)
-  /// @throw Exception if bases differ or @p that is not combinable
+  /// @brief Combines exponents when bases match and conjugation flags agree:
+  ///   - `b^e1 *= b^e2` → `b^(e1+e2)`         (both unconjugated)
+  ///   - `(b^e1)* *= (b^e2)*` → `(b^(e1+e2))*` (both conjugated)
+  ///   - `b^e *= b` → `b^(e+1)` (treats bare base as base^1; only when this
+  ///      is unconjugated)
+  /// @throw Exception if bases differ, conjugation flags differ, or @p that
+  /// is not combinable. Mixed conjugation (e.g. `b^e1 * (b^e2)*`) has no
+  /// Power representation.
   Expr& operator*=(const Expr& that) override {
     if (that.is<Power>()) {
       const auto& other = that.as<Power>();
-      if (*base_ == *other.base_) {
+      if (conjugated_ == other.conjugated_ && *base_ == *other.base_) {
         exponent_ += other.exponent_;
         reset_hash_value();
         return *this;
       }
-    } else if (*base_ == that) {
+    } else if (!conjugated_ && *base_ == that) {
       exponent_ += rational{1};
       reset_hash_value();
       return *this;
@@ -152,15 +169,16 @@ class Power : public Expr {
  private:
   ExprPtr base_;
   exponent_type exponent_;
+  bool conjugated_ = false;
 
   /// @return hash of this Power
-  /// @note when exponent is 1 the hash matches the base's, so a
-  /// `Power(b, 1)` is interchangeable with `b` for hash-based lookup.
+  /// @note when exponent is 1 and not conjugated the hash matches the base's
   hash_type memoizing_hash() const override {
     auto compute_hash = [this]() {
-      if (exponent_ == 1) return hash::value(*base_);
+      if (exponent_ == 1 && !conjugated_) return hash::value(*base_);
       auto val = hash::value(*base_);
       hash::combine(val, hash::value(exponent_));
+      hash::combine(val, conjugated_);
       return val;
     };
 
@@ -174,13 +192,15 @@ class Power : public Expr {
 
   bool static_equal(const Expr& that) const override {
     const auto& other = static_cast<const Power&>(that);
-    return exponent_ == other.exponent_ && *base_ == *other.base_;
+    return exponent_ == other.exponent_ && conjugated_ == other.conjugated_ &&
+           *base_ == *other.base_;
   }
 
   bool static_less_than(const Expr& that) const override {
     const auto& other = static_cast<const Power&>(that);
     if (*base_ != *other.base_) return *base_ < *other.base_;
-    return exponent_ < other.exponent_;
+    if (exponent_ != other.exponent_) return exponent_ < other.exponent_;
+    return conjugated_ < other.conjugated_;
   }
 };
 
@@ -188,8 +208,14 @@ class Power : public Expr {
 
 namespace sequant::io::latex {
 inline std::wstring to_string(const Power& power) {
-  if (power.exponent() == 1) return power.base()->to_latex();
-  return power.base()->to_latex() + L"^" + to_string(power.exponent());
+  std::wstring result;
+  if (power.exponent() == 1) {
+    result = power.base()->to_latex();
+  } else {
+    result = power.base()->to_latex() + L"^" + to_string(power.exponent());
+  }
+  if (power.conjugated()) result = L"{" + result + L"^*}";
+  return result;
 }
 }  // namespace sequant::io::latex
 
