@@ -304,6 +304,16 @@ TEST_CASE("serialization", "[serialization]") {
       REQUIRE(prod->as<Product>().scalar() == rational{3});
       REQUIRE(prod->as<Product>().factor(0)->is<Power>());
       REQUIRE(prod->as<Product>().factor(1)->is<Tensor>());
+
+      auto neg_half = ex<Power>(ex<Constant>(rational{-2}), rational{1, 2});
+      const auto neg_half_str = L"(-2)^(1/2)";
+      REQUIRE(serialize(neg_half) == neg_half_str);
+      REQUIRE(deserialize<ExprPtr>(L"(-2)^(1/2)") == neg_half);
+
+      auto frac_half = ex<Power>(ex<Constant>(rational{3, 2}), rational{1, 2});
+      const auto frac_half_str = L"(3/2)^(1/2)";
+      REQUIRE(serialize(frac_half) == frac_half_str);
+      REQUIRE(deserialize<ExprPtr>(L"(3/2)^(1/2)") == frac_half);
     }
 
     SECTION("Product") {

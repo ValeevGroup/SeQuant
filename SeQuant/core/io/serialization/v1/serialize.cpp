@@ -147,17 +147,17 @@ std::wstring to_string(const Variable& variable, const SerializationOptions&) {
 
 std::wstring to_string(const Power& power,
                        const SerializationOptions& options) {
+  if (power.conjugated()) {
+    // TODO: support conjugated Power
+    throw Exception(
+        "Cannot serialize conjugated Power: grammar does not yet support it");
+  }
   std::wstring serialized;
   const ExprPtr& base = power.base();
-  if (base->is<Constant>()) {
-    serialized += to_string(base->as<Constant>(), options);
-  } else if (base->is<Variable>()) {
-    serialized += to_string(base->as<Variable>(), options);
-  } else {
-    throw Exception(
-        "Cannot serialize Power with non-scalar base (expected Constant or "
-        "Variable)");
-  }
+  const bool parenthesize_base = base->is<Constant>();
+  if (parenthesize_base) serialized += L"(";
+  serialized += v1::to_string(*base, options);
+  if (parenthesize_base) serialized += L")";
   serialized += L"^(";
   serialized +=
       serialize_scalar(Constant::scalar_type{power.exponent()}, options);

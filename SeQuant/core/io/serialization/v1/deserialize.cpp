@@ -118,11 +118,13 @@ auto tensor_def       = x3::lexeme[
                             name >> x3::skip[index_groups] >> -(symmetry_spec)
                         ];
 
-auto power_def        = (number | variable) >> x3::lit(L"^") >> '(' >> number >> ')';
+// TODO(power): per comments on PR #513, promote `^` to a binary operator (with higher precedence than *) and then reject unsupported cases while traversing the AST.
+auto power_def        = (('(' >> (number | variable) >> ')') | number | variable) >> x3::lit(L"^") >> '(' >> number >> ')';
 
-auto nullary          = power | number | tensor | variable;
+auto nullary          = number | tensor | variable;
 
-auto grouped          = '(' > sum > ')' | nullary;
+// `power` is tried before `'(' > sum > ')'`
+auto grouped          = power | '(' > sum > ')' | nullary;
 
 auto product_def      = grouped % -x3::lit('*');
 
