@@ -43,9 +43,8 @@ class Power : public Expr {
       base_ = base->clone();
     }
     // 0^n is defined only for n >= 0 (0^0 = 1 by convention)
-    if (base_->is<Constant>() && base_->as<Constant>().is_zero()) {
-      SEQUANT_ASSERT(exponent_ >= 0);
-    }
+    SEQUANT_ASSERT(!base_->is<Constant>() || !base_->as<Constant>().is_zero() ||
+                   exponent_ >= 0);
   }
 
   /// @overload constructs a `Variable` base from @p label
