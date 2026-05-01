@@ -621,7 +621,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       //    std::endl;
       REQUIRE(
           to_latex(simplify(R_2.tensor_form())) ==
-          L"{{{\\frac{1}{4}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{a}^"
+          L"{{{\\frac{1}{2}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{a}^"
           L"{{a_1}{"
           L"a_2}}_{{i_1}{i_2}}}}");
 
@@ -630,25 +630,26 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       //    std::endl;
       REQUIRE(
           to_latex(simplify(L_3.tensor_form())) ==
-          L"{{{\\frac{1}{36}}}{\\bar{L}^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{"
+          L"{{{\\frac{1}{6}}}{\\bar{L}^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{"
           L"\\tilde{a}^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}}");
 
       auto R_2_3 = r(nₚ(3), nₕ(2))->as<op_t>();
       //    std::wcout << "R_2_3: " << to_latex(simplify(R_2_3.tensor_form()))
       //    << std::endl;
       REQUIRE(to_latex(simplify(R_2_3.tensor_form())) ==
-              L"{{{\\frac{1}{12}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}{a_2}{a_3}}}{"
+              L"{{\\frac{1}{12^{\\frac{1}{2}}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}{a_"
+              L"2}{a_3}}}{"
               L"\\tilde{a}^{"
               L"{a_1}{a_2}{a_3}}_{\\textvisiblespace\\,{i_1}{i_2}}}}");
 
       auto L_1_2 = l(nₚ(1), nₕ(2))->as<op_t>();
       // std::wcout << "l(1,2): " << to_latex(simplify(L_1_2.tensor_form())) <<
       // std::endl;
-      REQUIRE(
-          to_latex(simplify(L_1_2.tensor_form())) ==
-          L"{{{\\frac{1}{2}}}{\\bar{L}^{{a_1}}_{{i_1}{i_2}}}{\\tilde{a}^{{i_"
-          L"1}{i_2}}"
-          L"_{\\textvisiblespace\\,{a_1}}}}");
+      REQUIRE(to_latex(simplify(L_1_2.tensor_form())) ==
+              L"{{\\frac{1}{2^{\\frac{1}{2}}}}{\\bar{L}^{{a_1}}_{{i_1}{i_2}}}{"
+              L"\\tilde{a}^{{i_"
+              L"1}{i_2}}"
+              L"_{\\textvisiblespace\\,{a_1}}}}");
 
       auto A_2_1 = A(nₚ(2), nₕ(1))->as<op_t>();
       //    std::wcout << "A_2_1: " << to_latex(simplify(A_2_1.tensor_form()))
@@ -686,9 +687,9 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE(to_latex(R33) ==
               L"{ "
               L"\\bigl({{R^{{i_1}}_{{a_1}}}{\\tilde{a}^{{a_1}}_{{i_1}}}} + "
-              L"{{{\\frac{1}{36}}}{\\bar{R}^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}"
+              L"{{{\\frac{1}{6}}}{\\bar{R}^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}"
               L"}{\\tilde{a}^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}} + "
-              L"{{{\\frac{1}{4}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{"
+              L"{{{\\frac{1}{2}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{"
               L"a}^{{a_1}{a_2}}_{{i_1}{i_2}}}}\\bigr) }");
 
       auto R12 = R(nₚ(2), nₕ(1));
@@ -697,9 +698,9 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       //    std::wcout << "R12: " << to_latex(R12) << std::endl;
       REQUIRE(to_latex(R12) ==
               L"{ \\bigl({{R^{}_{{a_1}}}{\\tilde{a}^{{a_1}}}} + "
-              L"{{{\\frac{1}{2}}}{\\bar{R}^{{i_1}}_{{a_1}{a_2}}}{\\tilde{a}^{{"
-              L"a_1}{a_"
-              L"2}}_{\\textvisiblespace\\,{i_1}}}}\\bigr) }");
+              L"{{\\frac{1}{2^{\\frac{1}{2}}}}{\\bar{R}^{{i_1}}_{{a_1}{a_2}}}{"
+              L"\\tilde{a}^{{a_1}{a_2}}_{\\textvisiblespace\\,{i_1}}}}\\bigr) "
+              L"}");
 
       auto R21 = R(nₚ(1), nₕ(2));
       lower_to_tensor_form(R21);
@@ -707,7 +708,8 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       //    std::wcout << "R21: " << to_latex(R21) << std::endl;
       REQUIRE(to_latex(R21) ==
               L"{ "
-              L"\\bigl({{{\\frac{1}{2}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}}}{"
+              L"\\bigl({{\\frac{1}{2^{\\frac{1}{2}}}}{\\bar{R}^{{i_1}{i_2}}_{{"
+              L"a_1}}}{"
               L"\\tilde{a}^{"
               L"\\textvisiblespace\\,{a_1}}_{{i_1}{i_2}}}} + "
               L"{{R^{{i_1}}_{}}{\\tilde{a}_{{i_1}}}}\\bigr) }");
@@ -719,11 +721,12 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE(to_latex(L23) ==
               L"{ "
               L"\\bigl({{L^{}_{{i_1}}}{\\tilde{a}^{{i_1}}}} + "
-              L"{{{\\frac{1}{2}}}{\\bar{L}^{{a_1}}_{{i_1}{i_2}}}{\\tilde{a}^{{"
-              L"i_1}{i_2}}_{\\textvisiblespace\\,{a_1}}}} + "
-              L"{{{\\frac{1}{12}}}{\\bar{L}^{{a_1}{a_2}}_{{i_1}{i_2}{i_"
-              L"3}}}{\\tilde{a}^{{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{"
-              L"a_2}}}}\\bigr) }");
+              L"{{\\frac{1}{12^{\\frac{1}{2}}}}{\\bar{L}^{{a_1}{a_2}}_{{i_1}{i_"
+              L"2}{i_3}}}{\\tilde{a}^{{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{"
+              L"a_1}{a_2}}}} + "
+              L"{{\\frac{1}{2^{\\frac{1}{2}}}}{\\bar{L}^{{a_1}}_{{i_1}{i_2}}}{"
+              L"\\tilde{a}^{{i_1}{i_2}}_{\\textvisiblespace\\,{a_1}}}}\\bigr) "
+              L"}");
 
       // perturbation ops
       REQUIRE_NOTHROW(Hʼ(1, {.order = 1}));
@@ -753,17 +756,15 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       // δl δr ops
       {  // Spinor basis
         auto dl2 = tensor::δl(2);
-        REQUIRE(simplify(dl2 - rational{1, 4} * tensor::P(2)) ==
+        REQUIRE(simplify(dl2 - rational{1, 2} * tensor::P(2)) ==
                 ex<Constant>(0));
         auto dr2 = tensor::δr(2);
-        REQUIRE(simplify(dr2 - rational{1, 4} * tensor::P(-2)) ==
+        REQUIRE(simplify(dr2 - rational{1, 2} * tensor::P(-2)) ==
                 ex<Constant>(0));
 
         auto dl23 = tensor::δl(nₚ(2), nₕ(3));
-        REQUIRE(simplify(dl23 - rational{1, 12} * tensor::P(nₚ(2), nₕ(3))) ==
-                ex<Constant>(0));
-        auto dr24 = tensor::δr(nₚ(2), nₕ(4));
-        REQUIRE(simplify(dr24 - rational{1, 48} * tensor::P(nₚ(-2), nₕ(-4))) ==
+        REQUIRE(simplify(dl23 - ex<Power>(rational{1, 12}, rational{1, 2}) *
+                                    tensor::P(nₚ(2), nₕ(3))) ==
                 ex<Constant>(0));
       }
 
@@ -772,11 +773,11 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
         auto ctx_resetter =
             set_scoped_default_context(ctx.set(SPBasis::Spinfree));
         auto dl2 = tensor::δl(2);
-        REQUIRE(simplify(dl2 - rational{1, 2} * tensor::P(2)) ==
-                ex<Constant>(0));
+        REQUIRE(simplify(dl2 - ex<Power>(rational{1, 2}, rational{1, 2}) *
+                                   tensor::P(2)) == ex<Constant>(0));
         auto dr3 = tensor::δr(3);
-        REQUIRE(simplify(dr3 - rational{1, 6} * tensor::P(-3)) ==
-                ex<Constant>(0));
+        REQUIRE(simplify(dr3 - ex<Power>(rational{1, 6}, rational{1, 2}) *
+                                   tensor::P(-3)) == ex<Constant>(0));
       }
 
     }  // SECTION("predefined")
@@ -954,7 +955,8 @@ SECTION("SRSO Fock") {
     auto result = t::vac_av(input);
 
     REQUIRE(result->is<Product>());  // product ...
-    REQUIRE(result->size() == 3);    // ... of 3 factors
+    REQUIRE(result->size() ==
+            4);  // ... of 4 factors (3 tensors, first factor is a Power)
   }
 
   // <2p1h|H2|2p1h(c)> ->
