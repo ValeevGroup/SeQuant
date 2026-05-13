@@ -317,8 +317,14 @@ class ResultTensorOfTensorTA final : public Result {
 
   using _inner_tensor_type = typename ArrayT::value_type::value_type;
 
+  // "Regular" (non-nested) companion array for ToT * T einsum. The OUTER tile
+  // type must be a TA::Tensor — inner tile types like btas::Tensor are only
+  // valid as the *innermost* tile (they don't support permute/reshape/batch
+  // and so can't drive einsum's outer kernel). So we wrap the inner's numeric
+  // type in TA::Tensor here, rather than re-using the inner tile type as the
+  // outer tile.
   using compatible_regular_distarray_type =
-      TA::DistArray<_inner_tensor_type, typename ArrayT::policy_type>;
+      TA::DistArray<TA::Tensor<numeric_type>, typename ArrayT::policy_type>;
 
   // Only @c that_type type is allowed for ToT * T computation
   using that_type = ResultTensorTA<compatible_regular_distarray_type>;
