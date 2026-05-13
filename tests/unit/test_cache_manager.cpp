@@ -111,6 +111,54 @@ TEST_CASE("cache_manager", "[cache_manager]") {
     }
   }
 
+  SECTION("alive and entry_size_in_bytes") {
+    auto man = man_const;
+
+    // A key never registered in the manager.
+    auto const stray = make_node(L"R = B");
+    REQUIRE_FALSE(man.exists(stray));
+    REQUIRE_FALSE(man.alive(stray));
+    REQUIRE(man.entry_size_in_bytes(stray) == 0);
+
+    // Registered but never stored: not alive, zero size.
+    for (auto&& k : decaying_keys) {
+      REQUIRE(man.exists(k));
+      REQUIRE_FALSE(man.alive(k));
+      REQUIRE(man.entry_size_in_bytes(k) == 0);
+    }
+
+    // After store(): alive, size matches the stored data.
+    for (auto&& [k, v] : zip(decaying_keys, decaying_vals)) {
+      REQUIRE(man.store(k, v));
+      REQUIRE(man.alive(k));
+      REQUIRE(man.entry_size_in_bytes(k) == v->size_in_bytes());
+    }
+
+    // Drain each entry's remaining life. store() consumed one access already,
+    // so r - 1 accesses remain before data_p is moved out.
+    for (auto&& [k, r] : zip(decaying_keys, decaying_repeats)) {
+      for (auto i = r - 1; i > 0; --i) {
+        REQUIRE(man.alive(k));  // still holds data before this access
+        REQUIRE(man.access(k));
+      }
+      // Final access has drained life to 0 and moved data_p out.
+      REQUIRE_FALSE(man.alive(k));
+      REQUIRE(man.entry_size_in_bytes(k) == 0);
+    }
+
+    // reset() restores life counts; re-store, confirm alive, then reset()
+    // and confirm entries are not-alive again.
+    man.reset();
+    for (auto&& [k, v] : zip(decaying_keys, decaying_vals))
+      REQUIRE(man.store(k, v));
+    for (auto&& k : decaying_keys) REQUIRE(man.alive(k));
+    man.reset();
+    for (auto&& k : decaying_keys) {
+      REQUIRE_FALSE(man.alive(k));
+      REQUIRE(man.entry_size_in_bytes(k) == 0);
+    }
+  }
+
   SECTION("Hash collision safety") {
     // Two structurally different nodes
     auto const n1 = make_node(L"R{a1;i1} = f{a1;i1}");

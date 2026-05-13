@@ -83,8 +83,9 @@ class CacheManager {
   std::unordered_map<TreeNode, entry, hasher_type, comparator_type> cache_map_;
 
  public:
-  template <typename Iterable1>
-  explicit CacheManager(Iterable1&& decaying) noexcept {
+  template <typename Iterable>
+    requires(!std::same_as<std::remove_cvref_t<Iterable>, CacheManager>)
+  explicit CacheManager(Iterable&& decaying) noexcept {
     for (auto&& [k, c] : decaying) cache_map_.try_emplace(k, entry{c});
   }
 
@@ -143,6 +144,21 @@ class CacheManager {
     auto iter = cache_map_.find(key);
     auto end = cache_map_.end();
     return iter == end ? -1 : static_cast<int>(iter->second.max_life_count());
+  }
+
+  /// \return true iff the key is registered for caching and currently holds
+  ///         stored data (i.e. has been stored and not yet drained by its
+  ///         final access).
+  [[nodiscard]] bool alive(key_type const& key) const noexcept {
+    auto iter = cache_map_.find(key);
+    return iter != cache_map_.end() && iter->second.alive();
+  }
+
+  /// \return size in bytes of the data currently held for @p key, or 0 if
+  ///         the key is not registered or no data is currently stored.
+  [[nodiscard]] size_t entry_size_in_bytes(key_type const& key) const noexcept {
+    auto iter = cache_map_.find(key);
+    return iter == cache_map_.end() ? 0 : iter->second.size_in_bytes();
   }
 
   ///
