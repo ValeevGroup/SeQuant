@@ -12,6 +12,8 @@
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/expressions/variable.hpp>
 #include <SeQuant/core/index_space_registry.hpp>
+#include <SeQuant/core/runtime.hpp>
+#include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <algorithm>
 #include <stdexcept>
@@ -246,10 +248,13 @@ ExprPtr kramers_trace(const ExprPtr& expr) {
   const std::uint64_t n_configs = 1ull << n;
   const std::uint64_t mask = n_configs - 1;
 
-  // Pass 1: build the "X" term for the lex-smaller half of TRS pairs.
-  container::map<std::uint64_t, ExprPtr> x_terms;
+  // Enumerate all 2^n Kramers configurations as separate Products. We
+  // mirror open_shell_spintrace's pipeline: substitute → expand_antisymm →
+  // expand → simplify → canonicalize, working entirely in expanded
+  // (NonSymm) tensor form so the standard SeQuant simplifier sees full
+  // index permutability for fold detection.
+  auto result = std::make_shared<Sum>();
   for (std::uint64_t cfg = 0; cfg < n_configs; ++cfg) {
-    if (cfg > (mask ^ cfg)) continue;  // partner already (or will be) handled
     container::map<Index, Index> repl;
     for (std::size_t i = 0; i < n; ++i) {
       const bool is_down = (cfg >> i) & 1u;
@@ -257,21 +262,23 @@ ExprPtr kramers_trace(const ExprPtr& expr) {
                               : make_kramers_up(indices[i]);
       repl[indices[i]] = new_idx;
     }
-    x_terms[cfg] = append_kramers(expr, repl);
+    auto term = append_kramers(expr, repl);
+    term = expand_antisymm(term, /*skip_spinsymm*/ false);
+    expand(term);
+    rapid_simplify(term);
+    canonicalize(term);
+    rapid_simplify(term);
+    result->append(term);
   }
-
-  // Pass 2: assemble the Sum. The X̄ partner of cfg=k is k^mask; whichever
-  // is lex-smaller is the "X" (real) term, the other is `conjugate(X)`.
-  auto result = std::make_shared<Sum>();
-  for (std::uint64_t cfg = 0; cfg < n_configs; ++cfg) {
-    const std::uint64_t partner = mask ^ cfg;
-    if (cfg <= partner) {
-      result->append(x_terms.at(cfg));
-    } else {
-      result->append(conjugate(x_terms.at(partner)));
-    }
-  }
-  return result;
+  // Final cross-product canonicalize: now that every term is in NonSymm
+  // expanded form, dummy renaming can fold equivalents across Kramers
+  // configurations.
+  ExprPtr r = result;
+  expand(r);
+  rapid_simplify(r);
+  canonicalize(r);
+  rapid_simplify(r);
+  return r;
 }
 
 }  // namespace sequant::mbpt
