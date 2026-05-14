@@ -204,6 +204,11 @@ ExprPtr kramers_trace(const ExprPtr& expr) {
   // products in which every barred index appears in an even number of
   // tensors — true for any all-internal-index contraction).
   //
+  // TODO(CC): this all-internal-index assumption breaks for CC residuals,
+  // which carry free/external indices — those need explicit
+  // (-1)^(external bars) sign bookkeeping. See the kramers_trace @todo in
+  // spinor.hpp.
+  //
   // For each TRS pair we materialize only the "lex-smaller" configuration
   // X explicitly; the X̄ partner is emitted as `conjugate(T_X)`. Tensors
   // in the conj branch carry a `*` label suffix (per the convention in
@@ -494,6 +499,10 @@ container::svector<ContractionCycle> kramers_cycles(const Product& product) {
   // intra-tensor pairing per tensor: walk positions and pair k ↔ k+rank/2
   // within each tensor's slots. We rebuild rank by counting consecutive
   // slots with the same tensor_idx.
+  // TODO(CC): the k ↔ k+rank/2 pairing assumes a rectangular tensor
+  // (bra_rank == ket_rank), which holds for g/t/residual tensors but not
+  // for every CC intermediate; non-rectangular tensors need the bra/ket
+  // split read from the tensor directly rather than from total rank.
   for (std::size_t i = 0; i < N;) {
     std::size_t j = i;
     while (j < N && slots[j].tensor_idx == slots[i].tensor_idx) ++j;
@@ -981,8 +990,11 @@ bool parse_recomb_entry(const ExprPtr& summand, RecombEntry& e) {
 
 /// Detect whether @p t2 is @p t1 with a single column transposition.
 /// Returns 1 if t2 = bra-swap(t1), 2 if t2 = ket-swap(t1), 0 otherwise.
-/// Rank-4 (2+2) only for now. Both indices compared by full Index identity
-/// (recombinable terms share dummy names post-canonicalize).
+/// Both indices compared by full Index identity (recombinable terms share
+/// dummy names post-canonicalize).
+/// TODO(CC): rank-(2,2) only. CCSDT triples residuals need this
+/// generalized to rank-(n,n) — enumerate the column transpositions of an
+/// n-column tensor and report which single one (if any) maps t1 -> t2.
 int detect_single_column_swap(const Tensor& t1, const Tensor& t2) {
   if (t1.label() != t2.label()) return 0;
   if (t1.bra_rank() != 2 || t1.ket_rank() != 2) return 0;
@@ -1276,6 +1288,259 @@ ExprPtr kramers_trace_burnside(const ExprPtr& expr) {
   canonicalize(r);
   rapid_simplify(r);
   return r;
+}
+
+// =====================================================================
+// Quaternion decomposer. See spinor.hpp for the design overview.
+// =====================================================================
+
+namespace {
+
+/// Reads the specialized Kramers state of an index.
+Kramers index_kramers(const Index& idx) {
+  const auto k_bits = idx.space().qns().to_int32() & mask_v<Kramers>;
+  if (k_bits == static_cast<bitset_t>(Kramers::up)) return Kramers::up;
+  if (k_bits == static_cast<bitset_t>(Kramers::down)) return Kramers::down;
+  throw std::runtime_error(
+      "quaternion_decompose: tensor index is not Kramers-specialized");
+}
+
+/// Entry M(k_bra,k_ket)[c_bra][c_ket] of the quaternion decomposition
+/// matrix. Component order s=0, x=1, y=2, z=3. Derived from the spinor
+/// coefficient structure C_α = C_s + iC_x, C_β = -C_y + iC_z (barred
+/// partner [-C_β*; C_α*]); see kramers-restriction §6 / Wiebke Eq. 8-11.
+Constant::scalar_type quaternion_m(Kramers k_bra, Kramers k_ket, int c_bra,
+                                   int c_ket) {
+  using S = Constant::scalar_type;
+  auto v = [](int re, int im) { return S{Complex<rational>{re, im}}; };
+  // (re,im) tables for M(up,up) and M(up,down); rows = c_bra, cols = c_ket.
+  static const int uu_re[4][4] = {
+      {1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};
+  static const int uu_im[4][4] = {
+      {0, 1, 0, 0}, {-1, 0, 0, 0}, {0, 0, 0, -1}, {0, 0, 1, 0}};
+  static const int ud_re[4][4] = {
+      {0, 0, 1, 0}, {0, 0, 0, 1}, {-1, 0, 0, 0}, {0, -1, 0, 0}};
+  static const int ud_im[4][4] = {
+      {0, 0, 0, 1}, {0, 0, -1, 0}, {0, 1, 0, 0}, {-1, 0, 0, 0}};
+  const bool b_up = (k_bra == Kramers::up);
+  const bool k_up = (k_ket == Kramers::up);
+  if (b_up && k_up) return v(uu_re[c_bra][c_ket], uu_im[c_bra][c_ket]);
+  if (!b_up && !k_up)  // M(down,down) = conj(M(up,up))
+    return v(uu_re[c_bra][c_ket], -uu_im[c_bra][c_ket]);
+  if (b_up && !k_up) return v(ud_re[c_bra][c_ket], ud_im[c_bra][c_ket]);
+  // M(down,up) = M(up,down)^dagger
+  return v(ud_re[c_ket][c_bra], -ud_im[c_ket][c_bra]);
+}
+
+constexpr char kQComp[4] = {'s', 'x', 'y', 'z'};
+
+/// Decompose one rank-(2,2) Nonsymm tensor into its (up to 64) quaternion
+/// components: T = Σ_c M(k_B0,k_K0)[c_B0,c_K0]·M(k_B1,k_K1)[c_B1,c_K1]·T#c.
+ExprPtr decompose_nonsymm_tensor(const Tensor& t) {
+  if (t.bra_rank() != 2 || t.ket_rank() != 2)
+    throw std::runtime_error(
+        "quaternion_decompose: only rank-(2,2) tensors are supported");
+  const bool conj = has_conj_suffix(t.label());
+  const std::wstring core =
+      conj ? std::wstring{t.label().substr(0, t.label().size() - 1)}
+           : std::wstring{t.label()};
+  const Index& B0 = t.bra().at(0);
+  const Index& B1 = t.bra().at(1);
+  const Index& K0 = t.ket().at(0);
+  const Index& K1 = t.ket().at(1);
+  // electron 1 = (B0, K0), electron 2 = (B1, K1)
+  const Kramers kB0 = index_kramers(B0), kB1 = index_kramers(B1);
+  const Kramers kK0 = index_kramers(K0), kK1 = index_kramers(K1);
+
+  auto sum = std::make_shared<Sum>();
+  const Constant::scalar_type zero{0};
+  for (int cB0 = 0; cB0 < 4; ++cB0)
+    for (int cK0 = 0; cK0 < 4; ++cK0) {
+      const auto m1 = quaternion_m(kB0, kK0, cB0, cK0);
+      if (m1 == zero) continue;
+      for (int cB1 = 0; cB1 < 4; ++cB1)
+        for (int cK1 = 0; cK1 < 4; ++cK1) {
+          const auto m2 = quaternion_m(kB1, kK1, cB1, cK1);
+          if (m2 == zero) continue;
+          auto coeff = m1 * m2;
+          if (conj) coeff = sequant::conj(coeff);
+          std::wstring lbl = quaternion_label_add(
+              core, kQComp[cB0], kQComp[cB1], kQComp[cK0], kQComp[cK1]);
+          if (conj) lbl += L'*';
+          auto qt =
+              ex<Tensor>(lbl, bra{B0, B1}, ket{K0, K1}, Symmetry::Nonsymm,
+                         BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+          sum->append(ex<Constant>(coeff) * qt);
+        }
+    }
+  return sum;
+}
+
+}  // namespace
+
+ExprPtr quaternion_decompose(const ExprPtr& expr) {
+  if (expr->is<Sum>()) {
+    auto s = std::make_shared<Sum>();
+    for (auto&& summand : *expr) s->append(quaternion_decompose(summand));
+    return s;
+  }
+  if (expr->is<RealPart>())
+    return ex<RealPart>(quaternion_decompose(expr->as<RealPart>().inner()));
+  if (expr->is<ImagPart>())
+    return ex<ImagPart>(quaternion_decompose(expr->as<ImagPart>().inner()));
+  if (expr->is<Constant>() || expr->is<Variable>()) return expr;
+  if (expr->is<Tensor>()) {
+    auto const& t = expr->as<Tensor>();
+    if (t.symmetry() == Symmetry::Antisymm) {
+      // expand g - g_exchange first, then decompose each Nonsymm piece
+      return quaternion_decompose(
+          expand_antisymm(expr, /*skip_spinsymm*/ false));
+    }
+    return decompose_nonsymm_tensor(t);
+  }
+  if (expr->is<Product>()) {
+    auto const& p = expr->as<Product>();
+    bool has_wrapper = false;
+    for (auto&& f : p)
+      if (f->is<RealPart>() || f->is<ImagPart>()) has_wrapper = true;
+    auto prod = std::make_shared<Product>();
+    prod->scale(p.scalar());
+    for (auto&& f : p)
+      prod->append(1, quaternion_decompose(f), Product::Flatten::No);
+    ExprPtr r = prod;
+    if (!has_wrapper) {
+      // a genuine contraction product — distribute the per-tensor Sums and
+      // fold dummy-renamed duplicates
+      expand(r);
+      rapid_simplify(r);
+      canonicalize(r);
+      rapid_simplify(r);
+    }
+    return r;
+  }
+  throw std::runtime_error("quaternion_decompose: unsupported Expr type");
+}
+
+// =====================================================================
+// Complex (Re/Im) split. See spinor.hpp for the design overview.
+// =====================================================================
+
+namespace {
+
+/// Returns (re, im) such that @p expr == re + i*im, with both `re` and
+/// `im` expressed over real-valued tensors (labels carrying `~r`/`~i`).
+std::pair<ExprPtr, ExprPtr> split_re_im(const ExprPtr& expr) {
+  using S = Constant::scalar_type;
+  if (expr->is<Constant>()) {
+    const auto v = expr->as<Constant>().value();
+    return {ex<Constant>(S{v.real()}), ex<Constant>(S{v.imag()})};
+  }
+  if (expr->is<RealPart>()) {
+    auto inner = split_re_im(expr->as<RealPart>().inner());
+    return {inner.first, ex<Constant>(S{0})};
+  }
+  if (expr->is<ImagPart>()) {
+    auto inner = split_re_im(expr->as<ImagPart>().inner());
+    return {inner.second, ex<Constant>(S{0})};
+  }
+  if (expr->is<Tensor>()) {
+    auto const& t = expr->as<Tensor>();
+    const bool conj = has_conj_suffix(t.label());
+    const std::wstring core =
+        conj ? std::wstring{t.label().substr(0, t.label().size() - 1)}
+             : std::wstring{t.label()};
+    auto mk = [&](bool imag) {
+      return ex<Tensor>(
+          complex_label_add(core, imag),
+          bra(container::svector<Index>{t.bra().begin(), t.bra().end()}),
+          ket(container::svector<Index>{t.ket().begin(), t.ket().end()}),
+          aux(container::svector<Index>{t.aux().begin(), t.aux().end()}),
+          t.symmetry(), t.braket_symmetry(), t.column_symmetry());
+    };
+    ExprPtr re = mk(false);
+    ExprPtr im = mk(true);
+    if (conj) im = ex<Constant>(S{-1}) * im;  // g* = g~r - i·g~i
+    return {re, im};
+  }
+  if (expr->is<Sum>()) {
+    auto re = std::make_shared<Sum>();
+    auto im = std::make_shared<Sum>();
+    for (auto&& s : *expr) {
+      auto part = split_re_im(s);
+      re->append(part.first);
+      im->append(part.second);
+    }
+    return {re, im};
+  }
+  if (expr->is<Product>()) {
+    auto const& p = expr->as<Product>();
+    // Π_i z_i built up incrementally, starting from the leading scalar.
+    auto acc = split_re_im(ex<Constant>(p.scalar()));
+    for (auto&& f : p) {
+      auto fac = split_re_im(f);
+      // (ar + i·ai)(fr + i·fi) = (ar·fr - ai·fi) + i(ar·fi + ai·fr)
+      ExprPtr nr = acc.first * fac.first +
+                   ex<Constant>(S{-1}) * (acc.second * fac.second);
+      ExprPtr ni = acc.first * fac.second + acc.second * fac.first;
+      acc = {nr, ni};
+    }
+    return acc;
+  }
+  if (expr->is<Variable>())
+    throw std::runtime_error("complex_split: Variable not supported");
+  throw std::runtime_error("complex_split: unsupported Expr type");
+}
+
+/// Distribute and constant-fold a real-tensor scalar expression.
+///
+/// NB: deliberately does NOT `canonicalize`. The split tensors inherit
+/// the (already-consistent) index wiring of the Kramers-traced input;
+/// `canonicalize` would permute the indices of `Antisymm` `~r`/`~i`
+/// tensors and emit `(-1)` signs that the evaluator cannot see — it
+/// rebuilds the `[as]` integral formula from index *type* + Kramers
+/// label, which is invariant under such a permutation, so the sign
+/// would be uncompensated. `expand` + `rapid_simplify` only distribute
+/// and constant-fold; they never permute tensor indices.
+ExprPtr clean_real(ExprPtr e) {
+  expand(e);
+  rapid_simplify(e);
+  return e;
+}
+
+}  // namespace
+
+ExprPtr complex_split(const ExprPtr& expr) {
+  if (expr->is<Sum>()) {
+    auto s = std::make_shared<Sum>();
+    for (auto&& summand : *expr) s->append(complex_split(summand));
+    return s;
+  }
+  if (expr->is<RealPart>()) {
+    return ex<RealPart>(
+        clean_real(split_re_im(expr->as<RealPart>().inner()).first));
+  }
+  if (expr->is<ImagPart>()) {
+    // Im(inner) is itself real-valued; its real-tensor form is the
+    // `.second` of the split — wrap in RealPart so the evaluator
+    // boundary treats it as a real quantity.
+    return ex<RealPart>(
+        clean_real(split_re_im(expr->as<ImagPart>().inner()).second));
+  }
+  if (expr->is<Constant>() || expr->is<Variable>()) return expr;
+  if (expr->is<Product>()) {
+    auto const& p = expr->as<Product>();
+    if (p.size() == 1 &&
+        (p.factor(0)->is<RealPart>() || p.factor(0)->is<ImagPart>())) {
+      auto prod = std::make_shared<Product>();
+      prod->scale(p.scalar());
+      prod->append(1, complex_split(p.factor(0)), Product::Flatten::No);
+      return prod;
+    }
+    throw std::runtime_error(
+        "complex_split: expected `Constant * (Re|Im)(...)` summand — run "
+        "fold_conj_pairs first so every term is real-wrapped");
+  }
+  throw std::runtime_error("complex_split: unsupported top-level Expr type");
 }
 
 }  // namespace sequant::mbpt

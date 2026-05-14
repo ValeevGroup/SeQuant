@@ -30,6 +30,8 @@
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>
 
+#include <array>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -344,15 +346,22 @@ class ImagPart : public sequant::Expr {
 /// Implements the closed-shell relativistic trace algebra: enumerate the
 /// per-tensor Kramers blocks, apply per-tensor TRS canonicalization (with
 /// the `(-1)^k` sign), and fold via the standard
-/// `canonicalize` + `rapid_simplify` pipeline. A single entry point
-/// handles energy expressions, amplitude residuals, and arbitrary
-/// operator expressions; antisymmetric tensors are expanded internally
-/// before tracing.
+/// `canonicalize` + `rapid_simplify` pipeline. Antisymmetric tensors are
+/// expanded internally before tracing.
 ///
 /// @param expr expression whose indices carry `Kramers::any` (i.e. not
 ///             yet specialized to up/down)
 /// @return a `Sum<Product>` of canonical-orbit-block tensors; tensor
 ///         labels carrying conjugation get a `*` suffix
+/// @todo CC support. The per-tensor `(-1)^k` TRS signs only cancel when
+///       every barred index appears an even number of times across the
+///       whole expression — true for a fully-contracted scalar (the MP2
+///       energy), but NOT for an expression carrying free/external
+///       indices (a CC residual `R_{IJ...}^{AB...}`). Residuals need
+///       explicit `(-1)^(bars on external indices)` sign bookkeeping;
+///       until that is added this entry point is correct only for
+///       fully-contracted scalar expressions. The same caveat applies to
+///       `kramers_trace_cycles` and `kramers_trace_burnside`.
 ExprPtr kramers_trace(const ExprPtr& expr);
 
 /// @brief Flips every Kramers state (`up` ↔ `down`) in an expression.
@@ -529,6 +538,12 @@ void kramers_cycle_dump(const ExprPtr& expr, std::wostream& os);
 ///       sum to the same scalar; the result is the analogue of what the
 ///       open-shell spin tracer yields, but driven by index wiring
 ///       rather than spin-label uniformity
+/// @todo CC support. Recombination currently recognizes only rank-(2,2)
+///       column swaps (see `detect_single_column_swap` in spinor.cpp).
+///       CCSDT triples residuals (`Ȳ_{IJK}^{ABC}` etc.) need the
+///       single-column-swap detection generalized to rank-(n,n).
+///       Higher-rank tensors are left expanded — not folded, never
+///       miscombined — so this is a missed-optimization, not a bug.
 [[nodiscard]] ExprPtr antisymm_recombine(const ExprPtr& expr);
 
 /// @brief Burnside-enumeration Kramers tracer.
@@ -552,6 +567,167 @@ void kramers_cycle_dump(const ExprPtr& expr, std::wostream& os);
 ///         the output of kramers_trace(); feed it the same
 ///         `fold_conj_pairs → antisymm_recombine` pipeline
 [[nodiscard]] ExprPtr kramers_trace_burnside(const ExprPtr& expr);
+
+// =====================================================================
+// Quaternion decomposer.
+//
+// After Kramers tracing, every 2-electron tensor is rewritten into the
+// four real (s, x, y, z) quaternion components of its spinor
+// coefficients (Helmich-Paris, Repisky, Visscher 2016; see
+// kramers-restriction §6 / Wiebke Eq. 8-11). For a rank-(2,2) tensor
+// `T(B0,B1;K0,K1)` with Kramers-specialized indices, the spin-traced
+// per-electron transition density decomposes via a 4x4 complex matrix
+// `M(k_bra,k_ket)` — one per Kramers-pair, 8 nonzero entries each:
+//
+//   T(B0,B1;K0,K1) = Σ_c M(k_B0,k_K0)[c_B0,c_K0]·M(k_B1,k_K1)[c_B1,c_K1]
+//                      · T#<c_B0 c_B1 c_K0 c_K1>(B0,B1;K0,K1)
+//
+// where electron 1 = (B0,K0), electron 2 = (B1,K1). The quaternion
+// component tuple is encoded as a `#`-prefixed 4-char suffix on the
+// tensor label (analogous to the `*` conjugation marker); the contracted
+// indices are left unchanged so tensors still contract pairwise.
+// =====================================================================
+
+/// @brief Encodes a quaternion-component tuple onto a tensor label.
+/// @param core the (component-free) tensor label
+/// @param c0,c1,c2,c3 the components of bra[0],bra[1],ket[0],ket[1],
+///        each one of 's','x','y','z'
+/// @return @p core with a `#c0c1c2c3` suffix appended
+[[nodiscard]] inline std::wstring quaternion_label_add(std::wstring_view core,
+                                                       char c0, char c1,
+                                                       char c2, char c3) {
+  std::wstring s{core};
+  s += L'#';
+  s += static_cast<wchar_t>(c0);
+  s += static_cast<wchar_t>(c1);
+  s += static_cast<wchar_t>(c2);
+  s += static_cast<wchar_t>(c3);
+  return s;
+}
+
+/// @brief Parses the quaternion-component suffix off a tensor label.
+/// @param label the (possibly quaternion-decomposed) tensor label; a
+///        trailing `*` conjugation marker is tolerated
+/// @return the four component chars (bra[0],bra[1],ket[0],ket[1]), or
+///         std::nullopt if @p label carries no `#`-suffix
+[[nodiscard]] inline std::optional<std::array<char, 4>> quaternion_label_parse(
+    std::wstring_view label) {
+  const auto pos = label.find(L'#');
+  if (pos == std::wstring_view::npos) return std::nullopt;
+  auto tail = label.substr(pos + 1);
+  if (!tail.empty() && tail.back() == L'*')
+    tail = tail.substr(0, tail.size() - 1);
+  if (tail.size() != 4) return std::nullopt;
+  std::array<char, 4> out{};
+  for (std::size_t i = 0; i < 4; ++i) {
+    const wchar_t ch = tail[i];
+    if (ch != L's' && ch != L'x' && ch != L'y' && ch != L'z')
+      return std::nullopt;
+    out[i] = static_cast<char>(ch);
+  }
+  return out;
+}
+
+/// @brief Returns the component-free core of a (possibly quaternion-
+///        decomposed, possibly conjugated) tensor label.
+/// @param label the tensor label
+/// @return @p label truncated at the `#` suffix marker (no-op if absent)
+[[nodiscard]] inline std::wstring quaternion_label_core(
+    std::wstring_view label) {
+  return std::wstring{label.substr(0, label.find(L'#'))};
+}
+
+/// @brief Rewrites a Kramers-traced expression into quaternion components.
+///
+/// Recurses through Sum / Product / RealPart / ImagPart, expanding any
+/// `Symmetry::Antisymm` tensor first, then applies the per-tensor 4x4
+/// `M`-matrix decomposition (see the section comment above) to every
+/// rank-(2,2) `Symmetry::Nonsymm` tensor. Each input tensor expands into
+/// up to 64 quaternion-component tensors (8 nonzero `M` entries per
+/// electron pair); the decomposed sub-products are canonicalized so
+/// dummy-renamed duplicates fold.
+///
+/// @param expr a Kramers-traced expression (output of `kramers_trace` →
+///             `fold_conj_pairs` → `antisymm_recombine`), every tensor
+///             index carrying a specialized `Kramers::up`/`Kramers::down`
+///             QN
+/// @return the quaternion-component-decomposed expression, value-equal to
+///         @p expr; tensor labels carry a `#c0c1c2c3` component suffix
+/// @pre every tensor in @p expr is rank-(2,2) with Kramers-specialized
+///      indices
+[[nodiscard]] ExprPtr quaternion_decompose(const ExprPtr& expr);
+
+// =====================================================================
+// Complex (Re/Im) split.
+//
+// For a closed-shell 1eX2C energy expression the spin-free Coulomb
+// operator spin-traces each per-electron transition density down to its
+// scalar Pauli component, which is *complex* — no quaternion
+// (4-component) structure survives, so `quaternion_decompose`
+// over-decomposes. The minimal real-arithmetic form is the 2-component
+// split: every complex tensor `g` becomes `g = g~r + i·g~i` with `g~r`,
+// `g~i` real tensors, and complex arithmetic is propagated symbolically
+// (`Re(g·t) = g~r·t~r − g~i·t~i`, etc.). The component is encoded as a
+// `~r`/`~i` label suffix (analogous to the `*` conjugation marker).
+// =====================================================================
+
+/// @brief Encodes a real/imaginary-part marker onto a tensor label.
+/// @param core the (marker-free) tensor label
+/// @param imag true for the imaginary part (`~i`), false for the real
+///        part (`~r`)
+/// @return @p core with the `~r`/`~i` suffix appended
+[[nodiscard]] inline std::wstring complex_label_add(std::wstring_view core,
+                                                    bool imag) {
+  return std::wstring{core} + (imag ? L"~i" : L"~r");
+}
+
+/// @brief Parses the real/imaginary-part marker off a tensor label.
+/// @param label the (possibly complex-split) tensor label; a trailing
+///        `*` conjugation marker is tolerated
+/// @return true for the imaginary part, false for the real part, or
+///         std::nullopt if @p label carries no `~` marker
+[[nodiscard]] inline std::optional<bool> complex_label_parse(
+    std::wstring_view label) {
+  const auto pos = label.find(L'~');
+  if (pos == std::wstring_view::npos) return std::nullopt;
+  auto tail = label.substr(pos + 1);
+  if (!tail.empty() && tail.back() == L'*')
+    tail = tail.substr(0, tail.size() - 1);
+  if (tail == std::wstring_view{L"r"}) return false;
+  if (tail == std::wstring_view{L"i"}) return true;
+  return std::nullopt;
+}
+
+/// @brief Returns the marker-free core of a (possibly complex-split)
+///        tensor label.
+/// @param label the tensor label
+/// @return @p label truncated at the `~` marker (no-op if absent)
+[[nodiscard]] inline std::wstring complex_label_core(std::wstring_view label) {
+  return std::wstring{label.substr(0, label.find(L'~'))};
+}
+
+/// @brief Rewrites a Kramers-traced expression into one over real
+///        tensors via the complex (Re/Im) split.
+///
+/// Each complex tensor `g` is replaced by two real tensors `g~r`, `g~i`
+/// (`g = g~r + i·g~i`), and complex arithmetic is propagated
+/// symbolically through every Product and Sum. A `RealPart`/`ImagPart`
+/// wrapper collapses to the corresponding real sub-expression
+/// (`Re(g·t) → g~r·t~r − g~i·t~i`). Conjugated tensors (`g*`) split as
+/// `g~r − i·g~i`. The resulting real sub-expressions are distributed and
+/// constant-folded but deliberately NOT canonicalized — the split
+/// tensors inherit the input's index wiring, and canonicalizing
+/// `Antisymm` `~r`/`~i` tensors would emit signs the evaluator cannot
+/// see (it rebuilds `[as]` formulas from index type + Kramers label).
+///
+/// @param expr a Kramers-traced expression whose summands are
+///             `Constant * RealPart/ImagPart(...)` (the output of
+///             `kramers_trace → fold_conj_pairs → antisymm_recombine`)
+/// @return an equivalent expression in which every tensor is real;
+///         tensor labels carry a `~r`/`~i` suffix, real sub-expressions
+///         re-wrapped in `RealPart` for the evaluator boundary
+/// @pre every summand is real-wrapped — run `fold_conj_pairs` first
+[[nodiscard]] ExprPtr complex_split(const ExprPtr& expr);
 
 }  // namespace sequant::mbpt
 
