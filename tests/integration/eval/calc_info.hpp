@@ -57,7 +57,7 @@ struct CalcInfo {
     SEQUANT_ASSERT(exprs.size() == eqn_opts.excit);
     return zip(exprs, iota(size_t{1}, eqn_opts.excit + 1)) |
            transform([this](auto&& pair) {
-             return node_<ExprT>(pair.first, pair.second);
+             return this->template node_<ExprT>(pair.first, pair.second);
            }) |
            ranges::to_vector;
   }
