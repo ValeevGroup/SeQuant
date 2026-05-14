@@ -121,6 +121,51 @@ ExprPtr append_kramers(const ExprPtr& expr,
                        const container::map<Index, Index>& index_replacements);
 
 // =====================================================================
+// Complex-arithmetic operators on tensor expressions.
+//
+// Groundwork for the Kramers tracer (which uses TRS to rewrite barred
+// configurations as conjugates of unbarred ones) and the upcoming
+// quaternion decomposer (which separates real/imaginary parts).
+//
+// Convention: complex conjugation of a tensor is encoded as a `*`
+// suffix on the tensor's label (e.g., `g` → `g*`, `t` → `t*`).
+// Evaluator-side dispatch (e.g., MPQC's SQ_MP2 yielder) translates the
+// suffix into a `.conj()` call on the underlying numeric tensor.
+// =====================================================================
+
+/// Test whether a tensor's label encodes complex conjugation
+/// (trailing `*` suffix per the convention above).
+inline bool has_conj_suffix(std::wstring_view label) {
+  return !label.empty() && label.back() == L'*';
+}
+
+/// Append `*` to a tensor's label (or strip if already present, since
+/// (z*)* = z). Pure label rewrite — does NOT affect Symmetry tags or
+/// IndexSpace QNs. Caller's responsibility to ensure the underlying
+/// numeric tensor's complex conjugate is what's wanted.
+[[nodiscard]] std::wstring toggle_conj_suffix(std::wstring_view label);
+
+/// Symbolic complex conjugation of an expression.
+///
+/// Recursively walks @p expr and applies:
+///   - Tensor: toggle its `*` suffix (z → z*, z* → z).
+///   - Constant: numeric complex conjugate.
+///   - Variable: not yet supported (throws).
+///   - Product: conjugate the scalar AND each factor. (Π zᵢ)* = Π zᵢ*.
+///   - Sum: conjugate each summand. (Σ zᵢ)* = Σ zᵢ*.
+///
+/// `conjugate(conjugate(expr))` recovers @p expr.
+[[nodiscard]] ExprPtr conjugate(const ExprPtr& expr);
+
+/// Symbolic real part: returns `(expr + conjugate(expr)) / 2`.
+/// Currently materialized as that two-term Sum (no native `Re` node);
+/// downstream callers can apply numerical optimizations after evaluation.
+[[nodiscard]] ExprPtr real_part(const ExprPtr& expr);
+
+/// Symbolic imaginary part: returns `(expr - conjugate(expr)) / (2i)`.
+[[nodiscard]] ExprPtr imaginary_part(const ExprPtr& expr);
+
+// =====================================================================
 // Kramers tracer.
 // =====================================================================
 

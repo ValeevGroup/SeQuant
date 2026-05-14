@@ -72,6 +72,80 @@ Index make_kramers_free(const Index& idx) {
   return detail::make_index_with_kramers(idx, mbpt::Kramers::any);
 }
 
+// =====================================================================
+// Conjugation infrastructure (groundwork for Kramers tracer + quaternion
+// decomposer).
+// =====================================================================
+
+std::wstring toggle_conj_suffix(std::wstring_view label) {
+  if (has_conj_suffix(label)) return std::wstring{label.substr(0, label.size() - 1)};
+  return std::wstring{label} + L'*';
+}
+
+namespace {
+
+/// Apply conjugation to a single Tensor: rebuild it with toggled label
+/// and identical bra/ket/aux/symmetry/etc.
+ExprPtr conjugate_tensor(const Tensor& t) {
+  auto new_label = toggle_conj_suffix(t.label());
+  // Tensor copy ctor + label edit isn't directly exposed; reconstruct.
+  return ex<Tensor>(
+      new_label,
+      bra(container::svector<Index>{t.bra().begin(), t.bra().end()}),
+      ket(container::svector<Index>{t.ket().begin(), t.ket().end()}),
+      aux(container::svector<Index>{t.aux().begin(), t.aux().end()}),
+      t.symmetry(), t.braket_symmetry(), t.column_symmetry());
+}
+
+}  // namespace
+
+ExprPtr conjugate(const ExprPtr& expr) {
+  if (expr->is<Tensor>()) {
+    return conjugate_tensor(expr->as<Tensor>());
+  }
+  if (expr->is<Constant>()) {
+    auto v = expr->as<Constant>().value();
+    return ex<Constant>(sequant::conj(v));
+  }
+  if (expr->is<Variable>()) {
+    throw std::runtime_error(
+        "conjugate: Variable conjugation not yet supported");
+  }
+  if (expr->is<Product>()) {
+    auto const& prod = expr->as<Product>();
+    auto p = std::make_shared<Product>();
+    p->scale(sequant::conj(prod.scalar()));
+    for (auto&& f : prod) p->append(1, conjugate(f));
+    return p;
+  }
+  if (expr->is<Sum>()) {
+    auto s = std::make_shared<Sum>();
+    for (auto&& summand : *expr) s->append(conjugate(summand));
+    return s;
+  }
+  throw std::runtime_error("conjugate: unsupported Expr type");
+}
+
+ExprPtr real_part(const ExprPtr& expr) {
+  // Re(z) = (z + z*) / 2 — represented as a literal Sum with a 1/2 prefactor.
+  auto s = std::make_shared<Sum>();
+  s->append(expr);
+  s->append(conjugate(expr));
+  return ex<Constant>(rational{1, 2}) * ExprPtr{s};
+}
+
+ExprPtr imaginary_part(const ExprPtr& expr) {
+  // Im(z) = (z - z*) / (2i) = -i (z - z*) / 2.
+  auto s = std::make_shared<Sum>();
+  s->append(expr);
+  // -1 * conj(expr): scale conj by -1 via a wrapping Product.
+  auto neg_conj = ex<Constant>(-1) * conjugate(expr);
+  s->append(neg_conj);
+  // multiply by -i / 2:
+  return ex<Constant>(rational{1, 2}) *
+         ex<Constant>(Complex<rational>{0, -1}) * ExprPtr{s};
+}
+
 ExprPtr append_kramers(
     const ExprPtr& expr,
     const container::map<Index, Index>& index_replacements) {
@@ -141,17 +215,25 @@ container::svector<Index> collect_kramers_indices(const ExprPtr& expr) {
 }  // namespace
 
 ExprPtr kramers_trace(const ExprPtr& expr) {
-  // MVP (Phase 2b/i): enumerate the 2^N Kramers configurations of the
-  // expression's spinor (Kramers::any) indices and emit a Sum of substituted
-  // copies. Each summand is a Product (or Sum/Tensor) where every Kramers
-  // index has been pinned to up/down.
+  // Enumerate the 2^N Kramers configurations of the expression's spinor
+  // (Kramers::any) indices, then apply TRS pairing: configs (X, X̄) related
+  // by full bar-flip are complex conjugates of each other (per the
+  // (-1)^k full-bar identity, with the per-tensor signs cancelling for
+  // products in which every barred index appears in an even number of
+  // tensors — true for any all-internal-index contraction, MP2 included).
   //
-  // Per-tensor TRS canonicalization (the (-1)^k bit-table fold) and
-  // cross-tensor simplification land in subsequent commits.
+  // For each TRS pair we materialize only the "lex-smaller" configuration
+  // X explicitly; the X̄ partner is emitted as `conjugate(T_X)`. Tensors
+  // in the conj branch carry a `*` label suffix (per the convention in
+  // the conjugate/real_part/imaginary_part scaffolding above) which the
+  // evaluator dispatches into a `.conj()` call on the underlying numeric
+  // tensor. Term count is unchanged, but the symbolic structure exposes
+  // the conjugate-pair relationship for downstream simplification (e.g.,
+  // `real_part` collapse in real-scalar callers like SQ_MP2).
   //
-  // The eventual evaluator (LCAOFactory) sees each summand as a concrete
-  // (g_block, t_block, ...) contraction; LCAOFactory's own canonical-storage
-  // layer (Phase 1.5) ensures we still pay only the orbit-rep integral cost.
+  // Standard SeQuant simplifications (dummy renaming, antisym fold, etc.)
+  // are NOT applied here — caller invokes `sequant::canonicalize` if it
+  // wants those.
 
   const auto indices = collect_kramers_indices(expr);
   const std::size_t n = indices.size();
@@ -161,9 +243,13 @@ ExprPtr kramers_trace(const ExprPtr& expr) {
         "kramers_trace: too many Kramers indices (would emit > 2^30 terms)");
   }
 
-  auto result = std::make_shared<Sum>();
   const std::uint64_t n_configs = 1ull << n;
+  const std::uint64_t mask = n_configs - 1;
+
+  // Pass 1: build the "X" term for the lex-smaller half of TRS pairs.
+  container::map<std::uint64_t, ExprPtr> x_terms;
   for (std::uint64_t cfg = 0; cfg < n_configs; ++cfg) {
+    if (cfg > (mask ^ cfg)) continue;  // partner already (or will be) handled
     container::map<Index, Index> repl;
     for (std::size_t i = 0; i < n; ++i) {
       const bool is_down = (cfg >> i) & 1u;
@@ -171,7 +257,19 @@ ExprPtr kramers_trace(const ExprPtr& expr) {
                               : make_kramers_up(indices[i]);
       repl[indices[i]] = new_idx;
     }
-    result->append(append_kramers(expr, repl));
+    x_terms[cfg] = append_kramers(expr, repl);
+  }
+
+  // Pass 2: assemble the Sum. The X̄ partner of cfg=k is k^mask; whichever
+  // is lex-smaller is the "X" (real) term, the other is `conjugate(X)`.
+  auto result = std::make_shared<Sum>();
+  for (std::uint64_t cfg = 0; cfg < n_configs; ++cfg) {
+    const std::uint64_t partner = mask ^ cfg;
+    if (cfg <= partner) {
+      result->append(x_terms.at(cfg));
+    } else {
+      result->append(conjugate(x_terms.at(partner)));
+    }
   }
   return result;
 }
