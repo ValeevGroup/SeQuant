@@ -89,6 +89,29 @@ struct mask<BatchingQNS> {
   static constexpr type value = static_cast<type>(BatchingQNS::batch);
 };
 
+/// quantum numbers tags related to Kramers symmetry (relativistic 2-component)
+/// \note Kramers QN takes the 8th and 9th rightmost bits since there are 3
+///       possible states (any, kramers-up, kramers-down).
+/// \note Spin and Kramers are mutually exclusive on a single index: an index
+///       is either spin-orbital (alpha/beta) or relativistic-spinor
+///       (kramers-up/kramers-down), never both. Spin restriction is the
+///       non-relativistic limit of Kramers restriction.
+enum class Kramers : bitset_t {
+  up = 0b010000000,    //!< unbarred Kramers spinor (⇑)
+  down = 0b100000000,  //!< barred   Kramers spinor (⇓)
+  /// arbitrary Kramers state represented by 2 bits so overlap and union
+  /// work as expected (`any & up = up`, `up | down = any`, etc.)
+  any = up | down,
+  // syntactic sugar
+  null = 0b000000000
+};
+
+template <>
+struct mask<Kramers> {
+  using type = std::underlying_type_t<Kramers>;
+  static constexpr type value = static_cast<type>(Kramers::any);
+};
+
 }  // namespace sequant::mbpt
 
 #endif  // SEQUANT_DOMAIN_MBPT_SPACE_QNS_HPP

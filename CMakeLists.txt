@@ -423,6 +423,8 @@ set(SeQuant_mbpt_src
         SeQuant/domain/mbpt/space_qns.hpp
         SeQuant/domain/mbpt/spin.cpp
         SeQuant/domain/mbpt/spin.hpp
+        SeQuant/domain/mbpt/spinor.cpp
+        SeQuant/domain/mbpt/spinor.hpp
         SeQuant/domain/mbpt/vac_av.hpp
         SeQuant/domain/mbpt/vac_av.cpp
         SeQuant/domain/mbpt/utils.hpp
