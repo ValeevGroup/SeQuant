@@ -4,6 +4,9 @@
 
 #include "options.hpp"
 
+#include <range/v3/algorithm/contains.hpp>
+#include <range/v3/view/concat.hpp>
+
 namespace sequant::eval {
 
 namespace detail {

@@ -19,7 +19,7 @@
 #include <string>
 #include <utility>
 
-#include <range/v3/all.hpp>
+#include <range/v3/view/iota.hpp>
 
 TEST_CASE("math", "[elements]") {
   using namespace sequant;

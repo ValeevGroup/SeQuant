@@ -8,8 +8,8 @@
 #include <SeQuant/core/container.hpp>
 #include <fstream>
 #include <iomanip>
-#include <range/v3/algorithm.hpp>
-#include <range/v3/view.hpp>
+#include <range/v3/range/operations.hpp>
+#include <range/v3/view/tail.hpp>
 #include <sstream>
 
 namespace sequant::eval {

@@ -24,8 +24,6 @@
 #include <utility>
 #include <vector>
 
-#include <range/v3/all.hpp>
-
 namespace Catch {
 template <>
 struct StringMaker<sequant::io::serialization::SerializationError> {

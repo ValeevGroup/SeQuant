@@ -17,6 +17,8 @@
 #include <scf.hpp>
 #include <ta/data_world_ta.hpp>
 
+#include <range/v3/view/repeat_n.hpp>
+
 #include <chrono>
 
 namespace sequant::eval {

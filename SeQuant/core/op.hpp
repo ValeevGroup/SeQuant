@@ -30,7 +30,17 @@
 #include <type_traits>
 #include <utility>
 
-#include <range/v3/all.hpp>
+#include <range/v3/algorithm/adjacent_find.hpp>
+#include <range/v3/algorithm/find_if.hpp>
+#include <range/v3/algorithm/for_each.hpp>
+#include <range/v3/functional/comparisons.hpp>
+#include <range/v3/iterator/basic_iterator.hpp>
+#include <range/v3/range/access.hpp>
+#include <range/v3/range/primitives.hpp>
+#include <range/v3/view/concat.hpp>
+#include <range/v3/view/counted.hpp>
+#include <range/v3/view/reverse.hpp>
+#include <range/v3/view/transform.hpp>
 
 namespace sequant {
 

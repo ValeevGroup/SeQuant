@@ -18,8 +18,6 @@
 #include <string>
 #include <type_traits>
 
-#include <range/v3/all.hpp>
-
 TEST_CASE("canonicalization", "[algorithms]") {
   using namespace sequant;
 

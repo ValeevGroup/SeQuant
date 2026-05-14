@@ -38,6 +38,7 @@
 #include <range/v3/functional/identity.hpp>
 #include <range/v3/iterator/basic_iterator.hpp>
 #include <range/v3/view/any_view.hpp>
+#include <range/v3/view/enumerate.hpp>
 #include <range/v3/view/view.hpp>
 
 namespace sequant {

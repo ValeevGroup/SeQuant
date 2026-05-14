@@ -9,7 +9,9 @@
 #include <string>
 #include <utility>
 
-#include <range/v3/all.hpp>
+#include <range/v3/view/all.hpp>
+#include <range/v3/view/iota.hpp>
+#include <range/v3/view/take.hpp>
 
 TEST_CASE("binary_node", "[FullBinaryNode]") {
   using ranges::views::iota;

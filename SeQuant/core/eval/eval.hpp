@@ -14,11 +14,10 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
-#include <chrono>
-#include <range/v3/numeric.hpp>
-#include <range/v3/view.hpp>
+#include <range/v3/range/operations.hpp>
 
 #include <any>
+#include <chrono>
 #include <iostream>
 #include <optional>
 #include <stdexcept>

@@ -20,6 +20,9 @@
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <btas/btas.h>
+
+#include <range/v3/view/repeat_n.hpp>
+
 #include <memory>
 
 namespace sequant::eval::btas {

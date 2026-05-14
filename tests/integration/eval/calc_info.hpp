@@ -16,7 +16,10 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
-#include <range/v3/view.hpp>
+#include <range/v3/view/join.hpp>
+#include <range/v3/view/single.hpp>
+#include <range/v3/view/tail.hpp>
+#include <range/v3/view/transform.hpp>
 
 #include <cstddef>
 

@@ -21,6 +21,8 @@
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <range/v3/view/repeat_n.hpp>
+
 #include <memory>
 
 namespace sequant::eval::tapp {

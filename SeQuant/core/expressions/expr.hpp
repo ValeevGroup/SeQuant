@@ -11,7 +11,8 @@
 #include <memory>
 #include <optional>
 
-#include <range/v3/all.hpp>
+#include <range/v3/range/primitives.hpp>
+#include <range/v3/view/facade.hpp>
 
 namespace sequant {
 

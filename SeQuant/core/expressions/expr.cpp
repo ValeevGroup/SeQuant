@@ -15,7 +15,13 @@
 #include <SeQuant/core/tensor_network/typedefs.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
-#include <range/v3/all.hpp>
+#include <range/v3/algorithm/any_of.hpp>
+#include <range/v3/algorithm/find_if.hpp>
+#include <range/v3/algorithm/for_each.hpp>
+#include <range/v3/algorithm/sort.hpp>
+#include <range/v3/range/access.hpp>
+#include <range/v3/range/conversion.hpp>
+#include <range/v3/view/filter.hpp>
 
 #include <thread>
 #include <vector>

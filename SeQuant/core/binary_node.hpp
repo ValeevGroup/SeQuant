@@ -9,7 +9,12 @@
 #include <utility>
 
 #include <range/v3/numeric/accumulate.hpp>
-#include <range/v3/view.hpp>
+#include <range/v3/range/access.hpp>
+#include <range/v3/range/operations.hpp>
+#include <range/v3/range/primitives.hpp>
+#include <range/v3/range/traits.hpp>
+#include <range/v3/view/move.hpp>
+#include <range/v3/view/tail.hpp>
 
 namespace sequant {
 

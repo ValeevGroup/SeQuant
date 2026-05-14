@@ -15,6 +15,9 @@
 
 #include <boost/regex.hpp>
 
+#include <range/v3/view/repeat_n.hpp>
+#include <range/v3/view/split.hpp>
+
 #include <string>
 #include <vector>
 

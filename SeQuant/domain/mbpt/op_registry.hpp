@@ -10,6 +10,8 @@
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <range/v3/view/map.hpp>
+
 #include <memory>
 
 namespace sequant::mbpt {

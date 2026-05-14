@@ -6,11 +6,13 @@
 
 #include <boost/numeric/conversion/cast.hpp>
 
+#include <range/v3/range/operations.hpp>
+#include <range/v3/view/reverse.hpp>
+#include <range/v3/view/tail.hpp>
+#include <range/v3/view/zip.hpp>
+
 #include <cmath>
 #include <limits>
-
-#include <range/v3/iterator.hpp>
-#include <range/v3/view.hpp>
 
 namespace sequant {
 

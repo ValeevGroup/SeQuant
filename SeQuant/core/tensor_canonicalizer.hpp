@@ -8,6 +8,10 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <range/v3/view/counted.hpp>
+#include <range/v3/view/take.hpp>
+#include <range/v3/view/zip.hpp>
+
 #include <functional>
 #include <memory>
 #include <string_view>

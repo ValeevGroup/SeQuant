@@ -29,7 +29,9 @@
 #include <utility>
 #include <vector>
 
-#include <range/v3/all.hpp>
+#include <range/v3/iterator/basic_iterator.hpp>
+#include <range/v3/range/access.hpp>
+#include <range/v3/range/primitives.hpp>
 
 struct Dummy : public sequant::Expr {
   virtual ~Dummy() = default;

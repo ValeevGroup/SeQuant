@@ -28,7 +28,7 @@
 #include <type_traits>
 #include <vector>
 
-#include <range/v3/all.hpp>
+#include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/view/interface.hpp>
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/view.hpp>

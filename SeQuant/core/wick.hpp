@@ -5,10 +5,6 @@
 #ifndef SEQUANT_WICK_HPP
 #define SEQUANT_WICK_HPP
 
-#include <bitset>
-#include <mutex>
-#include <utility>
-
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/logger.hpp>
@@ -18,6 +14,18 @@
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
+
+#include <range/v3/algorithm/fill.hpp>
+#include <range/v3/view/enumerate.hpp>
+#include <range/v3/view/iota.hpp>
+#include <range/v3/view/reverse.hpp>
+#include <range/v3/view/transform.hpp>
+#include <range/v3/view/zip.hpp>
+
+#include <bitset>
+#include <mutex>
+#include <span>
+#include <utility>
 
 namespace sequant {
 
@@ -1333,7 +1341,7 @@ class WickTheorem {
                 if (use_op_partition_groups && is_unique &&
                     past_op_right_partition_idx < this->op_npartitions_) {
                   const auto left_partition_ncontr_past_right_partition =
-                      ranges::span<size_t>(
+                      std::span<size_t>(
                           state.op_partition_cdeg_matrix.data() +
                               state.uptri_op(op_left_partition_idx,
                                              past_op_right_partition_idx),

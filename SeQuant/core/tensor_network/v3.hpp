@@ -14,6 +14,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/range/traits.hpp>
+#include <range/v3/view/indirect.hpp>
 
 #include <cstdlib>
 #include <iosfwd>

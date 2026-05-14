@@ -10,6 +10,8 @@
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <range/v3/algorithm/none_of.hpp>
+
 namespace sequant::mbpt {
 
 /// expands CSVs in a tensor in terms of a basis (standard unoccupieds, PAOs,

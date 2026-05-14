@@ -20,8 +20,6 @@
 #include <utility>
 #include <vector>
 
-#include <range/v3/all.hpp>
-
 namespace {
 
 auto eval_node(sequant::ExprPtr const& expr) { return binarize(expr); }

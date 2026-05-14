@@ -10,7 +10,12 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/external/bliss/graph.hh>
 
-#include <range/v3/view.hpp>
+#include <range/v3/view/concat.hpp>
+#include <range/v3/view/filter.hpp>
+#include <range/v3/view/indirect.hpp>
+#include <range/v3/view/move.hpp>
+#include <range/v3/view/reverse.hpp>
+#include <range/v3/view/transform.hpp>
 
 #include <algorithm>
 #include <bit>

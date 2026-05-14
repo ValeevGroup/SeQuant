@@ -7,7 +7,12 @@
 
 #include <SeQuant/core/utility/macros.hpp>
 
-#include <range/v3/all.hpp>
+#include <range/v3/iterator/basic_iterator.hpp>
+#include <range/v3/iterator/default_sentinel.hpp>
+#include <range/v3/range/primitives.hpp>
+#include <range/v3/view/facade.hpp>
+
+#include <numeric>
 
 namespace sequant {
 
