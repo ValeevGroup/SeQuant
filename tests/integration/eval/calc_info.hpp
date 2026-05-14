@@ -16,7 +16,10 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
-#include <range/v3/view.hpp>
+#include <range/v3/view/join.hpp>
+#include <range/v3/view/single.hpp>
+#include <range/v3/view/tail.hpp>
+#include <range/v3/view/transform.hpp>
 
 #include <cstddef>
 
@@ -54,7 +57,7 @@ struct CalcInfo {
     SEQUANT_ASSERT(exprs.size() == eqn_opts.excit);
     return zip(exprs, iota(size_t{1}, eqn_opts.excit + 1)) |
            transform([this](auto&& pair) {
-             return node_<ExprT>(pair.first, pair.second);
+             return this->template node_<ExprT>(pair.first, pair.second);
            }) |
            ranges::to_vector;
   }

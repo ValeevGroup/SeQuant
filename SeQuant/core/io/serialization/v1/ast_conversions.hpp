@@ -16,6 +16,8 @@
 
 #include <boost/variant.hpp>
 
+#include <range/v3/algorithm/find.hpp>
+
 #include <algorithm>
 #include <string>
 #include <tuple>

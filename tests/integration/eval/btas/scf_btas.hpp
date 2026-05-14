@@ -20,6 +20,14 @@
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <btas/btas.h>
+
+#include <range/v3/algorithm/sort.hpp>
+#include <range/v3/range/operations.hpp>
+#include <range/v3/view/concat.hpp>
+#include <range/v3/view/repeat_n.hpp>
+#include <range/v3/view/transform.hpp>
+#include <range/v3/view/zip.hpp>
+
 #include <memory>
 
 namespace sequant::eval::btas {

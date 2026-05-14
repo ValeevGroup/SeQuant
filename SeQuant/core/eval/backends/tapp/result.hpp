@@ -9,6 +9,10 @@
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 
+#include <range/v3/view/concat.hpp>
+#include <range/v3/view/iota.hpp>
+#include <range/v3/view/transform.hpp>
+
 namespace sequant {
 
 namespace {

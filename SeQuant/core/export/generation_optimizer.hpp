@@ -9,6 +9,8 @@
 
 #include <pv/polymorphic_variant.hpp>
 
+#include <range/v3/algorithm/find.hpp>
+
 #include <algorithm>
 #include <stack>
 #include <utility>

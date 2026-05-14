@@ -3,6 +3,12 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/optimize/sum.hpp>
 
+#include <range/v3/range/operations.hpp>
+#include <range/v3/view/map.hpp>
+#include <range/v3/view/reverse.hpp>
+#include <range/v3/view/tail.hpp>
+#include <range/v3/view/transform.hpp>
+
 #include <stack>
 
 namespace sequant::opt {

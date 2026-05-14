@@ -8,6 +8,15 @@
 #include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/op_registry.hpp>
 
+#include <range/v3/algorithm/contains.hpp>
+#include <range/v3/algorithm/for_each.hpp>
+#include <range/v3/algorithm/is_sorted.hpp>
+#include <range/v3/view/filter.hpp>
+#include <range/v3/view/iota.hpp>
+#include <range/v3/view/map.hpp>
+#include <range/v3/view/reverse.hpp>
+#include <range/v3/view/transform.hpp>
+
 namespace sequant::mbpt {
 
 std::vector<std::wstring> cardinal_tensor_labels() {

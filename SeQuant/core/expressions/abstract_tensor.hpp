@@ -20,7 +20,11 @@
 #include <string_view>
 #include <typeinfo>
 
-#include <range/v3/all.hpp>
+#include <range/v3/algorithm/copy.hpp>
+#include <range/v3/algorithm/stable_sort.hpp>
+#include <range/v3/range/concepts.hpp>
+#include <range/v3/view/any_view.hpp>
+#include <range/v3/view/zip.hpp>
 
 #include <boost/core/demangle.hpp>
 

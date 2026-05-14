@@ -24,6 +24,9 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/strong.hpp>
 
+#include <range/v3/algorithm/adjacent_find.hpp>
+#include <range/v3/algorithm/is_sorted.hpp>
+#include <range/v3/algorithm/lexicographical_compare.hpp>
 #include <range/v3/iterator/basic_iterator.hpp>
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/range/primitives.hpp>

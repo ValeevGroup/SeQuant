@@ -32,7 +32,17 @@
 #include <utility>
 #include <vector>
 
-#include <range/v3/all.hpp>
+#include <range/v3/algorithm/adjacent_find.hpp>
+#include <range/v3/algorithm/contains.hpp>
+#include <range/v3/algorithm/count_if.hpp>
+#include <range/v3/algorithm/for_each.hpp>
+#include <range/v3/algorithm/sort.hpp>
+#include <range/v3/range/access.hpp>
+#include <range/v3/range/conversion.hpp>
+#include <range/v3/view/concat.hpp>
+#include <range/v3/view/counted.hpp>
+#include <range/v3/view/filter.hpp>
+#include <range/v3/view/transform.hpp>
 
 namespace sequant {
 

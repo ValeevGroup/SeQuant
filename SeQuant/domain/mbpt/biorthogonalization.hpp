@@ -21,6 +21,8 @@
 #include <SeQuant/core/eval/backends/tapp/tensor.hpp>
 #endif
 
+#include <range/v3/view/iota.hpp>
+
 #include <concepts>
 #include <condition_variable>
 #include <cstddef>

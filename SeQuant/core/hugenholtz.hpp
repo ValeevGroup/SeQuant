@@ -8,7 +8,8 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
-#include <range/v3/all.hpp>
+#include <range/v3/algorithm/for_each.hpp>
+#include <range/v3/range/primitives.hpp>
 
 #include <algorithm>
 #include <utility>

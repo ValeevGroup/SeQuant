@@ -33,12 +33,20 @@
 #include <string>
 #include <type_traits>
 
+#include <range/v3/algorithm/find.hpp>
 #include <range/v3/algorithm/for_each.hpp>
+#include <range/v3/algorithm/lower_bound.hpp>
 #include <range/v3/algorithm/none_of.hpp>
 #include <range/v3/functional/identity.hpp>
 #include <range/v3/iterator/basic_iterator.hpp>
 #include <range/v3/view/any_view.hpp>
+#include <range/v3/view/concat.hpp>
+#include <range/v3/view/enumerate.hpp>
+#include <range/v3/view/indirect.hpp>
+#include <range/v3/view/join.hpp>
+#include <range/v3/view/transform.hpp>
 #include <range/v3/view/view.hpp>
+#include <range/v3/view/zip.hpp>
 
 namespace sequant {
 

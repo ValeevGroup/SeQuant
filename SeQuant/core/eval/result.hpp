@@ -10,8 +10,11 @@
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
-#include <range/v3/numeric.hpp>
-#include <range/v3/view.hpp>
+#include <range/v3/range/conversion.hpp>
+#include <range/v3/view/intersperse.hpp>
+#include <range/v3/view/iota.hpp>
+#include <range/v3/view/join.hpp>
+#include <range/v3/view/transform.hpp>
 
 #include <any>
 #include <memory>

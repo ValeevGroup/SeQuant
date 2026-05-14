@@ -7,6 +7,8 @@
 #include <SeQuant/core/expressions/sum.hpp>
 #include <SeQuant/core/expressions/variable.hpp>
 
+#include <range/v3/algorithm/any_of.hpp>
+
 namespace sequant {
 
 bool has_tensor(const ExprPtr& expr, std::wstring label) {

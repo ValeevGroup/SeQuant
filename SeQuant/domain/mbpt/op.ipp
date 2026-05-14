@@ -8,6 +8,10 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 
+#include <range/v3/algorithm/find_if.hpp>
+#include <range/v3/algorithm/is_sorted.hpp>
+#include <range/v3/view/iota.hpp>
+
 namespace sequant {
 namespace mbpt {
 

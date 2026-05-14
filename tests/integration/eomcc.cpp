@@ -12,6 +12,8 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 
+#include <range/v3/algorithm/transform.hpp>
+
 using namespace sequant;
 using namespace sequant::mbpt;
 

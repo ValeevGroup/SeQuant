@@ -9,6 +9,8 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/external/bliss/graph.hh>
 
+#include <range/v3/algorithm/all_of.hpp>
+
 #include <cstddef>
 #include <memory>
 #include <string>

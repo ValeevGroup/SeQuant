@@ -19,8 +19,6 @@
 #include <initializer_list>
 #include <memory>
 
-#include <range/v3/all.hpp>
-
 sequant::ExprPtr extract(sequant::ExprPtr expr,
                          std::initializer_list<size_t> const& idxs) {
   using namespace sequant;

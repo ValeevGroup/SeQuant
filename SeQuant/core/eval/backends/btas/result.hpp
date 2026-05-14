@@ -9,6 +9,9 @@
 
 #include <btas/btas.h>
 
+#include <range/v3/view/concat.hpp>
+#include <range/v3/view/iota.hpp>
+
 namespace sequant {
 
 namespace {

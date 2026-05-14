@@ -5,6 +5,10 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <range/v3/algorithm/all_of.hpp>
+#include <range/v3/algorithm/find.hpp>
+#include <range/v3/algorithm/for_each.hpp>
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdlib>

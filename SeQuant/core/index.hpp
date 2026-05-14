@@ -34,7 +34,13 @@
 #include <utility>
 #include <vector>
 
-#include <range/v3/all.hpp>
+#include <range/v3/algorithm/contains.hpp>
+#include <range/v3/algorithm/for_each.hpp>
+#include <range/v3/algorithm/lexicographical_compare.hpp>
+#include <range/v3/range/access.hpp>
+#include <range/v3/range/conversion.hpp>
+#include <range/v3/view/join.hpp>
+#include <range/v3/view/transform.hpp>
 
 // change to 1 to make thread-safe
 #define SEQUANT_INDEX_THREADSAFE 1

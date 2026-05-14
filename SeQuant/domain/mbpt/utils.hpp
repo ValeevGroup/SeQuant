@@ -11,8 +11,6 @@
 
 #include <SeQuant/domain/mbpt/op.hpp>
 
-#include <range/v3/view.hpp>
-
 namespace sequant::mbpt {
 
 /// Options for Lie Similarity Transformation. @see lst

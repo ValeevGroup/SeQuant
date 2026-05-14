@@ -14,11 +14,14 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/external/bliss/graph.hh>
 
-#include <range/v3/action.hpp>
-#include <range/v3/algorithm.hpp>
-#include <range/v3/functional.hpp>
-#include <range/v3/iterator.hpp>
-#include <range/v3/view.hpp>
+#include <range/v3/algorithm/all_of.hpp>
+#include <range/v3/algorithm/any_of.hpp>
+#include <range/v3/functional/not_fn.hpp>
+#include <range/v3/range/operations.hpp>
+#include <range/v3/view/filter.hpp>
+#include <range/v3/view/join.hpp>
+#include <range/v3/view/move.hpp>
+#include <range/v3/view/transform.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -309,7 +312,7 @@ size_t hash_terminal_tensor(Tensor const& tnsr) noexcept {
 ///
 template <typename Rng>
 auto imed_hashes(Rng const& rng) {
-  using ranges::views::transform;
+  using std::views::transform;
   return inits(rng) | transform([](auto&& v) {
            return hash::range_unordered(ranges::begin(v), ranges::end(v));
          });
