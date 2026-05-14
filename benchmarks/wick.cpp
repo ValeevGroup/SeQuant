@@ -17,7 +17,6 @@ static constexpr std::size_t nInputs = 5;
 
 template <Statistics stats>
 ExprPtr get_op_sequence(std::size_t i) {
-  using OpSeq = NormalOperatorSequence<stats>;
   using Op = NormalOperator<stats>;
 
   switch (i) {
