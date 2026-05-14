@@ -12,6 +12,7 @@
 #include <range/v3/range/primitives.hpp>
 #include <range/v3/view/facade.hpp>
 
+#include <algorithm>
 #include <numeric>
 
 namespace sequant {

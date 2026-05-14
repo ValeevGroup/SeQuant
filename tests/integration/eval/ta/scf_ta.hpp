@@ -17,6 +17,7 @@
 #include <scf.hpp>
 #include <ta/data_world_ta.hpp>
 
+#include <range/v3/range/operations.hpp>
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/intersperse.hpp>
 #include <range/v3/view/join.hpp>

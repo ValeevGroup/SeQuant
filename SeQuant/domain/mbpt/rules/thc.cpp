@@ -8,6 +8,7 @@
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <range/v3/range/operations.hpp>
 #include <range/v3/view/transform.hpp>
 
 #include <string_view>
