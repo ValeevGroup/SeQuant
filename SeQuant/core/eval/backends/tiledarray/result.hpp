@@ -10,6 +10,8 @@
 #include <TiledArray/einsum/tiledarray.h>
 #include <tiledarray.h>
 
+#include <range/v3/view/iota.hpp>
+
 namespace sequant {
 
 namespace {

@@ -17,6 +17,8 @@
 #include <SeQuant/core/utility/overloads.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
+#include <range/v3/algorithm/contains.hpp>
+
 #include <string>
 #include <vector>
 

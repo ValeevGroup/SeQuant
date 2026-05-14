@@ -12,6 +12,10 @@
 #include <regex>
 #include <type_traits>
 
+#include <range/v3/algorithm/adjacent_find.hpp>
+#include <range/v3/algorithm/find.hpp>
+#include <range/v3/algorithm/for_each.hpp>
+#include <range/v3/algorithm/sort.hpp>
 #include <range/v3/functional/identity.hpp>
 
 namespace sequant {

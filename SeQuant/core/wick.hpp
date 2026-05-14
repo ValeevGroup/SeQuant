@@ -15,7 +15,16 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
+#include <range/v3/algorithm/adjacent_find.hpp>
+#include <range/v3/algorithm/any_of.hpp>
+#include <range/v3/algorithm/contains.hpp>
 #include <range/v3/algorithm/fill.hpp>
+#include <range/v3/algorithm/find.hpp>
+#include <range/v3/algorithm/find_if.hpp>
+#include <range/v3/algorithm/for_each.hpp>
+#include <range/v3/algorithm/is_sorted.hpp>
+#include <range/v3/algorithm/sort.hpp>
+#include <range/v3/iterator/basic_iterator.hpp>
 #include <range/v3/view/enumerate.hpp>
 #include <range/v3/view/iota.hpp>
 #include <range/v3/view/reverse.hpp>

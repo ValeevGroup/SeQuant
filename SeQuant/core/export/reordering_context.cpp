@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <ranges>
 
+#include <range/v3/algorithm/is_sorted.hpp>
 #include <range/v3/algorithm/sort.hpp>
 #include <range/v3/view/subrange.hpp>
 #include <range/v3/view/zip.hpp>

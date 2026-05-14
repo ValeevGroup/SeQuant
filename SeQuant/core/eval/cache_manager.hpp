@@ -9,6 +9,7 @@
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/expr.hpp>
 
+#include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/map.hpp>
 #include <range/v3/view/transform.hpp>

@@ -14,6 +14,8 @@
 #include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
+#include <range/v3/view/transform.hpp>
+
 using namespace sequant;
 using namespace sequant::mbpt;
 

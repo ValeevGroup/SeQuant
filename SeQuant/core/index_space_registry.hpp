@@ -10,6 +10,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
+#include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/algorithm/sort.hpp>
 #include <range/v3/numeric/accumulate.hpp>
 #include <range/v3/range/conversion.hpp>

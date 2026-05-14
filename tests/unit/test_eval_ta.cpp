@@ -17,6 +17,12 @@
 #include <tiledarray.h>
 #include <boost/regex.hpp>
 
+#include <range/v3/algorithm/contains.hpp>
+#include <range/v3/view/concat.hpp>
+#include <range/v3/view/intersperse.hpp>
+#include <range/v3/view/join.hpp>
+#include <range/v3/view/transform.hpp>
+
 #include <cmath>
 #include <cstdlib>
 #include <string>

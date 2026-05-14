@@ -21,6 +21,9 @@
 #include <libperm/Rank.hpp>
 #include <libperm/Utils.hpp>
 
+#include <range/v3/algorithm/for_each.hpp>
+#include <range/v3/view/transform.hpp>
+
 #include <algorithm>
 
 namespace sequant::mbpt {

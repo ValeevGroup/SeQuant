@@ -18,6 +18,8 @@
 #include <SeQuant/core/utility/strong.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
 
+#include <range/v3/view/transform.hpp>
+
 #include <limits>
 #include <ranges>
 #include <string>

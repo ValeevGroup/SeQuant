@@ -6,6 +6,8 @@
 
 #include <SeQuant/core/eval/eval_node.hpp>
 
+#include <range/v3/view/transform.hpp>
+
 namespace sequant {
 
 namespace {

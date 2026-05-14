@@ -11,6 +11,10 @@
 #include <SeQuant/core/slotted_index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <range/v3/algorithm/contains.hpp>
+#include <range/v3/algorithm/for_each.hpp>
+#include <range/v3/algorithm/is_sorted.hpp>
+#include <range/v3/algorithm/sort.hpp>
 #include <range/v3/range/operations.hpp>
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/filter.hpp>

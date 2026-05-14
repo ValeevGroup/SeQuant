@@ -12,7 +12,10 @@
 
 #include <boost/regex.hpp>
 
+#include <range/v3/algorithm/all_of.hpp>
+#include <range/v3/view/all.hpp>
 #include <range/v3/view/split.hpp>
+#include <range/v3/view/transform.hpp>
 
 #include <string>
 #include <vector>

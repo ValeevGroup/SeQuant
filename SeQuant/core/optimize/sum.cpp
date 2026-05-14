@@ -4,6 +4,7 @@
 #include <SeQuant/core/optimize/sum.hpp>
 
 #include <range/v3/view/map.hpp>
+#include <range/v3/view/reverse.hpp>
 #include <range/v3/view/tail.hpp>
 #include <range/v3/view/transform.hpp>
 

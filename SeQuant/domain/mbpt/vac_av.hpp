@@ -7,6 +7,8 @@
 
 #include <SeQuant/domain/mbpt/op.hpp>
 
+#include <range/v3/view/concat.hpp>
+
 namespace sequant::mbpt {
 inline namespace op {
 

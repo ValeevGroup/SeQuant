@@ -22,6 +22,8 @@
 #include <range/v3/range/access.hpp>
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/filter.hpp>
+#include <range/v3/view/reverse.hpp>
+#include <range/v3/view/transform.hpp>
 
 #include <thread>
 #include <vector>

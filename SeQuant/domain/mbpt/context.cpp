@@ -1,6 +1,8 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 
+#include <range/v3/algorithm/contains.hpp>
+
 #ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
 #include <mutex>
 #endif

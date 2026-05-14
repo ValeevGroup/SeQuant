@@ -17,7 +17,12 @@
 #include <scf.hpp>
 #include <ta/data_world_ta.hpp>
 
+#include <range/v3/view/concat.hpp>
+#include <range/v3/view/intersperse.hpp>
+#include <range/v3/view/join.hpp>
 #include <range/v3/view/repeat_n.hpp>
+#include <range/v3/view/transform.hpp>
+#include <range/v3/view/zip.hpp>
 
 #include <chrono>
 

@@ -23,6 +23,7 @@
 #include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/algorithm/contains.hpp>
 #include <range/v3/algorithm/count_if.hpp>
+#include <range/v3/algorithm/find_if.hpp>
 #include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/detail/variant.hpp>
 #include <range/v3/functional/identity.hpp>

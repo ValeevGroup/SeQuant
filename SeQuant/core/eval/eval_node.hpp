@@ -12,6 +12,8 @@
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <range/v3/algorithm/count_if.hpp>
+
 namespace sequant {
 
 template <meta::eval_node Node>

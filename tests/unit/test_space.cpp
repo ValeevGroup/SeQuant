@@ -11,6 +11,8 @@
 #include <SeQuant/domain/mbpt/spin.hpp>
 #include "SeQuant/domain/mbpt/space_qns.hpp"
 
+#include <range/v3/view/filter.hpp>
+
 TEST_CASE("index_space", "[elements]") {
   using namespace sequant;
 
