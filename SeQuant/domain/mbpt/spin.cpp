@@ -445,15 +445,6 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
     return std::make_shared<Tensor>(tensor);
   }
 
-  // keep antisymm label for R, but should I do it for all R or only some of
-  // them. need to have a test for it.
-  if (skip_spinsymm && tensor.label() == L"R" &&
-      (tensor.bra_rank() >= 2 || tensor.ket_rank() >= 2) &&
-      (tensor.bra_rank() == 0 || tensor.ket_rank() == 0) &&
-      tensor.symmetry() == Symmetry::Antisymm) {
-    return std::make_shared<Tensor>(tensor);
-  }
-
   if (tensor.symmetry() != Symmetry::Antisymm) {
     return std::make_shared<Tensor>(tensor);
   }
@@ -477,6 +468,8 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
         permute_bra ? tensor.bra().end() : tensor.ket().end());
 
     do {
+#define turn_off_colsymm_for_R
+#ifndef turn_off_colsymm_for_R
       auto new_tensor =
           permute_bra
               ? Tensor(tensor.label(), bra(perm_list), ket(tensor.ket()),
@@ -485,6 +478,30 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
               : Tensor(tensor.label(), bra(tensor.bra()), ket(perm_list),
                        tensor.aux(), Symmetry::Nonsymm,
                        tensor.braket_symmetry(), tensor.column_symmetry());
+#else
+      // auto col_symm = (tensor.label() == L"R") ? ColumnSymmetry::Nonsymm
+      // : tensor.column_symmetry();
+
+      auto col_symm = tensor.column_symmetry();
+      if (tensor.label() == L"R") {
+        auto bra_r = tensor.bra_rank();
+        auto ket_r = tensor.ket_rank();
+        auto diff = (bra_r > ket_r) ? (bra_r - ket_r) : (ket_r - bra_r);
+        if (diff >= 2) {
+          col_symm = ColumnSymmetry::Nonsymm;
+        }
+      }
+
+      auto new_tensor =
+          permute_bra
+              ? Tensor(tensor.label(), bra(perm_list), ket(tensor.ket()),
+                       tensor.aux(), Symmetry::Nonsymm,
+                       tensor.braket_symmetry(), col_symm)
+              : Tensor(tensor.label(), bra(tensor.bra()), ket(perm_list),
+                       tensor.aux(), Symmetry::Nonsymm,
+                       tensor.braket_symmetry(), col_symm);
+#endif
+
       if (!ms_conserving_columns(new_tensor)) continue;
       auto prod = std::make_shared<Product>();
       prod->append(get_phase(new_tensor), ex<Tensor>(new_tensor));
