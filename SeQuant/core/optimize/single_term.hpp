@@ -4,6 +4,7 @@
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/optimize/flags.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/indices.hpp>
@@ -19,12 +20,26 @@
 
 #include <algorithm>
 #include <bit>
+#include <cstddef>
+#include <functional>
 #include <limits>
 #include <type_traits>
 
-namespace sequant::opt {
+namespace sequant {
+
+/// A type-erased provider mapping an Index to its extent. Used by the public
+/// optimize() API. Callers reaching for the templated opt::single_term_opt
+/// overloads (constrained by \ref opt::has_index_extent) should pass the
+/// callable directly instead of wrapping it here — that keeps the cost
+/// function's call site inlineable, whereas a value of this alias goes
+/// through std::function's type-erased dispatch on every Index lookup.
+using index_to_extent_t = std::function<std::size_t(Index const&)>;
+
+namespace opt {
+
 template <typename F>
 concept has_index_extent = std::is_invocable_r_v<size_t, F, Index const&>;
+
 namespace detail {
 
 /// \brief Cost function returning the flop count of a binary tensor
@@ -38,14 +53,14 @@ namespace detail {
 /// \return A callable <tt>(lhs, rhs, result) -> double</tt> yielding the
 /// flop count of the contraction.
 auto flops_counter(has_index_extent auto&& ixex) {
-  return [ixex](meta::range_of<Index> auto const& lhs,
-                meta::range_of<Index> auto const& rhs,
-                meta::range_of<Index> auto const& result) -> double {
+  return [ixex = std::forward<decltype(ixex)>(ixex)](
+             meta::range_of<Index> auto const& lhs,
+             meta::range_of<Index> auto const& rhs,
+             meta::range_of<Index> auto const& result) -> double {
     using ranges::views::concat;
     auto tot_idxs = tot_indices<IndexSet>(concat(lhs, rhs, result));
     double total_flops = ranges::accumulate(
-        concat(tot_idxs.outer, tot_idxs.inner), 1., std::multiplies{},
-        std::forward<decltype(ixex)>(ixex));
+        concat(tot_idxs.outer, tot_idxs.inner), 1., std::multiplies{}, ixex);
     // total_flops == 1. implies zero flops
     return total_flops == 1. ? 0. : total_flops;
   };
@@ -62,16 +77,16 @@ auto flops_counter(has_index_extent auto&& ixex) {
 /// \return A callable <tt>(lhs, rhs, result) -> double</tt> yielding the
 /// summed memory size of the three operands.
 auto memsize_counter(has_index_extent auto&& ixex) {
-  return [ixex](meta::range_of<Index> auto const& lhs,
-                meta::range_of<Index> auto const& rhs,
-                meta::range_of<Index> auto const& result) -> double {
+  return [ixex = std::forward<decltype(ixex)>(ixex)](
+             meta::range_of<Index> auto const& lhs,
+             meta::range_of<Index> auto const& rhs,
+             meta::range_of<Index> auto const& result) -> double {
     using ranges::views::concat;
     double total_mem{0};
     for (auto&& tot_idxs :
          {tot_indices(lhs), tot_indices(rhs), tot_indices(result)}) {
       double mem = ranges::accumulate(concat(tot_idxs.outer, tot_idxs.inner),
-                                      1., std::multiplies{},
-                                      std::forward<decltype(ixex)>(ixex));
+                                      1., std::multiplies{}, ixex);
       if (mem != 1.) total_mem += mem;
       // else 1. is assumed to be the accumulation init value;
       // skip adding it to the total.
@@ -327,34 +342,43 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
 }
 
 ///
+/// \tparam OptFor Cost metric to optimize for (Flops or Memsize).
 /// \tparam IdxToSz
 /// \param network A TensorNetwork object.
 /// \param idxsz An invocable on Index, that maps Index to its dimension.
 /// \param subnet_cse Whether to recognize equivalent subnetworks to try
 /// minimizing the ops counts.
-/// \return Optimal evaluation sequence that
-/// minimizes flops. If there are
-///         equivalent optimal sequences then the result is the one that keeps
-///         the order of tensors in the network as original as possible.
+/// \return Optimal evaluation sequence under the chosen cost metric. If there
+///         are equivalent optimal sequences then the result is the one that
+///         keeps the order of tensors in the network as original as possible.
 ///
-template <has_index_extent IdxToSz>
+template <OptFor Metric, has_index_extent IdxToSz>
 EvalSequence single_term_opt(TensorNetwork const& network, IdxToSz&& idxsz,
                              bool subnet_cse) {
-  auto cost_fn = flops_counter(std::forward<IdxToSz>(idxsz));
   decltype(OptRes::indices) tidxs{};
-  return single_term_opt_impl(network, tidxs, cost_fn, subnet_cse);
+  if constexpr (Metric == OptFor::Flops) {
+    auto cost_fn = flops_counter(std::forward<IdxToSz>(idxsz));
+    return single_term_opt_impl(network, tidxs, cost_fn, subnet_cse);
+  } else {
+    static_assert(Metric == OptFor::Memsize,
+                  "Only Flops and Memsize OptFor supported.");
+    auto cost_fn = memsize_counter(std::forward<IdxToSz>(idxsz));
+    return single_term_opt_impl(network, tidxs, cost_fn, subnet_cse);
+  }
 }
 
 }  // namespace detail
 
 ///
+/// \tparam Metric Cost metric to optimize for (Flops by default; Memsize
+///         minimizes total operand memory rather than flops).
 /// \param prod  Product to be optimized.
 /// \param idxsz An invocable object that maps an Index object to size.
 /// \return Parenthesized product expression.
 ///
 /// @note @c prod is assumed to consist of only Tensor expressions
 ///
-template <has_index_extent IdxToSz>
+template <OptFor Metric = OptFor::Flops, has_index_extent IdxToSz>
 ExprPtr single_term_opt(Product const& prod, IdxToSz&& idxsz,
                         bool subnet_cse = false) {
   using ranges::views::filter;
@@ -365,8 +389,8 @@ ExprPtr single_term_opt(Product const& prod, IdxToSz&& idxsz,
                                prod.factors().end(), Product::Flatten::No});
   auto const tensors =
       prod | filter(&ExprPtr::template is<Tensor>) | ranges::to_vector;
-  auto seq = detail::single_term_opt(TensorNetwork{tensors},
-                                     std::forward<IdxToSz>(idxsz), subnet_cse);
+  auto seq = detail::single_term_opt<Metric>(
+      TensorNetwork{tensors}, std::forward<IdxToSz>(idxsz), subnet_cse);
   auto result = container::svector<ExprPtr>{};
   for (auto i : seq)
     if (i == -1) {
@@ -390,6 +414,7 @@ ExprPtr single_term_opt(Product const& prod, IdxToSz&& idxsz,
   return *result.rbegin();
 }
 
-}  // namespace sequant::opt
+}  // namespace opt
+}  // namespace sequant
 
 #endif  // SEQUANT_CORE_OPTIMIZE_SINGLE_TERM_HPP
