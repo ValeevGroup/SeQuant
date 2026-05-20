@@ -23,26 +23,31 @@
 #include <type_traits>
 
 namespace sequant::opt {
-///
-/// \param idxsz An invocable that returns size_t for Index argument.
-/// \param idxs Index objects.
-/// \return flops count
-///
 template <typename F>
 concept has_index_extent = std::is_invocable_r_v<size_t, F, Index const&>;
 namespace detail {
 
-auto constexpr flops_counter(has_index_extent auto&& ixex) {
+/// \brief Cost function returning the flop count of a binary tensor
+/// contraction.
+///
+/// The returned callable computes the product of extents over the union of
+/// indices on \c lhs, \c rhs, and \c result. A product of 1 (scalar
+/// contraction) is reported as zero flops.
+///
+/// \param ixex Invocable mapping an Index to its extent.
+/// \return A callable <tt>(lhs, rhs, result) -> double</tt> yielding the
+/// flop count of the contraction.
+auto flops_counter(has_index_extent auto&& ixex) {
   return [ixex](meta::range_of<Index> auto const& lhs,
                 meta::range_of<Index> auto const& rhs,
-                meta::range_of<Index> auto const& result) {
+                meta::range_of<Index> auto const& result) -> double {
     using ranges::views::concat;
-    auto tot_idxs = tot_indices<container::set<Index, Index::LabelCompare>>(
-        concat(lhs, rhs, result));
-    double ops = 1.;
-    for (auto&& idx : concat(tot_idxs.outer, tot_idxs.inner)) ops *= ixex(idx);
-    // ops == 1 implies zero flops
-    return ops == 1. ? 0. : ops;
+    auto tot_idxs = tot_indices<IndexSet>(concat(lhs, rhs, result));
+    double total_flops = ranges::accumulate(
+        concat(tot_idxs.outer, tot_idxs.inner), 1., std::multiplies{},
+        std::forward<decltype(ixex)>(ixex));
+    // total_flops == 1. implies zero flops
+    return total_flops == 1. ? 0. : total_flops;
   };
 }
 
@@ -54,8 +59,8 @@ struct OptRes {
   /// Free indices remaining upon evaluation
   IndexSet indices;
 
-  /// The flops count of evaluation
-  double flops;
+  /// The operations count of evaluation
+  double ops;
 
   /// The evaluation sequence
   EvalSequence sequence;
@@ -82,6 +87,84 @@ struct SubNetEqual {
     return bliss::ConstGraphCmp::cmp(*left.graph, *right.graph) == 0;
   }
 };
+
+/// \brief Seeds the DP table with per-subset open indices and singleton/empty
+/// ops counts.
+///
+/// For each subset \c i of the input tensors, computes the indices that remain
+/// open after evaluating that subset and stores them in \c results[i].indices.
+/// Initializes \c results[i].ops to 0 for empty and singleton subsets, and
+/// to \c max as a sentinel for subsets that will later be filled in by the DP.
+/// Singleton subsets also get their one-element \c sequence pre-populated.
+template <typename TIdxs>
+void init_results(TensorNetwork const& network, TIdxs const& tidxs,
+                  container::vector<OptRes>& results) {
+  using IndexContainer = decltype(OptRes::indices);
+  auto tensor_indices = network.tensors()          //
+                        | ranges::views::indirect  //
+                        | ranges::views::transform(slots);
+  auto imed_indices = subset_target_indices(tensor_indices, tidxs);
+  SEQUANT_ASSERT(ranges::distance(imed_indices) == ranges::distance(results));
+  for (size_t i = 0; i < results.size(); ++i) {
+    results[i].indices =
+        imed_indices[i] | ranges::views::move | ranges::to<IndexContainer>;
+    results[i].ops = std::popcount(i) > 1
+                         ? std::numeric_limits<decltype(OptRes::ops)>::max()
+                         : 0;
+    if (std::popcount(i) == 1)
+      results[i].sequence.emplace_back(std::countr_zero(i));
+    // else results[i].sequence is left uninitialized
+  }
+}
+
+struct SubnetMetadata {
+  /// meta_ids[n] is the canonical-subnet id of subset n, or
+  /// numeric_limits<size_t>::max() for subsets with popcount < 2.
+  container::vector<size_t> meta_ids;
+  /// Cost of evaluating one representative of each canonical subnet id,
+  /// indexed by id. Populated lazily during the DP.
+  container::vector<double> unique_meta_costs;
+};
+
+/// \brief Precomputes canonical-subnet identifiers for every subset of size
+/// >= 2 so that structurally equivalent subnetworks share a CSE id.
+///
+/// Builds a `TensorNetwork` for each subset, canonicalizes it, and assigns a
+/// dense integer id to each distinct canonical form. The returned
+/// `unique_meta_costs` is sized to the number of distinct ids and zero-filled;
+/// it is populated during the DP as each canonical subnet's optimal cost
+/// becomes known.
+///
+/// Side effect: `results[n].indices` may be reordered by `canonicalize_slots`.
+inline SubnetMetadata build_subnet_metadata(
+    TensorNetwork const& network, container::vector<OptRes>& results) {
+  SubnetMetadata out;
+  // Use max as sentinel for entries with popcount < 2 (singletons/empty),
+  // which are skipped below and never assigned a real meta ID.
+  out.meta_ids.resize(results.size(), std::numeric_limits<size_t>::max());
+  container::unordered_map<TensorNetwork::SlotCanonicalizationMetadata, size_t,
+                           SubNetHash, SubNetEqual>
+      meta_to_id;
+
+  for (size_t n = 0; n < results.size(); ++n) {
+    if (std::popcount(n) < 2) continue;
+    auto ts = bits::on_bits_index(n) | bits::sieve(network.tensors());
+    container::vector<ExprPtr> ts_expr;
+    for (auto&& t : ts)
+      ts_expr.emplace_back(std::dynamic_pointer_cast<Tensor>(t)->clone());
+
+    auto tn = TensorNetwork{ts_expr};
+    auto meta = tn.canonicalize_slots(
+        TensorCanonicalizer::cardinal_tensor_labels(), &results[n].indices);
+
+    auto [it, inserted] = meta_to_id.try_emplace(std::move(meta), 0);
+    if (inserted) it->second = meta_to_id.size() - 1;
+
+    out.meta_ids[n] = it->second;
+  }
+  out.unique_meta_costs.resize(meta_to_id.size(), 0.0);
+  return out;
+}
 
 /// \brief Finds the optimal evaluation sequence for a single-term tensor
 /// contraction.
@@ -130,34 +213,12 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
                                   meta::range_of<Index> auto const& tidxs,
                                   CostFn&& cost_fn, bool subnet_cse) {
   using ranges::views::concat;
-  using ranges::views::indirect;
-  using ranges::views::transform;
-  using IndexContainer = decltype(OptRes::indices);
   auto const nt = network.tensors().size();
   if (nt == 1) return EvalSequence{0};
   if (nt == 2) return EvalSequence{0, 1, -1};
 
   container::vector<OptRes> results((size_t{1} << nt));
-
-  // initialize the intermediate results
-  {
-    auto tensor_indices = network.tensors()  //
-                          | indirect         //
-                          | transform(slots);
-    auto imed_indices = subset_target_indices(tensor_indices, tidxs);
-    SEQUANT_ASSERT(ranges::distance(imed_indices) == ranges::distance(results));
-    for (size_t i = 0; i < results.size(); ++i) {
-      results[i].indices =
-          imed_indices[i] | ranges::views::move | ranges::to<IndexContainer>;
-      results[i].flops =
-          std::popcount(i) > 1
-              ? std::numeric_limits<decltype(OptRes::flops)>::max()
-              : 0;
-      if (std::popcount(i) == 1)
-        results[i].sequence.emplace_back(std::countr_zero(i));
-      // else results[i].sequence is left uninitialized
-    }
-  }
+  init_results(network, tidxs, results);
 
   // precompute all subnet_meta if subnet_cse is true
   // Note: the O(2^n) cost is bounded in practice — subset_target_indices above
@@ -165,37 +226,15 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
   container::vector<size_t> meta_ids;
   container::vector<double> unique_meta_costs;
   if (subnet_cse) {
-    // Use max as sentinel for entries with popcount < 2 (singletons/empty),
-    // which are skipped below and never assigned a real meta ID.
-    meta_ids.resize(results.size(), std::numeric_limits<size_t>::max());
-    container::unordered_map<TensorNetwork::SlotCanonicalizationMetadata,
-                             size_t, SubNetHash, SubNetEqual>
-        meta_to_id;
-
-    for (size_t n = 0; n < results.size(); ++n) {
-      if (std::popcount(n) < 2) continue;
-      auto ts = bits::on_bits_index(n) | bits::sieve(network.tensors());
-      container::vector<ExprPtr> ts_expr;
-      for (auto&& t : ts) {
-        ts_expr.emplace_back(std::dynamic_pointer_cast<Tensor>(t)->clone());
-      }
-      auto tn = TensorNetwork{ts_expr};
-      auto meta = tn.canonicalize_slots(
-          TensorCanonicalizer::cardinal_tensor_labels(), &results[n].indices);
-
-      auto [it, inserted] = meta_to_id.try_emplace(std::move(meta), 0);
-      if (inserted) {
-        it->second = meta_to_id.size() - 1;
-      }
-      meta_ids[n] = it->second;
-    }
-    unique_meta_costs.resize(meta_to_id.size(), 0.0);
+    auto md = build_subnet_metadata(network, results);
+    meta_ids = std::move(md.meta_ids);
+    unique_meta_costs = std::move(md.unique_meta_costs);
   }
 
   // find the optimal evaluation sequence
   for (size_t n = 0; n < results.size(); ++n) {
     if (std::popcount(n) < 2) continue;
-    for (auto& curr_cost = results[n].flops;
+    for (auto& curr_cost = results[n].ops;
          auto&& [lp, rp] : bits::bipartitions(n)) {
       // do nothing with the trivial bipartition
       // i.e. one subset is the empty set and the other full
@@ -219,7 +258,7 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
         new_cost = cost_fn(results[lp].indices,  //
                            results[rp].indices,  //
                            results[n].indices)   //
-                   + results[lp].flops + results[rp].flops;
+                   + results[lp].ops + results[rp].ops;
       }
 
       if (new_cost <= curr_cost) {
