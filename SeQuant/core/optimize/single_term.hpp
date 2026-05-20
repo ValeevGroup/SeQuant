@@ -4,7 +4,7 @@
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/optimize/flags.hpp>
+#include <SeQuant/core/optimize/options.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/indices.hpp>
@@ -20,22 +20,10 @@
 
 #include <algorithm>
 #include <bit>
-#include <cstddef>
-#include <functional>
 #include <limits>
 #include <type_traits>
 
-namespace sequant {
-
-/// A type-erased provider mapping an Index to its extent. Used by the public
-/// optimize() API. Callers reaching for the templated opt::single_term_opt
-/// overloads (constrained by \ref opt::has_index_extent) should pass the
-/// callable directly instead of wrapping it here — that keeps the cost
-/// function's call site inlineable, whereas a value of this alias goes
-/// through std::function's type-erased dispatch on every Index lookup.
-using index_to_extent_t = std::function<std::size_t(Index const&)>;
-
-namespace opt {
+namespace sequant::opt {
 
 template <typename F>
 concept has_index_extent = std::is_invocable_r_v<size_t, F, Index const&>;
@@ -414,7 +402,6 @@ ExprPtr single_term_opt(Product const& prod, IdxToSz&& idxsz,
   return *result.rbegin();
 }
 
-}  // namespace opt
-}  // namespace sequant
+}  // namespace sequant::opt
 
 #endif  // SEQUANT_CORE_OPTIMIZE_SINGLE_TERM_HPP

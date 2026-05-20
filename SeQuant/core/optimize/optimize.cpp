@@ -139,43 +139,23 @@ ExprPtr optimize_impl(ExprPtr const& expr, index_to_extent_t const& idx2size,
   return expr->clone();
 }
 
-ExprPtr optimize_dispatch(ExprPtr const& expr, index_to_extent_t idx2size,
-                          OptFor opt_for, ReorderSum reorder) {
-  if (!idx2size) idx2size = default_idx_to_size();
-  return optimize_impl(expr, idx2size, opt_for, reorder == ReorderSum::Reorder,
+}  // namespace
+
+ExprPtr optimize(ExprPtr const& expr, OptimizeOptions opts) {
+  auto idx2size = opts.idx_to_extent ? std::move(opts.idx_to_extent)
+                                     : default_idx_to_size();
+  return optimize_impl(expr, idx2size, opts.opt_for,
+                       opts.reorder == ReorderSum::Reorder,
                        /*parallel_outer=*/true);
 }
 
-}  // namespace
-
-ExprPtr optimize(ExprPtr const& expr, OptFor opt_for, ReorderSum reorder) {
-  return optimize_dispatch(expr, default_idx_to_size(), opt_for, reorder);
-}
-
-ExprPtr optimize(ExprPtr const& expr, index_to_extent_t idx2size,
-                 OptFor opt_for, ReorderSum reorder) {
-  return optimize_dispatch(expr, std::move(idx2size), opt_for, reorder);
-}
-
-ResultExpr& optimize(ResultExpr& expr, OptFor opt_for, ReorderSum reorder) {
-  expr.expression() = optimize(expr.expression(), opt_for, reorder);
+ResultExpr& optimize(ResultExpr& expr, OptimizeOptions opts) {
+  expr.expression() = optimize(expr.expression(), std::move(opts));
   return expr;
 }
 
-ResultExpr& optimize(ResultExpr& expr, index_to_extent_t idx2size,
-                     OptFor opt_for, ReorderSum reorder) {
-  expr.expression() =
-      optimize(expr.expression(), std::move(idx2size), opt_for, reorder);
-  return expr;
-}
-
-ResultExpr& optimize(ResultExpr&& expr, OptFor opt_for, ReorderSum reorder) {
-  return optimize(expr, opt_for, reorder);
-}
-
-ResultExpr& optimize(ResultExpr&& expr, index_to_extent_t idx2size,
-                     OptFor opt_for, ReorderSum reorder) {
-  return optimize(expr, std::move(idx2size), opt_for, reorder);
+ResultExpr& optimize(ResultExpr&& expr, OptimizeOptions opts) {
+  return optimize(expr, std::move(opts));
 }
 
 }  // namespace sequant

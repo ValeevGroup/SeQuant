@@ -2,43 +2,24 @@
 #define SEQUANT_OPTIMIZE_OPTIMIZE_HPP
 
 #include <SeQuant/core/expr_fwd.hpp>
-#include <SeQuant/core/optimize/flags.hpp>
-#include <SeQuant/core/optimize/single_term.hpp>
+#include <SeQuant/core/optimize/options.hpp>
 
 namespace sequant {
 
-///
-/// Optimize the expression using IndexSpace::approximate_size() as the index
-/// extent provider.
+/// Optimize the expression for lower evaluation cost.
 ///
 /// \param expr  Expression to be optimized.
-/// \param opt_for  Cost metric to optimize for (Flops by default).
-/// \param reorder  Whether to reorder summands; on by default.
-/// \return Optimized expression for lower evaluation cost.
-ExprPtr optimize(ExprPtr const& expr, OptFor opt_for = OptFor::Flops,
-                 ReorderSum reorder = ReorderSum::Reorder);
+/// \param opts  Options controlling the cost metric, summand reordering, and
+///              the index → extent provider. An empty
+///              \c OptimizeOptions::idx_to_extent falls back to
+///              \c IndexSpace::approximate_size().
+/// \return Optimized expression.
+ExprPtr optimize(ExprPtr const& expr, OptimizeOptions opts = {});
 
-/// Optimize using a caller-supplied index extent provider. Pass an empty
-/// \c idx2size to fall back to IndexSpace::approximate_size().
-ExprPtr optimize(ExprPtr const& expr, index_to_extent_t idx2size,
-                 OptFor opt_for = OptFor::Flops,
-                 ReorderSum reorder = ReorderSum::Reorder);
-
-ResultExpr& optimize(ResultExpr& expr, OptFor opt_for = OptFor::Flops,
-                     ReorderSum reorder = ReorderSum::Reorder);
-
-ResultExpr& optimize(ResultExpr& expr, index_to_extent_t idx2size,
-                     OptFor opt_for = OptFor::Flops,
-                     ReorderSum reorder = ReorderSum::Reorder);
+ResultExpr& optimize(ResultExpr& expr, OptimizeOptions opts = {});
 
 [[nodiscard]] ResultExpr& optimize(ResultExpr&& expr,
-                                   OptFor opt_for = OptFor::Flops,
-                                   ReorderSum reorder = ReorderSum::Reorder);
-
-[[nodiscard]] ResultExpr& optimize(ResultExpr&& expr,
-                                   index_to_extent_t idx2size,
-                                   OptFor opt_for = OptFor::Flops,
-                                   ReorderSum reorder = ReorderSum::Reorder);
+                                   OptimizeOptions opts = {});
 
 }  // namespace sequant
 
