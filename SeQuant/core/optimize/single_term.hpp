@@ -51,6 +51,35 @@ auto flops_counter(has_index_extent auto&& ixex) {
   };
 }
 
+/// \brief Cost function returning the total memory footprint of a binary
+/// tensor contraction.
+///
+/// The returned callable sums, over \c lhs, \c rhs, and \c result, the
+/// product of extents of each operand's indices. Operands whose extent
+/// product is 1 contribute zero.
+///
+/// \param ixex Invocable mapping an Index to its extent.
+/// \return A callable <tt>(lhs, rhs, result) -> double</tt> yielding the
+/// summed memory size of the three operands.
+auto memsize_counter(has_index_extent auto&& ixex) {
+  return [ixex](meta::range_of<Index> auto const& lhs,
+                meta::range_of<Index> auto const& rhs,
+                meta::range_of<Index> auto const& result) -> double {
+    using ranges::views::concat;
+    double total_mem{0};
+    for (auto&& tot_idxs :
+         {tot_indices(lhs), tot_indices(rhs), tot_indices(result)}) {
+      double mem = ranges::accumulate(concat(tot_idxs.outer, tot_idxs.inner),
+                                      1., std::multiplies{},
+                                      std::forward<decltype(ixex)>(ixex));
+      if (mem != 1.) total_mem += mem;
+      // else 1. is assumed to be the accumulation init value;
+      // skip adding it to the total.
+    }
+    return total_mem;
+  };
+}
+
 ///
 /// Represents a result of optimization on a range of expressions
 /// for a binary evaluation
