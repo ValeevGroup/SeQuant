@@ -56,20 +56,25 @@ template <typename T, typename... Ts>
   return std::format("{}B", bs.value);
 }
 
-/// \return the process resident-set size, in bytes. Read from `task_info` on
-/// macOS and from `/proc/self/statm` on Linux. Returns 0 on other platforms
-/// and on read failure (no exception, so safe to call from logging paths).
-/// Cheap (~µs) — intended to be called once per log record.
+/// \return the process resident-set size, in bytes. On macOS uses
+/// `task_info(TASK_VM_INFO)`'s `phys_footprint`, which is the value
+/// Activity Monitor's "Memory" column displays (`mach_task_basic_info`'s
+/// `resident_size` includes shared cache pages and other accounting that
+/// diverges from Activity Monitor by 100s of MB to multiple GB). On Linux
+/// reads `/proc/self/statm` (column 2 × page size) which matches what
+/// `top` / `ps` report as RSS. Returns 0 on other platforms and on read
+/// failure (no exception, so safe to call from logging paths). Cheap
+/// (~µs) — intended to be called once per log record.
 [[nodiscard]] inline std::size_t process_rss_bytes() noexcept {
 #if defined(__APPLE__)
-  ::mach_task_basic_info_data_t info{};
-  ::mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
-  if (::task_info(::mach_task_self(), MACH_TASK_BASIC_INFO,
+  ::task_vm_info_data_t info{};
+  ::mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
+  if (::task_info(::mach_task_self(), TASK_VM_INFO,
                   reinterpret_cast<::task_info_t>(&info),
                   &count) != KERN_SUCCESS) {
     return 0;
   }
-  return static_cast<std::size_t>(info.resident_size);
+  return static_cast<std::size_t>(info.phys_footprint);
 #elif defined(__linux__)
   // /proc/self/statm columns are page counts:
   //   total resident shared text lib data dt
@@ -86,6 +91,33 @@ template <typename T, typename... Ts>
 
 /// Convenience wrapper around process_rss_bytes() returning a Bytes.
 [[nodiscard]] inline Bytes rss() noexcept { return Bytes{process_rss_bytes()}; }
+
+/// Running max of per-op working sets seen so far. The Eval log emits
+/// this as `hw=`, not the per-op value, so the reported high-water mark
+/// is truly monotonic — when the cache releases entries, the per-op
+/// working set drops, but the reported peak does not. Stateful global;
+/// the value reflects the lifetime of the process (or until
+/// `reset_peak_hwmark_bytes()` is called).
+inline std::size_t& peak_hwmark_bytes_state_() noexcept {
+  static std::size_t v = 0;
+  return v;
+}
+
+/// Update the running max with @p observed and return the new max.
+inline std::size_t update_peak_hwmark_bytes(std::size_t observed) noexcept {
+  auto& v = peak_hwmark_bytes_state_();
+  if (observed > v) v = observed;
+  return v;
+}
+
+/// Reset the running max — useful for tests or for delimiting per-phase
+/// measurements. Returns the value that was held before the reset.
+inline std::size_t reset_peak_hwmark_bytes() noexcept {
+  auto& v = peak_hwmark_bytes_state_();
+  std::size_t prev = v;
+  v = 0;
+  return prev;
+}
 
 /// type of data or operation
 enum struct EvalMode {
@@ -149,7 +181,7 @@ enum struct TermMode { Begin, End };
 /// One log record per eval op. Line format:
 ///
 // clang-format off
-/// Eval | <mode> | <time> | [left=L | right=R |] result=X | alloc=A | hw=H | rss=R | <label>
+/// Eval | <mode> | <time> | [left=L | right=R |] result=X | alloc=A | cw=C | hw=H | rss=R | <label>
 // clang-format on
 ///
 /// Which fields are set depends on the op's arity:
@@ -170,13 +202,18 @@ enum struct TermMode { Begin, End };
 /// it's the size of the accumulator after the add. mem_alloc is what the
 /// op allocated — equal to mem_result everywhere except SumInplace,
 /// which writes into the accumulator and allocates nothing. mem_hwmark
-/// is the live working set during the op:
+/// is the live working set *during this op*:
 ///
 ///   bytes(cache) + bytes(result) + bytes of each operand not aliased
 ///                                  to a cache entry
 ///
 /// Aliasing is evaluated at each call site using cache.alive,
-/// canon_phase, and the requested layout.
+/// canon_phase, and the requested layout. The log record splits this
+/// into two columns: `cw=` (current watermark) reports the per-op value
+/// (mem_hwmark itself — can decrease as the cache releases entries), and
+/// `hw=` (high watermark) reports the running max of mem_hwmark seen so
+/// far (truly monotonic — never decreases). Use
+/// `reset_peak_hwmark_bytes()` to delimit phases.
 ///
 /// rss is the process resident-set size measured immediately before the
 /// record is emitted (read via `task_info` on macOS, `/proc/self/statm`
@@ -213,7 +250,9 @@ template <typename... Args>
 auto eval(EvalStat const& stat, Args const&... args) {
   auto const result_s = std::format("result={}", to_string(stat.mem_result));
   auto const alloc_s = std::format("alloc={}", to_string(stat.mem_alloc));
-  auto const hw_s = std::format("hw={}", to_string(stat.mem_hwmark));
+  auto const cw_s = std::format("cw={}", to_string(stat.mem_hwmark));
+  auto const peak_hw = update_peak_hwmark_bytes(stat.mem_hwmark.value);
+  auto const hw_s = std::format("hw={}", to_string(Bytes{peak_hw}));
   auto const rss_s = std::format("rss={}", to_string(rss()));
   if (stat.mem_left) {
     SEQUANT_ASSERT(stat.mem_right);
@@ -222,13 +261,13 @@ auto eval(EvalStat const& stat, Args const&... args) {
         stat.time,                                            //
         std::format("left={}", to_string(*stat.mem_left)),    //
         std::format("right={}", to_string(*stat.mem_right)),  //
-        result_s, alloc_s, hw_s, rss_s,                       //
+        result_s, alloc_s, cw_s, hw_s, rss_s,                 //
         args...);
   } else {
     log("Eval",                //
         to_string(stat.mode),  //
         stat.time,             //
-        result_s, alloc_s, hw_s, rss_s, args...);
+        result_s, alloc_s, cw_s, hw_s, rss_s, args...);
   }
 }
 
