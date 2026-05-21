@@ -23,6 +23,14 @@
 #include <stdexcept>
 #include <type_traits>
 
+// Headers for process_rss_bytes() — see log::process_rss_bytes() below.
+#if defined(__APPLE__)
+#include <mach/mach.h>
+#elif defined(__linux__)
+#include <unistd.h>
+#include <fstream>
+#endif
+
 namespace sequant {
 
 namespace log {
@@ -47,6 +55,37 @@ template <typename T, typename... Ts>
 [[nodiscard]] inline auto to_string(Bytes bs) noexcept {
   return std::format("{}B", bs.value);
 }
+
+/// \return the process resident-set size, in bytes. Read from `task_info` on
+/// macOS and from `/proc/self/statm` on Linux. Returns 0 on other platforms
+/// and on read failure (no exception, so safe to call from logging paths).
+/// Cheap (~µs) — intended to be called once per log record.
+[[nodiscard]] inline std::size_t process_rss_bytes() noexcept {
+#if defined(__APPLE__)
+  ::mach_task_basic_info_data_t info{};
+  ::mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
+  if (::task_info(::mach_task_self(), MACH_TASK_BASIC_INFO,
+                  reinterpret_cast<::task_info_t>(&info),
+                  &count) != KERN_SUCCESS) {
+    return 0;
+  }
+  return static_cast<std::size_t>(info.resident_size);
+#elif defined(__linux__)
+  // /proc/self/statm columns are page counts:
+  //   total resident shared text lib data dt
+  std::ifstream f("/proc/self/statm");
+  std::size_t pages_total = 0, pages_resident = 0;
+  if (!(f >> pages_total >> pages_resident)) return 0;
+  static const long page_size = ::sysconf(_SC_PAGESIZE);
+  if (page_size <= 0) return 0;
+  return pages_resident * static_cast<std::size_t>(page_size);
+#else
+  return 0;
+#endif
+}
+
+/// Convenience wrapper around process_rss_bytes() returning a Bytes.
+[[nodiscard]] inline Bytes rss() noexcept { return Bytes{process_rss_bytes()}; }
 
 /// type of data or operation
 enum struct EvalMode {
@@ -110,7 +149,7 @@ enum struct TermMode { Begin, End };
 /// One log record per eval op. Line format:
 ///
 // clang-format off
-/// Eval | <mode> | <time> | [left=L | right=R |] result=X | alloc=A | hw=H | <label>
+/// Eval | <mode> | <time> | [left=L | right=R |] result=X | alloc=A | hw=H | rss=R | <label>
 // clang-format on
 ///
 /// Which fields are set depends on the op's arity:
@@ -138,6 +177,13 @@ enum struct TermMode { Begin, End };
 ///
 /// Aliasing is evaluated at each call site using cache.alive,
 /// canon_phase, and the requested layout.
+///
+/// rss is the process resident-set size measured immediately before the
+/// record is emitted (read via `task_info` on macOS, `/proc/self/statm`
+/// on Linux; 0 on other platforms). Use it to triage memory held outside
+/// the eval engine — long-lived tensors not in the cache, runtime/library
+/// overhead, allocator fragmentation. mem_hwmark + rss diverge by exactly
+/// that "everything else" component.
 struct EvalStat {
   EvalMode mode;
   Duration time;
@@ -168,6 +214,7 @@ auto eval(EvalStat const& stat, Args const&... args) {
   auto const result_s = std::format("result={}", to_string(stat.mem_result));
   auto const alloc_s = std::format("alloc={}", to_string(stat.mem_alloc));
   auto const hw_s = std::format("hw={}", to_string(stat.mem_hwmark));
+  auto const rss_s = std::format("rss={}", to_string(rss()));
   if (stat.mem_left) {
     SEQUANT_ASSERT(stat.mem_right);
     log("Eval",                                               //
@@ -175,13 +222,13 @@ auto eval(EvalStat const& stat, Args const&... args) {
         stat.time,                                            //
         std::format("left={}", to_string(*stat.mem_left)),    //
         std::format("right={}", to_string(*stat.mem_right)),  //
-        result_s, alloc_s, hw_s,                              //
+        result_s, alloc_s, hw_s, rss_s,                       //
         args...);
   } else {
     log("Eval",                //
         to_string(stat.mode),  //
         stat.time,             //
-        result_s, alloc_s, hw_s, args...);
+        result_s, alloc_s, hw_s, rss_s, args...);
   }
 }
 
