@@ -17,7 +17,9 @@
 #include <range/v3/view/transform.hpp>
 
 #include <any>
+#include <cstdint>
 #include <memory>
+#include <string>
 #include <utility>
 
 namespace sequant {
@@ -137,10 +139,36 @@ std::string ords_to_annot(RngOfOrdinals const& ords) {
          ranges::to<std::string>;
 }
 
+/// Maps an integer annot value to a short symbolic name (i0, i1, ...).
+/// BTAS/TAPP annot vectors carry index hashes rather than small ordinals,
+/// so raw values look like 6073936079388559375. The mapping is process-
+/// global and monotonic so the same hash gets the same label across log
+/// lines, which makes a trace easy to follow.
+inline std::string annot_label(std::int64_t key) noexcept {
+  static container::unordered_map<std::int64_t, std::string> labels;
+  static std::size_t next_id = 0;
+  if (auto it = labels.find(key); it != labels.end()) return it->second;
+  auto name = "i" + std::to_string(next_id++);
+  return labels.emplace(key, std::move(name)).first->second;
+}
+
+template <typename RngOfOrdinals>
+std::string ords_to_labels(RngOfOrdinals const& ords) {
+  using ranges::views::intersperse;
+  using ranges::views::join;
+  using ranges::views::transform;
+  return ords | transform([](auto x) {
+           return annot_label(static_cast<std::int64_t>(x));
+         }) |
+         intersperse(std::string{","}) | join | ranges::to<std::string>;
+}
+
 template <typename... Args>
-inline void log_result(Args const&... args) noexcept {
+inline void log_result([[maybe_unused]] Args const&... args) noexcept {
+#ifdef SEQUANT_EVAL_TRACE
   auto& l = Logger::instance();
   if (l.eval.level > 1) write_log(l, args...);
+#endif
 }
 
 template <typename... Args>

@@ -117,6 +117,11 @@ auto particle_antisymmetrize_btas(btas::Tensor<Args...> const& arr,
   return result;
 }
 
+template <typename... Args>
+inline void log_btas(Args const&... args) noexcept {
+  log_result("[BTAS] ", args...);
+}
+
 }  // namespace
 
 ///
@@ -146,6 +151,9 @@ class ResultTensorBTAS final : public Result {
     SEQUANT_ASSERT(other.is<ResultTensorBTAS<T>>());
     auto const a = annot_wrap{annot};
 
+    log_btas(ords_to_labels(a.lannot), " + ", ords_to_labels(a.rannot), " = ",
+             ords_to_labels(a.this_annot), "\n");
+
     T lres, rres;
     btas::permute(get<T>(), a.lannot, lres, a.this_annot);
     btas::permute(other.get<T>(), a.rannot, rres, a.this_annot);
@@ -158,9 +166,13 @@ class ResultTensorBTAS final : public Result {
     auto const a = annot_wrap{annot};
 
     if (other.is<ResultScalar<numeric_type>>()) {
+      auto const scalar = other.as<ResultScalar<numeric_type>>().value();
+      log_btas(ords_to_labels(a.lannot), " * ", scalar, " = ",
+               ords_to_labels(a.this_annot), "\n");
+
       T result;
       btas::permute(get<T>(), a.lannot, result, a.this_annot);
-      btas::scal(other.as<ResultScalar<numeric_type>>().value(), result);
+      btas::scal(scalar, result);
       return eval_result<ResultTensorBTAS<T>>(std::move(result));
     }
 
@@ -169,8 +181,14 @@ class ResultTensorBTAS final : public Result {
     if (a.this_annot.empty()) {
       T rres;
       btas::permute(other.get<T>(), a.rannot, rres, a.lannot);
-      return eval_result<ResultScalar<numeric_type>>(btas::dot(get<T>(), rres));
+      numeric_type const d = btas::dot(get<T>(), rres);
+      log_btas(ords_to_labels(a.lannot), " * ", ords_to_labels(a.rannot), " = ",
+               d, "\n");
+      return eval_result<ResultScalar<numeric_type>>(d);
     }
+
+    log_btas(ords_to_labels(a.lannot), " * ", ords_to_labels(a.rannot), " = ",
+             ords_to_labels(a.this_annot), "\n");
 
     T result;
     btas::contract(numeric_type{1},           //
@@ -191,6 +209,10 @@ class ResultTensorBTAS final : public Result {
       std::array<std::any, 2> const& ann) const override {
     auto const pre_annot = std::any_cast<annot_t>(ann[0]);
     auto const post_annot = std::any_cast<annot_t>(ann[1]);
+
+    log_btas(ords_to_labels(pre_annot), " = ", ords_to_labels(post_annot),
+             "\n");
+
     T result;
     btas::permute(get<T>(), pre_annot, result, post_annot);
     return eval_result<ResultTensorBTAS<T>>(std::move(result));
@@ -200,6 +222,11 @@ class ResultTensorBTAS final : public Result {
     auto& t = get<T>();
     auto const& o = other.get<T>();
     SEQUANT_ASSERT(t.range() == o.range());
+
+    auto const ann = ords_to_annot(
+        ranges::views::iota(size_t{0}, static_cast<size_t>(t.rank())));
+    log_btas(ann, " += ", ann, "\n");
+
     t += o;
   }
 
