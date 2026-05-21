@@ -151,8 +151,8 @@ class ResultTensorBTAS final : public Result {
     SEQUANT_ASSERT(other.is<ResultTensorBTAS<T>>());
     auto const a = annot_wrap{annot};
 
-    log_btas(ords_to_annot(a.lannot), " + ", ords_to_annot(a.rannot), " = ",
-             ords_to_annot(a.this_annot), "\n");
+    log_btas(ords_to_labels(a.lannot), " + ", ords_to_labels(a.rannot), " = ",
+             ords_to_labels(a.this_annot), "\n");
 
     T lres, rres;
     btas::permute(get<T>(), a.lannot, lres, a.this_annot);
@@ -167,8 +167,8 @@ class ResultTensorBTAS final : public Result {
 
     if (other.is<ResultScalar<numeric_type>>()) {
       auto const scalar = other.as<ResultScalar<numeric_type>>().value();
-      log_btas(ords_to_annot(a.lannot), " * ", scalar, " = ",
-               ords_to_annot(a.this_annot), "\n");
+      log_btas(ords_to_labels(a.lannot), " * ", scalar, " = ",
+               ords_to_labels(a.this_annot), "\n");
 
       T result;
       btas::permute(get<T>(), a.lannot, result, a.this_annot);
@@ -182,13 +182,13 @@ class ResultTensorBTAS final : public Result {
       T rres;
       btas::permute(other.get<T>(), a.rannot, rres, a.lannot);
       numeric_type const d = btas::dot(get<T>(), rres);
-      log_btas(ords_to_annot(a.lannot), " * ", ords_to_annot(a.rannot), " = ",
+      log_btas(ords_to_labels(a.lannot), " * ", ords_to_labels(a.rannot), " = ",
                d, "\n");
       return eval_result<ResultScalar<numeric_type>>(d);
     }
 
-    log_btas(ords_to_annot(a.lannot), " * ", ords_to_annot(a.rannot), " = ",
-             ords_to_annot(a.this_annot), "\n");
+    log_btas(ords_to_labels(a.lannot), " * ", ords_to_labels(a.rannot), " = ",
+             ords_to_labels(a.this_annot), "\n");
 
     T result;
     btas::contract(numeric_type{1},           //
@@ -210,7 +210,8 @@ class ResultTensorBTAS final : public Result {
     auto const pre_annot = std::any_cast<annot_t>(ann[0]);
     auto const post_annot = std::any_cast<annot_t>(ann[1]);
 
-    log_btas(ords_to_annot(pre_annot), " = ", ords_to_annot(post_annot), "\n");
+    log_btas(ords_to_labels(pre_annot), " = ", ords_to_labels(post_annot),
+             "\n");
 
     T result;
     btas::permute(get<T>(), pre_annot, result, post_annot);
