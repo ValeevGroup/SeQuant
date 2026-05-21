@@ -138,9 +138,11 @@ std::string ords_to_annot(RngOfOrdinals const& ords) {
 }
 
 template <typename... Args>
-inline void log_result(Args const&... args) noexcept {
+inline void log_result([[maybe_unused]] Args const&... args) noexcept {
+#ifdef SEQUANT_EVAL_TRACE
   auto& l = Logger::instance();
   if (l.eval.level > 1) write_log(l, args...);
+#endif
 }
 
 template <typename... Args>
