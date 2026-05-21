@@ -138,6 +138,11 @@ auto particle_antisymmetrize_tapp(TAPPTensor<T, Alloc> const& arr,
   return result;
 }
 
+template <typename... Args>
+inline void log_tapp(Args const&... args) noexcept {
+  log_result("[TAPP] ", args...);
+}
+
 }  // namespace
 
 ///
@@ -166,6 +171,9 @@ class ResultTensorTAPP final : public Result {
     SEQUANT_ASSERT(other.is<ResultTensorTAPP<T>>());
     auto const a = annot_wrap{annot};
 
+    log_tapp(ords_to_annot(a.lannot), " + ", ords_to_annot(a.rannot), " = ",
+             ords_to_annot(a.this_annot), "\n");
+
     T lres, rres;
     tapp_ops::permute(get<T>(), a.lannot, lres, a.this_annot);
     tapp_ops::permute(other.get<T>(), a.rannot, rres, a.this_annot);
@@ -179,9 +187,13 @@ class ResultTensorTAPP final : public Result {
     auto const a = annot_wrap{annot};
 
     if (other.is<ResultScalar<numeric_type>>()) {
+      auto const scalar = other.as<ResultScalar<numeric_type>>().value();
+      log_tapp(ords_to_annot(a.lannot), " * ", scalar, " = ",
+               ords_to_annot(a.this_annot), "\n");
+
       T result;
       tapp_ops::permute(get<T>(), a.lannot, result, a.this_annot);
-      tapp_ops::scal(other.as<ResultScalar<numeric_type>>().value(), result);
+      tapp_ops::scal(scalar, result);
       return eval_result<ResultTensorTAPP<T>>(std::move(result));
     }
 
@@ -191,9 +203,14 @@ class ResultTensorTAPP final : public Result {
       // Full contraction -> scalar result (dot product)
       T rres;
       tapp_ops::permute(other.get<T>(), a.rannot, rres, a.lannot);
-      return eval_result<ResultScalar<numeric_type>>(
-          tapp_ops::dot(get<T>(), rres));
+      numeric_type const d = tapp_ops::dot(get<T>(), rres);
+      log_tapp(ords_to_annot(a.lannot), " * ", ords_to_annot(a.rannot), " = ",
+               d, "\n");
+      return eval_result<ResultScalar<numeric_type>>(d);
     }
+
+    log_tapp(ords_to_annot(a.lannot), " * ", ords_to_annot(a.rannot), " = ",
+             ords_to_annot(a.this_annot), "\n");
 
     T result;
     tapp_ops::contract(numeric_type{1},           //
@@ -214,6 +231,9 @@ class ResultTensorTAPP final : public Result {
       std::array<std::any, 2> const& ann) const override {
     auto const pre_annot = std::any_cast<annot_t>(ann[0]);
     auto const post_annot = std::any_cast<annot_t>(ann[1]);
+
+    log_tapp(ords_to_annot(pre_annot), " = ", ords_to_annot(post_annot), "\n");
+
     T result;
     tapp_ops::permute(get<T>(), pre_annot, result, post_annot);
     return eval_result<ResultTensorTAPP<T>>(std::move(result));
@@ -223,6 +243,11 @@ class ResultTensorTAPP final : public Result {
     auto& t = get<T>();
     auto const& o = other.get<T>();
     SEQUANT_ASSERT(t.extents() == o.extents());
+
+    auto const ann = ords_to_annot(
+        ranges::views::iota(size_t{0}, static_cast<size_t>(t.rank())));
+    log_tapp(ann, " += ", ann, "\n");
+
     t += o;
   }
 
