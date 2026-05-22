@@ -34,13 +34,21 @@ ResultExpr& optimize(ResultExpr& expr, OptimizeOptions opts = {});
 /// \param reorder_sum  If true, reorder the summands of a sum to cluster terms
 ///                     that share intermediates.
 /// \return Optimized expression.
-ExprPtr optimize(ExprPtr const& expr, bool reorder_sum);
+[[deprecated(
+    "use the OptimizeOptions"
+    " overload of optimize() instead")]] ExprPtr
+optimize(ExprPtr const& expr, bool reorder_sum);
 
 /// \copydoc optimize(ExprPtr const&, bool)
-ResultExpr& optimize(ResultExpr& expr, bool reorder_sum);
+[[deprecated(
+    "use the OptimizeOptions"
+    " overload of optimize() instead")]] ResultExpr&
+optimize(ResultExpr& expr, bool reorder_sum);
 
 /// \copydoc optimize(ExprPtr const&, bool)
-[[nodiscard]] ResultExpr& optimize(ResultExpr&& expr, bool reorder_sum);
+[[nodiscard, deprecated("use the OptimizeOptions"
+                        " overload of optimize() instead")]] ResultExpr&
+optimize(ResultExpr&& expr, bool reorder_sum);
 
 }  // namespace sequant
 
