@@ -158,4 +158,25 @@ ResultExpr& optimize(ResultExpr&& expr, OptimizeOptions opts) {
   return optimize(expr, std::move(opts));
 }
 
+// backwards compatibility overloads
+
+namespace {
+inline OptimizeOptions compatibility_opts(bool reorder_sum) {
+  return OptimizeOptions{.reorder = reorder_sum ? ReorderSum::Reorder
+                                                : ReorderSum::NoReorder};
+}
+}  // namespace
+
+ExprPtr optimize(ExprPtr const& expr, bool reorder_sum) {
+  return optimize(expr, compatibility_opts(reorder_sum));
+}
+
+ResultExpr& optimize(ResultExpr& expr, bool reorder_sum) {
+  return optimize(expr, compatibility_opts(reorder_sum));
+}
+
+ResultExpr& optimize(ResultExpr&& expr, bool reorder_sum) {
+  return optimize(std::move(expr), compatibility_opts(reorder_sum));
+}
+
 }  // namespace sequant
