@@ -118,6 +118,22 @@ ExprPtr optimize_impl(ExprPtr const& expr, index_to_extent_t const& idx2size,
                         /*reorder=*/false, /*parallel_outer=*/false);
     };
 
+    // Thread-safety of the parallel branch rests on two invariants; do NOT
+    // break them without re-auditing:
+    //   1. Each task writes a distinct, pre-allocated new_smands[i] slot, and
+    //      the work below (single_term_opt ->
+    //      TensorNetwork::canonicalize_slots) operates on per-task *clones* of
+    //      the input tensors. The lazily populated `mutable` caches on
+    //      Expr/Index (hash_value_, label_, ...) are unsynchronized, so
+    //      concurrent work must never read/write them on a shared (non-cloned)
+    //      node. Index comparison touches only immutable members, so building
+    //      index sets over shared indices is safe.
+    //   2. The binarize() pass below DOES read Index::label() (a lazy cache
+    //      write) on the optimized summands, so it is run *sequentially, after*
+    //      for_each() has joined -- never inside do_term().
+    // The default Context and cardinal_tensor_labels must also be configured
+    // before entering here (their writes are unsynchronized unless
+    // SEQUANT_CONTEXT_MANIPULATION_THREADSAFE); optimize() only reads them.
     if (parallel_outer && in_sum.size() > 1) {
       auto indices = ranges::views::iota(std::size_t{0}, in_sum.size());
       sequant::for_each(indices, do_term);
@@ -129,7 +145,8 @@ ExprPtr optimize_impl(ExprPtr const& expr, index_to_extent_t const& idx2size,
     if (!reorder) return ex<Sum>(std::move(new_sum));
 
     // Binarize once per optimized summand and hand the nodes to reorder()
-    // so they aren't re-built inside clusters().
+    // so they aren't re-built inside clusters(). NOTE: this runs sequentially
+    // by design -- see invariant (2) above.
     container::vector<FullBinaryNode<EvalExpr>> nodes;
     nodes.reserve(new_sum.size());
     for (auto const& s : new_sum.summands()) nodes.push_back(binarize(s));

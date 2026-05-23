@@ -12,6 +12,7 @@
 #include <SeQuant/core/optimize/common_subexpression_elimination.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/optimize/single_term.hpp>
+#include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
@@ -25,6 +26,15 @@ sequant::ExprPtr extract(sequant::ExprPtr expr,
   ExprPtr result = expr;
   for (auto s : idxs) result = result->at(s);
   return result;
+}
+
+// number of Tensor leaves in a (binarized) expression tree
+size_t count_tensor_leaves(sequant::ExprPtr const& expr) {
+  using namespace sequant;
+  size_t n = 0;
+  expr->visit([&n](auto const& x) { n += x->template is<Tensor>() ? 1 : 0; },
+              /*atoms_only=*/true);
+  return n;
 }
 
 TEST_CASE("optimize", "[optimize]") {
@@ -226,6 +236,63 @@ TEST_CASE("optimize", "[optimize]") {
       REQUIRE(single_term_opt(GT_abij_thc)->as<Product>() == GT_abij_thc_opt);
 
       aux->approximate_size(aux_sz);
+    }
+
+    SECTION("OptimizeOptions: cost metric and reorder knobs") {
+      auto const prod = parse_expr_antisymm(
+          L"g_{i3,i4}^{a3,a4} t_{a1,a2}^{i3,i4} t_{a3,a4}^{i1,i2}");
+
+      // both metrics must binarize the 3-tensor product into a binary tree:
+      // a 2-factor top product whose leaves are the 3 original tensors
+      for (auto opt_for : {OptFor::Flops, OptFor::Memsize}) {
+        CAPTURE(static_cast<int>(opt_for));
+        auto res = optimize(prod, OptimizeOptions{.opt_for = opt_for});
+        REQUIRE(res->is<Product>());
+        REQUIRE(res->as<Product>().factors().size() == 2);
+        REQUIRE(count_tensor_leaves(res) == 3);
+      }
+
+      // reorder knob: a two-summand sum is optimized either way, and the
+      // optimize() default (reorder) matches an explicit Reorder request
+      auto const sum = parse_expr_antisymm(
+          L"g_{i3,i4}^{a3,a4} t_{a1,a2}^{i3,i4} t_{a3,a4}^{i1,i2}"
+          L" + g_{i3,i4}^{a3,a4} t_{a3,a4}^{i1,i2} t_{a1}^{i3} t_{a2}^{i4}");
+      REQUIRE(sum->is<Sum>());
+
+      auto no_reorder =
+          optimize(sum, OptimizeOptions{.reorder = ReorderSum::NoReorder});
+      auto reorder =
+          optimize(sum, OptimizeOptions{.reorder = ReorderSum::Reorder});
+      REQUIRE(no_reorder->is<Sum>());
+      REQUIRE(reorder->is<Sum>());
+      REQUIRE(no_reorder->as<Sum>().size() == sum->as<Sum>().size());
+      REQUIRE(reorder->as<Sum>().size() == sum->as<Sum>().size());
+      // default options == explicit Reorder
+      REQUIRE(*optimize(sum) == *reorder);
+    }
+
+    SECTION("Parallel optimization of summands matches sequential") {
+      // exercise optimize_impl(..., parallel_outer=true): a multi-summand sum
+      // optimized concurrently must yield the same result as single-threaded.
+      auto const sum = parse_expr_antisymm(
+          L"g_{i3,i4}^{a3,a4} t_{a1,a2}^{i3,i4} t_{a3,a4}^{i1,i2}"
+          L" + g_{i3,i4}^{a3,a4} t_{a3,a4}^{i1,i2} t_{a1}^{i3} t_{a2}^{i4}"
+          L" + g_{i3,i4}^{a3,a4} t_{a1}^{i3} t_{a2}^{i4} t_{a3,a4}^{i1,i2}");
+      REQUIRE(sum->is<Sum>());
+      REQUIRE(sum->as<Sum>().size() > 1);
+
+      auto const nthreads_save = num_threads();
+      struct ThreadGuard {
+        int n;
+        ~ThreadGuard() { set_num_threads(n); }
+      } guard{nthreads_save};
+
+      set_num_threads(1);
+      auto const seq = optimize(sum);
+      set_num_threads(4);
+      auto const par = optimize(sum);
+
+      REQUIRE(*seq == *par);
     }
   }
 

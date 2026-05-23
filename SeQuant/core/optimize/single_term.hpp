@@ -46,10 +46,16 @@ auto flops_counter(has_index_extent auto&& ixex) {
              meta::range_of<Index> auto const& rhs,
              meta::range_of<Index> auto const& result) -> double {
     using ranges::views::concat;
+    // <IndexSet> is required here: concatenating the three operands repeats
+    // every contracted/shared index, so it must be deduplicated before taking
+    // the extent product (cf. memsize_counter, which processes each operand
+    // separately and so can use the default vector container).
     auto tot_idxs = tot_indices<IndexSet>(concat(lhs, rhs, result));
     double total_flops = ranges::accumulate(
         concat(tot_idxs.outer, tot_idxs.inner), 1., std::multiplies{}, ixex);
-    // total_flops == 1. implies zero flops
+    // A product of exactly 1. means the index set was empty (the accumulation
+    // init value), i.e. a scalar contraction => zero flops. Extents are
+    // integer-valued, so this equality is exact.
     return total_flops == 1. ? 0. : total_flops;
   };
 }
@@ -71,13 +77,17 @@ auto memsize_counter(has_index_extent auto&& ixex) {
              meta::range_of<Index> auto const& result) -> double {
     using ranges::views::concat;
     double total_mem{0};
+    // Each operand is sized independently, so the default (vector) container of
+    // tot_indices suffices -- a single operand's index list has no duplicates,
+    // unlike the concatenated set flops_counter must dedup.
     for (auto&& tot_idxs :
          {tot_indices(lhs), tot_indices(rhs), tot_indices(result)}) {
       double mem = ranges::accumulate(concat(tot_idxs.outer, tot_idxs.inner),
                                       1., std::multiplies{}, ixex);
+      // mem == 1. means this operand had no indices (the accumulation init
+      // value), i.e. a scalar; it contributes no memory. Same exact-equality
+      // convention as flops_counter above.
       if (mem != 1.) total_mem += mem;
-      // else 1. is assumed to be the accumulation init value;
-      // skip adding it to the total.
     }
     return total_mem;
   };
