@@ -1,7 +1,10 @@
+#include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/optimize/sum.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/range/operations.hpp>
 #include <range/v3/view/map.hpp>
@@ -24,7 +27,9 @@ bool has_only_single_atom(const ExprPtr& term) {
   return term->size() == 1 && has_only_single_atom(*term->begin());
 }
 
-container::vector<container::vector<size_t>> clusters(Sum const& expr) {
+container::vector<container::vector<size_t>> clusters(
+    Sum const& expr, container::vector<FullBinaryNode<EvalExpr>> const& nodes) {
+  SEQUANT_ASSERT(nodes.size() == expr.size());
   using ranges::views::tail;
   using ranges::views::transform;
   using hash_t = size_t;
@@ -44,7 +49,7 @@ container::vector<container::vector<size_t>> clusters(Sum const& expr) {
     };
 
     for (auto const& term : expr) {
-      auto const node = binarize(term);
+      auto const& node = nodes[pos];
       if (has_only_single_atom(term)) {
         visitor(node);
       } else {
@@ -93,14 +98,29 @@ container::vector<container::vector<size_t>> clusters(Sum const& expr) {
   return result;
 }
 
-Sum reorder(Sum const& sum) {
+container::vector<container::vector<size_t>> clusters(Sum const& expr) {
+  container::vector<FullBinaryNode<EvalExpr>> nodes;
+  nodes.reserve(expr.size());
+  for (auto const& term : expr) nodes.push_back(binarize(term));
+  return clusters(expr, nodes);
+}
+
+Sum reorder(Sum const& sum,
+            container::vector<FullBinaryNode<EvalExpr>> const& nodes) {
   Sum result;
 
-  for (auto const& clstr : clusters(sum))
+  for (auto const& clstr : clusters(sum, nodes))
     for (auto p : clstr) result.append(sum.at(p));
 
   SEQUANT_ASSERT(result.size() == sum.size());
   return result;
+}
+
+Sum reorder(Sum const& sum) {
+  container::vector<FullBinaryNode<EvalExpr>> nodes;
+  nodes.reserve(sum.size());
+  for (auto const& term : sum) nodes.push_back(binarize(term));
+  return reorder(sum, nodes);
 }
 
 }  // namespace sequant::opt
