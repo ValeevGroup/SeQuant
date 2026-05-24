@@ -56,12 +56,27 @@ template <typename T, typename... Ts>
   return std::format("{}B", bs.value);
 }
 
-/// \return the process resident-set size, in bytes. Read from `task_info` on
-/// macOS and from `/proc/self/statm` on Linux. Returns 0 on other platforms
+/// \return the process physical-memory footprint, in bytes. On macOS this is
+/// `phys_footprint` from `TASK_VM_INFO` — the same accounted footprint Activity
+/// Monitor reports in its "Memory" column, and what jetsam limits act on. It
+/// excludes shared/reclaimable pages (frameworks, the shared cache, file-backed
+/// clean pages), so it is much smaller than the raw resident-set size
+/// (`mach_task_basic_info::resident_size`), which double-counts shared text and
+/// is what made this column read far larger than Activity Monitor. On Linux we
+/// read resident pages from `/proc/self/statm`. Returns 0 on other platforms
 /// and on read failure (no exception, so safe to call from logging paths).
 /// Cheap (~µs) — intended to be called once per log record.
 [[nodiscard]] inline std::size_t process_rss_bytes() noexcept {
 #if defined(__APPLE__)
+  ::task_vm_info_data_t vm_info{};
+  ::mach_msg_type_number_t vm_count = TASK_VM_INFO_COUNT;
+  if (::task_info(::mach_task_self(), TASK_VM_INFO,
+                  reinterpret_cast<::task_info_t>(&vm_info),
+                  &vm_count) == KERN_SUCCESS &&
+      vm_count >= TASK_VM_INFO_COUNT) {
+    return static_cast<std::size_t>(vm_info.phys_footprint);
+  }
+  // Fallback: raw resident-set size (larger; includes shared pages).
   ::mach_task_basic_info_data_t info{};
   ::mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
   if (::task_info(::mach_task_self(), MACH_TASK_BASIC_INFO,
@@ -169,21 +184,30 @@ enum struct TermMode { Begin, End };
 /// mem_result is the size of the buffer the op produces; for SumInplace
 /// it's the size of the accumulator after the add. mem_alloc is what the
 /// op allocated — equal to mem_result everywhere except SumInplace,
-/// which writes into the accumulator and allocates nothing. mem_hwmark
-/// is the live working set during the op:
+/// which writes into the accumulator and allocates nothing.
+///
+/// mem_hwmark is the eval engine's high-water mark: the running maximum,
+/// over all ops since the cache was last reset, of the per-op live working
+/// set
 ///
 ///   bytes(cache) + bytes(result) + bytes of each operand not aliased
 ///                                  to a cache entry
 ///
-/// Aliasing is evaluated at each call site using cache.alive,
-/// canon_phase, and the requested layout.
+/// (aliasing is evaluated at each call site using cache.alive, canon_phase,
+/// and the requested layout). It is reported as a running max so it is
+/// monotonically non-decreasing within one evaluation — the peak memory the
+/// engine reaches — rather than the instantaneous per-op working set, which
+/// oscillates as the cache fills and drains. The max is held by the
+/// CacheManager and cleared by CacheManager::reset() (called per term), so
+/// each term reports its own peak.
 ///
-/// rss is the process resident-set size measured immediately before the
-/// record is emitted (read via `task_info` on macOS, `/proc/self/statm`
-/// on Linux; 0 on other platforms). Use it to triage memory held outside
-/// the eval engine — long-lived tensors not in the cache, runtime/library
-/// overhead, allocator fragmentation. mem_hwmark + rss diverge by exactly
-/// that "everything else" component.
+/// rss is the process physical-memory footprint measured immediately before
+/// the record is emitted (`phys_footprint` via `TASK_VM_INFO` on macOS — the
+/// value Activity Monitor's "Memory" column shows; resident pages from
+/// `/proc/self/statm` on Linux; 0 on other platforms). Use it to triage
+/// memory held outside the eval engine — long-lived tensors not in the
+/// cache, runtime/library overhead, allocator fragmentation. mem_hwmark and
+/// rss diverge by roughly that "everything else" component.
 struct EvalStat {
   EvalMode mode;
   Duration time;
@@ -372,11 +396,12 @@ ResultPtr evaluate(Node const& node,  //
       if constexpr (trace(EvalTrace)) {
         size_t hwmark = log::bytes(cache, post).value;
         if (!cache.alive(node)) hwmark += log::bytes(res).value;
-        auto stat = log::EvalStat{.mode = log::EvalMode::MultByPhase,
-                                  .time = time,
-                                  .mem_result = log::bytes(post),
-                                  .mem_alloc = log::bytes(post),
-                                  .mem_hwmark = {hwmark}};
+        auto stat =
+            log::EvalStat{.mode = log::EvalMode::MultByPhase,
+                          .time = time,
+                          .mem_result = log::bytes(post),
+                          .mem_alloc = log::bytes(post),
+                          .mem_hwmark = {cache.note_working_set(hwmark)}};
         log::eval(stat, std::format("{} * {}", phase, node->label()));
       }
       return post;
@@ -436,7 +461,8 @@ ResultPtr evaluate(Node const& node,  //
                               .time = time,
                               .mem_result = log::bytes(result),
                               .mem_alloc = log::bytes(result),
-                              .mem_hwmark = log::bytes(cache, result)},
+                              .mem_hwmark = {cache.note_working_set(
+                                  log::bytes(cache, result).value)}},
                 log::label(node));
     } else {
       // A cached child is *distinct* from the local left/right when its
@@ -452,7 +478,7 @@ ResultPtr evaluate(Node const& node,  //
                               .time = time,
                               .mem_result = log::bytes(result),
                               .mem_alloc = log::bytes(result),
-                              .mem_hwmark = {hwmark},
+                              .mem_hwmark = {cache.note_working_set(hwmark)},
                               .mem_left = log::bytes(left),
                               .mem_right = log::bytes(right)},
                 log::label(node));
@@ -518,7 +544,7 @@ ResultPtr evaluate(Node const& node,           //
                                 .time = time,
                                 .mem_result = log::bytes(result.post),
                                 .mem_alloc = log::bytes(result.post),
-                                .mem_hwmark = {hwmark}};
+                                .mem_hwmark = {cache.note_working_set(hwmark)}};
       log::eval(stat, node->label());
     }
     log::term(log::TermMode::End, xpr);
@@ -578,7 +604,7 @@ ResultPtr evaluate(Nodes const& nodes,  //
                                 .time = time,
                                 .mem_result = log::bytes(result),
                                 .mem_alloc = {0},
-                                .mem_hwmark = {hwmark}};
+                                .mem_hwmark = {cache.note_working_set(hwmark)}};
       log::eval(stat, n->label());
     }
   }

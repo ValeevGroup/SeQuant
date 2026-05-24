@@ -14,6 +14,7 @@
 #include <range/v3/view/map.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <algorithm>
 #include <memory>
 #include <optional>
 #include <unordered_map>
@@ -85,6 +86,12 @@ class CacheManager {
 
   std::unordered_map<TreeNode, entry, hasher_type, comparator_type> cache_map_;
 
+  /// Running high-water mark (bytes) of the eval engine's live working set,
+  /// updated by note_working_set() and cleared by reset(). Held here rather
+  /// than in the recursive evaluate() so it persists across the whole
+  /// evaluation of one term and is naturally reset between terms.
+  size_t working_set_hwmark_ = 0;
+
  public:
   template <typename Iterable>
     requires(!std::same_as<std::remove_cvref_t<Iterable>, CacheManager>)
@@ -97,6 +104,20 @@ class CacheManager {
   ///
   void reset() noexcept {
     for (auto&& [k, v] : cache_map_) v.reset();
+    working_set_hwmark_ = 0;
+  }
+
+  /// Fold the per-op live working set @p current_bytes into the running
+  /// high-water mark and return the updated mark. Reported as `hw=` in the
+  /// per-op eval trace; monotonically non-decreasing until reset().
+  size_t note_working_set(size_t current_bytes) noexcept {
+    working_set_hwmark_ = std::max(working_set_hwmark_, current_bytes);
+    return working_set_hwmark_;
+  }
+
+  /// Current running high-water mark (bytes) of the live working set.
+  [[nodiscard]] size_t working_set_hwmark() const noexcept {
+    return working_set_hwmark_;
   }
 
   ///
