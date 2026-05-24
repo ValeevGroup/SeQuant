@@ -11,6 +11,8 @@
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
+#include "SeQuant/domain/mbpt/biorthogonalization.hpp"
+
 using namespace sequant;
 using namespace sequant::mbpt;
 
@@ -109,6 +111,7 @@ class compute_eomcc_openshell {
     // to_latex_align(eqvec[i], 20, 1) << "\n";
 
     std::vector<std::vector<ExprPtr>> os_st_eom;
+    std::vector<ExprPtr> os_spinfree_summed_eom;
     std::vector<container::svector<container::svector<SlottedIndex>>>
         ext_index_groups_from_A;
     std::vector<size_t> n_paired_from_A;
@@ -128,8 +131,141 @@ class compute_eomcc_openshell {
 
       std::wcout << "R[" << i << "] has " << eqvec[i].size() << " terms\n";
       os_st_eom.push_back(open_shell_CC_spintrace(eqvec[i]));
-      // std::wcout << to_latex_align(os_st_eom[i][0], 20, 1) << "\n";
-      // std::wcout << "how many elements does it have? " << os_st_eom[i].size()
+      auto summed_spinfree = std::make_shared<Sum>();
+      // for (const auto& spin_case_expr : os_st_eom.back()) {
+      //   // std::wcout << "single expression: " <<
+      //   to_latex_align(spin_case_expr, 20, 0) << "\n";
+      //
+      //   ExprPtr stripped = expand_antisymm(spin_case_expr);
+      //   std::wcout << "expanded antisymm R[" << i << "] has " <<
+      //   stripped.size() << " terms\n";
+      //
+      //   expand(stripped);
+      //   std::wcout << "expanded  R[" << i << "] has " << stripped.size() << "
+      //   terms\n";
+      //   // std::wcout << "expanded : " << to_latex_align(stripped, 0, 4) <<
+      //   "\n";
+      //
+      //   // canonicalize(stripped);
+      //   stripped = remove_spin_with_relabel(stripped);
+      //   std::wcout << "after remove spin  R[" << i << "] has " <<
+      //   stripped.size() << " terms\n";
+      //
+      //   canonicalize(stripped);
+      //   std::wcout << "after canon  R[" << i << "] has " << stripped.size()
+      //   << " terms\n";
+      //
+      //   simplify(summed_spinfree);
+      //   std::wcout << "sub set size  R[" << i << "] has " << stripped.size()
+      //   << " terms\n";
+      //   // std::wcout << "final subset : " << to_latex_align(stripped, 0, 4)
+      //   << "\n"; summed_spinfree->append(stripped);
+      //
+      //
+      //   std::wcout << "=========================================\n";
+      // }
+
+      const size_t n_cases = os_st_eom.back().size();
+      std::wcout << "number of spin cases " << n_cases << "\n";
+      //
+      // for (size_t sc = 0; sc < n_cases; ++sc) {
+      //   auto& spin_case_expr = os_st_eom.back()[sc];
+      //
+      //   canonicalize(spin_case_expr);
+      //   ExprPtr stripped = expand_antisymm(spin_case_expr);
+      //   expand(stripped);
+      //   simplify(stripped);
+      //   std::wcout << "sc" << sc << "\n";
+      //   std::wcout << "before remove spin  R[" << i << "] has " <<
+      //   stripped.size() << " terms\n"; std::wcout << "before remove spin : "
+      //   << to_latex_align(stripped, 0, 4) << "\n"; stripped =
+      //   remove_spin_with_relabel(stripped); std::wcout << "after remove spin
+      //   R[" << i << "] has " << stripped.size() << " terms\n"; std::wcout <<
+      //   "after remove spin : " << to_latex_align(stripped, 0, 4) << "\n";
+      //   canonicalize(stripped);
+      //
+      //   // const bool is_mixed = (n_cases == 3 && sc == 1);
+      //   // if (is_mixed) {
+      //   //   const auto nf = ex<Constant> (factorial(2));
+      //   //   stripped = nf* stripped;
+      //   //   simplify(stripped);
+      //   // }
+      //
+      //   // if (is_mixed) {
+      //   //   ExprPtr swapped = swap_spin(stripped);
+      //   //   canonicalize(swapped);
+      //   //   simplify(swapped);
+      //   //   summed_spinfree->append(stripped);         // αβ
+      //   //   summed_spinfree->append(swapped);          // βα
+      //   //   continue;  // skip the normal append below
+      //   // }
+      //   std::wcout << "sub set size  R[" << i << "] has " << stripped.size()
+      //   << " terms\n";
+      //
+      //   summed_spinfree->append(stripped);
+      // }
+
+      ExprPtr sc0_result, sc2_result;
+
+      for (size_t sc = 0; sc < n_cases; ++sc) {
+        ExprPtr spin_case_expr = os_st_eom.back()[sc];
+        canonicalize(spin_case_expr);
+        simplify(spin_case_expr);
+
+        ExprPtr stripped = expand_antisymm(spin_case_expr);
+        expand(stripped);
+        canonicalize(stripped);
+        simplify(stripped);
+        stripped = remove_spin_with_relabel(stripped);
+        canonicalize(stripped);
+        simplify(stripped);
+
+        if (sc == 0) sc0_result = stripped;
+        if (sc == n_cases - 1) sc2_result = stripped;
+
+        summed_spinfree->append(stripped);
+      }
+
+      // subtract sc0 and sc2 to check consistency
+      if (sc0_result && sc2_result) {
+        ExprPtr diff = sc0_result + ex<Constant>(-1) * sc2_result;
+        simplify(diff);
+        std::wcout << "sc0 - sc_last difference: " << diff->size()
+                   << " terms\n";
+        std::wcout << to_latex_align(diff, 0, 4) << "\n";
+      }
+
+      // os_spinfree_summed_eom.push_back(std::move(summed_spinfree));
+      // expand_antisymm(os_spinfree_summed_eom.back());
+      // // simplify(os_spinfree_summed_eom.back());
+
+      // ExprPtr summed = expand_antisymm(summed_spinfree);
+      ExprPtr summed = summed_spinfree;
+      canonicalize(summed);
+
+      simplify(summed);
+
+      // using ranges::views::transform;
+      // auto const ext_idxs = external_indices(summed);
+      // auto bixs = ext_idxs | transform([](auto&& vec) { return
+      // get_bra_idx(vec); }); auto kixs = ext_idxs | transform([](auto&& vec) {
+      // return get_ket_idx(vec); }); ExprPtr S_tensor =
+      //     ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs), ket(bixs)});
+      //
+      //   if (ext_idxs.size() > 1) {
+      //     summed = ex<Constant>(factorial(ext_idxs.size()))*summed;
+      //     simplify(summed);
+      //
+      //     summed = S_tensor * summed;
+      //     simplify(summed);
+      //   }
+      //   simplify(summed);
+      // summed = biorthogonal_transform_pre_nnsproject(summed, ext_idxs);
+      os_spinfree_summed_eom.push_back(std::move(summed));
+
+      // std::wcout << "summed expression: " <<
+      // to_latex_align(os_spinfree_summed_eom[0], 20, 0) << "\n"; std::wcout <<
+      // "how many elements does it have? " << os_st_eom[i].size()
       // << "\n";
     }
 
@@ -187,6 +323,10 @@ class compute_eomcc_openshell {
         //   std::wcout << "\n";
         // }
       }
+
+      std::wcout << "\n R[" << i << "] spin-free summed (all spin cases): "
+                 << os_spinfree_summed_eom[i]->size() << " terms\n";
+      // std::wcout << to_latex_align(os_spinfree_summed_eom[i], 0, 4) << "\n";
     }
   }
 };
@@ -252,6 +392,7 @@ int main(int argc, char* argv[]) {
   sequant::set_default_context(sequant::Context(
       {.index_space_registry_shared_ptr = make_min_sr_spaces(),
        .vacuum = Vacuum::SingleProduct,
+       // .assert_strict_braket_symmetry = false,
        .canonicalization_options = CanonicalizeOptions().copy_and_set(
            CanonicalizationMethod::Complete)}));
   mbpt::set_default_mbpt_context(

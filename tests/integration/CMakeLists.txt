@@ -1,7 +1,7 @@
 set(TEST_CASES
     "antisymmetrizer.cpp"
 )
-if (NOT SEQUANT_INTERNAL_SKIP_LONG_TESTS)
+if (NOT !SEQUANT_INTERNAL_SKIP_LONG_TESTS)
     list(APPEND TEST_CASES
         # Single-Reference Coupled-Cluster equation generation (spin-orbital and spin-free)
         "srcc.cpp ->  |3 t std so|3 t csv so|3 lambda std so|3 lambda csv so|2 t std sf|2 t csv sf|2 lambda std sf|2 lambda csv sf"
@@ -10,6 +10,8 @@ if (NOT SEQUANT_INTERNAL_SKIP_LONG_TESTS)
         # Equation-of-motion Coupled-Cluster
         "eomcc.cpp"
             "os_eom.cpp"
+            "singletCSeom.cpp"
+#            "tripletCSeom.cpp"
     )
 
     if (TARGET Eigen3::Eigen)

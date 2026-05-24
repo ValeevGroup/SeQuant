@@ -129,6 +129,18 @@ ExprPtr append_spin(const ExprPtr& expr,
 /// @return expr an ExprPtr with spin labels removed
 ExprPtr remove_spin(const ExprPtr& expr);
 
+/// @brief Removes spin labels while relabeling internal indices that cause
+/// collision.
+///
+/// In open-shell spin-traced expressions, distinct indices like i↑_1 and i↓_1
+/// share the same spatial ordinal. Naive spin removal collapses them onto the
+/// same label, breaking tensor network construction. This function detects such
+/// collisions in each product term and relabels internal indices to fresh
+/// ordinals before stripping spin.
+/// @param expr an ExprPtr with spin indices
+/// @return expr an ExprPtr with spin labels removed and no index collisions
+ExprPtr remove_spin_with_relabel(const ExprPtr& expr);
+
 /// @brief Checks that columns conserve Ms (azimuthal spin qn); only
 /// filled columns (with 2 non-null indices) are considered
 /// @param tensor a tensor

@@ -360,6 +360,120 @@ ExprPtr remove_spin(const ExprPtr& expr) {
   }
 }
 
+ExprPtr remove_spin_with_relabel(const ExprPtr& expr) {
+  auto remove_spin_from_tensor_with_relabel = [](const Tensor& tensor) {
+    return remove_spin(ex<Tensor>(tensor));
+  };
+
+  auto remove_spin_from_product_with_relabel =
+      [](const Product& product) -> ExprPtr {
+    // count occurrences in the current product to detect contracted indices.
+    container::map<Index, std::size_t> index_occurrences;
+    for (const auto& factor : product) {
+      if (!factor->is<Tensor>()) continue;
+      const auto& tensor = factor->as<Tensor>();
+      for (const auto& idx : tensor.const_braket_indices()) {
+        ++index_occurrences[idx];
+      }
+      for (const auto& idx : tensor.aux()) {
+        ++index_occurrences[idx];
+      }
+    }
+
+    // group distinct spin-labeled indices by their would-be spin-free identity.
+    container::map<Index, container::set<Index>> sf_to_originals;
+    container::map<IndexSpace, Index::ordinal_type> max_ordinal_per_space;
+    for (const auto& [idx, _] : index_occurrences) {
+      const auto sf_idx = make_spinfree(idx);
+      sf_to_originals[sf_idx].insert(idx);
+      if (sf_idx.ordinal()) {
+        const auto& sf_space = sf_idx.space();
+        const auto ord = sf_idx.ordinal().value();
+        auto it = max_ordinal_per_space.find(sf_space);
+        if (it == max_ordinal_per_space.end() || ord > it->second) {
+          max_ordinal_per_space[sf_space] = ord;
+        }
+      } else if (!max_ordinal_per_space.contains(sf_idx.space())) {
+        max_ordinal_per_space[sf_idx.space()] = 0;
+      }
+    }
+
+    container::map<Index, Index> relabel_map;
+    for (const auto& [sf_idx, originals] : sf_to_originals) {
+      if (originals.size() <= 1) continue;
+
+      // keep external index unchanged; relabel only internals.
+      auto keep_it = originals.begin();
+      for (auto it = originals.begin(); it != originals.end(); ++it) {
+        const auto occ_it = index_occurrences.find(*it);
+        SEQUANT_ASSERT(occ_it != index_occurrences.end());
+        if (occ_it->second <= 1) {
+          keep_it = it;
+          break;
+        }
+      }
+
+      for (auto it = originals.begin(); it != originals.end(); ++it) {
+        if (it == keep_it) continue;
+
+        const auto occ_it = index_occurrences.find(*it);
+        SEQUANT_ASSERT(occ_it != index_occurrences.end());
+        if (occ_it->second <= 1) continue;  // do not relabel external indices
+
+        auto& next_ordinal = max_ordinal_per_space[sf_idx.space()];
+        ++next_ordinal;
+        if (next_ordinal >= Index::min_tmp_index()) {
+          throw Exception(
+              "remove_spin_with_relabel: exhausted non-reserved "
+              "ordinals while resolving spin collisions");
+        }
+
+        relabel_map[*it] = Index(it->space(), next_ordinal, it->proto_indices(),
+                                 it->symmetric_proto_indices());
+      }
+    }
+
+    if (!relabel_map.empty()) {
+      std::wcout << "relabel_map non-empty for product:\n";
+      std::wcout << to_latex_align(ex<Product>(product)) << "\n";
+      for (const auto& [from, to] : relabel_map) {
+        std::wcout << "  " << from.to_latex() << " -> " << to.to_latex()
+                   << "\n";
+      }
+    }
+
+    Product relabeled_product = product;
+    if (!relabel_map.empty()) {
+      for (auto& factor : relabeled_product.factors()) {
+        if (factor->is<Tensor>()) {
+          auto tensor = factor->as<Tensor>();
+          tensor.transform_indices(relabel_map);
+          factor = ex<Tensor>(tensor);
+        }
+      }
+    }
+
+    return remove_spin(ex<Product>(std::move(relabeled_product)));
+  };
+
+  if (expr->is<Tensor>()) {
+    return remove_spin_from_tensor_with_relabel(expr->as<Tensor>());
+  } else if (expr->is<Product>()) {
+    return remove_spin_from_product_with_relabel(expr->as<Product>());
+  } else if (expr->is<Sum>()) {
+    auto result = std::make_shared<Sum>();
+    for (auto&& summand : *expr) {
+      result->append(remove_spin_with_relabel(summand));
+    }
+    return result;
+  } else if (expr->is<Constant>() || expr->is<Variable>()) {
+    return expr;
+  } else {
+    throw Exception("Invalid Expr type in remove_spin_with_relabel: " +
+                    expr->type_name());
+  }
+}
+
 bool ms_conserving_columns(const AbstractTensor& tensor) {
   for (const auto& [bra, ket] :
        ranges::zip_view(tensor._bra(), tensor._ket())) {
@@ -1096,9 +1210,16 @@ ExprPtr closed_shell_spintrace_impl(const ExprPtr& expression,
   ExprPtr expr = partially_or_fully_expand(expression);
 
   // Index tags are cleaned prior to calling the fast canonicalizer
+  std::wcout << "before reset ids tags: " << to_latex_align(expr, 0, 4)
+             << std::endl;
+
   detail::reset_idx_tags(expr);  // This call is REQUIRED
-  expand(expr);                  // This call is REQUIRED
+  std::wcout << "after reset ids tags: " << to_latex_align(expr, 0, 4)
+             << std::endl;
+  expand(expr);  // This call is REQUIRED
+  std::wcout << "after expand: " << to_latex_align(expr, 0, 4) << std::endl;
   simplify(expr);  // full simplify to combine terms before count_cycles
+  std::wcout << "after simplify: " << to_latex_align(expr, 0, 4) << std::endl;
 
   // Lambda for spin-tracing a product term
   // For closed-shell case, a spin-traced result is a product term scaled by
@@ -1274,7 +1395,7 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
 
   if (!ext_idxs.empty()) {
     // Biorthogonal transformation with factoring out NNS projector
-    st_expr = biorthogonal_transform_pre_nnsproject(st_expr, ext_idxs);
+    // st_expr = biorthogonal_transform_pre_nnsproject(st_expr, ext_idxs);
   }
 
   simplify(st_expr);
@@ -1822,15 +1943,15 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
   }
   for (auto& expression : result) {
     detail::reset_idx_tags(expression);
-    if (target_spin_case && *target_spin_case == 1) {
-      std::wcout << "before canon (sc=1): " << to_latex_align(expression)
-                 << "\n";
-    }
+    // if (target_spin_case && *target_spin_case == 1) {
+    //   std::wcout << "before canon (sc=1): " << to_latex_align(expression)
+    //              << "\n";
+    // }
     canonicalize(expression);
-    if (target_spin_case && *target_spin_case == 1) {
-      std::wcout << "after canon (sc=1): " << to_latex_align(expression)
-                 << "\n";
-    }
+    // if (target_spin_case && *target_spin_case == 1) {
+    //   std::wcout << "after canon (sc=1): " << to_latex_align(expression)
+    //              << "\n";
+    // }
     rapid_simplify(expression);
   }
 
@@ -1861,7 +1982,7 @@ std::vector<ExprPtr> open_shell_spintrace(
 }
 
 std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
-  std::wcout << "expr at the beginning " << to_latex_align(expr) << "\n";
+  // std::wcout << "expr at the beginning " << to_latex_align(expr) << "\n";
 
   SEQUANT_ASSERT(expr->is<Sum>() || expr->is<Product>());
   Tensor A = expr.is<Sum>() ? expr->at(0)->at(0)->as<Tensor>()
@@ -1902,10 +2023,11 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
           open_shell_spintrace(os_st.at(s), ext_groups, static_cast<int>(s))
               .at(0);
 
-      if (s == 1) {
-        std::wcout << "R sc=1 after spintrace: " << to_latex_align(os_st.at(s))
-                   << "\n";
-      }
+      // if (s == 1) {
+      //   std::wcout << "R sc=1 after spintrace: " <<
+      //   to_latex_align(os_st.at(s))
+      //              << "\n";
+      // }
 
       // Apply A for higher-rank cases where A is nontrivial
       bool need_A =
