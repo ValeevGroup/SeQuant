@@ -1395,7 +1395,7 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
 
   if (!ext_idxs.empty()) {
     // Biorthogonal transformation with factoring out NNS projector
-    // st_expr = biorthogonal_transform_pre_nnsproject(st_expr, ext_idxs);
+    st_expr = biorthogonal_transform_pre_nnsproject(st_expr, ext_idxs);
   }
 
   simplify(st_expr);
