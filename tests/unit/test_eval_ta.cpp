@@ -1319,4 +1319,12 @@ TEST_CASE("eval_slice_array_over_mode", "[eval]") {
 
     REQUIRE(equal_tarrays(summed, full));
   }
+
+  SECTION("Result::slice_mode dispatches through the type-erased ResultPtr") {
+    sequant::ResultPtr const r =
+        sequant::eval_result<sequant::ResultTensorTA<TA::TArrayD>>(arr);
+    auto const via_result = r->slice_mode(1, 1, 3)->get<TA::TArrayD>();
+    auto const direct = slice_array_over_mode(arr, 1, 1, 3);
+    REQUIRE(equal_tarrays(via_result, direct));
+  }
 }

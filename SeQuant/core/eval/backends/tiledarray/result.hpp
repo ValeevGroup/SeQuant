@@ -159,6 +159,13 @@ inline void log_ta_tensor_host_memory_use() {
 #endif
 }
 
+// defined below; declared here so the result classes' slice_mode() overrides
+// can call it.
+template <typename... Args>
+[[nodiscard]] TA::DistArray<Args...> slice_array_over_mode(
+    TA::DistArray<Args...> const& arr, std::size_t mode, std::size_t tile_lo,
+    std::size_t tile_hi);
+
 ///
 /// \brief Result for a tensor value of TA::DistArray type.
 /// \tparam ArrayT TA::DistArray type. Tile type of ArrayT is regular tensor of
@@ -195,6 +202,12 @@ class ResultTensorTA final : public Result {
     decltype(result)::wait_for_lazy_cleanup(result.world());
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
+  }
+
+  [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t tile_lo,
+                                     std::size_t tile_hi) const override {
+    return eval_result<this_type>(
+        slice_array_over_mode(get<ArrayT>(), mode, tile_lo, tile_hi));
   }
 
   [[nodiscard]] ResultPtr prod(Result const& other,
@@ -349,6 +362,12 @@ class ResultTensorOfTensorTA final : public Result {
     decltype(result)::wait_for_lazy_cleanup(result.world());
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
+  }
+
+  [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t tile_lo,
+                                     std::size_t tile_hi) const override {
+    return eval_result<this_type>(
+        slice_array_over_mode(get<ArrayT>(), mode, tile_lo, tile_hi));
   }
 
   [[nodiscard]] ResultPtr prod(Result const& other,

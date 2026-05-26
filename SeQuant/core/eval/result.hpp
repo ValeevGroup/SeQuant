@@ -277,6 +277,22 @@ class Result {
       std::array<std::any, 2> const&) const = 0;
 
   ///
+  /// \brief Restrict this result to a contiguous tile range of one mode.
+  ///
+  /// Keeps tiles `[tile_lo, tile_hi)` of mode \p mode and all tiles of every
+  /// other mode. Used to evaluate a tensor network in batches over a
+  /// contracted index (see make_batched_custom_evaluator): slicing every leaf
+  /// that carries the index, evaluating, and summing reproduces the full
+  /// contraction. Not a pure virtual: only tensor-backed results need it;
+  /// the default throws.
+  ///
+  [[nodiscard]] virtual ResultPtr slice_mode(std::size_t /*mode*/,
+                                             std::size_t /*tile_lo*/,
+                                             std::size_t /*tile_hi*/) const {
+    throw unimplemented_method("slice_mode");
+  }
+
+  ///
   /// \brief Add other Result object into this object.
   ///
   virtual void add_inplace(Result const&) = 0;
