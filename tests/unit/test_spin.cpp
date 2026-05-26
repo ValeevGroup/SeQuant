@@ -2150,6 +2150,51 @@ SECTION("Open-shell spin-tracing") {
         IdxGroupList{{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
     REQUIRE(result2[1]->size() == 24);
   }
+  SECTION("remove_spin_with_relabel: external/internal collision") {
+    const auto i1A = Index(L"i↑_1");
+    const auto i2A = Index(L"i↑_2");
+    const auto i1B = Index(L"i↓_1");
+    const auto a1A = Index(L"a↑_1");
+    const auto a2A = Index(L"a↑_2");
+    const auto a1B = Index(L"a↓_1");
+
+    // -R{a↑1,a↑2;i↑2,i↑1} g{i↑2,i↓1;a↑2,a↓1} t{a↓1;i↓1}
+    auto input =
+        ex<Constant>(-1) *
+        ex<Tensor>(L"R", bra{a1A, a2A}, ket{i2A, i1A}, Symmetry::Nonsymm) *
+        ex<Tensor>(L"g", bra{i2A, i1B}, ket{a2A, a1B}, Symmetry::Nonsymm) *
+        ex<Tensor>(L"t", bra{a1B}, ket{i1B}, Symmetry::Nonsymm);
+
+    auto result = remove_spin_with_relabel(input);
+    canonicalize(result);
+
+    // a↓1 -> a3, i↓1 -> i3 to avoid clashing with external a↑1->a1, i↑1->i1
+    REQUIRE_THAT(result,
+                 EquivalentTo("-1 R{a1,a2;i2,i1} g{i2,i3;a2,a3} t{a3;i3}"));
+  }
+}
+SECTION("remove_spin_with_relabel: internal index relabeled, external kept") {
+  const auto i1A = Index(L"i↑_1");
+  const auto a1A = Index(L"a↑_1");
+  const auto i1B = Index(L"i↓_1");
+  const auto i2B = Index(L"i↓_2");
+  const auto i3B = Index(L"i↓_3");
+  const auto a1B = Index(L"a↓_1");
+  const auto a2B = Index(L"a↓_2");
+
+  // -2 R{a↑1;i↑1} g{i↑1,i↓3;a↑1,i↓1} t{a↓2,a↓1;i↓2,i↓3}
+  auto input =
+      ex<Constant>(-2) *
+      ex<Tensor>(L"R", bra{a1A}, ket{i1A}, Symmetry::Nonsymm) *
+      ex<Tensor>(L"g", bra{i1A, i3B}, ket{a1A, i1B}, Symmetry::Nonsymm) *
+      ex<Tensor>(L"t", bra{a2B, a1B}, ket{i2B, i3B}, Symmetry::Nonsymm);
+
+  auto result = remove_spin_with_relabel(input);
+  canonicalize(result);
+
+  // a↑1 -> a3, i↑1 -> i4 to avoid clashing with external a↓1->a1, i↓1->i1
+  REQUIRE_THAT(result,
+               EquivalentTo("-2 R{a3;i4} g{i4,i3;a3,i1} t{a2,a1;i2,i3}"));
 }
 
 SECTION("ResultExpr") {
