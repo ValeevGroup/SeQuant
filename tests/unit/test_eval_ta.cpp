@@ -1155,3 +1155,58 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     }
   }
 }
+
+TEST_CASE("eval_custom_evaluator", "[eval]") {
+  using sequant::evaluate;
+  using sequant::ResultPtr;
+  using TA::TArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+  using cache_t = sequant::CacheManager<node_t>;
+
+  auto& world = TA::get_default_world();
+  const size_t nocc = 2, nvirt = 20;
+  auto yield_ = rand_tensor_yield<double, TA::DensePolicy>{world, nocc, nvirt};
+
+  // a multi-product expression: several non-leaf nodes in the eval tree.
+  auto const expr = sequant::deserialize<sequant::ExprPtr>(
+      L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}",
+      {.def_perm_symm = sequant::Symmetry::Antisymm});
+  std::string const target = "a_1,a_2,i_1,i_2";
+  auto const node = eval_node(expr);
+
+  // standard-scheme reference (no custom evaluator)
+  auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
+
+  SECTION("declining evaluator defers to the standard scheme") {
+    // A custom evaluator that always returns null is consulted at every
+    // non-leaf node and the standard scheme produces the result.
+    int consulted = 0;
+    auto cache = cache_t::empty();
+    cache.set_custom_evaluator(
+        [&consulted](node_t const&, cache_t&) -> ResultPtr {
+          ++consulted;
+          return nullptr;
+        });
+    auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
+    REQUIRE(equal_tarrays(res, ref));
+    REQUIRE(consulted > 1);  // multiple non-leaf nodes, all declined
+  }
+
+  SECTION("intercepting evaluator takes over a subtree") {
+    // A custom evaluator that takes over the first (root) node it is consulted
+    // on -- here by re-evaluating that subtree via the standard scheme on a
+    // scratch cache. The result must still match, and the non-null return must
+    // short-circuit the recursion, so the evaluator fires exactly once.
+    int consulted = 0;
+    auto cache = cache_t::empty();
+    cache.set_custom_evaluator(
+        [&consulted, &yield_](node_t const& n, cache_t&) -> ResultPtr {
+          ++consulted;
+          auto scratch = cache_t::empty();
+          return evaluate(n, yield_, scratch);
+        });
+    auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
+    REQUIRE(equal_tarrays(res, ref));
+    REQUIRE(consulted == 1);
+  }
+}
