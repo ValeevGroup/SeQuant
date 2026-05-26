@@ -15,6 +15,11 @@ enum class OptFor { Flops, Memsize };
 /// closer to each other.
 enum class ReorderSum { Reorder, NoReorder };
 
+/// Whether single-term optimization should recognize equivalent subnetworks
+/// while searching for an evaluation order, trading extra search time for
+/// potentially lower op counts.
+enum class SubnetCSE { Enable, Disable };
+
 /// A type-erased provider mapping an Index to its extent. Used by the public
 /// optimize() API. Callers reaching for the templated opt::single_term_opt
 /// overloads (constrained by \ref opt::has_index_extent) should pass the
@@ -31,6 +36,11 @@ struct OptimizeOptions {
   /// Whether to reorder summands so terms with shared intermediates appear
   /// closer to each other.
   ReorderSum reorder = ReorderSum::Reorder;
+
+  /// Whether single-term optimization should perform subnetwork
+  /// common-subexpression recognition. Disabled by default; enabling can
+  /// reduce op counts at the cost of additional optimization time.
+  SubnetCSE subnet_cse = SubnetCSE::Disable;
 
   /// Caller-supplied Index to extent provider. If empty, defaults to
   /// \c IndexSpace::approximate_size().

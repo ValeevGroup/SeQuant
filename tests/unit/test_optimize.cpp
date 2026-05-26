@@ -479,6 +479,53 @@ TEST_CASE("optimize", "[optimize]") {
           (res_no_cse->at(0)->is<Tensor>() || res_no_cse->at(1)->is<Tensor>());
       REQUIRE(is_unbalanced);
     }
+
+    SECTION("subnet_cse flows through OptimizeOptions") {
+      auto ctx_resetter =
+          set_scoped_default_context(get_default_context().clone());
+      auto reg = get_default_context().mutable_index_space_registry();
+      // Same sizing trick as the section above: CSE prefers balanced,
+      // no-CSE prefers unbalanced.
+      reg->retrieve_ptr(L"i")->approximate_size(12);
+      reg->retrieve_ptr(L"a")->approximate_size(10);
+
+      auto idx_to_extent = [](Index const& ix) -> std::size_t {
+        return ix.nonnull() ? ix.space().approximate_size() : 1;
+      };
+
+      auto prod =
+          deserialize(L"X{i1;a1} Y{a1;i2} X{i2;a2} Y{a2;i3}")->as<Product>();
+      auto expr = ex<Product>(prod);
+
+      auto res_cse =
+          optimize(expr, OptimizeOptions{.subnet_cse = SubnetCSE::Enable,
+                                         .idx_to_extent = idx_to_extent});
+      auto res_no_cse =
+          optimize(expr, OptimizeOptions{.subnet_cse = SubnetCSE::Disable,
+                                         .idx_to_extent = idx_to_extent});
+
+      // With CSE: balanced tree -- both children are Products.
+      REQUIRE(res_cse->is<Product>());
+      REQUIRE(res_cse->as<Product>().factors().size() == 2);
+      REQUIRE(res_cse->at(0)->is<Product>());
+      REQUIRE(res_cse->at(1)->is<Product>());
+
+      // Without CSE: unbalanced tree -- at least one child is a bare Tensor.
+      REQUIRE(res_no_cse->is<Product>());
+      REQUIRE(res_no_cse->as<Product>().factors().size() == 2);
+      bool is_unbalanced =
+          res_no_cse->at(0)->is<Tensor>() || res_no_cse->at(1)->is<Tensor>();
+      REQUIRE(is_unbalanced);
+
+      // Default OptimizeOptions => subnet_cse Disable => same as no-CSE shape.
+      auto res_default =
+          optimize(expr, OptimizeOptions{.idx_to_extent = idx_to_extent});
+      REQUIRE(res_default->is<Product>());
+      REQUIRE(res_default->as<Product>().factors().size() == 2);
+      bool default_is_unbalanced =
+          res_default->at(0)->is<Tensor>() || res_default->at(1)->is<Tensor>();
+      REQUIRE(default_is_unbalanced);
+    }
   }
 
   /// verify that space changes did not leak
