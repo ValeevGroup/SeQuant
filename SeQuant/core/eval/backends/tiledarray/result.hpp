@@ -466,6 +466,37 @@ class ResultTensorOfTensorTA final : public Result {
   }
 };
 
+/// \brief Restrict a TA::DistArray to a contiguous tile range of one mode.
+///
+/// Keeps tiles `[tile_lo, tile_hi)` of mode \p mode and all tiles of every
+/// other mode; the result's `mode`-th TiledRange1 covers only those tiles
+/// (its element range is shifted to start at 0). Implemented with TA's
+/// `block()`, so block-sparse shape is preserved. Used to evaluate a tensor
+/// network in batches over a contracted index (see
+/// make_batched_custom_evaluator): slicing every leaf that carries the index
+/// to a tile range, evaluating, and summing reproduces the full contraction
+/// because `sum_K = sum_{blocks} sum_{K in block}`.
+template <typename... Args>
+[[nodiscard]] TA::DistArray<Args...> slice_array_over_mode(
+    TA::DistArray<Args...> const& arr, std::size_t mode, std::size_t tile_lo,
+    std::size_t tile_hi) {
+  using ranges::views::iota;
+  auto const rank = arr.trange().rank();
+  SEQUANT_ASSERT(mode < rank);
+  SEQUANT_ASSERT(tile_lo < tile_hi &&
+                 tile_hi <= arr.trange().dim(mode).tile_extent());
+  container::svector<std::size_t> lo(rank, 0), hi(rank);
+  for (std::size_t d = 0; d < rank; ++d)
+    hi[d] = arr.trange().dim(d).tile_extent();
+  lo[mode] = tile_lo;
+  hi[mode] = tile_hi;
+  auto const annot = ords_to_annot(iota(std::size_t{0}, rank));
+  TA::DistArray<Args...> out;
+  out(annot) = arr(annot).block(lo, hi);
+  TA::DistArray<Args...>::wait_for_lazy_cleanup(arr.world());
+  return out;
+}
+
 }  // namespace sequant
 
 #endif  // SEQUANT_HAS_TILEDARRAY

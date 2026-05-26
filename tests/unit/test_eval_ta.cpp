@@ -1280,3 +1280,43 @@ TEST_CASE("eval_batch_axis", "[eval]") {
     REQUIRE_FALSE(batch_axis(node_occ, in_unocc).has_value());
   }
 }
+
+TEST_CASE("eval_slice_array_over_mode", "[eval]") {
+  using sequant::slice_array_over_mode;
+  auto& world = TA::get_default_world();
+
+  // arr: a(2 tiles), b(3 tiles), c(1 tile); bb shares b's TiledRange1.
+  TA::TArrayD arr(world, TA::TiledRange{{0, 2, 4}, {0, 3, 6, 9}, {0, 5}});
+  TA::TArrayD bb(world, TA::TiledRange{{0, 3, 6, 9}, {0, 7}});
+  arr.fill_random();
+  bb.fill_random();
+  world.gop.fence();
+
+  SECTION("trange of the sliced mode") {
+    auto const s = slice_array_over_mode(arr, 1, 1, 3);  // b-tiles [1,3)
+    REQUIRE(s.trange().dim(1).tile_extent() == 2);
+    REQUIRE(s.trange().dim(0).tile_extent() ==
+            arr.trange().dim(0).tile_extent());
+    REQUIRE(s.trange().dim(2).tile_extent() ==
+            arr.trange().dim(2).tile_extent());
+  }
+
+  SECTION(
+      "blocked contraction over the sliced mode reconstructs the full one") {
+    // full contraction over b
+    TA::TArrayD full;
+    full("a,c,d") = arr("a,b,c") * bb("b,d");
+
+    // split b's 3 tiles into [0,1) and [1,3), contract each, sum
+    auto const a0 = slice_array_over_mode(arr, 1, 0, 1);
+    auto const a1 = slice_array_over_mode(arr, 1, 1, 3);
+    auto const b0 = slice_array_over_mode(bb, 0, 0, 1);
+    auto const b1 = slice_array_over_mode(bb, 0, 1, 3);
+    TA::TArrayD p0, p1, summed;
+    p0("a,c,d") = a0("a,b,c") * b0("b,d");
+    p1("a,c,d") = a1("a,b,c") * b1("b,d");
+    summed("a,c,d") = p0("a,c,d") + p1("a,c,d");
+
+    REQUIRE(equal_tarrays(summed, full));
+  }
+}
