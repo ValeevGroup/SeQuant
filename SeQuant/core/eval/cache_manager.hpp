@@ -15,6 +15,7 @@
 #include <range/v3/view/transform.hpp>
 
 #include <algorithm>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <unordered_map>
@@ -33,6 +34,21 @@ template <typename TreeNode, bool force_hash_collisions>
 class CacheManager {
  public:
   using key_type = TreeNode;
+
+  /// A custom evaluator type. `evaluate()` consults the cache's custom
+  /// evaluator (if set) before applying its standard recursive scheme to each
+  /// *non-leaf* node, invoking it as `custom_evaluator(node, cache)`:
+  ///   - a non-null `ResultPtr` means "I evaluated this subtree myself" (e.g.
+  ///     blocked over a contracted index to bound peak memory) and is used (and
+  ///     cached) as-is;
+  ///   - a null result means "decline", and the standard scheme evaluates the
+  ///     node (its children are in turn consulted via the threaded cache).
+  /// The leaf evaluator is captured by the callable. A custom evaluator that
+  /// (re)evaluates the subtree by the standard scheme on a transformed operand
+  /// set should do so on a *scratch* cache (e.g. `CacheManager::empty()`) to
+  /// avoid both re-interception and polluting this cache with partial results.
+  using custom_evaluator_type =
+      std::function<ResultPtr(key_type const&, CacheManager&)>;
 
  private:
   using hasher_type = TreeNodeHasher<TreeNode, force_hash_collisions>;
@@ -92,7 +108,21 @@ class CacheManager {
   /// evaluation of one term and is naturally reset between terms.
   size_t working_set_hwmark_ = 0;
 
+  /// Optional custom evaluator consulted by evaluate() (see
+  /// custom_evaluator_type). Empty => always defer to the standard scheme.
+  custom_evaluator_type custom_evaluator_{};
+
  public:
+  /// Sets the custom evaluator (see custom_evaluator_type). Pass an empty
+  /// std::function to clear it.
+  void set_custom_evaluator(custom_evaluator_type fn) noexcept {
+    custom_evaluator_ = std::move(fn);
+  }
+
+  /// \return the custom evaluator (empty if none is set).
+  [[nodiscard]] custom_evaluator_type const& custom_evaluator() const noexcept {
+    return custom_evaluator_;
+  }
   template <typename Iterable>
     requires(!std::same_as<std::remove_cvref_t<Iterable>, CacheManager>)
   explicit CacheManager(Iterable&& decaying) noexcept {

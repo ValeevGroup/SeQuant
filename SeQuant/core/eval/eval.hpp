@@ -429,6 +429,31 @@ ResultPtr evaluate(Node const& node,  //
 
   log::Duration time;
 
+  // Custom-evaluator interception: before the standard scheme, a non-leaf node
+  // may be evaluated by the cache's custom evaluator (e.g. blocked over a
+  // contracted index to bound peak memory). A non-null result is used (and
+  // cached by the Checked wrapper) as-is; null declines to the standard scheme
+  // below. See CacheManager::custom_evaluator_type.
+  if (!node.leaf()) {
+    if (auto const& custom_eval = cache.custom_evaluator(); custom_eval) {
+      ResultPtr intercepted;
+      time =
+          timed_eval_inplace([&]() { intercepted = custom_eval(node, cache); });
+      if (intercepted) {
+        if constexpr (trace(EvalTrace)) {
+          log::eval(log::EvalStat{.mode = log::eval_mode(node),
+                                  .time = time,
+                                  .mem_result = log::bytes(intercepted),
+                                  .mem_alloc = log::bytes(intercepted),
+                                  .mem_hwmark = {cache.note_working_set(
+                                      log::bytes(cache, intercepted).value)}},
+                    log::label(node));
+        }
+        return intercepted;
+      }
+    }
+  }
+
   if (node.leaf()) {
     time = timed_eval_inplace([&]() { result = le(node); });
   } else {
