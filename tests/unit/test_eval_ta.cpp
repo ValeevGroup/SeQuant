@@ -1210,3 +1210,44 @@ TEST_CASE("eval_custom_evaluator", "[eval]") {
     REQUIRE(consulted == 1);
   }
 }
+
+TEST_CASE("eval_batch_axis", "[eval]") {
+  using sequant::batch_axis;
+  using sequant::contracted_indices;
+
+  auto node_of = [](std::wstring_view xpr) {
+    return eval_node(sequant::deserialize<sequant::ExprPtr>(xpr));
+  };
+
+  SECTION("single contracted index") {
+    // R_{a1}^{i1,i3} * f_{i3}^{i2} sums over i3.
+    auto const node = node_of(L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
+    auto const c = contracted_indices(node);
+    REQUIRE(c.size() == 1);
+    auto const axis = batch_axis(node);
+    REQUIRE(axis.has_value());
+    REQUIRE(axis.value() == c.front());
+  }
+
+  SECTION("two contracted indices") {
+    // g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4} sums over a1,a2.
+    auto const node = node_of(L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
+    auto const c = contracted_indices(node);
+    REQUIRE(c.size() == 2);
+    auto const axis = batch_axis(node);
+    REQUIRE(axis.has_value());
+    REQUIRE(ranges::contains(c, axis.value()));
+  }
+
+  SECTION("leaf has no contracted index") {
+    auto const node = node_of(L"f_{i1}^{a1}");
+    REQUIRE(contracted_indices(node).empty());
+    REQUIRE_FALSE(batch_axis(node).has_value());
+  }
+
+  SECTION("a sum is not a contraction") {
+    auto const node = node_of(L"f_{i1}^{a1} + t_{a1}^{i1}");
+    REQUIRE(contracted_indices(node).empty());
+    REQUIRE_FALSE(batch_axis(node).has_value());
+  }
+}
