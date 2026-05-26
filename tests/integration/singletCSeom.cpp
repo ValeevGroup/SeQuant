@@ -132,9 +132,14 @@ class compute_eomcc_closedshell {
 
       const auto tstart = std::chrono::high_resolution_clock::now();
       auto st = closed_shell_CC_spintrace(eqvec[i], {.method = biorth_method});
-      if (i > 0) {
-        st = S_maps(st);
-        simplify(st);
+      // if (i > 1) {
+      //   st = S_maps(st);
+      //   simplify(st);
+      // }
+      for (auto& term : *st) {
+        if (term->is<Product>())
+          term = remove_tensor(term.as_shared_ptr<Product>(),
+                               reserved::symm_label());
       }
       const auto tstop = std::chrono::high_resolution_clock::now();
       std::chrono::duration<double> dt = tstop - tstart;
