@@ -16,7 +16,11 @@ namespace detail {
 template <meta::eval_node Node, typename ResultSet>
 void capture(Node& n, ResultSet& result) {
   result.insert(n);  // FullBinaryNode copy ctor is deep
-  n = Node{*n};      // collapse to a leaf carrying a copy of n's payload
+  // collapse to a leaf carrying a copy of n's payload with op_type nulled
+  // so the synthetic leaf reads as a primary expression
+  auto leaf_payload = *n;
+  EvalOpSetter{}.reset(static_cast<EvalExpr&>(leaf_payload));
+  n = Node{std::move(leaf_payload)};
 }
 
 template <meta::eval_node Node, typename Pred, typename ResultSet>
@@ -39,17 +43,16 @@ bool extract_subtrees_visit(Node& n, Pred& pred, ResultSet& result) {
 
 ///
 /// Extract maximal `pred`-matching subtrees from a forest of EvalNodes,
-/// replacing each match in place with a leaf carrying a verbatim copy of
-/// the original payload (expr, hash, canon_indices, phase, connectivity,
-/// op_type).
+/// replacing each match in place with a leaf carrying a copy of the
+/// original payload (expr, hash, canon_indices, phase, connectivity)
+/// with `op_type_` reset to null so the synthetic leaf reads as a
+/// primary expression.
 ///
 /// `pred(n, pl, pr) -> bool` is tested in post-order; `pl`/`pr` are the
 /// predicate values of `n`'s children (both `false` if `n` is a leaf).
 /// A node `n` is captured iff `pred(n) ∧ (n is a root ∨ ¬pred(parent(n)))`.
 /// Nested pred-positive descendants of a captured subtree are inlined,
-/// not re-extracted. The synthetic leaf retains the original payload's
-/// `op_type_`; consumers should treat the FullBinaryNode shape as
-/// authoritative rather than branching on the payload's `op_type_`.
+/// not re-extracted.
 ///
 /// Example — extract intermediates that don't involve any tensor with
 /// label "t". `pred(leaf) = false` keeps bare leaves out of the result
