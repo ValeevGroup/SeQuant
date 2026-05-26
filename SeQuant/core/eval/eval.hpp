@@ -419,6 +419,31 @@ template <typename IndexPredicate>
   return batch_axis(node, [](Index const&) { return true; });
 }
 
+/// \return the position of index \p ix in \p node's canonical result indices
+///         (i.e. the corresponding tensor mode), or nullopt if absent.
+[[nodiscard]] inline std::optional<std::size_t> index_position(
+    meta::eval_node auto const& node, Index const& ix) {
+  auto const& idxs = node->canon_indices();
+  for (std::size_t p = 0; p < idxs.size(); ++p)
+    if (idxs[p] == ix) return p;
+  return std::nullopt;
+}
+
+/// \return the first leaf in the subtree rooted at \p node whose canonical
+///         indices contain \p ix, paired with the position of \p ix there; or
+///         nullopt if no such leaf. Used to learn \p ix's tile structure from
+///         a tensor that carries it.
+template <typename Node>
+[[nodiscard]] std::optional<std::pair<Node, std::size_t>> find_leaf_carrying(
+    Node const& node, Index const& ix) {
+  if (node.leaf()) {
+    if (auto const p = index_position(node, ix)) return std::pair{node, *p};
+    return std::nullopt;
+  }
+  if (auto found = find_leaf_carrying(node.left(), ix)) return found;
+  return find_leaf_carrying(node.right(), ix);
+}
+
 ///
 /// \tparam EvalTrace If Trace::On, trace is written to the logger's stream.
 ///                   Default is to follow Trace::Default, which is itself
@@ -807,6 +832,79 @@ ResultPtr evaluate_antisymm(Args&&... args) {
     log::eval(stat, n0->label());
   }
   return result;
+}
+
+/// \brief Builds a custom evaluator (see CacheManager::custom_evaluator_type)
+/// that evaluates a subtree in batches over a contracted index, to bound the
+/// peak memory of intermediates that carry that index.
+///
+/// For each node it is consulted on, the returned evaluator chooses a batch
+/// axis \c K via `batch_axis(node, accept)` (declining if none). It asks the
+/// backend to partition \c K into contiguous element-range batches of about
+/// \p target_batch_size elements each (Result::mode_batches); if that yields at
+/// most one batch it declines (so small / unselected indices are left to the
+/// standard scheme). Otherwise, for each batch it evaluates the subtree by the
+/// standard scheme on a fresh scratch cache, with every leaf carrying \c K
+/// sliced to the batch's element range, and sums the partial results. This is
+/// exact because `sum_K = sum_{batches} sum_{K in batch}`, and never
+/// materializes the whole \c K extent of any intermediate at once.
+///
+/// \param le the leaf evaluator (captured).
+/// \param target_batch_size the desired size of each batch *in elements* (a
+///        user knob; no memory model is assumed). Backend-neutral: a tiled
+///        backend rounds batch boundaries to tile boundaries, so realized
+///        batches are uneven and each covers at least this many elements where
+///        possible.
+/// \param accept predicate selecting which contracted indices may be batched
+///        (e.g. only those in the auxiliary/RI IndexSpace). Defaults to any.
+struct accept_any_index {
+  bool operator()(Index const&) const noexcept { return true; }
+};
+
+template <typename F, typename IndexPredicate = accept_any_index>
+[[nodiscard]] auto make_batched_custom_evaluator(F le,
+                                                 std::size_t target_batch_size,
+                                                 IndexPredicate accept = {}) {
+  return [le = std::move(le), target_batch_size, accept](
+             auto const& node, auto& cache) -> ResultPtr {
+    using cache_t = std::remove_reference_t<decltype(cache)>;
+
+    auto const K = batch_axis(node, accept);
+    if (!K) return nullptr;
+
+    auto const leaf = find_leaf_carrying(node, *K);
+    if (!leaf) return nullptr;
+    auto const batches =
+        le(leaf->first)->mode_batches(leaf->second, target_batch_size);
+
+    if (batches.size() <= 1)
+      return nullptr;  // nothing to gain (or unbatchable)
+
+    ResultPtr acc;
+    for (auto const& [e_lo, e_hi] : batches) {
+      if (e_lo == e_hi) continue;
+
+      // leaf evaluator that slices every leaf carrying K to this element batch;
+      // others pass through unchanged.
+      auto le_g = [&le, &K, e_lo = e_lo,
+                   e_hi = e_hi](auto const& leaf_node) -> ResultPtr {
+        ResultPtr r = le(leaf_node);
+        if (auto const p = index_position(leaf_node, *K))
+          return r->slice_mode(*p, e_lo, e_hi);
+        return r;
+      };
+
+      // standard scheme on a fresh scratch cache: no re-interception, and the
+      // (partial, sliced) intermediates do not pollute the real cache.
+      auto scratch = cache_t::empty();
+      ResultPtr part = evaluate(node, le_g, scratch);
+      if (!acc)
+        acc = std::move(part);
+      else
+        acc->add_inplace(*part);
+    }
+    return acc;
+  };
 }
 
 }  // namespace sequant

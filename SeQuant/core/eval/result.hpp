@@ -277,19 +277,40 @@ class Result {
       std::array<std::any, 2> const&) const = 0;
 
   ///
-  /// \brief Restrict this result to a contiguous tile range of one mode.
+  /// \brief Restrict this result to a contiguous *element* range of one mode.
   ///
-  /// Keeps tiles `[tile_lo, tile_hi)` of mode \p mode and all tiles of every
-  /// other mode. Used to evaluate a tensor network in batches over a
-  /// contracted index (see make_batched_custom_evaluator): slicing every leaf
-  /// that carries the index, evaluating, and summing reproduces the full
-  /// contraction. Not a pure virtual: only tensor-backed results need it;
-  /// the default throws.
+  /// Keeps elements `[elem_lo, elem_hi)` of mode \p mode and all elements of
+  /// every other mode. Element semantics keep this backend-neutral (no notion
+  /// of tiles); a tiled backend may require `[elem_lo, elem_hi)` to fall on
+  /// tile boundaries (mode_batches() returns such ranges). Used to evaluate a
+  /// tensor network in batches over a contracted index (see
+  /// make_batched_custom_evaluator): slicing every leaf that carries the index,
+  /// evaluating, and summing reproduces the full contraction. Not a pure
+  /// virtual: only tensor-backed results need it; the default throws.
   ///
   [[nodiscard]] virtual ResultPtr slice_mode(std::size_t /*mode*/,
-                                             std::size_t /*tile_lo*/,
-                                             std::size_t /*tile_hi*/) const {
+                                             std::size_t /*elem_lo*/,
+                                             std::size_t /*elem_hi*/) const {
     throw unimplemented_method("slice_mode");
+  }
+
+  ///
+  /// \brief Partition mode \p mode into contiguous element-range batches, each
+  /// covering about \p target_batch_size elements.
+  ///
+  /// \return a list of `[elem_lo, elem_hi)` element ranges that tile the mode's
+  ///         full extent without overlap or gap. The partition is chosen by the
+  ///         backend at its storage granularity: a tiled backend snaps batch
+  ///         boundaries to tile boundaries (so batches are uneven and each
+  ///         covers at least \p target_batch_size elements where possible), a
+  ///         dense backend may split evenly. A single returned batch means the
+  ///         mode is not worth (or cannot be) split. Backend-neutral: the
+  ///         target is expressed in elements, not tiles. Default: not
+  ///         supported.
+  ///
+  [[nodiscard]] virtual container::svector<std::pair<std::size_t, std::size_t>>
+  mode_batches(std::size_t /*mode*/, std::size_t /*target_batch_size*/) const {
+    throw unimplemented_method("mode_batches");
   }
 
   ///

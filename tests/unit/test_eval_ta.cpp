@@ -177,10 +177,16 @@ class rand_tensor_yield {
   size_t nocc_;
   size_t nvirt_;
   size_t naux_;
+  // max tile size along each mode; the default (~0) makes a single tile per
+  // mode (the original behavior). Set smaller to produce multi-tile arrays.
+  size_t max_tile_ = ~size_t{0};
   mutable sequant::container::map<std::wstring, sequant::ResultPtr>
       label_to_er_;
 
  public:
+  /// Produce arrays whose modes are tiled in blocks of at most \p n.
+  void set_max_tile(size_t n) { max_tile_ = n; }
+
   using array_type = TA::DistArray<TA::Tensor<NumericT>, TAPolicyT>;
   using array_tot_type =
       TA::DistArray<TA::Tensor<TA::Tensor<NumericT>>, TAPolicyT>;
@@ -271,10 +277,16 @@ class rand_tensor_yield {
 
     auto const outer_extent = make_extents(nested.outer);
 
-    auto const outer_tr = [&outer_extent]() {
+    auto const outer_tr = [&outer_extent, this]() {
+      auto make_tr1 = [this](size_t e) {
+        container::svector<size_t> b;
+        for (size_t x = 0; x < e; x += max_tile_) b.push_back(x);
+        b.push_back(e);
+        return TA::TiledRange1(b.begin(), b.end());
+      };
       container::vector<TA::TiledRange1> tr1s;
       tr1s.reserve(outer_extent.size());
-      for (auto e : outer_extent) tr1s.emplace_back(TA::TiledRange1(0, e));
+      for (auto e : outer_extent) tr1s.emplace_back(make_tr1(e));
       return TA::TiledRange(tr1s.begin(), tr1s.end());
     }();
 
@@ -1320,11 +1332,65 @@ TEST_CASE("eval_slice_array_over_mode", "[eval]") {
     REQUIRE(equal_tarrays(summed, full));
   }
 
-  SECTION("Result::slice_mode dispatches through the type-erased ResultPtr") {
+  SECTION("Result::slice_mode takes element bounds, snaps to tiles") {
+    // mode 1 (b) tiles {0,3,6,9}; element range [3,9) is tiles [1,3).
     sequant::ResultPtr const r =
         sequant::eval_result<sequant::ResultTensorTA<TA::TArrayD>>(arr);
-    auto const via_result = r->slice_mode(1, 1, 3)->get<TA::TArrayD>();
+    auto const via_result = r->slice_mode(1, 3, 9)->get<TA::TArrayD>();
     auto const direct = slice_array_over_mode(arr, 1, 1, 3);
     REQUIRE(equal_tarrays(via_result, direct));
+  }
+
+  SECTION("Result::mode_batches partitions a mode into element ranges") {
+    using batches_t = sequant::container::svector<std::pair<size_t, size_t>>;
+    sequant::ResultPtr const r =
+        sequant::eval_result<sequant::ResultTensorTA<TA::TArrayD>>(arr);
+    // mode 1 (b) has 3 tiles of 3 elements each (extent 9).
+    // (extra parens: compare as a single bool so Catch2 needn't stringify
+    // pairs) target larger than the extent -> a single batch (caller declines).
+    REQUIRE((r->mode_batches(1, 100) == batches_t{{0, 9}}));
+    // target 4: tile0 (3<4) + tile1 reaches 6>=4 -> [0,6); remainder [6,9).
+    REQUIRE((r->mode_batches(1, 4) == batches_t{{0, 6}, {6, 9}}));
+    // target 1: every tile is its own batch.
+    REQUIRE((r->mode_batches(1, 1) == batches_t{{0, 3}, {3, 6}, {6, 9}}));
+  }
+}
+
+TEST_CASE("eval_batched_custom_evaluator", "[eval]") {
+  using sequant::evaluate;
+  using sequant::make_batched_custom_evaluator;
+  using TA::TArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+  using cache_t = sequant::CacheManager<node_t>;
+
+  auto& world = TA::get_default_world();
+  // multi-tile arrays so batching over a contracted index actually engages:
+  // unoccupied extent 12 in tiles of <=4 -> 3 tiles.
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 12};
+  yield_.set_max_tile(4);
+
+  // contracts a1,a2 (unoccupied) -> batch axis is an unoccupied index (3 tiles)
+  auto const expr = sequant::deserialize<sequant::ExprPtr>(
+      L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
+  std::string const target = "i_1,i_2,i_3,i_4";
+  auto const node = eval_node(expr);
+
+  // Reference first, so yield_'s (random) leaf arrays are generated and cached;
+  // the batched evaluator below copies yield_ and thus reuses the same arrays.
+  auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
+
+  // Batched evaluation must reproduce the reference for any target batch size,
+  // since sum_K = sum_{batches} sum_{K in batch}. The batch axis is unoccupied
+  // (extent 12, tiles of 4 -> 3 tiles). target_batch_size is in *elements*:
+  // 100 -> 1 batch (no-op), 8 -> 2 batches ([0,8),[8,12)), 4 -> 3 batches, and
+  // 1 -> 3 batches (each tile its own batch).
+  for (std::size_t target_batch_size :
+       {std::size_t{100}, std::size_t{8}, std::size_t{4}, std::size_t{1}}) {
+    auto cache = cache_t::empty();
+    cache.set_custom_evaluator(
+        make_batched_custom_evaluator(yield_, target_batch_size));
+    auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
+    // batched summation reorders the contraction, so allow a looser FP margin
+    REQUIRE(equal_tarrays<Loose>(res, ref));
   }
 }
