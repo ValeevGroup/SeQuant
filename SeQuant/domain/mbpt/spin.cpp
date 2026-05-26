@@ -1210,16 +1210,9 @@ ExprPtr closed_shell_spintrace_impl(const ExprPtr& expression,
   ExprPtr expr = partially_or_fully_expand(expression);
 
   // Index tags are cleaned prior to calling the fast canonicalizer
-  std::wcout << "before reset ids tags: " << to_latex_align(expr, 0, 4)
-             << std::endl;
-
   detail::reset_idx_tags(expr);  // This call is REQUIRED
-  std::wcout << "after reset ids tags: " << to_latex_align(expr, 0, 4)
-             << std::endl;
-  expand(expr);  // This call is REQUIRED
-  std::wcout << "after expand: " << to_latex_align(expr, 0, 4) << std::endl;
+  expand(expr);                  // This call is REQUIRED
   simplify(expr);  // full simplify to combine terms before count_cycles
-  std::wcout << "after simplify: " << to_latex_align(expr, 0, 4) << std::endl;
 
   // Lambda for spin-tracing a product term
   // For closed-shell case, a spin-traced result is a product term scaled by

@@ -11,7 +11,7 @@ if (NOT !SEQUANT_INTERNAL_SKIP_LONG_TESTS)
         "eomcc.cpp"
             "os_eom.cpp"
             "singletCSeom.cpp"
-#            "tripletCSeom.cpp"
+            "tripletCSeom.cpp"
     )
 
     if (TARGET Eigen3::Eigen)
