@@ -1250,4 +1250,33 @@ TEST_CASE("eval_batch_axis", "[eval]") {
     REQUIRE(contracted_indices(node).empty());
     REQUIRE_FALSE(batch_axis(node).has_value());
   }
+
+  SECTION("predicate scopes the batch axis") {
+    // contracts a1,a2 (unoccupied)
+    auto const node = node_of(L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
+    auto const c = contracted_indices(node);
+    REQUIRE(c.size() == 2);
+
+    // accept exactly one contracted index -> batch_axis returns it
+    auto const only_first = [&c](sequant::Index const& ix) {
+      return ix == c.front();
+    };
+    REQUIRE(batch_axis(node, only_first) == c.front());
+
+    // accept none -> nullopt
+    REQUIRE_FALSE(batch_axis(node, [](sequant::Index const&) {
+                    return false;
+                  }).has_value());
+
+    // scope batching to a specific IndexSpace
+    auto const unocc = c.front().space();
+    auto const in_unocc = [&unocc](sequant::Index const& ix) {
+      return ix.space() == unocc;
+    };
+    REQUIRE(batch_axis(node, in_unocc).has_value());
+
+    // a node whose only contracted index is in a different (occupied) space
+    auto const node_occ = node_of(L"R_{a1}^{i1,i3} * f_{i3}^{i2}");  // sums i3
+    REQUIRE_FALSE(batch_axis(node_occ, in_unocc).has_value());
+  }
 }

@@ -392,17 +392,31 @@ namespace {
 }
 
 /// \brief A default axis to batch the subtree at \p node over: the contracted
-/// index (see contracted_indices) with the largest IndexSpace approximate
-/// size -- typically the auxiliary/RI index, whose elimination most reduces the
-/// peak intermediate. \return nullopt if the node has no contracted index.
+/// index (see contracted_indices) that satisfies \p accept, choosing the one
+/// with the largest IndexSpace approximate size -- typically the auxiliary/RI
+/// index, whose elimination most reduces the peak intermediate.
+///
+/// \param accept a predicate `bool(Index const&)` selecting which contracted
+///        indices are eligible to batch over (e.g. only those in a given
+///        IndexSpace). This lets a caller scope batching to specific modes.
+/// \return nullopt if no contracted index satisfies \p accept.
+template <typename IndexPredicate>
+[[nodiscard]] inline std::optional<Index> batch_axis(
+    meta::eval_node auto const& node, IndexPredicate const& accept) {
+  std::optional<Index> best;
+  for (Index const& ix : contracted_indices(node)) {
+    if (!accept(ix)) continue;
+    if (!best ||
+        best->space().approximate_size() < ix.space().approximate_size())
+      best = ix;
+  }
+  return best;
+}
+
+/// \overload Batches over any contracted index (largest approximate size).
 [[nodiscard]] inline std::optional<Index> batch_axis(
     meta::eval_node auto const& node) {
-  auto const contracted = contracted_indices(node);
-  if (contracted.empty()) return std::nullopt;
-  return *std::max_element(
-      contracted.begin(), contracted.end(), [](Index const& a, Index const& b) {
-        return a.space().approximate_size() < b.space().approximate_size();
-      });
+  return batch_axis(node, [](Index const&) { return true; });
 }
 
 ///
