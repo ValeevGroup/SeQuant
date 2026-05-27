@@ -19,6 +19,7 @@
 #include <memory>
 #include <optional>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace sequant {
 
@@ -62,28 +63,63 @@ class CacheManager {
 
     ResultPtr data_p;
 
+    /// Lazily-computed, memoized data_p->size_in_bytes(): disengaged until the
+    /// size is first queried, then computed once and cached until data_p is
+    /// replaced or released. size_in_bytes() walks the DistArray's tiles, which
+    /// is expensive; it is only queried to populate the eval trace's memory
+    /// diagnostics, so for held data we compute it at most once and never when
+    /// it is not asked for. mutable so size_in_bytes() can stay const (the
+    /// classic lazy-memoization pattern).
+    mutable std::optional<size_t> size_bytes_;
+
+    /// Persistent (P) entries are never drained on access and survive reset(),
+    /// so their data lives across multiple evaluations (e.g. CC iterations);
+    /// non-persistent (NP) entries are released after their last use and
+    /// cleared by reset() (the default, and historical, behavior).
+    bool persistent_;
+
    public:
-    explicit entry(size_t count) noexcept
-        : max_life{count}, life_c{count}, data_p{nullptr} {}
+    explicit entry(size_t count, bool persistent = false) noexcept
+        : max_life{count},
+          life_c{count},
+          data_p{nullptr},
+          persistent_{persistent} {}
 
     [[nodiscard]] ResultPtr access() noexcept {
       if (!data_p) return nullptr;
-      return decay() == 0 ? std::move(data_p) : data_p;
+      if (persistent_) return data_p;  // never drain a persistent entry
+      if (decay() == 0) {              // last use: release the data
+        size_bytes_.reset();
+        return std::move(data_p);
+      }
+      return data_p;
     }
 
-    void store(ResultPtr&& data) noexcept { data_p = std::move(data); }
+    void store(ResultPtr&& data) noexcept {
+      data_p = std::move(data);
+      size_bytes_
+          .reset();  // (re)computed lazily on demand; see size_in_bytes()
+    }
 
     void reset() noexcept {
       life_c = max_life;
-      data_p = nullptr;
+      if (!persistent_) {  // persistent data (and its size) survives reset()
+        data_p = nullptr;
+        size_bytes_.reset();
+      }
     }
+
+    [[nodiscard]] bool persistent() const noexcept { return persistent_; }
 
     [[nodiscard]] size_t life_count() const noexcept { return life_c; }
 
     [[nodiscard]] size_t max_life_count() const noexcept { return max_life; }
 
     [[nodiscard]] size_t size_in_bytes() const noexcept {
-      return data_p ? data_p->size_in_bytes() : 0;
+      if (!data_p) return 0;
+      if (!size_bytes_)
+        size_bytes_ = data_p->size_in_bytes();  // lazy, memoized
+      return *size_bytes_;
     }
 
     [[nodiscard]] bool alive() const noexcept { return data_p ? true : false; }
@@ -123,10 +159,25 @@ class CacheManager {
   [[nodiscard]] custom_evaluator_type const& custom_evaluator() const noexcept {
     return custom_evaluator_;
   }
-  template <typename Iterable>
+  /// Default persistence classifier: every entry is non-persistent (NP).
+  struct all_non_persistent {
+    bool operator()(key_type const&) const noexcept { return false; }
+  };
+
+  /// \param decaying iterable of (node, use-count) pairs to register for
+  ///        caching.
+  /// \param is_persistent predicate classifying each node as persistent (P,
+  ///        never released on access, survives reset()) or non-persistent (NP,
+  ///        released after its last use and by reset()). Defaults to all-NP.
+  /// \note P nodes should be registered with whatever use-count is convenient
+  ///       (it is not consulted for P entries) and may have a count of 1 even
+  ///       though NP caching only registers nodes repeated min_repeats times.
+  template <typename Iterable, typename PersistencePred = all_non_persistent>
     requires(!std::same_as<std::remove_cvref_t<Iterable>, CacheManager>)
-  explicit CacheManager(Iterable&& decaying) noexcept {
-    for (auto&& [k, c] : decaying) cache_map_.try_emplace(k, entry{c});
+  explicit CacheManager(Iterable&& decaying,
+                        PersistencePred is_persistent = {}) noexcept {
+    for (auto&& [k, c] : decaying)
+      cache_map_.try_emplace(k, entry{c, is_persistent(k)});
   }
 
   ///
@@ -206,6 +257,13 @@ class CacheManager {
   [[nodiscard]] bool alive(key_type const& key) const noexcept {
     auto iter = cache_map_.find(key);
     return iter != cache_map_.end() && iter->second.alive();
+  }
+
+  /// \return true iff the key is registered for caching and classified
+  ///         persistent (P: never released on access, survives reset()).
+  [[nodiscard]] bool persistent(key_type const& key) const noexcept {
+    auto iter = cache_map_.find(key);
+    return iter != cache_map_.end() && iter->second.persistent();
   }
 
   /// \return size in bytes of the data currently held for @p key, or 0 if
@@ -299,6 +357,91 @@ auto cache_manager(meta::eval_node_range auto const& nodes,
   }
 
   return CacheManager<TreeNode, force_hash_collisions>{std::move(filtered)};
+}
+
+///
+/// \brief Make a cache manager that distinguishes persistent (P) from
+///        non-persistent (NP) intermediates, deriving persistence from a
+///        solver-supplied volatility predicate and the evaluation DAG.
+///
+/// A node is *volatile* (V) if its value changes between evaluations (e.g. it
+/// depends on the amplitudes being solved). \p is_volatile flags intrinsically
+/// volatile nodes (typically the amplitude leaves); volatility is then
+/// propagated up the DAG (a node is V iff it is intrinsically volatile or any
+/// child is V). Persistence is derived from volatility and the consumer
+/// (parent) relationship:
+///
+///   - V node                       -> NP (released after last use)
+///   - NV node with >=1 V consumer   -> P  (the NV/V frontier: constant data
+///                                          feeding per-iteration work; kept
+///                                          across evaluations)
+///   - NV node with no V consumer    -> NP (only feeds other NV nodes, so it is
+///                                          absorbed into them and not needed
+///                                          across evaluations)
+///
+/// Only *internal* (non-leaf) nodes are cached: NP nodes that repeat at least
+/// \p min_repeats times (the usual CSE rule), plus *all* P nodes regardless of
+/// repeat count (a P node is reused across evaluations even if used once each).
+///
+/// \param nodes the evaluation forest.
+/// \param is_volatile `bool(TreeNode const&)`: true if the node is
+///        intrinsically volatile. Only its value on leaves matters in practice
+///        (volatility propagates up), but it is consulted on every node.
+/// \param min_repeats minimum NP repeats to cache (default 2).
+/// \see CacheManager, cache_manager
+template <bool force_hash_collisions = false>
+auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
+                   size_t min_repeats = 2)
+  requires requires(
+      std::ranges::range_value_t<std::remove_cvref_t<decltype(nodes)>> const&
+          n) {
+    { is_volatile(n) } -> std::convertible_to<bool>;
+  }
+{
+  using TreeNode =
+      std::ranges::range_value_t<std::remove_cvref_t<decltype(nodes)>>;
+  using Hasher = TreeNodeHasher<TreeNode, force_hash_collisions>;
+  using Comp = TreeNodeEqualityComparator<TreeNode>;
+
+  std::unordered_map<TreeNode, size_t, Hasher, Comp> counts;  // internal uses
+  std::unordered_map<TreeNode, bool, Hasher, Comp> volatile_of;  // memoized
+  std::unordered_set<TreeNode, Hasher, Comp> persistent;  // NV/V frontier
+
+  // Single DAG walk: count internal-node uses (CSE), memoize volatility
+  // bottom-up, and mark the NV/V frontier. Every (parent, child) edge is
+  // visited exactly once (children are recursed only on a node's first visit),
+  // so a child is marked persistent iff some volatile parent consumes it.
+  auto visit = [&](auto&& self, TreeNode const& n) -> bool {
+    bool const first = !volatile_of.contains(n);
+    if (!n.leaf()) ++counts[n];  // count this use of an internal node
+    if (!first) return volatile_of.at(n);
+    bool v;
+    if (n.leaf()) {
+      v = is_volatile(n);
+    } else {
+      bool const vl = self(self, n.left());
+      bool const vr = self(self, n.right());
+      v = is_volatile(n) || vl || vr;
+      if (v) {  // n is a volatile consumer => its NV internal children are P
+        if (!vl && !n.left().leaf()) persistent.insert(n.left());
+        if (!vr && !n.right().leaf()) persistent.insert(n.right());
+      }
+    }
+    volatile_of.emplace(n, v);
+    return v;
+  };
+  for (auto&& tree : nodes) visit(visit, tree);
+
+  // Cache NP repeats + every P node; persistence = membership in `persistent`.
+  std::unordered_map<TreeNode, size_t, Hasher, Comp> filtered;
+  for (auto&& [n, c] : counts)
+    if (c >= min_repeats || persistent.contains(n)) filtered.emplace(n, c);
+
+  auto is_persistent = [persistent = std::move(persistent)](TreeNode const& n) {
+    return persistent.contains(n);
+  };
+  return CacheManager<TreeNode, force_hash_collisions>{
+      std::move(filtered), std::move(is_persistent)};
 }
 
 ///

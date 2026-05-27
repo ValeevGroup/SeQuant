@@ -42,6 +42,16 @@ struct Bytes {
   size_t value;
 };
 
+/// \return whether the eval trace is being printed (logger level > 0). The
+/// eval engine's per-op memory diagnostics (the hwmark working set and the
+/// cache total) feed only the trace output, so the standalone functions that
+/// compute them -- the cache-aware bytes() overload below and eval()/cache()
+/// -- short-circuit when this is false, and are thus computed only when a
+/// trace line will actually be emitted.
+[[nodiscard]] inline bool printing() noexcept {
+  return Logger::instance().eval.level > 0;
+}
+
 template <typename T, typename... Ts>
 [[nodiscard]] inline auto bytes(T const& arg, Ts const&... args) {
   auto one = [](auto const& a) -> size_t {
@@ -51,6 +61,19 @@ template <typename T, typename... Ts>
       return a.size_in_bytes();
   };
   return Bytes{(one(arg) + ... + one(args))};
+}
+
+/// Cache-aware bytes(): bytes(cache) + bytes(args...), where bytes(cache) sums
+/// the (lazily memoized) sizes of the cache's alive entries. This is the
+/// working-set/total walk used only to populate the trace's hwmark/total
+/// fields, so it short-circuits to 0 when no trace line will be printed --
+/// avoiding the per-op walk of every alive entry, which with persistent
+/// entries is otherwise paid on every op of every iteration.
+template <typename N, bool F, typename... Ts>
+[[nodiscard]] inline Bytes bytes(CacheManager<N, F> const& cache,
+                                 Ts const&... args) {
+  if (!printing()) return Bytes{0};
+  return Bytes{cache.size_in_bytes() + (size_t{0} + ... + bytes(args).value)};
 }
 
 [[nodiscard]] inline auto to_string(Bytes bs) noexcept {
@@ -236,6 +259,7 @@ void log(Arg const& arg, Args const&... args) {
 
 template <typename... Args>
 auto eval(EvalStat const& stat, Args const&... args) {
+  if (!printing()) return;  // nothing to format/emit; skip rss() and formatting
   auto const result_s = std::format("result={}", to_string(stat.mem_result));
   auto const alloc_s = std::format("alloc={}", to_string(stat.mem_alloc));
   auto const hw_s = std::format("hw={}", to_string(stat.mem_hwmark));
@@ -271,6 +295,7 @@ auto cache(CacheStat const& stat, Args const&... args) {
 
 template <typename N, bool F, typename... Args>
 auto cache(N const& node, CacheManager<N, F>& cm, Args const&... args) {
+  if (!printing()) return;  // skip the entry/total size walks and formatting
   using CacheMode::Access;
   using CacheMode::Release;
   using CacheMode::Store;
