@@ -857,15 +857,39 @@ ResultPtr evaluate_antisymm(Args&&... args) {
 ///        possible.
 /// \param accept predicate selecting which contracted indices may be batched
 ///        (e.g. only those in the auxiliary/RI IndexSpace). Defaults to any.
+/// \param make_scope_guard factory, called with the batch count, returning an
+///        RAII object held for the duration of the batched partial
+///        contractions; a backend may use it to relax block-sparse screening
+///        (scaled by the batch count) so per-batch screening does not drop
+///        small contributions that are significant once summed over the full
+///        batch axis. Defaults to a no-op (make_no_scope_guard).
 struct accept_any_index {
   bool operator()(Index const&) const noexcept { return true; }
 };
 
-template <typename F, typename IndexPredicate = accept_any_index>
-[[nodiscard]] auto make_batched_custom_evaluator(F le,
-                                                 std::size_t target_batch_size,
-                                                 IndexPredicate accept = {}) {
-  return [le = std::move(le), target_batch_size, accept](
+/// Default scope-guard factory for make_batched_custom_evaluator: produces a
+/// no-op guard. A backend may supply a factory whose returned RAII object
+/// relaxes block-sparse screening for the duration of the batched partial
+/// contractions, so that a result block whose norm clears the screening
+/// threshold over the *full* batch axis is not dropped in every individual
+/// batch (which would lose its contribution to the sum). The factory is called
+/// with the batch count, so the backend can scale the relaxation accordingly
+/// (e.g. divide a Cauchy-Schwarz norm-product screening threshold by n_batches:
+/// the bound for a sub-sum over 1/n of the batch axis is ~1/n of the full
+/// bound). See make_batched_custom_evaluator's \p make_scope_guard parameter.
+struct no_scope_guard {};
+struct make_no_scope_guard {
+  no_scope_guard operator()(std::size_t /*n_batches*/) const noexcept {
+    return {};
+  }
+};
+
+template <typename F, typename IndexPredicate = accept_any_index,
+          typename ScopeGuardFactory = make_no_scope_guard>
+[[nodiscard]] auto make_batched_custom_evaluator(
+    F le, std::size_t target_batch_size, IndexPredicate accept = {},
+    ScopeGuardFactory make_scope_guard = {}) {
+  return [le = std::move(le), target_batch_size, accept, make_scope_guard](
              auto const& node, auto& cache) -> ResultPtr {
     using cache_t = std::remove_reference_t<decltype(cache)>;
 
@@ -879,6 +903,13 @@ template <typename F, typename IndexPredicate = accept_any_index>
 
     if (batches.size() <= 1)
       return nullptr;  // nothing to gain (or unbatchable)
+
+    // RAII scope for the batched partial contractions; a backend-supplied
+    // factory may relax block-sparse screening here (scaled by the batch count)
+    // so per-batch screening does not drop contributions that survive over the
+    // full batch axis.
+    auto const scope_guard = make_scope_guard(batches.size());
+    (void)scope_guard;
 
     ResultPtr acc;
     for (auto const& [e_lo, e_hi] : batches) {
