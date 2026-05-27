@@ -159,6 +159,44 @@ inline void log_ta_tensor_host_memory_use() {
 #endif
 }
 
+// defined below; declared here so the result classes' slice_mode() overrides
+// can call it.
+template <typename... Args>
+[[nodiscard]] TA::DistArray<Args...> slice_array_over_mode(
+    TA::DistArray<Args...> const& arr, std::size_t mode, std::size_t tile_lo,
+    std::size_t tile_hi);
+
+/// Partition a TiledRange1 into contiguous, tile-aligned element-range batches,
+/// each covering at least \p target_batch_size elements where possible. Tiles
+/// are not uniformly sized, so batches are uneven; the last batch may be
+/// smaller, and any single tile larger than the target forms its own batch.
+/// Element ranges `[lo, hi)` are in the TiledRange1's element coordinate system
+/// (honoring a nonzero element lobound, e.g. a frozen-core offset). This is the
+/// TA realization of Result::mode_batches(): the caller requests a target batch
+/// size in *elements*, which we convert to whole-tile groups. Returns at least
+/// one batch for a non-empty mode.
+[[nodiscard]] inline container::svector<std::pair<std::size_t, std::size_t>>
+mode_batches_of_trange1(TA::TiledRange1 const& tr1,
+                        std::size_t target_batch_size) {
+  container::svector<std::pair<std::size_t, std::size_t>> batches;
+  auto const& er = tr1.elements_range();
+  if (er.second <= er.first) return batches;  // empty mode
+  std::size_t const target = std::max<std::size_t>(target_batch_size, 1);
+  std::size_t grp_lo = er.first;
+  std::size_t acc = 0;
+  std::size_t const ntiles = tr1.tile_extent();
+  for (std::size_t t = 0; t < ntiles; ++t) {
+    auto const& tr = tr1.tile(t);
+    acc += tr.second - tr.first;
+    if (acc >= target || t + 1 == ntiles) {
+      batches.emplace_back(grp_lo, tr.second);
+      grp_lo = tr.second;
+      acc = 0;
+    }
+  }
+  return batches;
+}
+
 ///
 /// \brief Result for a tensor value of TA::DistArray type.
 /// \tparam ArrayT TA::DistArray type. Tile type of ArrayT is regular tensor of
@@ -195,6 +233,34 @@ class ResultTensorTA final : public Result {
     decltype(result)::wait_for_lazy_cleanup(result.world());
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
+  }
+
+  [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t elem_lo,
+                                     std::size_t elem_hi) const override {
+    auto const& tr1 = get<ArrayT>().trange().dim(mode);
+    // slice_mode takes element bounds, but a tiled backend can only cut on tile
+    // boundaries; mode_batches() returns exactly such (tile-aligned, in-range)
+    // bounds. Assert the precondition so misuse is caught rather than silently
+    // producing an over- or under-sized slice (which would break batched sums).
+    SEQUANT_ASSERT(elem_lo >= tr1.elements_range().first && elem_lo < elem_hi &&
+                   elem_hi <= tr1.elements_range().second);
+    std::size_t const tile_lo = tr1.element_to_tile(elem_lo);
+    SEQUANT_ASSERT(tr1.tile(tile_lo).first ==
+                   elem_lo);  // lo on a tile boundary
+    std::size_t const tile_hi = (elem_hi >= tr1.elements_range().second)
+                                    ? tr1.tile_extent()
+                                    : tr1.element_to_tile(elem_hi);
+    SEQUANT_ASSERT(elem_hi >= tr1.elements_range().second ||
+                   tr1.tile(tile_hi).first ==
+                       elem_hi);  // hi on a tile boundary
+    return eval_result<this_type>(
+        slice_array_over_mode(get<ArrayT>(), mode, tile_lo, tile_hi));
+  }
+
+  [[nodiscard]] container::svector<std::pair<std::size_t, std::size_t>>
+  mode_batches(std::size_t mode, std::size_t target_batch_size) const override {
+    return mode_batches_of_trange1(get<ArrayT>().trange().dim(mode),
+                                   target_batch_size);
   }
 
   [[nodiscard]] ResultPtr prod(Result const& other,
@@ -351,6 +417,34 @@ class ResultTensorOfTensorTA final : public Result {
     return eval_result<this_type>(std::move(result));
   }
 
+  [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t elem_lo,
+                                     std::size_t elem_hi) const override {
+    auto const& tr1 = get<ArrayT>().trange().dim(mode);
+    // slice_mode takes element bounds, but a tiled backend can only cut on tile
+    // boundaries; mode_batches() returns exactly such (tile-aligned, in-range)
+    // bounds. Assert the precondition so misuse is caught rather than silently
+    // producing an over- or under-sized slice (which would break batched sums).
+    SEQUANT_ASSERT(elem_lo >= tr1.elements_range().first && elem_lo < elem_hi &&
+                   elem_hi <= tr1.elements_range().second);
+    std::size_t const tile_lo = tr1.element_to_tile(elem_lo);
+    SEQUANT_ASSERT(tr1.tile(tile_lo).first ==
+                   elem_lo);  // lo on a tile boundary
+    std::size_t const tile_hi = (elem_hi >= tr1.elements_range().second)
+                                    ? tr1.tile_extent()
+                                    : tr1.element_to_tile(elem_hi);
+    SEQUANT_ASSERT(elem_hi >= tr1.elements_range().second ||
+                   tr1.tile(tile_hi).first ==
+                       elem_hi);  // hi on a tile boundary
+    return eval_result<this_type>(
+        slice_array_over_mode(get<ArrayT>(), mode, tile_lo, tile_hi));
+  }
+
+  [[nodiscard]] container::svector<std::pair<std::size_t, std::size_t>>
+  mode_batches(std::size_t mode, std::size_t target_batch_size) const override {
+    return mode_batches_of_trange1(get<ArrayT>().trange().dim(mode),
+                                   target_batch_size);
+  }
+
   [[nodiscard]] ResultPtr prod(Result const& other,
                                std::array<std::any, 3> const& annot,
                                DeNest DeNestFlag) const override {
@@ -465,6 +559,37 @@ class ResultTensorOfTensorTA final : public Result {
     return local_size;
   }
 };
+
+/// \brief Restrict a TA::DistArray to a contiguous tile range of one mode.
+///
+/// Keeps tiles `[tile_lo, tile_hi)` of mode \p mode and all tiles of every
+/// other mode; the result's `mode`-th TiledRange1 covers only those tiles
+/// (its element range is shifted to start at 0). Implemented with TA's
+/// `block()`, so block-sparse shape is preserved. Used to evaluate a tensor
+/// network in batches over a contracted index (see
+/// make_batched_custom_evaluator): slicing every leaf that carries the index
+/// to a tile range, evaluating, and summing reproduces the full contraction
+/// because `sum_K = sum_{blocks} sum_{K in block}`.
+template <typename... Args>
+[[nodiscard]] TA::DistArray<Args...> slice_array_over_mode(
+    TA::DistArray<Args...> const& arr, std::size_t mode, std::size_t tile_lo,
+    std::size_t tile_hi) {
+  using ranges::views::iota;
+  auto const rank = arr.trange().rank();
+  SEQUANT_ASSERT(mode < rank);
+  SEQUANT_ASSERT(tile_lo < tile_hi &&
+                 tile_hi <= arr.trange().dim(mode).tile_extent());
+  container::svector<std::size_t> lo(rank, 0), hi(rank);
+  for (std::size_t d = 0; d < rank; ++d)
+    hi[d] = arr.trange().dim(d).tile_extent();
+  lo[mode] = tile_lo;
+  hi[mode] = tile_hi;
+  auto const annot = ords_to_annot(iota(std::size_t{0}, rank));
+  TA::DistArray<Args...> out;
+  out(annot) = arr(annot).block(lo, hi);
+  TA::DistArray<Args...>::wait_for_lazy_cleanup(arr.world());
+  return out;
+}
 
 }  // namespace sequant
 

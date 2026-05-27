@@ -16,6 +16,7 @@
 
 #include <range/v3/range/operations.hpp>
 
+#include <algorithm>
 #include <any>
 #include <chrono>
 #include <iostream>
@@ -362,6 +363,87 @@ namespace {
 [[nodiscard]] consteval bool trace(Trace t) noexcept { return t == Trace::On; }
 }  // namespace
 
+/// \brief The indices contracted at a binary evaluation node.
+///
+/// These are the indices present in *both* children's (canonical) result
+/// indices but absent from the node's own result indices -- i.e. the indices
+/// summed over by this node's product. Empty for leaves, for sums, and for
+/// products with no contracted index (e.g. a pure outer/Hadamard product).
+///
+/// Each such index `K` is a valid axis to evaluate the subtree rooted at
+/// `node` in batches: the node computes `R = sum_K f(K)`, so
+/// `R = sum_{blocks b} sum_{K in b} f(K)` -- evaluating per-block and summing
+/// bounds the peak memory of `K`-carrying intermediates in the subtree. A
+/// custom evaluator (see CacheManager::custom_evaluator_type) can use this to
+/// implement batched evaluation.
+[[nodiscard]] inline Index::index_vector contracted_indices(
+    meta::eval_node auto const& node) {
+  Index::index_vector result;
+  if (node.leaf() || !node->is_product()) return result;
+  auto const& l = node.left()->canon_indices();
+  auto const& r = node.right()->canon_indices();
+  auto const& c = node->canon_indices();
+  auto contains = [](auto const& vec, Index const& ix) {
+    return std::find(vec.begin(), vec.end(), ix) != vec.end();
+  };
+  for (Index const& ix : l)
+    if (contains(r, ix) && !contains(c, ix)) result.push_back(ix);
+  return result;
+}
+
+/// \brief A default axis to batch the subtree at \p node over: the contracted
+/// index (see contracted_indices) that satisfies \p accept, choosing the one
+/// with the largest IndexSpace approximate size -- typically the auxiliary/RI
+/// index, whose elimination most reduces the peak intermediate.
+///
+/// \param accept a predicate `bool(Index const&)` selecting which contracted
+///        indices are eligible to batch over (e.g. only those in a given
+///        IndexSpace). This lets a caller scope batching to specific modes.
+/// \return nullopt if no contracted index satisfies \p accept.
+template <typename IndexPredicate>
+[[nodiscard]] inline std::optional<Index> batch_axis(
+    meta::eval_node auto const& node, IndexPredicate const& accept) {
+  std::optional<Index> best;
+  for (Index const& ix : contracted_indices(node)) {
+    if (!accept(ix)) continue;
+    if (!best ||
+        best->space().approximate_size() < ix.space().approximate_size())
+      best = ix;
+  }
+  return best;
+}
+
+/// \overload Batches over any contracted index (largest approximate size).
+[[nodiscard]] inline std::optional<Index> batch_axis(
+    meta::eval_node auto const& node) {
+  return batch_axis(node, [](Index const&) { return true; });
+}
+
+/// \return the position of index \p ix in \p node's canonical result indices
+///         (i.e. the corresponding tensor mode), or nullopt if absent.
+[[nodiscard]] inline std::optional<std::size_t> index_position(
+    meta::eval_node auto const& node, Index const& ix) {
+  auto const& idxs = node->canon_indices();
+  for (std::size_t p = 0; p < idxs.size(); ++p)
+    if (idxs[p] == ix) return p;
+  return std::nullopt;
+}
+
+/// \return the first leaf in the subtree rooted at \p node whose canonical
+///         indices contain \p ix, paired with the position of \p ix there; or
+///         nullopt if no such leaf. Used to learn \p ix's tile structure from
+///         a tensor that carries it.
+template <typename Node>
+[[nodiscard]] std::optional<std::pair<Node, std::size_t>> find_leaf_carrying(
+    Node const& node, Index const& ix) {
+  if (node.leaf()) {
+    if (auto const p = index_position(node, ix)) return std::pair{node, *p};
+    return std::nullopt;
+  }
+  if (auto found = find_leaf_carrying(node.left(), ix)) return found;
+  return find_leaf_carrying(node.right(), ix);
+}
+
 ///
 /// \tparam EvalTrace If Trace::On, trace is written to the logger's stream.
 ///                   Default is to follow Trace::Default, which is itself
@@ -428,6 +510,31 @@ ResultPtr evaluate(Node const& node,  //
   ResultPtr right;
 
   log::Duration time;
+
+  // Custom-evaluator interception: before the standard scheme, a non-leaf node
+  // may be evaluated by the cache's custom evaluator (e.g. blocked over a
+  // contracted index to bound peak memory). A non-null result is used (and
+  // cached by the Checked wrapper) as-is; null declines to the standard scheme
+  // below. See CacheManager::custom_evaluator_type.
+  if (!node.leaf()) {
+    if (auto const& custom_eval = cache.custom_evaluator(); custom_eval) {
+      ResultPtr intercepted;
+      time =
+          timed_eval_inplace([&]() { intercepted = custom_eval(node, cache); });
+      if (intercepted) {
+        if constexpr (trace(EvalTrace)) {
+          log::eval(log::EvalStat{.mode = log::eval_mode(node),
+                                  .time = time,
+                                  .mem_result = log::bytes(intercepted),
+                                  .mem_alloc = log::bytes(intercepted),
+                                  .mem_hwmark = {cache.note_working_set(
+                                      log::bytes(cache, intercepted).value)}},
+                    log::label(node));
+        }
+        return intercepted;
+      }
+    }
+  }
 
   if (node.leaf()) {
     time = timed_eval_inplace([&]() { result = le(node); });
@@ -725,6 +832,110 @@ ResultPtr evaluate_antisymm(Args&&... args) {
     log::eval(stat, n0->label());
   }
   return result;
+}
+
+/// \brief Builds a custom evaluator (see CacheManager::custom_evaluator_type)
+/// that evaluates a subtree in batches over a contracted index, to bound the
+/// peak memory of intermediates that carry that index.
+///
+/// For each node it is consulted on, the returned evaluator chooses a batch
+/// axis \c K via `batch_axis(node, accept)` (declining if none). It asks the
+/// backend to partition \c K into contiguous element-range batches of about
+/// \p target_batch_size elements each (Result::mode_batches); if that yields at
+/// most one batch it declines (so small / unselected indices are left to the
+/// standard scheme). Otherwise, for each batch it evaluates the subtree by the
+/// standard scheme on a fresh scratch cache, with every leaf carrying \c K
+/// sliced to the batch's element range, and sums the partial results. This is
+/// exact because `sum_K = sum_{batches} sum_{K in batch}`, and never
+/// materializes the whole \c K extent of any intermediate at once.
+///
+/// \param le the leaf evaluator (captured).
+/// \param target_batch_size the desired size of each batch *in elements* (a
+///        user knob; no memory model is assumed). Backend-neutral: a tiled
+///        backend rounds batch boundaries to tile boundaries, so realized
+///        batches are uneven and each covers at least this many elements where
+///        possible.
+/// \param accept predicate selecting which contracted indices may be batched
+///        (e.g. only those in the auxiliary/RI IndexSpace). Defaults to any.
+/// \param make_scope_guard factory, called with the batch count, returning an
+///        RAII object held for the duration of the batched partial
+///        contractions; a backend may use it to relax block-sparse screening
+///        (scaled by the batch count) so per-batch screening does not drop
+///        small contributions that are significant once summed over the full
+///        batch axis. Defaults to a no-op (make_no_scope_guard).
+struct accept_any_index {
+  bool operator()(Index const&) const noexcept { return true; }
+};
+
+/// Default scope-guard factory for make_batched_custom_evaluator: produces a
+/// no-op guard. A backend may supply a factory whose returned RAII object
+/// relaxes block-sparse screening for the duration of the batched partial
+/// contractions, so that a result block whose norm clears the screening
+/// threshold over the *full* batch axis is not dropped in every individual
+/// batch (which would lose its contribution to the sum). The factory is called
+/// with the batch count, so the backend can scale the relaxation accordingly
+/// (e.g. divide a Cauchy-Schwarz norm-product screening threshold by n_batches:
+/// the bound for a sub-sum over 1/n of the batch axis is ~1/n of the full
+/// bound). See make_batched_custom_evaluator's \p make_scope_guard parameter.
+struct no_scope_guard {};
+struct make_no_scope_guard {
+  no_scope_guard operator()(std::size_t /*n_batches*/) const noexcept {
+    return {};
+  }
+};
+
+template <typename F, typename IndexPredicate = accept_any_index,
+          typename ScopeGuardFactory = make_no_scope_guard>
+[[nodiscard]] auto make_batched_custom_evaluator(
+    F le, std::size_t target_batch_size, IndexPredicate accept = {},
+    ScopeGuardFactory make_scope_guard = {}) {
+  return [le = std::move(le), target_batch_size, accept, make_scope_guard](
+             auto const& node, auto& cache) -> ResultPtr {
+    using cache_t = std::remove_reference_t<decltype(cache)>;
+
+    auto const K = batch_axis(node, accept);
+    if (!K) return nullptr;
+
+    auto const leaf = find_leaf_carrying(node, *K);
+    if (!leaf) return nullptr;
+    auto const batches =
+        le(leaf->first)->mode_batches(leaf->second, target_batch_size);
+
+    if (batches.size() <= 1)
+      return nullptr;  // nothing to gain (or unbatchable)
+
+    // RAII scope for the batched partial contractions; a backend-supplied
+    // factory may relax block-sparse screening here (scaled by the batch count)
+    // so per-batch screening does not drop contributions that survive over the
+    // full batch axis.
+    auto const scope_guard = make_scope_guard(batches.size());
+    (void)scope_guard;
+
+    ResultPtr acc;
+    for (auto const& [e_lo, e_hi] : batches) {
+      if (e_lo == e_hi) continue;
+
+      // leaf evaluator that slices every leaf carrying K to this element batch;
+      // others pass through unchanged.
+      auto le_g = [&le, &K, e_lo = e_lo,
+                   e_hi = e_hi](auto const& leaf_node) -> ResultPtr {
+        ResultPtr r = le(leaf_node);
+        if (auto const p = index_position(leaf_node, *K))
+          return r->slice_mode(*p, e_lo, e_hi);
+        return r;
+      };
+
+      // standard scheme on a fresh scratch cache: no re-interception, and the
+      // (partial, sliced) intermediates do not pollute the real cache.
+      auto scratch = cache_t::empty();
+      ResultPtr part = evaluate(node, le_g, scratch);
+      if (!acc)
+        acc = std::move(part);
+      else
+        acc->add_inplace(*part);
+    }
+    return acc;
+  };
 }
 
 }  // namespace sequant

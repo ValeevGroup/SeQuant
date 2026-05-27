@@ -177,10 +177,20 @@ class rand_tensor_yield {
   size_t nocc_;
   size_t nvirt_;
   size_t naux_;
+  // max tile size along each mode; the default (~0) makes a single tile per
+  // mode (the original behavior). Set smaller to produce multi-tile arrays.
+  size_t max_tile_ = ~size_t{0};
   mutable sequant::container::map<std::wstring, sequant::ResultPtr>
       label_to_er_;
 
  public:
+  /// Produce arrays whose modes are tiled in blocks of at most \p n.
+  /// \p n must be positive (0 would make the tiling loop in make_tr1 spin).
+  void set_max_tile(size_t n) {
+    REQUIRE(n > 0);
+    max_tile_ = n;
+  }
+
   using array_type = TA::DistArray<TA::Tensor<NumericT>, TAPolicyT>;
   using array_tot_type =
       TA::DistArray<TA::Tensor<TA::Tensor<NumericT>>, TAPolicyT>;
@@ -271,10 +281,16 @@ class rand_tensor_yield {
 
     auto const outer_extent = make_extents(nested.outer);
 
-    auto const outer_tr = [&outer_extent]() {
+    auto const outer_tr = [&outer_extent, this]() {
+      auto make_tr1 = [this](size_t e) {
+        container::svector<size_t> b;
+        for (size_t x = 0; x < e; x += max_tile_) b.push_back(x);
+        b.push_back(e);
+        return TA::TiledRange1(b.begin(), b.end());
+      };
       container::vector<TA::TiledRange1> tr1s;
       tr1s.reserve(outer_extent.size());
-      for (auto e : outer_extent) tr1s.emplace_back(TA::TiledRange1(0, e));
+      for (auto e : outer_extent) tr1s.emplace_back(make_tr1(e));
       return TA::TiledRange(tr1s.begin(), tr1s.end());
     }();
 
@@ -1153,5 +1169,233 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       }
       REQUIRE(result == Catch::Approx(ref));
     }
+  }
+}
+
+TEST_CASE("eval_custom_evaluator", "[eval]") {
+  using sequant::evaluate;
+  using sequant::ResultPtr;
+  using TA::TArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+  using cache_t = sequant::CacheManager<node_t>;
+
+  auto& world = TA::get_default_world();
+  const size_t nocc = 2, nvirt = 20;
+  auto yield_ = rand_tensor_yield<double, TA::DensePolicy>{world, nocc, nvirt};
+
+  // a multi-product expression: several non-leaf nodes in the eval tree.
+  auto const expr = sequant::deserialize<sequant::ExprPtr>(
+      L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}",
+      {.def_perm_symm = sequant::Symmetry::Antisymm});
+  std::string const target = "a_1,a_2,i_1,i_2";
+  auto const node = eval_node(expr);
+
+  // standard-scheme reference (no custom evaluator)
+  auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
+
+  SECTION("declining evaluator defers to the standard scheme") {
+    // A custom evaluator that always returns null is consulted at every
+    // non-leaf node and the standard scheme produces the result.
+    int consulted = 0;
+    auto cache = cache_t::empty();
+    cache.set_custom_evaluator(
+        [&consulted](node_t const&, cache_t&) -> ResultPtr {
+          ++consulted;
+          return nullptr;
+        });
+    auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
+    REQUIRE(equal_tarrays(res, ref));
+    REQUIRE(consulted > 1);  // multiple non-leaf nodes, all declined
+  }
+
+  SECTION("intercepting evaluator takes over a subtree") {
+    // A custom evaluator that takes over the first (root) node it is consulted
+    // on -- here by re-evaluating that subtree via the standard scheme on a
+    // scratch cache. The result must still match, and the non-null return must
+    // short-circuit the recursion, so the evaluator fires exactly once.
+    int consulted = 0;
+    auto cache = cache_t::empty();
+    cache.set_custom_evaluator(
+        [&consulted, &yield_](node_t const& n, cache_t&) -> ResultPtr {
+          ++consulted;
+          auto scratch = cache_t::empty();
+          return evaluate(n, yield_, scratch);
+        });
+    auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
+    REQUIRE(equal_tarrays(res, ref));
+    REQUIRE(consulted == 1);
+  }
+}
+
+TEST_CASE("eval_batch_axis", "[eval]") {
+  using sequant::batch_axis;
+  using sequant::contracted_indices;
+
+  auto node_of = [](std::wstring_view xpr) {
+    return eval_node(sequant::deserialize<sequant::ExprPtr>(xpr));
+  };
+
+  SECTION("single contracted index") {
+    // R_{a1}^{i1,i3} * f_{i3}^{i2} sums over i3.
+    auto const node = node_of(L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
+    auto const c = contracted_indices(node);
+    REQUIRE(c.size() == 1);
+    auto const axis = batch_axis(node);
+    REQUIRE(axis.has_value());
+    REQUIRE(axis.value() == c.front());
+  }
+
+  SECTION("two contracted indices") {
+    // g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4} sums over a1,a2.
+    auto const node = node_of(L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
+    auto const c = contracted_indices(node);
+    REQUIRE(c.size() == 2);
+    auto const axis = batch_axis(node);
+    REQUIRE(axis.has_value());
+    REQUIRE(ranges::contains(c, axis.value()));
+  }
+
+  SECTION("leaf has no contracted index") {
+    auto const node = node_of(L"f_{i1}^{a1}");
+    REQUIRE(contracted_indices(node).empty());
+    REQUIRE_FALSE(batch_axis(node).has_value());
+  }
+
+  SECTION("a sum is not a contraction") {
+    auto const node = node_of(L"f_{i1}^{a1} + t_{a1}^{i1}");
+    REQUIRE(contracted_indices(node).empty());
+    REQUIRE_FALSE(batch_axis(node).has_value());
+  }
+
+  SECTION("predicate scopes the batch axis") {
+    // contracts a1,a2 (unoccupied)
+    auto const node = node_of(L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
+    auto const c = contracted_indices(node);
+    REQUIRE(c.size() == 2);
+
+    // accept exactly one contracted index -> batch_axis returns it
+    auto const only_first = [&c](sequant::Index const& ix) {
+      return ix == c.front();
+    };
+    REQUIRE(batch_axis(node, only_first) == c.front());
+
+    // accept none -> nullopt
+    REQUIRE_FALSE(batch_axis(node, [](sequant::Index const&) {
+                    return false;
+                  }).has_value());
+
+    // scope batching to a specific IndexSpace
+    auto const unocc = c.front().space();
+    auto const in_unocc = [&unocc](sequant::Index const& ix) {
+      return ix.space() == unocc;
+    };
+    REQUIRE(batch_axis(node, in_unocc).has_value());
+
+    // a node whose only contracted index is in a different (occupied) space
+    auto const node_occ = node_of(L"R_{a1}^{i1,i3} * f_{i3}^{i2}");  // sums i3
+    REQUIRE_FALSE(batch_axis(node_occ, in_unocc).has_value());
+  }
+}
+
+TEST_CASE("eval_slice_array_over_mode", "[eval]") {
+  using sequant::slice_array_over_mode;
+  auto& world = TA::get_default_world();
+
+  // arr: a(2 tiles), b(3 tiles), c(1 tile); bb shares b's TiledRange1.
+  TA::TArrayD arr(world, TA::TiledRange{{0, 2, 4}, {0, 3, 6, 9}, {0, 5}});
+  TA::TArrayD bb(world, TA::TiledRange{{0, 3, 6, 9}, {0, 7}});
+  arr.fill_random();
+  bb.fill_random();
+  world.gop.fence();
+
+  SECTION("trange of the sliced mode") {
+    auto const s = slice_array_over_mode(arr, 1, 1, 3);  // b-tiles [1,3)
+    REQUIRE(s.trange().dim(1).tile_extent() == 2);
+    REQUIRE(s.trange().dim(0).tile_extent() ==
+            arr.trange().dim(0).tile_extent());
+    REQUIRE(s.trange().dim(2).tile_extent() ==
+            arr.trange().dim(2).tile_extent());
+  }
+
+  SECTION(
+      "blocked contraction over the sliced mode reconstructs the full one") {
+    // full contraction over b
+    TA::TArrayD full;
+    full("a,c,d") = arr("a,b,c") * bb("b,d");
+
+    // split b's 3 tiles into [0,1) and [1,3), contract each, sum
+    auto const a0 = slice_array_over_mode(arr, 1, 0, 1);
+    auto const a1 = slice_array_over_mode(arr, 1, 1, 3);
+    auto const b0 = slice_array_over_mode(bb, 0, 0, 1);
+    auto const b1 = slice_array_over_mode(bb, 0, 1, 3);
+    TA::TArrayD p0, p1, summed;
+    p0("a,c,d") = a0("a,b,c") * b0("b,d");
+    p1("a,c,d") = a1("a,b,c") * b1("b,d");
+    summed("a,c,d") = p0("a,c,d") + p1("a,c,d");
+
+    REQUIRE(equal_tarrays(summed, full));
+  }
+
+  SECTION("Result::slice_mode takes tile-aligned element bounds") {
+    // mode 1 (b) tiles {0,3,6,9}; element range [3,9) (tile-aligned, as
+    // mode_batches produces) corresponds to tiles [1,3).
+    sequant::ResultPtr const r =
+        sequant::eval_result<sequant::ResultTensorTA<TA::TArrayD>>(arr);
+    auto const via_result = r->slice_mode(1, 3, 9)->get<TA::TArrayD>();
+    auto const direct = slice_array_over_mode(arr, 1, 1, 3);
+    REQUIRE(equal_tarrays(via_result, direct));
+  }
+
+  SECTION("Result::mode_batches partitions a mode into element ranges") {
+    using batches_t = sequant::container::svector<std::pair<size_t, size_t>>;
+    sequant::ResultPtr const r =
+        sequant::eval_result<sequant::ResultTensorTA<TA::TArrayD>>(arr);
+    // mode 1 (b) has 3 tiles of 3 elements each (extent 9).
+    // (extra parens: compare as a single bool so Catch2 needn't stringify
+    // pairs) target larger than the extent -> a single batch (caller declines).
+    REQUIRE((r->mode_batches(1, 100) == batches_t{{0, 9}}));
+    // target 4: tile0 (3<4) + tile1 reaches 6>=4 -> [0,6); remainder [6,9).
+    REQUIRE((r->mode_batches(1, 4) == batches_t{{0, 6}, {6, 9}}));
+    // target 1: every tile is its own batch.
+    REQUIRE((r->mode_batches(1, 1) == batches_t{{0, 3}, {3, 6}, {6, 9}}));
+  }
+}
+
+TEST_CASE("eval_batched_custom_evaluator", "[eval]") {
+  using sequant::evaluate;
+  using sequant::make_batched_custom_evaluator;
+  using TA::TArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+  using cache_t = sequant::CacheManager<node_t>;
+
+  auto& world = TA::get_default_world();
+  // multi-tile arrays so batching over a contracted index actually engages:
+  // unoccupied extent 12 in tiles of <=4 -> 3 tiles.
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 12};
+  yield_.set_max_tile(4);
+
+  // contracts a1,a2 (unoccupied) -> batch axis is an unoccupied index (3 tiles)
+  auto const expr = sequant::deserialize<sequant::ExprPtr>(
+      L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
+  std::string const target = "i_1,i_2,i_3,i_4";
+  auto const node = eval_node(expr);
+
+  // Reference first, so yield_'s (random) leaf arrays are generated and cached;
+  // the batched evaluator below copies yield_ and thus reuses the same arrays.
+  auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
+
+  // Batched evaluation must reproduce the reference for any target batch size,
+  // since sum_K = sum_{batches} sum_{K in batch}. The batch axis is unoccupied
+  // (extent 12, tiles of 4 -> 3 tiles). target_batch_size is in *elements*:
+  // 100 -> 1 batch (no-op), 8 -> 2 batches ([0,8),[8,12)), 4 -> 3 batches, and
+  // 1 -> 3 batches (each tile its own batch).
+  for (std::size_t target_batch_size :
+       {std::size_t{100}, std::size_t{8}, std::size_t{4}, std::size_t{1}}) {
+    auto cache = cache_t::empty();
+    cache.set_custom_evaluator(
+        make_batched_custom_evaluator(yield_, target_batch_size));
+    auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
+    // batched summation reorders the contraction, so allow a looser FP margin
+    REQUIRE(equal_tarrays<Loose>(res, ref));
   }
 }
