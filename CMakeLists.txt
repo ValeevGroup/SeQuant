@@ -446,6 +446,7 @@ set(SeQuant_eval_src
 # Optimize sources (depends on eval)
 set(SeQuant_optimize_src
         SeQuant/core/optimize/common_subexpression_elimination.hpp
+        SeQuant/core/optimize/extract_subtrees.hpp
         SeQuant/core/optimize/fusion.cpp
         SeQuant/core/optimize/fusion.hpp
         SeQuant/core/optimize/options.hpp

@@ -272,6 +272,7 @@ class EvalExpr {
 
 struct EvalOpSetter {
   void set(EvalExpr& expr, EvalOp op) { expr.op_type_ = op; }
+  void reset(EvalExpr& expr) { expr.op_type_ = std::nullopt; }
 };
 
 namespace meta {

@@ -32,12 +32,14 @@ index_to_extent_t default_idx_to_size() {
 }
 
 /// Optimize a Product that contains only Tensor and scalar factors.
-ExprPtr opt_pure_product(Product const& prod, index_to_extent_t const& idx2size,
-                         OptFor opt_for) {
-  if (opt_for == OptFor::Flops)
-    return opt::single_term_opt<OptFor::Flops>(prod, idx2size);
-  SEQUANT_ASSERT(opt_for == OptFor::Memsize);
-  return opt::single_term_opt<OptFor::Memsize>(prod, idx2size);
+ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
+  bool const subnet_cse = opts.subnet_cse == SubnetCSE::Enable;
+  if (opts.opt_for == OptFor::Flops)
+    return opt::single_term_opt<OptFor::Flops>(prod, opts.idx_to_extent,
+                                               subnet_cse);
+  SEQUANT_ASSERT(opts.opt_for == OptFor::Memsize);
+  return opt::single_term_opt<OptFor::Memsize>(prod, opts.idx_to_extent,
+                                               subnet_cse);
 }
 
 /// Deliberately non-identifier label prefix used to stand in for non-Tensor,
@@ -48,8 +50,7 @@ inline constexpr std::wstring_view placeholder_label_prefix = L"@__opt_";
 /// Optimize a Product that contains some non-Tensor, non-scalar factors by
 /// substituting placeholder tensors with target indices, optimizing the
 /// resulting tensor-only product, then swapping the originals back in.
-ExprPtr opt_mixed_product(Product const& prod,
-                          index_to_extent_t const& idx2size, OptFor opt_for) {
+ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
   container::svector<ExprPtr> non_tensors(prod.size());
   container::svector<ExprPtr> new_factors;
   new_factors.reserve(prod.size());
@@ -68,8 +69,7 @@ ExprPtr opt_mixed_product(Product const& prod,
   }
 
   auto result = opt_pure_product(
-      Product{prod.scalar(), new_factors, Product::Flatten::No}, idx2size,
-      opt_for);
+      Product{prod.scalar(), new_factors, Product::Flatten::No}, opts);
 
   auto replacer = [&non_tensors](ExprPtr& out) {
     if (!out->is<Tensor>()) return;
@@ -97,15 +97,14 @@ ExprPtr opt_mixed_product(Product const& prod,
 /// Recursive workhorse. \p parallel_outer controls whether the (single)
 /// outermost Sum's summands are processed in parallel; nested recursive
 /// calls always run sequentially to avoid `sequant::for_each` oversubscription.
-ExprPtr optimize_impl(ExprPtr const& expr, index_to_extent_t const& idx2size,
-                      OptFor opt_for, bool reorder, bool parallel_outer) {
+ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
+                      bool reorder, bool parallel_outer) {
   if (expr->is<Product>()) {
     auto const& prod = expr->as<Product>();
     bool pure = ranges::all_of(prod, [](auto&& x) {
       return x->template is<Tensor>() || x->is_scalar();
     });
-    return pure ? opt_pure_product(prod, idx2size, opt_for)
-                : opt_mixed_product(prod, idx2size, opt_for);
+    return pure ? opt_pure_product(prod, opts) : opt_mixed_product(prod, opts);
   }
 
   if (expr->is<Sum>()) {
@@ -113,9 +112,9 @@ ExprPtr optimize_impl(ExprPtr const& expr, index_to_extent_t const& idx2size,
     Sum::summands_type new_smands(in_sum.size());
 
     auto do_term = [&](std::size_t i) {
-      new_smands[i] =
-          optimize_impl(in_sum.summand(i), idx2size, opt_for,
-                        /*reorder=*/false, /*parallel_outer=*/false);
+      new_smands[i] = optimize_impl(in_sum.summand(i), opts,
+                                    /*reorder=*/false,
+                                    /*parallel_outer=*/false);
     };
 
     // Thread-safety of the parallel branch rests on two invariants; do NOT
@@ -159,10 +158,8 @@ ExprPtr optimize_impl(ExprPtr const& expr, index_to_extent_t const& idx2size,
 }  // namespace
 
 ExprPtr optimize(ExprPtr const& expr, OptimizeOptions opts) {
-  auto idx2size = opts.idx_to_extent ? std::move(opts.idx_to_extent)
-                                     : default_idx_to_size();
-  return optimize_impl(expr, idx2size, opts.opt_for,
-                       opts.reorder == ReorderSum::Reorder,
+  if (!opts.idx_to_extent) opts.idx_to_extent = default_idx_to_size();
+  return optimize_impl(expr, opts, opts.reorder == ReorderSum::Reorder,
                        /*parallel_outer=*/true);
 }
 

@@ -54,6 +54,7 @@ target_compile_definitions(unit_tests-sequant-eval-obj PRIVATE
 # OBJECT library: Optimize tests (SeQuant-optimize)
 ##########################
 set(optimize_test_sources
+    "test_extract_subtrees.cpp"
     "test_fusion.cpp"
     "test_optimize.cpp"
 )
