@@ -591,6 +591,18 @@ TEST_CASE("utilities", "[utilities]") {
                {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}}}},
              {L"Â{a1;i1}",
               {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}}},
+             // For number-non-conserving antisymmetrizer (bra_rank !=
+             // ket_rank), which appears in EOM-IP / EOM-EA expressions, the
+             // bra<->ket conjugation must still hold and unpaired indices get
+             // their slot type flipped.
+             {L"Â{i1,i2;a1}",
+              {{{L"a_1", SlotType::Bra}, {L"i_1", SlotType::Ket}},
+               {{L"i_2", SlotType::Ket}}}},
+             {L"Â{a1;i1,i2}",
+              {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+               {{L"i_2", SlotType::Bra}}}},
+             {L"Â{i1,i2;} R{;i1,i2}",
+              {{{L"i_1", SlotType::Ket}}, {{L"i_2", SlotType::Ket}}}},
          }) {
       CAPTURE(toUtf8(input));
 

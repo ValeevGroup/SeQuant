@@ -485,13 +485,29 @@ Container<Group<SlottedIndex>> external_indices(const Expr& expr) {
       cont.at(i + num_braket).emplace_back(tensor.aux()[i], SlotType::Aux);
     }
 
-    if (tensor.label() == reserved::symm_label() ||
-        tensor.label() == reserved::antisymm_label()) {
+    const bool is_symm = tensor.label() == reserved::symm_label();
+    if (is_symm || tensor.label() == reserved::antisymm_label()) {
       // Note: In tensors representing symmetrization operators, bra and ket
       // indices are conjugated (reversed). Hence, we have to swap the
       // determined bra and ket indices.
+      // For a number-non-conserving antisymmetrizer (bra_rank != ket_rank),
+      // an unpaired index at a position has no partner to swap with, so flip
+      // its slot type instead to preserve the bra<->ket conjugation.
       for (std::size_t i = 0; i < num_braket; ++i) {
-        std::swap(cont.at(i).at(0).index(), cont.at(i).at(1).index());
+        auto& group = cont.at(i);
+        if (group.size() == 2) {
+          std::swap(group.at(0).index(), group.at(1).index());
+        } else if (is_symm) {
+          throw Exception(
+              "external_indices: column symmetrizer requires paired "
+              "bra/ket indices");
+        } else {
+          SEQUANT_ASSERT(group.size() == 1);
+          group.at(0) = SlottedIndex(group.at(0).index(),
+                                     group.at(0).slot_type() == SlotType::Bra
+                                         ? SlotType::Ket
+                                         : SlotType::Bra);
+        }
       }
     }
 
