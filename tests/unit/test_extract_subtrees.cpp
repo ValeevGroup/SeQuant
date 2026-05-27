@@ -103,4 +103,37 @@ TEST_CASE("opt::extract_subtrees", "[optimize][extract_subtrees]") {
     auto extracted = opt::extract_subtrees(forest, non_t_intermediate_pred);
     REQUIRE(extracted.size() == 1);
   }
+
+  SECTION("synthetic leaf carries id that resolves to the captured subtree") {
+    std::vector<Node> forest;
+    forest.emplace_back(bin(L"f{a1;a2} * g{a2;a1}"));
+    auto extracted = opt::extract_subtrees(forest, non_t_intermediate_pred);
+
+    REQUIRE(extracted.size() == 1);
+    REQUIRE(forest[0].leaf());
+    REQUIRE((*forest[0]).extracted_id().has_value());
+    const auto id = (*forest[0]).extracted_id().value();
+    REQUIRE(id == 0);
+    // hash of the synthetic leaf payload is preserved from the captured
+    // root, so it must match the stored subtree's root hash
+    REQUIRE(hash::value(*forest[0]) == hash::value(*extracted.at(id)));
+    // the stored root is itself stamped with the same id (single source
+    // of truth)
+    REQUIRE((*extracted.at(id)).extracted_id() == id);
+  }
+
+  SECTION("equal captured subtrees dedupe and share a single id") {
+    std::vector<Node> forest;
+    forest.emplace_back(bin(L"f{a1;a2} * g{a2;a1}"));
+    forest.emplace_back(bin(L"f{a1;a2} * g{a2;a1}"));
+    auto extracted = opt::extract_subtrees(forest, non_t_intermediate_pred);
+
+    REQUIRE(extracted.size() == 1);
+    REQUIRE(forest[0].leaf());
+    REQUIRE(forest[1].leaf());
+    REQUIRE((*forest[0]).extracted_id().has_value());
+    REQUIRE((*forest[1]).extracted_id().has_value());
+    REQUIRE((*forest[0]).extracted_id().value() ==
+            (*forest[1]).extracted_id().value());
+  }
 }

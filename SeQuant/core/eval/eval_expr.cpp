@@ -193,6 +193,10 @@ const std::optional<EvalOp>& EvalExpr::op_type() const noexcept {
   return op_type_;
 }
 
+const std::optional<std::size_t>& EvalExpr::extracted_id() const noexcept {
+  return extracted_id_;
+}
+
 ResultType EvalExpr::result_type() const noexcept { return result_type_; }
 
 size_t EvalExpr::hash_value() const noexcept { return hash_value_; }
