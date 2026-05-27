@@ -185,7 +185,11 @@ class rand_tensor_yield {
 
  public:
   /// Produce arrays whose modes are tiled in blocks of at most \p n.
-  void set_max_tile(size_t n) { max_tile_ = n; }
+  /// \p n must be positive (0 would make the tiling loop in make_tr1 spin).
+  void set_max_tile(size_t n) {
+    REQUIRE(n > 0);
+    max_tile_ = n;
+  }
 
   using array_type = TA::DistArray<TA::Tensor<NumericT>, TAPolicyT>;
   using array_tot_type =
@@ -1332,8 +1336,9 @@ TEST_CASE("eval_slice_array_over_mode", "[eval]") {
     REQUIRE(equal_tarrays(summed, full));
   }
 
-  SECTION("Result::slice_mode takes element bounds, snaps to tiles") {
-    // mode 1 (b) tiles {0,3,6,9}; element range [3,9) is tiles [1,3).
+  SECTION("Result::slice_mode takes tile-aligned element bounds") {
+    // mode 1 (b) tiles {0,3,6,9}; element range [3,9) (tile-aligned, as
+    // mode_batches produces) corresponds to tiles [1,3).
     sequant::ResultPtr const r =
         sequant::eval_result<sequant::ResultTensorTA<TA::TArrayD>>(arr);
     auto const via_result = r->slice_mode(1, 3, 9)->get<TA::TArrayD>();

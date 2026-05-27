@@ -238,10 +238,21 @@ class ResultTensorTA final : public Result {
   [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t elem_lo,
                                      std::size_t elem_hi) const override {
     auto const& tr1 = get<ArrayT>().trange().dim(mode);
+    // slice_mode takes element bounds, but a tiled backend can only cut on tile
+    // boundaries; mode_batches() returns exactly such (tile-aligned, in-range)
+    // bounds. Assert the precondition so misuse is caught rather than silently
+    // producing an over- or under-sized slice (which would break batched sums).
+    SEQUANT_ASSERT(elem_lo >= tr1.elements_range().first && elem_lo < elem_hi &&
+                   elem_hi <= tr1.elements_range().second);
     std::size_t const tile_lo = tr1.element_to_tile(elem_lo);
+    SEQUANT_ASSERT(tr1.tile(tile_lo).first ==
+                   elem_lo);  // lo on a tile boundary
     std::size_t const tile_hi = (elem_hi >= tr1.elements_range().second)
                                     ? tr1.tile_extent()
                                     : tr1.element_to_tile(elem_hi);
+    SEQUANT_ASSERT(elem_hi >= tr1.elements_range().second ||
+                   tr1.tile(tile_hi).first ==
+                       elem_hi);  // hi on a tile boundary
     return eval_result<this_type>(
         slice_array_over_mode(get<ArrayT>(), mode, tile_lo, tile_hi));
   }
@@ -409,10 +420,21 @@ class ResultTensorOfTensorTA final : public Result {
   [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t elem_lo,
                                      std::size_t elem_hi) const override {
     auto const& tr1 = get<ArrayT>().trange().dim(mode);
+    // slice_mode takes element bounds, but a tiled backend can only cut on tile
+    // boundaries; mode_batches() returns exactly such (tile-aligned, in-range)
+    // bounds. Assert the precondition so misuse is caught rather than silently
+    // producing an over- or under-sized slice (which would break batched sums).
+    SEQUANT_ASSERT(elem_lo >= tr1.elements_range().first && elem_lo < elem_hi &&
+                   elem_hi <= tr1.elements_range().second);
     std::size_t const tile_lo = tr1.element_to_tile(elem_lo);
+    SEQUANT_ASSERT(tr1.tile(tile_lo).first ==
+                   elem_lo);  // lo on a tile boundary
     std::size_t const tile_hi = (elem_hi >= tr1.elements_range().second)
                                     ? tr1.tile_extent()
                                     : tr1.element_to_tile(elem_hi);
+    SEQUANT_ASSERT(elem_hi >= tr1.elements_range().second ||
+                   tr1.tile(tile_hi).first ==
+                       elem_hi);  // hi on a tile boundary
     return eval_result<this_type>(
         slice_array_over_mode(get<ArrayT>(), mode, tile_lo, tile_hi));
   }
