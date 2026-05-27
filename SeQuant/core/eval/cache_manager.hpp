@@ -63,6 +63,15 @@ class CacheManager {
 
     ResultPtr data_p;
 
+    /// Lazily-computed, memoized data_p->size_in_bytes(): disengaged until the
+    /// size is first queried, then computed once and cached until data_p is
+    /// replaced or released. size_in_bytes() walks the DistArray's tiles, which
+    /// is expensive; it is only queried to populate the eval trace's memory
+    /// diagnostics, so for held data we compute it at most once and never when
+    /// it is not asked for. mutable so size_in_bytes() can stay const (the
+    /// classic lazy-memoization pattern).
+    mutable std::optional<size_t> size_bytes_;
+
     /// Persistent (P) entries are never drained on access and survive reset(),
     /// so their data lives across multiple evaluations (e.g. CC iterations);
     /// non-persistent (NP) entries are released after their last use and
@@ -79,14 +88,25 @@ class CacheManager {
     [[nodiscard]] ResultPtr access() noexcept {
       if (!data_p) return nullptr;
       if (persistent_) return data_p;  // never drain a persistent entry
-      return decay() == 0 ? std::move(data_p) : data_p;
+      if (decay() == 0) {              // last use: release the data
+        size_bytes_.reset();
+        return std::move(data_p);
+      }
+      return data_p;
     }
 
-    void store(ResultPtr&& data) noexcept { data_p = std::move(data); }
+    void store(ResultPtr&& data) noexcept {
+      data_p = std::move(data);
+      size_bytes_
+          .reset();  // (re)computed lazily on demand; see size_in_bytes()
+    }
 
     void reset() noexcept {
       life_c = max_life;
-      if (!persistent_) data_p = nullptr;  // persistent data survives reset()
+      if (!persistent_) {  // persistent data (and its size) survives reset()
+        data_p = nullptr;
+        size_bytes_.reset();
+      }
     }
 
     [[nodiscard]] bool persistent() const noexcept { return persistent_; }
@@ -96,7 +116,10 @@ class CacheManager {
     [[nodiscard]] size_t max_life_count() const noexcept { return max_life; }
 
     [[nodiscard]] size_t size_in_bytes() const noexcept {
-      return data_p ? data_p->size_in_bytes() : 0;
+      if (!data_p) return 0;
+      if (!size_bytes_)
+        size_bytes_ = data_p->size_in_bytes();  // lazy, memoized
+      return *size_bytes_;
     }
 
     [[nodiscard]] bool alive() const noexcept { return data_p ? true : false; }
