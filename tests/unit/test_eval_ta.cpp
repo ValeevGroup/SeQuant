@@ -1399,3 +1399,58 @@ TEST_CASE("eval_batched_custom_evaluator", "[eval]") {
     REQUIRE(equal_tarrays<Loose>(res, ref));
   }
 }
+
+TEST_CASE("eval_batched_custom_evaluator_tot", "[eval]") {
+  using sequant::evaluate;
+  using sequant::make_batched_custom_evaluator;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+  using cache_t = sequant::CacheManager<node_t>;
+
+  auto& world = TA::get_default_world();
+  // Multi-tile the occupied space so the contracted occupied index i3 spans
+  // more than one tile and batching over it actually engages: extent 8 in
+  // tiles of <=4 -> 2 tiles. The inner (virtual) space is left single-tiled.
+  rand_tensor_yield<double> yield{world, /*nocc=*/8, /*nvirt=*/3};
+  yield.set_max_tile(4);
+
+  using ArrayToT = typename decltype(yield)::array_tot_type;
+
+  // ToT * ToT -> ToT (the same expression as the "tot" section above). The
+  // contracted indices are the occupied i3 (an *outer* mode of both leaves)
+  // and the inner virtual a4. Scoping the batch axis to the occupied space
+  // selects i3, so the batched partials slice ToT leaves over i3
+  // (slice_array_over_mode) and sum ToT partials (add_inplace) -- the two
+  // annotation-free ToT array operations that must emit an "outer;inner"
+  // annotation rather than a flat one (else DistArray's is_tot_index() trips).
+  auto const expr = sequant::deserialize<sequant::ExprPtr>(
+      L"I{a4<i2,i3>,a1<i1,i2>;i1,i2} * s{a2<i1,i2>;a4<i2,i3>}");
+  std::string const target = "i_2,i_1;a_1i_1i_2,a_2i_1i_2";
+  auto const node = eval_node(expr);
+
+  // Reference first (non-batched), so yield's random leaf arrays are generated
+  // and cached; the batched evaluator reuses the same arrays.
+  auto const ref = evaluate(node, target, yield)->get<ArrayToT>();
+
+  auto const occ =
+      sequant::get_default_context().index_space_registry()->retrieve(L"i");
+  auto accept_occ = [occ](sequant::Index const& ix) {
+    return ix.space() == occ;
+  };
+
+  // TA::norm2 is unsupported for tensor-of-tensor tiles, so compare via the
+  // self-dot of each array (a scalar norm^2); reordering the contraction over
+  // i3 must not change it.
+  auto self_dot = [](auto const& arr) {
+    return arr("i,j;a,b").dot(arr("i,j;a,b"));
+  };
+  auto const ref_dot = self_dot(ref);
+
+  for (std::size_t target_batch_size :
+       {std::size_t{100}, std::size_t{4}, std::size_t{1}}) {
+    auto cache = cache_t::empty();
+    cache.set_custom_evaluator(
+        make_batched_custom_evaluator(yield, target_batch_size, accept_occ));
+    auto const res = evaluate(node, target, yield, cache)->get<ArrayToT>();
+    REQUIRE(self_dot(res) == Catch::Approx(ref_dot));
+  }
+}
