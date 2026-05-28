@@ -53,7 +53,6 @@ class Context {
     constexpr static auto vacuum = Vacuum::Physical;
     constexpr static auto metric = IndexSpaceMetric::Unit;
     constexpr static auto braket_symmetry = BraKetSymmetry::Conjugate;
-    constexpr static auto field = Field::Complex;
     constexpr static auto assert_strict_braket_symmetry = true;
     constexpr static auto spbasis = SPBasis::Spinor;
     constexpr static auto first_dummy_index_ordinal = 100;
@@ -76,9 +75,6 @@ class Context {
       IndexSpaceMetric metric = Defaults::metric;
       /// the BraKetSymmetry object
       BraKetSymmetry braket_symmetry = Defaults::braket_symmetry;
-      /// the scalar Field over which bra/ket mode spaces are defined; together
-      /// with a tensor's Hermiticity this determines its derived BraKetSymmetry
-      Field field = Defaults::field;
       /// the flag that controls the strictness of bra-ket checks in
       /// tensor network construction
       bool assert_strict_braket_symmetry = Defaults::assert_strict_braket_symmetry;
@@ -140,11 +136,6 @@ class Context {
   IndexSpaceMetric metric() const;
   /// \return BraKetSymmetry of this context
   BraKetSymmetry braket_symmetry() const;
-  /// \return the scalar Field of this context; controls whether a Hermitian
-  /// tensor's derived BraKetSymmetry is Symm (Field::Real) or Conjugate
-  /// (Field::Complex)
-  /// \sa Hermiticity, to_braket_symmetry
-  Field field() const;
   /// \return true if strict bra-ket symmetry is asserted;
   /// setting this to false (via `Context::set(AssertStrictBraKetSymmetry::No)`)
   /// allows arbitrary contractions of bra/ket modes as if they were aux indices.
@@ -190,10 +181,6 @@ class Context {
   /// \param braket_symmetry BraKetSymmetry
   /// \return ref to `*this`, for chaining
   Context& set(BraKetSymmetry braket_symmetry);
-  /// Sets the scalar Field for this context, convenient for chaining
-  /// \param field Field
-  /// \return ref to `*this`, for chaining
-  Context& set(Field field);
   /// Sets the bra-ket strict assertion flag for this context, convenient for chaining
   /// \param assert_strict_braket_symmetry AssertStrictBraKetSymmetry
   /// \return ref to `*this`, for chaining
@@ -223,7 +210,6 @@ class Context {
   Vacuum vacuum_ = Defaults::vacuum;
   IndexSpaceMetric metric_ = Defaults::metric;
   BraKetSymmetry braket_symmetry_ = Defaults::braket_symmetry;
-  Field field_ = Defaults::field;
   bool assert_strict_braket_symmetry_ = Defaults::assert_strict_braket_symmetry;
   SPBasis spbasis_ = Defaults::spbasis;
   std::size_t first_dummy_index_ordinal_ = Defaults::first_dummy_index_ordinal;

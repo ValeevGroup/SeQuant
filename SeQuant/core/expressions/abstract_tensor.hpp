@@ -213,6 +213,14 @@ class AbstractTensor {
   virtual Hermiticity _hermiticity() const {
     return to_hermiticity(this->_braket_symmetry());
   }
+  /// @return the base scalar Field of the tensor: the OR of the
+  /// IndexSpace::field() of its bra/ket indices (Complex dominates). Together
+  /// with _hermiticity() this determines _braket_symmetry() (a real-field
+  /// Hermitian tensor is bra<->ket Symm, a complex-field one Conjugate).
+  /// @sa sequant::base_field, IndexSpace::field
+  virtual Field _base_field() const {
+    return base_field(this->_bra(), this->_ket());
+  }
   /// @return the symmetry of tensor under exchange of matching {bra,ket} slot
   /// pairs
   /// @note slots are left-aligned
@@ -399,6 +407,7 @@ inline auto braket_symmetry(const AbstractTensor& t) {
   return t._braket_symmetry();
 }
 inline auto hermiticity(const AbstractTensor& t) { return t._hermiticity(); }
+inline auto base_field(const AbstractTensor& t) { return t._base_field(); }
 inline auto column_symmetry(const AbstractTensor& t) {
   return t._column_symmetry();
 }
@@ -536,6 +545,8 @@ inline std::wstring to_latex_tensor(
 ///         Hermiticity object that describes the field-agnostic adjoint
 ///         symmetry of @c t (whose resolution against the Field is
 ///         @c braket_symmetry(t) );
+///         - @c base_field(t) is a valid expression and evaluates to a Field
+///         object (the OR of @c t 's bra/ket index spaces' fields);
 ///         - @c column_symmetry(t) is a valid expression and evaluates to a
 ///         ColumnSymmetry object that describes the symmetry of @c t with
 ///         respect to permutations of particles;
@@ -557,6 +568,7 @@ concept is_tensor = requires(const T& obj) {
   { symmetry(obj) } -> std::convertible_to<Symmetry>;
   { braket_symmetry(obj) } -> std::convertible_to<BraKetSymmetry>;
   { hermiticity(obj) } -> std::convertible_to<Hermiticity>;
+  { base_field(obj) } -> std::convertible_to<Field>;
   { column_symmetry(obj) } -> std::convertible_to<ColumnSymmetry>;
   { color(obj) } -> std::convertible_to<std::size_t>;
   { is_cnumber(obj) } -> std::convertible_to<bool>;

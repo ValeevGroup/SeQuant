@@ -901,7 +901,7 @@ class NormalOperator : public Operator<S>,
                : Hermiticity::NonHermitian;
   }
   BraKetSymmetry _braket_symmetry() const override final {
-    return to_braket_symmetry(_hermiticity(), get_default_context(S).field());
+    return to_braket_symmetry(_hermiticity(), this->_base_field());
   }
   ColumnSymmetry _column_symmetry() const override final {
     return ColumnSymmetry::Symm;
