@@ -834,6 +834,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   BraKetSymmetry _braket_symmetry() const override final {
     return braket_symmetry_;
   }
+  Hermiticity _hermiticity() const override final { return hermiticity_; }
   ColumnSymmetry _column_symmetry() const override final {
     return column_symmetry_;
   }

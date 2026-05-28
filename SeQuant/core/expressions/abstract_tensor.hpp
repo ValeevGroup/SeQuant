@@ -202,6 +202,17 @@ class AbstractTensor {
   virtual BraKetSymmetry _braket_symmetry() const {
     throw missing_instantiation_for("_braket_symmetry");
   }
+  /// @return the (field-agnostic) symmetry of the abstract tensor under
+  /// (Hermitian) adjoint
+  /// @note the observable #_braket_symmetry() is the resolution of this trait
+  /// against the ambient Field; by default this is the (lossy) inverse of that
+  /// resolution (so a type need only implement #_braket_symmetry()), but a type
+  /// that tracks hermiticity directly should override this to preserve it
+  /// (e.g. the AntiHermitian case, which #_braket_symmetry() cannot represent)
+  /// @sa to_hermiticity, to_braket_symmetry
+  virtual Hermiticity _hermiticity() const {
+    return to_hermiticity(this->_braket_symmetry());
+  }
   /// @return the symmetry of tensor under exchange of matching {bra,ket} slot
   /// pairs
   /// @note slots are left-aligned
@@ -387,6 +398,7 @@ inline auto symmetry(const AbstractTensor& t) { return t._symmetry(); }
 inline auto braket_symmetry(const AbstractTensor& t) {
   return t._braket_symmetry();
 }
+inline auto hermiticity(const AbstractTensor& t) { return t._hermiticity(); }
 inline auto column_symmetry(const AbstractTensor& t) {
   return t._column_symmetry();
 }
@@ -520,6 +532,10 @@ inline std::wstring to_latex_tensor(
 ///         _particle-symmetric_ @c t ;
 ///         - @c braket_symmetry(t) is a valid expression and evaluates to a
 ///         BraKetSymmetry object that describes the bra-ket symmetry of @c t ;
+///         - @c hermiticity(t) is a valid expression and evaluates to a
+///         Hermiticity object that describes the field-agnostic adjoint
+///         symmetry of @c t (whose resolution against the Field is
+///         @c braket_symmetry(t) );
 ///         - @c column_symmetry(t) is a valid expression and evaluates to a
 ///         ColumnSymmetry object that describes the symmetry of @c t with
 ///         respect to permutations of particles;
@@ -540,6 +556,7 @@ concept is_tensor = requires(const T& obj) {
   { aux_rank(obj) } -> std::convertible_to<std::size_t>;
   { symmetry(obj) } -> std::convertible_to<Symmetry>;
   { braket_symmetry(obj) } -> std::convertible_to<BraKetSymmetry>;
+  { hermiticity(obj) } -> std::convertible_to<Hermiticity>;
   { column_symmetry(obj) } -> std::convertible_to<ColumnSymmetry>;
   { color(obj) } -> std::convertible_to<std::size_t>;
   { is_cnumber(obj) } -> std::convertible_to<bool>;

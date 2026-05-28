@@ -882,8 +882,26 @@ class NormalOperator : public Operator<S>,
                        : Symmetry::Nonsymm)
                 : (Symmetry::Symm));
   }
+  // The adjoint of a normal-ordered product swaps its creators and
+  // annihilators, so it is self-adjoint (Hermitian) iff those mirror each
+  // other: equal numbers and matching index spaces (as multisets). Hermiticity
+  // is the field-agnostic source of truth; braket_symmetry is derived from it
+  // against the ambient Field (Hermitian -> Symm real / Conjugate complex).
+  Hermiticity _hermiticity() const override final {
+    if (this->_bra_rank() != this->_ket_rank())
+      return Hermiticity::NonHermitian;
+    auto sorted_spaces = [](auto &&idx_view) {
+      container::svector<IndexSpace> spaces;
+      for (const Index &idx : idx_view) spaces.push_back(idx.space());
+      ranges::sort(spaces);
+      return spaces;
+    };
+    return sorted_spaces(this->_bra()) == sorted_spaces(this->_ket())
+               ? Hermiticity::Hermitian
+               : Hermiticity::NonHermitian;
+  }
   BraKetSymmetry _braket_symmetry() const override final {
-    return BraKetSymmetry::Nonsymm;
+    return to_braket_symmetry(_hermiticity(), get_default_context(S).field());
   }
   ColumnSymmetry _column_symmetry() const override final {
     return ColumnSymmetry::Symm;
