@@ -166,6 +166,38 @@ template <typename... Args>
     TA::DistArray<Args...> const& arr, std::size_t mode, std::size_t tile_lo,
     std::size_t tile_hi);
 
+/// Inner-tensor mode count of a tensor-of-tensor DistArray (0 for a regular,
+/// non-nested array). The outer trange carries no inner information, so the
+/// inner rank is read from the first local non-empty inner tile and reduced
+/// (max) across the world -- this makes it well-defined on ranks holding no
+/// local data (or only empty inner tiles), as long as some rank holds a
+/// non-empty inner tile. Needed to build a ToT-valid annotation ("outer;inner")
+/// in the annotation-free array operations (add_inplace,
+/// slice_array_over_mode), since a flat annotation trips DistArray's
+/// is_tot_index() check.
+template <typename ArrayT>
+[[nodiscard]] std::size_t tot_inner_rank(ArrayT const& arr) {
+  std::size_t r = 0;
+  if constexpr (TA::detail::is_tensor_of_tensor_v<
+                    typename ArrayT::value_type>) {
+    // Inner tensors carry the rank; an outer tile may hold null/empty inner
+    // views (e.g. a screened pair), so skip those -- calling range() on an
+    // empty view asserts (ArenaTensor) or is UB (TA::Tensor).
+    for (auto it = arr.begin(); it != arr.end() && r == 0; ++it) {
+      auto const& outer_tile = it->get();
+      for (auto const& inner : outer_tile) {
+        if (inner.empty()) continue;
+        if (inner.range().rank() > 0) {
+          r = inner.range().rank();
+          break;
+        }
+      }
+    }
+    arr.world().gop.max(r);
+  }
+  return r;
+}
+
 /// Partition a TiledRange1 into contiguous, tile-aligned element-range batches,
 /// each covering at least \p target_batch_size elements where possible. Tiles
 /// are not uniformly sized, so batches are uneven; the last batch may be
@@ -532,7 +564,12 @@ class ResultTensorOfTensorTA final : public Result {
     auto const& o = other.get<ArrayT>();
 
     SEQUANT_ASSERT(t.trange() == o.trange());
-    auto ann = TA::detail::dummy_annotation(t.trange().rank());
+    // ToT array: the annotation must carry an inner block ("outer;inner") or
+    // DistArray::operator() rejects it (is_tot_index). dummy_annotation's
+    // second argument is the inner-mode count, read from the array's inner
+    // tiles.
+    auto ann =
+        TA::detail::dummy_annotation(t.trange().rank(), tot_inner_rank(t));
 
     log_ta(ann, " += ", ann, "\n");
 
@@ -584,7 +621,18 @@ template <typename... Args>
     hi[d] = arr.trange().dim(d).tile_extent();
   lo[mode] = tile_lo;
   hi[mode] = tile_hi;
-  auto const annot = ords_to_annot(iota(std::size_t{0}, rank));
+  // For a tensor-of-tensor array the annotation must label an inner block
+  // ("outer;inner"); a flat annotation trips DistArray's is_tot_index() check.
+  // The block() is over outer modes only, so both sides share one annotation.
+  using value_type = typename TA::DistArray<Args...>::value_type;
+  std::string annot;
+  if constexpr (TA::detail::is_tensor_of_tensor_v<value_type>) {
+    annot = TA::detail::dummy_annotation(
+        static_cast<unsigned int>(rank),
+        static_cast<unsigned int>(tot_inner_rank(arr)));
+  } else {
+    annot = ords_to_annot(iota(std::size_t{0}, rank));
+  }
   TA::DistArray<Args...> out;
   out(annot) = arr(annot).block(lo, hi);
   TA::DistArray<Args...>::wait_for_lazy_cleanup(arr.world());
