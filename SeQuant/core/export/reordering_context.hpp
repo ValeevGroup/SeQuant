@@ -2,17 +2,11 @@
 #define SEQUANT_CORE_EXPORT_REORDERING_CONTEXT_HPP
 
 #include <SeQuant/core/export/context.hpp>
+#include <SeQuant/core/memory_layout.hpp>
 
 namespace sequant {
 
 class Tensor;
-
-/// Different ways of laying out a multidimensional tensor/array in memory
-enum class MemoryLayout {
-  RowMajor,
-  ColumnMajor,
-  Unspecified,
-};
 
 struct assume_real_orbitals {};
 struct assume_strict_column_permutability {};

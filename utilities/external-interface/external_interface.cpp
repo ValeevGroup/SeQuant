@@ -11,6 +11,7 @@
 #include <SeQuant/core/export/itf.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/memory_layout.hpp>
 #include <SeQuant/core/optimize/common_subexpression_elimination.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
@@ -378,7 +379,8 @@ void generateITF(const json &blocks, std::string_view out_file,
             }
 
             return true;
-          });
+          },
+          MemoryLayout::ColumnMajor);
     }
 
     groups.emplace_back(std::move(results),
