@@ -119,8 +119,11 @@ class OpRegistry {
   /// @brief returns a view of registered operator labels
   [[nodiscard]] auto ops() const { return ranges::views::keys(*ops_); }
 
-  /// @brief clears all registered operators
-  void purge() { ops_->clear(); }
+  /// @brief clears all registered operators (and their Hermiticity overrides)
+  void purge() {
+    ops_->clear();
+    herm_overrides_->clear();
+  }
 
  private:
   std::shared_ptr<container::map<std::wstring, OpClass>> ops_;

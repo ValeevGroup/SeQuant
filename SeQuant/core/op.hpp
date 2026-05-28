@@ -33,6 +33,7 @@
 #include <range/v3/algorithm/adjacent_find.hpp>
 #include <range/v3/algorithm/find_if.hpp>
 #include <range/v3/algorithm/for_each.hpp>
+#include <range/v3/algorithm/sort.hpp>
 #include <range/v3/functional/comparisons.hpp>
 #include <range/v3/iterator/basic_iterator.hpp>
 #include <range/v3/range/access.hpp>
@@ -883,20 +884,23 @@ class NormalOperator : public Operator<S>,
                 : (Symmetry::Symm));
   }
   // The adjoint of a normal-ordered product swaps its creators and
-  // annihilators, so it is self-adjoint (Hermitian) iff those mirror each
-  // other: equal numbers and matching index spaces (as multisets). Hermiticity
-  // is the field-agnostic source of truth; braket_symmetry is derived from it
-  // against the ambient Field (Hermitian -> Symm real / Conjugate complex).
+  // annihilators, so it is self-adjoint (Hermitian) only if it is provably so
+  // at the *index* level: its annihilator and creator index bundles coincide as
+  // multisets (so the bra<->ket swap maps it to itself). Matching index spaces
+  // is not enough -- e.g. a^+_p a_q (p != q) has adjoint a^+_q a_p, a distinct
+  // operator, so it must stay nonsymmetric. Hermiticity is the field-agnostic
+  // source of truth; braket_symmetry is derived from it against the ambient
+  // Field (Hermitian -> Symm real / Conjugate complex).
   Hermiticity _hermiticity() const override final {
     if (this->_bra_rank() != this->_ket_rank())
       return Hermiticity::NonHermitian;
-    auto sorted_spaces = [](auto &&idx_view) {
-      container::svector<IndexSpace> spaces;
-      for (const Index &idx : idx_view) spaces.push_back(idx.space());
-      ranges::sort(spaces);
-      return spaces;
+    auto sorted_indices = [](auto &&idx_view) {
+      container::svector<Index> indices;
+      for (const Index &idx : idx_view) indices.push_back(idx);
+      ranges::sort(indices);
+      return indices;
     };
-    return sorted_spaces(this->_bra()) == sorted_spaces(this->_ket())
+    return sorted_indices(this->_bra()) == sorted_indices(this->_ket())
                ? Hermiticity::Hermitian
                : Hermiticity::NonHermitian;
   }

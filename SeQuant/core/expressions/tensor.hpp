@@ -703,9 +703,14 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   Symmetry symmetry_ = Symmetry::Nonsymm;
   BraKetSymmetry braket_symmetry_ = BraKetSymmetry::Nonsymm;
   // field-agnostic abstract trait; braket_symmetry_ is its resolution against
-  // the ambient Context::field() at construction. Not folded into the hash /
-  // static_equal: braket_symmetry_ is the observable that drives
-  // canonicalization, and AntiHermitian/NonHermitian currently share it.
+  // base_field() at construction. Not folded into the hash / static_equal:
+  // braket_symmetry_ is the observable that drives canonicalization, and
+  // AntiHermitian/NonHermitian currently share it.
+  // N.B. not separately serialized: (de)serialization records braket_symmetry_,
+  // from which hermiticity is reconstructed via to_hermiticity(); this is
+  // lossless except that AntiHermitian round-trips as NonHermitian (both
+  // serialize as Nonsymm). Acceptable while AntiHermitian is unused (it has no
+  // distinct canonicalization behavior yet); revisit if that changes.
   Hermiticity hermiticity_ = Hermiticity::NonHermitian;
   ColumnSymmetry column_symmetry_ = ColumnSymmetry::Nonsymm;
   mutable std::optional<hash_type>
