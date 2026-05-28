@@ -120,6 +120,11 @@ ProcessingOptions extractProcessingOptions(
         details.at("subexpression_elimination").get<bool>();
   }
 
+  if (details.contains("min_cse_usage_count")) {
+    options.min_cse_usage =
+        details.at("min_cse_usage_count").get<std::size_t>();
+  }
+
   return options;
 }
 
@@ -341,6 +346,9 @@ void generateITF(const json &blocks, std::string_view out_file,
 
     if (current_block.value("subexpression_elimination",
                             defaults.subexpression_elimination)) {
+      const std::size_t min_usage =
+          current_block.value("min_cse_usage_count", defaults.min_cse_usage);
+
       opt::eliminate_common_subexpressions(
           results,
           [](const auto &expr) {
@@ -348,8 +356,8 @@ void generateITF(const json &blocks, std::string_view out_file,
             // ExprPtr as well as ResultExpr objects
             return to_export_tree(expr);
           },
-          [](const ExportNode<> &tree, std::size_t usage_count) {
-            if (usage_count < 2) {
+          [min_usage](const ExportNode<> &tree, std::size_t usage_count) {
+            if (usage_count < min_usage) {
               return false;
             }
 
