@@ -269,6 +269,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         aux_(make_indices(aux_indices)),
         symmetry_(s),
         braket_symmetry_(bks),
+        hermiticity_(to_hermiticity(bks)),
         column_symmetry_(ps),
         bra_net_rank_(ranges::count_if(
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
@@ -292,6 +293,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         aux_(std::move(aux_indices)),
         symmetry_(s),
         braket_symmetry_(bks),
+        hermiticity_(to_hermiticity(bks)),
         column_symmetry_(ps),
         bra_net_rank_(ranges::count_if(
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
@@ -405,6 +407,49 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     assert_nonreserved_label(label_);
   }
 
+  /// @name field-agnostic constructors
+  /// Specify the abstract #Hermiticity rather than the #BraKetSymmetry; the
+  /// latter is *derived* by resolving the former against the ambient
+  /// Context::field() (see to_braket_symmetry). Prefer these when the tensor's
+  /// adjoint symmetry is a physical fact independent of whether the computation
+  /// is real or complex (e.g. integrals are Hermitian, amplitudes are not).
+  /// @{
+
+  /// @param label the tensor label
+  /// @param bra_indices list of bra indices
+  /// @param ket_indices list of ket indices
+  /// @param s the symmetry of bra or ket
+  /// @param h the abstract symmetry under (Hermitian) adjoint
+  /// @param ps the symmetry under exchange of particles
+  template <basic_string_convertible S, range_of_castables_to_index IndexRange1,
+            range_of_castables_to_index IndexRange2>
+  Tensor(S &&label, const bra<IndexRange1> &bra_indices,
+         const ket<IndexRange2> &ket_indices, Symmetry s, Hermiticity h,
+         ColumnSymmetry ps = ColumnSymmetry::Symm)
+      : Tensor(std::forward<S>(label), bra_indices, ket_indices, s,
+               to_braket_symmetry(h, get_default_context().field()), ps) {
+    hermiticity_ = h;  // preserve the exact trait (incl. AntiHermitian)
+  }
+
+  /// @param label the tensor label
+  /// @param bra_indices list of bra indices
+  /// @param ket_indices list of ket indices
+  /// @param aux_indices list of aux indices
+  /// @param s the symmetry of bra or ket
+  /// @param h the abstract symmetry under (Hermitian) adjoint
+  /// @param ps the symmetry under exchange of particles
+  template <basic_string_convertible S, range_of_castables_to_index IndexRange1,
+            range_of_castables_to_index IndexRange2,
+            range_of_castables_to_index IndexRange3>
+  Tensor(S &&label, const bra<IndexRange1> &bra_indices,
+         const ket<IndexRange2> &ket_indices,
+         const aux<IndexRange3> &aux_indices, Symmetry s, Hermiticity h,
+         ColumnSymmetry ps = ColumnSymmetry::Symm)
+      : Tensor(std::forward<S>(label), bra_indices, ket_indices, aux_indices, s,
+               to_braket_symmetry(h, get_default_context().field()), ps) {
+    hermiticity_ = h;  // preserve the exact trait (incl. AntiHermitian)
+  }
+
   /// @}
 
   /// @return true if the Tensor is initialized
@@ -488,7 +533,14 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   Symmetry symmetry() const { return symmetry_; }
   /// @return the BraKetSymmetry object describing the symmetry of the Tensor
   /// under exchange of bra and ket.
+  /// @note this is the *derived* observable; it is the composition of the
+  /// (field-agnostic) #hermiticity with the ambient Context's #Field, resolved
+  /// when this Tensor was constructed (see to_braket_symmetry).
   BraKetSymmetry braket_symmetry() const { return braket_symmetry_; }
+  /// @return the Hermiticity object describing the (field-agnostic) symmetry of
+  /// the abstract tensor under (Hermitian) adjoint.
+  /// @sa braket_symmetry()
+  Hermiticity hermiticity() const { return hermiticity_; }
   /// @return the ColumnSymmetry object describing the symmetry of the Tensor
   /// under exchange of _columns_ (i.e., pairs of matching {bra[i],ket[i]}
   /// slot bundles).
@@ -638,6 +690,11 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   sequant::aux<index_container_type> aux_{};
   Symmetry symmetry_ = Symmetry::Nonsymm;
   BraKetSymmetry braket_symmetry_ = BraKetSymmetry::Nonsymm;
+  // field-agnostic abstract trait; braket_symmetry_ is its resolution against
+  // the ambient Context::field() at construction. Not folded into the hash /
+  // static_equal: braket_symmetry_ is the observable that drives
+  // canonicalization, and AntiHermitian/NonHermitian currently share it.
+  Hermiticity hermiticity_ = Hermiticity::NonHermitian;
   ColumnSymmetry column_symmetry_ = ColumnSymmetry::Nonsymm;
   mutable std::optional<hash_type>
       bra_hash_value_;  // memoized byproduct of memoizing_hash()

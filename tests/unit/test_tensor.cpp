@@ -452,3 +452,104 @@ TEST_CASE("tensor", "[elements]") {
 
   }  // SECTION("adjoint")
 }
+
+TEST_CASE("tensor_hermiticity", "[elements]") {
+  using namespace sequant;
+
+  SECTION("field<->hermiticity helpers") {
+    REQUIRE(to_braket_symmetry(Hermiticity::Hermitian, Field::Real) ==
+            BraKetSymmetry::Symm);
+    REQUIRE(to_braket_symmetry(Hermiticity::Hermitian, Field::Complex) ==
+            BraKetSymmetry::Conjugate);
+    REQUIRE(to_braket_symmetry(Hermiticity::NonHermitian, Field::Real) ==
+            BraKetSymmetry::Nonsymm);
+    REQUIRE(to_braket_symmetry(Hermiticity::NonHermitian, Field::Complex) ==
+            BraKetSymmetry::Nonsymm);
+    // AntiHermitian cannot yet be represented in BraKetSymmetry -> Nonsymm
+    REQUIRE(to_braket_symmetry(Hermiticity::AntiHermitian, Field::Real) ==
+            BraKetSymmetry::Nonsymm);
+
+    REQUIRE(to_hermiticity(BraKetSymmetry::Symm) == Hermiticity::Hermitian);
+    REQUIRE(to_hermiticity(BraKetSymmetry::Conjugate) ==
+            Hermiticity::Hermitian);
+    REQUIRE(to_hermiticity(BraKetSymmetry::Nonsymm) ==
+            Hermiticity::NonHermitian);
+  }
+
+  SECTION("braket_symmetry is derived from Hermiticity + Context::field") {
+    // an explicitly non-Hermitian tensor is bra-ket nonsymmetric regardless of
+    // the field
+    {
+      auto t = Tensor(L"t", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
+                      Hermiticity::NonHermitian);
+      REQUIRE(t.hermiticity() == Hermiticity::NonHermitian);
+      REQUIRE(t.braket_symmetry() == BraKetSymmetry::Nonsymm);
+    }
+    // a Hermitian tensor is bra-ket Symm over a real field ...
+    {
+      auto resetter = set_scoped_default_context(
+          Context(get_default_context()).set(Field::Real));
+      auto g = Tensor(L"g", bra{L"i_1"}, ket{L"i_2"}, Symmetry::Nonsymm,
+                      Hermiticity::Hermitian);
+      REQUIRE(g.hermiticity() == Hermiticity::Hermitian);
+      REQUIRE(g.braket_symmetry() == BraKetSymmetry::Symm);
+    }
+    // ... and bra-ket Conjugate over a complex field
+    {
+      auto resetter = set_scoped_default_context(
+          Context(get_default_context()).set(Field::Complex));
+      auto g = Tensor(L"g", bra{L"i_1"}, ket{L"i_2"}, Symmetry::Nonsymm,
+                      Hermiticity::Hermitian);
+      REQUIRE(g.hermiticity() == Hermiticity::Hermitian);
+      REQUIRE(g.braket_symmetry() == BraKetSymmetry::Conjugate);
+    }
+    // AntiHermitian is recorded but currently derives to Nonsymm
+    {
+      auto resetter = set_scoped_default_context(
+          Context(get_default_context()).set(Field::Real));
+      auto w = Tensor(L"w", bra{L"i_1"}, ket{L"i_2"}, Symmetry::Nonsymm,
+                      Hermiticity::AntiHermitian);
+      REQUIRE(w.hermiticity() == Hermiticity::AntiHermitian);
+      REQUIRE(w.braket_symmetry() == BraKetSymmetry::Nonsymm);
+    }
+  }
+
+  SECTION("legacy BraKetSymmetry ctor back-fills Hermiticity") {
+    auto g = Tensor(L"g", bra{L"i_1"}, ket{L"i_2"}, Symmetry::Nonsymm,
+                    BraKetSymmetry::Symm);
+    REQUIRE(g.braket_symmetry() == BraKetSymmetry::Symm);
+    REQUIRE(g.hermiticity() == Hermiticity::Hermitian);
+    auto t = Tensor(L"t", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
+                    BraKetSymmetry::Nonsymm);
+    REQUIRE(t.hermiticity() == Hermiticity::NonHermitian);
+  }
+
+  // The payoff: over a real field a Hermitian integral is bra<->ket symmetric,
+  // so g_{i1}^{i2} and the bra<->ket-swapped g_{i2}^{i1} canonicalize to the
+  // same tensor and cancel; over a complex field (Conjugate) they do not.
+  SECTION("bra-ket-symmetric integral collapses swapped contraction") {
+    auto make_diff = []() {
+      auto a = ex<Tensor>(L"g", bra{L"i_1"}, ket{L"i_2"}, Symmetry::Nonsymm,
+                          Hermiticity::Hermitian);
+      auto b = ex<Tensor>(L"g", bra{L"i_2"}, ket{L"i_1"}, Symmetry::Nonsymm,
+                          Hermiticity::Hermitian);
+      ExprPtr diff = a - b;
+      simplify(diff);
+      return diff;
+    };
+
+    {
+      auto resetter = set_scoped_default_context(
+          Context(get_default_context()).set(Field::Real));
+      auto diff = make_diff();
+      REQUIRE(diff == ex<Constant>(0));
+    }
+    {
+      auto resetter = set_scoped_default_context(
+          Context(get_default_context()).set(Field::Complex));
+      auto diff = make_diff();
+      // does not cancel: the two orientations remain distinct
+      REQUIRE_FALSE(diff == ex<Constant>(0));
+    }
+  }
+}

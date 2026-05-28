@@ -22,6 +22,7 @@ bool operator==(const Context& ctx1, const Context& ctx2) {
   else
     return ctx1.vacuum() == ctx2.vacuum() && ctx1.metric() == ctx2.metric() &&
            ctx1.braket_symmetry() == ctx2.braket_symmetry() &&
+           ctx1.field() == ctx2.field() &&
            ctx1.assert_strict_braket_symmetry() ==
                ctx2.assert_strict_braket_symmetry() &&
            ctx1.spbasis() == ctx2.spbasis() &&
@@ -129,6 +130,7 @@ Context::Context(Options options)
       vacuum_(options.vacuum),
       metric_(options.metric),
       braket_symmetry_(options.braket_symmetry),
+      field_(options.field),
       assert_strict_braket_symmetry_(options.assert_strict_braket_symmetry),
       spbasis_(options.spbasis),
       first_dummy_index_ordinal_(options.first_dummy_index_ordinal),
@@ -158,6 +160,8 @@ std::shared_ptr<IndexSpaceRegistry> Context::mutable_index_space_registry()
 IndexSpaceMetric Context::metric() const { return metric_; }
 
 BraKetSymmetry Context::braket_symmetry() const { return braket_symmetry_; }
+
+Field Context::field() const { return field_; }
 
 bool Context::assert_strict_braket_symmetry() const {
   return assert_strict_braket_symmetry_;
@@ -202,6 +206,11 @@ Context& Context::set(IndexSpaceMetric metric) {
 
 Context& Context::set(BraKetSymmetry braket_symmetry) {
   braket_symmetry_ = braket_symmetry;
+  return *this;
+}
+
+Context& Context::set(Field field) {
+  field_ = field;
   return *this;
 }
 

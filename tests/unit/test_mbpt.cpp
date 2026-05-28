@@ -33,6 +33,24 @@
 
 #include "SeQuant/core/utility/debug.hpp"
 
+namespace {
+/// Returns an RAII guard that, while alive, pins the (de)excitation amplitude
+/// operators (t, λ, R, L) Hermitian in the default MBPT context. The
+/// field/hermiticity model makes these operators bra<->ket *nonsymmetric* by
+/// default (which is correct); pinning them Hermitian here lets the reference
+/// equations below -- generated under the legacy conjugate-symmetric assumption
+/// -- stay valid without regenerating them.
+[[nodiscard]] auto scoped_hermitian_amplitudes() {
+  auto reg = sequant::mbpt::get_default_mbpt_context().op_registry()->clone();
+  for (std::wstring lbl : {L"t", L"λ", L"R", L"L"})
+    if (reg.contains(lbl))
+      reg.set_hermiticity(lbl, sequant::Hermiticity::Hermitian);
+  return sequant::mbpt::set_scoped_default_mbpt_context(
+      {.csv = sequant::mbpt::get_default_mbpt_context().csv(),
+       .op_registry = std::move(reg)});
+}
+}  // namespace
+
 TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
   SECTION("registry") {
     using namespace sequant::mbpt;
@@ -196,6 +214,10 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
   SECTION("nbody_operators") {
     using namespace sequant;
+
+    // reference equations below predate the hermiticity model; keep amplitudes
+    // Hermitian so they remain valid (see scoped_hermitian_amplitudes)
+    auto herm_amplitudes_guard = scoped_hermitian_amplitudes();
 
     SECTION("constructor") {
       // tests 1-space quantum number case
@@ -940,6 +962,9 @@ SECTION("SRSO Fock") {
 }  // SECTION("SRSO Fock")
 
 SECTION("vac_av with Power") {
+  // keep amplitudes Hermitian so the reference equation below stays valid
+  // (see scoped_hermitian_amplitudes)
+  auto herm_amplitudes_guard = scoped_hermitian_amplitudes();
   auto expr1 = ex<Power>(ex<Variable>(L"α"), rational{2}) * t::h(2) * t::t(2);
   auto vev1 = t::vac_av(expr1, {.connect = {{0, 1}}});
   simplify(vev1);
@@ -1275,11 +1300,14 @@ SECTION("manuscript-examples") {
     const auto& ann_space = get_hole_space(Spin::any);
 
     OpRegistry registry;
+    // amplitudes pinned Hermitian so the reference equations below (generated
+    // under the legacy conjugate-symmetric assumption) stay valid under the
+    // hermiticity model (see scoped_hermitian_amplitudes)
     registry.add(L"f", OpClass::gen)
         .add(L"g", OpClass::gen)
-        .add(L"t", OpClass::ex)
-        .add(L"x", OpClass::ex)
-        .add(L"y", OpClass::ex);
+        .add(L"t", OpClass::ex, Hermiticity::Hermitian)
+        .add(L"x", OpClass::ex, Hermiticity::Hermitian)
+        .add(L"y", OpClass::ex, Hermiticity::Hermitian);
 
     // set MBPT context
     auto ctx_resetter = set_scoped_default_mbpt_context(
@@ -1306,6 +1334,10 @@ SECTION("manuscript-examples") {
 SECTION("avoided-connections") {
   using namespace sequant::mbpt;
   using sequant::reserved::antisymm_label;
+
+  // keep amplitudes Hermitian so the reference equation below stays valid
+  // (see scoped_hermitian_amplitudes)
+  auto herm_amplitudes_guard = scoped_hermitian_amplitudes();
 
   // h(1) * t(1): two operators, avoid the only possible contraction
   auto expr1 = tensor::h(1) * tensor::t(1);
