@@ -341,11 +341,36 @@ void generateITF(const json &blocks, std::string_view out_file,
 
     if (current_block.value("subexpression_elimination",
                             defaults.subexpression_elimination)) {
-      opt::eliminate_common_subexpressions(results, [](const auto &expr) {
-        // Note: the lambda is needed to make the callable usable for
-        // ExprPtr as well as ResultExpr objects
-        return to_export_tree(expr);
-      });
+      opt::eliminate_common_subexpressions(
+          results,
+          [](const auto &expr) {
+            // Note: the lambda is needed to make the callable usable for
+            // ExprPtr as well as ResultExpr objects
+            return to_export_tree(expr);
+          },
+          [](const ExportNode<> &tree, std::size_t usage_count) {
+            if (usage_count < 2) {
+              return false;
+            }
+
+            std::size_t num_tensors = 0;
+            tree.visit_leaf([&num_tensors](const ExportNode<> &node) {
+              num_tensors += node->is_tensor();
+            });
+
+            if (num_tensors < 2) {
+              // A subexpression that contains less than two tensors is not
+              // worth the hassle of creating, storing and reusing it.
+              // Specifically, this avoids CSE in symmetrization expressions
+              // such as
+              // 1/2 * R2u:eecc[abij] + 1/2 * R2u:eecc[baji]
+              // where 1/2 * R2u:eecc would be the kind of subexpression we
+              // don't want)
+              return false;
+            }
+
+            return true;
+          });
     }
 
     groups.emplace_back(std::move(results),
