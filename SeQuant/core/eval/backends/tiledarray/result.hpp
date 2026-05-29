@@ -14,33 +14,93 @@
 
 namespace sequant {
 
+/// Inner-tensor mode count of a tensor-of-tensor DistArray (0 for a regular,
+/// non-nested array). The outer trange carries no inner information, so the
+/// inner rank is read from the first local non-empty inner tile and reduced
+/// (max) across the world -- this makes it well-defined on ranks holding no
+/// local data (or only empty inner tiles), as long as some rank holds a
+/// non-empty inner tile. Needed to build a ToT-valid annotation ("outer;inner")
+/// in the annotation-free array operations (add_inplace,
+/// slice_array_over_mode), since a flat annotation trips DistArray's
+/// is_tot_index() check.
+template <typename ArrayT>
+[[nodiscard]] std::size_t tot_inner_rank(ArrayT const& arr) {
+  std::size_t r = 0;
+  if constexpr (TA::detail::is_tensor_of_tensor_v<
+                    typename ArrayT::value_type>) {
+    // Inner tensors carry the rank; an outer tile may hold null/empty inner
+    // views (e.g. a screened pair), so skip those -- calling range() on an
+    // empty view asserts (ArenaTensor) or is UB (TA::Tensor).
+    for (auto it = arr.begin(); it != arr.end() && r == 0; ++it) {
+      auto const& outer_tile = it->get();
+      for (auto const& inner : outer_tile) {
+        if (inner.empty()) continue;
+        if (inner.range().rank() > 0) {
+          r = inner.range().rank();
+          break;
+        }
+      }
+    }
+    arr.world().gop.max(r);
+  }
+  return r;
+}
+
 namespace {
 
 ///
-/// \brief This function implements the symmetrization of TA::DistArray.
+/// \brief Particle-symmetrize a TA::DistArray (tensor-of-scalar or
+///        tensor-of-tensor).
 ///
-/// \param arr The array to be symmetrized
+/// \param arr The array to be symmetrized.
 ///
-/// \pre The rank of the array must be even
+/// \pre ToS: rank is even. ToT: outer rank == inner rank.
 ///
 /// \return The symmetrized TA::DistArray.
 ///
 template <typename... Args>
 auto column_symmetrize_ta(TA::DistArray<Args...> const& arr) {
   using ranges::views::iota;
+  constexpr bool is_tot = TA::detail::is_tensor_of_tensor_v<
+      typename TA::DistArray<Args...>::value_type>;
 
-  size_t const rank = arr.trange().rank();
-  if (rank % 2 != 0)
+  size_t const outer_rank = arr.trange().rank();
+
+  size_t const total_rank = [&] {
+    if constexpr (is_tot) {
+      size_t const inner_rank = tot_inner_rank(arr);
+      if (outer_rank != inner_rank)
+        throw Exception(
+            "ToT symmetrization requires equal outer and inner rank");
+      return outer_rank + inner_rank;
+    } else {
+      return outer_rank;
+    }
+  }();
+
+  if (total_rank % 2 != 0)
     throw Exception("This function only supports even-ranked tensors");
 
+  size_t const nparticles = total_rank / 2;
+
+  perm_t perm = iota(size_t{0}, total_rank) | ranges::to<perm_t>;
+
+  auto make_annot = [nparticles](perm_t const& p) {
+    if constexpr (is_tot) {
+      perm_t const outer(p.begin(), p.begin() + nparticles);
+      perm_t const inner(p.begin() + nparticles, p.end());
+      return ords_to_annot(outer) + ";" + ords_to_annot(inner);
+    } else {
+      return ords_to_annot(p);
+    }
+  };
+
+  auto const lannot = make_annot(perm);
+
   TA::DistArray<Args...> result;
-
-  perm_t perm = iota(size_t{0}, rank) | ranges::to<perm_t>;
-
-  auto const lannot = ords_to_annot(perm);
-
-  auto call_back = [&result, &lannot, &arr, &perm = std::as_const(perm)]() {
-    auto const rannot = ords_to_annot(perm);
+  auto call_back = [&result, &lannot, &arr, &perm = std::as_const(perm),
+                    &make_annot]() {
+    auto const rannot = make_annot(perm);
     if (result.is_initialized()) {
       result(lannot) += arr(rannot);
     } else {
@@ -48,7 +108,6 @@ auto column_symmetrize_ta(TA::DistArray<Args...> const& arr) {
     }
   };
 
-  auto const nparticles = rank / 2;
   symmetric_permutation(SymmetricParticleRange{perm.begin(),               //
                                                perm.begin() + nparticles,  //
                                                nparticles},
@@ -165,38 +224,6 @@ template <typename... Args>
 [[nodiscard]] TA::DistArray<Args...> slice_array_over_mode(
     TA::DistArray<Args...> const& arr, std::size_t mode, std::size_t tile_lo,
     std::size_t tile_hi);
-
-/// Inner-tensor mode count of a tensor-of-tensor DistArray (0 for a regular,
-/// non-nested array). The outer trange carries no inner information, so the
-/// inner rank is read from the first local non-empty inner tile and reduced
-/// (max) across the world -- this makes it well-defined on ranks holding no
-/// local data (or only empty inner tiles), as long as some rank holds a
-/// non-empty inner tile. Needed to build a ToT-valid annotation ("outer;inner")
-/// in the annotation-free array operations (add_inplace,
-/// slice_array_over_mode), since a flat annotation trips DistArray's
-/// is_tot_index() check.
-template <typename ArrayT>
-[[nodiscard]] std::size_t tot_inner_rank(ArrayT const& arr) {
-  std::size_t r = 0;
-  if constexpr (TA::detail::is_tensor_of_tensor_v<
-                    typename ArrayT::value_type>) {
-    // Inner tensors carry the rank; an outer tile may hold null/empty inner
-    // views (e.g. a screened pair), so skip those -- calling range() on an
-    // empty view asserts (ArenaTensor) or is UB (TA::Tensor).
-    for (auto it = arr.begin(); it != arr.end() && r == 0; ++it) {
-      auto const& outer_tile = it->get();
-      for (auto const& inner : outer_tile) {
-        if (inner.empty()) continue;
-        if (inner.range().rank() > 0) {
-          r = inner.range().rank();
-          break;
-        }
-      }
-    }
-    arr.world().gop.max(r);
-  }
-  return r;
-}
 
 /// Partition a TiledRange1 into contiguous, tile-aligned element-range batches,
 /// each covering at least \p target_batch_size elements where possible. Tiles
@@ -624,8 +651,7 @@ class ResultTensorOfTensorTA final : public Result {
   }
 
   [[nodiscard]] ResultPtr symmetrize() const override {
-    // not implemented yet
-    return nullptr;
+    return eval_result<this_type>(column_symmetrize_ta(get<ArrayT>()));
   }
 
   [[nodiscard]] ResultPtr antisymmetrize(size_t /*bra_rank*/) const override {
