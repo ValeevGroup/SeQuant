@@ -64,6 +64,20 @@
 #define SEQUANT_PRAGMA_GCC(x)
 #endif
 
+/* Scoped suppression of -Wdeprecated-declarations for a specific block of
+ * code. Use at a single call site that needs to invoke a deprecated API
+ * deliberately (e.g. tests that pin the legacy API's observable behavior, or
+ * in-tree wrappers that forward to it). Prefer this over a translation-unit-
+ * wide #pragma so the suppression's scope stays narrow. */
+#define SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN                         \
+  SEQUANT_PRAGMA_CLANG(diagnostic push)                                \
+  SEQUANT_PRAGMA_CLANG(diagnostic ignored "-Wdeprecated-declarations") \
+  SEQUANT_PRAGMA_GCC(diagnostic push)                                  \
+  SEQUANT_PRAGMA_GCC(diagnostic ignored "-Wdeprecated-declarations")
+#define SEQUANT_PRAGMA_IGNORE_DEPRECATED_END \
+  SEQUANT_PRAGMA_CLANG(diagnostic pop)       \
+  SEQUANT_PRAGMA_GCC(diagnostic pop)
+
 /* Defines the default error checking behavior */
 #define SEQUANT_ASSERT_THROW 2
 #define SEQUANT_ASSERT_ABORT 3

@@ -22,7 +22,11 @@
 
 namespace {
 
-auto eval_node(sequant::ExprPtr const& expr) { return binarize(expr); }
+auto eval_node(sequant::ExprPtr const& expr) {
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  return binarize(expr);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+}
 
 enum struct Npos {
   L,  // Left

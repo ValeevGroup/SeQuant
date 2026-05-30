@@ -419,14 +419,11 @@ FullBinaryNode<ExprT> binarize(ResultExpr const& res) {
   IndexSet uncontract;
   for (auto&& ix : res.indices()) uncontract.emplace(ix);
 
-    // The recursive calls below dispatch to the (now deprecated)
-    // binarize(ExprPtr) overload — the head's bra/ket would be positional, but
-    // we overwrite it below with res.result_as_tensor() so the layout is
-    // caller-determined and the deprecation does not apply.
-#if defined(__clang__) || defined(__GNUC__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
+  // The recursive calls below dispatch to the (now deprecated)
+  // binarize(ExprPtr) overload — the head's bra/ket would be positional, but
+  // we overwrite it below with res.result_as_tensor() so the layout is
+  // caller-determined and the deprecation does not apply.
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   FullBinaryNode<ExprT> tree = binarize<ExprT>(res.expression(), uncontract);
 
   const bool is_scalar =
@@ -448,9 +445,7 @@ FullBinaryNode<ExprT> binarize(ResultExpr const& res) {
     tree = FullBinaryNode<ExprT>(std::move(result), std::move(tree),
                                  binarize<ExprT>(ex<Constant>(1)));
   }
-#if defined(__clang__) || defined(__GNUC__)
-#pragma GCC diagnostic pop
-#endif
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   SEQUANT_ASSERT(tree.size() > 1);
 
   if (is_scalar) {

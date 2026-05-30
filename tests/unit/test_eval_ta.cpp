@@ -101,7 +101,12 @@ auto to_ta_node(sequant::FullBinaryNode<sequant::EvalExpr> node) {
 }
 
 auto eval_node(sequant::ExprPtr const& expr) {
+  // sequant::binarize(ExprPtr) is deprecated for caller-visible head
+  // construction; this helper exists for legacy test sections that don't
+  // depend on the head's bra/ket layout.
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   return to_ta_node(sequant::binarize(expr));
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 }
 
 auto eval_node(sequant::ResultExpr const& res) {

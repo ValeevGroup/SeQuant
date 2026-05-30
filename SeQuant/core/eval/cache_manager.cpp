@@ -5,6 +5,7 @@
 #include <SeQuant/core/eval/cache_manager.hpp>
 
 #include <SeQuant/core/eval/eval_node.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/view/transform.hpp>
 
@@ -41,17 +42,12 @@ AsyCost peak_cache(Sum const& expr, std::optional<size_t> min_repeats) {
   // Materialize into a vector so that nodes have stable addresses for
   // pointer-based scanning in cache_manager(). per-summand binarize for
   // cache-cost analysis only; the positional head doesn't escape.
-#if defined(__clang__) || defined(__GNUC__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   auto const nodes_vec = expr | ranges::views::transform([](const auto& expr) {
                            return binarize<EvalExpr>(expr);
                          }) |
                          ranges::to_vector;
-#if defined(__clang__) || defined(__GNUC__)
-#pragma GCC diagnostic pop
-#endif
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   auto cm = min_repeats ? cache_manager(nodes_vec, min_repeats.value())
                         : cache_manager(nodes_vec);
   auto max = AsyCost::zero();

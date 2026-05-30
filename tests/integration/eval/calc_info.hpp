@@ -100,7 +100,12 @@ struct CalcInfo {
     auto trimmed = tail_factor(expr);
     auto tform_and_save =
         transform([st = optm_opts.single_term](const auto& expr) {
+          // SCF reference path: per-term binarize for energy/residual building;
+          // the head's bra/ket layout is consumed by integration helpers that
+          // index by slot ordinal and don't depend on conventional layout.
+          SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
           return binarize<ExprT>(st ? optimize(expr) : expr);
+          SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
         }) |
         ranges::to_vector;
     if (trimmed.size() > 0) {

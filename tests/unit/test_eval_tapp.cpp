@@ -24,7 +24,9 @@ namespace {
 
 auto eval_node(sequant::ExprPtr const& expr) {
   using namespace sequant;
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   return binarize<EvalExprTAPP>(expr);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 }
 
 static auto const idx_rgx = boost::wregex{L"([ia])([↑↓])?_?(\\d+)"};

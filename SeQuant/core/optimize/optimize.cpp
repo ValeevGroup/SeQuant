@@ -149,14 +149,9 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
     container::vector<FullBinaryNode<EvalExpr>> nodes;
     nodes.reserve(new_sum.size());
     // per-summand binarize for ordering only; positional head doesn't escape.
-#if defined(__clang__) || defined(__GNUC__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     for (auto const& s : new_sum.summands()) nodes.push_back(binarize(s));
-#if defined(__clang__) || defined(__GNUC__)
-#pragma GCC diagnostic pop
-#endif
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     return ex<Sum>(opt::reorder(new_sum, nodes));
   }
 
