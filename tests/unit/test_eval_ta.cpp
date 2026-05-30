@@ -414,6 +414,16 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     using sequant::EvalExprTA;
     using sequant::ExprPtr;
 
+    // The test expressions below put an internal index (e.g. a_3) in the bra
+    // of two factors (g.bra and t.bra), which violates the default-context
+    // strict bra↔ket-symmetry policy (each internal must appear at most once
+    // per side under Conjugate). Disable the policy for this scope; we are
+    // probing the eval-graph head's bra/ket layout, not the canonicalizer's
+    // covariance assumptions.
+    auto ctx_resetter = sequant::set_scoped_default_context(
+        sequant::Context{sequant::get_default_context()}.set(
+            sequant::AssertStrictBraKetSymmetry::No));
+
     auto report = [](sequant::ExprPtr const& e, std::string const& label) {
       auto node = eval_node(e);
       auto const& head = node->as_tensor();

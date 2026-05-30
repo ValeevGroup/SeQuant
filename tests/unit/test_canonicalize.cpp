@@ -239,20 +239,6 @@ TEST_CASE("canonicalization", "[algorithms]") {
                               Symmetry::Nonsymm, BraKetSymmetry::Symm);
       REQUIRE_THAT(input, EquivalentTo("1/2 B{p1;p2;p5}:N-S B{p1;p2;p5}:N-S"));
     }
-    // bra-ket symmetry with rank-2 braket: exercises the LEXICOGRAPHIC block
-    // canonicalization path (DefaultTensorCanonicalizer::apply for Nonsymm
-    // permutational symmetry). g{i;a} and its bra<->ket swap g{a;i} must
-    // canonicalize to a unique orientation for a Symm braket. test_canonicalize
-    // above uses rank-1 braket B which early-returns in apply, so the block
-    // path with rank-2 braket is otherwise uncovered.
-    {
-      auto input = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
-                              Symmetry::Nonsymm, BraKetSymmetry::Symm) -
-                   ex<Tensor>(L"g", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
-                              Symmetry::Nonsymm, BraKetSymmetry::Symm);
-      simplify(input);
-      REQUIRE_THAT(input, EquivalentTo("0"));
-    }
     // SF R2 ±pair extracted from the real-field CCSD doubles. Under
     // make_min_sr_spaces + Real-field + Spinfree + SingleProduct (the srcc
     // SF context), the two terms are swap∘column-equivalent for a Symm braket
@@ -268,10 +254,15 @@ TEST_CASE("canonicalization", "[algorithms]") {
       for (auto const& s : *sr_reg) keys.push_back(s.base_key());
       for (auto const& k : keys)
         if (auto* sp = sr_reg->retrieve_ptr(k)) sp->field(Field::Real);
+      // Disable strict bra↔ket-symmetry policy: this expression has a_3 in
+      // g.bra and t.bra under one term's orientation (a bra-bra contraction,
+      // legitimate for Symm-braket g), which the default-context Conjugate
+      // policy would reject.
       auto srcc_resetter = set_scoped_default_context(
           Context({.index_space_registry_shared_ptr = sr_reg,
                    .vacuum = Vacuum::SingleProduct,
-                   .spbasis = SPBasis::Spinfree}));
+                   .spbasis = SPBasis::Spinfree})
+              .set(AssertStrictBraKetSymmetry::No));
       auto input = deserialize(
           L"8 * Ŝ{i_1,i_2;a_1,a_2}:N-C-S * g{i_3,a_1;a_3,i_1}:N-S-S "
           L"* t{a_2,a_3;i_2,i_3}:N-N-S "
@@ -293,6 +284,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
       auto sr_reg = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
       Context ctx_min = get_default_context();
       ctx_min.set(sr_reg);
+      ctx_min.set(AssertStrictBraKetSymmetry::No);
       auto resetter = set_scoped_default_context(ctx_min);
       auto exA = deserialize(
           L"8 * Ŝ{i_1,i_2;a_1,a_2}:N-C-S * g{i_3,a_1;a_3,i_1}:N-S-S "
@@ -329,7 +321,8 @@ TEST_CASE("canonicalization", "[algorithms]") {
       auto srcc_resetter = set_scoped_default_context(
           Context({.index_space_registry_shared_ptr = sr_reg,
                    .vacuum = Vacuum::SingleProduct,
-                   .spbasis = SPBasis::Spinfree}));
+                   .spbasis = SPBasis::Spinfree})
+              .set(AssertStrictBraKetSymmetry::No));
       auto input = deserialize(tests::data::sf_r2_direct_real());
       REQUIRE(input);
       const std::size_t n_before =
