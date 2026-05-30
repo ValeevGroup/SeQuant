@@ -56,6 +56,14 @@ target_link_libraries(your_executable_or_library_target PUBLIC SeQuant::SeQuant)
 
 The [Valeev Research Group (VRG)](https://valeevgroup.github.io) in the Department of Chemistry at Virginia Tech kickstarted the initial design and development of SeQuant. The ongoing development of SeQuant is driven by major [contributions](https://github.com/ValeevGroup/SeQuant/graphs/contributors) from VRG and the [Köhn Group](https://www.itheoc.uni-stuttgart.de/research/koehn) in the Department of Theoretical Chemistry at University of Stuttgart. 
 
+## How to Cite
+
+Machine-readable citation metadata is provided in the [`CITATION.cff`](CITATION.cff) file.
+
+The core, domain agnostic features of SeQuant are described in:
+
+Bimal Gaudel, Robert G. Adam, Ajay Melekamburath, Conner Masteran, Nakul Teke, Azam Besharatnik, Andreas Köhn, Edward F. Valeev; SeQuant framework for symbolic and numerical tensor algebra. I. Core capabilities. J. Chem. Phys. 14 April 2026; 164 (14): 142502. https://doi.org/10.1063/5.0311913
+
 ## Acknowledgement
 
 Development of SeQuant has been possible thanks to the support of the US National Science Foundation (award 2217081) and the US Department of Energy (awards DE-SC0022327 and DE-SC0022263)
