@@ -3,8 +3,12 @@ set(TEST_CASES
 )
 if (NOT SEQUANT_INTERNAL_SKIP_LONG_TESTS)
     list(APPEND TEST_CASES
-        # Single-Reference Coupled-Cluster equation generation (spin-orbital and spin-free)
-        "srcc.cpp ->  |3 t std so|3 t csv so|3 lambda std so|3 lambda csv so|2 t std sf|2 t csv sf|2 lambda std sf|2 lambda csv sf"
+        # Single-Reference Coupled-Cluster equation generation (spin-orbital and spin-free).
+        # The "real" keyword toggles every IndexSpace's scalar field to real;
+        # this promotes Hermitian integrals to braket-Symm, exercising the
+        # bra<->ket-swap canonicalization path that does not fire under the
+        # default complex (Conjugate) field.
+        "srcc.cpp ->  |3 t std so|3 t csv so|3 lambda std so|3 lambda csv so|2 t std sf|2 t csv sf|2 lambda std sf|2 lambda csv sf|2 t std sf real|2 t csv sf real|2 lambda std sf real|2 lambda csv sf real"
         # Single-Reference open-shell equation generation (spin-traced)
         "osstcc.cpp"
         # Equation-of-motion Coupled-Cluster
