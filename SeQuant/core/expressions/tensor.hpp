@@ -275,6 +275,20 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
         ket_net_rank_(ranges::count_if(
             ket_, [](const Index &idx) { return static_cast<bool>(idx); })) {
+    // The (anti)symmetrizer is a permutation-bookkeeping operator whose
+    // bra<->ket orientation defines/extracts the external indices and must be
+    // preserved; it must never be bra<->ket-symmetric (Symm), or
+    // canonicalization would swap its bra and ket and corrupt external-index
+    // extraction. Over a real field a Hermitian operator becomes Symm, so
+    // demote Symm to Conjugate here (Conjugate is treated as no-swap by the
+    // canonicalizer, matching the complex-field behavior) before
+    // canonicalize_slots() may act on it.
+    if ((label_ == reserved::antisymm_label() ||
+         label_ == reserved::symm_label()) &&
+        braket_symmetry_ == BraKetSymmetry::Symm) {
+      braket_symmetry_ = BraKetSymmetry::Conjugate;
+      hermiticity_ = to_hermiticity(BraKetSymmetry::Conjugate);
+    }
     validate_indices();
     validate_symmetries();
     canonicalize_slots();
@@ -299,6 +313,20 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
         ket_net_rank_(ranges::count_if(
             ket_, [](const Index &idx) { return static_cast<bool>(idx); })) {
+    // The (anti)symmetrizer is a permutation-bookkeeping operator whose
+    // bra<->ket orientation defines/extracts the external indices and must be
+    // preserved; it must never be bra<->ket-symmetric (Symm), or
+    // canonicalization would swap its bra and ket and corrupt external-index
+    // extraction. Over a real field a Hermitian operator becomes Symm, so
+    // demote Symm to Conjugate here (Conjugate is treated as no-swap by the
+    // canonicalizer, matching the complex-field behavior) before
+    // canonicalize_slots() may act on it.
+    if ((label_ == reserved::antisymm_label() ||
+         label_ == reserved::symm_label()) &&
+        braket_symmetry_ == BraKetSymmetry::Symm) {
+      braket_symmetry_ = BraKetSymmetry::Conjugate;
+      hermiticity_ = to_hermiticity(BraKetSymmetry::Conjugate);
+    }
     validate_indices();
     validate_symmetries();
     canonicalize_slots();
