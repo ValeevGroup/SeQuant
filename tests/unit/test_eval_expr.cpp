@@ -197,6 +197,83 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
                                              ket(IndexList{L"a_1"})));
   }
 
+  SECTION("Adjoint op") {
+    // A Nonsymm-braket tensor's adjoint() relabels its label with U+207A '⁺'
+    // (Tensor::adjoint() at expressions/tensor.cpp:25-41). When that leaf
+    // reaches binarize, the resulting eval-tree should expose the adjoint as
+    // a first-class IR op (EvalOp::Adjoint) holding the bare-label tensor as
+    // its single operand — not as a leaf with the marker still in the label.
+    Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+    REQUIRE(t.label() == L"t");
+    Tensor t_adj = t;
+    t_adj.adjoint();
+    REQUIRE(t_adj.label() == L"t⁺");
+    REQUIRE(t_adj.bra().at(0).label() == L"i_1");
+    REQUIRE(t_adj.ket().at(0).label() == L"a_1");
+
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto tree = binarize(ex<Tensor>(t_adj));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+    // The tree should NOT be a leaf — the adjoint marker on the leaf label is
+    // a structural property the IR should surface as a unary op.
+    REQUIRE_FALSE(tree.leaf());
+    REQUIRE(tree->op_type() == EvalOp::Adjoint);
+    REQUIRE(tree->is_tensor());  // adjoint of a tensor is still a tensor
+
+    // Left child: the bare-label leaf with the marker stripped and bra/ket
+    // swapped back to the operand's natural orientation.
+    REQUIRE(tree.left().leaf());
+    REQUIRE(tree.left()->is_tensor());
+    REQUIRE(tree.left()->as_tensor().label() == L"t");
+    REQUIRE(tree.left()->as_tensor().bra().at(0).label() == L"a_1");
+    REQUIRE(tree.left()->as_tensor().ket().at(0).label() == L"i_1");
+
+    // Right child: a Constant(1) sentinel — present so the full-binary-tree
+    // invariant holds (every non-leaf has both children); ignored by
+    // evaluate's Adjoint-case dispatch.
+    REQUIRE(tree.right().leaf());
+    REQUIRE(tree.right()->is_constant());
+    REQUIRE(tree.right()->as_constant().value() == Constant::scalar_type{1});
+
+    // The Adjoint node's canon_indices are the *original* (marker-bearing)
+    // tensor's index order — that's what a downstream Sum/Product parent
+    // sees as the operand's slot order.
+    auto const& adj_canon = tree->canon_indices();
+    REQUIRE(adj_canon.size() == 2);
+    REQUIRE(adj_canon[0].label() == L"i_1");
+    REQUIRE(adj_canon[1].label() == L"a_1");
+
+    // The bare-leaf operand's canon_indices are the swapped order.
+    auto const& bare_canon = tree.left()->canon_indices();
+    REQUIRE(bare_canon.size() == 2);
+    REQUIRE(bare_canon[0].label() == L"a_1");
+    REQUIRE(bare_canon[1].label() == L"i_1");
+
+    // Hash uniqueness: Adjoint(t) and the bare t leaf must have distinct
+    // hashes (else cache collisions). And Adjoint(Adjoint(t)) ≡ t.
+    auto bare_leaf = ex<Tensor>(t);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto bare_tree = binarize(bare_leaf);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(bare_tree.leaf());
+    REQUIRE(bare_tree->hash_value() != tree->hash_value());
+
+    // Hermitian (BraKetSymmetry::Conjugate/Symm) tensors don't carry the
+    // marker — Tensor::adjoint() guards the relabel on Nonsymm only — so
+    // binarize gives a plain leaf (no Adjoint op).
+    Tensor g(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"}, Symmetry::Nonsymm,
+             BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
+    Tensor g_adj = g;
+    g_adj.adjoint();
+    REQUIRE(g_adj.label() == L"g");  // no marker added for Conjugate
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto g_tree = binarize(ex<Tensor>(g_adj));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(g_tree.leaf());  // no Adjoint wrapper
+  }
+
   SECTION("external hyperindices") {
     // t{i1,i2;a1,a3} T2{a2,a3;i1,i2}: i1,i2 appear in bra of t and ket of
     // T2 (multiply-appearing), a3 also multiply-appearing

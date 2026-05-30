@@ -20,6 +20,11 @@ template <meta::eval_node Node>
 ExprPtr linearize_eval_node(Node const& node) {
   if (node.leaf()) return to_expr(node);
 
+  // Adjoint is unary: round-trip back to the marker-bearing tensor stored in
+  // the node's own ExprPtr — that's the symbolic form a Sum/Product parent
+  // would see — and ignore the Constant(1) sentinel right child.
+  if (node->op_type() == EvalOp::Adjoint) return to_expr(node);
+
   ExprPtr lres = linearize_eval_node(node.left());
   ExprPtr rres = linearize_eval_node(node.right());
 
@@ -152,6 +157,14 @@ struct Memory {
                                   : AsyCost::zero();
     };
 
+    // Adjoint is unary — the right child is the Constant(1) sentinel and
+    // the bare-leaf left holds the same indices as the node itself, so the
+    // memory requirement is just one tensor's worth.
+    if (n->op_type() == EvalOp::Adjoint) {
+      add_cost(n->expr());
+      return result;
+    }
+
     add_cost(n.left()->expr());
     add_cost(n.right()->expr());
     add_cost(n->expr());
@@ -169,9 +182,12 @@ struct Memory {
 struct FlopsWithSymm {
   [[nodiscard]] AsyCost operator()(meta::eval_node auto const& n) const {
     auto cost = Flops{}(n);
-    if (n.leaf() || !(n->is_tensor()            //
-                      && n.left()->is_tensor()  //
-                      && n.right()->is_tensor()))
+    // Adjoint is unary (right is Constant(1) sentinel) and does no
+    // symmetry-driven reduction — return Flops's permute-style cost as-is.
+    if (n.leaf() || n->op_type() == EvalOp::Adjoint ||
+        !(n->is_tensor()            //
+          && n.left()->is_tensor()  //
+          && n.right()->is_tensor()))
       return cost;
 
     // confirmed:

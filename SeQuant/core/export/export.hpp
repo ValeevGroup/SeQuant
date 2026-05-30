@@ -198,6 +198,13 @@ class GenerationVisitor {
             ex<Product>(ExprPtrList{node.left()->expr(), node.right()->expr()},
                         Product::Flatten::No));
         break;
+      case EvalOp::Adjoint:
+        // Unary IR op — the marker-bearing tensor lives in node->expr(); the
+        // bare-leaf left child and Constant(1) right child are structural
+        // plumbing for in-memory evaluation, not part of the symbolic form
+        // a code generator should be handed.
+        expressions.push_back(node->expr());
+        break;
       case EvalOp::Sum: {
         switch (node->compute_selection()) {
           case ComputeSelection::None:

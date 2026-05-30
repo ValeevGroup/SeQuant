@@ -277,6 +277,22 @@ class Result {
       std::array<std::any, 2> const&) const = 0;
 
   ///
+  /// \brief Take the adjoint (complex-conjugate transpose) of this result.
+  ///
+  /// Used to evaluate the EvalOp::Adjoint IR node — the unary op that holds a
+  /// bare-label operand and emits T† = conj(T) permuted into the adjoint slot
+  /// order. \p ann is [operand_annot, result_annot] (bra/ket swapped relative
+  /// to the operand); backends with a real numeric type implement this as a
+  /// pure permutation (conj is a no-op) and complex backends apply conj as
+  /// well. Not a pure virtual: only tensor-backed results need it; the
+  /// default throws. Mirrors the slice_mode precedent.
+  ///
+  [[nodiscard]] virtual ResultPtr adjoint(
+      std::array<std::any, 2> const& /*ann*/) const {
+    throw unimplemented_method("adjoint");
+  }
+
+  ///
   /// \brief Restrict this result to a contiguous *element* range of one mode.
   ///
   /// Keeps elements `[elem_lo, elem_hi)` of mode \p mode and all elements of
