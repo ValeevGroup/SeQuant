@@ -218,9 +218,11 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
                  /* bra + ket = */ 2>>
       canonical_slot_order;
   // for nonsymmetric column-symmetric tensors only: maps tensor ordinal ->
-  // canonical order of its column slots
+  // canonical order of its column bundle vertices (one per column).
+  // Populated from VertexType::TensorBraKet (column bundle) vertices below,
+  // not from individual bra/ket slot vertices.
   container::map<std::size_t, container::svector<std::size_t, 4>>
-      canonical_column_slot_order;
+      canonical_column_bundle_order;
   // for bra-ket symmetric tensors only: maps tensor ordinal -> canonical order
   // of its bra and ket slot bundle vertices
   container::map<std::size_t, std::array<std::size_t, /* bra + ket = */ 2>>
@@ -283,7 +285,7 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
         if (symm == Symmetry::Nonsymm && csymm == ColumnSymmetry::Symm &&
             /* skip the first one which connects bra and ket bundles */
             tensor_braket_vertex_ord != 0) {
-          canonical_column_slot_order[tensor_ord].emplace_back(
+          canonical_column_bundle_order[tensor_ord].emplace_back(
               canonize_perm[vertex]);
         }
         ++tensor_braket_vertex_ord;
@@ -316,8 +318,8 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
     braparslots.first = sort_then_replace_by_ordinals(braparslots.second);
     ketparslots.first = sort_then_replace_by_ordinals(ketparslots.second);
   }
-  for (auto &[ord, slots] : canonical_column_slot_order) {
-    sort_then_replace_by_ordinals(slots);
+  for (auto &[ord, bundles] : canonical_column_bundle_order) {
+    sort_then_replace_by_ordinals(bundles);
   }
 
   container::map<Index, Index> idxrepl;
@@ -373,8 +375,8 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
 
     if (asymm) {  // asymmetric tensor? order column slots only
 
-      auto it = canonical_column_slot_order.find(i);
-      if (it == canonical_column_slot_order.end()) continue;
+      auto it = canonical_column_bundle_order.find(i);
+      if (it == canonical_column_bundle_order.end()) continue;
 
       auto &sorted_ordinals = it->second;
 
@@ -416,7 +418,7 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
     }
 
     // lastly permute bra with ket bundles, if needed
-    // TODO extend to support comjugate case
+    // TODO extend to support conjugate case
     if (braket_symmetry(tensor) != BraKetSymmetry::Symm) continue;
 
     // swap bra and ket bundles
