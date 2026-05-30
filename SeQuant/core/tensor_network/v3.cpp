@@ -250,6 +250,22 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
           canonical_slot_order[tensor_ord][bra ? 0 : 1].second.emplace_back(
               canonize_perm[vertex]);
         }
+        break;
+      }
+
+      case VertexType::TensorBraBundle:
+      case VertexType::TensorKetBundle: {
+        // The braket swap decision must compare canon positions of the
+        // *bundle* vertices, not of individual slot vertices. Using slot
+        // vertices (as we used to) overwrote on every iteration → the
+        // comparison ended up reading canon_perm of the last bra/ket slot,
+        // which is not necessarily invariant under the canonical graph's
+        // automorphism group (same-color same-degree vertices can be
+        // permuted among themselves in valid canonical labelings).
+        SEQUANT_ASSERT(tensor_count > 0);
+        const auto bra = vertex_type == VertexType::TensorBraBundle;
+        const std::size_t tensor_ord = tensor_count - 1;
+        const AbstractTensor &tensor = *tensors_[tensor_ord];
         const auto bksymm = braket_symmetry(tensor);
         if (bksymm != BraKetSymmetry::Nonsymm) {
           canonical_bra_ket_bundle_order[tensor_ord][bra ? 0 : 1] =
@@ -282,8 +298,6 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
         break;
 
       case VertexType::TensorAux:
-      case VertexType::TensorBraBundle:
-      case VertexType::TensorKetBundle:
       case VertexType::TensorAuxBundle:
       case VertexType::IndexBundle:
         break;
