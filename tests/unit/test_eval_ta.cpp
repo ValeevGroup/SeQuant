@@ -395,6 +395,102 @@ bool equal_tarrays(Array const& arr1, Array const& arr2) {
 }  // namespace
 
 TEST_CASE("eval_with_tiledarray", "[eval]") {
+  // Reproducer for the mpqc4 cck real-field NaN regression. The eval-graph
+  // head's bra/ket split is purely positional: each external index ends up in
+  // whichever slot (bra or ket) it occupied in its source tensor, summed
+  // across the term. Two orientations of a tensor that are equivalent under
+  // bra<->ket-swap (Symm braket_symmetry) produce different head bra_rank,
+  // which breaks downstream code (e.g. mpqc's jacobi_update) that assumes a
+  // conventional 2:2 (vir,vir;occ,occ) layout for a CCSD T2 residual head.
+  // Bug is independent of scalar Field — fires under both Conjugate and Symm
+  // whenever the canonical orientation puts an external on the "wrong" side.
+  SECTION("eval-graph head bra/ket split is positional, not external-aware") {
+    using sequant::deserialize;
+    using sequant::EvalExprTA;
+    using sequant::ExprPtr;
+
+    auto report = [](sequant::ExprPtr const& e, std::string const& label) {
+      auto node = eval_node(e);
+      auto const& head = node->as_tensor();
+      std::wstring head_str = sequant::to_latex(head);
+      std::string head_str8{head_str.begin(), head_str.end()};
+      INFO(label + " head: " + head_str8 +
+           "  bra_rank=" + std::to_string(head.bra_rank()) +
+           "  ket_rank=" + std::to_string(head.ket_rank()));
+      return std::make_pair(head.bra_rank(), head.ket_rank());
+    };
+
+    // Representative SF R2 residual term (h2o-cck-2-631g-pvdz) with externals
+    // {a_1, a_2, i_1, i_2}. For a CCSD T2 the head ought to be I{a_1,a_2; i_1,
+    // i_2} (vir,vir;occ,occ) so downstream Jacobi-style updates index orbital
+    // energies correctly.
+
+    // (A) g written with the occ external i_2 in its bra slot: regardless of
+    // braket_symmetry, the head ends up I{i_2,a_1,a_2; i_1} — head bra/ket is
+    // assigned by external SLOT, not by space.
+    auto expr_bra_external_symm = deserialize(
+        L"2 g{i_2,a_3;i_3,i_4}:N-S-S * t{a_3;i_3}:N-N-S "
+        L"* t{a_1,a_2;i_1,i_4}:N-N-S");
+    REQUIRE(expr_bra_external_symm);
+    auto [br_symm, kr_symm] =
+        report(expr_bra_external_symm, "g{i_2,a_3;...}:N-S-S");
+
+    auto expr_bra_external_conj = deserialize(
+        L"2 g{i_2,a_3;i_3,i_4}:N-C-S * t{a_3;i_3}:N-N-S "
+        L"* t{a_1,a_2;i_1,i_4}:N-N-S");
+    REQUIRE(expr_bra_external_conj);
+    auto [br_conj, kr_conj] =
+        report(expr_bra_external_conj, "g{i_2,a_3;...}:N-C-S");
+
+    // (B) Same expression with g's bra/ket pre-swapped (mathematically
+    // equivalent under Symm braket_symmetry). External i_2 now lives in g's
+    // ket slot; the head comes out I{a_1,a_2; i_2,i_1} — the conventional 2:2
+    // layout that mpqc's downstream code expects.
+    auto expr_ket_external_swap = deserialize(
+        L"2 g{i_3,i_4;i_2,a_3}:N-S-S * t{a_3;i_3}:N-N-S "
+        L"* t{a_1,a_2;i_1,i_4}:N-N-S");
+    REQUIRE(expr_ket_external_swap);
+    auto [br_swap, kr_swap] =
+        report(expr_ket_external_swap, "g{i_3,i_4;i_2,a_3}:N-S-S (pre-swap)");
+
+    // (C) Caller-supplied head layout via ResultExpr: the right shape of the
+    // public API for this. The caller writes the LHS with the bra/ket layout
+    // it wants the head to have; binarize(ResultExpr) at eval_expr.hpp:435
+    // overwrites the eval-tree root's tensor with res.result_as_tensor(),
+    // making the IR's positional choice irrelevant.
+    auto res_explicit_layout = sequant::deserialize<sequant::ResultExpr>(
+        L"R2{a_1,a_2;i_1,i_2}:N-N-S = "
+        L"2 g{i_2,a_3;i_3,i_4}:N-S-S * t{a_3;i_3}:N-N-S "
+        L"* t{a_1,a_2;i_1,i_4}:N-N-S");
+    auto node_explicit = eval_node(res_explicit_layout);
+    auto const& head_explicit = node_explicit->as_tensor();
+    std::wstring head_explicit_str = sequant::to_latex(head_explicit);
+    std::string head_explicit_str8{head_explicit_str.begin(),
+                                   head_explicit_str.end()};
+    INFO("ResultExpr R2{a_1,a_2;i_1,i_2} head: " + head_explicit_str8 +
+         "  bra_rank=" + std::to_string(head_explicit.bra_rank()) +
+         "  ket_rank=" + std::to_string(head_explicit.ket_rank()));
+
+    // Document the current behavior:
+    // (A) same 3:1 split regardless of Symm vs Conjugate — proves the bug is
+    // positional, independent of scalar Field.
+    CHECK(br_symm == 3);
+    CHECK(kr_symm == 1);
+    CHECK(br_conj == 3);
+    CHECK(kr_conj == 1);
+    // (B) the orientation mpqc's master baseline relied on; head is 2:2.
+    CHECK(br_swap == 2);
+    CHECK(kr_swap == 2);
+    // (C) ResultExpr API gives the caller exact control; head matches the LHS
+    // verbatim no matter how the RHS factors are oriented internally.
+    CHECK(head_explicit.bra_rank() == 2);
+    CHECK(head_explicit.ket_rank() == 2);
+    CHECK(head_explicit.bra().at(0).label() == L"a_1");
+    CHECK(head_explicit.bra().at(1).label() == L"a_2");
+    CHECK(head_explicit.ket().at(0).label() == L"i_1");
+    CHECK(head_explicit.ket().at(1).label() == L"i_2");
+  }
+
   SECTION("real") {
     using ranges::views::transform;
     using sequant::EvalExprTA;
