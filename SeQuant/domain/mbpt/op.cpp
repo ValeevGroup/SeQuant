@@ -570,9 +570,10 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
   // field-agnostic fact carried by the OpRegistry: general operators are
   // matrix elements of (anti-)Hermitian operators (Hermitian by default),
   // (de)excitation operators (cluster amplitudes etc.) are not. The concrete
-  // BraKetSymmetry (Symm vs Conjugate) is derived from Context::field() when
-  // the Tensor is built, so a real computation sees Hermitian integrals as
-  // bra<->ket symmetric while amplitudes stay nonsymmetric.
+  // BraKetSymmetry (Symm vs Conjugate) is derived from the bra/ket indices'
+  // IndexSpace::field() (see sequant::base_field) when the Tensor is built, so
+  // a real computation sees Hermitian integrals as bra<->ket symmetric while
+  // amplitudes stay nonsymmetric.
   const auto op_herm = op_hermiticity(label_);
 
   if (!dep && csv) {

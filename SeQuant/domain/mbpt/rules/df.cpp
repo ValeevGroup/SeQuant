@@ -24,10 +24,11 @@ ExprPtr density_fit_impl(Tensor const& tnsr, Index const& aux_idx,
   // The 3-center DF factor (pq|X) is a matrix element of a (real, symmetric)
   // Coulomb metric and is therefore Hermitian in its p<->q (bra<->ket) pair --
   // (pq|X) = (qp|X) -- regardless of the spaces of p, q. Declaring it Hermitian
-  // (rather than inheriting the context default) lets a real computation treat
-  // it as bra<->ket symmetric, so e.g. (pq|X) C^p and (pq|X) C^q collapse to
-  // one intermediate. The concrete BraKetSymmetry (Symm vs Conjugate) is
-  // derived from Context::field() when the Tensor is built.
+  // (rather than the default non-Hermitian) lets a real computation treat it as
+  // bra<->ket symmetric, so e.g. (pq|X) C^p and (pq|X) C^q collapse to one
+  // intermediate. The concrete BraKetSymmetry (Symm vs Conjugate) is derived
+  // from the bra/ket indices' IndexSpace::field() (see sequant::base_field)
+  // when the Tensor is built.
   auto t1 = ex<Tensor>(factor_label, bra({ranges::front(tnsr.bra())}),
                        ket({ranges::front(tnsr.ket())}), aux({aux_idx}),
                        Symmetry::Nonsymm, Hermiticity::Hermitian);

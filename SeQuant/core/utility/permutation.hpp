@@ -52,16 +52,23 @@ std::size_t count_cycles(Seq0&& v0, Seq1&& v1) {
   const std::size_t n1 = size(v1);
   const std::size_t n = n0 + n1;
 
-  // precondition (debug builds only): every value occurs in exactly two slots
-  // across v0 and v1 combined. This is what makes the column+contraction graph
-  // 2-regular on its internal slots, so it decomposes into disjoint cycles and
-  // the component count is the loop count. It generalizes the former "v0 is a
-  // permutation of v1" contract (which also implied exactly two occurrences,
-  // one per row) to allow both occurrences in the same row (bra-bra / ket-ket
-  // edges from reoriented bra-ket-symmetric tensors). Without this check
-  // malformed input (a value appearing once, or 3+ times) is silently accepted
-  // and returns a meaningless count.
+  // preconditions (debug builds only):
+  //  (1) the two rows have equal length: every column pairs a v0 slot with a
+  //      v1 slot. The column-edge loop below only pairs min(n0, n1) slots, so
+  //      with n0 != n1 the surplus slots in the longer row would stay unpaired
+  //      and be miscounted as their own components -- a meaningless loop count
+  //      rather than a detected error.
+  //  (2) every value occurs in exactly two slots across v0 and v1 combined.
+  //      This is what makes the column+contraction graph 2-regular on its
+  //      internal slots, so it decomposes into disjoint cycles and the
+  //      component count is the loop count. It generalizes the former "v0 is a
+  //      permutation of v1" contract (which also implied exactly two
+  //      occurrences, one per row) to allow both occurrences in the same row
+  //      (bra-bra / ket-ket edges from reoriented bra-ket-symmetric tensors).
+  //      Without it malformed input (a value appearing once, or 3+ times) is
+  //      silently accepted.
   if constexpr (assert_enabled()) {
+    SEQUANT_ASSERT(n0 == n1);
     container::map<std::ranges::range_value_t<Seq0>, std::size_t> counts;
     for (auto&& x : v0) ++counts[x];
     for (auto&& x : v1) ++counts[x];
