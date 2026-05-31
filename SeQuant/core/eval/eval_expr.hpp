@@ -379,10 +379,27 @@ static_assert(!meta::can_evaluate<EvalNode<EvalExpr>>);
 ///        indices that appear more than once in @p expr (i.e., hyperindices)
 ///        but should not be contracted. Indices appearing once are
 ///        automatically treated as external.
+///
+/// @deprecated The root EvalExpr's tensor has a positional bra/ket split: each
+///        surviving external ends up in whichever bra/ket slot it occupied in
+///        its source factor (see eval_expr.cpp ~ "target_indices" lambda).
+///        For terms equivalent under bra<->ket-swap, this can yield a head
+///        with an unconventional bra/ket layout (e.g., 3:1 for a CCSD T2
+///        residual) that breaks downstream code reading the result tensor by
+///        slot position. Prefer the ResultExpr overload, which lets the
+///        caller declare the head's bra/ket layout explicitly via the LHS
+///        and is space/convention-agnostic in the IR.
+///
+/// @sa binarize(ResultExpr const&)
 template <typename ExprT = EvalExpr>
   requires std::is_constructible_v<ExprT, EvalExpr>
-FullBinaryNode<ExprT> binarize(ExprPtr const& expr,
-                               IndexSet const& external = {}) {
+[[deprecated(
+    "binarize(ExprPtr) builds the eval-tree head's bra/ket from external "
+    "slot positions in the source factors and can yield an unconventional "
+    "layout (e.g. T2 residual head 3:1 instead of 2:2). Use "
+    "binarize(ResultExpr) and supply the desired head as the "
+    "LHS.")]] FullBinaryNode<ExprT>
+binarize(ExprPtr const& expr, IndexSet const& external = {}) {
   SEQUANT_ASSERT(
       ranges::all_of(external, [](const auto& idx) { return idx.nonnull(); }));
   auto tree = impl::binarize(expr, external);
@@ -402,6 +419,11 @@ FullBinaryNode<ExprT> binarize(ResultExpr const& res) {
   IndexSet uncontract;
   for (auto&& ix : res.indices()) uncontract.emplace(ix);
 
+  // The recursive calls below dispatch to the (now deprecated)
+  // binarize(ExprPtr) overload — the head's bra/ket would be positional, but
+  // we overwrite it below with res.result_as_tensor() so the layout is
+  // caller-determined and the deprecation does not apply.
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   FullBinaryNode<ExprT> tree = binarize<ExprT>(res.expression(), uncontract);
 
   const bool is_scalar =
@@ -423,6 +445,7 @@ FullBinaryNode<ExprT> binarize(ResultExpr const& res) {
     tree = FullBinaryNode<ExprT>(std::move(result), std::move(tree),
                                  binarize<ExprT>(ex<Constant>(1)));
   }
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   SEQUANT_ASSERT(tree.size() > 1);
 
   if (is_scalar) {

@@ -18,7 +18,9 @@ using Node = sequant::EvalNode<sequant::EvalExpr>;
 
 Node bin(std::wstring_view s) {
   using namespace sequant;
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   return binarize(deserialize(s, {.def_perm_symm = Symmetry::Antisymm}));
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 }
 
 // Example predicate from the header docs: capture maximal internal

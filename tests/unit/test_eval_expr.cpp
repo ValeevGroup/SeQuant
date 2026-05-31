@@ -36,7 +36,9 @@ EvalExpr result_expr(EvalExpr const& left, EvalExpr const& right, EvalOp op) {
   SEQUANT_ASSERT(op == EvalOp::Product || op == EvalOp::Sum);
   auto xpr = op == EvalOp::Product ? left.expr() * right.expr()
                                    : left.expr() + right.expr();
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   return *binarize(xpr);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 }
 
 }  // namespace sequant
@@ -140,12 +142,16 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
   SECTION("result expr") {
     ExprPtr expr = deserialize(L"2 var");
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     ExprPtr root_expr = binarize(expr)->expr();
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     REQUIRE(root_expr->is<Variable>());
     REQUIRE(*root_expr != *expr);
 
     expr = deserialize(L"2 t{a1;i1}");
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     root_expr = binarize(expr)->expr();
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     REQUIRE(root_expr->is<Tensor>());
     REQUIRE(*root_expr != *expr);
 
@@ -199,7 +205,9 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     // without external indices: i1,i2,a3 are all contracted
     // result has only {a1,a2}
     {
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
       auto tree = binarize(expr);
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
       REQUIRE(tree->is_tensor());
       auto const& ixs = tree->as_tensor().const_braket() |
                         ranges::views::transform(&Index::label) |
@@ -215,7 +223,9 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
       IndexSet ext;
       ext.emplace(Index{L"i_1"});
       ext.emplace(Index{L"i_2"});
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
       auto tree = binarize(expr, ext);
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
       REQUIRE(tree->is_tensor());
       auto const& t = tree->as_tensor();
       auto all_labels = t.const_indices() |
@@ -295,8 +305,10 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
     REQUIRE_FALSE(x1.hash_value() == x3.hash_value());
     REQUIRE_FALSE(x12.hash_value() == x3.hash_value());
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     auto tree1 = binarize(deserialize(L"A C"));
     auto tree2 = binarize(deserialize(L"A t{a1;i1}"));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 
     REQUIRE(tree1->hash_value() != tree2->hash_value());
   }

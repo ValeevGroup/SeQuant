@@ -355,7 +355,13 @@ TEST_CASE("optimize", "[optimize]") {
                         .def_col_symm = ColumnSymmetry::Nonsymm}));
         }
 
-        auto binarizer = [](auto&& expr) { return binarize(expr); };
+        auto binarizer = [](auto&& expr) {
+          // CSE drives binarize() on subexpressions for hash-equivalence
+          // detection; positional head is irrelevant here.
+          SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+          return binarize(expr);
+          SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+        };
 
         if (force_hash_collisions) {
           // This code path makes all hashes be computed to be zero and hence

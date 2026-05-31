@@ -12,68 +12,106 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdlib>
+#include <numeric>
 #include <ranges>
 
 namespace sequant {
 
-/// @brief Returns the number of cycles
+/// @brief Returns the number of (spin) loops in a closed-shell trace
 
-/// Counts the number of cycles of a permutation represented in a 2-line form
-/// by stacking \p v0 and \p v1 on top of each other.
+/// Interprets \p v0 and \p v1 as the column-paired index slots of a contracted
+/// tensor network: slot @c i is one particle slot of one tensor, holding @c
+/// v0[i] in one row and @c v1[i] in the other (e.g. ket and bra). Two slots
+/// must carry the same spin if they are (a) the two rows of the same column (a
+/// *column edge* @c v0[i]—v1[i]) or (b) the two occurrences of the same
+/// (contracted) index value (a *contraction edge*). Every internal slot then
+/// has degree two, so this graph is a disjoint union of cycles and the number
+/// of connected components is the number of independent spin loops (each loop
+/// contributes a factor of two in the closed-shell trace).
+///
+/// Unlike a 2-line-permutation reading, this is agnostic to which row a value
+/// sits in: a contraction may be covariant (one occurrence in \p v0, one in
+/// \p v1) or, for bra-ket-symmetric (Hermitian/real) tensors that have been
+/// reoriented, both occurrences in the same row (bra-bra / ket-ket). The
+/// component count is invariant under such bra<->ket swaps and reduces to the
+/// permutation's cycle count whenever \p v0 is a permutation of \p v1.
 /// @tparam Seq0 (reference to) a container type
 /// @tparam Seq1 (reference to) a container type
-/// @param v0 first range
-/// @param v1 second range
-/// @pre \p v0 is a permutation of \p v1
-/// @return the number of cycles
+/// @param v0 first row of index slots
+/// @param v1 second row of index slots (\p v1[i] is column-paired with \p
+/// v0[i])
+/// @pre \p v0 and \p v1 have equal size and every value occurs in exactly two
+///      slots across \p v0 and \p v1 combined
+/// @return the number of connected components (spin loops)
 template <typename Seq0, typename Seq1>
 std::size_t count_cycles(Seq0&& v0, Seq1&& v1) {
   using std::ranges::begin;
   using std::ranges::end;
   using std::ranges::size;
-  SEQUANT_ASSERT(std::ranges::is_permutation(v0, v1));
-  // This function can't deal with duplicate entries in v0 or v1
-  SEQUANT_ASSERT(std::set(begin(v0), end(v0)).size() == size(v0));
-  SEQUANT_ASSERT(std::set(begin(v1), end(v1)).size() == size(v1));
+  const std::size_t n0 = size(v0);
+  const std::size_t n1 = size(v1);
+  const std::size_t n = n0 + n1;
 
-  container::svector<bool> visited;
-  visited.resize(size(v0), false);
-
-  std::size_t n_cycles = 0;
-  std::size_t start_col = 0;
-  for (auto it = begin(v0); it != end(v0); ++it, ++start_col) {
-    if (visited[start_col]) {
-      // This column has already been part of a previous cycle
-      continue;
-    }
-
-    n_cycles++;
-
-    std::size_t current_col = 0;
-    auto it0 = it;
-    do {
-      // Find corresponding element in v1
-      auto it1 = std::ranges::find(v1, *it0);
-      SEQUANT_ASSERT(std::distance(begin(v1), it1) >= 0);
-
-      // Determine column of the determined corresponding element
-      current_col = static_cast<std::size_t>(std::distance(begin(v1), it1));
-      SEQUANT_ASSERT(current_col < size(v0));
-
-      // Set it0 to the element in the determined column in v0
-      it0 = begin(v0);
-      std::advance(it0, current_col);
-
-      // Mark current_col as visited
-      SEQUANT_ASSERT(!visited[current_col]);
-      visited[current_col] = true;
-    } while (start_col != current_col);
+  // preconditions (debug builds only):
+  //  (1) the two rows have equal length: every column pairs a v0 slot with a
+  //      v1 slot. The column-edge loop below only pairs min(n0, n1) slots, so
+  //      with n0 != n1 the surplus slots in the longer row would stay unpaired
+  //      and be miscounted as their own components -- a meaningless loop count
+  //      rather than a detected error.
+  //  (2) every value occurs in exactly two slots across v0 and v1 combined.
+  //      This is what makes the column+contraction graph 2-regular on its
+  //      internal slots, so it decomposes into disjoint cycles and the
+  //      component count is the loop count. It generalizes the former "v0 is a
+  //      permutation of v1" contract (which also implied exactly two
+  //      occurrences, one per row) to allow both occurrences in the same row
+  //      (bra-bra / ket-ket edges from reoriented bra-ket-symmetric tensors).
+  //      Without it malformed input (a value appearing once, or 3+ times) is
+  //      silently accepted.
+  if constexpr (assert_enabled()) {
+    SEQUANT_ASSERT(n0 == n1);
+    container::map<std::ranges::range_value_t<Seq0>, std::size_t> counts;
+    for (auto&& x : v0) ++counts[x];
+    for (auto&& x : v1) ++counts[x];
+    SEQUANT_ASSERT(
+        ranges::all_of(counts, [](auto const& kv) { return kv.second == 2; }));
   }
 
-  // All columns must have been visited (otherwise, we'll have missed
-  // at least one cycle)
-  SEQUANT_ASSERT(std::ranges::all_of(visited, [](bool val) { return val; }));
+  // slot ids: row-0 slot i -> i ; row-1 slot i -> n0 + i. Size the union-find
+  // by n0 + n1 (not 2*n0) so it is safe even if the two rows differ in length.
+  // union-find with path halving
+  container::svector<std::size_t> parent(n);
+  std::iota(parent.begin(), parent.end(), std::size_t{0});
+  auto find = [&parent](std::size_t x) {
+    while (parent[x] != x) {
+      parent[x] = parent[parent[x]];
+      x = parent[x];
+    }
+    return x;
+  };
+  auto unite = [&](std::size_t a, std::size_t b) { parent[find(a)] = find(b); };
 
+  // column edges: the two rows of each column carry the same spin
+  const std::size_t ncols = std::min(n0, n1);
+  for (std::size_t i = 0; i < ncols; ++i) unite(i, n0 + i);
+
+  // contraction edges: the slots sharing an index value carry the same spin
+  container::map<std::ranges::range_value_t<Seq0>, std::size_t> first_slot;
+  auto add_slot = [&first_slot, &unite](auto const& idx, std::size_t slot) {
+    auto [it, inserted] = first_slot.try_emplace(idx, slot);
+    if (!inserted)
+      unite(it->second, slot);  // contraction with first occurrence
+  };
+  {
+    std::size_t i = 0;
+    for (auto it = begin(v0); it != end(v0); ++it, ++i) add_slot(*it, i);
+    i = 0;
+    for (auto it = begin(v1); it != end(v1); ++it, ++i) add_slot(*it, n0 + i);
+  }
+
+  // number of connected components = number of spin loops
+  std::size_t n_cycles = 0;
+  for (std::size_t i = 0; i < n; ++i)
+    if (find(i) == i) ++n_cycles;
   return n_cycles;
 };
 

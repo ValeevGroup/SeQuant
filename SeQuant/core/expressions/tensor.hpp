@@ -269,11 +269,26 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         aux_(make_indices(aux_indices)),
         symmetry_(s),
         braket_symmetry_(bks),
+        hermiticity_(to_hermiticity(bks)),
         column_symmetry_(ps),
         bra_net_rank_(ranges::count_if(
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
         ket_net_rank_(ranges::count_if(
             ket_, [](const Index &idx) { return static_cast<bool>(idx); })) {
+    // The (anti)symmetrizer is a permutation-bookkeeping operator whose
+    // bra<->ket orientation defines/extracts the external indices and must be
+    // preserved; it must never be bra<->ket-symmetric (Symm), or
+    // canonicalization would swap its bra and ket and corrupt external-index
+    // extraction. Over a real field a Hermitian operator becomes Symm, so
+    // demote Symm to Conjugate here (Conjugate is treated as no-swap by the
+    // canonicalizer, matching the complex-field behavior) before
+    // canonicalize_slots() may act on it.
+    if ((label_ == reserved::antisymm_label() ||
+         label_ == reserved::symm_label()) &&
+        braket_symmetry_ == BraKetSymmetry::Symm) {
+      braket_symmetry_ = BraKetSymmetry::Conjugate;
+      hermiticity_ = to_hermiticity(BraKetSymmetry::Conjugate);
+    }
     validate_indices();
     validate_symmetries();
     canonicalize_slots();
@@ -292,11 +307,26 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         aux_(std::move(aux_indices)),
         symmetry_(s),
         braket_symmetry_(bks),
+        hermiticity_(to_hermiticity(bks)),
         column_symmetry_(ps),
         bra_net_rank_(ranges::count_if(
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
         ket_net_rank_(ranges::count_if(
             ket_, [](const Index &idx) { return static_cast<bool>(idx); })) {
+    // The (anti)symmetrizer is a permutation-bookkeeping operator whose
+    // bra<->ket orientation defines/extracts the external indices and must be
+    // preserved; it must never be bra<->ket-symmetric (Symm), or
+    // canonicalization would swap its bra and ket and corrupt external-index
+    // extraction. Over a real field a Hermitian operator becomes Symm, so
+    // demote Symm to Conjugate here (Conjugate is treated as no-swap by the
+    // canonicalizer, matching the complex-field behavior) before
+    // canonicalize_slots() may act on it.
+    if ((label_ == reserved::antisymm_label() ||
+         label_ == reserved::symm_label()) &&
+        braket_symmetry_ == BraKetSymmetry::Symm) {
+      braket_symmetry_ = BraKetSymmetry::Conjugate;
+      hermiticity_ = to_hermiticity(BraKetSymmetry::Conjugate);
+    }
     validate_indices();
     validate_symmetries();
     canonicalize_slots();
@@ -405,6 +435,80 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     assert_nonreserved_label(label_);
   }
 
+  /// @name field-agnostic constructors
+  /// Specify the abstract #Hermiticity rather than the #BraKetSymmetry; the
+  /// latter is *derived* by resolving the former against the tensor's
+  /// #base_field (the OR of its bra/ket index spaces' IndexSpace::field(); see
+  /// to_braket_symmetry). Prefer these when the tensor's adjoint symmetry is a
+  /// physical fact independent of whether the computation is real or complex
+  /// (e.g. integrals are Hermitian, amplitudes are not).
+  /// @{
+
+  /// @param label the tensor label
+  /// @param bra_indices list of bra indices
+  /// @param ket_indices list of ket indices
+  /// @param s the symmetry of bra or ket
+  /// @param h the abstract symmetry under (Hermitian) adjoint
+  /// @param ps the symmetry under exchange of particles
+  template <basic_string_convertible S, range_of_castables_to_index IndexRange1,
+            range_of_castables_to_index IndexRange2>
+  Tensor(S &&label, const bra<IndexRange1> &bra_indices,
+         const ket<IndexRange2> &ket_indices, Symmetry s, Hermiticity h,
+         ColumnSymmetry ps = ColumnSymmetry::Symm)
+      // The base_field must be resolved into a BraKetSymmetry *here*, in the
+      // delegation, because the delegated-to ctor's body runs
+      // canonicalize_slots() (which keys off braket_symmetry_) -- it cannot be
+      // fixed up afterwards. Hence make_indices is unavoidably evaluated here
+      // too (the delegated ctor materializes bra_/ket_ from the same ranges
+      // again); the duplication is the cost of safe delegation, not an
+      // oversight.
+      : Tensor(std::forward<S>(label), bra_indices, ket_indices, s,
+               to_braket_symmetry(
+                   h, sequant::base_field(make_indices(bra_indices),
+                                          make_indices(ket_indices))),
+               ps) {
+    // Overwrite after delegation to preserve the exact trait (incl.
+    // AntiHermitian, which the BraKetSymmetry round-trip cannot represent).
+    // Stays consistent with the reserved-(anti)symmetrizer Symm->Conjugate
+    // demotion in the delegated ctor: that demotion only adjusts
+    // braket_symmetry_ (leaving hermiticity Hermitian), which h also implies.
+    hermiticity_ = h;
+  }
+
+  /// @param label the tensor label
+  /// @param bra_indices list of bra indices
+  /// @param ket_indices list of ket indices
+  /// @param aux_indices list of aux indices
+  /// @param s the symmetry of bra or ket
+  /// @param h the abstract symmetry under (Hermitian) adjoint
+  /// @param ps the symmetry under exchange of particles
+  template <basic_string_convertible S, range_of_castables_to_index IndexRange1,
+            range_of_castables_to_index IndexRange2,
+            range_of_castables_to_index IndexRange3>
+  Tensor(S &&label, const bra<IndexRange1> &bra_indices,
+         const ket<IndexRange2> &ket_indices,
+         const aux<IndexRange3> &aux_indices, Symmetry s, Hermiticity h,
+         ColumnSymmetry ps = ColumnSymmetry::Symm)
+      // The base_field must be resolved into a BraKetSymmetry *here*, in the
+      // delegation, because the delegated-to ctor's body runs
+      // canonicalize_slots() (which keys off braket_symmetry_) -- it cannot be
+      // fixed up afterwards. Hence make_indices is unavoidably evaluated here
+      // too (the delegated ctor materializes bra_/ket_ from the same ranges
+      // again); the duplication is the cost of safe delegation, not an
+      // oversight.
+      : Tensor(std::forward<S>(label), bra_indices, ket_indices, aux_indices, s,
+               to_braket_symmetry(
+                   h, sequant::base_field(make_indices(bra_indices),
+                                          make_indices(ket_indices))),
+               ps) {
+    // Overwrite after delegation to preserve the exact trait (incl.
+    // AntiHermitian, which the BraKetSymmetry round-trip cannot represent).
+    // Stays consistent with the reserved-(anti)symmetrizer Symm->Conjugate
+    // demotion in the delegated ctor: that demotion only adjusts
+    // braket_symmetry_ (leaving hermiticity Hermitian), which h also implies.
+    hermiticity_ = h;
+  }
+
   /// @}
 
   /// @return true if the Tensor is initialized
@@ -488,7 +592,19 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   Symmetry symmetry() const { return symmetry_; }
   /// @return the BraKetSymmetry object describing the symmetry of the Tensor
   /// under exchange of bra and ket.
+  /// @note this is the *derived* observable; it is the composition of the
+  /// (field-agnostic) #hermiticity with this tensor's #base_field, resolved
+  /// when this Tensor was constructed (see to_braket_symmetry).
   BraKetSymmetry braket_symmetry() const { return braket_symmetry_; }
+  /// @return the Hermiticity object describing the (field-agnostic) symmetry of
+  /// the abstract tensor under (Hermitian) adjoint.
+  /// @sa braket_symmetry()
+  Hermiticity hermiticity() const { return hermiticity_; }
+  /// @return the base scalar Field of this tensor: the OR of its bra/ket index
+  /// spaces' IndexSpace::field() (Complex dominates). Together with
+  /// #hermiticity it determines #braket_symmetry.
+  /// @sa sequant::base_field, IndexSpace::field
+  Field base_field() const { return sequant::base_field(bra_, ket_); }
   /// @return the ColumnSymmetry object describing the symmetry of the Tensor
   /// under exchange of _columns_ (i.e., pairs of matching {bra[i],ket[i]}
   /// slot bundles).
@@ -638,6 +754,16 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   sequant::aux<index_container_type> aux_{};
   Symmetry symmetry_ = Symmetry::Nonsymm;
   BraKetSymmetry braket_symmetry_ = BraKetSymmetry::Nonsymm;
+  // field-agnostic abstract trait; braket_symmetry_ is its resolution against
+  // base_field() at construction. Not folded into the hash / static_equal:
+  // braket_symmetry_ is the observable that drives canonicalization, and
+  // AntiHermitian/NonHermitian currently share it.
+  // N.B. not separately serialized: (de)serialization records braket_symmetry_,
+  // from which hermiticity is reconstructed via to_hermiticity(); this is
+  // lossless except that AntiHermitian round-trips as NonHermitian (both
+  // serialize as Nonsymm). Acceptable while AntiHermitian is unused (it has no
+  // distinct canonicalization behavior yet); revisit if that changes.
+  Hermiticity hermiticity_ = Hermiticity::NonHermitian;
   ColumnSymmetry column_symmetry_ = ColumnSymmetry::Nonsymm;
   mutable std::optional<hash_type>
       bra_hash_value_;  // memoized byproduct of memoizing_hash()
@@ -777,6 +903,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   BraKetSymmetry _braket_symmetry() const override final {
     return braket_symmetry_;
   }
+  Hermiticity _hermiticity() const override final { return hermiticity_; }
   ColumnSymmetry _column_symmetry() const override final {
     return column_symmetry_;
   }

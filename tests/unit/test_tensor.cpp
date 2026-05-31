@@ -452,3 +452,116 @@ TEST_CASE("tensor", "[elements]") {
 
   }  // SECTION("adjoint")
 }
+
+TEST_CASE("tensor_hermiticity", "[elements]") {
+  using namespace sequant;
+
+  SECTION("field<->hermiticity helpers") {
+    REQUIRE(to_braket_symmetry(Hermiticity::Hermitian, Field::Real) ==
+            BraKetSymmetry::Symm);
+    REQUIRE(to_braket_symmetry(Hermiticity::Hermitian, Field::Complex) ==
+            BraKetSymmetry::Conjugate);
+    REQUIRE(to_braket_symmetry(Hermiticity::NonHermitian, Field::Real) ==
+            BraKetSymmetry::Nonsymm);
+    REQUIRE(to_braket_symmetry(Hermiticity::NonHermitian, Field::Complex) ==
+            BraKetSymmetry::Nonsymm);
+    // AntiHermitian cannot yet be represented in BraKetSymmetry -> Nonsymm
+    REQUIRE(to_braket_symmetry(Hermiticity::AntiHermitian, Field::Real) ==
+            BraKetSymmetry::Nonsymm);
+
+    REQUIRE(to_hermiticity(BraKetSymmetry::Symm) == Hermiticity::Hermitian);
+    REQUIRE(to_hermiticity(BraKetSymmetry::Conjugate) ==
+            Hermiticity::Hermitian);
+    REQUIRE(to_hermiticity(BraKetSymmetry::Nonsymm) ==
+            Hermiticity::NonHermitian);
+  }
+
+  SECTION("braket_symmetry is derived from Hermiticity + base_field") {
+    // an index whose space is forced to a given Field (field is non-identity
+    // IndexSpace metadata, so the index still denotes the same space)
+    auto idx = [](std::wstring_view label, Field f) {
+      Index i{label};
+      IndexSpace space = i.space();
+      space.field(f);
+      return Index(space, i.ordinal());
+    };
+    // an explicitly non-Hermitian tensor is bra-ket nonsymmetric regardless of
+    // the field
+    {
+      auto t = Tensor(L"t", bra{idx(L"i_1", Field::Real)},
+                      ket{idx(L"a_1", Field::Real)}, Symmetry::Nonsymm,
+                      Hermiticity::NonHermitian);
+      REQUIRE(t.hermiticity() == Hermiticity::NonHermitian);
+      REQUIRE(t.braket_symmetry() == BraKetSymmetry::Nonsymm);
+    }
+    // a Hermitian tensor over real spaces is bra-ket Symm ...
+    {
+      auto g = Tensor(L"g", bra{idx(L"i_1", Field::Real)},
+                      ket{idx(L"i_2", Field::Real)}, Symmetry::Nonsymm,
+                      Hermiticity::Hermitian);
+      REQUIRE(g.hermiticity() == Hermiticity::Hermitian);
+      REQUIRE(g.base_field() == Field::Real);
+      REQUIRE(g.braket_symmetry() == BraKetSymmetry::Symm);
+    }
+    // ... and bra-ket Conjugate over complex spaces (the default)
+    {
+      auto g = Tensor(L"g", bra{idx(L"i_1", Field::Complex)},
+                      ket{idx(L"i_2", Field::Complex)}, Symmetry::Nonsymm,
+                      Hermiticity::Hermitian);
+      REQUIRE(g.base_field() == Field::Complex);
+      REQUIRE(g.braket_symmetry() == BraKetSymmetry::Conjugate);
+    }
+    // base_field ORs the spaces: any complex space makes the tensor complex
+    {
+      auto g = Tensor(L"g", bra{idx(L"i_1", Field::Real)},
+                      ket{idx(L"i_2", Field::Complex)}, Symmetry::Nonsymm,
+                      Hermiticity::Hermitian);
+      REQUIRE(g.base_field() == Field::Complex);
+      REQUIRE(g.braket_symmetry() == BraKetSymmetry::Conjugate);
+    }
+    // AntiHermitian is recorded but currently derives to Nonsymm
+    {
+      auto w = Tensor(L"w", bra{idx(L"i_1", Field::Real)},
+                      ket{idx(L"i_2", Field::Real)}, Symmetry::Nonsymm,
+                      Hermiticity::AntiHermitian);
+      REQUIRE(w.hermiticity() == Hermiticity::AntiHermitian);
+      REQUIRE(w.braket_symmetry() == BraKetSymmetry::Nonsymm);
+    }
+  }
+
+  SECTION("legacy BraKetSymmetry ctor back-fills Hermiticity") {
+    auto g = Tensor(L"g", bra{L"i_1"}, ket{L"i_2"}, Symmetry::Nonsymm,
+                    BraKetSymmetry::Symm);
+    REQUIRE(g.braket_symmetry() == BraKetSymmetry::Symm);
+    REQUIRE(g.hermiticity() == Hermiticity::Hermitian);
+    auto t = Tensor(L"t", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
+                    BraKetSymmetry::Nonsymm);
+    REQUIRE(t.hermiticity() == Hermiticity::NonHermitian);
+  }
+
+  // The payoff: over real spaces a Hermitian integral is bra<->ket symmetric,
+  // so g_{i1}^{i2} and the bra<->ket-swapped g_{i2}^{i1} canonicalize to the
+  // same tensor and cancel; over complex spaces (Conjugate) they do not.
+  SECTION("bra-ket-symmetric integral collapses swapped contraction") {
+    auto idx = [](std::wstring_view label, Field f) {
+      Index i{label};
+      IndexSpace space = i.space();
+      space.field(f);
+      return Index(space, i.ordinal());
+    };
+    auto make_diff = [&idx](Field f) {
+      auto a = ex<Tensor>(L"g", bra{idx(L"i_1", f)}, ket{idx(L"i_2", f)},
+                          Symmetry::Nonsymm, Hermiticity::Hermitian);
+      auto b = ex<Tensor>(L"g", bra{idx(L"i_2", f)}, ket{idx(L"i_1", f)},
+                          Symmetry::Nonsymm, Hermiticity::Hermitian);
+      ExprPtr diff = a - b;
+      simplify(diff);
+      return diff;
+    };
+
+    // real spaces -> Symm -> the swapped copies are equal and cancel
+    REQUIRE(make_diff(Field::Real) == ex<Constant>(0));
+    // complex spaces -> Conjugate -> the two orientations remain distinct
+    REQUIRE_FALSE(make_diff(Field::Complex) == ex<Constant>(0));
+  }
+}

@@ -31,6 +31,19 @@ namespace {
 
 TimerPool<32> tpool;
 
+/// scalar field assigned to every index space; toggled via the "real"/"complex"
+/// cmdline keyword. "real" makes Hermitian integrals braket-symmetric (Symm),
+/// "complex" (default) keeps them Conjugate.
+Field field_override = Field::Complex;
+
+/// sets IndexSpace::field on every space in @p reg to @p f
+void apply_field(auto& reg, Field f) {
+  std::vector<std::wstring> keys;
+  for (auto const& s : reg) keys.push_back(s.base_key());
+  for (auto const& k : keys)
+    if (auto* s = reg.retrieve_ptr(k)) s->field(f);
+}
+
 /// types of CC equations to solve
 enum class EqnType { t, λ };
 
@@ -82,9 +95,16 @@ class compute_cceqvec {
     // validate spin-free equations against spin-traced spin-orbital equations
     std::vector<ExprPtr> eqvec_sf_ref;
     if (get_default_context().spbasis() == SPBasis::Spinfree) {
+      auto so_reg = make_min_sr_spaces();
+      apply_field(*so_reg, field_override);
+      // mirror the main-context strict-bra-ket policy: relaxed under real
+      auto so_strict = field_override == Field::Real
+                           ? AssertStrictBraKetSymmetry::No
+                           : AssertStrictBraKetSymmetry::Yes;
       auto context_resetter = sequant::set_scoped_default_context(
-          {.index_space_registry_shared_ptr = make_min_sr_spaces(),
-           .vacuum = Vacuum::SingleProduct});
+          sequant::Context({.index_space_registry_shared_ptr = so_reg,
+                            .vacuum = Vacuum::SingleProduct})
+              .set(so_strict));
       std::vector<ExprPtr> eqvec_so;
       switch (type) {
         case EqnType::t:
@@ -238,12 +258,34 @@ int main(int argc, char* argv[]) {
   const std::string print_str = argc > 5 ? argv[5] : "noprint";
   const bool print = print_str == "print";
 
+  // optional cmdline keyword "real" or "complex" toggles the scalar field of
+  // all index spaces (default complex). "real" makes Hermitian integrals
+  // braket-symmetric (Symm); "complex" keeps them Conjugate.
+  for (int i = 1; i < argc; ++i) {
+    const std::string a = argv[i];
+    if (a == "real")
+      field_override = Field::Real;
+    else if (a == "complex")
+      field_override = Field::Complex;
+  }
+  std::cout << "scalar field: "
+            << (field_override == Field::Real ? "real" : "complex") << "\n";
+
   sequant::detail::OpIdRegistrar op_id_registrar;
+  auto sr_reg = make_min_sr_spaces(SpinConvention::None);
+  apply_field(*sr_reg, field_override);
+  // Under Field::Real, Hermitian integrals become bra↔ket-symmetric and the
+  // CC equations naturally feature bra-bra and ket-ket contractions; the
+  // strict bra↔ket-symmetry policy (each anonymous index at most once per
+  // side under Conjugate-default) would reject these and abort. Relax it
+  // when running over a real field.
+  auto strict = field_override == Field::Real ? AssertStrictBraKetSymmetry::No
+                                              : AssertStrictBraKetSymmetry::Yes;
   sequant::set_default_context(
-      sequant::Context({.index_space_registry_shared_ptr =
-                            make_min_sr_spaces(SpinConvention::None),
+      sequant::Context({.index_space_registry_shared_ptr = sr_reg,
                         .vacuum = Vacuum::SingleProduct,
-                        .spbasis = spbasis}));
+                        .spbasis = spbasis})
+          .set(strict));
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 

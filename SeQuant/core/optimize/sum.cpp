@@ -101,7 +101,12 @@ container::vector<container::vector<size_t>> clusters(
 container::vector<container::vector<size_t>> clusters(Sum const& expr) {
   container::vector<FullBinaryNode<EvalExpr>> nodes;
   nodes.reserve(expr.size());
+  // binarize(ExprPtr) is deprecated for caller-visible head construction
+  // (positional bra/ket split); here we only consume per-summand tree costs
+  // for clustering, so the head's bra/ket layout never escapes this file.
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   for (auto const& term : expr) nodes.push_back(binarize(term));
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   return clusters(expr, nodes);
 }
 
@@ -119,7 +124,10 @@ Sum reorder(Sum const& sum,
 Sum reorder(Sum const& sum) {
   container::vector<FullBinaryNode<EvalExpr>> nodes;
   nodes.reserve(sum.size());
+  // per-summand binarize for ordering only; positional head doesn't escape.
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   for (auto const& term : sum) nodes.push_back(binarize(term));
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   return reorder(sum, nodes);
 }
 

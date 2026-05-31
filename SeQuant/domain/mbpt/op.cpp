@@ -566,6 +566,16 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
   const auto csv = get_default_mbpt_context().csv() == mbpt::CSV::Yes;
   const auto opclass = mbpt::to_op_class(label_);
 
+  // The operator tensor's abstract bra<->ket adjoint symmetry is a
+  // field-agnostic fact carried by the OpRegistry: general operators are
+  // matrix elements of (anti-)Hermitian operators (Hermitian by default),
+  // (de)excitation operators (cluster amplitudes etc.) are not. The concrete
+  // BraKetSymmetry (Symm vs Conjugate) is derived from the bra/ket indices'
+  // IndexSpace::field() (see sequant::base_field) when the Tensor is built, so
+  // a real computation sees Hermitian integrals as bra<->ket symmetric while
+  // amplitudes stay nonsymmetric.
+  const auto op_herm = op_hermiticity(label_);
+
   if (!dep && csv) {
     if (opclass == OpClass::ex) {
       if constexpr (assert_enabled()) {
@@ -596,20 +606,22 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
   if (batch_indices_) {
     return make(
         cre_spaces_, ann_spaces_, batch_indices_.value(),
-        [this, opsymm_opt, full_label](const auto& creidxs, const auto& annidxs,
-                                       const auto& batchidxs, Symmetry opsymm) {
+        [this, opsymm_opt, full_label, op_herm](
+            const auto& creidxs, const auto& annidxs, const auto& batchidxs,
+            Symmetry opsymm) {
           return ex<Tensor>(full_label, bra(creidxs), ket(annidxs),
-                            aux(batchidxs), opsymm_opt ? *opsymm_opt : opsymm);
+                            aux(batchidxs), opsymm_opt ? *opsymm_opt : opsymm,
+                            op_herm);
         },
         dep ? *dep : UseDepIdx::None, normalization);
   }
   // else no batching
   return make(
       cre_spaces_, ann_spaces_,
-      [this, opsymm_opt, full_label](const auto& creidxs, const auto& annidxs,
-                                     Symmetry opsymm) {
+      [this, opsymm_opt, full_label, op_herm](
+          const auto& creidxs, const auto& annidxs, Symmetry opsymm) {
         return ex<Tensor>(full_label, bra(creidxs), ket(annidxs),
-                          opsymm_opt ? *opsymm_opt : opsymm);
+                          opsymm_opt ? *opsymm_opt : opsymm, op_herm);
       },
       dep ? *dep : UseDepIdx::None, normalization);
 }

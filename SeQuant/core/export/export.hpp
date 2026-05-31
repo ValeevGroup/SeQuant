@@ -961,9 +961,18 @@ void export_groups(Range groups, Generator<Context> &generator, Context ctx) {
 
 /// @param expr The expression to transform
 /// @returns The corresponding ExportNode tree
+/// @note Prefer the ResultExpr overload below: the bare-ExprPtr path goes
+///       through binarize(ExprPtr), which derives the tree head's bra/ket
+///       layout from external slot positions in the source factors (can
+///       yield an unconventional split). The export pass downstream of this
+///       call reads index slots only for code-gen and does not depend on the
+///       head's bra/ket convention, so the deprecation warning is suppressed
+///       here.
 template <typename NodeData = ExportExpr>
 ExportNode<NodeData> to_export_tree(const ExprPtr &expr) {
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   return binarize<NodeData>(expr);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 }
 
 /// @param expr The expression to transform

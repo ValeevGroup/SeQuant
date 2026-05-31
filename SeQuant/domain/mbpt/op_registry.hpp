@@ -19,6 +19,17 @@ namespace sequant::mbpt {
 /// Operator character relative to Fermi vacuum
 enum class OpClass { ex, deex, gen };
 
+/// @return the default Hermiticity for an operator of the given OpClass:
+/// general operators are matrix elements of (anti-)Hermitian operators and
+/// default to Hermitian; (de)excitation operators (cluster amplitudes, etc.)
+/// are not Hermitian. This default can be overridden per operator in the
+/// OpRegistry (e.g. to keep reference equations that assumed the legacy
+/// conjugate-symmetric amplitudes).
+inline Hermiticity default_hermiticity(OpClass cls) {
+  return cls == OpClass::gen ? Hermiticity::Hermitian
+                             : Hermiticity::NonHermitian;
+}
+
 /// @brief A Registry for MBPT Operators
 ///
 /// A registry that keeps track of MBPT operators by their labels and
@@ -31,18 +42,25 @@ class OpRegistry {
  public:
   /// default constructor, creates an empty registry
   OpRegistry()
-      : ops_(std::make_shared<container::map<std::wstring, OpClass>>()) {}
+      : ops_(std::make_shared<container::map<std::wstring, OpClass>>()),
+        herm_overrides_(
+            std::make_shared<container::map<std::wstring, Hermiticity>>()) {}
 
   /// constructs an OpRegistry from an existing map of operators and their
   /// classes
   OpRegistry(std::shared_ptr<container::map<std::wstring, OpClass>> ops)
-      : ops_(std::move(ops)) {}
+      : ops_(std::move(ops)),
+        herm_overrides_(
+            std::make_shared<container::map<std::wstring, Hermiticity>>()) {}
 
   /// copy constructor
-  OpRegistry(const OpRegistry& other) : ops_(other.ops_) {}
+  OpRegistry(const OpRegistry& other)
+      : ops_(other.ops_), herm_overrides_(other.herm_overrides_) {}
 
   /// move constructor
-  OpRegistry(OpRegistry&& other) noexcept : ops_(std::move(other.ops_)) {}
+  OpRegistry(OpRegistry&& other) noexcept
+      : ops_(std::move(other.ops_)),
+        herm_overrides_(std::move(other.herm_overrides_)) {}
 
   /// copy assignment operator
   OpRegistry& operator=(const OpRegistry& other);
@@ -62,7 +80,21 @@ class OpRegistry {
   /// @brief Adds a new operator to the registry
   /// @param op the operator label
   /// @param action the class of the operator
+  /// @note the operator's Hermiticity defaults to default_hermiticity(action)
   OpRegistry& add(const std::wstring& op, OpClass action);
+
+  /// @brief Adds a new operator to the registry with an explicit Hermiticity
+  /// @param op the operator label
+  /// @param action the class of the operator
+  /// @param hermiticity the operator's Hermiticity (overrides the default
+  ///        implied by @p action)
+  OpRegistry& add(const std::wstring& op, OpClass action,
+                  Hermiticity hermiticity);
+
+  /// @brief Overrides the Hermiticity of an already-registered operator
+  /// @param op the operator label (must already be registered)
+  /// @param hermiticity the operator's Hermiticity
+  OpRegistry& set_hermiticity(const std::wstring& op, Hermiticity hermiticity);
 
   /// @brief Removes an operator from the registry
   OpRegistry& remove(const std::wstring& op);
@@ -78,14 +110,26 @@ class OpRegistry {
   /// @return the class of the operator
   [[nodiscard]] OpClass to_class(const std::wstring& op) const;
 
+  /// @brief Returns the Hermiticity of the operator with the given label
+  /// @param op the operator label
+  /// @return the operator's Hermiticity (the per-operator override if set,
+  ///         else default_hermiticity(to_class(op)))
+  [[nodiscard]] Hermiticity hermiticity(const std::wstring& op) const;
+
   /// @brief returns a view of registered operator labels
   [[nodiscard]] auto ops() const { return ranges::views::keys(*ops_); }
 
-  /// @brief clears all registered operators
-  void purge() { ops_->clear(); }
+  /// @brief clears all registered operators (and their Hermiticity overrides)
+  void purge() {
+    ops_->clear();
+    herm_overrides_->clear();
+  }
 
  private:
   std::shared_ptr<container::map<std::wstring, OpClass>> ops_;
+  /// sparse per-operator Hermiticity overrides; absence means
+  /// default_hermiticity(to_class(op)). Shared (shallow copy) like ops_.
+  std::shared_ptr<container::map<std::wstring, Hermiticity>> herm_overrides_;
 
   /// @brief Validates that the operator label is not reserved and not already
   /// registered
@@ -95,7 +139,8 @@ class OpRegistry {
 
   /// @brief Equality operator for OpRegistry
   friend bool operator==(const OpRegistry& reg1, const OpRegistry& reg2) {
-    return *reg1.ops_ == *reg2.ops_;
+    return *reg1.ops_ == *reg2.ops_ &&
+           *reg1.herm_overrides_ == *reg2.herm_overrides_;
   }
 };  // class OpRegistry
 }  // namespace sequant::mbpt
