@@ -455,12 +455,24 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   Tensor(S &&label, const bra<IndexRange1> &bra_indices,
          const ket<IndexRange2> &ket_indices, Symmetry s, Hermiticity h,
          ColumnSymmetry ps = ColumnSymmetry::Symm)
+      // The base_field must be resolved into a BraKetSymmetry *here*, in the
+      // delegation, because the delegated-to ctor's body runs
+      // canonicalize_slots() (which keys off braket_symmetry_) -- it cannot be
+      // fixed up afterwards. Hence make_indices is unavoidably evaluated here
+      // too (the delegated ctor materializes bra_/ket_ from the same ranges
+      // again); the duplication is the cost of safe delegation, not an
+      // oversight.
       : Tensor(std::forward<S>(label), bra_indices, ket_indices, s,
                to_braket_symmetry(
                    h, sequant::base_field(make_indices(bra_indices),
                                           make_indices(ket_indices))),
                ps) {
-    hermiticity_ = h;  // preserve the exact trait (incl. AntiHermitian)
+    // Overwrite after delegation to preserve the exact trait (incl.
+    // AntiHermitian, which the BraKetSymmetry round-trip cannot represent).
+    // Stays consistent with the reserved-(anti)symmetrizer Symm->Conjugate
+    // demotion in the delegated ctor: that demotion only adjusts
+    // braket_symmetry_ (leaving hermiticity Hermitian), which h also implies.
+    hermiticity_ = h;
   }
 
   /// @param label the tensor label
@@ -477,12 +489,24 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
          const ket<IndexRange2> &ket_indices,
          const aux<IndexRange3> &aux_indices, Symmetry s, Hermiticity h,
          ColumnSymmetry ps = ColumnSymmetry::Symm)
+      // The base_field must be resolved into a BraKetSymmetry *here*, in the
+      // delegation, because the delegated-to ctor's body runs
+      // canonicalize_slots() (which keys off braket_symmetry_) -- it cannot be
+      // fixed up afterwards. Hence make_indices is unavoidably evaluated here
+      // too (the delegated ctor materializes bra_/ket_ from the same ranges
+      // again); the duplication is the cost of safe delegation, not an
+      // oversight.
       : Tensor(std::forward<S>(label), bra_indices, ket_indices, aux_indices, s,
                to_braket_symmetry(
                    h, sequant::base_field(make_indices(bra_indices),
                                           make_indices(ket_indices))),
                ps) {
-    hermiticity_ = h;  // preserve the exact trait (incl. AntiHermitian)
+    // Overwrite after delegation to preserve the exact trait (incl.
+    // AntiHermitian, which the BraKetSymmetry round-trip cannot represent).
+    // Stays consistent with the reserved-(anti)symmetrizer Symm->Conjugate
+    // demotion in the delegated ctor: that demotion only adjusts
+    // braket_symmetry_ (leaving hermiticity Hermitian), which h also implies.
+    hermiticity_ = h;
   }
 
   /// @}

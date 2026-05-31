@@ -52,6 +52,23 @@ std::size_t count_cycles(Seq0&& v0, Seq1&& v1) {
   const std::size_t n1 = size(v1);
   const std::size_t n = n0 + n1;
 
+  // precondition (debug builds only): every value occurs in exactly two slots
+  // across v0 and v1 combined. This is what makes the column+contraction graph
+  // 2-regular on its internal slots, so it decomposes into disjoint cycles and
+  // the component count is the loop count. It generalizes the former "v0 is a
+  // permutation of v1" contract (which also implied exactly two occurrences,
+  // one per row) to allow both occurrences in the same row (bra-bra / ket-ket
+  // edges from reoriented bra-ket-symmetric tensors). Without this check
+  // malformed input (a value appearing once, or 3+ times) is silently accepted
+  // and returns a meaningless count.
+  if constexpr (assert_enabled()) {
+    container::map<std::ranges::range_value_t<Seq0>, std::size_t> counts;
+    for (auto&& x : v0) ++counts[x];
+    for (auto&& x : v1) ++counts[x];
+    SEQUANT_ASSERT(
+        ranges::all_of(counts, [](auto const& kv) { return kv.second == 2; }));
+  }
+
   // slot ids: row-0 slot i -> i ; row-1 slot i -> n0 + i. Size the union-find
   // by n0 + n1 (not 2*n0) so it is safe even if the two rows differ in length.
   // union-find with path halving

@@ -1,8 +1,10 @@
 // Auto-generated from `srcc 2 t std sf real` (SPINTRACE_DIAG=1).
 // The full 113-term direct spin-free CCSD doubles residual (R2 N=2) under a
-// Real field. Reproduces the 113 vs 110 (spin-traced) mismatch: a
-// state-dependent failure of the canonicalizer to merge bra↔ket-swap-equivalent
-// Symm-braket g pairs in the presence of the full surrounding sum.
+// Real field. Before the bundle-vertex fix in tensor_network/v3.cpp this
+// reproduced the 113-vs-110 (spin-traced) mismatch: a state-dependent failure
+// of the canonicalizer to merge bra↔ket-swap-equivalent Symm-braket g pairs in
+// the presence of the full surrounding sum. The test now asserts it collapses
+// to the expected 110 terms.
 #pragma once
 #include <string>
 
