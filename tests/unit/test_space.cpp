@@ -63,16 +63,19 @@ TEST_CASE("index_space", "[elements]") {
     REQUIRE_NOTHROW(
         isr->add(L"o", 0b0001, 3)       // approximate size
             .add("i", 0b0100, is_hole)  // N.B. narrow string
-            .add(L'a', 0b0010, is_particle, QuantumNumbersAttr{},
+            .add(L'a', 0b0010, Field::Real, is_particle, QuantumNumbersAttr{},
                  50)  // N.B. wchar_t + explicit quantum numbers + size
-            .add('g', 0b1000)
+            .add('g', 0b1000, Field::Real)
             .add_union(L"m", {L"o", L"i"}, is_vacuum_occupied,
                        is_reference_occupied)
             .add_union(L"e", {L"a", L"g"})
             .add_unIon(L"p", {L"m", L"e"}, is_complete)  // N.B. unIon
     );
     REQUIRE(isr->retrieve(L"o").approximate_size() == 3);
+    REQUIRE(isr->retrieve(L"o").field() == Field::Complex);
+    REQUIRE(isr->retrieve(L"a").field() == Field::Real);
     REQUIRE(isr->retrieve(L"m").type().to_int32() == 0b0101);
+    REQUIRE(isr->retrieve(L"m").field() == Field::Complex);
     REQUIRE(isr->retrieve(L"m").approximate_size() ==
             isr->retrieve(L"o").approximate_size() +
                 isr->retrieve(L"i").approximate_size());
@@ -93,6 +96,7 @@ TEST_CASE("index_space", "[elements]") {
             isr->retrieve(L"m"));
     REQUIRE(isr->vacuum_unoccupied_space(IndexSpace::QuantumNumbers::null) ==
             isr->retrieve(L"e"));
+    REQUIRE(isr->retrieve("e").field() == Field::Real);
   }
 
   SECTION("equality") {
