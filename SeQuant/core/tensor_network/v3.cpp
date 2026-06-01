@@ -1246,6 +1246,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
             [[maybe_unused]] std::size_t nbra = 0;
             [[maybe_unused]] std::size_t nket = 0;
             [[maybe_unused]] std::size_t naux = 0;
+            [[maybe_unused]] BraKetSymmetry symm = BraKetSymmetry::Nonsymm;
             for (std::size_t v = 0; v < current_edge.vertex_count(); ++v) {
               const Vertex &vertex = current_edge.vertex(v);
               switch (vertex.getOrigin()) {
@@ -1261,13 +1262,19 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
                 case Origin::Proto:
                   SEQUANT_UNREACHABLE;
               }
+
+              if (symm != BraKetSymmetry::Symm) {
+                // We only care if at least one of the vertices has symmetric
+                // braket symm
+                symm = braket_symmetry(*tensors_[vertex.getTerminalIndex()]);
+              }
             }
+
             // if braket symmetry == BraKetSymmetry::Symm there is no
             // distinction between bra and ket, but still can have at most 2 of
             // them total if braket symmetry != BraKetSymmetry::Symm at most 1
             // bra and 1 ket can connect to aux
-            SEQUANT_ASSERT(get_default_context().braket_symmetry() ==
-                                   BraKetSymmetry::Symm
+            SEQUANT_ASSERT(symm == BraKetSymmetry::Symm
                                ? (nbra + nket <= 2)
                                : (nbra <= 1 && nket <= 1));
           }
