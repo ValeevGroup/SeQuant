@@ -1576,9 +1576,36 @@ std::vector<ExprPtr> open_shell_spintrace(
 
 std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
   SEQUANT_ASSERT(expr->is<Sum>() || expr->is<Product>());
-  Tensor A = expr.is<Sum>() ? expr->at(0)->at(0)->as<Tensor>()
-                            : expr->at(0)->as<Tensor>();
-  SEQUANT_ASSERT(A.label() == reserved::antisymm_label());
+  // Returns the leading antisymmetrizer of an expression, or nullopt
+  // when there is none
+  auto leading_antisymmetrizer = [](const ExprPtr& e) -> std::optional<Tensor> {
+    const ExprPtr& first = e->is<Sum>() ? e->as<Sum>().summand(0) : e;
+    const ExprPtr& leading_factor =
+        first->is<Product>() ? first->as<Product>().factor(0) : first;
+    if (leading_factor->is<Tensor>()) {
+      const Tensor& t = leading_factor->as<Tensor>();
+      if (t.label() == reserved::antisymm_label()) return t;
+    }
+    return std::nullopt;
+  };
+
+  // Expressions without a leading antisymmetrizer (e.g. CC energy) collapse
+  // to a single spin case. They are spin-traced directly, but term-by-term.
+  const auto A_opt = leading_antisymmetrizer(expr);
+  if (!A_opt) {
+    auto trace_term = [](const ExprPtr& term) -> ExprPtr {
+      if (term->is<Constant>() || term->is<Variable>()) return term;
+      return open_shell_spintrace(term, {}).at(0);
+    };
+    const auto terms =
+        expr.is<Sum>() ? expr->as<Sum>().summands() : Sum::summands_type{expr};
+    auto result = ex<Sum>(terms | ranges::views::transform(trace_term));
+    simplify(result);
+    return {result};
+  }
+
+  SEQUANT_ASSERT(A_opt.has_value() && "Leading antisymmetrizer not found.");
+  const Tensor& A = A_opt.value();
   size_t const i = A.rank();
   auto P_vec = open_shell_P_op_vector(A);
   auto A_vec = open_shell_A_op(A);

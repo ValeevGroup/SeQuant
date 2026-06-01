@@ -366,10 +366,13 @@ std::vector<ExprPtr> open_shell_spintrace(
 /// the expectation value is with respect to an open-shell Fermi vacuum.
 /// Antisymmetrizer is expanded partially to produce antisymmetrizer for
 /// spin-up and spin-down columns.
+/// Expressions without a leading antisymmetrizer (e.g. a CC energy expression)
+/// collapse to a single spin case and the returned vector then contains one expression.
 /// @param expr the input expression
 /// @return vector of spin-traced expressions for each spincase
-/// @warning the "antisymmetrizer" tensor A is assumed to be at the front of each tensor
-/// network, hence must use "complete" canonicalization to produce the input expression.
+/// @warning when an "antisymmetrizer" tensor A is present it is assumed to be at the
+/// front of each tensor network, hence must use "complete" canonicalization to produce
+/// the input expression.
 // clang-format on
 std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr);
 

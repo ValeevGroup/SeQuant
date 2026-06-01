@@ -1678,6 +1678,42 @@ SECTION("Open-shell spin-tracing") {
   }
 }
 
+SECTION("Open-shell CC spintrace energy") {
+  // CC energy
+  {
+    const auto input = deserialize(
+        L"f{i_1;a_1} t{a_1;i_1} "
+        L"+ 1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2} "
+        L"+ 1/2 g{i_1,i_2;a_1,a_2} t{a_1;i_1} t{a_2;i_2}",
+        {.def_perm_symm = Symmetry::Antisymm});
+    auto result = open_shell_CC_spintrace(input);
+    REQUIRE(result.size() == 1);
+    REQUIRE_THAT(
+        result[0],
+        EquivalentTo(L"f{i↑1;a↑1} t{a↑1;i↑1} "
+                     L"+ f{i↓1;a↓1} t{a↓1;i↓1} "
+                     L"+ 1/4 g{i↑1,i↑2;a↑1,a↑2}:A t{a↑1,a↑2;i↑1,i↑2}:A "
+                     L"+ 1/4 g{i↓1,i↓2;a↓1,a↓2}:A t{a↓1,a↓2;i↓1,i↓2}:A "
+                     L"+ g{i↑1,i↓1;a↑1,a↓1} t{a↑1,a↓1;i↑1,i↓1} "
+                     L"+ 1/2 g{i↑1,i↑2;a↑1,a↑2}:A t{a↑1;i↑1} t{a↑2;i↑2} "
+                     L"+ 1/2 g{i↓1,i↓2;a↓1,a↓2}:A t{a↓1;i↓1} t{a↓2;i↓2} "
+                     L"+ g{i↑1,i↓1;a↑1,a↓1} t{a↑1;i↑1} t{a↓1;i↓1}"));
+  }
+  // CCD Energy (a single Product)
+  {
+    const auto input = deserialize(L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
+                                   {.def_perm_symm = Symmetry::Antisymm});
+    REQUIRE(input->is<Product>());
+    auto result = open_shell_CC_spintrace(input);
+    REQUIRE(result.size() == 1);
+    REQUIRE_THAT(
+        result[0],
+        EquivalentTo(L"1/4 g{i↑1,i↑2;a↑1,a↑2}:A t{a↑1,a↑2;i↑1,i↑2}:A "
+                     L"+ 1/4 g{i↓1,i↓2;a↓1,a↓2}:A t{a↓1,a↓2;i↓1,i↓2}:A "
+                     L"+ g{i↑1,i↓2;a↑1,a↓2} t{a↑1,a↓2;i↑1,i↓2}"));
+  }
+}
+
 SECTION("ResultExpr") {
   auto ctx = get_default_context();
   ctx.set(mbpt::make_mr_spaces());
