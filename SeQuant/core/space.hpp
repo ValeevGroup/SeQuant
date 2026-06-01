@@ -17,6 +17,7 @@
 
 #include <cmath>
 #include <string_view>
+#include <type_traits>
 
 namespace sequant {
 
@@ -52,12 +53,12 @@ class TypeAttr {
 
   /// construct TypeAddr from things that can be cast to bitset_t, but exclude
   /// bool and QuantumNumbersAttr
-  template <typename T,
-            typename = std::enable_if_t<
-                meta::is_statically_castable_v<std::decay_t<T>, bitset_t> &&
-                !std::is_same_v<std::decay_t<T>, bool> &&
-                !std::is_same_v<std::decay_t<T>, QuantumNumbersAttr> &&
-                !std::is_same_v<std::decay_t<T>, TypeAttr>>>
+  template <typename T>
+    requires(meta::is_statically_castable_v<std::decay_t<T>, bitset_t> &&
+             !std::is_same_v<std::decay_t<T>, bool> &&
+             !std::is_same_v<std::decay_t<T>, QuantumNumbersAttr> &&
+             !std::is_same_v<std::decay_t<T>, TypeAttr> &&
+             !std::is_enum_v<std::decay_t<T>>)
   constexpr TypeAttr(T &&value) noexcept
       : TypeAttr(static_cast<bitset_t>(std::forward<T>(value))) {}
 
