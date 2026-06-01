@@ -26,7 +26,9 @@
 
 namespace sequant::io::serialization::v1::transform {
 
-using DefaultSymmetries = std::tuple<Symmetry, BraKetSymmetry, ColumnSymmetry>;
+using DefaultSymmetries =
+    std::tuple<Symmetry, std::variant<BraKetSymmetry, Hermiticity>,
+               ColumnSymmetry>;
 
 template <typename AST, typename PositionCache, typename Iterator>
 std::tuple<std::size_t, std::size_t> get_pos(const AST &ast,
@@ -147,7 +149,7 @@ Symmetry to_perm_symmetry(char c, std::size_t offset, const Iterator &,
 template <typename Iterator>
 std::variant<BraKetSymmetry, Hermiticity> to_braket_symmetry(
     char c, std::size_t offset, const Iterator &,
-    BraKetSymmetry default_symmetry) {
+    std::variant<BraKetSymmetry, Hermiticity> default_symmetry) {
   if (c == io::serialization::v1::ast::SymmetrySpec::unspecified) {
     return default_symmetry;
   }

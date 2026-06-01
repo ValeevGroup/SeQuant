@@ -10,6 +10,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <variant>
 
 namespace sequant::io::serialization {
 
@@ -43,7 +44,8 @@ struct DeserializationOptions {
   std::optional<Symmetry> def_perm_symm = std::nullopt;
   /// The BraKetSymmetry to use, if none is specified in the input explicitly.
   /// The Context is queried in case this is not provided explicitly.
-  std::optional<BraKetSymmetry> def_braket_symm = std::nullopt;
+  std::optional<std::variant<BraKetSymmetry, Hermiticity>> def_braket_symm =
+      std::nullopt;
   /// The ColumnSymmetry to use, if none is specified in the input explicitly.
   /// The Context is queried in case this is not provided explicitly.
   std::optional<ColumnSymmetry> def_col_symm = std::nullopt;
