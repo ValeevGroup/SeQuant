@@ -24,8 +24,12 @@ class ReorderingContext : public ExportContext {
 
   bool rewrite(Tensor &tensor) const override;
 
+  bool rewriting_enabled() const { return m_rewrite; }
+  void enable_rewriting(bool enable) { m_rewrite = enable; }
+
  private:
   MemoryLayout m_layout;
+  bool m_rewrite = true;
 
  protected:
   bool is_less(const IndexSpace &lhs, const IndexSpace &rhs) const;

@@ -97,6 +97,10 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
   using std::ranges::begin;
   using std::ranges::end;
 
+  if (!m_rewrite) {
+    return false;
+  }
+
   auto comparator = [this](const Index &lhs, const Index &rhs) {
     return this->is_less(lhs.space(), rhs.space());
   };
