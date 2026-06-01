@@ -46,6 +46,7 @@ enum class EvalOp {
 enum class ResultType { Tensor, Scalar };
 
 struct EvalOpSetter;
+struct ExtractedIdSetter;
 
 ///
 /// \brief The EvalExpr is a building block of binary trees used to evaluate
@@ -57,6 +58,7 @@ struct EvalOpSetter;
 class EvalExpr {
  public:
   friend struct EvalOpSetter;
+  friend struct ExtractedIdSetter;
   using index_vector = Index::index_vector;
 
   ///
@@ -101,6 +103,15 @@ class EvalExpr {
   /// expression.
   ///
   [[nodiscard]] const std::optional<EvalOp>& op_type() const noexcept;
+
+  ///
+  /// \return The id stamped on this payload by an extraction pass (see
+  ///         sequant::opt::extract_subtrees), if any. Set on the synthetic
+  ///         leaf that replaces a captured subtree; identifies which entry
+  ///         in the returned ExtractedSubtrees this leaf stands for. Not
+  ///         part of hash/equality.
+  ///
+  [[nodiscard]] const std::optional<std::size_t>& extracted_id() const noexcept;
 
   ///
   /// \return The ResultType of the evaluation performed on this node.
@@ -268,11 +279,18 @@ class EvalExpr {
   size_t hash_value_;
 
   std::shared_ptr<bliss::Graph> connectivity_;
+
+  std::optional<std::size_t> extracted_id_ = std::nullopt;
 };
 
 struct EvalOpSetter {
   void set(EvalExpr& expr, EvalOp op) { expr.op_type_ = op; }
   void reset(EvalExpr& expr) { expr.op_type_ = std::nullopt; }
+};
+
+struct ExtractedIdSetter {
+  void set(EvalExpr& expr, std::size_t id) { expr.extracted_id_ = id; }
+  void reset(EvalExpr& expr) { expr.extracted_id_ = std::nullopt; }
 };
 
 namespace meta {
