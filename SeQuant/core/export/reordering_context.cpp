@@ -122,8 +122,7 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
   bool sort_particles =
       !sort_bra && !sort_ket && !tensor.bra().empty() &&
       tensor.bra().size() == tensor.ket().size() &&
-      (tensor.column_symmetry() == ColumnSymmetry::Symm ||
-       m_column_permutability) &&
+      tensor.column_symmetry() == ColumnSymmetry::Symm &&
       !std::ranges::is_sorted(ranges::views::zip(tensor.bra(), tensor.ket()),
                               pair_comp);
 

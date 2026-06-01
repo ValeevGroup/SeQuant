@@ -8,8 +8,6 @@ namespace sequant {
 
 class Tensor;
 
-struct assume_strict_column_permutability {};
-
 /// An export context class that implements functionality for reordering indices
 /// in tensors for better cache locality during access, assuming the full tensor
 /// will be held in memory and all elements will be iterated over.
@@ -20,24 +18,14 @@ struct assume_strict_column_permutability {};
 class ReorderingContext : public ExportContext {
  public:
   explicit ReorderingContext(MemoryLayout layout) : m_layout(layout) {}
-  ReorderingContext(MemoryLayout layout, assume_strict_column_permutability)
-      : m_layout(layout), m_column_permutability(true) {}
 
   MemoryLayout memory_layout() const { return m_layout; }
   void set_memory_layout(MemoryLayout layout) { m_layout = layout; }
-
-  bool assumes_strict_column_permutability() const {
-    return m_column_permutability;
-  }
-  void set_assume_strict_column_permutability(bool permutable) {
-    m_column_permutability = permutable;
-  }
 
   bool rewrite(Tensor &tensor) const override;
 
  private:
   MemoryLayout m_layout;
-  bool m_column_permutability = false;
 
  protected:
   bool is_less(const IndexSpace &lhs, const IndexSpace &rhs) const;

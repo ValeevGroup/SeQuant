@@ -30,9 +30,7 @@ class ItfContext : public ReorderingContext {
       container::map<Tensor, std::string, TensorBlockLessThanComparator>;
   using VariableImportMap = container::map<Variable, std::string>;
 
-  ItfContext()
-      : ReorderingContext(MemoryLayout::ColumnMajor,
-                          assume_strict_column_permutability{}){};
+  ItfContext() : ReorderingContext(MemoryLayout::ColumnMajor){};
   ~ItfContext() = default;
 
   /// @returns The ITF representation of an index in the given space and with
