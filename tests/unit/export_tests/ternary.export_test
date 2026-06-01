@@ -12,36 +12,36 @@ Declare tensor A[a_2, i_2]
 Declare tensor B[i_2, a_1]
 Declare tensor C[i_1, a_2]
 Declare tensor I[i_1, a_1]
-Declare tensor I[a_2, a_1]
+Declare tensor I[a_1, a_2]
 
 Create I[i_1, a_1] and initialize to zero
-Create I[a_2, a_1] and initialize to zero
+Create I[a_1, a_2] and initialize to zero
 Load A[a_2, i_2]
 Load B[i_2, a_1]
-Compute I[a_2, a_1] += A[a_2, i_2] B[i_2, a_1]
+Compute I[a_1, a_2] += A[a_2, i_2] B[i_2, a_1]
 Unload B[i_2, a_1]
 Unload A[a_2, i_2]
 Load C[i_1, a_2]
-Compute I[i_1, a_1] += I[a_2, a_1] C[i_1, a_2]
+Compute I[i_1, a_1] += I[a_1, a_2] C[i_1, a_2]
 Unload C[i_1, a_2]
-Unload I[a_2, a_1]
+Unload I[a_1, a_2]
 Persist I[i_1, a_1]
 
 =================================================
 Julia (TensorOperations)
 =================================================
-I_ov = zeros(Float64, nocc, nv)
+I_vo = zeros(Float64, nv, nocc)
 I_vv = zeros(Float64, nv, nv)
 A_vo = deserialize("A_vo.jlbin")
 B_ov = deserialize("B_ov.jlbin")
-@tensor I_vv[ a_2, a_1 ] += A_vo[ a_2, i_2 ] * B_ov[ i_2, a_1 ]
+@tensor I_vv[ a_1, a_2 ] += A_vo[ a_2, i_2 ] * B_ov[ i_2, a_1 ]
 B_ov = nothing
 A_vo = nothing
 C_ov = deserialize("C_ov.jlbin")
-@tensor I_ov[ i_1, a_1 ] += I_vv[ a_2, a_1 ] * C_ov[ i_1, a_2 ]
+@tensor I_vo[ a_1, i_1 ] += I_vv[ a_1, a_2 ] * C_ov[ i_1, a_2 ]
 C_ov = nothing
 I_vv = nothing
-return I_ov
+return I_vo
 
 =================================================
 Julia (TensorKit)
@@ -67,18 +67,18 @@ i_2 = Index(nocc, "i_2")
 a_1 = Index(nv, "a_1")
 a_2 = Index(nv, "a_2")
 
-I_ov = ITensor(zeros(Float64, nocc, nv), i_1, a_1)
-I_vv = ITensor(zeros(Float64, nv, nv), a_2, a_1)
+I_vo = ITensor(zeros(Float64, nv, nocc), a_1, i_1)
+I_vv = ITensor(zeros(Float64, nv, nv), a_1, a_2)
 A_vo = ITensor(deserialize("A_vo.jlbin"), a_2, i_2)
 B_ov = ITensor(deserialize("B_ov.jlbin"), i_2, a_1)
 I_vv += A_vo * B_ov
 B_ov = nothing
 A_vo = nothing
 C_ov = ITensor(deserialize("C_ov.jlbin"), i_1, a_2)
-I_ov += I_vv * C_ov
+I_vo += I_vv * C_ov
 C_ov = nothing
 I_vv = nothing
-return I_ov
+return I_vo
 
 =================================================
 ITF
@@ -92,23 +92,23 @@ index-space: c, External, e
 tensor: A:ec[ck], A:ec
 tensor: B:ce[kb], B:ce
 tensor: C:ce[jc], C:ce
-tensor: I:ce[jb], I:ce
-tensor: I:ee[cb], !Create{type:plain}
+tensor: I:ec[bj], I:ec
+tensor: I:ee[bc], !Create{type:plain}
 
 
 ---- code("unnamed")
-alloc I:ce[jb]
-alloc I:ee[cb]
+alloc I:ec[bj]
+alloc I:ee[bc]
 load A:ec[ck]
 load B:ce[kb]
-.I:ee[cb] += A:ec[ck] B:ce[kb]
+.I:ee[bc] += A:ec[ck] B:ce[kb]
 drop B:ce[kb]
 drop A:ec[ck]
 load C:ce[jc]
-.I:ce[jb] += I:ee[cb] C:ce[jc]
+.I:ec[bj] += I:ee[bc] C:ce[jc]
 drop C:ce[jc]
-drop I:ee[cb]
-store I:ce[jb]
+drop I:ee[bc]
+store I:ec[bj]
 
 
 ---- end
@@ -119,17 +119,17 @@ Python (einsum)
 import numpy as np
 import os
 
-I_ov = np.zeros((nocc, nvirt), order='F')
+I_vo = np.zeros((nvirt, nocc), order='F')
 I_vv = np.zeros((nvirt, nvirt), order='F')
 A_vo = np.load('A_vo.npy')
 B_ov = np.load('B_ov.npy')
-I_vv += np.einsum('ai,ib->ab', A_vo, B_ov, optimize=True)
+I_vv += np.einsum('ai,ib->ba', A_vo, B_ov, optimize=True)
 del B_ov
 del A_vo
 C_ov = np.load('C_ov.npy')
-I_ov += np.einsum('ab,ia->ib', I_vv, C_ov, optimize=True)
+I_vo += np.einsum('ab,ib->ai', I_vv, C_ov, optimize=True)
 del C_ov
 del I_vv
-np.save('I_ov.npy', I_ov)
+np.save('I_vo.npy', I_vo)
 
 =================================================

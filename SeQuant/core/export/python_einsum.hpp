@@ -27,27 +27,23 @@
 namespace sequant {
 
 /// Base context class for Python einsum generators
-class PythonEinsumGeneratorContext : public ExportContext {
+class PythonEinsumGeneratorContext : public ReorderingContext {
  public:
   using ShapeMap = std::map<IndexSpace, std::string>;
   using TagMap = std::map<IndexSpace, std::string>;
 
-  PythonEinsumGeneratorContext() = default;
+  PythonEinsumGeneratorContext()
+      : ReorderingContext(MemoryLayout::ColumnMajor){};
   ~PythonEinsumGeneratorContext() = default;
   PythonEinsumGeneratorContext(ShapeMap index_shapes)
-      : m_index_shapes(std::move(index_shapes)) {}
+      : ReorderingContext(MemoryLayout::ColumnMajor),
+        m_index_shapes(std::move(index_shapes)) {}
 
   /// Get whether to generate import statements
   bool generate_imports() const { return m_generate_imports; }
 
   /// Set whether to generate import statements
   void set_generate_imports(bool value) { m_generate_imports = value; }
-
-  /// Get the memory layout for tensors
-  MemoryLayout memory_layout() const { return m_memory_layout; }
-
-  /// Set the memory layout for tensors
-  void set_memory_layout(MemoryLayout layout) { m_memory_layout = layout; }
 
   /// Get the dimension/shape for a given index space
   std::string get_shape(const IndexSpace &space) const {
@@ -97,8 +93,6 @@ class PythonEinsumGeneratorContext : public ExportContext {
   ShapeMap m_index_shapes;
   TagMap m_tags;
   bool m_generate_imports = true;  // Generate imports by default
-  MemoryLayout m_memory_layout =
-      MemoryLayout::ColumnMajor;  // Fortran order to match Eigen::Tensor
 };
 
 /// Context for NumPy einsum generator
@@ -110,7 +104,14 @@ class NumPyEinsumGeneratorContext : public PythonEinsumGeneratorContext {
 /// Context for PyTorch einsum generator
 class PyTorchEinsumGeneratorContext : public PythonEinsumGeneratorContext {
  public:
-  using PythonEinsumGeneratorContext::PythonEinsumGeneratorContext;
+  PyTorchEinsumGeneratorContext() : PythonEinsumGeneratorContext() {
+    set_memory_layout(MemoryLayout::RowMajor);
+  };
+  ~PyTorchEinsumGeneratorContext() = default;
+  PyTorchEinsumGeneratorContext(ShapeMap index_shapes)
+      : PythonEinsumGeneratorContext(std::move(index_shapes)) {
+    set_memory_layout(MemoryLayout::RowMajor);
+  }
 };
 
 /// Base generator for producing Python code using einsum

@@ -239,7 +239,8 @@ void add_to_context(Context &ctx, const std::string &line) {
   add_to_context(ctx, key, value);
 }
 
-std::vector<ExpressionGroup<>> parse_expression_spec(const std::string &spec) {
+std::vector<ExpressionGroup<>> parse_expression_spec(const std::string &spec,
+                                                     bool retain_braket) {
   std::vector<ExpressionGroup<>> groups;
 
   std::istringstream in(spec);
@@ -267,13 +268,13 @@ std::vector<ExpressionGroup<>> parse_expression_spec(const std::string &spec) {
           line, {.def_perm_symm = Symmetry::Nonsymm,
                  .def_braket_symm = BraKetSymmetry::Nonsymm,
                  .def_col_symm = ColumnSymmetry::Nonsymm});
-      groups.back().add(to_export_tree(res));
+      groups.back().add(to_export_tree(res, retain_braket));
     } catch (...) {
       ExprPtr expr =
           deserialize(line, {.def_perm_symm = Symmetry::Nonsymm,
                              .def_braket_symm = BraKetSymmetry::Nonsymm,
                              .def_col_symm = ColumnSymmetry::Nonsymm});
-      groups.back().add(to_export_tree(expr));
+      groups.back().add(to_export_tree(expr, retain_braket));
     }
   }
 
@@ -359,7 +360,8 @@ TEMPLATE_LIST_TEST_CASE("export_tests", "[export]", KnownGenerators) {
 
       REQUIRE(!expression_spec.empty());
 
-      auto groups = parse_expression_spec(expression_spec);
+      auto groups = parse_expression_spec(
+          expression_spec, std::same_as<CurrentGen, JuliaTensorKitGenerator<>>);
       REQUIRE(!groups.empty());
 
       export_groups<>(groups, generator, context);

@@ -156,6 +156,10 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
 
   if (prioritize_aux) {
     indices.insert(end(indices), begin(tensor.aux()), end(tensor.aux()));
+
+    // We only have to retain relative order of indices that belong to the same
+    // space
+    std::ranges::stable_sort(indices, comparator);
   }
 
   std::size_t first_begin_idx;
@@ -207,7 +211,12 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
   }
 
   if (!prioritize_aux) {
+    auto aux_begin = end(indices);
     indices.insert(end(indices), begin(tensor.aux()), end(tensor.aux()));
+
+    // We only have to retain relative order of indices that belong to the same
+    // space
+    std::stable_sort(aux_begin, indices.end(), comparator);
   }
 
   tensor = Tensor(tensor.label(), bra(), ket(), aux(std::move(indices)),

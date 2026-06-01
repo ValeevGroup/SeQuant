@@ -969,17 +969,19 @@ void export_groups(Range groups, Generator<Context> &generator, Context ctx) {
 ///       head's bra/ket convention, so the deprecation warning is suppressed
 ///       here.
 template <typename NodeData = ExportExpr>
-ExportNode<NodeData> to_export_tree(const ExprPtr &expr) {
+ExportNode<NodeData> to_export_tree(const ExprPtr &expr,
+                                    bool retain_braket = false) {
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-  return binarize<NodeData>(expr);
+  return binarize<NodeData>(expr, {}, {.merge_indices = !retain_braket});
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 }
 
 /// @param expr The expression to transform
 /// @returns The corresponding ExportNode tree
 template <typename NodeData = ExportExpr>
-ExportNode<NodeData> to_export_tree(const ResultExpr &expr) {
-  return binarize<NodeData>(expr);
+ExportNode<NodeData> to_export_tree(const ResultExpr &expr,
+                                    bool retain_braket = false) {
+  return binarize<NodeData>(expr, {.merge_indices = !retain_braket});
 }
 
 }  // namespace sequant
