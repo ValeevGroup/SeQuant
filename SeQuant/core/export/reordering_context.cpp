@@ -137,9 +137,7 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
   // Same as for antisymmetry: We can't deal with conjugation at the tensor
   // level
   bool swap_braket = !tensor.bra().empty() && !tensor.ket().empty() &&
-                     (tensor.braket_symmetry() == BraKetSymmetry::Symm ||
-                      (m_real_orbitals && tensor.braket_symmetry() ==
-                                              BraKetSymmetry::Conjugate)) &&
+                     tensor.braket_symmetry() == BraKetSymmetry::Symm &&
                      needs_swap(relevant_bra, relevant_ket);
   bool prioritize_aux = !tensor.aux().empty() &&
                         needs_swap((swap_braket ? relevant_ket : relevant_bra),

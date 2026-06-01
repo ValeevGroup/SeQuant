@@ -31,7 +31,7 @@ class ItfContext : public ReorderingContext {
   using VariableImportMap = container::map<Variable, std::string>;
 
   ItfContext()
-      : ReorderingContext(MemoryLayout::ColumnMajor, assume_real_orbitals{},
+      : ReorderingContext(MemoryLayout::ColumnMajor,
                           assume_strict_column_permutability{}){};
   ~ItfContext() = default;
 
