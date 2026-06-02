@@ -129,15 +129,28 @@ bool AsyCost::AsyCostEntry::operator<(const AsyCost::AsyCostEntry &rhs) const {
   // The max() sentinel is the greatest entry.
   if (is_max_ != rhs.is_max_) return !is_max_;
 
-  // Order by exponents, space by space, from the greatest IndexSpace (highest
-  // priority) down to the least, using IndexSpace's own ordering. The first
-  // space whose exponents differ decides: a larger exponent on a higher-
-  // priority space makes the entry larger. Entries with identical exponents
-  // on every space are equivalent.
+  // Order primarily by the sum of all exponents, i.e. the overall polynomial
+  // degree (worst-case scaling). When two entries share the same total degree,
+  // break the tie by comparing exponents space by space, from the greatest
+  // IndexSpace (highest priority) down to the least, using IndexSpace's own
+  // ordering: the first space whose exponents differ decides, and a larger
+  // exponent on a higher-priority space makes the entry larger. Entries with
+  // identical exponents on every space are equivalent.
   auto exp_for = [](ExponentMap const &m, IndexSpace const &s) {
     auto it = m.find(s);
     return it == m.end() ? std::size_t{0} : it->second;
   };
+
+  auto total_degree = [](ExponentMap const &m) {
+    std::size_t sum = 0;
+    for (auto const &kv : m) sum += kv.second;
+    return sum;
+  };
+  {
+    auto const l = total_degree(exponents_);
+    auto const r = total_degree(rhs.exponents_);
+    if (l != r) return l < r;
+  }
 
   container::set<IndexSpace> spaces;
   for (auto const &kv : exponents_) spaces.insert(kv.first);

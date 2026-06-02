@@ -218,11 +218,17 @@ TEST_CASE("asy_cost", "[AsyCost]") {
                            std::pow(100.0, 3) * 1.0 * std::pow(7.0, 1);
     REQUIRE(c.ops(ext2) == expected2);
 
-    // Ordering follows IndexSpace priority (highest space dominates): with
-    // K > V > U > O, a larger K-exponent makes a cost larger regardless of
-    // the lower spaces.
-    AsyCost const heavy_k{AsyCost::ExponentMap{{O, 4}, {K, 3}}};
-    AsyCost const light_k{AsyCost::ExponentMap{{O, 9}, {K, 2}}};
-    REQUIRE(light_k < heavy_k);
+    // Ordering is by total degree (sum of exponents) first: the overall
+    // polynomial / worst-case scaling dominates regardless of which spaces
+    // carry the exponents.
+    AsyCost const deg7{AsyCost::ExponentMap{{O, 4}, {K, 3}}};   // sum 7
+    AsyCost const deg11{AsyCost::ExponentMap{{O, 9}, {K, 2}}};  // sum 11
+    REQUIRE(deg7 < deg11);
+
+    // Among equal total degrees, IndexSpace priority breaks the tie: with
+    // K > O, a larger K-exponent makes the cost larger.
+    AsyCost const big_k{AsyCost::ExponentMap{{O, 1}, {K, 3}}};    // sum 4
+    AsyCost const small_k{AsyCost::ExponentMap{{O, 3}, {K, 1}}};  // sum 4
+    REQUIRE(small_k < big_k);
   }
 }
