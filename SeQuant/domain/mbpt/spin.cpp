@@ -1590,7 +1590,7 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
   };
 
   // Expressions without a leading antisymmetrizer (e.g. CC energy) collapse
-  // to a single spin case. They are spin-traced directly, but term-by-term.
+  // to a single expression. They are spin-traced directly, but term-by-term.
   const auto A_opt = leading_antisymmetrizer(expr);
   if (!A_opt) {
     auto trace_term = [](const ExprPtr& term) -> ExprPtr {

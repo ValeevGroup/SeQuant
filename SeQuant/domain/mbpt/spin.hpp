@@ -367,7 +367,7 @@ std::vector<ExprPtr> open_shell_spintrace(
 /// Antisymmetrizer is expanded partially to produce antisymmetrizer for
 /// spin-up and spin-down columns.
 /// Expressions without a leading antisymmetrizer (e.g. a CC energy expression)
-/// collapse to a single spin case and the returned vector then contains one expression.
+/// collapse to a single expression which sums over all spin combinations
 /// @param expr the input expression
 /// @return vector of spin-traced expressions for each spincase
 /// @warning when an "antisymmetrizer" tensor A is present it is assumed to be at the
