@@ -465,7 +465,10 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
   if (storeExpr) {
     node->set_expr(ex<ExprType>(expr));
   }
+}
 
+template <typename T>
+void track_usage(const EvalNode<T> &node, PreprocessResult &result) {
   Usage usage = [&]() {
     if (node.leaf()) {
       return Usage::Terminal;
@@ -481,21 +484,37 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
     return Usage::Intermediate;
   }();
 
-  if constexpr (std::is_same_v<ExprType, Tensor>) {
-    result.tensors[expr] |= usage;
-    auto &&indices = expr.const_indices();
+  const Expr &expr = *node->expr();
+
+  auto handle_tensor = [&](const Tensor &tensor) {
+    result.tensors[tensor] |= usage;
+    auto &&indices = tensor.const_indices();
     result.indices.insert(indices.begin(), indices.end());
 
-    result.tensorReferences[expr]++;
-  } else {
-    result.variables[expr] |= usage;
+    result.tensorReferences[tensor]++;
+  };
+  auto handle_variable = [&](const Variable &variable) {
+    result.variables[variable] |= usage;
 
-    result.variableReferences[expr]++;
+    result.variableReferences[variable]++;
+  };
+
+  if (expr.is<Tensor>()) {
+    handle_tensor(expr.as<Tensor>());
+  } else if (expr.is<Variable>()) {
+    handle_variable(expr.as<Variable>());
+  } else if (expr.is<Power>()) {
+    const Power &power = expr.as<Power>();
+    if (power.base().is<Tensor>()) {
+      handle_tensor(power.base().as<Tensor>());
+    } else if (power.base().is<Variable>()) {
+      handle_variable(power.base().as<Variable>());
+    }
   }
 }
 
 /// @returns Whether the given node may be pruned from its parent in order to be
-/// represented implicitly rather than by explicit occurrance in the tree
+/// represented implicitly rather than by explicit occurrence in the tree
 template <typename T>
 bool may_prune(const EvalNode<T> &tree) {
   // Tree must represent a product and must itself not be a leaf (pruning that
@@ -562,7 +581,12 @@ class PreprocessVisitor {
         if (!tree.leaf()) {
           rebalance_tree(tree);
           set_compute_selection(tree);
+          prune_redundant_intermediate(tree);
         }
+
+        // It is important to track_usage AFTER prune_redundant_intermediate as
+        // the latter might change the result expression on the current node
+        track_usage(tree, m_result);
         break;
       case TreeTraversal::PostOrder:
         if (!tree.leaf()) {
@@ -637,26 +661,51 @@ class PreprocessVisitor {
   }
 
   void set_compute_selection(ExportNode<T> &node) {
-    if (node->op_type() == EvalOp::Sum) {
-      // We don't want to explicitly encode addition of non-leaf
-      // nodes in the tree as that could lead to unnecessary intermediates
-      // being created. Instead, we flush the top-most result of the
-      // addition downwards, making use of the += semantic that is assumed
-      // for all computations.
-      // Note the explicit flushing down of the result name is required in
-      // case the top-level summation node has a different name than the
-      // intermediate nodes.
-      ComputeSelection selection = ComputeSelection::Both;
-      if (!node.left().leaf()) {
-        node.left()->set_expr(node->expr());
-        selection &= ~ComputeSelection::Left;
-      }
-      if (!node.right().leaf()) {
-        node.right()->set_expr(node->expr());
-        selection &= ~ComputeSelection::Right;
-      }
+    if (node->op_type() != EvalOp::Sum) {
+      return;
+    }
 
-      node->set_compute_selection(selection);
+    // We don't want to explicitly encode addition of non-leaf
+    // nodes in the tree as that could lead to unnecessary intermediates
+    // being created. Instead, we flush the top-most result of the
+    // addition downwards, making use of the += semantic that is assumed
+    // for all computations.
+    // Note the explicit flushing down of the result name is required in
+    // case the top-level summation node has a different name than the
+    // intermediate nodes.
+    ComputeSelection selection = ComputeSelection::Both;
+    if (!node.left().leaf()) {
+      selection &= ~ComputeSelection::Left;
+    }
+    if (!node.right().leaf()) {
+      selection &= ~ComputeSelection::Right;
+    }
+
+    node->set_compute_selection(selection);
+  }
+
+  void prune_redundant_intermediate(ExportNode<T> &node) {
+    if (node.root()) {
+      return;
+    }
+    if (node.parent()->compute_selection() == ComputeSelection::Both) {
+      return;
+    }
+
+    const bool is_left = node.parent().left()->id() == node->id();
+    const bool computes_left =
+        (node.parent()->compute_selection() & ComputeSelection::Left) ==
+        ComputeSelection::Left;
+    const bool computes_right =
+        (node.parent()->compute_selection() & ComputeSelection::Right) ==
+        ComputeSelection::Right;
+
+    if (is_left && !computes_left || !is_left && !computes_right) {
+      // The current node is not computed as an independent result. Hence, the
+      // result for the current node is not needed and we can simply overwrite
+      // it with the parent's result (to prune the existence of the redundant
+      // intermediate on node)
+      node->set_expr(node.parent()->expr());
     }
   }
 
@@ -969,17 +1018,19 @@ void export_groups(Range groups, Generator<Context> &generator, Context ctx) {
 ///       head's bra/ket convention, so the deprecation warning is suppressed
 ///       here.
 template <typename NodeData = ExportExpr>
-ExportNode<NodeData> to_export_tree(const ExprPtr &expr) {
+ExportNode<NodeData> to_export_tree(const ExprPtr &expr,
+                                    bool retain_braket = false) {
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-  return binarize<NodeData>(expr);
+  return binarize<NodeData>(expr, {}, {.merge_indices = !retain_braket});
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 }
 
 /// @param expr The expression to transform
 /// @returns The corresponding ExportNode tree
 template <typename NodeData = ExportExpr>
-ExportNode<NodeData> to_export_tree(const ResultExpr &expr) {
-  return binarize<NodeData>(expr);
+ExportNode<NodeData> to_export_tree(const ResultExpr &expr,
+                                    bool retain_braket = false) {
+  return binarize<NodeData>(expr, {.merge_indices = !retain_braket});
 }
 
 }  // namespace sequant

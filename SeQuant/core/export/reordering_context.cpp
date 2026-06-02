@@ -97,6 +97,10 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
   using std::ranges::begin;
   using std::ranges::end;
 
+  if (!m_rewrite) {
+    return false;
+  }
+
   auto comparator = [this](const Index &lhs, const Index &rhs) {
     return this->is_less(lhs.space(), rhs.space());
   };
@@ -122,8 +126,7 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
   bool sort_particles =
       !sort_bra && !sort_ket && !tensor.bra().empty() &&
       tensor.bra().size() == tensor.ket().size() &&
-      (tensor.column_symmetry() == ColumnSymmetry::Symm ||
-       m_column_permutability) &&
+      tensor.column_symmetry() == ColumnSymmetry::Symm &&
       !std::ranges::is_sorted(ranges::views::zip(tensor.bra(), tensor.ket()),
                               pair_comp);
 
@@ -137,9 +140,7 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
   // Same as for antisymmetry: We can't deal with conjugation at the tensor
   // level
   bool swap_braket = !tensor.bra().empty() && !tensor.ket().empty() &&
-                     (tensor.braket_symmetry() == BraKetSymmetry::Symm ||
-                      (m_real_orbitals && tensor.braket_symmetry() ==
-                                              BraKetSymmetry::Conjugate)) &&
+                     tensor.braket_symmetry() == BraKetSymmetry::Symm &&
                      needs_swap(relevant_bra, relevant_ket);
   bool prioritize_aux = !tensor.aux().empty() &&
                         needs_swap((swap_braket ? relevant_ket : relevant_bra),
@@ -155,6 +156,10 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
 
   if (prioritize_aux) {
     indices.insert(end(indices), begin(tensor.aux()), end(tensor.aux()));
+
+    // We only have to retain relative order of indices that belong to the same
+    // space
+    std::ranges::stable_sort(indices, comparator);
   }
 
   std::size_t first_begin_idx;
@@ -206,7 +211,12 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
   }
 
   if (!prioritize_aux) {
+    auto aux_begin = end(indices);
     indices.insert(end(indices), begin(tensor.aux()), end(tensor.aux()));
+
+    // We only have to retain relative order of indices that belong to the same
+    // space
+    std::stable_sort(aux_begin, indices.end(), comparator);
   }
 
   tensor = Tensor(tensor.label(), bra(), ket(), aux(std::move(indices)),

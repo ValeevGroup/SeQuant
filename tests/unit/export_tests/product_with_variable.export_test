@@ -11,16 +11,16 @@ Declare variable myVar
 
 Declare tensor A[a_2, i_2]
 Declare tensor B[i_2, a_1]
-Declare tensor I[a_2, a_1]
+Declare tensor I[a_1, a_2]
 
-Create I[a_2, a_1] and initialize to zero
+Create I[a_1, a_2] and initialize to zero
 Load A[a_2, i_2]
 Load B[i_2, a_1]
 Load myVar
-Compute I[a_2, a_1] += myVar A[a_2, i_2] B[i_2, a_1]
+Compute I[a_1, a_2] += myVar A[a_2, i_2] B[i_2, a_1]
 Unload myVar
 Unload B[i_2, a_1]
 Unload A[a_2, i_2]
-Persist I[a_2, a_1]
+Persist I[a_1, a_2]
 
 =================================================

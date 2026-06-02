@@ -310,6 +310,11 @@ std::wstring to_string(AbstractTensor const& tensor,
   return serialized;
 }
 
+std::wstring to_string(Tensor const& tensor,
+                       const SerializationOptions& options) {
+  return v1::to_string(static_cast<const Expr&>(tensor), options);
+}
+
 template <Statistics S>
 std::wstring to_string(NormalOperator<S> const& nop,
                        const SerializationOptions& options) {

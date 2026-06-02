@@ -432,7 +432,9 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta) {
     entry.tag = current.at("tag").get<std::string>();
 
     std::wstring label = toUtf16(current.at("label").get<std::string>());
-    registry.add(label, type, size,
+    Field field =
+        current.value("real_valued", false) ? Field::Real : Field::Complex;
+    registry.add(label, type, size, field,
                  IndexSpace::QuantumNumbers{mbpt::Spin::any});
 
     spdlog::debug(

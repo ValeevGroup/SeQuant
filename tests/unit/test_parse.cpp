@@ -187,10 +187,16 @@ TEST_CASE("serialization", "[serialization]") {
       auto expr1 = deserialize<ExprPtr>(L"t{a1;i1}:A");
       auto expr2 = deserialize<ExprPtr>(L"t{a1;i1}:S-C");
       auto expr3 = deserialize<ExprPtr>(L"t{a1;i1}:N-S-N");
+      auto expr4 = deserialize<ExprPtr>(L"t{a1;i1}:N-H-N");
+      auto expr5 = deserialize<ExprPtr>(L"t{a1;i1}:N-A-N");
+      auto expr6 = deserialize<ExprPtr>(L"t{a1;i1}:N-N-N");
 
       const Tensor& t1 = expr1->as<Tensor>();
       const Tensor& t2 = expr2->as<Tensor>();
       const Tensor& t3 = expr3->as<Tensor>();
+      const Tensor& t4 = expr4->as<Tensor>();
+      const Tensor& t5 = expr5->as<Tensor>();
+      const Tensor& t6 = expr6->as<Tensor>();
 
       REQUIRE(t1.symmetry() == Symmetry::Antisymm);
 
@@ -200,6 +206,10 @@ TEST_CASE("serialization", "[serialization]") {
       REQUIRE(t3.symmetry() == Symmetry::Nonsymm);
       REQUIRE(t3.braket_symmetry() == BraKetSymmetry::Symm);
       REQUIRE(t3.column_symmetry() == ColumnSymmetry::Nonsymm);
+
+      REQUIRE(t4.hermiticity() == Hermiticity::Hermitian);
+      REQUIRE(t5.hermiticity() == Hermiticity::AntiHermitian);
+      REQUIRE(t6.hermiticity() == Hermiticity::NonHermitian);
     }
 
     SECTION("NormalOperator") {

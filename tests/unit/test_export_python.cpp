@@ -380,6 +380,8 @@ TEST_CASE("PythonEinsumGenerator - Memory Layout", "[export][python]") {
     auto export_tree = to_export_tree(result_expr);
 
     NumPyEinsumGeneratorContext ctx;
+    ctx.enable_rewriting(
+        false);  // to ensure we write all tensors in expected layout
     ctx.set_shape(occ, "nocc");
     ctx.set_shape(virt, "nvirt");
     ctx.set_tag(occ, "o");
@@ -402,6 +404,8 @@ TEST_CASE("PythonEinsumGenerator - Memory Layout", "[export][python]") {
     auto export_tree = to_export_tree(result_expr);
 
     NumPyEinsumGeneratorContext ctx;
+    ctx.enable_rewriting(
+        false);  // to ensure we write all tensors in expected layout
     ctx.set_shape(occ, "nocc");
     ctx.set_shape(virt, "nvirt");
     ctx.set_tag(occ, "o");
@@ -425,6 +429,8 @@ TEST_CASE("PythonEinsumGenerator - Memory Layout", "[export][python]") {
     auto export_tree = to_export_tree(result_expr);
 
     NumPyEinsumGeneratorContext ctx;
+    ctx.enable_rewriting(
+        false);  // to ensure we write all tensors in expected layout
     ctx.set_shape(occ, "nocc");
     ctx.set_shape(virt, "nvirt");
     ctx.set_tag(occ, "o");
@@ -448,6 +454,8 @@ TEST_CASE("PythonEinsumGenerator - Memory Layout", "[export][python]") {
     auto export_tree = to_export_tree(result_expr);
 
     PyTorchEinsumGeneratorContext ctx;
+    ctx.enable_rewriting(
+        false);  // to ensure we write all tensors in expected layout
     ctx.set_shape(occ, "nocc");
     ctx.set_shape(virt, "nvirt");
     ctx.set_tag(occ, "o");
@@ -510,6 +518,8 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     auto export_tree = to_export_tree(result_expr);
 
     NumPyEinsumGeneratorContext ctx;
+    ctx.enable_rewriting(
+        false);  // to ensure we write all tensors in expected layout
     ctx.set_shape(occ, std::to_string(nocc));
     ctx.set_shape(virt, std::to_string(nvirt));
     ctx.set_tag(occ, "o");
@@ -586,6 +596,8 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     auto export_tree = to_export_tree(result_expr);
 
     NumPyEinsumGeneratorContext ctx;
+    ctx.enable_rewriting(
+        false);  // to ensure we write all tensors in expected layout
     ctx.set_shape(occ, std::to_string(nocc));
     ctx.set_shape(virt, std::to_string(nvirt));
     ctx.set_tag(occ, "o");
@@ -660,6 +672,8 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     auto export_tree = to_export_tree(result_expr);
 
     NumPyEinsumGeneratorContext ctx;
+    ctx.enable_rewriting(
+        false);  // to ensure we write all tensors in expected layout
     ctx.set_shape(occ, std::to_string(nocc));
     ctx.set_shape(virt, std::to_string(nvirt));
     ctx.set_tag(occ, "o");
@@ -733,6 +747,8 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     auto export_tree = to_export_tree(result_expr);
 
     NumPyEinsumGeneratorContext ctx;
+    ctx.enable_rewriting(
+        false);  // to ensure we write all tensors in expected layout
     ctx.set_shape(occ, std::to_string(nocc));
     ctx.set_shape(virt, std::to_string(nvirt));
     ctx.set_tag(occ, "o");
@@ -802,6 +818,8 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     auto export_tree = to_export_tree(result_expr);
 
     NumPyEinsumGeneratorContext ctx;
+    ctx.enable_rewriting(
+        false);  // to ensure we write all tensors in expected layout
     ctx.set_shape(occ, std::to_string(nocc));
     ctx.set_shape(virt, std::to_string(nvirt));
     ctx.set_tag(occ, "o");
@@ -874,6 +892,8 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     auto export_tree = to_export_tree(result_expr);
 
     NumPyEinsumGeneratorContext ctx;
+    ctx.enable_rewriting(
+        false);  // to ensure we write all tensors in expected layout
     ctx.set_shape(occ, std::to_string(nocc));
     ctx.set_shape(virt, std::to_string(nvirt));
     ctx.set_tag(occ, "o");
@@ -960,6 +980,8 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     auto export_tree = to_export_tree(result_expr);
 
     NumPyEinsumGeneratorContext ctx;
+    ctx.enable_rewriting(
+        false);  // to ensure we write all tensors in expected layout
     ctx.set_shape(virt, std::to_string(nvirt));
     ctx.set_shape(auxsp, std::to_string(naux));
     ctx.set_tag(virt, "v");
@@ -1046,6 +1068,8 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     auto export_tree = to_export_tree(result_expr);
 
     NumPyEinsumGeneratorContext ctx;
+    ctx.enable_rewriting(
+        false);  // to ensure we write all tensors in expected layout
     ctx.set_shape(occ, std::to_string(nocc));
     ctx.set_shape(virt, std::to_string(nvirt));
     ctx.set_tag(occ, "o");
@@ -1122,6 +1146,8 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     auto export_tree = to_export_tree(result_expr);
 
     NumPyEinsumGeneratorContext ctx;
+    ctx.enable_rewriting(
+        false);  // to ensure we write all tensors in expected layout
     ctx.set_shape(occ, std::to_string(nocc));
     ctx.set_shape(virt, std::to_string(nvirt));
     ctx.set_tag(occ, "o");
@@ -1354,6 +1380,8 @@ TEST_CASE("PyTorchEinsumGenerator - Validation", "[export][python][torch]") {
     auto export_tree = to_export_tree(result_expr);
 
     PyTorchEinsumGeneratorContext ctx;
+    ctx.enable_rewriting(
+        false);  // to ensure we write all tensors in expected layout
     ctx.set_shape(occ, std::to_string(nocc));
     ctx.set_shape(virt, std::to_string(nvirt));
     ctx.set_tag(occ, "o");
@@ -1432,6 +1460,8 @@ TEST_CASE("PyTorchEinsumGenerator - Validation", "[export][python][torch]") {
     auto export_tree = to_export_tree(result_expr);
 
     PyTorchEinsumGeneratorContext ctx;
+    ctx.enable_rewriting(
+        false);  // to ensure we write all tensors in expected layout
     ctx.set_shape(occ, std::to_string(nocc));
     ctx.set_shape(virt, std::to_string(nvirt));
     ctx.set_tag(occ, "o");
@@ -1514,6 +1544,8 @@ TEST_CASE("PyTorchEinsumGenerator - Validation", "[export][python][torch]") {
     auto export_tree = to_export_tree(result_expr);
 
     PyTorchEinsumGeneratorContext ctx;
+    ctx.enable_rewriting(
+        false);  // to ensure we write all tensors in expected layout
     ctx.set_shape(occ, std::to_string(nocc));
     ctx.set_shape(virt, std::to_string(nvirt));
     ctx.set_tag(occ, "o");
@@ -1613,6 +1645,8 @@ TEST_CASE("PyTorchEinsumGenerator - Validation", "[export][python][torch]") {
     auto export_tree = to_export_tree(result_expr);
 
     PyTorchEinsumGeneratorContext ctx;
+    ctx.enable_rewriting(
+        false);  // to ensure we write all tensors in expected layout
     ctx.set_shape(virt, std::to_string(nvirt));
     ctx.set_shape(auxsp, std::to_string(naux));
     ctx.set_tag(virt, "v");

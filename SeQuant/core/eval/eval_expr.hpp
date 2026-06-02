@@ -275,6 +275,13 @@ struct EvalOpSetter {
   void reset(EvalExpr& expr) { expr.op_type_ = std::nullopt; }
 };
 
+struct BinarizationOptions {
+  /// Whether to merge indices of intermediate tensors into a single list
+  /// (stored as aux indices) instead of retaining the bra, ket and aux
+  /// separation
+  bool merge_indices = false;
+};
+
 namespace meta {
 
 namespace detail {
@@ -361,7 +368,8 @@ concept leaf_node_evaluator =
 
 namespace impl {
 
-FullBinaryNode<EvalExpr> binarize(ExprPtr const&, IndexSet const& uncontract);
+FullBinaryNode<EvalExpr> binarize(ExprPtr const&, IndexSet const& uncontract,
+                                  const BinarizationOptions& opts);
 }  // namespace impl
 
 ///
@@ -399,10 +407,11 @@ template <typename ExprT = EvalExpr>
     "layout (e.g. T2 residual head 3:1 instead of 2:2). Use "
     "binarize(ResultExpr) and supply the desired head as the "
     "LHS.")]] FullBinaryNode<ExprT>
-binarize(ExprPtr const& expr, IndexSet const& external = {}) {
+binarize(ExprPtr const& expr, IndexSet const& external = {},
+         const BinarizationOptions& opts = {}) {
   SEQUANT_ASSERT(
       ranges::all_of(external, [](const auto& idx) { return idx.nonnull(); }));
-  auto tree = impl::binarize(expr, external);
+  auto tree = impl::binarize(expr, external, opts);
   if constexpr (std::is_same_v<ExprT, EvalExpr>)
     return tree;
   else
@@ -414,7 +423,8 @@ binarize(ExprPtr const& expr, IndexSet const& external = {}) {
 /// External indices are deduced from @p res (its non-null slots).
 template <typename ExprT = EvalExpr>
   requires std::is_constructible_v<ExprT, EvalExpr>
-FullBinaryNode<ExprT> binarize(ResultExpr const& res) {
+FullBinaryNode<ExprT> binarize(ResultExpr const& res,
+                               const BinarizationOptions& opts = {}) {
   // collect result indices so they are not contracted in the expression tree
   IndexSet uncontract;
   for (auto&& ix : res.indices()) uncontract.emplace(ix);
@@ -424,7 +434,8 @@ FullBinaryNode<ExprT> binarize(ResultExpr const& res) {
   // we overwrite it below with res.result_as_tensor() so the layout is
   // caller-determined and the deprecation does not apply.
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-  FullBinaryNode<ExprT> tree = binarize<ExprT>(res.expression(), uncontract);
+  FullBinaryNode<ExprT> tree =
+      binarize<ExprT>(res.expression(), uncontract, opts);
 
   const bool is_scalar =
       res.bra().empty() && res.ket().empty() && res.aux().empty();
@@ -456,16 +467,6 @@ FullBinaryNode<ExprT> binarize(ResultExpr const& res) {
     Tensor& tensor = tree->expr().template as<Tensor>();
 
     tensor = res.result_as_tensor();
-
-    // if (res.has_label()) {
-    //   tensor.set_label(res.label());
-    // }
-
-    // SEQUANT_ASSERT(tensor.num_slots() ==
-    //        res.bra().size() + res.ket().size() + res.aux().size());
-    // tensor.set_bra(res.bra());
-    // tensor.set_ket(res.ket());
-    // tensor.set_aux(res.aux());
   }
 
   return tree;

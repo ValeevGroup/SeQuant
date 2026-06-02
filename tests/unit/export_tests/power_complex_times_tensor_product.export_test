@@ -12,19 +12,19 @@ Declare variable x
 Declare tensor A[a_1, i_2]
 Declare tensor B[i_1, a_1]
 Declare tensor I[i_1, i_2]
-Declare tensor I[a_1, i_2]
+Declare tensor I[i_2, a_1]
 
 Create I[i_1, i_2] and initialize to zero
-Create I[a_1, i_2] and initialize to zero
+Create I[i_2, a_1] and initialize to zero
 Load x
 Load A[a_1, i_2]
-Compute I[a_1, i_2] += (-1)^(1/2) x^2 A[a_1, i_2]
+Compute I[i_2, a_1] += (-1)^(1/2) x^2 A[a_1, i_2]
 Unload A[a_1, i_2]
 Unload x
 Load B[i_1, a_1]
-Compute I[i_1, i_2] += I[a_1, i_2] B[i_1, a_1]
+Compute I[i_1, i_2] += I[i_2, a_1] B[i_1, a_1]
 Unload B[i_1, a_1]
-Unload I[a_1, i_2]
+Unload I[i_2, a_1]
 Persist I[i_1, i_2]
 
 =================================================

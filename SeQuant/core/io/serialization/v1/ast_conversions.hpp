@@ -5,6 +5,7 @@
 #ifndef SEQUANT_CORE_PARSE_AST_CONVERSIONS_HPP
 #define SEQUANT_CORE_PARSE_AST_CONVERSIONS_HPP
 
+#include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
@@ -21,10 +22,13 @@
 #include <algorithm>
 #include <string>
 #include <tuple>
+#include <variant>
 
 namespace sequant::io::serialization::v1::transform {
 
-using DefaultSymmetries = std::tuple<Symmetry, BraKetSymmetry, ColumnSymmetry>;
+using DefaultSymmetries =
+    std::tuple<Symmetry, std::variant<BraKetSymmetry, Hermiticity>,
+               ColumnSymmetry>;
 
 template <typename AST, typename PositionCache, typename Iterator>
 std::tuple<std::size_t, std::size_t> get_pos(const AST &ast,
@@ -143,8 +147,9 @@ Symmetry to_perm_symmetry(char c, std::size_t offset, const Iterator &,
 }
 
 template <typename Iterator>
-BraKetSymmetry to_braket_symmetry(char c, std::size_t offset, const Iterator &,
-                                  BraKetSymmetry default_symmetry) {
+std::variant<BraKetSymmetry, Hermiticity> to_braket_symmetry(
+    char c, std::size_t offset, const Iterator &,
+    std::variant<BraKetSymmetry, Hermiticity> default_symmetry) {
   if (c == io::serialization::v1::ast::SymmetrySpec::unspecified) {
     return default_symmetry;
   }
@@ -152,17 +157,24 @@ BraKetSymmetry to_braket_symmetry(char c, std::size_t offset, const Iterator &,
   switch (c) {
     case 'C':
     case 'c':
-      return BraKetSymmetry::Conjugate;
+    case 'H':
+    case 'h':
+      return Hermiticity::Hermitian;
+    case 'A':
+    case 'a':
+      return Hermiticity::AntiHermitian;
     case 'S':
     case 's':
       return BraKetSymmetry::Symm;
     case 'N':
     case 'n':
-      return BraKetSymmetry::Nonsymm;
+      return Hermiticity::NonHermitian;
   }
 
   throw SerializationError(
-      offset, 1, std::string("Invalid BraKet symmetry specifier '") + c + "'");
+      offset, 1,
+      std::string("Invalid BraKet symmetry / Hermiticity specifier '") + c +
+          "'");
 }
 
 template <typename Iterator>
@@ -202,7 +214,8 @@ Constant to_constant(const io::serialization::v1::ast::Number &number,
 }
 
 template <typename PositionCache, typename Iterator>
-std::tuple<Symmetry, BraKetSymmetry, ColumnSymmetry> to_symmetries(
+std::tuple<Symmetry, std::variant<BraKetSymmetry, Hermiticity>, ColumnSymmetry>
+to_symmetries(
     const boost::optional<io::serialization::v1::ast::SymmetrySpec> &symm_spec,
     const DefaultSymmetries &default_symms, const PositionCache &cache,
     const Iterator &begin) {
@@ -219,7 +232,7 @@ std::tuple<Symmetry, BraKetSymmetry, ColumnSymmetry> to_symmetries(
   // an uppercase letter each (no whitespace allowed in-between)
   Symmetry perm_symm = to_perm_symmetry(spec.perm_symm, offset + 1, begin,
                                         std::get<0>(default_symms));
-  BraKetSymmetry braket_symm = to_braket_symmetry(
+  std::variant<BraKetSymmetry, Hermiticity> braket_symm = to_braket_symmetry(
       spec.braket_symm, offset + 3, begin, std::get<1>(default_symms));
   ColumnSymmetry column_symm = to_column_symmetry(
       spec.column_symm, offset + 5, begin, std::get<2>(default_symms));
@@ -295,9 +308,17 @@ struct Transformer {
       return ex<BNOperator>(cre(std::move(ketIndices)),
                             ann(std::move(braIndices)), vac);
     }
-    return ex<Tensor>(tensor.name, bra(std::move(braIndices)),
-                      ket(std::move(ketIndices)), aux(std::move(auxiliaries)),
-                      perm_symm, braket_symm, column_symm);
+
+    // Dispatch to correct Tensor constructor (taking either BraKetSymmetry or
+    // Hermiticity)
+    return std::visit(
+        [&](auto symm) {
+          return ex<Tensor>(tensor.name, bra(std::move(braIndices)),
+                            ket(std::move(ketIndices)),
+                            aux(std::move(auxiliaries)), perm_symm, symm,
+                            column_symm);
+        },
+        braket_symm);
   }
 
   ExprPtr operator()(
