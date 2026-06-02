@@ -354,6 +354,10 @@ class Result {
   /// @return the size of the object in bytes
   [[nodiscard]] virtual std::size_t size_in_bytes() const = 0;
 
+  /// @return short shape summary for the eval trace (outer dims; for ToT also
+  ///         the inner-cell count and average inner extent). Empty by default.
+  [[nodiscard]] virtual std::string shape_brief() const { return {}; }
+
  protected:
   template <typename T,
             typename = std::enable_if_t<!std::is_convertible_v<T, Result>>>

@@ -595,7 +595,7 @@ ResultPtr evaluate(Node const& node,  //
                               .mem_alloc = log::bytes(result),
                               .mem_hwmark = {cache.note_working_set(
                                   log::bytes(cache, result).value)}},
-                log::label(node));
+                result->shape_brief(), log::label(node));
     } else {
       // A cached child is *distinct* from the local left/right when its
       // canon_phase != 1, because mult_by_phase allocates a fresh buffer
@@ -613,7 +613,7 @@ ResultPtr evaluate(Node const& node,  //
                               .mem_hwmark = {cache.note_working_set(hwmark)},
                               .mem_left = log::bytes(left),
                               .mem_right = log::bytes(right)},
-                log::label(node));
+                result->shape_brief(), log::label(node));
     }
   }
 

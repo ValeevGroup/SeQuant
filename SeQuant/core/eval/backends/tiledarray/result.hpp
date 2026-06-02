@@ -367,6 +367,15 @@ class ResultTensorTA final : public Result {
     v.world().gop.sum(local_size);
     return local_size;
   }
+
+  // regular (non-nested) tensor: cheap outer-dims only, no per-cell walk.
+  [[nodiscard]] std::string shape_brief() const final {
+    auto const& rng = get<ArrayT>().trange().elements_range();
+    std::string s = "outer=";
+    for (std::size_t i = 0; i < rng.rank(); ++i)
+      s += (i ? "x" : "") + std::to_string(rng.extent(i));
+    return s;
+  }
 };
 
 template <typename ArrayT,
@@ -557,6 +566,63 @@ class ResultTensorOfTensorTA final : public Result {
     auto local_size = TA::size_of<TA::MemorySpace::Host>(v);
     v.world().gop.sum(local_size);
     return local_size;
+  }
+
+  // ToT: walk inner cells to report outer dims, # nonzero inner cells, the
+  // summed inner extent (total PNO mass), and the average inner extent. This
+  // is the same O(cells) cost as size_in_bytes above. With align=32 the
+  // recorded result bytes reconcile as ~ 40*ncells + 8*sum_inner.
+  [[nodiscard]] std::string shape_brief() const final {
+    auto const& v = get<ArrayT>();
+    auto const& erng = v.trange().elements_range();
+    // distinct outer occupied-pair (idx0,idx1) bookkeeping (single-rank exact)
+    auto const lob = erng.lobound();
+    long const l0 = erng.rank() >= 1 ? static_cast<long>(lob[0]) : 0;
+    long const l1 = erng.rank() >= 2 ? static_cast<long>(lob[1]) : 0;
+    std::size_t const e1 = erng.rank() >= 2 ? erng.extent(1) : 1;
+    std::vector<char> seen(
+        erng.rank() >= 2 ? erng.extent(0) * erng.extent(1) : 0, 0);
+    std::size_t ncells = 0, sum_inner = 0, npairs = 0;
+    auto const& gtr = v.trange();  // array TiledRange: always valid
+    for (auto it = v.begin(); it != v.end(); ++it) {  // local nonzero outer tiles
+      auto const& tile = it->get();                   // TA::Tensor<inner-tensor>
+      // Outer element range from the array's TiledRange, NOT tile.range(): on
+      // the ArenaTensor ToT backend the per-tile range can be empty/dangling
+      // in the eval-trace path, and tile.range().idx() then dereferences a
+      // null lobound (SIGSEGV). Mirrors TA's own dist_array.h pattern
+      // a.trange().make_tile_range(it.index()). Range-based inner iteration
+      // (not tile.data()[o]) also avoids the compacted-arena out-of-bounds.
+      auto const trng = gtr.make_tile_range(it.index());
+      std::size_t o = 0;
+      for (auto const& inner : tile) {
+        if (!inner.empty()) {
+          ++ncells;
+          sum_inner += inner.size();
+          if (!seen.empty()) {
+            auto const idx = trng.idx(o);
+            std::size_t const f =
+                static_cast<std::size_t>(idx[0] - l0) * e1 +
+                static_cast<std::size_t>(idx[1] - l1);
+            if (f < seen.size() && !seen[f]) {
+              seen[f] = 1;
+              ++npairs;
+            }
+          }
+        }
+        ++o;
+      }
+    }
+    v.world().gop.sum(ncells);
+    v.world().gop.sum(sum_inner);
+    std::string s = "outer=";
+    for (std::size_t i = 0; i < erng.rank(); ++i)
+      s += (i ? "x" : "") + std::to_string(erng.extent(i));
+    s += " ncells=" + std::to_string(ncells);
+    s += " sum_inner=" + std::to_string(sum_inner);
+    s += " npairs=" + std::to_string(npairs);  // distinct (i,j) outer pairs (this rank)
+    s += " avg_inner=" +
+         std::to_string(ncells ? double(sum_inner) / double(ncells) : 0.0);
+    return s;
   }
 };
 
