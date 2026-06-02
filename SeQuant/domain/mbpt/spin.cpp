@@ -13,6 +13,7 @@
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/overloads.hpp>
@@ -1576,22 +1577,14 @@ std::vector<ExprPtr> open_shell_spintrace(
 
 std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
   SEQUANT_ASSERT(expr->is<Sum>() || expr->is<Product>());
-  // Returns the leading antisymmetrizer of an expression, or nullopt
-  // when there is none
-  auto leading_antisymmetrizer = [](const ExprPtr& e) -> std::optional<Tensor> {
-    const ExprPtr& first = e->is<Sum>() ? e->as<Sum>().summand(0) : e;
-    const ExprPtr& leading_factor =
-        first->is<Product>() ? first->as<Product>().factor(0) : first;
-    if (leading_factor->is<Tensor>()) {
-      const Tensor& t = leading_factor->as<Tensor>();
-      if (t.label() == reserved::antisymm_label()) return t;
-    }
-    return std::nullopt;
-  };
+  // Pop the antisymmetrizer A off a copy of the leading term to detect and
+  // retrieve it. Energy-like expressions (e.g. CC energy) have none.
+  ExprPtr leading_term =
+      (expr->is<Sum>() ? expr->as<Sum>().summand(0) : expr).clone();
+  const auto A_opt = pop_tensor(leading_term, reserved::antisymm_label());
 
   // Expressions without a leading antisymmetrizer (e.g. CC energy) collapse
   // to a single expression. They are spin-traced directly, but term-by-term.
-  const auto A_opt = leading_antisymmetrizer(expr);
   if (!A_opt) {
     auto trace_term = [](const ExprPtr& term) -> ExprPtr {
       if (term->is<Constant>() || term->is<Variable>()) return term;
@@ -1604,8 +1597,7 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
     return {result};
   }
 
-  SEQUANT_ASSERT(A_opt.has_value() && "Leading antisymmetrizer not found.");
-  const Tensor& A = A_opt.value();
+  const Tensor& A = A_opt.value()->as<Tensor>();
   size_t const i = A.rank();
   auto P_vec = open_shell_P_op_vector(A);
   auto A_vec = open_shell_A_op(A);
