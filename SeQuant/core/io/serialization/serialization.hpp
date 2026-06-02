@@ -95,6 +95,8 @@ SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ResultExpr);
                          const SerializationOptions &options = {}); \
   std::wstring to_string(const AbstractTensor &expr,                \
                          const SerializationOptions &options = {}); \
+  std::wstring to_string(const Tensor &expr,                        \
+                         const SerializationOptions &options = {}); \
   std::wstring to_string(const Index &index,                        \
                          const SerializationOptions &options = {}); \
   template <Statistics S>                                           \
