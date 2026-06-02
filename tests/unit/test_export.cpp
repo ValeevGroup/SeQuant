@@ -119,14 +119,17 @@ void configure_context_defaults(ItfContext &ctx) {
   IndexSpace occ = registry->retrieve("i");
   IndexSpace virt = registry->retrieve("a");
   IndexSpace aux = registry->retrieve("x");
+  IndexSpace act = registry->retrieve("u");
 
   ctx.set_tag(occ, "c");
   ctx.set_tag(virt, "e");
   ctx.set_tag(aux, "x");
+  ctx.set_tag(act, "a");
 
   ctx.set_name(occ, "Closed");
   ctx.set_name(virt, "External");
   ctx.set_name(aux, "Auxiliary");
+  ctx.set_name(act, "Active");
 }
 
 void configure_context_defaults(JuliaTensorOperationsGeneratorContext &ctx) {
