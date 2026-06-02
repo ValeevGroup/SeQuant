@@ -1579,6 +1579,9 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
   SEQUANT_ASSERT(expr->is<Sum>() || expr->is<Product>());
   // Pop the antisymmetrizer A off a copy of the leading term to detect and
   // retrieve it. Energy-like expressions (e.g. CC energy) have none.
+  // The input is assumed homogeneous: either every term carries a leading
+  // antisymmetrizer (residual) or none does (energy), so inspecting the
+  // leading term alone suffices to classify the whole expression.
   ExprPtr leading_term =
       (expr->is<Sum>() ? expr->as<Sum>().summand(0) : expr).clone();
   const auto A_opt = pop_tensor(leading_term, reserved::antisymm_label());
