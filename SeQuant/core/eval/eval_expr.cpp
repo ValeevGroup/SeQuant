@@ -241,6 +241,10 @@ bool EvalExpr::is_product() const noexcept {
   return op_type() == EvalOp::Product;
 }
 
+bool EvalExpr::is_adjoint() const noexcept {
+  return op_type() == EvalOp::Adjoint;
+}
+
 Tensor const& EvalExpr::as_tensor() const { return expr().as<Tensor>(); }
 
 Constant const& EvalExpr::as_constant() const { return expr().as<Constant>(); }
@@ -355,7 +359,12 @@ void collect_tensor_factors(EvalExprNode const& node,  //
   static_assert(std::is_same_v<ranges::range_value_t<Rng>, ExprWithHash>);
 
   if (auto op = node->op_type();
-      node->is_tensor() && (!op || *op == EvalOp::Sum))
+      node->is_tensor() &&
+      (!op || *op == EvalOp::Sum || *op == EvalOp::Adjoint))
+    // Treat Adjoint the same as Sum here: it produces a tensor result that
+    // enters a parent Product as a single factor — the parent shouldn't
+    // try to recurse past the Adjoint boundary, just collect the adjointed
+    // tensor (held in node->expr()) and move on.
     collect.emplace_back(
         ExprWithHash{.expr = node->expr(), .hash = node->hash_value()});
   else if (node->op_type() == EvalOp::Product && !node.leaf()) {
@@ -370,7 +379,48 @@ EvalExprNode binarize(Variable const& v) { return EvalExprNode{EvalExpr{v}}; }
 
 EvalExprNode binarize(Power const& p) { return EvalExprNode{EvalExpr{p}}; }
 
-EvalExprNode binarize(Tensor const& t) { return EvalExprNode{EvalExpr{t}}; }
+EvalExprNode binarize(Tensor const& t) {
+  // Detect adjoint-marked tensor leaves (label ending in U+207A '⁺'). These
+  // arise when the user wrote an adjoint of a BraKetSymmetry::Nonsymm tensor,
+  // see Tensor::adjoint() in expressions/tensor.cpp. We surface the adjoint
+  // as an explicit IR op (EvalOp::Adjoint) wrapping the bare-label operand,
+  // so backends can serve T† by conjugating + permuting the cached T result.
+  //
+  // IR shape: Adjoint(Tensor{<bare>}, Constant{1})
+  // The Constant(1) right child is a sentinel — present so the FullBinaryNode
+  // invariant ("every non-leaf has two children") holds; evaluate ignores it
+  // for EvalOp::Adjoint dispatch.
+  if (!t.label().empty() && t.label().back() == adjoint_label) {
+    // The Adjoint node carries the *adjointed* tensor (so its canon_indices
+    // reflect the slot order parents see).
+
+    // Build the bare-label operand: copy and call adjoint() to toggle the
+    // marker off and swap bra/ket back to natural orientation.
+    Tensor bare{t};
+    bare.adjoint();
+    SEQUANT_ASSERT(bare.label().empty() ||
+                   bare.label().back() != adjoint_label);
+    EvalExprNode bare_leaf{EvalExpr{bare}};
+
+    // Sentinel right child.
+    EvalExprNode sentinel{EvalExpr{Constant{1}}};
+
+    // Build the Adjoint EvalExpr. Hash differs from the bare leaf so cache
+    // lookups don't collide.
+    auto h = bare_leaf->hash_value();
+    hash::combine(h, static_cast<size_t>(EvalOp::Adjoint));
+    EvalExpr adj{EvalOp::Adjoint,                                   //
+                 ResultType::Tensor,                                //
+                 t.clone(),                                         //
+                 t.indices() | ranges::to<EvalExpr::index_vector>,  //
+                 1,                                                 //
+                 h,                                                 //
+                 nullptr};
+    return EvalExprNode{std::move(adj), std::move(bare_leaf),
+                        std::move(sentinel)};
+  }
+  return EvalExprNode{EvalExpr{t}};
+}
 
 EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
                       const BinarizationOptions& opts) {

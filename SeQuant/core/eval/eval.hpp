@@ -55,7 +55,15 @@ struct Bytes {
 template <typename T, typename... Ts>
 [[nodiscard]] inline auto bytes(T const& arg, Ts const&... args) {
   auto one = [](auto const& a) -> size_t {
-    if constexpr (requires { a->size_in_bytes(); })
+    if constexpr (requires {
+                    static_cast<bool>(a);
+                    a->size_in_bytes();
+                  }) {
+      // Smart-pointer-like operand: tolerate null so callers (e.g. the
+      // EvalOp::Adjoint dispatcher, which leaves `right` unevaluated) can
+      // pass an empty ResultPtr without an external guard.
+      return a ? a->size_in_bytes() : size_t{0};
+    } else if constexpr (requires { a->size_in_bytes(); })
       return a->size_in_bytes();
     else
       return a.size_in_bytes();
@@ -150,9 +158,10 @@ enum struct EvalMode {
            : node->is_tensor()   ? EvalMode::Tensor
                                  : EvalMode::Unknown;
   } else {
-    return node->is_product() ? EvalMode::Product
-           : node->is_sum()   ? EvalMode::Sum
-                              : EvalMode::Unknown;
+    return node->is_product()   ? EvalMode::Product
+           : node->is_sum()     ? EvalMode::Sum
+           : node->is_adjoint() ? EvalMode::Permute
+                                : EvalMode::Unknown;
   }
 }
 
@@ -563,6 +572,16 @@ ResultPtr evaluate(Node const& node,  //
 
   if (node.leaf()) {
     time = timed_eval_inplace([&]() { result = le(node); });
+  } else if (node->op_type() == EvalOp::Adjoint) {
+    // Unary IR op: dispatch on left operand only; right is the Constant(1)
+    // sentinel kept around to preserve FullBinaryNode's invariant. We
+    // intentionally skip evaluating the sentinel — leaf evaluators that
+    // can't manufacture scalar constants (rare in practice but possible)
+    // would otherwise be invoked needlessly.
+    left = evaluate<EvalTrace>(node.left(), le, cache);
+    SEQUANT_ASSERT(left);
+    std::array<std::any, 2> const adj_ann{node.left()->annot(), node->annot()};
+    time = timed_eval_inplace([&]() { result = left->adjoint(adj_ann); });
   } else {
     left = evaluate<EvalTrace>(node.left(), le, cache);
     right = evaluate<EvalTrace>(node.right(), le, cache);
@@ -601,10 +620,14 @@ ResultPtr evaluate(Node const& node,  //
       // canon_phase != 1, because mult_by_phase allocates a fresh buffer
       // while the cache still holds the pre-phase data. So only skip the
       // local's bytes when the cache aliases the same buffer (phase == 1).
+      // Adjoint nodes evaluate only the left operand (the right child is the
+      // sentinel Constant(1) — see the Adjoint branch above), so `right` is
+      // null; log::bytes() tolerates a null shared_ptr for that reason.
       size_t hwmark = log::bytes(cache, result).value;
       if (!cache.alive(node.left()) || node.left()->canon_phase() != 1)
         hwmark += log::bytes(left).value;
-      if (!cache.alive(node.right()) || node.right()->canon_phase() != 1)
+      if (right &&
+          (!cache.alive(node.right()) || node.right()->canon_phase() != 1))
         hwmark += log::bytes(right).value;
       log::eval(log::EvalStat{.mode = log::eval_mode(node),
                               .time = time,
