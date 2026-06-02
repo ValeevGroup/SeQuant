@@ -6,9 +6,11 @@
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index_space_registry.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -48,6 +50,25 @@ sequant::EvalExpr node(sequant::EvalNode<sequant::EvalExpr> const& n,
 [[maybe_unused]] std::wstring tikz(
     sequant::EvalNode<sequant::EvalExpr> const& n) noexcept {
   return n.tikz([](auto&& n) { return L"$" + n->expr()->to_latex() + L"$"; });
+}
+
+// Build an IndexSpace-keyed ExponentMap over the SR test registry's hole
+// ("i") and particle ("a") spaces, matching the spaces that
+// `eval_node::space_counts` reads off the corresponding indices.
+sequant::AsyCost::ExponentMap ov_map(std::size_t nocc, std::size_t nvirt) {
+  auto const& isr = *sequant::get_default_context().index_space_registry();
+  sequant::AsyCost::ExponentMap m;
+  if (nocc > 0) m.emplace(isr.retrieve(L"i"), nocc);
+  if (nvirt > 0) m.emplace(isr.retrieve(L"a"), nvirt);
+  return m;
+}
+
+sequant::AsyCost ov(std::size_t nocc, std::size_t nvirt) {
+  return sequant::AsyCost{ov_map(nocc, nvirt)};
+}
+
+sequant::AsyCost ov(sequant::rational c, std::size_t nocc, std::size_t nvirt) {
+  return sequant::AsyCost{ov_map(nocc, nvirt), c};
 }
 
 }  // namespace
@@ -242,20 +263,20 @@ TEST_CASE("eval_node", "[EvalNode]") {
     auto asy_cost_single_node = FlopsWithSymm{};
     auto const p1 =
         parse_expr_antisymm(L"g_{i2, a1}^{a2, a3} * t_{a2, a3}^{i1, i2}");
-    REQUIRE(asy_cost_single_node(eval_node(p1)) == AsyCost{2, 2, 3});
+    REQUIRE(asy_cost_single_node(eval_node(p1)) == ov(2, 2, 3));
 
     auto const p2 = parse_expr_antisymm(
         L"g_{i2,i3}^{a2,a3} * t_{a2}^{i1} * t_{a1,a3}^{i2,i3}");
     auto const n2 = eval_node(p2);
 
-    REQUIRE(asy_cost_single_node(n2) == AsyCost{2, 3, 2});
-    REQUIRE(asy_cost_single_node(n2.left()) == AsyCost{2, 3, 2});
+    REQUIRE(asy_cost_single_node(n2) == ov(2, 3, 2));
+    REQUIRE(asy_cost_single_node(n2.left()) == ov(2, 3, 2));
 
     auto const p3 =
         parse_expr_antisymm(L"g_{i2,i3}^{i1,a2} * t_{a2}^{i2} * t_{a1}^{i3}");
     auto const n3 = eval_node(p3);
-    REQUIRE(asy_cost_single_node(n3) == AsyCost{2, 2, 1});
-    REQUIRE(asy_cost_single_node(n3.left()) == AsyCost{2, 3, 1});
+    REQUIRE(asy_cost_single_node(n3) == ov(2, 2, 1));
+    REQUIRE(asy_cost_single_node(n3.left()) == ov(2, 3, 1));
   }
 
   SECTION("asy_cost") {
@@ -264,25 +285,25 @@ TEST_CASE("eval_node", "[EvalNode]") {
     };
     auto const p1 =
         parse_expr_antisymm(L"g_{i2, a1}^{a2, a3} * t_{a2, a3}^{i1, i2}");
-    REQUIRE(asy_cost(eval_node(p1)) == AsyCost{2, 2, 3});
+    REQUIRE(asy_cost(eval_node(p1)) == ov(2, 2, 3));
 
     auto const p2 = parse_expr_antisymm(
         L"g_{i2,i3}^{a2,a3} * t_{a2}^{i1} * t_{a1,a3}^{i2,i3}");
 
     auto const np2 = eval_node(p2);
-    REQUIRE(asy_cost(np2) == AsyCost{2, 3, 2} + AsyCost{2, 3, 2});
+    REQUIRE(asy_cost(np2) == ov(2, 3, 2) + ov(2, 3, 2));
 
     auto const p3 =
         parse_expr_antisymm(L"g_{i2,i3}^{i1,a2} * t_{a2}^{i2} * t_{a1}^{i3}");
     auto const np3 = eval_node(p3);
-    REQUIRE(asy_cost(np3) == AsyCost{2, 2, 1} + AsyCost{2, 3, 1});
+    REQUIRE(asy_cost(np3) == ov(2, 2, 1) + ov(2, 3, 1));
 
     // full contraction to scalar: cc energy-like expression
     auto const p_e = parse_expr_antisymm(
         L"f_{i1}^{a1} * t_{a1}^{i1} + g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i1,i2}");
     auto const n_e = eval_node(p_e);
     REQUIRE(n_e->is_scalar());
-    REQUIRE(asy_cost(n_e) == 2 * AsyCost{2, 2} + 2 * AsyCost{1, 1});
+    REQUIRE(asy_cost(n_e) == 2 * ov(2, 2) + 2 * ov(1, 1));
 
 #if 0
     auto const s1 =
@@ -337,10 +358,10 @@ TEST_CASE("eval_node", "[EvalNode]") {
     // - scaling of I requires OV + OV = 2 * OV.
     // The maximum of the two steps is OV^3 + O^2V^2 + OV, which is the minimum
     // storage requirement.
-    REQUIRE(min_storage(n1) == AsyCost{1, 3} + AsyCost{2, 2} + AsyCost{1, 1});
+    REQUIRE(min_storage(n1) == ov(1, 3) + ov(2, 2) + ov(1, 1));
 
     auto p2 = deserialize(L"1/2 * (g{a1,a2; a3,a4} t{a3;i1}) t{a4;i2}");
     auto const n2 = eval_node(p2);
-    REQUIRE(min_storage(n2) == AsyCost{0, 4} + AsyCost{1, 3} + AsyCost{1, 1});
+    REQUIRE(min_storage(n2) == ov(0, 4) + ov(1, 3) + ov(1, 1));
   }
 }
