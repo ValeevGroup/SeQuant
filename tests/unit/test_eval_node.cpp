@@ -54,7 +54,7 @@ sequant::EvalExpr node(sequant::EvalNode<sequant::EvalExpr> const& n,
 
 // Build an IndexSpace-keyed ExponentMap over the SR test registry's hole
 // ("i") and particle ("a") spaces, matching the spaces that
-// `eval_node::space_counts` reads off the corresponding indices.
+// `detail::space_counts` reads off the corresponding indices.
 sequant::AsyCost::ExponentMap ov_map(std::size_t nocc, std::size_t nvirt) {
   auto const& isr = *sequant::get_default_context().index_space_registry();
   sequant::AsyCost::ExponentMap m;

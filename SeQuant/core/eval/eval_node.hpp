@@ -47,7 +47,7 @@ enum NodePos { Left = 0, Right, This };
 /// Tally indices per IndexSpace appearing in the bra+ket of `t`. AsyCost is
 /// only used for analysis/reporting, so spaces are taken verbatim from the
 /// indices, with no registry lookup.
-[[maybe_unused]] AsyCost::ExponentMap space_counts(Tensor const& t) {
+inline AsyCost::ExponentMap space_counts(Tensor const& t) {
   AsyCost::ExponentMap counts;
   for (auto const& idx : t.const_braket_indices()) ++counts[idx.space()];
   return counts;
@@ -121,12 +121,13 @@ class ContractedIndexCount {
 ///
 struct Flops {
   [[nodiscard]] AsyCost operator()(meta::eval_node auto const& n) const {
+    using detail::space_counts;
     if (n.leaf()) return AsyCost::zero();
     if (n->op_type() == EvalOp::Product  //
         && n.left()->is_tensor()         //
         && n.right()->is_tensor()) {
       if (n->is_tensor()) {
-        auto const idx_count = ContractedIndexCount{n};
+        auto const idx_count = detail::ContractedIndexCount{n};
         auto c = AsyCost{idx_count.unique_counts()};
         return idx_count.is_outerprod() ? c : 2 * c;
       } else {  // full contraction to scalar
@@ -157,8 +158,9 @@ struct Memory {
   [[nodiscard]] AsyCost operator()(meta::eval_node auto const& n) const {
     AsyCost result;
     auto add_cost = [&result](ExprPtr const& expr) {
-      result += expr.is<Tensor>() ? AsyCost{space_counts(expr.as<Tensor>())}
-                                  : AsyCost::zero();
+      result += expr.is<Tensor>()
+                    ? AsyCost{detail::space_counts(expr.as<Tensor>())}
+                    : AsyCost::zero();
     };
 
     // Adjoint is unary — the right child is the Constant(1) sentinel (zero
@@ -259,6 +261,7 @@ AsyCost asy_cost(Node const& node, F const& cost_fn = {}) {
 /// \return The minimum storage required for evaluating the given node.
 ///
 AsyCost min_storage(meta::eval_node auto const& node) {
+  using detail::space_counts;
   auto result = AsyCost::zero();
   auto visitor = [&result](meta::eval_node auto const& n) {
     auto cost = AsyCost::zero();
