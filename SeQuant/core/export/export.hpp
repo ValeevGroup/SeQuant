@@ -199,11 +199,14 @@ class GenerationVisitor {
                         Product::Flatten::No));
         break;
       case EvalOp::Adjoint:
-        // Unary IR op — the marker-bearing tensor lives in node->expr(); the
-        // bare-leaf left child and Constant(1) right child are structural
-        // plumbing for in-memory evaluation, not part of the symbolic form
-        // a code generator should be handed.
-        expressions.push_back(node->expr());
+        // Unary IR op. The adjoint result (node->expr(), the marker-bearing
+        // tensor) is the assignment target node->as_tensor(); the right child
+        // is the Constant(1) sentinel. Emitting node->expr() here would yield a
+        // self-referential `result = result` that never reads the operand.
+        // Instead hand the code generator the bare-leaf operand (node.left()),
+        // whose bra/ket order is swapped relative to the result — that index
+        // reordering is exactly the transpose the adjoint must materialize.
+        expressions.push_back(node.left()->expr());
         break;
       case EvalOp::Sum: {
         switch (node->compute_selection()) {

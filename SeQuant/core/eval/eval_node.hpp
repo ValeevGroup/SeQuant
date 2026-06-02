@@ -157,10 +157,12 @@ struct Memory {
                                   : AsyCost::zero();
     };
 
-    // Adjoint is unary — the right child is the Constant(1) sentinel and
-    // the bare-leaf left holds the same indices as the node itself, so the
-    // memory requirement is just one tensor's worth.
+    // Adjoint is unary — the right child is the Constant(1) sentinel (zero
+    // cost). But the backend materializes the permuted/conjugated result into
+    // a fresh array, so the bare-leaf operand (left) and the adjoint result
+    // (node) are both live at peak — two tensors' worth, not one.
     if (n->op_type() == EvalOp::Adjoint) {
+      add_cost(n.left()->expr());
       add_cost(n->expr());
       return result;
     }
