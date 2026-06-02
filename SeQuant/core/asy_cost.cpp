@@ -16,33 +16,48 @@
 
 namespace sequant {
 
-AsyCost::AsyCostEntry::AsyCostEntry(size_t nocc, size_t nvirt, rational count)
-    : occ_{nocc}, virt_{nvirt}, count_{count} {
-  if (count_ == 0 || (occ_ == 0 && virt_ == 0)) {
-    occ_ = 0;
-    virt_ = 0;
+AsyCost::AsyCostEntry::AsyCostEntry()
+    : exponents_{}, count_{0}, is_max_{false} {}
+
+AsyCost::AsyCostEntry::AsyCostEntry(ExponentMap exponents, rational count)
+    : exponents_{std::move(exponents)}, count_{count}, is_max_{false} {
+  for (auto it = exponents_.begin(); it != exponents_.end();) {
+    if (it->second == 0)
+      it = exponents_.erase(it);
+    else
+      ++it;
+  }
+  if (count_ == 0 || exponents_.empty()) {
+    exponents_.clear();
     count_ = 0;
   }
 }
 
 AsyCost::AsyCostEntry AsyCost::AsyCostEntry::max() {
-  return AsyCostEntry{std::numeric_limits<size_t>::max(),
-                      std::numeric_limits<size_t>::max(),
-                      std::numeric_limits<intmax_t>::max()};
+  AsyCostEntry e;
+  e.is_max_ = true;
+  e.count_ = std::numeric_limits<intmax_t>::max();
+  return e;
 }
 
 AsyCost::AsyCostEntry const &AsyCost::AsyCostEntry::zero() {
-  static AsyCostEntry const zero_cost = AsyCostEntry{0, 0, 0};
+  static AsyCostEntry const zero_cost{};
   return zero_cost;
 }
 
-size_t AsyCost::AsyCostEntry::occ() const { return occ_; }
-
-size_t AsyCost::AsyCostEntry::virt() const { return virt_; }
+AsyCost::ExponentMap const &AsyCost::AsyCostEntry::exponents() const {
+  return exponents_;
+}
 
 rational AsyCost::AsyCostEntry::count() const { return count_; }
 
 void AsyCost::AsyCostEntry::set_count(rational n) const { count_ = n; }
+
+bool AsyCost::AsyCostEntry::is_zero() const {
+  return !is_max_ && exponents_.empty() && count_ == 0;
+}
+
+bool AsyCost::AsyCostEntry::is_max() const { return is_max_; }
 
 std::ostream &AsyCost::AsyCostEntry::stream_out_rational(std::ostream &os,
                                                          rational const &r) {
@@ -57,9 +72,9 @@ std::ostream &AsyCost::AsyCostEntry::stream_out_rational(std::ostream &os,
 std::string AsyCost::AsyCostEntry::text() const {
   auto oss = std::ostringstream{};
 
-  if (*this == AsyCostEntry::max()) {
+  if (is_max_) {
     oss << "max";
-  } else if (*this == AsyCostEntry::zero()) {
+  } else if (is_zero()) {
     oss << "zero";
   } else {
     auto abs_c = abs(count_);
@@ -70,11 +85,12 @@ std::string AsyCost::AsyCostEntry::text() const {
       AsyCostEntry::stream_out_rational(oss, abs_c);
       oss << "*";
     }
-    oss << (occ_ > 0 ? "O" : "");
-    if (occ_ > 1) oss << "^" << occ_;
-
-    oss << (virt_ > 0 ? "V" : "");
-    if (virt_ > 1) oss << "^" << virt_;
+    // Spaces print in IndexSpace order (by attr, then base_key).
+    for (auto const &[space, exp] : exponents_) {
+      if (exp == 0) continue;
+      oss << toUtf8(space.base_key());
+      if (exp > 1) oss << "^" << exp;
+    }
   }
 
   return oss.str();
@@ -83,9 +99,9 @@ std::string AsyCost::AsyCostEntry::text() const {
 std::string AsyCost::AsyCostEntry::to_latex() const {
   auto oss = std::ostringstream{};
 
-  if (*this == AsyCostEntry::max()) {
+  if (is_max_) {
     oss << "\\texttt{max}";
-  } else if (*this == AsyCostEntry::zero()) {
+  } else if (is_zero()) {
     oss << "\\texttt{zero}";
   } else {
     auto abs_c = abs(count_);
@@ -98,24 +114,45 @@ std::string AsyCost::AsyCostEntry::to_latex() const {
           << "}{"                    //
           << denominator(count_) << "}";
     }
-    oss << (occ_ > 0 ? "O" : "");
-    if (occ_ > 1) {
-      oss << "^{" << occ_ << "}";
-    }
-    oss << (virt_ > 0 ? "V" : "");
-    if (virt_ > 1) {
-      oss << "^{" << virt_ << "}";
+    for (auto const &[space, exp] : exponents_) {
+      if (exp == 0) continue;
+      oss << toUtf8(space.base_key());
+      if (exp > 1) {
+        oss << "^{" << exp << "}";
+      }
     }
   }
   return oss.str();
 }
 
 bool AsyCost::AsyCostEntry::operator<(const AsyCost::AsyCostEntry &rhs) const {
-  return virt() < rhs.virt() || (virt() == rhs.virt() && occ() < rhs.occ());
+  // The max() sentinel is the greatest entry.
+  if (is_max_ != rhs.is_max_) return !is_max_;
+
+  // Order by exponents, space by space, from the greatest IndexSpace (highest
+  // priority) down to the least, using IndexSpace's own ordering. The first
+  // space whose exponents differ decides: a larger exponent on a higher-
+  // priority space makes the entry larger. Entries with identical exponents
+  // on every space are equivalent.
+  auto exp_for = [](ExponentMap const &m, IndexSpace const &s) {
+    auto it = m.find(s);
+    return it == m.end() ? std::size_t{0} : it->second;
+  };
+
+  container::set<IndexSpace> spaces;
+  for (auto const &kv : exponents_) spaces.insert(kv.first);
+  for (auto const &kv : rhs.exponents_) spaces.insert(kv.first);
+
+  for (auto it = spaces.rbegin(); it != spaces.rend(); ++it) {
+    auto const l = exp_for(exponents_, *it);
+    auto const r = exp_for(rhs.exponents_, *it);
+    if (l != r) return l < r;
+  }
+  return false;
 }
 
 bool AsyCost::AsyCostEntry::operator==(const AsyCost::AsyCostEntry &rhs) const {
-  return occ() == rhs.occ() && virt() == rhs.virt();
+  return is_max_ == rhs.is_max_ && exponents_ == rhs.exponents_;
 }
 
 bool AsyCost::AsyCostEntry::operator!=(const AsyCost::AsyCostEntry &rhs) const {
@@ -123,38 +160,37 @@ bool AsyCost::AsyCostEntry::operator!=(const AsyCost::AsyCostEntry &rhs) const {
 }
 
 AsyCost::AsyCost(AsyCostEntry c) {
-  if (c != AsyCostEntry::zero()) cost_.emplace(c);
+  if (!c.is_zero()) cost_.emplace(std::move(c));
 }
 
 AsyCost::AsyCost() : AsyCost{AsyCostEntry::zero()} {}
 
-AsyCost::AsyCost(rational count, size_t nocc, size_t nvirt)
-    : AsyCost{AsyCostEntry{nocc, nvirt, count}} {}
+AsyCost::AsyCost(ExponentMap exponents, rational count)
+    : AsyCost{AsyCostEntry{std::move(exponents), count}} {}
 
-AsyCost::AsyCost(size_t nocc, size_t nvirt) : AsyCost{1, nocc, nvirt} {}
-
-AsyCost::AsyCost(std::pair<size_t, size_t> const &ov)
-    : AsyCost{ov.first, ov.second} {}
-
-double AsyCost::ops(size_t nocc, size_t nvirt) const {
+double AsyCost::ops(ExtentMap const &extents) const {
   double total = 0;
-  for (auto &&c : cost_) {
+  for (auto const &c : cost_) {
+    if (c.is_max()) return std::numeric_limits<double>::infinity();
     double temp = 1;
-    temp *= std::pow(nocc, c.occ());
-    temp *= std::pow(nvirt, c.virt());
-    total += temp > 1 ? boost::numeric_cast<double>(c.count()) * temp : 0;
+    for (auto const &[space, exp] : c.exponents()) {
+      auto it = extents.find(space);
+      std::size_t const extent = (it != extents.end()) ? it->second : 1;
+      temp *= std::pow(static_cast<double>(extent), static_cast<double>(exp));
+    }
+    total += boost::numeric_cast<double>(c.count()) * temp;
   }
   return total;
 }
 
 AsyCost const &AsyCost::max() {
-  static const AsyCost max = AsyCost{AsyCostEntry::max()};
-  return max;
+  static const AsyCost m = AsyCost{AsyCostEntry::max()};
+  return m;
 }
 
 AsyCost const &AsyCost::zero() {
-  static const AsyCost zero = AsyCost{AsyCostEntry::zero()};
-  return zero;
+  static const AsyCost z = AsyCost{AsyCostEntry::zero()};
+  return z;
 }
 
 AsyCost &AsyCost::operator+=(AsyCost const &other) {

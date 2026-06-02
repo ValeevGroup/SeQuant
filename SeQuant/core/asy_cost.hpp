@@ -3,30 +3,36 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/space.hpp>
 
 #include <cstddef>
 #include <string>
-#include <utility>
 
 namespace sequant {
 
 ///
-/// Represents a symbolic asymptotic cost in terms of active_occupied
-/// and the rest orbitals.
-/// eg.
-///     - AsyCost{2,4} implies scaling of $O^2V^4$. In other words, the cost
-///       scales by the second power in the number of active_occupied orbitals
-///       and the fourth power in the number of the rest orbitals.
-///     - AsyCost{sequant::rational{1,2}, 2, 4} implies the same scaling as
-///       above except the numeric value obtained by substituting $O$ and $V$
-///       numbers is then halved.
+/// Represents a symbolic asymptotic cost as a polynomial in the sizes of
+/// index spaces. A cost is a sum of terms, each of which is a rational
+/// multiplier times a product of space sizes raised to integer powers.
+/// Spaces are identified by `IndexSpace`; `AsyCost` orders and prints them
+/// using `IndexSpace`'s own ordering and `base_key()`, and never consults an
+/// `IndexSpaceRegistry`.
+///
+/// Examples (with `I`, `A` denoting two index spaces):
+///   - `AsyCost({{I, 2}, {A, 4}})` represents $I^2 A^4$.
+///   - `AsyCost({{I, 2}, {A, 4}}, rational{1, 2})` halves the numeric value
+///     above when extents are substituted.
 ///
 class AsyCost {
+ public:
+  using ExponentMap = container::map<IndexSpace, std::size_t>;
+  using ExtentMap = container::map<IndexSpace, std::size_t>;
+
  private:
   class AsyCostEntry {
-    size_t occ_;              // power of active_occupied
-    size_t virt_;             // power of the rest orbitals
-    mutable rational count_;  // count of this asymptotic symbol
+    ExponentMap exponents_;   // space -> power; zero exponents are not stored
+    mutable rational count_;  // multiplier
+    bool is_max_ = false;     // true for the AsyCost::max() sentinel
 
    public:
     static std::ostream &stream_out_rational(std::ostream &os,
@@ -36,7 +42,9 @@ class AsyCost {
 
     static AsyCostEntry const &zero();
 
-    AsyCostEntry(size_t nocc, size_t nvirt, rational count);
+    AsyCostEntry();
+
+    AsyCostEntry(ExponentMap exponents, rational count);
 
     AsyCostEntry(AsyCostEntry const &) = default;
 
@@ -46,13 +54,15 @@ class AsyCost {
 
     AsyCostEntry &operator=(AsyCostEntry &&) = default;
 
-    size_t occ() const;
+    [[nodiscard]] ExponentMap const &exponents() const;
 
-    size_t virt() const;
-
-    rational count() const;
+    [[nodiscard]] rational count() const;
 
     void set_count(rational n) const;
+
+    [[nodiscard]] bool is_zero() const;
+
+    [[nodiscard]] bool is_max() const;
 
     bool operator<(AsyCostEntry const &rhs) const;
 
@@ -60,9 +70,9 @@ class AsyCost {
 
     bool operator!=(AsyCostEntry const &rhs) const;
 
-    std::string text() const;
+    [[nodiscard]] std::string text() const;
 
-    std::string to_latex() const;
+    [[nodiscard]] std::string to_latex() const;
   };
 
  private:
@@ -84,28 +94,11 @@ class AsyCost {
   AsyCost();
 
   ///
-  /// \param count Rational number of times this cost repeats.
-  /// \param nocc Asymptotic scaling exponent in the active occupied orbitals.
-  /// \param nvirt Asymptotic scaling exponent in the active unoccupied
-  ///              orbitals.
+  /// \param exponents Map from index space to its exponent in this term.
+  ///                  Zero exponents may be supplied; they are dropped.
+  /// \param count     Rational multiplier; defaults to 1.
   ///
-  AsyCost(rational count, size_t nocc, size_t nvirt);
-
-  ///
-  /// \param nocc Asymptotic scaling exponent in the active occupied orbitals.
-  /// \param nvirt Asymptotic scaling exponent in the active unoccupied
-  ///              orbitals.
-  ///
-  AsyCost(size_t nocc, size_t nvirt);
-
-  ///
-  ///
-  /// \param ov A pair of size_ts.
-  ///           ov.first is the asymptotic scaling exponent in the active
-  ///           occupied orbitals.
-  ///           ov.second is that in the active unoccupied orbitals
-  ///
-  explicit AsyCost(std::pair<size_t, size_t> const &ov);
+  explicit AsyCost(ExponentMap exponents, rational count = 1);
 
   AsyCost(AsyCost const &) = default;
 
@@ -116,10 +109,13 @@ class AsyCost {
   AsyCost &operator=(AsyCost &&) = default;
 
   ///
-  /// \param nocc Substitute $O$ by nocc.
-  /// \param nvirt Substitute $V$ by nvirt.
-  /// \return Scaled asymptotic cost.
-  [[nodiscard]] double ops(size_t nocc, size_t nvirt) const;
+  /// Substitute each space in this cost by an extent and evaluate.
+  /// \param extents Map from index space to extent (size). Any space appearing
+  ///                in this cost but missing from `extents` is treated as
+  ///                extent 1 (i.e. contributes a factor of 1).
+  /// \return Numerical value of the cost.
+  ///
+  [[nodiscard]] double ops(ExtentMap const &extents) const;
 
   [[nodiscard]] std::wstring to_latex() const;
 
