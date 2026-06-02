@@ -1,0 +1,43 @@
+R{u_2,a_1;u_1,i_1}:N-N-S = 2 T2{a_1,u_3;i_1,u_4} Ym2{u_2,u_4;u_1,u_3} - T2{a_1,u_3;i_1,u_4} Ym2{u_2,u_4;u_3,u_1}
+
+=================================================
+# This test ensures that we don't end up just sorting
+# the indices of the result (used to happen due to
+# multiple rewrites of the result tensor where the first
+# call merges all indices into the aux indices and the
+# second call sorts the aux indices).
+=================================================
+=================================================
+ITF
+=================================================
+---- decl
+index-space: j, Closed, c
+index-space: b, External, e
+index-space: v, Active, a
+index-space: w, Active, a
+index-space: x, Active, a
+index-space: y, Active, a
+
+tensor: R:eaca[bwjv], R:eaca
+tensor: T2:eaca[bxjy], T2:eaca
+tensor: Ym2:aaaa[wyvx], Ym2:aaaa
+
+
+---- code("unnamed")
+alloc R:eaca[bwjv]
+load T2:eaca[bxjy]
+load Ym2:aaaa[wyvx]
+.R:eaca[bwjv] += 2 * T2:eaca[bxjy] Ym2:aaaa[wyvx]
+drop Ym2:aaaa[wyvx]
+drop T2:eaca[bxjy]
+load T2:eaca[bxjy]
+load Ym2:aaaa[wyxv]
+.R:eaca[bwjv] += -1 * T2:eaca[bxjy] Ym2:aaaa[wyxv]
+drop Ym2:aaaa[wyxv]
+drop T2:eaca[bxjy]
+store R:eaca[bwjv]
+
+
+---- end
+
+=================================================
