@@ -110,7 +110,8 @@ class CC {
   /// equation
   ///   \f$ \langle 0| (1 + \hat{\Lambda}) \frac{d \bar{H}}{d \hat{T}_k} |0
   ///   \rangle = 0 \f$ for `k` in
-  /// the [1,N] range; element 0 is always null
+  /// the [1,N] range; element 0 contains the Lagrangian
+  ///   \f$ \langle 0| (1 + \hat{\Lambda}) \bar{H} |0 \rangle \f$
   [[nodiscard]] std::vector<ExprPtr> λ();
 
   // clang-format off

@@ -140,8 +140,9 @@ std::vector<ExprPtr> CC::λ() {
                                                             {L"g", symm}});
 
   // 2. project onto each manifold, screen, lower to tensor form and wick it
+  // p == 0 yields the Lagrangian
   std::vector<ExprPtr> result(N + 1);
-  for (auto p = N; p >= 1; --p) {
+  for (std::int64_t p = N; p >= 0; --p) {
     // 2.a. screen out terms that cannot give nonzero after projection onto
     // <P|
     std::shared_ptr<Sum>
@@ -173,7 +174,8 @@ std::vector<ExprPtr> CC::λ() {
 
     // 2.b multiply by adjoint of P(p) (i.e., P(-p)) on the right side and
     // compute VEV
-    result.at(p) = this->ref_av(lhbar_for_vev * P(nₚ(-p)), op_connect);
+    result.at(p) = this->ref_av(
+        p != 0 ? lhbar_for_vev * P(nₚ(-p)) : lhbar_for_vev, op_connect);
   }
   return result;
 }
