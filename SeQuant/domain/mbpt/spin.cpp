@@ -380,6 +380,7 @@ ExprPtr remove_spin_with_relabel(const ExprPtr& expr) {
       }
     }
 
+    // collision detection
     // group distinct spin-labeled indices by their would-be spin-free identity.
     container::map<Index, container::set<Index>> sf_to_originals;
     container::map<IndexSpace, Index::ordinal_type> max_ordinal_per_space;
@@ -433,14 +434,14 @@ ExprPtr remove_spin_with_relabel(const ExprPtr& expr) {
       }
     }
 
-    if (!relabel_map.empty()) {
-      std::wcout << "relabel_map non-empty for product:\n";
-      std::wcout << to_latex_align(ex<Product>(product)) << "\n";
-      for (const auto& [from, to] : relabel_map) {
-        std::wcout << "  " << from.to_latex() << " -> " << to.to_latex()
-                   << "\n";
-      }
-    }
+    // if (!relabel_map.empty()) {
+    //   std::wcout << "relabel_map non-empty for product:\n";
+    //   std::wcout << to_latex_align(ex<Product>(product)) << "\n";
+    //   for (const auto& [from, to] : relabel_map) {
+    //     std::wcout << "  " << from.to_latex() << " -> " << to.to_latex()
+    //                << "\n";
+    //   }
+    // }
 
     Product relabeled_product = product;
     if (!relabel_map.empty()) {
@@ -1388,7 +1389,11 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
 
   if (!ext_idxs.empty()) {
     // Biorthogonal transformation with factoring out NNS projector
-    st_expr = biorthogonal_transform_pre_nnsproject(st_expr, ext_idxs);
+    // st_expr = biorthogonal_transform_pre_nnsproject(st_expr, ext_idxs);
+  }
+  if (ext_idxs.size() > 1) {
+    st_expr = S_maps(st_expr);
+    simplify(st_expr);
   }
 
   simplify(st_expr);
@@ -1490,16 +1495,59 @@ ExprPtr merge_tensors(const Tensor& O1, const Tensor& O2) {
   return ex<Tensor>(Tensor(O1.label(), bra(b), ket(k), aux(a), O1.symmetry()));
 }
 
-std::vector<ExprPtr> open_shell_A_op(const Tensor& A) {
+template <detail::index_group_range IdxGroups>
+ExprPtr spintrace_impl(
+    const ExprPtr& expression, IdxGroups&& ext_index_groups,
+    bool spinfree_index_spaces,
+    const std::function<bool(uint64_t)>& spincase_predicate = {});
+
+namespace {
+
+std::size_t open_shell_n_spin_cases(std::size_t n_groups, bool npc,
+                                    std::size_t n_paired,
+                                    bool all_external_spin_assignments) {
+  if (all_external_spin_assignments) return std::size_t{1} << n_groups;
+  const auto n_unpaired = n_groups - n_paired;
+  return npc ? (n_paired + 1) * (n_unpaired + 1) : (n_groups + 1);
+}
+
+void open_shell_fill_group_spins(std::size_t sc, std::size_t n_groups, bool npc,
+                                 std::size_t n_paired,
+                                 bool all_external_spin_assignments,
+                                 container::svector<int>& group_spins) {
+  group_spins.assign(n_groups, 0);
+  if (all_external_spin_assignments) {
+    for (std::size_t g = 0; g < n_groups; ++g)
+      group_spins[g] = static_cast<int>((sc >> g) & 1u);
+    return;
+  }
+  if (npc) {
+    const auto n_paired_beta = sc % (n_paired + 1);
+    const auto n_unpaired_beta = sc / (n_paired + 1);
+    if (n_paired_beta > 0)
+      std::fill(group_spins.begin() + (n_paired - n_paired_beta),
+                group_spins.begin() + n_paired, 1);
+    if (n_unpaired_beta > 0)
+      std::fill(group_spins.begin() + (n_groups - n_unpaired_beta),
+                group_spins.end(), 1);
+  } else {
+    std::fill(group_spins.end() - static_cast<std::size_t>(sc),
+              group_spins.end(), 1);
+  }
+}
+
+}  // namespace
+
+std::vector<ExprPtr> open_shell_A_op(const Tensor& A,
+                                     bool all_external_spin_assignments) {
   SEQUANT_ASSERT(A.label() == reserved::antisymm_label());
   const auto n_bra = A.bra_rank();
   const auto n_ket = A.ket_rank();
   const auto n_paired = std::min(n_bra, n_ket);
-  const auto n_unpaired = std::max(n_bra, n_ket) - n_paired;
   const auto n_groups = std::max(n_bra, n_ket);
   const bool npc = (n_bra != n_ket);
-  const auto n_spin_cases =
-      npc ? (n_paired + 1) * (n_unpaired + 1) : (n_groups + 1);
+  const auto n_spin_cases = open_shell_n_spin_cases(
+      n_groups, npc, n_paired, all_external_spin_assignments);
 
   std::vector<ExprPtr> result(n_spin_cases);
 
@@ -1511,19 +1559,9 @@ std::vector<ExprPtr> open_shell_A_op(const Tensor& A) {
     // per-group spin assignment: 0 = alpha, 1 = beta
     // groups [0, n_paired) are paired (bra+ket), [n_paired, n_groups) are
     // unpaired
-    container::svector<int> group_spin(n_groups, 0);
-    if (npc) {
-      const auto n_paired_beta = sc % (n_paired + 1);
-      const auto n_unpaired_beta = sc / (n_paired + 1);
-      // const auto n_unpaired_beta = sc % (n_unpaired + 1);
-      // const auto n_paired_beta = sc / (n_unpaired + 1);
-      std::fill(group_spin.begin() + (n_paired - n_paired_beta),
-                group_spin.begin() + n_paired, 1);
-      std::fill(group_spin.begin() + (n_groups - n_unpaired_beta),
-                group_spin.end(), 1);
-    } else {
-      std::fill(group_spin.begin() + (n_groups - sc), group_spin.end(), 1);
-    }
+    container::svector<int> group_spin;
+    open_shell_fill_group_spins(sc, n_groups, npc, n_paired,
+                                all_external_spin_assignments, group_spin);
 
     // assign spin to bra and ket indices according to their group
     auto assign_spin = [&](auto& indices, std::size_t rank,
@@ -1549,37 +1587,24 @@ std::vector<ExprPtr> open_shell_A_op(const Tensor& A) {
   return result;
 }
 
-std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A) {
+std::vector<ExprPtr> open_shell_P_op_vector(
+    const Tensor& A, bool all_external_spin_assignments) {
   SEQUANT_ASSERT(A.label() == reserved::antisymm_label());
   const auto n_bra = A.bra_rank();
   const auto n_ket = A.ket_rank();
   const auto n_groups = std::max(n_bra, n_ket);
   const auto n_paired = std::min(n_bra, n_ket);
-  const auto n_unpaired = n_groups - n_paired;
   const bool nonparticle_conserving = (n_bra != n_ket);
-  const auto n_spin_cases = nonparticle_conserving
-                                ? (n_paired + 1) * (n_unpaired + 1)
-                                : (n_groups + 1);
+  const auto n_spin_cases =
+      open_shell_n_spin_cases(n_groups, nonparticle_conserving, n_paired,
+                              all_external_spin_assignments);
 
   std::vector<ExprPtr> result_vector(n_spin_cases);
 
   for (size_t sc = 0; sc < n_spin_cases; ++sc) {
-    container::svector<int> group_spins(n_groups, 0);
-    if (nonparticle_conserving) {
-      const std::size_t n_paired_beta = sc % (n_paired + 1);
-      const std::size_t n_unpaired_beta = sc / (n_paired + 1);
-      // const std::size_t n_unpaired_beta = sc % (n_unpaired + 1);
-      // const std::size_t n_paired_beta = sc / (n_unpaired + 1);
-      if (n_paired_beta > 0)
-        std::fill(group_spins.begin() + (n_paired - n_paired_beta),
-                  group_spins.begin() + n_paired, 1);
-      if (n_unpaired_beta > 0)
-        std::fill(group_spins.begin() + (n_groups - n_unpaired_beta),
-                  group_spins.end(), 1);
-    } else {
-      std::fill(group_spins.end() - static_cast<std::size_t>(sc),
-                group_spins.end(), 1);
-    }
+    container::svector<int> group_spins;
+    open_shell_fill_group_spins(sc, n_groups, nonparticle_conserving, n_paired,
+                                all_external_spin_assignments, group_spins);
 
     container::svector<int> alpha_bra_indices, beta_bra_indices;
     for (size_t i = 0; i < n_bra; ++i) {
@@ -1975,8 +2000,6 @@ std::vector<ExprPtr> open_shell_spintrace(
 }
 
 std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
-  // std::wcout << "expr at the beginning " << to_latex_align(expr) << "\n";
-
   SEQUANT_ASSERT(expr->is<Sum>() || expr->is<Product>());
   Tensor A = expr.is<Sum>() ? expr->at(0)->at(0)->as<Tensor>()
                             : expr->at(0)->as<Tensor>();
@@ -2016,13 +2039,6 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
           open_shell_spintrace(os_st.at(s), ext_groups, static_cast<int>(s))
               .at(0);
 
-      // if (s == 1) {
-      //   std::wcout << "R sc=1 after spintrace: " <<
-      //   to_latex_align(os_st.at(s))
-      //              << "\n";
-      // }
-
-      // Apply A for higher-rank cases where A is nontrivial
       bool need_A =
           (std::max(n_bra, n_ket) > 2) && !A_vec.at(s)->is<Constant>();
       if (need_A) {
@@ -2038,7 +2054,6 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
     ++n_spin_orbital_term;
   }
 
-  // Combine spin-traced terms for the current residual
   std::vector<ExprPtr> expr_vec;
   for (auto& spin_case : concat_terms) {
     auto ptr = sequant::ex<Sum>(spin_case);
@@ -2049,8 +2064,10 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
 }
 
 template <detail::index_group_range IdxGroups>
-ExprPtr spintrace_impl(const ExprPtr& expression, IdxGroups&& ext_index_groups,
-                       bool spinfree_index_spaces) {
+ExprPtr spintrace_impl(
+    const ExprPtr& expression, IdxGroups&& ext_index_groups,
+    bool spinfree_index_spaces,
+    const std::function<bool(uint64_t)>& spincase_predicate) {
   // Escape immediately if expression is a constant
   if (expression->is<Constant>() || expression->is<Variable>()) {
     return expression;
@@ -2124,8 +2141,8 @@ ExprPtr spintrace_impl(const ExprPtr& expression, IdxGroups&& ext_index_groups,
 
   // Most important lambda of this function
   auto trace_product = [&ext_index_groups, &spintrace_tensor,
-                        &spintrace_product,
-                        spinfree_index_spaces](const ProductPtr& product) {
+                        &spintrace_product, spinfree_index_spaces,
+                        spincase_predicate](const ProductPtr& product) {
     ExprPtr expr = product->clone();
     // List of all indices in the expression
     container::set<Index, Index::LabelCompare> grand_idxlist =
@@ -2159,7 +2176,9 @@ ExprPtr spintrace_impl(const ExprPtr& expression, IdxGroups&& ext_index_groups,
     //      internal indices before placing the rest into separate groups
     using IndexGroup = container::svector<Index>;
     container::svector<IndexGroup> index_groups;
-    for (auto&& i : int_idxlist) index_groups.emplace_back(IndexGroup(1, i));
+    // Externals first so external group g lives at bit g of spincase_bitstr;
+    // this lets spincase_predicate locate external bits without knowing the
+    // per-product internal count.
     for (const auto& group : ext_index_groups) {
       IndexGroup target;
       target.reserve(group.size());
@@ -2168,6 +2187,7 @@ ExprPtr spintrace_impl(const ExprPtr& expression, IdxGroups&& ext_index_groups,
       }
       index_groups.emplace_back(std::move(target));
     }
+    for (auto&& i : int_idxlist) index_groups.emplace_back(IndexGroup(1, i));
 
     // EFV: for each spincase (loop over integer from 0 to 2^n-1, n=#of index
     // groups)
@@ -2177,6 +2197,9 @@ ExprPtr spintrace_impl(const ExprPtr& expression, IdxGroups&& ext_index_groups,
     auto result = std::make_shared<Sum>();
     for (uint64_t spincase_bitstr = 0; spincase_bitstr != nspincases;
          ++spincase_bitstr) {
+      if (spincase_predicate && !spincase_predicate(spincase_bitstr)) {
+        continue;
+      }
       // EFV:  assign spin to each index group => make a replacement list
       container::map<Index, Index> index_replacements;
 
@@ -2196,6 +2219,7 @@ ExprPtr spintrace_impl(const ExprPtr& expression, IdxGroups&& ext_index_groups,
       // Append spin labels to indices in the expression
       auto spin_expr = append_spin(expr, index_replacements);
       rapid_simplify(spin_expr);  // This call is required for Tensor case
+      detail::reset_idx_tags(spin_expr);
 
       // NB: There are temporaries in the following code to enable
       // printing intermediate expressions.
@@ -2290,6 +2314,198 @@ container::svector<ResultExpr> spintrace(const ResultExpr& expr,
 
   return detail::wrap_trace<container::svector<ResultExpr>>(
       expr, static_cast<TraceFunction>(&spintrace), spinfree_index_spaces);
+}
+
+namespace {
+
+// M_S = 0 triplet coupling on the R amplitude line (singles: one line per R).
+int r_line_sign(const Tensor& R) {
+  std::optional<Spin> line_spin;
+  for (const auto& idx : R.const_braket_indices()) {
+    line_spin = mbpt::to_spin(idx.space().qns());
+    break;
+  }
+  SEQUANT_ASSERT(line_spin && "R has no line to couple");
+  SEQUANT_ASSERT(*line_spin == mbpt::Spin::alpha ||
+                 *line_spin == mbpt::Spin::beta);
+  return *line_spin == mbpt::Spin::alpha ? 1 : -1;
+}
+
+ExprPtr weight_R_triplet(const ExprPtr& spin_labeled) {
+  auto weight_product = [](const Product& p) -> ExprPtr {
+    int sign = 1;
+    for (const auto& f : p)
+      if (f->is<Tensor>() && f->as<Tensor>().label() == L"R")
+        sign *= r_line_sign(f->as<Tensor>());
+    auto out = std::make_shared<Product>(p);
+    out->scale(sign);
+    return out;
+  };
+
+  if (spin_labeled->is<Product>())
+    return weight_product(spin_labeled->as<Product>());
+  if (spin_labeled->is<Sum>()) {
+    auto out = std::make_shared<Sum>();
+    for (const auto& t : *spin_labeled)
+      out->append(t->is<Product>() ? weight_product(t->as<Product>()) : t);
+    return out;
+  }
+  return spin_labeled;
+}
+
+}  // namespace
+
+std::pair<ExprPtr, ExprPtr> partition_by_R_spin(const ExprPtr& expr) {
+  auto Ra = std::make_shared<Sum>();
+  auto Rb = std::make_shared<Sum>();
+
+  auto append_by_R_spin = [&](const ExprPtr& term) {
+    if (!term->is<Product>()) return;
+    const auto& p = term->as<Product>();
+    std::optional<Spin> r_spin;
+    for (const auto& f : p) {
+      if (!f->is<Tensor>() || f->as<Tensor>().label() != L"R") continue;
+      const auto& R = f->as<Tensor>();
+      for (const auto& idx : R.const_braket_indices()) {
+        const auto s = to_spin(idx.space().qns());
+        SEQUANT_ASSERT(s == Spin::alpha || s == Spin::beta);
+        r_spin = s;
+        break;
+      }
+      break;
+    }
+    if (!r_spin) return;
+    if (*r_spin == Spin::alpha)
+      Ra->append(term);
+    else
+      Rb->append(term);
+  };
+
+  if (expr->is<Sum>()) {
+    for (const auto& t : *expr) append_by_R_spin(t);
+  } else {
+    append_by_R_spin(expr);
+  }
+  return {std::move(Ra), std::move(Rb)};
+}
+
+ExprPtr closed_shell_EOM_triplet_spintrace(
+    ExprPtr const& expr, ClosedShellCCSpintraceOptions options) {
+  container::svector<container::svector<Index>> ext_groups;
+  const auto ext_idxs = external_indices(expr);
+  for (const auto& g : ext_idxs) {
+    container::svector<Index> grp;
+    grp.reserve(g.size());
+    for (const auto& s : g) grp.push_back(s.index());
+    ext_groups.push_back(std::move(grp));
+  }
+
+  // same sector layout as os_eom / spintrace_by_sector: ext_val=0 is all-α
+  // (first), ext_val=2^n-1 is all-β (last). Singlet sums every sector;
+  // triplet keeps first − last only.
+  auto sectors = spintrace_by_sector(expr, ext_groups, /*triplet_R=*/true);
+  SEQUANT_ASSERT(sectors.size() >= 2 &&
+                 "triplet spintrace needs at least α and β sectors");
+
+  // spintrace_by_sector already ran remove_spin_with_relabel on each sector.
+  ExprPtr triplet =
+      sectors.front().second->clone() - sectors.back().second->clone();
+  canonicalize(triplet);
+  simplify(triplet);
+
+  if (!ext_idxs.empty()) {
+    switch (options.method) {
+      case BiorthogonalizationMethod::V1:
+        triplet =
+            biorthogonal_transform_pre_nnsproject(triplet, ext_idxs, false);
+        break;
+      case BiorthogonalizationMethod::V2:
+        if (ext_idxs.size() > 1) {
+          triplet = S_maps(triplet);
+          simplify(triplet);
+        }
+        break;
+      default:
+        SEQUANT_ASSERT(false && "unreachable");
+        abort();
+    }
+  }
+  simplify(triplet);
+  return triplet;
+}
+
+// number-conserving spin trace that keeps external spin sectors separate.
+// returns one spin-free expression per external spin string (αα.., αβ.., ..,
+// ββ..). summing all returned sectors reproduces generic spintrace() exactly,
+// so each entry is a genuine projection of the same result onto one external
+// sector.
+container::svector<std::pair<std::wstring, ExprPtr>> spintrace_by_sector(
+    const ExprPtr& expr,
+    const container::svector<container::svector<Index>>& ext_index_groups,
+    bool triplet_R) {
+  ExprPtr work = expr->clone();
+  if (has_tensor(work, reserved::antisymm_label())) {
+    work = expand_A_op(work);
+  }
+
+  const std::size_t n_ext = ext_index_groups.size();
+  SEQUANT_ASSERT(n_ext <= 31);
+
+  // spintrace_impl places external groups at the head of its per-product
+  // index_groups list, so external group g sits at bit g of spincase_bitstr
+  // (independent of the product's internal-index count).
+  container::svector<std::pair<std::wstring, ExprPtr>> sectors;
+  for (std::uint32_t ext_val = 0; ext_val < (1u << n_ext); ++ext_val) {
+    std::function<bool(uint64_t)> predicate = [ext_val, n_ext](uint64_t sc) {
+      for (std::size_t g = 0; g < n_ext; ++g) {
+        const uint64_t spin_bit = (sc >> g) & 1u;
+        const uint64_t want = (ext_val >> g) & 1u;
+        if (spin_bit != want) return false;
+      }
+      return true;
+    };
+
+    ExprPtr sector = spintrace_impl(work, ext_index_groups,
+                                    /*spinfree_index_spaces=*/false, predicate);
+    detail::reset_idx_tags(sector);
+    canonicalize(sector);
+    simplify(sector);
+    if (triplet_R) sector = weight_R_triplet(sector);
+    sector = remove_spin_with_relabel(sector);
+    detail::reset_idx_tags(sector);
+    canonicalize(sector);
+    simplify(sector);
+
+    std::wstring label;
+    for (std::size_t g = 0; g < n_ext; ++g)
+      label += ((ext_val >> g) & 1u) ? L'β' : L'α';
+    sectors.emplace_back(std::move(label), std::move(sector));
+  }
+  return sectors;
+}
+
+std::vector<ExprPtr> open_shell_CC_spintrace_by_sector(const ExprPtr& expr) {
+  SEQUANT_ASSERT(expr->is<Sum>() || expr->is<Product>());
+  Tensor A = expr.is<Sum>() ? expr->at(0)->at(0)->as<Tensor>()
+                            : expr->at(0)->as<Tensor>();
+  SEQUANT_ASSERT(A.label() == reserved::antisymm_label());
+
+  container::svector<container::svector<Index>> ext_groups;
+  for (const auto& grp : external_indices(expr)) {
+    container::svector<Index> indices;
+    indices.reserve(grp.size());
+    for (const auto& slotted : grp) indices.push_back(slotted.index());
+    ext_groups.push_back(std::move(indices));
+  }
+
+  auto sectors = spintrace_by_sector(expr, ext_groups);
+  std::vector<ExprPtr> result;
+  result.reserve(sectors.size());
+  for (auto& [label, sector] : sectors) {
+    (void)label;
+    result.push_back(std::move(sector));
+  }
+  return result;
 }
 
 }  // namespace sequant::mbpt

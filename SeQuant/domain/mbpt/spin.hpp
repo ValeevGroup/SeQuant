@@ -314,6 +314,14 @@ ExprPtr closed_shell_CC_spintrace_v2(
     ClosedShellCCSpintraceOptions options = {
         .method = BiorthogonalizationMethod::V2, .naive_spintrace = false});
 
+ExprPtr closed_shell_EOM_triplet_spintrace(
+    ExprPtr const& expr, ClosedShellCCSpintraceOptions options = {});
+
+/// @brief Partition a spin labeled expression by the spin on R's braket line.
+/// @return (R-alpha terms, R beta terms); non-Product summands are skipped.
+[[nodiscard]] std::pair<ExprPtr, ExprPtr> partition_by_R_spin(
+    const ExprPtr& expr);
+
 /// @brief Swap spin labels in a tensor
 Tensor swap_spin(const Tensor& t);
 
@@ -325,7 +333,11 @@ ExprPtr swap_spin(const ExprPtr& expr);
 ExprPtr merge_tensors(const Tensor& O1, const Tensor& O2);
 
 /// @brief Vector of Anti-symmetrizers for spin-traced open-shell expr
-std::vector<ExprPtr> open_shell_A_op(const Tensor& A);
+/// @param all_external_spin_assignments if true, one entry per external spin
+/// string (2^n groups, same as spintrace_by_sector); if false, legacy orbit
+/// encoding (n+1 or NPC grid).
+std::vector<ExprPtr> open_shell_A_op(
+    const Tensor& A, bool all_external_spin_assignments = false);
 
 /// @brief Generate a vector of permutation operators for partial expansion of
 /// antisymmstrizer
@@ -336,7 +348,8 @@ std::vector<ExprPtr> open_shell_A_op(const Tensor& A);
 /// @return a vector of expression pointers containing permutation operators as
 /// a sum
 /// @warning This function assumes the antisymmetrizer (A) has a canonical form
-std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A);
+std::vector<ExprPtr> open_shell_P_op_vector(
+    const Tensor& A, bool all_external_spin_assignments = false);
 
 // clang-format off
 /// @brief Traces out spin degrees of freedom from fermionic operator moments
@@ -382,6 +395,17 @@ std::vector<ExprPtr> open_shell_spintrace(
 // clang-format on
 std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr);
 
+// clang-format off
+/// @brief Open-shell CC spintrace via external spin sectors (2^n assignments)
+/// @details Wraps spintrace_by_sector: expand_A_op + spintrace_impl per sector,
+/// then remove_spin_with_relabel. Summing the returned vectors equals generic
+/// spintrace; each entry matches the corresponding spintrace_by_sector sector.
+/// @param expr EOM/CC moment with antisymmetrizer Â at the front of each term
+/// @return spin-free sector expressions in sector-index order (no labels)
+/// @sa open_shell_CC_spintrace, spintrace_by_sector
+// clang-format on
+std::vector<ExprPtr> open_shell_CC_spintrace_by_sector(const ExprPtr& expr);
+
 /// @brief Transforms an expression from spin orbital to spin-free (spatial)
 /// orbital form
 /// @details Given an expression, this function extracts all indices and adds a
@@ -411,6 +435,20 @@ ExprPtr spintrace(
 container::svector<ResultExpr> spintrace(const ResultExpr& expr,
                                          bool spinfree_index_spaces = true);
 
+/// Particle-conserving spin trace that keeps external spin sectors separate.
+/// @param expr a spin-orbital expression (antisymmetrizer A is expanded
+///        internally if present)
+/// @param ext_index_groups external index groups; for particle-conserving
+///        input each group is the {bra, ket} pair of one external particle
+///        (as returned by `external_indices`)
+/// @return one (label, spin-free expression) pair per external spin string,
+///         ordered by the bit pattern over groups (αα.., βα.., .., ββ..).
+///         Summing all sectors reproduces generic `spintrace`.
+[[nodiscard]] container::svector<std::pair<std::wstring, ExprPtr>>
+spintrace_by_sector(
+    const ExprPtr& expr,
+    const container::svector<container::svector<Index>>& ext_index_groups,
+    bool triplet_R = false);
 }  // namespace sequant::mbpt
 
 #endif  // SEQUANT_DOMAIN_MBPT_SPIN_HPP
