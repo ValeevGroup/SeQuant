@@ -21,6 +21,13 @@
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <range/v3/algorithm/sort.hpp>
+#include <range/v3/range/operations.hpp>
+#include <range/v3/view/concat.hpp>
+#include <range/v3/view/repeat_n.hpp>
+#include <range/v3/view/transform.hpp>
+#include <range/v3/view/zip.hpp>
+
 #include <memory>
 
 namespace sequant::eval::tapp {
@@ -54,8 +61,11 @@ class SequantEvalScfTAPP final : public SequantEvalScf {
     static const std::wstring_view energy_expr =
         L"f{i1;a1} * t{a1;i1} + g{i1,i2;a1,a2} * "
         L"(1/4 * t{a1,a2;i1,i2} + 1/2 t{a1;i1} * t{a2;i2})";
+    // scalar-result expression; head's bra/ket layout is irrelevant here
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     static auto const node = binarize<EvalExprTAPP>(
         deserialize(energy_expr, {.def_perm_symm = Symmetry::Antisymm}));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 
     return evaluate(node, data_world_)->template get<double>();
   }

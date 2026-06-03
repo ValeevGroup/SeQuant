@@ -9,6 +9,7 @@ add_executable(external_interface
     processing.cpp
     utils.cpp
 )
+set_target_properties(external_interface PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 
 target_link_libraries(external_interface
     PRIVATE

@@ -1,0 +1,36 @@
+e = (2^(2))^* * x
+
+=================================================
+Plain Text
+=================================================
+Declare variable x
+Declare variable e
+
+Create e and initialize to zero
+Load x
+Compute e += conj(2^2) x
+Unload x
+Persist e
+
+=================================================
+Python (einsum)
+=================================================
+import numpy as np
+import os
+
+e = 0.0
+x = np.load('x.npy')
+e += np.conj(2**2) * x
+del x
+np.save('e.npy', e)
+
+=================================================
+Julia (TensorOperations)
+=================================================
+e = 0.0
+x = deserialize("x.jlbin")
+@tensor e += conj(2^2) * x
+x = nothing
+return e
+
+=================================================

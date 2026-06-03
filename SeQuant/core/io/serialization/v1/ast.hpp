@@ -90,7 +90,21 @@ struct Tensor : boost::spirit::x3::position_tagged {
 struct Product;
 struct Sum;
 
-using NullaryValue = boost::variant<Number, Tensor, Variable, Product, Sum>;
+struct Power : boost::spirit::x3::position_tagged {
+  boost::variant<Number, Variable> base;
+  Number exponent;
+  bool conjugated;
+
+  Power() noexcept = default;
+  Power(boost::variant<Number, Variable> base, Number exponent,
+        bool conjugated = false)
+      : base(std::move(base)),
+        exponent(std::move(exponent)),
+        conjugated(conjugated) {}
+};
+
+using NullaryValue =
+    boost::variant<Number, Tensor, Variable, Power, Product, Sum>;
 
 struct Product : boost::spirit::x3::position_tagged {
   std::vector<NullaryValue> factors;
@@ -147,6 +161,8 @@ BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::SymmetrySpec,
                           perm_symm, braket_symm, column_symm);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Tensor, name,
                           indices, symmetry);
+BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Power, base,
+                          exponent, conjugated);
 
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Product,
                           factors);

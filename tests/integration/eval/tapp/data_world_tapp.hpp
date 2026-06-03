@@ -16,7 +16,11 @@
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
-#include <range/v3/view.hpp>
+
+#include <range/v3/view/drop.hpp>
+#include <range/v3/view/repeat_n.hpp>
+#include <range/v3/view/transform.hpp>
+#include <range/v3/view/zip.hpp>
 
 namespace sequant::eval::tapp {
 

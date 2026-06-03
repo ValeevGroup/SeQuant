@@ -14,14 +14,23 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
-#include <chrono>
-#include <range/v3/numeric.hpp>
-#include <range/v3/view.hpp>
+#include <range/v3/range/operations.hpp>
 
+#include <algorithm>
 #include <any>
+#include <chrono>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 #include <type_traits>
+
+// Headers for process_rss_bytes() — see log::process_rss_bytes() below.
+#if defined(__APPLE__)
+#include <mach/mach.h>
+#elif defined(__linux__)
+#include <unistd.h>
+#include <fstream>
+#endif
 
 namespace sequant {
 
@@ -33,25 +42,103 @@ struct Bytes {
   size_t value;
 };
 
-template <typename... T>
-  requires((std::same_as<ResultPtr, T> && ...))
-[[nodiscard]] auto bytes(T const&... args) {
-  return Bytes{(args->size_in_bytes() + ...)};
+/// \return whether the eval trace is being printed (logger level > 0). The
+/// eval engine's per-op memory diagnostics (the hwmark working set and the
+/// cache total) feed only the trace output, so the standalone functions that
+/// compute them -- the cache-aware bytes() overload below and eval()/cache()
+/// -- short-circuit when this is false, and are thus computed only when a
+/// trace line will actually be emitted.
+[[nodiscard]] inline bool printing() noexcept {
+  return Logger::instance().eval.level > 0;
 }
 
-template <typename N, bool F>
-[[nodiscard]] inline auto bytes(CacheManager<N, F> const& cman) {
-  return cman.size_in_bytes();
+template <typename T, typename... Ts>
+[[nodiscard]] inline auto bytes(T const& arg, Ts const&... args) {
+  auto one = [](auto const& a) -> size_t {
+    if constexpr (requires {
+                    static_cast<bool>(a);
+                    a->size_in_bytes();
+                  }) {
+      // Smart-pointer-like operand: tolerate null so callers (e.g. the
+      // EvalOp::Adjoint dispatcher, which leaves `right` unevaluated) can
+      // pass an empty ResultPtr without an external guard.
+      return a ? a->size_in_bytes() : size_t{0};
+    } else if constexpr (requires { a->size_in_bytes(); })
+      return a->size_in_bytes();
+    else
+      return a.size_in_bytes();
+  };
+  return Bytes{(one(arg) + ... + one(args))};
+}
+
+/// Cache-aware bytes(): bytes(cache) + bytes(args...), where bytes(cache) sums
+/// the (lazily memoized) sizes of the cache's alive entries. This is the
+/// working-set/total walk used only to populate the trace's hwmark/total
+/// fields, so it short-circuits to 0 when no trace line will be printed --
+/// avoiding the per-op walk of every alive entry, which with persistent
+/// entries is otherwise paid on every op of every iteration.
+template <typename N, bool F, typename... Ts>
+[[nodiscard]] inline Bytes bytes(CacheManager<N, F> const& cache,
+                                 Ts const&... args) {
+  if (!printing()) return Bytes{0};
+  return Bytes{cache.size_in_bytes() + (size_t{0} + ... + bytes(args).value)};
 }
 
 [[nodiscard]] inline auto to_string(Bytes bs) noexcept {
   return std::format("{}B", bs.value);
 }
 
+/// \return the process physical-memory footprint, in bytes. On macOS this is
+/// `phys_footprint` from `TASK_VM_INFO` — the same accounted footprint Activity
+/// Monitor reports in its "Memory" column, and what jetsam limits act on. It
+/// excludes shared/reclaimable pages (frameworks, the shared cache, file-backed
+/// clean pages), so it is much smaller than the raw resident-set size
+/// (`mach_task_basic_info::resident_size`), which double-counts shared text and
+/// is what made this column read far larger than Activity Monitor. On Linux we
+/// read resident pages from `/proc/self/statm`. Returns 0 on other platforms
+/// and on read failure (no exception, so safe to call from logging paths).
+/// Cheap (~µs) — intended to be called once per log record.
+[[nodiscard]] inline std::size_t process_rss_bytes() noexcept {
+#if defined(__APPLE__)
+  ::task_vm_info_data_t vm_info{};
+  ::mach_msg_type_number_t vm_count = TASK_VM_INFO_COUNT;
+  if (::task_info(::mach_task_self(), TASK_VM_INFO,
+                  reinterpret_cast<::task_info_t>(&vm_info),
+                  &vm_count) == KERN_SUCCESS &&
+      vm_count >= TASK_VM_INFO_COUNT) {
+    return static_cast<std::size_t>(vm_info.phys_footprint);
+  }
+  // Fallback: raw resident-set size (larger; includes shared pages).
+  ::mach_task_basic_info_data_t info{};
+  ::mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
+  if (::task_info(::mach_task_self(), MACH_TASK_BASIC_INFO,
+                  reinterpret_cast<::task_info_t>(&info),
+                  &count) != KERN_SUCCESS) {
+    return 0;
+  }
+  return static_cast<std::size_t>(info.resident_size);
+#elif defined(__linux__)
+  // /proc/self/statm columns are page counts:
+  //   total resident shared text lib data dt
+  std::ifstream f("/proc/self/statm");
+  std::size_t pages_total = 0, pages_resident = 0;
+  if (!(f >> pages_total >> pages_resident)) return 0;
+  static const long page_size = ::sysconf(_SC_PAGESIZE);
+  if (page_size <= 0) return 0;
+  return pages_resident * static_cast<std::size_t>(page_size);
+#else
+  return 0;
+#endif
+}
+
+/// Convenience wrapper around process_rss_bytes() returning a Bytes.
+[[nodiscard]] inline Bytes rss() noexcept { return Bytes{process_rss_bytes()}; }
+
 /// type of data or operation
 enum struct EvalMode {
   Constant,
   Variable,
+  Power,
   Tensor,
   Permute,
   Product,
@@ -67,18 +154,21 @@ enum struct EvalMode {
   if (node.leaf()) {
     return node->is_constant()   ? EvalMode::Constant
            : node->is_variable() ? EvalMode::Variable
+           : node->is_power()    ? EvalMode::Power
            : node->is_tensor()   ? EvalMode::Tensor
                                  : EvalMode::Unknown;
   } else {
-    return node->is_product() ? EvalMode::Product
-           : node->is_sum()   ? EvalMode::Sum
-                              : EvalMode::Unknown;
+    return node->is_product()   ? EvalMode::Product
+           : node->is_sum()     ? EvalMode::Sum
+           : node->is_adjoint() ? EvalMode::Permute
+                                : EvalMode::Unknown;
   }
 }
 
 [[nodiscard]] constexpr auto to_string(EvalMode mode) noexcept {
   return (mode == EvalMode::Constant)         ? "Constant"
          : (mode == EvalMode::Variable)       ? "Variable"
+         : (mode == EvalMode::Power)          ? "Power"
          : (mode == EvalMode::Tensor)         ? "Tensor"
          : (mode == EvalMode::Permute)        ? "Permute"
          : (mode == EvalMode::Product)        ? "Product"
@@ -104,10 +194,61 @@ enum struct TermMode { Begin, End };
   return (mode == TermMode::Begin) ? "Begin" : "End";
 }
 
+/// One log record per eval op. Line format:
+///
+// clang-format off
+/// Eval | <mode> | <time> | [left=L | right=R |] result=X | alloc=A | hw=H | rss=R | <label>
+// clang-format on
+///
+/// Which fields are set depends on the op's arity:
+///
+///   mode                                          | left/right | alloc
+///   ----------------------------------------------+------------+--------
+///   Constant / Variable / Tensor (leaf)           | —          | result
+///   Permute / MultByPhase /                       | —          | result
+///     Symmetrize / Antisymmetrize                 |            |
+///   SumInplace                                    | —          | 0B
+///   Sum / Product                                 | set        | result
+///
+/// Only Sum and Product set left/right, since their operand sizes can
+/// differ from the result. Other modes omit those fields rather than
+/// zeroing them, so a logged 0B always means an empty buffer.
+///
+/// mem_result is the size of the buffer the op produces; for SumInplace
+/// it's the size of the accumulator after the add. mem_alloc is what the
+/// op allocated — equal to mem_result everywhere except SumInplace,
+/// which writes into the accumulator and allocates nothing.
+///
+/// mem_hwmark is the eval engine's high-water mark: the running maximum,
+/// over all ops since the cache was last reset, of the per-op live working
+/// set
+///
+///   bytes(cache) + bytes(result) + bytes of each operand not aliased
+///                                  to a cache entry
+///
+/// (aliasing is evaluated at each call site using cache.alive, canon_phase,
+/// and the requested layout). It is reported as a running max so it is
+/// monotonically non-decreasing within one evaluation — the peak memory the
+/// engine reaches — rather than the instantaneous per-op working set, which
+/// oscillates as the cache fills and drains. The max is held by the
+/// CacheManager and cleared by CacheManager::reset() (called per term), so
+/// each term reports its own peak.
+///
+/// rss is the process physical-memory footprint measured immediately before
+/// the record is emitted (`phys_footprint` via `TASK_VM_INFO` on macOS — the
+/// value Activity Monitor's "Memory" column shows; resident pages from
+/// `/proc/self/statm` on Linux; 0 on other platforms). Use it to triage
+/// memory held outside the eval engine — long-lived tensors not in the
+/// cache, runtime/library overhead, allocator fragmentation. mem_hwmark and
+/// rss diverge by roughly that "everything else" component.
 struct EvalStat {
   EvalMode mode;
   Duration time;
-  Bytes memory;
+  Bytes mem_result{};
+  Bytes mem_alloc{};
+  Bytes mem_hwmark{};
+  std::optional<Bytes> mem_left;
+  std::optional<Bytes> mem_right;
 };
 
 struct CacheStat {
@@ -115,7 +256,8 @@ struct CacheStat {
   size_t key;
   int curr_life, max_life;
   size_t num_alive;
-  Bytes memory;
+  Bytes entry_memory;
+  Bytes total_memory;
 };
 
 template <typename Arg, typename... Args>
@@ -126,26 +268,43 @@ void log(Arg const& arg, Args const&... args) {
 
 template <typename... Args>
 auto eval(EvalStat const& stat, Args const&... args) {
-  log("Eval",                  //
-      to_string(stat.mode),    //
-      stat.time,               //
-      to_string(stat.memory),  //
-      args...);
+  if (!printing()) return;  // nothing to format/emit; skip rss() and formatting
+  auto const result_s = std::format("result={}", to_string(stat.mem_result));
+  auto const alloc_s = std::format("alloc={}", to_string(stat.mem_alloc));
+  auto const hw_s = std::format("hw={}", to_string(stat.mem_hwmark));
+  auto const rss_s = std::format("rss={}", to_string(rss()));
+  if (stat.mem_left) {
+    SEQUANT_ASSERT(stat.mem_right);
+    log("Eval",                                               //
+        to_string(stat.mode),                                 //
+        stat.time,                                            //
+        std::format("left={}", to_string(*stat.mem_left)),    //
+        std::format("right={}", to_string(*stat.mem_right)),  //
+        result_s, alloc_s, hw_s, rss_s,                       //
+        args...);
+  } else {
+    log("Eval",                //
+        to_string(stat.mode),  //
+        stat.time,             //
+        result_s, alloc_s, hw_s, rss_s, args...);
+  }
 }
 
 template <typename... Args>
 auto cache(CacheStat const& stat, Args const&... args) {
-  log("Cache",                                              //
-      to_string(stat.mode),                                 //
-      stat.key,                                             //
-      std::format("{}/{}", stat.curr_life, stat.max_life),  //
-      stat.num_alive,                                       //
-      to_string(stat.memory),                               //
+  log("Cache",                                                   //
+      to_string(stat.mode),                                      //
+      std::format("key={}", stat.key),                           //
+      std::format("life={}/{}", stat.curr_life, stat.max_life),  //
+      std::format("alive={}", stat.num_alive),                   //
+      std::format("entry={}", to_string(stat.entry_memory)),     //
+      std::format("total={}", to_string(stat.total_memory)),     //
       args...);
 }
 
 template <typename N, bool F, typename... Args>
 auto cache(N const& node, CacheManager<N, F>& cm, Args const&... args) {
+  if (!printing()) return;  // skip the entry/total size walks and formatting
   using CacheMode::Access;
   using CacheMode::Release;
   using CacheMode::Store;
@@ -161,7 +320,8 @@ auto cache(N const& node, CacheManager<N, F>& cm, Args const&... args) {
                   .curr_life = cur_l,
                   .max_life = max_l,
                   .num_alive = cm.alive_count(),
-                  .memory = {bytes(cm)}},
+                  .entry_memory = {cm.entry_size_in_bytes(node)},
+                  .total_memory = {bytes(cm)}},
         args...);
 }
 
@@ -237,6 +397,87 @@ namespace {
 [[nodiscard]] consteval bool trace(Trace t) noexcept { return t == Trace::On; }
 }  // namespace
 
+/// \brief The indices contracted at a binary evaluation node.
+///
+/// These are the indices present in *both* children's (canonical) result
+/// indices but absent from the node's own result indices -- i.e. the indices
+/// summed over by this node's product. Empty for leaves, for sums, and for
+/// products with no contracted index (e.g. a pure outer/Hadamard product).
+///
+/// Each such index `K` is a valid axis to evaluate the subtree rooted at
+/// `node` in batches: the node computes `R = sum_K f(K)`, so
+/// `R = sum_{blocks b} sum_{K in b} f(K)` -- evaluating per-block and summing
+/// bounds the peak memory of `K`-carrying intermediates in the subtree. A
+/// custom evaluator (see CacheManager::custom_evaluator_type) can use this to
+/// implement batched evaluation.
+[[nodiscard]] inline Index::index_vector contracted_indices(
+    meta::eval_node auto const& node) {
+  Index::index_vector result;
+  if (node.leaf() || !node->is_product()) return result;
+  auto const& l = node.left()->canon_indices();
+  auto const& r = node.right()->canon_indices();
+  auto const& c = node->canon_indices();
+  auto contains = [](auto const& vec, Index const& ix) {
+    return std::find(vec.begin(), vec.end(), ix) != vec.end();
+  };
+  for (Index const& ix : l)
+    if (contains(r, ix) && !contains(c, ix)) result.push_back(ix);
+  return result;
+}
+
+/// \brief A default axis to batch the subtree at \p node over: the contracted
+/// index (see contracted_indices) that satisfies \p accept, choosing the one
+/// with the largest IndexSpace approximate size -- typically the auxiliary/RI
+/// index, whose elimination most reduces the peak intermediate.
+///
+/// \param accept a predicate `bool(Index const&)` selecting which contracted
+///        indices are eligible to batch over (e.g. only those in a given
+///        IndexSpace). This lets a caller scope batching to specific modes.
+/// \return nullopt if no contracted index satisfies \p accept.
+template <typename IndexPredicate>
+[[nodiscard]] inline std::optional<Index> batch_axis(
+    meta::eval_node auto const& node, IndexPredicate const& accept) {
+  std::optional<Index> best;
+  for (Index const& ix : contracted_indices(node)) {
+    if (!accept(ix)) continue;
+    if (!best ||
+        best->space().approximate_size() < ix.space().approximate_size())
+      best = ix;
+  }
+  return best;
+}
+
+/// \overload Batches over any contracted index (largest approximate size).
+[[nodiscard]] inline std::optional<Index> batch_axis(
+    meta::eval_node auto const& node) {
+  return batch_axis(node, [](Index const&) { return true; });
+}
+
+/// \return the position of index \p ix in \p node's canonical result indices
+///         (i.e. the corresponding tensor mode), or nullopt if absent.
+[[nodiscard]] inline std::optional<std::size_t> index_position(
+    meta::eval_node auto const& node, Index const& ix) {
+  auto const& idxs = node->canon_indices();
+  for (std::size_t p = 0; p < idxs.size(); ++p)
+    if (idxs[p] == ix) return p;
+  return std::nullopt;
+}
+
+/// \return the first leaf in the subtree rooted at \p node whose canonical
+///         indices contain \p ix, paired with the position of \p ix there; or
+///         nullopt if no such leaf. Used to learn \p ix's tile structure from
+///         a tensor that carries it.
+template <typename Node>
+[[nodiscard]] std::optional<std::pair<Node, std::size_t>> find_leaf_carrying(
+    Node const& node, Index const& ix) {
+  if (node.leaf()) {
+    if (auto const p = index_position(node, ix)) return std::pair{node, *p};
+    return std::nullopt;
+  }
+  if (auto found = find_leaf_carrying(node.left(), ix)) return found;
+  return find_leaf_carrying(node.right(), ix);
+}
+
 ///
 /// \tparam EvalTrace If Trace::On, trace is written to the logger's stream.
 ///                   Default is to follow Trace::Default, which is itself
@@ -260,7 +501,7 @@ ResultPtr evaluate(Node const& node,  //
                    CacheManager<N, FHC>& cache) {
   if constexpr (Cache == CacheCheck::Checked) {  // return from cache if found
 
-    auto mult_by_phase = [&node](ResultPtr res) {
+    auto mult_by_phase = [&node, &cache](ResultPtr res) {
       auto phase = node->canon_phase();
       if (phase == 1) return res;
 
@@ -269,23 +510,28 @@ ResultPtr evaluate(Node const& node,  //
           timed_eval_inplace([&]() { post = res->mult_by_phase(phase); });
 
       if constexpr (trace(EvalTrace)) {
-        auto stat = log::EvalStat{.mode = log::EvalMode::MultByPhase,
-                                  .time = time,
-                                  .memory = log::bytes(res, post)};
+        size_t hwmark = log::bytes(cache, post).value;
+        if (!cache.alive(node)) hwmark += log::bytes(res).value;
+        auto stat =
+            log::EvalStat{.mode = log::EvalMode::MultByPhase,
+                          .time = time,
+                          .mem_result = log::bytes(post),
+                          .mem_alloc = log::bytes(post),
+                          .mem_hwmark = {cache.note_working_set(hwmark)}};
         log::eval(stat, std::format("{} * {}", phase, node->label()));
       }
       return post;
     };
 
     if (auto ptr = cache.access(node); ptr) {
-      if constexpr (trace(EvalTrace)) log::cache(node, cache);
+      if constexpr (trace(EvalTrace)) log::cache(node, cache, log::label(node));
 
       return mult_by_phase(ptr);
     } else if (cache.exists(node)) {
       auto ptr = cache.store(
           node, mult_by_phase(evaluate<EvalTrace, CacheCheck::Unchecked>(
                     node, le, cache)));
-      if constexpr (trace(EvalTrace)) log::cache(node, cache);
+      if constexpr (trace(EvalTrace)) log::cache(node, cache, log::label(node));
 
       return mult_by_phase(ptr);
     } else {
@@ -299,8 +545,43 @@ ResultPtr evaluate(Node const& node,  //
 
   log::Duration time;
 
+  // Custom-evaluator interception: before the standard scheme, a non-leaf node
+  // may be evaluated by the cache's custom evaluator (e.g. blocked over a
+  // contracted index to bound peak memory). A non-null result is used (and
+  // cached by the Checked wrapper) as-is; null declines to the standard scheme
+  // below. See CacheManager::custom_evaluator_type.
+  if (!node.leaf()) {
+    if (auto const& custom_eval = cache.custom_evaluator(); custom_eval) {
+      ResultPtr intercepted;
+      time =
+          timed_eval_inplace([&]() { intercepted = custom_eval(node, cache); });
+      if (intercepted) {
+        if constexpr (trace(EvalTrace)) {
+          log::eval(log::EvalStat{.mode = log::eval_mode(node),
+                                  .time = time,
+                                  .mem_result = log::bytes(intercepted),
+                                  .mem_alloc = log::bytes(intercepted),
+                                  .mem_hwmark = {cache.note_working_set(
+                                      log::bytes(cache, intercepted).value)}},
+                    log::label(node));
+        }
+        return intercepted;
+      }
+    }
+  }
+
   if (node.leaf()) {
     time = timed_eval_inplace([&]() { result = le(node); });
+  } else if (node->op_type() == EvalOp::Adjoint) {
+    // Unary IR op: dispatch on left operand only; right is the Constant(1)
+    // sentinel kept around to preserve FullBinaryNode's invariant. We
+    // intentionally skip evaluating the sentinel — leaf evaluators that
+    // can't manufacture scalar constants (rare in practice but possible)
+    // would otherwise be invoked needlessly.
+    left = evaluate<EvalTrace>(node.left(), le, cache);
+    SEQUANT_ASSERT(left);
+    std::array<std::any, 2> const adj_ann{node.left()->annot(), node->annot()};
+    time = timed_eval_inplace([&]() { result = left->adjoint(adj_ann); });
   } else {
     left = evaluate<EvalTrace>(node.left(), le, cache);
     right = evaluate<EvalTrace>(node.right(), le, cache);
@@ -326,12 +607,37 @@ ResultPtr evaluate(Node const& node,  //
 
   // logging
   if constexpr (trace(EvalTrace)) {
-    auto stat =
-        log::EvalStat{.mode = log::eval_mode(node),
-                      .time = time,
-                      .memory = node.leaf() ? log::bytes(result)
-                                            : log::bytes(left, right, result)};
-    log::eval(stat, log::label(node));
+    if (node.leaf()) {
+      log::eval(log::EvalStat{.mode = log::eval_mode(node),
+                              .time = time,
+                              .mem_result = log::bytes(result),
+                              .mem_alloc = log::bytes(result),
+                              .mem_hwmark = {cache.note_working_set(
+                                  log::bytes(cache, result).value)}},
+                log::label(node));
+    } else {
+      // A cached child is *distinct* from the local left/right when its
+      // canon_phase != 1, because mult_by_phase allocates a fresh buffer
+      // while the cache still holds the pre-phase data. So only skip the
+      // local's bytes when the cache aliases the same buffer (phase == 1).
+      // Adjoint nodes evaluate only the left operand (the right child is the
+      // sentinel Constant(1) — see the Adjoint branch above), so `right` is
+      // null; log::bytes() tolerates a null shared_ptr for that reason.
+      size_t hwmark = log::bytes(cache, result).value;
+      if (!cache.alive(node.left()) || node.left()->canon_phase() != 1)
+        hwmark += log::bytes(left).value;
+      if (right &&
+          (!cache.alive(node.right()) || node.right()->canon_phase() != 1))
+        hwmark += log::bytes(right).value;
+      log::eval(log::EvalStat{.mode = log::eval_mode(node),
+                              .time = time,
+                              .mem_result = log::bytes(result),
+                              .mem_alloc = log::bytes(result),
+                              .mem_hwmark = {cache.note_working_set(hwmark)},
+                              .mem_left = log::bytes(left),
+                              .mem_right = log::bytes(right)},
+                log::label(node));
+    }
   }
 
   return result;
@@ -383,9 +689,17 @@ ResultPtr evaluate(Node const& node,           //
   // logging
   if constexpr (trace(EvalTrace)) {
     if (perm) {
+      // result.pre aliases the cache only when the inner evaluate returned
+      // the cached buffer unchanged — i.e. the node is cached AND no
+      // mult_by_phase fresh allocation happened (phase == 1).
+      size_t hwmark = log::bytes(cache, result.post).value;
+      if (!cache.alive(node) || node->canon_phase() != 1)
+        hwmark += log::bytes(result.pre).value;
       auto stat = log::EvalStat{.mode = log::EvalMode::Permute,
                                 .time = time,
-                                .memory = log::bytes(result.pre, result.post)};
+                                .mem_result = log::bytes(result.post),
+                                .mem_alloc = log::bytes(result.post),
+                                .mem_hwmark = {cache.note_working_set(hwmark)}};
       log::eval(stat, node->label());
     }
     log::term(log::TermMode::End, xpr);
@@ -419,6 +733,11 @@ ResultPtr evaluate(Nodes const& nodes,  //
                    F const& le, CacheManager<N, FHC>& cache) {
   ResultPtr result;
 
+  // pre comes back from the permute-wrapping evaluate; it aliases the
+  // cache only when the inner evaluate returned the cached buffer
+  // unchanged — i.e. node cached, phase == 1, AND no permute happened.
+  bool const layout_is_default = (layout == decltype(layout){});
+
   for (auto&& n : nodes) {
     if (!result) {
       result = evaluate<EvalTrace>(n, layout, le, cache);
@@ -430,9 +749,17 @@ ResultPtr evaluate(Nodes const& nodes,  //
 
     // logging
     if constexpr (trace(EvalTrace)) {
+      // SumInplace allocates nothing: it writes into the accumulator.
+      // hwmark counts the cache plus both operands live at this moment;
+      // skip pre's bytes only when pre is the cached buffer itself.
+      size_t hwmark = log::bytes(cache, result).value;
+      if (!cache.alive(n) || n->canon_phase() != 1 || !layout_is_default)
+        hwmark += log::bytes(pre).value;
       auto stat = log::EvalStat{.mode = log::EvalMode::SumInplace,
                                 .time = time,
-                                .memory = log::bytes(result, pre)};
+                                .mem_result = log::bytes(result),
+                                .mem_alloc = {0},
+                                .mem_hwmark = {cache.note_working_set(hwmark)}};
       log::eval(stat, n->label());
     }
   }
@@ -507,9 +834,14 @@ ResultPtr evaluate_symm(Args&&... args) {
 
   // logging
   if constexpr (trace(EvalTrace)) {
+    // cache is owned by the inner evaluate call and out of scope here;
+    // hwmark reflects only the local working set (pre + freshly allocated
+    // result both live during the symmetrize op).
     auto stat = log::EvalStat{.mode = log::EvalMode::Symmetrize,
                               .time = time,
-                              .memory = log::bytes(pre, result)};
+                              .mem_result = log::bytes(result),
+                              .mem_alloc = log::bytes(result),
+                              .mem_hwmark = log::bytes(pre, result)};
     log::eval(stat, node0(arg0(std::forward<Args>(args)...))->label());
   }
 
@@ -539,12 +871,119 @@ ResultPtr evaluate_antisymm(Args&&... args) {
 
   // logging
   if constexpr (trace(EvalTrace)) {
+    // See Symmetrize for the rationale on hwmark.
     auto stat = log::EvalStat{.mode = log::EvalMode::Antisymmetrize,
                               .time = time,
-                              .memory = log::bytes(pre, result)};
+                              .mem_result = log::bytes(result),
+                              .mem_alloc = log::bytes(result),
+                              .mem_hwmark = log::bytes(pre, result)};
     log::eval(stat, n0->label());
   }
   return result;
+}
+
+/// \brief Builds a custom evaluator (see CacheManager::custom_evaluator_type)
+/// that evaluates a subtree in batches over a contracted index, to bound the
+/// peak memory of intermediates that carry that index.
+///
+/// For each node it is consulted on, the returned evaluator chooses a batch
+/// axis \c K via `batch_axis(node, accept)` (declining if none). It asks the
+/// backend to partition \c K into contiguous element-range batches of about
+/// \p target_batch_size elements each (Result::mode_batches); if that yields at
+/// most one batch it declines (so small / unselected indices are left to the
+/// standard scheme). Otherwise, for each batch it evaluates the subtree by the
+/// standard scheme on a fresh scratch cache, with every leaf carrying \c K
+/// sliced to the batch's element range, and sums the partial results. This is
+/// exact because `sum_K = sum_{batches} sum_{K in batch}`, and never
+/// materializes the whole \c K extent of any intermediate at once.
+///
+/// \param le the leaf evaluator (captured).
+/// \param target_batch_size the desired size of each batch *in elements* (a
+///        user knob; no memory model is assumed). Backend-neutral: a tiled
+///        backend rounds batch boundaries to tile boundaries, so realized
+///        batches are uneven and each covers at least this many elements where
+///        possible.
+/// \param accept predicate selecting which contracted indices may be batched
+///        (e.g. only those in the auxiliary/RI IndexSpace). Defaults to any.
+/// \param make_scope_guard factory, called with the batch count, returning an
+///        RAII object held for the duration of the batched partial
+///        contractions; a backend may use it to relax block-sparse screening
+///        (scaled by the batch count) so per-batch screening does not drop
+///        small contributions that are significant once summed over the full
+///        batch axis. Defaults to a no-op (make_no_scope_guard).
+struct accept_any_index {
+  bool operator()(Index const&) const noexcept { return true; }
+};
+
+/// Default scope-guard factory for make_batched_custom_evaluator: produces a
+/// no-op guard. A backend may supply a factory whose returned RAII object
+/// relaxes block-sparse screening for the duration of the batched partial
+/// contractions, so that a result block whose norm clears the screening
+/// threshold over the *full* batch axis is not dropped in every individual
+/// batch (which would lose its contribution to the sum). The factory is called
+/// with the batch count, so the backend can scale the relaxation accordingly
+/// (e.g. divide a Cauchy-Schwarz norm-product screening threshold by n_batches:
+/// the bound for a sub-sum over 1/n of the batch axis is ~1/n of the full
+/// bound). See make_batched_custom_evaluator's \p make_scope_guard parameter.
+struct no_scope_guard {};
+struct make_no_scope_guard {
+  no_scope_guard operator()(std::size_t /*n_batches*/) const noexcept {
+    return {};
+  }
+};
+
+template <typename F, typename IndexPredicate = accept_any_index,
+          typename ScopeGuardFactory = make_no_scope_guard>
+[[nodiscard]] auto make_batched_custom_evaluator(
+    F le, std::size_t target_batch_size, IndexPredicate accept = {},
+    ScopeGuardFactory make_scope_guard = {}) {
+  return [le = std::move(le), target_batch_size, accept, make_scope_guard](
+             auto const& node, auto& cache) -> ResultPtr {
+    using cache_t = std::remove_reference_t<decltype(cache)>;
+
+    auto const K = batch_axis(node, accept);
+    if (!K) return nullptr;
+
+    auto const leaf = find_leaf_carrying(node, *K);
+    if (!leaf) return nullptr;
+    auto const batches =
+        le(leaf->first)->mode_batches(leaf->second, target_batch_size);
+
+    if (batches.size() <= 1)
+      return nullptr;  // nothing to gain (or unbatchable)
+
+    // RAII scope for the batched partial contractions; a backend-supplied
+    // factory may relax block-sparse screening here (scaled by the batch count)
+    // so per-batch screening does not drop contributions that survive over the
+    // full batch axis.
+    auto const scope_guard = make_scope_guard(batches.size());
+    (void)scope_guard;
+
+    ResultPtr acc;
+    for (auto const& [e_lo, e_hi] : batches) {
+      if (e_lo == e_hi) continue;
+
+      // leaf evaluator that slices every leaf carrying K to this element batch;
+      // others pass through unchanged.
+      auto le_g = [&le, &K, e_lo = e_lo,
+                   e_hi = e_hi](auto const& leaf_node) -> ResultPtr {
+        ResultPtr r = le(leaf_node);
+        if (auto const p = index_position(leaf_node, *K))
+          return r->slice_mode(*p, e_lo, e_hi);
+        return r;
+      };
+
+      // standard scheme on a fresh scratch cache: no re-interception, and the
+      // (partial, sliced) intermediates do not pollute the real cache.
+      auto scratch = cache_t::empty();
+      ResultPtr part = evaluate(node, le_g, scratch);
+      if (!acc)
+        acc = std::move(part);
+      else
+        acc->add_inplace(*part);
+    }
+    return acc;
+  };
 }
 
 }  // namespace sequant

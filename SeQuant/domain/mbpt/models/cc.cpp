@@ -36,6 +36,8 @@ CC::CC(size_t n) : CC(n, Options{}) {}
 CC::CC(size_t n, const Options& opts)
     : N(n),
       ansatz_(opts.ansatz),
+      skip_singles_(opts.skip_singles.value_or(ansatz_ == Ansatz::oT ||
+                                               ansatz_ == Ansatz::oU)),
       screen_(opts.screen),
       use_topology_(opts.use_topology),
       hbar_comm_rank_(opts.hbar_comm_rank),
@@ -43,6 +45,10 @@ CC::CC(size_t n, const Options& opts)
   if (unitary())
     SEQUANT_ASSERT(hbar_comm_rank_ &&
                    "CC: hbar_comm_rank is required for unitary ansatz");
+  if (ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU)
+    SEQUANT_ASSERT(
+        skip_singles_ &&
+        "CC: skip_singles must be true for orbital-optimized ansatz");
 }
 
 CC::Ansatz CC::ansatz() const { return ansatz_; }
@@ -51,20 +57,24 @@ bool CC::unitary() const {
   return ansatz_ == Ansatz::U || ansatz_ == Ansatz::oU;
 }
 
+bool CC::skip_singles() const { return skip_singles_; }
+
 bool CC::screen() const { return screen_; }
 
 bool CC::use_topology() const { return use_topology_; }
 
+ExprPtr CC::hbar(std::optional<size_t> truncation_rank) const {
+  const auto truncation = truncation_rank.value_or(hbar_comm_rank_.value_or(4));
+  return mbpt::lst(H(), T(N, skip_singles()), truncation,
+                   {.unitary = unitary()});
+}
+
 std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) {
   pmax = (pmax == std::numeric_limits<size_t>::max() ? N : pmax);
-  const bool skip_singles = ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU;
-
   SEQUANT_ASSERT(pmax >= pmin && "pmax should be >= pmin");
-  const auto commutator_rank = hbar_comm_rank_.value_or(4);
 
   // 1. construct hbar(op) in canonical form
-  auto hbar = mbpt::lst(H(), T(N, skip_singles), commutator_rank,
-                        {.unitary = unitary()});
+  auto hbar = this->hbar();
 
   // connectivity: empty for unitary ansatz, default otherwise
   const auto connectivity = this->unitary()
@@ -113,25 +123,21 @@ std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) {
 
 std::vector<ExprPtr> CC::λ() {
   SEQUANT_ASSERT(!unitary() && "there is no need for CC::λ for unitary ansatz");
-  const bool skip_singles = ansatz_ == Ansatz::oT;
-
-  const auto commutator_rank =
-      hbar_comm_rank_.value_or(4);  // default truncation rank is 4
 
   // construct hbar
-  SEQUANT_ASSERT(commutator_rank >= 1 &&
-                 "commutator_rank should be at least 1");
-  auto hbar = mbpt::lst(H(), T(N, skip_singles), commutator_rank - 1);
+  const auto commutator_rank = hbar_comm_rank_.value_or(4);
+  SEQUANT_ASSERT(commutator_rank >= 1 && "CC::λ: hbar_comm_rank must be >= 1");
+  auto hbar = this->hbar(commutator_rank -
+                         1);  // -1 because of the connection with the projector
 
-  auto lhbar = simplify((1 + Λ(N)) * hbar);
+  auto lhbar = simplify((1 + Λ(N, skip_singles())) * hbar);
 
-  const auto op_connect = concat(default_op_connections(),
-                                 OpConnections<std::wstring>{{L"h", asymm},
-                                                             {L"f", asymm},
-                                                             {L"g", asymm},
-                                                             {L"h", symm},
-                                                             {L"f", symm},
-                                                             {L"g", symm}});
+  const auto op_connect = concat(default_op_connections(), {{L"h", asymm},
+                                                            {L"f", asymm},
+                                                            {L"g", asymm},
+                                                            {L"h", symm},
+                                                            {L"f", symm},
+                                                            {L"g", symm}});
 
   // 2. project onto each manifold, screen, lower to tensor form and wick it
   std::vector<ExprPtr> result(N + 1);
@@ -193,16 +199,16 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
   // for two-body perturbation operator; unless specified otherwise
   const auto h1_truncate_default = rank == 1 ? 2 : 4;
   const auto h1_truncate_at = pertbar_comm_rank_.value_or(h1_truncate_default);
-  const auto h1_bar = mbpt::lst(Hʼ(rank, {.order = order, .nbatch = nbatch}),
-                                T(N), h1_truncate_at, {.unitary = unitary()});
+  const auto h1_bar =
+      mbpt::lst(Hʼ(rank, {.order = order, .nbatch = nbatch}),
+                T(N, skip_singles()), h1_truncate_at, {.unitary = unitary()});
 
   // construct [hbar, Tʼ(1)]
   const auto hbar_truncate_at = hbar_comm_rank_.value_or(
       3);  // notice 3 instead of 4 here, this is because of the commutator with
            // T'(1). In case 4 is used, it will generate more terms but they
            // will not contribute.
-  const auto hbar =
-      mbpt::lst(H(), T(N), hbar_truncate_at, {.unitary = unitary()});
+  const auto hbar = this->hbar(hbar_truncate_at);
 
   ExprPtr hbar_pert;
   if (unitary()) {
@@ -217,14 +223,13 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
   const auto expr = simplify(h1_bar + hbar_pert);
 
   // connectivity: empty for unitary ansatz, build otherwise
-  OpConnections<std::wstring> op_connect = {};
+  OpConnections<std::wstring> op_connect;
   if (!this->unitary()) {
     // connect t and t1 with {h,f,g}
     // connect h1 with t
     op_connect =
         concat(default_op_connections(),
-               OpConnections<std::wstring>{
-                   {L"h", L"t¹"}, {L"f", L"t¹"}, {L"g", L"t¹"}, {L"h¹", L"t"}});
+               {{L"h", L"t¹"}, {L"f", L"t¹"}, {L"g", L"t¹"}, {L"h¹", L"t"}});
   }
 
   std::vector<ExprPtr> result(N + 1);
@@ -251,8 +256,7 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
                  "CC::λʼ: only traditional ansatz is supported");
 
   // construct hbar
-  const auto hbar_truncate_at = hbar_comm_rank_.value_or(4);
-  const auto hbar = mbpt::lst(H(), T(N), hbar_truncate_at);
+  const auto hbar = this->hbar();
 
   // construct h1_bar
   // truncate h1_bar at rank 2 for one-body perturbation operator and at rank 4
@@ -260,14 +264,14 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
   const auto h1_truncate_at = (rank == 1) ? pertbar_comm_rank_.value_or(2)
                                           : pertbar_comm_rank_.value_or(4);
   const auto h1_bar = mbpt::lst(Hʼ(rank, {.order = order, .nbatch = nbatch}),
-                                T(N), h1_truncate_at);
+                                T(N, skip_singles()), h1_truncate_at);
 
   // construct [hbar, T(1)]
   const auto hbar_pert =
-      mbpt::lst(H(), T(N), 3) * Tʼ(N, {.order = order, .nbatch = nbatch});
+      this->hbar(3) * Tʼ(N, {.order = order, .nbatch = nbatch});
 
   // [Eq. 35, WIREs Comput Mol Sci. 2019; 9:e1406]
-  const auto expr = simplify((1 + Λ(N)) * (h1_bar + hbar_pert) +
+  const auto expr = simplify((1 + Λ(N, skip_singles())) * (h1_bar + hbar_pert) +
                              Λʼ(N, {.order = order, .nbatch = nbatch}) * hbar);
 
   // connectivity:
@@ -275,19 +279,18 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
   // projectors with {h,f,g}
   // h1 with t
   // h1 with projectors
-  const auto op_connect = concat(default_op_connections(),
-                                 OpConnections<std::wstring>{{L"h", L"t¹"},
-                                                             {L"f", L"t¹"},
-                                                             {L"g", L"t¹"},
-                                                             {L"h¹", L"t"},
-                                                             {L"h", asymm},
-                                                             {L"f", asymm},
-                                                             {L"g", asymm},
-                                                             {L"h", symm},
-                                                             {L"f", symm},
-                                                             {L"g", symm},
-                                                             {L"h¹", asymm},
-                                                             {L"h¹", symm}});
+  const auto op_connect = concat(default_op_connections(), {{L"h", L"t¹"},
+                                                            {L"f", L"t¹"},
+                                                            {L"g", L"t¹"},
+                                                            {L"h¹", L"t"},
+                                                            {L"h", asymm},
+                                                            {L"f", asymm},
+                                                            {L"g", asymm},
+                                                            {L"h", symm},
+                                                            {L"f", symm},
+                                                            {L"g", symm},
+                                                            {L"h¹", asymm},
+                                                            {L"h¹", symm}});
 
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
@@ -309,12 +312,9 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
     SEQUANT_ASSERT(hbar_comm_rank_ &&
                    "hbar_comm_rank must be specified for unitary ansatz "
                    "in CC::eom_r");
-  const bool skip_singles = ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU;
 
   // construct hbar
-  const auto hbar_truncate_at = hbar_comm_rank_.value_or(4);
-  const auto hbar = mbpt::lst(H(), T(N, skip_singles), hbar_truncate_at,
-                              {.unitary = unitary()});
+  const auto hbar = this->hbar();
 
   // construct [hbar, R]
   ExprPtr hbar_R;
@@ -327,12 +327,11 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
   }
 
   // connectivity: empty for unitary ansatz, build otherwise
-  OpConnections<std::wstring> op_connect = {};
+  OpConnections<std::wstring> op_connect;
   if (!this->unitary()) {
     // default connections + connect R with {h,f,g}
-    op_connect = concat(
-        default_op_connections(),
-        OpConnections<std::wstring>{{L"h", L"R"}, {L"f", L"R"}, {L"g", L"R"}});
+    op_connect = concat(default_op_connections(),
+                        {{L"h", L"R"}, {L"f", L"R"}, {L"g", L"R"}});
   }
   // initialize result vector
   std::vector<ExprPtr> result;
@@ -362,24 +361,21 @@ std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) {
     SEQUANT_ASSERT(
         get_default_context().spbasis() != SPBasis::Spinfree &&
         "spin-free basis does not support non particle-conserving cases");
-  const bool skip_singles = ansatz_ == Ansatz::oT;
 
   // construct hbar
-  const auto hbar_truncate_at = hbar_comm_rank_.value_or(4);
-  const auto hbar = mbpt::lst(H(), T(N, skip_singles), hbar_truncate_at);
+  const auto hbar = this->hbar();
 
   // L * hbar
   const auto L_hbar = L(np, nh) * hbar;
 
   // connectivity:
   // default connections + connect H with projectors
-  const auto op_connect = concat(default_op_connections(),
-                                 OpConnections<std::wstring>{{L"h", asymm},
-                                                             {L"f", asymm},
-                                                             {L"g", asymm},
-                                                             {L"h", symm},
-                                                             {L"f", symm},
-                                                             {L"g", symm}});
+  const auto op_connect = concat(default_op_connections(), {{L"h", asymm},
+                                                            {L"f", asymm},
+                                                            {L"g", asymm},
+                                                            {L"h", symm},
+                                                            {L"f", symm},
+                                                            {L"g", symm}});
 
   // initialize result vector
   std::vector<ExprPtr> result;

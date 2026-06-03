@@ -193,7 +193,8 @@ sequant::ExprPtr generateResultSymmetrization(
       symKet.push_back(externals.ket[(i + j) % externals.ket.size()]);
     }
 
-    symmetrization += ex<Tensor>(precursorName, bra(std::move(symBra)),
+    symmetrization += rational(1, externals.bra.size()) *
+                      ex<Tensor>(precursorName, bra(std::move(symBra)),
                                  ket(std::move(symKet)), aux(externals.aux));
   }
 

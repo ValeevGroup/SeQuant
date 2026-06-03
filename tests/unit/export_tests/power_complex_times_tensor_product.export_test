@@ -1,0 +1,65 @@
+(-1)^(1/2) * x^(2) * A{a1;i2} * B{i1;a1}
+
+=================================================
+Plain Text
+=================================================
+Declare index i_1
+Declare index i_2
+Declare index a_1
+
+Declare variable x
+
+Declare tensor A[a_1, i_2]
+Declare tensor B[i_1, a_1]
+Declare tensor I[i_1, i_2]
+Declare tensor I[i_2, a_1]
+
+Create I[i_1, i_2] and initialize to zero
+Create I[i_2, a_1] and initialize to zero
+Load x
+Load A[a_1, i_2]
+Compute I[i_2, a_1] += (-1)^(1/2) x^2 A[a_1, i_2]
+Unload A[a_1, i_2]
+Unload x
+Load B[i_1, a_1]
+Compute I[i_1, i_2] += I[i_2, a_1] B[i_1, a_1]
+Unload B[i_1, a_1]
+Unload I[i_2, a_1]
+Persist I[i_1, i_2]
+
+=================================================
+Julia (TensorOperations)
+=================================================
+I_oo = zeros(Float64, nocc, nocc)
+I_vo = zeros(Float64, nv, nocc)
+x = deserialize("x.jlbin")
+A_vo = deserialize("A_vo.jlbin")
+@tensor I_vo[ a_1, i_2 ] += (-1)^(1//2) * x^2 * A_vo[ a_1, i_2 ]
+A_vo = nothing
+x = nothing
+B_ov = deserialize("B_ov.jlbin")
+@tensor I_oo[ i_1, i_2 ] += I_vo[ a_1, i_2 ] * B_ov[ i_1, a_1 ]
+B_ov = nothing
+I_vo = nothing
+return I_oo
+
+=================================================
+Python (einsum)
+=================================================
+import numpy as np
+import os
+
+I_oo = np.zeros((nocc, nocc), order='F')
+I_vo = np.zeros((nvirt, nocc), order='F')
+x = np.load('x.npy')
+A_vo = np.load('A_vo.npy')
+I_vo += (-1)**(1/2) * x**2 * np.einsum('ai->ai', A_vo, optimize=True)
+del A_vo
+del x
+B_ov = np.load('B_ov.npy')
+I_oo += np.einsum('ai,ba->bi', I_vo, B_ov, optimize=True)
+del B_ov
+del I_vo
+np.save('I_oo.npy', I_oo)
+
+=================================================

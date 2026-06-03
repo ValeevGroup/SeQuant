@@ -14,6 +14,8 @@
 #include <SeQuant/core/tensor_network/vertex.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <range/v3/view/indirect.hpp>
+
 #include <cstdlib>
 #include <memory>
 #include <string>

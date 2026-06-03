@@ -13,12 +13,15 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <SeQuant/core/bliss.hpp>
+#include <SeQuant/core/tensor_network/v3.hpp>
+#include <SeQuant/external/bliss/graph.hh>
+
+#include "data/sf_r2_direct_real_inc.hpp"
 
 #include <memory>
 #include <string>
 #include <type_traits>
-
-#include <range/v3/all.hpp>
+#include <vector>
 
 TEST_CASE("canonicalization", "[algorithms]") {
   using namespace sequant;
@@ -236,6 +239,102 @@ TEST_CASE("canonicalization", "[algorithms]") {
                               Symmetry::Nonsymm, BraKetSymmetry::Symm);
       REQUIRE_THAT(input, EquivalentTo("1/2 B{p1;p2;p5}:N-S B{p1;p2;p5}:N-S"));
     }
+    // SF R2 ±pair extracted from the real-field CCSD doubles. Under
+    // make_min_sr_spaces + Real-field + Spinfree + SingleProduct (the srcc
+    // SF context), the two terms are swap∘column-equivalent for a Symm braket
+    // and must collapse to a single 16· term. Before the bundle-vertex fix at
+    // v3.cpp (canonical_bra_ket_bundle_order was being read from the last
+    // bra/ket slot's canon_perm value instead of from the bra/ket bundle
+    // vertex), bliss's input-order-dependent labeling among same-color
+    // column-bundle vertices made these two orientations canonicalize to
+    // different symbolic forms and not merge under min_sr.
+    {
+      auto sr_reg = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+      std::vector<std::wstring> keys;
+      for (auto const& s : *sr_reg) keys.push_back(s.base_key());
+      for (auto const& k : keys)
+        if (auto* sp = sr_reg->retrieve_ptr(k)) sp->field(Field::Real);
+      // Disable strict bra↔ket-symmetry policy: this expression has a_3 in
+      // g.bra and t.bra under one term's orientation (a bra-bra contraction,
+      // legitimate for Symm-braket g), which the default-context Conjugate
+      // policy would reject.
+      auto srcc_resetter = set_scoped_default_context(
+          Context({.index_space_registry_shared_ptr = sr_reg,
+                   .vacuum = Vacuum::SingleProduct,
+                   .spbasis = SPBasis::Spinfree})
+              .set(AssertStrictBraKetSymmetry::No));
+      auto input = deserialize(
+          L"8 * Ŝ{i_1,i_2;a_1,a_2}:N-C-S * g{i_3,a_1;a_3,i_1}:N-S-S "
+          L"* t{a_2,a_3;i_2,i_3}:N-N-S "
+          L"+ 8 * Ŝ{i_1,i_2;a_1,a_2}:N-C-S * g{i_1,a_3;a_1,i_3}:N-S-S "
+          L"* t{a_2,a_3;i_2,i_3}:N-N-S");
+      simplify(input);
+      const std::size_t n =
+          input ? (input->is<Sum>() ? input->size() : std::size_t{1}) : 0;
+      INFO("pair-1 under srcc context → " << n << " terms (1=merged, 2=not)");
+      REQUIRE(n == 1);
+    }
+    // Structural invariant for the same ±pair: build each term as its own
+    // TensorNetworkV3 and verify that the canonicalized bliss::Graph objects
+    // returned by canonicalize_slots() compare equal via Graph::cmp. This
+    // checks the graph encoding (colors + topology) independently of the
+    // downstream slot/column/braket reordering applied at v3.cpp:352-411 —
+    // if cmp != 0 we'd know the encoding (not the consumer) is at fault.
+    {
+      auto sr_reg = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+      Context ctx_min = get_default_context();
+      ctx_min.set(sr_reg);
+      ctx_min.set(AssertStrictBraKetSymmetry::No);
+      auto resetter = set_scoped_default_context(ctx_min);
+      auto exA = deserialize(
+          L"8 * Ŝ{i_1,i_2;a_1,a_2}:N-C-S * g{i_3,a_1;a_3,i_1}:N-S-S "
+          L"* t{a_2,a_3;i_2,i_3}:N-N-S");
+      auto exB = deserialize(
+          L"8 * Ŝ{i_1,i_2;a_1,a_2}:N-C-S * g{i_1,a_3;a_1,i_3}:N-S-S "
+          L"* t{a_2,a_3;i_2,i_3}:N-N-S");
+      REQUIRE(exA);
+      REQUIRE(exB);
+      TensorNetworkV3 tnA(exA);
+      TensorNetworkV3 tnB(exB);
+      TensorNetworkV3::NamedIndexSet named{Index(L"i_1"), Index(L"i_2"),
+                                           Index(L"a_1"), Index(L"a_2")};
+      auto mdA = tnA.canonicalize_slots({}, &named);
+      auto mdB = tnB.canonicalize_slots({}, &named);
+      REQUIRE(mdA.graph);
+      REQUIRE(mdB.graph);
+      const int cmpAB = mdA.graph->cmp(*mdB.graph);
+      INFO("canonical bliss graph cmp(A, B) = " << cmpAB << " (0 = equal)");
+      REQUIRE(cmpAB == 0);
+    }
+    // Top-level regression: the 113-term SF R2 direct-path (real field)
+    // residual extracted byte-for-byte from `srcc 2 t std sf real`. The
+    // spin-traced reference collapses to 110 terms; before the fix the direct
+    // path produced 113 and refused to merge the 3 ±pairs that exercised the
+    // bra↔ket-swap canonicalization under bliss's ambiguous labeling of
+    // same-color bundle vertices.
+    {
+      auto sr_reg = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+      std::vector<std::wstring> keys;
+      for (auto const& s : *sr_reg) keys.push_back(s.base_key());
+      for (auto const& k : keys)
+        if (auto* sp = sr_reg->retrieve_ptr(k)) sp->field(Field::Real);
+      auto srcc_resetter = set_scoped_default_context(
+          Context({.index_space_registry_shared_ptr = sr_reg,
+                   .vacuum = Vacuum::SingleProduct,
+                   .spbasis = SPBasis::Spinfree})
+              .set(AssertStrictBraKetSymmetry::No));
+      auto input = deserialize(tests::data::sf_r2_direct_real());
+      REQUIRE(input);
+      const std::size_t n_before =
+          input->is<Sum>() ? input->size() : std::size_t{1};
+      REQUIRE(n_before == 113);
+      simplify(input);
+      const std::size_t n_after =
+          input ? (input->is<Sum>() ? input->size() : std::size_t{1}) : 0;
+      INFO("after simplify: " << n_after
+                              << " terms (expected 110 if merge works)");
+      REQUIRE(n_after == 110);
+    }
   }
 
   SECTION("Sum of Variables") {
@@ -254,6 +353,47 @@ TEST_CASE("canonicalization", "[algorithms]") {
       canonicalize(input);
       REQUIRE_THAT(input, EquivalentTo("q2 + q1 * q1"));
     }
+  }
+
+  SECTION("Powers in Products") {
+    const auto f = deserialize(L"f{p_1;p_2}:A-C-S * ã{p_2;p_1}");
+    const auto t1 = deserialize(L"t{a_1;i_1}:A-C-S * ã{i_1;a_1}");
+    const auto pw = ex<Power>(ex<Variable>(L"x"), rational{1, 2});
+
+    auto expr1 = f * t1 * pw;
+    simplify(expr1);
+    REQUIRE_THAT(expr1, EquivalentTo(L"x^(1/2) * ã{p_2;p_1} * ã{i_1;a_1} * "
+                                     L"t{a_1;i_1}:A-C-S * f{p_1;p_2}:A-C-S"));
+
+    auto expr2 = ex<Constant>(rational{1, 2}) * f * t1 * pw;
+    simplify(expr2);
+    REQUIRE_THAT(expr2, EquivalentTo(L"1/2 x^(1/2) * ã{p_2;p_1} * ã{i_1;a_1} * "
+                                     L"t{a_1;i_1}:A-C-S * f{p_1;p_2}:A-C-S"));
+
+    auto expr3 = f * t1 * ex<Power>(2, 3);
+    simplify(expr3);
+    REQUIRE_THAT(expr3, EquivalentTo(L"8 * ã{p_2;p_1} * ã{i_1;a_1} * "
+                                     L"t{a_1;i_1}:A-C-S * f{p_1;p_2}:A-C-S"));
+  }
+
+  SECTION("Sum of Powers") {
+    const auto vx = ex<Variable>(L"x");
+
+    // x^{1/2} + x^{1/2} = 2 * x^{1/2}
+    auto pw1 = ex<Power>(vx, rational{1, 2});
+    auto pw2 = ex<Power>(vx, rational{1, 2});
+    auto sum_expr = pw1 + pw2;
+    simplify(sum_expr);
+    REQUIRE(sum_expr->is<Product>());
+    REQUIRE(sum_expr->as<Product>().scalar() == 2);
+
+    // 2 x^{1/2} + 3 x^{1/2} = 5 x^{1/2}
+    auto s1 = ex<Constant>(2) * ex<Power>(vx, rational{1, 2});
+    auto s2 = ex<Constant>(3) * ex<Power>(vx, rational{1, 2});
+    auto sum2 = s1 + s2;
+    simplify(sum2);
+    REQUIRE(sum2->is<Product>());
+    REQUIRE(sum2->as<Product>().scalar() == 5);
   }
 
   SECTION("Sum of Products") {

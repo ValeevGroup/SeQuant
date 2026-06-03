@@ -17,6 +17,10 @@
 #include <string_view>
 #include <type_traits>
 
+namespace sequant {
+class Power;
+}
+
 namespace sequant::io::latex {
 
 template <typename T>
@@ -27,13 +31,13 @@ concept pointer_can_call_to_latex = requires(const T& t) { t->to_latex(); };
 
 template <typename T>
   requires(has_to_latex_member<T>)
-std::wstring to_string(T&& t) {
+std::wstring to_string(const T& t) {
   return t.to_latex();
 }
 
 template <typename T>
   requires(!has_to_latex_member<T> && pointer_can_call_to_latex<T>)
-std::wstring to_string(T&& t) {
+std::wstring to_string(const T& t) {
   return t->to_latex();
 }
 
@@ -98,6 +102,8 @@ std::wstring to_string(const std::complex<T>& t) {
 }
 
 std::wstring to_string(const rational& num);
+
+std::wstring to_string(const Power& power);
 
 namespace detail {
 

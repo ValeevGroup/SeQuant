@@ -12,8 +12,6 @@
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 
-#include <range/v3/algorithm.hpp>
-
 #include <dtl/dtl.hpp>
 
 #include <algorithm>

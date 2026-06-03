@@ -137,6 +137,14 @@ class GenerationVisitor {
       // Constants don't need to be loaded/created
       return;
     }
+    if (node->is_power()) {
+      // load the base Variable (if any)
+      const Power &pw = node->as_power();
+      if (pw.base()->is<Variable>()) {
+        load_or_create<Variable>(pw.base()->as<Variable>(), node.leaf());
+      }
+      return;
+    }
     if (!node->is_tensor() && !node->is_variable()) {
       throw Exception(
           "Unexpected expression type in "
@@ -169,6 +177,12 @@ class GenerationVisitor {
       if (m_variableUses[variable] == 0) {
         m_generator.unload(variable, m_ctx);
       }
+    } else if (expr.is<Power>()) {
+      // drop if base is Variable
+      const Power &pw = expr.as<Power>();
+      if (pw.base()->is<Variable>()) {
+        drop(pw.base()->as<Variable>());
+      }
     }
   }
 
@@ -183,6 +197,16 @@ class GenerationVisitor {
         expressions.push_back(
             ex<Product>(ExprPtrList{node.left()->expr(), node.right()->expr()},
                         Product::Flatten::No));
+        break;
+      case EvalOp::Adjoint:
+        // Unary IR op. The adjoint result (node->expr(), the marker-bearing
+        // tensor) is the assignment target node->as_tensor(); the right child
+        // is the Constant(1) sentinel. Emitting node->expr() here would yield a
+        // self-referential `result = result` that never reads the operand.
+        // Instead hand the code generator the bare-leaf operand (node.left()),
+        // whose bra/ket order is swapped relative to the result — that index
+        // reordering is exactly the transpose the adjoint must materialize.
+        expressions.push_back(node.left()->expr());
         break;
       case EvalOp::Sum: {
         switch (node->compute_selection()) {
@@ -212,27 +236,33 @@ class GenerationVisitor {
     container::svector<Variable> variables;
     if (auto iter = m_scalarFactors.find(node->id());
         iter != m_scalarFactors.end()) {
-      if (iter->second->template is<Product>()) {
-        for (const ExprPtr &current : iter->second->template as<Product>()) {
-          SEQUANT_ASSERT(current->is<Constant>() || current->is<Variable>());
+      auto handle_factor = [&](const ExprPtr &current) {
+        SEQUANT_ASSERT(current->is<Constant>() || current->is<Variable>() ||
+                       current->is<Power>());
 
-          if (current->is<Variable>()) {
-            variables.push_back(current->as<Variable>());
-            if (m_variableUses[variables.back()] == 0) {
-              m_generator.load(variables.back(), false, m_ctx);
-            }
+        // Power(Constant, n) is effectively a Constant: no load/drop needed.
+        if (current->is<Constant>()) return;
+        if (current->is<Power>() && current->as<Power>().base()->is<Constant>())
+          return;
 
-            m_variableUses[variables.back()]++;
-          }
-        }
-      } else if (iter->second->template is<Variable>()) {
-        variables.push_back(iter->second->template as<Variable>());
-
+        SEQUANT_ASSERT(current->is<Variable>() ||
+                       (current->is<Power>() &&
+                        current->as<Power>().base()->is<Variable>()));
+        const Variable &var = current->is<Variable>()
+                                  ? current->as<Variable>()
+                                  : current->as<Power>().base()->as<Variable>();
+        variables.push_back(var);
         if (m_variableUses[variables.back()] == 0) {
           m_generator.load(variables.back(), false, m_ctx);
         }
-
         m_variableUses[variables.back()]++;
+      };
+      if (iter->second->template is<Product>()) {
+        for (const ExprPtr &current : iter->second->template as<Product>()) {
+          handle_factor(current);
+        }
+      } else {
+        handle_factor(iter->second);
       }
 
       for (ExprPtr &current : expressions) {
@@ -304,7 +334,8 @@ bool prune_scalar_factor(ExportNode<T> &node, PreprocessResult &result,
   ExprPtr factor = node->expr();
 
   SEQUANT_ASSERT(factor);
-  SEQUANT_ASSERT(factor->is<Constant>() || factor->is<Variable>());
+  SEQUANT_ASSERT(factor->is<Constant>() || factor->is<Variable>() ||
+                 factor->is<Power>());
 
   if (factor->is<Variable>()) {
     if ((prunable & PrunableScalars::Variables) == PrunableScalars::None) {
@@ -312,6 +343,19 @@ bool prune_scalar_factor(ExportNode<T> &node, PreprocessResult &result,
     }
     result.variables[factor->as<Variable>()] |=
         node.leaf() ? Usage::Terminal : Usage::Intermediate;
+  } else if (factor->is<Power>()) {
+    // treat power based on the base type
+    const Power &pw = factor->as<Power>();
+    if (pw.base()->is<Variable>()) {
+      if ((prunable & PrunableScalars::Variables) == PrunableScalars::None) {
+        return false;
+      }
+      result.variables[pw.base()->as<Variable>()] |=
+          node.leaf() ? Usage::Terminal : Usage::Intermediate;
+    } else if ((prunable & PrunableScalars::Constants) ==
+               PrunableScalars::None) {
+      return false;
+    }
   } else if ((prunable & PrunableScalars::Constants) == PrunableScalars::None) {
     return false;
   }
@@ -431,7 +475,10 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
   if (storeExpr) {
     node->set_expr(ex<ExprType>(expr));
   }
+}
 
+template <typename T>
+void track_usage(const EvalNode<T> &node, PreprocessResult &result) {
   Usage usage = [&]() {
     if (node.leaf()) {
       return Usage::Terminal;
@@ -447,21 +494,37 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
     return Usage::Intermediate;
   }();
 
-  if constexpr (std::is_same_v<ExprType, Tensor>) {
-    result.tensors[expr] |= usage;
-    auto &&indices = expr.const_indices();
+  const Expr &expr = *node->expr();
+
+  auto handle_tensor = [&](const Tensor &tensor) {
+    result.tensors[tensor] |= usage;
+    auto &&indices = tensor.const_indices();
     result.indices.insert(indices.begin(), indices.end());
 
-    result.tensorReferences[expr]++;
-  } else {
-    result.variables[expr] |= usage;
+    result.tensorReferences[tensor]++;
+  };
+  auto handle_variable = [&](const Variable &variable) {
+    result.variables[variable] |= usage;
 
-    result.variableReferences[expr]++;
+    result.variableReferences[variable]++;
+  };
+
+  if (expr.is<Tensor>()) {
+    handle_tensor(expr.as<Tensor>());
+  } else if (expr.is<Variable>()) {
+    handle_variable(expr.as<Variable>());
+  } else if (expr.is<Power>()) {
+    const Power &power = expr.as<Power>();
+    if (power.base().is<Tensor>()) {
+      handle_tensor(power.base().as<Tensor>());
+    } else if (power.base().is<Variable>()) {
+      handle_variable(power.base().as<Variable>());
+    }
   }
 }
 
 /// @returns Whether the given node may be pruned from its parent in order to be
-/// represented implicitly rather than by explicit occurrance in the tree
+/// represented implicitly rather than by explicit occurrence in the tree
 template <typename T>
 bool may_prune(const EvalNode<T> &tree) {
   // Tree must represent a product and must itself not be a leaf (pruning that
@@ -528,7 +591,12 @@ class PreprocessVisitor {
         if (!tree.leaf()) {
           rebalance_tree(tree);
           set_compute_selection(tree);
+          prune_redundant_intermediate(tree);
         }
+
+        // It is important to track_usage AFTER prune_redundant_intermediate as
+        // the latter might change the result expression on the current node
+        track_usage(tree, m_result);
         break;
       case TreeTraversal::PostOrder:
         if (!tree.leaf()) {
@@ -588,6 +656,11 @@ class PreprocessVisitor {
       preprocess<Tensor>(node->as_tensor(), m_ctx, node, m_result);
     } else if (node->is_variable()) {
       preprocess<Variable>(node->as_variable(), m_ctx, node, m_result);
+    } else if (node->is_power()) {
+      const Power &pw = node->as_power();
+      if (pw.base()->is<Variable>()) {
+        preprocess<Variable>(pw.base()->as<Variable>(), m_ctx, node, m_result);
+      }
     }
   }
 
@@ -598,26 +671,51 @@ class PreprocessVisitor {
   }
 
   void set_compute_selection(ExportNode<T> &node) {
-    if (node->op_type() == EvalOp::Sum) {
-      // We don't want to explicitly encode addition of non-leaf
-      // nodes in the tree as that could lead to unnecessary intermediates
-      // being created. Instead, we flush the top-most result of the
-      // addition downwards, making use of the += semantic that is assumed
-      // for all computations.
-      // Note the explicit flushing down of the result name is required in
-      // case the top-level summation node has a different name than the
-      // intermediate nodes.
-      ComputeSelection selection = ComputeSelection::Both;
-      if (!node.left().leaf()) {
-        node.left()->set_expr(node->expr());
-        selection &= ~ComputeSelection::Left;
-      }
-      if (!node.right().leaf()) {
-        node.right()->set_expr(node->expr());
-        selection &= ~ComputeSelection::Right;
-      }
+    if (node->op_type() != EvalOp::Sum) {
+      return;
+    }
 
-      node->set_compute_selection(selection);
+    // We don't want to explicitly encode addition of non-leaf
+    // nodes in the tree as that could lead to unnecessary intermediates
+    // being created. Instead, we flush the top-most result of the
+    // addition downwards, making use of the += semantic that is assumed
+    // for all computations.
+    // Note the explicit flushing down of the result name is required in
+    // case the top-level summation node has a different name than the
+    // intermediate nodes.
+    ComputeSelection selection = ComputeSelection::Both;
+    if (!node.left().leaf()) {
+      selection &= ~ComputeSelection::Left;
+    }
+    if (!node.right().leaf()) {
+      selection &= ~ComputeSelection::Right;
+    }
+
+    node->set_compute_selection(selection);
+  }
+
+  void prune_redundant_intermediate(ExportNode<T> &node) {
+    if (node.root()) {
+      return;
+    }
+    if (node.parent()->compute_selection() == ComputeSelection::Both) {
+      return;
+    }
+
+    const bool is_left = node.parent().left()->id() == node->id();
+    const bool computes_left =
+        (node.parent()->compute_selection() & ComputeSelection::Left) ==
+        ComputeSelection::Left;
+    const bool computes_right =
+        (node.parent()->compute_selection() & ComputeSelection::Right) ==
+        ComputeSelection::Right;
+
+    if (is_left && !computes_left || !is_left && !computes_right) {
+      // The current node is not computed as an independent result. Hence, the
+      // result for the current node is not needed and we can simply overwrite
+      // it with the parent's result (to prune the existence of the redundant
+      // intermediate on node)
+      node->set_expr(node.parent()->expr());
     }
   }
 
@@ -922,16 +1020,27 @@ void export_groups(Range groups, Generator<Context> &generator, Context ctx) {
 
 /// @param expr The expression to transform
 /// @returns The corresponding ExportNode tree
+/// @note Prefer the ResultExpr overload below: the bare-ExprPtr path goes
+///       through binarize(ExprPtr), which derives the tree head's bra/ket
+///       layout from external slot positions in the source factors (can
+///       yield an unconventional split). The export pass downstream of this
+///       call reads index slots only for code-gen and does not depend on the
+///       head's bra/ket convention, so the deprecation warning is suppressed
+///       here.
 template <typename NodeData = ExportExpr>
-ExportNode<NodeData> to_export_tree(const ExprPtr &expr) {
-  return binarize<NodeData>(expr);
+ExportNode<NodeData> to_export_tree(const ExprPtr &expr,
+                                    bool retain_braket = false) {
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  return binarize<NodeData>(expr, {}, {.merge_indices = !retain_braket});
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 }
 
 /// @param expr The expression to transform
 /// @returns The corresponding ExportNode tree
 template <typename NodeData = ExportExpr>
-ExportNode<NodeData> to_export_tree(const ResultExpr &expr) {
-  return binarize<NodeData>(expr);
+ExportNode<NodeData> to_export_tree(const ResultExpr &expr,
+                                    bool retain_braket = false) {
+  return binarize<NodeData>(expr, {.merge_indices = !retain_braket});
 }
 
 }  // namespace sequant

@@ -24,8 +24,6 @@
 #include <utility>
 #include <vector>
 
-#include <range/v3/all.hpp>
-
 namespace Catch {
 template <>
 struct StringMaker<sequant::io::serialization::SerializationError> {
@@ -189,10 +187,16 @@ TEST_CASE("serialization", "[serialization]") {
       auto expr1 = deserialize<ExprPtr>(L"t{a1;i1}:A");
       auto expr2 = deserialize<ExprPtr>(L"t{a1;i1}:S-C");
       auto expr3 = deserialize<ExprPtr>(L"t{a1;i1}:N-S-N");
+      auto expr4 = deserialize<ExprPtr>(L"t{a1;i1}:N-H-N");
+      auto expr5 = deserialize<ExprPtr>(L"t{a1;i1}:N-A-N");
+      auto expr6 = deserialize<ExprPtr>(L"t{a1;i1}:N-N-N");
 
       const Tensor& t1 = expr1->as<Tensor>();
       const Tensor& t2 = expr2->as<Tensor>();
       const Tensor& t3 = expr3->as<Tensor>();
+      const Tensor& t4 = expr4->as<Tensor>();
+      const Tensor& t5 = expr5->as<Tensor>();
+      const Tensor& t6 = expr6->as<Tensor>();
 
       REQUIRE(t1.symmetry() == Symmetry::Antisymm);
 
@@ -202,6 +206,10 @@ TEST_CASE("serialization", "[serialization]") {
       REQUIRE(t3.symmetry() == Symmetry::Nonsymm);
       REQUIRE(t3.braket_symmetry() == BraKetSymmetry::Symm);
       REQUIRE(t3.column_symmetry() == ColumnSymmetry::Nonsymm);
+
+      REQUIRE(t4.hermiticity() == Hermiticity::Hermitian);
+      REQUIRE(t5.hermiticity() == Hermiticity::AntiHermitian);
+      REQUIRE(t6.hermiticity() == Hermiticity::NonHermitian);
     }
 
     SECTION("NormalOperator") {
@@ -279,6 +287,56 @@ TEST_CASE("serialization", "[serialization]") {
       REQUIRE(deserialize<ExprPtr>(L"b^*")->is<Variable>());
       REQUIRE(deserialize<ExprPtr>(L"b^*")->as<Variable>().conjugated());
       REQUIRE(deserialize<ExprPtr>(L"b^*")->as<Variable>().label() == L"b");
+    }
+
+    SECTION("Power") {
+      auto half = deserialize<ExprPtr>(L"2^(1/2)");
+      REQUIRE(half->is<Power>());
+      REQUIRE(half->as<Power>().base()->is<Constant>());
+      REQUIRE(half->as<Power>().base()->as<Constant>().value() == rational{2});
+      REQUIRE(half->as<Power>().exponent() == rational{1, 2});
+
+      auto x_square = deserialize<ExprPtr>(L"x^(2)");
+      REQUIRE(x_square->is<Power>());
+      REQUIRE(x_square->as<Power>().base()->is<Variable>());
+      REQUIRE(x_square->as<Power>().base()->as<Variable>().label() == L"x");
+      REQUIRE(x_square->as<Power>().exponent() == rational{2});
+
+      // whitespace
+      REQUIRE(deserialize<ExprPtr>(L"x ^ ( 1/2 )") ==
+              deserialize<ExprPtr>(L"x^(1/2)"));
+
+      // Power composes inside Products
+      auto prod = deserialize<ExprPtr>(L"3 * x^(1/2) * t{i1;a1}");
+      REQUIRE(prod->is<Product>());
+      REQUIRE(prod->as<Product>().scalar() == rational{3});
+      REQUIRE(prod->as<Product>().factor(0)->is<Power>());
+      REQUIRE(prod->as<Product>().factor(1)->is<Tensor>());
+
+      auto neg_half = ex<Power>(ex<Constant>(rational{-2}), rational{1, 2});
+      const auto neg_half_str = L"(-2)^(1/2)";
+      REQUIRE(serialize(neg_half) == neg_half_str);
+      REQUIRE(deserialize<ExprPtr>(L"(-2)^(1/2)") == neg_half);
+
+      auto frac_half = ex<Power>(ex<Constant>(rational{3, 2}), rational{1, 2});
+      const auto frac_half_str = L"(3/2)^(1/2)";
+      REQUIRE(serialize(frac_half) == frac_half_str);
+      REQUIRE(deserialize<ExprPtr>(L"(3/2)^(1/2)") == frac_half);
+
+      // conjugated Variable base must be parenthesized
+      auto conj_var = ex<Variable>(L"x");
+      conj_var->as<Variable>().conjugate();
+      auto pw_conj_var = ex<Power>(conj_var, rational{2});
+      const auto pw_conj_var_str = L"(x^*)^(2)";
+      REQUIRE(serialize(pw_conj_var) == pw_conj_var_str);
+      REQUIRE(deserialize<ExprPtr>(pw_conj_var_str) == pw_conj_var);
+
+      // conjugated power with conjugated Variable base: ((x^*)^(2))^*
+      auto pw_conj_var_conj = pw_conj_var->clone();
+      pw_conj_var_conj->as<Power>().conjugate();
+      const auto pw_conj_var_conj_str = L"((x^*)^(2))^*";
+      REQUIRE(serialize(pw_conj_var_conj) == pw_conj_var_conj_str);
+      REQUIRE(deserialize<ExprPtr>(pw_conj_var_conj_str) == pw_conj_var_conj);
     }
 
     SECTION("Product") {

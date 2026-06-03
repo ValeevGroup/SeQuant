@@ -3,6 +3,8 @@
 
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/export/generator.hpp>
+#include <SeQuant/core/export/reordering_context.hpp>
+#include <SeQuant/core/export/utils.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
@@ -19,12 +21,13 @@
 namespace sequant {
 
 /// Context class for the JuliaTensorOperationsGenerator
-class JuliaTensorOperationsGeneratorContext : public ExportContext {
+class JuliaTensorOperationsGeneratorContext : public ReorderingContext {
  public:
   using TagMap = std::map<IndexSpace, std::string>;
   using DimMap = std::map<IndexSpace, std::string>;
 
-  JuliaTensorOperationsGeneratorContext() = default;
+  JuliaTensorOperationsGeneratorContext()
+      : ReorderingContext(MemoryLayout::ColumnMajor){};
   ~JuliaTensorOperationsGeneratorContext() = default;
   JuliaTensorOperationsGeneratorContext(TagMap index_tags, DimMap index_dims);
 
@@ -122,6 +125,23 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
     }
 
     return sstream.str();
+  }
+
+  std::string represent(const Power &power, const Context &ctx) const override {
+    const ExprPtr &base = power.base();
+    std::string base_str = to_julia_expr(*base, ctx);
+    if (base->is<Variable>() && base->as<Variable>().conjugated()) {
+      base_str = this->wrap_conj(std::move(base_str));
+    }
+    auto s = detail::format_power_base(base, std::move(base_str)) + "^" +
+             detail::format_power_exponent(power.exponent(),
+                                           /*double_slash*/ true);
+    if (power.conjugated()) s = this->wrap_conj(std::move(s));
+    return s;
+  }
+
+  std::string wrap_conj(std::string s) const override {
+    return "conj(" + std::move(s) + ")";
   }
 
   void create(const Tensor &tensor, bool zero_init,
@@ -271,6 +291,8 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
       return represent(expr.as<Variable>(), ctx);
     } else if (expr.is<Constant>()) {
       return represent(expr.as<Constant>(), ctx);
+    } else if (expr.is<Power>()) {
+      return represent(expr.as<Power>(), ctx);
     } else if (expr.is<Product>()) {
       const Product &product = expr.as<Product>();
       std::string repr;

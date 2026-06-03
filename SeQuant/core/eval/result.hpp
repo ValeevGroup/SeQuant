@@ -10,11 +10,16 @@
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
-#include <range/v3/numeric.hpp>
-#include <range/v3/view.hpp>
+#include <range/v3/range/conversion.hpp>
+#include <range/v3/view/intersperse.hpp>
+#include <range/v3/view/iota.hpp>
+#include <range/v3/view/join.hpp>
+#include <range/v3/view/transform.hpp>
 
 #include <any>
+#include <cstdint>
 #include <memory>
+#include <string>
 #include <utility>
 
 namespace sequant {
@@ -134,10 +139,36 @@ std::string ords_to_annot(RngOfOrdinals const& ords) {
          ranges::to<std::string>;
 }
 
+/// Maps an integer annot value to a short symbolic name (i0, i1, ...).
+/// BTAS/TAPP annot vectors carry index hashes rather than small ordinals,
+/// so raw values look like 6073936079388559375. The mapping is process-
+/// global and monotonic so the same hash gets the same label across log
+/// lines, which makes a trace easy to follow.
+inline std::string annot_label(std::int64_t key) noexcept {
+  static container::unordered_map<std::int64_t, std::string> labels;
+  static std::size_t next_id = 0;
+  if (auto it = labels.find(key); it != labels.end()) return it->second;
+  auto name = "i" + std::to_string(next_id++);
+  return labels.emplace(key, std::move(name)).first->second;
+}
+
+template <typename RngOfOrdinals>
+std::string ords_to_labels(RngOfOrdinals const& ords) {
+  using ranges::views::intersperse;
+  using ranges::views::join;
+  using ranges::views::transform;
+  return ords | transform([](auto x) {
+           return annot_label(static_cast<std::int64_t>(x));
+         }) |
+         intersperse(std::string{","}) | join | ranges::to<std::string>;
+}
+
 template <typename... Args>
-inline void log_result(Args const&... args) noexcept {
+inline void log_result([[maybe_unused]] Args const&... args) noexcept {
+#ifdef SEQUANT_EVAL_TRACE
   auto& l = Logger::instance();
   if (l.eval.level > 1) write_log(l, args...);
+#endif
 }
 
 template <typename... Args>
@@ -244,6 +275,59 @@ class Result {
   ///
   [[nodiscard]] virtual ResultPtr permute(
       std::array<std::any, 2> const&) const = 0;
+
+  ///
+  /// \brief Take the adjoint (complex-conjugate transpose) of this result.
+  ///
+  /// Used to evaluate the EvalOp::Adjoint IR node — the unary op that holds a
+  /// bare-label operand and emits T† = conj(T) permuted into the adjoint slot
+  /// order. \p ann is [operand_annot, result_annot] (bra/ket swapped relative
+  /// to the operand); backends with a real numeric type implement this as a
+  /// pure permutation (conj is a no-op) and complex backends apply conj as
+  /// well. Not a pure virtual: only tensor-backed results need it; the
+  /// default throws. Mirrors the slice_mode precedent.
+  ///
+  [[nodiscard]] virtual ResultPtr adjoint(
+      std::array<std::any, 2> const& /*ann*/) const {
+    throw unimplemented_method("adjoint");
+  }
+
+  ///
+  /// \brief Restrict this result to a contiguous *element* range of one mode.
+  ///
+  /// Keeps elements `[elem_lo, elem_hi)` of mode \p mode and all elements of
+  /// every other mode. Element semantics keep this backend-neutral (no notion
+  /// of tiles); a tiled backend may require `[elem_lo, elem_hi)` to fall on
+  /// tile boundaries (mode_batches() returns such ranges). Used to evaluate a
+  /// tensor network in batches over a contracted index (see
+  /// make_batched_custom_evaluator): slicing every leaf that carries the index,
+  /// evaluating, and summing reproduces the full contraction. Not a pure
+  /// virtual: only tensor-backed results need it; the default throws.
+  ///
+  [[nodiscard]] virtual ResultPtr slice_mode(std::size_t /*mode*/,
+                                             std::size_t /*elem_lo*/,
+                                             std::size_t /*elem_hi*/) const {
+    throw unimplemented_method("slice_mode");
+  }
+
+  ///
+  /// \brief Partition mode \p mode into contiguous element-range batches, each
+  /// covering about \p target_batch_size elements.
+  ///
+  /// \return a list of `[elem_lo, elem_hi)` element ranges that tile the mode's
+  ///         full extent without overlap or gap. The partition is chosen by the
+  ///         backend at its storage granularity: a tiled backend snaps batch
+  ///         boundaries to tile boundaries (so batches are uneven and each
+  ///         covers at least \p target_batch_size elements where possible), a
+  ///         dense backend may split evenly. A single returned batch means the
+  ///         mode is not worth (or cannot be) split. Backend-neutral: the
+  ///         target is expressed in elements, not tiles. Default: not
+  ///         supported.
+  ///
+  [[nodiscard]] virtual container::svector<std::pair<std::size_t, std::size_t>>
+  mode_batches(std::size_t /*mode*/, std::size_t /*target_batch_size*/) const {
+    throw unimplemented_method("mode_batches");
+  }
 
   ///
   /// \brief Add other Result object into this object.

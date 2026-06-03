@@ -8,6 +8,9 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+
+#include <range/v3/view/transform.hpp>
+
 #include <chrono>
 #include <fstream>
 #include <iomanip>

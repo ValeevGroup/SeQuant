@@ -22,11 +22,13 @@ void OpRegistry::validate_op(const std::wstring& op) const {
 
 OpRegistry& OpRegistry::operator=(const OpRegistry& other) {
   ops_ = other.ops_;
+  herm_overrides_ = other.herm_overrides_;
   return *this;
 }
 
 OpRegistry& OpRegistry::operator=(OpRegistry&& other) noexcept {
   ops_ = std::move(other.ops_);
+  herm_overrides_ = std::move(other.herm_overrides_);
   return *this;
 }
 
@@ -36,12 +38,31 @@ OpRegistry& OpRegistry::add(const std::wstring& op, OpClass action) {
   return *this;
 }
 
+OpRegistry& OpRegistry::add(const std::wstring& op, OpClass action,
+                            Hermiticity hermiticity) {
+  this->validate_op(op);
+  ops_->emplace(op, action);
+  herm_overrides_->insert_or_assign(op, hermiticity);
+  return *this;
+}
+
+OpRegistry& OpRegistry::set_hermiticity(const std::wstring& op,
+                                        Hermiticity hermiticity) {
+  if (!this->contains(op)) {
+    throw Exception("mbpt::OpRegistry::set_hermiticity: operator " +
+                    toUtf8(op) + " does not exist in registry");
+  }
+  herm_overrides_->insert_or_assign(op, hermiticity);
+  return *this;
+}
+
 OpRegistry& OpRegistry::remove(const std::wstring& op) {
   if (!this->contains(op)) {
     throw Exception("mbpt::OpRegistry::remove: operator " + toUtf8(op) +
                     " does not exist in registry");
   }
   ops_->erase(op);
+  herm_overrides_->erase(op);
   return *this;
 }
 
@@ -58,9 +79,18 @@ OpClass OpRegistry::to_class(const std::wstring& op) const {
   return it->second;
 }
 
+Hermiticity OpRegistry::hermiticity(const std::wstring& op) const {
+  if (auto it = herm_overrides_->find(op); it != herm_overrides_->end())
+    return it->second;
+  return default_hermiticity(this->to_class(op));
+}
+
 OpRegistry OpRegistry::clone() const {
   OpRegistry result(*this);
   result.ops_ = std::make_shared<container::map<std::wstring, OpClass>>(*ops_);
+  result.herm_overrides_ =
+      std::make_shared<container::map<std::wstring, Hermiticity>>(
+          *herm_overrides_);
   return result;
 }
 

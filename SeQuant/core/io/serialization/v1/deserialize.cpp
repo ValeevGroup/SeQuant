@@ -38,6 +38,7 @@ namespace parse {
 struct NumberRule;
 struct VariableRule;
 struct TensorRule;
+struct PowerRule;
 struct ProductRule;
 struct SumRule;
 struct ExprRule;
@@ -51,6 +52,7 @@ struct SymmetrySpecRule;
 x3::rule<NumberRule, ast::Number> number{"Number"};
 x3::rule<VariableRule, ast::Variable> variable{"Variable"};
 x3::rule<TensorRule, ast::Tensor> tensor{"Tensor"};
+x3::rule<PowerRule, ast::Power> power{"Power"};
 
 // Expression structure
 x3::rule<ProductRule, ast::Product> product{"Product"};
@@ -116,9 +118,16 @@ auto tensor_def       = x3::lexeme[
                             name >> x3::skip[index_groups] >> -(symmetry_spec)
                         ];
 
+// TODO(power): per comments on PR #513, promote `^` to a binary operator (with higher precedence than *) and then reject unsupported cases while traversing the AST.
+// Two forms are accepted: b^(e) and (b^(e))^*
+auto power_core       = (('(' >> (number | variable) >> ')') | number | variable)
+                        >> x3::lit(L"^") >> '(' >> number >> ')';
+auto power_def        = (power_core >> x3::attr(false))
+                        | ('(' >> power_core >> ')' >> x3::lit(L"^*") >> x3::attr(true));
+
 auto nullary          = number | tensor | variable;
 
-auto grouped          = '(' > sum > ')' | nullary;
+auto grouped          = power | '(' > sum > ')' | nullary;
 
 auto product_def      = grouped % -x3::lit('*');
 
@@ -134,7 +143,8 @@ auto resultExpr_def       = (tensor | variable) > (L'=' | x3::lit(L"->")) >> exp
 // clang-format on
 
 BOOST_SPIRIT_DEFINE(name, number, variable, index_label, index, index_groups,
-                    tensor, product, sum, expr, symmetry_spec, resultExpr);
+                    tensor, power, product, sum, expr, symmetry_spec,
+                    resultExpr);
 
 struct position_cache_tag;
 struct error_handler_tag;
@@ -167,6 +177,7 @@ struct error_handler {
 struct NumberRule : helpers::annotate_position, helpers::error_handler {};
 struct VariableRule : helpers::annotate_position, helpers::error_handler {};
 struct TensorRule : helpers::annotate_position, helpers::error_handler {};
+struct PowerRule : helpers::annotate_position, helpers::error_handler {};
 struct ProductRule : helpers::annotate_position, helpers::error_handler {};
 struct SumRule : helpers::annotate_position, helpers::error_handler {};
 struct ExprRule : helpers::annotate_position, helpers::error_handler {};

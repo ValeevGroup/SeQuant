@@ -8,8 +8,6 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
-#include <range/v3/all.hpp>
-
 #include <cstddef>
 #include <string>
 #include <utility>
@@ -145,6 +143,24 @@ std::wstring to_string(const Variable& variable, const SerializationOptions&) {
   return std::wstring(variable.label()) + (variable.conjugated() ? L"^*" : L"");
 }
 
+std::wstring to_string(const Power& power,
+                       const SerializationOptions& options) {
+  std::wstring core;
+  const auto& base = power.base();
+  // parenthesize bases for Constants and conjugated Variables
+  const bool parenthesize_base =
+      base->is<Constant>() ||
+      (base->is<Variable>() && base->as<Variable>().conjugated());
+  if (parenthesize_base) core += L"(";
+  core += v1::to_string(*base, options);
+  if (parenthesize_base) core += L")";
+  core += L"^(";
+  core += serialize_scalar(Constant::scalar_type{power.exponent()}, options);
+  core += L")";
+  if (power.conjugated()) return L"(" + std::move(core) + L")^*";
+  return core;
+}
+
 std::wstring to_string(Product const& prod,
                        const SerializationOptions& options) {
   std::wstring serialized;
@@ -231,6 +247,8 @@ std::wstring to_string(const Expr& expr, const SerializationOptions& options) {
     return details::to_string(expr.as<Constant>(), options);
   else if (expr.is<Variable>())
     return details::to_string(expr.as<Variable>(), options);
+  else if (expr.is<Power>())
+    return details::to_string(expr.as<Power>(), options);
   else
     throw Exception("Unsupported expr type for serialize!");
 }
@@ -290,6 +308,11 @@ std::wstring to_string(AbstractTensor const& tensor,
   }
 
   return serialized;
+}
+
+std::wstring to_string(Tensor const& tensor,
+                       const SerializationOptions& options) {
+  return v1::to_string(static_cast<const Expr&>(tensor), options);
 }
 
 template <Statistics S>

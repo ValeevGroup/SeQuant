@@ -16,7 +16,7 @@
 #include <iterator>
 #include <vector>
 
-#include <range/v3/all.hpp>
+#include <range/v3/iterator/basic_iterator.hpp>
 
 TEST_CASE("iterators", "[elements]") {
   using namespace sequant;

@@ -17,6 +17,13 @@
 #include <tiledarray.h>
 #include <boost/regex.hpp>
 
+#include <range/v3/algorithm/contains.hpp>
+#include <range/v3/view/concat.hpp>
+#include <range/v3/view/intersperse.hpp>
+#include <range/v3/view/join.hpp>
+#include <range/v3/view/transform.hpp>
+
+#include <cmath>
 #include <cstdlib>
 #include <string>
 #include <vector>
@@ -94,7 +101,12 @@ auto to_ta_node(sequant::FullBinaryNode<sequant::EvalExpr> node) {
 }
 
 auto eval_node(sequant::ExprPtr const& expr) {
+  // sequant::binarize(ExprPtr) is deprecated for caller-visible head
+  // construction; this helper exists for legacy test sections that don't
+  // depend on the head's bra/ket layout.
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   return to_ta_node(sequant::binarize(expr));
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 }
 
 auto eval_node(sequant::ResultExpr const& res) {
@@ -170,10 +182,20 @@ class rand_tensor_yield {
   size_t nocc_;
   size_t nvirt_;
   size_t naux_;
+  // max tile size along each mode; the default (~0) makes a single tile per
+  // mode (the original behavior). Set smaller to produce multi-tile arrays.
+  size_t max_tile_ = ~size_t{0};
   mutable sequant::container::map<std::wstring, sequant::ResultPtr>
       label_to_er_;
 
  public:
+  /// Produce arrays whose modes are tiled in blocks of at most \p n.
+  /// \p n must be positive (0 would make the tiling loop in make_tr1 spin).
+  void set_max_tile(size_t n) {
+    REQUIRE(n > 0);
+    max_tile_ = n;
+  }
+
   using array_type = TA::DistArray<TA::Tensor<NumericT>, TAPolicyT>;
   using array_tot_type =
       TA::DistArray<TA::Tensor<TA::Tensor<NumericT>>, TAPolicyT>;
@@ -197,12 +219,34 @@ class rand_tensor_yield {
         .first->second;
   }
 
+  sequant::ResultPtr operator()(sequant::Power const& pw) const {
+    using result_t = sequant::ResultScalar<NumericT>;
+
+    // evaluate base
+    NumericT base_val;
+    if (pw.base()->template is<sequant::Constant>()) {
+      base_val = pw.base()
+                     ->template as<sequant::Constant>()
+                     .template value<NumericT>();
+    } else {
+      SEQUANT_ASSERT(pw.base()->template is<sequant::Variable>());
+      auto base_result = (*this)(pw.base()->template as<sequant::Variable>());
+      base_val = base_result->template get<NumericT>();
+    }
+
+    auto exp_val = static_cast<double>(pw.exponent());
+    return sequant::eval_result<result_t>(
+        static_cast<NumericT>(std::pow(base_val, exp_val)));
+  }
+
   sequant::ResultPtr operator()(
       sequant::meta::can_evaluate auto const& node) const {
     using namespace sequant;
     if (node->is_tensor()) return (*this)(node->as_tensor());
 
     if (node->is_variable()) return (*this)(node->as_variable());
+
+    if (node->is_power()) return (*this)(node->as_power());
 
     SEQUANT_ASSERT(node->is_constant());
 
@@ -242,10 +286,16 @@ class rand_tensor_yield {
 
     auto const outer_extent = make_extents(nested.outer);
 
-    auto const outer_tr = [&outer_extent]() {
+    auto const outer_tr = [&outer_extent, this]() {
+      auto make_tr1 = [this](size_t e) {
+        container::svector<size_t> b;
+        for (size_t x = 0; x < e; x += max_tile_) b.push_back(x);
+        b.push_back(e);
+        return TA::TiledRange1(b.begin(), b.end());
+      };
       container::vector<TA::TiledRange1> tr1s;
       tr1s.reserve(outer_extent.size());
-      for (auto e : outer_extent) tr1s.emplace_back(TA::TiledRange1(0, e));
+      for (auto e : outer_extent) tr1s.emplace_back(make_tr1(e));
       return TA::TiledRange(tr1s.begin(), tr1s.end());
     }();
 
@@ -350,6 +400,112 @@ bool equal_tarrays(Array const& arr1, Array const& arr2) {
 }  // namespace
 
 TEST_CASE("eval_with_tiledarray", "[eval]") {
+  // Reproducer for the mpqc4 cck real-field NaN regression. The eval-graph
+  // head's bra/ket split is purely positional: each external index ends up in
+  // whichever slot (bra or ket) it occupied in its source tensor, summed
+  // across the term. Two orientations of a tensor that are equivalent under
+  // bra<->ket-swap (Symm braket_symmetry) produce different head bra_rank,
+  // which breaks downstream code (e.g. mpqc's jacobi_update) that assumes a
+  // conventional 2:2 (vir,vir;occ,occ) layout for a CCSD T2 residual head.
+  // Bug is independent of scalar Field — fires under both Conjugate and Symm
+  // whenever the canonical orientation puts an external on the "wrong" side.
+  SECTION("eval-graph head bra/ket split is positional, not external-aware") {
+    using sequant::deserialize;
+    using sequant::EvalExprTA;
+    using sequant::ExprPtr;
+
+    // The test expressions below put an internal index (e.g. a_3) in the bra
+    // of two factors (g.bra and t.bra), which violates the default-context
+    // strict bra↔ket-symmetry policy (each internal must appear at most once
+    // per side under Conjugate). Disable the policy for this scope; we are
+    // probing the eval-graph head's bra/ket layout, not the canonicalizer's
+    // covariance assumptions.
+    auto ctx_resetter = sequant::set_scoped_default_context(
+        sequant::Context{sequant::get_default_context()}.set(
+            sequant::AssertStrictBraKetSymmetry::No));
+
+    auto report = [](sequant::ExprPtr const& e, std::string const& label) {
+      auto node = eval_node(e);
+      auto const& head = node->as_tensor();
+      std::wstring head_str = sequant::to_latex(head);
+      std::string head_str8{head_str.begin(), head_str.end()};
+      INFO(label + " head: " + head_str8 +
+           "  bra_rank=" + std::to_string(head.bra_rank()) +
+           "  ket_rank=" + std::to_string(head.ket_rank()));
+      return std::make_pair(head.bra_rank(), head.ket_rank());
+    };
+
+    // Representative SF R2 residual term (h2o-cck-2-631g-pvdz) with externals
+    // {a_1, a_2, i_1, i_2}. For a CCSD T2 the head ought to be I{a_1,a_2; i_1,
+    // i_2} (vir,vir;occ,occ) so downstream Jacobi-style updates index orbital
+    // energies correctly.
+
+    // (A) g written with the occ external i_2 in its bra slot: regardless of
+    // braket_symmetry, the head ends up I{i_2,a_1,a_2; i_1} — head bra/ket is
+    // assigned by external SLOT, not by space.
+    auto expr_bra_external_symm = deserialize(
+        L"2 g{i_2,a_3;i_3,i_4}:N-S-S * t{a_3;i_3}:N-N-S "
+        L"* t{a_1,a_2;i_1,i_4}:N-N-S");
+    REQUIRE(expr_bra_external_symm);
+    auto [br_symm, kr_symm] =
+        report(expr_bra_external_symm, "g{i_2,a_3;...}:N-S-S");
+
+    auto expr_bra_external_conj = deserialize(
+        L"2 g{i_2,a_3;i_3,i_4}:N-C-S * t{a_3;i_3}:N-N-S "
+        L"* t{a_1,a_2;i_1,i_4}:N-N-S");
+    REQUIRE(expr_bra_external_conj);
+    auto [br_conj, kr_conj] =
+        report(expr_bra_external_conj, "g{i_2,a_3;...}:N-C-S");
+
+    // (B) Same expression with g's bra/ket pre-swapped (mathematically
+    // equivalent under Symm braket_symmetry). External i_2 now lives in g's
+    // ket slot; the head comes out I{a_1,a_2; i_2,i_1} — the conventional 2:2
+    // layout that mpqc's downstream code expects.
+    auto expr_ket_external_swap = deserialize(
+        L"2 g{i_3,i_4;i_2,a_3}:N-S-S * t{a_3;i_3}:N-N-S "
+        L"* t{a_1,a_2;i_1,i_4}:N-N-S");
+    REQUIRE(expr_ket_external_swap);
+    auto [br_swap, kr_swap] =
+        report(expr_ket_external_swap, "g{i_3,i_4;i_2,a_3}:N-S-S (pre-swap)");
+
+    // (C) Caller-supplied head layout via ResultExpr: the right shape of the
+    // public API for this. The caller writes the LHS with the bra/ket layout
+    // it wants the head to have; binarize(ResultExpr) at eval_expr.hpp:435
+    // overwrites the eval-tree root's tensor with res.result_as_tensor(),
+    // making the IR's positional choice irrelevant.
+    auto res_explicit_layout = sequant::deserialize<sequant::ResultExpr>(
+        L"R2{a_1,a_2;i_1,i_2}:N-N-S = "
+        L"2 g{i_2,a_3;i_3,i_4}:N-S-S * t{a_3;i_3}:N-N-S "
+        L"* t{a_1,a_2;i_1,i_4}:N-N-S");
+    auto node_explicit = eval_node(res_explicit_layout);
+    auto const& head_explicit = node_explicit->as_tensor();
+    std::wstring head_explicit_str = sequant::to_latex(head_explicit);
+    std::string head_explicit_str8{head_explicit_str.begin(),
+                                   head_explicit_str.end()};
+    INFO("ResultExpr R2{a_1,a_2;i_1,i_2} head: " + head_explicit_str8 +
+         "  bra_rank=" + std::to_string(head_explicit.bra_rank()) +
+         "  ket_rank=" + std::to_string(head_explicit.ket_rank()));
+
+    // Document the current behavior:
+    // (A) same 3:1 split regardless of Symm vs Conjugate — proves the bug is
+    // positional, independent of scalar Field.
+    CHECK(br_symm == 3);
+    CHECK(kr_symm == 1);
+    CHECK(br_conj == 3);
+    CHECK(kr_conj == 1);
+    // (B) the orientation mpqc's master baseline relied on; head is 2:2.
+    CHECK(br_swap == 2);
+    CHECK(kr_swap == 2);
+    // (C) ResultExpr API gives the caller exact control; head matches the LHS
+    // verbatim no matter how the RHS factors are oriented internally.
+    CHECK(head_explicit.bra_rank() == 2);
+    CHECK(head_explicit.ket_rank() == 2);
+    CHECK(head_explicit.bra().at(0).label() == L"a_1");
+    CHECK(head_explicit.bra().at(1).label() == L"a_2");
+    CHECK(head_explicit.ket().at(0).label() == L"i_1");
+    CHECK(head_explicit.ket().at(1).label() == L"i_2");
+  }
+
   SECTION("real") {
     using ranges::views::transform;
     using sequant::EvalExprTA;
@@ -510,6 +666,67 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           1.5 * yield(L"f{i1;a1}")("i1,a1");
 
       REQUIRE(equal_tarrays(sum2_eval, sum2_man));
+    }
+
+    SECTION("power at leaves") {
+      using sequant::Constant;
+      using sequant::ex;
+      using sequant::Power;
+      using sequant::rational;
+      using sequant::Variable;
+
+      {
+        auto pw = ex<Power>(ex<Constant>(2), rational{1, 2});
+        auto t = parse_antisymm(L"t_{a1}^{i1}");
+        auto expr = pw * t;
+
+        auto eval1 = eval(expr, "i_1,a_1");
+
+        auto man1 = TArrayD{};
+        man1("i1,a1") = std::sqrt(2.0) * yield(L"t{a1;i1}")("a1,i1");
+        REQUIRE(equal_tarrays(eval1, man1));
+      }
+
+      {
+        auto pw = ex<Power>(ex<Variable>(L"α"), rational{2, 1});
+        auto f = parse_antisymm(L"f_{i1}^{a1}");
+        auto expr = pw * f;
+        auto eval1 = eval(expr, "i_1,a_1");
+
+        auto alpha_val = yield_d(L"α");
+        auto man1 = TArrayD{};
+        man1("i1,a1") = (alpha_val * alpha_val) * yield(L"f{i1;a1}")("i1,a1");
+        REQUIRE(equal_tarrays(eval1, man1));
+      }
+
+      {
+        auto pw = ex<Power>(ex<Constant>(2), rational{1, 2});
+        auto t = parse_antisymm(L"t_{a1}^{i1}");
+        auto alpha = ex<Variable>(L"α");
+        auto f = parse_antisymm(L"f_{i1}^{a1}");
+
+        auto expr = pw * t + alpha * f;
+
+        auto eval1 = eval(expr, "i_1,a_1");
+
+        auto man1 = TArrayD{};
+        man1("i1,a1") = std::sqrt(2.0) * yield(L"t{a1;i1}")("a1,i1") +
+                        yield_d(L"α") * yield(L"f{i1;a1}")("i1,a1");
+        REQUIRE(equal_tarrays(eval1, man1));
+      }
+
+      {
+        auto pw = ex<Power>(ex<Constant>(rational{1, 3}), rational{2, 1});
+        auto g = parse_antisymm(L"g_{i1, i2}^{a1, a2}");
+        auto expr = pw * g;
+
+        auto eval1 = eval(expr, "i_1,i_2,a_1,a_2");
+
+        auto man1 = TArrayD{};
+        man1("i1,i2,a1,a2") =
+            std::pow(1.0 / 3.0, 2.0) * yield(L"g{i1,i2;a1,a2}")("i1,i2,a1,a2");
+        REQUIRE(equal_tarrays(eval1, man1));
+      }
     }
 
     SECTION("Antisymmetrization") {
@@ -1063,5 +1280,288 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       }
       REQUIRE(result == Catch::Approx(ref));
     }
+  }
+}
+
+TEST_CASE("eval_custom_evaluator", "[eval]") {
+  using sequant::evaluate;
+  using sequant::ResultPtr;
+  using TA::TArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+  using cache_t = sequant::CacheManager<node_t>;
+
+  auto& world = TA::get_default_world();
+  const size_t nocc = 2, nvirt = 20;
+  auto yield_ = rand_tensor_yield<double, TA::DensePolicy>{world, nocc, nvirt};
+
+  // a multi-product expression: several non-leaf nodes in the eval tree.
+  auto const expr = sequant::deserialize<sequant::ExprPtr>(
+      L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}",
+      {.def_perm_symm = sequant::Symmetry::Antisymm});
+  std::string const target = "a_1,a_2,i_1,i_2";
+  auto const node = eval_node(expr);
+
+  // standard-scheme reference (no custom evaluator)
+  auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
+
+  SECTION("declining evaluator defers to the standard scheme") {
+    // A custom evaluator that always returns null is consulted at every
+    // non-leaf node and the standard scheme produces the result.
+    int consulted = 0;
+    auto cache = cache_t::empty();
+    cache.set_custom_evaluator(
+        [&consulted](node_t const&, cache_t&) -> ResultPtr {
+          ++consulted;
+          return nullptr;
+        });
+    auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
+    REQUIRE(equal_tarrays(res, ref));
+    REQUIRE(consulted > 1);  // multiple non-leaf nodes, all declined
+  }
+
+  SECTION("intercepting evaluator takes over a subtree") {
+    // A custom evaluator that takes over the first (root) node it is consulted
+    // on -- here by re-evaluating that subtree via the standard scheme on a
+    // scratch cache. The result must still match, and the non-null return must
+    // short-circuit the recursion, so the evaluator fires exactly once.
+    int consulted = 0;
+    auto cache = cache_t::empty();
+    cache.set_custom_evaluator(
+        [&consulted, &yield_](node_t const& n, cache_t&) -> ResultPtr {
+          ++consulted;
+          auto scratch = cache_t::empty();
+          return evaluate(n, yield_, scratch);
+        });
+    auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
+    REQUIRE(equal_tarrays(res, ref));
+    REQUIRE(consulted == 1);
+  }
+}
+
+TEST_CASE("eval_batch_axis", "[eval]") {
+  using sequant::batch_axis;
+  using sequant::contracted_indices;
+
+  auto node_of = [](std::wstring_view xpr) {
+    return eval_node(sequant::deserialize<sequant::ExprPtr>(xpr));
+  };
+
+  SECTION("single contracted index") {
+    // R_{a1}^{i1,i3} * f_{i3}^{i2} sums over i3.
+    auto const node = node_of(L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
+    auto const c = contracted_indices(node);
+    REQUIRE(c.size() == 1);
+    auto const axis = batch_axis(node);
+    REQUIRE(axis.has_value());
+    REQUIRE(axis.value() == c.front());
+  }
+
+  SECTION("two contracted indices") {
+    // g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4} sums over a1,a2.
+    auto const node = node_of(L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
+    auto const c = contracted_indices(node);
+    REQUIRE(c.size() == 2);
+    auto const axis = batch_axis(node);
+    REQUIRE(axis.has_value());
+    REQUIRE(ranges::contains(c, axis.value()));
+  }
+
+  SECTION("leaf has no contracted index") {
+    auto const node = node_of(L"f_{i1}^{a1}");
+    REQUIRE(contracted_indices(node).empty());
+    REQUIRE_FALSE(batch_axis(node).has_value());
+  }
+
+  SECTION("a sum is not a contraction") {
+    auto const node = node_of(L"f_{i1}^{a1} + t_{a1}^{i1}");
+    REQUIRE(contracted_indices(node).empty());
+    REQUIRE_FALSE(batch_axis(node).has_value());
+  }
+
+  SECTION("predicate scopes the batch axis") {
+    // contracts a1,a2 (unoccupied)
+    auto const node = node_of(L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
+    auto const c = contracted_indices(node);
+    REQUIRE(c.size() == 2);
+
+    // accept exactly one contracted index -> batch_axis returns it
+    auto const only_first = [&c](sequant::Index const& ix) {
+      return ix == c.front();
+    };
+    REQUIRE(batch_axis(node, only_first) == c.front());
+
+    // accept none -> nullopt
+    REQUIRE_FALSE(batch_axis(node, [](sequant::Index const&) {
+                    return false;
+                  }).has_value());
+
+    // scope batching to a specific IndexSpace
+    auto const unocc = c.front().space();
+    auto const in_unocc = [&unocc](sequant::Index const& ix) {
+      return ix.space() == unocc;
+    };
+    REQUIRE(batch_axis(node, in_unocc).has_value());
+
+    // a node whose only contracted index is in a different (occupied) space
+    auto const node_occ = node_of(L"R_{a1}^{i1,i3} * f_{i3}^{i2}");  // sums i3
+    REQUIRE_FALSE(batch_axis(node_occ, in_unocc).has_value());
+  }
+}
+
+TEST_CASE("eval_slice_array_over_mode", "[eval]") {
+  using sequant::slice_array_over_mode;
+  auto& world = TA::get_default_world();
+
+  // arr: a(2 tiles), b(3 tiles), c(1 tile); bb shares b's TiledRange1.
+  TA::TArrayD arr(world, TA::TiledRange{{0, 2, 4}, {0, 3, 6, 9}, {0, 5}});
+  TA::TArrayD bb(world, TA::TiledRange{{0, 3, 6, 9}, {0, 7}});
+  arr.fill_random();
+  bb.fill_random();
+  world.gop.fence();
+
+  SECTION("trange of the sliced mode") {
+    auto const s = slice_array_over_mode(arr, 1, 1, 3);  // b-tiles [1,3)
+    REQUIRE(s.trange().dim(1).tile_extent() == 2);
+    REQUIRE(s.trange().dim(0).tile_extent() ==
+            arr.trange().dim(0).tile_extent());
+    REQUIRE(s.trange().dim(2).tile_extent() ==
+            arr.trange().dim(2).tile_extent());
+  }
+
+  SECTION(
+      "blocked contraction over the sliced mode reconstructs the full one") {
+    // full contraction over b
+    TA::TArrayD full;
+    full("a,c,d") = arr("a,b,c") * bb("b,d");
+
+    // split b's 3 tiles into [0,1) and [1,3), contract each, sum
+    auto const a0 = slice_array_over_mode(arr, 1, 0, 1);
+    auto const a1 = slice_array_over_mode(arr, 1, 1, 3);
+    auto const b0 = slice_array_over_mode(bb, 0, 0, 1);
+    auto const b1 = slice_array_over_mode(bb, 0, 1, 3);
+    TA::TArrayD p0, p1, summed;
+    p0("a,c,d") = a0("a,b,c") * b0("b,d");
+    p1("a,c,d") = a1("a,b,c") * b1("b,d");
+    summed("a,c,d") = p0("a,c,d") + p1("a,c,d");
+
+    REQUIRE(equal_tarrays(summed, full));
+  }
+
+  SECTION("Result::slice_mode takes tile-aligned element bounds") {
+    // mode 1 (b) tiles {0,3,6,9}; element range [3,9) (tile-aligned, as
+    // mode_batches produces) corresponds to tiles [1,3).
+    sequant::ResultPtr const r =
+        sequant::eval_result<sequant::ResultTensorTA<TA::TArrayD>>(arr);
+    auto const via_result = r->slice_mode(1, 3, 9)->get<TA::TArrayD>();
+    auto const direct = slice_array_over_mode(arr, 1, 1, 3);
+    REQUIRE(equal_tarrays(via_result, direct));
+  }
+
+  SECTION("Result::mode_batches partitions a mode into element ranges") {
+    using batches_t = sequant::container::svector<std::pair<size_t, size_t>>;
+    sequant::ResultPtr const r =
+        sequant::eval_result<sequant::ResultTensorTA<TA::TArrayD>>(arr);
+    // mode 1 (b) has 3 tiles of 3 elements each (extent 9).
+    // (extra parens: compare as a single bool so Catch2 needn't stringify
+    // pairs) target larger than the extent -> a single batch (caller declines).
+    REQUIRE((r->mode_batches(1, 100) == batches_t{{0, 9}}));
+    // target 4: tile0 (3<4) + tile1 reaches 6>=4 -> [0,6); remainder [6,9).
+    REQUIRE((r->mode_batches(1, 4) == batches_t{{0, 6}, {6, 9}}));
+    // target 1: every tile is its own batch.
+    REQUIRE((r->mode_batches(1, 1) == batches_t{{0, 3}, {3, 6}, {6, 9}}));
+  }
+}
+
+TEST_CASE("eval_batched_custom_evaluator", "[eval]") {
+  using sequant::evaluate;
+  using sequant::make_batched_custom_evaluator;
+  using TA::TArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+  using cache_t = sequant::CacheManager<node_t>;
+
+  auto& world = TA::get_default_world();
+  // multi-tile arrays so batching over a contracted index actually engages:
+  // unoccupied extent 12 in tiles of <=4 -> 3 tiles.
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 12};
+  yield_.set_max_tile(4);
+
+  // contracts a1,a2 (unoccupied) -> batch axis is an unoccupied index (3 tiles)
+  auto const expr = sequant::deserialize<sequant::ExprPtr>(
+      L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
+  std::string const target = "i_1,i_2,i_3,i_4";
+  auto const node = eval_node(expr);
+
+  // Reference first, so yield_'s (random) leaf arrays are generated and cached;
+  // the batched evaluator below copies yield_ and thus reuses the same arrays.
+  auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
+
+  // Batched evaluation must reproduce the reference for any target batch size,
+  // since sum_K = sum_{batches} sum_{K in batch}. The batch axis is unoccupied
+  // (extent 12, tiles of 4 -> 3 tiles). target_batch_size is in *elements*:
+  // 100 -> 1 batch (no-op), 8 -> 2 batches ([0,8),[8,12)), 4 -> 3 batches, and
+  // 1 -> 3 batches (each tile its own batch).
+  for (std::size_t target_batch_size :
+       {std::size_t{100}, std::size_t{8}, std::size_t{4}, std::size_t{1}}) {
+    auto cache = cache_t::empty();
+    cache.set_custom_evaluator(
+        make_batched_custom_evaluator(yield_, target_batch_size));
+    auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
+    // batched summation reorders the contraction, so allow a looser FP margin
+    REQUIRE(equal_tarrays<Loose>(res, ref));
+  }
+}
+
+TEST_CASE("eval_batched_custom_evaluator_tot", "[eval]") {
+  using sequant::evaluate;
+  using sequant::make_batched_custom_evaluator;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+  using cache_t = sequant::CacheManager<node_t>;
+
+  auto& world = TA::get_default_world();
+  // Multi-tile the occupied space so the contracted occupied index i3 spans
+  // more than one tile and batching over it actually engages: extent 8 in
+  // tiles of <=4 -> 2 tiles. The inner (virtual) space is left single-tiled.
+  rand_tensor_yield<double> yield{world, /*nocc=*/8, /*nvirt=*/3};
+  yield.set_max_tile(4);
+
+  using ArrayToT = typename decltype(yield)::array_tot_type;
+
+  // ToT * ToT -> ToT (the same expression as the "tot" section above). The
+  // contracted indices are the occupied i3 (an *outer* mode of both leaves)
+  // and the inner virtual a4. Scoping the batch axis to the occupied space
+  // selects i3, so the batched partials slice ToT leaves over i3
+  // (slice_array_over_mode) and sum ToT partials (add_inplace) -- the two
+  // annotation-free ToT array operations that must emit an "outer;inner"
+  // annotation rather than a flat one (else DistArray's is_tot_index() trips).
+  auto const expr = sequant::deserialize<sequant::ExprPtr>(
+      L"I{a4<i2,i3>,a1<i1,i2>;i1,i2} * s{a2<i1,i2>;a4<i2,i3>}");
+  std::string const target = "i_2,i_1;a_1i_1i_2,a_2i_1i_2";
+  auto const node = eval_node(expr);
+
+  // Reference first (non-batched), so yield's random leaf arrays are generated
+  // and cached; the batched evaluator reuses the same arrays.
+  auto const ref = evaluate(node, target, yield)->get<ArrayToT>();
+
+  auto const occ =
+      sequant::get_default_context().index_space_registry()->retrieve(L"i");
+  auto accept_occ = [occ](sequant::Index const& ix) {
+    return ix.space() == occ;
+  };
+
+  // TA::norm2 is unsupported for tensor-of-tensor tiles, so compare via the
+  // self-dot of each array (a scalar norm^2); reordering the contraction over
+  // i3 must not change it.
+  auto self_dot = [](auto const& arr) {
+    return arr("i,j;a,b").dot(arr("i,j;a,b"));
+  };
+  auto const ref_dot = self_dot(ref);
+
+  for (std::size_t target_batch_size :
+       {std::size_t{100}, std::size_t{4}, std::size_t{1}}) {
+    auto cache = cache_t::empty();
+    cache.set_custom_evaluator(
+        make_batched_custom_evaluator(yield, target_batch_size, accept_occ));
+    auto const res = evaluate(node, target, yield, cache)->get<ArrayToT>();
+    REQUIRE(self_dot(res) == Catch::Approx(ref_dot));
   }
 }

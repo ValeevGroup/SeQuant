@@ -7,6 +7,8 @@
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <range/v3/algorithm/equal.hpp>
+#include <range/v3/algorithm/find.hpp>
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/enumerate.hpp>
 

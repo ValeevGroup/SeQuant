@@ -31,6 +31,11 @@ constexpr bool is_a_variable_v = meta::is_base_of_v<Variable, T>;
 template <typename T>
 constexpr bool is_variable_v = meta::is_same_v<Variable, T>;
 
+template <typename T>
+constexpr bool is_a_power_v = meta::is_base_of_v<Power, T>;
+template <typename T>
+constexpr bool is_power_v = meta::is_same_v<Power, T>;
+
 }  // namespace sequant
 
 #endif  // SEQUANT_EXPRESSIONS_TRAITS_HPP

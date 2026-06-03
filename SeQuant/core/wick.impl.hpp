@@ -16,6 +16,15 @@
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <range/v3/algorithm/contains.hpp>
+#include <range/v3/algorithm/find.hpp>
+#include <range/v3/algorithm/find_if.hpp>
+#include <range/v3/algorithm/for_each.hpp>
+#include <range/v3/algorithm/none_of.hpp>
+#include <range/v3/algorithm/sort.hpp>
+#include <range/v3/view/filter.hpp>
+#include <range/v3/view/transform.hpp>
+
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
 #include <execution>
 #endif

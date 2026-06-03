@@ -63,7 +63,7 @@ struct TreeNodeEqualityComparator {
       return false;
     }
 
-    if (lhs->is_constant() || lhs->is_variable()) {
+    if (lhs->is_constant() || lhs->is_variable() || lhs->is_power()) {
       if (*lhs->expr() != *rhs->expr()) {
         return false;
       }

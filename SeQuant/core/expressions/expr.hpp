@@ -11,7 +11,8 @@
 #include <memory>
 #include <optional>
 
-#include <range/v3/all.hpp>
+#include <range/v3/range/primitives.hpp>
+#include <range/v3/view/facade.hpp>
 
 namespace sequant {
 
@@ -171,6 +172,19 @@ class Expr : public std::enable_shared_from_this<Expr>,
   struct is_shared_ptr_of_expr_or_derived<std::shared_ptr<T>,
                                           std::enable_if_t<is_an_expr_v<T>>>
       : std::true_type {};
+
+  /// @brief Reports if this is a pure scalar (number-like) expression
+  /// @return true if this is a scalar
+  /// @note This is distinct from is_cnumber()
+  /// @warning this returns false for all leaves by default, hence must be
+  /// overridden for scalar leaf types.
+  virtual bool is_scalar() const {
+    if (is_atom()) return false;
+    for (auto it = begin_subexpr(); it != end_subexpr(); ++it) {
+      if (!(*it)->is_scalar()) return false;
+    }
+    return true;
+  }
 
   /// @brief Reports if this is a c-number
   /// (https://en.wikipedia.org/wiki/C-number), i.e. it commutes

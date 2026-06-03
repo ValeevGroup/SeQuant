@@ -12,15 +12,13 @@
 #include <SeQuant/core/optimize/common_subexpression_elimination.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/optimize/single_term.hpp>
+#include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <cstddef>
 #include <initializer_list>
 #include <memory>
-#include <stdexcept>
-
-#include <range/v3/all.hpp>
 
 sequant::ExprPtr extract(sequant::ExprPtr expr,
                          std::initializer_list<size_t> const& idxs) {
@@ -28,6 +26,15 @@ sequant::ExprPtr extract(sequant::ExprPtr expr,
   ExprPtr result = expr;
   for (auto s : idxs) result = result->at(s);
   return result;
+}
+
+// number of Tensor leaves in a (binarized) expression tree
+size_t count_tensor_leaves(sequant::ExprPtr const& expr) {
+  using namespace sequant;
+  size_t n = 0;
+  expr->visit([&n](auto const& x) { n += x->template is<Tensor>() ? 1 : 0; },
+              /*atoms_only=*/true);
+  return n;
 }
 
 TEST_CASE("optimize", "[optimize]") {
@@ -230,6 +237,63 @@ TEST_CASE("optimize", "[optimize]") {
 
       aux->approximate_size(aux_sz);
     }
+
+    SECTION("OptimizeOptions: cost metric and reorder knobs") {
+      auto const prod = parse_expr_antisymm(
+          L"g_{i3,i4}^{a3,a4} t_{a1,a2}^{i3,i4} t_{a3,a4}^{i1,i2}");
+
+      // both metrics must binarize the 3-tensor product into a binary tree:
+      // a 2-factor top product whose leaves are the 3 original tensors
+      for (auto opt_for : {OptFor::Flops, OptFor::Memsize}) {
+        CAPTURE(static_cast<int>(opt_for));
+        auto res = optimize(prod, OptimizeOptions{.opt_for = opt_for});
+        REQUIRE(res->is<Product>());
+        REQUIRE(res->as<Product>().factors().size() == 2);
+        REQUIRE(count_tensor_leaves(res) == 3);
+      }
+
+      // reorder knob: a two-summand sum is optimized either way, and the
+      // optimize() default (reorder) matches an explicit Reorder request
+      auto const sum = parse_expr_antisymm(
+          L"g_{i3,i4}^{a3,a4} t_{a1,a2}^{i3,i4} t_{a3,a4}^{i1,i2}"
+          L" + g_{i3,i4}^{a3,a4} t_{a3,a4}^{i1,i2} t_{a1}^{i3} t_{a2}^{i4}");
+      REQUIRE(sum->is<Sum>());
+
+      auto no_reorder =
+          optimize(sum, OptimizeOptions{.reorder = ReorderSum::NoReorder});
+      auto reorder =
+          optimize(sum, OptimizeOptions{.reorder = ReorderSum::Reorder});
+      REQUIRE(no_reorder->is<Sum>());
+      REQUIRE(reorder->is<Sum>());
+      REQUIRE(no_reorder->as<Sum>().size() == sum->as<Sum>().size());
+      REQUIRE(reorder->as<Sum>().size() == sum->as<Sum>().size());
+      // default options == explicit Reorder
+      REQUIRE(*optimize(sum) == *reorder);
+    }
+
+    SECTION("Parallel optimization of summands matches sequential") {
+      // exercise optimize_impl(..., parallel_outer=true): a multi-summand sum
+      // optimized concurrently must yield the same result as single-threaded.
+      auto const sum = parse_expr_antisymm(
+          L"g_{i3,i4}^{a3,a4} t_{a1,a2}^{i3,i4} t_{a3,a4}^{i1,i2}"
+          L" + g_{i3,i4}^{a3,a4} t_{a3,a4}^{i1,i2} t_{a1}^{i3} t_{a2}^{i4}"
+          L" + g_{i3,i4}^{a3,a4} t_{a1}^{i3} t_{a2}^{i4} t_{a3,a4}^{i1,i2}");
+      REQUIRE(sum->is<Sum>());
+      REQUIRE(sum->as<Sum>().size() > 1);
+
+      auto const nthreads_save = num_threads();
+      struct ThreadGuard {
+        int n;
+        ~ThreadGuard() { set_num_threads(n); }
+      } guard{nthreads_save};
+
+      set_num_threads(1);
+      auto const seq = optimize(sum);
+      set_num_threads(4);
+      auto const par = optimize(sum);
+
+      REQUIRE(*seq == *par);
+    }
   }
 
   SECTION("CSE") {
@@ -291,7 +355,13 @@ TEST_CASE("optimize", "[optimize]") {
                         .def_col_symm = ColumnSymmetry::Nonsymm}));
         }
 
-        auto binarizer = [](auto&& expr) { return binarize(expr); };
+        auto binarizer = [](auto&& expr) {
+          // CSE drives binarize() on subexpressions for hash-equivalence
+          // detection; positional head is irrelevant here.
+          SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+          return binarize(expr);
+          SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+        };
 
         if (force_hash_collisions) {
           // This code path makes all hashes be computed to be zero and hence
@@ -323,9 +393,150 @@ TEST_CASE("optimize", "[optimize]") {
     }
   }
 
+  SECTION("Single term optimization with CSE") {
+    auto ctx_resetter =
+        set_scoped_default_context(get_default_context().clone());
+    auto reg = get_default_context().mutable_index_space_registry();
+    mbpt::add_df_spaces(reg);
+    mbpt::add_pao_spaces(reg);
+    mbpt::add_ao_spaces(reg);
+    // i 10
+    // a 40
+    // μ̃ 50
+    // Κ 90
+    for (auto&& [k, v] :
+         std::initializer_list<std::pair<std::wstring_view, size_t>>{
+             {L"i", 10}, {L"a", 40}, {L"μ̃", 50}, {L"Κ", 90}}) {
+      reg->retrieve_ptr(k)->approximate_size(v);
+    }
+
+    auto single_term_opt = [](Product const& prod, bool cse = true) {
+      return opt::single_term_opt(
+          prod,
+          [](Index const& ix) {
+            // null space contributes x1 to the size
+            auto sz = ix.nonnull() ? ix.space().approximate_size() : 1;
+            return sz;
+          },
+          /*subnet_cse=*/cse);
+    };
+
+    auto prod9 =
+        deserialize("X{i1;a1} X{i2;a2} Y{a2;i3} Y{a1;i4}")->as<Product>();
+    auto res9 = single_term_opt(prod9);
+    auto res9_no_cse = single_term_opt(prod9, false);
+    // this is the one we want to find
+    // (X Y) (X Y)
+    REQUIRE(extract(res9, {0, 0}) == prod9.at(0));
+    REQUIRE(extract(res9, {0, 1}) == prod9.at(3));
+    REQUIRE(extract(res9, {1, 0}) == prod9.at(1));
+    REQUIRE(extract(res9, {1, 1}) == prod9.at(2));
+
+    // take a look at res9_no_cse for a result with subnet_cse disabled
+    // should give the same result in this case as it's already optimal
+    REQUIRE(extract(res9_no_cse, {0, 0}) == prod9.at(0));
+    REQUIRE(extract(res9_no_cse, {0, 1}) == prod9.at(3));
+    REQUIRE(extract(res9_no_cse, {1, 0}) == prod9.at(1));
+    REQUIRE(extract(res9_no_cse, {1, 1}) == prod9.at(2));
+
+    SECTION("CSE effect on optimization result") {
+      auto ctx_resetter =
+          set_scoped_default_context(get_default_context().clone());
+      auto reg = get_default_context().mutable_index_space_registry();
+      // Use sizes that make the unbalanced tree better without CSE,
+      // but the balanced tree better with CSE.
+      // Balanced: ( (X1 Y1) (X2 Y2) )
+      // Cost(X1*Y1) = size(i)*size(a)*size(j) = 12*10*12 = 1440.
+      // Cost(Inter) = 12^3 = 1728.
+      // Total no-CSE: 2*1440 + 1728 = 4608.
+      // Total CSE: 1440 + 1728 = 3168.
+      // Unbalanced: ( ( (X1 Y1) X2 ) Y2 )
+      // Cost(X1*Y1) = 12*10*12 = 1440.
+      // Cost((X1*Y1)*X2) = size(i)*size(i)*size(a) = 12*12*10 = 1440.
+      // Cost(...) * Y2 = 12*10*12 = 1440.
+      // Total Unbalanced: 1440 + 1440 + 1440 = 4320.
+      // 3168 < 4320 < 4608.
+      reg->retrieve_ptr(L"i")->approximate_size(12);
+      reg->retrieve_ptr(L"a")->approximate_size(10);
+
+      auto single_term_opt = [](Product const& prod, bool cse) {
+        return opt::single_term_opt(
+            prod,
+            [](Index const& ix) {
+              return ix.nonnull() ? ix.space().approximate_size() : 1;
+            },
+            cse);
+      };
+
+      // X{i1;a1} Y{a1;i2} X{i2;a2} Y{a2;i3}
+      auto prod =
+          deserialize(L"X{i1;a1} Y{a1;i2} X{i2;a2} Y{a2;i3}")->as<Product>();
+
+      auto res_cse = single_term_opt(prod, true);
+      auto res_no_cse = single_term_opt(prod, false);
+
+      // With CSE: Balanced tree
+      REQUIRE(res_cse->as<Product>().factors().size() == 2);
+      REQUIRE(res_cse->at(0)->is<Product>());
+      REQUIRE(res_cse->at(1)->is<Product>());
+
+      // Without CSE: Unbalanced tree
+      bool is_unbalanced =
+          (res_no_cse->at(0)->is<Tensor>() || res_no_cse->at(1)->is<Tensor>());
+      REQUIRE(is_unbalanced);
+    }
+
+    SECTION("subnet_cse flows through OptimizeOptions") {
+      auto ctx_resetter =
+          set_scoped_default_context(get_default_context().clone());
+      auto reg = get_default_context().mutable_index_space_registry();
+      // Same sizing trick as the section above: CSE prefers balanced,
+      // no-CSE prefers unbalanced.
+      reg->retrieve_ptr(L"i")->approximate_size(12);
+      reg->retrieve_ptr(L"a")->approximate_size(10);
+
+      auto idx_to_extent = [](Index const& ix) -> std::size_t {
+        return ix.nonnull() ? ix.space().approximate_size() : 1;
+      };
+
+      auto prod =
+          deserialize(L"X{i1;a1} Y{a1;i2} X{i2;a2} Y{a2;i3}")->as<Product>();
+      auto expr = ex<Product>(prod);
+
+      auto res_cse =
+          optimize(expr, OptimizeOptions{.subnet_cse = SubnetCSE::Enable,
+                                         .idx_to_extent = idx_to_extent});
+      auto res_no_cse =
+          optimize(expr, OptimizeOptions{.subnet_cse = SubnetCSE::Disable,
+                                         .idx_to_extent = idx_to_extent});
+
+      // With CSE: balanced tree -- both children are Products.
+      REQUIRE(res_cse->is<Product>());
+      REQUIRE(res_cse->as<Product>().factors().size() == 2);
+      REQUIRE(res_cse->at(0)->is<Product>());
+      REQUIRE(res_cse->at(1)->is<Product>());
+
+      // Without CSE: unbalanced tree -- at least one child is a bare Tensor.
+      REQUIRE(res_no_cse->is<Product>());
+      REQUIRE(res_no_cse->as<Product>().factors().size() == 2);
+      bool is_unbalanced =
+          res_no_cse->at(0)->is<Tensor>() || res_no_cse->at(1)->is<Tensor>();
+      REQUIRE(is_unbalanced);
+
+      // Default OptimizeOptions => subnet_cse Disable => same as no-CSE shape.
+      auto res_default =
+          optimize(expr, OptimizeOptions{.idx_to_extent = idx_to_extent});
+      REQUIRE(res_default->is<Product>());
+      REQUIRE(res_default->as<Product>().factors().size() == 2);
+      bool default_is_unbalanced =
+          res_default->at(0)->is<Tensor>() || res_default->at(1)->is<Tensor>();
+      REQUIRE(default_is_unbalanced);
+    }
+  }
+
   /// verify that space changes did not leak
-  auto reg = get_default_context().index_space_registry();
-  auto uocc = reg->retrieve_ptr(L"a");
-  REQUIRE(uocc);
-  REQUIRE(uocc->approximate_size() == 10);
+  auto reg_check = get_default_context().index_space_registry();
+  auto uocc_check = reg_check->retrieve_ptr(L"a");
+  REQUIRE(uocc_check);
+  REQUIRE(uocc_check->approximate_size() == 10);
 }

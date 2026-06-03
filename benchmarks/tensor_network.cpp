@@ -8,7 +8,9 @@
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
-#include <range/v3/all.hpp>
+#include <range/v3/range/conversion.hpp>
+#include <range/v3/view/chunk.hpp>
+#include <range/v3/view/transform.hpp>
 
 #include <format>
 #include <random>

@@ -5,9 +5,10 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
-#include <range/v3/algorithm.hpp>
-#include <range/v3/iterator.hpp>
-#include <range/v3/view.hpp>
+#include <range/v3/algorithm/reverse.hpp>
+#include <range/v3/view/drop.hpp>
+#include <range/v3/view/reverse.hpp>
+#include <range/v3/view/zip.hpp>
 
 namespace sequant::opt {
 

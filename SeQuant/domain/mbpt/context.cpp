@@ -1,6 +1,8 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 
+#include <range/v3/algorithm/contains.hpp>
+
 #ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
 #include <mutex>
 #endif
@@ -154,6 +156,15 @@ OpClass to_op_class(const std::wstring& op) {
     return OpClass::gen;  // all reserved labels are gen
   } else {
     return get_default_mbpt_context().op_registry()->to_class(op);
+  }
+}
+
+Hermiticity op_hermiticity(const std::wstring& op) {
+  // reserved labels are OpClass::gen, hence Hermitian by default
+  if (ranges::contains(reserved::labels(), op)) {
+    return default_hermiticity(OpClass::gen);
+  } else {
+    return get_default_mbpt_context().op_registry()->hermiticity(op);
   }
 }
 

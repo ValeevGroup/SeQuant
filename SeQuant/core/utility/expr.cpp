@@ -6,6 +6,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
+#include <range/v3/algorithm/all_of.hpp>
 #include <range/v3/view/concat.hpp>
 
 #include <algorithm>
@@ -528,7 +529,7 @@ std::optional<ExprPtr> pop_tensor(ExprPtr &expression,
     return tensor;
   }
 
-  if (expression->is<Constant>() || expression->is<Variable>()) {
+  if (expression->is_scalar()) {
     return tensor;
   }
 

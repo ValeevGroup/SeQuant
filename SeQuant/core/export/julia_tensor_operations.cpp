@@ -8,7 +8,8 @@ namespace sequant {
 
 JuliaTensorOperationsGeneratorContext::JuliaTensorOperationsGeneratorContext(
     TagMap index_tags, DimMap index_dims)
-    : m_index_tags(std::move(index_tags)),
+    : ReorderingContext(MemoryLayout::ColumnMajor),
+      m_index_tags(std::move(index_tags)),
       m_index_dims(std::move(index_dims)) {}
 
 std::string JuliaTensorOperationsGeneratorContext::get_tag(

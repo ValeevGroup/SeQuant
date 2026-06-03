@@ -9,6 +9,8 @@
 #include "SeQuant/core/expr.hpp"
 #include "SeQuant/core/op.hpp"
 
+#include <range/v3/view/transform.hpp>
+
 #include <array>
 #include <span>
 

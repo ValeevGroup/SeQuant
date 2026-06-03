@@ -8,6 +8,15 @@
 #include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/op_registry.hpp>
 
+#include <range/v3/algorithm/contains.hpp>
+#include <range/v3/algorithm/for_each.hpp>
+#include <range/v3/algorithm/is_sorted.hpp>
+#include <range/v3/view/filter.hpp>
+#include <range/v3/view/iota.hpp>
+#include <range/v3/view/map.hpp>
+#include <range/v3/view/reverse.hpp>
+#include <range/v3/view/transform.hpp>
+
 namespace sequant::mbpt {
 
 std::vector<std::wstring> cardinal_tensor_labels() {
@@ -557,6 +566,16 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
   const auto csv = get_default_mbpt_context().csv() == mbpt::CSV::Yes;
   const auto opclass = mbpt::to_op_class(label_);
 
+  // The operator tensor's abstract bra<->ket adjoint symmetry is a
+  // field-agnostic fact carried by the OpRegistry: general operators are
+  // matrix elements of (anti-)Hermitian operators (Hermitian by default),
+  // (de)excitation operators (cluster amplitudes etc.) are not. The concrete
+  // BraKetSymmetry (Symm vs Conjugate) is derived from the bra/ket indices'
+  // IndexSpace::field() (see sequant::base_field) when the Tensor is built, so
+  // a real computation sees Hermitian integrals as bra<->ket symmetric while
+  // amplitudes stay nonsymmetric.
+  const auto op_herm = op_hermiticity(label_);
+
   if (!dep && csv) {
     if (opclass == OpClass::ex) {
       if constexpr (assert_enabled()) {
@@ -587,20 +606,22 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
   if (batch_indices_) {
     return make(
         cre_spaces_, ann_spaces_, batch_indices_.value(),
-        [this, opsymm_opt, full_label](const auto& creidxs, const auto& annidxs,
-                                       const auto& batchidxs, Symmetry opsymm) {
+        [this, opsymm_opt, full_label, op_herm](
+            const auto& creidxs, const auto& annidxs, const auto& batchidxs,
+            Symmetry opsymm) {
           return ex<Tensor>(full_label, bra(creidxs), ket(annidxs),
-                            aux(batchidxs), opsymm_opt ? *opsymm_opt : opsymm);
+                            aux(batchidxs), opsymm_opt ? *opsymm_opt : opsymm,
+                            op_herm);
         },
         dep ? *dep : UseDepIdx::None, normalization);
   }
   // else no batching
   return make(
       cre_spaces_, ann_spaces_,
-      [this, opsymm_opt, full_label](const auto& creidxs, const auto& annidxs,
-                                     Symmetry opsymm) {
+      [this, opsymm_opt, full_label, op_herm](
+          const auto& creidxs, const auto& annidxs, Symmetry opsymm) {
         return ex<Tensor>(full_label, bra(creidxs), ket(annidxs),
-                          opsymm_opt ? *opsymm_opt : opsymm);
+                          opsymm_opt ? *opsymm_opt : opsymm, op_herm);
       },
       dep ? *dep : UseDepIdx::None, normalization);
 }
@@ -1186,7 +1207,8 @@ qns_t apply_to_vac(const ExprPtr& expr) {
     qns = expr.as<op_t>()();
   } else if (expr.is<Product>()) {
     const auto& op_product = expr.as<Product>();
-    for (auto& op_ptr : ranges::views::reverse(op_product.factors())) {
+    for (auto& op_ptr :
+         ranges::views::reverse(op_product.nonscalar_factors())) {
       SEQUANT_ASSERT(op_ptr->template is<op_t>());
       const auto& op = op_ptr->template as<op_t>();
       qns = op(qns);
@@ -1236,9 +1258,21 @@ bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
 
 namespace tensor {
 
-ExprPtr expectation_value_impl(ExprPtr expr,
-                               std::vector<std::pair<int, int>> nop_connections,
-                               bool use_top, bool full_contractions) {
+ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
+                               OpConnections<int> avoid, bool use_top,
+                               bool full_contractions) {
+  // Pull scalar factors  out of a Product before WickTheorem sees it.
+  // Extracted factors are reattached to the result after Wick evaluation.
+  container::svector<ExprPtr> scalar_factors;
+  if (expr.is<Product>()) {
+    const auto& prod = expr.as<Product>();
+    scalar_factors =
+        prod.scalar_factors() | ranges::to<container::svector<ExprPtr>>;
+    if (!scalar_factors.empty()) {
+      expr = ex<Product>(prod.scalar(), prod.nonscalar_factors());
+    }
+  }
+
   simplify(expr);
   auto isr = get_default_context().index_space_registry();
   const auto spinor = get_default_context().spbasis() == SPBasis::Spinor;
@@ -1255,13 +1289,21 @@ ExprPtr expectation_value_impl(ExprPtr expr,
   }
 
   FWickTheorem wick{expr};
-  wick.use_topology(use_top).set_nop_connections(nop_connections);
+  wick.use_topology(use_top).set_nop_connections(connect);
+  if (!avoid.empty()) wick.set_nop_avoided_connections(avoid);
   wick.full_contractions(full_contractions);
   auto result = wick.compute(/* count_only = */ false,
                              /* skip_input_canonicalization? true since already
                                 did simplification above */
                              true);
   simplify(result);
+
+  auto restore_scalars = [&scalar_factors](ExprPtr& r) {
+    if (!scalar_factors.empty()) {
+      ranges::for_each(scalar_factors, [&r](const auto& s) { r = r * s; });
+      simplify(r);
+    }
+  };
 
   if (Logger::instance().wick_stats) {
     std::wcout << "WickTheorem stats: # of contractions attempted = "
@@ -1277,6 +1319,7 @@ ExprPtr expectation_value_impl(ExprPtr expr,
   if (isr->reference_occupied_space() == IndexSpace::Type{} ||
       isr->reference_occupied_space(Spin::any) ==
           isr->vacuum_occupied_space(Spin::any)) {
+    restore_scalars(result);
     return result;
   } else {
     const auto target_rdm_space_type =
@@ -1452,23 +1495,22 @@ ExprPtr expectation_value_impl(ExprPtr expr,
                  << " # of useful contractions = "
                  << wick.stats().num_useful_contractions << std::endl;
     }
+    restore_scalars(result);
     return result;
   }
 }
 
-ExprPtr ref_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
-               bool use_top) {
+ExprPtr ref_av(ExprPtr expr, EVOptions<int> opts) {
   auto isr = get_default_context().index_space_registry();
   const bool full_contractions =
-      (isr->reference_occupied_space() == isr->vacuum_occupied_space()) ? true
-                                                                        : false;
-  return expectation_value_impl(expr, nop_connections, use_top,
-                                full_contractions);
+      isr->reference_occupied_space() == isr->vacuum_occupied_space();
+  return expectation_value_impl(expr, opts.connect, opts.do_not_connect,
+                                opts.use_topology, full_contractions);
 }
 
-ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
-               bool use_top) {
-  return expectation_value_impl(expr, nop_connections, use_top,
+ExprPtr vac_av(ExprPtr expr, EVOptions<int> opts) {
+  return expectation_value_impl(expr, opts.connect, opts.do_not_connect,
+                                opts.use_topology,
                                 /* full_contractions*/ true);
 }
 

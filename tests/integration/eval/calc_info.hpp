@@ -16,7 +16,10 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
-#include <range/v3/view.hpp>
+#include <range/v3/view/join.hpp>
+#include <range/v3/view/single.hpp>
+#include <range/v3/view/tail.hpp>
+#include <range/v3/view/transform.hpp>
 
 #include <cstddef>
 
@@ -54,7 +57,7 @@ struct CalcInfo {
     SEQUANT_ASSERT(exprs.size() == eqn_opts.excit);
     return zip(exprs, iota(size_t{1}, eqn_opts.excit + 1)) |
            transform([this](auto&& pair) {
-             return node_<ExprT>(pair.first, pair.second);
+             return this->template node_<ExprT>(pair.first, pair.second);
            }) |
            ranges::to_vector;
   }
@@ -97,7 +100,12 @@ struct CalcInfo {
     auto trimmed = tail_factor(expr);
     auto tform_and_save =
         transform([st = optm_opts.single_term](const auto& expr) {
+          // SCF reference path: per-term binarize for energy/residual building;
+          // the head's bra/ket layout is consumed by integration helpers that
+          // index by slot ordinal and don't depend on conventional layout.
+          SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
           return binarize<ExprT>(st ? optimize(expr) : expr);
+          SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
         }) |
         ranges::to_vector;
     if (trimmed.size() > 0) {

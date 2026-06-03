@@ -7,10 +7,13 @@
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/eval/eval_node_compare.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/memory_layout.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <algorithm>
 #include <concepts>
 #include <format>
+#include <functional>
 #include <optional>
 #include <ranges>
 #include <string>
@@ -82,11 +85,13 @@ class SubexpressionReplacer {
   SubexpressionReplacer(
       VectorLike &expr_trees,
       const SubexpressionUsageCounts<TreeNode, force_hash_collisions> &map,
-      const Transformer &transformer, const LabelGenerator &label_gen)
+      const Transformer &transformer, const LabelGenerator &label_gen,
+      MemoryLayout target_layout)
       : expr_trees(expr_trees),
         subexpressions(map),
         expr_to_tree(transformer),
-        label_gen(label_gen) {}
+        label_gen(label_gen),
+        target_layout(target_layout) {}
 
   void perform_replacements() {
     // Ensure we won't have to reallocate while iterating over the expressions
@@ -117,7 +122,34 @@ class SubexpressionReplacer {
 
     ExprPtr expr = [&]() {
       if (tree->is_tensor()) {
-        return ex<Tensor>(label, bra(), ket(), aux(tree->canon_indices()),
+        Index::index_vector indices = tree->canon_indices();
+
+        const bool contains_proto_indices = std::ranges::any_of(
+            indices, [](const Index &idx) { return idx.has_proto_indices(); });
+
+        if (!contains_proto_indices &&
+            tree->as_tensor().symmetry() != Symmetry::Antisymm) {
+          switch (target_layout) {
+            case MemoryLayout::ColumnMajor:
+              // Largest indices should come first
+              std::ranges::stable_sort(indices, std::greater<>{},
+                                       [](const Index &idx) {
+                                         return idx.space().approximate_size();
+                                       });
+              break;
+            case MemoryLayout::RowMajor:
+              // Largest indices should come last
+              std::ranges::stable_sort(indices, std::greater<>{},
+                                       [](const Index &idx) {
+                                         return idx.space().approximate_size();
+                                       });
+              break;
+            case MemoryLayout::Unspecified:
+              break;
+          }
+        }
+
+        return ex<Tensor>(label, bra(), ket(), aux(std::move(indices)),
                           Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
                           ColumnSymmetry::Nonsymm);
       }
@@ -188,6 +220,7 @@ class SubexpressionReplacer {
   SubexpressionNames<TreeNode, force_hash_collisions> cse_names;
   std::size_t name_counter = 1;
   const LabelGenerator &label_gen;
+  MemoryLayout target_layout = MemoryLayout::Unspecified;
 };
 
 // TODO: provide predicate that computes the FLOPs required to compute the CSE
@@ -221,9 +254,10 @@ template <std::ranges::range VectorLike,
           bool force_hash_collisions = false>
   requires std::regular_invocable<Transformer, ResultExpr> &&
            meta::eval_node<std::ranges::range_value_t<VectorLike>>
-void eliminate_common_subexpressions(VectorLike &expr_trees,
-                                     const Transformer &expr_to_tree,
-                                     const Filter &filter_predicate = {}) {
+void eliminate_common_subexpressions(
+    VectorLike &expr_trees, const Transformer &expr_to_tree,
+    const Filter &filter_predicate = {},
+    MemoryLayout target_layout = MemoryLayout::Unspecified) {
   using std::ranges::begin;
   using std::ranges::end;
 
@@ -248,7 +282,8 @@ void eliminate_common_subexpressions(VectorLike &expr_trees,
 
   cse::SubexpressionReplacer<VectorLike, TreeNode, Transformer,
                              decltype(label_gen), force_hash_collisions>
-      replacer(expr_trees, subexpression_usages, expr_to_tree, label_gen);
+      replacer(expr_trees, subexpression_usages, expr_to_tree, label_gen,
+               target_layout);
 
   replacer.perform_replacements();
 }

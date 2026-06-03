@@ -13,6 +13,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <algorithm>
@@ -28,7 +29,9 @@
 #include <utility>
 #include <vector>
 
-#include <range/v3/all.hpp>
+#include <range/v3/iterator/basic_iterator.hpp>
+#include <range/v3/range/access.hpp>
+#include <range/v3/range/primitives.hpp>
 
 struct Dummy : public sequant::Expr {
   virtual ~Dummy() = default;
@@ -266,6 +269,122 @@ TEST_CASE("expr", "[elements]") {
                       std::range_error);
   }
 
+  SECTION("power") {
+    const auto c2 = ex<Constant>(rational{1, 2});
+    const auto vx = ex<Variable>(L"x");
+
+    {  // constructors
+      REQUIRE_NOTHROW(Power(c2, rational{1, 2}));
+      REQUIRE_NOTHROW(Power(vx, rational{3, 1}));
+
+      // convenience ctors:
+      REQUIRE(Power(L"x", 2) == Power(vx, rational{2}));
+      REQUIRE(Power(L"x", rational{1, 2}) == Power(vx, rational{1, 2}));
+      REQUIRE(Power(2, 3) == Power(ex<Constant>(2), rational{3}));
+      REQUIRE(Power(rational{2, 3}, 2) ==
+              Power(ex<Constant>(rational{2, 3}), rational{2}));
+      if constexpr (sequant::assert_behavior() ==
+                    sequant::AssertBehavior::Throw) {
+        // base must be a Constant or Variable; Power-of-Power is not allowed
+        auto inner = ex<Power>(c2, rational{1, 2});
+        REQUIRE_THROWS(Power(inner, rational{2, 3}));
+
+        // 0^n is defined only for n >= 0
+        REQUIRE_THROWS(Power(ex<Constant>(0), rational{-1}));
+      }
+    }
+
+    {  // accessors
+      Power p(c2, rational{1, 2});
+      REQUIRE(p.base() == ex<Constant>(rational{1, 2}));
+      REQUIRE(p.exponent() == rational{1, 2});
+
+      // is_zero: base == 0, exponent > 0
+      Power pz(ex<Constant>(0), rational{2});
+      REQUIRE(pz.is_zero());
+      // 0^0 is not zero by our convention
+      Power pz2(ex<Constant>(0), rational{0});
+      REQUIRE(!pz2.is_zero());
+      REQUIRE(!p.is_zero());
+    }
+
+    {  // comparison
+      Power p1(c2, rational{1, 2});
+      Power p2(c2, rational{1, 2});
+      REQUIRE(p1 == p2);
+
+      Power p3(c2, rational{1, 3});
+      REQUIRE(!(p1 == p3));
+
+      Power p4(vx, rational{1, 2});
+      REQUIRE(!(p1 == p4));
+
+      // static_less_than: same base, compare by exponent
+      Power plt_a(vx, rational{1, 2});
+      Power plt_b(vx, rational{3, 4});
+      REQUIRE(plt_a < plt_b);
+      Power plt_c(vx, rational{1, 2});
+      REQUIRE(!(plt_a < plt_c));
+    }
+
+    {  // operator*=
+      // b^e1 *= b^e2 -> b^(e1+e2)
+      Power pa(vx, rational{1, 2});
+      Power pb(vx, rational{1, 3});
+      pa *= pb;
+      REQUIRE(pa.exponent() == rational{5, 6});  // 1/2 + 1/3
+
+      // bare base: b^e *= b -> b^(e+1)
+      Power pc(vx, rational{1, 2});
+      pc *= vx.as<Variable>();
+      REQUIRE(pc.exponent() == rational{3, 2});
+
+      // (b^e)* *= b* -> ((b^(e+1))*) (Power-level conjugation; bare base
+      // also conjugated)
+      Power pc_conj(vx, rational{1, 2});
+      pc_conj.conjugate();
+      Variable vx_conj(L"x");
+      vx_conj.conjugate();
+      pc_conj *= vx_conj;
+      REQUIRE(pc_conj.conjugated());
+      REQUIRE(pc_conj.exponent() == rational{3, 2});
+
+      // mirror case: (b*^e)* *= b -> ((b*^(e+1))*) (base Variable is conj'd,
+      // Power conj'd, matches)
+      Power pc_conj2(ex<Variable>(vx_conj), rational{1, 2});
+      pc_conj2.conjugate();
+      pc_conj2 *= vx.as<Variable>();
+      REQUIRE(pc_conj2.exponent() == rational{3, 2});
+
+      // 2^{1/2} * 2^{1/2} = 2
+      Power pe(ex<Constant>(2), rational{1, 2});
+      Power pf(ex<Constant>(2), rational{1, 2});
+      pe *= pf;
+      REQUIRE(pe.exponent() == rational{1});
+      REQUIRE(to_latex(pe) == Constant(2).to_latex());
+    }
+
+    {  // Power should NOT be absorbed into Product::scalar_
+      auto p = ex<Power>(vx, rational{1, 2});
+      auto prod = ex<Product>(Product{});
+      prod->as<Product>().append(1, p, Product::Flatten::Yes);
+      REQUIRE(prod->as<Product>().factors().size() == 1);
+      REQUIRE(prod->as<Product>().scalar() == 1);
+
+      // simplify folds a foldable Power-in-Product into the Product scalar
+      auto pwf = ex<Power>(2, 2) * ex<Variable>(L"x");
+      simplify(pwf);
+      REQUIRE(pwf->is<Product>());
+      REQUIRE(pwf->as<Product>().scalar() == 4);
+
+      // non-foldable Power stays as a factor; scalar is 1
+      auto pwnf = ex<Power>(2, rational{1, 2}) * ex<Variable>(L"x");
+      simplify(pwnf);
+      REQUIRE(pwnf->is<Product>());
+      REQUIRE(pwnf->as<Product>().scalar() == 1);
+    }
+  }
+
   SECTION("scaled_product") {
     REQUIRE_NOTHROW(Product{});
     Product sp0{};
@@ -343,6 +462,34 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(e->summands()[0]->as<Adjointable>().v == -1);
       REQUIRE(e->summands()[1]->as<Adjointable>().v == 2);
     }
+    {  // Power: adjoint flips the conjugation flag; base/exponent unchanged
+      Power pv(ex<Variable>(L"z"), rational{1, 2});
+      REQUIRE(!pv.conjugated());
+      pv.adjoint();
+      REQUIRE(pv.conjugated());
+      REQUIRE(!pv.base()->as<Variable>().conjugated());
+      REQUIRE(pv.exponent() == rational{1, 2});
+      // double adjoint is identity
+      pv.adjoint();
+      REQUIRE(!pv.conjugated());
+
+      using scalar_type = Constant::scalar_type;
+      // i^{2} = -1
+      auto i_sq = ex<Power>(ex<Constant>(scalar_type{0, 1}), 2);
+      Power::flatten(i_sq);
+      REQUIRE(i_sq->is<Constant>());
+      REQUIRE(i_sq->as<Constant>().value() == scalar_type{-1});
+
+      // (1+i)^{2} = 2i; ((1+i)^{2})* = -2i
+      auto one_plus_i = ex<Constant>(scalar_type{1, 1});  // (1+i)
+      auto square = ex<Power>(one_plus_i, 2);             // (1+i)^{2}
+      square->as<Power>().adjoint();
+      REQUIRE(square->as<Power>().conjugated());
+      Power::flatten(square);
+      REQUIRE(square->is<Constant>());
+      REQUIRE(square->as<Constant>().value() ==
+              scalar_type{0, -2});  // (2i)^{*} = -2i
+    }
   }
 
   SECTION("clone") {
@@ -364,6 +511,19 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(e->to_latex() == L"{{q}^*}");
       REQUIRE_NOTHROW(e->adjoint());
       REQUIRE(e->to_latex() == L"{q}");
+    }
+
+    {  // Power
+      const auto c2 = ex<Constant>(rational{1, 2});
+
+      Power p1(c2, rational{1, 2});
+      REQUIRE(to_latex(p1) == L"{\\frac{1}{2^{\\frac{1}{2}}}}");
+
+      Power p_exp1(c2, rational{1});
+      REQUIRE(to_latex(p_exp1) == L"{{{\\frac{1}{2}}}}");
+
+      Power pv(ex<Variable>(L"x"), rational{2, 1});
+      REQUIRE(to_latex(pv) == L"{x}^{2}");
     }
 
     Product sp0{};
@@ -653,6 +813,83 @@ TEST_CASE("expr", "[elements]") {
               L"{\\text{Dummy}}\\bigr) }{\\text{Dummy}}{ "
               L"\\bigl({\\text{Dummy}} + {\\text{Dummy}}\\bigr) }}");
     }
+
+    {  // Power::flatten
+
+      // Constant base + integer exponent folds in place
+      auto pf1 = ex<Power>(2, 3);
+      Power::flatten(pf1);
+      REQUIRE(pf1 == ex<Constant>(rational{8}));
+
+      // non-integer exponent without an exact root is a no-op
+      auto pf2 = ex<Power>(2, rational{1, 2});
+      Power::flatten(pf2);
+      REQUIRE(pf2->is<Power>());
+
+      // Variable base is a no-op
+      auto pf3 = ex<Power>(L"x", 2);
+      Power::flatten(pf3);
+      REQUIRE(pf3->is<Power>());
+
+      // Variable base, zero exponent: x^0 = 1
+      auto pf4 = ex<Power>(L"x", 0);
+      Power::flatten(pf4);
+      REQUIRE(pf4 == ex<Constant>(rational{1}));
+
+      // 2^(-20) = 1/1048576
+      auto pf5 = ex<Power>(2, -20);
+      Power::flatten(pf5);
+      REQUIRE(pf5 == ex<Constant>(rational{1, 1048576}));
+
+      // square-root exponent with perfect-square base folds
+      // 4^(1/2) = 2
+      auto pf6 = ex<Power>(4, rational{1, 2});
+      Power::flatten(pf6);
+      REQUIRE(pf6 == ex<Constant>(rational{2}));
+
+      // (1/4)^(1/2) = 1/2
+      auto pf7 = ex<Power>(rational{1, 4}, rational{1, 2});
+      Power::flatten(pf7);
+      REQUIRE(pf7 == ex<Constant>(rational{1, 2}));
+
+      // (1/4)^(-1/2) = 2
+      auto pf8 = ex<Power>(rational{1, 4}, rational{-1, 2});
+      Power::flatten(pf8);
+      REQUIRE(pf8 == ex<Constant>(rational{2}));
+
+      // (9/16)^(3/2) = 27/64
+      auto pf9 = ex<Power>(rational{9, 16}, rational{3, 2});
+      Power::flatten(pf9);
+      REQUIRE(pf9 == ex<Constant>(rational{27, 64}));
+
+      // (-1)^(1/2) is imaginary; left as Power
+      auto pf10 = ex<Power>(-1, rational{1, 2});
+      Power::flatten(pf10);
+      REQUIRE(pf10->is<Power>());
+
+      // negative-real base with half-integer exponent: not folded
+      auto pf11 = ex<Power>(-4, rational{1, 2});
+      Power::flatten(pf11);
+      REQUIRE(pf11->is<Power>());
+
+      // complex base (imag != 0) with half-integer exponent: not folded
+      auto pf12 = ex<Power>(Constant::scalar_type{1, 1}, rational{1, 2});
+      Power::flatten(pf12);
+      REQUIRE(pf12->is<Power>());
+
+      // 8^(1/3) is not folded
+      auto pf13 = ex<Power>(8, rational{1, 3});
+      Power::flatten(pf13);
+      REQUIRE(pf13->is<Power>());
+
+      // (b^1)* = conj(b):
+      auto pf14 = ex<Power>(L"y", rational{1});
+      pf14->as<Power>().conjugate();
+      Power::flatten(pf14);
+      REQUIRE(pf14->is<Variable>());
+      REQUIRE(pf14->as<Variable>().label() == L"y");
+      REQUIRE(pf14->as<Variable>().conjugated());
+    }
   }
 
   SECTION("hashing") {
@@ -668,6 +905,29 @@ TEST_CASE("expr", "[elements]") {
       return 0;
     };
     REQUIRE_NOTHROW(ex<Constant>(1)->hash_value(hasher) == 0);
+
+    {  // Power
+      const auto c2 = ex<Constant>(rational{1, 2});
+      const auto vx = ex<Variable>(L"x");
+
+      Power p1(c2, rational{1, 2});
+      Power p3(c2, rational{1, 3});  // different exponent
+      Power p4(vx, rational{1, 2});  // different base
+      REQUIRE(sequant::hash::value(p1) != sequant::hash::value(p3));
+      REQUIRE(sequant::hash::value(p1) != sequant::hash::value(p4));
+
+      // Power(b, 1) has the same hash as b
+      const auto v = ex<Variable>(L"u");
+      Power p_one(v, rational{1});
+      REQUIRE(sequant::hash::value(p_one) == sequant::hash::value(*v));
+
+      // mutating the ExprPtr does not affect the Power's cached hash.
+      auto shared = ex<Variable>(L"s");
+      Power ps(shared, rational{2});
+      const auto ps_hash_before = sequant::hash::value(ps);
+      shared->as<Variable>().conjugate();
+      REQUIRE(sequant::hash::value(ps) == ps_hash_before);
+    }
   }
 
   SECTION("commutativity") {

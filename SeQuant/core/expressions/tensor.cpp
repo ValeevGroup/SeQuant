@@ -10,6 +10,8 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <range/v3/algorithm/contains.hpp>
+
 namespace sequant {
 
 Tensor::~Tensor() = default;

@@ -10,6 +10,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
+#include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/algorithm/sort.hpp>
 #include <range/v3/numeric/accumulate.hpp>
 #include <range/v3/range/conversion.hpp>
@@ -21,6 +22,7 @@
 #include <boost/hana/ext/std/integral_constant.hpp>
 
 #include <mutex>
+#include <ranges>
 
 namespace sequant {
 
@@ -366,8 +368,21 @@ class IndexSpaceRegistry {
       approximate_size = boost::hana::at_c<0>(h_ints);
     }
 
+    Field field = Field::Complex;
+    auto h_field = boost::hana::filter(h_args, [](auto arg) {
+      return boost::hana::type_c<decltype(arg)> == boost::hana::type_c<Field>;
+    });
+    constexpr auto nfields = boost::hana::size(h_field);
+    static_assert(
+        nfields == boost::hana::size_c<0> || nfields == boost::hana::size_c<1>,
+        "IndexSpaceRegistry::add: only one Field argument is allowed");
+    if constexpr (nfields == boost::hana::size_c<1>) {
+      field = boost::hana::at_c<0>(h_field);
+    }
+
     // make space
-    IndexSpace space(std::forward<S>(type_label), type, qns, approximate_size);
+    IndexSpace space(std::forward<S>(type_label), type, qns, approximate_size,
+                     field);
     this->add(space);
 
     // process attribute tags
@@ -375,7 +390,8 @@ class IndexSpaceRegistry {
       return !boost::hana::traits::is_integral(
                  boost::hana::type_c<decltype(arg)>) &&
              boost::hana::type_c<decltype(arg)> !=
-                 boost::hana::type_c<IndexSpace::QuantumNumbers>;
+                 boost::hana::type_c<IndexSpace::QuantumNumbers> &&
+             boost::hana::type_c<decltype(arg)> != boost::hana::type_c<Field>;
     });
     process_attribute_tags(h_attributes, type);
 
@@ -422,9 +438,10 @@ class IndexSpaceRegistry {
       ++count;
     }
     const auto approximate_size = compute_approximate_size(space_attr);
+    const Field field = compute_field(space_attr);
 
     IndexSpace space(std::forward<S>(type_label), space_attr.type(),
-                     space_attr.qns(), approximate_size);
+                     space_attr.qns(), approximate_size, field);
     this->add(space);
     auto type = space.type();
 
@@ -1515,6 +1532,24 @@ class IndexSpaceRegistry {
           });
       return size;
     }
+  }
+
+  Field compute_field(const IndexSpace::Attr& space_attr) const {
+    if (is_base(space_attr.type())) {
+      return this->retrieve(space_attr).field();
+    }
+
+    // compute_field is used when populating the registry
+    // so don't use base_spaces() here
+
+    bool contains_complex = std::ranges::any_of(
+        *spaces_ | std::ranges::views::filter([this, &space_attr](auto& s) {
+          return s.qns() == space_attr.qns() && this->is_base(s.type()) &&
+                 space_attr.type().intersection(s.type());
+        }),
+        [](const IndexSpace& s) { return s.field() == Field::Complex; });
+
+    return contains_complex ? Field::Complex : Field::Real;
   }
 
   friend bool operator==(const IndexSpaceRegistry& isr1,

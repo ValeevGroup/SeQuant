@@ -3,6 +3,8 @@
 //
 
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/expressions/constant.hpp>
+#include <SeQuant/core/expressions/power.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -34,6 +36,31 @@ std::wstring to_string(const rational& t) {
   }
   // n.b.
   // result += L"}";
+  return result;
+}
+
+std::wstring to_string(const Power& power) {
+  std::wstring result;
+  const auto& base = power.base();
+  const auto& exp = power.exponent();
+
+  // special case when base is a unit fraction 1/k with k > 1
+  const auto base_nr_1 = base->is<Constant>() &&
+                         base->as<Constant>().value().imag() == 0 &&
+                         numerator(base->as<Constant>().value().real()) == 1 &&
+                         denominator(base->as<Constant>().value().real()) > 1;
+
+  if (exp == 1) {
+    result = base->to_latex();
+  } else if (base_nr_1) {
+    // render (1/k)^n as \frac{1}{k^n}
+    result = L"{\\frac{1}{" +
+             to_wstring(denominator(base->as<Constant>().value().real())) +
+             L"^" + to_string(exp) + L"}}";
+  } else {
+    result = base->to_latex() + L"^" + to_string(exp);
+  }
+  if (power.conjugated()) result = L"{" + result + L"^*}";
   return result;
 }
 

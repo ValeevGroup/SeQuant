@@ -17,6 +17,7 @@
 
 #include <cmath>
 #include <string_view>
+#include <type_traits>
 
 namespace sequant {
 
@@ -52,12 +53,12 @@ class TypeAttr {
 
   /// construct TypeAddr from things that can be cast to bitset_t, but exclude
   /// bool and QuantumNumbersAttr
-  template <typename T,
-            typename = std::enable_if_t<
-                meta::is_statically_castable_v<std::decay_t<T>, bitset_t> &&
-                !std::is_same_v<std::decay_t<T>, bool> &&
-                !std::is_same_v<std::decay_t<T>, QuantumNumbersAttr> &&
-                !std::is_same_v<std::decay_t<T>, TypeAttr>>>
+  template <typename T>
+    requires(meta::is_statically_castable_v<std::decay_t<T>, bitset_t> &&
+             !std::is_same_v<std::decay_t<T>, bool> &&
+             !std::is_same_v<std::decay_t<T>, QuantumNumbersAttr> &&
+             !std::is_same_v<std::decay_t<T>, TypeAttr> &&
+             !std::is_enum_v<std::decay_t<T>>)
   constexpr TypeAttr(T &&value) noexcept
       : TypeAttr(static_cast<bitset_t>(std::forward<T>(value))) {}
 
@@ -443,10 +444,11 @@ class IndexSpace {
   template <basic_string_convertible S>
   IndexSpace(S &&type_label, TypeAttr typeattr,
              QuantumNumbersAttr qnattr = QuantumNumbersAttr{0},
-             unsigned long approximate_size = 10)
+             unsigned long approximate_size = 10, Field field = Field::Complex)
       : attr_(typeattr, qnattr),
         base_key_(toUtf16(std::forward<S>(type_label))),
-        approximate_size_(approximate_size) {}
+        approximate_size_(approximate_size),
+        field_(field) {}
 
   explicit IndexSpace(std::string_view label);
   explicit IndexSpace(std::wstring_view label);
@@ -458,7 +460,8 @@ class IndexSpace {
   IndexSpace(IndexSpace &&other) noexcept
       : attr_(std::move(other.attr_)),
         base_key_(std::move(other.base_key_)),
-        approximate_size_(std::move(other.approximate_size_)) {
+        approximate_size_(std::move(other.approximate_size_)),
+        field_(other.field_) {
     other = null;
   }
   IndexSpace &operator=(const IndexSpace &other) = default;
@@ -469,6 +472,7 @@ class IndexSpace {
     attr_ = std::move(other.attr_);
     base_key_ = std::move(other.base_key_);
     approximate_size_ = std::move(other.approximate_size_);
+    field_ = other.field_;
     other = null;
     return *this;
   }
@@ -497,10 +501,22 @@ class IndexSpace {
   /// Set the approximate size of a space.
   void approximate_size(size_t n) { approximate_size_ = n; }
 
+  /// @return the scalar Field over which this space is defined; controls
+  /// whether the bra<->ket dual pairing involving this space is real
+  /// (symmetric bilinear) or complex (Hermitian sesquilinear). Like
+  /// approximate_size, this is non-identity metadata (does not participate in
+  /// attr()/hash/comparison). Defaults to Field::Complex.
+  /// @sa AbstractTensor::_base_field
+  Field field() const { return field_; }
+
+  /// Set the scalar Field of this space.
+  void field(Field f) { field_ = f; }
+
  private:
   Attr attr_ = {};
   std::wstring base_key_ = {};
   std::size_t approximate_size_ = {};
+  Field field_ = Field::Complex;
 };  // class IndexSpace
 
 inline const IndexSpace IndexSpace::null;

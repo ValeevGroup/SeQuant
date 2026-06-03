@@ -11,6 +11,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/range/access.hpp>
+#include <range/v3/view/transform.hpp>
 
 #include <string>
 

@@ -3,7 +3,7 @@
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <iostream>
-#include <range/v3/view.hpp>
+#include <range/v3/view/zip.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -111,6 +111,54 @@ TEST_CASE("cache_manager", "[cache_manager]") {
     }
   }
 
+  SECTION("alive and entry_size_in_bytes") {
+    auto man = man_const;
+
+    // A key never registered in the manager.
+    auto const stray = make_node(L"R = B");
+    REQUIRE_FALSE(man.exists(stray));
+    REQUIRE_FALSE(man.alive(stray));
+    REQUIRE(man.entry_size_in_bytes(stray) == 0);
+
+    // Registered but never stored: not alive, zero size.
+    for (auto&& k : decaying_keys) {
+      REQUIRE(man.exists(k));
+      REQUIRE_FALSE(man.alive(k));
+      REQUIRE(man.entry_size_in_bytes(k) == 0);
+    }
+
+    // After store(): alive, size matches the stored data.
+    for (auto&& [k, v] : zip(decaying_keys, decaying_vals)) {
+      REQUIRE(man.store(k, v));
+      REQUIRE(man.alive(k));
+      REQUIRE(man.entry_size_in_bytes(k) == v->size_in_bytes());
+    }
+
+    // Drain each entry's remaining life. store() consumed one access already,
+    // so r - 1 accesses remain before data_p is moved out.
+    for (auto&& [k, r] : zip(decaying_keys, decaying_repeats)) {
+      for (auto i = r - 1; i > 0; --i) {
+        REQUIRE(man.alive(k));  // still holds data before this access
+        REQUIRE(man.access(k));
+      }
+      // Final access has drained life to 0 and moved data_p out.
+      REQUIRE_FALSE(man.alive(k));
+      REQUIRE(man.entry_size_in_bytes(k) == 0);
+    }
+
+    // reset() restores life counts; re-store, confirm alive, then reset()
+    // and confirm entries are not-alive again.
+    man.reset();
+    for (auto&& [k, v] : zip(decaying_keys, decaying_vals))
+      REQUIRE(man.store(k, v));
+    for (auto&& k : decaying_keys) REQUIRE(man.alive(k));
+    man.reset();
+    for (auto&& k : decaying_keys) {
+      REQUIRE_FALSE(man.alive(k));
+      REQUIRE(man.entry_size_in_bytes(k) == 0);
+    }
+  }
+
   SECTION("Hash collision safety") {
     // Two structurally different nodes
     auto const n1 = make_node(L"R{a1;i1} = f{a1;i1}");
@@ -155,4 +203,75 @@ TEST_CASE("cache_manager", "[cache_manager]") {
     REQUIRE(accessed2);
     REQUIRE(accessed2->get<int>() == 99);
   }
+}
+
+TEST_CASE("cache_manager_persistent", "[cache_manager]") {
+  using hasher_t = sequant::TreeNodeHasher<node_type>;
+  using comp_t = sequant::TreeNodeEqualityComparator<node_type>;
+  auto eval_result = [](int x) {
+    return sequant::eval_result<sequant::ResultScalar<int>>(x);
+  };
+
+  auto const np = make_node(L"R{a1;i1} = f{a1;i1}");  // non-persistent
+  auto const p = make_node(L"R{a1;i1} = g{a1;i1}");   // persistent
+
+  std::unordered_map<node_type, size_t, hasher_t, comp_t> counts;
+  counts.emplace(np, 2);  // NP, drained after 2 accesses
+  counts.emplace(p, 1);   // P, count irrelevant (registered once)
+
+  comp_t eq;
+  auto is_persistent = [&p, &eq](node_type const& k) { return eq(k, p); };
+  auto man = manager_type(std::move(counts), is_persistent);
+
+  // A persistent entry is never drained: arbitrarily many accesses all return
+  // the stored data (unlike an NP entry, whose data is released after its
+  // max_life-th access).
+  man.store(p, eval_result(20));
+  for (int i = 0; i < 10; ++i) {
+    auto r = man.access(p);
+    REQUIRE(r);
+    REQUIRE(r->get<int>() == 20);
+  }
+  REQUIRE(man.alive(p));
+
+  // reset() clears the non-persistent entry but keeps the persistent one, so
+  // the latter's data survives across evaluations (e.g. CC iterations).
+  man.store(np, eval_result(10));
+  man.reset();
+  REQUIRE(man.access(np) == nullptr);  // NP cleared by reset
+  auto rp = man.access(p);             // P survives reset
+  REQUIRE(rp);
+  REQUIRE(rp->get<int>() == 20);
+  REQUIRE(man.alive(p));
+}
+
+TEST_CASE("cache_manager_volatility_frontier", "[cache_manager]") {
+  // R = f * g * t : f,g constant (NV), t the amplitude (intrinsically V).
+  auto const node = make_node(L"R{a1;i1} = f{a1;a2} * g{a2;a3} * t{a3;i1}");
+
+  auto is_volatile = [](node_type const& n) {
+    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
+  };
+  std::function<bool(node_type const&)> has_t =
+      [&](node_type const& n) -> bool {
+    return n.leaf() ? is_volatile(n) : (has_t(n.left()) || has_t(n.right()));
+  };
+
+  auto man = sequant::cache_manager(std::array{node}, is_volatile);
+
+  // For every internal node, the factory's persistence must match the rule:
+  // persistent  <=>  node is NV  AND  its parent is V.
+  bool saw_persistent = false;
+  std::function<void(node_type const&, bool)> check =
+      [&](node_type const& n, bool parent_volatile) {
+        if (n.leaf()) return;
+        bool const node_volatile = has_t(n);
+        bool const want_p = !node_volatile && parent_volatile;
+        REQUIRE(man.persistent(n) == want_p);
+        if (want_p) saw_persistent = true;
+        check(n.left(), node_volatile);
+        check(n.right(), node_volatile);
+      };
+  check(node, /*parent_volatile=*/false);  // root has no (volatile) consumer
+  REQUIRE(saw_persistent);  // the NV product feeding the volatile root is P
 }

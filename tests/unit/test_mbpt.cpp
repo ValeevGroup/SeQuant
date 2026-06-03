@@ -33,6 +33,24 @@
 
 #include "SeQuant/core/utility/debug.hpp"
 
+namespace {
+/// Returns an RAII guard that, while alive, pins the (de)excitation amplitude
+/// operators (t, λ, R, L) Hermitian in the default MBPT context. The
+/// field/hermiticity model makes these operators bra<->ket *nonsymmetric* by
+/// default (which is correct); pinning them Hermitian here lets the reference
+/// equations below -- generated under the legacy conjugate-symmetric assumption
+/// -- stay valid without regenerating them.
+[[nodiscard]] auto scoped_hermitian_amplitudes() {
+  auto reg = sequant::mbpt::get_default_mbpt_context().op_registry()->clone();
+  for (std::wstring lbl : {L"t", L"λ", L"R", L"L"})
+    if (reg.contains(lbl))
+      reg.set_hermiticity(lbl, sequant::Hermiticity::Hermitian);
+  return sequant::mbpt::set_scoped_default_mbpt_context(
+      {.csv = sequant::mbpt::get_default_mbpt_context().csv(),
+       .op_registry = std::move(reg)});
+}
+}  // namespace
+
 TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
   SECTION("registry") {
     using namespace sequant::mbpt;
@@ -196,6 +214,10 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
   SECTION("nbody_operators") {
     using namespace sequant;
+
+    // reference equations below predate the hermiticity model; keep amplitudes
+    // Hermitian so they remain valid (see scoped_hermitian_amplitudes)
+    auto herm_amplitudes_guard = scoped_hermitian_amplitudes();
 
     SECTION("constructor") {
       // tests 1-space quantum number case
@@ -878,7 +900,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
         // H**T12**T12 -> R2
         SECTION("wick(H**T12**T12 -> R2)"){
             auto result = t::vac_av(t::A(nₚ(-2)) * t::H(2) * t::T(2) * t::T(2),
-                                    {{1, 2}, {1, 3}});
+                                    {.connect = {{1, 2}, {1, 3}}});
 
     //      std::wcout << "H*T12*T12 -> R2 = " << to_latex_align(result, 20)
     //                 << std::endl;
@@ -895,8 +917,8 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
   // H2**T3**T3 -> R4
   SECTION("wick(H2**T3**T3 -> R4)") {
-    auto result =
-        t::vac_av(t::A(nₚ(-4)) * t::h(2) * t::t(3) * t::t(3), {{1, 2}, {1, 3}});
+    auto result = t::vac_av(t::A(nₚ(-4)) * t::h(2) * t::t(3) * t::t(3),
+                            {.connect = {{1, 2}, {1, 3}}});
 
     // std::wcout << "H2**T3**T3 -> R4 = " << to_latex_align(result, 20)
     //            << std::endl;
@@ -910,7 +932,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
     ExprPtr ref_result;
     SECTION("wick(H2**T2**T2**T3 -> R5)") {
       ref_result = t::vac_av(t::A(-5) * t::h(2) * t::t(2) * t::t(2) * t::t(3),
-                             {{1, 2}, {1, 3}, {1, 4}});
+                             {.connect = {{1, 2}, {1, 3}, {1, 4}}});
       REQUIRE(ref_result->size() == 7);
     }
   }
@@ -939,6 +961,25 @@ SECTION("SRSO Fock") {
   }
 }  // SECTION("SRSO Fock")
 
+SECTION("vac_av with Power") {
+  // keep amplitudes Hermitian so the reference equation below stays valid
+  // (see scoped_hermitian_amplitudes)
+  auto herm_amplitudes_guard = scoped_hermitian_amplitudes();
+  auto expr1 = ex<Power>(ex<Variable>(L"α"), rational{2}) * t::h(2) * t::t(2);
+  auto vev1 = t::vac_av(expr1, {.connect = {{0, 1}}});
+  simplify(vev1);
+  REQUIRE_THAT(
+      vev1, EquivalentTo(
+                L"1/4 * α^(2) * g{i1,i2;a1,a2}:A-C-S * t{a1,a2;i1,i2}:A-C-S"));
+
+  auto expr2 = ex<Power>(ex<Constant>(2), rational{2}) * t::h(2) * t::t(2);
+  auto vev2 = op::vac_av(expr2);
+  simplify(vev2);
+  // should not have Power object, 1/4 * 2^{2}
+  REQUIRE_THAT(vev2,
+               EquivalentTo(L"g{i1,i2;a1,a2}:A-C-S * t{a1,a2;i1,i2}:A-C-S"));
+}
+
 SECTION("SRSO-PNO") {
   using sequant::mbpt::Context;
   auto mbpt_ctx = sequant::mbpt::set_scoped_default_mbpt_context(
@@ -946,8 +987,8 @@ SECTION("SRSO-PNO") {
 
   // H2**T2**T2 -> R2
   SECTION("wick(H2**T2**T2 -> R2)") {
-    auto result =
-        t::vac_av(t::A(nₚ(-2)) * t::h(2) * t::t(2) * t::t(2), {{1, 2}, {1, 3}});
+    auto result = t::vac_av(t::A(nₚ(-2)) * t::h(2) * t::t(2) * t::t(2),
+                            {.connect = {{1, 2}, {1, 3}}});
 
     REQUIRE(result->size() == 4);
   }
@@ -972,7 +1013,8 @@ SECTION("SRSF") {
 
   // H2**T2 -> R2
   SECTION("wick(H2**T2 -> R2)") {
-    auto result = t::vac_av(t::S(-2) * t::h(2) * t::t(2), {{1, 2}});
+    auto result =
+        t::vac_av(t::S(-2) * t::h(2) * t::t(2), {.connect = {{1, 2}}});
 
     {
       // std::wcout << "H2**T2 -> R2 = " << to_latex_align(result, 0, 1)
@@ -999,10 +1041,10 @@ SECTION("MRSO") {
 
   SECTION("wick(H2**T2 -> 0)") {
     {
-      auto result = t::ref_av(t::h(2) * t::t(2), {{0, 1}});
+      auto result = t::ref_av(t::h(2) * t::t(2), {.connect = {{0, 1}}});
 
-      auto result_wo_top = t::ref_av(t::h(2) * t::t(2), {{0, 1}},
-                                     /* use_topology = */ false);
+      auto result_wo_top = t::ref_av(
+          t::h(2) * t::t(2), {.connect = {{0, 1}}, .use_topology = false});
       REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
     }
 
@@ -1012,18 +1054,18 @@ SECTION("MRSO") {
       ctx.set(mbpt::make_mr_spaces());
       ctx.set(Vacuum::Physical);
       auto ctx_resetter = set_scoped_default_context(ctx);
-      auto result_phys = t::ref_av(t::h(2) * t::t(2), {{0, 1}});
+      auto result_phys = t::ref_av(t::h(2) * t::t(2), {.connect = {{0, 1}}});
     }
   }
 
   // H2 ** T2 ** T2 -> 0
   SECTION("wick(H2**T2**T2 -> 0)") {
     // first without use of topology
-    auto result = t::ref_av(t::h(2) * t::t(2) * t::t(2), {{0, 1}},
-                            /* use_topology = */ false);
+    auto result = t::ref_av(t::h(2) * t::t(2) * t::t(2),
+                            {.connect = {{0, 1}}, .use_topology = false});
     // now with topology use
-    auto result_top = t::ref_av(t::h(2) * t::t(2) * t ::t(2), {{0, 1}},
-                                /* use_topology = */ true);
+    auto result_top = t::ref_av(t::h(2) * t::t(2) * t ::t(2),
+                                {.connect = {{0, 1}}, .use_topology = true});
 
     REQUIRE(simplify(result - result_top) == ex<Constant>(0));
   }
@@ -1031,7 +1073,7 @@ SECTION("MRSO") {
 #if 0
     // H**T12 -> R2
     SECTION("wick(H**T2 -> R2)") {
-      auto result = t::ref_av(t::A(-2) * t::H() * t::t(2), {{1, 2}});
+      auto result = t::ref_av(t::A(-2) * t::H() * t::t(2), {.connect = {{1, 2}}});
 
       {
         std::wcout << "H*T2 -> R2 = " << to_latex_align(result, 0, 1)
@@ -1049,12 +1091,12 @@ SECTION("MRSF") {
   auto ctx_resetter = set_scoped_default_context(ctx);
 
   SECTION("wick(H2**T2 -> 0)") {
-    auto result = t::ref_av(t::h(2) * t::t(2), {{0, 1}});
+    auto result = t::ref_av(t::h(2) * t::t(2), {.connect = {{0, 1}}});
 
     {
       // make sure get same result without use of topology
-      auto result_wo_top = t::ref_av(t::h(2) * t::t(2), {{0, 1}},
-                                     /* use_topology = */ false);
+      auto result_wo_top = t::ref_av(
+          t::h(2) * t::t(2), {.connect = {{0, 1}}, .use_topology = false});
 
       REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
     }
@@ -1167,8 +1209,8 @@ SECTION("manuscript-examples") {
                                            {L"f", antisymm_label()},
                                            {L"g", antisymm_label()}});
 
-    auto t = ref_av(P(2) * H̅(), t_connect);
-    auto λ = ref_av((1 + Λ(2)) * H̅() * P(-2), l_connect);
+    auto t = ref_av(P(2) * H̅(), {.connect = t_connect});
+    auto λ = ref_av((1 + Λ(2)) * H̅() * P(-2), {.connect = l_connect});
 
     // numer of terms are verified against srcc results
     REQUIRE(t.size() == 31);
@@ -1180,7 +1222,7 @@ SECTION("manuscript-examples") {
 
     auto θ̅ = lst(θ(1), T(N), 2);
     auto expr = (1 + Λ(N)) * θ̅ * Tʼ(N) + Λʼ(N) * θ̅;
-    auto result = ref_av(expr, {{L"θ", L"t"}, {L"θ", L"t¹"}});
+    auto result = ref_av(expr, {.connect = {{L"θ", L"t"}, {L"θ", L"t¹"}}});
     // number of terms is verified against MPQC4 implementation
     REQUIRE(result.size() == 21);
   }
@@ -1197,14 +1239,18 @@ SECTION("manuscript-examples") {
                                            {L"g", antisymm_label()}});
 
     // EE
-    auto r_EE = ref_av(P(2) * H̅() * R(2), r_connect);
-    auto l_EE = ref_av(L(2) * H̅() * P(-2), l_connect);
+    auto r_EE = ref_av(P(2) * H̅() * R(2), {.connect = r_connect});
+    auto l_EE = ref_av(L(2) * H̅() * P(-2), {.connect = l_connect});
     // EA
-    auto r_EA = ref_av(P(nₚ(2), nₕ(1)) * H̅() * R(nₚ(2), nₕ(1)), r_connect);
-    auto l_EA = ref_av(L(nₚ(2), nₕ(1)) * H̅() * P(nₚ(-2), nₕ(-1)), l_connect);
+    auto r_EA =
+        ref_av(P(nₚ(2), nₕ(1)) * H̅() * R(nₚ(2), nₕ(1)), {.connect = r_connect});
+    auto l_EA = ref_av(L(nₚ(2), nₕ(1)) * H̅() * P(nₚ(-2), nₕ(-1)),
+                       {.connect = l_connect});
     // IP
-    auto r_IP = ref_av(P(nₚ(1), nₕ(2)) * H̅() * R(nₚ(1), nₕ(2)), r_connect);
-    auto l_IP = ref_av(L(nₚ(1), nₕ(2)) * H̅() * P(nₚ(-1), nₕ(-2)), l_connect);
+    auto r_IP =
+        ref_av(P(nₚ(1), nₕ(2)) * H̅() * R(nₚ(1), nₕ(2)), {.connect = r_connect});
+    auto l_IP = ref_av(L(nₚ(1), nₕ(2)) * H̅() * P(nₚ(-1), nₕ(-2)),
+                       {.connect = l_connect});
 
     // number of terms are verified against eomcc results
     REQUIRE(r_EE.size() == 53);
@@ -1234,11 +1280,12 @@ SECTION("manuscript-examples") {
                                            {L"h¹", antisymm_label()}});
 
     // perturbed t amplitudes (Eq 18 in SQ Manuscript #2)
-    auto t = ref_av(P(2) * (H̅(1) + H̅() * Tʼ(2) - "ω" * tʼ(2)), t_connect);
+    auto t = ref_av(P(2) * (H̅(1) + H̅() * Tʼ(2) - "ω" * tʼ(2)),
+                    {.connect = t_connect});
     // perturbed λ amplitudes (Eq 19 in SQ Manuscript #2)
     auto λ = ref_av(
         ((1 + Λ(2)) * (H̅(1) + H̅() * Tʼ(2)) + Λʼ(2) * H̅() + "ω" * λʼ(2)) * P(-2),
-        l_connect);
+        {.connect = l_connect});
 
     // number of terms are verified against MPQC4 implementation
     REQUIRE(t.size() == 58);
@@ -1253,11 +1300,14 @@ SECTION("manuscript-examples") {
     const auto& ann_space = get_hole_space(Spin::any);
 
     OpRegistry registry;
+    // amplitudes pinned Hermitian so the reference equations below (generated
+    // under the legacy conjugate-symmetric assumption) stay valid under the
+    // hermiticity model (see scoped_hermitian_amplitudes)
     registry.add(L"f", OpClass::gen)
         .add(L"g", OpClass::gen)
-        .add(L"t", OpClass::ex)
-        .add(L"x", OpClass::ex)
-        .add(L"y", OpClass::ex);
+        .add(L"t", OpClass::ex, Hermiticity::Hermitian)
+        .add(L"x", OpClass::ex, Hermiticity::Hermitian)
+        .add(L"y", OpClass::ex, Hermiticity::Hermitian);
 
     // set MBPT context
     auto ctx_resetter = set_scoped_default_mbpt_context(
@@ -1280,4 +1330,51 @@ SECTION("manuscript-examples") {
             L"ã{i1,i2;a1,a2} ã{i3;a3,a4}"));
   }
 }  // SECTION("manuscript-examples")
+
+SECTION("avoided-connections") {
+  using namespace sequant::mbpt;
+  using sequant::reserved::antisymm_label;
+
+  // keep amplitudes Hermitian so the reference equation below stays valid
+  // (see scoped_hermitian_amplitudes)
+  auto herm_amplitudes_guard = scoped_hermitian_amplitudes();
+
+  // h(1) * t(1): two operators, avoid the only possible contraction
+  auto expr1 = tensor::h(1) * tensor::t(1);
+  auto res1 = tensor::vac_av(expr1, {.do_not_connect = {{0, 1}}});
+  REQUIRE(res1 == sequant::ex<sequant::Constant>(0));  // result should be zero
+
+  // P(1) * H() * T(2): avoid connections between projector and Hamiltonian
+  auto expr2 = tensor::P(1) * tensor::H() * tensor::T(2);
+  auto res2_full = tensor::vac_av(expr2, {.connect = {{1, 2}}});
+  auto res2 =
+      tensor::vac_av(expr2, {.connect = {{1, 2}}, .do_not_connect = {{0, 1}}});
+  REQUIRE(res2_full.size() == 6);
+  // only one term with no A-{f,g} connection
+  REQUIRE(res2.is<sequant::Product>());
+  const std::wstring expected2 =
+      L"-1 Â{i_1;a_1}:A-C-S t{a_1,a_2;i_2,i_1}:A-C-S f{i_2;a_2}:A-C-S";
+  REQUIRE_THAT(sequant::simplify(res2), EquivalentTo(expected2));
+
+  // same test as above but from Operator level and labels for connectivity
+  using namespace sequant::mbpt::op;
+  auto expr3 = op::P(1) * op::H(2) * op::T(2);
+  auto res3 = op::vac_av(expr3, {.connect = {{L"f", L"t"}, {L"g", L"t"}},
+                                 .do_not_connect = {{antisymm_label(), L"f"},
+                                                    {antisymm_label(), L"g"}}});
+  REQUIRE_THAT(sequant::simplify(res3), EquivalentTo(expected2));
+
+  // projectors are never connected
+  auto expr4 = op::P(1) * op::H() * op::t(2) * op::P(-1);
+  auto res4_full = op::vac_av(expr4);
+  auto res4 = op::vac_av(
+      expr4, {.connect = op::default_op_connections(),
+              .do_not_connect = {{antisymm_label(), antisymm_label()}}});
+  REQUIRE(res4_full.size() == 4);
+  REQUIRE(res4.is<sequant::Product>());  // only single term survives
+  const std::wstring expected4 =
+      L"Â{i_1;a_2}:A-C-S Â{a_1;i_2}:A-C-S g{i_3,i_2;a_3,a_1}:A-C-S "
+      L"t{a_3,a_2;i_3,i_1}:A-C-S";
+  REQUIRE_THAT(simplify(res4), EquivalentTo(expected4));
+}
 }

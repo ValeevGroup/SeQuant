@@ -28,7 +28,7 @@
 #include <type_traits>
 #include <vector>
 
-#include <range/v3/all.hpp>
+#include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/view/interface.hpp>
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/view.hpp>
@@ -2195,6 +2195,42 @@ SECTION("remove_spin_with_relabel: internal index relabeled, external kept") {
   // a↑1 -> a3, i↑1 -> i4 to avoid clashing with external a↓1->a1, i↓1->i1
   REQUIRE_THAT(result,
                EquivalentTo("-2 R{a3;i4} g{i4,i3;a3,i1} t{a2,a1;i2,i3}"));
+}
+
+SECTION("Open-shell CC spintrace energy") {
+  // CC energy
+  {
+    const auto input = deserialize(
+        L"f{i_1;a_1} t{a_1;i_1} "
+        L"+ 1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2} "
+        L"+ 1/2 g{i_1,i_2;a_1,a_2} t{a_1;i_1} t{a_2;i_2}",
+        {.def_perm_symm = Symmetry::Antisymm});
+    auto result = open_shell_CC_spintrace(input);
+    REQUIRE(result.size() == 1);
+    REQUIRE_THAT(
+        result[0],
+        EquivalentTo(L"f{i↑1;a↑1} t{a↑1;i↑1} "
+                     L"+ f{i↓1;a↓1} t{a↓1;i↓1} "
+                     L"+ 1/4 g{i↑1,i↑2;a↑1,a↑2}:A t{a↑1,a↑2;i↑1,i↑2}:A "
+                     L"+ 1/4 g{i↓1,i↓2;a↓1,a↓2}:A t{a↓1,a↓2;i↓1,i↓2}:A "
+                     L"+ g{i↑1,i↓1;a↑1,a↓1} t{a↑1,a↓1;i↑1,i↓1} "
+                     L"+ 1/2 g{i↑1,i↑2;a↑1,a↑2}:A t{a↑1;i↑1} t{a↑2;i↑2} "
+                     L"+ 1/2 g{i↓1,i↓2;a↓1,a↓2}:A t{a↓1;i↓1} t{a↓2;i↓2} "
+                     L"+ g{i↑1,i↓1;a↑1,a↓1} t{a↑1;i↑1} t{a↓1;i↓1}"));
+  }
+  // CCD Energy (a single Product)
+  {
+    const auto input = deserialize(L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
+                                   {.def_perm_symm = Symmetry::Antisymm});
+    REQUIRE(input->is<Product>());
+    auto result = open_shell_CC_spintrace(input);
+    REQUIRE(result.size() == 1);
+    REQUIRE_THAT(
+        result[0],
+        EquivalentTo(L"1/4 g{i↑1,i↑2;a↑1,a↑2}:A t{a↑1,a↑2;i↑1,i↑2}:A "
+                     L"+ 1/4 g{i↓1,i↓2;a↓1,a↓2}:A t{a↓1,a↓2;i↓1,i↓2}:A "
+                     L"+ g{i↑1,i↓2;a↑1,a↓2} t{a↑1,a↓2;i↑1,i↓2}"));
+  }
 }
 
 SECTION("ResultExpr") {

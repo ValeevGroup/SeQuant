@@ -50,6 +50,8 @@ class Variable : public Expr, public MutatableLabeled {
 
   type_id_type type_id() const override { return get_type_id<Variable>(); }
 
+  bool is_scalar() const override { return true; }
+
   ExprPtr clone() const override;
 
   /// @brief adjoint of a Variable is its complex conjugate

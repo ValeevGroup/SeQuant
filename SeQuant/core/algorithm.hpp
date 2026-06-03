@@ -8,7 +8,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/meta.hpp>
 
-#include <range/v3/view.hpp>
+#include <range/v3/view/slice.hpp>
 
 #include <algorithm>
 #include <functional>
@@ -156,7 +156,7 @@ using EvalSequence = container::svector<int>;
 template <typename Rng>
 auto inits(Rng const& rng) {
   using ranges::views::slice;
-  using ranges::views::transform;
+  using std::views::transform;
   return rng | transform([n = 0, &rng](auto&&) mutable {
            return slice(rng, 0, ++n);
          });

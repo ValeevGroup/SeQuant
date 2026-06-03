@@ -1,83 +1,117 @@
 #ifndef SEQUANT_PERMUTATION_HPP
 #define SEQUANT_PERMUTATION_HPP
 
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
-#include <range/v3/algorithm.hpp>
+#include <range/v3/algorithm/all_of.hpp>
+#include <range/v3/algorithm/find.hpp>
+#include <range/v3/algorithm/for_each.hpp>
 
 #include <algorithm>
 #include <cstddef>
 #include <cstdlib>
-#include <set>
-#include <type_traits>
-#include <utility>
+#include <numeric>
+#include <ranges>
 
 namespace sequant {
 
-/// @brief Returns the number of cycles
+/// @brief Returns the number of (spin) loops in a closed-shell trace
 
-/// Counts the number of cycles of a permutation represented in a 2-line form
-/// by stacking \p v0 and \p v1 on top of each other.
+/// Interprets \p v0 and \p v1 as the column-paired index slots of a contracted
+/// tensor network: slot @c i is one particle slot of one tensor, holding @c
+/// v0[i] in one row and @c v1[i] in the other (e.g. ket and bra). Two slots
+/// must carry the same spin if they are (a) the two rows of the same column (a
+/// *column edge* @c v0[i]—v1[i]) or (b) the two occurrences of the same
+/// (contracted) index value (a *contraction edge*). Every internal slot then
+/// has degree two, so this graph is a disjoint union of cycles and the number
+/// of connected components is the number of independent spin loops (each loop
+/// contributes a factor of two in the closed-shell trace).
+///
+/// Unlike a 2-line-permutation reading, this is agnostic to which row a value
+/// sits in: a contraction may be covariant (one occurrence in \p v0, one in
+/// \p v1) or, for bra-ket-symmetric (Hermitian/real) tensors that have been
+/// reoriented, both occurrences in the same row (bra-bra / ket-ket). The
+/// component count is invariant under such bra<->ket swaps and reduces to the
+/// permutation's cycle count whenever \p v0 is a permutation of \p v1.
 /// @tparam Seq0 (reference to) a container type
 /// @tparam Seq1 (reference to) a container type
-/// @param v0 first sequence; if passed as an rvalue reference, it is moved from
-/// @param[in] v1 second sequence
-/// @pre \p v0 is a permutation of \p v1
-/// @return the number of cycles
+/// @param v0 first row of index slots
+/// @param v1 second row of index slots (\p v1[i] is column-paired with \p
+/// v0[i])
+/// @pre \p v0 and \p v1 have equal size and every value occurs in exactly two
+///      slots across \p v0 and \p v1 combined
+/// @return the number of connected components (spin loops)
 template <typename Seq0, typename Seq1>
-std::size_t count_cycles(Seq0&& v0, const Seq1& v1) {
-  std::remove_reference_t<Seq0> v(std::forward<Seq0>(v0));
-  using T = std::decay_t<decltype(v[0])>;
-  SEQUANT_ASSERT(ranges::is_permutation(v, v1));
-  // This function can't deal with duplicate entries in v0 or v1
-  SEQUANT_ASSERT(std::set(std::begin(v0), std::end(v0)).size() == v0.size());
-  SEQUANT_ASSERT(std::set(std::begin(v1), std::end(v1)).size() == v1.size());
+std::size_t count_cycles(Seq0&& v0, Seq1&& v1) {
+  using std::ranges::begin;
+  using std::ranges::end;
+  using std::ranges::size;
+  const std::size_t n0 = size(v0);
+  const std::size_t n1 = size(v1);
+  const std::size_t n = n0 + n1;
 
-  auto make_null = []() -> T {
-    if constexpr (std::is_arithmetic_v<T>) {
-      return -1;
-    } else if constexpr (std::is_same_v<T, Index>) {
-      return L"p_50";
-    }
-
-    SEQUANT_UNREACHABLE;
-  };
-
-  const auto null = make_null();
-  SEQUANT_ASSERT(ranges::contains(v, null) == false);
-  SEQUANT_ASSERT(ranges::contains(v1, null) == false);
-
-  std::size_t n_cycles = 0;
-  for (auto it = v.begin(); it != v.end(); ++it) {
-    if (*it != null) {
-      n_cycles++;
-
-      auto idx = std::distance(v.begin(), it);
-      SEQUANT_ASSERT(idx >= 0);
-
-      auto it0 = it;
-
-      auto it1 = std::find(v1.begin(), v1.end(), *it0);
-      SEQUANT_ASSERT(it1 != v1.end());
-
-      auto idx1 = std::distance(v1.begin(), it1);
-      SEQUANT_ASSERT(idx1 >= 0);
-
-      do {
-        it0 = std::find(v.begin(), v.end(), v[idx1]);
-        SEQUANT_ASSERT(it0 != v.end());
-
-        it1 = std::find(v1.begin(), v1.end(), *it0);
-        SEQUANT_ASSERT(it1 != v1.end());
-
-        idx1 = std::distance(v1.begin(), it1);
-        SEQUANT_ASSERT(idx1 >= 0);
-
-        *it0 = null;
-      } while (idx1 != idx);
-    }
+  // preconditions (debug builds only):
+  //  (1) the two rows have equal length: every column pairs a v0 slot with a
+  //      v1 slot. The column-edge loop below only pairs min(n0, n1) slots, so
+  //      with n0 != n1 the surplus slots in the longer row would stay unpaired
+  //      and be miscounted as their own components -- a meaningless loop count
+  //      rather than a detected error.
+  //  (2) every value occurs in exactly two slots across v0 and v1 combined.
+  //      This is what makes the column+contraction graph 2-regular on its
+  //      internal slots, so it decomposes into disjoint cycles and the
+  //      component count is the loop count. It generalizes the former "v0 is a
+  //      permutation of v1" contract (which also implied exactly two
+  //      occurrences, one per row) to allow both occurrences in the same row
+  //      (bra-bra / ket-ket edges from reoriented bra-ket-symmetric tensors).
+  //      Without it malformed input (a value appearing once, or 3+ times) is
+  //      silently accepted.
+  if constexpr (assert_enabled()) {
+    SEQUANT_ASSERT(n0 == n1);
+    container::map<std::ranges::range_value_t<Seq0>, std::size_t> counts;
+    for (auto&& x : v0) ++counts[x];
+    for (auto&& x : v1) ++counts[x];
+    SEQUANT_ASSERT(
+        ranges::all_of(counts, [](auto const& kv) { return kv.second == 2; }));
   }
+
+  // slot ids: row-0 slot i -> i ; row-1 slot i -> n0 + i. Size the union-find
+  // by n0 + n1 (not 2*n0) so it is safe even if the two rows differ in length.
+  // union-find with path halving
+  container::svector<std::size_t> parent(n);
+  std::iota(parent.begin(), parent.end(), std::size_t{0});
+  auto find = [&parent](std::size_t x) {
+    while (parent[x] != x) {
+      parent[x] = parent[parent[x]];
+      x = parent[x];
+    }
+    return x;
+  };
+  auto unite = [&](std::size_t a, std::size_t b) { parent[find(a)] = find(b); };
+
+  // column edges: the two rows of each column carry the same spin
+  const std::size_t ncols = std::min(n0, n1);
+  for (std::size_t i = 0; i < ncols; ++i) unite(i, n0 + i);
+
+  // contraction edges: the slots sharing an index value carry the same spin
+  container::map<std::ranges::range_value_t<Seq0>, std::size_t> first_slot;
+  auto add_slot = [&first_slot, &unite](auto const& idx, std::size_t slot) {
+    auto [it, inserted] = first_slot.try_emplace(idx, slot);
+    if (!inserted)
+      unite(it->second, slot);  // contraction with first occurrence
+  };
+  {
+    std::size_t i = 0;
+    for (auto it = begin(v0); it != end(v0); ++it, ++i) add_slot(*it, i);
+    i = 0;
+    for (auto it = begin(v1); it != end(v1); ++it, ++i) add_slot(*it, n0 + i);
+  }
+
+  // number of connected components = number of spin loops
+  std::size_t n_cycles = 0;
+  for (std::size_t i = 0; i < n; ++i)
+    if (find(i) == i) ++n_cycles;
   return n_cycles;
 };
 
@@ -105,7 +139,7 @@ int permutation_parity(std::span<T> p, bool overwrite = false) {
   }
 
   if (overwrite) {
-    ranges::for_each(p, [N](auto& e) { e -= N; });
+    std::ranges::for_each(p, [N](auto& e) { e -= N; });
   }
 
   return parity;

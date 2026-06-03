@@ -9,7 +9,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 
-#include <range/v3/view.hpp>
+#include <range/v3/view/transform.hpp>
 
 #include <cstdint>
 

@@ -15,6 +15,12 @@
 
 #include <boost/regex.hpp>
 
+#include <range/v3/algorithm/all_of.hpp>
+#include <range/v3/view/all.hpp>
+#include <range/v3/view/repeat_n.hpp>
+#include <range/v3/view/split.hpp>
+#include <range/v3/view/transform.hpp>
+
 #include <string>
 #include <vector>
 
@@ -22,7 +28,9 @@ namespace {
 
 auto eval_node(sequant::ExprPtr const& expr) {
   using namespace sequant;
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   return binarize<EvalExprBTAS>(expr);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 }
 
 static auto const idx_rgx = boost::wregex{L"([ia])([↑↓])?_?(\\d+)"};

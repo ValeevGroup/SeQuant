@@ -27,6 +27,7 @@ struct ProcessingOptions {
   bool expand_symmetrizer = false;
   bool term_by_term = false;
   bool subexpression_elimination = true;
+  std::size_t min_cse_usage = 2;
 };
 
 sequant::container::svector<sequant::ResultExpr> postProcess(

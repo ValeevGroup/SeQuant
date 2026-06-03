@@ -71,6 +71,8 @@ class Constant : public Expr {
 
   type_id_type type_id() const override { return get_type_id<Constant>(); }
 
+  bool is_scalar() const override { return true; }
+
   ExprPtr clone() const override { return ex<Constant>(this->value()); }
 
   /// @brief adjoint of a Constant is its complex conjugate

@@ -5,6 +5,8 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/utils.hpp>
 
+#include <range/v3/algorithm/any_of.hpp>
+
 namespace sequant::mbpt {
 
 ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank, LSTOptions options) {

@@ -11,6 +11,7 @@ add_library(eval_shared STATIC EXCLUDE_FROM_ALL
         "scf.hpp"
         "scf.cpp"
 )
+set_target_properties(eval_shared PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 target_link_libraries(eval_shared PUBLIC SeQuant)
 target_include_directories(eval_shared PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 
@@ -20,6 +21,7 @@ if (SEQUANT_HAS_TILEDARRAY)
             "ta/scf_ta.hpp"
             "ta/main.cpp"
     )
+    set_target_properties(eval_ta PROPERTIES CXX_SCAN_FOR_MODULES OFF)
     target_link_libraries(eval_ta PRIVATE eval_shared tiledarray)
 
     set(test_name "sequant/integration/eval_ta")
@@ -38,6 +40,7 @@ if (SEQUANT_HAS_BTAS)
             "btas/scf_btas.hpp"
             "btas/main.cpp"
     )
+    set_target_properties(eval_btas PROPERTIES CXX_SCAN_FOR_MODULES OFF)
     target_link_libraries(eval_btas PRIVATE eval_shared BTAS::BTAS)
 
     set(test_name "sequant/integration/eval_btas")
@@ -56,6 +59,7 @@ if (SEQUANT_HAS_TAPP)
             "tapp/scf_tapp.hpp"
             "tapp/main.cpp"
     )
+    set_target_properties(eval_tapp PROPERTIES CXX_SCAN_FOR_MODULES OFF)
     target_link_libraries(eval_tapp PRIVATE eval_shared tapp::reference)
 
     set(test_name "sequant/integration/eval_tapp")

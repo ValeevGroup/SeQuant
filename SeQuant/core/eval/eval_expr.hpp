@@ -9,6 +9,8 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/external/bliss/graph.hh>
 
+#include <range/v3/algorithm/all_of.hpp>
+
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -32,7 +34,18 @@ enum class EvalOp {
   ///        times a tensor, a constant times a constant, or a tensor times a
   ///        constant
   ///        (in either order).
-  Product
+  Product,
+
+  ///
+  /// \brief Represents the adjoint (conjugate transpose) of one EvalExpr
+  ///        object. The result equals the bra/ket-swapped, complex-conjugated
+  ///        operand. The IR representation is "structurally binary, lexically
+  ///        unary": an Adjoint node holds the bare-label operand as its left
+  ///        child and a Constant(1) sentinel as its right child (so the
+  ///        FullBinaryNode invariant — every non-leaf has both children —
+  ///        is preserved). Evaluate dispatches on this op_type and only uses
+  ///        the left operand; the right is ignored.
+  Adjoint
 };
 
 ///
@@ -71,6 +84,11 @@ class EvalExpr {
   /// \brief Construct an EvalExpr object from a Variable.
   ///
   explicit EvalExpr(Variable const& v);
+
+  ///
+  /// \brief Construct an EvalExpr object from a Power.
+  ///
+  explicit EvalExpr(Power const& p);
 
   ///
   /// @param op Evaluation operation resulting to this object.
@@ -140,8 +158,9 @@ class EvalExpr {
   [[nodiscard]] bool is_tensor() const noexcept;
 
   ///
-  /// \return True if the ExprPtr held by this object is scalar(Constant, or
-  ///         Variable) and equivalently the result of evaluation is scalar.
+  /// \return True if the ExprPtr held by this object is scalar (Constant,
+  ///         Variable, or Power) and equivalently the result of evaluation
+  ///         is scalar.
   ///
   [[nodiscard]] bool is_scalar() const noexcept;
 
@@ -154,6 +173,11 @@ class EvalExpr {
   /// \return True if ExprPtr held by this object is Variable.
   ///
   [[nodiscard]] bool is_variable() const noexcept;
+
+  ///
+  /// \return True if ExprPtr held by this object is Power.
+  ///
+  [[nodiscard]] bool is_power() const noexcept;
 
   ///
   /// \return True if this is a primary expression (i.e. a leaf on expression
@@ -170,6 +194,11 @@ class EvalExpr {
   /// \return True if this expression is a sum.
   ///
   [[nodiscard]] bool is_sum() const noexcept;
+
+  ///
+  /// \return True if this expression is an adjoint (unary) node.
+  ///
+  [[nodiscard]] bool is_adjoint() const noexcept;
 
   ///
   /// \brief Calls to<Tensor>() on ExprPtr held by this object.
@@ -191,6 +220,13 @@ class EvalExpr {
   /// \return Variable const&
   ///
   [[nodiscard]] Variable const& as_variable() const;
+
+  ///
+  /// \brief Calls to<Power>() on ExprPtr held by this object.
+  ///
+  /// \return Power const&
+  ///
+  [[nodiscard]] Power const& as_power() const;
 
   ///
   /// \brief Get the label for this object useful for logging.
@@ -252,6 +288,14 @@ class EvalExpr {
 
 struct EvalOpSetter {
   void set(EvalExpr& expr, EvalOp op) { expr.op_type_ = op; }
+  void reset(EvalExpr& expr) { expr.op_type_ = std::nullopt; }
+};
+
+struct BinarizationOptions {
+  /// Whether to merge indices of intermediate tensors into a single list
+  /// (stored as aux indices) instead of retaining the bra, ket and aux
+  /// separation
+  bool merge_indices = false;
 };
 
 namespace meta {
@@ -340,7 +384,8 @@ concept leaf_node_evaluator =
 
 namespace impl {
 
-FullBinaryNode<EvalExpr> binarize(ExprPtr const&, IndexSet const& uncontract);
+FullBinaryNode<EvalExpr> binarize(ExprPtr const&, IndexSet const& uncontract,
+                                  const BinarizationOptions& opts);
 }  // namespace impl
 
 ///
@@ -358,13 +403,31 @@ static_assert(!meta::can_evaluate<EvalNode<EvalExpr>>);
 ///        indices that appear more than once in @p expr (i.e., hyperindices)
 ///        but should not be contracted. Indices appearing once are
 ///        automatically treated as external.
+///
+/// @deprecated The root EvalExpr's tensor has a positional bra/ket split: each
+///        surviving external ends up in whichever bra/ket slot it occupied in
+///        its source factor (see eval_expr.cpp ~ "target_indices" lambda).
+///        For terms equivalent under bra<->ket-swap, this can yield a head
+///        with an unconventional bra/ket layout (e.g., 3:1 for a CCSD T2
+///        residual) that breaks downstream code reading the result tensor by
+///        slot position. Prefer the ResultExpr overload, which lets the
+///        caller declare the head's bra/ket layout explicitly via the LHS
+///        and is space/convention-agnostic in the IR.
+///
+/// @sa binarize(ResultExpr const&)
 template <typename ExprT = EvalExpr>
   requires std::is_constructible_v<ExprT, EvalExpr>
-FullBinaryNode<ExprT> binarize(ExprPtr const& expr,
-                               IndexSet const& external = {}) {
+[[deprecated(
+    "binarize(ExprPtr) builds the eval-tree head's bra/ket from external "
+    "slot positions in the source factors and can yield an unconventional "
+    "layout (e.g. T2 residual head 3:1 instead of 2:2). Use "
+    "binarize(ResultExpr) and supply the desired head as the "
+    "LHS.")]] FullBinaryNode<ExprT>
+binarize(ExprPtr const& expr, IndexSet const& external = {},
+         const BinarizationOptions& opts = {}) {
   SEQUANT_ASSERT(
       ranges::all_of(external, [](const auto& idx) { return idx.nonnull(); }));
-  auto tree = impl::binarize(expr, external);
+  auto tree = impl::binarize(expr, external, opts);
   if constexpr (std::is_same_v<ExprT, EvalExpr>)
     return tree;
   else
@@ -376,12 +439,19 @@ FullBinaryNode<ExprT> binarize(ExprPtr const& expr,
 /// External indices are deduced from @p res (its non-null slots).
 template <typename ExprT = EvalExpr>
   requires std::is_constructible_v<ExprT, EvalExpr>
-FullBinaryNode<ExprT> binarize(ResultExpr const& res) {
+FullBinaryNode<ExprT> binarize(ResultExpr const& res,
+                               const BinarizationOptions& opts = {}) {
   // collect result indices so they are not contracted in the expression tree
   IndexSet uncontract;
   for (auto&& ix : res.indices()) uncontract.emplace(ix);
 
-  FullBinaryNode<ExprT> tree = binarize<ExprT>(res.expression(), uncontract);
+  // The recursive calls below dispatch to the (now deprecated)
+  // binarize(ExprPtr) overload — the head's bra/ket would be positional, but
+  // we overwrite it below with res.result_as_tensor() so the layout is
+  // caller-determined and the deprecation does not apply.
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  FullBinaryNode<ExprT> tree =
+      binarize<ExprT>(res.expression(), uncontract, opts);
 
   const bool is_scalar =
       res.bra().empty() && res.ket().empty() && res.aux().empty();
@@ -402,6 +472,7 @@ FullBinaryNode<ExprT> binarize(ResultExpr const& res) {
     tree = FullBinaryNode<ExprT>(std::move(result), std::move(tree),
                                  binarize<ExprT>(ex<Constant>(1)));
   }
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   SEQUANT_ASSERT(tree.size() > 1);
 
   if (is_scalar) {
@@ -412,16 +483,6 @@ FullBinaryNode<ExprT> binarize(ResultExpr const& res) {
     Tensor& tensor = tree->expr().template as<Tensor>();
 
     tensor = res.result_as_tensor();
-
-    // if (res.has_label()) {
-    //   tensor.set_label(res.label());
-    // }
-
-    // SEQUANT_ASSERT(tensor.num_slots() ==
-    //        res.bra().size() + res.ket().size() + res.aux().size());
-    // tensor.set_bra(res.bra());
-    // tensor.set_ket(res.ket());
-    // tensor.set_aux(res.aux());
   }
 
   return tree;
@@ -435,6 +496,11 @@ ExprPtr to_expr(meta::eval_node auto const& node) {
   auto const& evxpr = *node;
 
   if (node.leaf()) return evxpr.expr();
+
+  // Adjoint is unary and stores the marker-bearing tensor directly in its
+  // own ExprPtr; the bare-leaf left child and Constant(1) right child are
+  // structural plumbing for the IR, not part of the symbolic form.
+  if (op == EvalOp::Adjoint) return evxpr.expr();
 
   if (op == EvalOp::Product) {
     auto prod = Product{};

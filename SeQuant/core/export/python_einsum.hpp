@@ -4,6 +4,7 @@
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/export/generator.hpp>
 #include <SeQuant/core/export/reordering_context.hpp>
+#include <SeQuant/core/export/utils.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
@@ -26,27 +27,23 @@
 namespace sequant {
 
 /// Base context class for Python einsum generators
-class PythonEinsumGeneratorContext : public ExportContext {
+class PythonEinsumGeneratorContext : public ReorderingContext {
  public:
   using ShapeMap = std::map<IndexSpace, std::string>;
   using TagMap = std::map<IndexSpace, std::string>;
 
-  PythonEinsumGeneratorContext() = default;
+  PythonEinsumGeneratorContext()
+      : ReorderingContext(MemoryLayout::ColumnMajor){};
   ~PythonEinsumGeneratorContext() = default;
   PythonEinsumGeneratorContext(ShapeMap index_shapes)
-      : m_index_shapes(std::move(index_shapes)) {}
+      : ReorderingContext(MemoryLayout::ColumnMajor),
+        m_index_shapes(std::move(index_shapes)) {}
 
   /// Get whether to generate import statements
   bool generate_imports() const { return m_generate_imports; }
 
   /// Set whether to generate import statements
   void set_generate_imports(bool value) { m_generate_imports = value; }
-
-  /// Get the memory layout for tensors
-  MemoryLayout memory_layout() const { return m_memory_layout; }
-
-  /// Set the memory layout for tensors
-  void set_memory_layout(MemoryLayout layout) { m_memory_layout = layout; }
 
   /// Get the dimension/shape for a given index space
   std::string get_shape(const IndexSpace &space) const {
@@ -96,8 +93,6 @@ class PythonEinsumGeneratorContext : public ExportContext {
   ShapeMap m_index_shapes;
   TagMap m_tags;
   bool m_generate_imports = true;  // Generate imports by default
-  MemoryLayout m_memory_layout =
-      MemoryLayout::ColumnMajor;  // Fortran order to match Eigen::Tensor
 };
 
 /// Context for NumPy einsum generator
@@ -109,7 +104,14 @@ class NumPyEinsumGeneratorContext : public PythonEinsumGeneratorContext {
 /// Context for PyTorch einsum generator
 class PyTorchEinsumGeneratorContext : public PythonEinsumGeneratorContext {
  public:
-  using PythonEinsumGeneratorContext::PythonEinsumGeneratorContext;
+  PyTorchEinsumGeneratorContext() : PythonEinsumGeneratorContext() {
+    set_memory_layout(MemoryLayout::RowMajor);
+  };
+  ~PyTorchEinsumGeneratorContext() = default;
+  PyTorchEinsumGeneratorContext(ShapeMap index_shapes)
+      : PythonEinsumGeneratorContext(std::move(index_shapes)) {
+    set_memory_layout(MemoryLayout::RowMajor);
+  }
 };
 
 /// Base generator for producing Python code using einsum
@@ -191,6 +193,23 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
     }
 
     return sstream.str();
+  }
+
+  std::string represent(const Power &power, const Context &ctx) const override {
+    const ExprPtr &base = power.base();
+    std::string base_str = stringify_scalar(*base, ctx);
+    if (base->is<Variable>() && base->as<Variable>().conjugated()) {
+      base_str = wrap_conj(std::move(base_str));
+    }
+    auto s = detail::format_power_base(base, std::move(base_str)) + "**" +
+             detail::format_power_exponent(power.exponent(),
+                                           /*double_slash*/ false);
+    if (power.conjugated()) s = wrap_conj(std::move(s));
+    return s;
+  }
+
+  std::string wrap_conj(std::string s) const override {
+    return module_prefix() + "conj(" + std::move(s) + ")";
   }
 
   void unload(const Tensor &tensor, const Context &ctx) override {
@@ -453,6 +472,11 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
     einsum_spec +=
         "->" + tensor_to_einsum_subscript(result, ctx, index_map, used_chars);
 
+    // make sure there is at least one tensor, else return the scalar
+    if (tensor_names.empty()) {
+      return scalar_factor.empty() ? std::string{"1"} : scalar_factor;
+    }
+
     // Build einsum call
     std::string einsum_call = module_prefix() + "einsum('" + einsum_spec + "'";
 
@@ -475,6 +499,20 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
     return einsum_call;
   }
 
+  /// Render a scalar leaf expression (Variable, Constant, or Power thereof)
+  /// as its Python source representation.
+  std::string stringify_scalar(const Expr &expr, const Context &ctx) const {
+    if (expr.is<Variable>()) {
+      return represent(expr.as<Variable>(), ctx);
+    } else if (expr.is<Constant>()) {
+      return represent(expr.as<Constant>(), ctx);
+    } else if (expr.is<Power>()) {
+      return represent(expr.as<Power>(), ctx);
+    }
+    throw Exception("stringify_scalar: expression is not a scalar leaf, got " +
+                    expr.type_name());
+  }
+
   /// Extract einsum components from an expression
   void extract_einsum_components(
       const Expr &expr, std::string &einsum_spec,
@@ -488,19 +526,12 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
       einsum_spec +=
           tensor_to_einsum_subscript(tensor, ctx, index_map, used_chars);
       tensor_names.push_back(represent(tensor, ctx));
-    } else if (expr.is<Variable>()) {
-      // Treat variable as a scalar
+    } else if (expr.is<Variable>() || expr.is<Constant>() || expr.is<Power>()) {
+      std::string repr = stringify_scalar(expr, ctx);
       if (scalar_factor.empty()) {
-        scalar_factor = represent(expr.as<Variable>(), ctx);
+        scalar_factor = std::move(repr);
       } else {
-        scalar_factor += " * " + represent(expr.as<Variable>(), ctx);
-      }
-    } else if (expr.is<Constant>()) {
-      std::string const_repr = represent(expr.as<Constant>(), ctx);
-      if (scalar_factor.empty()) {
-        scalar_factor = const_repr;
-      } else {
-        scalar_factor += " * " + const_repr;
+        scalar_factor += " * " + repr;
       }
     } else if (expr.is<Product>()) {
       const Product &product = expr.as<Product>();
@@ -533,10 +564,8 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
   /// Convert expression to Python scalar expression (for variable results)
   std::string to_python_scalar_expr(const Expr &expr,
                                     const Context &ctx) const {
-    if (expr.is<Variable>()) {
-      return represent(expr.as<Variable>(), ctx);
-    } else if (expr.is<Constant>()) {
-      return represent(expr.as<Constant>(), ctx);
+    if (expr.is<Variable>() || expr.is<Constant>() || expr.is<Power>()) {
+      return stringify_scalar(expr, ctx);
     } else if (expr.is<Product>()) {
       // This should involve tensor contractions
       // For a scalar result, we need to contract all indices
@@ -552,6 +581,11 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
 
       extract_einsum_components(expr, einsum_spec, tensor_names, scalar_factor,
                                 ctx, index_map, used_chars);
+
+      // make sure there is at least one tensor, else return the scalar
+      if (tensor_names.empty()) {
+        return scalar_factor.empty() ? std::string{"1"} : scalar_factor;
+      }
 
       // For scalar result, use "->" or "->..."
       einsum_spec += "->";

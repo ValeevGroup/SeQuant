@@ -10,6 +10,11 @@
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <range/v3/algorithm/equal.hpp>
+#include <range/v3/algorithm/for_each.hpp>
+#include <range/v3/view/filter.hpp>
+#include <range/v3/view/transform.hpp>
+
 #include <string>
 #include <type_traits>
 
@@ -269,6 +274,21 @@ class Product : public Expr {
 
   const auto &factors() const { return factors_; }
   auto &factors() { return factors_; }
+
+  /// @brief View view of factors that are scalars (anything for which
+  ///        Expr::is_scalar() returns true).
+  /// @note Order-preserving.
+  auto scalar_factors() const {
+    return factors_ | ranges::views::filter(
+                          [](const ExprPtr &f) { return f->is_scalar(); });
+  }
+
+  /// @brief View of factors that are NOT scalars (i.e. tensor- or
+  ///        operator-like factors).
+  auto nonscalar_factors() const {
+    return factors_ | ranges::views::filter(
+                          [](const ExprPtr &f) { return !f->is_scalar(); });
+  }
 
   /// Factor accessor
   /// @param i factor index
