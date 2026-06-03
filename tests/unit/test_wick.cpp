@@ -1365,7 +1365,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         // the t tensors themselves into Symm via `:A-C-S` overspecifies and
         // collapses canonical externals (i_1, i_2 internalize).
         auto sr_reg = std::make_shared<sequant::IndexSpaceRegistry>(
-            *get_default_context().index_space_registry());
+            get_default_context().index_space_registry()->clone());
         std::vector<std::wstring> keys;
         for (auto const& s : *sr_reg) keys.push_back(s.base_key());
         for (auto const& k : keys)
@@ -1406,7 +1406,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       {
         // Field::Real preprocessing: see doubles variant above.
         auto sr_reg = std::make_shared<sequant::IndexSpaceRegistry>(
-            *get_default_context().index_space_registry());
+            get_default_context().index_space_registry()->clone());
         std::vector<std::wstring> keys;
         for (auto const& s : *sr_reg) keys.push_back(s.base_key());
         for (auto const& k : keys)
