@@ -1357,8 +1357,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         auto resetter = sequant::set_scoped_default_context(
             Context(get_default_context())
                 .set(CanonicalizeOptions::default_options().copy_and_set(
-                    container::set<Index>{L"i_1", L"i_2", L"a_1", L"a_2"}))
-                .set(BraKetSymmetry::Symm));
+                    container::set<Index>{L"i_1", L"i_2", L"a_1", L"a_2"})));
         // std::wcout << expr.to_latex() << "\n";
         auto rdm1_so = sequant::mbpt::tensor::vac_av(expr);
         // std::wcout << "SO RDM: " << rdm1_so.to_latex() << "\n";
@@ -1393,8 +1392,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
             Context(get_default_context())
                 .set(CanonicalizeOptions::default_options().copy_and_set(
                     container::set<Index>{L"i_1", L"i_2", L"i_3", L"a_4",
-                                          L"a_5"}))
-                .set(BraKetSymmetry::Symm));
+                                          L"a_5"})));
         // std::wcout << expr.to_latex() << "\n";
         auto rdm1_so = sequant::mbpt::tensor::vac_av(expr);
         // std::wcout << "SO RDM: " << rdm1_so.to_latex() << "\n";

@@ -225,9 +225,8 @@ TEST_CASE("canonicalization", "[algorithms]") {
     }
     // with bra-ket symmetry
     {
-      Context ctx = get_default_context();
-      ctx.set(BraKetSymmetry::Symm);
-      auto resetter = set_scoped_default_context(ctx);
+      // Tensor's BraKetSymmetry is per-tensor (Symm passed explicitly below);
+      // no Context manipulation needed.
       // TN is invariant wrt flipping one if the tensors
       // N.B. it's not possible purely to canonicalize each tensor since bra and
       // ket slots are equivalent, only the overall TN topology determines

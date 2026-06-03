@@ -26,11 +26,9 @@ TEST_CASE("context", "[runtime]") {
         {.index_space_registry_shared_ptr = mbpt::make_sr_spaces(),
          .vacuum = Vacuum::SingleProduct,
          .metric = IndexSpaceMetric::Unit,
-         .braket_symmetry = BraKetSymmetry::Symm,
          .spbasis = SPBasis::Spinfree}));
     CHECK(get_default_context().vacuum() == Vacuum::SingleProduct);
     CHECK(get_default_context().metric() == IndexSpaceMetric::Unit);
-    CHECK(get_default_context().braket_symmetry() == BraKetSymmetry::Symm);
     CHECK(get_default_context().spbasis() == SPBasis::Spinfree);
 
     // set distinct contexts for fermi and bose statistics
@@ -55,7 +53,6 @@ TEST_CASE("context", "[runtime]") {
     CHECK_NOTHROW(reset_default_context());
     CHECK(get_default_context().vacuum() == Vacuum::Physical);
     CHECK(get_default_context().metric() == IndexSpaceMetric::Unit);
-    CHECK(get_default_context().braket_symmetry() == BraKetSymmetry::Conjugate);
     CHECK(get_default_context().spbasis() == SPBasis::Spinor);
 
     // reset back to initial context
@@ -70,13 +67,11 @@ TEST_CASE("context", "[runtime]") {
           {.index_space_registry_shared_ptr = mbpt::make_sr_spaces(),
            .vacuum = Vacuum::SingleProduct,
            .metric = IndexSpaceMetric::Unit,
-           .braket_symmetry = BraKetSymmetry::Symm,
            .spbasis = SPBasis::Spinfree}));
       CHECK(get_default_context() == initial_ctx);
 
       auto ctx = get_default_context();
       ctx.set(mbpt::make_sr_spaces());
-      ctx.set(BraKetSymmetry::Symm);
       ctx.set(SPBasis::Spinfree);
       const auto ctx_copy = ctx;
       auto resetter = set_scoped_default_context(ctx);

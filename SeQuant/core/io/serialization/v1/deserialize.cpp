@@ -246,10 +246,12 @@ AST parse(const StartRule &start, std::wstring_view input,
 
 transform::DefaultSymmetries to_default_symms(
     const DeserializationOptions &options) {
-  const Context &ctx = get_default_context();
-
-  transform::DefaultSymmetries symms{Symmetry::Nonsymm, ctx.braket_symmetry(),
-                                     ColumnSymmetry::Symm};
+  // BraKetSymmetry fallback used only when the serialized form omits it
+  // (legacy/short input); the v1 serializer always emits it explicitly.
+  // The fallback value matches the historical Context::braket_symmetry()
+  // default of Conjugate.
+  transform::DefaultSymmetries symms{
+      Symmetry::Nonsymm, BraKetSymmetry::Conjugate, ColumnSymmetry::Symm};
 
   if (options.def_perm_symm.has_value()) {
     std::get<0>(symms) = options.def_perm_symm.value();
