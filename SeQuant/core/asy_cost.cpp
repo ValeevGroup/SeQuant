@@ -2,6 +2,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <boost/numeric/conversion/cast.hpp>
@@ -85,7 +86,8 @@ std::string AsyCost::AsyCostEntry::text() const {
       AsyCostEntry::stream_out_rational(oss, abs_c);
       oss << "*";
     }
-    // Spaces print in IndexSpace order (by attr, then base_key).
+    // Spaces print in IndexSpace order (primarily by attr; base_key only
+    // breaks ties between reserved-attr spaces).
     for (auto const &[space, exp] : exponents_) {
       if (exp == 0) continue;
       oss << toUtf8(space.base_key());
@@ -188,8 +190,11 @@ double AsyCost::ops(ExtentMap const &extents) const {
     double temp = 1;
     for (auto const &[space, exp] : c.exponents()) {
       auto it = extents.find(space);
-      std::size_t const extent = (it != extents.end()) ? it->second : 1;
-      temp *= std::pow(static_cast<double>(extent), static_cast<double>(exp));
+      if (it == extents.end())
+        throw Exception("AsyCost::ops: no extent provided for index space '" +
+                        toUtf8(space.base_key()) + "'");
+      temp *=
+          std::pow(static_cast<double>(it->second), static_cast<double>(exp));
     }
     total += boost::numeric_cast<double>(c.count()) * temp;
   }

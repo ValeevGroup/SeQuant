@@ -110,9 +110,10 @@ class AsyCost {
 
   ///
   /// Substitute each space in this cost by an extent and evaluate.
-  /// \param extents Map from index space to extent (size). Any space appearing
-  ///                in this cost but missing from `extents` is treated as
-  ///                extent 1 (i.e. contributes a factor of 1).
+  /// \param extents Map from index space to extent (size). Every space
+  ///                appearing in this cost must be present in `extents`.
+  /// \throw sequant::Exception if a space appearing in this cost is missing
+  ///                from `extents`.
   /// \return Numerical value of the cost.
   ///
   [[nodiscard]] double ops(ExtentMap const &extents) const;

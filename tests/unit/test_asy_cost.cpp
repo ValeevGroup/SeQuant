@@ -3,6 +3,7 @@
 #include <SeQuant/core/asy_cost.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 
 #include "catch2_sequant.hpp"
 
@@ -212,11 +213,9 @@ TEST_CASE("asy_cost", "[AsyCost]") {
                           std::pow(7.0, 1);
     REQUIRE(c.ops(ext) == expected);
 
-    // Missing extent for K falls back to 1.
+    // Missing extent for a space the cost depends on is an error.
     AsyCost::ExtentMap const ext2{{O, 10}, {V, 100}, {U, 5}, {Q, 7}};
-    auto const expected2 = std::pow(10.0, 2) * std::pow(5.0, 1) *
-                           std::pow(100.0, 3) * 1.0 * std::pow(7.0, 1);
-    REQUIRE(c.ops(ext2) == expected2);
+    REQUIRE_THROWS_AS(c.ops(ext2), sequant::Exception);
 
     // Ordering is by total degree (sum of exponents) first: the overall
     // polynomial / worst-case scaling dominates regardless of which spaces
