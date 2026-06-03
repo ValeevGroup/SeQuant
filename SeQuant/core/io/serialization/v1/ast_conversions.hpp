@@ -154,21 +154,35 @@ std::variant<BraKetSymmetry, Hermiticity> to_braket_symmetry(
     return default_symmetry;
   }
 
+  // The v1 serialized form historically encodes BraKetSymmetry directly:
+  // 'C' / 'S' / 'N' are concrete BraKetSymmetry::{Conjugate, Symm, Nonsymm}
+  // values, not Hermiticity traits — Tensor's hermiticity_ is back-filled
+  // from the BraKetSymmetry via to_hermiticity at construction. Round-tripping
+  // through Hermiticity here would corrupt that encoding: 'C' field-resolved
+  // against Real-field indices would silently flip to Symm, and 'N' would
+  // round-trip as NonHermitian losing the AntiHermitian preimage.
+  //
+  // The explicit Hermiticity letters 'H' (Hermitian) and 'A' (AntiHermitian)
+  // are the *new* abstract-trait spellings that intentionally defer to
+  // field resolution at Tensor construction time; use those when serializing
+  // tensors whose adjoint symmetry should be expressed independently of the
+  // computation's scalar field.
   switch (c) {
     case 'C':
     case 'c':
+      return BraKetSymmetry::Conjugate;
+    case 'S':
+    case 's':
+      return BraKetSymmetry::Symm;
+    case 'N':
+    case 'n':
+      return BraKetSymmetry::Nonsymm;
     case 'H':
     case 'h':
       return Hermiticity::Hermitian;
     case 'A':
     case 'a':
       return Hermiticity::AntiHermitian;
-    case 'S':
-    case 's':
-      return BraKetSymmetry::Symm;
-    case 'N':
-    case 'n':
-      return Hermiticity::NonHermitian;
   }
 
   throw SerializationError(

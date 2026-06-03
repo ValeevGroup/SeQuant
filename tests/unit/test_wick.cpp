@@ -1362,7 +1362,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         // affected tensors *created after* the set; the t tensors below were
         // deserialized first and stored a Conjugate braket_symmetry_, but
         // vac_av's new intermediates inherited Symm from the Context. Putting
-        // the t tensors themselves into Symm via `:A-S-S` overspecifies and
+        // the t tensors themselves into Symm via `:A-C-S` overspecifies and
         // collapses canonical externals (i_1, i_2 internalize).
         auto sr_reg = std::make_shared<sequant::IndexSpaceRegistry>(
             *get_default_context().index_space_registry());
@@ -1384,7 +1384,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         REQUIRE_THAT(
             rdm1_so,
             EquivalentTo(
-                L"t{a_2,a_3;i_2,i_1}:A-S-S * t{i_2,i_1;a_1,a_3}:A-S-S"));
+                L"t{a_2,a_3;i_2,i_1}:A-C-S * t{i_2,i_1;a_1,a_3}:A-C-S"));
 
         // N.B. closed-shell spintrace expects ext groups to consist of pairs of
         // indices
@@ -1396,10 +1396,10 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         REQUIRE_THAT(
             rdm1_sf,
             EquivalentTo(
-                L"4 t{i_1,i_2;a_1,a_3}:N-S-S * t{a_3,a_2;i_2,i_1}:N-S-S + 4 "
-                L"t{i_1,i_2;a_3,a_1}:N-S-S * t{a_3,a_2;i_1,i_2}:N-S-S - 2 "
-                L"t{i_1,i_2;a_1,a_3}:N-S-S * t{a_3,a_2;i_1,i_2}:N-S-S - 2 "
-                L"t{i_1,i_2;a_3,a_1}:N-S-S * t{a_3,a_2;i_2,i_1}:N-S-S"));
+                L"4 t{i_1,i_2;a_1,a_3}:N-C-S * t{a_3,a_2;i_2,i_1}:N-C-S + 4 "
+                L"t{i_1,i_2;a_3,a_1}:N-C-S * t{a_3,a_2;i_1,i_2}:N-C-S - 2 "
+                L"t{i_1,i_2;a_1,a_3}:N-C-S * t{a_3,a_2;i_1,i_2}:N-C-S - 2 "
+                L"t{i_1,i_2;a_3,a_1}:N-C-S * t{a_3,a_2;i_2,i_1}:N-C-S"));
       }
 
       // triples variant of the previous case
@@ -1425,8 +1425,8 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         auto rdm1_so = sequant::mbpt::tensor::vac_av(expr);
         // std::wcout << "SO RDM: " << rdm1_so.to_latex() << "\n";
         REQUIRE_THAT(rdm1_so,
-                     EquivalentTo(L"1/2 t{a_1,a_2,a_5;i_3,i_2,i_1}:A-S-S * "
-                                  L"t{i_3,i_2,i_1;a_1,a_2,a_4}:A-S-S"));
+                     EquivalentTo(L"1/2 t{a_1,a_2,a_5;i_3,i_2,i_1}:A-C-S * "
+                                  L"t{i_3,i_2,i_1;a_1,a_2,a_4}:A-C-S"));
 
         // N.B. closed-shell spintrace expects ext groups to consist of pairs of
         // indices
@@ -1437,42 +1437,42 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         // std::wcout << "ST RDM: " << rdm1_sf.to_latex() << "\n";
 
         const std::wstring expected =
-            L"8 t{a_1,a_5,a_2;i_3,i_1,i_2}:N-S-S * "
-            L"t{i_3,i_2,i_1;a_1,a_2,a_4}:N-S-S + 2 "
-            L"t{a_1,a_2,a_5;i_1,i_3,i_2}:N-S-S * "
-            L"t{i_3,i_2,i_1;a_1,a_2,a_4}:N-S-S - 4 "
-            L"t{a_1,a_5,a_2;i_3,i_1,i_2}:N-S-S * "
-            L"t{i_2,i_3,i_1;a_1,a_2,a_4}:N-S-S + 2 "
-            L"t{a_1,a_2,a_5;i_3,i_1,i_2}:N-S-S * "
-            L"t{i_1,i_2,i_3;a_1,a_2,a_4}:N-S-S - 4 "
-            L"t{a_1,a_2,a_5;i_3,i_1,i_2}:N-S-S * "
-            L"t{i_3,i_2,i_1;a_1,a_2,a_4}:N-S-S - 4 "
-            L"t{a_1,a_5,a_2;i_3,i_1,i_2}:N-S-S * "
-            L"t{i_3,i_1,i_2;a_1,a_2,a_4}:N-S-S + 2 "
-            L"t{a_1,a_5,a_2;i_3,i_1,i_2}:N-S-S * "
-            L"t{i_1,i_3,i_2;a_1,a_2,a_4}:N-S-S - 4 "
-            L"t{a_1,a_2,a_5;i_1,i_3,i_2}:N-S-S * "
-            L"t{i_3,i_1,i_2;a_1,a_2,a_4}:N-S-S + 8 "
-            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-S-S * "
-            L"t{i_1,i_2,i_3;a_1,a_2,a_4}:N-S-S - 4 "
-            L"t{a_1,a_2,a_5;i_1,i_3,i_2}:N-S-S * "
-            L"t{i_1,i_2,i_3;a_1,a_2,a_4}:N-S-S + 8 "
-            L"t{a_1,a_2,a_5;i_1,i_3,i_2}:N-S-S * "
-            L"t{i_1,i_3,i_2;a_1,a_2,a_4}:N-S-S - 4 "
-            L"t{a_1,a_5,a_2;i_3,i_1,i_2}:N-S-S * "
-            L"t{i_1,i_2,i_3;a_1,a_2,a_4}:N-S-S - 4 "
-            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-S-S * "
-            L"t{i_3,i_2,i_1;a_1,a_2,a_4}:N-S-S + 2 "
-            L"t{a_1,a_5,a_2;i_3,i_1,i_2}:N-S-S * "
-            L"t{i_2,i_1,i_3;a_1,a_2,a_4}:N-S-S - 4 "
-            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-S-S * "
-            L"t{i_2,i_1,i_3;a_1,a_2,a_4}:N-S-S + 2 "
-            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-S-S * "
-            L"t{i_3,i_1,i_2;a_1,a_2,a_4}:N-S-S + 2 "
-            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-S-S * "
-            L"t{i_2,i_3,i_1;a_1,a_2,a_4}:N-S-S - 4 "
-            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-S-S * "
-            L"t{i_1,i_3,i_2;a_1,a_2,a_4}:N-S-S";
+            L"8 t{a_1,a_5,a_2;i_3,i_1,i_2}:N-C-S * "
+            L"t{i_3,i_2,i_1;a_1,a_2,a_4}:N-C-S + 2 "
+            L"t{a_1,a_2,a_5;i_1,i_3,i_2}:N-C-S * "
+            L"t{i_3,i_2,i_1;a_1,a_2,a_4}:N-C-S - 4 "
+            L"t{a_1,a_5,a_2;i_3,i_1,i_2}:N-C-S * "
+            L"t{i_2,i_3,i_1;a_1,a_2,a_4}:N-C-S + 2 "
+            L"t{a_1,a_2,a_5;i_3,i_1,i_2}:N-C-S * "
+            L"t{i_1,i_2,i_3;a_1,a_2,a_4}:N-C-S - 4 "
+            L"t{a_1,a_2,a_5;i_3,i_1,i_2}:N-C-S * "
+            L"t{i_3,i_2,i_1;a_1,a_2,a_4}:N-C-S - 4 "
+            L"t{a_1,a_5,a_2;i_3,i_1,i_2}:N-C-S * "
+            L"t{i_3,i_1,i_2;a_1,a_2,a_4}:N-C-S + 2 "
+            L"t{a_1,a_5,a_2;i_3,i_1,i_2}:N-C-S * "
+            L"t{i_1,i_3,i_2;a_1,a_2,a_4}:N-C-S - 4 "
+            L"t{a_1,a_2,a_5;i_1,i_3,i_2}:N-C-S * "
+            L"t{i_3,i_1,i_2;a_1,a_2,a_4}:N-C-S + 8 "
+            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-C-S * "
+            L"t{i_1,i_2,i_3;a_1,a_2,a_4}:N-C-S - 4 "
+            L"t{a_1,a_2,a_5;i_1,i_3,i_2}:N-C-S * "
+            L"t{i_1,i_2,i_3;a_1,a_2,a_4}:N-C-S + 8 "
+            L"t{a_1,a_2,a_5;i_1,i_3,i_2}:N-C-S * "
+            L"t{i_1,i_3,i_2;a_1,a_2,a_4}:N-C-S - 4 "
+            L"t{a_1,a_5,a_2;i_3,i_1,i_2}:N-C-S * "
+            L"t{i_1,i_2,i_3;a_1,a_2,a_4}:N-C-S - 4 "
+            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-C-S * "
+            L"t{i_3,i_2,i_1;a_1,a_2,a_4}:N-C-S + 2 "
+            L"t{a_1,a_5,a_2;i_3,i_1,i_2}:N-C-S * "
+            L"t{i_2,i_1,i_3;a_1,a_2,a_4}:N-C-S - 4 "
+            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-C-S * "
+            L"t{i_2,i_1,i_3;a_1,a_2,a_4}:N-C-S + 2 "
+            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-C-S * "
+            L"t{i_3,i_1,i_2;a_1,a_2,a_4}:N-C-S + 2 "
+            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-C-S * "
+            L"t{i_2,i_3,i_1;a_1,a_2,a_4}:N-C-S - 4 "
+            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-C-S * "
+            L"t{i_1,i_3,i_2;a_1,a_2,a_4}:N-C-S";
         REQUIRE_THAT(rdm1_sf, EquivalentTo(expected));
       }
     }
