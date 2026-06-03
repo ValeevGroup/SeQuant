@@ -1305,22 +1305,21 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         // sequant::wprintf(to_latex_align(Ld_H2N_L), L" = \n",
         //                  to_latex_align(result2, 0, 2), L"\n");
         REQUIRE(result2.as<Sum>().size() == 5);
-        // Term ordering within the Sum changed when the Tensor default
-        // BraKetSymmetry stopped tracking Context::braket_symmetry (now
-        // Hermitian+field-derived); the canonicalized sorting key for the
-        // two -1/2 terms is the inverse of the old order. The expression
-        // is mathematically identical.
+        // Sum-term ordering shifted vs master after the removal of
+        // Context::braket_symmetry: the canonical sort key for the two
+        // -1/2 ã·v̄·w terms swapped. The expression is mathematically
+        // unchanged.
         REQUIRE(
             result2.to_latex() ==
             L"{ \\bigl( - "
             L"{{{\\frac{1}{4}}}{\\tilde{a}^{{p_3}{p_4}{p_5}}_{{p_1}{p_2}{p_5}"
             L"}}{\\bar{v}^{{p_1}{p_2}}_{{p_3}{p_4}}}{w^{}_{}[{p_5}]}} - "
-            L"{{{\\frac{1}{2}}}{\\tilde{a}^{{e_1}{p_3}}_{{p_1}{p_2}}}{\\bar{"
-            L"v}^{{p_1}{p_2}}_{{e_1}{p_3}}}{w^{}_{}[{e_1}]}} + "
-            L"{{\\tilde{a}^{{p_2}}_{{p_1}}}{\\bar{v}^{{e_1}{p_1}}_{{e_1}{p_2}"
-            L"}}{w^{}_{}[{e_1}]}} - "
             L"{{{\\frac{1}{2}}}{\\tilde{a}^{{p_2}{p_3}}_{{e_1}{p_1}}}{\\bar{"
             L"v}^{{e_1}{p_1}}_{{p_2}{p_3}}}{w^{}_{}[{e_1}]}} + "
+            L"{{\\tilde{a}^{{p_2}}_{{p_1}}}{\\bar{v}^{{e_1}{p_1}}_{{e_1}{p_2}"
+            L"}}{w^{}_{}[{e_1}]}} - "
+            L"{{{\\frac{1}{2}}}{\\tilde{a}^{{e_1}{p_3}}_{{p_1}{p_2}}}{\\bar{"
+            L"v}^{{p_1}{p_2}}_{{e_1}{p_3}}}{w^{}_{}[{e_1}]}} + "
             L"{{{\\frac{1}{4}}}{\\tilde{a}^{{p_3}{p_4}}_{{p_1}{p_2}}}{\\bar{"
             L"v}^{{p_1}{p_2}}_{{p_3}{p_4}}}{w^{}_{}[{e_1}]}}\\bigr) }");
       }
@@ -1340,18 +1339,13 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         simplify(result);
         REQUIRE(result.as<Sum>().size() == 5);
 
-        // h{;;...}, programmatically built at line 1336, has empty bra/ket so
-        // its BraKetSymmetry is derived from base_field(empty,empty)=Real →
-        // Symm under the new field-and-Hermiticity default. The deserializer
-        // fallback for omitted BraKet is the historical Conjugate, so spell
-        // Symm explicitly here.
         // clang-format off
         auto expected = deserialize(
-            "- h{;;p_3}:N-S-S ã{p_1<i_1>,p_3;p_2<i_2>,p_3}"
-            "+ h{;;p_3}:N-S-S δ{p_1<i_1>;a_1<i_1>} δ{a_2<i_2>;p_2<i_2>} ã{p_3;p_3} s{a_1<i_1>;a_2<i_2>} "
-            "- h{;;a_1}:N-S-S δ{a_2<i_2>;p_2<i_2>} ã{p_1<i_1>;a_1} s{a_1;a_2<i_2>} "
-            "- h{;;a_2}:N-S-S δ{p_1<i_1>;a_1<i_1>} s{a_1<i_1>;a_2} ã{a_2;p_2<i_2>} "
-            "+ h{;;a_3}:N-S-S δ{p_1<i_1>;a_1<i_1>} δ{a_2<i_2>;p_2<i_2>} s{a_1<i_1>;a_3} s{a_3;a_2<i_2>} ");
+            "- h{;;p_3} ã{p_1<i_1>,p_3;p_2<i_2>,p_3}"
+            "+ h{;;p_3} δ{p_1<i_1>;a_1<i_1>} δ{a_2<i_2>;p_2<i_2>} ã{p_3;p_3} s{a_1<i_1>;a_2<i_2>} "
+            "- h{;;a_1} δ{a_2<i_2>;p_2<i_2>} ã{p_1<i_1>;a_1} s{a_1;a_2<i_2>} "
+            "- h{;;a_2} δ{p_1<i_1>;a_1<i_1>} s{a_1<i_1>;a_2} ã{a_2;p_2<i_2>} "
+            "+ h{;;a_3} δ{p_1<i_1>;a_1<i_1>} δ{a_2<i_2>;p_2<i_2>} s{a_1<i_1>;a_3} s{a_3;a_2<i_2>} ");
         // clang-format on
         simplify(expected);
 
@@ -1361,20 +1355,36 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       // quasi-diagonal example, with some indices in covariant expression
       // fixed, as in the pair-specific densities used to produce PNOs
       {
+        // Make all spaces Real so the deserialized ':A-C-S' Hermitian braket
+        // trait resolves to Symm at *Tensor construction* time (via
+        // base_field). This preserves master's pre-removal semantics of
+        // `.set(BraKetSymmetry::Symm)` on the Context — which in master only
+        // affected tensors *created after* the set; the t tensors below were
+        // deserialized first and stored a Conjugate braket_symmetry_, but
+        // vac_av's new intermediates inherited Symm from the Context. Putting
+        // the t tensors themselves into Symm via `:A-S-S` overspecifies and
+        // collapses canonical externals (i_1, i_2 internalize).
+        auto sr_reg = std::make_shared<sequant::IndexSpaceRegistry>(
+            *get_default_context().index_space_registry());
+        std::vector<std::wstring> keys;
+        for (auto const& s : *sr_reg) keys.push_back(s.base_key());
+        for (auto const& k : keys)
+          if (auto* sp = sr_reg->retrieve_ptr(k)) sp->field(Field::Real);
+        auto resetter = sequant::set_scoped_default_context(
+            Context(get_default_context())
+                .set(sr_reg)
+                .set(CanonicalizeOptions::default_options().copy_and_set(
+                    container::set<Index>{L"i_1", L"i_2", L"a_1", L"a_2"})));
         auto expr = sequant::deserialize(
             L"1/8 t{i1,i2;a3,a4}:A-C-S * ã{a3,a4;i1,i2} * ã{;a1} * ã{a2} * "
             L"t{a5,a6;i3,i4}:A-C-S * ã{i3,i4;a5,a6}");
-        auto resetter = sequant::set_scoped_default_context(
-            Context(get_default_context())
-                .set(CanonicalizeOptions::default_options().copy_and_set(
-                    container::set<Index>{L"i_1", L"i_2", L"a_1", L"a_2"})));
         // std::wcout << expr.to_latex() << "\n";
         auto rdm1_so = sequant::mbpt::tensor::vac_av(expr);
         // std::wcout << "SO RDM: " << rdm1_so.to_latex() << "\n";
         REQUIRE_THAT(
             rdm1_so,
             EquivalentTo(
-                L"t{a_2,a_3;i_2,i_1}:A-C-S * t{i_2,i_1;a_1,a_3}:A-C-S"));
+                L"t{a_2,a_3;i_2,i_1}:A-S-S * t{i_2,i_1;a_1,a_3}:A-S-S"));
 
         // N.B. closed-shell spintrace expects ext groups to consist of pairs of
         // indices
@@ -1386,29 +1396,37 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         REQUIRE_THAT(
             rdm1_sf,
             EquivalentTo(
-                L"4 t{i_1,i_2;a_1,a_3}:N-C-S * t{a_3,a_2;i_2,i_1}:N-C-S + 4 "
-                L"t{i_1,i_2;a_3,a_1}:N-C-S * t{a_3,a_2;i_1,i_2}:N-C-S - 2 "
-                L"t{i_1,i_2;a_1,a_3}:N-C-S * t{a_3,a_2;i_1,i_2}:N-C-S - 2 "
-                L"t{i_1,i_2;a_3,a_1}:N-C-S * t{a_3,a_2;i_2,i_1}:N-C-S"));
+                L"4 t{i_1,i_2;a_1,a_3}:N-S-S * t{a_3,a_2;i_2,i_1}:N-S-S + 4 "
+                L"t{i_1,i_2;a_3,a_1}:N-S-S * t{a_3,a_2;i_1,i_2}:N-S-S - 2 "
+                L"t{i_1,i_2;a_1,a_3}:N-S-S * t{a_3,a_2;i_1,i_2}:N-S-S - 2 "
+                L"t{i_1,i_2;a_3,a_1}:N-S-S * t{a_3,a_2;i_2,i_1}:N-S-S"));
       }
 
       // triples variant of the previous case
       {
+        // Field::Real preprocessing: see doubles variant above.
+        auto sr_reg = std::make_shared<sequant::IndexSpaceRegistry>(
+            *get_default_context().index_space_registry());
+        std::vector<std::wstring> keys;
+        for (auto const& s : *sr_reg) keys.push_back(s.base_key());
+        for (auto const& k : keys)
+          if (auto* sp = sr_reg->retrieve_ptr(k)) sp->field(Field::Real);
+        auto resetter = sequant::set_scoped_default_context(
+            Context(get_default_context())
+                .set(sr_reg)
+                .set(CanonicalizeOptions::default_options().copy_and_set(
+                    container::set<Index>{L"i_1", L"i_2", L"i_3", L"a_4",
+                                          L"a_5"})));
         auto expr = sequant::deserialize(
             L"1/216 t{i1,i2,i3;a1,a2,a3}:A-C-S * ã{a1,a2,a3;i1,i2,i3} * "
             L"ã{;a4} * ã{a5} * "
             L"t{a6,a7,a8;i4,i5,i6}:A-C-S * ã{i4,i5,i6;a6,a7,a8}");
-        auto resetter = sequant::set_scoped_default_context(
-            Context(get_default_context())
-                .set(CanonicalizeOptions::default_options().copy_and_set(
-                    container::set<Index>{L"i_1", L"i_2", L"i_3", L"a_4",
-                                          L"a_5"})));
         // std::wcout << expr.to_latex() << "\n";
         auto rdm1_so = sequant::mbpt::tensor::vac_av(expr);
         // std::wcout << "SO RDM: " << rdm1_so.to_latex() << "\n";
         REQUIRE_THAT(rdm1_so,
-                     EquivalentTo(L"1/2 t{a_1,a_2,a_5;i_3,i_2,i_1}:A-C-S * "
-                                  L"t{i_3,i_2,i_1;a_1,a_2,a_4}:A-C-S"));
+                     EquivalentTo(L"1/2 t{a_1,a_2,a_5;i_3,i_2,i_1}:A-S-S * "
+                                  L"t{i_3,i_2,i_1;a_1,a_2,a_4}:A-S-S"));
 
         // N.B. closed-shell spintrace expects ext groups to consist of pairs of
         // indices
@@ -1419,42 +1437,42 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         // std::wcout << "ST RDM: " << rdm1_sf.to_latex() << "\n";
 
         const std::wstring expected =
-            L"8 t{a_1,a_5,a_2;i_3,i_1,i_2}:N-C-S * "
-            L"t{i_3,i_2,i_1;a_1,a_2,a_4}:N-C-S + 2 "
-            L"t{a_1,a_2,a_5;i_1,i_3,i_2}:N-C-S * "
-            L"t{i_3,i_2,i_1;a_1,a_2,a_4}:N-C-S - 4 "
-            L"t{a_1,a_5,a_2;i_3,i_1,i_2}:N-C-S * "
-            L"t{i_2,i_3,i_1;a_1,a_2,a_4}:N-C-S + 2 "
-            L"t{a_1,a_2,a_5;i_3,i_1,i_2}:N-C-S * "
-            L"t{i_1,i_2,i_3;a_1,a_2,a_4}:N-C-S - 4 "
-            L"t{a_1,a_2,a_5;i_3,i_1,i_2}:N-C-S * "
-            L"t{i_3,i_2,i_1;a_1,a_2,a_4}:N-C-S - 4 "
-            L"t{a_1,a_5,a_2;i_3,i_1,i_2}:N-C-S * "
-            L"t{i_3,i_1,i_2;a_1,a_2,a_4}:N-C-S + 2 "
-            L"t{a_1,a_5,a_2;i_3,i_1,i_2}:N-C-S * "
-            L"t{i_1,i_3,i_2;a_1,a_2,a_4}:N-C-S - 4 "
-            L"t{a_1,a_2,a_5;i_1,i_3,i_2}:N-C-S * "
-            L"t{i_3,i_1,i_2;a_1,a_2,a_4}:N-C-S + 8 "
-            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-C-S * "
-            L"t{i_1,i_2,i_3;a_1,a_2,a_4}:N-C-S - 4 "
-            L"t{a_1,a_2,a_5;i_1,i_3,i_2}:N-C-S * "
-            L"t{i_1,i_2,i_3;a_1,a_2,a_4}:N-C-S + 8 "
-            L"t{a_1,a_2,a_5;i_1,i_3,i_2}:N-C-S * "
-            L"t{i_1,i_3,i_2;a_1,a_2,a_4}:N-C-S - 4 "
-            L"t{a_1,a_5,a_2;i_3,i_1,i_2}:N-C-S * "
-            L"t{i_1,i_2,i_3;a_1,a_2,a_4}:N-C-S - 4 "
-            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-C-S * "
-            L"t{i_3,i_2,i_1;a_1,a_2,a_4}:N-C-S + 2 "
-            L"t{a_1,a_5,a_2;i_3,i_1,i_2}:N-C-S * "
-            L"t{i_2,i_1,i_3;a_1,a_2,a_4}:N-C-S - 4 "
-            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-C-S * "
-            L"t{i_2,i_1,i_3;a_1,a_2,a_4}:N-C-S + 2 "
-            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-C-S * "
-            L"t{i_3,i_1,i_2;a_1,a_2,a_4}:N-C-S + 2 "
-            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-C-S * "
-            L"t{i_2,i_3,i_1;a_1,a_2,a_4}:N-C-S - 4 "
-            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-C-S * "
-            L"t{i_1,i_3,i_2;a_1,a_2,a_4}:N-C-S";
+            L"8 t{a_1,a_5,a_2;i_3,i_1,i_2}:N-S-S * "
+            L"t{i_3,i_2,i_1;a_1,a_2,a_4}:N-S-S + 2 "
+            L"t{a_1,a_2,a_5;i_1,i_3,i_2}:N-S-S * "
+            L"t{i_3,i_2,i_1;a_1,a_2,a_4}:N-S-S - 4 "
+            L"t{a_1,a_5,a_2;i_3,i_1,i_2}:N-S-S * "
+            L"t{i_2,i_3,i_1;a_1,a_2,a_4}:N-S-S + 2 "
+            L"t{a_1,a_2,a_5;i_3,i_1,i_2}:N-S-S * "
+            L"t{i_1,i_2,i_3;a_1,a_2,a_4}:N-S-S - 4 "
+            L"t{a_1,a_2,a_5;i_3,i_1,i_2}:N-S-S * "
+            L"t{i_3,i_2,i_1;a_1,a_2,a_4}:N-S-S - 4 "
+            L"t{a_1,a_5,a_2;i_3,i_1,i_2}:N-S-S * "
+            L"t{i_3,i_1,i_2;a_1,a_2,a_4}:N-S-S + 2 "
+            L"t{a_1,a_5,a_2;i_3,i_1,i_2}:N-S-S * "
+            L"t{i_1,i_3,i_2;a_1,a_2,a_4}:N-S-S - 4 "
+            L"t{a_1,a_2,a_5;i_1,i_3,i_2}:N-S-S * "
+            L"t{i_3,i_1,i_2;a_1,a_2,a_4}:N-S-S + 8 "
+            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-S-S * "
+            L"t{i_1,i_2,i_3;a_1,a_2,a_4}:N-S-S - 4 "
+            L"t{a_1,a_2,a_5;i_1,i_3,i_2}:N-S-S * "
+            L"t{i_1,i_2,i_3;a_1,a_2,a_4}:N-S-S + 8 "
+            L"t{a_1,a_2,a_5;i_1,i_3,i_2}:N-S-S * "
+            L"t{i_1,i_3,i_2;a_1,a_2,a_4}:N-S-S - 4 "
+            L"t{a_1,a_5,a_2;i_3,i_1,i_2}:N-S-S * "
+            L"t{i_1,i_2,i_3;a_1,a_2,a_4}:N-S-S - 4 "
+            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-S-S * "
+            L"t{i_3,i_2,i_1;a_1,a_2,a_4}:N-S-S + 2 "
+            L"t{a_1,a_5,a_2;i_3,i_1,i_2}:N-S-S * "
+            L"t{i_2,i_1,i_3;a_1,a_2,a_4}:N-S-S - 4 "
+            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-S-S * "
+            L"t{i_2,i_1,i_3;a_1,a_2,a_4}:N-S-S + 2 "
+            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-S-S * "
+            L"t{i_3,i_1,i_2;a_1,a_2,a_4}:N-S-S + 2 "
+            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-S-S * "
+            L"t{i_2,i_3,i_1;a_1,a_2,a_4}:N-S-S - 4 "
+            L"t{a_1,a_5,a_2;i_1,i_3,i_2}:N-S-S * "
+            L"t{i_1,i_3,i_2;a_1,a_2,a_4}:N-S-S";
         REQUIRE_THAT(rdm1_sf, EquivalentTo(expected));
       }
     }

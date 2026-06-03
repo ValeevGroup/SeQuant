@@ -278,9 +278,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         // of bra/ket is nonempty, derive from base_field(bra_, ket_) +
         // Hermitian (matches the field-agnostic Hermiticity-taking ctor).
         // When both bra and ket are empty, the bra↔ket exchange has no
-        // physical meaning — preserve the legacy default of Conjugate so
-        // downstream passes that key off braket_symmetry_ for canonicalization
-        // / spintrace bookkeeping see the same value they did before.
+        // physical meaning — fall back to the literal Conjugate default
+        // (historical Context::braket_symmetry() value); deriving Symm there
+        // would break the spintrace bookkeeping for vacuum-aux tensors.
         braket_symmetry_(bks_opt.value_or(
             (bra_.empty() && ket_.empty())
                 ? BraKetSymmetry::Conjugate
@@ -327,9 +327,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         // of bra/ket is nonempty, derive from base_field(bra_, ket_) +
         // Hermitian (matches the field-agnostic Hermiticity-taking ctor).
         // When both bra and ket are empty, the bra↔ket exchange has no
-        // physical meaning — preserve the legacy default of Conjugate so
-        // downstream passes that key off braket_symmetry_ for canonicalization
-        // / spintrace bookkeeping see the same value they did before.
+        // physical meaning — fall back to the literal Conjugate default
+        // (historical Context::braket_symmetry() value); deriving Symm there
+        // would break the spintrace bookkeeping for vacuum-aux tensors.
         braket_symmetry_(bks_opt.value_or(
             (bra_.empty() && ket_.empty())
                 ? BraKetSymmetry::Conjugate
