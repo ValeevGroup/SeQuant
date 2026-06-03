@@ -12,6 +12,9 @@
 
 #include <range/v3/view/iota.hpp>
 
+#include <unordered_set>
+#include <vector>
+
 namespace sequant {
 
 namespace {
@@ -369,7 +372,9 @@ class ResultTensorTA final : public Result {
   }
 
   // regular (non-nested) tensor: cheap outer-dims only, no per-cell walk.
-  [[nodiscard]] std::string shape_brief() const final {
+  // occ_outer is unused here (a dense tensor has no sparse pair grid).
+  [[nodiscard]] std::string shape_brief(
+      std::vector<bool> const& = {}) const final {
     auto const& rng = get<ArrayT>().trange().elements_range();
     std::string s = "outer=";
     for (std::size_t i = 0; i < rng.rank(); ++i)
@@ -572,16 +577,30 @@ class ResultTensorOfTensorTA final : public Result {
   // summed inner extent (total PNO mass), and the average inner extent. This
   // is the same O(cells) cost as size_in_bytes above. With align=32 the
   // recorded result bytes reconcile as ~ 40*ncells + 8*sum_inner.
-  [[nodiscard]] std::string shape_brief() const final {
+  [[nodiscard]] std::string shape_brief(
+      std::vector<bool> const& occ_outer = {}) const final {
     auto const& v = get<ArrayT>();
     auto const& erng = v.trange().elements_range();
-    // distinct outer occupied-pair (idx0,idx1) bookkeeping (single-rank exact)
+    auto const rank = erng.rank();
     auto const lob = erng.lobound();
-    long const l0 = erng.rank() >= 1 ? static_cast<long>(lob[0]) : 0;
-    long const l1 = erng.rank() >= 2 ? static_cast<long>(lob[1]) : 0;
-    std::size_t const e1 = erng.rank() >= 2 ? erng.extent(1) : 1;
-    std::vector<char> seen(
-        erng.rank() >= 2 ? erng.extent(0) * erng.extent(1) : 0, 0);
+    // Which outer modes are OCCUPIED-space indices (set by the caller from the
+    // SeQuant index spaces, in annotation order). `npairs` below counts the
+    // number of distinct tuples over *these* modes among nonzero inner cells,
+    // i.e. how many distinct OCCUPIED-index combinations are actually stored.
+    // This generalizes the old "(idx0,idx1) pair" count, which silently
+    // assumed the first two outer modes were the occupied pair: it now works
+    // for any number/position of occupied modes (0,1,2,3,...) and skips
+    // non-occupied outer modes (PAO/μ̃, DF/Κ). So e.g. I(i,μ̃,Κ,j;a) keys on
+    // (i,j), and I(k,i,j;a) keys on the (k,i,j) triple -- not on whatever two
+    // modes happen to come first. `nocc` in the output records how many
+    // occupied modes the count is over, so npairs is interpretable (nocc=2 =>
+    // pairs, nocc=3 => triples, ...). Per-rank (not reduced across ranks).
+    std::vector<std::size_t> occ_pos;
+    if (occ_outer.size() == rank)
+      for (std::size_t d = 0; d < rank; ++d)
+        if (occ_outer[d]) occ_pos.push_back(d);
+
+    std::unordered_set<std::size_t> seen;  // distinct occupied-tuple keys
     std::size_t ncells = 0, sum_inner = 0, npairs = 0;
     auto const& gtr = v.trange();  // array TiledRange: always valid
     for (auto it = v.begin(); it != v.end(); ++it) {  // local nonzero outer tiles
@@ -598,15 +617,14 @@ class ResultTensorOfTensorTA final : public Result {
         if (!inner.empty()) {
           ++ncells;
           sum_inner += inner.size();
-          if (!seen.empty()) {
+          if (!occ_pos.empty()) {
             auto const idx = trng.idx(o);
-            std::size_t const f =
-                static_cast<std::size_t>(idx[0] - l0) * e1 +
-                static_cast<std::size_t>(idx[1] - l1);
-            if (f < seen.size() && !seen[f]) {
-              seen[f] = 1;
-              ++npairs;
-            }
+            // mixed-radix key over the occupied modes only
+            std::size_t key = 0;
+            for (auto p : occ_pos)
+              key = key * erng.extent(p) +
+                    static_cast<std::size_t>(idx[p] - static_cast<long>(lob[p]));
+            if (seen.insert(key).second) ++npairs;
           }
         }
         ++o;
@@ -615,11 +633,13 @@ class ResultTensorOfTensorTA final : public Result {
     v.world().gop.sum(ncells);
     v.world().gop.sum(sum_inner);
     std::string s = "outer=";
-    for (std::size_t i = 0; i < erng.rank(); ++i)
+    for (std::size_t i = 0; i < rank; ++i)
       s += (i ? "x" : "") + std::to_string(erng.extent(i));
+    s += " nocc=" + std::to_string(occ_pos.size());
     s += " ncells=" + std::to_string(ncells);
     s += " sum_inner=" + std::to_string(sum_inner);
-    s += " npairs=" + std::to_string(npairs);  // distinct (i,j) outer pairs (this rank)
+    s += " npairs=" +
+         std::to_string(npairs);  // distinct occupied-index tuples (this rank)
     s += " avg_inner=" +
          std::to_string(ncells ? double(sum_inner) / double(ncells) : 0.0);
     return s;

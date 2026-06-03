@@ -23,6 +23,7 @@
 #include <optional>
 #include <stdexcept>
 #include <type_traits>
+#include <vector>
 
 // Headers for process_rss_bytes() — see log::process_rss_bytes() below.
 #if defined(__APPLE__)
@@ -588,6 +589,37 @@ ResultPtr evaluate(Node const& node,  //
 
   // logging
   if constexpr (trace(EvalTrace)) {
+    // Flag which outer (non-proto) modes of the result are OCCUPIED-orbital
+    // indices, in annotation order, so shape_brief() counts distinct
+    // occupied-index tuples regardless of mode ordering (e.g. I(i,μ̃,Κ,j;a)
+    // keys on (i,j)) and including spectator occupied indices.
+    //
+    // Reference occupied-orbital space = the space of the ToT inner indices'
+    // proto-indices (PNO/OSV virtuals are proto-indexed by occupied orbitals).
+    // An outer mode is occupied iff its space is a (Type AND QuantumNumbers)
+    // subspace of that reference. The qns test is essential: mpqc registers the
+    // DF auxiliary space (Κ) with the SAME occupied Type bit as occupied
+    // orbitals, separated only by a distinct QuantumNumbers sector -- so a
+    // Type-only test (e.g. is_pure_occupied) misclassifies Κ as occupied.
+    std::vector<bool> occ_outer;
+    if (node->is_tensor()) {
+      IndexSpace const* occ_space = nullptr;
+      for (auto const& idx : node->canon_indices())
+        if (idx.has_proto_indices() && !idx.proto_indices().empty()) {
+          occ_space = &idx.proto_indices().front().space();
+          break;
+        }
+      if (occ_space) {
+        auto const ot = occ_space->type().to_int32();
+        auto const oq = occ_space->qns().to_int32();
+        for (auto const& idx : node->canon_indices())
+          if (!idx.has_proto_indices()) {
+            auto const t = idx.space().type().to_int32();
+            auto const q = idx.space().qns().to_int32();
+            occ_outer.push_back(t != 0 && (t & ot) == t && (q & oq) == q);
+          }
+      }
+    }
     if (node.leaf()) {
       log::eval(log::EvalStat{.mode = log::eval_mode(node),
                               .time = time,
@@ -595,7 +627,7 @@ ResultPtr evaluate(Node const& node,  //
                               .mem_alloc = log::bytes(result),
                               .mem_hwmark = {cache.note_working_set(
                                   log::bytes(cache, result).value)}},
-                result->shape_brief(), log::label(node));
+                result->shape_brief(occ_outer), log::label(node));
     } else {
       // A cached child is *distinct* from the local left/right when its
       // canon_phase != 1, because mult_by_phase allocates a fresh buffer
@@ -613,7 +645,7 @@ ResultPtr evaluate(Node const& node,  //
                               .mem_hwmark = {cache.note_working_set(hwmark)},
                               .mem_left = log::bytes(left),
                               .mem_right = log::bytes(right)},
-                result->shape_brief(), log::label(node));
+                result->shape_brief(occ_outer), log::label(node));
     }
   }
 

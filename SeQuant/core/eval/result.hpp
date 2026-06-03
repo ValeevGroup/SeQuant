@@ -21,6 +21,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace sequant {
 
@@ -356,7 +357,15 @@ class Result {
 
   /// @return short shape summary for the eval trace (outer dims; for ToT also
   ///         the inner-cell count and average inner extent). Empty by default.
-  [[nodiscard]] virtual std::string shape_brief() const { return {}; }
+  /// @param occ_outer per-outer-mode flags (annotation order, one per
+  ///        non-proto mode) marking which outer modes are OCCUPIED-space
+  ///        indices; ToT backends key their `npairs` (distinct occupied-index
+  ///        tuples) on these. Empty => no occupied-tuple count.
+  [[nodiscard]] virtual std::string shape_brief(
+      std::vector<bool> const& occ_outer = {}) const {
+    (void)occ_outer;
+    return {};
+  }
 
  protected:
   template <typename T,
