@@ -261,15 +261,32 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
          const ket<IndexRange2> &ket_indices,
          const aux<IndexRange3> &aux_indices, reserved_tag,
          Symmetry s = Symmetry::Nonsymm,
-         BraKetSymmetry bks = get_default_context().braket_symmetry(),
+         std::optional<BraKetSymmetry> bks_opt = std::nullopt,
          ColumnSymmetry ps = ColumnSymmetry::Symm)
       : label_(toUtf16(std::forward<S>(label))),
         bra_(make_indices(bra_indices)),
         ket_(make_indices(ket_indices)),
         aux_(make_indices(aux_indices)),
         symmetry_(s),
-        braket_symmetry_(bks),
-        hermiticity_(to_hermiticity(bks)),
+        // Derive bra<->ket exchange symmetry from the indices' fields with a
+        // default Hermitian abstract trait, unless the caller explicitly
+        // requested a particular BraKetSymmetry (e.g. Nonsymm for amplitudes).
+        // base_field(bra_, ket_) is well-defined here: declaration order of the
+        // private members guarantees bra_/ket_ are constructed before
+        // braket_symmetry_.
+        // If the caller didn't specify a BraKetSymmetry: when at least one
+        // of bra/ket is nonempty, derive from base_field(bra_, ket_) +
+        // Hermitian (matches the field-agnostic Hermiticity-taking ctor).
+        // When both bra and ket are empty, the bra↔ket exchange has no
+        // physical meaning — preserve the legacy default of Conjugate so
+        // downstream passes that key off braket_symmetry_ for canonicalization
+        // / spintrace bookkeeping see the same value they did before.
+        braket_symmetry_(bks_opt.value_or(
+            (bra_.empty() && ket_.empty())
+                ? BraKetSymmetry::Conjugate
+                : to_braket_symmetry(Hermiticity::Hermitian,
+                                     sequant::base_field(bra_, ket_)))),
+        hermiticity_(to_hermiticity(braket_symmetry_)),
         column_symmetry_(ps),
         bra_net_rank_(ranges::count_if(
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
@@ -299,15 +316,26 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
          ket<index_container_type> &&ket_indices,
          aux<index_container_type> &&aux_indices, reserved_tag,
          Symmetry s = Symmetry::Nonsymm,
-         BraKetSymmetry bks = get_default_context().braket_symmetry(),
+         std::optional<BraKetSymmetry> bks_opt = std::nullopt,
          ColumnSymmetry ps = ColumnSymmetry::Symm)
       : label_(toUtf16(std::forward<S>(label))),
         bra_(std::move(bra_indices)),
         ket_(std::move(ket_indices)),
         aux_(std::move(aux_indices)),
         symmetry_(s),
-        braket_symmetry_(bks),
-        hermiticity_(to_hermiticity(bks)),
+        // If the caller didn't specify a BraKetSymmetry: when at least one
+        // of bra/ket is nonempty, derive from base_field(bra_, ket_) +
+        // Hermitian (matches the field-agnostic Hermiticity-taking ctor).
+        // When both bra and ket are empty, the bra↔ket exchange has no
+        // physical meaning — preserve the legacy default of Conjugate so
+        // downstream passes that key off braket_symmetry_ for canonicalization
+        // / spintrace bookkeeping see the same value they did before.
+        braket_symmetry_(bks_opt.value_or(
+            (bra_.empty() && ket_.empty())
+                ? BraKetSymmetry::Conjugate
+                : to_braket_symmetry(Hermiticity::Hermitian,
+                                     sequant::base_field(bra_, ket_)))),
+        hermiticity_(to_hermiticity(braket_symmetry_)),
         column_symmetry_(ps),
         bra_net_rank_(ranges::count_if(
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
@@ -362,10 +390,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
             range_of_castables_to_index IndexRange2>
   Tensor(S &&label, const bra<IndexRange1> &bra_indices,
          const ket<IndexRange2> &ket_indices, Symmetry s = Symmetry::Nonsymm,
-         BraKetSymmetry bks = get_default_context().braket_symmetry(),
+         std::optional<BraKetSymmetry> bks_opt = std::nullopt,
          ColumnSymmetry ps = ColumnSymmetry::Symm)
       : Tensor(std::forward<S>(label), bra_indices, ket_indices, sequant::aux{},
-               reserved_tag{}, s, bks, ps) {
+               reserved_tag{}, s, bks_opt, ps) {
     assert_nonreserved_label(label_);
   }
 
@@ -385,10 +413,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   Tensor(S &&label, const bra<IndexRange1> &bra_indices,
          const ket<IndexRange2> &ket_indices,
          const aux<IndexRange3> &aux_indices, Symmetry s = Symmetry::Nonsymm,
-         BraKetSymmetry bks = get_default_context().braket_symmetry(),
+         std::optional<BraKetSymmetry> bks_opt = std::nullopt,
          ColumnSymmetry ps = ColumnSymmetry::Symm)
       : Tensor(std::forward<S>(label), bra_indices, ket_indices, aux_indices,
-               reserved_tag{}, s, bks, ps) {
+               reserved_tag{}, s, bks_opt, ps) {
     assert_nonreserved_label(label_);
   }
 
@@ -404,11 +432,11 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   Tensor(S &&label, bra<index_container_type> &&bra_indices,
          ket<index_container_type> &&ket_indices,
          Symmetry s = Symmetry::Nonsymm,
-         BraKetSymmetry bks = get_default_context().braket_symmetry(),
+         std::optional<BraKetSymmetry> bks_opt = std::nullopt,
          ColumnSymmetry ps = ColumnSymmetry::Symm)
       : Tensor(std::forward<S>(label), std::move(bra_indices),
-               std::move(ket_indices), sequant::aux{}, reserved_tag{}, s, bks,
-               ps) {
+               std::move(ket_indices), sequant::aux{}, reserved_tag{}, s,
+               bks_opt, ps) {
     assert_nonreserved_label(label_);
   }
 
@@ -427,11 +455,11 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
          ket<index_container_type> &&ket_indices,
          aux<index_container_type> &&aux_indices,
          Symmetry s = Symmetry::Nonsymm,
-         BraKetSymmetry bks = get_default_context().braket_symmetry(),
+         std::optional<BraKetSymmetry> bks_opt = std::nullopt,
          ColumnSymmetry ps = ColumnSymmetry::Symm)
       : Tensor(std::forward<S>(label), std::move(bra_indices),
                std::move(ket_indices), std::move(aux_indices), reserved_tag{},
-               s, bks, ps) {
+               s, bks_opt, ps) {
     assert_nonreserved_label(label_);
   }
 
