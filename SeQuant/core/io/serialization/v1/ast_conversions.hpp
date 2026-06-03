@@ -269,6 +269,10 @@ struct Transformer {
     auto [braIndices, ketIndices, auxiliaries] =
         make_indices(tensor.indices, position_cache.get(), begin.get());
 
+    // braket_symm is now std::optional<BraKetSymmetry>: nullopt means
+    // "neither the serialized form nor the deserialization options pinned
+    // a value, so let the Tensor ctor derive from base_field + Hermitian"
+    // (matches the programmatic default of ex<Tensor>(label, bra, ket)).
     auto [perm_symm, braket_symm, column_symm] =
         to_symmetries(tensor.symmetry, default_symms.get(),
                       position_cache.get(), begin.get());

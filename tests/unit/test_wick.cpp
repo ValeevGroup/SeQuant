@@ -1305,17 +1305,22 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         // sequant::wprintf(to_latex_align(Ld_H2N_L), L" = \n",
         //                  to_latex_align(result2, 0, 2), L"\n");
         REQUIRE(result2.as<Sum>().size() == 5);
+        // Term ordering within the Sum changed when the Tensor default
+        // BraKetSymmetry stopped tracking Context::braket_symmetry (now
+        // Hermitian+field-derived); the canonicalized sorting key for the
+        // two -1/2 terms is the inverse of the old order. The expression
+        // is mathematically identical.
         REQUIRE(
             result2.to_latex() ==
             L"{ \\bigl( - "
             L"{{{\\frac{1}{4}}}{\\tilde{a}^{{p_3}{p_4}{p_5}}_{{p_1}{p_2}{p_5}"
             L"}}{\\bar{v}^{{p_1}{p_2}}_{{p_3}{p_4}}}{w^{}_{}[{p_5}]}} - "
-            L"{{{\\frac{1}{2}}}{\\tilde{a}^{{p_2}{p_3}}_{{e_1}{p_1}}}{\\bar{"
-            L"v}^{{e_1}{p_1}}_{{p_2}{p_3}}}{w^{}_{}[{e_1}]}} + "
-            L"{{\\tilde{a}^{{p_2}}_{{p_1}}}{\\bar{v}^{{e_1}{p_1}}_{{e_1}{p_2}"
-            L"}}{w^{}_{}[{e_1}]}} - "
             L"{{{\\frac{1}{2}}}{\\tilde{a}^{{e_1}{p_3}}_{{p_1}{p_2}}}{\\bar{"
             L"v}^{{p_1}{p_2}}_{{e_1}{p_3}}}{w^{}_{}[{e_1}]}} + "
+            L"{{\\tilde{a}^{{p_2}}_{{p_1}}}{\\bar{v}^{{e_1}{p_1}}_{{e_1}{p_2}"
+            L"}}{w^{}_{}[{e_1}]}} - "
+            L"{{{\\frac{1}{2}}}{\\tilde{a}^{{p_2}{p_3}}_{{e_1}{p_1}}}{\\bar{"
+            L"v}^{{e_1}{p_1}}_{{p_2}{p_3}}}{w^{}_{}[{e_1}]}} + "
             L"{{{\\frac{1}{4}}}{\\tilde{a}^{{p_3}{p_4}}_{{p_1}{p_2}}}{\\bar{"
             L"v}^{{p_1}{p_2}}_{{p_3}{p_4}}}{w^{}_{}[{e_1}]}}\\bigr) }");
       }
@@ -1335,13 +1340,18 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         simplify(result);
         REQUIRE(result.as<Sum>().size() == 5);
 
+        // h{;;...}, programmatically built at line 1336, has empty bra/ket so
+        // its BraKetSymmetry is derived from base_field(empty,empty)=Real →
+        // Symm under the new field-and-Hermiticity default. The deserializer
+        // fallback for omitted BraKet is the historical Conjugate, so spell
+        // Symm explicitly here.
         // clang-format off
         auto expected = deserialize(
-            "- h{;;p_3} ã{p_1<i_1>,p_3;p_2<i_2>,p_3}"
-            "+ h{;;p_3} δ{p_1<i_1>;a_1<i_1>} δ{a_2<i_2>;p_2<i_2>} ã{p_3;p_3} s{a_1<i_1>;a_2<i_2>} "
-            "- h{;;a_1} δ{a_2<i_2>;p_2<i_2>} ã{p_1<i_1>;a_1} s{a_1;a_2<i_2>} "
-            "- h{;;a_2} δ{p_1<i_1>;a_1<i_1>} s{a_1<i_1>;a_2} ã{a_2;p_2<i_2>} "
-            "+ h{;;a_3} δ{p_1<i_1>;a_1<i_1>} δ{a_2<i_2>;p_2<i_2>} s{a_1<i_1>;a_3} s{a_3;a_2<i_2>} ");
+            "- h{;;p_3}:N-S-S ã{p_1<i_1>,p_3;p_2<i_2>,p_3}"
+            "+ h{;;p_3}:N-S-S δ{p_1<i_1>;a_1<i_1>} δ{a_2<i_2>;p_2<i_2>} ã{p_3;p_3} s{a_1<i_1>;a_2<i_2>} "
+            "- h{;;a_1}:N-S-S δ{a_2<i_2>;p_2<i_2>} ã{p_1<i_1>;a_1} s{a_1;a_2<i_2>} "
+            "- h{;;a_2}:N-S-S δ{p_1<i_1>;a_1<i_1>} s{a_1<i_1>;a_2} ã{a_2;p_2<i_2>} "
+            "+ h{;;a_3}:N-S-S δ{p_1<i_1>;a_1<i_1>} δ{a_2<i_2>;p_2<i_2>} s{a_1<i_1>;a_3} s{a_3;a_2<i_2>} ");
         // clang-format on
         simplify(expected);
 

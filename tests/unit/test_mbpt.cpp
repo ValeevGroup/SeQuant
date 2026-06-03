@@ -1152,13 +1152,19 @@ SECTION("rules") {
         L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}",
         L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}:A",
     };
+    // C is built by mbpt::tensor_hypercontract via the legacy Tensor ctor
+    // with default bra/ket (both empty, only aux indices). Under the new
+    // SeQuant convention the default BraKetSymmetry is derived from
+    // base_field(empty,empty) = Real → Symm via Hermitian — so spell that
+    // out explicitly here; the deserializer's legacy fallback would
+    // otherwise use Conjugate.
     const std::vector<std::wstring> expected = {
         L"t{a1,a2;i1,i2} t{a3;i3}",
-        L"t{a1,a2;i1,i2} B{i1;;x_1} B{;a1;x_1} C{;;x_1,x_2} B{i2;;x_2} "
+        L"t{a1,a2;i1,i2} B{i1;;x_1} B{;a1;x_1} C{;;x_1,x_2}:N-S-S B{i2;;x_2} "
         L"B{;a2;x_2}",
-        L"t{a1,a2;i1,i2} (B{i1;;x_1} B{;a1;x_1} C{;;x_1,x_2} B{i2;;x_2} "
+        L"t{a1,a2;i1,i2} (B{i1;;x_1} B{;a1;x_1} C{;;x_1,x_2}:N-S-S B{i2;;x_2} "
         L"B{;a2;x_2}"
-        " - B{i2;;x_1} B{;a1;x_1} C{;;x_1,x_2} B{i1;;x_2} B{;a2;x_2})",
+        " - B{i2;;x_1} B{;a1;x_1} C{;;x_1,x_2}:N-S-S B{i1;;x_2} B{;a2;x_2})",
     };
 
     REQUIRE(inputs.size() == expected.size());

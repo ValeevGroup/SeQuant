@@ -246,10 +246,13 @@ AST parse(const StartRule &start, std::wstring_view input,
 
 transform::DefaultSymmetries to_default_symms(
     const DeserializationOptions &options) {
-  // BraKetSymmetry fallback used only when the serialized form omits it
-  // (legacy/short input); the v1 serializer always emits it explicitly.
-  // The fallback value matches the historical Context::braket_symmetry()
-  // default of Conjugate.
+  // Deserializer's BraKet fallback for legacy/short serialized forms that
+  // omit the braket spec. Matches the historical Context::braket_symmetry()
+  // default of Conjugate, preserving snapshot-test stability for existing
+  // serialized fixtures. Callers who want a specific fallback (e.g.
+  // Hermiticity::Hermitian to make deserialized expectations match the
+  // programmatic ex<Tensor>(label, bra, ket) default, or Nonsymm for
+  // amplitudes in CSE tests) set options.def_braket_symm explicitly.
   transform::DefaultSymmetries symms{
       Symmetry::Nonsymm, BraKetSymmetry::Conjugate, ColumnSymmetry::Symm};
 
