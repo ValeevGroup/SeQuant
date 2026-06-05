@@ -283,10 +283,14 @@ struct Transformer {
     auto [braIndices, ketIndices, auxiliaries] =
         make_indices(tensor.indices, position_cache.get(), begin.get());
 
-    // braket_symm is now std::optional<BraKetSymmetry>: nullopt means
-    // "neither the serialized form nor the deserialization options pinned
-    // a value, so let the Tensor ctor derive from base_field + Hermitian"
-    // (matches the programmatic default of ex<Tensor>(label, bra, ket)).
+    // braket_symm is a std::variant<BraKetSymmetry, Hermiticity>: a concrete
+    // BraKetSymmetry (a 'C'/'S'/'N' spec, or the default fallback) is forwarded
+    // verbatim, while a Hermiticity (an 'H'/'A' spec, or a Hermiticity-valued
+    // default) defers to the Tensor ctor, which resolves it against
+    // base_field(bra, ket) — matching the programmatic ex<Tensor>(label, bra,
+    // ket) default. The std::visit below dispatches on which alternative is
+    // held to the matching Tensor ctor overload (BraKetSymmetry- vs
+    // Hermiticity-taking).
     auto [perm_symm, braket_symm, column_symm] =
         to_symmetries(tensor.symmetry, default_symms.get(),
                       position_cache.get(), begin.get());

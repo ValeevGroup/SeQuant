@@ -5,9 +5,12 @@
 
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/math.hpp>
+#include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 
 #include <btas/btas.h>
+
+#include <complex>
 
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/iota.hpp>
@@ -215,6 +218,25 @@ class ResultTensorBTAS final : public Result {
 
     T result;
     btas::permute(get<T>(), pre_annot, result, post_annot);
+    return eval_result<ResultTensorBTAS<T>>(std::move(result));
+  }
+
+  [[nodiscard]] ResultPtr adjoint(
+      std::array<std::any, 2> const& ann) const override {
+    // T†{a;i} = conj(T{i;a}): bra/ket-swapped layout (operand annot in ann[0],
+    // adjoint annot in ann[1]) plus elementwise conjugation. conj is a no-op
+    // for real numeric_type, so it is elided there.
+    auto const pre_annot = std::any_cast<annot_t>(ann[0]);
+    auto const post_annot = std::any_cast<annot_t>(ann[1]);
+
+    log_btas(ords_to_labels(post_annot), " = adjoint(",
+             ords_to_labels(pre_annot), ")\n");
+
+    T result;
+    btas::permute(get<T>(), pre_annot, result, post_annot);
+    if constexpr (meta::is_complex_v<numeric_type>) {
+      for (auto& x : result) x = std::conj(x);
+    }
     return eval_result<ResultTensorBTAS<T>>(std::move(result));
   }
 
