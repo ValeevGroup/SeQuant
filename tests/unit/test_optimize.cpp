@@ -335,9 +335,9 @@ TEST_CASE("optimize", "[optimize]") {
                // indices (tensor-of-tensor)
                {{L"R1{i1;i2} = (g{i1;a1} C{a1;a1<i1>}) h{a1<i1>;i2}",
                  L"R2{i1;i2} = (g{i1;a1} C{a1;a1<i1>}) k{a1<i1>;i2}"},
-                {L"CSE1{;;i1,a1<i1>} = g{i1;a1} C{a1;a1<i1>}",
-                 L"R1{i1;i2} = CSE1{;;i1,a1<i1>} h{a1<i1>;i2}",
-                 L"R2{i1;i2} = CSE1{;;i1,a1<i1>} k{a1<i1>;i2}"}},
+                {L"CSE1{;;a1<i1>,i1} = g{i1;a1} C{a1;a1<i1>}",
+                 L"R1{i1;i2} = CSE1{;;a1<i1>,i1} h{a1<i1>;i2}",
+                 L"R2{i1;i2} = CSE1{;;a1<i1>,i1} k{a1<i1>;i2}"}},
                // In this case it is important that the computation of the
                // subexpression isn't simply thrown at the beginning of the
                // expression list as it depends on B, which has to be computed

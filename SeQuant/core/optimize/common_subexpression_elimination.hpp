@@ -7,7 +7,6 @@
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/eval/eval_node_compare.hpp>
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/memory_layout.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <algorithm>
@@ -85,13 +84,11 @@ class SubexpressionReplacer {
   SubexpressionReplacer(
       VectorLike &expr_trees,
       const SubexpressionUsageCounts<TreeNode, force_hash_collisions> &map,
-      const Transformer &transformer, const LabelGenerator &label_gen,
-      MemoryLayout target_layout)
+      const Transformer &transformer, const LabelGenerator &label_gen)
       : expr_trees(expr_trees),
         subexpressions(map),
         expr_to_tree(transformer),
-        label_gen(label_gen),
-        target_layout(target_layout) {}
+        label_gen(label_gen) {}
 
   void perform_replacements() {
     // Ensure we won't have to reallocate while iterating over the expressions
@@ -124,30 +121,14 @@ class SubexpressionReplacer {
       if (tree->is_tensor()) {
         Index::index_vector indices = tree->canon_indices();
 
-        const bool contains_proto_indices = std::ranges::any_of(
-            indices, [](const Index &idx) { return idx.has_proto_indices(); });
-
-        if (!contains_proto_indices &&
-            tree->as_tensor().symmetry() != Symmetry::Antisymm) {
-          switch (target_layout) {
-            case MemoryLayout::ColumnMajor:
-              // Largest indices should come first
-              std::ranges::stable_sort(indices, std::greater<>{},
-                                       [](const Index &idx) {
-                                         return idx.space().approximate_size();
-                                       });
-              break;
-            case MemoryLayout::RowMajor:
-              // Largest indices should come last
-              std::ranges::stable_sort(indices, std::greater<>{},
-                                       [](const Index &idx) {
-                                         return idx.space().approximate_size();
-                                       });
-              break;
-            case MemoryLayout::Unspecified:
-              break;
-          }
-        }
+        // Sort indices into distinct groups based on index space in order
+        // to create a deterministic set of indices.
+        // Since there can't be any permutational symmetries between indices
+        // of different spaces, we can arrange them in arbitrary order as long
+        // as we retain the relative order of indices that belong to the same
+        // space.
+        std::ranges::stable_sort(indices, std::less<>{},
+                                 [](const Index &idx) { return idx.space(); });
 
         return ex<Tensor>(label, bra(), ket(), aux(std::move(indices)),
                           Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
@@ -220,7 +201,6 @@ class SubexpressionReplacer {
   SubexpressionNames<TreeNode, force_hash_collisions> cse_names;
   std::size_t name_counter = 1;
   const LabelGenerator &label_gen;
-  MemoryLayout target_layout = MemoryLayout::Unspecified;
 };
 
 // TODO: provide predicate that computes the FLOPs required to compute the CSE
@@ -254,10 +234,9 @@ template <std::ranges::range VectorLike,
           bool force_hash_collisions = false>
   requires std::regular_invocable<Transformer, ResultExpr> &&
            meta::eval_node<std::ranges::range_value_t<VectorLike>>
-void eliminate_common_subexpressions(
-    VectorLike &expr_trees, const Transformer &expr_to_tree,
-    const Filter &filter_predicate = {},
-    MemoryLayout target_layout = MemoryLayout::Unspecified) {
+void eliminate_common_subexpressions(VectorLike &expr_trees,
+                                     const Transformer &expr_to_tree,
+                                     const Filter &filter_predicate = {}) {
   using std::ranges::begin;
   using std::ranges::end;
 
@@ -282,8 +261,7 @@ void eliminate_common_subexpressions(
 
   cse::SubexpressionReplacer<VectorLike, TreeNode, Transformer,
                              decltype(label_gen), force_hash_collisions>
-      replacer(expr_trees, subexpression_usages, expr_to_tree, label_gen,
-               target_layout);
+      replacer(expr_trees, subexpression_usages, expr_to_tree, label_gen);
 
   replacer.perform_replacements();
 }
