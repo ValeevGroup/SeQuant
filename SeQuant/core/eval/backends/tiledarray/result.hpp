@@ -12,6 +12,8 @@
 
 #include <range/v3/view/iota.hpp>
 
+#include <complex>
+
 namespace sequant {
 
 namespace {
@@ -584,20 +586,27 @@ class ResultTensorOfTensorTA final : public Result {
       std::array<std::any, 2> const& ann) const override {
     // ToT adjoint: bra/ket-swapped layout (operand annot in ann[0], adjoint
     // annot in ann[1]) plus elementwise conj (no-op for real numeric_type).
-    // .conj() on a ToT array currently fails to compile in TA — no inner
-    // conj overload for Tensor<Tensor<complex>>. For now bail at runtime
-    // for complex ToT; real ToT falls through to a pure permute.
+    // TA's `.conj()` expression has no overload for a tensor-of-tensors, so for
+    // a complex numeric_type we permute first and then conjugate every inner
+    // scalar in place via a local-tile walk (the same tile-iteration idiom as
+    // tot_inner_rank() above). `it->get()` blocks until each permuted tile is
+    // ready, so no extra fence is needed before mutating.
     auto const pre_annot = std::any_cast<std::string>(ann[0]);
     auto const post_annot = std::any_cast<std::string>(ann[1]);
 
     log_ta(post_annot, " = adjoint(", pre_annot, ")\n");
 
     ArrayT result;
+    result(post_annot) = get<ArrayT>()(pre_annot);
     if constexpr (TA::detail::is_complex_v<numeric_type>) {
-      throw unimplemented_method(
-          "adjoint of tensor-of-tensors with complex numeric_type");
-    } else {
-      result(post_annot) = get<ArrayT>()(pre_annot);
+      for (auto it = result.begin(); it != result.end(); ++it) {
+        auto& outer_tile = it->get();
+        for (auto& inner : outer_tile) {
+          if (inner.empty())
+            continue;  // skip null inner views (screened pairs)
+          for (auto& x : inner) x = std::conj(x);
+        }
+      }
     }
     ArrayT::wait_for_lazy_cleanup(result.world());
     log_ta_tensor_host_memory_use();

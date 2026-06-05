@@ -17,6 +17,7 @@
 #include <range/v3/view/split.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <complex>
 #include <string>
 #include <vector>
 
@@ -80,8 +81,17 @@ class rand_tensor_yield {
                    ranges::to<sequant::container::svector<int64_t>>;
 
     auto result = Tensor_t{extents};
-    result.generate(
-        []() { return static_cast<double>(std::rand()) / RAND_MAX; });
+    using numeric_type = typename Tensor_t::numeric_type;
+    result.generate([]() -> numeric_type {
+      auto const re = static_cast<double>(std::rand()) / RAND_MAX;
+      if constexpr (sequant::meta::is_complex_v<numeric_type>) {
+        // genuinely complex data so a missing conjugation is observable
+        auto const im = static_cast<double>(std::rand()) / RAND_MAX;
+        return numeric_type(re, im);
+      } else {
+        return static_cast<numeric_type>(re);
+      }
+    });
     return result;
   }
 
@@ -457,4 +467,45 @@ TEST_CASE("eval_with_tapp", "[eval_tapp]") {
     REQUIRE(norm(zero2) == Catch::Approx(0).margin(
                                100 * std::numeric_limits<double>::epsilon()));
   }
+}
+
+TEST_CASE("eval_adjoint_complex_tapp", "[eval_tapp]") {
+  using namespace sequant;
+  using TAPPTensorC = sequant::TAPPTensor<std::complex<double>>;
+
+  std::srand(2023);
+  const size_t nocc = 2, nvirt = 5;
+  auto yield_ = rand_tensor_yield<TAPPTensorC>{nocc, nvirt};
+
+  // A Nonsymm-braket tensor's adjoint() marks the label with '⁺' and swaps
+  // bra/ket; binarize lowers that to an EvalOp::Adjoint node, and evaluating it
+  // must conjugate-transpose the operand. With genuinely complex data the
+  // conjugation is observable (a missing conj would leave imaginary parts
+  // unflipped — a pure transpose would still pass a norm-only check).
+  Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+           BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+  Tensor t_adj = t;
+  t_adj.adjoint();
+  REQUIRE(t_adj.label() == L"t⁺");
+
+  auto node = eval_node(ex<Tensor>(t_adj));
+  REQUIRE(node->op_type() == EvalOp::Adjoint);
+
+  // operand tensor (bare 't{a_1;i_1}'): shape [nvirt, nocc], indexed (a, i)
+  auto const& src = yield_(node.left()->as_tensor())->get<TAPPTensorC>();
+  REQUIRE(src.extents()[0] == static_cast<int64_t>(nvirt));
+  REQUIRE(src.extents()[1] == static_cast<int64_t>(nocc));
+
+  // adjoint result: shape [nocc, nvirt], indexed (i, a) == conj(src(a, i))
+  auto const adj = evaluate(node, tidxs(t_adj), yield_)->get<TAPPTensorC>();
+  REQUIRE(adj.extents()[0] == static_cast<int64_t>(nocc));
+  REQUIRE(adj.extents()[1] == static_cast<int64_t>(nvirt));
+
+  for (size_t i = 0; i < nocc; ++i)
+    for (size_t a = 0; a < nvirt; ++a) {
+      auto const expected = std::conj(src(a, i));
+      auto const got = adj(i, a);
+      CHECK(got.real() == Catch::Approx(expected.real()).margin(1e-12));
+      CHECK(got.imag() == Catch::Approx(expected.imag()).margin(1e-12));
+    }
 }

@@ -24,9 +24,19 @@
 #include <range/v3/view/transform.hpp>
 
 #include <cmath>
+#include <complex>
 #include <cstdlib>
 #include <string>
 #include <vector>
+
+// Force compile-instantiation of the complex tensor-of-tensors Result so its
+// adjoint() override (which conjugates inner elements in place) is
+// type-checked. No TA eval test constructs a complex ToT, and Result::adjoint()
+// is private (reachable only through the EvalOp::Adjoint IR node), so this
+// explicit instantiation is what exercises the complex ToT branch at compile
+// time.
+template class sequant::ResultTensorOfTensorTA<
+    TA::DistArray<TA::Tensor<TA::Tensor<std::complex<double>>>>>;
 
 namespace TiledArray {
 template <typename>
