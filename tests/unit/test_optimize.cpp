@@ -297,6 +297,14 @@ TEST_CASE("optimize", "[optimize]") {
   }
 
   SECTION("CSE") {
+    auto ctx_resetter =
+        set_scoped_default_context(get_default_context().clone());
+    IndexSpaceRegistry registry;
+    registry.add("a", 0b001);
+    registry.add("i", 0b010);
+    registry.add("u", 0b100);
+    *get_default_context().mutable_index_space_registry() = registry;
+
     for (bool force_hash_collisions : {false, true}) {
       CAPTURE(force_hash_collisions);
 
@@ -336,6 +344,14 @@ TEST_CASE("optimize", "[optimize]") {
                // first.
                {{L"B = K J", L"R = (A B) C + (A B) D"},
                 {L"B = K J", L"CSE1 = A B", L"R = CSE1 C + CSE1 D"}},
+               // CSE in the presence of bra-ket symmetry
+               {{L"R2{u2,a1;u1,i1} = -2 f{u3;u4}:N-S Y{u2,u3;u1,u5} "
+                 L"t{a1,u5;i1,u4} + f{u3;u4}:N-S Y{u2,u4;u5,u1} t{a1,u5;i1,u3} "
+                 L"+ f{u3;u4}:N-S Y{u2,u4;u1,u5} t{a1,u5;u3,i1}"},
+                {L"CSE1{;;u4,u2,u1,u5} = f{u3;u4}:N-S Y{u2,u3;u1,u5}",
+                 L"R2{u2,a1;u1,i1} = -2 CSE1{;;u4,u2,u1,u5} t{a1,u5;i1,u4}"
+                 L" + CSE1{;;u3,u2,u5,u1} t{a1,u5;i1,u3}"
+                 L" + CSE1{;;u3,u2,u1,u5} t{a1,u5;u3,i1}"}},
            }) {
         CAPTURE(inputs);
 
