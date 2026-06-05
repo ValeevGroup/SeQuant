@@ -348,10 +348,10 @@ TEST_CASE("optimize", "[optimize]") {
                {{L"R2{u2,a1;u1,i1} = -2 f{u3;u4}:N-S Y{u2,u3;u1,u5} "
                  L"t{a1,u5;i1,u4} + f{u3;u4}:N-S Y{u2,u4;u5,u1} t{a1,u5;i1,u3} "
                  L"+ f{u3;u4}:N-S Y{u2,u4;u1,u5} t{a1,u5;u3,i1}"},
-                {L"CSE1{;;u2,u4,u1,u5} = f{u3;u4}:N-S Y{u2,u3;u1,u5}",
-                 L"R2{u2,a1;u1,i1} = -2 CSE1{;;u2,u4,u1,u5} t{a1,u5;i1,u4}"
-                 L" + CSE1{;;u3,u2,u5,u1} t{a1,u5;i1,u3}"
-                 L" + CSE1{;;u2,u3,u1,u5} t{a1,u5;u3,i1}"}},
+                {L"CSE1{;;u4,u2,u1,u5} = f{u3;u4}:N-S Y{u2,u3;u1,u5}",
+                 L"R2{u2,a1;u1,i1} = -2 CSE1{;;u4,u2,u1,u5} t{a1,u5;i1,u4}"
+                 L" + CSE1{;;u2,u3,u5,u1} t{a1,u5;i1,u3}"
+                 L" + CSE1{;;u3,u2,u1,u5} t{a1,u5;u3,i1}"}},
            }) {
         CAPTURE(inputs);
 

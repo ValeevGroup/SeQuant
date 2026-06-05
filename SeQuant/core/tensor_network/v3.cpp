@@ -771,11 +771,21 @@ TensorNetworkV3::canonicalize_slots(
         // connected ... the latter would only occur if this index is named
         // due to also being a protoindex on one of the named indices!
         if (edge_it->vertex_count() == 1) {
-          if (edge_it->vertex(0).getOrigin() == Origin::Aux)
+          const BraKetSymmetry symm = braket_symmetry(
+              *tensors_.at(edge_it->vertex(0).getTerminalIndex()));
+
+          if (edge_it->vertex(0).getOrigin() == Origin::Aux) {
             slot_type = IndexSlotType::TensorAux;
-          else if (edge_it->vertex(0).getOrigin() == Origin::Bra)
+          } else if (symm == BraKetSymmetry::Symm ||
+                     edge_it->vertex(0).getOrigin() == Origin::Bra) {
+            // Note: we must not distinguis bra and ket indices in case braket
+            // symmetry is present Technically, this should (to some degree)
+            // also apply to BraKetSymmetry::Conjugate but this TN
+            // implementation currently doesn't exploit conjugate braket
+            // symmetry (as it is not entirely clear how to handle the required
+            // complex conjugation)
             slot_type = IndexSlotType::TensorBra;
-          else {
+          } else {
             SEQUANT_ASSERT(edge_it->vertex(0).getOrigin() == Origin::Ket);
             slot_type = IndexSlotType::TensorKet;
           }
