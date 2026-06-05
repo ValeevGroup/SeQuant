@@ -296,6 +296,10 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV1,
                            idxvec_t{L"u_2", L"u_4", L"u_1", L"u_5"});
         tests.emplace_back(L"f{u4;u3}:N-S Y{u2,u3;u1,u5}",
                            idxvec_t{L"u_2", L"u_4", L"u_1", L"u_5"});
+        tests.emplace_back(L"f{u3;u4}:N-S Y{u2,u4;u1,u5}",
+                           idxvec_t{L"u_2", L"u_3", L"u_1", L"u_5"});
+        tests.emplace_back(L"f{u3;u4}:N-S Y{u2,u4;u5,u1}",
+                           idxvec_t{L"u_2", L"u_3", L"u_5", L"u_1"});
       }
 
       for (const auto& [input, str_indices] : tests) {
