@@ -71,22 +71,25 @@ class ContractedIndexCount {
     SEQUANT_ASSERT(n->is_tensor() && n.left()->is_tensor() &&
                    n.right()->is_tensor());
 
+    // For the result and both operands, record the tensor's rank and collect
+    // every index into `distinct`. The set dedupes indices shared across
+    // tensors (a contracted index appears in both operands; a batched index in
+    // all three), so each is counted exactly once below.
     container::set<Index> distinct;
     for (auto p : {L, R, T}) {
       auto const& t = (p == L ? n.left() : p == R ? n.right() : n)->as_tensor();
-      counts_[p] = space_counts(t);
+      auto const counts = space_counts(t);
       ranks_[p] = 0;
-      for (auto const& [_, c] : counts_[p]) ranks_[p] += c;
+      for (auto const& [_, c] : counts) ranks_[p] += c;
       for (auto const& idx : t.const_braketaux_indices()) distinct.insert(idx);
     }
 
+    // An outer product contracts nothing, so the result keeps all operand
+    // indices and the ranks add up exactly.
     is_outerprod_ = ranks_[L] + ranks_[R] == ranks_[T];
 
+    // Cost exponent per space = number of distinct indices touching that space.
     for (auto const& idx : distinct) ++unique_[idx.space()];
-  }
-
-  [[nodiscard]] Counts const& counts(NodePos p) const noexcept {
-    return counts_[p];
   }
 
   [[nodiscard]] size_t rank(NodePos p) const noexcept { return ranks_[p]; }
@@ -99,7 +102,6 @@ class ContractedIndexCount {
   [[nodiscard]] Counts const& unique_counts() const { return unique_; }
 
  private:
-  std::array<Counts, 3> counts_;
   Counts unique_;
   std::array<size_t, 3> ranks_{0, 0, 0};
   bool is_outerprod_ = false;

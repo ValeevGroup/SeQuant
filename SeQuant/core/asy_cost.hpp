@@ -13,10 +13,10 @@ namespace sequant {
 ///
 /// Represents a symbolic asymptotic cost as a polynomial in the sizes of
 /// index spaces. A cost is a sum of terms, each of which is a rational
-/// multiplier times a product of space sizes raised to integer powers.
-/// Spaces are identified by `IndexSpace`; `AsyCost` orders and prints them
-/// using `IndexSpace`'s own ordering and `base_key()`, and never consults an
-/// `IndexSpaceRegistry`.
+/// multiplier times a product of space sizes raised to non-negative integer
+/// powers. Spaces are identified by `IndexSpace`; `AsyCost` orders and prints
+/// them using `IndexSpace`'s own ordering and `base_key()`, and never consults
+/// an `IndexSpaceRegistry`.
 ///
 /// Examples (with `I`, `A` denoting two index spaces):
 ///   - `AsyCost({{I, 2}, {A, 4}})` represents $I^2 A^4$.
