@@ -604,11 +604,6 @@ TEST_CASE("canonicalization", "[algorithms]") {
 
 TEST_CASE("braket_symmetric_half_tensor_canonicalization", "[algorithms]") {
   using namespace sequant;
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
-  auto ctx = get_default_context();
-  ctx.set(sequant::mbpt::make_sr_spaces());
-  auto ctx_resetter = set_scoped_default_context(ctx);
 
   auto canon_hash = [](std::wstring spec) {
     auto e = deserialize(spec);
