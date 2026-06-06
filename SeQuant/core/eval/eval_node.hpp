@@ -44,12 +44,18 @@ namespace detail {
 
 enum NodePos { Left = 0, Right, This };
 
-/// Tally indices per IndexSpace appearing in the bra+ket of `t`. AsyCost is
-/// only used for analysis/reporting, so spaces are taken verbatim from the
-/// indices, with no registry lookup.
+/// Tally indices per IndexSpace appearing in the bra+ket+aux of `t`. The aux
+/// slots are included so that auxiliary spaces (e.g. density-fitting/THC) show
+/// up in the cost. AsyCost is only used for analysis/reporting, so spaces are
+/// taken verbatim from the indices, with no registry lookup.
+///
+/// Cost is expressed in terms of whatever IndexSpace each index carries. A
+/// union-space index (e.g. MR hole `I=i∪u`) contributes its union dimension
+/// `|I|=|i|+|u|` as a single symbol: it is not decomposed into base-space (`i`,
+/// `u`, ...) block terms.
 inline AsyCost::ExponentMap space_counts(Tensor const& t) {
   AsyCost::ExponentMap counts;
-  for (auto const& idx : t.const_braket_indices()) ++counts[idx.space()];
+  for (auto const& idx : t.const_braketaux_indices()) ++counts[idx.space()];
   return counts;
 }
 
@@ -65,14 +71,18 @@ class ContractedIndexCount {
     SEQUANT_ASSERT(n->is_tensor() && n.left()->is_tensor() &&
                    n.right()->is_tensor());
 
+    container::set<Index> distinct;
     for (auto p : {L, R, T}) {
       auto const& t = (p == L ? n.left() : p == R ? n.right() : n)->as_tensor();
       counts_[p] = space_counts(t);
       ranks_[p] = 0;
       for (auto const& [_, c] : counts_[p]) ranks_[p] += c;
+      for (auto const& idx : t.const_braketaux_indices()) distinct.insert(idx);
     }
 
     is_outerprod_ = ranks_[L] + ranks_[R] == ranks_[T];
+
+    for (auto const& idx : distinct) ++unique_[idx.space()];
   }
 
   [[nodiscard]] Counts const& counts(NodePos p) const noexcept {
@@ -83,29 +93,14 @@ class ContractedIndexCount {
 
   [[nodiscard]] bool is_outerprod() const noexcept { return is_outerprod_; }
 
-  /// Per-space count of unique indices participating in the contraction:
-  ///   unique[s] = (count_L[s] + count_R[s] + count_T[s]) / 2
-  /// (i.e. each contracted-pair index is counted once).
-  [[nodiscard]] Counts unique_counts() const {
-    Counts result;
-    auto get = [this](NodePos p, IndexSpace const& s) -> size_t {
-      auto it = counts_[p].find(s);
-      return it == counts_[p].end() ? 0 : it->second;
-    };
-    for (auto p : {NodePos::Left, NodePos::Right, NodePos::This}) {
-      for (auto const& [s, _] : counts_[p]) {
-        if (result.count(s)) continue;
-        auto const u = (get(NodePos::Left, s) + get(NodePos::Right, s) +
-                        get(NodePos::This, s)) /
-                       2;
-        if (u > 0) result.emplace(s, u);
-      }
-    }
-    return result;
-  }
+  /// Per-space count of distinct indices participating in the contraction.
+  /// Each external, contracted, or batched index is counted once. For ordinary
+  /// contractions (no batched index) this equals (L[s] + R[s] + T[s]) / 2.
+  [[nodiscard]] Counts const& unique_counts() const { return unique_; }
 
  private:
   std::array<Counts, 3> counts_;
+  Counts unique_;
   std::array<size_t, 3> ranks_{0, 0, 0};
   bool is_outerprod_ = false;
 };
