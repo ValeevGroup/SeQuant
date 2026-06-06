@@ -26,8 +26,10 @@ std::size_t VertexPainterImpl::to_hash_value(
   // asymmetry, in the core-vertex shade.)
   auto bra_rank = tensor._bra_rank();
   auto ket_rank = tensor._ket_rank();
-  if (tensor._braket_symmetry() == BraKetSymmetry::Symm && bra_rank > ket_rank)
+  if (tensor._braket_symmetry() == BraKetSymmetry::Symm &&
+      bra_rank > ket_rank) {
     std::swap(bra_rank, ket_rank);
+  }
   auto hashes = {hash::value(tensor._label()),
                  hash::value(bra_rank),
                  hash::value(ket_rank),
