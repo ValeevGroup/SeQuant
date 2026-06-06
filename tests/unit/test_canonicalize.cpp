@@ -13,6 +13,7 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <SeQuant/core/bliss.hpp>
+#include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network/v3.hpp>
 #include <SeQuant/external/bliss/graph.hh>
 
@@ -599,4 +600,31 @@ TEST_CASE("canonicalization", "[algorithms]") {
           EquivalentTo("t{a2;i4} t{a1,a3;i3,i2} B{i3;i1;p5} B{i4;a3;p5}"));
     }
   }
+}
+
+TEST_CASE("braket_symmetric_half_tensor_canonicalization", "[algorithms]") {
+  using namespace sequant;
+  TensorCanonicalizer::register_instance(
+      std::make_shared<DefaultTensorCanonicalizer>());
+  auto isr = sequant::mbpt::make_legacy_spaces();
+  mbpt::add_pao_spaces(isr);
+  auto ctx = get_default_context();
+  ctx.set(isr);
+  auto ctx_resetter = set_scoped_default_context(ctx);
+
+  auto canon_hash = [](std::wstring spec) {
+    auto e = deserialize(spec);
+    ExprPtrList tl{e};
+    TensorNetwork tn(tl);
+    return tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels())
+        .hash_value();
+  };
+
+  // A braket-symmetric tensor is invariant under bra<->ket exchange, so a
+  // half-tensor with the orbital in bra must canonicalize identically to the
+  // form with the orbital in ket (regression: the vertex painter's tensor
+  // "shade" hashed bra_rank/ket_rank in fixed order, distinguishing them).
+  CHECK(canon_hash(L"X{a1;;i1}:N-S-N") == canon_hash(L"X{;a1;i1}:N-S-N"));
+  // Without braket symmetry the two forms must remain distinct.
+  CHECK(canon_hash(L"X{a1;;i1}:N-N-N") != canon_hash(L"X{;a1;i1}:N-N-N"));
 }
