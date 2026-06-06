@@ -1305,6 +1305,10 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         // sequant::wprintf(to_latex_align(Ld_H2N_L), L" = \n",
         //                  to_latex_align(result2, 0, 2), L"\n");
         REQUIRE(result2.as<Sum>().size() == 5);
+        // Sum-term ordering shifted vs master after the removal of
+        // Context::braket_symmetry: the canonical sort key for the two
+        // -1/2 ã·v̄·w terms swapped. The expression is mathematically
+        // unchanged.
         REQUIRE(
             result2.to_latex() ==
             L"{ \\bigl( - "
@@ -1351,14 +1355,29 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       // quasi-diagonal example, with some indices in covariant expression
       // fixed, as in the pair-specific densities used to produce PNOs
       {
+        // Make all spaces Real so the deserialized ':A-C-S' Hermitian braket
+        // trait resolves to Symm at *Tensor construction* time (via
+        // base_field). This preserves master's pre-removal semantics of
+        // `.set(BraKetSymmetry::Symm)` on the Context — which in master only
+        // affected tensors *created after* the set; the t tensors below were
+        // deserialized first and stored a Conjugate braket_symmetry_, but
+        // vac_av's new intermediates inherited Symm from the Context. Putting
+        // the t tensors themselves into Symm via `:A-C-S` overspecifies and
+        // collapses canonical externals (i_1, i_2 internalize).
+        auto sr_reg = std::make_shared<sequant::IndexSpaceRegistry>(
+            get_default_context().index_space_registry()->clone());
+        std::vector<std::wstring> keys;
+        for (auto const& s : *sr_reg) keys.push_back(s.base_key());
+        for (auto const& k : keys)
+          if (auto* sp = sr_reg->retrieve_ptr(k)) sp->field(Field::Real);
+        auto resetter = sequant::set_scoped_default_context(
+            Context(get_default_context())
+                .set(sr_reg)
+                .set(CanonicalizeOptions::default_options().copy_and_set(
+                    container::set<Index>{L"i_1", L"i_2", L"a_1", L"a_2"})));
         auto expr = sequant::deserialize(
             L"1/8 t{i1,i2;a3,a4}:A-C-S * ã{a3,a4;i1,i2} * ã{;a1} * ã{a2} * "
             L"t{a5,a6;i3,i4}:A-C-S * ã{i3,i4;a5,a6}");
-        auto resetter = sequant::set_scoped_default_context(
-            Context(get_default_context())
-                .set(CanonicalizeOptions::default_options().copy_and_set(
-                    container::set<Index>{L"i_1", L"i_2", L"a_1", L"a_2"}))
-                .set(BraKetSymmetry::Symm));
         // std::wcout << expr.to_latex() << "\n";
         auto rdm1_so = sequant::mbpt::tensor::vac_av(expr);
         // std::wcout << "SO RDM: " << rdm1_so.to_latex() << "\n";
@@ -1385,16 +1404,23 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
 
       // triples variant of the previous case
       {
+        // Field::Real preprocessing: see doubles variant above.
+        auto sr_reg = std::make_shared<sequant::IndexSpaceRegistry>(
+            get_default_context().index_space_registry()->clone());
+        std::vector<std::wstring> keys;
+        for (auto const& s : *sr_reg) keys.push_back(s.base_key());
+        for (auto const& k : keys)
+          if (auto* sp = sr_reg->retrieve_ptr(k)) sp->field(Field::Real);
+        auto resetter = sequant::set_scoped_default_context(
+            Context(get_default_context())
+                .set(sr_reg)
+                .set(CanonicalizeOptions::default_options().copy_and_set(
+                    container::set<Index>{L"i_1", L"i_2", L"i_3", L"a_4",
+                                          L"a_5"})));
         auto expr = sequant::deserialize(
             L"1/216 t{i1,i2,i3;a1,a2,a3}:A-C-S * ã{a1,a2,a3;i1,i2,i3} * "
             L"ã{;a4} * ã{a5} * "
             L"t{a6,a7,a8;i4,i5,i6}:A-C-S * ã{i4,i5,i6;a6,a7,a8}");
-        auto resetter = sequant::set_scoped_default_context(
-            Context(get_default_context())
-                .set(CanonicalizeOptions::default_options().copy_and_set(
-                    container::set<Index>{L"i_1", L"i_2", L"i_3", L"a_4",
-                                          L"a_5"}))
-                .set(BraKetSymmetry::Symm));
         // std::wcout << expr.to_latex() << "\n";
         auto rdm1_so = sequant::mbpt::tensor::vac_av(expr);
         // std::wcout << "SO RDM: " << rdm1_so.to_latex() << "\n";
