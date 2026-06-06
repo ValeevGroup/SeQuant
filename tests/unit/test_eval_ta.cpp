@@ -30,11 +30,12 @@
 #include <vector>
 
 // Force compile-instantiation of the complex tensor-of-tensors Result so its
-// adjoint() override (which conjugates inner elements in place) is
-// type-checked. No TA eval test constructs a complex ToT, and Result::adjoint()
-// is private (reachable only through the EvalOp::Adjoint IR node), so this
-// explicit instantiation is what exercises the complex ToT branch at compile
-// time.
+// adjoint() override (`result(annot) = arr(annot).conj()`, relying on TA's
+// recursive conj for nested tiles) is type-checked. No TA eval test constructs
+// a complex ToT adjoint, and Result::adjoint() is private (reachable only
+// through the EvalOp::Adjoint IR node); the ta_tot_conj_complex test below
+// runtime-checks the underlying TA conj while this instantiation compile-checks
+// the override.
 template class sequant::ResultTensorOfTensorTA<
     TA::DistArray<TA::Tensor<TA::Tensor<std::complex<double>>>>>;
 
@@ -1573,5 +1574,45 @@ TEST_CASE("eval_batched_custom_evaluator_tot", "[eval]") {
         make_batched_custom_evaluator(yield, target_batch_size, accept_occ));
     auto const res = evaluate(node, target, yield, cache)->get<ArrayToT>();
     REQUIRE(self_dot(res) == Catch::Approx(ref_dot));
+  }
+}
+
+TEST_CASE("ta_tot_conj_complex", "[eval]") {
+  // Exercises TiledArray's .conj() on a complex tensor-of-tensors through the
+  // expression engine — the capability SeQuant's ToT adjoint() relies on after
+  // teaching TA to recurse conj into nested tiles. With genuinely complex data
+  // a missing/incorrect inner conj would flip the wrong imaginary sign.
+  using namespace sequant;
+  auto& world = TA::get_default_world();
+  size_t const nocc = 2, nvirt = 3;
+  rand_tensor_yield<std::complex<double>, TA::DensePolicy> yield{world, nocc,
+                                                                 nvirt};
+  using ArrayToT = typename decltype(yield)::array_tot_type;
+
+  std::string const annot{"i_2,i_3;a_3i_2i_3,a_4i_2i_3"};
+  auto const t = deserialize<sequant::ExprPtr>(L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}");
+  auto const& src = yield(t->as<sequant::Tensor>())->get<ArrayToT>();
+
+  ArrayToT conjd;
+  conjd(annot) = src(annot).conj();
+  ArrayToT::wait_for_lazy_cleanup(world);
+
+  // elementwise: conjd inner == conj(src inner); identical tiling/layout (no
+  // permutation in the assignment) lets us walk local tiles in lockstep.
+  auto it_s = src.begin();
+  auto it_c = conjd.begin();
+  for (; it_s != src.end(); ++it_s, ++it_c) {
+    auto const& souter = it_s->get();
+    auto const& couter = it_c->get();
+    REQUIRE(souter.size() == couter.size());
+    for (std::size_t o = 0; o < souter.size(); ++o) {
+      auto const& sinner = souter[o];
+      auto const& cinner = couter[o];
+      if (sinner.empty()) continue;
+      for (std::size_t k = 0; k < sinner.size(); ++k) {
+        CHECK(cinner[k].real() == Catch::Approx(sinner[k].real()));
+        CHECK(cinner[k].imag() == Catch::Approx(-sinner[k].imag()));
+      }
+    }
   }
 }
