@@ -146,7 +146,7 @@ std::vector<ExprPtr> CC::λ() {
     const auto hbar_λ =
         mbpt::lst(H(), adjoint(Λ(N, skip_singles())), commutator_rank);
     result.at(0) = this->ref_av(
-        hbar_λ, {{L"h", L"λ"}, {L"f", L"λ"}, {L"f̃", L"λ"}, {L"g", L"λ"}});
+        hbar_λ, {{L"h", L"λ⁺"}, {L"f", L"λ⁺"}, {L"f̃", L"λ⁺"}, {L"g", L"λ⁺"}});
   }
 
   // 2. project onto each manifold, screen, lower to tensor form and wick it
