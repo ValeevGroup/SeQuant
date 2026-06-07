@@ -139,10 +139,18 @@ std::vector<ExprPtr> CC::λ() {
                                                             {L"f", symm},
                                                             {L"g", symm}});
 
-  // 2. project onto each manifold, screen, lower to tensor form and wick it
-  // p == 0 yields the Lagrangian
   std::vector<ExprPtr> result(N + 1);
-  for (std::int64_t p = N; p >= 0; --p) {
+
+  // element 0: λ pseudoenergy, computed as the CC energy with T → Λ⁺.
+  {
+    const auto hbar_λ =
+        mbpt::lst(H(), adjoint(Λ(N, skip_singles())), commutator_rank);
+    result.at(0) = this->ref_av(
+        hbar_λ, {{L"h", L"λ"}, {L"f", L"λ"}, {L"f̃", L"λ"}, {L"g", L"λ"}});
+  }
+
+  // 2. project onto each manifold, screen, lower to tensor form and wick it
+  for (std::int64_t p = N; p >= 1; --p) {
     // 2.a. screen out terms that cannot give nonzero after projection onto
     // <P|
     std::shared_ptr<Sum>
@@ -174,8 +182,7 @@ std::vector<ExprPtr> CC::λ() {
 
     // 2.b multiply by adjoint of P(p) (i.e., P(-p)) on the right side and
     // compute VEV
-    result.at(p) = this->ref_av(
-        p != 0 ? lhbar_for_vev * P(nₚ(-p)) : lhbar_for_vev, op_connect);
+    result.at(p) = this->ref_av(lhbar_for_vev * P(nₚ(-p)), op_connect);
   }
   return result;
 }

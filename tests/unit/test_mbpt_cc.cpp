@@ -31,6 +31,23 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
       }
 
     }  // SECTION("t")
+
+    SECTION("λ") {
+      SECTION("CCSD λ") {
+        const auto N = 2;
+        auto cc = CC{N};
+        auto λ_eqs = cc.λ();
+        REQUIRE(λ_eqs.size() == N + 1);
+        // element 0 is the λ pseudoenergy: the CC energy with T → Λ⁺, i.e. the
+        // CC energy expression with the cluster amplitudes replaced by Λ⁺
+        REQUIRE_THAT(λ_eqs[0],
+                     EquivalentTo(L"f{i_1;a_1}:A-C-S λ⁺{a_1;i_1}:A-N-S "
+                                  L"+ 1/4 g{i_1,i_2;a_1,a_2}:A-C-S "
+                                  L"λ⁺{a_1,a_2;i_1,i_2}:A-N-S "
+                                  L"+ 1/2 g{i_1,i_2;a_1,a_2}:A-C-S "
+                                  L"λ⁺{a_1;i_1}:A-N-S λ⁺{a_2;i_2}:A-N-S"));
+      }
+    }  // SECTION("λ")
   }
 
   SECTION("eom_cc"){SECTION("EOM-CCSD"){const auto N = 2;

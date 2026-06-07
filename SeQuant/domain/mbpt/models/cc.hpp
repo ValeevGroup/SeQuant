@@ -110,8 +110,8 @@ class CC {
   /// equation
   ///   \f$ \langle 0| (1 + \hat{\Lambda}) \frac{d \bar{H}}{d \hat{T}_k} |0
   ///   \rangle = 0 \f$ for `k` in
-  /// the [1,N] range; element 0 contains the Lagrangian
-  ///   \f$ \langle 0| (1 + \hat{\Lambda}) \bar{H} |0 \rangle \f$
+  /// the [1,N] range; element 0 contains the λ pseudoenergy, computed as the
+  /// CC energy with \f$ \hat{T} \f$ replaced by \f$ \hat{\Lambda}^{\dagger} \f$
   [[nodiscard]] std::vector<ExprPtr> λ();
 
   // clang-format off
