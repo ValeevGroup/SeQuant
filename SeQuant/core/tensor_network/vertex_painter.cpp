@@ -3,6 +3,8 @@
 #include <SeQuant/core/tensor_network/vertex_painter.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <utility>
+
 namespace sequant {
 
 VertexPainterImpl::VertexPainterImpl(
@@ -14,9 +16,23 @@ VertexPainterImpl::VertexPainterImpl(
 
 std::size_t VertexPainterImpl::to_hash_value(
     const AbstractTensor &tensor) const {
+  // For a braket-symmetric tensor, bra<->ket exchange is a symmetry, so the
+  // tensor's "shade" (which salts the colors of all of its slot and index
+  // vertices) must be invariant under swapping the bra and ket ranks. Hash them
+  // as an unordered pair in that case, so e.g. a half-tensor X{a;;x} and its
+  // bra/ket-swapped form X{;a;x} receive the same color and canonicalize to the
+  // same form. (TNV3 already colors bra/ket slot and bundle vertices
+  // symmetrically for such tensors; this removes the last ordered-by-bra/ket
+  // asymmetry, in the core-vertex shade.)
+  auto bra_rank = tensor._bra_rank();
+  auto ket_rank = tensor._ket_rank();
+  if (tensor._braket_symmetry() == BraKetSymmetry::Symm &&
+      bra_rank > ket_rank) {
+    std::swap(bra_rank, ket_rank);
+  }
   auto hashes = {hash::value(tensor._label()),
-                 hash::value(tensor._bra_rank()),
-                 hash::value(tensor._ket_rank()),
+                 hash::value(bra_rank),
+                 hash::value(ket_rank),
                  hash::value(tensor._aux_rank()),
                  hash::value(tensor._symmetry()),
                  hash::value(tensor._column_symmetry()),
