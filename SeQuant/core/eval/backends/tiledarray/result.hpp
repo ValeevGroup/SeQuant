@@ -71,7 +71,9 @@ auto column_symmetrize_ta(TA::DistArray<Args...> const& arr) {
       size_t const inner_rank = tot_inner_rank(arr);
       if (outer_rank != inner_rank)
         throw Exception(
-            "ToT symmetrization requires equal outer and inner rank");
+            "ToT symmetrization requires equal outer and inner rank (outer=" +
+            std::to_string(outer_rank) +
+            ", inner=" + std::to_string(inner_rank) + ")");
       return outer_rank + inner_rank;
     } else {
       return outer_rank;

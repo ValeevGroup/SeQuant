@@ -162,7 +162,7 @@ void Operator<QuantumNumbers, S>::adjoint() {
 
   // capture the current tensor-form generator so that each call regenerates
   // fresh dummy indices; otherwise using this adjoint operator more than once
-  // would yield tensors that have same indices
+  // would yield tensors that have the same indices.
   auto base_tensor_form = this->tensor_form_generator_;
   *this = Operator{
       [=]() -> std::wstring_view { return lbl; },  // label_generator
