@@ -14,6 +14,8 @@
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
+#include <range/v3/algorithm/transform.hpp>
+
 #include <chrono>
 
 using namespace sequant;
@@ -289,8 +291,8 @@ class compute_eomcc_closedshell_triplet {
                    << T_diff->size() << " terms\n";
 
         if (print) {
-          std::wcout << "\n open-shell singlet sum:\n"
-                     << to_latex_align(summed, 20, 1) << "\n";
+          // std::wcout << "\n open-shell singlet sum:\n"
+          //            << to_latex_align(summed, 20, 1) << "\n";
           std::wcout << "\n triplet (production):\n"
                      << to_latex_align(st, 20, 1) << "\n";
         }

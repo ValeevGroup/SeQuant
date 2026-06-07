@@ -1377,6 +1377,21 @@ ExprPtr closed_shell_CC_spintrace_v1(ExprPtr const& expr,
   }
   simplify(st_expr);
 
+  // if (ext_idxs.size() <= 1){
+  //   if (st_expr->is<Sum>())
+  //   {
+  //     for (auto& term : *st_expr) {
+  //       if (term->is<Product>())
+  //         term = remove_tensor(term.as_shared_ptr<Product>(),
+  //                              reserved::symm_label());
+  //     }
+  //   }
+  // }else if(ext_idxs.size() > 1) {
+  //   st_expr = S_maps(st_expr);
+  //   st_expr = ex<Constant>(2) * st_expr;
+  //   simplify(st_expr);
+  // }
+
   return st_expr;
 }
 
@@ -1392,12 +1407,12 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
 
   if (!ext_idxs.empty()) {
     // Biorthogonal transformation with factoring out NNS projector
-    // st_expr = biorthogonal_transform_pre_nnsproject(st_expr, ext_idxs);
+    st_expr = biorthogonal_transform_pre_nnsproject(st_expr, ext_idxs);
   }
-  if (ext_idxs.size() > 1) {
-    st_expr = S_maps(st_expr);
-    simplify(st_expr);
-  }
+  // if (ext_idxs.size() > 1) {
+  //   st_expr = S_maps(st_expr);
+  //   simplify(st_expr);
+  // }
 
   simplify(st_expr);
   // std::wcout << "final eqs after symm: "
@@ -2443,10 +2458,8 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
             biorthogonal_transform_pre_nnsproject(triplet, ext_idxs, false);
         break;
       case BiorthogonalizationMethod::V2:
-        if (ext_idxs.size() > 1) {
-          triplet = S_maps(triplet);
-          simplify(triplet);
-        }
+        triplet =
+            biorthogonal_transform_pre_nnsproject(triplet, ext_idxs, true);
         break;
       default:
         SEQUANT_ASSERT(false && "unreachable");
