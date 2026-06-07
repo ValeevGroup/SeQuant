@@ -469,9 +469,11 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
         report(expr_bra_external_conj, "g{i_2,a_3;...}:N-C-S");
 
     // (B) Same expression with g's bra/ket pre-swapped (mathematically
-    // equivalent under Symm braket_symmetry). External i_2 now lives in g's
-    // ket slot; the head comes out I{a_1,a_2; i_2,i_1} — the conventional 2:2
-    // layout that mpqc's downstream code expects.
+    // equivalent under Symm braket_symmetry). Braket-symmetric tensors now
+    // canonicalize by bra/ket *color* (index spaces), so g canonicalizes to the
+    // same orientation as in (A) regardless of how it is written: the head
+    // comes out the same 3:1 as (A). Pre-swapping no longer steers the head
+    // layout — use the ResultExpr API (C) to pin it.
     auto expr_ket_external_swap = deserialize(
         L"2 g{i_3,i_4;i_2,a_3}:N-S-S * t{a_3;i_3}:N-N-S "
         L"* t{a_1,a_2;i_1,i_4}:N-N-S");
@@ -498,15 +500,17 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
          "  ket_rank=" + std::to_string(head_explicit.ket_rank()));
 
     // Document the current behavior:
-    // (A) same 3:1 split regardless of Symm vs Conjugate — proves the bug is
-    // positional, independent of scalar Field.
+    // (A) same 3:1 split regardless of Symm vs Conjugate — head bra/ket is
+    // assigned positionally (by external slot), independent of scalar Field.
     CHECK(br_symm == 3);
     CHECK(kr_symm == 1);
     CHECK(br_conj == 3);
     CHECK(kr_conj == 1);
-    // (B) the orientation mpqc's master baseline relied on; head is 2:2.
-    CHECK(br_swap == 2);
-    CHECK(kr_swap == 2);
+    // (B) the pre-swapped form canonicalizes (by bra/ket color) to the same
+    // orientation as (A), so the head is the same 3:1 — pre-swapping is no
+    // longer a lever on head layout.
+    CHECK(br_swap == 3);
+    CHECK(kr_swap == 1);
     // (C) ResultExpr API gives the caller exact control; head matches the LHS
     // verbatim no matter how the RHS factors are oriented internally.
     CHECK(head_explicit.bra_rank() == 2);

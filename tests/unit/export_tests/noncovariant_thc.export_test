@@ -1,0 +1,180 @@
+((X{a1;;x1}:N-S-N X{;a2;x1}:N-S-N) Y{;;x1,x2})(X{a3;;x2}:N-S-N X{;a4;x2}:N-S-N)
+
+=================================================
+Plain Text
+=================================================
+Declare index a_1
+Declare index a_2
+Declare index a_3
+Declare index a_4
+Declare index x_1
+Declare index x_2
+
+Declare tensor I[a_1, a_2, x_2]
+Declare tensor I[a_1, a_2, a_3, a_4]
+Declare tensor I2[a_1, a_2, x_1]
+Declare tensor X[a_1, x_1]
+Declare tensor Y[x_1, x_2]
+
+Create I[a_1, a_2, a_3, a_4] and initialize to zero
+Create I[a_1, a_2, x_2] and initialize to zero
+Create I2[a_1, a_2, x_1] and initialize to zero
+Load X[a_1, x_1]
+Compute I2[a_1, a_2, x_1] += X[a_1, x_1] X[a_2, x_1]
+Unload X[a_1, x_1]
+Load Y[x_1, x_2]
+Compute I[a_1, a_2, x_2] += I2[a_1, a_2, x_1] Y[x_1, x_2]
+Unload Y[x_1, x_2]
+Unload I2[a_1, a_2, x_1]
+Load I2[a_3, a_4, x_2] and set it to zero
+Load X[a_3, x_2]
+Compute I2[a_3, a_4, x_2] += X[a_3, x_2] X[a_4, x_2]
+Unload X[a_3, x_2]
+Compute I[a_1, a_2, a_3, a_4] += I[a_1, a_2, x_2] I2[a_3, a_4, x_2]
+Unload I2[a_3, a_4, x_2]
+Unload I[a_1, a_2, x_2]
+Persist I[a_1, a_2, a_3, a_4]
+
+=================================================
+Julia (TensorOperations)
+=================================================
+I_vvvv = zeros(Float64, nv, nv, nv, nv)
+I_vvx = zeros(Float64, nv, nv, naux)
+I2_vvx = zeros(Float64, nv, nv, naux)
+X_vx = deserialize("X_vx.jlbin")
+@tensor I2_vvx[ a_1, a_2, x_1 ] += X_vx[ a_1, x_1 ] * X_vx[ a_2, x_1 ]
+X_vx = nothing
+Y_xx = deserialize("Y_xx.jlbin")
+@tensor I_vvx[ a_1, a_2, x_2 ] += I2_vvx[ a_1, a_2, x_1 ] * Y_xx[ x_1, x_2 ]
+Y_xx = nothing
+I2_vvx = nothing
+I2_vvx = I2_vvx = zeros(Float64, nv, nv, naux)
+X_vx = deserialize("X_vx.jlbin")
+@tensor I2_vvx[ a_3, a_4, x_2 ] += X_vx[ a_3, x_2 ] * X_vx[ a_4, x_2 ]
+X_vx = nothing
+@tensor I_vvvv[ a_1, a_2, a_3, a_4 ] += I_vvx[ a_1, a_2, x_2 ] * I2_vvx[ a_3, a_4, x_2 ]
+I2_vvx = nothing
+I_vvx = nothing
+return I_vvvv
+
+=================================================
+Julia (ITensor)
+=================================================
+a_1 = Index(nv, "a_1")
+a_2 = Index(nv, "a_2")
+a_3 = Index(nv, "a_3")
+a_4 = Index(nv, "a_4")
+x_1 = Index(naux, "x_1")
+x_2 = Index(naux, "x_2")
+
+I_vvvv = ITensor(zeros(Float64, nv, nv, nv, nv), a_1, a_2, a_3, a_4)
+I_vvx = ITensor(zeros(Float64, nv, nv, naux), a_1, a_2, x_2)
+I2_vvx = ITensor(zeros(Float64, nv, nv, naux), a_1, a_2, x_1)
+X_vx = ITensor(deserialize("X_vx.jlbin"), a_1, x_1)
+I2_vvx += X_vx * X_vx
+X_vx = nothing
+Y_xx = ITensor(deserialize("Y_xx.jlbin"), x_1, x_2)
+I_vvx += I2_vvx * Y_xx
+Y_xx = nothing
+I2_vvx = nothing
+I2_vvx = ITensor(zeros(Float64, nv, nv, naux), a_3, a_4, x_2)
+X_vx = ITensor(deserialize("X_vx.jlbin"), a_3, x_2)
+I2_vvx += X_vx * X_vx
+X_vx = nothing
+I_vvvv += I_vvx * I2_vvx
+I2_vvx = nothing
+I_vvx = nothing
+return I_vvvv
+
+=================================================
+ITF
+=================================================
+---- decl
+index-space: b, External, e
+index-space: c, External, e
+index-space: d, External, e
+index-space: e, External, e
+index-space: y, Auxiliary, x
+index-space: z, Auxiliary, x
+
+tensor: I:eex[bcz], !Create{type:plain}
+tensor: I:eeee[bcde], I:eeee
+tensor: I2:eex[bcy], !Create{type:plain}
+tensor: X:ex[by], X:ex
+tensor: Y:xx[yz], Y:xx
+
+
+---- code("unnamed")
+alloc I:eeee[bcde]
+alloc I:eex[bcz]
+alloc I2:eex[bcy]
+load X:ex[by]
+.I2:eex[bcy] += X:ex[by] X:ex[cy]
+drop X:ex[by]
+load Y:xx[yz]
+.I:eex[bcz] += I2:eex[bcy] Y:xx[yz]
+drop Y:xx[yz]
+drop I2:eex[bcy]
+alloc I2:eex[dez]
+load X:ex[dz]
+.I2:eex[dez] += X:ex[dz] X:ex[ez]
+drop X:ex[dz]
+.I:eeee[bcde] += I:eex[bcz] I2:eex[dez]
+drop I2:eex[dez]
+drop I:eex[bcz]
+store I:eeee[bcde]
+
+
+---- end
+
+=================================================
+Python (einsum)
+=================================================
+import numpy as np
+import os
+
+I_vvvv = np.zeros((nvirt, nvirt, nvirt, nvirt), order='F')
+I_vvx = np.zeros((nvirt, nvirt, naux), order='F')
+I2_vvx = np.zeros((nvirt, nvirt, naux), order='F')
+X_vx = np.load('X_vx.npy')
+I2_vvx += np.einsum('ax,bx->abx', X_vx, X_vx, optimize=True)
+del X_vx
+Y_xx = np.load('Y_xx.npy')
+I_vvx += np.einsum('abx,xc->abc', I2_vvx, Y_xx, optimize=True)
+del Y_xx
+del I2_vvx
+I2_vvx = np.zeros((nvirt, nvirt, naux), order='F')
+X_vx = np.load('X_vx.npy')
+I2_vvx += np.einsum('ax,bx->abx', X_vx, X_vx, optimize=True)
+del X_vx
+I_vvvv += np.einsum('abx,cdx->abcd', I_vvx, I2_vvx, optimize=True)
+del I2_vvx
+del I_vvx
+np.save('I_vvvv.npy', I_vvvv)
+
+=================================================
+PyTorch (einsum)
+=================================================
+import torch
+import os
+
+I_vvvv = torch.zeros((nvirt, nvirt, nvirt, nvirt), dtype=torch.float64)
+I_vvx = torch.zeros((nvirt, nvirt, naux), dtype=torch.float64)
+I2_vvx = torch.zeros((nvirt, nvirt, naux), dtype=torch.float64)
+X_xv = torch.load('X_xv.pt')
+I2_vvx += torch.einsum('xa,xb->abx', X_xv, X_xv)
+del X_xv
+Y_xx = torch.load('Y_xx.pt')
+I_vvx += torch.einsum('abx,xc->abc', I2_vvx, Y_xx)
+del Y_xx
+del I2_vvx
+I2_vvx = torch.zeros((nvirt, nvirt, naux), dtype=torch.float64)
+X_xv = torch.load('X_xv.pt')
+I2_vvx += torch.einsum('xa,xb->abx', X_xv, X_xv)
+del X_xv
+I_vvvv += torch.einsum('abx,cdx->abcd', I_vvx, I2_vvx)
+del I2_vvx
+del I_vvx
+torch.save(I_vvvv, 'I_vvvv.pt')
+
+=================================================

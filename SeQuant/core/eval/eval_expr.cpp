@@ -148,9 +148,16 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     canon_indices_ = md.get_indices<index_vector>();
     connectivity_ = std::move(md.graph);
   } else {
-    hash_value_ = hash_terminal_tensor(tnsr);
-    canon_phase_ = 1;
-    canon_indices_ = tnsr.indices() | ranges::to<index_vector>;
+    // Single (protoindex-free) tensor: block-canonicalize it in place. This is
+    // a lightweight per-tensor canonicalization (no deep tensor-network
+    // canonicalization is needed for a tensor that is not itself a network),
+    // and it normalizes bra<->ket orientation for braket-symmetric tensors so
+    // that equivalent half-tensor forms (e.g. X{a;;x} and X{;a;x}) fold.
+    auto& t = expr_->as<Tensor>();
+    auto phase = TensorBlockCanonicalizer{}.apply(t);
+    canon_phase_ = phase ? -1 : 1;
+    hash_value_ = hash_terminal_tensor(t);
+    canon_indices_ = t.const_indices() | ranges::to<index_vector>;
   }
 }
 

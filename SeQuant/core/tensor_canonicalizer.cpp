@@ -9,12 +9,14 @@
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 
+#include <algorithm>
 #include <regex>
 #include <type_traits>
 
 #include <range/v3/algorithm/adjacent_find.hpp>
 #include <range/v3/algorithm/find.hpp>
 #include <range/v3/algorithm/for_each.hpp>
+#include <range/v3/algorithm/lexicographical_compare.hpp>
 #include <range/v3/algorithm/sort.hpp>
 #include <range/v3/functional/identity.hpp>
 
@@ -330,6 +332,33 @@ using suitable_call_operator =
 
 ExprPtr TensorBlockCanonicalizer::apply(AbstractTensor& t) const {
   tag_indices(t);
+
+  // bra<->ket exchange is a symmetry for braket-symmetric tensors, so pick a
+  // canonical orientation (independent of column/permutation symmetry). This
+  // makes a half-tensor X{a;;x} and its bra/ket-swapped form X{;a;x}
+  // block-canonicalize identically. Mirrors the bra<->ket bundle swap in
+  // TensorNetworkV3::canonicalize_slots.
+  // bra<->ket exchange is a symmetry for braket-symmetric tensors, so pick a
+  // canonical orientation. The choice is governed solely by the canonical
+  // "colors" of the bra and ket bundles -- i.e. their index spaces, not the
+  // index labels -- so the result is label-independent. Bundles with identical
+  // spaces (e.g. g{p,q;r,s}) compare equal and are left untouched; only
+  // differing-color bundles are reoriented (so e.g. a half-tensor X{;a;x} folds
+  // into X{a;;x}). Mirrors the bra<->ket bundle swap in
+  // TensorNetworkV3::canonicalize_slots.
+  if (t._braket_symmetry() == BraKetSymmetry::Symm) {
+    const TensorBlockIndexComparer cmp;
+    auto space_less = [&cmp](const Index& a, const Index& b) {
+      return cmp.compare_spaces(a, b) < 0;
+    };
+    auto bra = mutable_bra_range(t);
+    auto ket = mutable_ket_range(t);
+    // canonical orientation: the bundle whose spaces are lexicographically
+    // larger goes to bra.
+    if (ranges::lexicographical_compare(bra, ket, space_less)) {
+      t._swap_bra_ket();
+    }
+  }
 
   auto result = DefaultTensorCanonicalizer::apply(t, TensorBlockIndexComparer{},
                                                   TensorBlockIndexComparer{});
