@@ -31,11 +31,16 @@ struct MatFlops {
 sequant::IndexSpace const occ_space{L"O", 0b01};
 sequant::IndexSpace const virt_space{L"V", 0b10};
 
-sequant::AsyCost::ExponentMap ov(std::size_t nocc, std::size_t nvirt) {
+sequant::AsyCost occ_virt_cost(sequant::rational prefactor, std::size_t nocc,
+                               std::size_t nvirt) {
   sequant::AsyCost::ExponentMap m;
   if (nocc > 0) m.emplace(occ_space, nocc);
   if (nvirt > 0) m.emplace(virt_space, nvirt);
-  return m;
+  return sequant::AsyCost{m, prefactor};
+}
+
+sequant::AsyCost occ_virt_cost(std::size_t nocc, std::size_t nvirt) {
+  return occ_virt_cost(1, nocc, nvirt);
 }
 
 }  // namespace
@@ -45,41 +50,41 @@ TEST_CASE("asy_cost", "[AsyCost]") {
   using sequant::rational;
 
   SECTION("to_text") {
-    REQUIRE(AsyCost{ov(0, 0)}.text() == "0");
+    REQUIRE(occ_virt_cost(0, 0).text() == "0");
 
     REQUIRE(AsyCost{}.text() == "0");
 
-    REQUIRE(AsyCost{ov(1, 0)}.text() == "O");
+    REQUIRE(occ_virt_cost(1, 0).text() == "O");
 
-    REQUIRE(AsyCost{ov(0, 1)}.text() == "V");
+    REQUIRE(occ_virt_cost(0, 1).text() == "V");
 
-    REQUIRE(AsyCost{ov(1, 1)}.text() == "OV");
+    REQUIRE(occ_virt_cost(1, 1).text() == "OV");
 
-    REQUIRE(AsyCost{ov(2, 1)}.text() == "O^2V");
+    REQUIRE(occ_virt_cost(2, 1).text() == "O^2V");
 
-    REQUIRE(AsyCost{ov(1, 2)}.text() == "OV^2");
+    REQUIRE(occ_virt_cost(1, 2).text() == "OV^2");
 
-    REQUIRE(AsyCost{ov(2, 2)}.text() == "O^2V^2");
+    REQUIRE(occ_virt_cost(2, 2).text() == "O^2V^2");
 
-    auto c = AsyCost{ov(2, 2)} + AsyCost{ov(3, 2)} + AsyCost{ov(2, 3)} +
-             AsyCost{ov(3, 3)};
+    auto c = occ_virt_cost(2, 2) + occ_virt_cost(3, 2) + occ_virt_cost(2, 3) +
+             occ_virt_cost(3, 3);
     REQUIRE(c.text() == "O^3V^3 + O^2V^3 + O^3V^2 + O^2V^2");
 
-    c = AsyCost{ov(1, 1)} - AsyCost{ov(2, 3)} + AsyCost{ov(2, 2)};
+    c = occ_virt_cost(1, 1) - occ_virt_cost(2, 3) + occ_virt_cost(2, 2);
     REQUIRE(c.text() == "- O^2V^3 + O^2V^2 + OV");
 
-    REQUIRE(AsyCost{ov(1, 1), 20}.text() == "20*OV");
+    REQUIRE(occ_virt_cost(20, 1, 1).text() == "20*OV");
 
-    REQUIRE(AsyCost{ov(0, 0)} == AsyCost::zero());
+    REQUIRE(occ_virt_cost(0, 0) == AsyCost::zero());
 
-    REQUIRE(AsyCost{ov(1, 1), 0} == AsyCost::zero());
+    REQUIRE(occ_virt_cost(0, 1, 1) == AsyCost::zero());
   }
 
   SECTION("Comparisons") {
-    auto const c1 = AsyCost{ov(0, 0)};
-    auto const c2 = AsyCost{ov(0, 1)};
-    auto const c3 = AsyCost{ov(0, 2)};
-    auto const c4 = AsyCost{ov(0, 2)};
+    auto const c1 = occ_virt_cost(0, 0);
+    auto const c2 = occ_virt_cost(0, 1);
+    auto const c3 = occ_virt_cost(0, 2);
+    auto const c4 = occ_virt_cost(0, 2);
 
     REQUIRE(c1 == AsyCost::zero());
 
@@ -94,18 +99,19 @@ TEST_CASE("asy_cost", "[AsyCost]") {
 
     REQUIRE(c3 == c4);
 
-    auto const cc1 = AsyCost{ov(4, 1)} + AsyCost{ov(3, 2)} + AsyCost{ov(4, 2)};
+    auto const cc1 =
+        occ_virt_cost(4, 1) + occ_virt_cost(3, 2) + occ_virt_cost(4, 2);
     auto const cc2 =
-        AsyCost{ov(2, 2)} + (AsyCost{ov(2, 4)} + AsyCost{ov(2, 4)});
+        occ_virt_cost(2, 2) + (occ_virt_cost(2, 4) + occ_virt_cost(2, 4));
     REQUIRE(cc1 < cc2);
     REQUIRE_FALSE(cc2 < cc1);
     REQUIRE(cc2 > cc1);
   }
 
   SECTION("Addition and subtraction") {
-    auto const c1 = AsyCost{ov(0, 0)};
-    auto const c2 = AsyCost{ov(0, 1)};
-    auto const c3 = AsyCost{ov(1, 2)};
+    auto const c1 = occ_virt_cost(0, 0);
+    auto const c2 = occ_virt_cost(0, 1);
+    auto const c3 = occ_virt_cost(1, 2);
     REQUIRE(c1 + c2 == c2);
     REQUIRE(c1 - c2 == -1 * c2);
     REQUIRE((c2 + c3).text() == "OV^2 + V");
@@ -114,9 +120,9 @@ TEST_CASE("asy_cost", "[AsyCost]") {
   }
 
   SECTION("Assignments") {
-    auto c1 = AsyCost{ov(0, 0)};
-    auto c2 = AsyCost{ov(0, 1)};
-    auto c3 = AsyCost{ov(1, 2)};
+    auto c1 = occ_virt_cost(0, 0);
+    auto c2 = occ_virt_cost(0, 1);
+    auto c3 = occ_virt_cost(1, 2);
     c2 += c1;
     REQUIRE(c2.text() == "V");
     c2 -= c1;
@@ -138,36 +144,36 @@ TEST_CASE("asy_cost", "[AsyCost]") {
         MatFlops{static_cast<double>(nocc), static_cast<double>(nvirt)};
     REQUIRE(AsyCost::zero().ops(ext) == 0);
 
-    REQUIRE(AsyCost{ov(2, 3)}.ops(ext) == flops(2, 3));
+    REQUIRE(occ_virt_cost(2, 3).ops(ext) == flops(2, 3));
 
-    auto const cost = AsyCost{ov(3, 1)} + AsyCost{ov(2, 1)};
+    auto const cost = occ_virt_cost(3, 1) + occ_virt_cost(2, 1);
     REQUIRE(cost.ops(ext) == flops(3, 1) + flops(2, 1));
   }
 
   SECTION("Fractional costs") {
-    auto c0 = AsyCost{ov(2, 4), rational{1, 2}};
+    auto c0 = occ_virt_cost(rational{1, 2}, 2, 4);
     REQUIRE(c0.text() == "1/2*O^2V^4");
 
-    auto const c1 = AsyCost{ov(1, 2)} * rational{2, 3};
+    auto const c1 = occ_virt_cost(1, 2) * rational{2, 3};
     REQUIRE(c1.text() == "2/3*OV^2");
 
-    auto const c2 = AsyCost{ov(1, 2)} / rational{2, 3};
+    auto const c2 = occ_virt_cost(1, 2) / rational{2, 3};
     REQUIRE(c2.text() == "3/2*OV^2");
 
-    auto const c3 = (AsyCost{ov(1, 2)} + AsyCost{ov(2, 4)}) * 2;
+    auto const c3 = (occ_virt_cost(1, 2) + occ_virt_cost(2, 4)) * 2;
     REQUIRE(c3.text() == "2*O^2V^4 + 2*OV^2");
   }
 
   SECTION("LaTeX") {
-    auto cost = AsyCost{ov(2, 3), rational{1, 4}};
+    auto cost = occ_virt_cost(rational{1, 4}, 2, 3);
     REQUIRE(cost.to_latex() == L"\\frac{1}{4}O^{2}V^{3}");
-    cost = AsyCost{ov(2, 3)};
+    cost = occ_virt_cost(2, 3);
     REQUIRE(cost.to_latex() == L"O^{2}V^{3}");
-    cost = AsyCost{ov(2, 3), rational{1, 1}};
+    cost = occ_virt_cost(rational{1, 1}, 2, 3);
     REQUIRE(cost.to_latex() == L"O^{2}V^{3}");
-    cost = AsyCost{ov(2, 3), rational{-1, 1}};
+    cost = occ_virt_cost(rational{-1, 1}, 2, 3);
     REQUIRE(cost.to_latex() == L"- O^{2}V^{3}");
-    cost = AsyCost{ov(2, 3), rational{-1, 4}};
+    cost = occ_virt_cost(rational{-1, 4}, 2, 3);
     REQUIRE(cost.to_latex() == L"- \\frac{1}{4}O^{2}V^{3}");
   }
 
