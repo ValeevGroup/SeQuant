@@ -1295,6 +1295,71 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       }
       REQUIRE(result == Catch::Approx(ref));
     }
+
+    SECTION("symmetrize") {
+      // A double-valued yield is used because the 1/n! prefactor is fractional.
+      rand_tensor_yield<double> dyield{world, nocc, nvirt};
+      using DArrayToT = typename decltype(dyield)::array_tot_type;
+
+      // n=2 (logical rank 4): outer = occupied (i1,i2), inner = virtual
+      // (a1,a2). symmetrize() must produce S(i,j;a,b) = 1/2! * (R(i,j;a,b) +
+      // R(j,i;b,a))
+      // -- outer and inner modes permute in lockstep.
+      {
+        auto const Rnode = eval_node(
+            deserialize<sequant::ExprPtr>(L"R{a1<i1,i2>,a2<i1,i2>;i1,i2}"));
+        auto const Rres = dyield(Rnode);
+        auto const& R = Rres->get<DArrayToT>();
+
+        auto const symm = Rres->symmetrize()->get<DArrayToT>();
+
+        std::string const annot{"i_1,i_2;a_1i_1i_2,a_2i_1i_2"};
+        DArrayToT ref;
+        ref(annot) = R(annot) + R("i_2,i_1;a_2i_1i_2,a_1i_1i_2");
+        ref(annot) = 0.5 * ref(annot);
+
+        DArrayToT diff;
+        diff(annot) = symm(annot) - ref(annot);
+        // Norm-squared of the difference; an absolute margin is needed because
+        // Approx(0.0) is a pure relative test. The reference sums the same
+        // permutations in a different order than the production helper, so a
+        // tiny rounding residual (~1e-30) is expected; a real mismatch is O(1).
+        REQUIRE(diff(annot).dot(diff(annot)) ==
+                Catch::Approx(0.0).margin(1e-12));
+      }
+
+      // n=3 (logical rank 6): exercises the 6-permutation / 1/3! path. The 6
+      // particle permutations permute outer (i1,i2,i3) and inner (a1,a2,a3) in
+      // lockstep; each inner index keeps its proto-suffix "i_1i_2i_3".
+      {
+        auto const Rnode = eval_node(deserialize<sequant::ExprPtr>(
+            L"R{a1<i1,i2,i3>,a2<i1,i2,i3>,a3<i1,i2,i3>;i1,i2,i3}"));
+        auto const Rres = dyield(Rnode);
+        auto const& R = Rres->get<DArrayToT>();
+
+        auto const symm = Rres->symmetrize()->get<DArrayToT>();
+
+        std::string const annot{
+            "i_1,i_2,i_3;a_1i_1i_2i_3,a_2i_1i_2i_3,a_3i_1i_2i_3"};
+        DArrayToT ref;
+        ref(annot) = R("i_1,i_2,i_3;a_1i_1i_2i_3,a_2i_1i_2i_3,a_3i_1i_2i_3") +
+                     R("i_1,i_3,i_2;a_1i_1i_2i_3,a_3i_1i_2i_3,a_2i_1i_2i_3") +
+                     R("i_3,i_1,i_2;a_3i_1i_2i_3,a_1i_1i_2i_3,a_2i_1i_2i_3") +
+                     R("i_3,i_2,i_1;a_3i_1i_2i_3,a_2i_1i_2i_3,a_1i_1i_2i_3") +
+                     R("i_2,i_3,i_1;a_2i_1i_2i_3,a_3i_1i_2i_3,a_1i_1i_2i_3") +
+                     R("i_2,i_1,i_3;a_2i_1i_2i_3,a_1i_1i_2i_3,a_3i_1i_2i_3");
+        ref(annot) = (1.0 / 6.0) * ref(annot);
+
+        DArrayToT diff;
+        diff(annot) = symm(annot) - ref(annot);
+        // Norm-squared of the difference; an absolute margin is needed because
+        // Approx(0.0) is a pure relative test. The reference sums the same
+        // permutations in a different order than the production helper, so a
+        // tiny rounding residual (~1e-30) is expected; a real mismatch is O(1).
+        REQUIRE(diff(annot).dot(diff(annot)) ==
+                Catch::Approx(0.0).margin(1e-12));
+      }
+    }
   }
 }
 

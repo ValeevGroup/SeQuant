@@ -139,8 +139,17 @@ std::vector<ExprPtr> CC::λ() {
                                                             {L"f", symm},
                                                             {L"g", symm}});
 
-  // 2. project onto each manifold, screen, lower to tensor form and wick it
   std::vector<ExprPtr> result(N + 1);
+
+  // element 0: λ pseudoenergy, computed as the CC energy with T → Λ⁺.
+  {
+    const auto hbar_λ =
+        mbpt::lst(H(), adjoint(Λ(N, skip_singles())), commutator_rank);
+    result.at(0) = this->ref_av(
+        hbar_λ, {{L"h", L"λ⁺"}, {L"f", L"λ⁺"}, {L"f̃", L"λ⁺"}, {L"g", L"λ⁺"}});
+  }
+
+  // 2. project onto each manifold, screen, lower to tensor form and wick it
   for (auto p = N; p >= 1; --p) {
     // 2.a. screen out terms that cannot give nonzero after projection onto
     // <P|

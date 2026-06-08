@@ -341,7 +341,9 @@ inline auto term(TermMode mode, std::string_view term) {
 
 }  // namespace log
 
-namespace {
+// implementation details of the eval engine; prefer sequant::detail over an
+// unnamed namespace in a header (see CppCoreGuidelines SF.21)
+namespace detail {
 
 ///
 /// Invokes @c fun that returns void on the arguments @c args and returns the
@@ -379,7 +381,7 @@ auto&& node0(std::ranges::range auto&& rng) {
 
 enum struct CacheCheck { Checked, Unchecked };
 
-}  // namespace
+}  // namespace detail
 
 enum struct Trace {
   On,
@@ -393,9 +395,11 @@ enum struct Trace {
 };
 static_assert(Trace::Default == Trace::On || Trace::Default == Trace::Off);
 
-namespace {
+// implementation details of the eval engine; prefer sequant::detail over an
+// unnamed namespace in a header (see CppCoreGuidelines SF.21)
+namespace detail {
 [[nodiscard]] consteval bool trace(Trace t) noexcept { return t == Trace::On; }
-}  // namespace
+}  // namespace detail
 
 /// \brief The indices contracted at a binary evaluation node.
 ///
@@ -493,23 +497,24 @@ template <typename Node>
 /// \return Evaluated result as ResultPtr.
 ///
 template <Trace EvalTrace = Trace::Default,
-          CacheCheck Cache = CacheCheck::Checked, meta::can_evaluate Node,
-          typename F, typename N, bool FHC>
+          detail::CacheCheck Cache = detail::CacheCheck::Checked,
+          meta::can_evaluate Node, typename F, typename N, bool FHC>
   requires meta::leaf_node_evaluator<Node, F>
 ResultPtr evaluate(Node const& node,  //
                    F const& le,       //
                    CacheManager<N, FHC>& cache) {
-  if constexpr (Cache == CacheCheck::Checked) {  // return from cache if found
+  if constexpr (Cache == detail::CacheCheck::Checked) {  // return from cache if
+                                                         // found
 
     auto mult_by_phase = [&node, &cache](ResultPtr res) {
       auto phase = node->canon_phase();
       if (phase == 1) return res;
 
       ResultPtr post;
-      auto time =
-          timed_eval_inplace([&]() { post = res->mult_by_phase(phase); });
+      auto time = detail::timed_eval_inplace(
+          [&]() { post = res->mult_by_phase(phase); });
 
-      if constexpr (trace(EvalTrace)) {
+      if constexpr (detail::trace(EvalTrace)) {
         size_t hwmark = log::bytes(cache, post).value;
         if (!cache.alive(node)) hwmark += log::bytes(res).value;
         auto stat =
@@ -524,14 +529,17 @@ ResultPtr evaluate(Node const& node,  //
     };
 
     if (auto ptr = cache.access(node); ptr) {
-      if constexpr (trace(EvalTrace)) log::cache(node, cache, log::label(node));
+      if constexpr (detail::trace(EvalTrace))
+        log::cache(node, cache, log::label(node));
 
       return mult_by_phase(ptr);
     } else if (cache.exists(node)) {
       auto ptr = cache.store(
-          node, mult_by_phase(evaluate<EvalTrace, CacheCheck::Unchecked>(
-                    node, le, cache)));
-      if constexpr (trace(EvalTrace)) log::cache(node, cache, log::label(node));
+          node,
+          mult_by_phase(evaluate<EvalTrace, detail::CacheCheck::Unchecked>(
+              node, le, cache)));
+      if constexpr (detail::trace(EvalTrace))
+        log::cache(node, cache, log::label(node));
 
       return mult_by_phase(ptr);
     } else {
@@ -553,10 +561,10 @@ ResultPtr evaluate(Node const& node,  //
   if (!node.leaf()) {
     if (auto const& custom_eval = cache.custom_evaluator(); custom_eval) {
       ResultPtr intercepted;
-      time =
-          timed_eval_inplace([&]() { intercepted = custom_eval(node, cache); });
+      time = detail::timed_eval_inplace(
+          [&]() { intercepted = custom_eval(node, cache); });
       if (intercepted) {
-        if constexpr (trace(EvalTrace)) {
+        if constexpr (detail::trace(EvalTrace)) {
           log::eval(log::EvalStat{.mode = log::eval_mode(node),
                                   .time = time,
                                   .mem_result = log::bytes(intercepted),
@@ -571,7 +579,7 @@ ResultPtr evaluate(Node const& node,  //
   }
 
   if (node.leaf()) {
-    time = timed_eval_inplace([&]() { result = le(node); });
+    time = detail::timed_eval_inplace([&]() { result = le(node); });
   } else if (node->op_type() == EvalOp::Adjoint) {
     // Unary IR op: dispatch on left operand only; right is the Constant(1)
     // sentinel kept around to preserve FullBinaryNode's invariant. We
@@ -581,7 +589,8 @@ ResultPtr evaluate(Node const& node,  //
     left = evaluate<EvalTrace>(node.left(), le, cache);
     SEQUANT_ASSERT(left);
     std::array<std::any, 2> const adj_ann{node.left()->annot(), node->annot()};
-    time = timed_eval_inplace([&]() { result = left->adjoint(adj_ann); });
+    time =
+        detail::timed_eval_inplace([&]() { result = left->adjoint(adj_ann); });
   } else {
     left = evaluate<EvalTrace>(node.left(), le, cache);
     right = evaluate<EvalTrace>(node.right(), le, cache);
@@ -591,12 +600,13 @@ ResultPtr evaluate(Node const& node,  //
     std::array<std::any, 3> const ann{node.left()->annot(),
                                       node.right()->annot(), node->annot()};
     if (node->op_type() == EvalOp::Sum) {
-      time = timed_eval_inplace([&]() { result = left->sum(*right, ann); });
+      time = detail::timed_eval_inplace(
+          [&]() { result = left->sum(*right, ann); });
     } else {
       SEQUANT_ASSERT(node->op_type() == EvalOp::Product);
       auto const de_nest =
           node.left()->tot() && node.right()->tot() && !node->tot();
-      time = timed_eval_inplace([&]() {
+      time = detail::timed_eval_inplace([&]() {
         result =
             left->prod(*right, ann, de_nest ? DeNest::True : DeNest::False);
       });
@@ -606,7 +616,7 @@ ResultPtr evaluate(Node const& node,  //
   SEQUANT_ASSERT(result);
 
   // logging
-  if constexpr (trace(EvalTrace)) {
+  if constexpr (detail::trace(EvalTrace)) {
     if (node.leaf()) {
       log::eval(log::EvalStat{.mode = log::eval_mode(node),
                               .time = time,
@@ -667,7 +677,7 @@ ResultPtr evaluate(Node const& node,           //
   bool const perm = layout != decltype(layout){};
 
   std::string xpr;
-  if constexpr (trace(EvalTrace)) {
+  if constexpr (detail::trace(EvalTrace)) {
     xpr = toUtf8(io::serialization::to_string(to_expr(node)));
     log::term(log::TermMode::Begin, xpr);
   }
@@ -678,7 +688,7 @@ ResultPtr evaluate(Node const& node,           //
 
   result.pre = evaluate<EvalTrace>(node, le, cache);
 
-  auto time = timed_eval_inplace([&]() {
+  auto time = detail::timed_eval_inplace([&]() {
     result.post = perm ? result.pre->permute(
                              std::array<std::any, 2>{node->annot(), layout})
                        : result.pre;
@@ -687,7 +697,7 @@ ResultPtr evaluate(Node const& node,           //
   SEQUANT_ASSERT(result.post);
 
   // logging
-  if constexpr (trace(EvalTrace)) {
+  if constexpr (detail::trace(EvalTrace)) {
     if (perm) {
       // result.pre aliases the cache only when the inner evaluate returned
       // the cached buffer unchanged — i.e. the node is cached AND no
@@ -745,10 +755,11 @@ ResultPtr evaluate(Nodes const& nodes,  //
     }
 
     ResultPtr pre = evaluate<EvalTrace>(n, layout, le, cache);
-    auto time = timed_eval_inplace([&]() { result->add_inplace(*pre); });
+    auto time =
+        detail::timed_eval_inplace([&]() { result->add_inplace(*pre); });
 
     // logging
-    if constexpr (trace(EvalTrace)) {
+    if constexpr (detail::trace(EvalTrace)) {
       // SumInplace allocates nothing: it writes into the accumulator.
       // hwmark counts the cache plus both operands live at this moment;
       // skip pre's bytes only when pre is the cached buffer itself.
@@ -806,10 +817,10 @@ ResultPtr evaluate(Nodes const& nodes,  //
 /// \return Evaluated result as ResultPtr.
 ///
 template <Trace EvalTrace = Trace::Default, typename... Args>
-  requires(!last_type_is_cache_manager<Args...>)
+  requires(!detail::last_type_is_cache_manager<Args...>)
 ResultPtr evaluate(Args&&... args) {
-  using Node =
-      std::remove_cvref_t<decltype(node0(arg0(std::forward<Args>(args)...)))>;
+  using Node = std::remove_cvref_t<decltype(detail::node0(
+      detail::arg0(std::forward<Args>(args)...)))>;
   auto cache = CacheManager<Node>::empty();
   return evaluate<EvalTrace>(std::forward<Args>(args)..., cache);
 }
@@ -830,10 +841,10 @@ ResultPtr evaluate_symm(Args&&... args) {
   ResultPtr pre = evaluate<EvalTrace>(std::forward<Args>(args)...);
   SEQUANT_ASSERT(pre);
   ResultPtr result;
-  auto time = timed_eval_inplace([&]() { result = pre->symmetrize(); });
+  auto time = detail::timed_eval_inplace([&]() { result = pre->symmetrize(); });
 
   // logging
-  if constexpr (trace(EvalTrace)) {
+  if constexpr (detail::trace(EvalTrace)) {
     // cache is owned by the inner evaluate call and out of scope here;
     // hwmark reflects only the local working set (pre + freshly allocated
     // result both live during the symmetrize op).
@@ -842,7 +853,9 @@ ResultPtr evaluate_symm(Args&&... args) {
                               .mem_result = log::bytes(result),
                               .mem_alloc = log::bytes(result),
                               .mem_hwmark = log::bytes(pre, result)};
-    log::eval(stat, node0(arg0(std::forward<Args>(args)...))->label());
+    log::eval(
+        stat,
+        detail::node0(detail::arg0(std::forward<Args>(args)...))->label());
   }
 
   return result;
@@ -863,14 +876,14 @@ ResultPtr evaluate_antisymm(Args&&... args) {
   ResultPtr pre = evaluate<EvalTrace>(std::forward<Args>(args)...);
   SEQUANT_ASSERT(pre);
 
-  auto const& n0 = node0(arg0(std::forward<Args>(args)...));
+  auto const& n0 = detail::node0(detail::arg0(std::forward<Args>(args)...));
 
   ResultPtr result;
-  auto time = timed_eval_inplace(
+  auto time = detail::timed_eval_inplace(
       [&]() { result = pre->antisymmetrize(n0->as_tensor().bra_rank()); });
 
   // logging
-  if constexpr (trace(EvalTrace)) {
+  if constexpr (detail::trace(EvalTrace)) {
     // See Symmetrize for the rationale on hwmark.
     auto stat = log::EvalStat{.mode = log::EvalMode::Antisymmetrize,
                               .time = time,

@@ -534,6 +534,16 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       auto λ1_order3_adj = adjoint(λ1_order3);
       REQUIRE(λ1_order3_adj.as<op_t>().order() == 3);
 
+      // each call to tensor_form() must generate fresh dummy indices, otherwise
+      // using an operator more than once (e.g. squaring it in a similarity
+      // transform) yields tensors that share indices. Non-adjoint
+      // operators satisfy this:
+      op_t t2op = t(2)->as<op_t>();
+      REQUIRE(to_latex(t2op.tensor_form()) != to_latex(t2op.tensor_form()));
+      // adjoint operators must satisfy it too:
+      op_t λ2adj = adjoint(λ(2))->as<op_t>();
+      REQUIRE(to_latex(λ2adj.tensor_form()) != to_latex(λ2adj.tensor_form()));
+
     }  // SECTION("adjoint")
 
     SECTION("screen") {

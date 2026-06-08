@@ -84,7 +84,10 @@ constexpr TreeTraversal operator&(TreeTraversal lhs, TreeTraversal rhs) {
       break;                                                         \
   }
 
-namespace {
+// implementation details of the full-binary-node tree visitor; prefer
+// sequant::detail over an unnamed namespace in a header (see CppCoreGuidelines
+// SF.21)
+namespace detail {
 
 /// Visit leaf nodes only.
 struct VisitLeaf {};
@@ -213,7 +216,7 @@ void visit(Node&& node, Visitor&& f, NodeType) {
   }
 }
 
-}  // namespace
+}  // namespace detail
 
 ///
 /// @brief Represents a node with data of @c T type in a full-binary tree.
@@ -480,14 +483,16 @@ class FullBinaryNode {
   ///
   template <typename F>
   void visit(F&& visitor, TreeTraversal order = TreeTraversal::PreOrder) const {
-    TRAVERSAL_TO_TEMPLATE_ARG(order, sequant::visit,
-                              (*this, std::forward<F>(visitor), VisitAll{}));
+    TRAVERSAL_TO_TEMPLATE_ARG(
+        order, sequant::detail::visit,
+        (*this, std::forward<F>(visitor), detail::VisitAll{}));
   }
 
   template <typename F>
   void visit(F&& visitor, TreeTraversal order = TreeTraversal::PreOrder) {
-    TRAVERSAL_TO_TEMPLATE_ARG(order, sequant::visit,
-                              (*this, std::forward<F>(visitor), VisitAll{}));
+    TRAVERSAL_TO_TEMPLATE_ARG(
+        order, sequant::detail::visit,
+        (*this, std::forward<F>(visitor), detail::VisitAll{}));
   }
 
   ///
@@ -504,16 +509,16 @@ class FullBinaryNode {
   void visit_internal(F&& visitor,
                       TreeTraversal order = TreeTraversal::PreOrder) const {
     TRAVERSAL_TO_TEMPLATE_ARG(
-        order, sequant::visit,
-        (*this, std::forward<F>(visitor), VisitInternal{}));
+        order, sequant::detail::visit,
+        (*this, std::forward<F>(visitor), detail::VisitInternal{}));
   }
 
   template <typename F>
   void visit_internal(F&& visitor,
                       TreeTraversal order = TreeTraversal::PreOrder) {
     TRAVERSAL_TO_TEMPLATE_ARG(
-        order, sequant::visit,
-        (*this, std::forward<F>(visitor), VisitInternal{}));
+        order, sequant::detail::visit,
+        (*this, std::forward<F>(visitor), detail::VisitInternal{}));
   }
 
   ///
@@ -529,14 +534,16 @@ class FullBinaryNode {
   template <typename F>
   void visit_leaf(F&& visitor,
                   TreeTraversal order = TreeTraversal::PreOrder) const {
-    TRAVERSAL_TO_TEMPLATE_ARG(order, sequant::visit,
-                              (*this, std::forward<F>(visitor), VisitLeaf{}));
+    TRAVERSAL_TO_TEMPLATE_ARG(
+        order, sequant::detail::visit,
+        (*this, std::forward<F>(visitor), detail::VisitLeaf{}));
   }
 
   template <typename F>
   void visit_leaf(F&& visitor, TreeTraversal order = TreeTraversal::PreOrder) {
-    TRAVERSAL_TO_TEMPLATE_ARG(order, sequant::visit,
-                              (*this, std::forward<F>(visitor), VisitLeaf{}));
+    TRAVERSAL_TO_TEMPLATE_ARG(
+        order, sequant::detail::visit,
+        (*this, std::forward<F>(visitor), detail::VisitLeaf{}));
   }
 
  private:

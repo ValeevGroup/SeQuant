@@ -14,33 +14,98 @@
 
 namespace sequant {
 
-namespace {
+// implementation details of the TiledArray result backend; prefer
+// sequant::detail over an unnamed namespace in a header (see CppCoreGuidelines
+// SF.21 / "Use unnamed namespaces in headers ... no" guidance)
+namespace detail {
+
+/// Inner-tensor mode count of a tensor-of-tensor DistArray (0 for a regular,
+/// non-nested array). The outer trange carries no inner information, so the
+/// inner rank is read from the first local non-empty inner tile and reduced
+/// (max) across the world -- this makes it well-defined on ranks holding no
+/// local data (or only empty inner tiles), as long as some rank holds a
+/// non-empty inner tile. Needed to build a ToT-valid annotation ("outer;inner")
+/// in the annotation-free array operations (add_inplace,
+/// slice_array_over_mode), since a flat annotation trips DistArray's
+/// is_tot_index() check.
+template <typename ArrayT>
+[[nodiscard]] std::size_t tot_inner_rank(ArrayT const& arr) {
+  std::size_t r = 0;
+  if constexpr (TA::detail::is_tensor_of_tensor_v<
+                    typename ArrayT::value_type>) {
+    // Inner tensors carry the rank; an outer tile may hold null/empty inner
+    // views (e.g. a screened pair), so skip those -- calling range() on an
+    // empty view asserts (ArenaTensor) or is UB (TA::Tensor).
+    for (auto it = arr.begin(); it != arr.end() && r == 0; ++it) {
+      auto const& outer_tile = it->get();
+      for (auto const& inner : outer_tile) {
+        if (inner.empty()) continue;
+        if (inner.range().rank() > 0) {
+          r = inner.range().rank();
+          break;
+        }
+      }
+    }
+    arr.world().gop.max(r);
+  }
+  return r;
+}
 
 ///
-/// \brief This function implements the symmetrization of TA::DistArray.
+/// \brief Particle-symmetrize a TA::DistArray (tensor-of-scalar or
+///        tensor-of-tensor).
 ///
-/// \param arr The array to be symmetrized
+/// \param arr The array to be symmetrized.
 ///
-/// \pre The rank of the array must be even
+/// \pre ToS: rank is even. ToT: outer rank == inner rank.
 ///
 /// \return The symmetrized TA::DistArray.
 ///
 template <typename... Args>
 auto column_symmetrize_ta(TA::DistArray<Args...> const& arr) {
   using ranges::views::iota;
+  constexpr bool is_tot = TA::detail::is_tensor_of_tensor_v<
+      typename TA::DistArray<Args...>::value_type>;
 
-  size_t const rank = arr.trange().rank();
-  if (rank % 2 != 0)
+  size_t const outer_rank = arr.trange().rank();
+
+  size_t const total_rank = [&] {
+    if constexpr (is_tot) {
+      size_t const inner_rank = tot_inner_rank(arr);
+      if (outer_rank != inner_rank)
+        throw Exception(
+            "ToT symmetrization requires equal outer and inner rank (outer=" +
+            std::to_string(outer_rank) +
+            ", inner=" + std::to_string(inner_rank) + ")");
+      return outer_rank + inner_rank;
+    } else {
+      return outer_rank;
+    }
+  }();
+
+  if (total_rank % 2 != 0)
     throw Exception("This function only supports even-ranked tensors");
 
+  size_t const nparticles = total_rank / 2;
+
+  perm_t perm = iota(size_t{0}, total_rank) | ranges::to<perm_t>;
+
+  auto make_annot = [nparticles](perm_t const& p) {
+    if constexpr (is_tot) {
+      perm_t const outer(p.begin(), p.begin() + nparticles);
+      perm_t const inner(p.begin() + nparticles, p.end());
+      return ords_to_annot(outer) + ";" + ords_to_annot(inner);
+    } else {
+      return ords_to_annot(p);
+    }
+  };
+
+  auto const lannot = make_annot(perm);
+
   TA::DistArray<Args...> result;
-
-  perm_t perm = iota(size_t{0}, rank) | ranges::to<perm_t>;
-
-  auto const lannot = ords_to_annot(perm);
-
-  auto call_back = [&result, &lannot, &arr, &perm = std::as_const(perm)]() {
-    auto const rannot = ords_to_annot(perm);
+  auto call_back = [&result, &lannot, &arr, &perm = std::as_const(perm),
+                    &make_annot]() {
+    auto const rannot = make_annot(perm);
     if (result.is_initialized()) {
       result(lannot) += arr(rannot);
     } else {
@@ -48,7 +113,6 @@ auto column_symmetrize_ta(TA::DistArray<Args...> const& arr) {
     }
   };
 
-  auto const nparticles = rank / 2;
   symmetric_permutation(SymmetricParticleRange{perm.begin(),               //
                                                perm.begin() + nparticles,  //
                                                nparticles},
@@ -142,7 +206,7 @@ inline constexpr TA::DeNest to_ta_denest(DeNest d) noexcept {
   return d == DeNest::True ? TA::DeNest::True : TA::DeNest::False;
 }
 
-}  // namespace
+}  // namespace detail
 
 /// TA::Tensor memory use logger
 /// If TiledArray was configured with TA_TENSOR_MEM_PROFILE set this
@@ -165,38 +229,6 @@ template <typename... Args>
 [[nodiscard]] TA::DistArray<Args...> slice_array_over_mode(
     TA::DistArray<Args...> const& arr, std::size_t mode, std::size_t tile_lo,
     std::size_t tile_hi);
-
-/// Inner-tensor mode count of a tensor-of-tensor DistArray (0 for a regular,
-/// non-nested array). The outer trange carries no inner information, so the
-/// inner rank is read from the first local non-empty inner tile and reduced
-/// (max) across the world -- this makes it well-defined on ranks holding no
-/// local data (or only empty inner tiles), as long as some rank holds a
-/// non-empty inner tile. Needed to build a ToT-valid annotation ("outer;inner")
-/// in the annotation-free array operations (add_inplace,
-/// slice_array_over_mode), since a flat annotation trips DistArray's
-/// is_tot_index() check.
-template <typename ArrayT>
-[[nodiscard]] std::size_t tot_inner_rank(ArrayT const& arr) {
-  std::size_t r = 0;
-  if constexpr (TA::detail::is_tensor_of_tensor_v<
-                    typename ArrayT::value_type>) {
-    // Inner tensors carry the rank; an outer tile may hold null/empty inner
-    // views (e.g. a screened pair), so skip those -- calling range() on an
-    // empty view asserts (ArenaTensor) or is UB (TA::Tensor).
-    for (auto it = arr.begin(); it != arr.end() && r == 0; ++it) {
-      auto const& outer_tile = it->get();
-      for (auto const& inner : outer_tile) {
-        if (inner.empty()) continue;
-        if (inner.range().rank() > 0) {
-          r = inner.range().rank();
-          break;
-        }
-      }
-    }
-    arr.world().gop.max(r);
-  }
-  return r;
-}
 
 /// Partition a TiledRange1 into contiguous, tile-aligned element-range batches,
 /// each covering at least \p target_batch_size elements where possible. Tiles
@@ -257,7 +289,7 @@ class ResultTensorTA final : public Result {
     SEQUANT_ASSERT(other.is<this_type>());
     auto const a = annot_wrap{annot};
 
-    log_ta(a.lannot, " + ", a.rannot, " = ", a.this_annot, "\n");
+    detail::log_ta(a.lannot, " + ", a.rannot, " = ", a.this_annot, "\n");
 
     ArrayT result;
     result(a.this_annot) =
@@ -304,7 +336,7 @@ class ResultTensorTA final : public Result {
       auto result = get<ArrayT>();
       auto scalar = other.get<numeric_type>();
 
-      log_ta(a.lannot, " * ", scalar, " = ", a.this_annot, "\n");
+      detail::log_ta(a.lannot, " * ", scalar, " = ", a.this_annot, "\n");
 
       result(a.this_annot) = scalar * result(a.lannot);
 
@@ -321,7 +353,7 @@ class ResultTensorTA final : public Result {
       ArrayT::wait_for_lazy_cleanup(get<ArrayT>().world());
       ArrayT::wait_for_lazy_cleanup(other.get<ArrayT>().world());
 
-      log_ta(a.lannot, " * ", a.rannot, " = ", d, "\n");
+      detail::log_ta(a.lannot, " * ", a.rannot, " = ", d, "\n");
 
       log_ta_tensor_host_memory_use();
       return eval_result<ResultScalar<numeric_type>>(d);
@@ -336,7 +368,7 @@ class ResultTensorTA final : public Result {
 
     // confirmed: other.is<this_type>() is true
 
-    log_ta(a.lannot, " * ", a.rannot, " = ", a.this_annot, "\n");
+    detail::log_ta(a.lannot, " * ", a.rannot, " = ", a.this_annot, "\n");
 
     ArrayT result;
 
@@ -358,7 +390,7 @@ class ResultTensorTA final : public Result {
     auto const pre_annot = std::any_cast<std::string>(ann[0]);
     auto const post_annot = std::any_cast<std::string>(ann[1]);
 
-    log_ta(pre_annot, " = ", post_annot, "\n");
+    detail::log_ta(pre_annot, " = ", post_annot, "\n");
 
     ArrayT result;
     result(post_annot) = get<ArrayT>()(pre_annot);
@@ -377,7 +409,7 @@ class ResultTensorTA final : public Result {
     auto const pre_annot = std::any_cast<std::string>(ann[0]);
     auto const post_annot = std::any_cast<std::string>(ann[1]);
 
-    log_ta(post_annot, " = adjoint(", pre_annot, ")\n");
+    detail::log_ta(post_annot, " = adjoint(", pre_annot, ")\n");
 
     ArrayT result;
     if constexpr (TA::detail::is_complex_v<numeric_type>) {
@@ -399,7 +431,7 @@ class ResultTensorTA final : public Result {
     SEQUANT_ASSERT(t.trange() == o.trange());
     auto ann = TA::detail::dummy_annotation(t.trange().rank());
 
-    log_ta(ann, " += ", ann, "\n");
+    detail::log_ta(ann, " += ", ann, "\n");
 
     t(ann) += o(ann);
     ArrayT::wait_for_lazy_cleanup(t.world());
@@ -407,12 +439,12 @@ class ResultTensorTA final : public Result {
   }
 
   [[nodiscard]] ResultPtr symmetrize() const override {
-    return eval_result<this_type>(column_symmetrize_ta(get<ArrayT>()));
+    return eval_result<this_type>(detail::column_symmetrize_ta(get<ArrayT>()));
   }
 
   [[nodiscard]] ResultPtr antisymmetrize(size_t bra_rank) const override {
     return eval_result<this_type>(
-        particle_antisymmetrize_ta(get<ArrayT>(), bra_rank));
+        detail::particle_antisymmetrize_ta(get<ArrayT>(), bra_rank));
   }
 
  private:
@@ -462,7 +494,7 @@ class ResultTensorOfTensorTA final : public Result {
     SEQUANT_ASSERT(other.is<this_type>());
     auto const a = annot_wrap{annot};
 
-    log_ta(a.lannot, " + ", a.rannot, " = ", a.this_annot, "\n");
+    detail::log_ta(a.lannot, " + ", a.rannot, " = ", a.this_annot, "\n");
 
     ArrayT result;
     result(a.this_annot) =
@@ -509,7 +541,7 @@ class ResultTensorOfTensorTA final : public Result {
       auto result = get<ArrayT>();
       auto scalar = other.get<numeric_type>();
 
-      log_ta(a.lannot, " * ", scalar, " = ", a.this_annot, "\n");
+      detail::log_ta(a.lannot, " * ", scalar, " = ", a.this_annot, "\n");
 
       result(a.this_annot) = scalar * result(a.lannot);
 
@@ -524,13 +556,13 @@ class ResultTensorOfTensorTA final : public Result {
       ArrayT::wait_for_lazy_cleanup(get<ArrayT>().world());
       ArrayT::wait_for_lazy_cleanup(other.get<ArrayT>().world());
 
-      log_ta(a.lannot, " * ", a.rannot, " = ", d, "\n");
+      detail::log_ta(a.lannot, " * ", a.rannot, " = ", d, "\n");
 
       log_ta_tensor_host_memory_use();
       return eval_result<ResultScalar<numeric_type>>(d);
     }
 
-    log_ta(a.lannot, " * ", a.rannot, " = ", a.this_annot, "\n");
+    detail::log_ta(a.lannot, " * ", a.rannot, " = ", a.this_annot, "\n");
 
     if (other.is<that_type>()) {
       // ToT * T -> ToT
@@ -555,7 +587,7 @@ class ResultTensorOfTensorTA final : public Result {
       log_ta_tensor_host_memory_use();
       return eval_result<this_type>(std::move(result));
     } else {
-      throw invalid_operand();
+      throw detail::invalid_operand();
     }
   }
 
@@ -571,7 +603,7 @@ class ResultTensorOfTensorTA final : public Result {
     auto const pre_annot = std::any_cast<std::string>(ann[0]);
     auto const post_annot = std::any_cast<std::string>(ann[1]);
 
-    log_ta(pre_annot, " = ", post_annot, "\n");
+    detail::log_ta(pre_annot, " = ", post_annot, "\n");
 
     ArrayT result;
     result(post_annot) = get<ArrayT>()(pre_annot);
@@ -589,7 +621,7 @@ class ResultTensorOfTensorTA final : public Result {
     auto const pre_annot = std::any_cast<std::string>(ann[0]);
     auto const post_annot = std::any_cast<std::string>(ann[1]);
 
-    log_ta(post_annot, " = adjoint(", pre_annot, ")\n");
+    detail::log_ta(post_annot, " = adjoint(", pre_annot, ")\n");
 
     ArrayT result;
     if constexpr (TA::detail::is_complex_v<numeric_type>) {
@@ -613,10 +645,10 @@ class ResultTensorOfTensorTA final : public Result {
     // DistArray::operator() rejects it (is_tot_index). dummy_annotation's
     // second argument is the inner-mode count, read from the array's inner
     // tiles.
-    auto ann =
-        TA::detail::dummy_annotation(t.trange().rank(), tot_inner_rank(t));
+    auto ann = TA::detail::dummy_annotation(t.trange().rank(),
+                                            detail::tot_inner_rank(t));
 
-    log_ta(ann, " += ", ann, "\n");
+    detail::log_ta(ann, " += ", ann, "\n");
 
     t(ann) += o(ann);
     ArrayT::wait_for_lazy_cleanup(t.world());
@@ -624,8 +656,7 @@ class ResultTensorOfTensorTA final : public Result {
   }
 
   [[nodiscard]] ResultPtr symmetrize() const override {
-    // not implemented yet
-    return nullptr;
+    return eval_result<this_type>(detail::column_symmetrize_ta(get<ArrayT>()));
   }
 
   [[nodiscard]] ResultPtr antisymmetrize(size_t /*bra_rank*/) const override {
@@ -674,9 +705,9 @@ template <typename... Args>
   if constexpr (TA::detail::is_tensor_of_tensor_v<value_type>) {
     annot = TA::detail::dummy_annotation(
         static_cast<unsigned int>(rank),
-        static_cast<unsigned int>(tot_inner_rank(arr)));
+        static_cast<unsigned int>(detail::tot_inner_rank(arr)));
   } else {
-    annot = ords_to_annot(iota(std::size_t{0}, rank));
+    annot = detail::ords_to_annot(iota(std::size_t{0}, rank));
   }
   TA::DistArray<Args...> out;
   out(annot) = arr(annot).block(lo, hi);
