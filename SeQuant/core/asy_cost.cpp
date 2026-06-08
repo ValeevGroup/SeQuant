@@ -18,26 +18,26 @@
 namespace sequant {
 
 AsyCost::AsyCostEntry::AsyCostEntry()
-    : exponents_{}, count_{0}, is_max_{false} {}
+    : exponents_{}, prefactor_{0}, is_max_{false} {}
 
-AsyCost::AsyCostEntry::AsyCostEntry(ExponentMap exponents, rational count)
-    : exponents_{std::move(exponents)}, count_{count}, is_max_{false} {
+AsyCost::AsyCostEntry::AsyCostEntry(ExponentMap exponents, rational prefactor)
+    : exponents_{std::move(exponents)}, prefactor_{prefactor}, is_max_{false} {
   for (auto it = exponents_.begin(); it != exponents_.end();) {
     if (it->second == 0)
       it = exponents_.erase(it);
     else
       ++it;
   }
-  if (count_ == 0 || exponents_.empty()) {
+  if (prefactor_ == 0 || exponents_.empty()) {
     exponents_.clear();
-    count_ = 0;
+    prefactor_ = 0;
   }
 }
 
 AsyCost::AsyCostEntry AsyCost::AsyCostEntry::max() {
   AsyCostEntry e;
   e.is_max_ = true;
-  e.count_ = std::numeric_limits<intmax_t>::max();
+  e.prefactor_ = std::numeric_limits<intmax_t>::max();
   return e;
 }
 
@@ -50,12 +50,12 @@ AsyCost::ExponentMap const &AsyCost::AsyCostEntry::exponents() const {
   return exponents_;
 }
 
-rational AsyCost::AsyCostEntry::count() const { return count_; }
+rational AsyCost::AsyCostEntry::prefactor() const { return prefactor_; }
 
-void AsyCost::AsyCostEntry::set_count(rational n) const { count_ = n; }
+void AsyCost::AsyCostEntry::set_prefactor(rational n) const { prefactor_ = n; }
 
 bool AsyCost::AsyCostEntry::is_zero() const {
-  return !is_max_ && exponents_.empty() && count_ == 0;
+  return !is_max_ && exponents_.empty() && prefactor_ == 0;
 }
 
 bool AsyCost::AsyCostEntry::is_max() const { return is_max_; }
@@ -78,8 +78,8 @@ std::string AsyCost::AsyCostEntry::text() const {
   } else if (is_zero()) {
     oss << "zero";
   } else {
-    auto abs_c = abs(count_);
-    oss << (count_ < abs_c ? "- " : "");
+    auto abs_c = abs(prefactor_);
+    oss << (prefactor_ < abs_c ? "- " : "");
     if (abs_c == 1) {
       // do nothing
     } else {
@@ -106,15 +106,15 @@ std::string AsyCost::AsyCostEntry::to_latex() const {
   } else if (is_zero()) {
     oss << "\\texttt{zero}";
   } else {
-    auto abs_c = abs(count_);
-    oss << (count_ < abs_c ? "- " : "");
-    bool frac_mode = abs(denominator(count_)) != 1;
-    if (!frac_mode && (abs_c != 1)) oss << numerator(count_);
+    auto abs_c = abs(prefactor_);
+    oss << (prefactor_ < abs_c ? "- " : "");
+    bool frac_mode = abs(denominator(prefactor_)) != 1;
+    if (!frac_mode && (abs_c != 1)) oss << numerator(prefactor_);
     if (frac_mode) {
-      oss << "\\frac{"               //
-          << abs(numerator(count_))  //
-          << "}{"                    //
-          << denominator(count_) << "}";
+      oss << "\\frac{"                   //
+          << abs(numerator(prefactor_))  //
+          << "}{"                        //
+          << denominator(prefactor_) << "}";
     }
     for (auto const &[space, exp] : exponents_) {
       if (exp == 0) continue;
@@ -180,8 +180,8 @@ AsyCost::AsyCost(AsyCostEntry c) {
 
 AsyCost::AsyCost() : AsyCost{AsyCostEntry::zero()} {}
 
-AsyCost::AsyCost(ExponentMap exponents, rational count)
-    : AsyCost{AsyCostEntry{std::move(exponents), count}} {}
+AsyCost::AsyCost(ExponentMap exponents, rational prefactor)
+    : AsyCost{AsyCostEntry{std::move(exponents), prefactor}} {}
 
 double AsyCost::ops(ExtentMap const &extents) const {
   double total = 0;
@@ -196,7 +196,7 @@ double AsyCost::ops(ExtentMap const &extents) const {
       temp *=
           std::pow(static_cast<double>(it->second), static_cast<double>(exp));
     }
-    total += boost::numeric_cast<double>(c.count()) * temp;
+    total += boost::numeric_cast<double>(c.prefactor()) * temp;
   }
   return total;
 }
@@ -226,8 +226,8 @@ AsyCost operator+(AsyCost const &lhs, AsyCost const &rhs) {
   auto &data = sum.cost_;
   for (auto const &c : rhs.cost_) {
     if (auto found = data.find(c); found != data.end()) {
-      found->set_count(found->count() + c.count());
-      if (found->count() == 0) data.erase(found);
+      found->set_prefactor(found->prefactor() + c.prefactor());
+      if (found->prefactor() == 0) data.erase(found);
     } else {
       data.emplace(c);
     }
@@ -241,7 +241,7 @@ AsyCost operator-(AsyCost const &lhs, AsyCost const &rhs) {
 
 AsyCost operator*(AsyCost const &cost, rational scale) {
   auto ac = cost;
-  for (auto &c : ac.cost_) c.set_count(c.count() * scale);
+  for (auto &c : ac.cost_) c.set_prefactor(c.prefactor() * scale);
   return ac;
 }
 
@@ -259,9 +259,9 @@ bool operator<(AsyCost const &lhs, AsyCost const &rhs) {
     if (c1 < c2)
       return true;
     else if (c1 == c2) {
-      if (c1.count() < c2.count())
+      if (c1.prefactor() < c2.prefactor())
         return true;
-      else if (c1.count() > c2.count())
+      else if (c1.prefactor() > c2.prefactor())
         return false;
     } else
       return false;

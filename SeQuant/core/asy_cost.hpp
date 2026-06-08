@@ -29,49 +29,80 @@ class AsyCost {
   using ExtentMap = container::map<IndexSpace, std::size_t>;
 
  private:
+  /// A single term of an AsyCost: a rational prefactor times a
+  /// product of index-space sizes raised to per-space exponents, e.g.
+  /// `3/2 * O^2 V^4`.
   class AsyCostEntry {
-    ExponentMap exponents_;   // space -> power; zero exponents are not stored
-    mutable rational count_;  // multiplier
-    bool is_max_ = false;     // true for the AsyCost::max() sentinel
+    ExponentMap exponents_;       // space -> power; zero exponents not stored
+    mutable rational prefactor_;  // rational multiplier
+    bool is_max_ = false;         // true for the AsyCost::max() sentinel
 
    public:
+    /// Write a rational to a stream as `num`, or `num/den` when its
+    /// denominator is not 1.
+    /// \param os Stream to write to.
+    /// \param r Rational to format
+    /// \return `os`
     static std::ostream &stream_out_rational(std::ostream &os,
                                              rational const &r);
 
+    /// \return The sentinel entry representing an infinitely scaling cost; it
+    ///         compares greater than every non-max entry.
     static AsyCostEntry max();
 
+    /// \return The canonical zero entry (no exponents, zero prefactor).
     static AsyCostEntry const &zero();
 
+    /// Constructors
     AsyCostEntry();
-
-    AsyCostEntry(ExponentMap exponents, rational count);
 
     AsyCostEntry(AsyCostEntry const &) = default;
 
     AsyCostEntry(AsyCostEntry &&) = default;
 
+    /// \param exponents Map from index space to its exponent. Zero exponents
+    ///                  are dropped.
+    /// \param prefactor Rational multiplier. If it is zero, or no exponents
+    ///                  remain after dropping zeros, the entry collapses to
+    ///                  zero.
+    AsyCostEntry(ExponentMap exponents, rational prefactor);
+
     AsyCostEntry &operator=(AsyCostEntry const &) = default;
 
     AsyCostEntry &operator=(AsyCostEntry &&) = default;
 
+    /// \return The per-space exponents of this term.
     [[nodiscard]] ExponentMap const &exponents() const;
 
-    [[nodiscard]] rational count() const;
+    /// \return The rational multiplier (prefactor) of this term, e.g. `3/2`
+    ///         in `3/2 * O^2 V^4`.
+    [[nodiscard]] rational prefactor() const;
 
-    void set_count(rational n) const;
+    /// Set the rational multiplier. `const` because the prefactor is not part
+    /// of the term's identity (see \ref operator==).
+    void set_prefactor(rational n) const;
 
+    /// \return Whether this is the zero entry.
     [[nodiscard]] bool is_zero() const;
 
+    /// \return Whether this is the \ref max() sentinel.
     [[nodiscard]] bool is_max() const;
 
+    /// Order by the \ref max() sentinel (greatest), then by total polynomial
+    /// degree (sum of exponents), then space by space from highest- to
+    /// lowest-priority IndexSpace. Independent of the prefactor.
     bool operator<(AsyCostEntry const &rhs) const;
 
+    /// \return Whether two entries share the same monomial (same exponents and
+    ///         max-ness). The prefactor is not compared.
     bool operator==(AsyCostEntry const &rhs) const;
 
     bool operator!=(AsyCostEntry const &rhs) const;
 
+    /// \return A plain-text rendering of this term, e.g. `3/2*O^2V^4`.
     [[nodiscard]] std::string text() const;
 
+    /// \return A LaTeX rendering of this term.
     [[nodiscard]] std::string to_latex() const;
   };
 
@@ -96,9 +127,9 @@ class AsyCost {
   ///
   /// \param exponents Map from index space to its exponent in this term.
   ///                  Zero exponents may be supplied; they are dropped.
-  /// \param count     Rational multiplier; defaults to 1.
+  /// \param prefactor Rational multiplier; defaults to 1.
   ///
-  explicit AsyCost(ExponentMap exponents, rational count = 1);
+  explicit AsyCost(ExponentMap exponents, rational prefactor = 1);
 
   AsyCost(AsyCost const &) = default;
 
@@ -118,8 +149,12 @@ class AsyCost {
   ///
   [[nodiscard]] double ops(ExtentMap const &extents) const;
 
+  /// \return A LaTeX rendering of the whole cost: its terms joined by ` + `,
+  ///         most expensive first. The zero cost renders as `0`.
   [[nodiscard]] std::wstring to_latex() const;
 
+  /// \return A plain-text rendering of the whole cost: its terms joined by
+  ///         ` + `, most expensive first. The zero cost renders as `0`.
   [[nodiscard]] std::string text() const;
 
   AsyCost &operator+=(AsyCost const &);
