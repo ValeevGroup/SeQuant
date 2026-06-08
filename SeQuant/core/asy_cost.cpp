@@ -2,7 +2,6 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/rational.hpp>
-#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <boost/numeric/conversion/cast.hpp>
@@ -190,11 +189,9 @@ double AsyCost::ops(ExtentMap const &extents) const {
     double temp = 1;
     for (auto const &[space, exp] : c.exponents()) {
       auto it = extents.find(space);
-      if (it == extents.end())
-        throw Exception("AsyCost::ops: no extent provided for index space '" +
-                        toUtf8(space.base_key()) + "'");
-      temp *=
-          std::pow(static_cast<double>(it->second), static_cast<double>(exp));
+      auto const extent =
+          it != extents.end() ? it->second : space.approximate_size();
+      temp *= std::pow(static_cast<double>(extent), static_cast<double>(exp));
     }
     total += boost::numeric_cast<double>(c.prefactor()) * temp;
   }

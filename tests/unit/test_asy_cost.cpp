@@ -3,7 +3,6 @@
 #include <SeQuant/core/asy_cost.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
-#include <SeQuant/core/utility/exception.hpp>
 
 #include "catch2_sequant.hpp"
 
@@ -219,9 +218,23 @@ TEST_CASE("asy_cost", "[AsyCost]") {
                           std::pow(7.0, 1);
     REQUIRE(c.ops(ext) == expected);
 
-    // Missing extent for a space the cost depends on is an error.
+    // A space absent from the extent map falls back to its approximate_size().
+    // Here K (exponent 2) is omitted, so its approximate_size() is used.
     AsyCost::ExtentMap const ext2{{O, 10}, {V, 100}, {U, 5}, {Q, 7}};
-    REQUIRE_THROWS_AS(c.ops(ext2), sequant::Exception);
+    auto const expected2 =
+        std::pow(10.0, 2) * std::pow(5.0, 1) * std::pow(100.0, 3) *
+        std::pow(static_cast<double>(K.approximate_size()), 2) *
+        std::pow(7.0, 1);
+    REQUIRE(c.ops(ext2) == expected2);
+
+    // With no extents supplied, every space uses its approximate_size().
+    auto const expected_default =
+        std::pow(static_cast<double>(O.approximate_size()), 2) *
+        std::pow(static_cast<double>(U.approximate_size()), 1) *
+        std::pow(static_cast<double>(V.approximate_size()), 3) *
+        std::pow(static_cast<double>(K.approximate_size()), 2) *
+        std::pow(static_cast<double>(Q.approximate_size()), 1);
+    REQUIRE(c.ops() == expected_default);
 
     // Ordering is by total degree (sum of exponents) first: the overall
     // polynomial / worst-case scaling dominates regardless of which spaces

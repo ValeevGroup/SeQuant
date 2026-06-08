@@ -141,13 +141,13 @@ class AsyCost {
 
   ///
   /// Substitute each space in this cost by an extent and evaluate.
-  /// \param extents Map from index space to extent (size). Every space
-  ///                appearing in this cost must be present in `extents`.
-  /// \throw sequant::Exception if a space appearing in this cost is missing
-  ///                from `extents`.
+  /// \param extents Map from index space to extent (size). A space appearing
+  ///                in this cost but absent from `extents` falls back to its
+  ///                `IndexSpace::approximate_size()`. Defaults to empty, in
+  ///                which case every space uses its `approximate_size()`.
   /// \return Numerical value of the cost.
   ///
-  [[nodiscard]] double ops(ExtentMap const &extents) const;
+  [[nodiscard]] double ops(ExtentMap const &extents = {}) const;
 
   /// \return A LaTeX rendering of the whole cost: its terms joined by ` + `,
   ///         most expensive first. The zero cost renders as `0`.
