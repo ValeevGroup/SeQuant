@@ -37,11 +37,13 @@ ExprPtr linearize_eval_node(Node const& node) {
       Product{1, ExprPtrList{lres, rres}, Product::Flatten::Yes});
 }
 
-namespace {
+// implementation details of eval-node cost analysis; prefer sequant::detail
+// over an unnamed namespace in a header (see CppCoreGuidelines SF.21)
+namespace detail {
 
 enum NodePos { Left = 0, Right, This };
 
-[[maybe_unused]] std::pair<size_t, size_t> occ_virt(Tensor const& t) {
+[[maybe_unused]] inline std::pair<size_t, size_t> occ_virt(Tensor const& t) {
   auto bk_rank = t.bra_net_rank() + t.ket_net_rank();
   auto nocc = ranges::count_if(t.const_braket_indices(), [](Index const& idx) {
     return idx.space() ==
@@ -105,7 +107,7 @@ class ContractedIndexCount {
   size_t virt_ = 0;
   bool is_outerprod_ = false;
 };
-}  // namespace
+}  // namespace detail
 
 ///
 /// \brief This function object takes an evaluation node and returns the
@@ -122,19 +124,19 @@ struct Flops {
         && n.left()->is_tensor()         //
         && n.right()->is_tensor()) {
       if (n->is_tensor()) {
-        auto const idx_count = ContractedIndexCount{n};
+        auto const idx_count = detail::ContractedIndexCount{n};
         auto c = AsyCost{idx_count.unique_occs(), idx_count.unique_virts()};
         return idx_count.is_outerpod() ? c : 2 * c;
       } else {  // full contraction to scalar
         SEQUANT_ASSERT(n->is_scalar());
-        SEQUANT_ASSERT(occ_virt(n.left()->as_tensor()) ==
-                       occ_virt(n.right()->as_tensor()));
-        return 2 * AsyCost{occ_virt(n.left()->as_tensor())};
+        SEQUANT_ASSERT(detail::occ_virt(n.left()->as_tensor()) ==
+                       detail::occ_virt(n.right()->as_tensor()));
+        return 2 * AsyCost{detail::occ_virt(n.left()->as_tensor())};
       }
     } else if (n->is_tensor()) {
       // scalar times a tensor
       // or a tensor plus a tensor
-      return AsyCost{occ_virt(n->as_tensor())};
+      return AsyCost{detail::occ_virt(n->as_tensor())};
     } else /* scalar (+|*) scalar */
       return AsyCost::zero();
   }
@@ -153,7 +155,7 @@ struct Memory {
   [[nodiscard]] AsyCost operator()(meta::eval_node auto const& n) const {
     AsyCost result;
     auto add_cost = [&result](ExprPtr const& expr) {
-      result += expr.is<Tensor>() ? AsyCost{occ_virt(expr.as<Tensor>())}
+      result += expr.is<Tensor>() ? AsyCost{detail::occ_virt(expr.as<Tensor>())}
                                   : AsyCost::zero();
     };
 
@@ -259,14 +261,15 @@ AsyCost min_storage(meta::eval_node auto const& node) {
   auto visitor = [&result](meta::eval_node auto const& n) {
     auto cost = AsyCost::zero();
     if (n.leaf() && n->is_tensor())
-      cost = AsyCost{occ_virt(n->as_tensor())};
+      cost = AsyCost{detail::occ_virt(n->as_tensor())};
     else if (!n.leaf()) {
-      cost += (n.left()->is_tensor() ? AsyCost{occ_virt(n.left()->as_tensor())}
-                                     : AsyCost::zero());
-      cost +=
-          (n.right()->is_tensor() ? AsyCost{occ_virt(n.right()->as_tensor())}
-                                  : AsyCost::zero());
-      cost += (n->is_tensor() ? AsyCost{occ_virt(n->as_tensor())}
+      cost += (n.left()->is_tensor()
+                   ? AsyCost{detail::occ_virt(n.left()->as_tensor())}
+                   : AsyCost::zero());
+      cost += (n.right()->is_tensor()
+                   ? AsyCost{detail::occ_virt(n.right()->as_tensor())}
+                   : AsyCost::zero());
+      cost += (n->is_tensor() ? AsyCost{detail::occ_virt(n->as_tensor())}
                               : AsyCost::zero());
     } else {
       // do nothing

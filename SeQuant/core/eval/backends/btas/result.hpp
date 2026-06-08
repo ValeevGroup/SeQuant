@@ -17,7 +17,10 @@
 
 namespace sequant {
 
-namespace {
+// implementation details of the BTAS result backend; prefer sequant::detail
+// over an unnamed namespace in a header (see CppCoreGuidelines SF.21 / "Use
+// unnamed namespaces in headers ... no" guidance)
+namespace detail {
 
 ///
 /// \brief This function implements the symmetrization of btas::Tensor.
@@ -125,7 +128,7 @@ inline void log_btas(Args const&... args) noexcept {
   log_result("[BTAS] ", args...);
 }
 
-}  // namespace
+}  // namespace detail
 
 ///
 /// \brief Result for a tensor value of btas::Tensor type.
@@ -154,8 +157,9 @@ class ResultTensorBTAS final : public Result {
     SEQUANT_ASSERT(other.is<ResultTensorBTAS<T>>());
     auto const a = annot_wrap{annot};
 
-    log_btas(ords_to_labels(a.lannot), " + ", ords_to_labels(a.rannot), " = ",
-             ords_to_labels(a.this_annot), "\n");
+    detail::log_btas(detail::ords_to_labels(a.lannot), " + ",
+                     detail::ords_to_labels(a.rannot), " = ",
+                     detail::ords_to_labels(a.this_annot), "\n");
 
     T lres, rres;
     btas::permute(get<T>(), a.lannot, lres, a.this_annot);
@@ -170,8 +174,8 @@ class ResultTensorBTAS final : public Result {
 
     if (other.is<ResultScalar<numeric_type>>()) {
       auto const scalar = other.as<ResultScalar<numeric_type>>().value();
-      log_btas(ords_to_labels(a.lannot), " * ", scalar, " = ",
-               ords_to_labels(a.this_annot), "\n");
+      detail::log_btas(detail::ords_to_labels(a.lannot), " * ", scalar, " = ",
+                       detail::ords_to_labels(a.this_annot), "\n");
 
       T result;
       btas::permute(get<T>(), a.lannot, result, a.this_annot);
@@ -185,13 +189,14 @@ class ResultTensorBTAS final : public Result {
       T rres;
       btas::permute(other.get<T>(), a.rannot, rres, a.lannot);
       numeric_type const d = btas::dot(get<T>(), rres);
-      log_btas(ords_to_labels(a.lannot), " * ", ords_to_labels(a.rannot), " = ",
-               d, "\n");
+      detail::log_btas(detail::ords_to_labels(a.lannot), " * ",
+                       detail::ords_to_labels(a.rannot), " = ", d, "\n");
       return eval_result<ResultScalar<numeric_type>>(d);
     }
 
-    log_btas(ords_to_labels(a.lannot), " * ", ords_to_labels(a.rannot), " = ",
-             ords_to_labels(a.this_annot), "\n");
+    detail::log_btas(detail::ords_to_labels(a.lannot), " * ",
+                     detail::ords_to_labels(a.rannot), " = ",
+                     detail::ords_to_labels(a.this_annot), "\n");
 
     T result;
     btas::contract(numeric_type{1},           //
@@ -213,8 +218,8 @@ class ResultTensorBTAS final : public Result {
     auto const pre_annot = std::any_cast<annot_t>(ann[0]);
     auto const post_annot = std::any_cast<annot_t>(ann[1]);
 
-    log_btas(ords_to_labels(pre_annot), " = ", ords_to_labels(post_annot),
-             "\n");
+    detail::log_btas(detail::ords_to_labels(pre_annot), " = ",
+                     detail::ords_to_labels(post_annot), "\n");
 
     T result;
     btas::permute(get<T>(), pre_annot, result, post_annot);
@@ -245,20 +250,21 @@ class ResultTensorBTAS final : public Result {
     auto const& o = other.get<T>();
     SEQUANT_ASSERT(t.range() == o.range());
 
-    auto const ann = ords_to_annot(
+    auto const ann = detail::ords_to_annot(
         ranges::views::iota(size_t{0}, static_cast<size_t>(t.rank())));
-    log_btas(ann, " += ", ann, "\n");
+    detail::log_btas(ann, " += ", ann, "\n");
 
     t += o;
   }
 
   [[nodiscard]] ResultPtr symmetrize() const override {
-    return eval_result<ResultTensorBTAS<T>>(column_symmetrize_btas(get<T>()));
+    return eval_result<ResultTensorBTAS<T>>(
+        detail::column_symmetrize_btas(get<T>()));
   }
 
   [[nodiscard]] ResultPtr antisymmetrize(size_t bra_rank) const override {
     return eval_result<ResultTensorBTAS<T>>(
-        particle_antisymmetrize_btas(get<T>(), bra_rank));
+        detail::particle_antisymmetrize_btas(get<T>(), bra_rank));
   }
 
  private:
