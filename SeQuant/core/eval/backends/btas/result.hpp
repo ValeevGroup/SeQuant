@@ -234,8 +234,8 @@ class ResultTensorBTAS final : public Result {
     auto const pre_annot = std::any_cast<annot_t>(ann[0]);
     auto const post_annot = std::any_cast<annot_t>(ann[1]);
 
-    log_btas(ords_to_labels(post_annot), " = adjoint(",
-             ords_to_labels(pre_annot), ")\n");
+    detail::log_btas(detail::ords_to_labels(post_annot), " = adjoint(",
+                     detail::ords_to_labels(pre_annot), ")\n");
 
     T result;
     btas::permute(get<T>(), pre_annot, result, post_annot);
