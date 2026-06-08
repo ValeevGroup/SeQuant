@@ -150,7 +150,7 @@ std::vector<ExprPtr> CC::λ() {
   }
 
   // 2. project onto each manifold, screen, lower to tensor form and wick it
-  for (std::int64_t p = N; p >= 1; --p) {
+  for (auto p = N; p >= 1; --p) {
     // 2.a. screen out terms that cannot give nonzero after projection onto
     // <P|
     std::shared_ptr<Sum>

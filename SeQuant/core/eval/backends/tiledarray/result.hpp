@@ -14,6 +14,8 @@
 
 namespace sequant {
 
+namespace {
+
 /// Inner-tensor mode count of a tensor-of-tensor DistArray (0 for a regular,
 /// non-nested array). The outer trange carries no inner information, so the
 /// inner rank is read from the first local non-empty inner tile and reduced
@@ -45,8 +47,6 @@ template <typename ArrayT>
   }
   return r;
 }
-
-namespace {
 
 ///
 /// \brief Particle-symmetrize a TA::DistArray (tensor-of-scalar or
