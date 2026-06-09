@@ -12,6 +12,7 @@
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
+#include <range/v3/algorithm/transform.hpp>
 #include "SeQuant/domain/mbpt/biorthogonalization.hpp"
 
 using namespace sequant;
@@ -126,7 +127,7 @@ void diagnose_against_generic_spintrace(const ExprPtr& spinorbital_rhs,
   if (!spinorbital_rhs) return;
 
   auto banner = [&](const std::wstring& s) {
-    std::wcout << L"\n========== R[" << i << L"] " << s << L" ==========\n";
+    std::wcout << L"\n=== R[" << i << L"] " << s << L" ==========\n";
   };
 
   // External index groups. Use the expression-level call so it matches what
@@ -146,7 +147,7 @@ void diagnose_against_generic_spintrace(const ExprPtr& spinorbital_rhs,
 
   // -- (1) Generic brute-force spintrace -----------------------------------
   // Keep spin labels (spinfree_index_spaces = false) so we remove them
-  // ourselves, exactly as the PI described.
+  // ourselves
   banner(L"generic spintrace (brute force, 2^n spin cases)");
   ExprPtr generic = spintrace(so, ext_groups,
                               /*spinfree_index_spaces=*/false);
@@ -158,6 +159,7 @@ void diagnose_against_generic_spintrace(const ExprPtr& spinorbital_rhs,
   generic = remove_spin_with_relabel(generic);
   canonicalize(generic);
   simplify(generic);
+  generic = biorthogonal_transform_pre_nnsproject(generic, ext_groups);
   std::wcout << L"  after remove_spin: " << generic->size() << L" terms, "
              << count_distinct_hashes(generic->clone())
              << L" distinct hashes\n";
@@ -167,7 +169,7 @@ void diagnose_against_generic_spintrace(const ExprPtr& spinorbital_rhs,
 
   // Strip any leftover symmetrizer so all three expressions are bare sums.
   auto strip = [](const ExprPtr& e) {
-    ExprPtr r = remove_tensor(e->clone(), reserved::symm_label());
+    ExprPtr r = e->clone();
     canonicalize(r);
     simplify(r);
     return r;
@@ -255,10 +257,16 @@ class compute_eomcc_openshell {
       // std::wcout << "before spintracing: " << to_latex_align(eqvec[i], 20, 1)
       // << "\n";
 
+      std::wcout << "R[" << i << "] has " << eqvec[i].size() << " terms\n";
+
+      // Singlet/triplet sector construction (and all the comparison/diagnostic
+      // blocks below) only make sense for particle-conserving manifolds where
+      // the resulting state has well-defined total spin (S=0/S=1).
+      if (np != nh) continue;
+
       ext_index_groups_from_A.push_back(external_indices(A));
       n_paired_from_A.push_back(std::min(A.bra_rank(), A.ket_rank()));
 
-      std::wcout << "R[" << i << "] has " << eqvec[i].size() << " terms\n";
       os_st_eom.push_back(open_shell_CC_spintrace_by_sector(eqvec[i]));
       auto summed_spinfree = std::make_shared<Sum>();
 
@@ -341,17 +349,18 @@ class compute_eomcc_openshell {
       using ranges::views::transform;
       auto const ext_idxs = external_indices(summed);
       simplify(summed);
+      summed = biorthogonal_transform_pre_nnsproject(summed, ext_idxs);
 
-      ExprPtr summed_smaps = summed->clone();
-      if (has_tensor(summed_smaps, reserved::symm_label())) {
-        summed_smaps = S_maps(summed_smaps);
-        simplify(summed_smaps);
-      }
+      // ExprPtr summed_smaps = summed->clone();
+      // if (has_tensor(summed_smaps, reserved::symm_label())) {
+      //   summed_smaps = S_maps(summed_smaps);
+      //   simplify(summed_smaps);
+      // }
       std::wcout << "R[" << i
                  << "] open-shell sum (Ŝ NOT expanded): " << summed->size()
                  << " terms\n";
-      std::wcout << "R[" << i << "] open-shell sum (Ŝ expanded via S_maps): "
-                 << summed_smaps->size() << " terms\n";
+      // std::wcout << "R[" << i << "] open-shell sum (Ŝ expanded via S_maps): "
+      //            << summed_smaps->size() << " terms\n";
 
       os_spinfree_summed_eom.push_back(std::move(summed));
 
@@ -362,8 +371,7 @@ class compute_eomcc_openshell {
       std::wcout << "R[" << i << "] reference closed-shell (CC spintrace): "
                  << singlet_ref->size() << " terms\n";
 
-      ExprPtr os_singlet =
-          remove_tensor(os_spinfree_summed_eom.back(), reserved::symm_label());
+      ExprPtr os_singlet = os_spinfree_summed_eom.back();
       simplify(os_singlet);
 
       // subtract
@@ -382,50 +390,6 @@ class compute_eomcc_openshell {
       // (open-shell sum) block: it is the decisive comparison.
       diagnose_against_generic_spintrace(eqvec[i], i, singlet_ref,
                                          os_spinfree_summed_eom.back());
-
-      // ----- INSTRUMENTATION: compare the Ŝ-expanded variant ---------------
-      // Closed-shell V2 expands Ŝ via S_maps; the open-shell path above does
-      // not. Repeat the brute-force diagnosis using the S_maps-expanded sum to
-      // localize whether the missing S_maps call is the entire discrepancy.
-      std::wcout << "\n========== R[" << i
-                 << "] EXTRA: open-shell sum WITH S_maps applied ==========\n";
-      {
-        ExprPtr a = summed_smaps->clone();
-        canonicalize(a);
-        simplify(a);
-        ExprPtr a_stripped = remove_tensor(a, reserved::symm_label());
-        canonicalize(a_stripped);
-        simplify(a_stripped);
-        std::wcout << "  smaps-open-shell sum : " << a_stripped->size()
-                   << " terms, " << count_distinct_hashes(a_stripped->clone())
-                   << " distinct hashes\n";
-        ExprPtr ref_stripped =
-            remove_tensor(singlet_ref->clone(), reserved::symm_label());
-        canonicalize(ref_stripped);
-        simplify(ref_stripped);
-        ExprPtr d = a_stripped - ref_stripped;
-        canonicalize(d);
-        simplify(d);
-        std::wcout << "  (smaps-open-shell sum) - (closed-shell ref) : "
-                   << d->size() << " terms\n";
-        // if (d->size() != 0)
-        //   std::wcout << to_latex_align(d, 0, 4) << L"\n";
-      }
-
-      // std::wcout << "summed expression: " << to_latex_align(summed, 20, 0) <<
-      // "\n";
-
-      // std::wcout << "summed expression: " <<
-      // to_latex_align(os_spinfree_summed_eom[0], 20, 0) << "\n"; std::wcout <<
-      // "how many elements does it have? " << os_st_eom[i].size()
-      // << "\n";
-
-      std::wcout << "R[" << i << "] open-shell distinct hashes: "
-                 << count_distinct_hashes(
-                        os_spinfree_summed_eom.back()->clone())
-                 << "\n";
-      std::wcout << "R[" << i << "] closed-shell distinct hashes: "
-                 << count_distinct_hashes(singlet_ref->clone()) << "\n";
 
       // ----- INDEPENDENT PATH: per-sector spin trace ----------------------
       // Self-contained; does not touch os_st_eom / os_spinfree_summed_eom or
@@ -452,8 +416,12 @@ class compute_eomcc_openshell {
         }
 
         // Consistency check: Σ sectors must equal generic spintrace.
-        auto sector_total = std::make_shared<Sum>();
-        for (auto& [label, sec] : sectors) sector_total->append(sec->clone());
+        auto sector_sum = std::make_shared<Sum>();
+        for (auto& [label, sec] : sectors) sector_sum->append(sec->clone());
+
+        ExprPtr sector_total = sector_sum;
+        sector_total = biorthogonal_transform_pre_nnsproject(
+            sector_total, external_indices(eqvec[i]));
 
         ExprPtr so = eqvec[i]->clone();
         so->visit(
@@ -471,6 +439,7 @@ class compute_eomcc_openshell {
         generic = remove_spin_with_relabel(generic);
         canonicalize(generic);
         simplify(generic);
+        generic = biorthogonal_transform_pre_nnsproject(generic, ext_idxs);
 
         ExprPtr diff = ExprPtr(sector_total) - generic;
         canonicalize(diff);
