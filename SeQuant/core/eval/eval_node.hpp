@@ -92,8 +92,6 @@ class ContractedIndexCount {
     for (auto const& idx : distinct) ++unique_[idx.space()];
   }
 
-  [[nodiscard]] size_t rank(NodePos p) const noexcept { return ranks_[p]; }
-
   [[nodiscard]] bool is_outerprod() const noexcept { return is_outerprod_; }
 
   /// Per-space count of distinct indices participating in the contraction.

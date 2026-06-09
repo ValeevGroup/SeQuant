@@ -202,6 +202,12 @@ TEST_CASE("asy_cost", "[AsyCost]") {
     REQUIRE(tex.find(L"U^{") == std::wstring::npos);     // exp 1: no caret
     REQUIRE(tex.find(L"(qq)^{") == std::wstring::npos);  // exp 1: no caret
 
+    // Pin down the full rendered string, not just substring presence: within a
+    // term the spaces print in IndexSpace order (O < U < V < K < Q), so the
+    // sequence is fixed regardless of construction order.
+    REQUIRE(c.text() == "O^2UV^3K^2(qq)");
+    REQUIRE(c.to_latex() == L"O^{2}UV^{3}K^{2}(qq)");
+
     // Equal costs constructed in two different orders compare equal.
     AsyCost::ExponentMap m2;
     m2.emplace(K, 2);
@@ -248,5 +254,34 @@ TEST_CASE("asy_cost", "[AsyCost]") {
     AsyCost const big_k{AsyCost::ExponentMap{{O, 1}, {K, 3}}};    // sum 4
     AsyCost const small_k{AsyCost::ExponentMap{{O, 3}, {K, 1}}};  // sum 4
     REQUIRE(small_k < big_k);
+
+    // A multi-term cost renders most-expensive-first, which under the new
+    // semantics means highest total degree first. Pinning the full string locks
+    // down the term sequence: deg 4 (O^2K^2) > deg 3 (V^3) > deg 2 (OV).
+    AsyCost const multi =
+        AsyCost{AsyCost::ExponentMap{{O, 1}, {V, 1}}} +  // deg 2
+        AsyCost{AsyCost::ExponentMap{{O, 2}, {K, 2}}} +  // deg 4
+        AsyCost{AsyCost::ExponentMap{{V, 3}}};           // deg 3
+    REQUIRE(multi.text() == "O^2K^2 + V^3 + OV");
+  }
+
+  SECTION("max() sentinel") {
+    using sequant::IndexSpace;
+    IndexSpace const O{L"O", 0b01};
+    IndexSpace const V{L"V", 0b10};
+
+    // max() flows through ops() as infinity, regardless of supplied extents.
+    REQUIRE(std::isinf(AsyCost::max().ops()));
+    AsyCost::ExtentMap const ext{{O, 10}, {V, 100}};
+    REQUIRE(std::isinf(AsyCost::max().ops(ext)));
+
+    // max() is the greatest cost: it compares above any finite cost via the
+    // is_max branch of operator<, and equals itself.
+    auto const finite = AsyCost{AsyCost::ExponentMap{{O, 9}, {V, 9}}};
+    REQUIRE(finite < AsyCost::max());
+    REQUIRE(AsyCost::max() > finite);
+    REQUIRE_FALSE(AsyCost::max() < finite);
+    REQUIRE(AsyCost::max() == AsyCost::max());
+    REQUIRE(AsyCost::max() > AsyCost::zero());
   }
 }
