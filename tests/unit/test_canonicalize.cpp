@@ -342,7 +342,16 @@ TEST_CASE("canonicalization", "[algorithms]") {
         return mdA.graph->cmp(*mdB.graph);
       };
       auto nodes_equal = [](std::wstring a, std::wstring b) {
-        auto na = binarize(deserialize(a)), nb = binarize(deserialize(b));
+        auto exA = deserialize(a), exB = deserialize(b);
+        REQUIRE(exA);
+        REQUIRE(exB);
+        // binarize(ExprPtr) is deprecated (builds a positional head); here we
+        // only need the eval node to compare, so suppress as other eval tests
+        // do
+        SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+        auto na = binarize(exA);
+        auto nb = binarize(exB);
+        SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
         TreeNodeEqualityComparator<std::remove_cvref_t<decltype(na)>> eq;
         // sanity: the eval-node hashes fold (the comparator must be consistent)
         CHECK(na->hash_value() == nb->hash_value());
