@@ -452,9 +452,8 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
 /// \param expr A Sum whose terms will be evaluated by reusing intermediates.
 /// \param min_repeats Minimum number of repeats for a node to be cached. If not
 /// provided, will use the default of \c cache_manager().
-/// \return AsyCost object that represents the memory in terms of powers of
-///         active occupied and active unoccupied index extents of stored
-///         tensor.
+/// \return AsyCost object representing the peak memory as a polynomial in
+///         the index-space sizes of the stored tensors.
 ///
 AsyCost peak_cache(Sum const& expr,
                    std::optional<size_t> min_repeats = std::nullopt);

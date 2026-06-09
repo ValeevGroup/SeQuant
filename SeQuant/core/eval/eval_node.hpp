@@ -10,6 +10,7 @@
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/math.hpp>
+#include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/algorithm/count_if.hpp>
@@ -43,19 +44,25 @@ namespace detail {
 
 enum NodePos { Left = 0, Right, This };
 
-[[maybe_unused]] inline std::pair<size_t, size_t> occ_virt(Tensor const& t) {
-  auto bk_rank = t.bra_net_rank() + t.ket_net_rank();
-  auto nocc = ranges::count_if(t.const_braket_indices(), [](Index const& idx) {
-    return idx.space() ==
-           get_default_context().index_space_registry()->hole_space(
-               idx.space().qns());
-  });
-  auto nvirt = bk_rank - nocc;
-  return {nocc, nvirt};
+/// Tally indices per IndexSpace appearing in the bra+ket+aux of `t`. The aux
+/// slots are included so that auxiliary spaces (e.g. density-fitting/THC) show
+/// up in the cost. AsyCost is only used for analysis/reporting, so spaces are
+/// taken verbatim from the indices, with no registry lookup.
+///
+/// Cost is expressed in terms of whatever IndexSpace each index carries. A
+/// union-space index (e.g. MR hole `I=i∪u`) contributes its union dimension
+/// `|I|=|i|+|u|` as a single symbol: it is not decomposed into base-space (`i`,
+/// `u`, ...) block terms.
+inline AsyCost::ExponentMap space_counts(Tensor const& t) {
+  AsyCost::ExponentMap counts;
+  for (auto const& idx : t.const_braketaux_indices()) ++counts[idx.space()];
+  return counts;
 }
 
 class ContractedIndexCount {
  public:
+  using Counts = AsyCost::ExponentMap;
+
   explicit ContractedIndexCount(meta::eval_node auto const& n) {
     auto const L = NodePos::Left;
     auto const R = NodePos::Right;
@@ -64,47 +71,37 @@ class ContractedIndexCount {
     SEQUANT_ASSERT(n->is_tensor() && n.left()->is_tensor() &&
                    n.right()->is_tensor());
 
+    // For the result and both operands, record the tensor's rank and collect
+    // every index into `distinct`. The set dedupes indices shared across
+    // tensors (a contracted index appears in both operands; a batched index in
+    // all three), so each is counted exactly once below.
+    container::set<Index> distinct;
     for (auto p : {L, R, T}) {
       auto const& t = (p == L ? n.left() : p == R ? n.right() : n)->as_tensor();
-      std::tie(occs_[p], virts_[p]) = occ_virt(t);
-      ranks_[p] = occs_[p] + virts_[p];
+      auto const counts = space_counts(t);
+      ranks_[p] = 0;
+      for (auto const& [_, c] : counts) ranks_[p] += c;
+      for (auto const& idx : t.const_braketaux_indices()) distinct.insert(idx);
     }
 
-    // no. of contractions in occupied index space (always a whole number)
-    occ_ = (occs_[L] + occs_[R] - occs_[T]) / 2;
-
-    // no. of contractions in virtual index space (always a whole number)
-    virt_ = (virts_[L] + virts_[R] - virts_[T]) / 2;
-
+    // An outer product contracts nothing, so the result keeps all operand
+    // indices and the ranks add up exactly.
     is_outerprod_ = ranks_[L] + ranks_[R] == ranks_[T];
+
+    // Cost exponent per space = number of distinct indices touching that space.
+    for (auto const& idx : distinct) ++unique_[idx.space()];
   }
 
-  [[nodiscard]] size_t occ(NodePos p) const noexcept { return occs_[p]; }
+  [[nodiscard]] bool is_outerprod() const noexcept { return is_outerprod_; }
 
-  [[nodiscard]] size_t virt(NodePos p) const noexcept { return virts_[p]; }
-
-  [[nodiscard]] size_t rank(NodePos p) const noexcept { return ranks_[p]; }
-
-  [[nodiscard]] size_t occ() const noexcept { return occ_; }
-
-  [[nodiscard]] size_t virt() const noexcept { return virt_; }
-
-  [[nodiscard]] bool is_outerpod() const noexcept { return is_outerprod_; }
-
-  [[nodiscard]] size_t unique_occs() const noexcept {
-    return occ(NodePos::Left) + occ(NodePos::Right) - occ();
-  }
-
-  [[nodiscard]] size_t unique_virts() const noexcept {
-    return virt(NodePos::Left) + virt(NodePos::Right) - virt();
-  }
+  /// Per-space count of distinct indices participating in the contraction.
+  /// Each external, contracted, or batched index is counted once. For ordinary
+  /// contractions (no batched index) this equals (L[s] + R[s] + T[s]) / 2.
+  [[nodiscard]] Counts const& unique_counts() const { return unique_; }
 
  private:
-  std::array<size_t, 3> occs_{0, 0, 0};
-  std::array<size_t, 3> virts_{0, 0, 0};
+  Counts unique_;
   std::array<size_t, 3> ranks_{0, 0, 0};
-  size_t occ_ = 0;
-  size_t virt_ = 0;
   bool is_outerprod_ = false;
 };
 }  // namespace detail
@@ -119,24 +116,25 @@ class ContractedIndexCount {
 ///
 struct Flops {
   [[nodiscard]] AsyCost operator()(meta::eval_node auto const& n) const {
+    using detail::space_counts;
     if (n.leaf()) return AsyCost::zero();
     if (n->op_type() == EvalOp::Product  //
         && n.left()->is_tensor()         //
         && n.right()->is_tensor()) {
       if (n->is_tensor()) {
         auto const idx_count = detail::ContractedIndexCount{n};
-        auto c = AsyCost{idx_count.unique_occs(), idx_count.unique_virts()};
-        return idx_count.is_outerpod() ? c : 2 * c;
+        auto c = AsyCost{idx_count.unique_counts()};
+        return idx_count.is_outerprod() ? c : 2 * c;
       } else {  // full contraction to scalar
         SEQUANT_ASSERT(n->is_scalar());
-        SEQUANT_ASSERT(detail::occ_virt(n.left()->as_tensor()) ==
-                       detail::occ_virt(n.right()->as_tensor()));
-        return 2 * AsyCost{detail::occ_virt(n.left()->as_tensor())};
+        SEQUANT_ASSERT(space_counts(n.left()->as_tensor()) ==
+                       space_counts(n.right()->as_tensor()));
+        return 2 * AsyCost{space_counts(n.left()->as_tensor())};
       }
     } else if (n->is_tensor()) {
       // scalar times a tensor
       // or a tensor plus a tensor
-      return AsyCost{detail::occ_virt(n->as_tensor())};
+      return AsyCost{space_counts(n->as_tensor())};
     } else /* scalar (+|*) scalar */
       return AsyCost::zero();
   }
@@ -155,8 +153,9 @@ struct Memory {
   [[nodiscard]] AsyCost operator()(meta::eval_node auto const& n) const {
     AsyCost result;
     auto add_cost = [&result](ExprPtr const& expr) {
-      result += expr.is<Tensor>() ? AsyCost{detail::occ_virt(expr.as<Tensor>())}
-                                  : AsyCost::zero();
+      result += expr.is<Tensor>()
+                    ? AsyCost{detail::space_counts(expr.as<Tensor>())}
+                    : AsyCost::zero();
     };
 
     // Adjoint is unary — the right child is the Constant(1) sentinel (zero
@@ -257,19 +256,20 @@ AsyCost asy_cost(Node const& node, F const& cost_fn = {}) {
 /// \return The minimum storage required for evaluating the given node.
 ///
 AsyCost min_storage(meta::eval_node auto const& node) {
+  using detail::space_counts;
   auto result = AsyCost::zero();
   auto visitor = [&result](meta::eval_node auto const& n) {
     auto cost = AsyCost::zero();
     if (n.leaf() && n->is_tensor())
-      cost = AsyCost{detail::occ_virt(n->as_tensor())};
+      cost = AsyCost{space_counts(n->as_tensor())};
     else if (!n.leaf()) {
-      cost += (n.left()->is_tensor()
-                   ? AsyCost{detail::occ_virt(n.left()->as_tensor())}
-                   : AsyCost::zero());
+      cost +=
+          (n.left()->is_tensor() ? AsyCost{space_counts(n.left()->as_tensor())}
+                                 : AsyCost::zero());
       cost += (n.right()->is_tensor()
-                   ? AsyCost{detail::occ_virt(n.right()->as_tensor())}
+                   ? AsyCost{space_counts(n.right()->as_tensor())}
                    : AsyCost::zero());
-      cost += (n->is_tensor() ? AsyCost{detail::occ_virt(n->as_tensor())}
+      cost += (n->is_tensor() ? AsyCost{space_counts(n->as_tensor())}
                               : AsyCost::zero());
     } else {
       // do nothing

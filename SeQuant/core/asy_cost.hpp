@@ -3,66 +3,107 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/space.hpp>
 
 #include <cstddef>
 #include <string>
-#include <utility>
 
 namespace sequant {
 
 ///
-/// Represents a symbolic asymptotic cost in terms of active_occupied
-/// and the rest orbitals.
-/// eg.
-///     - AsyCost{2,4} implies scaling of $O^2V^4$. In other words, the cost
-///       scales by the second power in the number of active_occupied orbitals
-///       and the fourth power in the number of the rest orbitals.
-///     - AsyCost{sequant::rational{1,2}, 2, 4} implies the same scaling as
-///       above except the numeric value obtained by substituting $O$ and $V$
-///       numbers is then halved.
+/// Represents a symbolic asymptotic cost as a polynomial in the sizes of
+/// index spaces. A cost is a sum of terms, each of which is a rational
+/// multiplier times a product of space sizes raised to non-negative integer
+/// powers. Spaces are identified by `IndexSpace`; `AsyCost` orders and prints
+/// them using `IndexSpace`'s own ordering and `base_key()`, and never consults
+/// an `IndexSpaceRegistry`.
+///
+/// Examples (with `I`, `A` denoting two index spaces):
+///   - `AsyCost({{I, 2}, {A, 4}})` represents $I^2 A^4$.
+///   - `AsyCost({{I, 2}, {A, 4}}, rational{1, 2})` halves the numeric value
+///     above when extents are substituted.
 ///
 class AsyCost {
+ public:
+  using ExponentMap = container::map<IndexSpace, std::size_t>;
+  using ExtentMap = container::map<IndexSpace, std::size_t>;
+
  private:
+  /// A single term of an AsyCost: a rational prefactor times a
+  /// product of index-space sizes raised to per-space exponents, e.g.
+  /// `3/2 * O^2 V^4`.
   class AsyCostEntry {
-    size_t occ_;              // power of active_occupied
-    size_t virt_;             // power of the rest orbitals
-    mutable rational count_;  // count of this asymptotic symbol
+    ExponentMap exponents_;       // space -> power; zero exponents not stored
+    mutable rational prefactor_;  // rational multiplier
+    bool is_max_ = false;         // true for the AsyCost::max() sentinel
 
    public:
+    /// Write a rational to a stream as `num`, or `num/den` when its
+    /// denominator is not 1.
+    /// \param os Stream to write to.
+    /// \param r Rational to format
+    /// \return `os`
     static std::ostream &stream_out_rational(std::ostream &os,
                                              rational const &r);
 
+    /// \return The sentinel entry representing an infinitely scaling cost; it
+    ///         compares greater than every non-max entry.
     static AsyCostEntry max();
 
+    /// \return The canonical zero entry (no exponents, zero prefactor).
     static AsyCostEntry const &zero();
 
-    AsyCostEntry(size_t nocc, size_t nvirt, rational count);
+    /// Constructors
+    AsyCostEntry();
 
     AsyCostEntry(AsyCostEntry const &) = default;
 
     AsyCostEntry(AsyCostEntry &&) = default;
 
+    /// \param exponents Map from index space to its exponent. Zero exponents
+    ///                  are dropped.
+    /// \param prefactor Rational multiplier. If it is zero, or no exponents
+    ///                  remain after dropping zeros, the entry collapses to
+    ///                  zero.
+    AsyCostEntry(ExponentMap exponents, rational prefactor);
+
     AsyCostEntry &operator=(AsyCostEntry const &) = default;
 
     AsyCostEntry &operator=(AsyCostEntry &&) = default;
 
-    size_t occ() const;
+    /// \return The per-space exponents of this term.
+    [[nodiscard]] ExponentMap const &exponents() const;
 
-    size_t virt() const;
+    /// \return The rational multiplier (prefactor) of this term, e.g. `3/2`
+    ///         in `3/2 * O^2 V^4`.
+    [[nodiscard]] rational prefactor() const;
 
-    rational count() const;
+    /// Set the rational multiplier. `const` because the prefactor is not part
+    /// of the term's identity (see \ref operator==).
+    void set_prefactor(rational n) const;
 
-    void set_count(rational n) const;
+    /// \return Whether this is the zero entry.
+    [[nodiscard]] bool is_zero() const;
 
+    /// \return Whether this is the \ref max() sentinel.
+    [[nodiscard]] bool is_max() const;
+
+    /// Order by the \ref max() sentinel (greatest), then by total polynomial
+    /// degree (sum of exponents), then space by space from highest- to
+    /// lowest-priority IndexSpace. Independent of the prefactor.
     bool operator<(AsyCostEntry const &rhs) const;
 
+    /// \return Whether two entries share the same monomial (same exponents and
+    ///         max-ness). The prefactor is not compared.
     bool operator==(AsyCostEntry const &rhs) const;
 
     bool operator!=(AsyCostEntry const &rhs) const;
 
-    std::string text() const;
+    /// \return A plain-text rendering of this term, e.g. `3/2*O^2V^4`.
+    [[nodiscard]] std::string text() const;
 
-    std::string to_latex() const;
+    /// \return A LaTeX rendering of this term.
+    [[nodiscard]] std::string to_latex() const;
   };
 
  private:
@@ -84,28 +125,11 @@ class AsyCost {
   AsyCost();
 
   ///
-  /// \param count Rational number of times this cost repeats.
-  /// \param nocc Asymptotic scaling exponent in the active occupied orbitals.
-  /// \param nvirt Asymptotic scaling exponent in the active unoccupied
-  ///              orbitals.
+  /// \param exponents Map from index space to its exponent in this term.
+  ///                  Zero exponents may be supplied; they are dropped.
+  /// \param prefactor Rational multiplier; defaults to 1.
   ///
-  AsyCost(rational count, size_t nocc, size_t nvirt);
-
-  ///
-  /// \param nocc Asymptotic scaling exponent in the active occupied orbitals.
-  /// \param nvirt Asymptotic scaling exponent in the active unoccupied
-  ///              orbitals.
-  ///
-  AsyCost(size_t nocc, size_t nvirt);
-
-  ///
-  ///
-  /// \param ov A pair of size_ts.
-  ///           ov.first is the asymptotic scaling exponent in the active
-  ///           occupied orbitals.
-  ///           ov.second is that in the active unoccupied orbitals
-  ///
-  explicit AsyCost(std::pair<size_t, size_t> const &ov);
+  explicit AsyCost(ExponentMap exponents, rational prefactor = 1);
 
   AsyCost(AsyCost const &) = default;
 
@@ -116,13 +140,21 @@ class AsyCost {
   AsyCost &operator=(AsyCost &&) = default;
 
   ///
-  /// \param nocc Substitute $O$ by nocc.
-  /// \param nvirt Substitute $V$ by nvirt.
-  /// \return Scaled asymptotic cost.
-  [[nodiscard]] double ops(size_t nocc, size_t nvirt) const;
+  /// Substitute each space in this cost by an extent and evaluate.
+  /// \param extents Map from index space to extent (size). A space appearing
+  ///                in this cost but absent from `extents` falls back to its
+  ///                `IndexSpace::approximate_size()`. Defaults to empty, in
+  ///                which case every space uses its `approximate_size()`.
+  /// \return Numerical value of the cost.
+  ///
+  [[nodiscard]] double ops(ExtentMap const &extents = {}) const;
 
+  /// \return A LaTeX rendering of the whole cost: its terms joined by ` + `,
+  ///         most expensive first. The zero cost renders as `0`.
   [[nodiscard]] std::wstring to_latex() const;
 
+  /// \return A plain-text rendering of the whole cost: its terms joined by
+  ///         ` + `, most expensive first. The zero cost renders as `0`.
   [[nodiscard]] std::string text() const;
 
   AsyCost &operator+=(AsyCost const &);
