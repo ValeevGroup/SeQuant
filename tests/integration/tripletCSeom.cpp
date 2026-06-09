@@ -208,6 +208,7 @@ class compute_eomcc_closedshell_triplet {
 
       ExprPtr summed = summed_spinfree;
       simplify(summed);
+      summed = biorthogonal_transform_pre_nnsproject(summed, ext_idxs);
       std::wcout << "R[" << i
                  << "] open-shell sum (Ŝ NOT expanded): " << summed->size()
                  << " terms\n";
@@ -218,8 +219,7 @@ class compute_eomcc_closedshell_triplet {
       std::wcout << "R[" << i << "] reference closed-shell (CC spintrace): "
                  << singlet_ref->size() << " terms\n";
 
-      ExprPtr os_singlet =
-          remove_tensor(summed->clone(), reserved::symm_label());
+      ExprPtr os_singlet = summed->clone();
       simplify(os_singlet);
       ExprPtr singlet_diff = os_singlet - singlet_ref;
       canonicalize(singlet_diff);
@@ -269,6 +269,8 @@ class compute_eomcc_closedshell_triplet {
                        triplet_sectors.back().second->clone();
       canonicalize(T_diag);
       simplify(T_diag);
+      T_diag = biorthogonal_transform_pre_nnsproject(T_diag, ext_groups);
+
       std::wcout << "R[" << i
                  << "] triplet (triplet_R, first - last): " << T_diag->size()
                  << " terms\n";
