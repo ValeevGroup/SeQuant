@@ -2,7 +2,6 @@
 #define SEQUANT_EVAL_EVAL_NODE_COMPARE_HPP
 
 #include <SeQuant/core/hash.hpp>
-#include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
 
@@ -68,32 +67,26 @@ struct TreeNodeEqualityComparator {
       if (*lhs->expr() != *rhs->expr()) {
         return false;
       }
-    } else if (lhs->is_tensor()) {
+    } else if (lhs->is_tensor() && !lhs->has_connectivity_graph()) {
+      // Tensor nodes that carry a canonical connectivity graph (tensor-network
+      // intermediates and proto-indexed leaves) are compared exactly by that
+      // graph in the connectivity check below: it is the same canonical colored
+      // graph the eval-node hash is derived from, its 3-way cmp is a complete
+      // network identity, and it already folds bra<->ket orientation (the
+      // orientation was canonicalized into the graph). Block comparison here
+      // would instead compare on the stored bra/ket slot order — a partial,
+      // orientation-sensitive signature — and wrongly separate e.g. a CSV/PNO
+      // coefficient C{a;μ̃} from its equivalent C{μ̃;a}, or the two g·C
+      // intermediates from transforming a real DF factor g(μ̃,μ̃,Κ) on its bra
+      // vs its ket leg. So only graph-less tensor nodes — protoindex-free
+      // leaves (block-canonicalized in place at construction) and scalar*tensor
+      // results — are compared here by block.
       const Tensor &lhs_tensor = lhs->as_tensor();
       const Tensor &rhs_tensor = rhs->as_tensor();
 
       TensorBlockEqualComparator cmp;
       if (!cmp(lhs_tensor, rhs_tensor)) {
-        // Two tensors that are whole-bundle bra<->ket swaps of each other can
-        // be the same object, so retry the comparison in canonical orientation
-        // — otherwise e.g. a CSV/PNO coefficient C{a;μ̃} and its equivalent
-        // C{μ̃;a}, or two evaluation intermediates I{a;μ̃} and I{μ̃;a} produced by
-        // transforming a real DF factor g(μ̃,μ̃,Κ) on its bra vs its ket leg,
-        // would be seen as distinct and recomputed. This canonicalizes only for
-        // the comparison (the stored tensors are not mutated, so the result
-        // layout/export is unchanged) and stays consistent with the eval-node
-        // hash, which already folds these. For a leaf data tensor the bra/ket
-        // orientation is meaningful, so only braket-symmetric leaves are
-        // folded; a non-leaf result tensor has a free orientation, so fold it
-        // unconditionally. The hash/connectivity/children checks below still
-        // distinguish genuinely different tensors.
-        const bool require_braket_symm = lhs.leaf();
-        Tensor l = lhs_tensor, r = rhs_tensor;
-        canonicalize_braket_orientation(l, require_braket_symm);
-        canonicalize_braket_orientation(r, require_braket_symm);
-        if (!cmp(l, r)) {
-          return false;
-        }
+        return false;
       }
     }
 

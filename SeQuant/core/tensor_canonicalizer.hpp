@@ -260,23 +260,6 @@ class TensorBlockCanonicalizer : public DefaultTensorCanonicalizer {
   ExprPtr apply(AbstractTensor& t) const override;
 };
 
-/// Reorients a tensor's bra and ket bundles to a canonical orientation by a
-/// whole-bundle bra<->ket *swap* (the bundle whose index spaces are
-/// lexicographically larger, by color, goes to bra). This preserves bra/ket
-/// cardinalities (a 2-bra/2-ket tensor stays 2-bra/2-ket) and keeps proto
-/// (inner) indices with their bundle. The choice depends only on index spaces,
-/// not labels, so equivalent inputs (e.g. a half-transformed CSV/PNO
-/// coefficient C{a;μ̃} and C{μ̃;a}) fold to the same orientation. Works on
-/// proto-indexed (tensor-of-tensor) tensors too.
-/// @param require_braket_symm if true (default) only braket-symmetric tensors
-///        are reoriented (the swap is then a genuine symmetry); pass false to
-///        canonicalize the orientation of a tensor whose bra/ket assignment is
-///        otherwise free (e.g. an evaluation intermediate produced by
-///        contracting braket-symmetric factors).
-/// @return true if a bra<->ket swap was applied.
-bool canonicalize_braket_orientation(AbstractTensor& t,
-                                     bool require_braket_symm = true);
-
 }  // namespace sequant
 
 #endif  // SEQUANT_CORE_TENSOR_CANONICALIZER_HPP
