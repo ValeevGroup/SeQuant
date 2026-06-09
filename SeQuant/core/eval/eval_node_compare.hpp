@@ -67,7 +67,20 @@ struct TreeNodeEqualityComparator {
       if (*lhs->expr() != *rhs->expr()) {
         return false;
       }
-    } else if (lhs->is_tensor()) {
+    } else if (lhs->is_tensor() && !lhs->has_connectivity_graph()) {
+      // Tensor nodes that carry a canonical connectivity graph (tensor-network
+      // intermediates and proto-indexed leaves) are compared exactly by that
+      // graph in the connectivity check below: it is the same canonical colored
+      // graph the eval-node hash is derived from, its 3-way cmp is a complete
+      // network identity, and it already folds bra<->ket orientation (the
+      // orientation was canonicalized into the graph). Block comparison here
+      // would instead compare on the stored bra/ket slot order — a partial,
+      // orientation-sensitive signature — and wrongly separate e.g. a CSV/PNO
+      // coefficient C{a;μ̃} from its equivalent C{μ̃;a}, or the two g·C
+      // intermediates from transforming a real DF factor g(μ̃,μ̃,Κ) on its bra
+      // vs its ket leg. So only graph-less tensor nodes — protoindex-free
+      // leaves (block-canonicalized in place at construction) and scalar*tensor
+      // results — are compared here by block.
       const Tensor &lhs_tensor = lhs->as_tensor();
       const Tensor &rhs_tensor = rhs->as_tensor();
 

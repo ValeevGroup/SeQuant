@@ -13,8 +13,12 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <SeQuant/core/bliss.hpp>
+#include <SeQuant/core/eval/eval_expr.hpp>
+#include <SeQuant/core/eval/eval_node.hpp>
+#include <SeQuant/core/eval/eval_node_compare.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network/v3.hpp>
+#include <SeQuant/core/utility/tensor.hpp>
 #include <SeQuant/external/bliss/graph.hh>
 
 #include "data/sf_r2_direct_real_inc.hpp"
@@ -305,6 +309,71 @@ TEST_CASE("canonicalization", "[algorithms]") {
       const int cmpAB = mdA.graph->cmp(*mdB.graph);
       INFO("canonical bliss graph cmp(A, B) = " << cmpAB << " (0 = equal)");
       REQUIRE(cmpAB == 0);
+    }
+    // PNO-CCSD duplicate-intermediate regression (real PAO/PNO/Κ spaces).
+    // A real DF factor g(μ̃,μ̃,Κ) transformed PAO->PNO on its bra vs its ket leg
+    // yields equivalent half-transformed intermediates that must dedup to one,
+    // both as leaf coefficients (C{a;μ̃} ≡ C{μ̃;a}) and as g·C products. Before
+    // the fix the eval cache compared stored tensors by bra/ket slot order and
+    // saw the two orientations as distinct, recomputing the (large)
+    // intermediate.
+    {
+      auto sr_reg = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+      mbpt::add_pao_spaces(sr_reg);  // μ̃ (PAO)
+      mbpt::add_df_spaces(sr_reg);   // Κ  (DF aux)
+      std::vector<std::wstring> keys;
+      for (auto const& s : *sr_reg) keys.push_back(s.base_key());
+      for (auto const& k : keys)
+        if (auto* sp = sr_reg->retrieve_ptr(k)) sp->field(Field::Real);
+      Context ctx = get_default_context();
+      ctx.set(sr_reg);
+      ctx.set(AssertStrictBraKetSymmetry::No);
+      auto resetter = set_scoped_default_context(ctx);
+
+      auto graph_cmp = [](std::wstring a, std::wstring b) {
+        auto exA = deserialize(a), exB = deserialize(b);
+        REQUIRE(exA);
+        REQUIRE(exB);
+        TensorNetworkV3 tnA(exA), tnB(exB);
+        auto mdA = tnA.canonicalize_slots();
+        auto mdB = tnB.canonicalize_slots();
+        REQUIRE(mdA.graph);
+        REQUIRE(mdB.graph);
+        return mdA.graph->cmp(*mdB.graph);
+      };
+      auto nodes_equal = [](std::wstring a, std::wstring b) {
+        auto exA = deserialize(a), exB = deserialize(b);
+        REQUIRE(exA);
+        REQUIRE(exB);
+        // binarize(ExprPtr) is deprecated (builds a positional head); here we
+        // only need the eval node to compare, so suppress as other eval tests
+        // do
+        SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+        auto na = binarize(exA);
+        auto nb = binarize(exB);
+        SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+        TreeNodeEqualityComparator<std::remove_cvref_t<decltype(na)>> eq;
+        // sanity: the eval-node hashes fold (the comparator must be consistent)
+        CHECK(na->hash_value() == nb->hash_value());
+        return eq(na, nb);
+      };
+
+      // the proto-indexed leaf coefficient folds under bra<->ket swap ...
+      CHECK(graph_cmp(L"C{a_1<i_1,i_2>;μ̃_1}:N-S-S",
+                      L"C{μ̃_1;a_1<i_1,i_2>}:N-S-S") == 0);
+      // ... and so does the g·C product network ...
+      CHECK(graph_cmp(L"g{μ̃_1;μ̃_2;Κ_1}:N-S-S * C{a_1<i_1,i_2>;μ̃_1}:N-S-S",
+                      L"g{μ̃_1;μ̃_2;Κ_1}:N-S-S * C{μ̃_2;a_1<i_1,i_2>}:N-S-S") ==
+            0);
+
+      // ... and, crucially, the bra- vs ket-transform g·C eval nodes compare
+      // EQUAL (so the cache deduplicates them): both when the surviving PNO
+      // external is the same (a_1) and when it differs but shares the space and
+      // pair domain (a_1 vs a_4 — residual target vs internal dummy in CCSD).
+      CHECK(nodes_equal(L"g{μ̃_1;μ̃_2;Κ_1}:N-S-S * C{a_1<i_1,i_2>;μ̃_1}:N-S-S",
+                        L"g{μ̃_1;μ̃_2;Κ_1}:N-S-S * C{μ̃_2;a_1<i_1,i_2>}:N-S-S"));
+      CHECK(nodes_equal(L"g{μ̃_1;μ̃_2;Κ_1}:N-S-S * C{a_1<i_1,i_2>;μ̃_1}:N-S-S",
+                        L"g{μ̃_1;μ̃_2;Κ_1}:N-S-S * C{μ̃_2;a_4<i_1,i_2>}:N-S-S"));
     }
     // Top-level regression: the 113-term SF R2 direct-path (real field)
     // residual extracted byte-for-byte from `srcc 2 t std sf real`. The
