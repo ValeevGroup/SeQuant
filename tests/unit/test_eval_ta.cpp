@@ -1627,8 +1627,8 @@ TEST_CASE("eval_batched_custom_evaluator persistence gate", "[eval]") {
     };
     auto cache = cache_t::empty();
     cache.set_custom_evaluator(make_batched_custom_evaluator(
-        yield_, std::size_t{4}, sequant::accept_any_index{}, is_volatile_t,
-        spy));
+        yield_, std::size_t{4}, sequant::accept_any_index{}, spy,
+        is_volatile_t));
     auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
     REQUIRE_FALSE(batched);  // volatile subtree -> not batched
     REQUIRE(equal_tarrays<Loose>(res, ref));
@@ -1644,8 +1644,8 @@ TEST_CASE("eval_batched_custom_evaluator persistence gate", "[eval]") {
     };
     auto cache = cache_t::empty();
     cache.set_custom_evaluator(make_batched_custom_evaluator(
-        yield_, std::size_t{4}, sequant::accept_any_index{},
-        sequant::never_volatile{}, spy));
+        yield_, std::size_t{4}, sequant::accept_any_index{}, spy,
+        sequant::never_volatile{}));
     auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
     REQUIRE(batched);  // no gate -> batched as before
     REQUIRE(equal_tarrays<Loose>(res, ref));

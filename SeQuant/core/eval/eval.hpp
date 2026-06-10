@@ -918,17 +918,19 @@ ResultPtr evaluate_antisymm(Args&&... args) {
 ///        possible.
 /// \param accept predicate selecting which contracted indices may be batched
 ///        (e.g. only those in the auxiliary/RI IndexSpace). Defaults to any.
-/// \param is_volatile predicate flagging a volatile leaf node (e.g. an
-///        amplitude tensor); the evaluator declines to batch any node whose
-///        subtree contains such a leaf, so only persistent (build-once)
-///        subtrees are streamed. Defaults to never_volatile (no persistence
-///        gate). Same classification as the eval cache's volatility predicate.
 /// \param make_scope_guard factory, called with the batch count, returning an
 ///        RAII object held for the duration of the batched partial
 ///        contractions; a backend may use it to relax block-sparse screening
 ///        (scaled by the batch count) so per-batch screening does not drop
 ///        small contributions that are significant once summed over the full
 ///        batch axis. Defaults to a no-op (make_no_scope_guard).
+/// \param is_volatile predicate flagging a volatile leaf node (e.g. an
+///        amplitude tensor); the evaluator declines to batch any node whose
+///        subtree contains such a leaf, so only persistent (build-once)
+///        subtrees are streamed. Defaults to never_volatile (no persistence
+///        gate). Same classification as the eval cache's volatility predicate.
+///        Kept last so the prior 4-argument form (…, accept, make_scope_guard)
+///        still compiles unchanged.
 struct accept_any_index {
   bool operator()(Index const&) const noexcept { return true; }
 };
@@ -974,11 +976,11 @@ template <typename Node, typename Pred>
 }
 
 template <typename F, typename IndexPredicate = accept_any_index,
-          typename IsVolatile = never_volatile,
-          typename ScopeGuardFactory = make_no_scope_guard>
+          typename ScopeGuardFactory = make_no_scope_guard,
+          typename IsVolatile = never_volatile>
 [[nodiscard]] auto make_batched_custom_evaluator(
     F le, std::size_t target_batch_size, IndexPredicate accept = {},
-    IsVolatile is_volatile = {}, ScopeGuardFactory make_scope_guard = {}) {
+    ScopeGuardFactory make_scope_guard = {}, IsVolatile is_volatile = {}) {
   return [le = std::move(le), target_batch_size, accept, is_volatile,
           make_scope_guard](auto const& node, auto& cache) -> ResultPtr {
     using cache_t = std::remove_reference_t<decltype(cache)>;
