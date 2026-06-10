@@ -918,6 +918,11 @@ ResultPtr evaluate_antisymm(Args&&... args) {
 ///        possible.
 /// \param accept predicate selecting which contracted indices may be batched
 ///        (e.g. only those in the auxiliary/RI IndexSpace). Defaults to any.
+/// \param is_volatile predicate flagging a volatile leaf node (e.g. an
+///        amplitude tensor); the evaluator declines to batch any node whose
+///        subtree contains such a leaf, so only persistent (build-once)
+///        subtrees are streamed. Defaults to never_volatile (no persistence
+///        gate). Same classification as the eval cache's volatility predicate.
 /// \param make_scope_guard factory, called with the batch count, returning an
 ///        RAII object held for the duration of the batched partial
 ///        contractions; a backend may use it to relax block-sparse screening
@@ -945,17 +950,48 @@ struct make_no_scope_guard {
   }
 };
 
+/// Default node-volatility predicate for make_batched_custom_evaluator: no node
+/// is volatile, so batching is gated only by the index predicate. A caller may
+/// instead supply a predicate flagging volatile (e.g. amplitude-dependent) leaf
+/// nodes; the evaluator then declines to batch any node whose subtree contains
+/// such a leaf, so only persistent (build-once) subtrees are streamed over the
+/// batch axis (a volatile subtree is rebuilt every evaluation, so batching it
+/// would pay the partition + relaxed-screening cost on every pass for no
+/// lasting memory benefit).
+struct never_volatile {
+  template <typename Node>
+  bool operator()(Node const&) const noexcept {
+    return false;
+  }
+};
+
+/// \return whether any node in the subtree rooted at \p n satisfies \p pred.
+template <typename Node, typename Pred>
+[[nodiscard]] bool subtree_any(Node const& n, Pred const& pred) {
+  if (pred(n)) return true;
+  if (n.leaf()) return false;
+  return subtree_any(n.left(), pred) || subtree_any(n.right(), pred);
+}
+
 template <typename F, typename IndexPredicate = accept_any_index,
+          typename IsVolatile = never_volatile,
           typename ScopeGuardFactory = make_no_scope_guard>
 [[nodiscard]] auto make_batched_custom_evaluator(
     F le, std::size_t target_batch_size, IndexPredicate accept = {},
-    ScopeGuardFactory make_scope_guard = {}) {
-  return [le = std::move(le), target_batch_size, accept, make_scope_guard](
-             auto const& node, auto& cache) -> ResultPtr {
+    IsVolatile is_volatile = {}, ScopeGuardFactory make_scope_guard = {}) {
+  return [le = std::move(le), target_batch_size, accept, is_volatile,
+          make_scope_guard](auto const& node, auto& cache) -> ResultPtr {
     using cache_t = std::remove_reference_t<decltype(cache)>;
 
     auto const K = batch_axis(node, accept);
     if (!K) return nullptr;
+
+    // Persistence gate: only stream subtrees that are amplitude-independent
+    // (built once). If the subtree contains a volatile leaf it is rebuilt on
+    // every evaluation, so batching pays the partition + relaxed-screening cost
+    // each pass for no lasting memory benefit -- decline to the standard
+    // scheme. Default never_volatile => no gating (original behavior).
+    if (subtree_any(node, is_volatile)) return nullptr;
 
     auto const leaf = find_leaf_carrying(node, *K);
     if (!leaf) return nullptr;

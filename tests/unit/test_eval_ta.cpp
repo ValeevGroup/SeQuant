@@ -1591,6 +1591,67 @@ TEST_CASE("eval_batched_custom_evaluator", "[eval]") {
   }
 }
 
+TEST_CASE("eval_batched_custom_evaluator persistence gate", "[eval]") {
+  using sequant::evaluate;
+  using sequant::make_batched_custom_evaluator;
+  using TA::TArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+  using cache_t = sequant::CacheManager<node_t>;
+
+  auto& world = TA::get_default_world();
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 12};
+  yield_.set_max_tile(4);
+
+  // Contracts a1,a2 (unoccupied, 3 tiles) -> batchable over an unoccupied axis.
+  // The subtree contains a "t" leaf, which we treat as volatile.
+  auto const expr = sequant::deserialize<sequant::ExprPtr>(
+      L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
+  std::string const target = "i_1,i_2,i_3,i_4";
+  auto const node = eval_node(expr);
+  auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
+
+  // Volatile-leaf predicate: the amplitude "t".
+  auto is_volatile_t = [](node_t const& n) {
+    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
+  };
+
+  // (1) Gate ON: the subtree contains a volatile "t" leaf, so batching is
+  // DECLINED -- the spy scope-guard (invoked only once a node passes every gate
+  // and yields >1 batch) is never called, yet the standard scheme still gives
+  // the correct result.
+  {
+    bool batched = false;
+    auto spy = [&batched](std::size_t) {
+      batched = true;
+      return sequant::no_scope_guard{};
+    };
+    auto cache = cache_t::empty();
+    cache.set_custom_evaluator(make_batched_custom_evaluator(
+        yield_, std::size_t{4}, sequant::accept_any_index{}, is_volatile_t,
+        spy));
+    auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
+    REQUIRE_FALSE(batched);  // volatile subtree -> not batched
+    REQUIRE(equal_tarrays<Loose>(res, ref));
+  }
+
+  // (2) No gate (default never_volatile): the SAME node DOES batch -- confirms
+  // (1)'s decline is due to the volatility gate, not the index/tiling setup.
+  {
+    bool batched = false;
+    auto spy = [&batched](std::size_t) {
+      batched = true;
+      return sequant::no_scope_guard{};
+    };
+    auto cache = cache_t::empty();
+    cache.set_custom_evaluator(make_batched_custom_evaluator(
+        yield_, std::size_t{4}, sequant::accept_any_index{},
+        sequant::never_volatile{}, spy));
+    auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
+    REQUIRE(batched);  // no gate -> batched as before
+    REQUIRE(equal_tarrays<Loose>(res, ref));
+  }
+}
+
 TEST_CASE("eval_batched_custom_evaluator_tot", "[eval]") {
   using sequant::evaluate;
   using sequant::make_batched_custom_evaluator;
