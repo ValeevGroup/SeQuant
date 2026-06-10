@@ -235,7 +235,9 @@ TEST_CASE("optimize", "[optimize]") {
       OptimizeOptions base;
       base.idx_to_extent = idxsz;
 
-      // baseline: no predicate => weighting disabled => current behavior
+      // baseline: predicate set but n_replay==1 => weight is 1 everywhere =>
+      // reverts to current behavior. (The empty-predicate no-op is checked
+      // separately via opts_off below.)
       auto opts1 = base;
       opts1.is_volatile_leaf = is_t;
       opts1.n_replay = 1;
