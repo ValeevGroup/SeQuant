@@ -352,6 +352,15 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
 /// \param idxsz An invocable on Index, that maps Index to its dimension.
 /// \param subnet_cse Whether to recognize equivalent subnetworks to try
 /// minimizing the ops counts.
+/// \param is_volatile_leaf Predicate marking a leaf tensor as volatile (its
+/// value changes on every replay); empty disables weighting. The predicate MUST
+/// be invariant under slot/index canonicalization — key on tensor label or
+/// structure, NOT on anonymous index identity — so that two subnetworks deemed
+/// equivalent by the subnet-CSE canonicalization also agree on volatility (the
+/// CSE path stores one cost per canonical subnet). Flops metric only.
+/// \param n_replay Multiplier applied to the cost of each volatile-result
+/// contraction (volatile contractions are re-evaluated on every replay);
+/// persistent contractions are counted once. 1 (default) disables weighting.
 /// \return Optimal evaluation sequence under the chosen cost metric. If there
 ///         are equivalent optimal sequences then the result is the one that
 ///         keeps the order of tensors in the network as original as possible.
