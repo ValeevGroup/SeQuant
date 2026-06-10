@@ -269,8 +269,7 @@ class compute_eomcc_closedshell_triplet {
                        triplet_sectors.back().second->clone();
       canonicalize(T_diag);
       simplify(T_diag);
-      T_diag = biorthogonal_transform_pre_nnsproject(T_diag, ext_groups);
-
+      T_diag = biorthogonal_transform_pre_nnsproject(T_diag, ext_idxs);
       std::wcout << "R[" << i
                  << "] triplet (triplet_R, first - last): " << T_diag->size()
                  << " terms\n";
