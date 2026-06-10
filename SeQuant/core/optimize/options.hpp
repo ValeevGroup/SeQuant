@@ -7,6 +7,7 @@
 namespace sequant {
 
 class Index;
+class Tensor;
 
 /// Cost metric to optimize for in single-term and top-level optimize routines.
 enum class OptFor { Flops, Memsize };
@@ -45,6 +46,22 @@ struct OptimizeOptions {
   /// Caller-supplied Index to extent provider. If empty, defaults to
   /// \c IndexSpace::approximate_size().
   index_to_extent_t idx_to_extent = {};
+
+  /// Marks a LEAF tensor as volatile: its value changes between replays of the
+  /// network, so any contraction depending on it is re-evaluated on every
+  /// replay. Empty (default) ⇒ no tensor is volatile ⇒ cost weighting is
+  /// disabled and n_replay is ignored (behavior identical to before this
+  /// feature). CC callers pass label==volatile_label, the same classification
+  /// the runtime eval cache uses, so the optimizer's cost model and the cache
+  /// agree.
+  std::function<bool(Tensor const&)> is_volatile_leaf = {};
+
+  /// Expected number of times the network is replayed with the volatile inputs
+  /// mutated; the cost of each volatile contraction is multiplied by this,
+  /// while persistent (volatile-independent) contractions are counted once.
+  /// Default 1 (no change). Only consulted when is_volatile_leaf is non-empty
+  /// and opt_for == Flops.
+  unsigned n_replay = 1;
 };
 
 }  // namespace sequant

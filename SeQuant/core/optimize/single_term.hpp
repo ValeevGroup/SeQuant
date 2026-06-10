@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <functional>
 #include <limits>
 #include <type_traits>
 
@@ -253,7 +254,8 @@ template <typename CostFn>
   }
 EvalSequence single_term_opt_impl(TensorNetwork const& network,
                                   meta::range_of<Index> auto const& tidxs,
-                                  CostFn&& cost_fn, bool subnet_cse) {
+                                  CostFn&& cost_fn, bool subnet_cse,
+                                  size_t volatile_mask, double n_replay) {
   using ranges::views::concat;
   auto const nt = network.tensors().size();
   if (nt == 1) return EvalSequence{0};
@@ -276,6 +278,10 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
   // find the optimal evaluation sequence
   for (size_t n = 0; n < results.size(); ++n) {
     if (std::popcount(n) < 2) continue;
+    // A subset is volatile iff it contains any volatile leaf; the contraction
+    // that forms it is then re-executed on every replay. volatile_mask == 0
+    // (no predicate / Memsize / n_replay<=1) makes w == 1 everywhere.
+    double const w = (volatile_mask & n) ? n_replay : 1.0;
     for (auto& curr_cost = results[n].ops;
          auto&& [lp, rp] : bits::bipartitions(n)) {
       // do nothing with the trivial bipartition
@@ -290,16 +296,16 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
         std::set_union(results[lp].subnets.begin(), results[lp].subnets.end(),
                        results[rp].subnets.begin(), results[rp].subnets.end(),
                        std::back_inserter(combined_subnets));
-        new_cost = cost_fn(results[lp].indices,  //
-                           results[rp].indices,  //
-                           results[n].indices);
+        new_cost = w * cost_fn(results[lp].indices,  //
+                               results[rp].indices,  //
+                               results[n].indices);
         for (auto id : combined_subnets) {
           new_cost += unique_meta_costs[id];
         }
       } else {
-        new_cost = cost_fn(results[lp].indices,  //
-                           results[rp].indices,  //
-                           results[n].indices)   //
+        new_cost = w * cost_fn(results[lp].indices,  //
+                               results[rp].indices,  //
+                               results[n].indices)   //
                    + results[lp].ops + results[rp].ops;
       }
 
@@ -319,8 +325,8 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
       // sizes, so their cost is identical. Overwriting with a later bitmask's
       // cost is intentional and benign.
       unique_meta_costs[mid] =
-          cost_fn(results[results[n].lp].indices,
-                  results[results[n].rp].indices, results[n].indices);
+          w * cost_fn(results[results[n].lp].indices,
+                      results[results[n].rp].indices, results[n].indices);
       auto it = std::lower_bound(results[n].subnets.begin(),
                                  results[n].subnets.end(), mid);
       if (it == results[n].subnets.end() || *it != mid) {
@@ -346,22 +352,51 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
 /// \param idxsz An invocable on Index, that maps Index to its dimension.
 /// \param subnet_cse Whether to recognize equivalent subnetworks to try
 /// minimizing the ops counts.
+/// \param is_volatile_leaf Predicate marking a leaf tensor as volatile (its
+/// value changes on every replay); empty disables weighting. The predicate MUST
+/// be invariant under slot/index canonicalization — key on tensor label or
+/// structure, NOT on anonymous index identity — so that two subnetworks deemed
+/// equivalent by the subnet-CSE canonicalization also agree on volatility (the
+/// CSE path stores one cost per canonical subnet). Flops metric only.
+/// \param n_replay Multiplier applied to the cost of each volatile-result
+/// contraction (volatile contractions are re-evaluated on every replay);
+/// persistent contractions are counted once. 1 (default) disables weighting.
 /// \return Optimal evaluation sequence under the chosen cost metric. If there
 ///         are equivalent optimal sequences then the result is the one that
 ///         keeps the order of tensors in the network as original as possible.
 ///
 template <OptFor Metric, has_index_extent IdxToSz>
-EvalSequence single_term_opt(TensorNetwork const& network, IdxToSz&& idxsz,
-                             bool subnet_cse) {
+EvalSequence single_term_opt(
+    TensorNetwork const& network, IdxToSz&& idxsz, bool subnet_cse,
+    std::function<bool(Tensor const&)> const& is_volatile_leaf = {},
+    unsigned n_replay = 1) {
   decltype(OptRes::indices) tidxs{};
+
+  // Volatility weighting is a Flops-only notion (persistent intermediates cost
+  // MORE memory, not less, so it is wrong-signed for Memsize). Build the
+  // volatile-leaf bitmask in network.tensors() bit order so it aligns with the
+  // DP's subset bits.
+  size_t volatile_mask = 0;
+  double nr = 1.0;
   if constexpr (Metric == OptFor::Flops) {
+    if (is_volatile_leaf && n_replay > 1) {
+      size_t i = 0;
+      for (auto&& t : network.tensors()) {
+        auto tp = std::dynamic_pointer_cast<Tensor>(t);
+        if (tp && is_volatile_leaf(*tp)) volatile_mask |= (size_t{1} << i);
+        ++i;
+      }
+      nr = static_cast<double>(n_replay);
+    }
     auto cost_fn = flops_counter(std::forward<IdxToSz>(idxsz));
-    return single_term_opt_impl(network, tidxs, cost_fn, subnet_cse);
+    return single_term_opt_impl(network, tidxs, cost_fn, subnet_cse,
+                                volatile_mask, nr);
   } else {
     static_assert(Metric == OptFor::Memsize,
                   "Only Flops and Memsize OptFor supported.");
     auto cost_fn = memsize_counter(std::forward<IdxToSz>(idxsz));
-    return single_term_opt_impl(network, tidxs, cost_fn, subnet_cse);
+    return single_term_opt_impl(network, tidxs, cost_fn, subnet_cse,
+                                volatile_mask, nr);
   }
 }
 
@@ -377,8 +412,10 @@ EvalSequence single_term_opt(TensorNetwork const& network, IdxToSz&& idxsz,
 /// @note @c prod is assumed to consist of only Tensor expressions
 ///
 template <OptFor Metric = OptFor::Flops, has_index_extent IdxToSz>
-ExprPtr single_term_opt(Product const& prod, IdxToSz&& idxsz,
-                        bool subnet_cse = false) {
+ExprPtr single_term_opt(
+    Product const& prod, IdxToSz&& idxsz, bool subnet_cse = false,
+    std::function<bool(Tensor const&)> const& is_volatile_leaf = {},
+    unsigned n_replay = 1) {
   using ranges::views::filter;
   using ranges::views::reverse;
 
@@ -388,7 +425,8 @@ ExprPtr single_term_opt(Product const& prod, IdxToSz&& idxsz,
   auto const tensors =
       prod | filter(&ExprPtr::template is<Tensor>) | ranges::to_vector;
   auto seq = detail::single_term_opt<Metric>(
-      TensorNetwork{tensors}, std::forward<IdxToSz>(idxsz), subnet_cse);
+      TensorNetwork{tensors}, std::forward<IdxToSz>(idxsz), subnet_cse,
+      is_volatile_leaf, n_replay);
   auto result = container::svector<ExprPtr>{};
   for (auto i : seq)
     if (i == -1) {

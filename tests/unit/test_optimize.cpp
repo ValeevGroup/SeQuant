@@ -199,6 +199,78 @@ TEST_CASE("optimize", "[optimize]") {
       REQUIRE(extract(res8, {1, 1}) == prod8.at(3));
     }
 
+    SECTION("Single term optimization: n_replay volatility weighting") {
+      using namespace sequant;
+
+      // PPL-shaped motif, fully contracted to a scalar:
+      //   A = g_{i1,a1}^{x1}   (persistent integral)
+      //   B = g_{i2,a2}^{x1}   (persistent integral)
+      //   t = t_{a1,a2}^{i1,i2} (VOLATILE amplitude)
+      // sizes: i=10 (O), a=100 (V), x=4 (X).
+      //
+      // (A*B)*t : build I=A*B over x  -> {i1,a1,i2,a2}  cost O^2 V^2 X
+      // (persistent)
+      //           then I*t            -> scalar         cost O^2 V^2 (volatile)
+      // (A*t)*B : build J=A*t over i1,a1 -> {x,i2,a2}   cost O^2 V^2 X
+      // (VOLATILE)
+      //           then J*B               -> scalar      cost X O V (volatile)
+      //
+      // n_replay=1  : (A*t)*B wins (O^2 V^2 X + X O V  <  O^2 V^2 X + O^2 V^2)
+      //               => t buried in an inner volatile intermediate.
+      // n_replay=10 : (A*B)*t wins (persistent build counted once; the only
+      //               x10 term is the cheap O^2 V^2 final step)
+      //               => t contracted LAST, persistent integral formed first.
+      auto idxsz = [](Index const& ix) {
+        return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+      };
+
+      auto prod = parse_expr_antisymm(
+                      L"g_{i1,a1}^{x1}"
+                      L" * g_{i2,a2}^{x1}"
+                      L" * t_{a1,a2}^{i1,i2}")
+                      ->as<Product>();
+
+      auto is_t = [](Tensor const& t) { return t.label() == L"t"; };
+
+      OptimizeOptions base;
+      base.idx_to_extent = idxsz;
+
+      // baseline: predicate set but n_replay==1 => weight is 1 everywhere =>
+      // reverts to current behavior. (The empty-predicate no-op is checked
+      // separately via opts_off below.)
+      auto opts1 = base;
+      opts1.is_volatile_leaf = is_t;
+      opts1.n_replay = 1;
+      auto res1 = optimize(ex<Product>(prod), opts1);
+
+      auto opts10 = base;
+      opts10.is_volatile_leaf = is_t;
+      opts10.n_replay = 10;
+      auto res10 = optimize(ex<Product>(prod), opts10);
+
+      // a bare top-level t leaf means t was contracted last (persistent-first)
+      auto top_has_bare_t = [](ExprPtr const& e) {
+        if (!e->is<Product>()) return false;
+        for (auto const& c : *e)
+          if (c->is<Tensor>() && c->as<Tensor>().label() == L"t") return true;
+        return false;
+      };
+
+      // weighting flips the chosen factorization
+      REQUIRE(res1 != res10);
+      // n_replay=1 reproduces today's behavior: t buried in an inner
+      // intermediate
+      REQUIRE_FALSE(top_has_bare_t(res1));
+      // n_replay=10: persistent g*g built first, t contracted last
+      REQUIRE(top_has_bare_t(res10));
+
+      // empty predicate => weighting off => identical to n_replay=1 regardless
+      auto opts_off = base;
+      opts_off.n_replay = 10;  // ignored: predicate empty
+      auto res_off = optimize(ex<Product>(prod), opts_off);
+      REQUIRE(res_off == res1);
+    }
+
     SECTION("Ensure single-value sums/products are not discarded") {
       auto sum = ex<Sum>();
       sum->as<Sum>().append(
