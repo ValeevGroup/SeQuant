@@ -159,6 +159,20 @@ TEST_CASE("cache_manager", "[cache_manager]") {
     }
   }
 
+  SECTION("for_each_key enumerates every registered key") {
+    auto const& man = man_const;
+    size_t count = 0;
+    man.for_each_key([&](node_type const& k) {
+      ++count;
+      REQUIRE(man.exists(k));
+    });
+    REQUIRE(count == n_decaying);
+
+    // empty manager: no keys, no invocations
+    auto const empty = manager_type::empty();
+    empty.for_each_key([](node_type const&) { FAIL("no keys expected"); });
+  }
+
   SECTION("Hash collision safety") {
     // Two structurally different nodes
     auto const n1 = make_node(L"R{a1;i1} = f{a1;i1}");
