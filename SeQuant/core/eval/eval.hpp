@@ -905,10 +905,13 @@ ResultPtr evaluate_antisymm(Args&&... args) {
 /// \p target_batch_size elements each (Result::mode_batches); if that yields at
 /// most one batch it declines (so small / unselected indices are left to the
 /// standard scheme). Otherwise, for each batch it evaluates the subtree by the
-/// standard scheme on a fresh scratch cache, with every leaf carrying \c K
-/// sliced to the batch's element range, and sums the partial results. This is
-/// exact because `sum_K = sum_{batches} sum_{K in batch}`, and never
-/// materializes the whole \c K extent of any intermediate at once.
+/// standard scheme on a *registered* scratch cache (see
+/// detail::make_batched_scratch) -- repeated subtrees, e.g. canonically-equal
+/// siblings, are evaluated once per batch and shared, exactly as the real
+/// cache would share them -- with every leaf carrying \c K sliced to the
+/// batch's element range, and sums the partial results. This is exact because
+/// `sum_K = sum_{batches} sum_{K in batch}`, and never materializes the whole
+/// \c K extent of any intermediate at once.
 ///
 /// \param le the leaf evaluator (captured).
 /// \param target_batch_size the desired size of each batch *in elements* (a
@@ -1074,8 +1077,6 @@ template <typename F, typename IndexPredicate = accept_any_index,
     ScopeGuardFactory make_scope_guard = {}, IsVolatile is_volatile = {}) {
   return [le = std::move(le), target_batch_size, accept, is_volatile,
           make_scope_guard](auto const& node, auto& cache) -> ResultPtr {
-    using cache_t = std::remove_reference_t<decltype(cache)>;
-
     auto const K = batch_axis(node, accept);
     if (!K) return nullptr;
 
@@ -1101,9 +1102,23 @@ template <typename F, typename IndexPredicate = accept_any_index,
     auto const scope_guard = make_scope_guard(batches.size());
     (void)scope_guard;
 
+    // The scratch cache for the per-batch replays: registered from the
+    // subtree itself (same canonical-equality counting as the real cache), so
+    // repeated subtrees -- e.g. two canonically-equal children of the node --
+    // are evaluated once per batch and shared, not re-derived per occurrence.
+    // Carries no custom evaluator (no re-interception) and keeps the partial,
+    // sliced intermediates out of the real cache; reset() between batches
+    // drops the previous batch's partials (seeded entries are registered
+    // persistent and survive).
+    using node_t = std::remove_cvref_t<decltype(node)>;
+    std::vector<std::pair<node_t const*, Index>> const members{{&node, *K}};
+    auto bs = detail::make_batched_scratch(members, cache);
+    for (auto const* s : bs.seeds) (void)bs.cache.store(*s, cache.access(*s));
+
     ResultPtr acc;
     for (auto const& [e_lo, e_hi] : batches) {
       if (e_lo == e_hi) continue;
+      bs.cache.reset();
 
       // leaf evaluator that slices every leaf carrying K to this element batch;
       // others pass through unchanged.
@@ -1115,10 +1130,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
         return r;
       };
 
-      // standard scheme on a fresh scratch cache: no re-interception, and the
-      // (partial, sliced) intermediates do not pollute the real cache.
-      auto scratch = cache_t::empty();
-      ResultPtr part = evaluate(node, le_g, scratch);
+      ResultPtr part = evaluate(node, le_g, bs.cache);
       if (!acc)
         acc = std::move(part);
       else

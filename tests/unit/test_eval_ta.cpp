@@ -1797,3 +1797,44 @@ TEST_CASE("eval_batched_scratch", "[eval]") {
     REQUIRE_FALSE(bs.cache.exists(node.left()));
   }
 }
+
+TEST_CASE("eval_batched_custom_evaluator dedups within-batch repeats",
+          "[eval]") {
+  using sequant::evaluate;
+  using sequant::make_batched_custom_evaluator;
+  using TA::TArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+  using cache_t = sequant::CacheManager<node_t>;
+
+  auto& world = TA::get_default_world();
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 12};
+  yield_.set_max_tile(4);
+
+  // W-analog: root contracts a1; the two children are canonically equal
+  auto const expr = sequant::deserialize<sequant::ExprPtr>(
+      L"(g_{a2}^{i1} * h_{a1,i3}^{a2}) * (g_{a3}^{i2} * h_{a1,i4}^{a3})");
+  std::string const target = "i_1,i_3,i_2,i_4";
+  auto const node = eval_node(expr);
+  auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
+
+  std::map<std::wstring, int> n_yield;
+  auto counting_yield = [&yield_, &n_yield](node_t const& n) {
+    if (n->is_tensor()) ++n_yield[std::wstring(n->as_tensor().label())];
+    return yield_(n);
+  };
+
+  // a1 is unoccupied: extent 12, tiles of 4; target 4 elements -> 3 batches
+  int const n_b = 3;
+  auto cache = cache_t::empty();
+  cache.set_custom_evaluator(
+      make_batched_custom_evaluator(counting_yield, std::size_t{4}));
+  auto const res =
+      evaluate(node, target, counting_yield, cache)->get<TArrayD>();
+  REQUIRE(equal_tarrays<Loose>(res, ref));
+
+  // with within-batch dedup: per batch the left child evaluates (g and h
+  // yielded once each), the right child is a scratch cache hit; plus one h
+  // from the evaluator's mode_batches probe of the a1-carrying leaf
+  CHECK(n_yield[L"h"] == n_b + 1);
+  CHECK(n_yield[L"g"] == n_b);
+}
