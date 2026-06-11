@@ -1753,10 +1753,12 @@ TEST_CASE("eval_batched_scratch", "[eval]") {
   using cache_t = sequant::CacheManager<node_t>;
   using sequant::Index;
 
-  // W-analog: two canonically-equal internal siblings, both carrying the
-  // batch axis a_1 (free at the children, contracted at the root)
+  // W-analog of the PNO-CCSD PPL intermediate: two canonically-equal internal
+  // siblings, both carrying the auxiliary batch axis x_1 (free at the
+  // children, contracted at the root; an aux-aux edge, like the DF index K).
+  // Every orbital contraction pairs a bra with a ket.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(g_{a2}^{i1} * h_{a1,i3}^{a2}) * (g_{a3}^{i2} * h_{a1,i4}^{a3})");
+      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (g{a_3;i_2;x_1} * h{i_4;a_3})");
   auto const node = eval_node(expr);
   REQUIRE_FALSE(node.leaf());
   REQUIRE_FALSE(node.left().leaf());
@@ -1766,7 +1768,7 @@ TEST_CASE("eval_batched_scratch", "[eval]") {
     auto cm = sequant::cache_manager(ranges::views::single(node), 2);
     REQUIRE(cm.max_life(node.left()) == 2);
   }
-  auto const a1 = [&] {  // the contracted (batch) axis
+  auto const x1 = [&] {  // the contracted (batch) axis
     auto axes = sequant::contracted_indices(node);
     REQUIRE(axes.size() == 1);
     return axes[0];
@@ -1775,7 +1777,7 @@ TEST_CASE("eval_batched_scratch", "[eval]") {
   auto real = cache_t::empty();
 
   SECTION("registers consistent repeats with in-pass counts") {
-    std::vector<std::pair<node_t const*, Index>> const members{{&node, a1}};
+    std::vector<std::pair<node_t const*, Index>> const members{{&node, x1}};
     auto bs = sequant::detail::make_batched_scratch(members, real);
     REQUIRE(bs.cache.exists(node.left()));
     REQUIRE(bs.cache.max_life(node.left()) == 2);
@@ -1788,11 +1790,11 @@ TEST_CASE("eval_batched_scratch", "[eval]") {
     // axis (an index the shared subnode does not carry) gives it signature
     // 'absent' while the first gives a position -> inconsistent -> unshared
     auto const expr2 = sequant::deserialize<sequant::ExprPtr>(
-        L"(g_{a2}^{i1} * h_{a1,i3}^{a2}) * p_{a1}^{i5}");
+        L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}");
     auto const node2 = eval_node(expr2);
     auto const bogus_axis = Index(L"i_9");
     std::vector<std::pair<node_t const*, Index>> const members{
-        {&node, a1}, {&node2, bogus_axis}};
+        {&node, x1}, {&node2, bogus_axis}};
     auto bs = sequant::detail::make_batched_scratch(members, real);
     REQUIRE_FALSE(bs.cache.exists(node.left()));
   }
@@ -1807,12 +1809,13 @@ TEST_CASE("eval_batched_custom_evaluator dedups within-batch repeats",
   using cache_t = sequant::CacheManager<node_t>;
 
   auto& world = TA::get_default_world();
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 12};
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 12, 12};
   yield_.set_max_tile(4);
 
-  // W-analog: root contracts a1; the two children are canonically equal
+  // W-analog: root contracts the aux index x_1; the two children are
+  // canonically equal
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(g_{a2}^{i1} * h_{a1,i3}^{a2}) * (g_{a3}^{i2} * h_{a1,i4}^{a3})");
+      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (g{a_3;i_2;x_1} * h{i_4;a_3})");
   std::string const target = "i_1,i_3,i_2,i_4";
   auto const node = eval_node(expr);
   auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
@@ -1823,7 +1826,7 @@ TEST_CASE("eval_batched_custom_evaluator dedups within-batch repeats",
     return yield_(n);
   };
 
-  // a1 is unoccupied: extent 12, tiles of 4; target 4 elements -> 3 batches
+  // x_1 is auxiliary: extent 12, tiles of 4; target 4 elements -> 3 batches
   int const n_b = 3;
   auto cache = cache_t::empty();
   cache.set_custom_evaluator(
@@ -1833,10 +1836,10 @@ TEST_CASE("eval_batched_custom_evaluator dedups within-batch repeats",
   REQUIRE(equal_tarrays<Loose>(res, ref));
 
   // with within-batch dedup: per batch the left child evaluates (g and h
-  // yielded once each), the right child is a scratch cache hit; plus one h
-  // from the evaluator's mode_batches probe of the a1-carrying leaf
-  CHECK(n_yield[L"h"] == n_b + 1);
-  CHECK(n_yield[L"g"] == n_b);
+  // yielded once each), the right child is a scratch cache hit; plus one g
+  // from the evaluator's mode_batches probe of the x_1-carrying leaf
+  CHECK(n_yield[L"g"] == n_b + 1);
+  CHECK(n_yield[L"h"] == n_b);
 }
 
 TEST_CASE("eval_batched_custom_evaluator group replay", "[eval]") {
@@ -1846,21 +1849,22 @@ TEST_CASE("eval_batched_custom_evaluator group replay", "[eval]") {
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
 
   auto& world = TA::get_default_world();
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 12};
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 12, 12};
   yield_.set_max_tile(4);
 
   // Two persistent finals sharing the sub-intermediate S = g*h (carries the
-  // batch axis a1):
-  //   F1 = S * S'   (canonically-equal siblings; contracts a1)
-  //   F2 = S * p    (contracts a1)
-  // Volatile heads (label "t") make F1 and F2 persistent.
+  // auxiliary batch axis x_1):
+  //   F1 = S * S'   (canonically-equal siblings; contracts x_1, aux-aux)
+  //   F2 = S * p    (contracts x_1, aux-aux)
+  // Volatile heads (label "t") make F1 and F2 persistent. Every orbital
+  // contraction pairs a bra with a ket.
   auto const t1 = sequant::deserialize<sequant::ExprPtr>(
-      L"((g_{a2}^{i1} * h_{a1,i3}^{a2}) * (g_{a3}^{i2} * h_{a1,i4}^{a3}))"
-      L" * t_{i1,i3}^{i5,i6}");
+      L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * (g{a_3;i_2;x_1} * h{i_4;a_3}))"
+      L" * t{i_1,i_2;i_3,i_9}");
   auto const t2 = sequant::deserialize<sequant::ExprPtr>(
-      L"((g_{a2}^{i1} * h_{a1,i3}^{a2}) * p_{a1}^{i5}) * t_{i1,i3}^{i6,i7}");
-  std::string const tgt1 = "i_2,i_4,i_5,i_6";
-  std::string const tgt2 = "i_5,i_6,i_7";
+      L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}) * t{i_1;i_3}");
+  std::string const tgt1 = "i_4,i_9";
+  std::string const tgt2 = "i_5,i_6";
   auto const n1 = eval_node(t1);
   auto const n2 = eval_node(t2);
 
@@ -1894,11 +1898,11 @@ TEST_CASE("eval_batched_custom_evaluator group replay", "[eval]") {
   REQUIRE(equal_tarrays<Loose>(res1, ref1));
   REQUIRE(equal_tarrays<Loose>(res2, ref2));
 
-  // S evaluated once per batch (n_b = 3), shared by F1 (x2) and F2 (x1):
-  // h: 3 (S evals) + 1 (trigger probe) + 1 (F2 candidacy probe) = 5
-  // g: 3; p: 3 (sliced, once per batch); t: 2 (one per term head)
-  CHECK(n_yield[L"h"] == 5);
-  CHECK(n_yield[L"g"] == 3);
+  // S evaluated once per batch (n_b = 3), shared by F1 (twice) and F2 (once):
+  // g: 3 (S evals) + 1 (trigger probe) + 1 (F2 candidacy probe) = 5
+  // h: 3; p: 3 (sliced, once per batch); t: 2 (one per term head)
+  CHECK(n_yield[L"g"] == 5);
+  CHECK(n_yield[L"h"] == 3);
   CHECK(n_yield[L"p"] == 3);
   CHECK(n_yield[L"t"] == 2);
 }
@@ -1911,19 +1915,20 @@ TEST_CASE("eval_batched_custom_evaluator group replay layers nested finals",
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
 
   auto& world = TA::get_default_world();
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 12};
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 12, 12};
   yield_.set_max_tile(4);
 
-  // F_in = (g*h)*p (contracts a1; persistent) nests inside F_out, which
-  // contracts its own axis a6:  F_out = ((F_in * r) * q), r and q carry a6.
-  // Triggering at F_out must build F_in in an inner layer first, then seed
-  // its full value into F_out's pass (F_in carries no a6).
+  // F_in = (g*h)*p (contracts the aux index x_1; persistent) nests inside
+  // F_out, which contracts its own aux axis x_2:  F_out = (F_in * r) * q,
+  // with r and q carrying x_2. Triggering at F_out must build F_in in an
+  // inner layer first, then seed its full value into F_out's pass (F_in
+  // carries no x_2). Every orbital contraction pairs a bra with a ket.
   auto const t_out = sequant::deserialize<sequant::ExprPtr>(
-      L"((((g_{a2}^{i1} * h_{a1,i3}^{a2}) * p_{a1}^{i5}) * r_{i5}^{a6})"
-      L" * q_{a6}^{i7}) * t_{i1,i3}^{i8,i9}");
+      L"((((g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}) * r{i_6;i_7;x_2})"
+      L" * q{i_7;i_8;x_2}) * t{i_1;i_3,i_9}");
   auto const t_in = sequant::deserialize<sequant::ExprPtr>(
-      L"((g_{a2}^{i1} * h_{a1,i3}^{a2}) * p_{a1}^{i5}) * t_{i1,i3}^{i6,i7}");
-  std::string const tgt_out = "i_7,i_8,i_9";
+      L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}) * t{i_1;i_3,i_7}");
+  std::string const tgt_out = "i_5,i_8,i_9";
   std::string const tgt_in = "i_5,i_6,i_7";
   auto const n_out = eval_node(t_out);
   auto const n_in = eval_node(t_in);
@@ -1949,8 +1954,14 @@ TEST_CASE("eval_batched_custom_evaluator group replay layers nested finals",
     if (n->is_tensor()) ++n_yield[std::wstring(n->as_tensor().label())];
     return yield_(n);
   };
+  // batch only over auxiliary indices (as a DF-batched application would)
+  auto const aux_space =
+      sequant::get_default_context().index_space_registry()->retrieve(L"x");
+  auto accept_aux = [aux_space](sequant::Index const& ix) {
+    return ix.space() == aux_space;
+  };
   cache.set_custom_evaluator(make_batched_custom_evaluator(
-      counting_yield, std::size_t{4}, sequant::accept_any_index{},
+      counting_yield, std::size_t{4}, accept_aux,
       sequant::make_no_scope_guard{}, is_volatile_t));
 
   auto const res_out =
@@ -1962,12 +1973,13 @@ TEST_CASE("eval_batched_custom_evaluator group replay layers nested finals",
   REQUIRE(equal_tarrays<Loose>(res_out, ref_out));
   REQUIRE(equal_tarrays<Loose>(res_in, ref_in));
 
-  // layer 1 (F_in over a1, 3 batches): g,h,p once per batch; layer 2 (F_out
-  // over a6): F_in SEEDED (g,h,p untouched), r,q sliced once per batch.
-  // Probes: +1 r (trigger, a6-carrying leaf), +1 h (F_in candidacy, a1 leaf).
-  // If seeding failed and F_in were re-derived per batch, g/h/p would be 6+.
-  CHECK(n_yield[L"h"] == 4);
-  CHECK(n_yield[L"g"] == 3);
+  // layer 1 (F_in over x_1, 3 batches): g,h,p once per batch; layer 2 (F_out
+  // over x_2): F_in SEEDED (g,h,p untouched), r,q sliced once per batch.
+  // Probes: +1 r (trigger, x_2-carrying leaf), +1 g (F_in candidacy, x_1
+  // leaf). If seeding failed and F_in were re-derived per batch, g/h/p
+  // would be 6+.
+  CHECK(n_yield[L"g"] == 4);
+  CHECK(n_yield[L"h"] == 3);
   CHECK(n_yield[L"p"] == 3);
   CHECK(n_yield[L"r"] == 4);
   CHECK(n_yield[L"q"] == 3);
