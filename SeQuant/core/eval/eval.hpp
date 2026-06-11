@@ -904,14 +904,26 @@ ResultPtr evaluate_antisymm(Args&&... args) {
 /// backend to partition \c K into contiguous element-range batches of about
 /// \p target_batch_size elements each (Result::mode_batches); if that yields at
 /// most one batch it declines (so small / unselected indices are left to the
-/// standard scheme). Otherwise, for each batch it evaluates the subtree by the
-/// standard scheme on a *registered* scratch cache (see
-/// detail::make_batched_scratch) -- repeated subtrees, e.g. canonically-equal
-/// siblings, are evaluated once per batch and shared, exactly as the real
-/// cache would share them -- with every leaf carrying \c K sliced to the
-/// batch's element range, and sums the partial results. This is exact because
-/// `sum_K = sum_{batches} sum_{K in batch}`, and never materializes the whole
-/// \c K extent of any intermediate at once.
+/// standard scheme).
+///
+/// Otherwise it *replays the build of every compatible persistent final* in
+/// the same batch passes: the group is the trigger node plus every key of
+/// \p cache that is registered persistent, not yet alive, and batches over an
+/// axis with the identical realized partition. Per batch, each group member is
+/// evaluated by the standard scheme -- with every leaf carrying the member's
+/// batch axis sliced to the batch's element range -- on a shared *registered*
+/// scratch cache (see detail::make_batched_scratch), so sub-intermediates
+/// repeated within a member (canonically-equal siblings) or shared between
+/// members are evaluated once per batch, exactly as the real cache would share
+/// them; the per-member partials are summed across batches. This is exact
+/// because `sum_K = sum_{batches} sum_{K in batch}`, and never materializes
+/// the whole batch-axis extent of any intermediate at once. Completed members
+/// are stored into \p cache (canonical-phase convention); the trigger's result
+/// is returned for evaluate() to cache as usual. Members nested inside other
+/// members evaluate in earlier passes and are then seeded (slice-free w.r.t.
+/// the outer batch axis) or re-derived sliced in the outer pass. Considering a
+/// group candidate costs one leaf evaluation (the mode_batches probe); with an
+/// unregistered (empty) cache the group is just the trigger.
 ///
 /// \param le the leaf evaluator (captured).
 /// \param target_batch_size the desired size of each batch *in elements* (a
@@ -1095,6 +1107,65 @@ template <typename F, typename IndexPredicate = accept_any_index,
     if (batches.size() <= 1)
       return nullptr;  // nothing to gain (or unbatchable)
 
+    using node_t = std::remove_cvref_t<decltype(node)>;
+    using member_t = std::pair<node_t const*, Index>;
+    TreeNodeEqualityComparator<node_t> const eq;
+
+    // The replay group: the trigger plus every registered persistent key that
+    // is not yet alive and batches over an axis with the identical realized
+    // partition. All compatible persistent finals stream over the batch axis
+    // in the same passes, so sub-intermediates shared between them (wherever
+    // the scratch's slicing-signature guard admits sharing -- equal canonical
+    // positions of the batch axis plus equal element ranges imply identical
+    // slices) are evaluated once per batch instead of once per consumer.
+    // The cost of considering a candidate is one leaf evaluation (the
+    // mode_batches probe). With an unregistered (empty) real cache the group
+    // is just the trigger.
+    std::vector<member_t> group{{&node, *K}};
+    cache.for_each_key([&](node_t const& k) {
+      if (!cache.persistent(k) || cache.alive(k)) return;
+      if (eq(k, node)) return;  // the trigger occupies its own slot
+      auto const Kk = batch_axis(k, accept);
+      if (!Kk) return;
+      if (subtree_any(k, is_volatile)) return;  // defensive: P implies NV
+      auto const lk = find_leaf_carrying(k, *Kk);
+      if (!lk) return;
+      if (le(lk->first)->mode_batches(lk->second, target_batch_size) != batches)
+        return;
+      group.emplace_back(&k, *Kk);
+    });
+
+    // Layer by nesting: a member whose subtree contains another member
+    // evaluates in a later layer, with the inner result by then alive in the
+    // real cache -- seeded into the outer pass when slice-free w.r.t. the
+    // outer batch axis, re-derived sliced (correct, unshared) otherwise.
+    auto contains = [&eq](node_t const& outer, node_t const& inner) -> bool {
+      auto rec = [&eq, &inner](auto&& self, node_t const& n) -> bool {
+        if (eq(n, inner)) return true;
+        if (n.leaf()) return false;
+        return self(self, n.left()) || self(self, n.right());
+      };
+      if (outer.leaf()) return false;
+      return rec(rec, outer.left()) || rec(rec, outer.right());
+    };
+    std::vector<std::vector<member_t>> layers;
+    {
+      std::vector<member_t> remaining = std::move(group);
+      while (!remaining.empty()) {
+        std::vector<member_t> layer, rest;
+        for (auto const& m : remaining) {
+          bool const outer = std::any_of(
+              remaining.begin(), remaining.end(), [&](member_t const& o) {
+                return m.first != o.first && contains(*m.first, *o.first);
+              });
+          (outer ? rest : layer).push_back(m);
+        }
+        SEQUANT_ASSERT(!layer.empty());  // containment is a strict order
+        layers.push_back(std::move(layer));
+        remaining = std::move(rest);
+      }
+    }
+
     // RAII scope for the batched partial contractions; a backend-supplied
     // factory may relax block-sparse screening here (scaled by the batch count)
     // so per-batch screening does not drop contributions that survive over the
@@ -1102,41 +1173,61 @@ template <typename F, typename IndexPredicate = accept_any_index,
     auto const scope_guard = make_scope_guard(batches.size());
     (void)scope_guard;
 
-    // The scratch cache for the per-batch replays: registered from the
-    // subtree itself (same canonical-equality counting as the real cache), so
-    // repeated subtrees -- e.g. two canonically-equal children of the node --
-    // are evaluated once per batch and shared, not re-derived per occurrence.
-    // Carries no custom evaluator (no re-interception) and keeps the partial,
-    // sliced intermediates out of the real cache; reset() between batches
-    // drops the previous batch's partials (seeded entries are registered
-    // persistent and survive).
-    using node_t = std::remove_cvref_t<decltype(node)>;
-    std::vector<std::pair<node_t const*, Index>> const members{{&node, *K}};
-    auto bs = detail::make_batched_scratch(members, cache);
-    for (auto const* s : bs.seeds) (void)bs.cache.store(*s, cache.access(*s));
+    ResultPtr trigger_result;
+    for (auto const& layer : layers) {
+      // The layer's scratch cache: registered from the member subtrees (same
+      // canonical-equality counting as the real cache), so repeated subtrees
+      // -- canonically-equal siblings within a member as well as
+      // sub-intermediates shared between members -- are evaluated once per
+      // batch. Carries no custom evaluator (no re-interception) and keeps the
+      // partial, sliced intermediates out of the real cache; reset() between
+      // batches drops the previous batch's partials, while pre-seeded alive
+      // persistent entries (registered persistent in the scratch) survive.
+      auto bs = detail::make_batched_scratch(layer, cache);
+      for (auto const* s : bs.seeds) (void)bs.cache.store(*s, cache.access(*s));
 
-    ResultPtr acc;
-    for (auto const& [e_lo, e_hi] : batches) {
-      if (e_lo == e_hi) continue;
-      bs.cache.reset();
+      std::vector<ResultPtr> acc(layer.size());
+      for (auto const& [e_lo, e_hi] : batches) {
+        if (e_lo == e_hi) continue;
+        bs.cache.reset();
+        for (std::size_t m = 0; m != layer.size(); ++m) {
+          auto const& [mem, Km] = layer[m];
+          // leaf evaluator that slices every leaf carrying the member's batch
+          // axis to this element batch; others pass through unchanged.
+          auto le_g = [&le, &Km, e_lo = e_lo,
+                       e_hi = e_hi](auto const& leaf_node) -> ResultPtr {
+            ResultPtr r = le(leaf_node);
+            if (auto const p = index_position(leaf_node, Km))
+              return r->slice_mode(*p, e_lo, e_hi);
+            return r;
+          };
+          ResultPtr part = evaluate(*mem, le_g, bs.cache);
+          if (!acc[m])
+            acc[m] = std::move(part);
+          else
+            acc[m]->add_inplace(*part);
+        }
+      }
 
-      // leaf evaluator that slices every leaf carrying K to this element batch;
-      // others pass through unchanged.
-      auto le_g = [&le, &K, e_lo = e_lo,
-                   e_hi = e_hi](auto const& leaf_node) -> ResultPtr {
-        ResultPtr r = le(leaf_node);
-        if (auto const p = index_position(leaf_node, *K))
-          return r->slice_mode(*p, e_lo, e_hi);
-        return r;
-      };
-
-      ResultPtr part = evaluate(node, le_g, bs.cache);
-      if (!acc)
-        acc = std::move(part);
-      else
-        acc->add_inplace(*part);
+      // Store the members into the real cache under the canonical-phase
+      // convention (mirroring evaluate()'s Checked store), eagerly per layer
+      // so later layers can seed them. The trigger is returned instead: its
+      // Checked wrapper stores it (a direct store here would double-decay a
+      // non-persistent trigger's life count).
+      for (std::size_t m = 0; m != layer.size(); ++m) {
+        auto const* mem = layer[m].first;
+        if (mem == &node) {
+          trigger_result = std::move(acc[m]);
+          continue;
+        }
+        ResultPtr v = std::move(acc[m]);
+        if (auto const ph = (*mem)->canon_phase(); ph != 1)
+          v = v->mult_by_phase(ph);
+        (void)cache.store(*mem, std::move(v));
+      }
     }
-    return acc;
+    SEQUANT_ASSERT(trigger_result);
+    return trigger_result;
   };
 }
 
