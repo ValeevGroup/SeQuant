@@ -21,6 +21,7 @@
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/intersperse.hpp>
 #include <range/v3/view/join.hpp>
+#include <range/v3/view/single.hpp>
 #include <range/v3/view/transform.hpp>
 
 #include <cmath>
@@ -1744,5 +1745,55 @@ TEST_CASE("ta_tot_conj_complex", "[eval]") {
         CHECK(cinner[k].imag() == Catch::Approx(-sinner[k].imag()));
       }
     }
+  }
+}
+
+TEST_CASE("eval_batched_scratch", "[eval]") {
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+  using cache_t = sequant::CacheManager<node_t>;
+  using sequant::Index;
+
+  // W-analog: two canonically-equal internal siblings, both carrying the
+  // batch axis a_1 (free at the children, contracted at the root)
+  auto const expr = sequant::deserialize<sequant::ExprPtr>(
+      L"(g_{a2}^{i1} * h_{a1,i3}^{a2}) * (g_{a3}^{i2} * h_{a1,i4}^{a3})");
+  auto const node = eval_node(expr);
+  REQUIRE_FALSE(node.leaf());
+  REQUIRE_FALSE(node.left().leaf());
+  REQUIRE_FALSE(node.right().leaf());
+  // structural precondition: the two children ARE canonically equal
+  {
+    auto cm = sequant::cache_manager(ranges::views::single(node), 2);
+    REQUIRE(cm.max_life(node.left()) == 2);
+  }
+  auto const a1 = [&] {  // the contracted (batch) axis
+    auto axes = sequant::contracted_indices(node);
+    REQUIRE(axes.size() == 1);
+    return axes[0];
+  }();
+
+  auto real = cache_t::empty();
+
+  SECTION("registers consistent repeats with in-pass counts") {
+    std::vector<std::pair<node_t const*, Index>> const members{{&node, a1}};
+    auto bs = sequant::detail::make_batched_scratch(members, real);
+    REQUIRE(bs.cache.exists(node.left()));
+    REQUIRE(bs.cache.max_life(node.left()) == 2);
+    REQUIRE_FALSE(bs.cache.exists(node));  // member roots are not registered
+    REQUIRE(bs.seeds.empty());
+  }
+
+  SECTION("signature-inconsistent subnodes are not registered") {
+    // the same subtree appears under two members, but the second member's
+    // axis (an index the shared subnode does not carry) gives it signature
+    // 'absent' while the first gives a position -> inconsistent -> unshared
+    auto const expr2 = sequant::deserialize<sequant::ExprPtr>(
+        L"(g_{a2}^{i1} * h_{a1,i3}^{a2}) * p_{a1}^{i5}");
+    auto const node2 = eval_node(expr2);
+    auto const bogus_axis = Index(L"i_9");
+    std::vector<std::pair<node_t const*, Index>> const members{
+        {&node, a1}, {&node2, bogus_axis}};
+    auto bs = sequant::detail::make_batched_scratch(members, real);
+    REQUIRE_FALSE(bs.cache.exists(node.left()));
   }
 }

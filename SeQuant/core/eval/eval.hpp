@@ -975,6 +975,97 @@ template <typename Node, typename Pred>
   return subtree_any(n.left(), pred) || subtree_any(n.right(), pred);
 }
 
+namespace detail {
+
+/// The scratch cache for one batched replay pass, plus the alive persistent
+/// real-cache entries to pre-seed it with (registered persistent in the
+/// scratch, so they survive the per-batch reset()).
+template <typename TreeNode, bool FHC>
+struct BatchedScratch {
+  CacheManager<TreeNode, FHC> cache;
+  std::vector<TreeNode const*> seeds;
+};
+
+/// \brief Builds the scratch CacheManager for one batched replay pass over
+/// \p members (each a subtree root paired with its batch axis).
+///
+/// Walks every member subtree with the same pruned counting walk as
+/// cache_manager() (descend only on first visit of a canonical-equal node, so
+/// counts match access counts under caching) and registers every internal
+/// subnode that repeats AND has a consistent slicing signature -- the position
+/// of the containing member's batch axis in the subnode's canon_indices(), or
+/// its absence -- across all occurrences. Signature consistency is what makes
+/// a scratch hit exact across members: canonical equality maps the index at
+/// canonical position p to the index at position p, so equal signatures plus
+/// equal realized element ranges (guaranteed by the caller's grouping) imply
+/// identical slices. Inconsistently-sliced subnodes are not registered and so
+/// are evaluated per occurrence, unshared. Count inexactness arising from the
+/// pruned walk is benign: an undercount makes evaluate() recompute a drained
+/// entry, an overcount keeps an entry until the per-batch reset().
+///
+/// Subnodes whose signature is consistently 'absent' (no leaf below carries
+/// the axis -- the axis is contracted at the member's root, so a subtree
+/// containing an axis-carrying leaf carries the axis free in its
+/// canon_indices()) have batch-invariant full values; those that are alive
+/// persistent entries of \p real are returned as seeds, and the caller copies
+/// their values into the scratch before the batch loop.
+template <typename TreeNode, bool FHC, typename Members>
+[[nodiscard]] BatchedScratch<TreeNode, FHC> make_batched_scratch(
+    Members const& members, CacheManager<TreeNode, FHC> const& real) {
+  using Hasher = TreeNodeHasher<TreeNode, FHC>;
+  using Comp = TreeNodeEqualityComparator<TreeNode>;
+  struct Meta {
+    std::size_t count = 0;
+    std::optional<std::size_t> sig;
+    bool consistent = true;
+  };
+  std::unordered_map<TreeNode const*, Meta, Hasher, Comp> meta;
+
+  auto visit = [&meta](auto&& self, TreeNode const& n,
+                       Index const& axis) -> void {
+    if (n.leaf()) return;
+    auto const sig = index_position(n, axis);
+    auto const [it, first] = meta.try_emplace(&n);
+    auto& e = it->second;
+    if (first)
+      e.sig = sig;
+    else if (e.sig != sig)
+      e.consistent = false;
+    ++e.count;
+    if (!first) return;  // equal node already walked: deeper accesses shared
+    self(self, n.left(), axis);
+    self(self, n.right(), axis);
+  };
+  for (auto const& [root, axis] : members) {
+    // member roots themselves are accumulated by the caller, not cached here
+    if (root->leaf()) continue;
+    visit(visit, root->left(), axis);
+    visit(visit, root->right(), axis);
+  }
+
+  std::unordered_map<TreeNode, std::size_t, Hasher, Comp> reg;
+  std::unordered_set<TreeNode, Hasher, Comp> seed_keys;
+  std::vector<TreeNode const*> seeds;
+  for (auto const& [ptr, e] : meta) {
+    if (!e.consistent) continue;  // ambiguous slicing: never share
+    bool const seedable = !e.sig && real.persistent(*ptr) && real.alive(*ptr);
+    if (seedable) {
+      seeds.push_back(ptr);
+      seed_keys.insert(*ptr);
+      reg.emplace(*ptr, e.count);  // count is ignored for persistent entries
+    } else if (e.count >= 2) {
+      reg.emplace(*ptr, e.count);
+    }
+  }
+  auto is_persistent = [seed_keys = std::move(seed_keys)](TreeNode const& n) {
+    return seed_keys.contains(n);
+  };
+  return {CacheManager<TreeNode, FHC>{std::move(reg), std::move(is_persistent)},
+          std::move(seeds)};
+}
+
+}  // namespace detail
+
 template <typename F, typename IndexPredicate = accept_any_index,
           typename ScopeGuardFactory = make_no_scope_guard,
           typename IsVolatile = never_volatile>
