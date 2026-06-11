@@ -925,6 +925,21 @@ ResultPtr evaluate_antisymm(Args&&... args) {
 /// group candidate costs one leaf evaluation (the mode_batches probe); with an
 /// unregistered (empty) cache the group is just the trigger.
 ///
+/// Why a *group* of trees rather than the trigger alone: sub-intermediates are
+/// shared between separately-intercepted finals, and a scratch scoped to one
+/// final cannot see the other consumers. Concretely, in DF-based PNO-CCSD the
+/// half-transformed DF factor gC = g.C (g the 3-index DF factor carrying the
+/// aux index K, C the PNO coefficients) feeds both canonically-equal gCC
+/// children of the particle-particle-ladder intermediate W = gCC.gCC *and* the
+/// triply-transformed final gCCC. Unbatched, the real cache builds gC once and
+/// serves all three uses (its keys are canonical, max_life = 3). Batching each
+/// final in isolation rebuilds gC n_batches times *per final* -- the shared
+/// scratch of a single pass dedups W's two gCC children within each batch, but
+/// cross-final sharing with gCCC is restored only by streaming both finals
+/// over the same batch partition in the same passes, which brings gC back to
+/// one evaluation per batch (work parity with the unbatched path, at sliced
+/// rather than full intermediate peak memory).
+///
 /// \param le the leaf evaluator (captured).
 /// \param target_batch_size the desired size of each batch *in elements* (a
 ///        user knob; no memory model is assumed). Backend-neutral: a tiled
