@@ -1005,8 +1005,11 @@ struct BatchedScratch {
 /// \p members (each a subtree root paired with its batch axis).
 ///
 /// Walks every member subtree with the same pruned counting walk as
-/// cache_manager() (descend only on first visit of a canonical-equal node, so
-/// counts match access counts under caching) and registers every internal
+/// cache_manager() (descend on first visit of a canonical-equal node, so
+/// counts match access counts under caching -- and also on a re-encounter
+/// whose slicing signature differs from the first visit's, so that
+/// descendants' signatures under an inconsistently-sliced occurrence are
+/// recorded rather than hidden by the prune) and registers every internal
 /// subnode that repeats AND has a consistent slicing signature -- the position
 /// of the containing member's batch axis in the subnode's canon_indices(), or
 /// its absence -- across all occurrences. Signature consistency is what makes
@@ -1047,7 +1050,17 @@ template <typename TreeNode, bool FHC, typename Members>
     else if (e.sig != sig)
       e.consistent = false;
     ++e.count;
-    if (!first) return;  // equal node already walked: deeper accesses shared
+    // Prune a re-encounter only when its signature matches the first one:
+    // canonical equality maps canonical position p to position p, so an equal
+    // signature here implies the descendants' signatures equal those already
+    // recorded on the first walk (deeper accesses shared and counted). A
+    // differing signature gives no such guarantee -- descend so descendants'
+    // signatures under this occurrence are recorded too; otherwise a
+    // descendant sliced differently only under this (unshared, pruned)
+    // occurrence could pass the guard and serve wrong slices. The extra
+    // descendant counts are real accesses: an inconsistently-sliced occurrence
+    // is evaluated per occurrence, not served from the scratch at n.
+    if (!first && e.sig == sig) return;
     self(self, n.left(), axis);
     self(self, n.right(), axis);
   };

@@ -1798,6 +1798,49 @@ TEST_CASE("eval_batched_scratch", "[eval]") {
     auto bs = sequant::detail::make_batched_scratch(members, real);
     REQUIRE_FALSE(bs.cache.exists(node.left()));
   }
+
+  SECTION("descends through inconsistently-sliced re-encounters") {
+    // M1 (axis x_1) = X * D2 with X = (D * u): D's two occurrences (inside X
+    // and as the root's sibling D2) are visited with the same signature, so D
+    // alone would be registered. M2 (bogus axis) re-encounters X with
+    // signature 'absent' -- inconsistent, unshared. The walk must descend
+    // through that re-encounter: under it D's signature is also 'absent', so
+    // sharing D would serve M2's (per-occurrence) evaluation of X a wrongly
+    // sliced value. D must end up unregistered.
+    auto const expr_m1 = sequant::deserialize<sequant::ExprPtr>(
+        L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * u{i_5;i_3}) * "
+        L"(g{a_3;i_2;x_1} * h{i_4;a_3})");
+    auto const m1 = eval_node(expr_m1);
+    auto const expr_m2 = sequant::deserialize<sequant::ExprPtr>(
+        L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * u{i_5;i_3}) * p{i_6;i_7;x_1}");
+    auto const m2 = eval_node(expr_m2);
+    // structural preconditions: m1 = X * D2, X = D * u, D2 == D == m2's X
+    // child canonically
+    sequant::TreeNodeEqualityComparator<node_t> const eq;
+    REQUIRE_FALSE(m1.left().leaf());
+    REQUIRE_FALSE(m1.left().left().leaf());
+    auto const& D = m1.left().left();
+    REQUIRE(eq(D, m1.right()));
+    REQUIRE(eq(m1.left(), m2.left()));
+
+    // positive control: M1 alone registers D (count 2, consistent signature)
+    {
+      std::vector<std::pair<node_t const*, Index>> const members{{&m1, x1}};
+      auto bs = sequant::detail::make_batched_scratch(members, real);
+      REQUIRE(bs.cache.exists(D));
+      REQUIRE(bs.cache.max_life(D) == 2);
+    }
+    // adding M2 makes X inconsistent AND must expose D's 'absent' signature
+    // beneath X's second occurrence
+    {
+      auto const bogus_axis = Index(L"i_9");
+      std::vector<std::pair<node_t const*, Index>> const members{
+          {&m1, x1}, {&m2, bogus_axis}};
+      auto bs = sequant::detail::make_batched_scratch(members, real);
+      REQUIRE_FALSE(bs.cache.exists(m1.left()));  // X: inconsistent
+      REQUIRE_FALSE(bs.cache.exists(D));  // D: inconsistent via pruned branch
+    }
+  }
 }
 
 TEST_CASE("eval_batched_custom_evaluator dedups within-batch repeats",
