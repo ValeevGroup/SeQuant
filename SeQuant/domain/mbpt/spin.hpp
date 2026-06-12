@@ -112,6 +112,19 @@ std::wstring spinannotation_replacе(WS&& label, Spin s) {
 // make null-spin idx
 [[nodiscard]] Index make_spinfree(const Index& idx);
 
+namespace detail {
+
+/// @brief Resets index tags on every Tensor in @p expr.
+///
+/// `canonicalize` tags Index instances and does not always reset them on
+/// exit; calling it twice without an intervening reset (or on a Sum that
+/// aggregates per-term canonicalized Products) trips
+/// `SEQUANT_ASSERT(!tag_.has_value())` in `Taggable::assign`. The standard
+/// SeQuant idiom is `detail::reset_idx_tags(e); simplify(e);`.
+void reset_idx_tags(const ExprPtr& expr);
+
+}  // namespace detail
+
 /// @brief Preserving particle symmetry, swaps bra and ket labels on all tensors
 /// in an expression
 /// @param expr ExprPtr to transform
