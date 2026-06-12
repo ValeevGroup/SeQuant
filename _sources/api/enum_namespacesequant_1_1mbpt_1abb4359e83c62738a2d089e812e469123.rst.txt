@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1_1mbpt_1abb4359e83c62738a2d089e812e469123:
+
+Enum LCAOQNS
+============
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_space_qns.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::mbpt::LCAOQNS
+   :project: SeQuant

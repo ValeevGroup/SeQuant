@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1ac3b7a7da3a08c672a0794bf2ed7faeb6:
+
+Template Function sequant::detail::track_usage
+==============================================
+
+- Defined in :ref:`file_SeQuant_core_export_export.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::track_usage(const EvalNode<T>&, PreprocessResult&)
+   :project: SeQuant

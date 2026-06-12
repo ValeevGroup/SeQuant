@@ -1,0 +1,24 @@
+
+.. _namespace_sequant__opt__cse:
+
+Namespace sequant::opt::cse
+===========================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1cse_1_1_accept_all_predicate`
+
+- :ref:`exhale_class_classsequant_1_1opt_1_1cse_1_1_subexpression_identifier`
+
+- :ref:`exhale_class_classsequant_1_1opt_1_1cse_1_1_subexpression_replacer`

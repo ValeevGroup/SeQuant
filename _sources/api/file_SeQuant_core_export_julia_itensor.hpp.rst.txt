@@ -1,0 +1,66 @@
+
+.. _file_SeQuant_core_export_julia_itensor.hpp:
+
+File julia_itensor.hpp
+======================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_export>` (``SeQuant/core/export``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/export/julia_itensor.hpp``)
+------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_export_julia_itensor.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/export/julia_tensor_operations.hpp`` (:ref:`file_SeQuant_core_export_julia_tensor_operations.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/space.hpp`` (:ref:`file_SeQuant_core_space.hpp`)
+
+- ``SeQuant/core/utility/exception.hpp`` (:ref:`file_SeQuant_core_utility_exception.hpp`)
+
+- ``range/v3/view/join.hpp``
+
+- ``range/v3/view/transform.hpp``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_class_classsequant_1_1_julia_i_tensor_generator`
+
+- :ref:`exhale_class_classsequant_1_1_julia_i_tensor_generator_context`
+

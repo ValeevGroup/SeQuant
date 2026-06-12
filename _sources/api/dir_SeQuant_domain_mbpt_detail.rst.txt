@@ -1,0 +1,21 @@
+.. _dir_SeQuant_domain_mbpt_detail:
+
+
+Directory detail
+================
+
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_mbpt>` (``SeQuant/domain/mbpt``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+*Directory path:* ``SeQuant/domain/mbpt/detail``
+
+
+Files
+-----
+
+- :ref:`file_SeQuant_domain_mbpt_detail_concepts.hpp`
+
+

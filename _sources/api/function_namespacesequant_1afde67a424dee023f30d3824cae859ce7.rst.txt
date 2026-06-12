@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1afde67a424dee023f30d3824cae859ce7:
+
+Function sequant::assert_enabled
+================================
+
+- Defined in :ref:`file_SeQuant_core_utility_macros.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::assert_enabled()
+   :project: SeQuant

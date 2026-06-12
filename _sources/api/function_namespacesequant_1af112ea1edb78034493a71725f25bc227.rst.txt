@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1af112ea1edb78034493a71725f25bc227:
+
+Function sequant::operator>=
+============================
+
+- Defined in :ref:`file_SeQuant_core_asy_cost.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::operator>=(AsyCost const&, AsyCost const&)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1_1op_1a4dbf3231d9327199f5bac47a9aba15a3:
+
+Function sequant::mbpt::op::P
+=============================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::op::P(nₚ, nₕ)
+   :project: SeQuant

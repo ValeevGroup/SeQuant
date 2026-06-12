@@ -1,0 +1,79 @@
+
+.. _file_SeQuant_core_utility_strong.hpp:
+
+File strong.hpp
+===============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_utility>` (``SeQuant/core/utility``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/utility/strong.hpp``)
+------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_utility_strong.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/meta.hpp``
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_atomic.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_expressions_tensor.hpp`
+
+- :ref:`file_SeQuant_core_op.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_class_classsequant_1_1detail_1_1strong__type__base`
+
+
+Defines
+-------
+
+
+- :ref:`exhale_define_strong_8hpp_1a847f24bbcb3f34e1404593242b2ed7c1`
+
+- :ref:`exhale_define_strong_8hpp_1a133eab31f602ee35c8c44fee0e3a4e3d`
+
+- :ref:`exhale_define_strong_8hpp_1afe35064a17747cbbf63cd71120b20a41`
+

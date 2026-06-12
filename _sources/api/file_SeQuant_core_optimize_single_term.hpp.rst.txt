@@ -1,0 +1,125 @@
+
+.. _file_SeQuant_core_optimize_single_term.hpp:
+
+File single_term.hpp
+====================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_optimize>` (``SeQuant/core/optimize``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/optimize/single_term.hpp``)
+------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_optimize_single_term.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/algorithm.hpp`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/optimize/options.hpp`` (:ref:`file_SeQuant_core_optimize_options.hpp`)
+
+- ``SeQuant/core/tensor_canonicalizer.hpp`` (:ref:`file_SeQuant_core_tensor_canonicalizer.hpp`)
+
+- ``SeQuant/core/tensor_network.hpp`` (:ref:`file_SeQuant_core_tensor_network.hpp`)
+
+- ``SeQuant/core/utility/indices.hpp`` (:ref:`file_SeQuant_core_utility_indices.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/external/bliss/graph.hh``
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``bit`` (:ref:`file_SeQuant_core_bitset.hpp`)
+
+- ``functional``
+
+- ``limits``
+
+- ``range/v3/view/concat.hpp``
+
+- ``range/v3/view/filter.hpp``
+
+- ``range/v3/view/indirect.hpp``
+
+- ``range/v3/view/move.hpp``
+
+- ``range/v3/view/reverse.hpp``
+
+- ``range/v3/view/transform.hpp``
+
+- ``type_traits``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_optimize_optimize.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__opt`
+
+- :ref:`namespace_sequant__opt__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_opt_res`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_sub_net_equal`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_sub_net_hash`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_subnet_metadata`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a6ea80776b6c05947efef837161d97a34`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a01cf2c56e921e941a4dae102efff0374`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1ac40920fc746e08faa3e816ad4b1f09d6`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a6495b1052a9f30b037a22521d8854347`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a111727845065a493e389b5deb87e8e76`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1ad5dd66e844ef910a0d94f4bcc32fea40`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1ab3717b0a0faf5ab6fa0a90063867b2fd`
+

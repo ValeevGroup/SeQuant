@@ -1,0 +1,14 @@
+.. _exhale_define_latex_8cpp_1ab760ab1eddd4483966e84165082e67a7:
+
+Define SQ_IMPL1
+===============
+
+- Defined in :ref:`file_SeQuant_core_io_latex_latex.cpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SQ_IMPL1
+   :project: SeQuant

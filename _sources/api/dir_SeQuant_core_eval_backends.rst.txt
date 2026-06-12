@@ -1,0 +1,23 @@
+.. _dir_SeQuant_core_eval_backends:
+
+
+Directory backends
+==================
+
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_eval>` (``SeQuant/core/eval``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+*Directory path:* ``SeQuant/core/eval/backends``
+
+Subdirectories
+--------------
+
+- :ref:`dir_SeQuant_core_eval_backends_btas`
+- :ref:`dir_SeQuant_core_eval_backends_tapp`
+- :ref:`dir_SeQuant_core_eval_backends_tiledarray`
+
+
+

@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1io_1_1serialization_1a97aff59cbc4d3ee4cbe7f0edaebd7530:
+
+Variable sequant::io::serialization::SEQUANT_DECLARE_DESERIALIZATION_FUNC
+=========================================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_serialization.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::io::serialization::SEQUANT_DECLARE_DESERIALIZATION_FUNC
+   :project: SeQuant

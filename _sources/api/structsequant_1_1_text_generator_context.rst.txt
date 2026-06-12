@@ -1,0 +1,26 @@
+.. _exhale_struct_structsequant_1_1_text_generator_context:
+
+Struct TextGeneratorContext
+===========================
+
+- Defined in :ref:`file_SeQuant_core_export_text_generator.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public sequant::ExportContext`` (:ref:`exhale_class_classsequant_1_1_export_context`)
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::TextGeneratorContext
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

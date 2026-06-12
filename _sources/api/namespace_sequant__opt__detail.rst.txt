@@ -1,0 +1,47 @@
+
+.. _namespace_sequant__opt__detail:
+
+Namespace sequant::opt::detail
+==============================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_opt_res`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_sub_net_equal`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_sub_net_hash`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_subnet_metadata`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a6ea80776b6c05947efef837161d97a34`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a2b839e3c301c3e67566df6af550aa5fa`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a03b74d1a22c9fa5027001eab86254707`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a01cf2c56e921e941a4dae102efff0374`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1ac40920fc746e08faa3e816ad4b1f09d6`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a6495b1052a9f30b037a22521d8854347`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a111727845065a493e389b5deb87e8e76`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1ad5dd66e844ef910a0d94f4bcc32fea40`

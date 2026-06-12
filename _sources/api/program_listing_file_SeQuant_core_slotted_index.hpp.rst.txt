@@ -1,0 +1,47 @@
+
+.. _program_listing_file_SeQuant_core_slotted_index.hpp:
+
+Program Listing for File slotted_index.hpp
+==========================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_slotted_index.hpp>` (``SeQuant/core/slotted_index.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_SLOTTED_INDEX_H
+   #define SEQUANT_SLOTTED_INDEX_H
+   
+   #include <SeQuant/core/attr.hpp>
+   #include <SeQuant/core/index.hpp>
+   
+   namespace sequant {
+   
+   class SlottedIndex {
+    public:
+     SlottedIndex(Index idx, SlotType slot)
+         : idx_(std::move(idx)), slot_(std::move(slot)) {}
+   
+     Index &index() { return idx_; }
+   
+     const Index &index() const { return idx_; }
+   
+     SlotType slot_type() const { return slot_; }
+   
+     friend bool operator==(const SlottedIndex &lhs, const SlottedIndex &rhs) {
+       return lhs.index() == rhs.index() && lhs.slot_type() == rhs.slot_type();
+     }
+   
+     friend bool operator!=(const SlottedIndex &lhs, const SlottedIndex &rhs) {
+       return !(lhs == rhs);
+     }
+   
+    private:
+     Index idx_;
+     SlotType slot_;
+   };
+   
+   }  // namespace sequant
+   
+   #endif

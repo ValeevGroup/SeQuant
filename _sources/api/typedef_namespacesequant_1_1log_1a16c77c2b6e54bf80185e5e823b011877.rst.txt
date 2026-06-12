@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1log_1a16c77c2b6e54bf80185e5e823b011877:
+
+Typedef sequant::log::Duration
+==============================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::log::Duration
+   :project: SeQuant

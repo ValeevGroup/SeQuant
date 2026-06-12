@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1_1detail_1aab38ea9fdbfa791355005e91691605ab:
+
+Template Function sequant::mbpt::detail::hardcoded_nns_projector
+================================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_biorthogonalization.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::detail::hardcoded_nns_projector(std::size_t)
+   :project: SeQuant

@@ -1,0 +1,348 @@
+
+.. _program_listing_file_SeQuant_core_optimize_single_term.hpp:
+
+Program Listing for File single_term.hpp
+========================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_optimize_single_term.hpp>` (``SeQuant/core/optimize/single_term.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_OPTIMIZE_SINGLE_TERM_HPP
+   #define SEQUANT_CORE_OPTIMIZE_SINGLE_TERM_HPP
+   
+   #include <SeQuant/core/algorithm.hpp>
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/expr.hpp>
+   #include <SeQuant/core/optimize/options.hpp>
+   #include <SeQuant/core/tensor_canonicalizer.hpp>
+   #include <SeQuant/core/tensor_network.hpp>
+   #include <SeQuant/core/utility/indices.hpp>
+   #include <SeQuant/core/utility/macros.hpp>
+   #include <SeQuant/external/bliss/graph.hh>
+   
+   #include <range/v3/view/concat.hpp>
+   #include <range/v3/view/filter.hpp>
+   #include <range/v3/view/indirect.hpp>
+   #include <range/v3/view/move.hpp>
+   #include <range/v3/view/reverse.hpp>
+   #include <range/v3/view/transform.hpp>
+   
+   #include <algorithm>
+   #include <bit>
+   #include <functional>
+   #include <limits>
+   #include <type_traits>
+   
+   namespace sequant::opt {
+   
+   template <typename F>
+   concept has_index_extent = std::is_invocable_r_v<size_t, F, Index const&>;
+   
+   namespace detail {
+   
+   auto flops_counter(has_index_extent auto&& ixex) {
+     return [ixex = std::forward<decltype(ixex)>(ixex)](
+                meta::range_of<Index> auto const& lhs,
+                meta::range_of<Index> auto const& rhs,
+                meta::range_of<Index> auto const& result) -> double {
+       using ranges::views::concat;
+       // <IndexSet> is required here: concatenating the three operands repeats
+       // every contracted/shared index, so it must be deduplicated before taking
+       // the extent product (cf. memsize_counter, which processes each operand
+       // separately and so can use the default vector container).
+       auto tot_idxs = tot_indices<IndexSet>(concat(lhs, rhs, result));
+       double total_flops = ranges::accumulate(
+           concat(tot_idxs.outer, tot_idxs.inner), 1., std::multiplies{}, ixex);
+       // A product of exactly 1. means the index set was empty (the accumulation
+       // init value), i.e. a scalar contraction => zero flops. Extents are
+       // integer-valued, so this equality is exact.
+       return total_flops == 1. ? 0. : total_flops;
+     };
+   }
+   
+   auto memsize_counter(has_index_extent auto&& ixex) {
+     return [ixex = std::forward<decltype(ixex)>(ixex)](
+                meta::range_of<Index> auto const& lhs,
+                meta::range_of<Index> auto const& rhs,
+                meta::range_of<Index> auto const& result) -> double {
+       using ranges::views::concat;
+       double total_mem{0};
+       // Each operand is sized independently, so the default (vector) container of
+       // tot_indices suffices -- a single operand's index list has no duplicates,
+       // unlike the concatenated set flops_counter must dedup.
+       for (auto&& tot_idxs :
+            {tot_indices(lhs), tot_indices(rhs), tot_indices(result)}) {
+         double mem = ranges::accumulate(concat(tot_idxs.outer, tot_idxs.inner),
+                                         1., std::multiplies{}, ixex);
+         // mem == 1. means this operand had no indices (the accumulation init
+         // value), i.e. a scalar; it contributes no memory. Same exact-equality
+         // convention as flops_counter above.
+         if (mem != 1.) total_mem += mem;
+       }
+       return total_mem;
+     };
+   }
+   
+   struct OptRes {
+     IndexSet indices;
+   
+     double ops;
+   
+     EvalSequence sequence;
+   
+     size_t lp = 0;
+     size_t rp = 0;
+   
+     container::vector<size_t> subnets;
+   };
+   
+   struct SubNetHash {
+     size_t operator()(
+         TensorNetwork::SlotCanonicalizationMetadata const& data) const noexcept {
+       return data.hash_value();
+     }
+   };
+   
+   struct SubNetEqual {
+     bool operator()(
+         TensorNetwork::SlotCanonicalizationMetadata const& left,
+         TensorNetwork::SlotCanonicalizationMetadata const& right) const {
+       return bliss::ConstGraphCmp::cmp(*left.graph, *right.graph) == 0;
+     }
+   };
+   
+   template <typename TIdxs>
+   void init_results(TensorNetwork const& network, TIdxs const& tidxs,
+                     container::vector<OptRes>& results) {
+     using IndexContainer = decltype(OptRes::indices);
+     auto tensor_indices = network.tensors()          //
+                           | ranges::views::indirect  //
+                           | ranges::views::transform(slots);
+     auto imed_indices = subset_target_indices(tensor_indices, tidxs);
+     SEQUANT_ASSERT(ranges::distance(imed_indices) == ranges::distance(results));
+     for (size_t i = 0; i < results.size(); ++i) {
+       results[i].indices =
+           imed_indices[i] | ranges::views::move | ranges::to<IndexContainer>;
+       results[i].ops = std::popcount(i) > 1
+                            ? std::numeric_limits<decltype(OptRes::ops)>::max()
+                            : 0;
+       if (std::popcount(i) == 1)
+         results[i].sequence.emplace_back(std::countr_zero(i));
+       // else results[i].sequence is left uninitialized
+     }
+   }
+   
+   struct SubnetMetadata {
+     container::vector<size_t> meta_ids;
+     container::vector<double> unique_meta_costs;
+   };
+   
+   inline SubnetMetadata build_subnet_metadata(
+       TensorNetwork const& network, container::vector<OptRes>& results) {
+     SubnetMetadata out;
+     // Use max as sentinel for entries with popcount < 2 (singletons/empty),
+     // which are skipped below and never assigned a real meta ID.
+     out.meta_ids.resize(results.size(), std::numeric_limits<size_t>::max());
+     container::unordered_map<TensorNetwork::SlotCanonicalizationMetadata, size_t,
+                              SubNetHash, SubNetEqual>
+         meta_to_id;
+   
+     for (size_t n = 0; n < results.size(); ++n) {
+       if (std::popcount(n) < 2) continue;
+       auto ts = bits::on_bits_index(n) | bits::sieve(network.tensors());
+       container::vector<ExprPtr> ts_expr;
+       for (auto&& t : ts)
+         ts_expr.emplace_back(std::dynamic_pointer_cast<Tensor>(t)->clone());
+   
+       auto tn = TensorNetwork{ts_expr};
+       auto meta = tn.canonicalize_slots(
+           TensorCanonicalizer::cardinal_tensor_labels(), &results[n].indices);
+   
+       auto [it, inserted] = meta_to_id.try_emplace(std::move(meta), 0);
+       if (inserted) it->second = meta_to_id.size() - 1;
+   
+       out.meta_ids[n] = it->second;
+     }
+     out.unique_meta_costs.resize(meta_to_id.size(), 0.0);
+     return out;
+   }
+   
+   template <typename CostFn>
+     requires requires(CostFn&& fn, decltype(OptRes::indices) const& ixs) {
+       { fn(ixs, ixs, ixs) } -> std::floating_point;
+     }
+   EvalSequence single_term_opt_impl(TensorNetwork const& network,
+                                     meta::range_of<Index> auto const& tidxs,
+                                     CostFn&& cost_fn, bool subnet_cse,
+                                     size_t volatile_mask, double n_replay) {
+     using ranges::views::concat;
+     auto const nt = network.tensors().size();
+     if (nt == 1) return EvalSequence{0};
+     if (nt == 2) return EvalSequence{0, 1, -1};
+   
+     container::vector<OptRes> results((size_t{1} << nt));
+     init_results(network, tidxs, results);
+   
+     // precompute all subnet_meta if subnet_cse is true
+     // Note: the O(2^n) cost is bounded in practice — subset_target_indices above
+     // asserts n <= 24, capping the number of subsets at ~16M.
+     container::vector<size_t> meta_ids;
+     container::vector<double> unique_meta_costs;
+     if (subnet_cse) {
+       auto md = build_subnet_metadata(network, results);
+       meta_ids = std::move(md.meta_ids);
+       unique_meta_costs = std::move(md.unique_meta_costs);
+     }
+   
+     // find the optimal evaluation sequence
+     for (size_t n = 0; n < results.size(); ++n) {
+       if (std::popcount(n) < 2) continue;
+       // A subset is volatile iff it contains any volatile leaf; the contraction
+       // that forms it is then re-executed on every replay. volatile_mask == 0
+       // (no predicate / Memsize / n_replay<=1) makes w == 1 everywhere.
+       double const w = (volatile_mask & n) ? n_replay : 1.0;
+       for (auto& curr_cost = results[n].ops;
+            auto&& [lp, rp] : bits::bipartitions(n)) {
+         // do nothing with the trivial bipartition
+         // i.e. one subset is the empty set and the other full
+         if (lp == 0 || rp == 0) continue;
+   
+         double new_cost = 0;
+         container::vector<size_t> combined_subnets;
+         if (subnet_cse) {
+           // subnets is always kept sorted; set_union requires sorted inputs and
+           // produces sorted output — this invariant is maintained throughout.
+           std::set_union(results[lp].subnets.begin(), results[lp].subnets.end(),
+                          results[rp].subnets.begin(), results[rp].subnets.end(),
+                          std::back_inserter(combined_subnets));
+           new_cost = w * cost_fn(results[lp].indices,  //
+                                  results[rp].indices,  //
+                                  results[n].indices);
+           for (auto id : combined_subnets) {
+             new_cost += unique_meta_costs[id];
+           }
+         } else {
+           new_cost = w * cost_fn(results[lp].indices,  //
+                                  results[rp].indices,  //
+                                  results[n].indices)   //
+                      + results[lp].ops + results[rp].ops;
+         }
+   
+         if (new_cost <= curr_cost) {
+           curr_cost = new_cost;
+           results[n].lp = lp;
+           results[n].rp = rp;
+           if (subnet_cse) {
+             results[n].subnets = std::move(combined_subnets);
+           }
+         }
+       }
+   
+       if (subnet_cse) {
+         auto mid = meta_ids[n];
+         // Canonically equivalent subnetworks share the same topology and index
+         // sizes, so their cost is identical. Overwriting with a later bitmask's
+         // cost is intentional and benign.
+         unique_meta_costs[mid] =
+             w * cost_fn(results[results[n].lp].indices,
+                         results[results[n].rp].indices, results[n].indices);
+         auto it = std::lower_bound(results[n].subnets.begin(),
+                                    results[n].subnets.end(), mid);
+         if (it == results[n].subnets.end() || *it != mid) {
+           results[n].subnets.insert(it, mid);
+         }
+       }
+   
+       auto const& lseq = results[results[n].lp].sequence;
+       auto const& rseq = results[results[n].rp].sequence;
+       results[n].sequence =
+           (lseq[0] < rseq[0] ? concat(lseq, rseq) : concat(rseq, lseq)) |
+           ranges::to<EvalSequence>;
+       results[n].sequence.push_back(-1);
+     }
+   
+     return results.back().sequence;
+   }
+   
+   template <OptFor Metric, has_index_extent IdxToSz>
+   EvalSequence single_term_opt(
+       TensorNetwork const& network, IdxToSz&& idxsz, bool subnet_cse,
+       std::function<bool(Tensor const&)> const& is_volatile_leaf = {},
+       unsigned n_replay = 1) {
+     decltype(OptRes::indices) tidxs{};
+   
+     // Volatility weighting is a Flops-only notion (persistent intermediates cost
+     // MORE memory, not less, so it is wrong-signed for Memsize). Build the
+     // volatile-leaf bitmask in network.tensors() bit order so it aligns with the
+     // DP's subset bits.
+     size_t volatile_mask = 0;
+     double nr = 1.0;
+     if constexpr (Metric == OptFor::Flops) {
+       if (is_volatile_leaf && n_replay > 1) {
+         size_t i = 0;
+         for (auto&& t : network.tensors()) {
+           auto tp = std::dynamic_pointer_cast<Tensor>(t);
+           if (tp && is_volatile_leaf(*tp)) volatile_mask |= (size_t{1} << i);
+           ++i;
+         }
+         nr = static_cast<double>(n_replay);
+       }
+       auto cost_fn = flops_counter(std::forward<IdxToSz>(idxsz));
+       return single_term_opt_impl(network, tidxs, cost_fn, subnet_cse,
+                                   volatile_mask, nr);
+     } else {
+       static_assert(Metric == OptFor::Memsize,
+                     "Only Flops and Memsize OptFor supported.");
+       auto cost_fn = memsize_counter(std::forward<IdxToSz>(idxsz));
+       return single_term_opt_impl(network, tidxs, cost_fn, subnet_cse,
+                                   volatile_mask, nr);
+     }
+   }
+   
+   }  // namespace detail
+   
+   template <OptFor Metric = OptFor::Flops, has_index_extent IdxToSz>
+   ExprPtr single_term_opt(
+       Product const& prod, IdxToSz&& idxsz, bool subnet_cse = false,
+       std::function<bool(Tensor const&)> const& is_volatile_leaf = {},
+       unsigned n_replay = 1) {
+     using ranges::views::filter;
+     using ranges::views::reverse;
+   
+     if (prod.factors().size() < 3)
+       return ex<Product>(Product{prod.scalar(), prod.factors().begin(),
+                                  prod.factors().end(), Product::Flatten::No});
+     auto const tensors =
+         prod | filter(&ExprPtr::template is<Tensor>) | ranges::to_vector;
+     auto seq = detail::single_term_opt<Metric>(
+         TensorNetwork{tensors}, std::forward<IdxToSz>(idxsz), subnet_cse,
+         is_volatile_leaf, n_replay);
+     auto result = container::svector<ExprPtr>{};
+     for (auto i : seq)
+       if (i == -1) {
+         auto rexpr = *result.rbegin();
+         result.pop_back();
+         auto lexpr = *result.rbegin();
+         result.pop_back();
+         auto p = Product{1, ExprPtrList{lexpr, rexpr}, Product::Flatten::No};
+         result.push_back(ex<Product>(Product{
+             1, p.factors().begin(), p.factors().end(), Product::Flatten::No}));
+       } else {
+         result.push_back(tensors.at(i));
+       }
+   
+     auto& p_ = (*result.rbegin()).as<Product>();
+     for (auto&& v :
+          prod | reverse | filter([](const ExprPtr& e) { return e->is_scalar(); }))
+       p_.prepend(1, v, Product::Flatten::No);
+   
+     p_.scale(prod.scalar());
+     return *result.rbegin();
+   }
+   
+   }  // namespace sequant::opt
+   
+   #endif  // SEQUANT_CORE_OPTIMIZE_SINGLE_TERM_HPP

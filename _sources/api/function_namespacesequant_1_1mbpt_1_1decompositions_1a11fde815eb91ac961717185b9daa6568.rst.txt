@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1_1decompositions_1a11fde815eb91ac961717185b9daa6568:
+
+Function sequant::mbpt::decompositions::cumu2_to_density
+========================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_rdm.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::decompositions::cumu2_to_density(sequant::ExprPtr)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a88685d8d7e0729724cdd52c262435058:
+
+Function sequant::remove_tensor
+===============================
+
+- Defined in :ref:`file_SeQuant_core_expressions_abstract_tensor.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::remove_tensor(const ExprPtr&, std::wstring)
+   :project: SeQuant

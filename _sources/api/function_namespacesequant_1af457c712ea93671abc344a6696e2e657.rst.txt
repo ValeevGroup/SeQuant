@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1af457c712ea93671abc344a6696e2e657:
+
+Function sequant::includes(IndexSpace::QuantumNumbers, IndexSpace::QuantumNumbers)
+==================================================================================
+
+- Defined in :ref:`file_SeQuant_core_space.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::includes(IndexSpace::QuantumNumbers, IndexSpace::QuantumNumbers)
+   :project: SeQuant

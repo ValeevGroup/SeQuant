@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1aa70b6261fe04b0de0baceadd67d6599a:
+
+Enum SubnetCSE
+==============
+
+- Defined in :ref:`file_SeQuant_core_optimize_options.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::SubnetCSE
+   :project: SeQuant

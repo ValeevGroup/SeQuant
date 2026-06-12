@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1a5a834d84c1ff99e61473e13ff4d5cfeb:
+
+Enum OptFor
+===========
+
+- Defined in :ref:`file_SeQuant_core_optimize_options.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::OptFor
+   :project: SeQuant

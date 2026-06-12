@@ -1,0 +1,48 @@
+
+.. _program_listing_file_SeQuant_core_optimize_options.hpp:
+
+Program Listing for File options.hpp
+====================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_optimize_options.hpp>` (``SeQuant/core/optimize/options.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_OPTIMIZE_OPTIONS_HPP
+   #define SEQUANT_CORE_OPTIMIZE_OPTIONS_HPP
+   
+   #include <cstddef>
+   #include <functional>
+   
+   namespace sequant {
+   
+   class Index;
+   class Tensor;
+   
+   enum class OptFor { Flops, Memsize };
+   
+   enum class ReorderSum { Reorder, NoReorder };
+   
+   enum class SubnetCSE { Enable, Disable };
+   
+   using index_to_extent_t = std::function<std::size_t(Index const&)>;
+   
+   struct OptimizeOptions {
+     OptFor opt_for = OptFor::Flops;
+   
+     ReorderSum reorder = ReorderSum::Reorder;
+   
+     SubnetCSE subnet_cse = SubnetCSE::Disable;
+   
+     index_to_extent_t idx_to_extent = {};
+   
+     std::function<bool(Tensor const&)> is_volatile_leaf = {};
+   
+     unsigned n_replay = 1;
+   };
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_CORE_OPTIMIZE_OPTIONS_HPP

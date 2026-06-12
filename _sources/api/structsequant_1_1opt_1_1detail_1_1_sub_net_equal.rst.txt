@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1opt_1_1detail_1_1_sub_net_equal:
+
+Struct SubNetEqual
+==================
+
+- Defined in :ref:`file_SeQuant_core_optimize_single_term.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::opt::detail::SubNetEqual
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

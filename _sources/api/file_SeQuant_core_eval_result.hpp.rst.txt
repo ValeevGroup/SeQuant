@@ -1,0 +1,146 @@
+
+.. _file_SeQuant_core_eval_result.hpp:
+
+File result.hpp
+===============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_eval>` (``SeQuant/core/eval``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/eval/result.hpp``)
+---------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_eval_result.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/algorithm.hpp`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/eval/fwd.hpp`` (:ref:`file_SeQuant_core_eval_fwd.hpp`)
+
+- ``SeQuant/core/hash.hpp`` (:ref:`file_SeQuant_core_hash.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/logger.hpp`` (:ref:`file_SeQuant_core_logger.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``any``
+
+- ``cstdint``
+
+- ``memory`` (:ref:`file_SeQuant_core_memory_layout.hpp`)
+
+- ``range/v3/range/conversion.hpp``
+
+- ``range/v3/view/intersperse.hpp``
+
+- ``range/v3/view/iota.hpp``
+
+- ``range/v3/view/join.hpp``
+
+- ``range/v3/view/transform.hpp``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_atomic.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_eval_cache_manager.hpp`
+
+- :ref:`file_SeQuant_core_eval_eval.hpp`
+
+- :ref:`file_SeQuant_core_eval_result.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_annot`
+
+- :ref:`exhale_struct_structsequant_1_1detail_1_1_iter_pair`
+
+- :ref:`exhale_struct_structsequant_1_1detail_1_1_particle_range`
+
+- :ref:`exhale_struct_structsequant_1_1detail_1_1_symmetric_particle_range`
+
+- :ref:`exhale_class_classsequant_1_1_result`
+
+- :ref:`exhale_class_classsequant_1_1_result_scalar`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a0b4f66e1968bce9b5b38c46285a69d5a`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1acb21db0d20769491dd800343344c43e4`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1ac91b0a052379ef36c8bc9b4596ee6096`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a585b122decf14c946fa20b0e140fa6ec`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1aaa638644944ea7d9f53e840a026a97df`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a99eab6d698bdc394adfab564f7e416de`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1ab33b24f92ff62695d589687c8dd060aa`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a602f95a94d0bdc79d2c971b3d3a29645`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1af973e181382b68ac0c6b178ee159fcce`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a58b476a6a2c096cba4a8c84bd064c27c`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a3f11f63e95bca319340b1d0cdb6a6035`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a64fcd70fceffa4f8bfd47178ef7c56f7`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a0e688e5bb3ae3cbae84640c43f676b0b`
+
+- :ref:`exhale_function_namespacesequant_1a5967ce75234ba469f02661c3ada775ec`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1_1detail_1a0abab47bb892da81e6cd2a1ecb5dd4c1`
+

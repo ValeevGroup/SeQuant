@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1ad8fd96b486ae08915fcf5fbe2d24b838:
+
+Variable sequant::io::serialization::v1::parse::word_components
+===============================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_deserialize.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::io::serialization::v1::parse::word_components
+   :project: SeQuant

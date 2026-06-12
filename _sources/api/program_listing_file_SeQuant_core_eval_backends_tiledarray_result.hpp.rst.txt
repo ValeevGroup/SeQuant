@@ -1,0 +1,705 @@
+
+.. _program_listing_file_SeQuant_core_eval_backends_tiledarray_result.hpp:
+
+Program Listing for File result.hpp
+===================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_backends_tiledarray_result.hpp>` (``SeQuant/core/eval/backends/tiledarray/result.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_EVAL_BACKENDS_TILEDARRAY_RESULT_HPP
+   #define SEQUANT_EVAL_BACKENDS_TILEDARRAY_RESULT_HPP
+   
+   #ifdef SEQUANT_HAS_TILEDARRAY
+   
+   #include <SeQuant/core/eval/result.hpp>
+   #include <SeQuant/core/math.hpp>
+   #include <SeQuant/core/utility/exception.hpp>
+   
+   #include <TiledArray/einsum/tiledarray.h>
+   #include <tiledarray.h>
+   
+   #include <range/v3/view/iota.hpp>
+   
+   namespace sequant {
+   
+   // implementation details of the TiledArray result backend; prefer
+   // sequant::detail over an unnamed namespace in a header (see CppCoreGuidelines
+   // SF.21 / "Use unnamed namespaces in headers ... no" guidance)
+   namespace detail {
+   
+   template <typename ArrayT>
+   [[nodiscard]] std::size_t tot_inner_rank(ArrayT const& arr) {
+     std::size_t r = 0;
+     if constexpr (TA::detail::is_tensor_of_tensor_v<
+                       typename ArrayT::value_type>) {
+       // Inner tensors carry the rank; an outer tile may hold null/empty inner
+       // views (e.g. a screened pair), so skip those -- calling range() on an
+       // empty view asserts (ArenaTensor) or is UB (TA::Tensor).
+       for (auto it = arr.begin(); it != arr.end() && r == 0; ++it) {
+         auto const& outer_tile = it->get();
+         for (auto const& inner : outer_tile) {
+           if (inner.empty()) continue;
+           if (inner.range().rank() > 0) {
+             r = inner.range().rank();
+             break;
+           }
+         }
+       }
+       arr.world().gop.max(r);
+     }
+     return r;
+   }
+   
+   template <typename... Args>
+   auto column_symmetrize_ta(TA::DistArray<Args...> const& arr) {
+     using ranges::views::iota;
+     constexpr bool is_tot = TA::detail::is_tensor_of_tensor_v<
+         typename TA::DistArray<Args...>::value_type>;
+   
+     size_t const outer_rank = arr.trange().rank();
+   
+     if constexpr (is_tot) {
+       size_t const inner_rank = tot_inner_rank(arr);
+       // All-empty-inner ToT (e.g. every CSV pair screened out): no populated tile
+       // to read a rank from, so tot_inner_rank() is 0. It represents zero, and
+       // symmetrizing zero is zero -- return unchanged instead of failing the
+       // equal-rank check below.
+       if (inner_rank == 0) return arr;
+       if (outer_rank != inner_rank)
+         throw Exception(
+             "ToT symmetrization requires equal outer and inner rank (outer=" +
+             std::to_string(outer_rank) + ", inner=" + std::to_string(inner_rank) +
+             ")");
+     }
+   
+     // ToT (equal-rank, validated above): total rank = outer + inner = 2*outer.
+     size_t const total_rank = is_tot ? 2 * outer_rank : outer_rank;
+   
+     if (total_rank % 2 != 0)
+       throw Exception("This function only supports even-ranked tensors");
+   
+     size_t const nparticles = total_rank / 2;
+   
+     perm_t perm = iota(size_t{0}, total_rank) | ranges::to<perm_t>;
+   
+     auto make_annot = [nparticles](perm_t const& p) {
+       if constexpr (is_tot) {
+         perm_t const outer(p.begin(), p.begin() + nparticles);
+         perm_t const inner(p.begin() + nparticles, p.end());
+         return ords_to_annot(outer) + ";" + ords_to_annot(inner);
+       } else {
+         return ords_to_annot(p);
+       }
+     };
+   
+     auto const lannot = make_annot(perm);
+   
+     TA::DistArray<Args...> result;
+     auto call_back = [&result, &lannot, &arr, &perm = std::as_const(perm),
+                       &make_annot]() {
+       auto const rannot = make_annot(perm);
+       if (result.is_initialized()) {
+         result(lannot) += arr(rannot);
+       } else {
+         result(lannot) = arr(rannot);
+       }
+     };
+   
+     symmetric_permutation(SymmetricParticleRange{perm.begin(),               //
+                                                  perm.begin() + nparticles,  //
+                                                  nparticles},
+                           call_back);
+   
+     auto const nf = static_cast<double>(rational{1, factorial(nparticles)});
+     result(lannot) = nf * result(lannot);
+   
+     TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
+   
+     return result;
+   }
+   
+   template <typename... Args>
+   auto particle_antisymmetrize_ta(TA::DistArray<Args...> const& arr,
+                                   size_t bra_rank) {
+     using ranges::views::iota;
+     size_t const rank = arr.trange().rank();
+     SEQUANT_ASSERT(bra_rank <= rank);
+     size_t const ket_rank = rank - bra_rank;
+   
+     if (bra_rank <= 1 && ket_rank <= 1) {
+       // nothing to do
+       return arr;
+     }
+   
+     perm_t perm = iota(size_t{0}, rank) | ranges::to<perm_t>;
+     perm_t bra_perm = iota(size_t{0}, bra_rank) | ranges::to<perm_t>;
+     perm_t ket_perm = iota(bra_rank, rank) | ranges::to<perm_t>;
+   
+     const auto lannot = ords_to_annot(perm);
+   
+     auto process_permutations = [&lannot](const TA::DistArray<Args...>& input_arr,
+                                           size_t range_rank, perm_t range_perm,
+                                           const std::string& other_annot,
+                                           bool is_bra) -> TA::DistArray<Args...> {
+       if (range_rank <= 1) return input_arr;
+       TA::DistArray<Args...> result;
+   
+       auto callback = [&](int parity) {
+         const auto range_annot = ords_to_annot(range_perm);
+         const auto annot = other_annot.empty()
+                                ? range_annot
+                                : (is_bra ? range_annot + "," + other_annot
+                                          : other_annot + "," + range_annot);
+   
+         typename decltype(result)::numeric_type p_ = parity == 0 ? 1 : -1;
+         if (result.is_initialized()) {
+           result(lannot) += p_ * input_arr(annot);
+         } else {
+           result(lannot) = p_ * input_arr(annot);
+         }
+       };
+       antisymmetric_permutation(ParticleRange{range_perm.begin(), range_rank},
+                                 callback);
+       return result;
+     };
+   
+     // Process bra permutations first
+     const auto ket_annot = ket_rank == 0 ? "" : ords_to_annot(ket_perm);
+     auto result = process_permutations(arr, bra_rank, bra_perm, ket_annot, true);
+   
+     // Process ket permutations
+     const auto bra_annot = bra_rank == 0 ? "" : ords_to_annot(bra_perm);
+     result = process_permutations(result, ket_rank, ket_perm, bra_annot, false);
+   
+     auto const nf = static_cast<double>(
+         rational{1, factorial(bra_rank) * factorial(ket_rank)});
+     result(lannot) = nf * result(lannot);
+   
+     TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
+     return result;
+   }
+   
+   template <typename... Args>
+   inline void log_ta(Args const&... args) noexcept {
+     log_result("[TA] ", args...);
+   }
+   
+   inline constexpr TA::DeNest to_ta_denest(DeNest d) noexcept {
+     return d == DeNest::True ? TA::DeNest::True : TA::DeNest::False;
+   }
+   
+   }  // namespace detail
+   
+   void log_ta_tensor_host_memory_use(madness::World& world,
+                                      std::string_view label = "");
+   
+   inline void log_ta_tensor_host_memory_use() {
+   #if defined(SEQUANT_EVAL_TRACE)
+     log_ta_tensor_host_memory_use(TA::get_default_world(), "[TA]");
+   #endif
+   }
+   
+   // defined below; declared here so the result classes' slice_mode() overrides
+   // can call it.
+   template <typename... Args>
+   [[nodiscard]] TA::DistArray<Args...> slice_array_over_mode(
+       TA::DistArray<Args...> const& arr, std::size_t mode, std::size_t tile_lo,
+       std::size_t tile_hi);
+   
+   [[nodiscard]] inline container::svector<std::pair<std::size_t, std::size_t>>
+   mode_batches_of_trange1(TA::TiledRange1 const& tr1,
+                           std::size_t target_batch_size) {
+     container::svector<std::pair<std::size_t, std::size_t>> batches;
+     auto const& er = tr1.elements_range();
+     if (er.second <= er.first) return batches;  // empty mode
+     std::size_t const target = std::max<std::size_t>(target_batch_size, 1);
+     std::size_t grp_lo = er.first;
+     std::size_t acc = 0;
+     std::size_t const ntiles = tr1.tile_extent();
+     for (std::size_t t = 0; t < ntiles; ++t) {
+       auto const& tr = tr1.tile(t);
+       acc += tr.second - tr.first;
+       if (acc >= target || t + 1 == ntiles) {
+         batches.emplace_back(grp_lo, tr.second);
+         grp_lo = tr.second;
+         acc = 0;
+       }
+     }
+     return batches;
+   }
+   
+   template <typename ArrayT, typename = std::enable_if_t<TA::detail::is_tensor_v<
+                                  typename ArrayT::value_type>>>
+   class ResultTensorTA final : public Result {
+    public:
+     using Result::id_t;
+     using numeric_type = typename ArrayT::numeric_type;
+   
+     explicit ResultTensorTA(ArrayT arr) : Result{std::move(arr)} {}
+   
+    private:
+     using this_type = ResultTensorTA<ArrayT>;
+     using annot_wrap = Annot<std::string>;
+   
+     [[nodiscard]] id_t type_id() const noexcept override {
+       return id_for_type<this_type>();
+     }
+   
+     [[nodiscard]] ResultPtr sum(
+         Result const& other,
+         std::array<std::any, 3> const& annot) const override {
+       SEQUANT_ASSERT(other.is<this_type>());
+       auto const a = annot_wrap{annot};
+   
+       detail::log_ta(a.lannot, " + ", a.rannot, " = ", a.this_annot, "\n");
+   
+       ArrayT result;
+       result(a.this_annot) =
+           get<ArrayT>()(a.lannot) + other.get<ArrayT>()(a.rannot);
+       decltype(result)::wait_for_lazy_cleanup(result.world());
+       log_ta_tensor_host_memory_use();
+       return eval_result<this_type>(std::move(result));
+     }
+   
+     [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t elem_lo,
+                                        std::size_t elem_hi) const override {
+       auto const& tr1 = get<ArrayT>().trange().dim(mode);
+       // slice_mode takes element bounds, but a tiled backend can only cut on tile
+       // boundaries; mode_batches() returns exactly such (tile-aligned, in-range)
+       // bounds. Assert the precondition so misuse is caught rather than silently
+       // producing an over- or under-sized slice (which would break batched sums).
+       SEQUANT_ASSERT(elem_lo >= tr1.elements_range().first && elem_lo < elem_hi &&
+                      elem_hi <= tr1.elements_range().second);
+       std::size_t const tile_lo = tr1.element_to_tile(elem_lo);
+       SEQUANT_ASSERT(tr1.tile(tile_lo).first ==
+                      elem_lo);  // lo on a tile boundary
+       std::size_t const tile_hi = (elem_hi >= tr1.elements_range().second)
+                                       ? tr1.tile_extent()
+                                       : tr1.element_to_tile(elem_hi);
+       SEQUANT_ASSERT(elem_hi >= tr1.elements_range().second ||
+                      tr1.tile(tile_hi).first ==
+                          elem_hi);  // hi on a tile boundary
+       return eval_result<this_type>(
+           slice_array_over_mode(get<ArrayT>(), mode, tile_lo, tile_hi));
+     }
+   
+     [[nodiscard]] container::svector<std::pair<std::size_t, std::size_t>>
+     mode_batches(std::size_t mode, std::size_t target_batch_size) const override {
+       return mode_batches_of_trange1(get<ArrayT>().trange().dim(mode),
+                                      target_batch_size);
+     }
+   
+     [[nodiscard]] ResultPtr prod(Result const& other,
+                                  std::array<std::any, 3> const& annot,
+                                  DeNest DeNestFlag) const override {
+       auto const a = annot_wrap{annot};
+   
+       if (other.is<ResultScalar<numeric_type>>()) {
+         auto result = get<ArrayT>();
+         auto scalar = other.get<numeric_type>();
+   
+         detail::log_ta(a.lannot, " * ", scalar, " = ", a.this_annot, "\n");
+   
+         result(a.this_annot) = scalar * result(a.lannot);
+   
+         decltype(result)::wait_for_lazy_cleanup(result.world());
+         log_ta_tensor_host_memory_use();
+         return eval_result<this_type>(std::move(result));
+       }
+   
+       if (a.this_annot.empty()) {
+         // DOT product
+         SEQUANT_ASSERT(other.is<this_type>());
+         numeric_type d =
+             TA::dot(get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot));
+         ArrayT::wait_for_lazy_cleanup(get<ArrayT>().world());
+         ArrayT::wait_for_lazy_cleanup(other.get<ArrayT>().world());
+   
+         detail::log_ta(a.lannot, " * ", a.rannot, " = ", d, "\n");
+   
+         log_ta_tensor_host_memory_use();
+         return eval_result<ResultScalar<numeric_type>>(d);
+       }
+   
+       if (!other.is<this_type>()) {
+         // potential T * ToT
+         auto annot_swap = annot;
+         std::swap(annot_swap[0], annot_swap[1]);
+         return other.prod(*this, annot_swap, DeNestFlag);
+       }
+   
+       // confirmed: other.is<this_type>() is true
+   
+       detail::log_ta(a.lannot, " * ", a.rannot, " = ", a.this_annot, "\n");
+   
+       ArrayT result;
+   
+       result = TA::einsum(get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot),
+                           a.this_annot);
+       decltype(result)::wait_for_lazy_cleanup(result.world());
+       log_ta_tensor_host_memory_use();
+       return eval_result<this_type>(std::move(result));
+     }
+   
+     [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
+       auto pre = get<ArrayT>();
+       TA::scale(pre, numeric_type(factor));
+       return eval_result<this_type>(std::move(pre));
+     }
+   
+     [[nodiscard]] ResultPtr permute(
+         std::array<std::any, 2> const& ann) const override {
+       auto const pre_annot = std::any_cast<std::string>(ann[0]);
+       auto const post_annot = std::any_cast<std::string>(ann[1]);
+   
+       detail::log_ta(pre_annot, " = ", post_annot, "\n");
+   
+       ArrayT result;
+       result(post_annot) = get<ArrayT>()(pre_annot);
+       ArrayT::wait_for_lazy_cleanup(result.world());
+       log_ta_tensor_host_memory_use();
+       return eval_result<this_type>(std::move(result));
+     }
+   
+     [[nodiscard]] ResultPtr adjoint(
+         std::array<std::any, 2> const& ann) const override {
+       // T†{a;i} = conj(T{i;a}) — bra/ket-swapped layout (annotation rewrite
+       // baked into ann by the IR: operand annot in ann[0], adjoint annot in
+       // ann[1]) plus elementwise conjugation. For real numeric_type, conj is
+       // a no-op; elide it so the TA expression doesn't carry a ConjTsrExpr
+       // wrapper unnecessarily.
+       auto const pre_annot = std::any_cast<std::string>(ann[0]);
+       auto const post_annot = std::any_cast<std::string>(ann[1]);
+   
+       detail::log_ta(post_annot, " = adjoint(", pre_annot, ")\n");
+   
+       ArrayT result;
+       if constexpr (TA::detail::is_complex_v<numeric_type>) {
+         result(post_annot) = get<ArrayT>()(pre_annot).conj();
+       } else {
+         result(post_annot) = get<ArrayT>()(pre_annot);
+       }
+       ArrayT::wait_for_lazy_cleanup(result.world());
+       log_ta_tensor_host_memory_use();
+       return eval_result<this_type>(std::move(result));
+     }
+   
+     void add_inplace(Result const& other) override {
+       SEQUANT_ASSERT(other.is<this_type>());
+   
+       auto& t = get<ArrayT>();
+       auto const& o = other.get<ArrayT>();
+   
+       SEQUANT_ASSERT(t.trange() == o.trange());
+       auto ann = TA::detail::dummy_annotation(t.trange().rank());
+   
+       detail::log_ta(ann, " += ", ann, "\n");
+   
+       t(ann) += o(ann);
+       ArrayT::wait_for_lazy_cleanup(t.world());
+       log_ta_tensor_host_memory_use();
+     }
+   
+     [[nodiscard]] ResultPtr symmetrize() const override {
+       return eval_result<this_type>(detail::column_symmetrize_ta(get<ArrayT>()));
+     }
+   
+     [[nodiscard]] ResultPtr antisymmetrize(size_t bra_rank) const override {
+       return eval_result<this_type>(
+           detail::particle_antisymmetrize_ta(get<ArrayT>(), bra_rank));
+     }
+   
+    private:
+     [[nodiscard]] std::size_t size_in_bytes() const final {
+       auto& v = get<ArrayT>();
+       auto local_size = TA::size_of<TA::MemorySpace::Host>(v);
+       v.world().gop.sum(local_size);
+       return local_size;
+     }
+   };
+   
+   template <typename ArrayT,
+             typename = std::enable_if_t<
+                 TA::detail::is_tensor_of_tensor_v<typename ArrayT::value_type>>>
+   class ResultTensorOfTensorTA final : public Result {
+    public:
+     using Result::id_t;
+     using numeric_type = typename ArrayT::numeric_type;
+   
+     explicit ResultTensorOfTensorTA(ArrayT arr) : Result{std::move(arr)} {}
+   
+    private:
+     using this_type = ResultTensorOfTensorTA<ArrayT>;
+     using annot_wrap = Annot<std::string>;
+   
+     using _inner_tensor_type = typename ArrayT::value_type::value_type;
+   
+     // "Regular" (non-nested) companion array for ToT * T einsum. The OUTER tile
+     // type must be a TA::Tensor — inner tile types like btas::Tensor are only
+     // valid as the *innermost* tile (they don't support permute/reshape/batch
+     // and so can't drive einsum's outer kernel). So we wrap the inner's numeric
+     // type in TA::Tensor here, rather than re-using the inner tile type as the
+     // outer tile.
+     using compatible_regular_distarray_type =
+         TA::DistArray<TA::Tensor<numeric_type>, typename ArrayT::policy_type>;
+   
+     // Only @c that_type type is allowed for ToT * T computation
+     using that_type = ResultTensorTA<compatible_regular_distarray_type>;
+   
+     [[nodiscard]] id_t type_id() const noexcept override {
+       return id_for_type<this_type>();
+     }
+   
+     [[nodiscard]] ResultPtr sum(
+         Result const& other,
+         std::array<std::any, 3> const& annot) const override {
+       SEQUANT_ASSERT(other.is<this_type>());
+       auto const a = annot_wrap{annot};
+   
+       detail::log_ta(a.lannot, " + ", a.rannot, " = ", a.this_annot, "\n");
+   
+       ArrayT result;
+       result(a.this_annot) =
+           get<ArrayT>()(a.lannot) + other.get<ArrayT>()(a.rannot);
+       decltype(result)::wait_for_lazy_cleanup(result.world());
+       log_ta_tensor_host_memory_use();
+       return eval_result<this_type>(std::move(result));
+     }
+   
+     [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t elem_lo,
+                                        std::size_t elem_hi) const override {
+       auto const& tr1 = get<ArrayT>().trange().dim(mode);
+       // slice_mode takes element bounds, but a tiled backend can only cut on tile
+       // boundaries; mode_batches() returns exactly such (tile-aligned, in-range)
+       // bounds. Assert the precondition so misuse is caught rather than silently
+       // producing an over- or under-sized slice (which would break batched sums).
+       SEQUANT_ASSERT(elem_lo >= tr1.elements_range().first && elem_lo < elem_hi &&
+                      elem_hi <= tr1.elements_range().second);
+       std::size_t const tile_lo = tr1.element_to_tile(elem_lo);
+       SEQUANT_ASSERT(tr1.tile(tile_lo).first ==
+                      elem_lo);  // lo on a tile boundary
+       std::size_t const tile_hi = (elem_hi >= tr1.elements_range().second)
+                                       ? tr1.tile_extent()
+                                       : tr1.element_to_tile(elem_hi);
+       SEQUANT_ASSERT(elem_hi >= tr1.elements_range().second ||
+                      tr1.tile(tile_hi).first ==
+                          elem_hi);  // hi on a tile boundary
+       return eval_result<this_type>(
+           slice_array_over_mode(get<ArrayT>(), mode, tile_lo, tile_hi));
+     }
+   
+     [[nodiscard]] container::svector<std::pair<std::size_t, std::size_t>>
+     mode_batches(std::size_t mode, std::size_t target_batch_size) const override {
+       return mode_batches_of_trange1(get<ArrayT>().trange().dim(mode),
+                                      target_batch_size);
+     }
+   
+     [[nodiscard]] ResultPtr prod(Result const& other,
+                                  std::array<std::any, 3> const& annot,
+                                  DeNest DeNestFlag) const override {
+       auto const a = annot_wrap{annot};
+   
+       if (other.is<ResultScalar<numeric_type>>()) {
+         auto result = get<ArrayT>();
+         auto scalar = other.get<numeric_type>();
+   
+         detail::log_ta(a.lannot, " * ", scalar, " = ", a.this_annot, "\n");
+   
+         result(a.this_annot) = scalar * result(a.lannot);
+   
+         decltype(result)::wait_for_lazy_cleanup(result.world());
+         log_ta_tensor_host_memory_use();
+         return eval_result<this_type>(std::move(result));
+       } else if (a.this_annot.empty()) {
+         // DOT product
+         SEQUANT_ASSERT(other.is<this_type>());
+         numeric_type d =
+             TA::dot(get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot));
+         ArrayT::wait_for_lazy_cleanup(get<ArrayT>().world());
+         ArrayT::wait_for_lazy_cleanup(other.get<ArrayT>().world());
+   
+         detail::log_ta(a.lannot, " * ", a.rannot, " = ", d, "\n");
+   
+         log_ta_tensor_host_memory_use();
+         return eval_result<ResultScalar<numeric_type>>(d);
+       }
+   
+       detail::log_ta(a.lannot, " * ", a.rannot, " = ", a.this_annot, "\n");
+   
+       if (other.is<that_type>()) {
+         // ToT * T -> ToT
+         auto result =
+             TA::einsum(get<ArrayT>()(a.lannot),
+                        other.get<compatible_regular_distarray_type>()(a.rannot),
+                        a.this_annot);
+         log_ta_tensor_host_memory_use();
+         return eval_result<this_type>(std::move(result));
+   
+       } else if (other.is<this_type>() && DeNestFlag == DeNest::True) {
+         // ToT * ToT -> T
+         auto result = TA::einsum<TA::DeNest::True>(
+             get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot), a.this_annot);
+         log_ta_tensor_host_memory_use();
+         return eval_result<that_type>(std::move(result));
+   
+       } else if (other.is<this_type>() && DeNestFlag == DeNest::False) {
+         // ToT * ToT -> ToT
+         auto result = TA::einsum(get<ArrayT>()(a.lannot),
+                                  other.get<ArrayT>()(a.rannot), a.this_annot);
+         log_ta_tensor_host_memory_use();
+         return eval_result<this_type>(std::move(result));
+       } else {
+         throw detail::invalid_operand();
+       }
+     }
+   
+     [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
+       auto pre = get<ArrayT>();
+       TA::scale(pre, numeric_type(factor));
+       log_ta_tensor_host_memory_use();
+       return eval_result<this_type>(std::move(pre));
+     }
+   
+     [[nodiscard]] ResultPtr permute(
+         std::array<std::any, 2> const& ann) const override {
+       auto const pre_annot = std::any_cast<std::string>(ann[0]);
+       auto const post_annot = std::any_cast<std::string>(ann[1]);
+   
+       detail::log_ta(pre_annot, " = ", post_annot, "\n");
+   
+       ArrayT result;
+       result(post_annot) = get<ArrayT>()(pre_annot);
+       ArrayT::wait_for_lazy_cleanup(result.world());
+       log_ta_tensor_host_memory_use();
+       return eval_result<this_type>(std::move(result));
+     }
+   
+     [[nodiscard]] ResultPtr adjoint(
+         std::array<std::any, 2> const& ann) const override {
+       // ToT adjoint: bra/ket-swapped layout (operand annot in ann[0], adjoint
+       // annot in ann[1]) plus elementwise conj (a no-op for real numeric_type, so
+       // it is elided there to avoid a ConjTsrExpr wrapper). Identical to the
+       // regular-tensor branch above: TA's `.conj()` recurses into nested tiles.
+       auto const pre_annot = std::any_cast<std::string>(ann[0]);
+       auto const post_annot = std::any_cast<std::string>(ann[1]);
+   
+       detail::log_ta(post_annot, " = adjoint(", pre_annot, ")\n");
+   
+       ArrayT result;
+       if constexpr (TA::detail::is_complex_v<numeric_type>) {
+         result(post_annot) = get<ArrayT>()(pre_annot).conj();
+       } else {
+         result(post_annot) = get<ArrayT>()(pre_annot);
+       }
+       ArrayT::wait_for_lazy_cleanup(result.world());
+       log_ta_tensor_host_memory_use();
+       return eval_result<this_type>(std::move(result));
+     }
+   
+     void add_inplace(Result const& other) override {
+       SEQUANT_ASSERT(other.is<this_type>());
+   
+       auto& t = get<ArrayT>();
+       auto const& o = other.get<ArrayT>();
+   
+       SEQUANT_ASSERT(t.trange() == o.trange());
+       // ToT annotation needs an inner block ("outer;inner"); tot_inner_rank()
+       // reads it from a populated inner tile and is 0 when an operand's inner
+       // tiles are all empty. Take the rank from whichever operand has data; if
+       // both are empty the add is an identity no-op (t += 0), nothing to
+       // annotate.
+       auto const inner_rank =
+           std::max(detail::tot_inner_rank(t), detail::tot_inner_rank(o));
+       if (inner_rank == 0) return;
+       auto ann = TA::detail::dummy_annotation(t.trange().rank(), inner_rank);
+   
+       detail::log_ta(ann, " += ", ann, "\n");
+   
+       t(ann) += o(ann);
+       ArrayT::wait_for_lazy_cleanup(t.world());
+       log_ta_tensor_host_memory_use();
+     }
+   
+     [[nodiscard]] ResultPtr symmetrize() const override {
+       return eval_result<this_type>(detail::column_symmetrize_ta(get<ArrayT>()));
+     }
+   
+     [[nodiscard]] ResultPtr antisymmetrize(size_t /*bra_rank*/) const override {
+       // not implemented yet
+       return nullptr;
+     }
+   
+    private:
+     [[nodiscard]] std::size_t size_in_bytes() const final {
+       auto& v = get<ArrayT>();
+       auto local_size = TA::size_of<TA::MemorySpace::Host>(v);
+       v.world().gop.sum(local_size);
+       return local_size;
+     }
+   };
+   
+   template <typename... Args>
+   [[nodiscard]] TA::DistArray<Args...> slice_array_over_mode(
+       TA::DistArray<Args...> const& arr, std::size_t mode, std::size_t tile_lo,
+       std::size_t tile_hi) {
+     using ranges::views::iota;
+     auto const rank = arr.trange().rank();
+     SEQUANT_ASSERT(mode < rank);
+     SEQUANT_ASSERT(tile_lo < tile_hi &&
+                    tile_hi <= arr.trange().dim(mode).tile_extent());
+     container::svector<std::size_t> lo(rank, 0), hi(rank);
+     for (std::size_t d = 0; d < rank; ++d)
+       hi[d] = arr.trange().dim(d).tile_extent();
+     lo[mode] = tile_lo;
+     hi[mode] = tile_hi;
+     // For a tensor-of-tensor array the annotation must label an inner block
+     // ("outer;inner"); a flat annotation trips DistArray's is_tot_index() check.
+     // The block() is over outer modes only, so both sides share one annotation.
+     using value_type = typename TA::DistArray<Args...>::value_type;
+     std::string annot;
+     if constexpr (TA::detail::is_tensor_of_tensor_v<value_type>) {
+       auto const inner_rank = detail::tot_inner_rank(arr);
+       if (inner_rank == 0) {
+         // All-empty-inner ToT: tot_inner_rank() is 0, so there's no inner rank to
+         // build the ToT annotation block() needs. The slice of zero is zero, so
+         // build the sliced outer trange by hand (mode cut to [tile_lo,tile_hi),
+         // each dim rebased to 0, matching block()) and return a zero ToT over it.
+         // The result is dense even if ArrayT's policy is sparse -- harmless, the
+         // array is identically zero.
+         std::vector<TA::TiledRange1> tr1s;
+         tr1s.reserve(rank);
+         for (std::size_t d = 0; d < rank; ++d) {
+           auto const& dim = arr.trange().dim(d);
+           std::size_t const base = dim.tile(lo[d]).first;
+           std::vector<std::size_t> bounds{0};
+           for (std::size_t t = lo[d]; t < hi[d]; ++t)
+             bounds.push_back(dim.tile(t).second - base);
+           tr1s.emplace_back(bounds.begin(), bounds.end());
+         }
+         TA::DistArray<Args...> out{arr.world(),
+                                    TA::TiledRange(tr1s.begin(), tr1s.end())};
+         for (auto it = out.begin(); it != out.end(); ++it)
+           if (out.is_local(it.index())) *it = value_type{it.make_range()};
+         out.world().gop.fence();
+         return out;
+       }
+       annot = TA::detail::dummy_annotation(static_cast<unsigned int>(rank),
+                                            static_cast<unsigned int>(inner_rank));
+     } else {
+       annot = detail::ords_to_annot(iota(std::size_t{0}, rank));
+     }
+     TA::DistArray<Args...> out;
+     out(annot) = arr(annot).block(lo, hi);
+     TA::DistArray<Args...>::wait_for_lazy_cleanup(arr.world());
+     return out;
+   }
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_HAS_TILEDARRAY
+   
+   #endif  // SEQUANT_EVAL_BACKENDS_TILEDARRAY_RESULT_HPP

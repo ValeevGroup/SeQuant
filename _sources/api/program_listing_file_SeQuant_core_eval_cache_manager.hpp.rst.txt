@@ -1,0 +1,334 @@
+
+.. _program_listing_file_SeQuant_core_eval_cache_manager.hpp:
+
+Program Listing for File cache_manager.hpp
+==========================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_cache_manager.hpp>` (``SeQuant/core/eval/cache_manager.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_EVAL_CACHE_MANAGER_HPP
+   #define SEQUANT_EVAL_CACHE_MANAGER_HPP
+   
+   #include <SeQuant/core/asy_cost.hpp>
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/eval/eval_node.hpp>
+   #include <SeQuant/core/eval/eval_node_compare.hpp>
+   #include <SeQuant/core/eval/fwd.hpp>
+   #include <SeQuant/core/eval/result.hpp>
+   #include <SeQuant/core/expr.hpp>
+   
+   #include <range/v3/algorithm/for_each.hpp>
+   #include <range/v3/view/filter.hpp>
+   #include <range/v3/view/map.hpp>
+   #include <range/v3/view/transform.hpp>
+   
+   #include <algorithm>
+   #include <functional>
+   #include <memory>
+   #include <optional>
+   #include <unordered_map>
+   #include <unordered_set>
+   
+   namespace sequant {
+   
+   template <typename TreeNode, bool force_hash_collisions>
+   class CacheManager {
+    public:
+     using key_type = TreeNode;
+   
+     using custom_evaluator_type =
+         std::function<ResultPtr(key_type const&, CacheManager&)>;
+   
+    private:
+     using hasher_type = TreeNodeHasher<TreeNode, force_hash_collisions>;
+     using comparator_type = TreeNodeEqualityComparator<TreeNode>;
+   
+     class entry {
+      private:
+       size_t max_life;
+   
+       size_t life_c;
+   
+       ResultPtr data_p;
+   
+       mutable std::optional<size_t> size_bytes_;
+   
+       bool persistent_;
+   
+      public:
+       explicit entry(size_t count, bool persistent = false) noexcept
+           : max_life{count},
+             life_c{count},
+             data_p{nullptr},
+             persistent_{persistent} {}
+   
+       [[nodiscard]] ResultPtr access() noexcept {
+         if (!data_p) return nullptr;
+         if (persistent_) return data_p;  // never drain a persistent entry
+         if (decay() == 0) {              // last use: release the data
+           size_bytes_.reset();
+           return std::move(data_p);
+         }
+         return data_p;
+       }
+   
+       void store(ResultPtr&& data) noexcept {
+         data_p = std::move(data);
+         size_bytes_
+             .reset();  // (re)computed lazily on demand; see size_in_bytes()
+       }
+   
+       void reset() noexcept {
+         life_c = max_life;
+         if (!persistent_) {  // persistent data (and its size) survives reset()
+           data_p = nullptr;
+           size_bytes_.reset();
+         }
+       }
+   
+       [[nodiscard]] bool persistent() const noexcept { return persistent_; }
+   
+       [[nodiscard]] size_t life_count() const noexcept { return life_c; }
+   
+       [[nodiscard]] size_t max_life_count() const noexcept { return max_life; }
+   
+       [[nodiscard]] size_t size_in_bytes() const noexcept {
+         if (!data_p) return 0;
+         if (!size_bytes_)
+           size_bytes_ = data_p->size_in_bytes();  // lazy, memoized
+         return *size_bytes_;
+       }
+   
+       [[nodiscard]] bool alive() const noexcept { return data_p ? true : false; }
+   
+      private:
+       [[nodiscard]] int decay() noexcept {
+         return life_c > 0 ? static_cast<int>(--life_c) : 0;
+       }
+   
+     };  // entry
+   
+     static ResultPtr store(entry& ent, ResultPtr&& data) noexcept {
+       ent.store(std::move(data));
+       return ent.access();
+     }
+   
+     std::unordered_map<TreeNode, entry, hasher_type, comparator_type> cache_map_;
+   
+     size_t working_set_hwmark_ = 0;
+   
+     custom_evaluator_type custom_evaluator_{};
+   
+    public:
+     void set_custom_evaluator(custom_evaluator_type fn) noexcept {
+       custom_evaluator_ = std::move(fn);
+     }
+   
+     [[nodiscard]] custom_evaluator_type const& custom_evaluator() const noexcept {
+       return custom_evaluator_;
+     }
+     struct all_non_persistent {
+       bool operator()(key_type const&) const noexcept { return false; }
+     };
+   
+     template <typename Iterable, typename PersistencePred = all_non_persistent>
+       requires(!std::same_as<std::remove_cvref_t<Iterable>, CacheManager>)
+     explicit CacheManager(Iterable&& decaying,
+                           PersistencePred is_persistent = {}) noexcept {
+       for (auto&& [k, c] : decaying)
+         cache_map_.try_emplace(k, entry{c, is_persistent(k)});
+     }
+   
+     void reset() noexcept {
+       for (auto&& [k, v] : cache_map_) v.reset();
+       working_set_hwmark_ = 0;
+     }
+   
+     size_t note_working_set(size_t current_bytes) noexcept {
+       working_set_hwmark_ = std::max(working_set_hwmark_, current_bytes);
+       return working_set_hwmark_;
+     }
+   
+     [[nodiscard]] size_t working_set_hwmark() const noexcept {
+       return working_set_hwmark_;
+     }
+   
+     ResultPtr access(key_type const& key) noexcept {
+       if (auto found = cache_map_.find(key); found != cache_map_.end())
+         return found->second.access();
+       return nullptr;
+     }
+   
+     [[nodiscard]] ResultPtr store(key_type const& key, ResultPtr data) noexcept {
+       if (auto found = cache_map_.find(key); found != cache_map_.end())
+         return store(found->second, std::move(data));
+       return data;
+     }
+   
+     [[nodiscard]] bool exists(key_type const& key) const noexcept {
+       return cache_map_.find(key) != cache_map_.end();
+     }
+   
+     template <typename F>
+       requires std::invocable<F&, key_type const&>
+     void for_each_key(F&& fn) const {
+       for (auto const& [k, v] : cache_map_) fn(k);
+     }
+   
+     [[nodiscard]] int life(key_type const& key) const noexcept {
+       auto iter = cache_map_.find(key);
+       auto end = cache_map_.end();
+       return iter == end ? -1 : static_cast<int>(iter->second.life_count());
+     }
+   
+     [[nodiscard]] int max_life(key_type const& key) const noexcept {
+       auto iter = cache_map_.find(key);
+       auto end = cache_map_.end();
+       return iter == end ? -1 : static_cast<int>(iter->second.max_life_count());
+     }
+   
+     [[nodiscard]] bool alive(key_type const& key) const noexcept {
+       auto iter = cache_map_.find(key);
+       return iter != cache_map_.end() && iter->second.alive();
+     }
+   
+     [[nodiscard]] bool persistent(key_type const& key) const noexcept {
+       auto iter = cache_map_.find(key);
+       return iter != cache_map_.end() && iter->second.persistent();
+     }
+   
+     [[nodiscard]] size_t entry_size_in_bytes(key_type const& key) const noexcept {
+       auto iter = cache_map_.find(key);
+       return iter == cache_map_.end() ? 0 : iter->second.size_in_bytes();
+     }
+   
+     [[nodiscard]] size_t alive_count() const noexcept {
+       using ranges::views::filter;
+       using ranges::views::transform;
+       using ranges::views::values;
+       return ranges::accumulate(cache_map_                            //
+                                     | values                          //
+                                     | filter(&entry::alive)           //
+                                     | transform(&entry::life_count),  //
+                                 size_t{0});
+     }
+   
+     [[nodiscard]] size_t size_in_bytes() const noexcept {
+       using ranges::views::transform;
+       using ranges::views::values;
+       return ranges::accumulate(
+           cache_map_ | values | transform(&entry::size_in_bytes), size_t{0});
+     }
+   
+     static CacheManager empty() noexcept {
+       using map_type =
+           std::unordered_map<TreeNode, size_t, hasher_type, comparator_type>;
+       return CacheManager{map_type{}};
+     }
+   
+     // for unit testing
+     template <typename T>
+     struct access_by;
+     template <typename T>
+     friend struct access_by;
+   
+   };  // CacheManager
+   
+   template <bool force_hash_collisions = false>
+   auto cache_manager(meta::eval_node_range auto const& nodes,
+                      size_t min_repeats = 2) noexcept {
+     using TreeNode =
+         std::ranges::range_value_t<std::remove_cvref_t<decltype(nodes)>>;
+     using Hasher = TreeNodeHasher<TreeNode, force_hash_collisions>;
+     using Comp = TreeNodeEqualityComparator<TreeNode>;
+   
+     // Phase 1: Scan with pointer-based map (low memory)
+     std::unordered_map<const TreeNode*, size_t, Hasher, Comp> imed_counts;
+   
+     auto imed_visitor = [&imed_counts](auto&& n) -> bool {
+       if (auto found = imed_counts.find(&n); found != imed_counts.end()) {
+         ++found->second;
+         return false;
+       }
+       imed_counts.emplace(&n, 1);
+       return true;
+     };
+   
+     ranges::for_each(nodes, [&imed_visitor](auto&& tree) {
+       tree.visit_internal(imed_visitor);
+     });
+   
+     // Phase 2: Copy repeated entries (node by value)
+     std::unordered_map<TreeNode, size_t, Hasher, Comp> filtered;
+     for (auto&& [ptr, count] : imed_counts) {
+       if (count >= min_repeats) filtered.emplace(*ptr, count);
+     }
+   
+     return CacheManager<TreeNode, force_hash_collisions>{std::move(filtered)};
+   }
+   
+   template <bool force_hash_collisions = false>
+   auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
+                      size_t min_repeats = 2)
+     requires requires(
+         std::ranges::range_value_t<std::remove_cvref_t<decltype(nodes)>> const&
+             n) {
+       { is_volatile(n) } -> std::convertible_to<bool>;
+     }
+   {
+     using TreeNode =
+         std::ranges::range_value_t<std::remove_cvref_t<decltype(nodes)>>;
+     using Hasher = TreeNodeHasher<TreeNode, force_hash_collisions>;
+     using Comp = TreeNodeEqualityComparator<TreeNode>;
+   
+     std::unordered_map<TreeNode, size_t, Hasher, Comp> counts;  // internal uses
+     std::unordered_map<TreeNode, bool, Hasher, Comp> volatile_of;  // memoized
+     std::unordered_set<TreeNode, Hasher, Comp> persistent;  // NV/V frontier
+   
+     // Single DAG walk: count internal-node uses (CSE), memoize volatility
+     // bottom-up, and mark the NV/V frontier. Every (parent, child) edge is
+     // visited exactly once (children are recursed only on a node's first visit),
+     // so a child is marked persistent iff some volatile parent consumes it.
+     auto visit = [&](auto&& self, TreeNode const& n) -> bool {
+       bool const first = !volatile_of.contains(n);
+       if (!n.leaf()) ++counts[n];  // count this use of an internal node
+       if (!first) return volatile_of.at(n);
+       bool v;
+       if (n.leaf()) {
+         v = is_volatile(n);
+       } else {
+         bool const vl = self(self, n.left());
+         bool const vr = self(self, n.right());
+         v = is_volatile(n) || vl || vr;
+         if (v) {  // n is a volatile consumer => its NV internal children are P
+           if (!vl && !n.left().leaf()) persistent.insert(n.left());
+           if (!vr && !n.right().leaf()) persistent.insert(n.right());
+         }
+       }
+       volatile_of.emplace(n, v);
+       return v;
+     };
+     for (auto&& tree : nodes) visit(visit, tree);
+   
+     // Cache NP repeats + every P node; persistence = membership in `persistent`.
+     std::unordered_map<TreeNode, size_t, Hasher, Comp> filtered;
+     for (auto&& [n, c] : counts)
+       if (c >= min_repeats || persistent.contains(n)) filtered.emplace(n, c);
+   
+     auto is_persistent = [persistent = std::move(persistent)](TreeNode const& n) {
+       return persistent.contains(n);
+     };
+     return CacheManager<TreeNode, force_hash_collisions>{
+         std::move(filtered), std::move(is_persistent)};
+   }
+   
+   AsyCost peak_cache(Sum const& expr,
+                      std::optional<size_t> min_repeats = std::nullopt);
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_EVAL_CACHE_MANAGER_HPP

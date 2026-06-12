@@ -1,0 +1,67 @@
+
+.. _file_SeQuant_core_export_utils.hpp:
+
+File utils.hpp
+==============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_export>` (``SeQuant/core/export``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/export/utils.hpp``)
+----------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_export_utils.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/expr_fwd.hpp`` (:ref:`file_SeQuant_core_expr_fwd.hpp`)
+
+- ``SeQuant/core/expressions/expr_ptr.hpp`` (:ref:`file_SeQuant_core_expressions_expr_ptr.hpp`)
+
+- ``SeQuant/core/expressions/power.hpp`` (:ref:`file_SeQuant_core_expressions_power.hpp`)
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_export_itf.hpp`
+
+- :ref:`file_SeQuant_core_export_julia_tensor_operations.hpp`
+
+- :ref:`file_SeQuant_core_export_python_einsum.hpp`
+
+- :ref:`file_SeQuant_core_export_text_generator.hpp`
+
+- :ref:`file_SeQuant_core_export_utils.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__detail`
+

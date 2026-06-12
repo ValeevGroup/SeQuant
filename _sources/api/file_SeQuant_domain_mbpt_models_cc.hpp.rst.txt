@@ -1,0 +1,74 @@
+
+.. _file_SeQuant_domain_mbpt_models_cc.hpp:
+
+File cc.hpp
+===========
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_mbpt_models>` (``SeQuant/domain/mbpt/models``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/domain/mbpt/models/cc.hpp``)
+--------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_mbpt_models_cc.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/op.hpp`` (:ref:`file_SeQuant_core_op.hpp`)
+
+- ``SeQuant/domain/mbpt/op.hpp`` (:ref:`file_SeQuant_domain_mbpt_op.hpp`)
+
+- ``SeQuant/domain/mbpt/vac_av.hpp`` (:ref:`file_SeQuant_domain_mbpt_vac_av.hpp`)
+
+- ``cstddef``
+
+- ``limits``
+
+- ``optional``
+
+- ``vector``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_domain_mbpt_models_cc.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__mbpt`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1mbpt_1_1_c_c_1_1_options`
+
+- :ref:`exhale_class_classsequant_1_1mbpt_1_1_c_c`
+

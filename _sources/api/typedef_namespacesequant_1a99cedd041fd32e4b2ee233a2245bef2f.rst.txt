@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1a99cedd041fd32e4b2ee233a2245bef2f:
+
+Typedef sequant::FOp
+====================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::FOp
+   :project: SeQuant

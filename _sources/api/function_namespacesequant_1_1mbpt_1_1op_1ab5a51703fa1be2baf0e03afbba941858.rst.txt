@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1_1op_1ab5a51703fa1be2baf0e03afbba941858:
+
+Function sequant::mbpt::op::lower_to_tensor_form(const ExprPtr&)
+================================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_vac_av.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::op::lower_to_tensor_form(const ExprPtr&)
+   :project: SeQuant

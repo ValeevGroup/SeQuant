@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1ac5066799ad112e0d11d548e666c7d60a:
+
+Typedef sequant::SubexpressionUsageCounts
+=========================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_node_compare.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::SubexpressionUsageCounts
+   :project: SeQuant

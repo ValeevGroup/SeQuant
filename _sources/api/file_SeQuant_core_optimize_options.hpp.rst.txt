@@ -1,0 +1,80 @@
+
+.. _file_SeQuant_core_optimize_options.hpp:
+
+File options.hpp
+================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_optimize>` (``SeQuant/core/optimize``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/optimize/options.hpp``)
+--------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_optimize_options.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``cstddef``
+
+- ``functional``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_optimize_optimize.hpp`
+
+- :ref:`file_SeQuant_core_optimize_single_term.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_optimize_options`
+
+
+Enums
+-----
+
+
+- :ref:`exhale_enum_namespacesequant_1a5a834d84c1ff99e61473e13ff4d5cfeb`
+
+- :ref:`exhale_enum_namespacesequant_1aedaae79d4f68df56c51e701dc954f8e4`
+
+- :ref:`exhale_enum_namespacesequant_1aa70b6261fe04b0de0baceadd67d6599a`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1a4fe42667b5b01e507a00435726143ae6`
+

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a8510feba16321a56d52a0e3adb072dc0:
+
+Function sequant::toplevel_diff(const Constant&, const Constant&)
+=================================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::toplevel_diff(const Constant&, const Constant&)
+   :project: SeQuant

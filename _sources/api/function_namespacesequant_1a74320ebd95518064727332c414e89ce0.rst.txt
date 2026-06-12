@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a74320ebd95518064727332c414e89ce0:
+
+Function sequant::toplevel_diff(const Sum&, const Sum&)
+=======================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::toplevel_diff(const Sum&, const Sum&)
+   :project: SeQuant

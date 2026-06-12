@@ -1,0 +1,94 @@
+
+.. _file_SeQuant_core_reserved.hpp:
+
+File reserved.hpp
+=================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/reserved.hpp``)
+------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_reserved.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``array`` (:ref:`file_SeQuant_core_eval_backends_tiledarray_eval_expr.hpp`)
+
+- ``range/v3/algorithm/contains.hpp``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_expressions_tensor.hpp`
+
+- :ref:`file_SeQuant_core_tensor_canonicalizer.cpp`
+
+- :ref:`file_SeQuant_core_utility_expr.cpp`
+
+- :ref:`file_SeQuant_core_utility_indices.hpp`
+
+- :ref:`file_SeQuant_core_wick.impl.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_biorthogonalization.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_models_cc.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_op_registry.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_rules_csv.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__reserved`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1reserved_1ae8269764dd2792fcbc1e8832b6c54da0`
+
+- :ref:`exhale_function_namespacesequant_1_1reserved_1a8ecc7155212482c2d7611c91284c2610`
+
+- :ref:`exhale_function_namespacesequant_1_1reserved_1ad44ef3d4c9544d3f61583d4b5356afbd`
+
+- :ref:`exhale_function_namespacesequant_1_1reserved_1a5645db49905c083184fd892385b41718`
+
+- :ref:`exhale_function_namespacesequant_1_1reserved_1a892857a6befeb28e8cfb45cd8dbdd4aa`
+
+- :ref:`exhale_function_namespacesequant_1_1reserved_1af47698eb4e5d5fae67dafc45ed2ec44d`
+
+- :ref:`exhale_function_namespacesequant_1_1reserved_1ac6c35baf9f4ffcc7e119d4c517a54ce2`
+

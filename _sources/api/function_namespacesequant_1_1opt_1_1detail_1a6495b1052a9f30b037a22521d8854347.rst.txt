@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1a6495b1052a9f30b037a22521d8854347:
+
+Function sequant::opt::detail::memsize_counter
+==============================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_single_term.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::memsize_counter(has_index_extent auto&&)
+   :project: SeQuant
