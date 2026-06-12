@@ -69,6 +69,10 @@ class CC {
   /// @return true if the ansatz is unitary
   [[nodiscard]] bool unitary() const;
 
+  /// @return the maximum of nested commutators in H̄; returns std::nullopt if
+  /// not set
+  [[nodiscard]] std::optional<size_t> hbar_comm_rank() const;
+
   /// @return true if singles amplitudes are excluded from \f$ \hat{T} \f$ and
   /// \f$ \hat{\Lambda} \f$
   [[nodiscard]] bool skip_singles() const;
@@ -88,6 +92,15 @@ class CC {
   /// value. If provided, will override all defaults.
   [[nodiscard]] ExprPtr hbar(
       std::optional<size_t> truncation_rank = std::nullopt) const;
+
+  /// @brief derives the CC energy expression \f$ \langle 0|\bar{H}|0 \rangle
+  /// \f$ at the requested commutator truncation, WITHOUT deriving the
+  /// projected amplitude equations (cheaper than `t().at(0)`).
+  /// @param comm_rank optional H̄ commutator-truncation override, forwarded to
+  ///   @ref hbar (defaults to the engine's `hbar_comm_rank`, else 4).
+  /// @return the energy expression \f$ \langle 0|\bar{H}|0 \rangle \f$
+  [[nodiscard]] ExprPtr energy(
+      std::optional<size_t> comm_rank = std::nullopt) const;
 
   /// @brief derives t amplitude equations, \f$ \langle P|\bar{H}|0 \rangle = 0
   /// \f$

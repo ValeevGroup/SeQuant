@@ -57,6 +57,8 @@ bool CC::unitary() const {
   return ansatz_ == Ansatz::U || ansatz_ == Ansatz::oU;
 }
 
+std::optional<size_t> CC::hbar_comm_rank() const { return hbar_comm_rank_; }
+
 bool CC::skip_singles() const { return skip_singles_; }
 
 bool CC::screen() const { return screen_; }
@@ -67,6 +69,15 @@ ExprPtr CC::hbar(std::optional<size_t> truncation_rank) const {
   const auto truncation = truncation_rank.value_or(hbar_comm_rank_.value_or(4));
   return mbpt::lst(H(), T(N, skip_singles()), truncation,
                    {.unitary = unitary()});
+}
+
+ExprPtr CC::energy(std::optional<size_t> comm_rank) const {
+  // <0|H̄|0>: reference expectation value of H̄ at the requested commutator
+  // truncation. No projector ⇒ this is the energy. ref_av applies the
+  // connectivity (empty for unitary, default otherwise).
+  return this->unitary() ? this->ref_av(this->hbar(comm_rank),
+                                        mbpt::OpConnections<std::wstring>{})
+                         : this->ref_av(this->hbar(comm_rank));
 }
 
 std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) const {
