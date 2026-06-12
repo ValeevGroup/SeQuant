@@ -3,6 +3,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -27,8 +28,8 @@ std::size_t IndexSpaceMeta::getSize(const Index &index) const {
 std::string IndexSpaceMeta::getName(const IndexSpace &space) const {
   auto iter = m_entries.find(space);
   if (iter == m_entries.end()) {
-    throw std::runtime_error("No known name for index space " +
-                             toUtf8(space.base_key()));
+    throw Exception("No known name for index space " +
+                    toUtf8(space.base_key()));
   }
 
   return iter->second.name;
@@ -37,8 +38,7 @@ std::string IndexSpaceMeta::getName(const IndexSpace &space) const {
 std::string IndexSpaceMeta::getTag(const IndexSpace &space) const {
   auto iter = m_entries.find(space);
   if (iter == m_entries.end()) {
-    throw std::runtime_error("No known tag for index space " +
-                             toUtf8(space.base_key()));
+    throw Exception("No known tag for index space " + toUtf8(space.base_key()));
   }
 
   return iter->second.tag;

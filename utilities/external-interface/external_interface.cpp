@@ -14,6 +14,7 @@
 #include <SeQuant/core/optimize/common_subexpression_elimination.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -85,8 +86,7 @@ ProcessingOptions extractProcessingOptions(
     } else if (spintrace == "rigorous") {
       options.spintrace = SpinTracing::Rigorous;
     } else {
-      throw std::runtime_error("Invalid spintracing option '" + spintrace +
-                               "'");
+      throw Exception("Invalid spintracing option '" + spintrace + "'");
     }
   }
 
@@ -98,8 +98,7 @@ ProcessingOptions extractProcessingOptions(
     } else if (projection == "biorthogonal") {
       options.transform = ProjectionTransformation::Biorthogonal;
     } else {
-      throw std::runtime_error("Invalid projection option '" + projection +
-                               "'");
+      throw Exception("Invalid projection option '" + projection + "'");
     }
   }
 
@@ -220,8 +219,8 @@ void generateITF(const json &blocks, std::string_view out_file,
                     result_name);
 
       if (!std::filesystem::exists(input_file)) {
-        throw std::runtime_error("Specified input file '" + input_file +
-                                 "' does not exist");
+        throw Exception("Specified input file '" + input_file +
+                        "' does not exist");
       }
 
       // Read input file
@@ -255,20 +254,20 @@ void generateITF(const json &blocks, std::string_view out_file,
           } else if (equality_method == "block") {
             replace<TensorBlockEqualComparator>(result, target, replacement);
           } else {
-            throw std::runtime_error("Unknown tensor_equality choice '" +
-                                     equality_method + "'");
+            throw Exception("Unknown tensor_equality choice '" +
+                            equality_method + "'");
           }
         }
       }
 
-      // SeQuant processing often assumes fully expanded/simplified expressions
-      // so at least for now, we start out with exactly that
+      // SeQuant processing often assumes fully expanded/simplified
+      // expressions so at least for now, we start out with exactly that
       rapid_simplify(result);
 
       spdlog::debug("Initial (mildly simplified) equation is:\n{}", result);
 
       if (std::string msg; !is_valid(result, &msg)) {
-        throw std::runtime_error("Input equation is invalid: " + msg);
+        throw Exception("Input equation is invalid: " + msg);
       }
 
       ProcessingOptions options =
@@ -412,8 +411,8 @@ void generateCode(const json &details, const IndexSpaceMeta &spaceMeta) {
   if (boost::iequals(format, "itf")) {
     generateITF(details.at("code_blocks"), out_path, defaultOptions, spaceMeta);
   } else {
-    throw std::runtime_error("Unknown code generation target format '" +
-                             std::string(format) + "'");
+    throw Exception("Unknown code generation target format '" +
+                    std::string(format) + "'");
   }
 }
 
@@ -430,7 +429,7 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta) {
     const int size = current.at("size");
 
     if (size <= 0) {
-      throw std::runtime_error("Index space sizes must be > 0");
+      throw Exception("Index space sizes must be > 0");
     }
 
     IndexSpaceMeta::Entry entry;
@@ -459,7 +458,7 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta) {
 
 void process(const json &driver, IndexSpaceMeta &spaceMeta) {
   if (!driver.contains("index_spaces")) {
-    throw std::runtime_error("Missing index_spaces definition");
+    throw Exception("Missing index_spaces definition");
   }
 
   registerIndexSpaces(driver.at("index_spaces"), spaceMeta);
@@ -503,11 +502,11 @@ int main(int argc, char **argv) {
   CLI11_PARSE(app, argc, argv);
 
   if (!std::filesystem::exists(driver)) {
-    throw std::runtime_error("Specified driver file '" + driver.string() +
-                             "' does not exist");
+    throw Exception("Specified driver file '" + driver.string() +
+                    "' does not exist");
   } else if (!std::filesystem::is_regular_file(driver)) {
-    throw std::runtime_error("Specified driver file '" + driver.string() +
-                             "' is not a file");
+    throw Exception("Specified driver file '" + driver.string() +
+                    "' is not a file");
   }
 
   // Change directory to where the driver file is located so that all relative
