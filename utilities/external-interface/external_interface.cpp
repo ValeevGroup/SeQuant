@@ -128,31 +128,36 @@ ProcessingOptions extractProcessingOptions(
   return options;
 }
 
+struct ExportOptions {
+  bool importResult = false;
+  bool createResult = false;
+};
+
 ExportNode<> prepareForExport(const ResultExpr &result,
                               const ItfGenerator<ItfExportContext> &generator,
-                              ItfExportContext &ctx, bool importResult,
-                              bool createResult) {
+                              ItfExportContext &ctx,
+                              const ExportOptions &opts) {
   ExportNode<> tree = to_export_tree(result);
 
   if (result.produces_tensor()) {
     SEQUANT_ASSERT(result.has_label());
     Tensor result_tensor = result.result_as_tensor();
     ctx.rewrite(result_tensor);
-    if (importResult) {
+    if (opts.importResult) {
       ctx.set_import_name(result_tensor,
                           generator.get_name(result_tensor, ctx));
     }
-    if (createResult) {
+    if (opts.createResult) {
       ctx.setLoadStrategy(result_tensor, LoadStrategy::Create, tree->id());
     } else {
       ctx.setLoadStrategy(result_tensor, LoadStrategy::Load, tree->id());
     }
   } else {
-    if (importResult) {
+    if (opts.importResult) {
       SEQUANT_ASSERT(result.has_label());
       ctx.set_import_name(result.result_as_variable(), toUtf8(result.label()));
     }
-    if (createResult) {
+    if (opts.createResult) {
       ctx.setLoadStrategy(result.result_as_variable(), LoadStrategy::Create,
                           tree->id());
     } else {
@@ -320,12 +325,14 @@ void generateITF(const json &blocks, std::string_view out_file,
 
             spdlog::debug("After popping S tensor:\n{}", current);
 
-            results.push_back(prepareForExport(current, itfgen, context, false,
-                                               createResult));
+            results.push_back(prepareForExport(
+                current, itfgen, context,
+                {.importResult = false, .createResult = createResult}));
           } else {
             results.push_back(prepareForExport(
-                current, itfgen, context, current_result.value("import", true),
-                createResult));
+                current, itfgen, context,
+                {.importResult = current_result.value("import", true),
+                 .createResult = createResult}));
           }
         }
       }
@@ -338,9 +345,10 @@ void generateITF(const json &blocks, std::string_view out_file,
 
         spdlog::debug("Result symmetrization via\n{}", symmetrizedResult);
 
-        results.push_back(prepareForExport(symmetrizedResult, itfgen, context,
-                                           current_result.value("import", true),
-                                           true));
+        results.push_back(prepareForExport(
+            symmetrizedResult, itfgen, context,
+            {.importResult = current_result.value("import", true),
+             .createResult = true}));
       }
     }
 
