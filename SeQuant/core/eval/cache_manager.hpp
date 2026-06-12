@@ -234,6 +234,19 @@ class CacheManager {
     return cache_map_.find(key) != cache_map_.end();
   }
 
+  ///
+  /// \brief Invokes \p fn with a const reference to every registered key.
+  ///
+  /// Keys are the canonical evaluation-tree nodes registered at construction;
+  /// iteration order is unspecified. Use together with persistent()/alive() to
+  /// enumerate, e.g., persistent entries that have not been populated yet.
+  ///
+  template <typename F>
+    requires std::invocable<F&, key_type const&>
+  void for_each_key(F&& fn) const {
+    for (auto const& [k, v] : cache_map_) fn(k);
+  }
+
   /// if the key exists in the database, return the current lifetime count of
   /// the cached data otherwise return -1
   [[nodiscard]] int life(key_type const& key) const noexcept {

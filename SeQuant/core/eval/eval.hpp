@@ -904,11 +904,41 @@ ResultPtr evaluate_antisymm(Args&&... args) {
 /// backend to partition \c K into contiguous element-range batches of about
 /// \p target_batch_size elements each (Result::mode_batches); if that yields at
 /// most one batch it declines (so small / unselected indices are left to the
-/// standard scheme). Otherwise, for each batch it evaluates the subtree by the
-/// standard scheme on a fresh scratch cache, with every leaf carrying \c K
-/// sliced to the batch's element range, and sums the partial results. This is
-/// exact because `sum_K = sum_{batches} sum_{K in batch}`, and never
-/// materializes the whole \c K extent of any intermediate at once.
+/// standard scheme).
+///
+/// Otherwise it *replays the build of every compatible persistent final* in
+/// the same batch passes: the group is the trigger node plus every key of
+/// \p cache that is registered persistent, not yet alive, and batches over an
+/// axis with the identical realized partition. Per batch, each group member is
+/// evaluated by the standard scheme -- with every leaf carrying the member's
+/// batch axis sliced to the batch's element range -- on a shared *registered*
+/// scratch cache (see detail::make_batched_scratch), so sub-intermediates
+/// repeated within a member (canonically-equal siblings) or shared between
+/// members are evaluated once per batch, exactly as the real cache would share
+/// them; the per-member partials are summed across batches. This is exact
+/// because `sum_K = sum_{batches} sum_{K in batch}`, and never materializes
+/// the whole batch-axis extent of any intermediate at once. Completed members
+/// are stored into \p cache (canonical-phase convention); the trigger's result
+/// is returned for evaluate() to cache as usual. Members nested inside other
+/// members evaluate in earlier passes and are then seeded (slice-free w.r.t.
+/// the outer batch axis) or re-derived sliced in the outer pass. Considering a
+/// group candidate costs one leaf evaluation (the mode_batches probe); with an
+/// unregistered (empty) cache the group is just the trigger.
+///
+/// Why a *group* of trees rather than the trigger alone: sub-intermediates are
+/// shared between separately-intercepted finals, and a scratch scoped to one
+/// final cannot see the other consumers. Concretely, in DF-based PNO-CCSD the
+/// half-transformed DF factor gC = g.C (g the 3-index DF factor carrying the
+/// aux index K, C the PNO coefficients) feeds both canonically-equal gCC
+/// children of the particle-particle-ladder intermediate W = gCC.gCC *and* the
+/// triply-transformed final gCCC. Unbatched, the real cache builds gC once and
+/// serves all three uses (its keys are canonical, max_life = 3). Batching each
+/// final in isolation rebuilds gC n_batches times *per final* -- the shared
+/// scratch of a single pass dedups W's two gCC children within each batch, but
+/// cross-final sharing with gCCC is restored only by streaming both finals
+/// over the same batch partition in the same passes, which brings gC back to
+/// one evaluation per batch (work parity with the unbatched path, at sliced
+/// rather than full intermediate peak memory).
 ///
 /// \param le the leaf evaluator (captured).
 /// \param target_batch_size the desired size of each batch *in elements* (a
@@ -975,6 +1005,110 @@ template <typename Node, typename Pred>
   return subtree_any(n.left(), pred) || subtree_any(n.right(), pred);
 }
 
+namespace detail {
+
+/// The scratch cache for one batched replay pass, plus the alive persistent
+/// real-cache entries to pre-seed it with (registered persistent in the
+/// scratch, so they survive the per-batch reset()).
+template <typename TreeNode, bool FHC>
+struct BatchedScratch {
+  CacheManager<TreeNode, FHC> cache;
+  std::vector<TreeNode const*> seeds;
+};
+
+/// \brief Builds the scratch CacheManager for one batched replay pass over
+/// \p members (each a subtree root paired with its batch axis).
+///
+/// Walks every member subtree with the same pruned counting walk as
+/// cache_manager() (descend on first visit of a canonical-equal node, so
+/// counts match access counts under caching -- and also on a re-encounter
+/// whose slicing signature differs from the first visit's, so that
+/// descendants' signatures under an inconsistently-sliced occurrence are
+/// recorded rather than hidden by the prune) and registers every internal
+/// subnode that repeats AND has a consistent slicing signature -- the position
+/// of the containing member's batch axis in the subnode's canon_indices(), or
+/// its absence -- across all occurrences. Signature consistency is what makes
+/// a scratch hit exact across members: canonical equality maps the index at
+/// canonical position p to the index at position p, so equal signatures plus
+/// equal realized element ranges (guaranteed by the caller's grouping) imply
+/// identical slices. Inconsistently-sliced subnodes are not registered and so
+/// are evaluated per occurrence, unshared. Count inexactness arising from the
+/// pruned walk is benign: an undercount makes evaluate() recompute a drained
+/// entry, an overcount keeps an entry until the per-batch reset().
+///
+/// Subnodes whose signature is consistently 'absent' (no leaf below carries
+/// the axis -- the axis is contracted at the member's root, so a subtree
+/// containing an axis-carrying leaf carries the axis free in its
+/// canon_indices()) have batch-invariant full values; those that are alive
+/// persistent entries of \p real are returned as seeds, and the caller copies
+/// their values into the scratch before the batch loop.
+template <typename TreeNode, bool FHC, typename Members>
+[[nodiscard]] BatchedScratch<TreeNode, FHC> make_batched_scratch(
+    Members const& members, CacheManager<TreeNode, FHC> const& real) {
+  using Hasher = TreeNodeHasher<TreeNode, FHC>;
+  using Comp = TreeNodeEqualityComparator<TreeNode>;
+  struct Meta {
+    std::size_t count = 0;
+    std::optional<std::size_t> sig;
+    bool consistent = true;
+  };
+  std::unordered_map<TreeNode const*, Meta, Hasher, Comp> meta;
+
+  auto visit = [&meta](auto&& self, TreeNode const& n,
+                       Index const& axis) -> void {
+    if (n.leaf()) return;
+    auto const sig = index_position(n, axis);
+    auto const [it, first] = meta.try_emplace(&n);
+    auto& e = it->second;
+    if (first)
+      e.sig = sig;
+    else if (e.sig != sig)
+      e.consistent = false;
+    ++e.count;
+    // Prune a re-encounter only when its signature matches the first one:
+    // canonical equality maps canonical position p to position p, so an equal
+    // signature here implies the descendants' signatures equal those already
+    // recorded on the first walk (deeper accesses shared and counted). A
+    // differing signature gives no such guarantee -- descend so descendants'
+    // signatures under this occurrence are recorded too; otherwise a
+    // descendant sliced differently only under this (unshared, pruned)
+    // occurrence could pass the guard and serve wrong slices. The extra
+    // descendant counts are real accesses: an inconsistently-sliced occurrence
+    // is evaluated per occurrence, not served from the scratch at n.
+    if (!first && e.sig == sig) return;
+    self(self, n.left(), axis);
+    self(self, n.right(), axis);
+  };
+  for (auto const& [root, axis] : members) {
+    // member roots themselves are accumulated by the caller, not cached here
+    if (root->leaf()) continue;
+    visit(visit, root->left(), axis);
+    visit(visit, root->right(), axis);
+  }
+
+  std::unordered_map<TreeNode, std::size_t, Hasher, Comp> reg;
+  std::unordered_set<TreeNode, Hasher, Comp> seed_keys;
+  std::vector<TreeNode const*> seeds;
+  for (auto const& [ptr, e] : meta) {
+    if (!e.consistent) continue;  // ambiguous slicing: never share
+    bool const seedable = !e.sig && real.persistent(*ptr) && real.alive(*ptr);
+    if (seedable) {
+      seeds.push_back(ptr);
+      seed_keys.insert(*ptr);
+      reg.emplace(*ptr, e.count);  // count is ignored for persistent entries
+    } else if (e.count >= 2) {
+      reg.emplace(*ptr, e.count);
+    }
+  }
+  auto is_persistent = [seed_keys = std::move(seed_keys)](TreeNode const& n) {
+    return seed_keys.contains(n);
+  };
+  return {CacheManager<TreeNode, FHC>{std::move(reg), std::move(is_persistent)},
+          std::move(seeds)};
+}
+
+}  // namespace detail
+
 template <typename F, typename IndexPredicate = accept_any_index,
           typename ScopeGuardFactory = make_no_scope_guard,
           typename IsVolatile = never_volatile>
@@ -983,8 +1117,6 @@ template <typename F, typename IndexPredicate = accept_any_index,
     ScopeGuardFactory make_scope_guard = {}, IsVolatile is_volatile = {}) {
   return [le = std::move(le), target_batch_size, accept, is_volatile,
           make_scope_guard](auto const& node, auto& cache) -> ResultPtr {
-    using cache_t = std::remove_reference_t<decltype(cache)>;
-
     auto const K = batch_axis(node, accept);
     if (!K) return nullptr;
 
@@ -1003,6 +1135,65 @@ template <typename F, typename IndexPredicate = accept_any_index,
     if (batches.size() <= 1)
       return nullptr;  // nothing to gain (or unbatchable)
 
+    using node_t = std::remove_cvref_t<decltype(node)>;
+    using member_t = std::pair<node_t const*, Index>;
+    TreeNodeEqualityComparator<node_t> const eq;
+
+    // The replay group: the trigger plus every registered persistent key that
+    // is not yet alive and batches over an axis with the identical realized
+    // partition. All compatible persistent finals stream over the batch axis
+    // in the same passes, so sub-intermediates shared between them (wherever
+    // the scratch's slicing-signature guard admits sharing -- equal canonical
+    // positions of the batch axis plus equal element ranges imply identical
+    // slices) are evaluated once per batch instead of once per consumer.
+    // The cost of considering a candidate is one leaf evaluation (the
+    // mode_batches probe). With an unregistered (empty) real cache the group
+    // is just the trigger.
+    std::vector<member_t> group{{&node, *K}};
+    cache.for_each_key([&](node_t const& k) {
+      if (!cache.persistent(k) || cache.alive(k)) return;
+      if (eq(k, node)) return;  // the trigger occupies its own slot
+      auto const Kk = batch_axis(k, accept);
+      if (!Kk) return;
+      if (subtree_any(k, is_volatile)) return;  // defensive: P implies NV
+      auto const lk = find_leaf_carrying(k, *Kk);
+      if (!lk) return;
+      if (le(lk->first)->mode_batches(lk->second, target_batch_size) != batches)
+        return;
+      group.emplace_back(&k, *Kk);
+    });
+
+    // Layer by nesting: a member whose subtree contains another member
+    // evaluates in a later layer, with the inner result by then alive in the
+    // real cache -- seeded into the outer pass when slice-free w.r.t. the
+    // outer batch axis, re-derived sliced (correct, unshared) otherwise.
+    auto contains = [&eq](node_t const& outer, node_t const& inner) -> bool {
+      auto rec = [&eq, &inner](auto&& self, node_t const& n) -> bool {
+        if (eq(n, inner)) return true;
+        if (n.leaf()) return false;
+        return self(self, n.left()) || self(self, n.right());
+      };
+      if (outer.leaf()) return false;
+      return rec(rec, outer.left()) || rec(rec, outer.right());
+    };
+    std::vector<std::vector<member_t>> layers;
+    {
+      std::vector<member_t> remaining = std::move(group);
+      while (!remaining.empty()) {
+        std::vector<member_t> layer, rest;
+        for (auto const& m : remaining) {
+          bool const outer = std::any_of(
+              remaining.begin(), remaining.end(), [&](member_t const& o) {
+                return m.first != o.first && contains(*m.first, *o.first);
+              });
+          (outer ? rest : layer).push_back(m);
+        }
+        SEQUANT_ASSERT(!layer.empty());  // containment is a strict order
+        layers.push_back(std::move(layer));
+        remaining = std::move(rest);
+      }
+    }
+
     // RAII scope for the batched partial contractions; a backend-supplied
     // factory may relax block-sparse screening here (scaled by the batch count)
     // so per-batch screening does not drop contributions that survive over the
@@ -1010,30 +1201,61 @@ template <typename F, typename IndexPredicate = accept_any_index,
     auto const scope_guard = make_scope_guard(batches.size());
     (void)scope_guard;
 
-    ResultPtr acc;
-    for (auto const& [e_lo, e_hi] : batches) {
-      if (e_lo == e_hi) continue;
+    ResultPtr trigger_result;
+    for (auto const& layer : layers) {
+      // The layer's scratch cache: registered from the member subtrees (same
+      // canonical-equality counting as the real cache), so repeated subtrees
+      // -- canonically-equal siblings within a member as well as
+      // sub-intermediates shared between members -- are evaluated once per
+      // batch. Carries no custom evaluator (no re-interception) and keeps the
+      // partial, sliced intermediates out of the real cache; reset() between
+      // batches drops the previous batch's partials, while pre-seeded alive
+      // persistent entries (registered persistent in the scratch) survive.
+      auto bs = detail::make_batched_scratch(layer, cache);
+      for (auto const* s : bs.seeds) (void)bs.cache.store(*s, cache.access(*s));
 
-      // leaf evaluator that slices every leaf carrying K to this element batch;
-      // others pass through unchanged.
-      auto le_g = [&le, &K, e_lo = e_lo,
-                   e_hi = e_hi](auto const& leaf_node) -> ResultPtr {
-        ResultPtr r = le(leaf_node);
-        if (auto const p = index_position(leaf_node, *K))
-          return r->slice_mode(*p, e_lo, e_hi);
-        return r;
-      };
+      std::vector<ResultPtr> acc(layer.size());
+      for (auto const& [e_lo, e_hi] : batches) {
+        if (e_lo == e_hi) continue;
+        bs.cache.reset();
+        for (std::size_t m = 0; m != layer.size(); ++m) {
+          auto const& [mem, Km] = layer[m];
+          // leaf evaluator that slices every leaf carrying the member's batch
+          // axis to this element batch; others pass through unchanged.
+          auto le_g = [&le, &Km, e_lo = e_lo,
+                       e_hi = e_hi](auto const& leaf_node) -> ResultPtr {
+            ResultPtr r = le(leaf_node);
+            if (auto const p = index_position(leaf_node, Km))
+              return r->slice_mode(*p, e_lo, e_hi);
+            return r;
+          };
+          ResultPtr part = evaluate(*mem, le_g, bs.cache);
+          if (!acc[m])
+            acc[m] = std::move(part);
+          else
+            acc[m]->add_inplace(*part);
+        }
+      }
 
-      // standard scheme on a fresh scratch cache: no re-interception, and the
-      // (partial, sliced) intermediates do not pollute the real cache.
-      auto scratch = cache_t::empty();
-      ResultPtr part = evaluate(node, le_g, scratch);
-      if (!acc)
-        acc = std::move(part);
-      else
-        acc->add_inplace(*part);
+      // Store the members into the real cache under the canonical-phase
+      // convention (mirroring evaluate()'s Checked store), eagerly per layer
+      // so later layers can seed them. The trigger is returned instead: its
+      // Checked wrapper stores it (a direct store here would double-decay a
+      // non-persistent trigger's life count).
+      for (std::size_t m = 0; m != layer.size(); ++m) {
+        auto const* mem = layer[m].first;
+        if (mem == &node) {
+          trigger_result = std::move(acc[m]);
+          continue;
+        }
+        ResultPtr v = std::move(acc[m]);
+        if (auto const ph = (*mem)->canon_phase(); ph != 1)
+          v = v->mult_by_phase(ph);
+        (void)cache.store(*mem, std::move(v));
+      }
     }
-    return acc;
+    SEQUANT_ASSERT(trigger_result);
+    return trigger_result;
   };
 }
 
