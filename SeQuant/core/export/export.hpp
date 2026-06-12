@@ -729,25 +729,40 @@ class PreprocessVisitor {
   }
 
   void release_used_terms(ExportNode<T> &node) {
-    // Mark tensors/variables as no longer in use
-    if (node.left()->is_tensor()) {
-      const Tensor &tensor = node.left()->as_tensor();
+    auto handle_tensor = [&](const Tensor &tensor) {
       SEQUANT_ASSERT(m_result.tensorReferences[tensor] > 0);
       m_result.tensorReferences[tensor]--;
-    } else if (node.left()->is_variable()) {
-      const Variable &variable = node.left()->as_variable();
+    };
+    auto handle_variable = [&](const Variable &variable) {
       SEQUANT_ASSERT(m_result.variableReferences[variable] > 0);
       m_result.variableReferences[variable]--;
+    };
+
+    // Mark tensors/variables as no longer in use
+    if (node.left()->is_tensor()) {
+      handle_tensor(node.left()->as_tensor());
+    } else if (node.left()->is_variable()) {
+      handle_variable(node.left()->as_variable());
+    } else if (node.left()->is_power()) {
+      const Power &power = node.left()->as_power();
+      if (power.base().is<Tensor>()) {
+        handle_tensor(power.base().as<Tensor>());
+      } else if (power.base().is<Variable>()) {
+        handle_variable(power.base().as<Variable>());
+      }
     }
 
     if (node.right()->is_tensor()) {
-      const Tensor &tensor = node.right()->as_tensor();
-      SEQUANT_ASSERT(m_result.tensorReferences[tensor] > 0);
-      m_result.tensorReferences[tensor]--;
+      handle_tensor(node.right()->as_tensor());
     } else if (node.right()->is_variable()) {
-      const Variable &variable = node.right()->as_variable();
-      SEQUANT_ASSERT(m_result.variableReferences[variable] > 0);
-      m_result.variableReferences[variable]--;
+      handle_variable(node.right()->as_variable());
+    } else if (node.right()->is_power()) {
+      const Power &power = node.right()->as_power();
+      if (power.base().is<Tensor>()) {
+        handle_tensor(power.base().as<Tensor>());
+      } else if (power.base().is<Variable>()) {
+        handle_variable(power.base().as<Variable>());
+      }
     }
   }
 
