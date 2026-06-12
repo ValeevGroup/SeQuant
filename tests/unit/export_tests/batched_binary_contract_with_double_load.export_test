@@ -1,0 +1,34 @@
+A{a1;i1;u1} A{a2;i2;u1}
+
+=================================================
+ITF
+batch_indices: i_1,i_2
+# Note that in this test tensors A[j...] and A[k...] are
+# no longer the same tensor block as batching causes j and
+# k to become distinct batched index spaces.
+=================================================
+---- decl
+index-space: j, Closed, c
+index-space: k, Closed, c
+index-space: b, External, e
+index-space: c, External, e
+index-space: v, Active, a
+
+tensor: A:eca[bjv], A:eca
+tensor: I:eecc[bcjk], I:eecc
+
+
+---- code("unnamed")
+for [j, k]:
+	alloc I:eecc[bcjk]
+	load A:eca[bjv]
+	load A:eca[ckv]
+	.I:eecc[bcjk] += A:eca[bjv] A:eca[ckv]
+	drop A:eca[ckv]
+	drop A:eca[bjv]
+	store I:eecc[bcjk]
+
+
+---- end
+
+=================================================

@@ -450,6 +450,7 @@ class GenerationOptimizer final : public Generator<MainContext> {
   // clang-format off
   bool supports_named_sections() const override { return m_generator.supports_named_sections(); }
   bool requires_named_sections() const override { return m_generator.requires_named_sections(); }
+  bool supports_index_batching() const override { return m_generator.supports_index_batching(); }
   DeclarationScope index_declaration_scope() const override { return m_generator.index_declaration_scope(); }
   DeclarationScope variable_declaration_scope() const override { return m_generator.variable_declaration_scope(); }
   DeclarationScope tensor_declaration_scope() const override { return m_generator.tensor_declaration_scope(); }

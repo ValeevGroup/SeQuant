@@ -30,6 +30,61 @@ namespace sequant {
 
 namespace detail {
 
+struct ExportTensorComparator {
+  bool operator()(const Tensor &lhs, const Tensor &rhs) const {
+    TensorBlockLessThanComparator cmp;
+    bool blocksLess = cmp(lhs, rhs);
+    if (blocksLess || cmp(rhs, lhs)) {
+      return blocksLess;
+    }
+
+    // Blocks are identical -> check for batched indices
+    auto &&lhs_indices = lhs.indices();
+    auto &&rhs_indices = rhs.indices();
+
+    SEQUANT_ASSERT(lhs.num_indices() == rhs.num_indices());
+    auto lit = lhs_indices.begin();
+    auto rit = rhs_indices.begin();
+    while (lit != lhs_indices.end()) {
+      if (*lit != *rit) {
+        const std::size_t lhs_pos = std::ranges::distance(
+            batchedIndices.begin(), std::ranges::find(batchedIndices, *lit));
+        const std::size_t rhs_pos = std::ranges::distance(
+            batchedIndices.begin(), std::ranges::find(batchedIndices, *rit));
+
+        const bool lhs_is_batched = lhs_pos < batchedIndices.size();
+        const bool rhs_is_batched = rhs_pos < batchedIndices.size();
+
+        if (lhs_is_batched != rhs_is_batched) {
+          return lhs_is_batched;
+        } else if (lhs_is_batched && rhs_is_batched) {
+          return lhs_pos < rhs_pos;
+        }
+      }
+
+      ++lit;
+      ++rit;
+    }
+
+    // Tensors are equal
+    return false;
+  }
+
+  std::vector<Index> batchedIndices;
+};
+
+/// A collection of various meta-data that the preprocessing stage will collect
+struct PreprocessResult {
+  std::unordered_map<std::size_t, ExprPtr> scalarFactors;
+  std::set<Index> indices;
+  std::map<Tensor, UsageSet, TensorBlockLessThanComparator> tensors;
+  std::map<Variable, UsageSet> variables;
+
+  // std::map<Tensor, std::size_t, ExportTensorComparator> tensorReferences;
+  std::map<Tensor, std::size_t, TensorBlockLessThanComparator> tensorReferences;
+  std::map<Variable, std::size_t> variableReferences;
+};
+
 /// Visitor objects that will steer code generation while visiting a given
 /// expression/evaluation tree by triggering the corresponding callbacks in the
 /// provided Generator objects.
@@ -44,7 +99,18 @@ class GenerationVisitor {
   /// need to be multiplied with the result before storing the node
   GenerationVisitor(Generator<Context> &generator, Context &ctx,
                     const std::unordered_map<NodeID, ExprPtr> &scalarFactors)
-      : m_generator(generator), m_ctx(ctx), m_scalarFactors(scalarFactors) {}
+      : m_generator(generator), m_ctx(ctx), m_scalarFactors(scalarFactors) {
+    if (m_generator.supports_index_batching()) {
+      // Make tensor comparator aware of the list of batched indices
+      std::vector<Index> batchIndices =
+          m_ctx.batch_indices(m_ctx.current_expression_id());
+      if (!batchIndices.empty()) {
+        ExportTensorComparator cmp = m_tensorUses.key_comp();
+        cmp.batchedIndices = std::move(batchIndices);
+        m_tensorUses = decltype(m_tensorUses)(std::move(cmp));
+      }
+    }
+  }
 
   void operator()(const ExportNode<NodeData> &node, TreeTraversal context) {
     // Note the context for leaf nodes is always TreeTraversal::Any
@@ -304,21 +370,10 @@ class GenerationVisitor {
   Generator<Context> &m_generator;
   Context &m_ctx;
   const std::unordered_map<NodeID, ExprPtr> &m_scalarFactors;
-  std::map<Tensor, std::size_t, TensorBlockLessThanComparator> m_tensorUses;
+  std::map<Tensor, std::size_t, ExportTensorComparator> m_tensorUses;
   std::map<Variable, std::size_t> m_variableUses;
 
   std::optional<NodeID> m_rootID;
-};
-
-/// A collection of various meta-data that the preprocessing stage will collect
-struct PreprocessResult {
-  std::unordered_map<std::size_t, ExprPtr> scalarFactors;
-  std::set<Index> indices;
-  std::map<Tensor, UsageSet, TensorBlockLessThanComparator> tensors;
-  std::map<Variable, UsageSet> variables;
-
-  std::map<Tensor, std::size_t, TensorBlockLessThanComparator> tensorReferences;
-  std::map<Variable, std::size_t> variableReferences;
 };
 
 /// Removes explicitly represented scalar factors from the provided tree and
@@ -409,8 +464,9 @@ bool prune_scalar_factor(ExportNode<T> &node, PreprocessResult &result,
 /// Renames the given Tensor to a name that doesn't collide with any currently
 /// loaded object. This may reuse previously used/declares tensors.
 bool rename(Tensor &tensor, PreprocessResult &result);
-/// Renames the given Variable to a name that doesn't collide with any currently
-/// loaded object. This may reuse previously used/declares variables.
+/// Renames the given Variable to a name that doesn't collide with any
+/// currently loaded object. This may reuse previously used/declares
+/// variables.
 bool rename(Variable &variable, PreprocessResult &result);
 
 /// Preprocesses the given expression
@@ -423,8 +479,9 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
 
   bool storeExpr = false;
 
-  // TODO: find a way to pass usage information to this call so that indices of
-  // tensors that are only used as an intermediate can be more easily reordered
+  // TODO: find a way to pass usage information to this call so that indices
+  // of tensors that are only used as an intermediate can be more easily
+  // reordered
   storeExpr |= ctx.rewrite(expr);
 
   if (node.leaf()) {
@@ -532,8 +589,8 @@ void track_usage(const EvalNode<T> &node, PreprocessResult &result) {
   }
 }
 
-/// @returns Whether the given node may be pruned from its parent in order to be
-/// represented implicitly rather than by explicit occurrence in the tree
+/// @returns Whether the given node may be pruned from its parent in order to
+/// be represented implicitly rather than by explicit occurrence in the tree
 template <typename T>
 bool may_prune(const EvalNode<T> &tree) {
   // Tree must represent a product and must itself not be a leaf (pruning that
@@ -565,9 +622,9 @@ bool may_prune(const EvalNode<T> &tree) {
 ///
 /// Preprocesses the provided binary tree by
 /// - removing explicit appearances of scalar leafs. We don't want them to
-///   be represented in the tree. Instead, we keep track of them in a different
-///   way in order to be able to give scalar factors alongside the actual
-///   tensor contraction they are supposed to scale (this is necessary
+///   be represented in the tree. Instead, we keep track of them in a
+///   different way in order to be able to give scalar factors alongside the
+///   actual tensor contraction they are supposed to scale (this is necessary
 ///   as there are backends which only support scaling in this context)
 /// - rebalance the tree such that for any given non-leaf node, its left
 ///   subtree is always larger (or equally large) than its right one.
@@ -575,7 +632,8 @@ bool may_prune(const EvalNode<T> &tree) {
 ///   at the same time, when generating code for a backend which only supports
 ///   stack-like memory allocations (e.g. when A is allocated before B, B
 ///   must be deleted before A can be deleted).
-/// - Rename intermediate tensors that have the same name and describe the same
+/// - Rename intermediate tensors that have the same name and describe the
+/// same
 ///   tensor block, which are required as two separate entities at the same
 ///   time when evaluating the tree (thus a single tensor object is
 ///   insufficient).
@@ -603,8 +661,9 @@ class PreprocessVisitor {
           prune_redundant_intermediate(tree);
         }
 
-        // It is important to track_usage AFTER prune_redundant_intermediate as
-        // the latter might change the result expression on the current node
+        // It is important to track_usage AFTER prune_redundant_intermediate
+        // as the latter might change the result expression on the current
+        // node
         track_usage(tree, m_result);
         break;
       case TreeTraversal::PostOrder:
@@ -812,6 +871,7 @@ void export_expression(ExportNode<T> &expression, Generator<Context> &generator,
 
   detail::GenerationVisitor<T, Context> visitor(generator, ctx,
                                                 pp_result.scalarFactors);
+
   expression.visit(
       [&visitor](const FullBinaryNode<T> &node, TreeTraversal context) {
         visitor(node, context);
@@ -857,8 +917,8 @@ void declare_all(const Range &range, Generator<Context> &generator,
 }
 
 /// Combines the known T from the range of
-/// PreprocessResults and clears the respective fields of the individual result
-/// objects.
+/// PreprocessResults and clears the respective fields of the individual
+/// result objects.
 /// @returns The combined set of known objects
 template <typename T, typename Compare = std::less<T>, typename Range>
   requires std::ranges::range<Range> &&

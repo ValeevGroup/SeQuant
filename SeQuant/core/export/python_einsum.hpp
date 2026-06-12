@@ -126,6 +126,8 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
 
   bool requires_named_sections() const override { return false; }
 
+  bool supports_index_batching() const override { return false; }
+
   DeclarationScope index_declaration_scope() const override {
     return DeclarationScope::Global;
   }

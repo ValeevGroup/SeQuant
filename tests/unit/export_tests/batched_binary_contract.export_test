@@ -1,0 +1,30 @@
+A{a1;i2} B{i1;a1}
+
+=================================================
+ITF
+batch_indices: i_2
+=================================================
+---- decl
+index-space: j, Closed, c
+index-space: k, Closed, c
+index-space: b, External, e
+
+tensor: A:ec[bk], A:ec
+tensor: B:ce[jb], B:ce
+tensor: I:cc[jk], I:cc
+
+
+---- code("unnamed")
+for [k]:
+	alloc I:cc[jk]
+	load A:ec[bk]
+	load B:ce[jb]
+	.I:cc[jk] += A:ec[bk] B:ce[jb]
+	drop B:ce[jb]
+	drop A:ec[bk]
+	store I:cc[jk]
+
+
+---- end
+
+=================================================

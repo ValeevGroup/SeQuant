@@ -18,6 +18,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace sequant {
 
@@ -83,6 +84,14 @@ class ItfContext : public ReorderingContext {
   /// to be >= this value
   virtual void set_index_id_offset(std::size_t offset);
 
+  void set_batch_indices(std::vector<Index> indices,
+                         std::optional<std::size_t> id = {});
+  std::vector<Index> batch_indices(
+      std::optional<std::size_t> id = {}) const override;
+  bool is_batched(std::optional<std::size_t> = {}) const;
+  bool is_index_batched(const Index &idx,
+                        std::optional<std::size_t> = {}) const;
+
  private:
   NameMap m_space_names;
   TagMap m_tags;
@@ -91,6 +100,7 @@ class ItfContext : public ReorderingContext {
   container::map<IndexSpace, char> m_index_label_limits;
   std::wstring m_integral_label = L"g";
   std::size_t m_idx_offset = 0;
+  std::map<std::size_t, std::vector<Index>> m_batch_indices;
 
  protected:
   bool is_exceptional_J(std::span<Index> bra, std::span<Index> ket) const;
@@ -111,6 +121,8 @@ class ItfGenerator : public Generator<Context> {
   bool supports_named_sections() const override { return true; }
 
   bool requires_named_sections() const override { return true; }
+
+  bool supports_index_batching() const override { return true; }
 
   DeclarationScope index_declaration_scope() const override {
     return DeclarationScope::Global;
@@ -391,14 +403,49 @@ class ItfGenerator : public Generator<Context> {
   }
 
   void end_named_section(std::string_view /*name*/, const Context &) override {
+    if (!m_currentBatchIndices.empty()) {
+      m_currentBatchIndices.clear();
+      SEQUANT_ASSERT(m_indent_level > 0);
+      m_indent_level -= 1;
+      SEQUANT_ASSERT(m_indent_level == 0);
+    }
+
     append_line();
     append_line();
   }
 
-  void begin_expression(const Context &) override {
+  void begin_expression(const Context &ctx) override {
     if (!m_generated.empty() && !m_generated.ends_with("\n\n") &&
         !m_generated.ends_with(")\n")) {
       append_line();
+    }
+
+    if (ctx.is_batched(ctx.current_expression_id())) {
+      std::vector<Index> batchIndices =
+          ctx.batch_indices(ctx.current_expression_id());
+
+      if (batchIndices == m_currentBatchIndices) {
+        // "Reuse" previously started batch loop
+        return;
+      } else if (!m_currentBatchIndices.empty()) {
+        SEQUANT_ASSERT(m_indent_level > 0);
+        m_indent_level -= 1;
+      }
+
+      append("for [");
+      for (std::size_t i = 0; i < batchIndices.size(); ++i) {
+        append(represent(batchIndices[i], ctx));
+        if (i + 1 < batchIndices.size()) {
+          append(", ");
+        }
+      }
+      append_line("]:");
+      m_indent_level += 1;
+      m_currentBatchIndices = std::move(batchIndices);
+    } else if (!m_currentBatchIndices.empty()) {
+      m_currentBatchIndices.clear();
+      SEQUANT_ASSERT(m_indent_level > 0);
+      m_indent_level -= 1;
     }
   }
 
@@ -406,13 +453,23 @@ class ItfGenerator : public Generator<Context> {
 
   void begin_export(const Context &) override { m_generated.clear(); }
 
-  void end_export(const Context &) override { append_line("---- end"); }
+  void end_export(const Context &) override {
+    if (!m_currentBatchIndices.empty()) {
+      m_currentBatchIndices.clear();
+      SEQUANT_ASSERT(m_indent_level > 0);
+      m_indent_level -= 1;
+      SEQUANT_ASSERT(m_indent_level == 0);
+    }
+
+    append_line("---- end");
+  }
 
   std::string get_generated_code() const override { return m_generated; }
 
  private:
   std::string m_generated;
   std::size_t m_indent_level = 0;
+  std::vector<Index> m_currentBatchIndices;
 
   std::string stringify(const Expr &expr, const Context &ctx) const {
     if (expr.is<Tensor>()) {

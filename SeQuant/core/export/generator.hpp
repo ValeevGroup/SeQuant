@@ -56,6 +56,11 @@ class Generator {
   /// with code outside of named sections)
   virtual bool requires_named_sections() const = 0;
 
+  /// @returns Whether this generator supports index batching. This means
+  /// that a given tensor expression is computed for fixed batches of one
+  /// or more of the involved indices instead of all at once.
+  virtual bool supports_index_batching() const = 0;
+
   /// @returns The scope at which this generator would like declare indices
   virtual DeclarationScope index_declaration_scope() const = 0;
   /// @returns The scope at which this generator would like declare variables

@@ -62,6 +62,8 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
 
   bool requires_named_sections() const override { return false; }
 
+  bool supports_index_batching() const override { return false; }
+
   DeclarationScope index_declaration_scope() const override {
     return DeclarationScope::Global;
   }
@@ -327,7 +329,6 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
   static std::string wrap_conj(std::string s) {
     return "conj(" + std::move(s) + ")";
   }
-
 
   std::string tensor_name(const Tensor &tensor, const Context &ctx) const {
     std::string representation = toUtf8(tensor.label());
