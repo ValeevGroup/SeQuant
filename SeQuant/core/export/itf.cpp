@@ -227,4 +227,49 @@ void ItfContext::set_index_id_offset(std::size_t offset) {
   m_idx_offset = offset;
 }
 
+void ItfContext::set_batch_indices(std::vector<Index> indices,
+                                   std::optional<std::size_t> id) {
+  m_batch_indices[id.value_or(ID_GLOBAL)] = std::move(indices);
+}
+
+std::vector<Index> ItfContext::batch_indices(
+    std::optional<std::size_t> id) const {
+  auto it = m_batch_indices.find(id.value_or(ID_GLOBAL));
+
+  if (it == m_batch_indices.end() && id.has_value()) {
+    it = m_batch_indices.find(ID_GLOBAL);
+  }
+
+  if (it == m_batch_indices.end()) {
+    return {};
+  }
+
+  return it->second;
+}
+
+bool ItfContext::is_batched(std::optional<std::size_t> id) const {
+  auto it = m_batch_indices.find(id.value_or(ID_GLOBAL));
+
+  if (it == m_batch_indices.end() && id.has_value()) {
+    it = m_batch_indices.find(ID_GLOBAL);
+  }
+
+  return it != m_batch_indices.end() && !it->second.empty();
+}
+
+bool ItfContext::is_index_batched(const Index &idx,
+                                  std::optional<std::size_t> id) const {
+  auto it = m_batch_indices.find(id.value_or(ID_GLOBAL));
+
+  if (it == m_batch_indices.end() && id.has_value()) {
+    it = m_batch_indices.find(ID_GLOBAL);
+  }
+
+  if (it == m_batch_indices.end()) {
+    return false;
+  }
+
+  return std::ranges::find(it->second, idx) != it->second.end();
+}
+
 }  // namespace sequant

@@ -1,0 +1,40 @@
+A{a1;i1;u1} B{a2;i2;u1} + B{a1;i1;u1} B{a2;i2;u1}
+
+=================================================
+ITF
+batch_indices: i_1,i_2
+# TODO: The order of loading could be improved to avoid
+# unloading B[ckv] just for the sake of being able to
+# drop A
+=================================================
+---- decl
+index-space: j, Closed, c
+index-space: k, Closed, c
+index-space: b, External, e
+index-space: c, External, e
+index-space: v, Active, a
+
+tensor: A:eca[bjv], A:eca
+tensor: B:eca[ckv], B:eca
+tensor: I:eecc[bcjk], I:eecc
+
+
+---- code("unnamed")
+for [j, k]:
+	alloc I:eecc[bcjk]
+	load A:eca[bjv]
+	load B:eca[ckv]
+	.I:eecc[bcjk] += A:eca[bjv] B:eca[ckv]
+	drop B:eca[ckv]
+	drop A:eca[bjv]
+	load B:eca[bjv]
+	load B:eca[ckv]
+	.I:eecc[bcjk] += B:eca[bjv] B:eca[ckv]
+	drop B:eca[ckv]
+	drop B:eca[bjv]
+	store I:eecc[bcjk]
+
+
+---- end
+
+=================================================

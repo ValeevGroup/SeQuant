@@ -1,0 +1,46 @@
+(B{a1;a2} C{i1;a1}) (E{a2;a3} F{a3;i2})
+
+=================================================
+ITF
+batch_indices: i_1
+=================================================
+---- decl
+index-space: j, Closed, c
+index-space: k, Closed, c
+index-space: b, External, e
+index-space: c, External, e
+index-space: d, External, e
+
+tensor: B:ee[bc], B:ee
+tensor: C:ce[jb], C:ce
+tensor: E:ee[cd], E:ee
+tensor: F:ec[dk], F:ec
+tensor: I:cc[jk], I:cc
+tensor: I:ec[cj], !Create{type:plain}
+tensor: I2:ec[ck], !Create{type:plain}
+
+
+---- code("unnamed")
+for [j]:
+	alloc I:cc[jk]
+	alloc I:ec[cj]
+	load B:ee[bc]
+	load C:ce[jb]
+	.I:ec[cj] += B:ee[bc] C:ce[jb]
+	drop C:ce[jb]
+	drop B:ee[bc]
+	alloc I2:ec[ck]
+	load E:ee[cd]
+	load F:ec[dk]
+	.I2:ec[ck] += E:ee[cd] F:ec[dk]
+	drop F:ec[dk]
+	drop E:ee[cd]
+	.I:cc[jk] += I:ec[cj] I2:ec[ck]
+	drop I2:ec[ck]
+	drop I:ec[cj]
+	store I:cc[jk]
+
+
+---- end
+
+=================================================
