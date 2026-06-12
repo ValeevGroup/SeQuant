@@ -213,7 +213,10 @@ class ItfGenerator : public Generator<Context> {
         "**" +
         detail::format_power_exponent(power.exponent(),
                                       /*double_slash*/ false);
-    if (power.conjugated()) s = this->wrap_conj(std::move(s));
+    if (power.conjugated() && (base->as<Constant>().value().imag() != 0 ||
+                               power.exponent().imag() != 0)) {
+      s = "(" + s + ").conjugate()";
+    }
     return s;
   }
 
