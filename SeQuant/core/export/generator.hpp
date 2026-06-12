@@ -86,13 +86,6 @@ class Generator {
   virtual std::string represent(const Power &power,
                                 const Context &ctx) const = 0;
 
-  /// Wraps an already-stringified scalar expression in the backend's
-  /// complex-conjugation syntax (e.g. `conj(...)`, `np.conj(...)`,
-  /// `torch.conj(...)`).
-  /// @param s the stringified expression to be conjugated
-  /// @return @p s wrapped in the backend's `conj` syntax
-  virtual std::string wrap_conj(std::string s) const = 0;
-
   /// Semantic callback for creating the given tensor. This is expected to make
   /// the created tensor available for further use.
   virtual void create(const Tensor &tensor, bool zero_init,

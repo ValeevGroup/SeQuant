@@ -208,10 +208,6 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
     return s;
   }
 
-  std::string wrap_conj(std::string s) const override {
-    return module_prefix() + "conj(" + std::move(s) + ")";
-  }
-
   void unload(const Tensor &tensor, const Context &ctx) override {
     m_generated += m_indent + "del " + represent(tensor, ctx) + "\n";
   }
@@ -623,6 +619,10 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
     }
 
     throw Exception("Unsupported expression type for Python scalar expression");
+  }
+
+  std::string wrap_conj(std::string s) const {
+    return module_prefix() + "conj(" + std::move(s) + ")";
   }
 };
 

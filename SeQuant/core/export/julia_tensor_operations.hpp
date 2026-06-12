@@ -131,17 +131,13 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
     const ExprPtr &base = power.base();
     std::string base_str = to_julia_expr(*base, ctx);
     if (base->is<Variable>() && base->as<Variable>().conjugated()) {
-      base_str = this->wrap_conj(std::move(base_str));
+      base_str = wrap_conj(std::move(base_str));
     }
     auto s = detail::format_power_base(base, std::move(base_str)) + "^" +
              detail::format_power_exponent(power.exponent(),
                                            /*double_slash*/ true);
-    if (power.conjugated()) s = this->wrap_conj(std::move(s));
+    if (power.conjugated()) s = wrap_conj(std::move(s));
     return s;
-  }
-
-  std::string wrap_conj(std::string s) const override {
-    return "conj(" + std::move(s) + ")";
   }
 
   void create(const Tensor &tensor, bool zero_init,
@@ -327,6 +323,11 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
 
     throw Exception("Unsupported expression type in to_julia_expr");
   }
+
+  static std::string wrap_conj(std::string s) {
+    return "conj(" + std::move(s) + ")";
+  }
+
 
   std::string tensor_name(const Tensor &tensor, const Context &ctx) const {
     std::string representation = toUtf8(tensor.label());

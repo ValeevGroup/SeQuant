@@ -220,10 +220,6 @@ class ItfGenerator : public Generator<Context> {
     return s;
   }
 
-  std::string wrap_conj(std::string s) const override {
-    return "conj(" + std::move(s) + ")";
-  }
-
   void create(const Tensor &tensor, bool zero_init,
               const Context &ctx) override {
     if (!zero_init) {

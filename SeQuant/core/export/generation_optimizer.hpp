@@ -459,7 +459,6 @@ class GenerationOptimizer final : public Generator<MainContext> {
   std::string represent(const Variable &variable, const MainContext &ctx) const override { return m_generator.represent(variable, ctx); }
   std::string represent(const Constant &constant, const MainContext &ctx) const override { return m_generator.represent(constant, ctx); }
   std::string represent(const Power &power, const MainContext &ctx) const override { return m_generator.represent(power, ctx); }
-  std::string wrap_conj(std::string s) const override { return m_generator.wrap_conj(std::move(s)); }
   void declare(const Index &idx, const MainContext &ctx)  override { m_generator.declare(idx, ctx); }
   void declare(const Variable &variable, UsageSet usage, const MainContext &ctx)  override { m_generator.declare(variable, usage, ctx); }
   void declare(const Tensor &tensor, UsageSet usage, const MainContext &ctx)  override { m_generator.declare(tensor, usage, ctx); }
