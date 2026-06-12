@@ -69,6 +69,10 @@ class CC {
   /// @return true if the ansatz is unitary
   [[nodiscard]] bool unitary() const;
 
+  /// @return the maximum of nested commutators in H̄; returns std::nullopt if
+  /// not set
+  [[nodiscard]] std::optional<size_t> hbar_comm_rank() const;
+
   /// @return true if singles amplitudes are excluded from \f$ \hat{T} \f$ and
   /// \f$ \hat{\Lambda} \f$
   [[nodiscard]] bool skip_singles() const;
@@ -89,6 +93,15 @@ class CC {
   [[nodiscard]] ExprPtr hbar(
       std::optional<size_t> truncation_rank = std::nullopt) const;
 
+  /// @brief derives the CC energy expression \f$ \langle 0|\bar{H}|0 \rangle
+  /// \f$ at the requested commutator truncation, WITHOUT deriving the
+  /// projected amplitude equations (cheaper than `t().at(0)`).
+  /// @param comm_rank optional H̄ commutator-truncation override, forwarded to
+  ///   @ref hbar (defaults to the engine's `hbar_comm_rank`, else 4).
+  /// @return the energy expression \f$ \langle 0|\bar{H}|0 \rangle \f$
+  [[nodiscard]] ExprPtr energy(
+      std::optional<size_t> comm_rank = std::nullopt) const;
+
   /// @brief derives t amplitude equations, \f$ \langle P|\bar{H}|0 \rangle = 0
   /// \f$
   /// @param pmax highest particle rank of the projector manifold `\f \langle P
@@ -101,7 +114,7 @@ class CC {
   ///   \f$ \langle k |\bar{H}|0 \rangle = 0 \f$ for `k` in the [\p pmin,\p
   ///   pmax] range, and null value otherwise
   [[nodiscard]] std::vector<ExprPtr> t(
-      size_t pmax = std::numeric_limits<size_t>::max(), size_t pmin = 0);
+      size_t pmax = std::numeric_limits<size_t>::max(), size_t pmin = 0) const;
 
   /// @brief derives λ amplitude equations,
   /// \f$ \langle 0| (1 + \hat{\Lambda}) \frac{d \bar{H}}{d \hat{T}_P} |0
@@ -112,7 +125,7 @@ class CC {
   ///   \rangle = 0 \f$ for `k` in
   /// the [1,N] range; element 0 contains the λ pseudoenergy, computed as the
   /// CC energy with \f$ \hat{T} \f$ replaced by \f$ \hat{\Lambda}^{\dagger} \f$
-  [[nodiscard]] std::vector<ExprPtr> λ();
+  [[nodiscard]] std::vector<ExprPtr> λ() const;
 
   // clang-format off
   /// @brief derives perturbed t amplitude equations
@@ -124,7 +137,7 @@ class CC {
   // clang-format on
   [[nodiscard]] std::vector<ExprPtr> tʼ(
       size_t rank = 1, size_t order = 1,
-      std::optional<size_t> nbatch = std::nullopt);
+      std::optional<size_t> nbatch = std::nullopt) const;
 
   // clang-format off
   /// @brief derives perturbed λ amplitude equations
@@ -136,19 +149,19 @@ class CC {
   // clang-format on
   [[nodiscard]] std::vector<ExprPtr> λʼ(
       size_t rank = 1, size_t order = 1,
-      std::optional<size_t> nbatch = std::nullopt);
+      std::optional<size_t> nbatch = std::nullopt) const;
 
   /// @brief derives right-side sigma equations for EOM-CC
   /// @param np number of particle creators in R operator
   /// @param nh number of hole creators in R operator
   /// @return vector of right side sigma equations, element 0 is always null
-  [[nodiscard]] std::vector<ExprPtr> eom_r(nₚ np, nₕ nh);
+  [[nodiscard]] std::vector<ExprPtr> eom_r(nₚ np, nₕ nh) const;
 
   /// @brief derives left-side sigma equations for EOM-CC
   /// @param np number of particle annihilators in L operator
   /// @param nh number of hole annihilators in L operator
   /// @return vector of left side sigma equations, element 0 is always null
-  [[nodiscard]] std::vector<ExprPtr> eom_l(nₚ np, nₕ nh);
+  [[nodiscard]] std::vector<ExprPtr> eom_l(nₚ np, nₕ nh) const;
 
  private:
   size_t N;

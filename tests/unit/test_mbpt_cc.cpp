@@ -50,6 +50,23 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     }  // SECTION("λ")
   }
 
+  SECTION("energy") {
+    // CC::energy() must equal the p==0 element of CC::t() for both ansätze.
+    const auto N = 2;
+    SECTION("TCC energy == t()[0]") {
+      REQUIRE_THAT(CC{N}.energy(), EquivalentTo(CC{N}.t().at(0)));
+    }
+    SECTION("UCC energy == t()[0]") {
+      const CC::Options opts{.ansatz = CC::Ansatz::U, .hbar_comm_rank = 2};
+      REQUIRE_THAT(CC(N, opts).energy(), EquivalentTo(CC(N, opts).t().at(0)));
+      // explicit rank override matches an engine built at that rank
+      REQUIRE_THAT(
+          CC(N, opts).energy(3),
+          EquivalentTo(
+              CC(N, {.ansatz = CC::Ansatz::U, .hbar_comm_rank = 3}).t().at(0)));
+    }
+  }  // SECTION("energy")
+
   SECTION("eom_cc"){SECTION("EOM-CCSD"){const auto N = 2;
   auto cc = CC{N};
   SECTION("EE-EOM-CCSD R") {
