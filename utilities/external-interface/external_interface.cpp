@@ -34,6 +34,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <ranges>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -130,6 +131,8 @@ ProcessingOptions extractProcessingOptions(
 struct ExportOptions {
   bool importResult = false;
   bool createResult = false;
+  std::variant<IndexBatching, std::vector<Index>> batching = {};
+  std::size_t min_unbatched_indices = 2;
 };
 
 ExportNode<> prepareForExport(const ResultExpr &result,
@@ -151,6 +154,35 @@ ExportNode<> prepareForExport(const ResultExpr &result,
     } else {
       ctx.setLoadStrategy(result_tensor, LoadStrategy::Load, tree->id());
     }
+
+    std::vector<Index> batchIndices;
+    if (std::holds_alternative<IndexBatching>(opts.batching)) {
+      switch (std::get<IndexBatching>(opts.batching)) {
+        case IndexBatching::None:
+          break;
+        case IndexBatching::Fastest: {
+          // In ITF the fastest (aka: contiguous) indices are the first ones
+          // (row-major)
+          auto indices = result_tensor.const_indices() |
+                         std::ranges::views::reverse |
+                         std::ranges::views::drop(opts.min_unbatched_indices);
+          batchIndices.insert(batchIndices.end(), indices.begin(),
+                              indices.end());
+          break;
+        }
+        case IndexBatching::Slowest: {
+          auto indices = result_tensor.const_indices() |
+                         std::ranges::views::drop(opts.min_unbatched_indices);
+          batchIndices.insert(batchIndices.end(), indices.begin(),
+                              indices.end());
+          break;
+        }
+      }
+    } else {
+      batchIndices = std::get<decltype(batchIndices)>(opts.batching);
+    }
+
+    ctx.set_batch_indices(std::move(batchIndices), tree->id());
   } else {
     if (opts.importResult) {
       SEQUANT_ASSERT(result.has_label());
@@ -326,12 +358,17 @@ void generateITF(const json &blocks, std::string_view out_file,
 
             results.push_back(prepareForExport(
                 current, itfgen, context,
-                {.importResult = false, .createResult = createResult}));
+                {.importResult = false,
+                 .createResult = createResult,
+                 .batching = options.batching,
+                 .min_unbatched_indices = options.min_unbatched_indices}));
           } else {
             results.push_back(prepareForExport(
                 current, itfgen, context,
                 {.importResult = current_result.value("import", true),
-                 .createResult = createResult}));
+                 .createResult = createResult,
+                 .batching = options.batching,
+                 .min_unbatched_indices = options.min_unbatched_indices}));
           }
         }
       }
@@ -347,7 +384,9 @@ void generateITF(const json &blocks, std::string_view out_file,
         results.push_back(prepareForExport(
             symmetrizedResult, itfgen, context,
             {.importResult = current_result.value("import", true),
-             .createResult = true}));
+             .createResult = true,
+             .batching = options.batching,
+             .min_unbatched_indices = options.min_unbatched_indices}));
       }
     }
 
