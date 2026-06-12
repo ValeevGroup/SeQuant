@@ -69,19 +69,22 @@ auto column_symmetrize_ta(TA::DistArray<Args...> const& arr) {
 
   size_t const outer_rank = arr.trange().rank();
 
-  size_t const total_rank = [&] {
-    if constexpr (is_tot) {
-      size_t const inner_rank = tot_inner_rank(arr);
-      if (outer_rank != inner_rank)
-        throw Exception(
-            "ToT symmetrization requires equal outer and inner rank (outer=" +
-            std::to_string(outer_rank) +
-            ", inner=" + std::to_string(inner_rank) + ")");
-      return outer_rank + inner_rank;
-    } else {
-      return outer_rank;
-    }
-  }();
+  if constexpr (is_tot) {
+    size_t const inner_rank = tot_inner_rank(arr);
+    // All-empty-inner ToT (e.g. every CSV pair screened out): no populated tile
+    // to read a rank from, so tot_inner_rank() is 0. It represents zero, and
+    // symmetrizing zero is zero -- return unchanged instead of failing the
+    // equal-rank check below.
+    if (inner_rank == 0) return arr;
+    if (outer_rank != inner_rank)
+      throw Exception(
+          "ToT symmetrization requires equal outer and inner rank (outer=" +
+          std::to_string(outer_rank) + ", inner=" + std::to_string(inner_rank) +
+          ")");
+  }
+
+  // ToT (equal-rank, validated above): total rank = outer + inner = 2*outer.
+  size_t const total_rank = is_tot ? 2 * outer_rank : outer_rank;
 
   if (total_rank % 2 != 0)
     throw Exception("This function only supports even-ranked tensors");
@@ -641,12 +644,15 @@ class ResultTensorOfTensorTA final : public Result {
     auto const& o = other.get<ArrayT>();
 
     SEQUANT_ASSERT(t.trange() == o.trange());
-    // ToT array: the annotation must carry an inner block ("outer;inner") or
-    // DistArray::operator() rejects it (is_tot_index). dummy_annotation's
-    // second argument is the inner-mode count, read from the array's inner
-    // tiles.
-    auto ann = TA::detail::dummy_annotation(t.trange().rank(),
-                                            detail::tot_inner_rank(t));
+    // ToT annotation needs an inner block ("outer;inner"); tot_inner_rank()
+    // reads it from a populated inner tile and is 0 when an operand's inner
+    // tiles are all empty. Take the rank from whichever operand has data; if
+    // both are empty the add is an identity no-op (t += 0), nothing to
+    // annotate.
+    auto const inner_rank =
+        std::max(detail::tot_inner_rank(t), detail::tot_inner_rank(o));
+    if (inner_rank == 0) return;
+    auto ann = TA::detail::dummy_annotation(t.trange().rank(), inner_rank);
 
     detail::log_ta(ann, " += ", ann, "\n");
 
@@ -703,9 +709,33 @@ template <typename... Args>
   using value_type = typename TA::DistArray<Args...>::value_type;
   std::string annot;
   if constexpr (TA::detail::is_tensor_of_tensor_v<value_type>) {
-    annot = TA::detail::dummy_annotation(
-        static_cast<unsigned int>(rank),
-        static_cast<unsigned int>(detail::tot_inner_rank(arr)));
+    auto const inner_rank = detail::tot_inner_rank(arr);
+    if (inner_rank == 0) {
+      // All-empty-inner ToT: tot_inner_rank() is 0, so there's no inner rank to
+      // build the ToT annotation block() needs. The slice of zero is zero, so
+      // build the sliced outer trange by hand (mode cut to [tile_lo,tile_hi),
+      // each dim rebased to 0, matching block()) and return a zero ToT over it.
+      // The result is dense even if ArrayT's policy is sparse -- harmless, the
+      // array is identically zero.
+      std::vector<TA::TiledRange1> tr1s;
+      tr1s.reserve(rank);
+      for (std::size_t d = 0; d < rank; ++d) {
+        auto const& dim = arr.trange().dim(d);
+        std::size_t const base = dim.tile(lo[d]).first;
+        std::vector<std::size_t> bounds{0};
+        for (std::size_t t = lo[d]; t < hi[d]; ++t)
+          bounds.push_back(dim.tile(t).second - base);
+        tr1s.emplace_back(bounds.begin(), bounds.end());
+      }
+      TA::DistArray<Args...> out{arr.world(),
+                                 TA::TiledRange(tr1s.begin(), tr1s.end())};
+      for (auto it = out.begin(); it != out.end(); ++it)
+        if (out.is_local(it.index())) *it = value_type{it.make_range()};
+      out.world().gop.fence();
+      return out;
+    }
+    annot = TA::detail::dummy_annotation(static_cast<unsigned int>(rank),
+                                         static_cast<unsigned int>(inner_rank));
   } else {
     annot = detail::ords_to_annot(iota(std::size_t{0}, rank));
   }

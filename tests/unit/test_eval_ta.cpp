@@ -411,6 +411,118 @@ bool equal_tarrays(Array const& arr1, Array const& arr2) {
 
 }  // namespace
 
+// Regression tests for tensor-of-tensor (ToT) ops on arrays whose inner tiles
+// are all empty (e.g. a fully screened CSV residual). tot_inner_rank() reads
+// the rank from a populated inner tile, so it returns 0 here; downstream ToT
+// ops must not turn that 0 into a degenerate (non-ToT) annotation. Reproduces
+// the mpqc4 PAO-CSV abort fixed in add_inplace and column_symmetrize_ta.
+TEST_CASE("tot_all_empty_inner", "[eval][tot]") {
+  using sequant::eval_result;
+  using sequant::ResultPtr;
+  using sequant::ResultTensorOfTensorTA;
+  using sequant::detail::tot_inner_rank;
+  using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<double>>>;
+  using ResultToT = ResultTensorOfTensorTA<ToTArray>;
+
+  auto& world = TA::get_default_world();
+
+  // Build a ToT array; `empty_inner` leaves every inner tensor empty.
+  auto build = [&world](unsigned outer_rank, bool empty_inner,
+                        TA::TiledRange1 outer_tr1 =
+                            TA::TiledRange1{0, 3}) -> ToTArray {
+    std::vector<TA::TiledRange1> tr1s(outer_rank, outer_tr1);
+    TA::TiledRange outer_tr(tr1s.begin(), tr1s.end());
+    std::vector<std::size_t> inner_ext(outer_rank, 4);
+    TA::Range inner_r(inner_ext);
+
+    auto tile_fn = [inner_r, empty_inner](TA::Range const& orng) {
+      TA::Tensor<TA::Tensor<double>> t{orng};
+      if (!empty_inner)
+        for (auto& inner : t) {
+          inner = TA::Tensor<double>{inner_r};
+          std::fill(inner.begin(), inner.end(), 1.0);
+        }
+      return t;
+    };
+
+    ToTArray arr{world, outer_tr};
+    for (auto it = arr.begin(); it != arr.end(); ++it)
+      if (arr.is_local(it.index()))
+        *it = world.taskq.add(tile_fn, it.make_range());
+    world.gop.fence();
+    return arr;
+  };
+
+  SECTION("add_inplace: empty += populated adopts the populated inner rank") {
+    auto empty = build(1, /*empty_inner=*/true);
+    auto full = build(1, /*empty_inner=*/false);
+    REQUIRE(tot_inner_rank(empty) == 0);
+    REQUIRE(tot_inner_rank(full) == 1);
+
+    auto r_empty = eval_result<ResultToT>(empty);
+    auto r_full = eval_result<ResultToT>(full);
+    REQUIRE_NOTHROW(r_empty->add_inplace(*r_full));
+    auto const& res = r_empty->get<ToTArray>();
+    REQUIRE(tot_inner_rank(res) == 1);
+    // the populated operand's data (all 1.0) must actually have landed.
+    for (auto it = res.begin(); it != res.end(); ++it)
+      if (res.is_local(it.index()))
+        for (auto const& inner : it->get()) {
+          REQUIRE_FALSE(inner.empty());
+          for (auto const& x : inner) REQUIRE(x == 1.0);
+        }
+  }
+
+  SECTION("add_inplace: populated += empty is a no-op") {
+    auto full = build(1, false);
+    auto empty = build(1, true);
+    auto r_full = eval_result<ResultToT>(full);
+    auto r_empty = eval_result<ResultToT>(empty);
+    REQUIRE_NOTHROW(r_full->add_inplace(*r_empty));
+    REQUIRE(tot_inner_rank(r_full->get<ToTArray>()) == 1);
+  }
+
+  SECTION("add_inplace: empty += empty is an identity no-op") {
+    auto e1 = build(1, true);
+    auto e2 = build(1, true);
+    auto r1 = eval_result<ResultToT>(e1);
+    auto r2 = eval_result<ResultToT>(e2);
+    REQUIRE_NOTHROW(r1->add_inplace(*r2));
+    REQUIRE(tot_inner_rank(r1->get<ToTArray>()) == 0);
+  }
+
+  SECTION("symmetrize: all-empty ToT is the identity") {
+    auto empty = build(1, true);
+    REQUIRE(tot_inner_rank(empty) == 0);
+    auto r_empty = eval_result<ResultToT>(empty);
+    ResultPtr sym;
+    REQUIRE_NOTHROW(sym = r_empty->symmetrize());
+    REQUIRE(tot_inner_rank(sym->get<ToTArray>()) == 0);
+  }
+
+  SECTION("slice_array_over_mode: all-empty ToT slices to a zero ToT") {
+    auto empty = build(1, true);
+    REQUIRE(tot_inner_rank(empty) == 0);
+    ToTArray sliced;
+    REQUIRE_NOTHROW(sliced = sequant::slice_array_over_mode(empty, 0, 0, 1));
+    REQUIRE(tot_inner_rank(sliced) == 0);
+    REQUIRE(sliced.trange().dim(0).tile_extent() == 1);
+  }
+
+  SECTION(
+      "slice_array_over_mode: rebasing matches block() on a multi-tile cut") {
+    // Slice across two tiles at a non-zero base; hand-built trange must match
+    // what the populated path gets from TA's block().
+    TA::TiledRange1 const tr1{0, 3, 6, 9};
+    auto empty = build(1, /*empty_inner=*/true, tr1);
+    auto full = build(1, /*empty_inner=*/false, tr1);
+    auto const s_empty = sequant::slice_array_over_mode(empty, 0, 1, 3);
+    auto const s_full = sequant::slice_array_over_mode(full, 0, 1, 3);
+    REQUIRE(tot_inner_rank(s_empty) == 0);
+    REQUIRE(s_empty.trange() == s_full.trange());
+  }
+}
+
 TEST_CASE("eval_with_tiledarray", "[eval]") {
   // Reproducer for the mpqc4 cck real-field NaN regression. The eval-graph
   // head's bra/ket split is purely positional: each external index ends up in
