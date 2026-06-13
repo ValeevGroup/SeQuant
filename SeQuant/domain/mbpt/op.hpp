@@ -1115,6 +1115,27 @@ ExprPtr λʼ(std::size_t K, const OpParams& params = {.order = 1});
 /// @pre If batching is used, ISR must contain batching space
 ExprPtr Λʼ(std::size_t K,
            const OpParams& params = {.order = 1, .skip1 = false});
+
+// clang-format off
+/// @brief Makes projector 1/√(np! nh!) A_{a1 a2 ... a_np}^{i1 i2 ... i_nh} a_{i1 i2 ... i_nh}^{a1 a2 ... a_np} (excitation operator).
+/// Unlike P, uses SquareRoot normalization (includes the 1/√(np! nh!) prefactor).
+/// @param np number of particle creators
+/// @param nh number of hole annihilators
+/// @note if using spin-free basis, only supports particle-number-conserving operators (\p np == \p nh)
+// clang-format on
+ExprPtr δr(nₚ np, nₕ nh);
+DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(δr);
+
+// clang-format off
+/// @brief Makes projector 1/√(np! nh!) A^{a1 a2 ... a_np}_{i1 i2 ... i_nh} a^{i1 i2 ... i_nh}_{a1 a2 ... a_np} (deexcitation operator).
+/// Unlike P, uses SquareRoot normalization (includes the 1/√(np! nh!) prefactor).
+/// @param np number of particle annihilators
+/// @param nh number of hole creators
+/// @note if using spin-free basis, only supports particle-number-conserving operators (\p np == \p nh)
+// clang-format on
+ExprPtr δl(nₚ np, nₕ nh);
+DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(δl);
+
 }  // namespace tensor
 }  // namespace op
 
@@ -1295,6 +1316,26 @@ ExprPtr λʼ(std::size_t K, const OpParams& params = {.order = 1});
 /// @pre If batching is used, ISR must contain batching space
 ExprPtr Λʼ(std::size_t K,
            const OpParams& params = {.order = 1, .skip1 = false});
+
+// clang-format off
+/// @brief Makes projector with tensor form 1/√(np! nh!) A_{a1 a2 ... a_np}^{i1 i2 ... i_nh} a_{i1 i2 ... i_nh}^{a1 a2 ... a_np} (excitation operator).
+/// Unlike P, uses SquareRoot normalization (includes the 1/√(np! nh!) prefactor).
+/// @param np number of particle creators
+/// @param nh number of hole annihilators
+/// @note if using spin-free basis, only supports particle-number-conserving operators (\p np == \p nh)
+// clang-format on
+ExprPtr δr(nₚ np, nₕ nh);
+DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(δr);
+
+// clang-format off
+/// @brief Makes projector with tensor form 1/√(np! nh!) A^{a1 a2 ... a_np}_{i1 i2 ... i_nh} a^{i1 i2 ... i_nh}_{a1 a2 ... a_np} (deexcitation operator).
+/// Unlike P, uses SquareRoot normalization (includes the 1/√(np! nh!) prefactor).
+/// @param np number of particle annihilators
+/// @param nh number of hole creators
+/// @note if using spin-free basis, only supports particle-number-conserving operators (\p np == \p nh)
+// clang-format on
+ExprPtr δl(nₚ np, nₕ nh);
+DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(δl);
 
 /// @brief computes the quantum number change effected by a given Operator or
 /// Operator Product when applied to the vacuum state
