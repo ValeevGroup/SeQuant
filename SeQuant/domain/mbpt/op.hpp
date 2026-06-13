@@ -567,6 +567,14 @@ mbpt::qns_t adjoint(mbpt::qns_t qns);
 
 namespace mbpt {
 
+/// @brief Normalization convention used in MBPT Operators
+enum class Normalization {
+  Default,    /// Include 1/(c! a!) prefactor
+  Implicit,   /// No prefactor, used for Â and Ŝ since their definition
+              /// includes the normalization
+  SquareRoot  /// Include sqrt(1/c! a!) prefactor
+};
+
 // clang-format off
 /// @brief makes a tensor-level many-body operator
 
@@ -641,12 +649,6 @@ class OpMaker {
     None
   };
 
-  /// Op of e.g. rank {c,a} by default includes normalization factor
-  /// of 1/(c! a!) ... sometimes we want to change normalization, e.g.
-  /// A and S include normalization factor in their definition,
-  /// so no need to include it explicitly
-  enum class Normalization { Default, Implicit };
-
   /// struct to hold the information about the operator
   struct OpInfo {
     container::svector<Index> creidxs;  //!< creator indices
@@ -666,9 +668,11 @@ class OpMaker {
   /// @param[in] opsymm_opt if given, controls whether (anti)symmetric
   /// tensor is returned; if \p opsymm_opt is not given then the default is
   /// determined by the MBPT context.
+  /// @param[in] normalization if given, controls the normalization behavior, else uses internal defaults. @see Normalization
   // clang-format on
   ExprPtr operator()(std::optional<UseDepIdx> dep_opt = {},
-                     std::optional<Symmetry> opsymm_opt = {}) const;
+                     std::optional<Symmetry> opsymm_opt = {},
+                     std::optional<Normalization> normalization = {}) const;
 
   /// @brief Creates an OpInfo struct containing creator and annihilator
   /// indices, normalization factor, symmetry, and dependency information.
@@ -683,7 +687,7 @@ class OpMaker {
                               const IndexSpaceContainer& ann_spaces,
                               UseDepIdx dep = UseDepIdx::None) {
     const bool symm = get_default_context().spbasis() ==
-                      SPBasis::Spinor;  // antisymmetrize if spin-orbital basis
+                      SPBasis::Spinor;  // antisymmetrize if spinor basis
     const auto dep_bra = dep == UseDepIdx::Bra;
     const auto dep_ket = dep == UseDepIdx::Ket;
 
@@ -729,6 +733,24 @@ class OpMaker {
     return OpInfo{creidxs, annidxs, mult, opsymm, dep};
   }
 
+  /// @brief Applies the prefactor implied by \p normalization (a function of
+  /// the normalization factor \p mult) to \p expr.
+  /// @see Normalization
+  static ExprPtr apply_normalization(ExprPtr expr, Normalization normalization,
+                                     sequant::intmax_t mult) {
+    switch (normalization) {
+      case Normalization::Default:
+        return ex<Constant>(rational{1, mult}) * expr;
+      case Normalization::Implicit:
+        return expr;
+      case Normalization::SquareRoot:
+        return ex<Power>(ex<Constant>(rational{1, mult}), rational{1, 2}) *
+               expr;
+      default:
+        SEQUANT_ABORT("unknown normalization option");
+    }
+  }
+
   /// @tparam TensorGenerator callable with signature
   /// `TensorGenerator(range<Index>, range<Index>, Symmetry)` that returns a
   /// Tensor with the respective bra/cre and ket/ann indices and of the given
@@ -751,16 +773,7 @@ class OpMaker {
     auto result =
         t * ex<NormalOperator<S>>(cre(op_info.creidxs), ann(op_info.annidxs),
                                   get_default_context().vacuum());
-    switch (normalization) {
-      case Normalization::Default:
-        result = ex<Constant>(rational{1, op_info.mult}) * result;
-        break;
-      case Normalization::Implicit:
-        break;
-      default:
-        abort();
-    }
-    return result;
+    return apply_normalization(result, normalization, op_info.mult);
   }
 
   /// @tparam TensorGenerator callable with signature
@@ -818,16 +831,7 @@ class OpMaker {
     auto result =
         t * ex<NormalOperator<S>>(cre(op_info.creidxs), ann(op_info.annidxs),
                                   get_default_context().vacuum());
-    switch (normalization) {
-      case Normalization::Default:
-        result = ex<Constant>(rational{1, op_info.mult}) * result;
-        break;
-      case Normalization::Implicit:
-        break;
-      default:
-        abort();
-    }
-    return result;
+    return apply_normalization(result, normalization, op_info.mult);
   }
 
   /// @tparam TensorGenerator callable with signature
