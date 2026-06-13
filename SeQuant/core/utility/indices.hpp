@@ -103,6 +103,11 @@ IndexGroups<Container> get_unique_indices(const Variable&) {
   return {};
 }
 
+template <typename Container = std::vector<Index>>
+IndexGroups<Container> get_unique_indices(const Power&) {
+  return {};
+}
+
 /// @returns Lists of non-contracted indices arising when contracting the two
 /// given tensors in the order bra, ket, auxiliary
 template <typename Container = container::svector<Index>>
@@ -249,6 +254,8 @@ IndexGroups<Container> get_unique_indices(const Expr& expr) {
     return get_unique_indices<Container>(expr.as<Sum>());
   } else if (expr.is<Product>()) {
     return get_unique_indices<Container>(expr.as<Product>());
+  } else if (expr.is<Power>()) {
+    return get_unique_indices<Container>(expr.as<Power>());
   } else {
     throw Exception(
         "Encountered unsupported expression type in get_unique_indices");
