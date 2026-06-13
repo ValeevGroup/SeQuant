@@ -271,6 +271,48 @@ TEST_CASE("optimize", "[optimize]") {
       REQUIRE(res_off == res1);
     }
 
+    SECTION("Single term optimization: footprint_weight") {
+      using namespace sequant;
+
+      // Network A{i1;x1} * B{x1;i2} * C{i2;a1}: contract x1 (between A,B) and
+      // i2 (between B,C); free indices {i1, a1}. With the aux index x LARGE and
+      // the virtual index a SMALL, the two viable orders trade FLOPs against
+      // the footprint of the single intermediate they materialize:
+      //
+      //   (A*B)*C : I{i1;i2}  (occ^2 = 100)         FLOPs i*x*i + i*i*a =
+      //   100400 A*(B*C) : I{x1;a1}  (aux*virt = 4000)     FLOPs x*i*a + i*x*a
+      //   =  80000
+      //
+      // Pure FLOPs picks A*(B*C): cheaper, but materializes the big
+      // aux-carrying intermediate I{x1;a1}. A nonzero footprint_weight
+      // penalizes that 4000-element intermediate (vs the 100-element one) and
+      // flips the choice to (A*B)*C. Flip threshold here is footprint_weight >
+      // ~5.2.
+      auto uocc = reg->retrieve_ptr(L"a");
+      auto aux = reg->retrieve_ptr(L"x");
+      auto const uocc_sz = uocc->approximate_size();
+      auto const aux_sz = aux->approximate_size();
+      uocc->approximate_size(4);    // virtual: deliberately SMALL
+      aux->approximate_size(1000);  // aux: deliberately LARGE
+
+      auto const prod =
+          deserialize(L"A{i1;x1} B{x1;i2} C{i2;a1}")->as<Product>();
+
+      // footprint_weight == 0 reproduces the pure-FLOPs choice ...
+      auto res0 = optimize(ex<Product>(prod), OptimizeOptions{});
+      auto res0_explicit =
+          optimize(ex<Product>(prod), OptimizeOptions{.footprint_weight = 0.0});
+      REQUIRE(res0 == res0_explicit);  // weight 0 is a no-op
+
+      // ... a large footprint_weight changes the chosen factorization.
+      auto resF = optimize(ex<Product>(prod),
+                           OptimizeOptions{.footprint_weight = 100.});
+      REQUIRE(res0 != resF);
+
+      uocc->approximate_size(uocc_sz);
+      aux->approximate_size(aux_sz);
+    }
+
     SECTION("Ensure single-value sums/products are not discarded") {
       auto sum = ex<Sum>();
       sum->as<Sum>().append(

@@ -62,6 +62,30 @@ struct OptimizeOptions {
   /// Default 1 (no change). Only consulted when is_volatile_leaf is non-empty
   /// and opt_for == Flops.
   unsigned n_replay = 1;
+
+  /// Per-intermediate memory-footprint penalty added to the single-term
+  /// optimization cost. For every binary contraction, the storage footprint of
+  /// its RESULT intermediate (the product of the extents of the result's
+  /// indices, i.e. its element count) is multiplied by this weight and added to
+  /// the contraction cost. Unlike the FLOPs cost, this penalty is NOT scaled by
+  /// \ref n_replay (peak footprint is a one-time materialization cost, not a
+  /// per-replay one). 0 (default) disables the penalty, recovering the pure
+  /// FLOPs/Memsize behavior.
+  ///
+  /// Rationale: the FLOPs cost is blind to the storage size of the
+  /// intermediates it materializes, so it will happily pick an order (and thus
+  /// expose, as a shareable subtree, a common subexpression) that carries a
+  /// free large-space index — e.g. a half-transformed DF integral that still
+  /// carries a free projected-AO (PAO) index — because forming it once is
+  /// FLOPs-cheap. Such an intermediate can be enormous. A nonzero
+  /// footprint_weight biases single-term optimization toward orders that defer
+  /// or avoid materializing such large intermediates (e.g. transforming both
+  /// large legs before exposing a shared subtree), trading a controlled amount
+  /// of extra FLOPs for a lower peak footprint. Only consulted when
+  /// opt_for == Flops; the units are FLOPs-per-element, so a useful magnitude
+  /// is on the order of the contracted-index extent that the offending
+  /// intermediate would otherwise leave free.
+  double footprint_weight = 0.0;
 };
 
 }  // namespace sequant

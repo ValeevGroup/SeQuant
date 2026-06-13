@@ -37,11 +37,11 @@ ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
   if (opts.opt_for == OptFor::Flops)
     return opt::single_term_opt<OptFor::Flops>(
         prod, opts.idx_to_extent, subnet_cse, opts.is_volatile_leaf,
-        opts.n_replay);
+        opts.n_replay, opts.footprint_weight);
   SEQUANT_ASSERT(opts.opt_for == OptFor::Memsize);
   return opt::single_term_opt<OptFor::Memsize>(
       prod, opts.idx_to_extent, subnet_cse, opts.is_volatile_leaf,
-      opts.n_replay);
+      opts.n_replay, opts.footprint_weight);
 }
 
 /// Deliberately non-identifier label prefix used to stand in for non-Tensor,
