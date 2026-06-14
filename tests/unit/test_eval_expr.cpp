@@ -276,16 +276,14 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
   SECTION("Adjoint op in a binarized term") {
     // Regression: a tensor leaf can carry the adjoint marker U+207A '⁺' in its
-    // label while NOT being internally flagged adjoint (is_adjoint_). The flag
-    // is only ever set by Tensor::adjoint(); a tensor built directly from a
-    // label string that already ends in '⁺' keeps the marker but leaves the
-    // flag default-false.
+    // label without having been produced by Tensor::adjoint() — e.g. when built
+    // directly from a label string that already ends in '⁺'. Adjointness is
+    // tracked solely by this label marker, so such a leaf is a valid adjoint.
     //
     // binarize() keys off the '⁺' label to surface the marker-bearing leaf as
     // EvalOp::Adjoint (see the "Adjoint op" section above), stripping the
-    // marker via Tensor::adjoint(). That path should tolerate a leaf whose flag
-    // was never set; instead it trips Tensor::adjoint()'s is_adjoint_
-    // consistency assertion.
+    // marker via Tensor::adjoint(). That path must tolerate a leaf that never
+    // went through Tensor::adjoint().
     auto expr = deserialize(L"1/2 g{i_1,i_2;a_1,a_2} t⁺{a_1;i_1} t{a_2;i_2}",
                             {.def_braket_symm = BraKetSymmetry::Nonsymm});
     REQUIRE(expr->is<Product>());

@@ -95,7 +95,8 @@ class CC {
 
   /// @brief derives the CC energy expression \f$ \langle 0|\bar{H}|0 \rangle
   /// \f$ at the requested commutator truncation, WITHOUT deriving the
-  /// projected amplitude equations (cheaper than `t().at(0)`).
+  /// projected amplitude equations (avoids deriving the full `t()` manifold
+  /// just to read `t().at(0)`).
   /// @param comm_rank optional H̄ commutator-truncation override, forwarded to
   ///   @ref hbar (defaults to the engine's `hbar_comm_rank`, else 4).
   /// @return the energy expression \f$ \langle 0|\bar{H}|0 \rangle \f$
