@@ -39,7 +39,8 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
     for (std::size_t i = 0; i < inputs.size(); ++i) {
       CAPTURE(i);
 
-      ExprPtr input_expr = deserialize(inputs.at(i));
+      ExprPtr input_expr =
+          deserialize(inputs.at(i), {.def_col_symm = ColumnSymmetry::Symm});
 
       auto externals = external_indices(input_expr);
 
@@ -80,7 +81,8 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
       container::svector<ResultExpr> expressions;
       container::svector<ResultExpr> expected;
       for (std::size_t k = 0; k < inputs.at(i).size(); ++k) {
-        ResultExpr parsed = deserialize<ResultExpr>(inputs.at(i).at(k));
+        ResultExpr parsed = deserialize<ResultExpr>(
+            inputs.at(i).at(k), {.def_col_symm = ColumnSymmetry::Symm});
         expressions.push_back(parsed);
 
         expected.push_back(
@@ -108,7 +110,8 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
       container::svector<ResultExpr> expressions;
 
       for (const std::wstring &str : current_inputs) {
-        expressions.push_back(deserialize<ResultExpr>(str));
+        expressions.push_back(deserialize<ResultExpr>(
+            str, {.def_col_symm = ColumnSymmetry::Symm}));
       }
 
       REQUIRE_THROWS_WITH(
