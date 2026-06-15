@@ -47,7 +47,8 @@ sequant::ExprPtr generateResultSymmetrization(const sequant::Tensor &result,
 
 sequant::ExprPtr generateResultSymmetrization(
     std::wstring_view precursorName,
-    const sequant::IndexGroups<std::vector<sequant::Index> > &externals);
+    const sequant::IndexGroups<std::vector<sequant::Index> > &externals,
+    const sequant::Tensor &ref);
 
 std::optional<sequant::ExprPtr> pop_symmetrizer(sequant::ResultExpr &expr);
 
