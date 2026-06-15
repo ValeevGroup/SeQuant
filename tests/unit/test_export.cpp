@@ -559,6 +559,53 @@ TEST_CASE("export", "[export]") {
 
                 ));
       }
+      SECTION("index batching") {
+        ctx.set_batch_indices({"i_1", "i_2"});
+
+        export_expression(
+            to_export_tree(deserialize<ResultExpr>(
+                L"R{a1,a2;i1,i2} = A{a1,a2;i1,i2} + A{a3,a4;i1,i2} "
+                L"B{a1,a2;a3,a4} + A{a1,a2;i3,i4} B{a3,a4;i1,i2}")),
+            generator, ctx);
+        REQUIRE_THAT(
+            generator.get_generated_code(),
+            DiffedStringEquals(
+                "Declare index i_1\n"
+                "Declare index i_2\n"
+                "Declare index i_3\n"
+                "Declare index i_4\n"
+                "Declare index a_1\n"
+                "Declare index a_2\n"
+                "Declare index a_3\n"
+                "Declare index a_4\n"
+                "\n"
+                "Declare tensor A[a_3, a_4, i_1, i_2]\n"
+                "Declare tensor B[a_3, a_4, i_1, i_2]\n"
+                "Declare tensor B[a_1, a_2, a_3, a_4]\n"
+                "Declare tensor R[a_1, a_2, i_1, i_2]\n"
+                "\n"
+                "Start batching over i_1, i_2\n"
+                "Create R[a_1, a_2, i_1, i_2] and initialize to zero\n"
+                "Load A[a_3, a_4, i_1, i_2]\n"
+                "Load B[a_1, a_2, a_3, a_4]\n"
+                "Compute R[a_1, a_2, i_1, i_2] += A[a_3, a_4, i_1, i_2] B[a_1, "
+                "a_2, a_3, a_4]\n"
+                "Unload B[a_1, a_2, a_3, a_4]\n"
+                "Compute R[a_1, a_2, i_1, i_2] += A[a_1, a_2, i_1, i_2]\n"
+                // Note: this pair of unload/load A must not be eliminated due
+                // to differences in their use of batching vs. non-batching
+                // indices Hence, the former refers to only a multidimensional
+                // slice of A, whereas the latter refers to the full A tensor.
+                "Unload A[a_1, a_2, i_1, i_2]\n"
+                "Load A[a_1, a_2, i_3, i_4]\n"
+                "Load B[a_3, a_4, i_1, i_2]\n"
+                "Compute R[a_1, a_2, i_1, i_2] += A[a_1, a_2, i_3, i_4] B[a_3, "
+                "a_4, i_1, i_2]\n"
+                "Unload B[a_3, a_4, i_1, i_2]\n"
+                "Unload A[a_1, a_2, i_3, i_4]\n"
+                "Persist R[a_1, a_2, i_1, i_2]\n"
+                "End batching\n"));
+      }
 
       // The following test cases will only become relevant once the optimizer
       // is further improved
