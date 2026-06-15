@@ -548,12 +548,14 @@ class GenerationOptimizer final : public Generator<MainContext> {
 
         if (first->pairs_with(second)) {
           auto pair = std::make_pair(i + m_cache.size(), k + m_cache.size());
-          assert(std::ranges::find(m_paired, pair.first,
-                                   &decltype(m_paired)::value_type::first) ==
-                 m_paired.end());
-          assert(std::ranges::find(m_paired, pair.second,
-                                   &decltype(m_paired)::value_type::second) ==
-                 m_paired.end());
+          SEQUANT_ASSERT(
+              std::ranges::find(m_paired, pair.first,
+                                &decltype(m_paired)::value_type::first) ==
+              m_paired.end());
+          SEQUANT_ASSERT(
+              std::ranges::find(m_paired, pair.second,
+                                &decltype(m_paired)::value_type::second) ==
+              m_paired.end());
 
           m_paired.push_back(std::move(pair));
           break;
