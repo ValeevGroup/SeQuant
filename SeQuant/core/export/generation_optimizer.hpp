@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/export/generator.hpp>
+#include <SeQuant/core/export/tensor_comparator.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
@@ -61,12 +62,13 @@ class GenerationOptimizer final : public Generator<MainContext> {
 
     /// @returns Whether this operation cancels the provided operation. That is,
     /// executing them both in sequence will result in a no-op
-    bool cancels(const AbstractOperation &other) const {
+    bool cancels(const AbstractOperation &other,
+                 const detail::ExportTensorComparator &cmp) const {
       if ((type() == OperationType::Load &&
            other.type() == OperationType::Unload) ||
           (type() == OperationType::Unload &&
            other.type() == OperationType::Load)) {
-        return object_equals(other.m_object);
+        return object_equals(other.m_object, cmp);
       }
 
       return false;
@@ -74,8 +76,9 @@ class GenerationOptimizer final : public Generator<MainContext> {
 
     /// @returns Whether this operation forms a semantic pair with the provided
     /// one
-    bool pairs_with(const AbstractOperation &operation) const {
-      if (!object_equals(operation.m_object)) {
+    bool pairs_with(const AbstractOperation &operation,
+                    const detail::ExportTensorComparator &cmp) const {
+      if (!object_equals(operation.m_object, cmp)) {
         return false;
       }
 
@@ -167,14 +170,16 @@ class GenerationOptimizer final : public Generator<MainContext> {
       return str;
     }
 
-    bool operator==(const AbstractOperation &other) const {
-      return type() == other.type() && object_equals(other.m_object);
+    bool equals(const AbstractOperation &other,
+                const detail::ExportTensorComparator &cmp) const {
+      return type() == other.type() && object_equals(other.m_object, cmp);
     }
 
    private:
     Object m_object;
 
-    bool object_equals(const Object &other) const {
+    bool object_equals(const Object &other,
+                       const detail::ExportTensorComparator &cmp) const {
       if (m_object.index() != other.index()) {
         return false;
       }
@@ -183,8 +188,8 @@ class GenerationOptimizer final : public Generator<MainContext> {
         const Tensor &lhs = std::get<Tensor>(m_object);
         const Tensor &rhs = std::get<Tensor>(other);
 
-        TensorBlockEqualComparator cmp;
-        return cmp(lhs, rhs);
+        // cmp checks whehter lhs < rhs
+        return !cmp(lhs, rhs) && !cmp(rhs, lhs);
       }
 
       return std::get<Variable>(m_object) == std::get<Variable>(other);
@@ -412,20 +417,20 @@ class GenerationOptimizer final : public Generator<MainContext> {
   }
 
   void compute(const Expr &expression, const Tensor &result,
-               const MainContext &) override {
+               const MainContext &ctx) override {
     m_queue.emplace_back(ComputeOperation(result, expression.clone()));
-    process_operation_queue();
+    process_operation_queue(ctx);
   }
 
   void compute(const Expr &expression, const Variable &result,
-               const MainContext &) override {
+               const MainContext &ctx) override {
     m_queue.emplace_back(ComputeOperation(result, expression.clone()));
-    process_operation_queue();
+    process_operation_queue(ctx);
   }
 
   void end_expression(const MainContext &ctx) override {
     // Assumption: Context is the same as for all queued operations
-    process_operation_queue();
+    process_operation_queue(ctx);
     process_operation_cache(ctx);
 
     SEQUANT_ASSERT(m_queue.empty());
@@ -483,7 +488,9 @@ class GenerationOptimizer final : public Generator<MainContext> {
   container::svector<std::pair<std::size_t, std::size_t>> m_paired;
 
   template <typename Iterator>
-  static Iterator find_unpaired_allocation(Iterator begin, const Iterator end) {
+  static Iterator find_unpaired_allocation(
+      Iterator begin, const Iterator end,
+      const detail::ExportTensorComparator &cmp) {
     if (begin == end) {
       return begin;
     }
@@ -499,7 +506,8 @@ class GenerationOptimizer final : public Generator<MainContext> {
           break;
         case MemoryAction::Allocate: {
           const Operation &op = *begin;
-          if (!deallocations.empty() && op->pairs_with(deallocations.top())) {
+          if (!deallocations.empty() &&
+              op->pairs_with(deallocations.top(), cmp)) {
             deallocations.pop();
           } else {
             return begin;
@@ -514,12 +522,15 @@ class GenerationOptimizer final : public Generator<MainContext> {
     return end;
   }
 
-  void process_operation_queue() {
+  void process_operation_queue(const MainContext &ctx) {
+    detail::ExportTensorComparator cmp(
+        ctx.batch_indices(ctx.current_expression_id()));
+
     // If two subsequent elements cancel each other, they can be erased without
     // having to worry about potentially violating the stack-like ordering of
     // memory operations (it will be preserved).
     for (std::size_t i = 0; i < m_queue.size() - 1; ++i) {
-      if (m_queue[i]->cancels(m_queue.at(i + 1))) {
+      if (m_queue[i]->cancels(m_queue.at(i + 1), cmp)) {
         m_queue.erase(m_queue.begin() + i + 1);
         m_queue.erase(m_queue.begin() + i);
         // Re-visit the previous value of i in the next iteration
@@ -546,12 +557,21 @@ class GenerationOptimizer final : public Generator<MainContext> {
       for (std::size_t k = i + 1; k < m_queue.size(); ++k) {
         const Operation &second = m_queue.at(k);
 
-        if (first->pairs_with(second)) {
+        if (first->pairs_with(second, cmp)) {
           auto pair = std::make_pair(i + m_cache.size(), k + m_cache.size());
           SEQUANT_ASSERT(
               std::ranges::find(m_paired, pair.first,
                                 &decltype(m_paired)::value_type::first) ==
               m_paired.end());
+          auto it = std::ranges::find(m_paired, pair.second,
+                                      &decltype(m_paired)::value_type::second);
+          if (it != m_paired.end()) {
+            std::cout << "Clashed operation pairing: " << first->to_string()
+                      << " with " << second->to_string() << std::endl;
+            std::cout << "Clashed operation pairing: "
+                      << m_cache.at(it->first)->to_string() << " with "
+                      << m_cache.at(it->second)->to_string() << std::endl;
+          }
           SEQUANT_ASSERT(
               std::ranges::find(m_paired, pair.second,
                                 &decltype(m_paired)::value_type::second) ==
@@ -568,7 +588,10 @@ class GenerationOptimizer final : public Generator<MainContext> {
     m_queue.clear();
   }
 
-  void optimize_operation_cache() {
+  void optimize_operation_cache(const MainContext &ctx) {
+    detail::ExportTensorComparator cmp(
+        ctx.batch_indices(ctx.current_expression_id()));
+
     std::size_t erased = 0;
 
     // Process paired operations that **might** be removed, provided we can (and
@@ -594,7 +617,7 @@ class GenerationOptimizer final : public Generator<MainContext> {
 
       [[maybe_unused]] const Operation &first = m_cache.at(first_idx);
       [[maybe_unused]] const Operation &second = m_cache.at(second_idx);
-      SEQUANT_ASSERT(first->pairs_with(second));
+      SEQUANT_ASSERT(first->pairs_with(second, cmp));
 
       if (second_idx - first_idx > 2) {
         // There is more than one intermittent operation between the pair. We
@@ -620,20 +643,20 @@ class GenerationOptimizer final : public Generator<MainContext> {
       SEQUANT_ASSERT(first->memory_action() == MemoryAction::Deallocate);
 
       auto alloc_it = find_unpaired_allocation(
-          m_cache.rbegin() + m_cache.size() - 1 - first_idx + 1,
-          m_cache.rend());
+          m_cache.rbegin() + m_cache.size() - 1 - first_idx + 1, m_cache.rend(),
+          cmp);
       SEQUANT_ASSERT(alloc_it != m_cache.rend());
       SEQUANT_ASSERT(std::distance(alloc_it, m_cache.rend()) > 0);
       std::size_t first_alloc_idx = std::distance(alloc_it, m_cache.rend()) - 1;
-      SEQUANT_ASSERT(m_cache.at(first_alloc_idx)->pairs_with(first));
+      SEQUANT_ASSERT(m_cache.at(first_alloc_idx)->pairs_with(first, cmp));
 
-      alloc_it = find_unpaired_allocation(alloc_it + 1, m_cache.rend());
+      alloc_it = find_unpaired_allocation(alloc_it + 1, m_cache.rend(), cmp);
       SEQUANT_ASSERT(alloc_it != m_cache.rend());
       SEQUANT_ASSERT(std::distance(alloc_it, m_cache.rend()) > 0);
       std::size_t intermittent_alloc_idx =
           std::distance(alloc_it, m_cache.rend()) - 1;
       SEQUANT_ASSERT(
-          m_cache.at(intermittent_alloc_idx)->pairs_with(intermittent));
+          m_cache.at(intermittent_alloc_idx)->pairs_with(intermittent, cmp));
 
       SEQUANT_ASSERT(intermittent_alloc_idx < first_alloc_idx);
       if (first_alloc_idx - intermittent_alloc_idx == 1) {
@@ -657,11 +680,14 @@ class GenerationOptimizer final : public Generator<MainContext> {
   }
 
   void process_operation_cache(const MainContext &ctx) {
+    [[maybe_unused]] detail::ExportTensorComparator cmp(
+        ctx.batch_indices(ctx.current_expression_id()));
+
     SEQUANT_ASSERT(m_queue.empty());
     SEQUANT_ASSERT(m_cache.empty() ||
-                   m_cache.front()->pairs_with(m_cache.back()));
+                   m_cache.front()->pairs_with(m_cache.back(), cmp));
 
-    optimize_operation_cache();
+    optimize_operation_cache(ctx);
 
     for (Operation &op : m_cache) {
       op->execute(m_generator, ctx);
