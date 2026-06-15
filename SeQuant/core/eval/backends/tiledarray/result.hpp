@@ -682,9 +682,13 @@ class ResultTensorOfTensorTA final : public Result {
 /// \brief Restrict a TA::DistArray to a contiguous tile range of one mode.
 ///
 /// Keeps tiles `[tile_lo, tile_hi)` of mode \p mode and all tiles of every
-/// other mode; the result's `mode`-th TiledRange1 covers only those tiles
-/// (its element range is shifted to start at 0). Implemented with TA's
-/// `block()`, so block-sparse shape is preserved. Used to evaluate a tensor
+/// other mode; the result's `mode`-th TiledRange1 covers only those tiles.
+/// Every mode's original element lobound is preserved (via TA's
+/// `preserve_lobound` block), so a spectator index that carries a nonzero
+/// lobound (e.g. an active-occupied index with a frozen-core offset) keeps it
+/// and still matches the unsliced operand it is contracted against. Implemented
+/// with TA's `block()`, so block-sparse shape is preserved. Used to evaluate a
+/// tensor
 /// network in batches over a contracted index (see
 /// make_batched_custom_evaluator): slicing every leaf that carries the index
 /// to a tile range, evaluating, and summing reproduces the full contraction
@@ -714,17 +718,17 @@ template <typename... Args>
       // All-empty-inner ToT: tot_inner_rank() is 0, so there's no inner rank to
       // build the ToT annotation block() needs. The slice of zero is zero, so
       // build the sliced outer trange by hand (mode cut to [tile_lo,tile_hi),
-      // each dim rebased to 0, matching block()) and return a zero ToT over it.
-      // The result is dense even if ArrayT's policy is sparse -- harmless, the
+      // every dim's original element lobound preserved, matching the
+      // preserve_lobound block() below) and return a zero ToT over it. The
+      // result is dense even if ArrayT's policy is sparse -- harmless, the
       // array is identically zero.
       std::vector<TA::TiledRange1> tr1s;
       tr1s.reserve(rank);
       for (std::size_t d = 0; d < rank; ++d) {
         auto const& dim = arr.trange().dim(d);
-        std::size_t const base = dim.tile(lo[d]).first;
-        std::vector<std::size_t> bounds{0};
+        std::vector<std::size_t> bounds{dim.tile(lo[d]).first};
         for (std::size_t t = lo[d]; t < hi[d]; ++t)
-          bounds.push_back(dim.tile(t).second - base);
+          bounds.push_back(dim.tile(t).second);
         tr1s.emplace_back(bounds.begin(), bounds.end());
       }
       TA::DistArray<Args...> out{arr.world(),
@@ -740,7 +744,16 @@ template <typename... Args>
     annot = detail::ords_to_annot(iota(std::size_t{0}, rank));
   }
   TA::DistArray<Args...> out;
-  out(annot) = arr(annot).block(lo, hi);
+  // preserve_lobound: keep every mode's original element lobound instead of
+  // rebasing the block to 0. We only sub-range the batch mode; the other modes
+  // are taken in full, but plain block() would still rebase them to 0 -- giving
+  // a spectator index like the active-occupied i (whose DistArray carries an
+  // ncore lobound) a 0 lobound in this sliced operand, which then mismatches
+  // the unsliced operand's TiledRange1 for the same index when the two are
+  // combined by einsum's general product (Einsum::index::operator| asserts that
+  // a shared index has the same TiledRange1 in both operands). The batch mode
+  // keeps its real element offset too, consistently across all sliced operands.
+  out(annot) = arr(annot).block(lo, hi, TA::preserve_lobound);
   TA::DistArray<Args...>::wait_for_lazy_cleanup(arr.world());
   return out;
 }
