@@ -396,19 +396,38 @@ auto cache_manager(meta::eval_node_range auto const& nodes,
 /// \p min_repeats times (the usual CSE rule), plus *all* P nodes regardless of
 /// repeat count (a P node is reused across evaluations even if used once each).
 ///
+/// Default footprint accessor for cache_manager: reports zero footprint for
+/// every node, so the footprint gate is inert (combined with max_footprint==0).
+struct zero_footprint {
+  double operator()(auto const&) const noexcept { return 0.; }
+};
+
 /// \param nodes the evaluation forest.
 /// \param is_volatile `bool(TreeNode const&)`: true if the node is
 ///        intrinsically volatile. Only its value on leaves matters in practice
 ///        (volatility propagates up), but it is consulted on every node.
 /// \param min_repeats minimum NP repeats to cache (default 2).
+/// \param footprint_of `double(TreeNode const&)`: the materialized storage
+///        footprint of a node's result (e.g. its element count or byte size).
+///        Consulted only when \p max_footprint > 0.
+/// \param max_footprint footprint gate: any node whose \p footprint_of exceeds
+///        this is NOT cached (neither as an NP repeat nor as a P frontier
+///        node), so it is recomputed by each consumer instead of being
+///        materialized whole and held. This bounds the peak/sustained footprint
+///        of huge intermediates that carry a free large-space index (e.g. a
+///        half-transformed DF integral with a free projected-AO index), at the
+///        cost of recomputation. 0 (default) disables the gate.
 /// \see CacheManager, cache_manager
-template <bool force_hash_collisions = false>
+template <bool force_hash_collisions = false,
+          typename FootprintOf = zero_footprint>
 auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
-                   size_t min_repeats = 2)
+                   size_t min_repeats = 2, FootprintOf footprint_of = {},
+                   double max_footprint = 0.)
   requires requires(
       std::ranges::range_value_t<std::remove_cvref_t<decltype(nodes)>> const&
           n) {
     { is_volatile(n) } -> std::convertible_to<bool>;
+    { footprint_of(n) } -> std::convertible_to<double>;
   }
 {
   using TreeNode =
@@ -446,9 +465,18 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
   for (auto&& tree : nodes) visit(visit, tree);
 
   // Cache NP repeats + every P node; persistence = membership in `persistent`.
+  // Footprint gate: a node whose result is larger than max_footprint is never
+  // cached (so it is recomputed by each consumer rather than materialized whole
+  // and held), bounding the footprint of huge free-large-index intermediates.
   std::unordered_map<TreeNode, size_t, Hasher, Comp> filtered;
-  for (auto&& [n, c] : counts)
-    if (c >= min_repeats || persistent.contains(n)) filtered.emplace(n, c);
+  for (auto&& [n, c] : counts) {
+    if (!(c >= min_repeats || persistent.contains(n))) continue;
+    if (max_footprint > 0. && footprint_of(n) > max_footprint) {
+      persistent.erase(n);  // keep is_persistent consistent with what is cached
+      continue;
+    }
+    filtered.emplace(n, c);
+  }
 
   auto is_persistent = [persistent = std::move(persistent)](TreeNode const& n) {
     return persistent.contains(n);

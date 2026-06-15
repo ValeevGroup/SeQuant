@@ -94,6 +94,27 @@ auto memsize_counter(has_index_extent auto&& ixex) {
   };
 }
 
+/// \brief Cost function returning the storage footprint (element count) of a
+/// single tensor: the product of the extents of its indices.
+///
+/// Used to apply a per-intermediate memory-footprint penalty in single-term
+/// optimization (see OptimizeOptions::footprint_weight). A scalar (no indices)
+/// contributes zero.
+///
+/// \param ixex Invocable mapping an Index to its extent.
+/// \return A callable <tt>(result) -> double</tt> yielding the element count of
+/// the result tensor.
+auto footprint_counter(has_index_extent auto&& ixex) {
+  return [ixex = std::forward<decltype(ixex)>(ixex)](
+             meta::range_of<Index> auto const& result) -> double {
+    using ranges::views::concat;
+    auto tot_idxs = tot_indices(result);
+    double mem = ranges::accumulate(concat(tot_idxs.outer, tot_idxs.inner), 1.,
+                                    std::multiplies{}, ixex);
+    return mem == 1. ? 0. : mem;
+  };
+}
+
 ///
 /// Represents a result of optimization on a range of expressions
 /// for a binary evaluation
@@ -248,14 +269,18 @@ inline SubnetMetadata build_subnet_metadata(
 ///  intermediate results, which is particularly effective for
 ///  expressions with repeating tensor patterns.
 ///
-template <typename CostFn>
-  requires requires(CostFn&& fn, decltype(OptRes::indices) const& ixs) {
+template <typename CostFn, typename FootprintFn>
+  requires requires(CostFn&& fn, FootprintFn&& ffn,
+                    decltype(OptRes::indices) const& ixs) {
     { fn(ixs, ixs, ixs) } -> std::floating_point;
+    { ffn(ixs) } -> std::floating_point;
   }
 EvalSequence single_term_opt_impl(TensorNetwork const& network,
                                   meta::range_of<Index> auto const& tidxs,
                                   CostFn&& cost_fn, bool subnet_cse,
-                                  size_t volatile_mask, double n_replay) {
+                                  size_t volatile_mask, double n_replay,
+                                  FootprintFn&& footprint_fn,
+                                  double footprint_weight) {
   using ranges::views::concat;
   auto const nt = network.tensors().size();
   if (nt == 1) return EvalSequence{0};
@@ -288,6 +313,14 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
       // i.e. one subset is the empty set and the other full
       if (lp == 0 || rp == 0) continue;
 
+      // Per-intermediate memory-footprint penalty (storage of THIS result),
+      // added once and NOT scaled by the replay weight w (peak footprint is a
+      // one-time materialization cost). Zero when footprint_weight == 0.
+      double const fp =
+          footprint_weight != 0.0
+              ? footprint_weight * footprint_fn(results[n].indices)
+              : 0.0;
+
       double new_cost = 0;
       container::vector<size_t> combined_subnets;
       if (subnet_cse) {
@@ -298,7 +331,8 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
                        std::back_inserter(combined_subnets));
         new_cost = w * cost_fn(results[lp].indices,  //
                                results[rp].indices,  //
-                               results[n].indices);
+                               results[n].indices)   //
+                   + fp;
         for (auto id : combined_subnets) {
           new_cost += unique_meta_costs[id];
         }
@@ -306,7 +340,7 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
         new_cost = w * cost_fn(results[lp].indices,  //
                                results[rp].indices,  //
                                results[n].indices)   //
-                   + results[lp].ops + results[rp].ops;
+                   + fp + results[lp].ops + results[rp].ops;
       }
 
       if (new_cost <= curr_cost) {
@@ -326,7 +360,10 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
       // cost is intentional and benign.
       unique_meta_costs[mid] =
           w * cost_fn(results[results[n].lp].indices,
-                      results[results[n].rp].indices, results[n].indices);
+                      results[results[n].rp].indices, results[n].indices) +
+          (footprint_weight != 0.0
+               ? footprint_weight * footprint_fn(results[n].indices)
+               : 0.0);
       auto it = std::lower_bound(results[n].subnets.begin(),
                                  results[n].subnets.end(), mid);
       if (it == results[n].subnets.end() || *it != mid) {
@@ -369,8 +406,12 @@ template <OptFor Metric, has_index_extent IdxToSz>
 EvalSequence single_term_opt(
     TensorNetwork const& network, IdxToSz&& idxsz, bool subnet_cse,
     std::function<bool(Tensor const&)> const& is_volatile_leaf = {},
-    unsigned n_replay = 1) {
+    unsigned n_replay = 1, double footprint_weight = 0.0) {
   decltype(OptRes::indices) tidxs{};
+
+  // The per-intermediate footprint penalty needs idxsz too, so build a
+  // footprint counter alongside the cost function (idxsz is copied into each).
+  auto footprint_fn = footprint_counter(idxsz);
 
   // Volatility weighting is a Flops-only notion (persistent intermediates cost
   // MORE memory, not less, so it is wrong-signed for Memsize). Build the
@@ -388,15 +429,17 @@ EvalSequence single_term_opt(
       }
       nr = static_cast<double>(n_replay);
     }
-    auto cost_fn = flops_counter(std::forward<IdxToSz>(idxsz));
+    auto cost_fn = flops_counter(idxsz);
     return single_term_opt_impl(network, tidxs, cost_fn, subnet_cse,
-                                volatile_mask, nr);
+                                volatile_mask, nr, footprint_fn,
+                                footprint_weight);
   } else {
     static_assert(Metric == OptFor::Memsize,
                   "Only Flops and Memsize OptFor supported.");
-    auto cost_fn = memsize_counter(std::forward<IdxToSz>(idxsz));
+    auto cost_fn = memsize_counter(idxsz);
     return single_term_opt_impl(network, tidxs, cost_fn, subnet_cse,
-                                volatile_mask, nr);
+                                volatile_mask, nr, footprint_fn,
+                                footprint_weight);
   }
 }
 
@@ -415,7 +458,7 @@ template <OptFor Metric = OptFor::Flops, has_index_extent IdxToSz>
 ExprPtr single_term_opt(
     Product const& prod, IdxToSz&& idxsz, bool subnet_cse = false,
     std::function<bool(Tensor const&)> const& is_volatile_leaf = {},
-    unsigned n_replay = 1) {
+    unsigned n_replay = 1, double footprint_weight = 0.0) {
   using ranges::views::filter;
   using ranges::views::reverse;
 
@@ -426,7 +469,7 @@ ExprPtr single_term_opt(
       prod | filter(&ExprPtr::template is<Tensor>) | ranges::to_vector;
   auto seq = detail::single_term_opt<Metric>(
       TensorNetwork{tensors}, std::forward<IdxToSz>(idxsz), subnet_cse,
-      is_volatile_leaf, n_replay);
+      is_volatile_leaf, n_replay, footprint_weight);
   auto result = container::svector<ExprPtr>{};
   for (auto i : seq)
     if (i == -1) {
