@@ -795,7 +795,6 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   ColumnSymmetry column_symmetry_ = ColumnSymmetry::Nonsymm;
   mutable std::optional<hash_type>
       bra_hash_value_;  // memoized byproduct of memoizing_hash()
-  bool is_adjoint_ = false;
   std::size_t bra_net_rank_;
   std::size_t ket_net_rank_;
 
