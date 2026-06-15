@@ -276,22 +276,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
         ket_net_rank_(ranges::count_if(
             ket_, [](const Index &idx) { return static_cast<bool>(idx); })) {
-    // The (anti)symmetrizer is a permutation-bookkeeping operator whose
-    // bra<->ket orientation defines/extracts the external indices and must be
-    // preserved; it must never be bra<->ket-symmetric (Symm), or
-    // canonicalization would swap its bra and ket and corrupt external-index
-    // extraction. Over a real field a Hermitian operator becomes Symm, so
-    // demote Symm to Conjugate here (Conjugate is treated as no-swap by the
-    // canonicalizer, matching the complex-field behavior) before
-    // canonicalize_slots() may act on it.
-    if ((label_ == reserved::antisymm_label() ||
-         label_ == reserved::symm_label()) &&
-        braket_symmetry_ != BraKetSymmetry::Nonsymm) {
-      throw Exception(
-          "(Anti)symmetrization operators must not have braket symmetry");
-    }
     validate_indices();
-    validate_symmetries();
+    check_symmetries();
     canonicalize_slots();
   }
 
@@ -314,22 +300,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
         ket_net_rank_(ranges::count_if(
             ket_, [](const Index &idx) { return static_cast<bool>(idx); })) {
-    // The (anti)symmetrizer is a permutation-bookkeeping operator whose
-    // bra<->ket orientation defines/extracts the external indices and must be
-    // preserved; it must never be bra<->ket-symmetric (Symm), or
-    // canonicalization would swap its bra and ket and corrupt external-index
-    // extraction. Over a real field a Hermitian operator becomes Symm, so
-    // demote Symm to Conjugate here (Conjugate is treated as no-swap by the
-    // canonicalizer, matching the complex-field behavior) before
-    // canonicalize_slots() may act on it.
-    if ((label_ == reserved::antisymm_label() ||
-         label_ == reserved::symm_label()) &&
-        braket_symmetry_ != BraKetSymmetry::Nonsymm) {
-      throw Exception(
-          "(Anti)symmetrization operators must not have braket symmetry");
-    }
     validate_indices();
-    validate_symmetries();
+    check_symmetries();
     canonicalize_slots();
   }
 
@@ -771,11 +743,27 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   std::size_t bra_net_rank_;
   std::size_t ket_net_rank_;
 
-  void validate_symmetries() {
-    // (anti)symmetric bra or ket makes sense only for particle-symmetric
-    // tensors
-    if (symmetry_ == Symmetry::Symm || symmetry_ == Symmetry::Antisymm)
-      SEQUANT_ASSERT(column_symmetry_ == ColumnSymmetry::Symm);
+  void check_symmetries() {
+    // The (anti)symmetrizer is a permutation-bookkeeping operator whose
+    // bra<->ket orientation defines/extracts the external indices and must be
+    // preserved; it must never be bra<->ket-symmetric (Symm), or
+    // canonicalization would swap its bra and ket and corrupt external-index
+    // extraction. Over a real field a Hermitian operator becomes Symm, so
+    // demote Symm to Conjugate here (Conjugate is treated as no-swap by the
+    // canonicalizer, matching the complex-field behavior) before
+    // canonicalize_slots() may act on it.
+    if ((label_ == reserved::antisymm_label() ||
+         label_ == reserved::symm_label()) &&
+        braket_symmetry_ != BraKetSymmetry::Nonsymm) {
+      throw Exception(
+          "(Anti)symmetrization operators must not have braket symmetry");
+    }
+
+    if (symmetry_ == Symmetry::Symm || symmetry_ == Symmetry::Antisymm) {
+      // (Anti)symmetry in bra and ket indices automatically implies column
+      // symmetry
+      column_symmetry_ = ColumnSymmetry::Symm;
+    }
   }
 
   hash_type memoizing_hash() const override {
