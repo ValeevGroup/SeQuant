@@ -1831,12 +1831,11 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
     }
 
     SECTION("special") {
-      auto factors =
-          deserialize(
-              L"Ŝ{i_1;a_1<i_1>}:N-C-S g{i_2,a_1<i_1>;a_2<i_2>,i_1}:N-C-S "
-              L"t{a_2<i_2>;i_2}:N-C-S")
-              ->as<Product>()
-              .factors();
+      auto factors = deserialize(
+                         L"Ŝ{i_1;a_1<i_1>} g{i_2,a_1<i_1>;a_2<i_2>,i_1}:N-C-S "
+                         L"t{a_2<i_2>;i_2}:N-C-S")
+                         ->as<Product>()
+                         .factors();
 
       TN tn(factors);
 
