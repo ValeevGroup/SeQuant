@@ -178,10 +178,21 @@ void configure_context_defaults(PyTorchEinsumGeneratorContext &ctx) {
   ctx.set_tag(aux, "x");
 }
 
-void add_to_context(TextGeneratorContext &, std::string_view,
-                    std::string_view) {
-  throw std::runtime_error(
-      "TextGeneratorContext doesn't support specifications");
+void add_to_context(TextGeneratorContext &ctx, std::string_view key,
+                    std::string_view value) {
+  if (key == "batch_indices") {
+    std::vector<Index> indices;
+    for (auto current : std::ranges::views::split(value, ',')) {
+      Index idx(std::string(current.begin(), current.end()));
+      indices.push_back(idx);
+    }
+
+    ctx.set_batch_indices(std::move(indices));
+  } else {
+    throw Exception(
+        "Unsupported key in TextGenerator context specification: '" +
+        std::string(key) + "'");
+  }
 }
 void add_to_context(ItfContext &ctx, std::string_view key,
                     std::string_view value) {

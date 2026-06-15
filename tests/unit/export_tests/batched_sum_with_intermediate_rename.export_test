@@ -1,6 +1,44 @@
 (B{a1;a2} C{i1;a1}) (E{a2;a3} F{a3;i2})
 
 =================================================
+Plain Text
+batch_indices: i_1
+=================================================
+Declare index i_1
+Declare index i_2
+Declare index a_1
+Declare index a_2
+Declare index a_3
+
+Declare tensor B[a_1, a_2]
+Declare tensor C[i_1, a_1]
+Declare tensor E[a_2, a_3]
+Declare tensor F[a_3, i_2]
+Declare tensor I[i_1, i_2]
+Declare tensor I[i_1, a_2]
+Declare tensor I2[i_2, a_2]
+
+Start batching over i_1
+Create I[i_1, i_2] and initialize to zero
+Create I[i_1, a_2] and initialize to zero
+Load B[a_1, a_2]
+Load C[i_1, a_1]
+Compute I[i_1, a_2] += B[a_1, a_2] C[i_1, a_1]
+Unload C[i_1, a_1]
+Unload B[a_1, a_2]
+Create I2[i_2, a_2] and initialize to zero
+Load E[a_2, a_3]
+Load F[a_3, i_2]
+Compute I2[i_2, a_2] += E[a_2, a_3] F[a_3, i_2]
+Unload F[a_3, i_2]
+Unload E[a_2, a_3]
+Compute I[i_1, i_2] += I[i_1, a_2] I2[i_2, a_2]
+Unload I2[i_2, a_2]
+Unload I[i_1, a_2]
+Persist I[i_1, i_2]
+End batching
+
+=================================================
 ITF
 batch_indices: i_1
 =================================================
