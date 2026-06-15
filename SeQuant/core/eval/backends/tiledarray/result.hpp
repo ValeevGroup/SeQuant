@@ -726,9 +726,10 @@ template <typename... Args>
       tr1s.reserve(rank);
       for (std::size_t d = 0; d < rank; ++d) {
         auto const& dim = arr.trange().dim(d);
-        std::vector<std::size_t> bounds{dim.tile(lo[d]).first};
+        std::vector<std::size_t> bounds{
+            static_cast<std::size_t>(dim.tile(lo[d]).first)};
         for (std::size_t t = lo[d]; t < hi[d]; ++t)
-          bounds.push_back(dim.tile(t).second);
+          bounds.push_back(static_cast<std::size_t>(dim.tile(t).second));
         tr1s.emplace_back(bounds.begin(), bounds.end());
       }
       TA::DistArray<Args...> out{arr.world(),
