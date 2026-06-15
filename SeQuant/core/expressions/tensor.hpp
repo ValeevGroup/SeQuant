@@ -15,6 +15,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/reserved.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/strong.hpp>
@@ -268,24 +269,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         ket_(make_indices(ket_indices)),
         aux_(make_indices(aux_indices)),
         symmetry_(s),
-        // Derive bra<->ket exchange symmetry from the indices' fields with a
-        // default Hermitian abstract trait, unless the caller explicitly
-        // requested a particular BraKetSymmetry (e.g. Nonsymm for amplitudes).
-        // base_field(bra_, ket_) is well-defined here: declaration order of the
-        // private members guarantees bra_/ket_ are constructed before
-        // braket_symmetry_.
-        // If the caller didn't specify a BraKetSymmetry: when at least one
-        // of bra/ket is nonempty, derive from base_field(bra_, ket_) +
-        // Hermitian (matches the field-agnostic Hermiticity-taking ctor).
-        // When both bra and ket are empty, the bra↔ket exchange has no
-        // physical meaning — fall back to the literal Conjugate default
-        // (historical Context::braket_symmetry() value); deriving Symm there
-        // would break the spintrace bookkeeping for vacuum-aux tensors.
-        braket_symmetry_(bks_opt.value_or(
-            (bra_.empty() && ket_.empty())
-                ? BraKetSymmetry::Conjugate
-                : to_braket_symmetry(Hermiticity::Hermitian,
-                                     sequant::base_field(bra_, ket_)))),
+        braket_symmetry_(bks_opt.value_or(BraKetSymmetry::Nonsymm)),
         hermiticity_(to_hermiticity(braket_symmetry_)),
         column_symmetry_(ps),
         bra_net_rank_(ranges::count_if(
@@ -302,9 +286,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     // canonicalize_slots() may act on it.
     if ((label_ == reserved::antisymm_label() ||
          label_ == reserved::symm_label()) &&
-        braket_symmetry_ == BraKetSymmetry::Symm) {
-      braket_symmetry_ = BraKetSymmetry::Conjugate;
-      hermiticity_ = to_hermiticity(BraKetSymmetry::Conjugate);
+        braket_symmetry_ != BraKetSymmetry::Nonsymm) {
+      throw Exception(
+          "(Anti)symmetrization operators must not have braket symmetry");
     }
     validate_indices();
     validate_symmetries();
@@ -323,18 +307,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         ket_(std::move(ket_indices)),
         aux_(std::move(aux_indices)),
         symmetry_(s),
-        // If the caller didn't specify a BraKetSymmetry: when at least one
-        // of bra/ket is nonempty, derive from base_field(bra_, ket_) +
-        // Hermitian (matches the field-agnostic Hermiticity-taking ctor).
-        // When both bra and ket are empty, the bra↔ket exchange has no
-        // physical meaning — fall back to the literal Conjugate default
-        // (historical Context::braket_symmetry() value); deriving Symm there
-        // would break the spintrace bookkeeping for vacuum-aux tensors.
-        braket_symmetry_(bks_opt.value_or(
-            (bra_.empty() && ket_.empty())
-                ? BraKetSymmetry::Conjugate
-                : to_braket_symmetry(Hermiticity::Hermitian,
-                                     sequant::base_field(bra_, ket_)))),
+        braket_symmetry_(bks_opt.value_or(BraKetSymmetry::Nonsymm)),
         hermiticity_(to_hermiticity(braket_symmetry_)),
         column_symmetry_(ps),
         bra_net_rank_(ranges::count_if(
@@ -351,9 +324,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     // canonicalize_slots() may act on it.
     if ((label_ == reserved::antisymm_label() ||
          label_ == reserved::symm_label()) &&
-        braket_symmetry_ == BraKetSymmetry::Symm) {
-      braket_symmetry_ = BraKetSymmetry::Conjugate;
-      hermiticity_ = to_hermiticity(BraKetSymmetry::Conjugate);
+        braket_symmetry_ != BraKetSymmetry::Nonsymm) {
+      throw Exception(
+          "(Anti)symmetrization operators must not have braket symmetry");
     }
     validate_indices();
     validate_symmetries();
