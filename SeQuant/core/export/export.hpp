@@ -9,6 +9,7 @@
 #include <SeQuant/core/export/export_node.hpp>
 #include <SeQuant/core/export/expression_group.hpp>
 #include <SeQuant/core/export/generator.hpp>
+#include <SeQuant/core/export/tensor_comparator.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -29,49 +30,6 @@
 namespace sequant {
 
 namespace detail {
-
-struct ExportTensorComparator {
-  bool operator()(const Tensor &lhs, const Tensor &rhs) const {
-    TensorBlockLessThanComparator cmp;
-    bool blocksLess = cmp(lhs, rhs);
-    if (blocksLess || cmp(rhs, lhs)) {
-      return blocksLess;
-    }
-
-    // Blocks are identical -> check for batched indices
-    auto &&lhs_indices = lhs.indices();
-    auto &&rhs_indices = rhs.indices();
-
-    SEQUANT_ASSERT(lhs.num_indices() == rhs.num_indices());
-    auto lit = lhs_indices.begin();
-    auto rit = rhs_indices.begin();
-    while (lit != lhs_indices.end()) {
-      if (*lit != *rit) {
-        const std::size_t lhs_pos = std::ranges::distance(
-            batchedIndices.begin(), std::ranges::find(batchedIndices, *lit));
-        const std::size_t rhs_pos = std::ranges::distance(
-            batchedIndices.begin(), std::ranges::find(batchedIndices, *rit));
-
-        const bool lhs_is_batched = lhs_pos < batchedIndices.size();
-        const bool rhs_is_batched = rhs_pos < batchedIndices.size();
-
-        if (lhs_is_batched != rhs_is_batched) {
-          return lhs_is_batched;
-        } else if (lhs_is_batched && rhs_is_batched) {
-          return lhs_pos < rhs_pos;
-        }
-      }
-
-      ++lit;
-      ++rit;
-    }
-
-    // Tensors are equal
-    return false;
-  }
-
-  std::vector<Index> batchedIndices;
-};
 
 /// A collection of various meta-data that the preprocessing stage will collect
 struct PreprocessResult {
@@ -106,7 +64,7 @@ class GenerationVisitor {
           m_ctx.batch_indices(m_ctx.current_expression_id());
       if (!batchIndices.empty()) {
         ExportTensorComparator cmp = m_tensorUses.key_comp();
-        cmp.batchedIndices = std::move(batchIndices);
+        cmp.set_batch_indices(std::move(batchIndices));
         m_tensorUses = decltype(m_tensorUses)(std::move(cmp));
       }
     }
