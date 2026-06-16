@@ -500,6 +500,16 @@ TEST_CASE("serialization", "[serialization]") {
             io::serialization::SerializationError,
             serializationErrorMatches(9, 1, "Invalid symmetry specifier"));
       }
+
+      SECTION("(anti)symmetrization operators reject braket symmetry") {
+        // a reserved (anti)symmetrizer must be braket-Nonsymm; an explicit
+        // non-Nonsymm braket spec is rejected by the Tensor ctor
+        REQUIRE_THROWS(deserialize<ExprPtr>(L"Ŝ{i1,i2;a1,a2}:N-C-S"));
+        REQUIRE_THROWS(deserialize<ExprPtr>(L"Â{i1,i2;a1,a2}:A-C-S"));
+        // the default (braket-Nonsymm) form is accepted
+        REQUIRE_NOTHROW(deserialize<ExprPtr>(L"Ŝ{i1,i2;a1,a2}"));
+        REQUIRE_NOTHROW(deserialize<ExprPtr>(L"Â{i1,i2;a1,a2}"));
+      }
     }
   }
 

@@ -323,7 +323,13 @@ struct Transformer {
                             ann(std::move(braIndices)), vac);
     }
 
-    // Set required symmetries for symmetrization operators
+    // Force the defining symmetry of each reserved (anti)symmetrization
+    // operator (overriding the parsed/default one). The two differ by design:
+    // the antisymmetrizer Â antisymmetrizes within bra and within ket (a
+    // permutational #Symmetry), whereas the symmetrizer Ŝ symmetrizes the
+    // {bra,ket} particle columns (a #ColumnSymmetry). The remaining symmetry
+    // attributes are resolved/validated by the Tensor ctor (which also requires
+    // these operators to be braket-Nonsymm).
     if (tensor.name == reserved::antisymm_label()) {
       perm_symm = Symmetry::Antisymm;
     } else if (tensor.name == reserved::symm_label()) {

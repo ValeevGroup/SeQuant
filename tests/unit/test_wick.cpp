@@ -1305,23 +1305,23 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         // sequant::wprintf(to_latex_align(Ld_H2N_L), L" = \n",
         //                  to_latex_align(result2, 0, 2), L"\n");
         REQUIRE(result2.as<Sum>().size() == 5);
-        // Sum-term ordering shifted vs master after the removal of
-        // Context::braket_symmetry: the canonical sort key for the two
-        // -1/2 ã·v̄·w terms swapped. The expression is mathematically
-        // unchanged.
+        // Sum-term ordering depends on the tensors' (Context-derived) braket
+        // and column symmetries; the canonical sort key for these ã·v̄·w terms
+        // shifted vs master as those defaults changed. The expression is
+        // mathematically unchanged.
         REQUIRE(
             result2.to_latex() ==
             L"{ \\bigl( - "
-            L"{{{\\frac{1}{4}}}{\\tilde{a}^{{p_3}{p_4}{p_5}}_{{p_1}{p_2}{p_5}"
-            L"}}{\\bar{v}^{{p_1}{p_2}}_{{p_3}{p_4}}}{w^{}_{}[{p_5}]}} - "
-            L"{{{\\frac{1}{2}}}{\\tilde{a}^{{p_2}{p_3}}_{{e_1}{p_1}}}{\\bar{"
-            L"v}^{{e_1}{p_1}}_{{p_2}{p_3}}}{w^{}_{}[{e_1}]}} + "
-            L"{{\\tilde{a}^{{p_2}}_{{p_1}}}{\\bar{v}^{{e_1}{p_1}}_{{e_1}{p_2}"
-            L"}}{w^{}_{}[{e_1}]}} - "
-            L"{{{\\frac{1}{2}}}{\\tilde{a}^{{e_1}{p_3}}_{{p_1}{p_2}}}{\\bar{"
-            L"v}^{{p_1}{p_2}}_{{e_1}{p_3}}}{w^{}_{}[{e_1}]}} + "
-            L"{{{\\frac{1}{4}}}{\\tilde{a}^{{p_3}{p_4}}_{{p_1}{p_2}}}{\\bar{"
-            L"v}^{{p_1}{p_2}}_{{p_3}{p_4}}}{w^{}_{}[{e_1}]}}\\bigr) }");
+            L"{{{\\frac{1}{2}}}{\\tilde{a}^{{e_1}{p_3}}_{{p_1}{p_2}}}{\\bar{v}^"
+            L"{{p_1}{p_2}}_{{e_1}{p_3}}}{w^{}_{}[{e_1}]}} - "
+            L"{{{\\frac{1}{4}}}{\\tilde{a}^{{p_3}{p_4}{p_5}}_{{p_1}{p_2}{p_5}}}"
+            L"{\\bar{v}^{{p_1}{p_2}}_{{p_3}{p_4}}}{w^{}_{}[{p_5}]}} + "
+            L"{{\\tilde{a}^{{p_2}}_{{p_1}}}{\\bar{v}^{{e_1}{p_1}}_{{e_1}{p_2}}}"
+            L"{w^{}_{}[{e_1}]}} + "
+            L"{{{\\frac{1}{4}}}{\\tilde{a}^{{p_3}{p_4}}_{{p_1}{p_2}}}{\\bar{v}^"
+            L"{{p_1}{p_2}}_{{p_3}{p_4}}}{w^{}_{}[{e_1}]}} - "
+            L"{{{\\frac{1}{2}}}{\\tilde{a}^{{p_2}{p_3}}_{{e_1}{p_1}}}{\\bar{v}^"
+            L"{{e_1}{p_1}}_{{p_2}{p_3}}}{w^{}_{}[{e_1}]}}\\bigr) }");
       }
 
       // simplified example with "diagonal" operator from the paper, inspired by

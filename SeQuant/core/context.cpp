@@ -31,6 +31,9 @@ bool operator==(const Context& ctx1, const Context& ctx2) {
            ctx1.canonicalization_options() == ctx2.canonicalization_options() &&
            ctx1.braket_typesetting() == ctx2.braket_typesetting() &&
            ctx1.braket_slot_typesetting() == ctx2.braket_slot_typesetting() &&
+           ctx1.symmetry() == ctx2.symmetry() &&
+           ctx1.hermiticity() == ctx2.hermiticity() &&
+           ctx1.column_symmetry() == ctx2.column_symmetry() &&
            *ctx1.index_space_registry() == *ctx2.index_space_registry();
 }
 
@@ -132,7 +135,10 @@ Context::Context(Options options)
       first_dummy_index_ordinal_(options.first_dummy_index_ordinal),
       canonicalization_options_(options.canonicalization_options),
       braket_typesetting_(options.braket_typesetting),
-      braket_slot_typesetting_(options.braket_slot_typesetting) {}
+      braket_slot_typesetting_(options.braket_slot_typesetting),
+      symmetry_(options.symmetry),
+      hermiticity_(options.hermiticity),
+      column_symmetry_(options.column_symmetry) {}
 
 Context Context::clone() const {
   Context ctx(*this);
@@ -175,6 +181,12 @@ BraKetTypesetting Context::braket_typesetting() const {
 BraKetSlotTypesetting Context::braket_slot_typesetting() const {
   return braket_slot_typesetting_;
 }
+
+Symmetry Context::symmetry() const { return symmetry_; }
+
+Hermiticity Context::hermiticity() const { return hermiticity_; }
+
+ColumnSymmetry Context::column_symmetry() const { return column_symmetry_; }
 
 Context& Context::set(Vacuum vacuum) {
   vacuum_ = vacuum;
@@ -226,6 +238,21 @@ Context& Context::set(BraKetTypesetting bkt) {
 
 Context& Context::set(BraKetSlotTypesetting bkst) {
   braket_slot_typesetting_ = bkst;
+  return *this;
+}
+
+Context& Context::set(Symmetry symmetry) {
+  symmetry_ = symmetry;
+  return *this;
+}
+
+Context& Context::set(Hermiticity hermiticity) {
+  hermiticity_ = hermiticity;
+  return *this;
+}
+
+Context& Context::set(ColumnSymmetry column_symmetry) {
+  column_symmetry_ = column_symmetry;
   return *this;
 }
 

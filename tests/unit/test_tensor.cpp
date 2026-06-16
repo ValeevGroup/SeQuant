@@ -59,7 +59,10 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE(ranges::distance(t2.const_indices().begin(),
                              t2.const_indices().end()) == 2);
     REQUIRE(t2.symmetry() == Symmetry::Nonsymm);
-    REQUIRE(t2.braket_symmetry() == BraKetSymmetry::Conjugate);
+    // bare ctor: braket symmetry is derived from the default Context's
+    // Hermiticity (NonHermitian here) -> Nonsymm; column symmetry follows the
+    // Context default (Symm in the test context)
+    REQUIRE(t2.braket_symmetry() == BraKetSymmetry::Nonsymm);
     REQUIRE(t2.column_symmetry() == ColumnSymmetry::Symm);
     REQUIRE(t2.label() == L"F");
 
@@ -82,7 +85,7 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE(ranges::distance(t3.const_indices().begin(),
                              t3.const_indices().end()) == 2);
     REQUIRE(t3.symmetry() == Symmetry::Nonsymm);
-    REQUIRE(t3.braket_symmetry() == BraKetSymmetry::Conjugate);
+    REQUIRE(t3.braket_symmetry() == BraKetSymmetry::Nonsymm);
     REQUIRE(t3.column_symmetry() == ColumnSymmetry::Symm);
     REQUIRE(t3.label() == L"N");
 
@@ -432,7 +435,9 @@ TEST_CASE("tensor", "[elements]") {
   SECTION("adjoint") {
     auto f1 = Tensor(L"F", bra{L"i_1", L"i_2"}, ket{L"i_3", L"i_4"});
     REQUIRE_NOTHROW(f1.adjoint());
-    REQUIRE(to_latex(f1) == L"{F^{{i_1}{i_2}}_{{i_3}{i_4}}}");
+    // F is now non-Hermitian by default (braket Nonsymm), so its adjoint is
+    // marked with the conjugation superscript
+    REQUIRE(to_latex(f1) == L"{F⁺^{{i_1}{i_2}}_{{i_3}{i_4}}}");
 
     auto t1 = Tensor(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
                      BraKetSymmetry::Nonsymm);
@@ -445,7 +450,7 @@ TEST_CASE("tensor", "[elements]") {
               ex<FNOperator>(cre{L"i_1"}, ann{L"i_2"});
     h1 = adjoint(h1);
     REQUIRE(to_latex(h1) ==
-            L"{{\\tilde{a}^{{i_2}}_{{i_1}}}{F^{{i_1}}_{{i_2}}}}");
+            L"{{\\tilde{a}^{{i_2}}_{{i_1}}}{F⁺^{{i_1}}_{{i_2}}}}");
     h1 = adjoint(h1);
     REQUIRE(to_latex(h1) ==
             L"{{F^{{i_2}}_{{i_1}}}{\\tilde{a}^{{i_1}}_{{i_2}}}}");
@@ -563,5 +568,30 @@ TEST_CASE("tensor_hermiticity", "[elements]") {
     REQUIRE(make_diff(Field::Real) == ex<Constant>(0));
     // complex spaces -> Conjugate -> the two orientations remain distinct
     REQUIRE_FALSE(make_diff(Field::Complex) == ex<Constant>(0));
+  }
+
+  SECTION("default symmetries are taken from the Context") {
+    // unspecified symmetries are resolved against the active default Context;
+    // braket symmetry is *derived* from the Context's default Hermiticity and
+    // the tensor's base field (there is no braket-symmetry Context knob)
+    auto ctx = get_default_context();
+    ctx.set(Symmetry::Nonsymm)
+        .set(Hermiticity::Hermitian)
+        .set(ColumnSymmetry::Nonsymm);
+    auto resetter = set_scoped_default_context(ctx);
+
+    auto g = Tensor(L"g", bra{L"i_1"}, ket{L"i_2"});
+    REQUIRE(g.symmetry() == Symmetry::Nonsymm);
+    REQUIRE(g.hermiticity() == Hermiticity::Hermitian);
+    REQUIRE(g.column_symmetry() == ColumnSymmetry::Nonsymm);
+    REQUIRE(g.braket_symmetry() ==
+            to_braket_symmetry(Hermiticity::Hermitian, g.base_field()));
+
+    // explicitly-specified symmetries override the Context defaults
+    auto t = Tensor(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+                    BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+    REQUIRE(t.braket_symmetry() == BraKetSymmetry::Nonsymm);
+    REQUIRE(t.hermiticity() == Hermiticity::NonHermitian);
+    REQUIRE(t.column_symmetry() == ColumnSymmetry::Symm);
   }
 }

@@ -1039,8 +1039,8 @@ SECTION("SRSF") {
     auto scalar = expr->as<Product>().scalar();
     REQUIRE(scalar == 1);
     REQUIRE_THAT(expr,
-                 EquivalentTo("Ŝ{a_3,a_4;i_3,i_4}:N-C-S * "
-                              "f{a_1,a_2;i_1,i_2}:N-C-S * ã{i_3,i_4;a_3,a_4}"));
+                 EquivalentTo("Ŝ{a_3,a_4;i_3,i_4} * "
+                              "f{a_1,a_2;i_1,i_2}:N-N-S * ã{i_3,i_4;a_3,a_4}"));
   }
 }  // SECTION("SRSF")
 
@@ -1135,9 +1135,9 @@ SECTION("rules") {
     const std::vector<std::wstring> expected = {
         L"t{a1,a2;i1,i2} t{a3;i3}",
         L"t{a1,a2;i1,i2} g{a3;i3}",
-        L"t{a1,a2;i1,i2} B{i1;a1;x_1} B{i2;a2;x_1}",
-        L"t{a1,a2;i1,i2} (B{i1;a1;x_1} B{i2;a2;x_1} "
-        "- B{i2;a1;x_1} B{i1;a2;x_1})",
+        L"t{a1,a2;i1,i2} B{i1;a1;x_1}:N-C-S B{i2;a2;x_1}:N-C-S",
+        L"t{a1,a2;i1,i2} (B{i1;a1;x_1}:N-C-S B{i2;a2;x_1}:N-C-S "
+        "- B{i2;a1;x_1}:N-C-S B{i1;a2;x_1}:N-C-S)",
     };
 
     REQUIRE(inputs.size() == expected.size());
@@ -1363,7 +1363,7 @@ SECTION("avoided-connections") {
   // only one term with no A-{f,g} connection
   REQUIRE(res2.is<sequant::Product>());
   const std::wstring expected2 =
-      L"-1 Â{i_1;a_1}:A-C-S t{a_1,a_2;i_2,i_1}:A-C-S f{i_2;a_2}:A-C-S";
+      L"-1 Â{i_1;a_1} t{a_1,a_2;i_2,i_1}:A-C-S f{i_2;a_2}:A-C-S";
   REQUIRE_THAT(sequant::simplify(res2), EquivalentTo(expected2));
 
   // same test as above but from Operator level and labels for connectivity
@@ -1383,7 +1383,7 @@ SECTION("avoided-connections") {
   REQUIRE(res4_full.size() == 4);
   REQUIRE(res4.is<sequant::Product>());  // only single term survives
   const std::wstring expected4 =
-      L"Â{i_1;a_2}:A-C-S Â{a_1;i_2}:A-C-S g{i_3,i_2;a_3,a_1}:A-C-S "
+      L"Â{i_1;a_2} Â{a_1;i_2} g{i_3,i_2;a_3,a_1}:A-C-S "
       L"t{a_3,a_2;i_3,i_1}:A-C-S";
   REQUIRE_THAT(simplify(res4), EquivalentTo(expected4));
 }
