@@ -236,6 +236,9 @@ void generateITF(const json &blocks, std::string_view out_file,
   for (const json &current_block : blocks) {
     const std::string block_name = current_block.at("name");
 
+    const ProcessingOptions block_options =
+        extractProcessingOptions(current_block, defaults);
+
     spdlog::debug("Processing ITF code block '{}'", block_name);
 
     container::svector<ExportNode<>> results;
@@ -301,12 +304,12 @@ void generateITF(const json &blocks, std::string_view out_file,
         throw Exception("Input equation is invalid: " + msg);
       }
 
-      ProcessingOptions options =
-          extractProcessingOptions(current_result, defaults);
+      const ProcessingOptions result_options =
+          extractProcessingOptions(current_result, block_options);
 
       std::vector<ResultExpr> resultParts =
-          options.term_by_term ? splitContributions(result)
-                               : std::vector<ResultExpr>{result};
+          result_options.term_by_term ? splitContributions(result)
+                                      : std::vector<ResultExpr>{result};
 
       std::unordered_set<Tensor> tensorsToSymmetrize;
 
@@ -315,7 +318,7 @@ void generateITF(const json &blocks, std::string_view out_file,
           spdlog::debug("Current contribution:\n{}", contribution);
         }
 
-        for (ResultExpr &current : postProcess(contribution, options)) {
+        for (ResultExpr &current : postProcess(contribution, result_options)) {
           spdlog::debug("Fully processed equation is:\n{}", current);
 
           if (*current.expression() == Constant(0)) {
@@ -355,19 +358,21 @@ void generateITF(const json &blocks, std::string_view out_file,
 
             spdlog::debug("After popping S tensor:\n{}", current);
 
-            results.push_back(prepareForExport(
-                current, itfgen, context,
-                {.importResult = false,
-                 .createResult = createResult,
-                 .batching = options.batching,
-                 .min_unbatched_indices = options.min_unbatched_indices}));
+            results.push_back(
+                prepareForExport(current, itfgen, context,
+                                 {.importResult = false,
+                                  .createResult = createResult,
+                                  .batching = result_options.batching,
+                                  .min_unbatched_indices =
+                                      result_options.min_unbatched_indices}));
           } else {
             results.push_back(prepareForExport(
                 current, itfgen, context,
                 {.importResult = current_result.value("import", true),
                  .createResult = createResult,
-                 .batching = options.batching,
-                 .min_unbatched_indices = options.min_unbatched_indices}));
+                 .batching = result_options.batching,
+                 .min_unbatched_indices =
+                     result_options.min_unbatched_indices}));
           }
         }
       }
@@ -384,15 +389,13 @@ void generateITF(const json &blocks, std::string_view out_file,
             symmetrizedResult, itfgen, context,
             {.importResult = current_result.value("import", true),
              .createResult = true,
-             .batching = options.batching,
-             .min_unbatched_indices = options.min_unbatched_indices}));
+             .batching = result_options.batching,
+             .min_unbatched_indices = result_options.min_unbatched_indices}));
       }
     }
 
-    if (current_block.value("subexpression_elimination",
-                            defaults.subexpression_elimination)) {
-      const std::size_t min_usage =
-          current_block.value("min_cse_usage_count", defaults.min_cse_usage);
+    if (block_options.subexpression_elimination) {
+      const std::size_t min_usage = block_options.min_cse_usage;
 
       opt::eliminate_common_subexpressions(
           results,
