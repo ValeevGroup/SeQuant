@@ -240,12 +240,12 @@ TEST_CASE("optimize", "[optimize]") {
       // separately via opts_off below.)
       auto opts1 = base;
       opts1.is_volatile_leaf = is_t;
-      opts1.n_replay = 1;
+      opts1.volatile_weight = 1;
       auto res1 = optimize(ex<Product>(prod), opts1);
 
       auto opts10 = base;
       opts10.is_volatile_leaf = is_t;
-      opts10.n_replay = 10;
+      opts10.volatile_weight = 10;
       auto res10 = optimize(ex<Product>(prod), opts10);
 
       // a bare top-level t leaf means t was contracted last (persistent-first)
@@ -266,7 +266,7 @@ TEST_CASE("optimize", "[optimize]") {
 
       // empty predicate => weighting off => identical to n_replay=1 regardless
       auto opts_off = base;
-      opts_off.n_replay = 10;  // ignored: predicate empty
+      opts_off.volatile_weight = 10;  // ignored: predicate empty
       auto res_off = optimize(ex<Product>(prod), opts_off);
       REQUIRE(res_off == res1);
     }
@@ -358,9 +358,11 @@ TEST_CASE("optimize", "[optimize]") {
 
       // both metrics must binarize the 3-tensor product into a binary tree:
       // a 2-factor top product whose leaves are the 3 original tensors
-      for (auto opt_for : {OptFor::Flops, OptFor::Memsize}) {
-        CAPTURE(static_cast<int>(opt_for));
-        auto res = optimize(prod, OptimizeOptions{.opt_for = opt_for});
+      for (auto objective_function :
+           {ObjectiveFunction::DenseFLOPs, ObjectiveFunction::DenseSize}) {
+        CAPTURE(static_cast<int>(objective_function));
+        auto res = optimize(
+            prod, OptimizeOptions{.objective_function = objective_function});
         REQUIRE(res->is<Product>());
         REQUIRE(res->as<Product>().factors().size() == 2);
         REQUIRE(count_tensor_leaves(res) == 3);
@@ -634,10 +636,10 @@ TEST_CASE("optimize", "[optimize]") {
       auto expr = ex<Product>(prod);
 
       auto res_cse =
-          optimize(expr, OptimizeOptions{.subnet_cse = SubnetCSE::Enable,
+          optimize(expr, OptimizeOptions{.CSE = {.subnet = true},
                                          .idx_to_extent = idx_to_extent});
       auto res_no_cse =
-          optimize(expr, OptimizeOptions{.subnet_cse = SubnetCSE::Disable,
+          optimize(expr, OptimizeOptions{.CSE = {.subnet = false},
                                          .idx_to_extent = idx_to_extent});
 
       // With CSE: balanced tree -- both children are Products.
