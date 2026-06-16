@@ -124,6 +124,47 @@ ProcessingOptions extractProcessingOptions(
         details.at("min_cse_usage_count").get<std::size_t>();
   }
 
+  if (details.contains("index_batching")) {
+    const nlohmann::json &batch = details.at("index_batching");
+    auto handle_strategy = [&options](std::string_view strategy) {
+      if (strategy == "None" || strategy == "none") {
+        options.batching = IndexBatching::None;
+      } else if (strategy == "Fastest" || strategy == "fastest") {
+        options.batching = IndexBatching::Fastest;
+      } else if (strategy == "Slowest" || strategy == "slowest") {
+        options.batching = IndexBatching::Slowest;
+      } else {
+        std::vector<Index> indices;
+        for (auto current : strategy | std::ranges::views::split(',')) {
+          indices.emplace_back(std::string(current.begin(), current.end()));
+        }
+        options.batching = std::move(indices);
+
+        // If an explicit index list is given, we intend to use it and that's it
+        options.min_unbatched_indices = 0;
+      }
+    };
+
+    if (batch.is_object()) {
+      if (batch.contains("batch")) {
+        handle_strategy(batch.at("batch").get<std::string_view>());
+      }
+      if (batch.contains("min_unbatched")) {
+        options.min_unbatched_indices =
+            batch.at("min_unbatched").get<std::size_t>();
+
+        if (options.min_unbatched_indices > 0 &&
+            std::holds_alternative<std::vector<Index>>(options.batching)) {
+          throw Exception(
+              "Can't use the min_unbatched option in combination with an "
+              "explicit list of batching indices");
+        }
+      }
+    } else {
+      handle_strategy(batch.get<std::string_view>());
+    }
+  }
+
   return options;
 }
 
