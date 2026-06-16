@@ -16,8 +16,6 @@ class ConversionException : public Exception {
   using Exception::Exception;
 };
 
-// implementation details of string conversion; prefer sequant::detail over an
-// unnamed namespace in a header (see CppCoreGuidelines SF.21)
 namespace detail {
 template <typename T, typename Arg>
   requires(std::integral<T> || std::floating_point<T>)
