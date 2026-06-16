@@ -61,6 +61,9 @@ TEST_CASE("index", "[elements][index]") {
     REQUIRE(i2.space() == isr->retrieve(L"i_1"));
     REQUIRE(i2.ordinal() == 2);
 
+    Index i2_alt(isr->retrieve("i1"), 2);
+    REQUIRE(i2 == i2_alt);
+
     // examples with proto indices
     {
       REQUIRE_NOTHROW(Index(isr->retrieve(L"i"), 3, {i1, i2}));
