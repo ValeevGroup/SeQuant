@@ -2,9 +2,13 @@
 #define SEQUANT_UTILITY_CONVERSION_HPP
 
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
+#include <algorithm>
 #include <charconv>
 #include <concepts>
+#include <limits>
+#include <string>
 #include <string_view>
 #include <system_error>
 #include <typeinfo>
@@ -80,6 +84,24 @@ T string_to(std::string_view str, int base = 10) {
   return detail::string_to_impl<T>(str, base);
 }
 
+template <std::integral T>
+T string_to(std::wstring_view str, int base = 10) {
+  if (std::ranges::any_of(str, [](wchar_t c) {
+        return c > std::numeric_limits<char>::max();
+      })) {
+    throw ConversionException(
+        "'" + toUtf8(str) +
+        "' contains characters that can't possibly represent a numeric value");
+  }
+
+  std::string buff;
+  buff.resize(str.size());
+  std::ranges::transform(str, buff.begin(),
+                         [](wchar_t c) { return static_cast<char>(c); });
+
+  return string_to<T>(buff, base);
+}
+
 /// Converts the provided string to the desired floating-point type.
 /// Contrary to standard functions, this function does perform explicit
 /// error checking and will throw a ConversionException if the provided
@@ -102,6 +124,25 @@ T string_to(std::string_view str,
                 "implementation for this floating point type");
 
   return detail::string_to_impl<T>(str, fmt);
+}
+
+template <std::floating_point T>
+T string_to(std::wstring_view str,
+            std::chars_format fmt = std::chars_format::general) {
+  if (std::ranges::any_of(str, [](wchar_t c) {
+        return c > std::numeric_limits<char>::max();
+      })) {
+    throw ConversionException(
+        "'" + toUtf8(str) +
+        "' contains characters that can't possibly represent a numeric value");
+  }
+
+  std::string buff;
+  buff.resize(str.size());
+  std::ranges::transform(str, buff.begin(),
+                         [](wchar_t c) { return static_cast<char>(c); });
+
+  return string_to<T>(buff, fmt);
 }
 
 }  // namespace sequant
