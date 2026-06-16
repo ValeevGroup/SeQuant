@@ -509,6 +509,16 @@ TEST_CASE("serialization", "[serialization]") {
         // the default (braket-Nonsymm) form is accepted
         REQUIRE_NOTHROW(deserialize<ExprPtr>(L"Ŝ{i1,i2;a1,a2}"));
         REQUIRE_NOTHROW(deserialize<ExprPtr>(L"Â{i1,i2;a1,a2}"));
+        // ... and stays accepted even when the Context defaults to Hermitian:
+        // reserved (anti)symmetrizers must not inherit the Context braket
+        // default (which would otherwise derive a non-Nonsymm braket and throw)
+        {
+          auto ctx = get_default_context();
+          ctx.set(Hermiticity::Hermitian);
+          auto resetter = set_scoped_default_context(ctx);
+          REQUIRE_NOTHROW(deserialize<ExprPtr>(L"Ŝ{i1,i2;a1,a2}"));
+          REQUIRE_NOTHROW(deserialize<ExprPtr>(L"Â{i1,i2;a1,a2}"));
+        }
       }
     }
   }

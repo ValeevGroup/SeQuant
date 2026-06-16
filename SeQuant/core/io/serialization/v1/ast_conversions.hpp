@@ -327,14 +327,24 @@ struct Transformer {
     // operator (overriding the parsed/default one). The two differ by design:
     // the antisymmetrizer Â antisymmetrizes within bra and within ket (a
     // permutational #Symmetry), whereas the symmetrizer Ŝ symmetrizes the
-    // {bra,ket} particle columns (a #ColumnSymmetry). The remaining symmetry
-    // attributes are resolved/validated by the Tensor ctor (which also requires
-    // these operators to be braket-Nonsymm).
+    // {bra,ket} particle columns (a #ColumnSymmetry).
+    const bool is_reserved_symmetrizer =
+        tensor.name == reserved::antisymm_label() ||
+        tensor.name == reserved::symm_label();
     if (tensor.name == reserved::antisymm_label()) {
       perm_symm = Symmetry::Antisymm;
     } else if (tensor.name == reserved::symm_label()) {
       column_symm = ColumnSymmetry::Symm;
     }
+    // (Anti)symmetrization operators are always braket-Nonsymm. When no braket
+    // symmetry is spelled out, force Nonsymm rather than letting them inherit
+    // the Context's default Hermiticity (which could derive a non-Nonsymm
+    // braket and make a plain "Ŝ{...}"/"Â{...}" fail to construct). An explicit
+    // braket spec is left untouched so the Tensor ctor still rejects it.
+    if (is_reserved_symmetrizer &&
+        (!tensor.symmetry.has_value() ||
+         tensor.symmetry.value().braket_symm == ast::SymmetrySpec::unspecified))
+      braket_symm = BraKetSymmetry::Nonsymm;
 
     // Dispatch to correct Tensor constructor (taking either BraKetSymmetry or
     // Hermiticity)

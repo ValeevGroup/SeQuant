@@ -290,7 +290,11 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     } else {
       s_resolved = *s;
       ps_resolved = *ps;
-      // not used below (bks_opt is set), value is irrelevant
+      // h_resolved is consulted below only to derive the braket symmetry, and
+      // only when no BraKetSymmetry was given. To reach this branch with no
+      // BraKetSymmetry, a Hermiticity must have been given, so herm_opt is set
+      // in exactly the case h_resolved is used; the value_or fallback is
+      // unused.
       h_resolved = herm_opt.value_or(Hermiticity::NonHermitian);
     }
     const BraKetSymmetry bks_resolved =
