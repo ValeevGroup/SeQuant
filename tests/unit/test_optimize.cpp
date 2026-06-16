@@ -457,9 +457,8 @@ TEST_CASE("optimize", "[optimize]") {
           // dealt with by using proper comparison operators.
           static constexpr bool force_collisions = true;
           opt::eliminate_common_subexpressions<
-              decltype(expressions), decltype(binarizer),
-              opt::cse::AcceptAllPredicate, force_collisions>(expressions,
-                                                              binarizer);
+              decltype(expressions), decltype(binarizer), force_collisions>(
+              expressions, binarizer);
         } else {
           opt::eliminate_common_subexpressions(expressions, binarizer);
         }

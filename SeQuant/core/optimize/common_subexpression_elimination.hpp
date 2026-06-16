@@ -8,6 +8,7 @@
 #include <SeQuant/core/eval/eval_node_compare.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <algorithm>
 #include <concepts>
@@ -114,8 +115,9 @@ class SubexpressionReplacer {
 
     auto label_it = cse_names.find(tree);
 
-    std::wstring label = label_it == end(cse_names) ? label_gen(name_counter++)
-                                                    : label_it->second;
+    std::wstring label = label_it == end(cse_names)
+                             ? toUtf16(label_gen(tree, name_counter++))
+                             : label_it->second;
 
     ExprPtr expr = [&]() {
       if (tree->is_tensor()) {
@@ -201,22 +203,26 @@ class SubexpressionReplacer {
   SubexpressionNames<TreeNode, force_hash_collisions> cse_names;
   std::size_t name_counter = 1;
   const LabelGenerator &label_gen;
-};
-
-// TODO: provide predicate that computes the FLOPs required to compute the CSE
-// and compares that with the expected speed for reading the CSE from disk.
-// Use typical FLOPs/s and I/O rates from e.g. https://ssd.userbenchmark.com/
-// https://openbenchmarking.org/test/pts/mt-dgemm
-// to determine whether or not pre-computing the CSE is worth it.
-// Note: of course the number of reusages of the CSE plays into this.
-struct AcceptAllPredicate {
-  template <typename... Ts>
-  bool operator()(const Ts &...) const {
-    return true;
-  }
+  std::vector<std::size_t> cse_definition_indices;
 };
 
 }  // namespace cse
+
+template <typename TreeNode>
+struct CSEOptions {
+  // TODO: provide predicate that computes the FLOPs required to compute the CSE
+  // and compares that with the expected speed for reading the CSE from disk.
+  // Use typical FLOPs/s and I/O rates from e.g. https://ssd.userbenchmark.com/
+  // https://openbenchmarking.org/test/pts/mt-dgemm
+  // to determine whether or not pre-computing the CSE is worth it.
+  // Note: of course the number of reusages of the CSE plays into this.
+  std::function<bool(const TreeNode &, std::size_t)> filter_predicate =
+      [](const TreeNode &, std::size_t) { return true; };
+  std::function<std::string(const TreeNode &, std::size_t)> label_gen =
+      [](const TreeNode &, std::size_t counter) {
+        return std::format("CSE{}", counter);
+      };
+};
 
 /// Takes the range of expression trees and performs common subexpression
 /// elimination on them. Evaluation trees for intermediates are inserted into
@@ -229,14 +235,12 @@ struct AcceptAllPredicate {
 /// not be eliminated
 template <std::ranges::range VectorLike,
           std::regular_invocable<ExprPtr> Transformer,
-          std::predicate<std::ranges::range_value_t<VectorLike>, std::size_t>
-              Filter = cse::AcceptAllPredicate,
           bool force_hash_collisions = false>
   requires std::regular_invocable<Transformer, ResultExpr> &&
            meta::eval_node<std::ranges::range_value_t<VectorLike>>
-void eliminate_common_subexpressions(VectorLike &expr_trees,
-                                     const Transformer &expr_to_tree,
-                                     const Filter &filter_predicate = {}) {
+void eliminate_common_subexpressions(
+    VectorLike &expr_trees, const Transformer &expr_to_tree,
+    const CSEOptions<std::ranges::range_value_t<VectorLike>> opts = {}) {
   using std::ranges::begin;
   using std::ranges::end;
 
@@ -252,16 +256,13 @@ void eliminate_common_subexpressions(VectorLike &expr_trees,
       subexpression_usages = identifier.take_subexpression_map();
 
   // Apply filter
-  std::erase_if(subexpression_usages, [&filter_predicate](const auto &pair) {
-    return !filter_predicate(pair.first, pair.second);
+  std::erase_if(subexpression_usages, [&opts](const auto &pair) {
+    return !opts.filter_predicate(pair.first, pair.second);
   });
 
-  // TODO: Make label generator be passable from the outside
-  auto label_gen = [](std::size_t c) { return std::format(L"CSE{}", c); };
-
   cse::SubexpressionReplacer<VectorLike, TreeNode, Transformer,
-                             decltype(label_gen), force_hash_collisions>
-      replacer(expr_trees, subexpression_usages, expr_to_tree, label_gen);
+                             decltype(opts.label_gen), force_hash_collisions>
+      replacer(expr_trees, subexpression_usages, expr_to_tree, opts.label_gen);
 
   replacer.perform_replacements();
 }
