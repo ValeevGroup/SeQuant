@@ -53,6 +53,9 @@ TEST_CASE("index", "[elements][index]") {
     REQUIRE(i1.ordinal() == 1);
     REQUIRE(static_cast<bool>(i1) == true);
 
+    Index i1_alt("i1");
+    REQUIRE(i1 == i1_alt);
+
     Index i2(isr->retrieve(L'i'), 2);  // N.B. using retrieve(char)
     REQUIRE(i2.label() == L"i_2");
     REQUIRE(i2.space() == isr->retrieve(L"i_1"));
