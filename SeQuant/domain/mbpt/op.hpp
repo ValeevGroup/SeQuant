@@ -568,7 +568,8 @@ mbpt::qns_t adjoint(mbpt::qns_t qns);
 namespace mbpt {
 
 /// @brief Normalization convention used in MBPT Operators
-/// Op of e.g. rank {c,a} by default includes normalization factor of 1/(c! a!).
+/// An Op of rank {c,a}, where `c`/`a` are the number of creators/annihilators
+/// by default includes a normalization factor of 1/(c! a!).
 /// For some cases, we want to change that.
 enum class Normalization {
   Default,    /// Include 1/(c! a!) prefactor
