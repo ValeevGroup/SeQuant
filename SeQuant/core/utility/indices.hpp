@@ -104,7 +104,7 @@ IndexGroups<Container> get_unique_indices(const Variable&) {
 }
 
 template <typename Container = std::vector<Index>>
-IndexGroups<Container> get_unique_indices(const Power& power) {
+IndexGroups<Container> get_unique_indices([[maybe_unused]] const Power& power) {
   SEQUANT_ASSERT(power.base()->is<Constant>() || power.base()->is<Variable>());
   return {};
 }
