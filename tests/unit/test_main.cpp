@@ -48,7 +48,12 @@ int main(int argc, char* argv[]) {
        .braket_typesetting = BraKetTypesetting::ContraSub,
        // to_latex() reference outputs predominantly assume the original
        // (naive) convention
-       .braket_slot_typesetting = BraKetSlotTypesetting::Naive});
+       .braket_slot_typesetting = BraKetSlotTypesetting::Naive,
+       // mbpt works with particle-symmetric tensors, so default new/parsed
+       // tensors to particle (column) symmetry; bra-ket and permutational
+       // symmetries stay at the safe Nonsymm/NonHermitian library defaults and
+       // are specified explicitly where needed (e.g. Hermitian integrals)
+       .column_symmetry = ColumnSymmetry::Symm});
   TensorCanonicalizer::set_cardinal_tensor_labels(
       sequant::mbpt::cardinal_tensor_labels());
   // uncomment to enable verbose output ...

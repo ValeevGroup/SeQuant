@@ -283,10 +283,10 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV1,
 
       std::vector<std::pair<std::wstring, std::vector<std::wstring>>> tests{
           {L"G{;;a1,a2,a3,a4} T{;;i3,i2,a3,a4}",
-           v3 ? idxvec_t{L"i_3", L"i_2", L"a_2", L"a_1"}
+           v3 ? idxvec_t{L"i_2", L"i_3", L"a_2", L"a_1"}
               : idxvec_t{L"i_2", L"i_3", L"a_1", L"a_2"}},
           {L"G{;;a1,a2,a3,a4} T{;;i2,i3,a3,a4}",
-           v3 ? idxvec_t{L"i_2", L"i_3", L"a_2", L"a_1"}
+           v3 ? idxvec_t{L"i_3", L"i_2", L"a_2", L"a_1"}
               : idxvec_t{L"i_3", L"i_2", L"a_1", L"a_2"}},
       };
 
@@ -1182,12 +1182,11 @@ TEST_CASE("tensor_network_v2", "[elements][valgrind_skip]") {
     }
 
     SECTION("special") {
-      auto factors =
-          deserialize(
-              L"Ŝ{i_1;a_1<i_1>}:N-C-S g{i_2,a_1<i_1>;a_2<i_2>,i_1}:N-C-S "
-              L"t{a_2<i_2>;i_2}:N-C-S")
-              ->as<Product>()
-              .factors();
+      auto factors = deserialize(
+                         L"Ŝ{i_1;a_1<i_1>} g{i_2,a_1<i_1>;a_2<i_2>,i_1}:N-C-S "
+                         L"t{a_2<i_2>;i_2}:N-C-S")
+                         ->as<Product>()
+                         .factors();
 
       TensorNetworkV2 tn(factors);
 

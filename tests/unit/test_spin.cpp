@@ -293,11 +293,11 @@ TEST_CASE("spin", "[spin]") {
       REQUIRE_THAT(
           result,
           EquivalentTo(
-              "1/4 g{p↑_1,p↑_2;p↑_3,p↑_4}:N-C-S - 1/4 "
-              "g{p↑_2,p↑_1;p↑_3,p↑_4}:N-C-S + 1/4 g{p↑_1,p↓_2;p↑_3,p↓_4}:N-C-S "
-              "+ 1/4 g{p↑_2,p↓_1;p↑_4,p↓_3}:N-C-S + 1/4 "
-              "g{p↓_1,p↓_2;p↓_3,p↓_4}:N-C-S - 1/4 "
-              "g{p↓_2,p↓_1;p↓_3,p↓_4}:N-C-S"));
+              "1/4 g{p↑_1,p↑_2;p↑_3,p↑_4}:N-N-S - 1/4 "
+              "g{p↑_2,p↑_1;p↑_3,p↑_4}:N-N-S + 1/4 g{p↑_1,p↓_2;p↑_3,p↓_4}:N-N-S "
+              "+ 1/4 g{p↑_2,p↓_1;p↑_4,p↓_3}:N-N-S + 1/4 "
+              "g{p↓_1,p↓_2;p↓_3,p↓_4}:N-N-S - 1/4 "
+              "g{p↓_2,p↓_1;p↓_3,p↓_4}:N-N-S"));
     }
   }
 
@@ -589,23 +589,23 @@ SECTION("partial expansion + S_maps = full expansion") {
                           Symmetry::Antisymm);
   auto result = symmetrize_expr(input);
   REQUIRE_THAT(
-      result, SimplifiesTo(
-                  "1/2 Ŝ{i_1,i_2;a_1,a_2}:N-C-S * t{a_1,a_2;i_1,i_2}:A-C-S "
-                  "- 1/2 Ŝ{i_1,i_2;a_1,a_2}:N-C-S * t{a_1,a_2;i_2,i_1}:A-C-S"));
+      result,
+      SimplifiesTo("1/2 Ŝ{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_1,i_2}:A-N-S "
+                   "- 1/2 Ŝ{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_2,i_1}:A-N-S"));
 
   result = S_maps(result);
   REQUIRE_THAT(
       result,
       SimplifiesTo(
-          "1/4 t{a_1,a_2;i_1,i_2}:A-C-S + 1/4 t{a_2,a_1;i_2,i_1}:A-C-S "
-          "- 1/4 t{a_1,a_2;i_2,i_1}:A-C-S - 1/4 t{a_2,a_1;i_1,i_2}:A-C-S"));
+          "1/4 t{a_1,a_2;i_1,i_2}:A-N-S + 1/4 t{a_2,a_1;i_2,i_1}:A-N-S "
+          "- 1/4 t{a_1,a_2;i_2,i_1}:A-N-S - 1/4 t{a_2,a_1;i_1,i_2}:A-N-S"));
 
   result = expand_A_op(input);
   REQUIRE_THAT(
       result,
       SimplifiesTo(
-          "1/4 t{a_1,a_2;i_1,i_2}:A-C-S - 1/4 t{a_1,a_2;i_2,i_1}:A-C-S "
-          "- 1/4 t{a_2,a_1;i_1,i_2}:A-C-S + 1/4 t{a_2,a_1;i_2,i_1}:A-C-S"));
+          "1/4 t{a_1,a_2;i_1,i_2}:A-N-S - 1/4 t{a_1,a_2;i_2,i_1}:A-N-S "
+          "- 1/4 t{a_2,a_1;i_1,i_2}:A-N-S + 1/4 t{a_2,a_1;i_2,i_1}:A-N-S"));
 }
 
 SECTION("partial spintracing + S_maps = full spintracing") {
@@ -617,20 +617,20 @@ SECTION("partial spintracing + S_maps = full spintracing") {
       input, IdxGroupList{{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
   REQUIRE_THAT(
       result,
-      EquivalentTo("-2 Ŝ{i_1,i_2;a_1,a_2}:N-C-S * t{a_1,a_2;i_2,i_1}:N-C-S "
-                   "+ 4 Ŝ{i_1,i_2;a_1,a_2}:N-C-S * t{a_1,a_2;i_1,i_2}:N-C-S"));
+      EquivalentTo("-2 Ŝ{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_2,i_1}:N-N-S "
+                   "+ 4 Ŝ{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_1,i_2}:N-N-S"));
   result = S_maps(result);
   REQUIRE_THAT(
       result, EquivalentTo(
-                  "-1 t{a_1,a_2;i_2,i_1}:N-C-S - 1 t{a_2,a_1;i_1,i_2}:N-C-S "
-                  "+ 2 t{a_1,a_2;i_1,i_2}:N-C-S + 2 t{a_2,a_1;i_2,i_1}:N-C-S"));
+                  "-1 t{a_1,a_2;i_2,i_1}:N-N-S - 1 t{a_2,a_1;i_1,i_2}:N-N-S "
+                  "+ 2 t{a_1,a_2;i_1,i_2}:N-N-S + 2 t{a_2,a_1;i_2,i_1}:N-N-S"));
 
   result = closed_shell_spintrace(
       input, IdxGroupList{{L"i_1", L"a_1"}, {L"i_2", L"a_2"}}, true);
   REQUIRE_THAT(
       result, EquivalentTo(
-                  "-1 t{a_1,a_2;i_2,i_1}:N-C-S - 1 t{a_2,a_1;i_1,i_2}:N-C-S "
-                  "+ 2 t{a_1,a_2;i_1,i_2}:N-C-S + 2 t{a_2,a_1;i_2,i_1}:N-C-S"));
+                  "-1 t{a_1,a_2;i_2,i_1}:N-N-S - 1 t{a_2,a_1;i_1,i_2}:N-N-S "
+                  "+ 2 t{a_1,a_2;i_1,i_2}:N-N-S + 2 t{a_2,a_1;i_2,i_1}:N-N-S"));
 }
 
 SECTION("Symmetrize expression") {
@@ -801,9 +801,9 @@ SECTION("Closed-shell spintrace CCD") {
           closed_shell_CC_spintrace_v1(pno_ccd_energy_so_as_sum);
       REQUIRE_THAT(pno_ccd_energy_sf,
                    EquivalentTo("2 g{a1<i1,i2>,a2<i1,i2>;i1,i2}:N-C "
-                                "t{i1,i2;a1<i1,i2>,a2<i1,i2>}:N-C - "
+                                "t{i1,i2;a1<i1,i2>,a2<i1,i2>}:N-N - "
                                 "g{a1<i1,i2>,a2<i1,i2>;i1,i2}:N-C "
-                                "t{i1,i2;a2<i1,i2>,a1<i1,i2>}:N-C"));
+                                "t{i1,i2;a2<i1,i2>,a1<i1,i2>}:N-N"));
     }
     {  // CSV (aka PNO) for more compact equations
       const auto pno_ccd_energy_so = deserialize(
@@ -817,9 +817,9 @@ SECTION("Closed-shell spintrace CCD") {
           closed_shell_CC_spintrace_v2(pno_ccd_energy_so_as_sum);
       REQUIRE_THAT(pno_ccd_energy_sf,
                    EquivalentTo("2 g{a1<i1,i2>,a2<i1,i2>;i1,i2}:N-C "
-                                "t{i1,i2;a1<i1,i2>,a2<i1,i2>}:N-C - "
+                                "t{i1,i2;a1<i1,i2>,a2<i1,i2>}:N-N - "
                                 "g{a1<i1,i2>,a2<i1,i2>;i1,i2}:N-C "
-                                "t{i1,i2;a2<i1,i2>,a1<i1,i2>}:N-C"));
+                                "t{i1,i2;a2<i1,i2>,a1<i1,i2>}:N-N"));
     }
   }
 }
@@ -1083,14 +1083,14 @@ SECTION("Closed-shell spintrace CCSDT terms") {
 
     REQUIRE_THAT(
         result,
-        EquivalentTo("24 Ŝ{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * f{i_4;i_3}:N-C-S * "
-                     "t{a_1,a_2,a_3;i_1,i_2,i_4}:N-C-S - 12"
-                     " Ŝ{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * f{i_4;i_3}:N-C-S * "
-                     "t{a_1,a_2,a_3;i_2,i_1,i_4}:N-C-S + 12"
-                     " Ŝ{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * f{i_4;i_1}:N-C-S * "
-                     "t{a_1,a_2,a_3;i_2,i_3,i_4}:N-C-S - 24"
-                     " Ŝ{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * f{i_4;i_2}:N-C-S * "
-                     "t{a_1,a_2,a_3;i_1,i_3,i_4}:N-C-S "));
+        EquivalentTo("24 Ŝ{i_1,i_2,i_3;a_1,a_2,a_3} * f{i_4;i_3}:N-N-S * "
+                     "t{a_1,a_2,a_3;i_1,i_2,i_4}:N-N-S - 12"
+                     " Ŝ{i_1,i_2,i_3;a_1,a_2,a_3} * f{i_4;i_3}:N-N-S * "
+                     "t{a_1,a_2,a_3;i_2,i_1,i_4}:N-N-S + 12"
+                     " Ŝ{i_1,i_2,i_3;a_1,a_2,a_3} * f{i_4;i_1}:N-N-S * "
+                     "t{a_1,a_2,a_3;i_2,i_3,i_4}:N-N-S - 24"
+                     " Ŝ{i_1,i_2,i_3;a_1,a_2,a_3} * f{i_4;i_2}:N-N-S * "
+                     "t{a_1,a_2,a_3;i_1,i_3,i_4}:N-N-S "));
   }
 
   SECTION(
@@ -1116,25 +1116,25 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     REQUIRE_THAT(
         result_1,
         EquivalentTo(
-            "  8 g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_3,i_1,i_2}:N-C-S + "
+            "  8 g{a_1,a_2;a_4,a_5}:N-N-S * t{a_3,a_4,a_5;i_3,i_1,i_2}:N-N-S + "
             "2"
-            "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_2,i_3,i_1}:N-C-S - 4"
-            "g{a_1,a_3;a_4,a_5}:N-C-S * t{a_2,a_4,a_5;i_3,i_1,i_2}:N-C-S - 4"
-            "g{a_2,a_3;a_4,a_5}:N-C-S * t{a_1,a_4,a_5;i_1,i_3,i_2}:N-C-S - 4 "
-            "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_2,i_1,i_3}:N-C-S - 4 "
-            "g{a_2,a_3;a_4,a_5}:N-C-S * t{a_1,a_4,a_5;i_2,i_1,i_3}:N-C-S + 2 "
-            "g{a_2,a_3;a_4,a_5}:N-C-S * t{a_1,a_4,a_5;i_3,i_1,i_2}:N-C-S - 4"
-            "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_3,i_2,i_1}:N-C-S + 2 "
-            "g{a_2,a_3;a_4,a_5}:N-C-S * t{a_1,a_4,a_5;i_2,i_3,i_1}:N-C-S - 4 "
-            "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_1,i_3,i_2}:N-C-S - 4 "
-            "g{a_1,a_3;a_4,a_5}:N-C-S * t{a_2,a_4,a_5;i_1,i_2,i_3}:N-C-S + 8 "
-            "g{a_2,a_3;a_4,a_5}:N-C-S * t{a_1,a_4,a_5;i_1,i_2,i_3}:N-C-S + 8 "
-            "g{a_1,a_3;a_4,a_5}:N-C-S * t{a_2,a_4,a_5;i_2,i_1,i_3}:N-C-S + 2 "
-            "g{a_1,a_3;a_4,a_5}:N-C-S * t{a_2,a_4,a_5;i_3,i_2,i_1}:N-C-S - 4 "
-            "g{a_1,a_3;a_4,a_5}:N-C-S * t{a_2,a_4,a_5;i_2,i_3,i_1}:N-C-S - 4 "
-            "g{a_2,a_3;a_4,a_5}:N-C-S * t{a_1,a_4,a_5;i_3,i_2,i_1}:N-C-S + 2 "
-            "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_1,i_2,i_3}:N-C-S + 2"
-            "g{a_1,a_3;a_4,a_5}:N-C-S * t{a_2,a_4,a_5;i_1,i_3,i_2}:N-C-S"));
+            "g{a_1,a_2;a_4,a_5}:N-N-S * t{a_3,a_4,a_5;i_2,i_3,i_1}:N-N-S - 4"
+            "g{a_1,a_3;a_4,a_5}:N-N-S * t{a_2,a_4,a_5;i_3,i_1,i_2}:N-N-S - 4"
+            "g{a_2,a_3;a_4,a_5}:N-N-S * t{a_1,a_4,a_5;i_1,i_3,i_2}:N-N-S - 4 "
+            "g{a_1,a_2;a_4,a_5}:N-N-S * t{a_3,a_4,a_5;i_2,i_1,i_3}:N-N-S - 4 "
+            "g{a_2,a_3;a_4,a_5}:N-N-S * t{a_1,a_4,a_5;i_2,i_1,i_3}:N-N-S + 2 "
+            "g{a_2,a_3;a_4,a_5}:N-N-S * t{a_1,a_4,a_5;i_3,i_1,i_2}:N-N-S - 4"
+            "g{a_1,a_2;a_4,a_5}:N-N-S * t{a_3,a_4,a_5;i_3,i_2,i_1}:N-N-S + 2 "
+            "g{a_2,a_3;a_4,a_5}:N-N-S * t{a_1,a_4,a_5;i_2,i_3,i_1}:N-N-S - 4 "
+            "g{a_1,a_2;a_4,a_5}:N-N-S * t{a_3,a_4,a_5;i_1,i_3,i_2}:N-N-S - 4 "
+            "g{a_1,a_3;a_4,a_5}:N-N-S * t{a_2,a_4,a_5;i_1,i_2,i_3}:N-N-S + 8 "
+            "g{a_2,a_3;a_4,a_5}:N-N-S * t{a_1,a_4,a_5;i_1,i_2,i_3}:N-N-S + 8 "
+            "g{a_1,a_3;a_4,a_5}:N-N-S * t{a_2,a_4,a_5;i_2,i_1,i_3}:N-N-S + 2 "
+            "g{a_1,a_3;a_4,a_5}:N-N-S * t{a_2,a_4,a_5;i_3,i_2,i_1}:N-N-S - 4 "
+            "g{a_1,a_3;a_4,a_5}:N-N-S * t{a_2,a_4,a_5;i_2,i_3,i_1}:N-N-S - 4 "
+            "g{a_2,a_3;a_4,a_5}:N-N-S * t{a_1,a_4,a_5;i_3,i_2,i_1}:N-N-S + 2 "
+            "g{a_1,a_2;a_4,a_5}:N-N-S * t{a_3,a_4,a_5;i_1,i_2,i_3}:N-N-S + 2"
+            "g{a_1,a_3;a_4,a_5}:N-N-S * t{a_2,a_4,a_5;i_1,i_3,i_2}:N-N-S"));
 
     // the new efficient method, does spintracing with partial expansion, then
     // expanding by S_map (this method is used in
@@ -1150,24 +1150,24 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     REQUIRE_THAT(
         result_2,
         EquivalentTo(
-            "8 g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_3,i_1,i_2}:N-C-S + 2"
-            "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_2,i_3,i_1}:N-C-S - 4 "
-            "g{a_1,a_3;a_4,a_5}:N-C-S * t{a_2,a_4,a_5;i_3,i_1,i_2}:N-C-S - 4 "
-            "g{a_2,a_3;a_4,a_5}:N-C-S * t{a_1,a_4,a_5;i_1,i_3,i_2}:N-C-S - 4 "
-            "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_2,i_1,i_3}:N-C-S - 4"
-            "g{a_2,a_3;a_4,a_5}:N-C-S * t{a_1,a_4,a_5;i_2,i_1,i_3}:N-C-S+ 2 "
-            "g{a_2,a_3;a_4,a_5}:N-C-S * t{a_1,a_4,a_5;i_3,i_1,i_2}:N-C-S - 4 "
-            "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_3,i_2,i_1}:N-C-S + 2 "
-            "g{a_2,a_3;a_4,a_5}:N-C-S * t{a_1,a_4,a_5;i_2,i_3,i_1}:N-C-S - 4"
-            "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_1,i_3,i_2}:N-C-S - 4"
-            "g{a_1,a_3;a_4,a_5}:N-C-S * t{a_2,a_4,a_5;i_1,i_2,i_3}:N-C-S + 8 "
-            "g{a_2,a_3;a_4,a_5}:N-C-S * t{a_1,a_4,a_5;i_1,i_2,i_3}:N-C-S + 8 "
-            "g{a_1,a_3;a_4,a_5}:N-C-S * t{a_2,a_4,a_5;i_2,i_1,i_3}:N-C-S + 2 "
-            "g{a_1,a_3;a_4,a_5}:N-C-S * t{a_2,a_4,a_5;i_3,i_2,i_1}:N-C-S - 4 "
-            "g{a_1,a_3;a_4,a_5}:N-C-S * t{a_2,a_4,a_5;i_2,i_3,i_1}:N-C-S - 4 "
-            "g{a_2,a_3;a_4,a_5}:N-C-S * t{a_1,a_4,a_5;i_3,i_2,i_1}:N-C-S + 2 "
-            "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_1,i_2,i_3}:N-C-S + 2 "
-            "g{a_1,a_3;a_4,a_5}:N-C-S * t{a_2,a_4,a_5;i_1,i_3,i_2}:N-C-S"));
+            "8 g{a_1,a_2;a_4,a_5}:N-N-S * t{a_3,a_4,a_5;i_3,i_1,i_2}:N-N-S + 2"
+            "g{a_1,a_2;a_4,a_5}:N-N-S * t{a_3,a_4,a_5;i_2,i_3,i_1}:N-N-S - 4 "
+            "g{a_1,a_3;a_4,a_5}:N-N-S * t{a_2,a_4,a_5;i_3,i_1,i_2}:N-N-S - 4 "
+            "g{a_2,a_3;a_4,a_5}:N-N-S * t{a_1,a_4,a_5;i_1,i_3,i_2}:N-N-S - 4 "
+            "g{a_1,a_2;a_4,a_5}:N-N-S * t{a_3,a_4,a_5;i_2,i_1,i_3}:N-N-S - 4"
+            "g{a_2,a_3;a_4,a_5}:N-N-S * t{a_1,a_4,a_5;i_2,i_1,i_3}:N-N-S+ 2 "
+            "g{a_2,a_3;a_4,a_5}:N-N-S * t{a_1,a_4,a_5;i_3,i_1,i_2}:N-N-S - 4 "
+            "g{a_1,a_2;a_4,a_5}:N-N-S * t{a_3,a_4,a_5;i_3,i_2,i_1}:N-N-S + 2 "
+            "g{a_2,a_3;a_4,a_5}:N-N-S * t{a_1,a_4,a_5;i_2,i_3,i_1}:N-N-S - 4"
+            "g{a_1,a_2;a_4,a_5}:N-N-S * t{a_3,a_4,a_5;i_1,i_3,i_2}:N-N-S - 4"
+            "g{a_1,a_3;a_4,a_5}:N-N-S * t{a_2,a_4,a_5;i_1,i_2,i_3}:N-N-S + 8 "
+            "g{a_2,a_3;a_4,a_5}:N-N-S * t{a_1,a_4,a_5;i_1,i_2,i_3}:N-N-S + 8 "
+            "g{a_1,a_3;a_4,a_5}:N-N-S * t{a_2,a_4,a_5;i_2,i_1,i_3}:N-N-S + 2 "
+            "g{a_1,a_3;a_4,a_5}:N-N-S * t{a_2,a_4,a_5;i_3,i_2,i_1}:N-N-S - 4 "
+            "g{a_1,a_3;a_4,a_5}:N-N-S * t{a_2,a_4,a_5;i_2,i_3,i_1}:N-N-S - 4 "
+            "g{a_2,a_3;a_4,a_5}:N-N-S * t{a_1,a_4,a_5;i_3,i_2,i_1}:N-N-S + 2 "
+            "g{a_1,a_2;a_4,a_5}:N-N-S * t{a_3,a_4,a_5;i_1,i_2,i_3}:N-N-S + 2 "
+            "g{a_1,a_3;a_4,a_5}:N-N-S * t{a_2,a_4,a_5;i_1,i_3,i_2}:N-N-S"));
   }
 
   SECTION("the most expensive terms in CCSDT in v2") {  // results in 1 term
@@ -1181,7 +1181,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
         result,
         EquivalentTo(
             L"3 Ŝ{i_1,i_2,i_3;a_1,a_2,a_3} * "
-            "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_3,i_1,i_2}:N-C-S"));
+            "g{a_1,a_2;a_4,a_5}:N-N-S * t{a_3,a_4,a_5;i_3,i_1,i_2}:N-N-S"));
   }
 
   SECTION("most expensive CCSDT term in v1") {  // results in 4 terms
@@ -1196,13 +1196,13 @@ SECTION("Closed-shell spintrace CCSDT terms") {
         result,
         EquivalentTo(
             L"-6/5 Ŝ{i_1,i_2,i_3;a_1,a_2,a_3} * "
-            "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_1,i_2,i_3}:N-C-S + "
-            "3 Ŝ{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * g{a_1,a_2;a_4,a_5}:N-C-S *"
-            " t{a_3,a_4,a_5;i_3,i_1,i_2}:N-C-S -"
-            " 3/5 Ŝ{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * g{a_1,a_2;a_4,a_5}:N-C-S *"
-            " t{a_3,a_4,a_5;i_3,i_2,i_1}:N-C-S -"
-            " 6/5 Ŝ{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * g{a_1,a_2;a_4,a_5}:N-C-S *"
-            " t{a_3,a_4,a_5;i_2,i_1,i_3}:N-C-S"));
+            "g{a_1,a_2;a_4,a_5}:N-N-S * t{a_3,a_4,a_5;i_1,i_2,i_3}:N-N-S + "
+            "3 Ŝ{i_1,i_2,i_3;a_1,a_2,a_3} * g{a_1,a_2;a_4,a_5}:N-N-S *"
+            " t{a_3,a_4,a_5;i_3,i_1,i_2}:N-N-S -"
+            " 3/5 Ŝ{i_1,i_2,i_3;a_1,a_2,a_3} * g{a_1,a_2;a_4,a_5}:N-N-S *"
+            " t{a_3,a_4,a_5;i_3,i_2,i_1}:N-N-S -"
+            " 6/5 Ŝ{i_1,i_2,i_3;a_1,a_2,a_3} * g{a_1,a_2;a_4,a_5}:N-N-S *"
+            " t{a_3,a_4,a_5;i_2,i_1,i_3}:N-N-S"));
   }
 
   SECTION("f * t3") {
@@ -1573,8 +1573,8 @@ SECTION("Open-shell spin-tracing") {
     auto result = expand_A_op(input);
     result->visit(reset_idx_tags);
     REQUIRE_THAT(result,
-                 EquivalentTo("-1 g{i↑_3,i↑_4;i↑_1,i↑_2}:A-C-S * "
-                              "t{a↑_1,a↑_2,a↓_3;i↑_4,i↑_3,i↓_3}:N-C-S"));
+                 EquivalentTo("-1 g{i↑_3,i↑_4;i↑_1,i↑_2}:A-N-S * "
+                              "t{a↑_1,a↑_2,a↓_3;i↑_4,i↑_3,i↓_3}:N-N-S"));
 
     g = Tensor(L"g", bra{i4A, i5A}, ket{i1A, i2A}, Symmetry::Antisymm);
     t3 =
@@ -1584,8 +1584,8 @@ SECTION("Open-shell spin-tracing") {
     result = expand_A_op(input);
     result->visit(reset_idx_tags);
     REQUIRE_THAT(result,
-                 EquivalentTo("-1 g{i↑_3,i↑_4;i↑_1,i↑_2}:A-C-S * "
-                              "t{a↑_1,a↑_2,a↓_3;i↑_4,i↑_3,i↓_3}:N-C-S"));
+                 EquivalentTo("-1 g{i↑_3,i↑_4;i↑_1,i↑_2}:A-N-S * "
+                              "t{a↑_1,a↑_2,a↓_3;i↑_4,i↑_3,i↓_3}:N-N-S"));
   }
 
   // CCSDT R3 10 aaa, bbb

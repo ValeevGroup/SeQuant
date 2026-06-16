@@ -103,7 +103,9 @@ class compute_cceqvec {
                            : AssertStrictBraKetSymmetry::Yes;
       auto context_resetter = sequant::set_scoped_default_context(
           sequant::Context({.index_space_registry_shared_ptr = so_reg,
-                            .vacuum = Vacuum::SingleProduct})
+                            .vacuum = Vacuum::SingleProduct,
+                            // mbpt works with particle-symmetric tensors
+                            .column_symmetry = ColumnSymmetry::Symm})
               .set(so_strict));
       std::vector<ExprPtr> eqvec_so;
       switch (type) {
@@ -284,7 +286,9 @@ int main(int argc, char* argv[]) {
   sequant::set_default_context(
       sequant::Context({.index_space_registry_shared_ptr = sr_reg,
                         .vacuum = Vacuum::SingleProduct,
-                        .spbasis = spbasis})
+                        .spbasis = spbasis,
+                        // mbpt works with particle-symmetric tensors
+                        .column_symmetry = ColumnSymmetry::Symm})
           .set(strict));
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());

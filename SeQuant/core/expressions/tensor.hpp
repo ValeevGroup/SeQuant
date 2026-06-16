@@ -255,23 +255,77 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     }
   }
 
+  /// the four symmetry attributes of a Tensor, fully resolved (no defaulting
+  /// left to do)
+  struct resolved_symmetries {
+    Symmetry symmetry;
+    BraKetSymmetry braket_symmetry;
+    Hermiticity hermiticity;
+    ColumnSymmetry column_symmetry;
+  };
+
+  /// Resolves the (possibly unspecified) symmetry attributes of a tensor.
+  /// - #BraKetSymmetry is a *derived* property: if not given explicitly it is
+  ///   computed from the (explicit or default) #Hermiticity and the tensor's
+  ///   @p base_fld via to_braket_symmetry().
+  /// - #Symmetry, #Hermiticity and #ColumnSymmetry fall back to the active
+  ///   default sequant::Context when not specified.
+  /// @note The default Context is consulted *only* when some attribute is left
+  ///       unspecified, so fully-explicit construction (the hot path, e.g.
+  ///       canonicalization copying a source tensor's attributes) never pays
+  ///       the get_default_context() synchronization cost.
+  static resolved_symmetries resolve_symmetries(
+      std::optional<Symmetry> s, std::optional<BraKetSymmetry> bks_opt,
+      std::optional<ColumnSymmetry> ps, std::optional<Hermiticity> herm_opt,
+      Field base_fld) {
+    Symmetry s_resolved;
+    Hermiticity h_resolved;
+    ColumnSymmetry ps_resolved;
+    if (!s.has_value() || !ps.has_value() ||
+        (!bks_opt.has_value() && !herm_opt.has_value())) {
+      const Context &ctx = get_default_context();
+      s_resolved = s.value_or(ctx.symmetry());
+      ps_resolved = ps.value_or(ctx.column_symmetry());
+      h_resolved = herm_opt.value_or(ctx.hermiticity());
+    } else {
+      s_resolved = *s;
+      ps_resolved = *ps;
+      // h_resolved is consulted below only to derive the braket symmetry, and
+      // only when no BraKetSymmetry was given. To reach this branch with no
+      // BraKetSymmetry, a Hermiticity must have been given, so herm_opt is set
+      // in exactly the case h_resolved is used; the value_or fallback is
+      // unused.
+      h_resolved = herm_opt.value_or(Hermiticity::NonHermitian);
+    }
+    const BraKetSymmetry bks_resolved =
+        bks_opt.has_value() ? *bks_opt
+                            : to_braket_symmetry(h_resolved, base_fld);
+    // preserve the exact #Hermiticity trait (incl. AntiHermitian, which the
+    // BraKetSymmetry round-trip cannot represent) when it was given; otherwise
+    // back-fill it from the explicit-or-derived braket symmetry
+    const Hermiticity hermiticity_resolved =
+        herm_opt.has_value()
+            ? *herm_opt
+            : (bks_opt.has_value() ? to_hermiticity(*bks_opt) : h_resolved);
+    return {s_resolved, bks_resolved, hermiticity_resolved, ps_resolved};
+  }
+
+  // fully-resolved terminal ctor (range form)
   template <basic_string_convertible S, range_of_castables_to_index IndexRange1,
             range_of_castables_to_index IndexRange2,
             range_of_castables_to_index IndexRange3>
   Tensor(S &&label, const bra<IndexRange1> &bra_indices,
          const ket<IndexRange2> &ket_indices,
          const aux<IndexRange3> &aux_indices, reserved_tag,
-         Symmetry s = Symmetry::Nonsymm,
-         std::optional<BraKetSymmetry> bks_opt = std::nullopt,
-         ColumnSymmetry ps = ColumnSymmetry::Symm)
+         resolved_symmetries rsym)
       : label_(toUtf16(std::forward<S>(label))),
         bra_(make_indices(bra_indices)),
         ket_(make_indices(ket_indices)),
         aux_(make_indices(aux_indices)),
-        symmetry_(s),
-        braket_symmetry_(bks_opt.value_or(BraKetSymmetry::Nonsymm)),
-        hermiticity_(to_hermiticity(braket_symmetry_)),
-        column_symmetry_(ps),
+        symmetry_(rsym.symmetry),
+        braket_symmetry_(rsym.braket_symmetry),
+        hermiticity_(rsym.hermiticity),
+        column_symmetry_(rsym.column_symmetry),
         bra_net_rank_(ranges::count_if(
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
         ket_net_rank_(ranges::count_if(
@@ -281,21 +335,20 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     canonicalize_slots();
   }
 
+  // fully-resolved terminal ctor (move form)
   template <basic_string_convertible S>
   Tensor(S &&label, bra<index_container_type> &&bra_indices,
          ket<index_container_type> &&ket_indices,
          aux<index_container_type> &&aux_indices, reserved_tag,
-         Symmetry s = Symmetry::Nonsymm,
-         std::optional<BraKetSymmetry> bks_opt = std::nullopt,
-         ColumnSymmetry ps = ColumnSymmetry::Symm)
+         resolved_symmetries rsym)
       : label_(toUtf16(std::forward<S>(label))),
         bra_(std::move(bra_indices)),
         ket_(std::move(ket_indices)),
         aux_(std::move(aux_indices)),
-        symmetry_(s),
-        braket_symmetry_(bks_opt.value_or(BraKetSymmetry::Nonsymm)),
-        hermiticity_(to_hermiticity(braket_symmetry_)),
-        column_symmetry_(ps),
+        symmetry_(rsym.symmetry),
+        braket_symmetry_(rsym.braket_symmetry),
+        hermiticity_(rsym.hermiticity),
+        column_symmetry_(rsym.column_symmetry),
         bra_net_rank_(ranges::count_if(
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
         ket_net_rank_(ranges::count_if(
@@ -303,6 +356,44 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     validate_indices();
     check_symmetries();
     canonicalize_slots();
+  }
+
+  // defaulting reserved-tag ctor (range form): resolves unspecified symmetries
+  // against the default Context, then delegates to the resolved terminal
+  template <basic_string_convertible S, range_of_castables_to_index IndexRange1,
+            range_of_castables_to_index IndexRange2,
+            range_of_castables_to_index IndexRange3>
+  Tensor(S &&label, const bra<IndexRange1> &bra_indices,
+         const ket<IndexRange2> &ket_indices,
+         const aux<IndexRange3> &aux_indices, reserved_tag,
+         std::optional<Symmetry> s = std::nullopt,
+         std::optional<BraKetSymmetry> bks_opt = std::nullopt,
+         std::optional<ColumnSymmetry> ps = std::nullopt,
+         std::optional<Hermiticity> herm_opt = std::nullopt)
+      : Tensor(std::forward<S>(label), bra_indices, ket_indices, aux_indices,
+               reserved_tag{},
+               resolve_symmetries(
+                   s, bks_opt, ps, herm_opt,
+                   sequant::base_field(make_indices(bra_indices),
+                                       make_indices(ket_indices)))) {}
+
+  // defaulting reserved-tag ctor (move form)
+  template <basic_string_convertible S>
+  Tensor(S &&label, bra<index_container_type> &&bra_indices,
+         ket<index_container_type> &&ket_indices,
+         aux<index_container_type> &&aux_indices, reserved_tag,
+         std::optional<Symmetry> s = std::nullopt,
+         std::optional<BraKetSymmetry> bks_opt = std::nullopt,
+         std::optional<ColumnSymmetry> ps = std::nullopt,
+         std::optional<Hermiticity> herm_opt = std::nullopt)
+      // base_field(bra_indices, ket_indices) is read during argument
+      // evaluation, before the delegated ctor moves the indices out -- safe
+      // regardless of argument evaluation order
+      : Tensor(
+            std::forward<S>(label), std::move(bra_indices),
+            std::move(ket_indices), std::move(aux_indices), reserved_tag{},
+            resolve_symmetries(s, bks_opt, ps, herm_opt,
+                               sequant::base_field(bra_indices, ket_indices))) {
   }
 
  public:
@@ -334,9 +425,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   template <basic_string_convertible S, range_of_castables_to_index IndexRange1,
             range_of_castables_to_index IndexRange2>
   Tensor(S &&label, const bra<IndexRange1> &bra_indices,
-         const ket<IndexRange2> &ket_indices, Symmetry s = Symmetry::Nonsymm,
+         const ket<IndexRange2> &ket_indices,
+         std::optional<Symmetry> s = std::nullopt,
          std::optional<BraKetSymmetry> bks_opt = std::nullopt,
-         ColumnSymmetry ps = ColumnSymmetry::Symm)
+         std::optional<ColumnSymmetry> ps = std::nullopt)
       : Tensor(std::forward<S>(label), bra_indices, ket_indices, sequant::aux{},
                reserved_tag{}, s, bks_opt, ps) {
     assert_nonreserved_label(label_);
@@ -357,9 +449,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
             range_of_castables_to_index IndexRange3>
   Tensor(S &&label, const bra<IndexRange1> &bra_indices,
          const ket<IndexRange2> &ket_indices,
-         const aux<IndexRange3> &aux_indices, Symmetry s = Symmetry::Nonsymm,
+         const aux<IndexRange3> &aux_indices,
+         std::optional<Symmetry> s = std::nullopt,
          std::optional<BraKetSymmetry> bks_opt = std::nullopt,
-         ColumnSymmetry ps = ColumnSymmetry::Symm)
+         std::optional<ColumnSymmetry> ps = std::nullopt)
       : Tensor(std::forward<S>(label), bra_indices, ket_indices, aux_indices,
                reserved_tag{}, s, bks_opt, ps) {
     assert_nonreserved_label(label_);
@@ -376,9 +469,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   template <basic_string_convertible S>
   Tensor(S &&label, bra<index_container_type> &&bra_indices,
          ket<index_container_type> &&ket_indices,
-         Symmetry s = Symmetry::Nonsymm,
+         std::optional<Symmetry> s = std::nullopt,
          std::optional<BraKetSymmetry> bks_opt = std::nullopt,
-         ColumnSymmetry ps = ColumnSymmetry::Symm)
+         std::optional<ColumnSymmetry> ps = std::nullopt)
       : Tensor(std::forward<S>(label), std::move(bra_indices),
                std::move(ket_indices), sequant::aux{}, reserved_tag{}, s,
                bks_opt, ps) {
@@ -399,9 +492,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   Tensor(S &&label, bra<index_container_type> &&bra_indices,
          ket<index_container_type> &&ket_indices,
          aux<index_container_type> &&aux_indices,
-         Symmetry s = Symmetry::Nonsymm,
+         std::optional<Symmetry> s = std::nullopt,
          std::optional<BraKetSymmetry> bks_opt = std::nullopt,
-         ColumnSymmetry ps = ColumnSymmetry::Symm)
+         std::optional<ColumnSymmetry> ps = std::nullopt)
       : Tensor(std::forward<S>(label), std::move(bra_indices),
                std::move(ket_indices), std::move(aux_indices), reserved_tag{},
                s, bks_opt, ps) {
@@ -427,25 +520,15 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
             range_of_castables_to_index IndexRange2>
   Tensor(S &&label, const bra<IndexRange1> &bra_indices,
          const ket<IndexRange2> &ket_indices, Symmetry s, Hermiticity h,
-         ColumnSymmetry ps = ColumnSymmetry::Symm)
-      // The base_field must be resolved into a BraKetSymmetry *here*, in the
-      // delegation, because the delegated-to ctor's body runs
-      // canonicalize_slots() (which keys off braket_symmetry_) -- it cannot be
-      // fixed up afterwards. Hence make_indices is unavoidably evaluated here
-      // too (the delegated ctor materializes bra_/ket_ from the same ranges
-      // again); the duplication is the cost of safe delegation, not an
-      // oversight.
-      : Tensor(std::forward<S>(label), bra_indices, ket_indices, s,
-               to_braket_symmetry(
-                   h, sequant::base_field(make_indices(bra_indices),
-                                          make_indices(ket_indices))),
-               ps) {
-    // Overwrite after delegation to preserve the exact trait (incl.
-    // AntiHermitian, which the BraKetSymmetry round-trip cannot represent).
-    // Stays consistent with the reserved-(anti)symmetrizer Symm->Conjugate
-    // demotion in the delegated ctor: that demotion only adjusts
-    // braket_symmetry_ (leaving hermiticity Hermitian), which h also implies.
-    hermiticity_ = h;
+         std::optional<ColumnSymmetry> ps = std::nullopt)
+      // pass the Hermiticity through to the reserved-tag ctor, which derives
+      // braket_symmetry_ from it and base_field() before canonicalize_slots()
+      // runs (the latter keys off braket_symmetry_), and preserves the exact
+      // trait (incl. AntiHermitian) in hermiticity_.
+      : Tensor(std::forward<S>(label), bra_indices, ket_indices, sequant::aux{},
+               reserved_tag{}, std::optional<Symmetry>(s), std::nullopt, ps,
+               std::optional<Hermiticity>(h)) {
+    assert_nonreserved_label(label_);
   }
 
   /// @param label the tensor label
@@ -461,25 +544,15 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   Tensor(S &&label, const bra<IndexRange1> &bra_indices,
          const ket<IndexRange2> &ket_indices,
          const aux<IndexRange3> &aux_indices, Symmetry s, Hermiticity h,
-         ColumnSymmetry ps = ColumnSymmetry::Symm)
-      // The base_field must be resolved into a BraKetSymmetry *here*, in the
-      // delegation, because the delegated-to ctor's body runs
-      // canonicalize_slots() (which keys off braket_symmetry_) -- it cannot be
-      // fixed up afterwards. Hence make_indices is unavoidably evaluated here
-      // too (the delegated ctor materializes bra_/ket_ from the same ranges
-      // again); the duplication is the cost of safe delegation, not an
-      // oversight.
-      : Tensor(std::forward<S>(label), bra_indices, ket_indices, aux_indices, s,
-               to_braket_symmetry(
-                   h, sequant::base_field(make_indices(bra_indices),
-                                          make_indices(ket_indices))),
-               ps) {
-    // Overwrite after delegation to preserve the exact trait (incl.
-    // AntiHermitian, which the BraKetSymmetry round-trip cannot represent).
-    // Stays consistent with the reserved-(anti)symmetrizer Symm->Conjugate
-    // demotion in the delegated ctor: that demotion only adjusts
-    // braket_symmetry_ (leaving hermiticity Hermitian), which h also implies.
-    hermiticity_ = h;
+         std::optional<ColumnSymmetry> ps = std::nullopt)
+      // pass the Hermiticity through to the reserved-tag ctor, which derives
+      // braket_symmetry_ from it and base_field() before canonicalize_slots()
+      // runs (the latter keys off braket_symmetry_), and preserves the exact
+      // trait (incl. AntiHermitian) in hermiticity_.
+      : Tensor(std::forward<S>(label), bra_indices, ket_indices, aux_indices,
+               reserved_tag{}, std::optional<Symmetry>(s), std::nullopt, ps,
+               std::optional<Hermiticity>(h)) {
+    assert_nonreserved_label(label_);
   }
 
   /// @}

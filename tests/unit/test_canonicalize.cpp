@@ -268,9 +268,9 @@ TEST_CASE("canonicalization", "[algorithms]") {
                    .spbasis = SPBasis::Spinfree})
               .set(AssertStrictBraKetSymmetry::No));
       auto input = deserialize(
-          L"8 * Ŝ{i_1,i_2;a_1,a_2}:N-C-S * g{i_3,a_1;a_3,i_1}:N-S-S "
+          L"8 * Ŝ{i_1,i_2;a_1,a_2} * g{i_3,a_1;a_3,i_1}:N-S-S "
           L"* t{a_2,a_3;i_2,i_3}:N-N-S "
-          L"+ 8 * Ŝ{i_1,i_2;a_1,a_2}:N-C-S * g{i_1,a_3;a_1,i_3}:N-S-S "
+          L"+ 8 * Ŝ{i_1,i_2;a_1,a_2} * g{i_1,a_3;a_1,i_3}:N-S-S "
           L"* t{a_2,a_3;i_2,i_3}:N-N-S");
       simplify(input);
       const std::size_t n =
@@ -291,10 +291,10 @@ TEST_CASE("canonicalization", "[algorithms]") {
       ctx_min.set(AssertStrictBraKetSymmetry::No);
       auto resetter = set_scoped_default_context(ctx_min);
       auto exA = deserialize(
-          L"8 * Ŝ{i_1,i_2;a_1,a_2}:N-C-S * g{i_3,a_1;a_3,i_1}:N-S-S "
+          L"8 * Ŝ{i_1,i_2;a_1,a_2} * g{i_3,a_1;a_3,i_1}:N-S-S "
           L"* t{a_2,a_3;i_2,i_3}:N-N-S");
       auto exB = deserialize(
-          L"8 * Ŝ{i_1,i_2;a_1,a_2}:N-C-S * g{i_1,a_3;a_1,i_3}:N-S-S "
+          L"8 * Ŝ{i_1,i_2;a_1,a_2} * g{i_1,a_3;a_1,i_3}:N-S-S "
           L"* t{a_2,a_3;i_2,i_3}:N-N-S");
       REQUIRE(exA);
       REQUIRE(exB);
