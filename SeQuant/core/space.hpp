@@ -487,7 +487,7 @@ class IndexSpace {
     }
   }
   static std::wstring reduce_key(std::string_view key) {
-    const auto underscore_position = key.rfind(L'_');
+    const auto underscore_position = key.rfind('_');
     if (underscore_position != std::string::npos) {  // key can be reduced
       return toUtf16(key.substr(0, underscore_position));
     } else {
