@@ -94,6 +94,7 @@ class SubexpressionReplacer {
   void perform_replacements() {
     // Ensure we won't have to reallocate while iterating over the expressions
     expr_trees.reserve(expr_trees.size() + subexpressions.size());
+    cse_definition_indices.reserve(subexpressions.size());
 
     const std::size_t orig_tree_count = expr_trees.size();
 
@@ -186,11 +187,17 @@ class SubexpressionReplacer {
       auto expr_it = expr_trees.begin();
       std::advance(expr_it, current_expr_idx + expr_offset);
 
+      cse_definition_indices.emplace_back(current_expr_idx + expr_offset);
+
       expr_trees.insert(expr_it, std::move(intermediate_definition.value()));
       expr_offset += 1;
     }
 
     return false;
+  }
+
+  const std::vector<std::size_t> &cse_indices() const {
+    return cse_definition_indices;
   }
 
  private:
@@ -238,7 +245,7 @@ template <std::ranges::range VectorLike,
           bool force_hash_collisions = false>
   requires std::regular_invocable<Transformer, ResultExpr> &&
            meta::eval_node<std::ranges::range_value_t<VectorLike>>
-void eliminate_common_subexpressions(
+std::vector<std::size_t> eliminate_common_subexpressions(
     VectorLike &expr_trees, const Transformer &expr_to_tree,
     const CSEOptions<std::ranges::range_value_t<VectorLike>> opts = {}) {
   using std::ranges::begin;
@@ -265,6 +272,8 @@ void eliminate_common_subexpressions(
       replacer(expr_trees, subexpression_usages, expr_to_tree, opts.label_gen);
 
   replacer.perform_replacements();
+
+  return replacer.cse_indices();
 }
 
 }  // namespace sequant::opt

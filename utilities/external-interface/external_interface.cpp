@@ -31,6 +31,7 @@
 
 #include <boost/algorithm/string.hpp>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -438,6 +439,7 @@ void generateITF(const json &blocks, std::string_view out_file,
     if (block_options.subexpression_elimination) {
       const std::size_t min_usage = block_options.min_cse_usage;
 
+      // TODO: Teach CSE about batched indices
       opt::CSEOptions<ExportNode<>> opts;
       opts.filter_predicate = [min_usage](const ExportNode<> &tree,
                                           std::size_t usage_count) {
@@ -464,14 +466,90 @@ void generateITF(const json &blocks, std::string_view out_file,
         return true;
       };
 
-      opt::eliminate_common_subexpressions(
-          results,
-          [](const auto &expr) {
-            // Note: the lambda is needed to make the callable usable for
-            // ExprPtr as well as ResultExpr objects
-            return to_export_tree(expr);
-          },
-          opts);
+      std::vector<std::size_t> cse_indices =
+          opt::eliminate_common_subexpressions(
+              results,
+              [](const auto &expr) {
+                // Note: the lambda is needed to make the callable usable for
+                // ExprPtr as well as ResultExpr objects
+                return to_export_tree(expr);
+              },
+              opts);
+
+      SEQUANT_ASSERT(std::ranges::is_sorted(cse_indices));
+
+      for (std::size_t i = 0; i < cse_indices.size(); ++i) {
+        std::size_t last = i;
+        for (std::size_t k = i + 1; k < cse_indices.size(); ++k) {
+          if (cse_indices[k] != cse_indices[k - 1] + 1) {
+            break;
+          }
+
+          last = k;
+        }
+        SEQUANT_ASSERT(last < results.size() - 1);
+        SEQUANT_ASSERT(
+            std::ranges::find(cse_indices, cse_indices.at(last) + 1) ==
+            cse_indices.end());
+
+        const ExportNode<> &base = results.at(cse_indices.at(last) + 1);
+        std::vector<Index> baseBatch = context.batch_indices(base->id());
+        if (baseBatch.empty()) {
+          continue;
+        }
+
+        const std::size_t first_cse = cse_indices.at(i);
+        const std::size_t last_cse = cse_indices.at(last);
+
+        // Using stable_sort instead of sort only for optical reasons
+        std::stable_sort(
+            cse_indices.begin() + i, cse_indices.begin() + last + 1,
+            [&results, &baseBatch](std::size_t lhs, std::size_t rhs) {
+              const ExportNode<> lhs_node = results.at(lhs);
+              const ExportNode<> rhs_node = results.at(rhs);
+
+              if (!lhs_node->is_tensor() || !rhs_node->is_tensor()) {
+                return rhs_node->is_tensor();
+              }
+
+              auto lhs_indices = lhs_node->as_tensor().const_indices();
+              auto rhs_indices = rhs_node->as_tensor().const_indices();
+
+              for (const Index &idx : baseBatch | std::ranges::views::reverse) {
+                const bool lhs_contains =
+                    std::ranges::find(lhs_indices, idx) != lhs_indices.end();
+                const bool rhs_contains =
+                    std::ranges::find(rhs_indices, idx) != rhs_indices.end();
+
+                if (lhs_contains != rhs_contains) {
+                  return rhs_contains;
+                }
+              }
+
+              return false;
+            });
+
+        auto cse_results = std::ranges::subrange(
+            results.begin() + first_cse, results.begin() + last_cse + 1);
+        auto cse_order = std::ranges::subrange(cse_indices.begin() + i,
+                                               cse_indices.begin() + last + 1);
+        reorder(cse_results, cse_order);
+
+        for (std::size_t idx = first_cse; idx <= last_cse; ++idx) {
+          const ExportNode<> &current = results.at(idx);
+          if (!current->is_tensor()) {
+            continue;
+          }
+
+          // TODO: only batch over indices that actually appear in this CSE
+          // However, this requires teaching the exporter to nest overlapping
+          // batch sets
+
+          context.set_batch_indices(baseBatch, current->id());
+        }
+
+        i = last;
+      }
     }
 
     groups.emplace_back(std::move(results),
