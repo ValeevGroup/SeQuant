@@ -35,7 +35,6 @@
 #include <fstream>
 #include <iterator>
 #include <ranges>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unordered_set>
