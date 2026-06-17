@@ -439,7 +439,6 @@ void generateITF(const json &blocks, std::string_view out_file,
     if (block_options.subexpression_elimination) {
       const std::size_t min_usage = block_options.min_cse_usage;
 
-      // TODO: Teach CSE about batched indices
       opt::CSEOptions<ExportNode<>> opts;
       opts.filter_predicate = [min_usage](const ExportNode<> &tree,
                                           std::size_t usage_count) {
@@ -466,89 +465,91 @@ void generateITF(const json &blocks, std::string_view out_file,
         return true;
       };
 
-      std::vector<std::size_t> cse_indices =
-          opt::eliminate_common_subexpressions(
-              results,
-              [](const auto &expr) {
-                // Note: the lambda is needed to make the callable usable for
-                // ExprPtr as well as ResultExpr objects
-                return to_export_tree(expr);
-              },
-              opts);
+      // Temporary buffer to facilitate batch-wise processing of CSEs
+      // We reverse the order to allow reversed order processing below
+      container::svector<ExportNode<>> tmp;
+      tmp.reserve(results.size());
+      tmp.insert(tmp.end(), std::make_move_iterator(results.rbegin()),
+                 std::make_move_iterator(results.rend()));
+      results.clear();
 
-      SEQUANT_ASSERT(std::ranges::is_sorted(cse_indices));
+      container::svector<ExportNode<>> current_buff;
+      while (!tmp.empty()) {
+        opts.batch_indices = context.batch_indices(tmp.back()->id());
 
-      for (std::size_t i = 0; i < cse_indices.size(); ++i) {
-        std::size_t last = i;
-        for (std::size_t k = i + 1; k < cse_indices.size(); ++k) {
-          if (cse_indices[k] != cse_indices[k - 1] + 1) {
-            break;
-          }
+        current_buff.clear();
 
-          last = k;
-        }
-        SEQUANT_ASSERT(last < results.size() - 1);
-        SEQUANT_ASSERT(
-            std::ranges::find(cse_indices, cse_indices.at(last) + 1) ==
-            cse_indices.end());
-
-        const ExportNode<> &base = results.at(cse_indices.at(last) + 1);
-        std::vector<Index> baseBatch = context.batch_indices(base->id());
-        if (baseBatch.empty()) {
-          continue;
+        // Create batch of expressions that are batched over the same indices
+        while (!tmp.empty() &&
+               context.batch_indices(tmp.back()->id()) == opts.batch_indices) {
+          current_buff.emplace_back(std::move(tmp.back()));
+          tmp.pop_back();
         }
 
-        const std::size_t first_cse = cse_indices.at(i);
-        const std::size_t last_cse = cse_indices.at(last);
+        std::vector<std::size_t> cse_positions =
+            opt::eliminate_common_subexpressions(
+                current_buff,
+                [](const auto &expr) {
+                  // Note: the lambda is needed to make the callable usable for
+                  // ExprPtr as well as ResultExpr objects
+                  return to_export_tree(expr);
+                },
+                opts);
 
-        // Using stable_sort instead of sort only for optical reasons
-        std::stable_sort(
-            cse_indices.begin() + i, cse_indices.begin() + last + 1,
-            [&results, &baseBatch](std::size_t lhs, std::size_t rhs) {
-              const ExportNode<> lhs_node = results.at(lhs);
-              const ExportNode<> rhs_node = results.at(rhs);
-
-              if (!lhs_node->is_tensor() || !rhs_node->is_tensor()) {
-                return rhs_node->is_tensor();
-              }
-
-              auto lhs_indices = lhs_node->as_tensor().const_indices();
-              auto rhs_indices = rhs_node->as_tensor().const_indices();
-
-              for (const Index &idx : baseBatch | std::ranges::views::reverse) {
-                const bool lhs_contains =
-                    std::ranges::find(lhs_indices, idx) != lhs_indices.end();
-                const bool rhs_contains =
-                    std::ranges::find(rhs_indices, idx) != rhs_indices.end();
-
-                if (lhs_contains != rhs_contains) {
-                  return rhs_contains;
+        if (!opts.batch_indices.empty()) {
+          // Sort by how many of the batched indices are contained in any given
+          // expression
+          std::ranges::stable_sort(
+              current_buff,
+              [&opts](const ExportNode<> &lhs, const ExportNode<> &rhs) {
+                if (!lhs->is_tensor() || !rhs->is_tensor()) {
+                  return rhs->is_tensor();
                 }
-              }
+                auto lhs_indices = lhs->as_tensor().const_indices();
+                auto rhs_indices = rhs->as_tensor().const_indices();
 
-              return false;
-            });
+                for (const Index &idx :
+                     opts.batch_indices | std::ranges::views::reverse) {
+                  const bool lhs_contains =
+                      std::ranges::find(lhs_indices, idx) != lhs_indices.end();
+                  const bool rhs_contains =
+                      std::ranges::find(rhs_indices, idx) != rhs_indices.end();
 
-        auto cse_results = std::ranges::subrange(
-            results.begin() + first_cse, results.begin() + last_cse + 1);
-        auto cse_order = std::ranges::subrange(cse_indices.begin() + i,
-                                               cse_indices.begin() + last + 1);
-        reorder(cse_results, cse_order);
+                  if (lhs_contains != rhs_contains) {
+                    return rhs_contains;
+                  }
+                }
+                return false;
+              });
 
-        for (std::size_t idx = first_cse; idx <= last_cse; ++idx) {
-          const ExportNode<> &current = results.at(idx);
-          if (!current->is_tensor()) {
-            continue;
+          // Configure batching indices for determined CSEs
+          for (std::size_t pos : cse_positions) {
+            const ExportNode<> &node = current_buff.at(pos);
+            if (!node->is_tensor()) {
+              continue;
+            }
+
+            // Only batch over indices actually part of the result
+            auto current_indices = node->as_tensor().const_indices();
+            std::vector<Index> indices;
+            std::ranges::copy_if(
+                opts.batch_indices, std::back_inserter(indices),
+                [&current_indices](const Index &idx) {
+                  return std::ranges::find(current_indices, idx) !=
+                         current_indices.end();
+                });
+
+            if (indices.empty()) {
+              continue;
+            }
+
+            context.set_batch_indices(std::move(indices), node->id());
           }
-
-          // TODO: only batch over indices that actually appear in this CSE
-          // However, this requires teaching the exporter to nest overlapping
-          // batch sets
-
-          context.set_batch_indices(baseBatch, current->id());
         }
 
-        i = last;
+        results.insert(results.end(),
+                       std::make_move_iterator(current_buff.begin()),
+                       std::make_move_iterator(current_buff.end()));
       }
     }
 
