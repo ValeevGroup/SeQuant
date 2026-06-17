@@ -3,7 +3,6 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/export/generator.hpp>
-#include <SeQuant/core/export/tensor_comparator.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
@@ -63,7 +62,7 @@ class GenerationOptimizer final : public Generator<MainContext> {
     /// @returns Whether this operation cancels the provided operation. That is,
     /// executing them both in sequence will result in a no-op
     bool cancels(const AbstractOperation &other,
-                 const detail::ExportTensorComparator &cmp) const {
+                 const IndexSpecificTensorBlockEqualComparator &cmp) const {
       if ((type() == OperationType::Load &&
            other.type() == OperationType::Unload) ||
           (type() == OperationType::Unload &&
@@ -77,7 +76,7 @@ class GenerationOptimizer final : public Generator<MainContext> {
     /// @returns Whether this operation forms a semantic pair with the provided
     /// one
     bool pairs_with(const AbstractOperation &operation,
-                    const detail::ExportTensorComparator &cmp) const {
+                    const IndexSpecificTensorBlockEqualComparator &cmp) const {
       if (!object_equals(operation.m_object, cmp)) {
         return false;
       }
@@ -171,15 +170,16 @@ class GenerationOptimizer final : public Generator<MainContext> {
     }
 
     bool equals(const AbstractOperation &other,
-                const detail::ExportTensorComparator &cmp) const {
+                const IndexSpecificTensorBlockEqualComparator &cmp) const {
       return type() == other.type() && object_equals(other.m_object, cmp);
     }
 
    private:
     Object m_object;
 
-    bool object_equals(const Object &other,
-                       const detail::ExportTensorComparator &cmp) const {
+    bool object_equals(
+        const Object &other,
+        const IndexSpecificTensorBlockEqualComparator &cmp) const {
       if (m_object.index() != other.index()) {
         return false;
       }
@@ -188,8 +188,7 @@ class GenerationOptimizer final : public Generator<MainContext> {
         const Tensor &lhs = std::get<Tensor>(m_object);
         const Tensor &rhs = std::get<Tensor>(other);
 
-        // cmp checks whehter lhs < rhs
-        return !cmp(lhs, rhs) && !cmp(rhs, lhs);
+        return cmp(lhs, rhs);
       }
 
       return std::get<Variable>(m_object) == std::get<Variable>(other);
@@ -490,7 +489,7 @@ class GenerationOptimizer final : public Generator<MainContext> {
   template <typename Iterator>
   static Iterator find_unpaired_allocation(
       Iterator begin, const Iterator end,
-      const detail::ExportTensorComparator &cmp) {
+      const IndexSpecificTensorBlockEqualComparator &cmp) {
     if (begin == end) {
       return begin;
     }
@@ -523,7 +522,7 @@ class GenerationOptimizer final : public Generator<MainContext> {
   }
 
   void process_operation_queue(const MainContext &ctx) {
-    detail::ExportTensorComparator cmp(
+    IndexSpecificTensorBlockEqualComparator cmp(
         ctx.batch_indices(ctx.current_expression_id()));
 
     // If two subsequent elements cancel each other, they can be erased without
@@ -589,7 +588,7 @@ class GenerationOptimizer final : public Generator<MainContext> {
   }
 
   void optimize_operation_cache(const MainContext &ctx) {
-    detail::ExportTensorComparator cmp(
+    IndexSpecificTensorBlockEqualComparator cmp(
         ctx.batch_indices(ctx.current_expression_id()));
 
     std::size_t erased = 0;
@@ -680,7 +679,7 @@ class GenerationOptimizer final : public Generator<MainContext> {
   }
 
   void process_operation_cache(const MainContext &ctx) {
-    [[maybe_unused]] detail::ExportTensorComparator cmp(
+    [[maybe_unused]] IndexSpecificTensorBlockEqualComparator cmp(
         ctx.batch_indices(ctx.current_expression_id()));
 
     SEQUANT_ASSERT(m_queue.empty());

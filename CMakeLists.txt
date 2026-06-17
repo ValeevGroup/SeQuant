@@ -477,8 +477,6 @@ set(SeQuant_export_src
         SeQuant/core/export/julia_tensor_operations.hpp
         SeQuant/core/export/reordering_context.cpp
         SeQuant/core/export/reordering_context.hpp
-        SeQuant/core/export/tensor_comparator.cpp
-        SeQuant/core/export/tensor_comparator.hpp
         SeQuant/core/export/text_generator.hpp
         SeQuant/core/export/utils.hpp
         SeQuant/core/export/utils.cpp

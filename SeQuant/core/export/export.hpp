@@ -9,7 +9,6 @@
 #include <SeQuant/core/export/export_node.hpp>
 #include <SeQuant/core/export/expression_group.hpp>
 #include <SeQuant/core/export/generator.hpp>
-#include <SeQuant/core/export/tensor_comparator.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -38,7 +37,6 @@ struct PreprocessResult {
   std::map<Tensor, UsageSet, TensorBlockLessThanComparator> tensors;
   std::map<Variable, UsageSet> variables;
 
-  // std::map<Tensor, std::size_t, ExportTensorComparator> tensorReferences;
   std::map<Tensor, std::size_t, TensorBlockLessThanComparator> tensorReferences;
   std::map<Variable, std::size_t> variableReferences;
 };
@@ -63,8 +61,9 @@ class GenerationVisitor {
       std::vector<Index> batchIndices =
           m_ctx.batch_indices(m_ctx.current_expression_id());
       if (!batchIndices.empty()) {
-        ExportTensorComparator cmp = m_tensorUses.key_comp();
-        cmp.set_batch_indices(std::move(batchIndices));
+        IndexSpecificTensorBlockLessThanComparator cmp =
+            m_tensorUses.key_comp();
+        cmp.set_indices(std::move(batchIndices));
         m_tensorUses = decltype(m_tensorUses)(std::move(cmp));
       }
     }
@@ -328,7 +327,8 @@ class GenerationVisitor {
   Generator<Context> &m_generator;
   Context &m_ctx;
   const std::unordered_map<NodeID, ExprPtr> &m_scalarFactors;
-  std::map<Tensor, std::size_t, ExportTensorComparator> m_tensorUses;
+  std::map<Tensor, std::size_t, IndexSpecificTensorBlockLessThanComparator>
+      m_tensorUses;
   std::map<Variable, std::size_t> m_variableUses;
 
   std::optional<NodeID> m_rootID;
