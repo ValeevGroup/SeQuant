@@ -10,9 +10,9 @@ class Index;
 class Tensor;
 
 /// Objective function to minimize in single-term and top-level optimize
-/// routines. The `Dense*` models are the current cost estimates, which assume
-/// dense tensors; "Size" (not "Memsize") because operands need not live in
-/// memory (disk, distributed, ...). Leaves room for `Sparse*` models later.
+/// routines. The `Dense*` models assume dense tensors: `DenseFLOPs` counts
+/// floating-point operations, `DenseSize` counts result-tensor storage elements
+/// (summed over intermediates). Leaves room for `Sparse*` models later.
 enum class ObjectiveFunction { DenseFLOPs, DenseSize };
 
 /// Whether to reorder summands so terms with shared intermediates appear
@@ -22,8 +22,7 @@ enum class ReorderSum { Reorder, NoReorder };
 /// Common-subexpression-elimination (CSE) options for single-term
 /// optimization. `subnet` recognizes equivalent subnetworks while searching for
 /// an evaluation order, trading extra search time for potentially lower op
-/// counts. (Room to grow, e.g. a maximum subnet size to consider.) `CSE` is an
-/// initialism.
+/// counts. (Room to grow, e.g. a maximum subnet size to consider.)
 struct CSEOptions {
   bool subnet = false;
 };
