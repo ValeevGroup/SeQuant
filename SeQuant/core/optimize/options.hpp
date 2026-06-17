@@ -65,7 +65,7 @@ struct OptimizeOptions {
   /// on every replay of the network), while persistent (volatile-independent)
   /// contractions are counted once. Conceptually the expected number of
   /// replays. Default 1.0 (no change). Only consulted when is_volatile_leaf is
-  /// non-empty and objective_function == DenseFLOPs.
+  /// non-empty and objective_function == ObjectiveFunction::DenseFLOPs.
   double volatile_weight = 1.0;
 
   /// Per-intermediate memory-footprint penalty added to the single-term
@@ -87,7 +87,8 @@ struct OptimizeOptions {
   /// or avoid materializing such large intermediates (e.g. transforming both
   /// large legs before exposing a shared subtree), trading a controlled amount
   /// of extra FLOPs for a lower peak footprint. Only consulted when
-  /// objective_function == DenseFLOPs; the units are FLOPs-per-element, so a
+  /// objective_function == ObjectiveFunction::DenseFLOPs; the units are
+  /// FLOPs-per-element, so a
   /// useful magnitude is on the order of the contracted-index extent that the
   /// offending intermediate would otherwise leave free.
   double footprint_weight = 0.0;

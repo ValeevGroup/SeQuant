@@ -258,13 +258,14 @@ TEST_CASE("optimize", "[optimize]") {
 
       // weighting flips the chosen factorization
       REQUIRE(res1 != res10);
-      // n_replay=1 reproduces today's behavior: t buried in an inner
+      // volatile_weight=1 reproduces today's behavior: t buried in an inner
       // intermediate
       REQUIRE_FALSE(top_has_bare_t(res1));
-      // n_replay=10: persistent g*g built first, t contracted last
+      // volatile_weight=10: persistent g*g built first, t contracted last
       REQUIRE(top_has_bare_t(res10));
 
-      // empty predicate => weighting off => identical to n_replay=1 regardless
+      // empty predicate => weighting off => identical to volatile_weight=1
+      // regardless
       auto opts_off = base;
       opts_off.volatile_weight = 10;  // ignored: predicate empty
       auto res_off = optimize(ex<Product>(prod), opts_off);
