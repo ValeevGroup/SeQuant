@@ -28,6 +28,12 @@ template <typename TreeNode, bool force_hash_collisions = false>
 class SubexpressionIdentifier {
  public:
   SubexpressionIdentifier() = default;
+  SubexpressionIdentifier(std::vector<Index> indices)
+      : intermediate_hashs(
+            SubexpressionHashCollector<TreeNode, force_hash_collisions>{}
+                .bucket_count(),  // use default bucket count
+            TreeNodeHasher<TreeNode, force_hash_collisions>{},
+            TreeNodeEqualityComparator<TreeNode>(std::move(indices))) {}
 
   bool operator()(const TreeNode &tree) {
     using std::ranges::end;
@@ -49,7 +55,11 @@ class SubexpressionIdentifier {
 
   SubexpressionUsageCounts<TreeNode, force_hash_collisions>
   take_subexpression_map() {
-    SubexpressionUsageCounts<TreeNode, force_hash_collisions> usages;
+    SubexpressionUsageCounts<TreeNode, force_hash_collisions> usages(
+        SubexpressionUsageCounts<TreeNode, force_hash_collisions>{}
+            .bucket_count(),  // use default bucket count
+        intermediate_hashs.hash_function(), intermediate_hashs.key_eq());
+
     for (const auto &[node_ptr, usage_count] : intermediate_hashs) {
       if (usage_count < 2) {
         // Everything that is used less than 2 times is not a common
@@ -229,6 +239,7 @@ struct CSEOptions {
       [](const TreeNode &, std::size_t counter) {
         return std::format("CSE{}", counter);
       };
+  std::vector<Index> batch_indices = {};
 };
 
 /// Takes the range of expression trees and performs common subexpression
@@ -253,7 +264,8 @@ std::vector<std::size_t> eliminate_common_subexpressions(
 
   using TreeNode = std::ranges::range_value_t<VectorLike>;
 
-  cse::SubexpressionIdentifier<TreeNode, force_hash_collisions> identifier;
+  cse::SubexpressionIdentifier<TreeNode, force_hash_collisions> identifier(
+      opts.batch_indices);
 
   for (const TreeNode &current : expr_trees) {
     current.visit_internal(identifier);
