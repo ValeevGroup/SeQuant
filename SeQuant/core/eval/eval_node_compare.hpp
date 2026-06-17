@@ -4,6 +4,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
+#include <SeQuant/external/bliss/graph.hh>
 
 #include <cstddef>
 #include <unordered_map>
