@@ -497,31 +497,6 @@ void generateITF(const json &blocks, std::string_view out_file,
                 opts);
 
         if (!opts.batch_indices.empty()) {
-          // Sort by how many of the batched indices are contained in any given
-          // expression
-          std::ranges::stable_sort(
-              current_buff,
-              [&opts](const ExportNode<> &lhs, const ExportNode<> &rhs) {
-                if (!lhs->is_tensor() || !rhs->is_tensor()) {
-                  return rhs->is_tensor();
-                }
-                auto lhs_indices = lhs->as_tensor().const_indices();
-                auto rhs_indices = rhs->as_tensor().const_indices();
-
-                for (const Index &idx :
-                     opts.batch_indices | std::ranges::views::reverse) {
-                  const bool lhs_contains =
-                      std::ranges::find(lhs_indices, idx) != lhs_indices.end();
-                  const bool rhs_contains =
-                      std::ranges::find(rhs_indices, idx) != rhs_indices.end();
-
-                  if (lhs_contains != rhs_contains) {
-                    return rhs_contains;
-                  }
-                }
-                return false;
-              });
-
           // Configure batching indices for determined CSEs
           for (std::size_t pos : cse_positions) {
             const ExportNode<> &node = current_buff.at(pos);
@@ -545,6 +520,39 @@ void generateITF(const json &blocks, std::string_view out_file,
 
             context.set_batch_indices(std::move(indices), node->id());
           }
+
+          // Sort by how many of the batched indices are contained in any given
+          // expression
+          // Since all non-CSEs are chose to have the same batching indices,
+          // their relative order remains unchanged. And since CSEs can't depend
+          // on each other (due to the way we determine them), their order is
+          // irrelevant as long as they are computed before they are used, which
+          // is guaranteed because the CSE can at most have as many batched
+          // indices as the associated main expression and hence they compare
+          // equivalent with the used comparator (and stable_sort guarantees
+          // retained relative order of equivalent elements).
+          std::ranges::stable_sort(
+              current_buff,
+              [&opts](const ExportNode<> &lhs, const ExportNode<> &rhs) {
+                if (!lhs->is_tensor() || !rhs->is_tensor()) {
+                  return rhs->is_tensor();
+                }
+                auto lhs_indices = lhs->as_tensor().const_indices();
+                auto rhs_indices = rhs->as_tensor().const_indices();
+
+                for (const Index &idx :
+                     opts.batch_indices | std::ranges::views::reverse) {
+                  const bool lhs_contains =
+                      std::ranges::find(lhs_indices, idx) != lhs_indices.end();
+                  const bool rhs_contains =
+                      std::ranges::find(rhs_indices, idx) != rhs_indices.end();
+
+                  if (lhs_contains != rhs_contains) {
+                    return rhs_contains;
+                  }
+                }
+                return false;
+              });
         }
 
         results.insert(results.end(),
