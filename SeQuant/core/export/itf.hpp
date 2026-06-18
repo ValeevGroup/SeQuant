@@ -406,8 +406,7 @@ class ItfGenerator : public Generator<Context> {
     if (!m_currentBatchIndices.empty()) {
       m_currentBatchIndices.clear();
       SEQUANT_ASSERT(m_indent_level > 0);
-      m_indent_level -= 1;
-      SEQUANT_ASSERT(m_indent_level == 0);
+      m_indent_level = 0;
     }
 
     append_line();
@@ -424,16 +423,29 @@ class ItfGenerator : public Generator<Context> {
       std::vector<Index> batchIndices =
           ctx.batch_indices(ctx.current_expression_id());
 
-      if (batchIndices == m_currentBatchIndices) {
+      std::size_t num_shared = 0;
+      for (std::size_t i = 0;
+           i < std::min(m_currentBatchIndices.size(), batchIndices.size());
+           ++i) {
+        if (batchIndices[i] != m_currentBatchIndices[i]) {
+          break;
+        }
+        ++num_shared;
+      }
+
+      if (num_shared == m_currentBatchIndices.size()) {
         // "Reuse" previously started batch loop
-        return;
-      } else if (!m_currentBatchIndices.empty()) {
+        if (batchIndices.size() == num_shared) {
+          return;
+        }
+      } else {
+        // Drop previous loop and start a fresh one
         SEQUANT_ASSERT(m_indent_level > 0);
-        m_indent_level -= 1;
+        m_indent_level = 0;
       }
 
       append("for [");
-      for (std::size_t i = 0; i < batchIndices.size(); ++i) {
+      for (std::size_t i = num_shared; i < batchIndices.size(); ++i) {
         append(represent(batchIndices[i], ctx));
         if (i + 1 < batchIndices.size()) {
           append(", ");
@@ -445,7 +457,7 @@ class ItfGenerator : public Generator<Context> {
     } else if (!m_currentBatchIndices.empty()) {
       m_currentBatchIndices.clear();
       SEQUANT_ASSERT(m_indent_level > 0);
-      m_indent_level -= 1;
+      m_indent_level = 0;
     }
   }
 
@@ -457,8 +469,7 @@ class ItfGenerator : public Generator<Context> {
     if (!m_currentBatchIndices.empty()) {
       m_currentBatchIndices.clear();
       SEQUANT_ASSERT(m_indent_level > 0);
-      m_indent_level -= 1;
-      SEQUANT_ASSERT(m_indent_level == 0);
+      m_indent_level = 0;
     }
 
     append_line("---- end");
