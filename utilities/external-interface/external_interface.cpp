@@ -540,8 +540,7 @@ void generateITF(const json &blocks, std::string_view out_file,
                 auto lhs_indices = lhs->as_tensor().const_indices();
                 auto rhs_indices = rhs->as_tensor().const_indices();
 
-                for (const Index &idx :
-                     opts.batch_indices | std::ranges::views::reverse) {
+                for (const Index &idx : opts.batch_indices) {
                   const bool lhs_contains =
                       std::ranges::find(lhs_indices, idx) != lhs_indices.end();
                   const bool rhs_contains =
