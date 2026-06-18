@@ -1,10 +1,12 @@
 #include <SeQuant/version.hpp>
 
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/timer.hpp>
@@ -262,16 +264,80 @@ class compute_eomcc_closedshell_triplet {
                    << sector_generic_diff->size() << L" terms\n";
       }
 
-      // ----- triplet: first − last with triplet_R (matches production) ----
+      // ----- triplet: explicitly spin-coupled basis (Hattig/Kohn/Hald) -----
+      // the T (x) E coupled manifold is implemented through doubles only;
+      // higher-rank amplitudes/projections (N > 2) would require the triples
+      // coupling T (x) E (x) E
+      if (N > 2 || ext_groups.size() > 2) {
+        std::wcout << "R[" << i
+                   << "] triplet: skipped (explicitly spin-coupled triplet "
+                      "manifold implemented through doubles only)\n";
+        cs_st_eom[i] = nullptr;
+        continue;
+      }
+
+      // V_mu = sum over external spin sectors weighted by the sign of the
+      // spin of external group 0 (the line carrying T = E(alpha) - E(beta))
       auto triplet_sectors =
           spintrace_by_sector(eqvec[i], ext_groups, /*triplet_R=*/true);
-      ExprPtr T_diag = triplet_sectors.front().second->clone() -
-                       triplet_sectors.back().second->clone();
-      canonicalize(T_diag);
-      simplify(T_diag);
-      T_diag = biorthogonal_transform_pre_nnsproject(T_diag, ext_idxs);
+      auto V_sum = std::make_shared<Sum>();
+      for (size_t sc = 0; sc < triplet_sectors.size(); ++sc) {
+        auto sector = triplet_sectors[sc].second->clone();
+        if (sc & 1u) sector = ex<Constant>(-1) * sector;
+        V_sum->append(sector);
+      }
+      ExprPtr V = V_sum;
+      canonicalize(V);
+      simplify(V);
+
+      auto term_count = [](const ExprPtr& e) -> size_t {
+        if (e->is<Constant>()) return e->as<Constant>().value() == 0 ? 0 : 1;
+        if (e->is<Sum>()) return e->size();
+        return 1;
+      };
+
+      ExprPtr T_ref;
+      if (ext_groups.size() == 1) {
+        // singles: the rank-1 biorthogonal coefficient (1/2) coincides with
+        // the singlet one
+        T_ref = biorthogonal_transform_pre_nnsproject(V, ext_idxs);
+      } else {
+        // doubles: verify the 4-primitive projection null identity, then
+        // assemble the paper-native combined R2 residual (Eqs. 7-8, 1/8):
+        //   V^{(1)} = (1/8)(V + V_{pair-swap}), V^{(2)} = (1/8)(V -
+        //   V_{pair-swap}), Omega = (1/2) V^{(1)} + V^{(2)} = (3V -
+        //   V_{pair-swap})/16
+        const auto& g0 = ext_idxs.at(0);
+        const auto& g1 = ext_idxs.at(1);
+        const Index b0 = get_bra_idx(g0);
+        const Index b1 = get_bra_idx(g1);
+        const Index k0 = get_ket_idx(g0);
+        const Index k1 = get_ket_idx(g1);
+        const container::map<Index, Index> swap_pair{
+            {b0, b1}, {b1, b0}, {k0, k1}, {k1, k0}};
+        const container::map<Index, Index> swap_bra{{b0, b1}, {b1, b0}};
+        const container::map<Index, Index> swap_ket{{k0, k1}, {k1, k0}};
+
+        ExprPtr V_ps = transform_expr(V, swap_pair);
+
+        ExprPtr null_check = V->clone() + V_ps->clone() +
+                             transform_expr(V, swap_bra) +
+                             transform_expr(V, swap_ket);
+        canonicalize(null_check);
+        simplify(null_check);
+        std::wcout << "R[" << i
+                   << "] triplet null-space identity (V + V_ps + V_bs + "
+                      "V_ks): "
+                   << term_count(null_check) << " terms (expect 0)\n";
+        runtime_assert(term_count(null_check) == 0);
+
+        ExprPtr V_ch1 = ex<Constant>(ratio(1, 8)) * (V + V_ps);
+        ExprPtr V_ch2 = ex<Constant>(ratio(1, 8)) * (V - V_ps);
+        T_ref = ex<Constant>(ratio(1, 2)) * V_ch1 + V_ch2;
+      }
+      simplify(T_ref);
       std::wcout << "R[" << i
-                 << "] triplet (triplet_R, first - last): " << T_diag->size()
+                 << "] triplet (reference assembly): " << term_count(T_ref)
                  << " terms\n";
 
       try {
@@ -281,15 +347,16 @@ class compute_eomcc_closedshell_triplet {
         const auto tstop = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> dt = tstop - tstart;
 
-        ExprPtr T_diff = st - T_diag;
+        ExprPtr T_diff = st - T_ref;
         canonicalize(T_diff);
         simplify(T_diff);
         std::wcout << "R[" << i
                    << "] closed_shell_EOM_triplet_spintrace: " << st->size()
                    << " terms, time: " << dt.count() << " s\n";
         std::wcout << "R[" << i
-                   << "] (production triplet) - (diag first-last): "
-                   << T_diff->size() << " terms\n";
+                   << "] (production triplet) - (reference assembly): "
+                   << term_count(T_diff) << " terms (expect 0)\n";
+        runtime_assert(term_count(T_diff) == 0);
 
         if (print) {
           // std::wcout << "\n open-shell singlet sum:\n"
