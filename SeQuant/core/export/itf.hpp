@@ -457,6 +457,7 @@ class ItfGenerator : public Generator<Context> {
         // Drop previous loop and start a fresh one
         SEQUANT_ASSERT(m_currentBatchIndices.empty() || m_indent_level > 0);
         m_indent_level = 0;
+        num_shared = 0;
       }
 
       append("for [");
