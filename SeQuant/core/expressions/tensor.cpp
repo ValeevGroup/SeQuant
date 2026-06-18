@@ -23,18 +23,18 @@ void Tensor::assert_nonreserved_label(
 }
 
 void Tensor::adjoint() {
-  std::swap(bra_.value(), ket_.value());
+  // _swap_bra_ket() swaps bra<->ket *and* the derived net ranks, then
+  // re-canonicalizes slots (needed when empty slots are present) and resets the
+  // hash; a bare std::swap of the index containers would leave the net ranks
+  // and slot order inconsistent
+  _swap_bra_ket();
 
-  // only track adjointness for BraKetSymmetry::Nonsymm cases
+  // adjointness is tracked solely by the label marker, for Nonsymm braket
   if (braket_symmetry() == BraKetSymmetry::Nonsymm) {
-    if (label_.back() == sequant::adjoint_label) {
-      SEQUANT_ASSERT(is_adjoint_);
+    if (!label_.empty() && label_.back() == sequant::adjoint_label)
       label_.pop_back();
-    } else {
-      SEQUANT_ASSERT(!is_adjoint_);
+    else
       label_.push_back(sequant::adjoint_label);
-    }
-    is_adjoint_ = !is_adjoint_;
   }
 
   reset_hash_value();

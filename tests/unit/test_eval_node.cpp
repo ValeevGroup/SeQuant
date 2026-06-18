@@ -6,12 +6,15 @@
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index_space_registry.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <initializer_list>
 #include <memory>
@@ -48,6 +51,37 @@ sequant::EvalExpr node(sequant::EvalNode<sequant::EvalExpr> const& n,
 [[maybe_unused]] std::wstring tikz(
     sequant::EvalNode<sequant::EvalExpr> const& n) noexcept {
   return n.tikz([](auto&& n) { return L"$" + n->expr()->to_latex() + L"$"; });
+}
+
+// Build an IndexSpace-keyed ExponentMap over the SR test registry's hole
+// ("i") and particle ("a") spaces, matching the spaces that
+// `detail::space_counts` reads off the corresponding indices.
+sequant::AsyCost::ExponentMap occ_virt_map(std::size_t nocc,
+                                           std::size_t nvirt) {
+  auto const& isr = *sequant::get_default_context().index_space_registry();
+  sequant::AsyCost::ExponentMap m;
+  if (nocc > 0) m.emplace(isr.retrieve(L"i"), nocc);
+  if (nvirt > 0) m.emplace(isr.retrieve(L"a"), nvirt);
+  return m;
+}
+
+sequant::AsyCost occ_virt_cost(std::size_t nocc, std::size_t nvirt) {
+  return sequant::AsyCost{occ_virt_map(nocc, nvirt)};
+}
+
+sequant::AsyCost occ_virt_cost(sequant::rational c, std::size_t nocc,
+                               std::size_t nvirt) {
+  return sequant::AsyCost{occ_virt_map(nocc, nvirt), c};
+}
+
+// Like occ_virt_map, but also accounts for the density-fitting auxiliary space
+// ("Κ", added to the registry by mbpt::add_df_spaces).
+sequant::AsyCost occ_virt_aux_cost(sequant::rational c, std::size_t nocc,
+                                   std::size_t nvirt, std::size_t naux) {
+  auto const& isr = *sequant::get_default_context().index_space_registry();
+  auto m = occ_virt_map(nocc, nvirt);
+  if (naux > 0) m.emplace(isr.retrieve(L"Κ"), naux);
+  return sequant::AsyCost{m, c};
 }
 
 }  // namespace
@@ -242,20 +276,20 @@ TEST_CASE("eval_node", "[EvalNode]") {
     auto asy_cost_single_node = FlopsWithSymm{};
     auto const p1 =
         parse_expr_antisymm(L"g_{i2, a1}^{a2, a3} * t_{a2, a3}^{i1, i2}");
-    REQUIRE(asy_cost_single_node(eval_node(p1)) == AsyCost{2, 2, 3});
+    REQUIRE(asy_cost_single_node(eval_node(p1)) == occ_virt_cost(2, 2, 3));
 
     auto const p2 = parse_expr_antisymm(
         L"g_{i2,i3}^{a2,a3} * t_{a2}^{i1} * t_{a1,a3}^{i2,i3}");
     auto const n2 = eval_node(p2);
 
-    REQUIRE(asy_cost_single_node(n2) == AsyCost{2, 3, 2});
-    REQUIRE(asy_cost_single_node(n2.left()) == AsyCost{2, 3, 2});
+    REQUIRE(asy_cost_single_node(n2) == occ_virt_cost(2, 3, 2));
+    REQUIRE(asy_cost_single_node(n2.left()) == occ_virt_cost(2, 3, 2));
 
     auto const p3 =
         parse_expr_antisymm(L"g_{i2,i3}^{i1,a2} * t_{a2}^{i2} * t_{a1}^{i3}");
     auto const n3 = eval_node(p3);
-    REQUIRE(asy_cost_single_node(n3) == AsyCost{2, 2, 1});
-    REQUIRE(asy_cost_single_node(n3.left()) == AsyCost{2, 3, 1});
+    REQUIRE(asy_cost_single_node(n3) == occ_virt_cost(2, 2, 1));
+    REQUIRE(asy_cost_single_node(n3.left()) == occ_virt_cost(2, 3, 1));
   }
 
   SECTION("asy_cost") {
@@ -264,25 +298,25 @@ TEST_CASE("eval_node", "[EvalNode]") {
     };
     auto const p1 =
         parse_expr_antisymm(L"g_{i2, a1}^{a2, a3} * t_{a2, a3}^{i1, i2}");
-    REQUIRE(asy_cost(eval_node(p1)) == AsyCost{2, 2, 3});
+    REQUIRE(asy_cost(eval_node(p1)) == occ_virt_cost(2, 2, 3));
 
     auto const p2 = parse_expr_antisymm(
         L"g_{i2,i3}^{a2,a3} * t_{a2}^{i1} * t_{a1,a3}^{i2,i3}");
 
     auto const np2 = eval_node(p2);
-    REQUIRE(asy_cost(np2) == AsyCost{2, 3, 2} + AsyCost{2, 3, 2});
+    REQUIRE(asy_cost(np2) == occ_virt_cost(2, 3, 2) + occ_virt_cost(2, 3, 2));
 
     auto const p3 =
         parse_expr_antisymm(L"g_{i2,i3}^{i1,a2} * t_{a2}^{i2} * t_{a1}^{i3}");
     auto const np3 = eval_node(p3);
-    REQUIRE(asy_cost(np3) == AsyCost{2, 2, 1} + AsyCost{2, 3, 1});
+    REQUIRE(asy_cost(np3) == occ_virt_cost(2, 2, 1) + occ_virt_cost(2, 3, 1));
 
     // full contraction to scalar: cc energy-like expression
     auto const p_e = parse_expr_antisymm(
         L"f_{i1}^{a1} * t_{a1}^{i1} + g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i1,i2}");
     auto const n_e = eval_node(p_e);
     REQUIRE(n_e->is_scalar());
-    REQUIRE(asy_cost(n_e) == 2 * AsyCost{2, 2} + 2 * AsyCost{1, 1});
+    REQUIRE(asy_cost(n_e) == 2 * occ_virt_cost(2, 2) + 2 * occ_virt_cost(1, 1));
 
 #if 0
     auto const s1 =
@@ -324,6 +358,77 @@ TEST_CASE("eval_node", "[EvalNode]") {
     auto const np8 = eval_node(p8);
     REQUIRE(asy_cost(np8) == AsyCost{2, 2, 4});  // 2 * O^2V^4
 #endif
+
+    SECTION("PPL and density-fitting") {
+      // AsyCost on parsed coupled-cluster expressions, using the plain Flops
+      // metric
+      auto isr = mbpt::make_min_sr_spaces();
+      mbpt::add_df_spaces(isr);
+      auto _ =
+          set_scoped_default_context({.index_space_registry_shared_ptr = isr,
+                                      .vacuum = Vacuum::SingleProduct,
+                                      .spbasis = SPBasis::Spinor});
+
+      // The particle-particle ladder term
+      auto const ppl = deserialize(L"g{a3,a4;a1,a2} t{a1,a2;i1,i2}");
+      REQUIRE(sequant::asy_cost(eval_node(ppl)) ==
+              occ_virt_aux_cost(2, 2, 4, 0));
+      REQUIRE(sequant::asy_cost(eval_node(ppl)) == occ_virt_cost(2, 2, 4));
+
+      // Density-fitting splits the rank-4 integral into two rank-3 factors
+      // sharing an auxiliary index, g{a3,a4;a1,a2} -> B{a3;a1;Κ} B{a4;a2;Κ}.
+      // (B{a4;a2;Κ} t{a1,a2;i1,i2}) B{a3;a1;Κ}.
+      auto const pp_ladder_df =
+          deserialize(L"(B{a4;a2;Κ_1} t{a1,a2;i1,i2}) B{a3;a1;Κ_1}");
+      REQUIRE(sequant::asy_cost(eval_node(pp_ladder_df)) ==
+              occ_virt_aux_cost(4, 2, 3, 1));
+    }
+
+    SECTION("batched index") {
+      auto isr = mbpt::make_min_sr_spaces();
+      mbpt::add_batching_spaces(isr);
+      auto _ =
+          set_scoped_default_context({.index_space_registry_shared_ptr = isr,
+                                      .vacuum = Vacuum::SingleProduct,
+                                      .spbasis = SPBasis::Spinor});
+      auto const& reg = *get_default_context().index_space_registry();
+      auto const a = reg.retrieve(L"a");
+      auto const z = reg.retrieve(L"z");
+
+      // A batched index appears in left, right, AND result: it is neither
+      // summed over (like a contracted index) nor unique to one operand (like
+      // an external index). `R{a1;a2;z1} = A{a1;a3;z1} B{a3;a2;z1}` is, for
+      // each fixed z1, the matmul A(a1,a3)·B(a3,a2) -> R(a1,a2) at cost a^3 (a3
+      // is the contracted index); repeating it for every value of z1 multiplies
+      // the cost by |z|. Total: a^3 · z^1. The leading 2 is the per-element
+      // flop count (one multiply + one add).
+      auto const e1 = binarize(
+          deserialize<ResultExpr>(L"R{a1;a2;z1} = A{a1;a3;z1} B{a3;a2;z1}"));
+      REQUIRE(sequant::asy_cost(e1) ==
+              AsyCost{AsyCost::ExponentMap{{a, 3}, {z, 1}}, 2});
+
+      // Two batched indices z1,z2 (both in space z): the a^3 matmul is repeated
+      // for every (z1,z2) pair, so the cost scales as a^3 · z^2.
+      auto const e2 = binarize(deserialize<ResultExpr>(
+          L"R{a1;a2;z1,z2} = A{a1;a3;z1,z2} B{a3;a2;z1,z2}"));
+      REQUIRE(sequant::asy_cost(e2) ==
+              AsyCost{AsyCost::ExponentMap{{a, 3}, {z, 2}}, 2});
+    }
+
+    SECTION("MRCC like example") {
+      auto isr = mbpt::make_min_mr_spaces();
+      auto _ =
+          set_scoped_default_context({.index_space_registry_shared_ptr = isr,
+                                      .vacuum = Vacuum::SingleProduct,
+                                      .spbasis = SPBasis::Spinor});
+      auto const& reg = *get_default_context().index_space_registry();
+      auto const u = reg.retrieve(L"u");  // active
+      auto const a = reg.retrieve(L"a");  // virtual
+
+      auto const n = eval_node(deserialize(L"g{u1,u2;a1,a2} t{a1,a2;u3,u4}"));
+      REQUIRE(sequant::asy_cost(n) ==
+              AsyCost{AsyCost::ExponentMap{{u, 4}, {a, 2}}, 2});  // 2 * u^4 a^2
+    }
   }
 
   SECTION("minimum storage") {
@@ -337,10 +442,12 @@ TEST_CASE("eval_node", "[EvalNode]") {
     // - scaling of I requires OV + OV = 2 * OV.
     // The maximum of the two steps is OV^3 + O^2V^2 + OV, which is the minimum
     // storage requirement.
-    REQUIRE(min_storage(n1) == AsyCost{1, 3} + AsyCost{2, 2} + AsyCost{1, 1});
+    REQUIRE(min_storage(n1) ==
+            occ_virt_cost(1, 3) + occ_virt_cost(2, 2) + occ_virt_cost(1, 1));
 
     auto p2 = deserialize(L"1/2 * (g{a1,a2; a3,a4} t{a3;i1}) t{a4;i2}");
     auto const n2 = eval_node(p2);
-    REQUIRE(min_storage(n2) == AsyCost{0, 4} + AsyCost{1, 3} + AsyCost{1, 1});
+    REQUIRE(min_storage(n2) ==
+            occ_virt_cost(0, 4) + occ_virt_cost(1, 3) + occ_virt_cost(1, 1));
   }
 }

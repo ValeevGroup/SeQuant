@@ -160,16 +160,19 @@ void Operator<QuantumNumbers, S>::adjoint() {
   const auto saved_order = this->order_;
   const auto saved_batch_ordinals = this->batch_ordinals_;
 
-  const auto tnsr = this->tensor_form();
-  *this =
-      Operator{[=]() -> std::wstring_view { return lbl; },  // label_generator
-               [=]() -> ExprPtr {
-                 return sequant::adjoint(tnsr);  // tensor_form_generator
-               },
-               [=](qnc_t& qn) {
-                 qn += sequant::adjoint(dN);
-                 return qn;  // qn_action
-               }};
+  // capture the current tensor-form generator so that each call regenerates
+  // fresh dummy indices; otherwise using this adjoint operator more than once
+  // would yield tensors that have the same indices.
+  auto base_tensor_form = this->tensor_form_generator_;
+  *this = Operator{
+      [=]() -> std::wstring_view { return lbl; },  // label_generator
+      [=]() -> ExprPtr {
+        return sequant::adjoint(base_tensor_form());  // tensor_form_generator
+      },
+      [=](qnc_t& qn) {
+        qn += sequant::adjoint(dN);
+        return qn;  // qn_action
+      }};
   this->is_adjoint_ = !this->is_adjoint_;  // toggle adjoint flag
 
   // restore original order and batch_ordinals

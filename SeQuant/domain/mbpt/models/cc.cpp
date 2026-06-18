@@ -57,6 +57,8 @@ bool CC::unitary() const {
   return ansatz_ == Ansatz::U || ansatz_ == Ansatz::oU;
 }
 
+std::optional<size_t> CC::hbar_comm_rank() const { return hbar_comm_rank_; }
+
 bool CC::skip_singles() const { return skip_singles_; }
 
 bool CC::screen() const { return screen_; }
@@ -69,7 +71,16 @@ ExprPtr CC::hbar(std::optional<size_t> truncation_rank) const {
                    {.unitary = unitary()});
 }
 
-std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) {
+ExprPtr CC::energy(std::optional<size_t> comm_rank) const {
+  // <0|H̄|0>: reference expectation value of H̄ at the requested commutator
+  // truncation. No projector ⇒ this is the energy. ref_av applies the
+  // connectivity (empty for unitary, default otherwise).
+  return this->unitary() ? this->ref_av(this->hbar(comm_rank),
+                                        mbpt::OpConnections<std::wstring>{})
+                         : this->ref_av(this->hbar(comm_rank));
+}
+
+std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) const {
   pmax = (pmax == std::numeric_limits<size_t>::max() ? N : pmax);
   SEQUANT_ASSERT(pmax >= pmin && "pmax should be >= pmin");
 
@@ -121,7 +132,7 @@ std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) {
   return result;
 }
 
-std::vector<ExprPtr> CC::λ() {
+std::vector<ExprPtr> CC::λ() const {
   SEQUANT_ASSERT(!unitary() && "there is no need for CC::λ for unitary ansatz");
 
   // construct hbar
@@ -139,8 +150,17 @@ std::vector<ExprPtr> CC::λ() {
                                                             {L"f", symm},
                                                             {L"g", symm}});
 
-  // 2. project onto each manifold, screen, lower to tensor form and wick it
   std::vector<ExprPtr> result(N + 1);
+
+  // element 0: λ pseudoenergy, computed as the CC energy with T → Λ⁺.
+  {
+    const auto hbar_λ =
+        mbpt::lst(H(), adjoint(Λ(N, skip_singles())), commutator_rank);
+    result.at(0) = this->ref_av(
+        hbar_λ, {{L"h", L"λ⁺"}, {L"f", L"λ⁺"}, {L"f̃", L"λ⁺"}, {L"g", L"λ⁺"}});
+  }
+
+  // 2. project onto each manifold, screen, lower to tensor form and wick it
   for (auto p = N; p >= 1; --p) {
     // 2.a. screen out terms that cannot give nonzero after projection onto
     // <P|
@@ -179,7 +199,7 @@ std::vector<ExprPtr> CC::λ() {
 }
 
 std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
-                            std::optional<size_t> nbatch) {
+                            std::optional<size_t> nbatch) const {
   SEQUANT_ASSERT(order == 1 &&
                  "sequant::mbpt::CC::tʼ(): only first-order perturbation is "
                  "supported now");
@@ -243,7 +263,7 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
 }
 
 std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
-                            std::optional<size_t> nbatch) {
+                            std::optional<size_t> nbatch) const {
   SEQUANT_ASSERT(order == 1 &&
                  "sequant::mbpt::CC::λʼ(): only first-order perturbation is "
                  "supported now");
@@ -302,7 +322,7 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
   return result;
 }
 
-std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
+std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) const {
   SEQUANT_ASSERT((np > 0 || nh > 0) && "Unsupported excitation order");
   if (np != nh)
     SEQUANT_ASSERT(
@@ -352,7 +372,7 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
   return result;
 }
 
-std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) {
+std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) const {
   SEQUANT_ASSERT(!unitary() &&
                  "there is no need for CC::eom_l for unitary ansatz");
   SEQUANT_ASSERT((np > 0 || nh > 0) && "Unsupported excitation order");

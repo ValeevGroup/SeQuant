@@ -206,6 +206,15 @@ class GenerationVisitor {
         // Instead hand the code generator the bare-leaf operand (node.left()),
         // whose bra/ket order is swapped relative to the result — that index
         // reordering is exactly the transpose the adjoint must materialize.
+        //
+        // LIMITATION (real-field only): this emits the conjugate-*transpose*
+        // minus the conjugation — only the index permutation is exported, not
+        // the elementwise conj. For a real scalar field conj is the identity so
+        // the exported code is exact; for a complex field it is incomplete. The
+        // exported-expression IR has no conjugation node to carry that
+        // operation yet (the eval-path backends apply conj directly in
+        // Result::adjoint()). Adding complex-correct export requires
+        // representing conj in the generated IR — tracked separately.
         expressions.push_back(node.left()->expr());
         break;
       case EvalOp::Sum: {

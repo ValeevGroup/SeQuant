@@ -31,7 +31,41 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
       }
 
     }  // SECTION("t")
+
+    SECTION("λ") {
+      SECTION("CCSD λ") {
+        const auto N = 2;
+        auto cc = CC{N};
+        auto λ_eqs = cc.λ();
+        REQUIRE(λ_eqs.size() == N + 1);
+        // element 0 is the λ pseudoenergy: the CC energy with T → Λ⁺, i.e. the
+        // CC energy expression with the cluster amplitudes replaced by Λ⁺
+        REQUIRE_THAT(λ_eqs[0],
+                     EquivalentTo(L"f{i_1;a_1}:A-C-S λ⁺{a_1;i_1}:A-N-S "
+                                  L"+ 1/4 g{i_1,i_2;a_1,a_2}:A-C-S "
+                                  L"λ⁺{a_1,a_2;i_1,i_2}:A-N-S "
+                                  L"+ 1/2 g{i_1,i_2;a_1,a_2}:A-C-S "
+                                  L"λ⁺{a_1;i_1}:A-N-S λ⁺{a_2;i_2}:A-N-S"));
+      }
+    }  // SECTION("λ")
   }
+
+  SECTION("energy") {
+    // CC::energy() must equal the p==0 element of CC::t() for both ansätze.
+    const auto N = 2;
+    SECTION("TCC energy == t()[0]") {
+      REQUIRE_THAT(CC{N}.energy(), EquivalentTo(CC{N}.t().at(0)));
+    }
+    SECTION("UCC energy == t()[0]") {
+      const CC::Options opts{.ansatz = CC::Ansatz::U, .hbar_comm_rank = 2};
+      REQUIRE_THAT(CC(N, opts).energy(), EquivalentTo(CC(N, opts).t().at(0)));
+      // explicit rank override matches an engine built at that rank
+      REQUIRE_THAT(
+          CC(N, opts).energy(3),
+          EquivalentTo(
+              CC(N, {.ansatz = CC::Ansatz::U, .hbar_comm_rank = 3}).t().at(0)));
+    }
+  }  // SECTION("energy")
 
   SECTION("eom_cc"){SECTION("EOM-CCSD"){const auto N = 2;
   auto cc = CC{N};

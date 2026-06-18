@@ -156,12 +156,12 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
 
   void load(const Tensor &tensor, bool set_to_zero,
             const Context &ctx) override {
-    m_generated += tensor_name(tensor, ctx);
-    m_generated += " = ";
-
     if (!set_to_zero) {
+      m_generated += tensor_name(tensor, ctx);
+      m_generated += " = ";
       m_generated += "deserialize(\"" + tensor_name(tensor, ctx) + ".jlbin\")";
     } else {
+      // zero_initialization already emits "<name> = zeros(...)"
       m_generated += zero_initialization(tensor, ctx);
     }
 

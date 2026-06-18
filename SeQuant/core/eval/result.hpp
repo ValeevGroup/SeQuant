@@ -24,14 +24,17 @@
 
 namespace sequant {
 
-namespace {
+// implementation details of the eval Result layer; prefer sequant::detail over
+// an unnamed namespace in a header (see CppCoreGuidelines SF.21 / "Use unnamed
+// namespaces in headers ... no" guidance)
+namespace detail {
 
-[[maybe_unused]] std::logic_error invalid_operand(
+[[maybe_unused]] inline std::logic_error invalid_operand(
     std::string_view msg = "Invalid operand for binary op") noexcept {
   return std::logic_error{msg.data()};
 }
 
-[[maybe_unused]] std::logic_error unimplemented_method(
+[[maybe_unused]] inline std::logic_error unimplemented_method(
     std::string_view msg) noexcept {
   using namespace std::string_literals;
   return std::logic_error{"Not implemented in this derived class: "s +
@@ -176,7 +179,7 @@ inline void log_constant(Args const&... args) noexcept {
   log_result("[CONST] ", args...);
 }
 
-}  // namespace
+}  // namespace detail
 
 /******************************************************************************/
 
@@ -289,7 +292,7 @@ class Result {
   ///
   [[nodiscard]] virtual ResultPtr adjoint(
       std::array<std::any, 2> const& /*ann*/) const {
-    throw unimplemented_method("adjoint");
+    throw detail::unimplemented_method("adjoint");
   }
 
   ///
@@ -307,7 +310,7 @@ class Result {
   [[nodiscard]] virtual ResultPtr slice_mode(std::size_t /*mode*/,
                                              std::size_t /*elem_lo*/,
                                              std::size_t /*elem_hi*/) const {
-    throw unimplemented_method("slice_mode");
+    throw detail::unimplemented_method("slice_mode");
   }
 
   ///
@@ -326,7 +329,7 @@ class Result {
   ///
   [[nodiscard]] virtual container::svector<std::pair<std::size_t, std::size_t>>
   mode_batches(std::size_t /*mode*/, std::size_t /*target_batch_size*/) const {
-    throw unimplemented_method("mode_batches");
+    throw detail::unimplemented_method("mode_batches");
   }
 
   ///
@@ -410,11 +413,11 @@ class ResultScalar final : public Result {
       auto const& o = other.as<ResultScalar<T>>();
       auto s = value() + o.value();
 
-      log_constant(value(), " + ", o.value(), " = ", s, "\n");
+      detail::log_constant(value(), " + ", o.value(), " = ", s, "\n");
 
       return eval_result<ResultScalar<T>>(s);
     } else {
-      throw invalid_operand();
+      throw detail::invalid_operand();
     }
   }
 
@@ -425,7 +428,7 @@ class ResultScalar final : public Result {
       auto const& o = other.as<ResultScalar<T>>();
       auto p = value() * o.value();
 
-      log_constant(value(), " * ", o.value(), " = ", p, "\n");
+      detail::log_constant(value(), " * ", o.value(), " = ", p, "\n");
 
       return eval_result<ResultScalar<T>>(value() * o.value());
     } else {
@@ -437,22 +440,22 @@ class ResultScalar final : public Result {
 
   [[nodiscard]] ResultPtr permute(
       std::array<std::any, 2> const&) const override {
-    throw unimplemented_method("permute");
+    throw detail::unimplemented_method("permute");
   }
 
   void add_inplace(Result const& other) override {
     SEQUANT_ASSERT(other.is<ResultScalar<T>>());
-    log_constant(value(), " += ", other.get<T>(), "\n");
+    detail::log_constant(value(), " += ", other.get<T>(), "\n");
     auto& val = get<T>();
     val += other.get<T>();
   }
 
   [[nodiscard]] ResultPtr symmetrize() const override {
-    throw unimplemented_method("symmetrize");
+    throw detail::unimplemented_method("symmetrize");
   }
 
   [[nodiscard]] ResultPtr antisymmetrize(size_t /*bra_rank*/) const override {
-    throw unimplemented_method("antisymmetrize");
+    throw detail::unimplemented_method("antisymmetrize");
   }
 
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {

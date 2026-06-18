@@ -284,23 +284,27 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
 
   TA::DistArray<Args...> result;
 
-  perm_t perm = iota(size_t{0}, rank) | ranges::to<perm_t>;
-  perm_t bra_perm = iota(size_t{0}, bra_rank) | ranges::to<perm_t>;
-  perm_t ket_perm = iota(bra_rank, rank) | ranges::to<perm_t>;
+  sequant::detail::perm_t perm =
+      iota(size_t{0}, rank) | ranges::to<sequant::detail::perm_t>;
+  sequant::detail::perm_t bra_perm =
+      iota(size_t{0}, bra_rank) | ranges::to<sequant::detail::perm_t>;
+  sequant::detail::perm_t ket_perm =
+      iota(bra_rank, rank) | ranges::to<sequant::detail::perm_t>;
 
-  const auto lannot = ords_to_annot(perm);
+  const auto lannot = sequant::detail::ords_to_annot(perm);
 
   if (ket_rank > 2 && !nns_p_coeffs.empty()) {
-    const auto bra_annot = bra_rank == 0 ? "" : ords_to_annot(bra_perm);
+    const auto bra_annot =
+        bra_rank == 0 ? "" : sequant::detail::ords_to_annot(bra_perm);
 
     size_t num_perms = nns_p_coeffs.size();
     for (size_t perm_rank = 0; perm_rank < num_perms; ++perm_rank) {
-      perm_t permuted_ket =
+      sequant::detail::perm_t permuted_ket =
           detail::compute_permuted_indices(ket_perm, perm_rank, ket_rank);
 
       numeric_type coeff = nns_p_coeffs[perm_rank];
 
-      const auto ket_annot = ords_to_annot(permuted_ket);
+      const auto ket_annot = sequant::detail::ords_to_annot(permuted_ket);
       const auto annot =
           bra_annot.empty() ? ket_annot : bra_annot + "," + ket_annot;
 
@@ -354,21 +358,24 @@ auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
 
   btas::Tensor<Args...> result;
 
-  perm_t perm = iota(size_t{0}, rank) | ranges::to<perm_t>;
-  perm_t bra_perm = iota(size_t{0}, bra_rank) | ranges::to<perm_t>;
-  perm_t ket_perm = iota(bra_rank, rank) | ranges::to<perm_t>;
+  sequant::detail::perm_t perm =
+      iota(size_t{0}, rank) | ranges::to<sequant::detail::perm_t>;
+  sequant::detail::perm_t bra_perm =
+      iota(size_t{0}, bra_rank) | ranges::to<sequant::detail::perm_t>;
+  sequant::detail::perm_t ket_perm =
+      iota(bra_rank, rank) | ranges::to<sequant::detail::perm_t>;
 
   if (ket_rank > 2 && !nns_p_coeffs.empty()) {
     bool result_initialized = false;
 
     size_t num_perms = nns_p_coeffs.size();
     for (size_t perm_rank = 0; perm_rank < num_perms; ++perm_rank) {
-      perm_t permuted_ket =
+      sequant::detail::perm_t permuted_ket =
           detail::compute_permuted_indices(ket_perm, perm_rank, ket_rank);
 
       numeric_type coeff = nns_p_coeffs[perm_rank];
 
-      perm_t annot = bra_perm;
+      sequant::detail::perm_t annot = bra_perm;
       annot.insert(annot.end(), permuted_ket.begin(), permuted_ket.end());
 
       btas::Tensor<Args...> temp;

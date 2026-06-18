@@ -159,6 +159,20 @@ TEST_CASE("cache_manager", "[cache_manager]") {
     }
   }
 
+  SECTION("for_each_key enumerates every registered key") {
+    auto const& man = man_const;
+    size_t count = 0;
+    man.for_each_key([&](node_type const& k) {
+      ++count;
+      REQUIRE(man.exists(k));
+    });
+    REQUIRE(count == n_decaying);
+
+    // empty manager: no keys, no invocations
+    auto const empty = manager_type::empty();
+    empty.for_each_key([](node_type const&) { FAIL("no keys expected"); });
+  }
+
   SECTION("Hash collision safety") {
     // Two structurally different nodes
     auto const n1 = make_node(L"R{a1;i1} = f{a1;i1}");
@@ -274,4 +288,39 @@ TEST_CASE("cache_manager_volatility_frontier", "[cache_manager]") {
       };
   check(node, /*parent_volatile=*/false);  // root has no (volatile) consumer
   REQUIRE(saw_persistent);  // the NV product feeding the volatile root is P
+}
+
+TEST_CASE("cache_manager_footprint_gate", "[cache_manager]") {
+  // R = f * g * t : the NV product (f*g) feeds the volatile root, so without a
+  // footprint gate it is cached as a persistent (cross-iteration) entry.
+  auto const node = make_node(L"R{a1;i1} = f{a1;a2} * g{a2;a3} * t{a3;i1}");
+  auto is_volatile = [](node_type const& n) {
+    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
+  };
+  // footprint proxy: number of result indices (the NV frontier I{a1;a3} has 2).
+  auto footprint_of = [](node_type const& n) -> double {
+    return n.leaf() ? 0. : static_cast<double>(n->canon_indices().size());
+  };
+
+  std::function<int(node_type const&, manager_type const&)> count_persistent =
+      [&](node_type const& n, manager_type const& m) -> int {
+    if (n.leaf()) return 0;
+    return (m.persistent(n) ? 1 : 0) + count_persistent(n.left(), m) +
+           count_persistent(n.right(), m);
+  };
+
+  // no gate (max_footprint == 0): the NV/V frontier is cached and persistent.
+  auto man0 = sequant::cache_manager(std::array{node}, is_volatile);
+  REQUIRE(count_persistent(node, man0) >= 1);
+
+  // a threshold above the frontier footprint leaves caching unchanged.
+  auto man_hi = sequant::cache_manager(std::array{node}, is_volatile,
+                                       /*min_repeats=*/2, footprint_of, 10.);
+  REQUIRE(count_persistent(node, man_hi) == count_persistent(node, man0));
+
+  // a threshold below the 2-index frontier footprint evicts it: it is not
+  // cached at all (no persistent entry; absent from the cache map).
+  auto man_lo = sequant::cache_manager(std::array{node}, is_volatile,
+                                       /*min_repeats=*/2, footprint_of, 1.5);
+  REQUIRE(count_persistent(node, man_lo) == 0);
 }

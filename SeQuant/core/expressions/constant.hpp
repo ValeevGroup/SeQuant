@@ -14,7 +14,9 @@
 
 namespace sequant {
 
-namespace {
+// implementation details of Constant; prefer sequant::detail over an unnamed
+// namespace in a header (see CppCoreGuidelines SF.21)
+namespace detail {
 template <typename X>
 X numeric_cast(const sequant::rational &r) {
   if constexpr (std::is_integral_v<X>) {
@@ -25,7 +27,7 @@ X numeric_cast(const sequant::rational &r) {
            boost::numeric_cast<X>(denominator(r));
   }
 };
-}  // namespace
+}  // namespace detail
 
 /// @brief a constant number
 
@@ -57,10 +59,10 @@ class Constant : public Expr {
   auto value() const {
     if constexpr (std::is_arithmetic_v<T>) {
       SEQUANT_ASSERT(value_.imag() == 0);
-      return numeric_cast<T>(value_.real());
+      return detail::numeric_cast<T>(value_.real());
     } else if constexpr (meta::is_complex_v<T>) {
-      return T(numeric_cast<typename T::value_type>(value_.real()),
-               numeric_cast<typename T::value_type>(value_.imag()));
+      return T(detail::numeric_cast<typename T::value_type>(value_.real()),
+               detail::numeric_cast<typename T::value_type>(value_.imag()));
     } else
       throw Exception("Constant::value<T>: cannot convert value to type T");
   }

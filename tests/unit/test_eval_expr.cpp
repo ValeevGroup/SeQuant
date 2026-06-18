@@ -274,6 +274,32 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE(g_tree.leaf());  // no Adjoint wrapper
   }
 
+  SECTION("Adjoint op in a binarized term") {
+    // Regression: a tensor leaf can carry the adjoint marker U+207A '⁺' in its
+    // label without having been produced by Tensor::adjoint() — e.g. when built
+    // directly from a label string that already ends in '⁺'. Adjointness is
+    // tracked solely by this label marker, so such a leaf is a valid adjoint.
+    //
+    // binarize() keys off the '⁺' label to surface the marker-bearing leaf as
+    // EvalOp::Adjoint (see the "Adjoint op" section above), stripping the
+    // marker via Tensor::adjoint(). That path must tolerate a leaf that never
+    // went through Tensor::adjoint().
+    auto expr = deserialize(L"1/2 g{i_1,i_2;a_1,a_2} t⁺{a_1;i_1} t{a_2;i_2}",
+                            {.def_braket_symm = BraKetSymmetry::Nonsymm});
+    REQUIRE(expr->is<Product>());
+
+    bool has_marker_leaf = false;
+    for (auto const& factor : expr->as<Product>().factors())
+      has_marker_leaf |=
+          factor->is<Tensor>() && factor->as<Tensor>().label() == L"t⁺";
+    REQUIRE(has_marker_leaf);
+
+    // binarize() must not throw on this term:
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    REQUIRE_NOTHROW(binarize(expr));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+
   SECTION("external hyperindices") {
     // t{i1,i2;a1,a3} T2{a2,a3;i1,i2}: i1,i2 appear in bra of t and ket of
     // T2 (multiply-appearing), a3 also multiply-appearing

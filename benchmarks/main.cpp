@@ -14,14 +14,11 @@ int main(int argc, char *argv[]) {
   set_locale();
   auto idxreg = mbpt::make_sr_spaces();
   Context fermi_ctx = Context({.index_space_registry_shared_ptr = idxreg,
-                               .vacuum = Vacuum::SingleProduct,
-                               .braket_symmetry = BraKetSymmetry::Nonsymm});
+                               .vacuum = Vacuum::SingleProduct});
   set_default_context(fermi_ctx);
 
-  Context bose_einstein_ctx =
-      Context({.index_space_registry_shared_ptr = idxreg,
-               .vacuum = Vacuum::Physical,
-               .braket_symmetry = BraKetSymmetry::Nonsymm});
+  Context bose_einstein_ctx = Context(
+      {.index_space_registry_shared_ptr = idxreg, .vacuum = Vacuum::Physical});
 
   set_default_context(bose_einstein_ctx, Statistics::BoseEinstein);
 

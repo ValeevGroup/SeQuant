@@ -33,13 +33,15 @@ index_to_extent_t default_idx_to_size() {
 
 /// Optimize a Product that contains only Tensor and scalar factors.
 ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
-  bool const subnet_cse = opts.subnet_cse == SubnetCSE::Enable;
-  if (opts.opt_for == OptFor::Flops)
-    return opt::single_term_opt<OptFor::Flops>(prod, opts.idx_to_extent,
-                                               subnet_cse);
-  SEQUANT_ASSERT(opts.opt_for == OptFor::Memsize);
-  return opt::single_term_opt<OptFor::Memsize>(prod, opts.idx_to_extent,
-                                               subnet_cse);
+  bool const subnet_cse = opts.CSE.subnet;
+  if (opts.objective_function == ObjectiveFunction::DenseFLOPs)
+    return opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
+        prod, opts.idx_to_extent, subnet_cse, opts.is_volatile_leaf,
+        opts.volatile_weight, opts.footprint_weight);
+  SEQUANT_ASSERT(opts.objective_function == ObjectiveFunction::DenseSize);
+  return opt::single_term_opt<ObjectiveFunction::DenseSize>(
+      prod, opts.idx_to_extent, subnet_cse, opts.is_volatile_leaf,
+      opts.volatile_weight, opts.footprint_weight);
 }
 
 /// Deliberately non-identifier label prefix used to stand in for non-Tensor,

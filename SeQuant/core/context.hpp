@@ -52,7 +52,6 @@ class Context {
   struct Defaults {
     constexpr static auto vacuum = Vacuum::Physical;
     constexpr static auto metric = IndexSpaceMetric::Unit;
-    constexpr static auto braket_symmetry = BraKetSymmetry::Conjugate;
     constexpr static auto assert_strict_braket_symmetry = true;
     constexpr static auto spbasis = SPBasis::Spinor;
     constexpr static auto first_dummy_index_ordinal = 100;
@@ -73,8 +72,6 @@ class Context {
       Vacuum vacuum = Defaults::vacuum;
       /// the IndexSpaceMetric object
       IndexSpaceMetric metric = Defaults::metric;
-      /// the BraKetSymmetry object
-      BraKetSymmetry braket_symmetry = Defaults::braket_symmetry;
       /// the flag that controls the strictness of bra-ket checks in
       /// tensor network construction
       bool assert_strict_braket_symmetry = Defaults::assert_strict_braket_symmetry;
@@ -134,8 +131,6 @@ class Context {
   std::shared_ptr<IndexSpaceRegistry> mutable_index_space_registry() const;
   /// \return IndexSpaceMetric of this context
   IndexSpaceMetric metric() const;
-  /// \return BraKetSymmetry of this context
-  BraKetSymmetry braket_symmetry() const;
   /// \return true if strict bra-ket symmetry is asserted;
   /// setting this to false (via `Context::set(AssertStrictBraKetSymmetry::No)`)
   /// allows arbitrary contractions of bra/ket modes as if they were aux indices.
@@ -177,10 +172,6 @@ class Context {
   /// \param metric IndexSpaceMetric
   /// \return ref to `*this`, for chaining
   Context& set(IndexSpaceMetric metric);
-  /// Sets the BraKetSymmetry for this context, convenient for chaining
-  /// \param braket_symmetry BraKetSymmetry
-  /// \return ref to `*this`, for chaining
-  Context& set(BraKetSymmetry braket_symmetry);
   /// Sets the bra-ket strict assertion flag for this context, convenient for chaining
   /// \param assert_strict_braket_symmetry AssertStrictBraKetSymmetry
   /// \return ref to `*this`, for chaining
@@ -209,7 +200,6 @@ class Context {
   std::shared_ptr<IndexSpaceRegistry> idx_space_reg_ = nullptr;
   Vacuum vacuum_ = Defaults::vacuum;
   IndexSpaceMetric metric_ = Defaults::metric;
-  BraKetSymmetry braket_symmetry_ = Defaults::braket_symmetry;
   bool assert_strict_braket_symmetry_ = Defaults::assert_strict_braket_symmetry;
   SPBasis spbasis_ = Defaults::spbasis;
   std::size_t first_dummy_index_ordinal_ = Defaults::first_dummy_index_ordinal;

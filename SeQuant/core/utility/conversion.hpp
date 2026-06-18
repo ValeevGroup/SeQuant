@@ -16,7 +16,9 @@ class ConversionException : public Exception {
   using Exception::Exception;
 };
 
-namespace {
+// implementation details of string conversion; prefer sequant::detail over an
+// unnamed namespace in a header (see CppCoreGuidelines SF.21)
+namespace detail {
 template <typename T, typename Arg>
   requires(std::integral<T> || std::floating_point<T>)
 T string_to_impl(std::string_view str, Arg &&arg) {
@@ -52,7 +54,7 @@ T string_to_impl(std::string_view str, Arg &&arg) {
   return val;
 }
 
-}  // namespace
+}  // namespace detail
 
 template <typename T>
 concept string_to_supports =
@@ -77,7 +79,7 @@ T string_to(std::string_view str, int base = 10) {
   static_assert(string_to_supports<T>,
                 "Your C++ standard library is missing a std::from_chars "
                 "implementation for this integral type");
-  return string_to_impl<T>(str, base);
+  return detail::string_to_impl<T>(str, base);
 }
 
 /// Converts the provided string to the desired floating-point type.
@@ -101,7 +103,7 @@ T string_to(std::string_view str,
                 "Your C++ standard library is missing a std::from_chars "
                 "implementation for this floating point type");
 
-  return string_to_impl<T>(str, fmt);
+  return detail::string_to_impl<T>(str, fmt);
 }
 
 }  // namespace sequant

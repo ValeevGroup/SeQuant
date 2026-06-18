@@ -199,6 +199,121 @@ TEST_CASE("optimize", "[optimize]") {
       REQUIRE(extract(res8, {1, 1}) == prod8.at(3));
     }
 
+    SECTION("Single term optimization: n_replay volatility weighting") {
+      using namespace sequant;
+
+      // PPL-shaped motif, fully contracted to a scalar:
+      //   A = g_{i1,a1}^{x1}   (persistent integral)
+      //   B = g_{i2,a2}^{x1}   (persistent integral)
+      //   t = t_{a1,a2}^{i1,i2} (VOLATILE amplitude)
+      // sizes: i=10 (O), a=100 (V), x=4 (X).
+      //
+      // (A*B)*t : build I=A*B over x  -> {i1,a1,i2,a2}  cost O^2 V^2 X
+      // (persistent)
+      //           then I*t            -> scalar         cost O^2 V^2 (volatile)
+      // (A*t)*B : build J=A*t over i1,a1 -> {x,i2,a2}   cost O^2 V^2 X
+      // (VOLATILE)
+      //           then J*B               -> scalar      cost X O V (volatile)
+      //
+      // n_replay=1  : (A*t)*B wins (O^2 V^2 X + X O V  <  O^2 V^2 X + O^2 V^2)
+      //               => t buried in an inner volatile intermediate.
+      // n_replay=10 : (A*B)*t wins (persistent build counted once; the only
+      //               x10 term is the cheap O^2 V^2 final step)
+      //               => t contracted LAST, persistent integral formed first.
+      auto idxsz = [](Index const& ix) {
+        return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+      };
+
+      auto prod = parse_expr_antisymm(
+                      L"g_{i1,a1}^{x1}"
+                      L" * g_{i2,a2}^{x1}"
+                      L" * t_{a1,a2}^{i1,i2}")
+                      ->as<Product>();
+
+      auto is_t = [](Tensor const& t) { return t.label() == L"t"; };
+
+      OptimizeOptions base;
+      base.idx_to_extent = idxsz;
+
+      // baseline: predicate set but n_replay==1 => weight is 1 everywhere =>
+      // reverts to current behavior. (The empty-predicate no-op is checked
+      // separately via opts_off below.)
+      auto opts1 = base;
+      opts1.is_volatile_leaf = is_t;
+      opts1.volatile_weight = 1;
+      auto res1 = optimize(ex<Product>(prod), opts1);
+
+      auto opts10 = base;
+      opts10.is_volatile_leaf = is_t;
+      opts10.volatile_weight = 10;
+      auto res10 = optimize(ex<Product>(prod), opts10);
+
+      // a bare top-level t leaf means t was contracted last (persistent-first)
+      auto top_has_bare_t = [](ExprPtr const& e) {
+        if (!e->is<Product>()) return false;
+        for (auto const& c : *e)
+          if (c->is<Tensor>() && c->as<Tensor>().label() == L"t") return true;
+        return false;
+      };
+
+      // weighting flips the chosen factorization
+      REQUIRE(res1 != res10);
+      // volatile_weight=1 reproduces today's behavior: t buried in an inner
+      // intermediate
+      REQUIRE_FALSE(top_has_bare_t(res1));
+      // volatile_weight=10: persistent g*g built first, t contracted last
+      REQUIRE(top_has_bare_t(res10));
+
+      // empty predicate => weighting off => identical to volatile_weight=1
+      // regardless
+      auto opts_off = base;
+      opts_off.volatile_weight = 10;  // ignored: predicate empty
+      auto res_off = optimize(ex<Product>(prod), opts_off);
+      REQUIRE(res_off == res1);
+    }
+
+    SECTION("Single term optimization: footprint_weight") {
+      using namespace sequant;
+
+      // Network A{i1;x1} * B{x1;i2} * C{i2;a1}: contract x1 (between A,B) and
+      // i2 (between B,C); free indices {i1, a1}. With the aux index x LARGE and
+      // the virtual index a SMALL, the two viable orders trade FLOPs against
+      // the footprint of the single intermediate they materialize:
+      //
+      //   (A*B)*C : I{i1;i2}  (occ^2 = 100)         FLOPs i*x*i + i*i*a =
+      //   100400 A*(B*C) : I{x1;a1}  (aux*virt = 4000)     FLOPs x*i*a + i*x*a
+      //   =  80000
+      //
+      // Pure FLOPs picks A*(B*C): cheaper, but materializes the big
+      // aux-carrying intermediate I{x1;a1}. A nonzero footprint_weight
+      // penalizes that 4000-element intermediate (vs the 100-element one) and
+      // flips the choice to (A*B)*C. Flip threshold here is footprint_weight >
+      // ~5.2.
+      auto uocc = reg->retrieve_ptr(L"a");
+      auto aux = reg->retrieve_ptr(L"x");
+      auto const uocc_sz = uocc->approximate_size();
+      auto const aux_sz = aux->approximate_size();
+      uocc->approximate_size(4);    // virtual: deliberately SMALL
+      aux->approximate_size(1000);  // aux: deliberately LARGE
+
+      auto const prod =
+          deserialize(L"A{i1;x1} B{x1;i2} C{i2;a1}")->as<Product>();
+
+      // footprint_weight == 0 reproduces the pure-FLOPs choice ...
+      auto res0 = optimize(ex<Product>(prod), OptimizeOptions{});
+      auto res0_explicit =
+          optimize(ex<Product>(prod), OptimizeOptions{.footprint_weight = 0.0});
+      REQUIRE(res0 == res0_explicit);  // weight 0 is a no-op
+
+      // ... a large footprint_weight changes the chosen factorization.
+      auto resF = optimize(ex<Product>(prod),
+                           OptimizeOptions{.footprint_weight = 100.});
+      REQUIRE(res0 != resF);
+
+      uocc->approximate_size(uocc_sz);
+      aux->approximate_size(aux_sz);
+    }
+
     SECTION("Ensure single-value sums/products are not discarded") {
       auto sum = ex<Sum>();
       sum->as<Sum>().append(
@@ -244,9 +359,11 @@ TEST_CASE("optimize", "[optimize]") {
 
       // both metrics must binarize the 3-tensor product into a binary tree:
       // a 2-factor top product whose leaves are the 3 original tensors
-      for (auto opt_for : {OptFor::Flops, OptFor::Memsize}) {
-        CAPTURE(static_cast<int>(opt_for));
-        auto res = optimize(prod, OptimizeOptions{.opt_for = opt_for});
+      for (auto objective_function :
+           {ObjectiveFunction::DenseFLOPs, ObjectiveFunction::DenseSize}) {
+        CAPTURE(static_cast<int>(objective_function));
+        auto res = optimize(
+            prod, OptimizeOptions{.objective_function = objective_function});
         REQUIRE(res->is<Product>());
         REQUIRE(res->as<Product>().factors().size() == 2);
         REQUIRE(count_tensor_leaves(res) == 3);
@@ -297,6 +414,14 @@ TEST_CASE("optimize", "[optimize]") {
   }
 
   SECTION("CSE") {
+    auto ctx_resetter =
+        set_scoped_default_context(get_default_context().clone());
+    IndexSpaceRegistry registry;
+    registry.add("a", 0b001);
+    registry.add("i", 0b010);
+    registry.add("u", 0b100);
+    *get_default_context().mutable_index_space_registry() = registry;
+
     for (bool force_hash_collisions : {false, true}) {
       CAPTURE(force_hash_collisions);
 
@@ -327,15 +452,23 @@ TEST_CASE("optimize", "[optimize]") {
                // indices (tensor-of-tensor)
                {{L"R1{i1;i2} = (g{i1;a1} C{a1;a1<i1>}) h{a1<i1>;i2}",
                  L"R2{i1;i2} = (g{i1;a1} C{a1;a1<i1>}) k{a1<i1>;i2}"},
-                {L"CSE1{;;i1,a1<i1>} = g{i1;a1} C{a1;a1<i1>}",
-                 L"R1{i1;i2} = CSE1{;;i1,a1<i1>} h{a1<i1>;i2}",
-                 L"R2{i1;i2} = CSE1{;;i1,a1<i1>} k{a1<i1>;i2}"}},
+                {L"CSE1{;;a1<i1>,i1} = g{i1;a1} C{a1;a1<i1>}",
+                 L"R1{i1;i2} = CSE1{;;a1<i1>,i1} h{a1<i1>;i2}",
+                 L"R2{i1;i2} = CSE1{;;a1<i1>,i1} k{a1<i1>;i2}"}},
                // In this case it is important that the computation of the
                // subexpression isn't simply thrown at the beginning of the
                // expression list as it depends on B, which has to be computed
                // first.
                {{L"B = K J", L"R = (A B) C + (A B) D"},
                 {L"B = K J", L"CSE1 = A B", L"R = CSE1 C + CSE1 D"}},
+               // CSE in the presence of bra-ket symmetry
+               {{L"R2{u2,a1;u1,i1} = -2 f{u3;u4}:N-S Y{u2,u3;u1,u5} "
+                 L"t{a1,u5;i1,u4} + f{u3;u4}:N-S Y{u2,u4;u5,u1} t{a1,u5;i1,u3} "
+                 L"+ f{u3;u4}:N-S Y{u2,u4;u1,u5} t{a1,u5;u3,i1}"},
+                {L"CSE1{;;u4,u2,u1,u5} = f{u3;u4}:N-S Y{u2,u3;u1,u5}",
+                 L"R2{u2,a1;u1,i1} = -2 CSE1{;;u4,u2,u1,u5} t{a1,u5;i1,u4}"
+                 L" + CSE1{;;u3,u2,u5,u1} t{a1,u5;i1,u3}"
+                 L" + CSE1{;;u3,u2,u1,u5} t{a1,u5;u3,i1}"}},
            }) {
         CAPTURE(inputs);
 
@@ -504,10 +637,10 @@ TEST_CASE("optimize", "[optimize]") {
       auto expr = ex<Product>(prod);
 
       auto res_cse =
-          optimize(expr, OptimizeOptions{.subnet_cse = SubnetCSE::Enable,
+          optimize(expr, OptimizeOptions{.CSE = {.subnet = true},
                                          .idx_to_extent = idx_to_extent});
       auto res_no_cse =
-          optimize(expr, OptimizeOptions{.subnet_cse = SubnetCSE::Disable,
+          optimize(expr, OptimizeOptions{.CSE = {.subnet = false},
                                          .idx_to_extent = idx_to_extent});
 
       // With CSE: balanced tree -- both children are Products.
