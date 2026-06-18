@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <sstream>
 #include <string>
@@ -438,14 +439,23 @@ class ItfGenerator : public Generator<Context> {
         ++num_shared;
       }
 
-      if (num_shared == m_currentBatchIndices.size()) {
+      // ITF is able to fuse index batching for indices of the same space
+      std::size_t num_fuseable = std::ranges::distance(
+          batchIndices.begin(),
+          std::ranges::partition_point(
+              batchIndices, [&batchIndices](const Index &idx) {
+                return idx.space() == batchIndices.front().space();
+              }));
+
+      if (num_shared >= num_fuseable &&
+          num_shared == m_currentBatchIndices.size()) {
         // "Reuse" previously started batch loop
         if (batchIndices.size() == num_shared) {
           return;
         }
       } else {
         // Drop previous loop and start a fresh one
-        SEQUANT_ASSERT(m_indent_level > 0);
+        SEQUANT_ASSERT(m_currentBatchIndices.empty() || m_indent_level > 0);
         m_indent_level = 0;
       }
 
