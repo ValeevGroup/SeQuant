@@ -35,6 +35,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <ranges>
 #include <string>
 #include <string_view>
@@ -153,13 +154,18 @@ ProcessingOptions extractProcessingOptions(
       if (batch.contains("min_unbatched")) {
         options.min_unbatched_indices =
             batch.at("min_unbatched").get<std::size_t>();
-
-        if (options.min_unbatched_indices > 0 &&
-            std::holds_alternative<std::vector<Index>>(options.batching)) {
-          throw Exception(
-              "Can't use the min_unbatched option in combination with an "
-              "explicit list of batching indices");
-        }
+      }
+      if (batch.contains("max_batched")) {
+        options.max_batched_indices =
+            batch.at("max_batched").get<std::size_t>();
+      }
+      if ((options.min_unbatched_indices > 0 ||
+           options.max_batched_indices <
+               std::numeric_limits<std::size_t>::max()) &&
+          std::holds_alternative<std::vector<Index>>(options.batching)) {
+        throw Exception(
+            "Can't use the min_unbatched option in combination with an "
+            "explicit list of batching indices");
       }
     } else {
       handle_strategy(batch.get<std::string_view>());
@@ -174,6 +180,7 @@ struct ExportOptions {
   bool createResult = false;
   std::variant<IndexBatching, std::vector<Index>> batching = {};
   std::size_t min_unbatched_indices = 2;
+  std::size_t max_batched = std::numeric_limits<std::size_t>::max();
 };
 
 ExportNode<> prepareForExport(const ResultExpr &result,
@@ -223,7 +230,15 @@ ExportNode<> prepareForExport(const ResultExpr &result,
       batchIndices = std::get<decltype(batchIndices)>(opts.batching);
     }
 
+    std::size_t num_batched = batchIndices.size();
     ctx.set_batch_indices(std::move(batchIndices), tree->id());
+
+    if (num_batched > opts.max_batched) {
+      // Ctx might sort batch indices in a preferential way
+      batchIndices = ctx.batch_indices(tree->id());
+      batchIndices.resize(opts.max_batched);
+      ctx.set_batch_indices(std::move(batchIndices), tree->id());
+    }
   } else {
     if (opts.importResult) {
       SEQUANT_ASSERT(result.has_label());
@@ -400,21 +415,21 @@ void generateITF(const json &blocks, std::string_view out_file,
 
             spdlog::debug("After popping S tensor:\n{}", current);
 
-            results.push_back(
-                prepareForExport(current, itfgen, context,
-                                 {.importResult = false,
-                                  .createResult = createResult,
-                                  .batching = result_options.batching,
-                                  .min_unbatched_indices =
-                                      result_options.min_unbatched_indices}));
+            results.push_back(prepareForExport(
+                current, itfgen, context,
+                {.importResult = false,
+                 .createResult = createResult,
+                 .batching = result_options.batching,
+                 .min_unbatched_indices = result_options.min_unbatched_indices,
+                 .max_batched = result_options.max_batched_indices}));
           } else {
             results.push_back(prepareForExport(
                 current, itfgen, context,
                 {.importResult = current_result.value("import", true),
                  .createResult = createResult,
                  .batching = result_options.batching,
-                 .min_unbatched_indices =
-                     result_options.min_unbatched_indices}));
+                 .min_unbatched_indices = result_options.min_unbatched_indices,
+                 .max_batched = result_options.max_batched_indices}));
           }
         }
       }
@@ -432,7 +447,8 @@ void generateITF(const json &blocks, std::string_view out_file,
             {.importResult = current_result.value("import", true),
              .createResult = true,
              .batching = result_options.batching,
-             .min_unbatched_indices = result_options.min_unbatched_indices}));
+             .min_unbatched_indices = result_options.min_unbatched_indices,
+             .max_batched = result_options.max_batched_indices}));
       }
     }
 

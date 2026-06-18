@@ -7,6 +7,8 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 
+#include <limits>
+
 enum class SpinTracing {
   None,
   ClosedShell,
@@ -38,6 +40,7 @@ struct ProcessingOptions {
   std::variant<IndexBatching, std::vector<sequant::Index>> batching =
       IndexBatching::Slowest;
   std::size_t min_unbatched_indices = 2;
+  std::size_t max_batched_indices = std::numeric_limits<std::size_t>::max();
 };
 
 sequant::container::svector<sequant::ResultExpr> postProcess(
