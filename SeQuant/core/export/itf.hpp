@@ -424,11 +424,9 @@ class ItfGenerator : public Generator<Context> {
       std::vector<Index> batchIndices =
           ctx.batch_indices(ctx.current_expression_id());
 
-      // ITF can parallelize over the first index so make sure this is as large
-      // as possible
-      std::ranges::sort(batchIndices, std::greater<>{}, [](const Index &idx) {
-        return idx.space().approximate_size();
-      });
+      SEQUANT_ASSERT(std::ranges::is_sorted(
+          batchIndices, std::greater<>{},
+          [](const Index &idx) { return idx.space().approximate_size(); }));
 
       std::size_t num_shared = 0;
       for (std::size_t i = 0;

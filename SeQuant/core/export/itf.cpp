@@ -229,6 +229,12 @@ void ItfContext::set_index_id_offset(std::size_t offset) {
 
 void ItfContext::set_batch_indices(std::vector<Index> indices,
                                    std::optional<std::size_t> id) {
+  // ITF can parallelize over the first index so make sure this is as large
+  // as possible
+  std::ranges::sort(indices, std::greater<>{}, [](const Index &idx) {
+    return idx.space().approximate_size();
+  });
+
   m_batch_indices[id.value_or(ID_GLOBAL)] = std::move(indices);
 }
 
