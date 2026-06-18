@@ -13,6 +13,7 @@
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
 
+#include <algorithm>
 #include <optional>
 #include <span>
 #include <sstream>
@@ -422,6 +423,12 @@ class ItfGenerator : public Generator<Context> {
     if (ctx.is_batched(ctx.current_expression_id())) {
       std::vector<Index> batchIndices =
           ctx.batch_indices(ctx.current_expression_id());
+
+      // ITF can parallelize over the first index so make sure this is as large
+      // as possible
+      std::ranges::sort(batchIndices, std::greater<>{}, [](const Index &idx) {
+        return idx.space().approximate_size();
+      });
 
       std::size_t num_shared = 0;
       for (std::size_t i = 0;
