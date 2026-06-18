@@ -323,9 +323,10 @@ ExprPtr remove_spin(const ExprPtr& expr) {
         idx = make_spinfree(idx);
       }
     }
+    // column symmetry must survive spin removal for triplet doubles
     return ex<Tensor>(tensor.label(), bra(std::move(b)), ket(std::move(k)),
-                      tensor.aux(), tensor.symmetry(),
-                      tensor.braket_symmetry());
+                      tensor.aux(), tensor.symmetry(), tensor.braket_symmetry(),
+                      tensor.column_symmetry());
   };
 
   auto remove_spin_from_product =
@@ -2356,76 +2357,99 @@ container::svector<ResultExpr> spintrace(const ResultExpr& expr,
 
 namespace {
 
-// M_S = 0 triplet coupling on the R amplitude line (singles: one line per R).
-int r_line_sign(const Tensor& R) {
-  std::optional<Spin> line_spin;
-  for (const auto& idx : R.const_braket_indices()) {
-    line_spin = mbpt::to_spin(idx.space().qns());
-    break;
-  }
-  SEQUANT_ASSERT(line_spin && "R has no line to couple");
-  SEQUANT_ASSERT(*line_spin == mbpt::Spin::alpha ||
-                 *line_spin == mbpt::Spin::beta);
-  return *line_spin == mbpt::Spin::alpha ? 1 : -1;
+bool is_eom_amplitude(const Tensor& t) {
+  return t.label() == L"R" || t.label() == L"L";
 }
 
-ExprPtr weight_R_triplet(const ExprPtr& spin_labeled) {
-  auto weight_product = [](const Product& p) -> ExprPtr {
-    int sign = 1;
-    for (const auto& f : p)
-      if (f->is<Tensor>() && f->as<Tensor>().label() == L"R")
-        sign *= r_line_sign(f->as<Tensor>());
-    auto out = std::make_shared<Product>(p);
-    out->scale(sign);
-    return out;
+// sign of the M_S = 0 triplet coupling for a spin-labeled line: T_{pq} =
+// E_{pq}(alpha) - E_{pq}(beta)
+int spin_line_sign(const Index& idx) {
+  const auto s = mbpt::to_spin(idx.space().qns());
+  SEQUANT_ASSERT(s == mbpt::Spin::alpha || s == mbpt::Spin::beta);
+  return s == mbpt::Spin::alpha ? 1 : -1;
+}
+
+ExprPtr triplet_adapt_amplitudes(const ExprPtr& spin_labeled) {
+  auto adapt_product = [](const Product& p) -> ExprPtr {
+    auto out = std::make_shared<Product>();
+    out->scale(p.scalar());
+
+    for (const auto& f : p) {
+      if (!f->is<Tensor>() || !is_eom_amplitude(f->as<Tensor>())) {
+        out->append(1, f, Product::Flatten::No);
+        continue;
+      }
+
+      const auto& t = f->as<Tensor>();
+      SEQUANT_ASSERT(t.bra_rank() == t.ket_rank() &&
+                     "triplet spin adaptation supports particle-conserving "
+                     "amplitudes only");
+      const auto rank = t.bra_rank();
+
+      if (rank == 1) {
+        out->scale(spin_line_sign(t.bra().at(0)));
+        out->append(1, f, Product::Flatten::No);
+      } else if (rank == 2) {
+        // antisymmetric spin-orbital tensors were already expanded to
+        // Nonsymm representatives by expand_antisymm inside spintrace
+        SEQUANT_ASSERT(t.symmetry() == Symmetry::Nonsymm);
+        const int s0 = spin_line_sign(t.bra().at(0));
+        const int s1 = spin_line_sign(t.bra().at(1));
+        const bool same_spin = (s0 == s1);
+
+        // stored column order; the combined spatial triplet amplitude has no
+        // column (pair) symmetry -> mark Nonsymm so that canonicalization
+        // cannot alias c_{aibj} with c_{bjai}
+        Tensor stored(t.label(), bra(t.bra()), ket(t.ket()), t.aux(),
+                      Symmetry::Nonsymm, t.braket_symmetry(),
+                      ColumnSymmetry::Nonsymm);
+        // both columns exchanged
+        container::svector<Index> swapped_bra{t.bra().at(1), t.bra().at(0)};
+        container::svector<Index> swapped_ket{t.ket().at(1), t.ket().at(0)};
+        Tensor swapped(t.label(), bra(std::move(swapped_bra)),
+                       ket(std::move(swapped_ket)), t.aux(), Symmetry::Nonsymm,
+                       t.braket_symmetry(), ColumnSymmetry::Nonsymm);
+
+        auto channel = std::make_shared<Sum>();
+        channel->append(ex<Constant>(s0) * ex<Tensor>(std::move(stored)));
+        channel->append(ex<Constant>(same_spin ? s0 : -s0) *
+                        ex<Tensor>(std::move(swapped)));
+        out->append(1, ExprPtr(channel), Product::Flatten::No);
+      } else {
+        throw Exception(
+            "triplet spin adaptation is implemented for singles and doubles "
+            "amplitudes only (T (x) E (x) E coupling of triples is not "
+            "implemented)");
+      }
+    }
+
+    ExprPtr result = out;
+    expand(result);
+    rapid_simplify(result);
+    return result;
   };
 
   if (spin_labeled->is<Product>())
-    return weight_product(spin_labeled->as<Product>());
+    return adapt_product(spin_labeled->as<Product>());
   if (spin_labeled->is<Sum>()) {
     auto out = std::make_shared<Sum>();
     for (const auto& t : *spin_labeled)
-      out->append(t->is<Product>() ? weight_product(t->as<Product>()) : t);
+      out->append(t->is<Product>() ? adapt_product(t->as<Product>()) : t);
     return out;
   }
   return spin_labeled;
 }
 
-}  // namespace
-
-std::pair<ExprPtr, ExprPtr> partition_by_R_spin(const ExprPtr& expr) {
-  auto Ra = std::make_shared<Sum>();
-  auto Rb = std::make_shared<Sum>();
-
-  auto append_by_R_spin = [&](const ExprPtr& term) {
-    if (!term->is<Product>()) return;
-    const auto& p = term->as<Product>();
-    std::optional<Spin> r_spin;
-    for (const auto& f : p) {
-      if (!f->is<Tensor>() || f->as<Tensor>().label() != L"R") continue;
-      const auto& R = f->as<Tensor>();
-      for (const auto& idx : R.const_braket_indices()) {
-        const auto s = to_spin(idx.space().qns());
-        SEQUANT_ASSERT(s == Spin::alpha || s == Spin::beta);
-        r_spin = s;
-        break;
-      }
-      break;
-    }
-    if (!r_spin) return;
-    if (*r_spin == Spin::alpha)
-      Ra->append(term);
-    else
-      Rb->append(term);
-  };
-
-  if (expr->is<Sum>()) {
-    for (const auto& t : *expr) append_by_R_spin(t);
-  } else {
-    append_by_R_spin(expr);
-  }
-  return {std::move(Ra), std::move(Rb)};
+ExprPtr triplet_doubles_paper_combined_residual(
+    const ExprPtr& V, const container::map<Index, Index>& pair_swap) {
+  ExprPtr V_ps = transform_expr(V, pair_swap);
+  ExprPtr V_ch1 = ex<Constant>(ratio(1, 8)) * (V + V_ps);
+  ExprPtr V_ch2 = ex<Constant>(ratio(1, 8)) * (V - V_ps);
+  return ex<Constant>(ratio(1, 2)) * V_ch1 +
+         V_ch2;  // paper does not have this 1/2. why?
 }
+
+}  // namespace
 
 ExprPtr closed_shell_EOM_triplet_spintrace(
     ExprPtr const& expr, ClosedShellCCSpintraceOptions options) {
@@ -2438,20 +2462,34 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
     ext_groups.push_back(std::move(grp));
   }
 
-  // same sector layout as os_eom / spintrace_by_sector: ext_val=0 is all-α
-  // (first), ext_val=2^n-1 is all-β (last). Singlet sums every sector;
-  // triplet keeps first − last only.
-  auto sectors = spintrace_by_sector(expr, ext_groups, /*triplet_R=*/true);
-  SEQUANT_ASSERT(sectors.size() >= 2 &&
-                 "triplet spintrace needs at least α and β sectors");
+  const auto n_ext = ext_idxs.size();
+  if (n_ext == 0 || n_ext > 2)
+    throw Exception(
+        "closed_shell_EOM_triplet_spintrace: the explicitly spin-coupled "
+        "triplet manifold is implemented for singles and doubles projections "
+        "only");
 
+  // same sector layout as os_eom / spintrace_by_sector: bit g of the sector
+  // index is the spin of external group g (0 = alpha, 1 = beta);
   // spintrace_by_sector already ran remove_spin_with_relabel on each sector.
-  ExprPtr triplet =
-      sectors.front().second->clone() - sectors.back().second->clone();
+  auto sectors = spintrace_by_sector(expr, ext_groups, /*triplet_R=*/true);
+  SEQUANT_ASSERT(sectors.size() == (std::size_t{1} << n_ext));
+
+  // V_mu: weight every sector by the sign of the spin of external group 0
+  auto V = std::make_shared<Sum>();
+  for (std::size_t s = 0; s < sectors.size(); ++s) {
+    if (s & 1u)
+      V->append(ex<Constant>(-1) * sectors[s].second);
+    else
+      V->append(sectors[s].second);
+  }
+  ExprPtr triplet = V;
   canonicalize(triplet);
   simplify(triplet);
 
-  if (!ext_idxs.empty()) {
+  if (n_ext == 1) {
+    // metric of the T_{ai} kets is 2*delta -> the rank-1 biorthogonal
+    // coefficient (1/2) coincides with the singlet one; reuse that machinery
     switch (options.method) {
       case BiorthogonalizationMethod::V1:
         triplet =
@@ -2465,6 +2503,22 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
         SEQUANT_ASSERT(false && "unreachable");
         abort();
     }
+  } else {  // n_ext == 2
+    // paper orthonormal (1)/(2) channels (1/8) folded into one R2 residual
+    const auto& g0 = ext_idxs.at(0);
+    const auto& g1 = ext_idxs.at(1);
+    SEQUANT_ASSERT(g0.size() == 2 && g1.size() == 2);
+    container::map<Index, Index> pair_swap;
+    const Index b0 = get_bra_idx(g0);
+    const Index b1 = get_bra_idx(g1);
+    const Index k0 = get_ket_idx(g0);
+    const Index k1 = get_ket_idx(g1);
+    pair_swap.emplace(b0, b1);
+    pair_swap.emplace(b1, b0);
+    pair_swap.emplace(k0, k1);
+    pair_swap.emplace(k1, k0);
+
+    triplet = triplet_doubles_paper_combined_residual(triplet, pair_swap);
   }
   simplify(triplet);
   return triplet;
@@ -2506,7 +2560,7 @@ container::svector<std::pair<std::wstring, ExprPtr>> spintrace_by_sector(
     detail::reset_idx_tags(sector);
     canonicalize(sector);
     simplify(sector);
-    if (triplet_R) sector = weight_R_triplet(sector);
+    if (triplet_R) sector = triplet_adapt_amplitudes(sector);
     sector = remove_spin_with_relabel(sector);
     detail::reset_idx_tags(sector);
     canonicalize(sector);

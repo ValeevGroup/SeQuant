@@ -316,13 +316,18 @@ ExprPtr closed_shell_CC_spintrace_v2(
     ClosedShellCCSpintraceOptions options = {
         .method = BiorthogonalizationMethod::V2, .naive_spintrace = false});
 
+// clang-format off
+/// @brief Closed-shell triplet (M_S = 0) spin trace of EOM-CC equations
+/// @param expr spin-orbital EOM equation (from CC::eom_r or CC::eom_l) with
+///        one or two external index groups (singles or doubles projection)
+/// @param options biorthogonalization method; affects the singles projection
+///        only (doubles use the paper channel combination above; V1/V2 N/A)
+/// @throw Exception for projection manifolds beyond doubles, or if the
+///        equations contain amplitudes beyond doubles (triples coupling
+///        T (x) E (x) E is not implemented)
+// clang-format on
 ExprPtr closed_shell_EOM_triplet_spintrace(
     ExprPtr const& expr, ClosedShellCCSpintraceOptions options = {});
-
-/// @brief Partition a spin labeled expression by the spin on R's braket line.
-/// @return (R-alpha terms, R beta terms); non-Product summands are skipped.
-[[nodiscard]] std::pair<ExprPtr, ExprPtr> partition_by_R_spin(
-    const ExprPtr& expr);
 
 /// @brief Swap spin labels in a tensor
 Tensor swap_spin(const Tensor& t);
@@ -446,9 +451,14 @@ container::svector<ResultExpr> spintrace(const ResultExpr& expr,
 /// @param ext_index_groups external index groups; for particle-conserving
 ///        input each group is the {bra, ket} pair of one external particle
 ///        (as returned by `external_indices`)
+/// @param triplet_R if true, the EOM amplitude tensors (R/L) are spin-adapted
+///        to the explicitly spin-coupled triplet (M_S = 0) manifold instead
+///        of the singlet one (see closed_shell_EOM_triplet_spintrace);
+///        supported for singles and doubles amplitudes only
 /// @return one (label, spin-free expression) pair per external spin string,
 ///         ordered by the bit pattern over groups (αα.., βα.., .., ββ..).
-///         Summing all sectors reproduces generic `spintrace`.
+///         Summing all sectors reproduces generic `spintrace` (for
+///         triplet_R == false).
 [[nodiscard]] container::svector<std::pair<std::wstring, ExprPtr>>
 spintrace_by_sector(
     const ExprPtr& expr,
