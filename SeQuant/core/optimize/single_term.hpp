@@ -11,6 +11,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/external/bliss/graph.hh>
 
+#include <range/v3/algorithm/find.hpp>
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/indirect.hpp>
@@ -154,6 +155,97 @@ container::vector<double> subset_footprints(TensorNetwork const& network,
   for (size_t n = 0; n < results.size(); ++n)
     S[n] = (n == 0) ? 0.0 : fp(results[n].indices);
   return S;
+}
+
+/// \brief Collects the distinct batchable indices (in appearance order) across
+/// all tensors in \p network.
+///
+/// Iterates over every tensor slot (bra, ket, and aux) and appends an index to
+/// the result the first time it is seen and \p is_batchable returns true for
+/// it.  The returned list assigns each index a stable bit position: index at
+/// position \c k is bit \c k of a sliced-set bitmask \c B.
+///
+/// \param network  The TensorNetwork to scan.
+/// \param is_batchable  Predicate returning true for indices in a batchable
+///        space (e.g. a DF/RI auxiliary space).
+/// \return Ordered, deduplicated list of batchable indices.
+inline container::vector<Index> batchable_index_list(
+    TensorNetwork const& network,
+    std::function<bool(Index const&)> const& is_batchable) {
+  container::vector<Index> aux;
+  if (!is_batchable) return aux;
+  for (auto&& t : network.tensors()) {
+    auto tp = std::dynamic_pointer_cast<Tensor>(t);
+    for (auto&& ix : ranges::views::concat(tp->bra(), tp->ket(), tp->aux()))
+      if (is_batchable(ix) && ranges::find(aux, ix) == ranges::end(aux))
+        aux.push_back(ix);
+  }
+  return aux;
+}
+
+/// \brief Footprint tables for every sliced-set B of batchable indices.
+///
+/// Returns a vector of \c 2^m tables, where \c m = \c aux_list.size(). Table
+/// \c B is the result of \ref subset_footprints evaluated with an extent
+/// function that replaces the full extent of \c aux_list[k] with
+/// \c min(full_extent, batch) whenever bit \c k is set in \c B.
+///
+/// \param network    The TensorNetwork.
+/// \param tidxs      Target (open) indices of the network.
+/// \param idxsz      Callable mapping an Index to its full extent.
+/// \param is_batchable  Predicate identifying batchable indices.
+/// \param batch      Shared slice size applied to every sliced batchable index.
+/// \param aux_list   Ordered list of distinct batchable indices (as returned
+///        by \ref batchable_index_list).
+/// \return \c tables[B][n] = footprint of subset \c n under sliced-set \c B.
+template <typename TIdxs, typename IdxToSz>
+container::vector<container::vector<double>> sliced_footprints(
+    TensorNetwork const& network, TIdxs const& tidxs, IdxToSz&& idxsz,
+    std::function<bool(Index const&)> const& is_batchable, std::size_t batch,
+    container::vector<Index> const& aux_list) {
+  std::size_t const m = aux_list.size();
+  container::vector<container::vector<double>> tables(std::size_t{1} << m);
+  for (std::size_t B = 0; B < tables.size(); ++B) {
+    auto extent = [&, B](Index const& ix) -> std::size_t {
+      std::size_t e = idxsz(ix);
+      if (is_batchable && is_batchable(ix)) {
+        auto it = ranges::find(aux_list, ix);
+        if (it != ranges::end(aux_list)) {
+          std::size_t k =
+              static_cast<std::size_t>(it - ranges::begin(aux_list));
+          if (B & (std::size_t{1} << k)) return std::min(e, batch);
+        }
+      }
+      return e;
+    };
+    tables[B] = subset_footprints(network, tidxs, extent);
+  }
+  return tables;
+}
+
+/// \brief Bitmask of volatile leaf tensors in \p network.
+///
+/// Bit \c i is set if tensor \c i (in \c network.tensors() order) satisfies
+/// \p is_volatile_leaf.  Returns 0 when the predicate is empty (no tensor is
+/// volatile, weighting disabled).  Mirrors the inline volatile-mask
+/// construction inside \ref single_term_opt_impl.
+///
+/// \param network           The TensorNetwork.
+/// \param is_volatile_leaf  Predicate identifying volatile leaf tensors; may
+///        be empty.
+/// \return Bitmask with bit i set iff tensor i is a volatile leaf.
+inline std::size_t leaf_volatile_mask(
+    TensorNetwork const& network,
+    std::function<bool(Tensor const&)> const& is_volatile_leaf) {
+  std::size_t mask = 0;
+  if (!is_volatile_leaf) return mask;
+  std::size_t i = 0;
+  for (auto&& t : network.tensors()) {
+    auto tp = std::dynamic_pointer_cast<Tensor>(t);
+    if (tp && is_volatile_leaf(*tp)) mask |= (std::size_t{1} << i);
+    ++i;
+  }
+  return mask;
 }
 
 struct SubNetHash {

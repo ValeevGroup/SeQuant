@@ -21,9 +21,20 @@ class Tensor;
 ///   order-independent `DenseFLOPs`/`DenseSize`, the contraction order is a
 ///   real lever here. NOTE: `DensePeakSize` does not yet support
 ///   common-subexpression elimination (`CSEOptions::subnet` must be false).
+/// - `DensePeakSizeBatched` extends `DensePeakSize` with a per-index
+///   batchability model: each index satisfying
+///   `OptimizeOptions::is_batchable_index` is treated as independently sliced
+///   to `min(extent, batch_target_size)` elements. The DP minimises peak over
+///   the worst-case sliced configuration. Only consulted by the batched oracle
+///   and DP; requires `is_batchable_index` and `batch_target_size` to be set.
 ///
 /// Leaves room for `Sparse*` models later.
-enum class ObjectiveFunction { DenseFLOPs, DenseSize, DensePeakSize };
+enum class ObjectiveFunction {
+  DenseFLOPs,
+  DenseSize,
+  DensePeakSize,
+  DensePeakSizeBatched
+};
 
 /// Whether to reorder summands so terms with shared intermediates appear
 /// closer to each other.
@@ -90,8 +101,8 @@ struct OptimizeOptions {
   /// Rationale: the FLOPs cost is blind to the storage size of the
   /// intermediates it materializes, so it will happily pick an order (and thus
   /// expose, as a shareable subtree, a common subexpression) that carries a
-  /// free large-space index — e.g. a half-transformed DF integral that still
-  /// carries a free projected-AO (PAO) index — because forming it once is
+  /// free large-space index -- e.g. a half-transformed DF integral that still
+  /// carries a free projected-AO (PAO) index -- because forming it once is
   /// FLOPs-cheap. Such an intermediate can be enormous. A nonzero
   /// footprint_weight biases single-term optimization toward orders that defer
   /// or avoid materializing such large intermediates (e.g. transforming both
@@ -102,6 +113,17 @@ struct OptimizeOptions {
   /// useful magnitude is on the order of the contracted-index extent that the
   /// offending intermediate would otherwise leave free.
   double footprint_weight = 0.0;
+
+  /// Predicate marking an Index as living in a batchable space the runtime
+  /// slices over (e.g. DF/RI aux; = the eval cache's accept_aux). Each distinct
+  /// batchable index is sliced independently. Only consulted by
+  /// ObjectiveFunction::DensePeakSizeBatched.
+  std::function<bool(Index const&)> is_batchable_index = {};
+
+  /// Shared slice size: a sliced batchable index contributes
+  /// min(extent, batch_target_size). 0 disables the batched discount. Only
+  /// consulted by DensePeakSizeBatched.
+  std::size_t batch_target_size = 0;
 };
 
 }  // namespace sequant

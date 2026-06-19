@@ -604,6 +604,38 @@ TEST_CASE("optimize", "[optimize]") {
       }
     }
 
+    SECTION("per-index batchability tables") {
+      using namespace sequant;
+      // Add a dedicated aux/fitting space "F" to the cloned registry so that
+      // g{a1;i1;F1} and g{a2;i1;F2} can be deserialized.  Use a fresh type bit
+      // (0b10000) that does not overlap with the sr-spaces bits
+      // (0b0001..0b1000).
+      reg->add(L"F", IndexSpace::Type{0b10000}, 3ul);
+
+      auto idxsz = [](Index const& ix) -> std::size_t {
+        return ix.space().approximate_size();
+      };
+      auto is_batchable = [](Index const& ix) {
+        return ix.space().base_key() == L"F";
+      };
+      auto t0 =
+          deserialize(L"g{a1;i1;F1}", {.def_perm_symm = Symmetry::Nonsymm});
+      auto t1 =
+          deserialize(L"g{a2;i1;F2}", {.def_perm_symm = Symmetry::Nonsymm});
+      TensorNetwork net{std::vector<ExprPtr>{t0, t1}};
+      container::svector<Index> targets;
+      auto aux = opt::detail::batchable_index_list(net, is_batchable);
+      REQUIRE(aux.size() == 2u);  // F1, F2 distinct
+      auto tables = opt::detail::sliced_footprints(net, targets, idxsz,
+                                                   is_batchable, 1, aux);
+      REQUIRE(tables.size() == 4u);  // 2^2 sliced-sets
+      // B=00 (none sliced) is the full footprint; B=11 (both) the all-sliced.
+      REQUIRE(tables[0b00][0b11] > tables[0b11][0b11]);  // full > all-sliced
+      // slicing only F1 (bit 0) shrinks the F1-leaf but not the F2-leaf.
+      size_t f1bit = 0;  // aux[0]==F1 by appearance order
+      REQUIRE(tables[size_t{1} << f1bit][0b01] < tables[0b00][0b01]);
+    }
+
     SECTION("optimize() public API dispatches DensePeakSize") {
       using namespace sequant;
       // Drives Step 3 (the opt_pure_product runtime dispatch). Before Step 3
