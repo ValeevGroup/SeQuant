@@ -555,19 +555,6 @@ container::vector<PeakRes> peak_dp(TensorNetwork const& network,
   return pr;
 }
 
-/// Achieved minimum peak memory (the DensePeakSize objective value) for the
-/// whole network under its optimal contraction order. Convenience wrapper that
-/// runs \ref subset_footprints and \ref peak_dp and returns the full set's
-/// (root subset's) peak. Used by tests to compare against the brute-force
-/// oracle.
-template <typename TIdxs, typename IdxToSz>
-double peak_cost(TensorNetwork const& network, TIdxs const& tidxs,
-                 IdxToSz&& idxsz) {
-  auto S = subset_footprints(network, tidxs, idxsz);
-  auto pr = peak_dp(network, tidxs, idxsz, S);
-  return pr.back().peak;
-}
-
 /// \brief Per-subset bitmask of batchable indices that are OPEN in that subset.
 ///
 /// For each subset \c n of the input tensors, bit \c k of \c open_aux[n] is set
@@ -709,37 +696,6 @@ container::vector<BatchedRes> peak_dp_batched(
   return pr;
 }
 
-/// \brief Achieved minimum batched peak memory for the whole network: the
-/// \c peak[root][B=0] objective of the multi-mode batched DP (section 6.2).
-///
-/// Builds the volatile-leaf bitmask from \p is_volatile_leaf, runs
-/// \ref peak_dp_batched, and returns the root subset's peak at the empty
-/// ancestor context (\c B = 0), per the design objective \c
-/// peak[root][\emptyset].
-///
-/// \param network           The TensorNetwork.
-/// \param tidxs             Target (open) indices of the network.
-/// \param idxsz             Callable mapping an Index to its full extent.
-/// \param is_batchable      Predicate identifying batchable indices.
-/// \param batch_target_size  Per-index slice size for each sliced batchable
-///        index.
-/// \param is_volatile_leaf  Predicate marking a leaf as volatile; may be empty.
-/// \return \c peak[root][0].
-template <typename TIdxs, typename IdxToSz>
-double peak_cost_batched(
-    TensorNetwork const& network, TIdxs const& tidxs, IdxToSz&& idxsz,
-    std::function<bool(Index const&)> const& is_batchable,
-    std::function<std::size_t(Index const&)> const& batch_target_size,
-    std::function<bool(Tensor const&)> const& is_volatile_leaf) {
-  std::size_t const vmask = leaf_volatile_mask(network, is_volatile_leaf);
-  auto pr = peak_dp_batched(network, tidxs, idxsz, is_batchable,
-                            batch_target_size, vmask);
-  auto aux = batchable_index_list(network, is_batchable);
-  std::size_t const nB = std::size_t{1} << aux.size();
-  std::size_t const root = (std::size_t{1} << network.tensors().size()) - 1;
-  return pr[root * nB + 0].peak;
-}
-
 /// Reconstruct the EvalSequence from the peak DP back-pointers, honoring the
 /// chosen evaluation order at each node (the lower-peak child is emitted last).
 template <typename TIdxs, typename IdxToSz>
@@ -822,100 +778,6 @@ EvalSequence single_term_opt_peak_batched_impl(
 
   std::size_t const root = (std::size_t{1} << nt) - 1;
   return build(build, root, 0);
-}
-
-/// \brief Independent memory-simulation recomputation of the chosen batched
-/// reconstruction's model-A peak (the user-required full numeric reconstruction
-/// check).
-///
-/// Runs \ref peak_dp_batched, walks the SAME chosen back-pointer tree as
-/// \ref single_term_opt_peak_batched_impl, and recomputes the subtree peak by
-/// DIRECT MEMORY SIMULATION rather than re-evaluating the DP's max/+ formula:
-/// at a node \c (n, B) with child context \c C = B | aprime, the first child
-/// (in \c lp_first order) is evaluated to completion, its result is held
-/// resident while the second child is evaluated, and the all-co-resident peak
-/// is the max over the schedule of the sum of live tensor sizes (leaf inputs
-/// resident from the start, freed on consumption; each child's result held
-/// until the parent contraction consumes it). All sizes come from
-/// \ref sliced_footprints at the active context (\c tables[ctx & open_aux[s]],
-/// matching the DP exactly). The returned value must EQUAL
-/// \ref peak_cost_batched; a mismatch signals a bug in either the DP or the
-/// reconstruction.
-///
-/// \param network       The TensorNetwork.
-/// \param tidxs         Target (open) indices of the network.
-/// \param idxsz         Callable mapping an Index to its full extent.
-/// \param is_batchable  Predicate identifying batchable indices.
-/// \param batch_target_size  Per-index slice size for each sliced batchable
-///        index.
-/// \param is_volatile_leaf  Predicate marking a leaf as volatile; may be empty.
-/// \return The simulated model-A peak of the chosen reconstruction.
-template <typename TIdxs, typename IdxToSz>
-double reconstructed_batched_peak(
-    TensorNetwork const& network, TIdxs const& tidxs, IdxToSz&& idxsz,
-    std::function<bool(Index const&)> const& is_batchable,
-    std::function<std::size_t(Index const&)> const& batch_target_size,
-    std::function<bool(Tensor const&)> const& is_volatile_leaf) {
-  auto const nt = network.tensors().size();
-  std::size_t const vmask = leaf_volatile_mask(network, is_volatile_leaf);
-  auto pr = peak_dp_batched(network, tidxs, idxsz, is_batchable,
-                            batch_target_size, vmask);
-  auto aux = batchable_index_list(network, is_batchable);
-  std::size_t const nB = std::size_t{1} << aux.size();
-  auto tables = sliced_footprints(network, tidxs, idxsz, is_batchable,
-                                  batch_target_size, aux);
-  auto open_aux = subset_open_aux(network, tidxs, aux);
-  auto at = [&](std::size_t n, std::size_t B) -> BatchedRes const& {
-    return pr[n * nB + B];
-  };
-  // Context-restricted size of subset s under sliced-set ctx (mirrors the DP).
-  auto sz = [&](std::size_t s, std::size_t ctx) {
-    return tables[ctx & open_aux[s]][s];
-  };
-
-  // Sum of leaf (singleton) sizes in subset s under ctx -- the inputs that are
-  // resident throughout the evaluation of subtree s.
-  auto Lof = [&](std::size_t s, std::size_t ctx) {
-    double r = 0.0;
-    for (std::size_t b = 0; b < nt; ++b)
-      if (s & (std::size_t{1} << b)) r += sz(std::size_t{1} << b, ctx);
-    return r;
-  };
-
-  // Simulate the peak of evaluating subtree n at ancestor context B by walking
-  // the chosen back-pointers. A leaf is resident at its own size. For an
-  // internal node, with child context C = B | aprime, evaluate the lp_first
-  // child fully (peak: its own simulated peak), then hold its result (sized at
-  // C) while evaluating the second child (whose inputs co-reside at Lof), then
-  // both results co-reside while the parent result (sized at B) is formed.
-  // Re-derives the chosen reconstruction's peak by following the back-pointer
-  // tree (contexts/orders chosen by the DP) and recomputing each child's peak
-  // via recursion, rather than reading the DP's minimized pr[*].peak table.
-  // The per-node combination (stage_first/stage_second/stage_form) uses the
-  // same staged-peak formula as the DP's lpf. What this validates independently
-  // is the back-pointer walk itself (which children, order, context). The
-  // Task-2/Task-3 batched oracle is the independent guard on the staged-peak
-  // algebra.
-  auto sim = [&](auto&& self, std::size_t n, std::size_t B) -> double {
-    if (std::popcount(n) == 1) return sz(n, B);
-    auto const& r = at(n, B);
-    std::size_t const C = B | r.aprime;
-    std::size_t const f = r.lp_first ? r.lp : r.rp;  // evaluated first
-    std::size_t const s = r.lp_first ? r.rp : r.lp;  // evaluated second
-    double const peak_f = self(self, f, C);
-    double const peak_s = self(self, s, C);
-    // While the first child evaluates, the second child's leaf inputs sit
-    // resident (Lof(s, C)). While the second child evaluates, the first
-    // child's result sits resident (sz(f, C)). When both results exist, the
-    // parent result (sz(n, B)) is materialized alongside them.
-    double const stage_first = Lof(s, C) + peak_f;
-    double const stage_second = sz(f, C) + peak_s;
-    double const stage_form = sz(f, C) + sz(s, C) + sz(n, B);
-    return std::max({stage_first, stage_second, stage_form});
-  };
-
-  std::size_t const root = (std::size_t{1} << nt) - 1;
-  return sim(sim, root, 0);
 }
 
 }  // namespace detail

@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <bit>
 #include <concepts>
+#include <functional>
 #include <limits>
 #include <utility>
 
@@ -448,6 +449,90 @@ struct PeakBatchedModel {
     return build(build, root, 0);
   }
 };
+
+/// \brief Achieved minimum peak memory (the DensePeakSize objective value) for
+/// the whole network under its optimal order. Builds \ref PeakModel, runs the
+/// generic driver's \ref solve_single_term, and returns the root subset's peak.
+/// Used by tests to compare against the brute-force oracle.
+template <typename TIdxs, typename IdxToSz>
+double peak_cost(TensorNetwork const& network, TIdxs const& tidxs,
+                 IdxToSz&& idxsz) {
+  PeakModel<std::decay_t<IdxToSz>> model{std::forward<IdxToSz>(idxsz)};
+  auto ctx = model.build_context(network, tidxs);
+  auto st = solve_single_term(model, network, tidxs, ctx);
+  return st.back().peak;  // root subset == full set == last element
+}
+
+/// \brief Achieved minimum batched peak memory: the peak[root][B=0] objective
+/// of the multi-mode batched DP. Builds \ref PeakBatchedModel, runs
+/// \ref solve_single_term, and returns the root subset's B=0 peak.
+template <typename TIdxs, typename IdxToSz>
+double peak_cost_batched(
+    TensorNetwork const& network, TIdxs const& tidxs, IdxToSz&& idxsz,
+    std::function<bool(Index const&)> const& is_batchable,
+    std::function<std::size_t(Index const&)> const& batch_target_size,
+    std::function<bool(Tensor const&)> const& is_volatile_leaf) {
+  PeakBatchedModel<std::decay_t<IdxToSz>> model{std::forward<IdxToSz>(idxsz),
+                                                is_batchable, batch_target_size,
+                                                is_volatile_leaf};
+  auto ctx = model.build_context(network, tidxs);
+  auto st = solve_single_term(model, network, tidxs, ctx);
+  return st.back()[0].peak;  // root subset's B=0 cell
+}
+
+/// \brief Independent memory-simulation recomputation of the chosen batched
+/// reconstruction's model-A peak. Builds \ref PeakBatchedModel, runs
+/// \ref solve_single_term for the back-pointer table, and recomputes the
+/// subtree peak by direct memory simulation (NOT the DP's max/+ formula). Must
+/// EQUAL \ref peak_cost_batched; a mismatch signals a DP/reconstruction bug.
+template <typename TIdxs, typename IdxToSz>
+double reconstructed_batched_peak(
+    TensorNetwork const& network, TIdxs const& tidxs, IdxToSz&& idxsz,
+    std::function<bool(Index const&)> const& is_batchable,
+    std::function<std::size_t(Index const&)> const& batch_target_size,
+    std::function<bool(Tensor const&)> const& is_volatile_leaf) {
+  PeakBatchedModel<std::decay_t<IdxToSz>> model{std::forward<IdxToSz>(idxsz),
+                                                is_batchable, batch_target_size,
+                                                is_volatile_leaf};
+  auto ctx = model.build_context(network, tidxs);
+  auto st = solve_single_term(model, network, tidxs, ctx);
+  auto const nt = network.tensors().size();
+
+  // Simulate the peak of evaluating subtree n at ancestor context B by walking
+  // the chosen back-pointers. A leaf is resident at its own size. For an
+  // internal node, with child context C = B | aprime, evaluate the lp_first
+  // child fully (peak: its own simulated peak), then hold its result (sized at
+  // C) while evaluating the second child (whose inputs co-reside at Lof), then
+  // both results co-reside while the parent result (sized at B) is formed.
+  // Re-derives the chosen reconstruction's peak by following the back-pointer
+  // tree (contexts/orders chosen by the DP) and recomputing each child's peak
+  // via recursion, rather than reading the DP's minimized st[*].peak table.
+  // The per-node combination (stage_first/stage_second/stage_form) uses the
+  // same staged-peak formula as the DP's lpf. What this validates independently
+  // is the back-pointer walk itself (which children, order, context). The
+  // Task-2/Task-3 batched oracle is the independent guard on the staged-peak
+  // algebra.
+  auto sim = [&](auto&& self, std::size_t n, std::size_t B) -> double {
+    if (std::popcount(n) == 1) return ctx.sz(n, B);
+    auto const& r = st[n][B];
+    std::size_t const C = B | r.aprime;
+    std::size_t const f = r.lp_first ? r.lp : r.rp;  // evaluated first
+    std::size_t const s = r.lp_first ? r.rp : r.lp;  // evaluated second
+    double const peak_f = self(self, f, C);
+    double const peak_s = self(self, s, C);
+    // While the first child evaluates, the second child's leaf inputs sit
+    // resident (Lof(s, C)). While the second child evaluates, the first
+    // child's result sits resident (sz(f, C)). When both results exist, the
+    // parent result (sz(n, B)) is materialized alongside them.
+    double const stage_first = ctx.Lof(s, C) + peak_f;
+    double const stage_second = ctx.sz(f, C) + peak_s;
+    double const stage_form = ctx.sz(f, C) + ctx.sz(s, C) + ctx.sz(n, B);
+    return std::max({stage_first, stage_second, stage_form});
+  };
+
+  std::size_t const root = (std::size_t{1} << nt) - 1;
+  return sim(sim, root, 0);
+}
 
 /// \brief Compile-time concept for a single-term-DP cost model.
 ///
