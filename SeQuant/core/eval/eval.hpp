@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/eval/fwd.hpp>
 
+#include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
@@ -1261,6 +1262,35 @@ template <typename F, typename IndexPredicate = accept_any_index,
     SEQUANT_ASSERT(trigger_result);
     return trigger_result;
   };
+}
+
+/// \brief Builds a batched custom evaluator (see make_batched_custom_evaluator)
+/// from a \p policy object, lifting the policy's canonical Tensor-based
+/// volatile-leaf predicate to the EvalNode predicate the batched evaluator
+/// expects.
+///
+/// Exactly equivalent to calling make_batched_custom_evaluator with:
+///   - target_batch_size = policy.batch_target_size
+///   - accept           = policy.is_batchable_index
+///   - make_scope_guard = make_scope_guard (forwarded)
+///   - is_volatile      = EvalNode lift of policy.is_volatile_leaf:
+///       n.leaf() && n->is_tensor() && policy.is_volatile_leaf(n->as_tensor())
+///     (when policy.is_volatile_leaf is empty, no node is volatile)
+///
+/// \param policy       BatchPolicy carrying the three batchability predicates.
+/// \param yielder      The leaf evaluator (captured and forwarded).
+/// \param make_scope_guard  Optional scope-guard factory (same semantics as in
+///        make_batched_custom_evaluator; defaults to make_no_scope_guard).
+template <class F, class ScopeGuardFactory = make_no_scope_guard>
+[[nodiscard]] auto make_evaluator(BatchPolicy const& policy, F yielder,
+                                  ScopeGuardFactory make_scope_guard = {}) {
+  auto is_volatile_node = [p = policy.is_volatile_leaf](auto const& n) -> bool {
+    if (!n.leaf() || !n->is_tensor()) return false;
+    return p && p(n->as_tensor());
+  };
+  return make_batched_custom_evaluator(
+      std::move(yielder), policy.batch_target_size, policy.is_batchable_index,
+      std::move(make_scope_guard), std::move(is_volatile_node));
 }
 
 }  // namespace sequant
