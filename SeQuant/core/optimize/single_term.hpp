@@ -963,7 +963,7 @@ EvalSequence single_term_opt(
     (void)footprint_weight;
     (void)is_batchable_index;
     (void)batch_target_size;
-    return single_term_opt_peak_impl(network, tidxs, idxsz);
+    return run_single_term_opt(PeakModel{idxsz}, network, tidxs);
   } else if constexpr (Metric == ObjectiveFunction::DensePeakSizeBatched) {
     SEQUANT_ASSERT(
         !subnet_cse &&

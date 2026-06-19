@@ -895,6 +895,27 @@ TEST_CASE("optimize", "[optimize]") {
       // optimized is a binarized product over the same 3 leaves.
       REQUIRE(count_tensor_leaves(optimized) == 3u);
     }
+
+    SECTION("PeakModel via driver == single_term_opt_peak_impl") {
+      using namespace sequant;
+      auto idxsz = [](Index const& ix) {
+        return ix.space().approximate_size();
+      };
+      for (auto const& spec : std::vector<std::vector<std::wstring>>{
+               {L"g{a1;i1}", L"g{a1;a2}", L"g{a2;i2}"},
+               {L"g{a1;i1}", L"g{a1;a2}", L"g{a2;a3}", L"g{a3;i2}"}}) {
+        std::vector<ExprPtr> ts;
+        for (auto s : spec)
+          ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
+        TensorNetwork net{ts};
+        container::svector<Index> targets;
+        auto old_seq =
+            opt::detail::single_term_opt_peak_impl(net, targets, idxsz);
+        auto new_seq = opt::detail::run_single_term_opt(
+            opt::detail::PeakModel{idxsz}, net, targets);
+        REQUIRE(new_seq == old_seq);
+      }
+    }
   }
 
   SECTION("CSE") {
