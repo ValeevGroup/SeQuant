@@ -17,6 +17,7 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <algorithm>
+#include <bit>
 #include <cstddef>
 #include <functional>
 #include <initializer_list>
@@ -73,6 +74,72 @@ static double brute_force_min_peak(std::vector<double> const& S, size_t nt) {
   for (size_t b = 0; b < nt; ++b) leaves.push_back(size_t{1} << b);
   (void)full;
   return rec(std::move(leaves));
+}
+
+// Per-index batch-aware peak oracle.
+// T[ctx][subset]: sliced footprints (ctx = bitmask of currently-sliced aux
+// indices, subset = bitmask of leaves). open_aux[subset] = bitmask of aux
+// indices that are open (external) in that subset. persistent[subset] = 1 iff
+// the contraction result at that subset is persistent. nt = number of leaves.
+// B = bitmask of aux indices currently being sliced (threading the context).
+static double oracle_rec(size_t n, size_t B,
+                         std::vector<std::vector<double>> const& T,
+                         std::vector<size_t> const& open_aux,
+                         std::vector<char> const& persistent, size_t nt) {
+  if (std::popcount(n) == 1) return T[B & open_aux[n]][n];
+  auto sz = [&](size_t s, size_t ctx) { return T[ctx & open_aux[s]][s]; };
+  auto Lof = [&](size_t s, size_t ctx) {
+    double r = 0;
+    for (size_t b = 0; b < nt; b++)
+      if (s & (size_t{1} << b)) r += sz(size_t{1} << b, ctx);
+    return r;
+  };
+  double best = std::numeric_limits<double>::max();
+  for (size_t lp = (n - 1) & n; lp; lp = (lp - 1) & n) {
+    size_t rp = n ^ lp;
+    if (lp > rp) continue;
+    // aux contracted at THIS node = open at children but not open at parent
+    size_t Acand =
+        persistent[n] ? ((open_aux[lp] | open_aux[rp]) & ~open_aux[n]) : 0;
+    for (size_t Ap = Acand;; Ap = (Ap - 1) & Acand) {
+      size_t C = B | Ap;
+      double pl = oracle_rec(lp, C, T, open_aux, persistent, nt);
+      double pr = oracle_rec(rp, C, T, open_aux, persistent, nt);
+      double both = sz(lp, C) + sz(rp, C) + sz(n, B);
+      double lpf = std::max({Lof(rp, C) + pl, sz(lp, C) + pr, both});
+      double rpf = std::max({Lof(lp, C) + pr, sz(rp, C) + pl, both});
+      best = std::min(best, std::min(lpf, rpf));
+      if (Ap == 0) break;
+    }
+  }
+  return best;
+}
+
+static double batched_min_peak(std::vector<std::vector<double>> const& T,
+                               std::vector<size_t> const& open_aux,
+                               std::vector<char> const& persistent, size_t nt) {
+  size_t full = (size_t{1} << nt) - 1;
+  return oracle_rec(full, 0, T, open_aux, persistent, nt);
+}
+
+TEST_CASE("batched_min_peak oracle (per-index)", "[optimize]") {
+  // 2 leaves sharing aux F (m=1). open_aux: leaves have F open (bit0=1);
+  // the pair has F internal (bit0=0). persistent everywhere.
+  // T[ctx][subset]: full (ctx=0) leaves 4, pair result 2; sliced (ctx=1)
+  // leaves 2.
+  std::vector<std::vector<double>> T(2, std::vector<double>(4, 0.0));
+  T[0][0b01] = T[0][0b10] = 4;
+  T[0][0b11] = 2;  // full
+  T[1][0b01] = T[1][0b10] = 2;
+  T[1][0b11] = 2;  // F sliced -> leaves halve
+  std::vector<size_t> open_aux(4, 0);
+  open_aux[0b01] = 1;
+  open_aux[0b10] = 1;
+  open_aux[0b11] = 0;  // F open in leaves, internal in pair
+  std::vector<char> persistent(4, 1);
+  // not batched: 4+4+2=10; batch F at the pair: leaves sliced 2 -> 2+2+2=6.
+  // min 6.
+  REQUIRE(batched_min_peak(T, open_aux, persistent, /*nt=*/2) == 6.0);
 }
 
 TEST_CASE("brute_force_min_peak oracle", "[optimize]") {
