@@ -16,9 +16,13 @@
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
+#include <algorithm>
 #include <cstddef>
+#include <functional>
 #include <initializer_list>
+#include <limits>
 #include <memory>
+#include <vector>
 
 sequant::ExprPtr extract(sequant::ExprPtr expr,
                          std::initializer_list<size_t> const& idxs) {
@@ -35,6 +39,61 @@ size_t count_tensor_leaves(sequant::ExprPtr const& expr) {
   expr->visit([&n](auto const& x) { n += x->template is<Tensor>() ? 1 : 0; },
               /*atoms_only=*/true);
   return n;
+}
+
+// Minimum peak memory over ALL pairwise contraction sequences of `nt` leaves,
+// using S[subset] (subset_footprints) for sizes. Independent oracle for the
+// peak DP: enumerates schedules and simulates memory; no recurrence assumed.
+static double brute_force_min_peak(std::vector<double> const& S, size_t nt) {
+  double const full = static_cast<double>((size_t{1} << nt) - 1);
+  // `live` is the set of subset-masks currently materialized (a partition of
+  // the full set). Recurse over every pair to merge.
+  std::function<double(std::vector<size_t>)> rec =
+      [&](std::vector<size_t> live) -> double {
+    if (live.size() == 1) return 0.0;  // nothing more to compute
+    double live_sum = 0.0;
+    for (auto m : live) live_sum += S[m];
+    double best = std::numeric_limits<double>::max();
+    for (size_t i = 0; i < live.size(); ++i)
+      for (size_t j = i + 1; j < live.size(); ++j) {
+        size_t merged = live[i] | live[j];
+        // instantaneous peak when forming `merged`: all live results plus the
+        // new result momentarily co-resident.
+        double step_peak = live_sum + S[merged];
+        std::vector<size_t> next;
+        next.reserve(live.size() - 1);
+        for (size_t k = 0; k < live.size(); ++k)
+          if (k != i && k != j) next.push_back(live[k]);
+        next.push_back(merged);
+        best = std::min(best, std::max(step_peak, rec(next)));
+      }
+    return best;
+  };
+  std::vector<size_t> leaves;
+  for (size_t b = 0; b < nt; ++b) leaves.push_back(size_t{1} << b);
+  (void)full;
+  return rec(std::move(leaves));
+}
+
+TEST_CASE("brute_force_min_peak oracle", "[optimize]") {
+  // 3 leaves, hand-checkable sizes by subset mask:
+  //   S[001]=2 S[010]=2 S[100]=2 (leaves)
+  //   S[011]=1 S[101]=1 S[110]=8 S[111]=1 (pair/full results)
+  std::vector<double> S(8, 0.0);
+  S[0b001] = S[0b010] = S[0b100] = 2.0;
+  S[0b011] = 1.0;
+  S[0b101] = 1.0;
+  S[0b110] = 8.0;
+  S[0b111] = 1.0;
+  // Memory model: step_peak = sum(all live subsets) + S[merged result].
+  // With 3 leaves all live, live_sum = 2+2+2 = 6.
+  // Schedule {001,010}->{011}: step_peak = 6+1 = 7; then {011,100}->{111}:
+  //   live_sum=1+2=3, step_peak=3+1=4. Peak = max(7,4) = 7.
+  // Schedule {001,100}->{101}: step_peak = 6+1 = 7; then {010,101}->{111}:
+  //   live_sum=2+1=3, step_peak=3+1=4. Peak = max(7,4) = 7.
+  // Schedule {010,100}->{110}: step_peak = 6+8 = 14. Peak >= 14.
+  // min over all schedules = 7.
+  REQUIRE(brute_force_min_peak(S, 3) == 7.0);
 }
 
 TEST_CASE("optimize", "[optimize]") {
