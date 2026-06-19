@@ -758,6 +758,145 @@ EvalSequence single_term_opt_peak_impl(TensorNetwork const& network,
   return seq.back();
 }
 
+/// \brief Reconstructs the optimal contraction \ref EvalSequence from the
+/// multi-mode batched peak DP back-pointers (section 6.2, model A).
+///
+/// Runs \ref peak_dp_batched, then walks the chosen back-pointers from the
+/// root subset at the empty ancestor context \c (root, B=0). At each node
+/// \c (n, B) it reads the winning \c aprime, forms the child context
+/// \c C = B | aprime, and recurses into the children at context \c C in
+/// \c lp_first order (the lower-peak child is emitted last). A singleton emits
+/// its tensor index; an internal node emits \c concat(first, second), -1.
+///
+/// \param network       The TensorNetwork.
+/// \param tidxs         Target (open) indices of the network.
+/// \param idxsz         Callable mapping an Index to its full extent.
+/// \param is_batchable  Predicate identifying batchable indices.
+/// \param batch         Shared slice size for each sliced batchable index.
+/// \param is_volatile_leaf  Predicate marking a leaf as volatile; may be empty.
+/// \return Optimal evaluation sequence under the batched peak objective.
+template <typename TIdxs, typename IdxToSz>
+EvalSequence single_term_opt_peak_batched_impl(
+    TensorNetwork const& network, TIdxs const& tidxs, IdxToSz&& idxsz,
+    std::function<bool(Index const&)> const& is_batchable, std::size_t batch,
+    std::function<bool(Tensor const&)> const& is_volatile_leaf) {
+  using ranges::views::concat;
+  auto const nt = network.tensors().size();
+  if (nt == 1) return EvalSequence{0};
+  if (nt == 2) return EvalSequence{0, 1, -1};
+
+  std::size_t const vmask = leaf_volatile_mask(network, is_volatile_leaf);
+  auto pr = peak_dp_batched(network, tidxs, idxsz, is_batchable, batch, vmask);
+  auto aux = batchable_index_list(network, is_batchable);
+  std::size_t const nB = std::size_t{1} << aux.size();
+  auto at = [&](std::size_t n, std::size_t B) -> BatchedRes const& {
+    return pr[n * nB + B];
+  };
+
+  // Recursive back-pointer walk: emit the subsequence for subset n evaluated
+  // at ancestor context B. The child context is C = B | aprime; children are
+  // emitted in lp_first order (lower-peak child last).
+  auto build = [&](auto&& self, std::size_t n, std::size_t B) -> EvalSequence {
+    if (std::popcount(n) == 1)
+      return EvalSequence{static_cast<int>(std::countr_zero(n))};
+    auto const& r = at(n, B);
+    std::size_t const C = B | r.aprime;
+    auto first = self(self, r.lp_first ? r.lp : r.rp, C);
+    auto second = self(self, r.lp_first ? r.rp : r.lp, C);
+    auto seq = concat(first, second) | ranges::to<EvalSequence>;
+    seq.push_back(-1);
+    return seq;
+  };
+
+  std::size_t const root = (std::size_t{1} << nt) - 1;
+  return build(build, root, 0);
+}
+
+/// \brief Independent memory-simulation recomputation of the chosen batched
+/// reconstruction's model-A peak (the user-required full numeric reconstruction
+/// check).
+///
+/// Runs \ref peak_dp_batched, walks the SAME chosen back-pointer tree as
+/// \ref single_term_opt_peak_batched_impl, and recomputes the subtree peak by
+/// DIRECT MEMORY SIMULATION rather than re-evaluating the DP's max/+ formula:
+/// at a node \c (n, B) with child context \c C = B | aprime, the first child
+/// (in \c lp_first order) is evaluated to completion, its result is held
+/// resident while the second child is evaluated, and the all-co-resident peak
+/// is the max over the schedule of the sum of live tensor sizes (leaf inputs
+/// resident from the start, freed on consumption; each child's result held
+/// until the parent contraction consumes it). All sizes come from
+/// \ref sliced_footprints at the active context (\c tables[ctx & open_aux[s]],
+/// matching the DP exactly). The returned value must EQUAL
+/// \ref peak_cost_batched; a mismatch signals a bug in either the DP or the
+/// reconstruction.
+///
+/// \param network       The TensorNetwork.
+/// \param tidxs         Target (open) indices of the network.
+/// \param idxsz         Callable mapping an Index to its full extent.
+/// \param is_batchable  Predicate identifying batchable indices.
+/// \param batch         Shared slice size for each sliced batchable index.
+/// \param is_volatile_leaf  Predicate marking a leaf as volatile; may be empty.
+/// \return The simulated model-A peak of the chosen reconstruction.
+template <typename TIdxs, typename IdxToSz>
+double reconstructed_batched_peak(
+    TensorNetwork const& network, TIdxs const& tidxs, IdxToSz&& idxsz,
+    std::function<bool(Index const&)> const& is_batchable, std::size_t batch,
+    std::function<bool(Tensor const&)> const& is_volatile_leaf) {
+  auto const nt = network.tensors().size();
+  std::size_t const vmask = leaf_volatile_mask(network, is_volatile_leaf);
+  auto pr = peak_dp_batched(network, tidxs, idxsz, is_batchable, batch, vmask);
+  auto aux = batchable_index_list(network, is_batchable);
+  std::size_t const nB = std::size_t{1} << aux.size();
+  auto tables =
+      sliced_footprints(network, tidxs, idxsz, is_batchable, batch, aux);
+  auto open_aux = subset_open_aux(network, tidxs, aux);
+  auto at = [&](std::size_t n, std::size_t B) -> BatchedRes const& {
+    return pr[n * nB + B];
+  };
+  // Context-restricted size of subset s under sliced-set ctx (mirrors the DP).
+  auto sz = [&](std::size_t s, std::size_t ctx) {
+    return tables[ctx & open_aux[s]][s];
+  };
+
+  // Sum of leaf (singleton) sizes in subset s under ctx -- the inputs that are
+  // resident throughout the evaluation of subtree s.
+  auto Lof = [&](std::size_t s, std::size_t ctx) {
+    double r = 0.0;
+    for (std::size_t b = 0; b < nt; ++b)
+      if (s & (std::size_t{1} << b)) r += sz(std::size_t{1} << b, ctx);
+    return r;
+  };
+
+  // Simulate the peak of evaluating subtree n at ancestor context B by walking
+  // the chosen back-pointers. A leaf is resident at its own size. For an
+  // internal node, with child context C = B | aprime, evaluate the lp_first
+  // child fully (peak: its own simulated peak), then hold its result (sized at
+  // C) while evaluating the second child (whose inputs co-reside at Lof), then
+  // both results co-reside while the parent result (sized at B) is formed.
+  // This re-derives peak independent of the DP's max/+ formula.
+  auto sim = [&](auto&& self, std::size_t n, std::size_t B) -> double {
+    if (std::popcount(n) == 1) return sz(n, B);
+    auto const& r = at(n, B);
+    std::size_t const C = B | r.aprime;
+    std::size_t const f = r.lp_first ? r.lp : r.rp;  // evaluated first
+    std::size_t const s = r.lp_first ? r.rp : r.lp;  // evaluated second
+    double const peak_f = self(self, f, C);
+    double const peak_s = self(self, s, C);
+    // While the first child evaluates, the second child's leaf inputs sit
+    // resident (Lof(s, C)). While the second child evaluates, the first
+    // child's result sits resident (sz(f, C)). When both results exist, the
+    // parent result (sz(n, B)) is materialized alongside them.
+    double const stage_first = Lof(s, C) + peak_f;
+    double const stage_second = sz(f, C) + peak_s;
+    double const stage_form = sz(f, C) + sz(s, C) + sz(n, B);
+    return std::max({stage_first, stage_second, stage_form});
+  };
+
+  std::size_t const root = (std::size_t{1} << nt) - 1;
+  if (nt == 0) return 0.0;
+  return sim(sim, root, 0);
+}
+
 ///
 /// \tparam Metric Objective function (ObjectiveFunction::DenseFLOPs or
 ///         ObjectiveFunction::DenseSize or ObjectiveFunction::DensePeakSize).
@@ -787,7 +926,9 @@ template <ObjectiveFunction Metric, has_index_extent IdxToSz>
 EvalSequence single_term_opt(
     TensorNetwork const& network, IdxToSz&& idxsz, bool subnet_cse,
     std::function<bool(Tensor const&)> const& is_volatile_leaf = {},
-    double volatile_weight = 1.0, double footprint_weight = 0.0) {
+    double volatile_weight = 1.0, double footprint_weight = 0.0,
+    std::function<bool(Index const&)> const& is_batchable_index = {},
+    std::size_t batch_target_size = 0) {
   decltype(OptRes::indices) tidxs{};
 
   // The per-intermediate footprint penalty needs idxsz too, so build a
@@ -806,7 +947,18 @@ EvalSequence single_term_opt(
     (void)is_volatile_leaf;
     (void)volatile_weight;
     (void)footprint_weight;
+    (void)is_batchable_index;
+    (void)batch_target_size;
     return single_term_opt_peak_impl(network, tidxs, idxsz);
+  } else if constexpr (Metric == ObjectiveFunction::DensePeakSizeBatched) {
+    SEQUANT_ASSERT(
+        !subnet_cse &&
+        "subnet_cse not supported with DensePeakSizeBatched (Phase 2)");
+    (void)volatile_weight;
+    (void)footprint_weight;
+    return single_term_opt_peak_batched_impl(
+        network, tidxs, idxsz, is_batchable_index, batch_target_size,
+        is_volatile_leaf);
   } else if constexpr (Metric == ObjectiveFunction::DenseFLOPs) {
     if (is_volatile_leaf && volatile_weight > 1.0) {
       size_t i = 0;
@@ -817,14 +969,18 @@ EvalSequence single_term_opt(
       }
       nr = volatile_weight;
     }
+    (void)is_batchable_index;
+    (void)batch_target_size;
     auto cost_fn = flops_counter(idxsz);
     return single_term_opt_impl(network, tidxs, cost_fn, subnet_cse,
                                 volatile_mask, nr, footprint_fn,
                                 footprint_weight);
   } else {
     static_assert(Metric == ObjectiveFunction::DenseSize,
-                  "Only DenseFLOPs, DenseSize, and DensePeakSize "
-                  "ObjectiveFunction supported.");
+                  "Only DenseFLOPs, DenseSize, DensePeakSize, and "
+                  "DensePeakSizeBatched ObjectiveFunction supported.");
+    (void)is_batchable_index;
+    (void)batch_target_size;
     auto cost_fn = memsize_counter(idxsz);
     return single_term_opt_impl(network, tidxs, cost_fn, subnet_cse,
                                 volatile_mask, nr, footprint_fn,
@@ -850,7 +1006,9 @@ template <ObjectiveFunction Metric = ObjectiveFunction::DenseFLOPs,
 ExprPtr single_term_opt(
     Product const& prod, IdxToSz&& idxsz, bool subnet_cse = false,
     std::function<bool(Tensor const&)> const& is_volatile_leaf = {},
-    double volatile_weight = 1.0, double footprint_weight = 0.0) {
+    double volatile_weight = 1.0, double footprint_weight = 0.0,
+    std::function<bool(Index const&)> const& is_batchable_index = {},
+    std::size_t batch_target_size = 0) {
   using ranges::views::filter;
   using ranges::views::reverse;
 
@@ -861,7 +1019,8 @@ ExprPtr single_term_opt(
       prod | filter(&ExprPtr::template is<Tensor>) | ranges::to_vector;
   auto seq = detail::single_term_opt<Metric>(
       TensorNetwork{tensors}, std::forward<IdxToSz>(idxsz), subnet_cse,
-      is_volatile_leaf, volatile_weight, footprint_weight);
+      is_volatile_leaf, volatile_weight, footprint_weight, is_batchable_index,
+      batch_target_size);
   auto result = container::svector<ExprPtr>{};
   for (auto i : seq)
     if (i == -1) {

@@ -779,6 +779,61 @@ TEST_CASE("optimize", "[optimize]") {
       }
     }
 
+    SECTION(
+        "DensePeakSizeBatched reconstruction achieves the optimum "
+        "(numeric)") {
+      using namespace sequant;
+      // Dedicated batchable "F" space (fresh type bit, no overlap with
+      // sr-spaces bits 0b0001..0b1000); see "per-index batchability tables".
+      reg->add(L"F", IndexSpace::Type{0b10000}, 3ul);
+      auto idxsz = [](Index const& ix) -> std::size_t {
+        return ix.space().approximate_size();
+      };
+      auto is_batchable = [](Index const& ix) {
+        return ix.space().base_key() == L"F";
+      };
+      std::size_t const batch = 1;
+      for (auto const& spec : std::vector<std::vector<std::wstring>>{
+               {L"g{a1;i1;F1}", L"g{a2;i1;F1}", L"g{a2;i2;F2}"},  // shared F1
+               {L"g{a1;i1;F1}", L"g{a2;i1;F2}", L"g{a2;i2;F2}"}}) {  // 2 aux
+        std::vector<ExprPtr> ts;
+        for (auto const& s : spec)
+          ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
+        TensorNetwork net{ts};
+        container::svector<Index> targets;
+        // recompute the chosen tree's peak by simulation over the pr
+        // back-pointers (independent of the DP's max/+ recurrence):
+        double recon = opt::detail::reconstructed_batched_peak(
+            net, targets, idxsz, is_batchable, batch, {});
+        double dp = opt::detail::peak_cost_batched(net, targets, idxsz,
+                                                   is_batchable, batch, {});
+        REQUIRE(recon == dp);
+      }
+    }
+
+    SECTION("optimize() public API dispatches DensePeakSizeBatched") {
+      using namespace sequant;
+      // Drives Step 4 (the opt_pure_product runtime dispatch for the batched
+      // arm). Before Step 4 this hits the exhaustiveness SEQUANT_ASSERT in
+      // opt_pure_product and fails; after Step 4 it returns a binarized
+      // product over the 3 leaves.
+      reg->add(L"F", IndexSpace::Type{0b10000}, 3ul);
+      auto expr = deserialize(L"g{a1;i1;F1} * g{a2;i1;F1} * g{a2;i2;F2}",
+                              {.def_perm_symm = Symmetry::Nonsymm});
+      OptimizeOptions opts;
+      opts.objective_function = ObjectiveFunction::DensePeakSizeBatched;
+      opts.idx_to_extent = [](Index const& ix) -> std::size_t {
+        return ix.space().approximate_size();
+      };
+      opts.is_batchable_index = [](Index const& ix) {
+        return ix.space().base_key() == L"F";
+      };
+      opts.batch_target_size = 1;
+      auto optimized = optimize(expr, opts);
+      REQUIRE(optimized);
+      REQUIRE(count_tensor_leaves(optimized) == 3u);
+    }
+
     SECTION("optimize() public API dispatches DensePeakSize") {
       using namespace sequant;
       // Drives Step 3 (the opt_pure_product runtime dispatch). Before Step 3
