@@ -564,6 +564,173 @@ double peak_cost(TensorNetwork const& network, TIdxs const& tidxs,
   return pr.back().peak;
 }
 
+/// \brief Per-subset bitmask of batchable indices that are OPEN in that subset.
+///
+/// For each subset \c n of the input tensors, bit \c k of \c open_aux[n] is set
+/// iff \c aux_list[k] is among the open (external) indices of subset \c n
+/// (those that remain after contracting \c n's tensors, with \c tidxs as the
+/// final targets). Used by the multi-mode batched DP and oracle to restrict the
+/// sliced-set context to indices actually open in a sized subset, so that table
+/// lookups (\ref sliced_footprints) are indexed consistently on both sides.
+///
+/// \param network   The TensorNetwork.
+/// \param tidxs     Target (open) indices of the network.
+/// \param aux_list  Ordered list of distinct batchable indices (as returned by
+///        \ref batchable_index_list); index \c k maps to bit \c k.
+/// \return \c open_aux[n] for every subset \c n.
+template <typename TIdxs>
+container::vector<std::size_t> subset_open_aux(
+    TensorNetwork const& network, TIdxs const& tidxs,
+    container::vector<Index> const& aux_list) {
+  container::vector<OptRes> results(
+      (std::size_t{1} << network.tensors().size()));
+  init_results(network, tidxs, results);
+  container::vector<std::size_t> open_aux(results.size(), 0);
+  for (std::size_t n = 0; n < results.size(); ++n) {
+    for (std::size_t k = 0; k < aux_list.size(); ++k) {
+      if (ranges::find(results[n].indices, aux_list[k]) !=
+          ranges::end(results[n].indices))
+        open_aux[n] |= (std::size_t{1} << k);
+    }
+  }
+  return open_aux;
+}
+
+/// Per-(subset, sliced-set) state for the multi-mode batched peak DP.
+/// Indexed in the flat table by \c n*(2^m)+B (subset \c n, sliced-set \c B).
+struct BatchedRes {
+  double peak = std::numeric_limits<double>::max();  // min peak for (n, B)
+  std::size_t lp = 0, rp = 0;  // winning bipartition (0 for singletons)
+  bool lp_first = true;        // winning evaluation order
+  std::size_t aprime = 0;  // winning subset of batchable indices sliced here
+};
+
+/// \brief Multi-mode (per batchable index) batched peak-memory DP.
+///
+/// Implements the \c peak[n][B] recurrence of the batch-aware cost model design
+/// (section 6.2, model A / all-co-resident). For a subset \c n contracted at
+/// sliced-set context \c B, the batchable indices CONTRACTED at this node are
+/// \c A = (open_aux[lp] | open_aux[rp]) & ~open_aux[n], gated by persistence
+/// (only when \c (volatile_mask & n) == 0). The recurrence minimizes over
+/// bipartition, evaluation order, and \c A' (a subset of \c A to batch here),
+/// with the child context \c C = B | A'. Footprints come from
+/// \ref sliced_footprints, indexed by a context restricted to what is open in
+/// the sized subset (the \c & open_aux[s] mask), mirroring the oracle.
+///
+/// \param network        The TensorNetwork.
+/// \param tidxs          Target (open) indices of the network.
+/// \param idxsz          Callable mapping an Index to its full extent.
+/// \param is_batchable   Predicate identifying batchable indices.
+/// \param batch          Shared slice size for each sliced batchable index.
+/// \param volatile_mask  Bitmask of volatile leaves (see \ref
+///        leaf_volatile_mask); subset \c n is persistent iff
+///        \c (volatile_mask & n) == 0.
+/// \return Flat table \c pr of size \c (2^nt)*(2^m), indexed \c n*(2^m)+B, with
+///         back-pointers (lp, rp, lp_first, aprime) per (n, B) for
+///         reconstruction.
+template <typename TIdxs, typename IdxToSz>
+container::vector<BatchedRes> peak_dp_batched(
+    TensorNetwork const& network, TIdxs const& tidxs, IdxToSz&& idxsz,
+    std::function<bool(Index const&)> const& is_batchable, std::size_t batch,
+    std::size_t volatile_mask) {
+  auto const nt = network.tensors().size();
+  auto aux = batchable_index_list(network, is_batchable);
+  std::size_t const m = aux.size();
+  std::size_t const nB = std::size_t{1} << m;
+  auto tables =
+      sliced_footprints(network, tidxs, idxsz, is_batchable, batch, aux);
+  auto open_aux = subset_open_aux(network, tidxs, aux);
+
+  // Flat (n, B) table.
+  container::vector<BatchedRes> pr((std::size_t{1} << nt) * nB);
+  auto idx = [nB](std::size_t n, std::size_t B) { return n * nB + B; };
+
+  // Context-restricted size of subset s under sliced-set ctx: the table is
+  // indexed by the part of ctx that is actually open in s (mirrors the oracle).
+  auto sz = [&](std::size_t s, std::size_t ctx) {
+    return tables[ctx & open_aux[s]][s];
+  };
+  // Per-context leaf-sum of subset s (sum of singleton sizes under ctx).
+  auto Lof = [&](std::size_t s, std::size_t ctx) {
+    double r = 0.0;
+    for (std::size_t b = 0; b < nt; ++b)
+      if (s & (std::size_t{1} << b)) r += sz(std::size_t{1} << b, ctx);
+    return r;
+  };
+
+  for (std::size_t n = 0; n < (std::size_t{1} << nt); ++n) {
+    if (std::popcount(n) == 0) {
+      for (std::size_t B = 0; B < nB; ++B) pr[idx(n, B)].peak = 0.0;
+      continue;
+    }
+    if (std::popcount(n) == 1) {
+      for (std::size_t B = 0; B < nB; ++B) pr[idx(n, B)].peak = sz(n, B);
+      continue;
+    }
+    for (std::size_t B = 0; B < nB; ++B) {
+      auto& curr = pr[idx(n, B)];
+      for (auto&& [lp, rp] : bits::bipartitions(n)) {
+        if (lp == 0 || rp == 0) continue;
+        // Batchable indices contracted at THIS node: open at children but not
+        // at parent, gated by persistence.
+        std::size_t const Acand =
+            (volatile_mask & n)
+                ? std::size_t{0}
+                : ((open_aux[lp] | open_aux[rp]) & ~open_aux[n]);
+        // Enumerate every subset A' of Acand (including the empty set).
+        std::size_t Ap = Acand;
+        while (true) {
+          std::size_t const C = B | Ap;
+          double const pl = pr[idx(lp, C)].peak;
+          double const prr = pr[idx(rp, C)].peak;
+          double const both = sz(lp, C) + sz(rp, C) + sz(n, B);
+          double const lpf = std::max({Lof(rp, C) + pl, sz(lp, C) + prr, both});
+          double const rpf = std::max({Lof(lp, C) + prr, sz(rp, C) + pl, both});
+          double const cand = std::min(lpf, rpf);
+          if (cand < curr.peak) {
+            curr.peak = cand;
+            curr.lp = lp;
+            curr.rp = rp;
+            curr.lp_first = (lpf <= rpf);
+            curr.aprime = Ap;
+          }
+          if (Ap == 0) break;
+          Ap = (Ap - 1) & Acand;
+        }
+      }
+    }
+  }
+  return pr;
+}
+
+/// \brief Achieved minimum batched peak memory for the whole network: the
+/// \c peak[root][B=0] objective of the multi-mode batched DP (section 6.2).
+///
+/// Builds the volatile-leaf bitmask from \p is_volatile_leaf, runs
+/// \ref peak_dp_batched, and returns the root subset's peak at the empty
+/// ancestor context (\c B = 0), per the design objective \c
+/// peak[root][\emptyset].
+///
+/// \param network           The TensorNetwork.
+/// \param tidxs             Target (open) indices of the network.
+/// \param idxsz             Callable mapping an Index to its full extent.
+/// \param is_batchable      Predicate identifying batchable indices.
+/// \param batch             Shared slice size for each sliced batchable index.
+/// \param is_volatile_leaf  Predicate marking a leaf as volatile; may be empty.
+/// \return \c peak[root][0].
+template <typename TIdxs, typename IdxToSz>
+double peak_cost_batched(
+    TensorNetwork const& network, TIdxs const& tidxs, IdxToSz&& idxsz,
+    std::function<bool(Index const&)> const& is_batchable, std::size_t batch,
+    std::function<bool(Tensor const&)> const& is_volatile_leaf) {
+  std::size_t const vmask = leaf_volatile_mask(network, is_volatile_leaf);
+  auto pr = peak_dp_batched(network, tidxs, idxsz, is_batchable, batch, vmask);
+  auto aux = batchable_index_list(network, is_batchable);
+  std::size_t const nB = std::size_t{1} << aux.size();
+  std::size_t const root = (std::size_t{1} << network.tensors().size()) - 1;
+  return pr[root * nB + 0].peak;
+}
+
 /// Reconstruct the EvalSequence from the peak DP back-pointers, honoring the
 /// chosen evaluation order at each node (the lower-peak child is emitted last).
 template <typename TIdxs, typename IdxToSz>

@@ -703,6 +703,82 @@ TEST_CASE("optimize", "[optimize]") {
       REQUIRE(tables[size_t{1} << f1bit][0b01] < tables[0b00][0b01]);
     }
 
+    SECTION(
+        "DensePeakSizeBatched all-sliced corner equals Phase-1 batched "
+        "peak") {
+      using namespace sequant;
+      // Dedicated batchable "F" space (fresh type bit, no overlap with
+      // sr-spaces bits 0b0001..0b1000); see "per-index batchability tables".
+      reg->add(L"F", IndexSpace::Type{0b10000}, 3ul);
+      auto idxsz = [](Index const& ix) -> std::size_t {
+        return ix.space().approximate_size();
+      };
+      auto is_batchable = [](Index const& ix) {
+        return ix.space().base_key() == L"F";
+      };
+      std::size_t const batch = 1;
+      std::vector<ExprPtr> ts;
+      for (auto s : {L"g{a1;i1;F1}", L"g{a2;i1;F1}", L"g{a2;i2;F2}"})
+        ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
+      TensorNetwork net{ts};
+      container::svector<Index> targets;
+      auto aux = opt::detail::batchable_index_list(net, is_batchable);
+      std::size_t const m = aux.size();
+      auto pr = opt::detail::peak_dp_batched(
+          net, targets, idxsz, is_batchable, batch,
+          opt::detail::leaf_volatile_mask(net, {}));
+      size_t root = (size_t{1} << ts.size()) - 1;
+      size_t allK = (size_t{1} << m) - 1;
+      double dp_allsliced = pr[root * (size_t{1} << m) + allK].peak;
+      // Phase-1 peak with EVERY batchable index sliced: an extent wrapper that
+      // slices iff the index is batchable (no batched_extent helper exists).
+      auto be = [&](Index const& ix) -> std::size_t {
+        std::size_t e = idxsz(ix);
+        return is_batchable(ix) ? std::min(e, batch) : e;
+      };
+      double phase1 = opt::detail::peak_cost(net, targets, be);
+      REQUIRE(dp_allsliced == phase1);
+    }
+
+    SECTION("DensePeakSizeBatched objective matches per-index oracle") {
+      using namespace sequant;
+      reg->add(L"F", IndexSpace::Type{0b10000}, 3ul);
+      auto idxsz = [](Index const& ix) -> std::size_t {
+        return ix.space().approximate_size();
+      };
+      auto is_batchable = [](Index const& ix) {
+        return ix.space().base_key() == L"F";
+      };
+      std::size_t const batch = 1;
+      std::vector<std::vector<std::wstring>> nets = {
+          {L"g{a1;i1;F1}", L"g{a2;i1;F1}", L"g{a2;i2;F2}"},  // shared F1
+          {L"g{a1;i1;F1}", L"g{a2;i1;F2}", L"g{a2;i2;F2}"},  // two distinct aux
+      };
+      for (auto const& spec : nets) {
+        std::vector<ExprPtr> ts;
+        for (auto const& s : spec)
+          ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
+        TensorNetwork net{ts};
+        container::svector<Index> targets;
+        auto aux = opt::detail::batchable_index_list(net, is_batchable);
+        auto vmask = opt::detail::leaf_volatile_mask(net, {});
+        auto tables = opt::detail::sliced_footprints(net, targets, idxsz,
+                                                     is_batchable, batch, aux);
+        // open_aux[s] via the SAME detail helper the DP uses, so DP and oracle
+        // index `tables` identically.
+        auto open_aux_det = opt::detail::subset_open_aux(net, targets, aux);
+        std::vector<size_t> open_aux(open_aux_det.begin(), open_aux_det.end());
+        std::vector<std::vector<double>> T(tables.begin(), tables.end());
+        std::vector<char> persistent(size_t{1} << ts.size());
+        for (size_t n = 0; n < persistent.size(); ++n)
+          persistent[n] = ((vmask & n) == 0) ? 1 : 0;
+        double oracle = batched_min_peak(T, open_aux, persistent, ts.size());
+        double dp = opt::detail::peak_cost_batched(net, targets, idxsz,
+                                                   is_batchable, batch, {});
+        REQUIRE(dp == oracle);
+      }
+    }
+
     SECTION("optimize() public API dispatches DensePeakSize") {
       using namespace sequant;
       // Drives Step 3 (the opt_pure_product runtime dispatch). Before Step 3
