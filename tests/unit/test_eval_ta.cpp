@@ -2231,7 +2231,10 @@ TEST_CASE("make_evaluator BatchPolicy adapter", "[eval]") {
     // Both must match the reference (batched summation -> loose FP tolerance).
     REQUIRE(equal_tarrays<Loose>(res_me, ref));
     REQUIRE(equal_tarrays<Loose>(res_hb, ref));
-    // And agree with each other (same algorithm, same tensors -> tight).
-    REQUIRE(equal_tarrays<Tight>(res_me, res_hb));
+    // And agree with each other to the same loose tolerance: both come from
+    // the same batched-summation algorithm, whose accumulation order is
+    // thread-non-deterministic, so the two independent evaluations agree only
+    // up to FP noise (a Tight/exact compare here flakes by a few ULPs).
+    REQUIRE(equal_tarrays<Loose>(res_me, res_hb));
   }
 }
