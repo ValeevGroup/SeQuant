@@ -2328,12 +2328,14 @@ ExprPtr triplet_adapt_amplitudes(const ExprPtr& spin_labeled) {
 }
 
 ExprPtr triplet_doubles_paper_combined_residual(
-    const ExprPtr& V, const container::map<Index, Index>& pair_swap) {
-  ExprPtr V_ps = transform_expr(V, pair_swap);
-  ExprPtr V_ch1 = ex<Constant>(ratio(1, 8)) * (V + V_ps);
-  ExprPtr V_ch2 = ex<Constant>(ratio(1, 8)) * (V - V_ps);
-  return ex<Constant>(ratio(1, 2)) * V_ch1 +
-         V_ch2;  // paper does not have this 1/2. why?
+    const ExprPtr& TE, const container::map<Index, Index>& pair_swap) {
+  ExprPtr TE_ps = transform_expr(TE, pair_swap);
+  ExprPtr tauSymm = TE + TE_ps;
+  ExprPtr tauAnti = TE - TE_ps;
+  ExprPtr tauSymm_N = ex<Constant>(ratio(1, 8)) * tauSymm;
+  ExprPtr tauAnti_N = ex<Constant>(ratio(1, 8)) * tauAnti;
+  return ex<Constant>(ratio(1, 2)) * tauSymm_N +
+         tauAnti_N;  // paper does not have this 1/2. why?
 }
 
 }  // namespace
