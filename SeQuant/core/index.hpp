@@ -980,7 +980,8 @@ class Index : public Taggable {
 
 	  SEQUANT_ASSERT(end != std::ranges::end(label));
 
-	  std::basic_string_view<std::remove_cvref_t<std::ranges::range_value_t<View>>> view(&(*end), std::ranges::distance(end, std::ranges::end(label)));
+	  std::basic_string_view<std::remove_cvref_t<std::ranges::range_value_t<View>>> view(&(*end),
+			  std::ranges::distance(end, std::ranges::end(label)));
 	  return string_to<ordinal_type>(view);
   }
 
