@@ -13,7 +13,7 @@ class Tensor;
 /// routines. The `Dense*` models assume dense tensors: `DenseFLOPs` counts
 /// floating-point operations, `DenseSize` counts result-tensor storage elements
 /// (summed over intermediates). Leaves room for `Sparse*` models later.
-enum class ObjectiveFunction { DenseFLOPs, DenseSize };
+enum class ObjectiveFunction { DenseFLOPs, DenseSize, DensePeakSize };
 
 /// Whether to reorder summands so terms with shared intermediates appear
 /// closer to each other.

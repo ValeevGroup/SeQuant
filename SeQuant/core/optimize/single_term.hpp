@@ -401,9 +401,102 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
   return results.back().sequence;
 }
 
+/// Per-subset state for the peak DP.
+struct PeakRes {
+  double peak =
+      std::numeric_limits<double>::max();  // min peak to build subtree
+  size_t lp = 0, rp = 0;  // winning bipartition (0 for singletons)
+  bool lp_first = true;   // winning evaluation order
+};
+
+/// Minimum peak memory to evaluate the whole network, plus the order.
+/// All-co-resident model (realistic tensor peak): inputs are resident; a tensor
+/// is live until consumed. Two build-independent tables: S[n] = result
+/// footprint, L[n] = sum of leaf sizes in subset n. Fills `pr[n].peak` via:
+///   peak[n] = min over (bipartition lp|rp, order) of
+///     lp-first: max( L[rp] + peak[lp], S[lp] + peak[rp], S[lp]+S[rp]+S[n] )
+///     rp-first: max( L[lp] + peak[rp], S[rp] + peak[lp], S[lp]+S[rp]+S[n] )
+/// The L[other] term is the bystander cost: while one child evaluates, the
+/// other child's inputs sit resident. S/L are build-independent and the
+/// recurrence is monotone in child peaks, so the per-subset minimum is globally
+/// optimal (optimal substructure).
+template <typename TIdxs, typename IdxToSz>
+container::vector<PeakRes> peak_dp(TensorNetwork const& network,
+                                   TIdxs const& /*tidxs*/, IdxToSz&& /*idxsz*/,
+                                   container::vector<double> const& S) {
+  auto const nt = network.tensors().size();
+  container::vector<PeakRes> pr(size_t{1} << nt);
+  // L[n] = sum of leaf (singleton) sizes in subset n.
+  container::vector<double> L(pr.size(), 0.0);
+  for (size_t n = 0; n < pr.size(); ++n)
+    for (size_t b = 0; b < nt; ++b)
+      if (n & (size_t{1} << b)) L[n] += S[size_t{1} << b];
+  for (size_t n = 0; n < pr.size(); ++n) {
+    if (std::popcount(n) == 0) {
+      pr[n].peak = 0.0;
+      continue;
+    }
+    if (std::popcount(n) == 1) {
+      pr[n].peak = S[n];  // a leaf, resident at its own size
+      continue;
+    }
+    for (auto&& [lp, rp] : bits::bipartitions(n)) {
+      if (lp == 0 || rp == 0) continue;
+      double const both = S[lp] + S[rp] + S[n];
+      double const lp_first =
+          std::max({L[rp] + pr[lp].peak, S[lp] + pr[rp].peak, both});
+      double const rp_first =
+          std::max({L[lp] + pr[rp].peak, S[rp] + pr[lp].peak, both});
+      double const cand = std::min(lp_first, rp_first);
+      if (cand < pr[n].peak) {
+        pr[n].peak = cand;
+        pr[n].lp = lp;
+        pr[n].rp = rp;
+        pr[n].lp_first = (lp_first <= rp_first);
+      }
+    }
+  }
+  return pr;
+}
+
+template <typename TIdxs, typename IdxToSz>
+double peak_cost(TensorNetwork const& network, TIdxs const& tidxs,
+                 IdxToSz&& idxsz) {
+  auto S = subset_footprints(network, tidxs, idxsz);
+  auto pr = peak_dp(network, tidxs, idxsz, S);
+  return pr.back().peak;
+}
+
+/// Reconstruct the EvalSequence from the peak DP back-pointers, honoring the
+/// chosen evaluation order at each node (the lower-peak child is emitted last).
+template <typename TIdxs, typename IdxToSz>
+EvalSequence single_term_opt_peak_impl(TensorNetwork const& network,
+                                       TIdxs const& tidxs, IdxToSz&& idxsz) {
+  using ranges::views::concat;
+  auto const nt = network.tensors().size();
+  if (nt == 1) return EvalSequence{0};
+  if (nt == 2) return EvalSequence{0, 1, -1};
+  auto S = subset_footprints(network, tidxs, idxsz);
+  auto pr = peak_dp(network, tidxs, idxsz, S);
+  // bottom-up emit: a subset's sequence is (first-child seq)(second-child
+  // seq)-1
+  container::vector<EvalSequence> seq(pr.size());
+  for (size_t n = 0; n < pr.size(); ++n) {
+    if (std::popcount(n) == 1) {
+      seq[n] = EvalSequence{static_cast<int>(std::countr_zero(n))};
+    } else if (std::popcount(n) >= 2) {
+      auto const& a = pr[n].lp_first ? seq[pr[n].lp] : seq[pr[n].rp];
+      auto const& b = pr[n].lp_first ? seq[pr[n].rp] : seq[pr[n].lp];
+      seq[n] = concat(a, b) | ranges::to<EvalSequence>;
+      seq[n].push_back(-1);
+    }
+  }
+  return seq.back();
+}
+
 ///
 /// \tparam Metric Objective function (ObjectiveFunction::DenseFLOPs or
-///         ObjectiveFunction::DenseSize).
+///         ObjectiveFunction::DenseSize or ObjectiveFunction::DensePeakSize).
 /// \tparam IdxToSz Invocable type mapping an Index to its extent.
 /// \param network A TensorNetwork object.
 /// \param idxsz An invocable on Index, that maps Index to its dimension.
@@ -443,7 +536,14 @@ EvalSequence single_term_opt(
   // DP's subset bits.
   size_t volatile_mask = 0;
   double nr = 1.0;
-  if constexpr (Metric == ObjectiveFunction::DenseFLOPs) {
+  if constexpr (Metric == ObjectiveFunction::DensePeakSize) {
+    SEQUANT_ASSERT(!subnet_cse &&
+                   "subnet_cse not supported with DensePeakSize (Phase 1)");
+    (void)is_volatile_leaf;
+    (void)volatile_weight;
+    (void)footprint_weight;
+    return single_term_opt_peak_impl(network, tidxs, idxsz);
+  } else if constexpr (Metric == ObjectiveFunction::DenseFLOPs) {
     if (is_volatile_leaf && volatile_weight > 1.0) {
       size_t i = 0;
       for (auto&& t : network.tensors()) {
@@ -459,7 +559,8 @@ EvalSequence single_term_opt(
                                 footprint_weight);
   } else {
     static_assert(Metric == ObjectiveFunction::DenseSize,
-                  "Only DenseFLOPs and DenseSize ObjectiveFunction supported.");
+                  "Only DenseFLOPs, DenseSize, and DensePeakSize "
+                  "ObjectiveFunction supported.");
     auto cost_fn = memsize_counter(idxsz);
     return single_term_opt_impl(network, tidxs, cost_fn, subnet_cse,
                                 volatile_mask, nr, footprint_fn,
