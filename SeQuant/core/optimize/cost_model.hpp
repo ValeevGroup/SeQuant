@@ -61,12 +61,11 @@ EvalSequence run_single_term_opt(Model const& m, TensorNetwork const& network,
 
 /// \brief Additive single-term cost model (FLOPs or operand storage size).
 ///
-/// Reproduces \ref single_term_opt_impl exactly, factored into the
-/// CostModel hooks driven by \ref run_single_term_opt. The per-contraction
-/// cost is supplied by \p CostFn (e.g. \ref flops_counter or
-/// \ref memsize_counter); a per-intermediate footprint penalty, volatile
-/// replay weighting, and subnet common-subexpression elimination (CSE) are
-/// all handled identically to the original implementation.
+/// Implements the additive single-term DP, factored into the CostModel hooks
+/// driven by \ref run_single_term_opt. The per-contraction cost is supplied by
+/// \p CostFn (e.g. \ref flops_counter or \ref memsize_counter); a
+/// per-intermediate footprint penalty, volatile replay weighting, and subnet
+/// common-subexpression elimination (CSE) are all handled by the hooks.
 ///
 /// \tparam CostFn A callable <tt>(lhs, rhs, result) -> double</tt>.
 /// \tparam FootprintFn A callable <tt>(result) -> double</tt>.
@@ -192,8 +191,8 @@ struct AdditiveModel {
   EvalSequence reconstruct(Context const& /*ctx*/,
                            container::vector<State> const& st) const {
     using ranges::views::concat;
-    // Rebuild per-subset sequences bottom-up, exactly as single_term_opt_impl's
-    // final pass: singletons emit their tensor index, internal nodes emit the
+    // Rebuild per-subset sequences bottom-up: singletons emit their tensor
+    // index, internal nodes emit the
     // children ordered by lseq[0] < rseq[0] followed by -1. Subsets are visited
     // in increasing order, so st[lp]/st[rp] (lp,rp < n) are already built.
     container::vector<EvalSequence> seq(st.size());
@@ -215,10 +214,10 @@ struct AdditiveModel {
 
 /// \brief Peak-memory single-term cost model (DensePeakSize objective).
 ///
-/// Reproduces \ref single_term_opt_peak_impl / \ref peak_dp exactly, factored
-/// into the CostModel hooks driven by \ref run_single_term_opt. The recurrence
-/// is the all-co-resident pebble game: while one child evaluates, the other
-/// child's leaf inputs sit resident. No CSE; no volatile weighting.
+/// Implements the all-co-resident pebble-game DP, factored into the CostModel
+/// hooks driven by \ref run_single_term_opt. The recurrence minimizes peak
+/// memory: while one child evaluates, the other child's leaf inputs sit
+/// resident. No CSE; no volatile weighting.
 ///
 /// \tparam IdxToSz A callable mapping an Index to its extent.
 template <typename IdxToSz>
@@ -307,13 +306,12 @@ struct PeakModel {
 /// \brief Multi-mode batched peak-memory single-term cost model
 /// (DensePeakSizeBatched objective).
 ///
-/// Reproduces \ref single_term_opt_peak_batched_impl / \ref peak_dp_batched
-/// exactly, factored into the CostModel hooks driven by \ref
-/// run_single_term_opt. The recurrence is the per-batchable-index all-co-
-/// resident pebble game of the batch-aware cost model design (section 6.2,
-/// model A): each DP cell is indexed by both a subset \c n and a sliced-set
-/// context \c B over the batchable indices, so a model State is the \c [B]
-/// -vector of per-context \ref BatchedRes. No CSE; persistence-gated batching.
+/// Implements the per-batchable-index all-co-resident pebble-game DP, factored
+/// into the CostModel hooks driven by \ref run_single_term_opt. Follows the
+/// batch-aware cost model design (section 6.2, model A): each DP cell is
+/// indexed by both a subset \c n and a sliced-set context \c B over the
+/// batchable indices, so a model State is the \c [B]-vector of per-context
+/// \ref BatchedRes. No CSE; persistence-gated batching.
 ///
 /// \tparam IdxToSz A callable mapping an Index to its extent.
 template <typename IdxToSz>
@@ -328,7 +326,7 @@ struct PeakBatchedModel {
   using State = container::vector<BatchedRes>;
 
   /// Precomputed tables and per-(subset, sliced-set) lookup parameters built
-  /// once by build_context, mirroring \ref peak_dp_batched's locals.
+  /// once by build_context.
   struct Context {
     /// Ordered, deduplicated batchable indices (bit \c k maps to \c aux[k]).
     container::vector<Index> aux;
