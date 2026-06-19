@@ -549,10 +549,6 @@ bool can_expand(const AbstractTensor& tensor) {
   }
 }
 
-// a trial to make expand_antisymm compact
-#define make_it_compact
-#ifdef make_it_compact
-// the compact NPC version with ms conserving
 ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
   if (tensor.bra_rank() <= 1 && tensor.ket_rank() <= 1) {
     return std::make_shared<Tensor>(Tensor(
@@ -633,114 +629,6 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
 
   return expand();
 }
-#else
-
-// the non-compact NPC version with ms conserving
-ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
-  // Return non-symmetric tensor if rank is 1
-  if (tensor.bra_rank() <= 1 && tensor.ket_rank() <= 1) {
-    Tensor new_tensor(tensor.label(), tensor.bra(), tensor.ket(), tensor.aux(),
-                      Symmetry::Nonsymm, tensor.braket_symmetry(),
-                      tensor.column_symmetry());
-    return std::make_shared<Tensor>(new_tensor);
-  }
-
-  // If all indices have the same spin label,
-  // return the antisymm tensor
-  if (skip_spinsymm && ms_uniform_tensor(tensor)) {
-    return std::make_shared<Tensor>(tensor);
-  }
-
-  auto get_phase = [](const Tensor& t) {
-    container::svector<Index> bra(t.bra().begin(), t.bra().end());
-    container::svector<Index> ket(t.ket().begin(), t.ket().end());
-    reset_ts_swap_counter<Index>();
-    bubble_sort(std::begin(bra), std::end(bra));
-    bubble_sort(std::begin(ket), std::end(ket));
-    return ts_swap_counter_is_even<Index>() ? 1 : -1;
-  };
-
-  if (tensor.symmetry() != Symmetry::Antisymm) {
-    return std::make_shared<Tensor>(tensor);
-  }
-
-  const auto prefactor = get_phase(tensor);
-  if (tensor.bra_rank() == tensor.ket_rank()) {
-    // particle-conserving: permute bra, column check
-    container::set<Index> bra_list(tensor.bra().begin(), tensor.bra().end());
-    container::set<Index> ket_list(tensor.ket().begin(), tensor.ket().end());
-    auto expr_sum = std::make_shared<Sum>();
-    do {
-      // N.B. must copy
-      auto new_tensor =
-          Tensor(tensor.label(), bra(bra_list), ket(ket_list), tensor.aux(),
-                 Symmetry::Nonsymm, tensor.braket_symmetry(),
-                 tensor.column_symmetry());
-
-      if (ms_conserving_columns(new_tensor)) {
-        auto new_tensor_product = std::make_shared<Product>();
-        new_tensor_product->append(get_phase(new_tensor),
-                                   ex<Tensor>(new_tensor));
-        new_tensor_product->scale(prefactor);
-        expr_sum->append(new_tensor_product);
-      }
-    } while (std::next_permutation(bra_list.begin(), bra_list.end()));
-
-    return expr_sum;
-  } else {
-    // non-particle-conserving: permute only the max rank side
-    // I need to check M_S on paired columns (first min(bra,ket) positions)
-    auto expr_sum = std::make_shared<Sum>();
-
-    const auto bra_rank = tensor.bra_rank();
-    const auto ket_rank = tensor.ket_rank();
-    const auto n_paired = std::min(bra_rank, ket_rank);
-    const bool permute_bra = bra_rank > ket_rank;
-
-    // check that paired columns have matching spin
-    auto paired_columns_valid = [&n_paired](const auto& bra_indices,
-                                            const auto& ket_indices) {
-      auto b_it = bra_indices.begin();
-      auto k_it = ket_indices.begin();
-      for (std::size_t i = 0; i < n_paired; ++i, ++b_it, ++k_it) {
-        if (mbpt::to_spin(b_it->space().qns()) !=
-            mbpt::to_spin(k_it->space().qns()))
-          return false;
-      }
-      return true;
-    };
-
-    if (permute_bra) {
-      container::set<Index> bra_list(tensor.bra().begin(), tensor.bra().end());
-      do {
-        if (!paired_columns_valid(bra_list, tensor.ket())) continue;
-        auto new_tensor =
-            Tensor(tensor.label(), bra(bra_list), ket(tensor.ket()),
-                   tensor.aux(), Symmetry::Nonsymm, tensor.braket_symmetry(),
-                   tensor.column_symmetry());
-        auto prod = std::make_shared<Product>();
-        prod->append(get_phase(new_tensor), ex<Tensor>(new_tensor));
-        prod->scale(prefactor);
-        expr_sum->append(prod);
-      } while (std::next_permutation(bra_list.begin(), bra_list.end()));
-    } else {
-      container::set<Index> ket_list(tensor.ket().begin(), tensor.ket().end());
-      do {
-        if (!paired_columns_valid(tensor.bra(), ket_list)) continue;
-        auto new_tensor =
-            Tensor(tensor.label(), bra(tensor.bra()), ket(ket_list),
-                   tensor.aux(), Symmetry::Nonsymm, tensor.braket_symmetry(),
-                   tensor.column_symmetry());
-        auto prod = std::make_shared<Product>();
-        prod->append(get_phase(new_tensor), ex<Tensor>(new_tensor));
-        prod->scale(prefactor);
-        expr_sum->append(prod);
-      } while (std::next_permutation(ket_list.begin(), ket_list.end()));
-    }
-    return expr_sum;
-  }
-}
-#endif
 
 ExprPtr expand_antisymm(const ExprPtr& expr, bool skip_spinsymm) {
   if (expr->is<Constant>() || expr->is<Variable>())
@@ -2397,13 +2285,12 @@ ExprPtr triplet_adapt_amplitudes(const ExprPtr& spin_labeled) {
         const int s1 = spin_line_sign(t.bra().at(1));
         const bool same_spin = (s0 == s1);
 
-        // stored column order; the combined spatial triplet amplitude has no
-        // column (pair) symmetry -> mark Nonsymm so that canonicalization
-        // cannot alias c_{aibj} with c_{bjai}
+        // set ColumnSymmetry::Nonsymm so that canonicalization cannot combine
+        // R_{a1i1 a2i2j} with R_{a2i2 a1i1}
         Tensor stored(t.label(), bra(t.bra()), ket(t.ket()), t.aux(),
                       Symmetry::Nonsymm, t.braket_symmetry(),
                       ColumnSymmetry::Nonsymm);
-        // both columns exchanged
+        // swap columns
         container::svector<Index> swapped_bra{t.bra().at(1), t.bra().at(0)};
         container::svector<Index> swapped_ket{t.ket().at(1), t.ket().at(0)};
         Tensor swapped(t.label(), bra(std::move(swapped_bra)),
@@ -2469,9 +2356,7 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
         "triplet manifold is implemented for singles and doubles projections "
         "only");
 
-  // same sector layout as os_eom / spintrace_by_sector: bit g of the sector
-  // index is the spin of external group g (0 = alpha, 1 = beta);
-  // spintrace_by_sector already ran remove_spin_with_relabel on each sector.
+  // spintrace_by_sector already called remove_spin_with_relabel on each sector.
   auto sectors = spintrace_by_sector(expr, ext_groups, /*triplet_R=*/true);
   SEQUANT_ASSERT(sectors.size() == (std::size_t{1} << n_ext));
 
@@ -2489,7 +2374,8 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
 
   if (n_ext == 1) {
     // metric of the T_{ai} kets is 2*delta -> the rank-1 biorthogonal
-    // coefficient (1/2) coincides with the singlet one; reuse that machinery
+    // for now I am calling v1/v2, but later I just add a normalization 1/2
+    // factor
     switch (options.method) {
       case BiorthogonalizationMethod::V1:
         triplet =
