@@ -158,22 +158,40 @@ side, compute the peak-heavy side last. Flops and gross-sum are
 order-*independent* (same intermediates, each counted once), which is why the
 current DP fixes the eval order by index canonicalization (single_term.hpp
 374-379) and never optimizes it. A peak objective makes evaluation order a real
-lever; `combine` takes the `min` over the two child orders.
+lever; `combine` takes the `min` over the two child orders. (This sketch omits
+the bystander-input term, added in 5.2.)
 
 ### 5.2 Recurrence and optimal substructure
 
-For subset `n = lp ⊕ rp`:
+**Memory model (all-co-resident).** Input tensors are materialized (DistArrays)
+and resident; a tensor is live from its production (a leaf: from first use) until
+its single consumption. The peak is the max over the schedule of the sum of all
+live tensor sizes plus the result being formed. This is the realistic tensor
+peak (the `opt_einsum`/`cotengra` "peak size"), not the register-allocation
+(Sethi-Ullman) peak, which would omit not-yet-used input leaves.
+
+Two build-independent tables per subset: `S[n]` = result footprint (product of
+extents of `n`'s open indices) and `L[n]` = sum of leaf (singleton) sizes in
+`n`. For subset `n = lp ⊕ rp`:
 
 ```
 peak[n] = min over (bipartition, order) of
-          max( peak[c1], S[c1] + peak[c2], S[c1] + S[c2] + S[n] )
+  lp-first: max( L[rp] + peak[lp], S[lp] + peak[rp], S[lp] + S[rp] + S[n] )
+  rp-first: max( L[lp] + peak[rp], S[rp] + peak[lp], S[lp] + S[rp] + S[n] )
 ```
 
-`S[n]` (result footprint) depends only on which tensors are in `n`, **not on how
-`n` was built** — it is a fixed table. The recurrence is monotone in the
-children's peaks, so minimizing each child's peak minimizes the parent's. Hence
-**optimal substructure holds**: the DP stays a scalar minimization with
-per-subset back-pointers; no Pareto frontier of `(peak, size)` is needed.
+The `L[other]` term is the bystander cost: while one child evaluates, the other
+child's inputs sit resident (constant throughout, since that subtree is
+untouched - which is why the additive external context composes and the per-
+subset `peak[n]` is well defined). `peak[singleton] = S[singleton]`.
+
+`S[n]` and `L[n]` depend only on which tensors are in `n`, **not on how `n` was
+built**, and the recurrence is monotone in the children's peaks, so minimizing
+each child's peak minimizes the parent's. Hence **optimal substructure holds**:
+a scalar minimization with per-subset back-pointers; no Pareto frontier needed.
+(This assumes each child subtree is evaluated contiguously; the
+brute-force-oracle regression test, which enumerates all schedules freely,
+guards that assumption.)
 
 The objective is `peak[root]` (the whole term; the final result is materialized,
 so the root is not sliced).

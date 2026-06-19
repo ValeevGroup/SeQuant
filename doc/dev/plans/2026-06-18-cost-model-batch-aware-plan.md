@@ -165,11 +165,11 @@ TEST_CASE("brute_force_min_peak oracle", "[optimize]") {
   std::vector<double> S(8, 0.0);
   S[0b001] = S[0b010] = S[0b100] = 2.0;
   S[0b011] = 1.0; S[0b101] = 1.0; S[0b110] = 8.0; S[0b111] = 1.0;
-  // Best schedule avoids ever materializing the size-8 pair {010,100}.
-  // Contract {001,010}->{011}(1): live {011(1),100(2)} step_peak=2+2+1=5;
-  //   then {011,100}->{111}(1): live_sum=1+2=3, +1 = 4. Peak = 5.
-  // The schedule that forms {110}=8 has a step >= 8. So min peak = 5.
-  REQUIRE(brute_force_min_peak(S, 3) == Catch::Approx(5.0));
+  // All-co-resident model: all 3 leaves live at step 1 (sum 6).
+  // Contract {001,010}->{011}(1): step_peak = 6 + 1 = 7;
+  //   then {011,100}->{111}(1): live_sum = 1+2 = 3, + 1 = 4. Peak = 7.
+  // The schedule that forms {110}=8 has a step 6+8 = 14. So min peak = 7.
+  REQUIRE(brute_force_min_peak(S, 3) == Catch::Approx(7.0));
 }
 ```
 
@@ -248,18 +248,27 @@ struct PeakRes {
 };
 
 /// Minimum peak memory to evaluate the whole network, plus the order.
-/// Fills `pr[n].peak` for every subset via:
+/// All-co-resident model (realistic tensor peak): inputs are resident; a tensor
+/// is live until consumed. Two build-independent tables: S[n] = result
+/// footprint, L[n] = sum of leaf sizes in subset n. Fills `pr[n].peak` via:
 ///   peak[n] = min over (bipartition lp|rp, order) of
-///             max( peak[first], S[first] + peak[second],
-///                  S[lp] + S[rp] + S[n] )
-/// S[n] is build-independent, and the recurrence is monotone in child peaks,
-/// so the per-subset minimum is globally optimal (optimal substructure).
+///     lp-first: max( L[rp] + peak[lp], S[lp] + peak[rp], S[lp]+S[rp]+S[n] )
+///     rp-first: max( L[lp] + peak[rp], S[rp] + peak[lp], S[lp]+S[rp]+S[n] )
+/// The L[other] term is the bystander cost: while one child evaluates, the
+/// other child's inputs sit resident. S/L are build-independent and the
+/// recurrence is monotone in child peaks, so the per-subset minimum is globally
+/// optimal (optimal substructure).
 template <typename TIdxs, typename IdxToSz>
 container::vector<PeakRes> peak_dp(TensorNetwork const& network,
                                    TIdxs const& tidxs, IdxToSz&& idxsz,
                                    container::vector<double> const& S) {
   auto const nt = network.tensors().size();
   container::vector<PeakRes> pr(size_t{1} << nt);
+  // L[n] = sum of leaf (singleton) sizes in subset n.
+  container::vector<double> L(pr.size(), 0.0);
+  for (size_t n = 0; n < pr.size(); ++n)
+    for (size_t b = 0; b < nt; ++b)
+      if (n & (size_t{1} << b)) L[n] += S[size_t{1} << b];
   for (size_t n = 0; n < pr.size(); ++n) {
     if (std::popcount(n) == 0) {
       pr[n].peak = 0.0;
@@ -273,9 +282,9 @@ container::vector<PeakRes> peak_dp(TensorNetwork const& network,
       if (lp == 0 || rp == 0) continue;
       double const both = S[lp] + S[rp] + S[n];
       double const lp_first =
-          std::max({pr[lp].peak, S[lp] + pr[rp].peak, both});
+          std::max({L[rp] + pr[lp].peak, S[lp] + pr[rp].peak, both});
       double const rp_first =
-          std::max({pr[rp].peak, S[rp] + pr[lp].peak, both});
+          std::max({L[lp] + pr[rp].peak, S[rp] + pr[lp].peak, both});
       double const cand = std::min(lp_first, rp_first);
       if (cand < pr[n].peak) {
         pr[n].peak = cand;
