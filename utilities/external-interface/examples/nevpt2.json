@@ -1,13 +1,14 @@
 {
 	"code_generation": {
 		"output_format": "itf",
+		"output_path": "nevpt2.itfaa",
 		"default_options": {
+			"projection": "biorthogonal",
+			"spintracing": "closed_shell",
 			"density_fitting": false,
 			"term_by_term": false,
-			"spintracing": "closed_shell",
-			"projection": "biorthogonal"
+			"subexpression_elimination": true
 		},
-		"output_path": "nevpt2.itfaa",
 		"code_blocks": [
 			{
 				"name": "Energy0",
@@ -41,12 +42,12 @@
 						"equation_file": "nevpt2/nevpt2_res1_s0.inp"
 					},
 					{
-						"name": "R1",
-						"equation_file": "nevpt2/nevpt2_res1_s1.inp"
-					},
-					{
 						"name": "R2",
 						"equation_file": "nevpt2/nevpt2_res2_s1_singles.inp"
+					},
+					{
+						"name": "R1",
+						"equation_file": "nevpt2/nevpt2_res1_s1.inp"
 					},
 					{
 						"name": "R2",
@@ -81,28 +82,25 @@
 	},
 	"index_spaces": [
 		{
-			"name": "virtual",
+			"name": "External",
 			"tag": "e",
 			"label": "a",
-			"size": 100
+			"size": 1000,
+			"real_valued": true
 		},
 		{
-			"name": "active",
+			"name": "Active",
 			"tag": "a",
 			"label": "u",
-			"size": 5
+			"size": 5,
+			"real_valued": true
 		},
 		{
-			"name": "occupied",
+			"name": "Closed",
 			"tag": "c",
 			"label": "i",
-			"size": 10
-		},
-		{
-			"name": "dummy",
-			"tag": "D",
-			"label": "p",
-			"size": 42
+			"size": 80,
+			"real_valued": true
 		}
 	]
 }

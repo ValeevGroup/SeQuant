@@ -4,6 +4,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
+#include <SeQuant/external/bliss/graph.hh>
 
 #include <cstddef>
 #include <unordered_map>
@@ -33,6 +34,10 @@ template <typename TreeNode>
 struct TreeNodeEqualityComparator {
   /// Trait used by the C++ STL allowing heterogenous lookups
   using is_transparent = void;
+
+  TreeNodeEqualityComparator() = default;
+  TreeNodeEqualityComparator(std::vector<Index> indices)
+      : block_comparator_(std::move(indices)) {}
 
   bool operator()(const TreeNode *lhs, const TreeNode *rhs) const {
     return (*this)(*lhs, *rhs);
@@ -84,8 +89,7 @@ struct TreeNodeEqualityComparator {
       const Tensor &lhs_tensor = lhs->as_tensor();
       const Tensor &rhs_tensor = rhs->as_tensor();
 
-      TensorBlockEqualComparator cmp;
-      if (!cmp(lhs_tensor, rhs_tensor)) {
+      if (!block_comparator_(lhs_tensor, rhs_tensor)) {
         return false;
       }
     }
@@ -119,6 +123,9 @@ struct TreeNodeEqualityComparator {
 
     return true;
   }
+
+ private:
+  IndexSpecificTensorBlockEqualComparator block_comparator_;
 };
 
 /// A map between (sub)tree hashes and how often they have been found

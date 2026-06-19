@@ -1,0 +1,69 @@
+A{a1;i1;u1} B{a2;i2;u1} + B{a1;i1;u1} B{a2;i2;u1}
+
+=================================================
+Plain Text
+batch_indices: i_1,i_2
+=================================================
+Declare index i_1
+Declare index i_2
+Declare index a_1
+Declare index a_2
+Declare index u_1
+
+Declare tensor A[a_1, i_1, u_1]
+Declare tensor B[a_2, i_2, u_1]
+Declare tensor I[i_1, i_2, a_1, a_2]
+
+Start batching over i_1, i_2
+Create I[i_1, i_2, a_1, a_2] and initialize to zero
+Load A[a_1, i_1, u_1]
+Load B[a_2, i_2, u_1]
+Compute I[i_1, i_2, a_1, a_2] += A[a_1, i_1, u_1] B[a_2, i_2, u_1]
+Unload B[a_2, i_2, u_1]
+Unload A[a_1, i_1, u_1]
+Load B[a_1, i_1, u_1]
+Load B[a_2, i_2, u_1]
+Compute I[i_1, i_2, a_1, a_2] += B[a_1, i_1, u_1] B[a_2, i_2, u_1]
+Unload B[a_2, i_2, u_1]
+Unload B[a_1, i_1, u_1]
+Persist I[i_1, i_2, a_1, a_2]
+End batching
+
+=================================================
+ITF
+batch_indices: i_1,i_2
+# TODO: The order of loading could be improved to avoid
+# unloading B[ckv] just for the sake of being able to
+# drop A
+=================================================
+---- decl
+index-space: j, Closed, c
+index-space: k, Closed, c
+index-space: b, External, e
+index-space: c, External, e
+index-space: v, Active, a
+
+tensor: A:eca[bjv], A:eca
+tensor: B:eca[ckv], B:eca
+tensor: I:eecc[bcjk], I:eecc
+
+
+---- code("unnamed")
+for [j, k]:
+	alloc I:eecc[bcjk]
+	load A:eca[bjv]
+	load B:eca[ckv]
+	.I:eecc[bcjk] += A:eca[bjv] B:eca[ckv]
+	drop B:eca[ckv]
+	drop A:eca[bjv]
+	load B:eca[bjv]
+	load B:eca[ckv]
+	.I:eecc[bcjk] += B:eca[bjv] B:eca[ckv]
+	drop B:eca[ckv]
+	drop B:eca[bjv]
+	store I:eecc[bcjk]
+
+
+---- end
+
+=================================================
