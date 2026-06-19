@@ -459,6 +459,11 @@ container::vector<PeakRes> peak_dp(TensorNetwork const& network,
   return pr;
 }
 
+/// Achieved minimum peak memory (the DensePeakSize objective value) for the
+/// whole network under its optimal contraction order. Convenience wrapper that
+/// runs \ref subset_footprints and \ref peak_dp and returns the full set's
+/// (root subset's) peak. Used by tests to compare against the brute-force
+/// oracle.
 template <typename TIdxs, typename IdxToSz>
 double peak_cost(TensorNetwork const& network, TIdxs const& tidxs,
                  IdxToSz&& idxsz) {
@@ -572,7 +577,9 @@ EvalSequence single_term_opt(
 
 ///
 /// \tparam Metric Objective function (DenseFLOPs by default; DenseSize
-///         minimizes total operand storage rather than flops).
+///         minimizes total operand storage rather than flops; DensePeakSize
+///         minimizes peak memory over the evaluation schedule -- see
+///         ObjectiveFunction).
 /// \param prod  Product to be optimized.
 /// \param idxsz An invocable object that maps an Index object to size.
 /// \return Parenthesized product expression.

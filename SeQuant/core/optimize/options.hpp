@@ -10,9 +10,19 @@ class Index;
 class Tensor;
 
 /// Objective function to minimize in single-term and top-level optimize
-/// routines. The `Dense*` models assume dense tensors: `DenseFLOPs` counts
-/// floating-point operations, `DenseSize` counts result-tensor storage elements
-/// (summed over intermediates). Leaves room for `Sparse*` models later.
+/// routines. The `Dense*` models assume dense tensors:
+/// - `DenseFLOPs` counts floating-point operations.
+/// - `DenseSize` counts result-tensor storage elements (summed over
+///   intermediates) -- a gross-traffic proxy, not a peak.
+/// - `DensePeakSize` minimizes peak memory: the maximum over the evaluation
+///   schedule of the combined size of all simultaneously-live tensors
+///   (intermediates AND resident input leaves, the all-co-resident model),
+///   and it chooses the evaluation order that minimizes that peak. Unlike the
+///   order-independent `DenseFLOPs`/`DenseSize`, the contraction order is a
+///   real lever here. NOTE: `DensePeakSize` does not yet support
+///   common-subexpression elimination (`CSEOptions::subnet` must be false).
+///
+/// Leaves room for `Sparse*` models later.
 enum class ObjectiveFunction { DenseFLOPs, DenseSize, DensePeakSize };
 
 /// Whether to reorder summands so terms with shared intermediates appear
