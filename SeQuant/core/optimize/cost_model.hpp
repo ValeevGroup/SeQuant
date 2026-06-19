@@ -172,9 +172,12 @@ struct AdditiveModel {
     // Canonically equivalent subnetworks share the same topology and index
     // sizes, so their cost is identical. Overwriting with a later bitmask's
     // cost is intentional and benign.
+    // Recompute w exactly as relax does: a subset is volatile iff it contains
+    // any volatile leaf, so the stored cost must use the same scaling.
+    double const w = (volatile_mask & n) ? volatile_weight : 1.0;
     ctx.unique_meta_costs[mid] =
-        cost_fn(ctx.results[st[n].lp].indices, ctx.results[st[n].rp].indices,
-                ctx.results[n].indices) +
+        w * cost_fn(ctx.results[st[n].lp].indices,
+                    ctx.results[st[n].rp].indices, ctx.results[n].indices) +
         (footprint_weight != 0.0
              ? footprint_weight * footprint_fn(ctx.results[n].indices)
              : 0.0);

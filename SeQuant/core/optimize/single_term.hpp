@@ -949,10 +949,6 @@ EvalSequence single_term_opt(
     std::size_t batch_target_size = 0) {
   decltype(OptRes::indices) tidxs{};
 
-  // The per-intermediate footprint penalty needs idxsz too, so build a
-  // footprint counter alongside the cost function (idxsz is copied into each).
-  auto footprint_fn = footprint_counter(idxsz);
-
   // Volatility weighting is a DenseFLOPs-only notion (persistent intermediates
   // cost MORE memory, not less, so it is wrong-signed for DenseSize). Build the
   // volatile-leaf bitmask in network.tensors() bit order so it aligns with the

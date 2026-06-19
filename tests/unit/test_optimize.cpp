@@ -556,24 +556,30 @@ TEST_CASE("optimize", "[optimize]") {
       for (auto s : spec) ts.push_back(deserialize(s));
       TensorNetwork net{ts};
       container::svector<Index> targets;
+      // volatile_mask=1u marks tensor-0 (X{i1;a1}) as volatile so that any
+      // subset containing it is scaled by volatile_weight in CSE bookkeeping.
+      // This axis was previously hard-coded to 0/1.0, hiding the bug in
+      // AdditiveModel::finalize that omitted the w* factor.
       for (bool cse : {false, true})
-        for (double fw : {0.0, 1000.0}) {
-          // OLD path:
-          auto old_flops = opt::detail::single_term_opt_impl(
-              net, targets, opt::detail::flops_counter(idxsz), cse,
-              /*volatile_mask=*/0u, /*volatile_weight=*/1.0,
-              opt::detail::footprint_counter(idxsz), fw);
-          // NEW path via the model+driver:
-          opt::detail::AdditiveModel model{
-              opt::detail::flops_counter(idxsz),
-              opt::detail::footprint_counter(idxsz),
-              /*volatile_mask=*/0u,
-              /*volatile_weight=*/1.0,
-              fw,
-              cse};
-          auto neww = opt::detail::run_single_term_opt(model, net, targets);
-          REQUIRE(neww == old_flops);
-        }
+        for (double fw : {0.0, 1000.0})
+          for (auto [vmask, vw] :
+               std::initializer_list<std::pair<size_t, double>>{{0u, 1.0},
+                                                                {1u, 2.0}}) {
+            // OLD path:
+            auto old_flops = opt::detail::single_term_opt_impl(
+                net, targets, opt::detail::flops_counter(idxsz), cse, vmask, vw,
+                opt::detail::footprint_counter(idxsz), fw);
+            // NEW path via the model+driver:
+            opt::detail::AdditiveModel model{
+                opt::detail::flops_counter(idxsz),
+                opt::detail::footprint_counter(idxsz),
+                vmask,
+                vw,
+                fw,
+                cse};
+            auto neww = opt::detail::run_single_term_opt(model, net, targets);
+            REQUIRE(neww == old_flops);
+          }
     }
 
     SECTION("subset_footprints") {
