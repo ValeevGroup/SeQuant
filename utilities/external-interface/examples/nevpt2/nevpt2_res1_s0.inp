@@ -1,7 +1,6 @@
 R1{a1;u1} =
-  + GAM0{u2;u1} f{a1;u2}
-  + 1/2 GAM0{u3,u4;u1,u2} g{a1,u2;u3,u4}
-  + GAM0{u2;u1} HAM_D{a1;a2} T1{a2;u2}
-  - GAM0{u3;u1} T1{a1;u2} HAM_D{u2;u3}
-  + 1/2 GAM0{u4,u5;u1,u2} T1{a1;u3} HAM_D{u2,u3;u4,u5}
-
+  + Ym1{u2;u1} f{a1;u2}:A-H-S
+  + 1/2 Ym2{u3,u4;u1,u2} g{a1,u2;u3,u4}:A-H-S
+  + Ym1{u2;u1} g{a1;a2}:A-H-S T1{a2;u2}
+  - Ym1{u3;u1} T1{a1;u2} f{u2;u3}:A-H-S
+  + 1/2 Ym2{u4,u5;u1,u2} T1{a1;u3} g{u2,u3;u4,u5}:A-H-S
