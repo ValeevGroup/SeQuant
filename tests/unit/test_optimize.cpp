@@ -538,50 +538,6 @@ TEST_CASE("optimize", "[optimize]") {
       REQUIRE(*seq == *par);
     }
 
-    SECTION("AdditiveModel via driver == single_term_opt_impl") {
-      using namespace sequant;
-      auto idxsz = [](Index const& ix) {
-        return ix.space().approximate_size();
-      };
-      // A CSE-bearing 4-tensor network: the two (X Y) pairs are structurally
-      // equivalent, so subnet_cse meaningfully exercises the CSE accounting.
-      // (The plain chain g{a1;i1}..g{a3;i2} has no CSE structure and trips a
-      // create_graph rank-guard during subnet canonicalization in BOTH the
-      // single_term_opt_impl oracle and the model path, so it is unusable as
-      // an equivalence fixture; this network is the one the existing
-      // "Single term optimization with CSE" SECTION uses.)
-      std::vector<std::wstring> spec = {L"X{i1;a1}", L"X{i2;a2}", L"Y{a2;i3}",
-                                        L"Y{a1;i4}"};
-      std::vector<ExprPtr> ts;
-      for (auto s : spec) ts.push_back(deserialize(s));
-      TensorNetwork net{ts};
-      container::svector<Index> targets;
-      // volatile_mask=1u marks tensor-0 (X{i1;a1}) as volatile so that any
-      // subset containing it is scaled by volatile_weight in CSE bookkeeping.
-      // This axis was previously hard-coded to 0/1.0, hiding the bug in
-      // AdditiveModel::finalize that omitted the w* factor.
-      for (bool cse : {false, true})
-        for (double fw : {0.0, 1000.0})
-          for (auto [vmask, vw] :
-               std::initializer_list<std::pair<size_t, double>>{{0u, 1.0},
-                                                                {1u, 2.0}}) {
-            // OLD path:
-            auto old_flops = opt::detail::single_term_opt_impl(
-                net, targets, opt::detail::flops_counter(idxsz), cse, vmask, vw,
-                opt::detail::footprint_counter(idxsz), fw);
-            // NEW path via the model+driver:
-            opt::detail::AdditiveModel model{
-                opt::detail::flops_counter(idxsz),
-                opt::detail::footprint_counter(idxsz),
-                vmask,
-                vw,
-                fw,
-                cse};
-            auto neww = opt::detail::run_single_term_opt(model, net, targets);
-            REQUIRE(neww == old_flops);
-          }
-    }
-
     SECTION("subset_footprints") {
       using namespace sequant;
       // i occ (size 2); a virt (size 4). Tensors: g{a1;i1}, g{a2;i2}.
@@ -709,7 +665,8 @@ TEST_CASE("optimize", "[optimize]") {
         TensorNetwork net{ts};
         container::svector<Index> targets;
         auto S = opt::detail::subset_footprints(net, targets, idxsz);
-        auto seq = opt::detail::single_term_opt_peak_impl(net, targets, idxsz);
+        auto seq = opt::detail::run_single_term_opt(
+            opt::detail::PeakModel{idxsz}, net, targets);
         double dp = opt::detail::peak_cost(net, targets, idxsz);
         REQUIRE(peak_of_sequence(seq, S, ts.size()) == dp);
       }
@@ -770,12 +727,13 @@ TEST_CASE("optimize", "[optimize]") {
       auto aux = opt::detail::batchable_index_list(net, is_batchable);
       std::size_t const m = aux.size();
       auto batch_fn = [batch](Index const&) -> std::size_t { return batch; };
-      auto pr = opt::detail::peak_dp_batched(
-          net, targets, idxsz, is_batchable, batch_fn,
-          opt::detail::leaf_volatile_mask(net, {}));
+      opt::detail::PeakBatchedModel model{idxsz, is_batchable, batch_fn,
+                                          /*is_volatile_leaf=*/{}};
+      auto ctx = model.build_context(net, targets);
+      auto st = opt::detail::solve_single_term(model, net, targets, ctx);
       size_t root = (size_t{1} << ts.size()) - 1;
       size_t allK = (size_t{1} << m) - 1;
-      double dp_allsliced = pr[root * (size_t{1} << m) + allK].peak;
+      double dp_allsliced = st[root][allK].peak;
       // Phase-1 peak with EVERY batchable index sliced: an extent wrapper that
       // slices iff the index is batchable (no batched_extent helper exists).
       auto be = [&](Index const& ix) -> std::size_t {
@@ -900,59 +858,6 @@ TEST_CASE("optimize", "[optimize]") {
       REQUIRE(optimized);
       // optimized is a binarized product over the same 3 leaves.
       REQUIRE(count_tensor_leaves(optimized) == 3u);
-    }
-
-    SECTION("PeakModel via driver == single_term_opt_peak_impl") {
-      using namespace sequant;
-      auto idxsz = [](Index const& ix) {
-        return ix.space().approximate_size();
-      };
-      for (auto const& spec : std::vector<std::vector<std::wstring>>{
-               {L"g{a1;i1}", L"g{a1;a2}", L"g{a2;i2}"},
-               {L"g{a1;i1}", L"g{a1;a2}", L"g{a2;a3}", L"g{a3;i2}"}}) {
-        std::vector<ExprPtr> ts;
-        for (auto s : spec)
-          ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
-        TensorNetwork net{ts};
-        container::svector<Index> targets;
-        auto old_seq =
-            opt::detail::single_term_opt_peak_impl(net, targets, idxsz);
-        auto new_seq = opt::detail::run_single_term_opt(
-            opt::detail::PeakModel{idxsz}, net, targets);
-        REQUIRE(new_seq == old_seq);
-      }
-    }
-
-    SECTION(
-        "PeakBatchedModel via driver == single_term_opt_peak_batched_impl") {
-      using namespace sequant;
-      // Dedicated batchable "F" space (fresh type bit, no overlap with
-      // sr-spaces bits 0b0001..0b1000); see "per-index batchability tables".
-      reg->add(L"F", IndexSpace::Type{0b10000}, 3ul);
-      auto idxsz = [](Index const& ix) {
-        return ix.space().approximate_size();
-      };
-      auto is_batchable = [](Index const& ix) {
-        return ix.space().base_key() == L"F";
-      };
-      std::size_t const batch = 1;
-      for (auto const& spec : std::vector<std::vector<std::wstring>>{
-               {L"g{a1;i1;F1}", L"g{a2;i1;F1}", L"g{a2;i2;F2}"},  // shared F1
-               {L"g{a1;i1;F1}", L"g{a2;i1;F2}", L"g{a2;i2;F2}"}}) {  // 2 aux
-        std::vector<ExprPtr> ts;
-        for (auto s : spec)
-          ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
-        TensorNetwork net{ts};
-        container::svector<Index> targets;
-        auto batch_fn = [batch](Index const&) -> std::size_t { return batch; };
-        auto old_seq = opt::detail::single_term_opt_peak_batched_impl(
-            net, targets, idxsz, is_batchable, batch_fn, {});
-        auto new_seq = opt::detail::run_single_term_opt(
-            opt::detail::PeakBatchedModel{idxsz, is_batchable, batch_fn,
-                                          /*is_volatile_leaf=*/{}},
-            net, targets);
-        REQUIRE(new_seq == old_seq);
-      }
     }
 
     SECTION("per-index batch_target_size honored") {
