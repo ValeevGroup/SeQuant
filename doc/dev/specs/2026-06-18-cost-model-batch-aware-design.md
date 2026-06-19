@@ -211,49 +211,49 @@ gives the sliced footprint. This is the mechanism that makes "plug slice" a
 one-line evaluation rather than a re-derivation, and it is what correctly keeps
 μ̃⁴ at full size (it carries no free K) while discounting the giant.
 
-### 6.2 Two-mode state and the persistence gate (model A)
+### 6.2 Multi-mode state (per batchable index, model A)
 
-Two values per subset: `peak_full[n]` and `peak_slice[n]`. Both `S[n]` and
-`L[n]` are evaluated at full extents (`S_full`, `L_full`) or slice extents
-(`S_slc`, `L_slc`), where slice substitutes `min(extent, batch_target_size)` for
-every batchable index (6.1).
+Batchable indices are sliced **independently**: a frontier that contracts `K1`
+slices only `K1` in its subtree, even if `K2` also threads through (it is sliced
+only at *its own* frontier). Slicing all batchable indices as one group would
+under-count a tensor carrying `K2` under a `K1`-only frontier and mislead the
+optimizer, so the state is per-index.
 
-- `peak_slice[n]` — model-A peak of subtree `n` evaluated **entirely sliced**:
-  the Phase-1 peak recurrence (5.2) with `S_slc`/`L_slc` throughout. Equivalently
-  `peak_slice[n] == peak_cost(subtree n, batched_idx_to_extent)`, the *already
-  validated* Phase-1 DP run with a wrapped extent provider
-  `is_batchable(ix) ? min(extent, batch) : extent`. The slice mode therefore
-  needs no new validation.
+Let `K = {K0, ..., K_{m-1}}` be the distinct batchable indices appearing in the
+term (`m` is small). For a **sliced-set** `B ⊆ K`, `S[n](B)`/`L[n](B)` evaluate
+the monomial (6.1) with each `Ki ∈ B` at `batch_target_size`, the rest at full
+extent; precompute the `2^m` footprint tables (one Phase-1 `subset_footprints`
+call per `B`, with an extent wrapper slicing exactly `B`).
 
-- `peak_full[n]` — model-A peak at full extents, except a child that is a
-  **batchable frontier** may contribute its `peak_slice`. Let
-  `cc(c) = is_frontier(c) ? min(peak_full[c], peak_slice[c]) : peak_full[c]` —
-  applied to **both** children independently (either may be a frontier). The
-  bystander leaf/sibling-result terms stay **full** (only the batched subtree
-  shrinks; a frontier's own result is batch-index-free, so `S_full[c]` already
-  equals its sliced result size). For `n = lp ⊕ rp`:
-  ```
-  lp-first: max( L_full[rp] + cc(lp), S_full[lp] + cc(rp), S_full[lp]+S_full[rp]+S_full[n] )
-  rp-first: max( L_full[lp] + cc(rp), S_full[rp] + cc(lp), S_full[lp]+S_full[rp]+S_full[n] )
-  ```
-  `peak_full[n] = min` over the two orders (and over bipartitions). Objective =
-  `peak_full[root]`.
+State: `peak[n][B]` = min peak to evaluate subtree `n` given that ancestor
+frontiers slice exactly the indices in `B` (so every tensor in `n`'s subtree is
+sized at `B`). For `n = lp ⊕ rp`, let
+`A(lp,rp) = (open(lp) ∪ open(rp)) \ open(n)` restricted to `K` — the batchable
+indices contracted *at this contraction*; they are batchable here only if `n` is
+**persistent** (`volatile_mask & n == 0`). The recurrence minimizes over
+bipartition, order, and `A' ⊆ A(lp,rp)` (the subset to batch here):
+```
+let C = B ∪ A'                                   # context inside n's subtree
+lp-first: max( L[rp](C) + peak[lp][C], S[lp](C) + peak[rp][C], S[lp](C)+S[rp](C)+S[n](B) )
+rp-first: max( L[lp](C) + peak[rp][C], S[rp](C) + peak[lp][C], S[lp](C)+S[rp](C)+S[n](B) )
+```
+`A'` indices are internal to `n`, hence absent from `n`'s result, so
+`S[n](B∪A') == S[n](B)`. Singleton: `peak[leaf][B] = S[leaf](B)`. **Objective =
+`peak[root][∅]`** — the root carries no ancestor context, and batching the whole
+term over its own aux is just `A'` at the root, subsumed by the recurrence (no
+special root handling).
 
-A child `c` is a **batchable frontier** when a batchable index is **internal**
-to `c` (in `c`'s tensors but not in `c`'s open indices — contracted within `c`,
-so `c`'s result is batch-index-free) **and** `c` is **persistent**
-(`volatile_mask & c == 0`). Both tests are local to the subset `c` — no ancestor
-lookups, dissolving the "DP knows below, not above" problem: we detect the
-frontier *where the batch index is internalized*, looking down at the child the
-DP has already solved. (Internality is checked on `c`: its result being
-batch-index-free while its tensors carry the batch index.)
+Both gates are **local**: `A(lp,rp)` is read off the per-subset open-index sets
+(`init_results`); persistence is `volatile_mask & n`. No ancestor lookups — the
+batch decision for `Ki` is taken exactly at the node where `Ki` is internalized,
+looking down at children the DP has already solved. This matches the runtime
+gate (`make_batched_custom_evaluator`) by construction. Each `(n, B)` keeps its
+own back-pointer (bipartition, order, `A'`); reconstruction follows the chosen
+context down.
 
-This matches the runtime gate by construction: the cost model treats a subtree
-as batchable iff a batch index is internal to it and it is persistent — the same
-condition `make_batched_custom_evaluator` uses.
-
-The two modes may resolve to *different* bipartitions/orders, so each carries its
-own back-pointer; the reconstruction follows the mode chosen at each frontier.
+The single-batch-index case (`m = 1`) collapses to a two-mode DP
+(`B ∈ {∅, {K0}}`), and `peak[n][{K0}] == peak_cost(n, extent-with-K0-sliced)`
+(the Phase-1 DP), which the validation reuses.
 
 ### 6.3 Worked check
 
@@ -269,16 +269,19 @@ own back-pointer; the reconstruction follows the mode chosen at each frontier.
 
 ### 6.4 Validation
 
-- **Slice mode:** assert `peak_slice[n] == peak_cost(net, batched_extent)` (the
-  Phase-1 DP at slice extents) — ties the entire slice mode to the proven peak
-  DP, no new oracle.
-- **Full mode with frontiers:** a batch-aware brute-force oracle enumerates
-  contraction trees x evaluation orders x **which persistent-batch-frontiers to
-  slice**, simulating the model-A peak with slice-sized batch extents for tensors
-  strictly inside a batched frontier's subtree; min over all = the batched
-  optimum. Assert DP == oracle on small networks, including (a) a persistent
-  frontier where the giant is priced sliced and (b) a volatile frontier where it
-  is not. Plus hand-computed unit cases for the frontier gate.
+- **Fully-sliced context reuses Phase 1:** for any subset `n`, `peak[n][K]` (all
+  batchable indices sliced) must equal `peak_cost(n, all-batched extent)` — the
+  *already-validated* Phase-1 DP run with every batchable index sliced. This
+  pins the all-sliced corner of the multi-mode table to the proven peak DP, free.
+- **Full objective with frontiers:** a batch-aware brute-force oracle enumerates
+  contraction trees x evaluation orders x, at each persistent contraction, which
+  subset of its contracted batchable indices to batch — simulating the model-A
+  peak where a live subtree `m` is sized over the union of `A_F` across batched
+  frontiers `F` that *strictly* contain `m` (per-index, nested). Min over all =
+  the batched optimum; assert `peak[root][∅] == oracle` on small networks,
+  including (a) a persistent frontier where the giant is priced sliced, (b) a
+  volatile frontier where it is not, and (c) a two-distinct-aux network where the
+  indices batch independently. Plus hand-computed unit cases for the gate.
 
 ### 6.5 Phase-2 plumbing (pre-CostModel)
 
