@@ -935,6 +935,11 @@ TEST_CASE("optimize", "[optimize]") {
       static_assert(opt::detail::CostModel<
                     opt::detail::PeakBatchedModel<decltype(idxsz)>>);
 
+      // Negative direction: a type lacking State/Context/the six methods must
+      // NOT satisfy CostModel (guards against a vacuously-true concept).
+      struct NotAModel {};
+      static_assert(!opt::detail::CostModel<NotAModel>);
+
       // --- Custom-model extension-point exercise ---
       // Build an AdditiveModel driven by memsize_counter with a doubled
       // footprint weight, then drive it directly via run_single_term_opt
