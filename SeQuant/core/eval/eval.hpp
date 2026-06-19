@@ -902,9 +902,9 @@ ResultPtr evaluate_antisymm(Args&&... args) {
 /// For each node it is consulted on, the returned evaluator chooses a batch
 /// axis \c K via `batch_axis(node, accept)` (declining if none). It asks the
 /// backend to partition \c K into contiguous element-range batches of about
-/// \p target_batch_size elements each (Result::mode_batches); if that yields at
-/// most one batch it declines (so small / unselected indices are left to the
-/// standard scheme).
+/// \p target_batch_size(K) elements each (Result::mode_batches); if that
+/// yields at most one batch it declines (so small / unselected indices are
+/// left to the standard scheme).
 ///
 /// Otherwise it *replays the build of every compatible persistent final* in
 /// the same batch passes: the group is the trigger node plus every key of
@@ -941,8 +941,9 @@ ResultPtr evaluate_antisymm(Args&&... args) {
 /// rather than full intermediate peak memory).
 ///
 /// \param le the leaf evaluator (captured).
-/// \param target_batch_size the desired size of each batch *in elements* (a
-///        user knob; no memory model is assumed). Backend-neutral: a tiled
+/// \param target_batch_size per-index function
+///        `std::function<std::size_t(Index const&)>` returning the desired
+///        batch size for a given (batch-axis) index. Backend-neutral: a tiled
 ///        backend rounds batch boundaries to tile boundaries, so realized
 ///        batches are uneven and each covers at least this many elements where
 ///        possible.

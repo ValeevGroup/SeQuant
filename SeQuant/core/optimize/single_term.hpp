@@ -194,8 +194,9 @@ inline container::vector<Index> batchable_index_list(
 /// \param tidxs      Target (open) indices of the network.
 /// \param idxsz      Callable mapping an Index to its full extent.
 /// \param is_batchable  Predicate identifying batchable indices.
-/// \param batch_target_size  Per-index slice size: a sliced batchable index
-///        contributes min(extent, batch_target_size(ix)).
+/// \param batch_target_size  Per-index slice-size function: a sliced batchable
+///        index \c ix contributes
+///        min(full_extent, batch_target_size(aux_list[k])).
 /// \param aux_list   Ordered list of distinct batchable indices (as returned
 ///        by \ref batchable_index_list).
 /// \return \c tables[B][n] = footprint of subset \c n under sliced-set \c B.

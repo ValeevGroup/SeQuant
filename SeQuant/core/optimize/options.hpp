@@ -24,9 +24,10 @@ class Tensor;
 /// - `DensePeakSizeBatched` extends `DensePeakSize` with a per-index
 ///   batchability model: each index satisfying
 ///   `OptimizeOptions::is_batchable_index` is treated as independently sliced
-///   to `min(extent, batch_target_size)` elements. The DP minimises peak over
-///   the worst-case sliced configuration. Only consulted by the batched oracle
-///   and DP; requires `is_batchable_index` and `batch_target_size` to be set.
+///   to `min(extent, batch_target_size(ix))` elements per index. The DP
+///   minimises peak over the worst-case sliced configuration. Only consulted by
+///   the batched oracle and DP; requires `is_batchable_index` and
+///   `batch_target_size` to be set.
 ///
 /// Leaves room for `Sparse*` models later.
 enum class ObjectiveFunction {

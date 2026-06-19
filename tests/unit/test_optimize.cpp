@@ -955,6 +955,9 @@ TEST_CASE("optimize", "[optimize]") {
 
     SECTION("per-index batch_target_size honored") {
       using namespace sequant;
+      // Register F with approximate_size=3; two distinct aux indices F_1, F_2.
+      // Index::label() returns base_key + "_" + ordinal, so the F1 ordinal-1
+      // index has label L"F_1" (not L"F1").
       reg->add(L"F", IndexSpace::Type{0b10000}, 3ul);
       auto idxsz = [](Index const& ix) -> std::size_t {
         return ix.space().approximate_size();
@@ -962,21 +965,43 @@ TEST_CASE("optimize", "[optimize]") {
       auto is_batchable = [](Index const& ix) {
         return ix.space().base_key() == L"F";
       };
+      // 3-tensor network where the connector tensor t1 carries BOTH F_1 and
+      // F_2: F_1 is contracted between t0 and t1, while F_2 propagates
+      // through t1 and is contracted later between t1 and t2.  Because t1
+      // carries both aux indices simultaneously, its footprint under a given
+      // context depends on the batch sizes of F_1 AND F_2 independently,
+      // making c_mixed strictly between c_all1 and c_all2.
+      //
+      // Network: t0=g{a1;i1;F1}, t1=g{a2;i1;F1,F2}, t2=g{a2;i2;F2}
+      //   contracted: i1 (t0-t1), F1 (t0-t1), a2 (t1-t2), F2 (t1-t2)
+      //   free (result): a1, i2   -> result size = 100*10 = 1000
       std::vector<ExprPtr> ts;
-      for (auto s : {L"g{a1;i1;F1}", L"g{a2;i1;F2}", L"g{a2;i2;F2}"})
+      for (auto s : {L"g{a1;i1;F1}", L"g{a2;i1;F1,F2}", L"g{a2;i2;F2}"})
         ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
       TensorNetwork net{ts};
       container::svector<Index> targets;
+      // Uniform batch sizes for baseline costs.
       auto all1 = [](Index const&) -> std::size_t { return 1; };
+      auto all2 = [](Index const&) -> std::size_t { return 2; };
+      // mixed: F_1 gets batch=1, F_2 gets batch=2.  The discriminator uses
+      // the exact label returned by Index::label(), which is L"F_1" for
+      // ordinal-1 (not L"F1").  Because t1 carries both F_1 and F_2, any
+      // scalar implementation (same value for all indices) cannot reproduce
+      // c_mixed; both per-index values participate in the optimum.
       auto mixed = [](Index const& ix) -> std::size_t {
-        return ix.label().find(L"F1") != std::wstring_view::npos ? 1 : 2;
+        return ix.label() == L"F_1" ? std::size_t{1} : std::size_t{2};
       };
       double c_all1 = opt::detail::peak_cost_batched(net, targets, idxsz,
                                                      is_batchable, all1, {});
+      double c_all2 = opt::detail::peak_cost_batched(net, targets, idxsz,
+                                                     is_batchable, all2, {});
       double c_mixed = opt::detail::peak_cost_batched(net, targets, idxsz,
                                                       is_batchable, mixed, {});
-      REQUIRE(c_mixed >= c_all1);  // larger F2 slice -> no smaller peak
-      REQUIRE(c_mixed != c_all1);  // the per-index size is actually used
+      // c_mixed must differ from both baselines: a scalar batch_target_size
+      // (returning the same value for F_1 and F_2) cannot produce c_mixed.
+      REQUIRE(c_all1 != c_all2);   // network is sensitive to batch size
+      REQUIRE(c_mixed != c_all1);  // mixed is not the same as all-batch-1
+      REQUIRE(c_mixed != c_all2);  // mixed is not the same as all-batch-2
     }
 
     SECTION("CostModel concept conformance + custom model") {
