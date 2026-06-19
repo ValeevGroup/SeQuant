@@ -401,30 +401,84 @@ SECTION("DensePeakSize matches oracle over a battery of small networks") {
   }
 }
 
-SECTION("DensePeakSize can pick a lower-peak tree than DenseFLOPs") {
+SECTION("DensePeakSize reconstructed sequence achieves the DP optimum") {
   using namespace sequant;
   auto idxsz = [](Index const& ix) -> std::size_t {
     return ix.space().approximate_size();
   };
-  // Construct a product where the flop-optimal order materializes a large
-  // intermediate the peak-optimal order avoids; assert the peak objective's
-  // achieved peak is <= the flop objective's tree peak.
-  auto prod = parse_expr(
-      L"g{a1;i1} * g{a1;a2} * g{a2;a3} * g{a3;i2}",
-      Symmetry::nonsymm)->as<Product>();
-  auto flops_tree = opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
-      prod, idxsz, /*subnet_cse=*/false);
-  auto peak_tree = opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
-      prod, idxsz, /*subnet_cse=*/false);
-  // Both must evaluate to equivalent expressions (same leaf set).
-  REQUIRE(count_tensor_leaves(flops_tree) == count_tensor_leaves(peak_tree));
-  // (Stronger numeric peak comparison added once peak_cost is exposed on trees.)
+  // Simulate the all-co-resident (model A) peak of a reconstructed
+  // EvalSequence and confirm it EQUALS peak_cost (the DP's minimum). This
+  // proves the emitted contraction order actually realizes the optimum, not
+  // just that the DP computed a number. CRITICAL: all input leaves are
+  // resident from the start (model A) -- a naive stack machine that pushes a
+  // leaf only when its token appears would compute the Sethi-Ullman (model B)
+  // peak and disagree. A tensor is freed when consumed.
+  auto peak_of_sequence = [](EvalSequence const& seq,
+                             container::vector<double> const& S,
+                             size_t nt) -> double {
+    container::set<size_t> live;
+    for (size_t b = 0; b < nt; ++b) live.insert(size_t{1} << b);
+    container::vector<size_t> stack;
+    double peak = 0.0;
+    for (int tok : seq) {
+      if (tok >= 0) {
+        stack.push_back(size_t{1} << tok);
+      } else {
+        size_t rhs = stack.back(); stack.pop_back();
+        size_t lhs = stack.back(); stack.pop_back();
+        size_t merged = lhs | rhs;
+        double live_sum = 0.0;
+        for (auto m : live) live_sum += S[m];  // all live, incl. bystanders
+        peak = std::max(peak, live_sum + S[merged]);
+        live.erase(lhs); live.erase(rhs); live.insert(merged);
+        stack.push_back(merged);
+      }
+    }
+    return peak;
+  };
+  std::vector<std::vector<std::wstring>> nets = {
+    {L"g{a1;i1}", L"g{a1;a2}", L"g{a2;i2}"},
+    {L"g{a1;i1}", L"g{a1;a2}", L"g{a2;a3}", L"g{a3;i2}"},
+    {L"g{a1,a2;i1,i2}", L"t{a1;i1}", L"t{a2;i2}"},
+  };
+  for (auto const& spec : nets) {
+    std::vector<ExprPtr> ts;
+    for (auto const& s : spec) ts.push_back(deserialize(s));  // sized spaces above
+    TensorNetwork net{ts};
+    container::svector<Index> targets;
+    auto S = opt::detail::subset_footprints(net, targets, idxsz);
+    auto seq = opt::detail::single_term_opt_peak_impl(net, targets, idxsz);
+    double dp = opt::detail::peak_cost(net, targets, idxsz);
+    REQUIRE(peak_of_sequence(seq, S, ts.size()) == Catch::Approx(dp));
+  }
+}
+
+SECTION("optimize() public API dispatches DensePeakSize") {
+  using namespace sequant;
+  // Drives Step 3 (the opt_pure_product runtime dispatch). Before Step 3 this
+  // hits the SEQUANT_ASSERT(objective_function == DenseSize) in opt_pure_product
+  // and fails; after Step 3 it returns a binarized product.
+  auto expr = deserialize(L"g{a1;i1} * g{a1;a2} * g{a2;i2}");
+  OptimizeOptions opts;
+  opts.objective_function = ObjectiveFunction::DensePeakSize;
+  opts.idx_to_extent = [](Index const& ix) -> std::size_t {
+    return ix.space().approximate_size();
+  };
+  auto optimized = optimize(expr, opts);
+  REQUIRE(optimized);
+  // optimized is a binarized product over the same 3 leaves.
+  REQUIRE(count_tensor_leaves(optimized) == 3u);
 }
 ```
 
 - [ ] **Step 2: Run to verify it fails**
 
-Expected: compile/link error - `single_term_opt<DensePeakSize>(Product, ...)` reachable, but `optimize()` public dispatch for `DensePeakSize` missing; the regression SECTION should compile but the public path is exercised next.
+Run the build/run commands. Expected: the battery and reconstruction SECTIONs
+compile and PASS (they exercise Task 3's detail functions), but the "optimize()
+public API dispatches DensePeakSize" SECTION FAILS - `optimize()` ->
+`opt_pure_product` has no `DensePeakSize` branch, so it hits
+`SEQUANT_ASSERT(objective_function == DenseSize)` and aborts/throws. That assert
+failure is the red test that Step 3 turns green.
 
 - [ ] **Step 3: Dispatch in `opt_pure_product`**
 
