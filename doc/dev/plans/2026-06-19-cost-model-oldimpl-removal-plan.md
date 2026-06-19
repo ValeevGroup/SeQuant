@@ -34,10 +34,10 @@ Move `peak_cost`, `peak_cost_batched`, and `reconstructed_batched_peak` out of `
 
 - [ ] **Step 1: Verify the suite is green before touching anything (baseline)**
 
-Run (build dir already configured at `/Users/efv/code/SeQuant/build`; if absent, configure with `cmake -S /Users/efv/code/SeQuant -B /Users/efv/code/SeQuant/build -G Ninja`):
+Run (build dir already configured at `/Users/efv/code/SeQuant/cmake-build-release`; if absent, configure with `cmake -S /Users/efv/code/SeQuant -B /Users/efv/code/SeQuant/cmake-build-release -G Ninja`):
 ```bash
-cmake --build /Users/efv/code/SeQuant/build --target unit_tests-sequant 2>&1 | tail -5
-/Users/efv/code/SeQuant/build/tests/unit/unit_tests-sequant "[optimize]" 2>&1 | tail -8
+cmake --build /Users/efv/code/SeQuant/cmake-build-release --target unit_tests-sequant 2>&1 | tail -5
+/Users/efv/code/SeQuant/cmake-build-release/tests/unit/unit_tests-sequant "[optimize]" 2>&1 | tail -8
 ```
 Expected: build succeeds; all `[optimize]` assertions pass (`All tests passed` line lists the SECTION count).
 
@@ -118,8 +118,8 @@ Remove the entire definitions of `peak_cost` (the `template ... double peak_cost
 Run:
 ```bash
 clang-format --style=file -i /Users/efv/code/SeQuant/SeQuant/core/optimize/cost_model.hpp /Users/efv/code/SeQuant/SeQuant/core/optimize/single_term.hpp
-cmake --build /Users/efv/code/SeQuant/build --target unit_tests-sequant 2>&1 | tail -5
-/Users/efv/code/SeQuant/build/tests/unit/unit_tests-sequant "[optimize]" 2>&1 | tail -8
+cmake --build /Users/efv/code/SeQuant/cmake-build-release --target unit_tests-sequant 2>&1 | tail -5
+/Users/efv/code/SeQuant/cmake-build-release/tests/unit/unit_tests-sequant "[optimize]" 2>&1 | tail -8
 ```
 Expected: clean build; `[optimize]` all pass (same SECTION/assertion counts as Step 1). The peak/batched oracle SECTIONs (`DensePeakSize DP matches brute-force oracle`, `DensePeakSizeBatched objective matches per-index oracle`, `DensePeakSizeBatched reconstruction achieves the optimum (numeric)`, etc.) now run through the models and still match their independent oracles.
 
@@ -200,8 +200,8 @@ Expected: NO output (empty). If any line prints, rewire it as above before conti
 Run:
 ```bash
 clang-format --style=file -i /Users/efv/code/SeQuant/tests/unit/test_optimize.cpp
-cmake --build /Users/efv/code/SeQuant/build --target unit_tests-sequant 2>&1 | tail -5
-/Users/efv/code/SeQuant/build/tests/unit/unit_tests-sequant "[optimize]" 2>&1 | tail -8
+cmake --build /Users/efv/code/SeQuant/cmake-build-release --target unit_tests-sequant 2>&1 | tail -5
+/Users/efv/code/SeQuant/cmake-build-release/tests/unit/unit_tests-sequant "[optimize]" 2>&1 | tail -8
 ```
 Expected: clean build; all `[optimize]` pass (three fewer SECTIONs than Task 1 Step 1; all kept SECTIONs still pass).
 
@@ -259,8 +259,8 @@ For each hit (e.g. the line ~235 comment `construction inside \ref single_term_o
 Run:
 ```bash
 clang-format --style=file -i /Users/efv/code/SeQuant/SeQuant/core/optimize/single_term.hpp /Users/efv/code/SeQuant/SeQuant/core/optimize/cost_model.hpp
-cmake --build /Users/efv/code/SeQuant/build --target unit_tests-sequant 2>&1 | tail -8
-/Users/efv/code/SeQuant/build/tests/unit/unit_tests-sequant "[optimize]" 2>&1 | tail -8
+cmake --build /Users/efv/code/SeQuant/cmake-build-release --target unit_tests-sequant 2>&1 | tail -8
+/Users/efv/code/SeQuant/cmake-build-release/tests/unit/unit_tests-sequant "[optimize]" 2>&1 | tail -8
 ```
 Expected: clean build (no "undeclared identifier" for any removed name); all `[optimize]` pass.
 
@@ -300,8 +300,8 @@ After the positive `static_assert`s (and before / alongside the custom-model run
 
 Run:
 ```bash
-cmake --build /Users/efv/code/SeQuant/build --target unit_tests-sequant 2>&1 | tail -5
-/Users/efv/code/SeQuant/build/tests/unit/unit_tests-sequant "[optimize]" 2>&1 | tail -6
+cmake --build /Users/efv/code/SeQuant/cmake-build-release --target unit_tests-sequant 2>&1 | tail -5
+/Users/efv/code/SeQuant/cmake-build-release/tests/unit/unit_tests-sequant "[optimize]" 2>&1 | tail -6
 ```
 Expected: clean build (the negative `static_assert` compiles, i.e. the concept is genuinely `false` for `NotAModel`); `[optimize]` all pass. If the build fails on that `static_assert`, the concept is broken (accepts a non-model) — report it.
 
