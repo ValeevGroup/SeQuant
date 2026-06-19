@@ -737,8 +737,9 @@ TEST_CASE("optimize", "[optimize]") {
       container::svector<Index> targets;
       auto aux = opt::detail::batchable_index_list(net, is_batchable);
       REQUIRE(aux.size() == 2u);  // F1, F2 distinct
+      auto batch_fn = [](Index const&) -> std::size_t { return 1; };
       auto tables = opt::detail::sliced_footprints(net, targets, idxsz,
-                                                   is_batchable, 1, aux);
+                                                   is_batchable, batch_fn, aux);
       REQUIRE(tables.size() == 4u);  // 2^2 sliced-sets
       // B=00 (none sliced) is the full footprint; B=11 (both) the all-sliced.
       REQUIRE(tables[0b00][0b11] > tables[0b11][0b11]);  // full > all-sliced
@@ -768,8 +769,9 @@ TEST_CASE("optimize", "[optimize]") {
       container::svector<Index> targets;
       auto aux = opt::detail::batchable_index_list(net, is_batchable);
       std::size_t const m = aux.size();
+      auto batch_fn = [batch](Index const&) -> std::size_t { return batch; };
       auto pr = opt::detail::peak_dp_batched(
-          net, targets, idxsz, is_batchable, batch,
+          net, targets, idxsz, is_batchable, batch_fn,
           opt::detail::leaf_volatile_mask(net, {}));
       size_t root = (size_t{1} << ts.size()) - 1;
       size_t allK = (size_t{1} << m) - 1;
@@ -806,8 +808,9 @@ TEST_CASE("optimize", "[optimize]") {
         container::svector<Index> targets;
         auto aux = opt::detail::batchable_index_list(net, is_batchable);
         auto vmask = opt::detail::leaf_volatile_mask(net, {});
-        auto tables = opt::detail::sliced_footprints(net, targets, idxsz,
-                                                     is_batchable, batch, aux);
+        auto batch_fn = [batch](Index const&) -> std::size_t { return batch; };
+        auto tables = opt::detail::sliced_footprints(
+            net, targets, idxsz, is_batchable, batch_fn, aux);
         // open_aux[s] via the SAME detail helper the DP uses, so DP and oracle
         // index `tables` identically.
         auto open_aux_det = opt::detail::subset_open_aux(net, targets, aux);
@@ -818,7 +821,7 @@ TEST_CASE("optimize", "[optimize]") {
           persistent[n] = ((vmask & n) == 0) ? 1 : 0;
         double oracle = batched_min_peak(T, open_aux, persistent, ts.size());
         double dp = opt::detail::peak_cost_batched(net, targets, idxsz,
-                                                   is_batchable, batch, {});
+                                                   is_batchable, batch_fn, {});
         REQUIRE(dp == oracle);
       }
     }
@@ -847,10 +850,11 @@ TEST_CASE("optimize", "[optimize]") {
         container::svector<Index> targets;
         // recompute the chosen tree's peak by simulation over the pr
         // back-pointers (independent of the DP's max/+ recurrence):
+        auto batch_fn = [batch](Index const&) -> std::size_t { return batch; };
         double recon = opt::detail::reconstructed_batched_peak(
-            net, targets, idxsz, is_batchable, batch, {});
+            net, targets, idxsz, is_batchable, batch_fn, {});
         double dp = opt::detail::peak_cost_batched(net, targets, idxsz,
-                                                   is_batchable, batch, {});
+                                                   is_batchable, batch_fn, {});
         REQUIRE(recon == dp);
       }
     }
@@ -872,7 +876,7 @@ TEST_CASE("optimize", "[optimize]") {
       opts.is_batchable_index = [](Index const& ix) {
         return ix.space().base_key() == L"F";
       };
-      opts.batch_target_size = 1;
+      opts.batch_target_size = [](Index const&) -> std::size_t { return 1; };
       auto optimized = optimize(expr, opts);
       REQUIRE(optimized);
       REQUIRE(count_tensor_leaves(optimized) == 3u);
@@ -938,14 +942,41 @@ TEST_CASE("optimize", "[optimize]") {
           ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
         TensorNetwork net{ts};
         container::svector<Index> targets;
+        auto batch_fn = [batch](Index const&) -> std::size_t { return batch; };
         auto old_seq = opt::detail::single_term_opt_peak_batched_impl(
-            net, targets, idxsz, is_batchable, batch, {});
+            net, targets, idxsz, is_batchable, batch_fn, {});
         auto new_seq = opt::detail::run_single_term_opt(
-            opt::detail::PeakBatchedModel{idxsz, is_batchable, batch,
+            opt::detail::PeakBatchedModel{idxsz, is_batchable, batch_fn,
                                           /*is_volatile_leaf=*/{}},
             net, targets);
         REQUIRE(new_seq == old_seq);
       }
+    }
+
+    SECTION("per-index batch_target_size honored") {
+      using namespace sequant;
+      reg->add(L"F", IndexSpace::Type{0b10000}, 3ul);
+      auto idxsz = [](Index const& ix) -> std::size_t {
+        return ix.space().approximate_size();
+      };
+      auto is_batchable = [](Index const& ix) {
+        return ix.space().base_key() == L"F";
+      };
+      std::vector<ExprPtr> ts;
+      for (auto s : {L"g{a1;i1;F1}", L"g{a2;i1;F2}", L"g{a2;i2;F2}"})
+        ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
+      TensorNetwork net{ts};
+      container::svector<Index> targets;
+      auto all1 = [](Index const&) -> std::size_t { return 1; };
+      auto mixed = [](Index const& ix) -> std::size_t {
+        return ix.label().find(L"F1") != std::wstring_view::npos ? 1 : 2;
+      };
+      double c_all1 = opt::detail::peak_cost_batched(net, targets, idxsz,
+                                                     is_batchable, all1, {});
+      double c_mixed = opt::detail::peak_cost_batched(net, targets, idxsz,
+                                                      is_batchable, mixed, {});
+      REQUIRE(c_mixed >= c_all1);  // larger F2 slice -> no smaller peak
+      REQUIRE(c_mixed != c_all1);  // the per-index size is actually used
     }
 
     SECTION("CostModel concept conformance + custom model") {

@@ -194,14 +194,16 @@ inline container::vector<Index> batchable_index_list(
 /// \param tidxs      Target (open) indices of the network.
 /// \param idxsz      Callable mapping an Index to its full extent.
 /// \param is_batchable  Predicate identifying batchable indices.
-/// \param batch      Shared slice size applied to every sliced batchable index.
+/// \param batch_target_size  Per-index slice size: a sliced batchable index
+///        contributes min(extent, batch_target_size(ix)).
 /// \param aux_list   Ordered list of distinct batchable indices (as returned
 ///        by \ref batchable_index_list).
 /// \return \c tables[B][n] = footprint of subset \c n under sliced-set \c B.
 template <typename TIdxs, typename IdxToSz>
 container::vector<container::vector<double>> sliced_footprints(
     TensorNetwork const& network, TIdxs const& tidxs, IdxToSz&& idxsz,
-    std::function<bool(Index const&)> const& is_batchable, std::size_t batch,
+    std::function<bool(Index const&)> const& is_batchable,
+    std::function<std::size_t(Index const&)> const& batch_target_size,
     container::vector<Index> const& aux_list) {
   std::size_t const m = aux_list.size();
   container::vector<container::vector<double>> tables(std::size_t{1} << m);
@@ -213,7 +215,8 @@ container::vector<container::vector<double>> sliced_footprints(
         if (it != ranges::end(aux_list)) {
           std::size_t k =
               static_cast<std::size_t>(it - ranges::begin(aux_list));
-          if (B & (std::size_t{1} << k)) return std::min(e, batch);
+          if (B & (std::size_t{1} << k))
+            return std::min(e, batch_target_size(ix));
         }
       }
       return e;
@@ -621,7 +624,8 @@ struct BatchedRes {
 /// \param tidxs          Target (open) indices of the network.
 /// \param idxsz          Callable mapping an Index to its full extent.
 /// \param is_batchable   Predicate identifying batchable indices.
-/// \param batch          Shared slice size for each sliced batchable index.
+/// \param batch_target_size  Per-index slice size for each sliced batchable
+///        index.
 /// \param volatile_mask  Bitmask of volatile leaves (see \ref
 ///        leaf_volatile_mask); subset \c n is persistent iff
 ///        \c (volatile_mask & n) == 0.
@@ -631,14 +635,15 @@ struct BatchedRes {
 template <typename TIdxs, typename IdxToSz>
 container::vector<BatchedRes> peak_dp_batched(
     TensorNetwork const& network, TIdxs const& tidxs, IdxToSz&& idxsz,
-    std::function<bool(Index const&)> const& is_batchable, std::size_t batch,
+    std::function<bool(Index const&)> const& is_batchable,
+    std::function<std::size_t(Index const&)> const& batch_target_size,
     std::size_t volatile_mask) {
   auto const nt = network.tensors().size();
   auto aux = batchable_index_list(network, is_batchable);
   std::size_t const m = aux.size();
   std::size_t const nB = std::size_t{1} << m;
-  auto tables =
-      sliced_footprints(network, tidxs, idxsz, is_batchable, batch, aux);
+  auto tables = sliced_footprints(network, tidxs, idxsz, is_batchable,
+                                  batch_target_size, aux);
   auto open_aux = subset_open_aux(network, tidxs, aux);
 
   // Flat (n, B) table.
@@ -715,16 +720,19 @@ container::vector<BatchedRes> peak_dp_batched(
 /// \param tidxs             Target (open) indices of the network.
 /// \param idxsz             Callable mapping an Index to its full extent.
 /// \param is_batchable      Predicate identifying batchable indices.
-/// \param batch             Shared slice size for each sliced batchable index.
+/// \param batch_target_size  Per-index slice size for each sliced batchable
+///        index.
 /// \param is_volatile_leaf  Predicate marking a leaf as volatile; may be empty.
 /// \return \c peak[root][0].
 template <typename TIdxs, typename IdxToSz>
 double peak_cost_batched(
     TensorNetwork const& network, TIdxs const& tidxs, IdxToSz&& idxsz,
-    std::function<bool(Index const&)> const& is_batchable, std::size_t batch,
+    std::function<bool(Index const&)> const& is_batchable,
+    std::function<std::size_t(Index const&)> const& batch_target_size,
     std::function<bool(Tensor const&)> const& is_volatile_leaf) {
   std::size_t const vmask = leaf_volatile_mask(network, is_volatile_leaf);
-  auto pr = peak_dp_batched(network, tidxs, idxsz, is_batchable, batch, vmask);
+  auto pr = peak_dp_batched(network, tidxs, idxsz, is_batchable,
+                            batch_target_size, vmask);
   auto aux = batchable_index_list(network, is_batchable);
   std::size_t const nB = std::size_t{1} << aux.size();
   std::size_t const root = (std::size_t{1} << network.tensors().size()) - 1;
@@ -772,13 +780,15 @@ EvalSequence single_term_opt_peak_impl(TensorNetwork const& network,
 /// \param tidxs         Target (open) indices of the network.
 /// \param idxsz         Callable mapping an Index to its full extent.
 /// \param is_batchable  Predicate identifying batchable indices.
-/// \param batch         Shared slice size for each sliced batchable index.
+/// \param batch_target_size  Per-index slice size for each sliced batchable
+///        index.
 /// \param is_volatile_leaf  Predicate marking a leaf as volatile; may be empty.
 /// \return Optimal evaluation sequence under the batched peak objective.
 template <typename TIdxs, typename IdxToSz>
 EvalSequence single_term_opt_peak_batched_impl(
     TensorNetwork const& network, TIdxs const& tidxs, IdxToSz&& idxsz,
-    std::function<bool(Index const&)> const& is_batchable, std::size_t batch,
+    std::function<bool(Index const&)> const& is_batchable,
+    std::function<std::size_t(Index const&)> const& batch_target_size,
     std::function<bool(Tensor const&)> const& is_volatile_leaf) {
   using ranges::views::concat;
   auto const nt = network.tensors().size();
@@ -786,7 +796,8 @@ EvalSequence single_term_opt_peak_batched_impl(
   if (nt == 2) return EvalSequence{0, 1, -1};
 
   std::size_t const vmask = leaf_volatile_mask(network, is_volatile_leaf);
-  auto pr = peak_dp_batched(network, tidxs, idxsz, is_batchable, batch, vmask);
+  auto pr = peak_dp_batched(network, tidxs, idxsz, is_batchable,
+                            batch_target_size, vmask);
   auto aux = batchable_index_list(network, is_batchable);
   std::size_t const nB = std::size_t{1} << aux.size();
   auto at = [&](std::size_t n, std::size_t B) -> BatchedRes const& {
@@ -834,21 +845,24 @@ EvalSequence single_term_opt_peak_batched_impl(
 /// \param tidxs         Target (open) indices of the network.
 /// \param idxsz         Callable mapping an Index to its full extent.
 /// \param is_batchable  Predicate identifying batchable indices.
-/// \param batch         Shared slice size for each sliced batchable index.
+/// \param batch_target_size  Per-index slice size for each sliced batchable
+///        index.
 /// \param is_volatile_leaf  Predicate marking a leaf as volatile; may be empty.
 /// \return The simulated model-A peak of the chosen reconstruction.
 template <typename TIdxs, typename IdxToSz>
 double reconstructed_batched_peak(
     TensorNetwork const& network, TIdxs const& tidxs, IdxToSz&& idxsz,
-    std::function<bool(Index const&)> const& is_batchable, std::size_t batch,
+    std::function<bool(Index const&)> const& is_batchable,
+    std::function<std::size_t(Index const&)> const& batch_target_size,
     std::function<bool(Tensor const&)> const& is_volatile_leaf) {
   auto const nt = network.tensors().size();
   std::size_t const vmask = leaf_volatile_mask(network, is_volatile_leaf);
-  auto pr = peak_dp_batched(network, tidxs, idxsz, is_batchable, batch, vmask);
+  auto pr = peak_dp_batched(network, tidxs, idxsz, is_batchable,
+                            batch_target_size, vmask);
   auto aux = batchable_index_list(network, is_batchable);
   std::size_t const nB = std::size_t{1} << aux.size();
-  auto tables =
-      sliced_footprints(network, tidxs, idxsz, is_batchable, batch, aux);
+  auto tables = sliced_footprints(network, tidxs, idxsz, is_batchable,
+                                  batch_target_size, aux);
   auto open_aux = subset_open_aux(network, tidxs, aux);
   auto at = [&](std::size_t n, std::size_t B) -> BatchedRes const& {
     return pr[n * nB + B];
@@ -946,7 +960,7 @@ EvalSequence single_term_opt(
     std::function<bool(Tensor const&)> const& is_volatile_leaf = {},
     double volatile_weight = 1.0, double footprint_weight = 0.0,
     std::function<bool(Index const&)> const& is_batchable_index = {},
-    std::size_t batch_target_size = 0) {
+    std::function<std::size_t(Index const&)> batch_target_size = {}) {
   decltype(OptRes::indices) tidxs{};
 
   // Volatility weighting is a DenseFLOPs-only notion (persistent intermediates
@@ -1023,7 +1037,7 @@ ExprPtr single_term_opt(
     std::function<bool(Tensor const&)> const& is_volatile_leaf = {},
     double volatile_weight = 1.0, double footprint_weight = 0.0,
     std::function<bool(Index const&)> const& is_batchable_index = {},
-    std::size_t batch_target_size = 0) {
+    std::function<std::size_t(Index const&)> batch_target_size = {}) {
   using ranges::views::filter;
   using ranges::views::reverse;
 

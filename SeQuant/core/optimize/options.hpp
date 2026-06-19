@@ -120,10 +120,10 @@ struct OptimizeOptions {
   /// ObjectiveFunction::DensePeakSizeBatched.
   std::function<bool(Index const&)> is_batchable_index = {};
 
-  /// Shared slice size: a sliced batchable index contributes
-  /// min(extent, batch_target_size). 0 disables the batched discount. Only
-  /// consulted by DensePeakSizeBatched.
-  std::size_t batch_target_size = 0;
+  /// Per-index slice size: a sliced batchable index contributes
+  /// min(extent, batch_target_size(ix)). Empty (default nullptr/empty function)
+  /// disables the batched discount. Only consulted by DensePeakSizeBatched.
+  std::function<std::size_t(Index const&)> batch_target_size = {};
 };
 
 }  // namespace sequant

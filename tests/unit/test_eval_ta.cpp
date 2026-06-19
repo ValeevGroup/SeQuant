@@ -1696,8 +1696,10 @@ TEST_CASE("eval_batched_custom_evaluator", "[eval]") {
   for (std::size_t target_batch_size :
        {std::size_t{100}, std::size_t{8}, std::size_t{4}, std::size_t{1}}) {
     auto cache = cache_t::empty();
-    cache.set_custom_evaluator(
-        make_batched_custom_evaluator(yield_, target_batch_size));
+    cache.set_custom_evaluator(make_batched_custom_evaluator(
+        yield_, [target_batch_size](sequant::Index const&) -> std::size_t {
+          return target_batch_size;
+        }));
     auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
     // batched summation reorders the contraction, so allow a looser FP margin
     REQUIRE(equal_tarrays<Loose>(res, ref));
@@ -1740,8 +1742,9 @@ TEST_CASE("eval_batched_custom_evaluator persistence gate", "[eval]") {
     };
     auto cache = cache_t::empty();
     cache.set_custom_evaluator(make_batched_custom_evaluator(
-        yield_, std::size_t{4}, sequant::accept_any_index{}, spy,
-        is_volatile_t));
+        yield_,
+        [](sequant::Index const&) -> std::size_t { return std::size_t{4}; },
+        sequant::accept_any_index{}, spy, is_volatile_t));
     auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
     REQUIRE_FALSE(batched);  // volatile subtree -> not batched
     REQUIRE(equal_tarrays<Loose>(res, ref));
@@ -1757,8 +1760,9 @@ TEST_CASE("eval_batched_custom_evaluator persistence gate", "[eval]") {
     };
     auto cache = cache_t::empty();
     cache.set_custom_evaluator(make_batched_custom_evaluator(
-        yield_, std::size_t{4}, sequant::accept_any_index{}, spy,
-        sequant::never_volatile{}));
+        yield_,
+        [](sequant::Index const&) -> std::size_t { return std::size_t{4}; },
+        sequant::accept_any_index{}, spy, sequant::never_volatile{}));
     auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
     REQUIRE(batched);  // no gate -> batched as before
     REQUIRE(equal_tarrays<Loose>(res, ref));
@@ -1813,8 +1817,12 @@ TEST_CASE("eval_batched_custom_evaluator_tot", "[eval]") {
   for (std::size_t target_batch_size :
        {std::size_t{100}, std::size_t{4}, std::size_t{1}}) {
     auto cache = cache_t::empty();
-    cache.set_custom_evaluator(
-        make_batched_custom_evaluator(yield, target_batch_size, accept_occ));
+    cache.set_custom_evaluator(make_batched_custom_evaluator(
+        yield,
+        [target_batch_size](sequant::Index const&) -> std::size_t {
+          return target_batch_size;
+        },
+        accept_occ));
     auto const res = evaluate(node, target, yield, cache)->get<ArrayToT>();
     REQUIRE(self_dot(res) == Catch::Approx(ref_dot));
   }
@@ -1984,8 +1992,9 @@ TEST_CASE("eval_batched_custom_evaluator dedups within-batch repeats",
   // x_1 is auxiliary: extent 12, tiles of 4; target 4 elements -> 3 batches
   int const n_b = 3;
   auto cache = cache_t::empty();
-  cache.set_custom_evaluator(
-      make_batched_custom_evaluator(counting_yield, std::size_t{4}));
+  cache.set_custom_evaluator(make_batched_custom_evaluator(
+      counting_yield,
+      [](sequant::Index const&) -> std::size_t { return std::size_t{4}; }));
   auto const res =
       evaluate(node, target, counting_yield, cache)->get<TArrayD>();
   REQUIRE(equal_tarrays<Loose>(res, ref));
@@ -2042,8 +2051,10 @@ TEST_CASE("eval_batched_custom_evaluator group replay", "[eval]") {
     return yield_(n);
   };
   cache.set_custom_evaluator(make_batched_custom_evaluator(
-      counting_yield, std::size_t{4}, sequant::accept_any_index{},
-      sequant::make_no_scope_guard{}, is_volatile_t));
+      counting_yield,
+      [](sequant::Index const&) -> std::size_t { return std::size_t{4}; },
+      sequant::accept_any_index{}, sequant::make_no_scope_guard{},
+      is_volatile_t));
 
   // evaluating term 1 triggers at F1 and must prebuild F2 in the same passes
   auto const res1 = evaluate(n1, tgt1, counting_yield, cache)->get<TArrayD>();
@@ -2116,8 +2127,9 @@ TEST_CASE("eval_batched_custom_evaluator group replay layers nested finals",
     return ix.space() == aux_space;
   };
   cache.set_custom_evaluator(make_batched_custom_evaluator(
-      counting_yield, std::size_t{4}, accept_aux,
-      sequant::make_no_scope_guard{}, is_volatile_t));
+      counting_yield,
+      [](sequant::Index const&) -> std::size_t { return std::size_t{4}; },
+      accept_aux, sequant::make_no_scope_guard{}, is_volatile_t));
 
   auto const res_out =
       evaluate(n_out, tgt_out, counting_yield, cache)->get<TArrayD>();

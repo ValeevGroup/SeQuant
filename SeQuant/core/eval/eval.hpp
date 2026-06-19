@@ -1113,9 +1113,11 @@ template <typename F, typename IndexPredicate = accept_any_index,
           typename ScopeGuardFactory = make_no_scope_guard,
           typename IsVolatile = never_volatile>
 [[nodiscard]] auto make_batched_custom_evaluator(
-    F le, std::size_t target_batch_size, IndexPredicate accept = {},
-    ScopeGuardFactory make_scope_guard = {}, IsVolatile is_volatile = {}) {
-  return [le = std::move(le), target_batch_size, accept, is_volatile,
+    F le, std::function<std::size_t(Index const&)> target_batch_size,
+    IndexPredicate accept = {}, ScopeGuardFactory make_scope_guard = {},
+    IsVolatile is_volatile = {}) {
+  return [le = std::move(le), target_batch_size = std::move(target_batch_size),
+          accept, is_volatile,
           make_scope_guard](auto const& node, auto& cache) -> ResultPtr {
     auto const K = batch_axis(node, accept);
     if (!K) return nullptr;
@@ -1130,7 +1132,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
     auto const leaf = find_leaf_carrying(node, *K);
     if (!leaf) return nullptr;
     auto const batches =
-        le(leaf->first)->mode_batches(leaf->second, target_batch_size);
+        le(leaf->first)->mode_batches(leaf->second, target_batch_size(*K));
 
     if (batches.size() <= 1)
       return nullptr;  // nothing to gain (or unbatchable)
@@ -1158,7 +1160,8 @@ template <typename F, typename IndexPredicate = accept_any_index,
       if (subtree_any(k, is_volatile)) return;  // defensive: P implies NV
       auto const lk = find_leaf_carrying(k, *Kk);
       if (!lk) return;
-      if (le(lk->first)->mode_batches(lk->second, target_batch_size) != batches)
+      if (le(lk->first)->mode_batches(lk->second, target_batch_size(*Kk)) !=
+          batches)
         return;
       group.emplace_back(&k, *Kk);
     });

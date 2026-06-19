@@ -319,7 +319,7 @@ template <typename IdxToSz>
 struct PeakBatchedModel {
   IdxToSz idxsz;
   std::function<bool(Index const&)> is_batchable;
-  std::size_t batch;
+  std::function<std::size_t(Index const&)> batch;
   std::function<bool(Tensor const&)> is_volatile_leaf;
 
   /// Per-subset DP cell: the full \c [B]-vector (size \c nB = 2^m) of per-
