@@ -302,7 +302,6 @@ class compute_eomcc_closedshell_triplet {
         // the singlet one
         T_ref = biorthogonal_transform_pre_nnsproject(V, ext_idxs);
       } else {
-        // doubles: verify the 4-primitive projection null identity, then
         // assemble the paper-native combined R2 residual (Eqs. 7-8, 1/8):
         //   V^{(1)} = (1/8)(V + V_{pair-swap}), V^{(2)} = (1/8)(V -
         //   V_{pair-swap}), Omega = (1/2) V^{(1)} + V^{(2)} = (3V -
@@ -338,7 +337,8 @@ class compute_eomcc_closedshell_triplet {
       simplify(T_ref);
       std::wcout << "R[" << i
                  << "] triplet (reference assembly): " << term_count(T_ref)
-                 << " terms\n";
+                 << " terms, and " << count_distinct_hashes(T_ref->clone())
+                 << " distinct hashes\n";
 
       try {
         const auto tstart = std::chrono::high_resolution_clock::now();
@@ -352,7 +352,8 @@ class compute_eomcc_closedshell_triplet {
         simplify(T_diff);
         std::wcout << "R[" << i
                    << "] closed_shell_EOM_triplet_spintrace: " << st->size()
-                   << " terms, time: " << dt.count() << " s\n";
+                   << " terms, and " << count_distinct_hashes(T_ref->clone())
+                   << " distinct hashes, and time: " << dt.count() << " s\n";
         std::wcout << "R[" << i
                    << "] (production triplet) - (reference assembly): "
                    << term_count(T_diff) << " terms (expect 0)\n";
