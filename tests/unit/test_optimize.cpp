@@ -411,6 +411,36 @@ TEST_CASE("optimize", "[optimize]") {
 
       REQUIRE(*seq == *par);
     }
+
+    SECTION("subset_footprints") {
+      using namespace sequant;
+      // i occ (size 2); a virt (size 4). Tensors: g{a1;i1}, g{a2;i2}.
+      auto occ_sp = reg->retrieve_ptr(L"i");
+      auto virt_sp = reg->retrieve_ptr(L"a");
+      auto const occ_sz_save = occ_sp->approximate_size();
+      auto const virt_sz_save = virt_sp->approximate_size();
+      occ_sp->approximate_size(2);
+      virt_sp->approximate_size(4);
+
+      auto idxsz = [](Index const& ix) -> std::size_t {
+        return ix.space().approximate_size();
+      };
+      auto g1 = deserialize(L"g{a1;i1}", {.def_perm_symm = Symmetry::Nonsymm});
+      auto g2 = deserialize(L"g{a2;i2}", {.def_perm_symm = Symmetry::Nonsymm});
+      TensorNetwork net{std::vector<ExprPtr>{g1, g2}};
+      container::svector<Index> targets;  // empty: all indices remain open
+      auto S = opt::detail::subset_footprints(net, targets, idxsz);
+      REQUIRE(S.size() == 4u);
+      REQUIRE(S[0] == 0.0);  // empty subset
+      // singleton {T0}: open indices a1,i1 -> 4*2 = 8
+      REQUIRE(S[0b01] == 8.0);
+      REQUIRE(S[0b10] == 8.0);
+      // full {T0,T1}: open a1,i1,a2,i2 -> 4*2*4*2 = 64
+      REQUIRE(S[0b11] == 64.0);
+
+      occ_sp->approximate_size(occ_sz_save);
+      virt_sp->approximate_size(virt_sz_save);
+    }
   }
 
   SECTION("CSE") {

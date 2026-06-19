@@ -137,6 +137,25 @@ struct OptRes {
   container::vector<size_t> subnets;
 };
 
+/// \brief Footprint (dense element count) of every subset's result tensor.
+///
+/// \c S[n] is the product of extents of the open indices of subset \c n
+/// (those remaining after contracting the tensors in \c n, given \c tidxs as
+/// the final target indices). \c S[0] (empty subset) and any scalar result are
+/// 0. Shared by the peak DP and its tests so both agree on per-subset sizes.
+template <typename TIdxs, typename IdxToSz>
+container::vector<double> subset_footprints(TensorNetwork const& network,
+                                            TIdxs const& tidxs,
+                                            IdxToSz&& idxsz) {
+  container::vector<OptRes> results((size_t{1} << network.tensors().size()));
+  init_results(network, tidxs, results);
+  auto fp = footprint_counter(std::forward<IdxToSz>(idxsz));
+  container::vector<double> S(results.size(), 0.0);
+  for (size_t n = 0; n < results.size(); ++n)
+    S[n] = (n == 0) ? 0.0 : fp(results[n].indices);
+  return S;
+}
+
 struct SubNetHash {
   size_t operator()(
       TensorNetwork::SlotCanonicalizationMetadata const& data) const noexcept {
