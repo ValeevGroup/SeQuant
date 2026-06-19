@@ -873,7 +873,14 @@ double reconstructed_batched_peak(
   // child fully (peak: its own simulated peak), then hold its result (sized at
   // C) while evaluating the second child (whose inputs co-reside at Lof), then
   // both results co-reside while the parent result (sized at B) is formed.
-  // This re-derives peak independent of the DP's max/+ formula.
+  // Re-derives the chosen reconstruction's peak by following the back-pointer
+  // tree (contexts/orders chosen by the DP) and recomputing each child's peak
+  // via recursion, rather than reading the DP's minimized pr[*].peak table.
+  // The per-node combination (stage_first/stage_second/stage_form) uses the
+  // same staged-peak formula as the DP's lpf. What this validates independently
+  // is the back-pointer walk itself (which children, order, context). The
+  // Task-2/Task-3 batched oracle is the independent guard on the staged-peak
+  // algebra.
   auto sim = [&](auto&& self, std::size_t n, std::size_t B) -> double {
     if (std::popcount(n) == 1) return sz(n, B);
     auto const& r = at(n, B);
@@ -893,7 +900,6 @@ double reconstructed_batched_peak(
   };
 
   std::size_t const root = (std::size_t{1} << nt) - 1;
-  if (nt == 0) return 0.0;
   return sim(sim, root, 0);
 }
 
