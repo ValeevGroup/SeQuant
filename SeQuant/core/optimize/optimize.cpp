@@ -36,25 +36,29 @@ ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
   bool const subnet_cse = opts.CSE.subnet;
   if (opts.objective_function == ObjectiveFunction::DenseFLOPs)
     return opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
-        prod, opts.idx_to_extent, subnet_cse, opts.is_volatile_leaf,
-        opts.volatile_weight, opts.footprint_weight, opts.is_batchable_index,
-        opts.batch_target_size);
+        prod, opts.idx_to_extent, subnet_cse,
+        opts.batch_policy.is_volatile_leaf, opts.volatile_weight,
+        opts.footprint_weight, opts.batch_policy.is_batchable_index,
+        opts.batch_policy.batch_target_size);
   if (opts.objective_function == ObjectiveFunction::DenseSize)
     return opt::single_term_opt<ObjectiveFunction::DenseSize>(
-        prod, opts.idx_to_extent, subnet_cse, opts.is_volatile_leaf,
-        opts.volatile_weight, opts.footprint_weight, opts.is_batchable_index,
-        opts.batch_target_size);
+        prod, opts.idx_to_extent, subnet_cse,
+        opts.batch_policy.is_volatile_leaf, opts.volatile_weight,
+        opts.footprint_weight, opts.batch_policy.is_batchable_index,
+        opts.batch_policy.batch_target_size);
   if (opts.objective_function == ObjectiveFunction::DensePeakSize)
     return opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
-        prod, opts.idx_to_extent, subnet_cse, opts.is_volatile_leaf,
-        opts.volatile_weight, opts.footprint_weight, opts.is_batchable_index,
-        opts.batch_target_size);
+        prod, opts.idx_to_extent, subnet_cse,
+        opts.batch_policy.is_volatile_leaf, opts.volatile_weight,
+        opts.footprint_weight, opts.batch_policy.is_batchable_index,
+        opts.batch_policy.batch_target_size);
   SEQUANT_ASSERT(opts.objective_function ==
                  ObjectiveFunction::DensePeakSizeBatched);
   return opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
-      prod, opts.idx_to_extent, subnet_cse, opts.is_volatile_leaf,
-      opts.volatile_weight, opts.footprint_weight, opts.is_batchable_index,
-      opts.batch_target_size);
+      prod, opts.idx_to_extent, subnet_cse, opts.batch_policy.is_volatile_leaf,
+      opts.volatile_weight, opts.footprint_weight,
+      opts.batch_policy.is_batchable_index,
+      opts.batch_policy.batch_target_size);
 }
 
 /// Deliberately non-identifier label prefix used to stand in for non-Tensor,

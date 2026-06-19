@@ -1,6 +1,8 @@
 #ifndef SEQUANT_CORE_OPTIMIZE_OPTIONS_HPP
 #define SEQUANT_CORE_OPTIMIZE_OPTIONS_HPP
 
+#include <SeQuant/core/batch_policy.hpp>
+
 #include <cstddef>
 #include <functional>
 
@@ -23,11 +25,13 @@ class Tensor;
 ///   common-subexpression elimination (`CSEOptions::subnet` must be false).
 /// - `DensePeakSizeBatched` extends `DensePeakSize` with a per-index
 ///   batchability model: each index satisfying
-///   `OptimizeOptions::is_batchable_index` is treated as independently sliced
-///   to `min(extent, batch_target_size(ix))` elements per index. The DP
-///   minimises peak over the worst-case sliced configuration. Only consulted by
-///   the batched oracle and DP; requires `is_batchable_index` and
-///   `batch_target_size` to be set.
+///   `OptimizeOptions::batch_policy.is_batchable_index` is treated as
+///   independently sliced to
+///   `min(extent, batch_policy.batch_target_size(ix))` elements per index. The
+///   DP minimises peak over the worst-case sliced configuration. Only consulted
+///   by the batched oracle and DP; requires
+///   `batch_policy.is_batchable_index` and `batch_policy.batch_target_size`
+///   to be set.
 ///
 /// Leaves room for `Sparse*` models later.
 enum class ObjectiveFunction {
@@ -74,20 +78,27 @@ struct OptimizeOptions {
   /// \c IndexSpace::approximate_size().
   index_to_extent_t idx_to_extent = {};
 
-  /// Marks a LEAF tensor as volatile: its value changes between replays of the
-  /// network, so any contraction depending on it is re-evaluated on every
-  /// replay. Empty (default) ⇒ no tensor is volatile ⇒ cost weighting is
-  /// disabled and volatile_weight is ignored (behavior identical to before this
-  /// feature). CC callers pass label==volatile_label, the same classification
-  /// the runtime eval cache uses, so the optimizer's cost model and the cache
-  /// agree.
-  std::function<bool(Tensor const&)> is_volatile_leaf = {};
+  /// Batchability policy: bundles the three per-index and per-leaf predicates
+  /// that govern batched evaluation. All three fields default to empty (no
+  /// batchable indices, no volatile leaves). The three sub-fields are:
+  ///   - `is_batchable_index`: marks an Index as living in a batchable space
+  ///     (e.g. DF/RI aux; = the eval cache's accept_aux).
+  ///   - `batch_target_size`: per-index slice size; a sliced batchable index
+  ///     ix contributes min(extent, batch_target_size(ix)). Only consulted by
+  ///     DensePeakSizeBatched.
+  ///   - `is_volatile_leaf`: marks a LEAF tensor as volatile (its value
+  ///     changes between replays). Empty => no tensor is volatile => cost
+  ///     weighting is disabled and volatile_weight is ignored. CC callers pass
+  ///     label==volatile_label, the same classification the runtime eval cache
+  ///     uses, so the optimizer's cost model and the cache agree.
+  BatchPolicy batch_policy = {};
 
   /// Real-valued weight on the cost of each volatile contraction (re-evaluated
   /// on every replay of the network), while persistent (volatile-independent)
   /// contractions are counted once. Conceptually the expected number of
-  /// replays. Default 1.0 (no change). Only consulted when is_volatile_leaf is
-  /// non-empty and objective_function == ObjectiveFunction::DenseFLOPs.
+  /// replays. Default 1.0 (no change). Only consulted when
+  /// batch_policy.is_volatile_leaf is non-empty and objective_function ==
+  /// ObjectiveFunction::DenseFLOPs.
   double volatile_weight = 1.0;
 
   /// Per-intermediate memory-footprint penalty added to the single-term
@@ -114,17 +125,6 @@ struct OptimizeOptions {
   /// useful magnitude is on the order of the contracted-index extent that the
   /// offending intermediate would otherwise leave free.
   double footprint_weight = 0.0;
-
-  /// Predicate marking an Index as living in a batchable space the runtime
-  /// slices over (e.g. DF/RI aux; = the eval cache's accept_aux). Each distinct
-  /// batchable index is sliced independently. Only consulted by
-  /// ObjectiveFunction::DensePeakSizeBatched.
-  std::function<bool(Index const&)> is_batchable_index = {};
-
-  /// Per-index slice size: a sliced batchable index contributes
-  /// min(extent, batch_target_size(ix)). Empty (default nullptr/empty function)
-  /// disables the batched discount. Only consulted by DensePeakSizeBatched.
-  std::function<std::size_t(Index const&)> batch_target_size = {};
 };
 
 }  // namespace sequant

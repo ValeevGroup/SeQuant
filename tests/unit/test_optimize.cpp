@@ -365,12 +365,12 @@ TEST_CASE("optimize", "[optimize]") {
       // reverts to current behavior. (The empty-predicate no-op is checked
       // separately via opts_off below.)
       auto opts1 = base;
-      opts1.is_volatile_leaf = is_t;
+      opts1.batch_policy.is_volatile_leaf = is_t;
       opts1.volatile_weight = 1;
       auto res1 = optimize(ex<Product>(prod), opts1);
 
       auto opts10 = base;
-      opts10.is_volatile_leaf = is_t;
+      opts10.batch_policy.is_volatile_leaf = is_t;
       opts10.volatile_weight = 10;
       auto res10 = optimize(ex<Product>(prod), opts10);
 
@@ -873,10 +873,12 @@ TEST_CASE("optimize", "[optimize]") {
       opts.idx_to_extent = [](Index const& ix) -> std::size_t {
         return ix.space().approximate_size();
       };
-      opts.is_batchable_index = [](Index const& ix) {
+      opts.batch_policy.is_batchable_index = [](Index const& ix) {
         return ix.space().base_key() == L"F";
       };
-      opts.batch_target_size = [](Index const&) -> std::size_t { return 1; };
+      opts.batch_policy.batch_target_size = [](Index const&) -> std::size_t {
+        return 1;
+      };
       auto optimized = optimize(expr, opts);
       REQUIRE(optimized);
       REQUIRE(count_tensor_leaves(optimized) == 3u);
