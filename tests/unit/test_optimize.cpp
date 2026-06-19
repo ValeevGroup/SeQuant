@@ -538,6 +538,44 @@ TEST_CASE("optimize", "[optimize]") {
       REQUIRE(*seq == *par);
     }
 
+    SECTION("AdditiveModel via driver == single_term_opt_impl") {
+      using namespace sequant;
+      auto idxsz = [](Index const& ix) {
+        return ix.space().approximate_size();
+      };
+      // A CSE-bearing 4-tensor network: the two (X Y) pairs are structurally
+      // equivalent, so subnet_cse meaningfully exercises the CSE accounting.
+      // (The plain chain g{a1;i1}..g{a3;i2} has no CSE structure and trips a
+      // create_graph rank-guard during subnet canonicalization in BOTH the
+      // single_term_opt_impl oracle and the model path, so it is unusable as
+      // an equivalence fixture; this network is the one the existing
+      // "Single term optimization with CSE" SECTION uses.)
+      std::vector<std::wstring> spec = {L"X{i1;a1}", L"X{i2;a2}", L"Y{a2;i3}",
+                                        L"Y{a1;i4}"};
+      std::vector<ExprPtr> ts;
+      for (auto s : spec) ts.push_back(deserialize(s));
+      TensorNetwork net{ts};
+      container::svector<Index> targets;
+      for (bool cse : {false, true})
+        for (double fw : {0.0, 1000.0}) {
+          // OLD path:
+          auto old_flops = opt::detail::single_term_opt_impl(
+              net, targets, opt::detail::flops_counter(idxsz), cse,
+              /*volatile_mask=*/0u, /*volatile_weight=*/1.0,
+              opt::detail::footprint_counter(idxsz), fw);
+          // NEW path via the model+driver:
+          opt::detail::AdditiveModel model{
+              opt::detail::flops_counter(idxsz),
+              opt::detail::footprint_counter(idxsz),
+              /*volatile_mask=*/0u,
+              /*volatile_weight=*/1.0,
+              fw,
+              cse};
+          auto neww = opt::detail::run_single_term_opt(model, net, targets);
+          REQUIRE(neww == old_flops);
+        }
+    }
+
     SECTION("subset_footprints") {
       using namespace sequant;
       // i occ (size 2); a virt (size 4). Tensors: g{a1;i1}, g{a2;i2}.

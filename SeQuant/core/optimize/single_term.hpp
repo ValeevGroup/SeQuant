@@ -903,6 +903,18 @@ double reconstructed_batched_peak(
   return sim(sim, root, 0);
 }
 
+}  // namespace detail
+}  // namespace sequant::opt
+
+// The additive arms of single_term_opt<Metric> below are routed through the
+// generic CostModel driver. cost_model.hpp includes this header (for the DP
+// helpers + EvalSequence + OptRes); the include guards make the cycle a no-op,
+// and every helper cost_model.hpp needs is defined above this point.
+#include <SeQuant/core/optimize/cost_model.hpp>
+
+namespace sequant::opt {
+namespace detail {
+
 ///
 /// \tparam Metric Objective function (ObjectiveFunction::DenseFLOPs or
 ///         ObjectiveFunction::DenseSize or ObjectiveFunction::DensePeakSize).
@@ -977,20 +989,20 @@ EvalSequence single_term_opt(
     }
     (void)is_batchable_index;
     (void)batch_target_size;
-    auto cost_fn = flops_counter(idxsz);
-    return single_term_opt_impl(network, tidxs, cost_fn, subnet_cse,
-                                volatile_mask, nr, footprint_fn,
-                                footprint_weight);
+    AdditiveModel model{flops_counter(idxsz), footprint_counter(idxsz),
+                        volatile_mask,        nr,
+                        footprint_weight,     subnet_cse};
+    return run_single_term_opt(model, network, tidxs);
   } else {
     static_assert(Metric == ObjectiveFunction::DenseSize,
                   "Only DenseFLOPs, DenseSize, DensePeakSize, and "
                   "DensePeakSizeBatched ObjectiveFunction supported.");
     (void)is_batchable_index;
     (void)batch_target_size;
-    auto cost_fn = memsize_counter(idxsz);
-    return single_term_opt_impl(network, tidxs, cost_fn, subnet_cse,
-                                volatile_mask, nr, footprint_fn,
-                                footprint_weight);
+    AdditiveModel model{memsize_counter(idxsz), footprint_counter(idxsz),
+                        volatile_mask,          nr,
+                        footprint_weight,       subnet_cse};
+    return run_single_term_opt(model, network, tidxs);
   }
 }
 
