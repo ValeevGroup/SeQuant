@@ -970,9 +970,10 @@ EvalSequence single_term_opt(
         "subnet_cse not supported with DensePeakSizeBatched (Phase 2)");
     (void)volatile_weight;
     (void)footprint_weight;
-    return single_term_opt_peak_batched_impl(
-        network, tidxs, idxsz, is_batchable_index, batch_target_size,
-        is_volatile_leaf);
+    return run_single_term_opt(
+        PeakBatchedModel{idxsz, is_batchable_index, batch_target_size,
+                         is_volatile_leaf},
+        network, tidxs);
   } else if constexpr (Metric == ObjectiveFunction::DenseFLOPs) {
     if (is_volatile_leaf && volatile_weight > 1.0) {
       size_t i = 0;

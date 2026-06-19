@@ -302,6 +302,152 @@ struct PeakModel {
   }
 };
 
+/// \brief Multi-mode batched peak-memory single-term cost model
+/// (DensePeakSizeBatched objective).
+///
+/// Reproduces \ref single_term_opt_peak_batched_impl / \ref peak_dp_batched
+/// exactly, factored into the CostModel hooks driven by \ref
+/// run_single_term_opt. The recurrence is the per-batchable-index all-co-
+/// resident pebble game of the batch-aware cost model design (section 6.2,
+/// model A): each DP cell is indexed by both a subset \c n and a sliced-set
+/// context \c B over the batchable indices, so a model State is the \c [B]
+/// -vector of per-context \ref BatchedRes. No CSE; persistence-gated batching.
+///
+/// \tparam IdxToSz A callable mapping an Index to its extent.
+template <typename IdxToSz>
+struct PeakBatchedModel {
+  IdxToSz idxsz;
+  std::function<bool(Index const&)> is_batchable;
+  std::size_t batch;
+  std::function<bool(Tensor const&)> is_volatile_leaf;
+
+  /// Per-subset DP cell: the full \c [B]-vector (size \c nB = 2^m) of per-
+  /// sliced-set \ref BatchedRes back-pointers.
+  using State = container::vector<BatchedRes>;
+
+  /// Precomputed tables and per-(subset, sliced-set) lookup parameters built
+  /// once by build_context, mirroring \ref peak_dp_batched's locals.
+  struct Context {
+    /// Ordered, deduplicated batchable indices (bit \c k maps to \c aux[k]).
+    container::vector<Index> aux;
+    /// Number of batchable indices (= aux.size()).
+    std::size_t m = 0;
+    /// Number of sliced-sets (= 2^m).
+    std::size_t nB = 1;
+    /// Number of tensors in the network.
+    std::size_t nt = 0;
+    /// tables[B][n] = footprint of subset n under sliced-set B.
+    container::vector<container::vector<double>> tables;
+    /// open_aux[n] = bitmask of batchable indices open in subset n.
+    container::vector<std::size_t> open_aux;
+    /// Bitmask of volatile leaf tensors.
+    std::size_t volatile_mask = 0;
+
+    /// Context-restricted size of subset s under sliced-set ctx (the table is
+    /// indexed by the part of ctx actually open in s; mirrors the oracle).
+    double sz(std::size_t s, std::size_t ctx) const {
+      return tables[ctx & open_aux[s]][s];
+    }
+    /// Per-context leaf-sum of subset s (sum of singleton sizes under ctx).
+    double Lof(std::size_t s, std::size_t ctx) const {
+      double r = 0.0;
+      for (std::size_t b = 0; b < nt; ++b)
+        if (s & (std::size_t{1} << b)) r += sz(std::size_t{1} << b, ctx);
+      return r;
+    }
+  };
+
+  template <typename TIdxs>
+  Context build_context(TensorNetwork const& network,
+                        TIdxs const& tidxs) const {
+    // CSE is not supported for DensePeakSizeBatched.
+    Context ctx;
+    ctx.nt = network.tensors().size();
+    ctx.aux = batchable_index_list(network, is_batchable);
+    ctx.m = ctx.aux.size();
+    ctx.nB = std::size_t{1} << ctx.m;
+    ctx.tables =
+        sliced_footprints(network, tidxs, idxsz, is_batchable, batch, ctx.aux);
+    ctx.open_aux = subset_open_aux(network, tidxs, ctx.aux);
+    ctx.volatile_mask = leaf_volatile_mask(network, is_volatile_leaf);
+    return ctx;
+  }
+
+  State leaf(Context const& ctx, size_t n) const {
+    State s(ctx.nB);
+    for (std::size_t B = 0; B < ctx.nB; ++B) s[B].peak = ctx.sz(n, B);
+    return s;
+  }
+
+  State init(Context const& ctx, size_t /*n*/) const {
+    return State(ctx.nB);  // BatchedRes defaults to peak == max
+  }
+
+  void relax(Context& ctx, size_t n, size_t lp, size_t rp, State const& lp_st,
+             State const& rp_st, State& acc) const {
+    for (std::size_t B = 0; B < ctx.nB; ++B) {
+      auto& curr = acc[B];
+      // Batchable indices contracted at THIS node: open at children but not at
+      // parent, gated by persistence.
+      std::size_t const Acand =
+          (ctx.volatile_mask & n)
+              ? std::size_t{0}
+              : ((ctx.open_aux[lp] | ctx.open_aux[rp]) & ~ctx.open_aux[n]);
+      // Enumerate every subset A' of Acand (including the empty set).
+      std::size_t Ap = Acand;
+      while (true) {
+        std::size_t const C = B | Ap;
+        double const pl = lp_st[C].peak;
+        double const prr = rp_st[C].peak;
+        double const both = ctx.sz(lp, C) + ctx.sz(rp, C) + ctx.sz(n, B);
+        double const lpf =
+            std::max({ctx.Lof(rp, C) + pl, ctx.sz(lp, C) + prr, both});
+        double const rpf =
+            std::max({ctx.Lof(lp, C) + prr, ctx.sz(rp, C) + pl, both});
+        double const cand = std::min(lpf, rpf);
+        if (cand < curr.peak) {
+          curr.peak = cand;
+          curr.lp = lp;
+          curr.rp = rp;
+          curr.lp_first = (lpf <= rpf);
+          curr.aprime = Ap;
+        }
+        if (Ap == 0) break;
+        Ap = (Ap - 1) & Acand;
+      }
+    }
+  }
+
+  void finalize(Context& /*ctx*/, size_t /*n*/,
+                container::vector<State>& /*st*/) const {}
+
+  EvalSequence reconstruct(Context const& ctx,
+                           container::vector<State> const& st) const {
+    using ranges::views::concat;
+    // Recursive back-pointer walk from the root subset at the empty ancestor
+    // context (root, B=0). At each node (n, B) read the winning aprime, form
+    // the child context C = B | aprime, and recurse into the children at C in
+    // lp_first order (the lower-peak child is emitted last). A singleton emits
+    // its tensor index; an internal node emits concat(first, second), -1. Each
+    // st[child] is a [B]-vector, so children are read at index C.
+    auto build = [&](auto&& self, std::size_t n,
+                     std::size_t B) -> EvalSequence {
+      if (std::popcount(n) == 1)
+        return EvalSequence{static_cast<int>(std::countr_zero(n))};
+      auto const& r = st[n][B];
+      std::size_t const C = B | r.aprime;
+      auto first = self(self, r.lp_first ? r.lp : r.rp, C);
+      auto second = self(self, r.lp_first ? r.rp : r.lp, C);
+      auto seq = concat(first, second) | ranges::to<EvalSequence>;
+      seq.push_back(-1);
+      return seq;
+    };
+
+    std::size_t const root = (std::size_t{1} << ctx.nt) - 1;
+    return build(build, root, 0);
+  }
+};
+
 }  // namespace sequant::opt::detail
 
 #endif  // SEQUANT_CORE_OPTIMIZE_COST_MODEL_HPP

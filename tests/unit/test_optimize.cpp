@@ -916,6 +916,37 @@ TEST_CASE("optimize", "[optimize]") {
         REQUIRE(new_seq == old_seq);
       }
     }
+
+    SECTION(
+        "PeakBatchedModel via driver == single_term_opt_peak_batched_impl") {
+      using namespace sequant;
+      // Dedicated batchable "F" space (fresh type bit, no overlap with
+      // sr-spaces bits 0b0001..0b1000); see "per-index batchability tables".
+      reg->add(L"F", IndexSpace::Type{0b10000}, 3ul);
+      auto idxsz = [](Index const& ix) {
+        return ix.space().approximate_size();
+      };
+      auto is_batchable = [](Index const& ix) {
+        return ix.space().base_key() == L"F";
+      };
+      std::size_t const batch = 1;
+      for (auto const& spec : std::vector<std::vector<std::wstring>>{
+               {L"g{a1;i1;F1}", L"g{a2;i1;F1}", L"g{a2;i2;F2}"},  // shared F1
+               {L"g{a1;i1;F1}", L"g{a2;i1;F2}", L"g{a2;i2;F2}"}}) {  // 2 aux
+        std::vector<ExprPtr> ts;
+        for (auto s : spec)
+          ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
+        TensorNetwork net{ts};
+        container::svector<Index> targets;
+        auto old_seq = opt::detail::single_term_opt_peak_batched_impl(
+            net, targets, idxsz, is_batchable, batch, {});
+        auto new_seq = opt::detail::run_single_term_opt(
+            opt::detail::PeakBatchedModel{idxsz, is_batchable, batch,
+                                          /*is_volatile_leaf=*/{}},
+            net, targets);
+        REQUIRE(new_seq == old_seq);
+      }
+    }
   }
 
   SECTION("CSE") {
