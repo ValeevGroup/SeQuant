@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <concepts>
 #include <limits>
 #include <utility>
 
@@ -447,6 +448,44 @@ struct PeakBatchedModel {
     return build(build, root, 0);
   }
 };
+
+/// \brief Compile-time concept for a single-term-DP cost model.
+///
+/// A type \c M satisfies \c CostModel if it provides two associated types
+/// (\c State and \c Context) and the six methods that \ref
+/// run_single_term_opt calls.  The four built-in models -- \ref AdditiveModel
+/// (FLOPs and Size variants), \ref PeakModel, and \ref PeakBatchedModel --
+/// all satisfy this concept.  Users may also implement \c CostModel directly
+/// and pass the instance to \ref run_single_term_opt to obtain an
+/// \ref EvalSequence under any custom objective.
+///
+/// Requirements:
+/// - \c M::State  -- the per-subset DP cell (the driver never inspects it).
+/// - \c M::Context -- precomputed tables and mutable scratch.
+/// - \c build_context(net, tidxs) \c const -> \c Context
+/// - \c leaf(ctx, n) \c const -> \c State
+/// - \c init(ctx, n) \c const -> \c State
+/// - \c relax(ctx, n, lp, rp, lp_st, rp_st, acc) \c const -- updates \c acc
+/// - \c finalize(ctx, n, states) \c const -- per-subset post-processing hook
+/// - \c reconstruct(ctx, states) \c const -> \c EvalSequence
+template <class M>
+concept CostModel =
+    requires {
+      typename M::State;
+      typename M::Context;
+    } && requires(M const& m, TensorNetwork const& net,
+                  container::svector<Index> const& tidxs,
+                  typename M::Context& ctx, typename M::Context const& cctx,
+                  size_t n, typename M::State const& cst, typename M::State& st,
+                  container::vector<typename M::State>& sts,
+                  container::vector<typename M::State> const& csts) {
+      { m.build_context(net, tidxs) } -> std::same_as<typename M::Context>;
+      { m.leaf(cctx, n) } -> std::same_as<typename M::State>;
+      { m.init(cctx, n) } -> std::same_as<typename M::State>;
+      m.relax(ctx, n, n, n, cst, cst, st);
+      m.finalize(ctx, n, sts);
+      { m.reconstruct(cctx, csts) } -> std::same_as<EvalSequence>;
+    };
 
 }  // namespace sequant::opt::detail
 

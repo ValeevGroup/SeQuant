@@ -947,6 +947,63 @@ TEST_CASE("optimize", "[optimize]") {
         REQUIRE(new_seq == old_seq);
       }
     }
+
+    SECTION("CostModel concept conformance + custom model") {
+      using namespace sequant;
+      // idxsz lambda captures approximate_size() for each index space.
+      auto idxsz = [](Index const& ix) {
+        return ix.space().approximate_size();
+      };
+
+      // --- Static conformance checks ---
+      // AdditiveModel (FLOPs variant): two template params (CostFn,
+      // FootprintFn).
+      static_assert(opt::detail::CostModel<opt::detail::AdditiveModel<
+                        decltype(opt::detail::flops_counter(idxsz)),
+                        decltype(opt::detail::footprint_counter(idxsz))>>);
+      // AdditiveModel (Size variant).
+      static_assert(opt::detail::CostModel<opt::detail::AdditiveModel<
+                        decltype(opt::detail::memsize_counter(idxsz)),
+                        decltype(opt::detail::footprint_counter(idxsz))>>);
+      // PeakModel: one template param (IdxToSz).
+      static_assert(
+          opt::detail::CostModel<opt::detail::PeakModel<decltype(idxsz)>>);
+      // PeakBatchedModel: one template param (IdxToSz).
+      static_assert(opt::detail::CostModel<
+                    opt::detail::PeakBatchedModel<decltype(idxsz)>>);
+
+      // --- Custom-model extension-point exercise ---
+      // Build an AdditiveModel driven by memsize_counter with a doubled
+      // footprint weight, then drive it directly via run_single_term_opt
+      // (bypassing the ObjectiveFunction enum).  This proves the public
+      // generic entry point is open to user-defined or custom-configured
+      // models.
+      opt::detail::AdditiveModel custom{opt::detail::memsize_counter(idxsz),
+                                        opt::detail::footprint_counter(idxsz),
+                                        /*volatile_mask=*/0u,
+                                        /*volatile_weight=*/1.0,
+                                        /*footprint_weight=*/2.0,
+                                        /*subnet_cse=*/false};
+
+      std::vector<ExprPtr> ts;
+      for (auto s : {L"g{a1;i1}", L"g{a1;a2}", L"g{a2;i2}"})
+        ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
+      TensorNetwork net{ts};
+      container::svector<Index> targets;
+      auto seq = opt::detail::run_single_term_opt(custom, net, targets);
+
+      // A valid binarization of 3 leaves: exactly 3 leaf tokens (>= 0) and
+      // 2 merge tokens (-1).
+      size_t leaves = 0, merges = 0;
+      for (int tok : seq) {
+        if (tok >= 0)
+          ++leaves;
+        else
+          ++merges;
+      }
+      REQUIRE(leaves == 3u);
+      REQUIRE(merges == 2u);
+    }
   }
 
   SECTION("CSE") {
