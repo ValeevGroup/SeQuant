@@ -405,11 +405,7 @@ class ItfGenerator : public Generator<Context> {
   }
 
   void end_named_section(std::string_view /*name*/, const Context &) override {
-    if (!m_currentBatchIndices.empty()) {
-      m_currentBatchIndices.clear();
-      SEQUANT_ASSERT(m_indent_level > 0);
-      m_indent_level = 0;
-    }
+    end_batching();
 
     append_line();
     append_line();
@@ -455,8 +451,7 @@ class ItfGenerator : public Generator<Context> {
         }
       } else {
         // Drop previous loop and start a fresh one
-        SEQUANT_ASSERT(m_currentBatchIndices.empty() || m_indent_level > 0);
-        m_indent_level = 0;
+        end_batching();
         num_shared = 0;
       }
 
@@ -470,10 +465,8 @@ class ItfGenerator : public Generator<Context> {
       append_line("]:");
       m_indent_level += 1;
       m_currentBatchIndices = std::move(batchIndices);
-    } else if (!m_currentBatchIndices.empty()) {
-      m_currentBatchIndices.clear();
-      SEQUANT_ASSERT(m_indent_level > 0);
-      m_indent_level = 0;
+    } else {
+      end_batching();
     }
   }
 
@@ -482,11 +475,7 @@ class ItfGenerator : public Generator<Context> {
   void begin_export(const Context &) override { m_generated.clear(); }
 
   void end_export(const Context &) override {
-    if (!m_currentBatchIndices.empty()) {
-      m_currentBatchIndices.clear();
-      SEQUANT_ASSERT(m_indent_level > 0);
-      m_indent_level = 0;
-    }
+    end_batching();
 
     append_line("---- end");
   }
@@ -566,6 +555,14 @@ class ItfGenerator : public Generator<Context> {
   void append_line(const std::string &snippet = {}) {
     append(snippet);
     m_generated += "\n";
+  }
+
+  void end_batching() {
+    if (!m_currentBatchIndices.empty()) {
+      m_currentBatchIndices.clear();
+      SEQUANT_ASSERT(m_indent_level > 0);
+      m_indent_level = 0;
+    }
   }
 };
 
