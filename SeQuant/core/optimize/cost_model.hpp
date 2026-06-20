@@ -10,6 +10,7 @@
 #include <concepts>
 #include <functional>
 #include <limits>
+#include <ostream>
 #include <utility>
 
 namespace sequant::opt::detail {
@@ -530,6 +531,58 @@ double reconstructed_batched_peak(
 
   std::size_t const root = (std::size_t{1} << nt) - 1;
   return sim(sim, root, 0);
+}
+
+/// \brief Diagnostic (env-gated): per-term predicted-vs-unsliced peak report
+/// for the batched peak objective. Walks the DP-chosen tree and reports the
+/// model's predicted (sliced) peak alongside the largest UNSLICED single-node
+/// footprint in that same chosen tree. If predicted_peak << max_node_unsliced,
+/// the model is discounting (crediting batch-slicing to) a node whose full
+/// extent must actually materialize -- the realized peak then tracks the
+/// unsliced value. Emits one line per call to \p os when enabled; cheap (no
+/// tensor eval).
+template <typename TIdxs, typename IdxToSz>
+void peak_batched_debug(
+    TensorNetwork const& network, TIdxs const& tidxs, IdxToSz&& idxsz,
+    std::function<bool(Index const&)> const& is_batchable,
+    std::function<std::size_t(Index const&)> const& batch_target_size,
+    std::function<bool(Tensor const&)> const& is_volatile_leaf,
+    std::ostream& os) {
+  PeakBatchedModel<std::decay_t<IdxToSz>> model{
+      idxsz, is_batchable, batch_target_size, is_volatile_leaf};
+  auto ctx = model.build_context(network, tidxs);
+  auto st = solve_single_term(model, network, tidxs, ctx);
+  auto const nt = network.tensors().size();
+  if (nt < 3) return;  // trivial products carry no factorization choice
+  // Unsliced (full-extent) footprint of every subset.
+  auto Sun = subset_footprints(network, tidxs, idxsz);
+  std::size_t const root = (std::size_t{1} << nt) - 1;
+  double const predicted = st[root][0].peak;
+  double max_node_unsliced = 0.0, max_node_sliced = 0.0;
+  std::size_t worst = 0;
+  // Walk the chosen back-pointer tree (root, B=0), recording per-node sliced
+  // (ctx.sz at its evaluation context) and unsliced footprints.
+  auto walk = [&](auto&& self, std::size_t n, std::size_t B) -> void {
+    if (std::popcount(n) < 2) return;
+    auto const& r = st[n][B];
+    std::size_t const C = B | r.aprime;
+    double const un = Sun[n];
+    double const sl = ctx.sz(n, B);
+    if (un > max_node_unsliced) {
+      max_node_unsliced = un;
+      worst = n;
+    }
+    max_node_sliced = std::max(max_node_sliced, sl);
+    self(self, r.lp_first ? r.lp : r.rp, C);
+    self(self, r.lp_first ? r.rp : r.lp, C);
+  };
+  walk(walk, root, 0);
+  auto gib = [](double b) { return b / 1073741824.0; };
+  os << "[PEAKDBG] nt=" << nt << " predicted_peak=" << gib(predicted)
+     << "GiB max_node_unsliced=" << gib(max_node_unsliced)
+     << "GiB max_node_sliced_in_tree=" << gib(max_node_sliced)
+     << "GiB under_count_ratio="
+     << (predicted > 0.0 ? max_node_unsliced / predicted : 0.0) << "\n";
 }
 
 /// \brief Compile-time concept for a single-term-DP cost model.

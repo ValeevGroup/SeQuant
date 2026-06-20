@@ -13,6 +13,9 @@
 
 #include <range/v3/algorithm/find.hpp>
 #include <range/v3/view/concat.hpp>
+
+#include <cstdlib>
+#include <iostream>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/indirect.hpp>
 #include <range/v3/view/move.hpp>
@@ -452,6 +455,9 @@ EvalSequence single_term_opt(
         "subnet_cse not supported with DensePeakSizeBatched (Phase 2)");
     (void)volatile_weight;
     (void)footprint_weight;
+    if (std::getenv("SEQUANT_PEAK_DEBUG"))
+      peak_batched_debug(network, tidxs, idxsz, is_batchable_index,
+                         batch_target_size, is_volatile_leaf, std::cout);
     return run_single_term_opt(
         PeakBatchedModel{idxsz, is_batchable_index, batch_target_size,
                          is_volatile_leaf},
