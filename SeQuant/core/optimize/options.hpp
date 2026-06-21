@@ -78,6 +78,16 @@ struct OptimizeOptions {
   /// \c IndexSpace::approximate_size().
   index_to_extent_t idx_to_extent = {};
 
+  /// Optional k-aware inner-composite extent for CSV/PNO tensor-of-tensor
+  /// indices, used by the peak objectives' footprint accounting. For a group of
+  /// \c k composites sharing a proto-index set, \c inner_pow(composite, k)
+  /// should return the k-th power mean of the per-pair domain
+  /// (\c (Sum_pairs d^k / nocc^N)^(1/k)), so that the product over the group
+  /// times the outer \c nocc^N equals the true block-sparse volume
+  /// \c Sum_pairs d^k. If empty, composites fall back to \ref idx_to_extent
+  /// (k=1), which grossly under-sizes multi-composite tensors.
+  std::function<double(Index const&, std::size_t)> inner_pow = {};
+
   /// Batchability policy: bundles the three per-index and per-leaf predicates
   /// that govern batched evaluation. All three fields default to empty (no
   /// batchable indices, no volatile leaves). The three sub-fields are:

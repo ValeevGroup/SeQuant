@@ -108,13 +108,40 @@ auto memsize_counter(has_index_extent auto&& ixex) {
 /// \param ixex Invocable mapping an Index to its extent.
 /// \return A callable <tt>(result) -> double</tt> yielding the element count of
 /// the result tensor.
-auto footprint_counter(has_index_extent auto&& ixex) {
-  return [ixex = std::forward<decltype(ixex)>(ixex)](
+/// \brief Counts the storage footprint (element count) of a result tensor.
+///
+/// Outer indices are sized by \p ixex. Inner (CSV/PNO tensor-of-tensor)
+/// composites are sized by \p inner_pow when provided: composites are grouped
+/// by their proto-index set, and each member of a group of size \c k is sized
+/// by \c inner_pow(composite, k). With \c inner_pow the k-th power mean of the
+/// per-pair domain (\c e_k = (Sum_pairs d^k / nocc^N)^(1/k)), the product
+/// \c nocc^N (from the proto indices in \c outer) times \c e_k^k equals the
+/// true block-sparse volume \c Sum_pairs d^k -- correcting the gross
+/// under-count of multi-composite tensors that a single grid-averaged extent
+/// (k=1) produces. When \p inner_pow is empty, inner composites fall back to \p
+/// ixex (k=1), reproducing the prior behavior exactly.
+template <typename InnerPow = std::function<double(Index const&, std::size_t)>>
+auto footprint_counter(has_index_extent auto&& ixex, InnerPow inner_pow = {}) {
+  return [ixex = std::forward<decltype(ixex)>(ixex),
+          inner_pow = std::move(inner_pow)](
              meta::range_of<Index> auto const& result) -> double {
     using ranges::views::concat;
     auto tot_idxs = tot_indices(result);
-    double mem = ranges::accumulate(concat(tot_idxs.outer, tot_idxs.inner), 1.,
-                                    std::multiplies{}, ixex);
+    double mem =
+        ranges::accumulate(tot_idxs.outer, 1., std::multiplies{}, ixex);
+    if (inner_pow) {
+      // Size each inner composite by inner_pow(c, k), where k is the number of
+      // inner composites sharing c's proto-index set (the cubic/quartic
+      // compounding the single-extent average cannot represent).
+      for (auto const& c : tot_idxs.inner) {
+        std::size_t k = 0;
+        for (auto const& o : tot_idxs.inner)
+          if (o.proto_indices() == c.proto_indices()) ++k;
+        mem *= inner_pow(c, k);
+      }
+    } else {
+      mem = ranges::accumulate(tot_idxs.inner, mem, std::multiplies{}, ixex);
+    }
     return mem == 1. ? 0. : mem;
   };
 }
@@ -148,12 +175,12 @@ struct OptRes {
 /// the final target indices). \c S[0] (empty subset) and any scalar result are
 /// 0. Shared by the peak DP and its tests so both agree on per-subset sizes.
 template <typename TIdxs, typename IdxToSz>
-container::vector<double> subset_footprints(TensorNetwork const& network,
-                                            TIdxs const& tidxs,
-                                            IdxToSz&& idxsz) {
+container::vector<double> subset_footprints(
+    TensorNetwork const& network, TIdxs const& tidxs, IdxToSz&& idxsz,
+    std::function<double(Index const&, std::size_t)> const& inner_pow = {}) {
   container::vector<OptRes> results((size_t{1} << network.tensors().size()));
   init_results(network, tidxs, results);
-  auto fp = footprint_counter(std::forward<IdxToSz>(idxsz));
+  auto fp = footprint_counter(std::forward<IdxToSz>(idxsz), inner_pow);
   container::vector<double> S(results.size(), 0.0);
   for (size_t n = 0; n < results.size(); ++n)
     S[n] = (n == 0) ? 0.0 : fp(results[n].indices);
@@ -208,7 +235,8 @@ container::vector<container::vector<double>> sliced_footprints(
     TensorNetwork const& network, TIdxs const& tidxs, IdxToSz&& idxsz,
     std::function<bool(Index const&)> const& is_batchable,
     std::function<std::size_t(Index const&)> const& batch_target_size,
-    container::vector<Index> const& aux_list) {
+    container::vector<Index> const& aux_list,
+    std::function<double(Index const&, std::size_t)> const& inner_pow = {}) {
   std::size_t const m = aux_list.size();
   container::vector<container::vector<double>> tables(std::size_t{1} << m);
   for (std::size_t B = 0; B < tables.size(); ++B) {
@@ -225,7 +253,7 @@ container::vector<container::vector<double>> sliced_footprints(
       }
       return e;
     };
-    tables[B] = subset_footprints(network, tidxs, extent);
+    tables[B] = subset_footprints(network, tidxs, extent, inner_pow);
   }
   return tables;
 }
@@ -431,7 +459,8 @@ EvalSequence single_term_opt(
     std::function<bool(Tensor const&)> const& is_volatile_leaf = {},
     double volatile_weight = 1.0, double footprint_weight = 0.0,
     std::function<bool(Index const&)> const& is_batchable_index = {},
-    std::function<std::size_t(Index const&)> batch_target_size = {}) {
+    std::function<std::size_t(Index const&)> batch_target_size = {},
+    std::function<double(Index const&, std::size_t)> const& inner_pow = {}) {
   decltype(OptRes::indices) tidxs{};
 
   // Volatility weighting is a DenseFLOPs-only notion (persistent intermediates
@@ -448,7 +477,7 @@ EvalSequence single_term_opt(
     (void)footprint_weight;
     (void)is_batchable_index;
     (void)batch_target_size;
-    return run_single_term_opt(PeakModel{idxsz}, network, tidxs);
+    return run_single_term_opt(PeakModel{idxsz, inner_pow}, network, tidxs);
   } else if constexpr (Metric == ObjectiveFunction::DensePeakSizeBatched) {
     SEQUANT_ASSERT(
         !subnet_cse &&
@@ -460,7 +489,7 @@ EvalSequence single_term_opt(
                          batch_target_size, is_volatile_leaf, std::cout);
     return run_single_term_opt(
         PeakBatchedModel{idxsz, is_batchable_index, batch_target_size,
-                         is_volatile_leaf},
+                         is_volatile_leaf, inner_pow},
         network, tidxs);
   } else if constexpr (Metric == ObjectiveFunction::DenseFLOPs) {
     if (is_volatile_leaf && volatile_weight > 1.0) {
@@ -511,7 +540,8 @@ ExprPtr single_term_opt(
     std::function<bool(Tensor const&)> const& is_volatile_leaf = {},
     double volatile_weight = 1.0, double footprint_weight = 0.0,
     std::function<bool(Index const&)> const& is_batchable_index = {},
-    std::function<std::size_t(Index const&)> batch_target_size = {}) {
+    std::function<std::size_t(Index const&)> batch_target_size = {},
+    std::function<double(Index const&, std::size_t)> const& inner_pow = {}) {
   using ranges::views::filter;
   using ranges::views::reverse;
 
@@ -523,7 +553,7 @@ ExprPtr single_term_opt(
   auto seq = detail::single_term_opt<Metric>(
       TensorNetwork{tensors}, std::forward<IdxToSz>(idxsz), subnet_cse,
       is_volatile_leaf, volatile_weight, footprint_weight, is_batchable_index,
-      batch_target_size);
+      batch_target_size, inner_pow);
   auto result = container::svector<ExprPtr>{};
   for (auto i : seq)
     if (i == -1) {
