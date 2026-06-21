@@ -38,15 +38,27 @@ namespace detail {
 /// \brief Composite-aware extent product of a \ref tot_indices split.
 ///
 /// Multiplies the extents of the outer indices (via \p ixex) by the extents of
-/// the inner (CSV/PNO tensor-of-tensor) composites. When \p inner_pow is
-/// provided, composites are grouped by their proto-index set and each member of
-/// a group of size \c k is sized by \c inner_pow(composite, k) -- the k-th
-/// power mean of the per-pair domain, so that the outer \c nocc^N times the
-/// group product equals the true block-sparse volume \c Sum_pairs d^k. When \p
-/// inner_pow is empty, composites fall back to \p ixex (k=1), reproducing a
-/// single grid-averaged extent per composite (which under-counts
-/// multi-composite tensors). Shared by all cost counters so every objective
-/// sizes CSV/PNO composites identically.
+/// the inner (CSV/PNO tensor-of-tensor) composites. Shared by all cost counters
+/// (\ref flops_counter, \ref memsize_counter, \ref footprint_counter) so every
+/// objective sizes CSV/PNO composites identically.
+///
+/// \param tot_idxs a \ref tot_indices split (\c outer plus \c inner
+/// composites). \param ixex     invocable mapping an Index to its extent (sizes
+/// \c outer and,
+///                 when \p inner_pow is empty, \c inner too).
+/// \param inner_pow optional invocable <tt>(composite, k) -> double</tt> giving
+///                 the size of a composite that shares its proto-index set with
+///                 \c k composites in the same tensor (the k-th power mean of
+///                 the per-pair domain). When non-empty, composites are grouped
+///                 by proto-index set and each member of a k-group is sized by
+///                 \c inner_pow(composite, k); the outer \c nocc^N times the
+///                 group product then equals the true block-sparse volume
+///                 \c Sum_pairs d^k.
+/// \return the extent product (element count).
+/// \note When \p inner_pow is empty, composites fall back to \p ixex (i.e.
+///       \c k=1), reproducing a single grid-averaged extent per composite,
+///       which under-counts multi-composite tensors: for heavy-tailed domains
+///       the mean of d^k far exceeds the k-th power of the mean of d.
 template <typename Tot, typename Ixex, typename InnerPow>
 double inner_aware_volume(Tot const& tot_idxs, Ixex const& ixex,
                           InnerPow const& inner_pow) {
@@ -72,6 +84,8 @@ double inner_aware_volume(Tot const& tot_idxs, Ixex const& ixex,
 /// contraction) is reported as zero flops.
 ///
 /// \param ixex Invocable mapping an Index to its extent.
+/// \param inner_pow Optional k-aware CSV/PNO composite extent; see
+///        \ref inner_aware_volume. Empty (default) sizes composites by \p ixex.
 /// \return A callable <tt>(lhs, rhs, result) -> double</tt> yielding the
 /// flop count of the contraction.
 template <typename InnerPow = std::function<double(Index const&, std::size_t)>>
@@ -103,6 +117,8 @@ auto flops_counter(has_index_extent auto&& ixex, InnerPow inner_pow = {}) {
 /// product is 1 contribute zero.
 ///
 /// \param ixex Invocable mapping an Index to its extent.
+/// \param inner_pow Optional k-aware CSV/PNO composite extent; see
+///        \ref inner_aware_volume. Empty (default) sizes composites by \p ixex.
 /// \return A callable <tt>(lhs, rhs, result) -> double</tt> yielding the
 /// summed memory size of the three operands.
 template <typename InnerPow = std::function<double(Index const&, std::size_t)>>
@@ -129,27 +145,21 @@ auto memsize_counter(has_index_extent auto&& ixex, InnerPow inner_pow = {}) {
 }
 
 /// \brief Cost function returning the storage footprint (element count) of a
-/// single tensor: the product of the extents of its indices.
+/// single result tensor.
 ///
-/// Used to apply a per-intermediate memory-footprint penalty in single-term
-/// optimization (see OptimizeOptions::footprint_weight). A scalar (no indices)
-/// contributes zero.
+/// Sizes the result's outer indices by \p ixex and its inner (CSV/PNO
+/// tensor-of-tensor) composites by \p inner_pow (see \ref inner_aware_volume).
+/// Used both as the peak objectives' per-subset footprint (\ref
+/// subset_footprints) and as the additive objectives' per-intermediate
+/// footprint penalty (see OptimizeOptions::footprint_weight). A scalar (no
+/// indices) contributes zero.
 ///
 /// \param ixex Invocable mapping an Index to its extent.
+/// \param inner_pow Optional k-aware CSV/PNO composite extent; see
+///        \ref inner_aware_volume. Empty (default) sizes composites by \p ixex,
+///        which under-counts multi-composite tensors.
 /// \return A callable <tt>(result) -> double</tt> yielding the element count of
 /// the result tensor.
-/// \brief Counts the storage footprint (element count) of a result tensor.
-///
-/// Outer indices are sized by \p ixex. Inner (CSV/PNO tensor-of-tensor)
-/// composites are sized by \p inner_pow when provided: composites are grouped
-/// by their proto-index set, and each member of a group of size \c k is sized
-/// by \c inner_pow(composite, k). With \c inner_pow the k-th power mean of the
-/// per-pair domain (\c e_k = (Sum_pairs d^k / nocc^N)^(1/k)), the product
-/// \c nocc^N (from the proto indices in \c outer) times \c e_k^k equals the
-/// true block-sparse volume \c Sum_pairs d^k -- correcting the gross
-/// under-count of multi-composite tensors that a single grid-averaged extent
-/// (k=1) produces. When \p inner_pow is empty, inner composites fall back to \p
-/// ixex (k=1), reproducing the prior behavior exactly.
 template <typename InnerPow = std::function<double(Index const&, std::size_t)>>
 auto footprint_counter(has_index_extent auto&& ixex, InnerPow inner_pow = {}) {
   return [ixex = std::forward<decltype(ixex)>(ixex),
@@ -188,6 +198,13 @@ struct OptRes {
 /// (those remaining after contracting the tensors in \c n, given \c tidxs as
 /// the final target indices). \c S[0] (empty subset) and any scalar result are
 /// 0. Shared by the peak DP and its tests so both agree on per-subset sizes.
+///
+/// \param network The TensorNetwork.
+/// \param tidxs   Target (open) indices of the network.
+/// \param idxsz   Callable mapping an Index to its extent.
+/// \param inner_pow Optional k-aware CSV/PNO composite extent forwarded to
+///        \ref footprint_counter; see \ref inner_aware_volume.
+/// \return \c S[n] = footprint of subset \c n's result tensor.
 template <typename TIdxs, typename IdxToSz>
 container::vector<double> subset_footprints(
     TensorNetwork const& network, TIdxs const& tidxs, IdxToSz&& idxsz,
@@ -243,6 +260,9 @@ inline container::vector<Index> batchable_index_list(
 ///        min(full_extent, batch_target_size(aux_list[k])).
 /// \param aux_list   Ordered list of distinct batchable indices (as returned
 ///        by \ref batchable_index_list).
+/// \param inner_pow Optional k-aware CSV/PNO composite extent forwarded to each
+///        per-\c B \ref subset_footprints call; see \ref inner_aware_volume.
+///        Orthogonal to slicing (composites are not the batchable aux indices).
 /// \return \c tables[B][n] = footprint of subset \c n under sliced-set \c B.
 template <typename TIdxs, typename IdxToSz>
 container::vector<container::vector<double>> sliced_footprints(
@@ -463,6 +483,14 @@ namespace detail {
 ///        (default) disables weighting.
 /// \param footprint_weight Per-intermediate storage-footprint penalty added to
 ///        the cost (ObjectiveFunction::DenseFLOPs only); 0 (default) disables.
+/// \param is_batchable_index Predicate marking an index as batchable (sliced);
+///        ObjectiveFunction::DensePeakSizeBatched only.
+/// \param batch_target_size Per-index slice size for batchable indices;
+///        ObjectiveFunction::DensePeakSizeBatched only.
+/// \param inner_pow Optional k-aware CSV/PNO composite extent applied by every
+///        cost counter; see \ref inner_aware_volume. Empty (default) sizes
+///        composites by \p idxsz (k=1), which under-counts multi-composite
+///        tensors.
 /// \return Optimal evaluation sequence under the chosen cost metric. If there
 ///         are equivalent optimal sequences then the result is the one that
 ///         keeps the order of tensors in the network as original as possible.
@@ -552,6 +580,10 @@ EvalSequence single_term_opt(
 /// \return Parenthesized product expression.
 ///
 /// @note @c prod is assumed to consist of only Tensor expressions
+/// @note The remaining parameters (\c subnet_cse, \c is_volatile_leaf,
+///       \c volatile_weight, \c footprint_weight, \c is_batchable_index,
+///       \c batch_target_size, \c inner_pow) are forwarded verbatim to the
+///       detail \ref single_term_opt overload; see it for their semantics.
 ///
 template <ObjectiveFunction Metric = ObjectiveFunction::DenseFLOPs,
           has_index_extent IdxToSz>
