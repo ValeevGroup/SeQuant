@@ -39,13 +39,13 @@ ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
         prod, opts.idx_to_extent, subnet_cse,
         opts.batch_policy.is_volatile_leaf, opts.volatile_weight,
         opts.footprint_weight, opts.batch_policy.is_batchable_index,
-        opts.batch_policy.batch_target_size);
+        opts.batch_policy.batch_target_size, opts.inner_pow);
   if (opts.objective_function == ObjectiveFunction::DenseSize)
     return opt::single_term_opt<ObjectiveFunction::DenseSize>(
         prod, opts.idx_to_extent, subnet_cse,
         opts.batch_policy.is_volatile_leaf, opts.volatile_weight,
         opts.footprint_weight, opts.batch_policy.is_batchable_index,
-        opts.batch_policy.batch_target_size);
+        opts.batch_policy.batch_target_size, opts.inner_pow);
   if (opts.objective_function == ObjectiveFunction::DensePeakSize)
     return opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
         prod, opts.idx_to_extent, subnet_cse,

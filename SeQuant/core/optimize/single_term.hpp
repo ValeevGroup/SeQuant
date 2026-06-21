@@ -35,6 +35,35 @@ concept has_index_extent = std::is_invocable_r_v<size_t, F, Index const&>;
 
 namespace detail {
 
+/// \brief Composite-aware extent product of a \ref tot_indices split.
+///
+/// Multiplies the extents of the outer indices (via \p ixex) by the extents of
+/// the inner (CSV/PNO tensor-of-tensor) composites. When \p inner_pow is
+/// provided, composites are grouped by their proto-index set and each member of
+/// a group of size \c k is sized by \c inner_pow(composite, k) -- the k-th
+/// power mean of the per-pair domain, so that the outer \c nocc^N times the
+/// group product equals the true block-sparse volume \c Sum_pairs d^k. When \p
+/// inner_pow is empty, composites fall back to \p ixex (k=1), reproducing a
+/// single grid-averaged extent per composite (which under-counts
+/// multi-composite tensors). Shared by all cost counters so every objective
+/// sizes CSV/PNO composites identically.
+template <typename Tot, typename Ixex, typename InnerPow>
+double inner_aware_volume(Tot const& tot_idxs, Ixex const& ixex,
+                          InnerPow const& inner_pow) {
+  double mem = ranges::accumulate(tot_idxs.outer, 1., std::multiplies{}, ixex);
+  if (inner_pow) {
+    for (auto const& c : tot_idxs.inner) {
+      std::size_t k = 0;
+      for (auto const& o : tot_idxs.inner)
+        if (o.proto_indices() == c.proto_indices()) ++k;
+      mem *= inner_pow(c, k);
+    }
+  } else {
+    mem = ranges::accumulate(tot_idxs.inner, mem, std::multiplies{}, ixex);
+  }
+  return mem;
+}
+
 /// \brief Cost function returning the flop count of a binary tensor
 /// contraction.
 ///
@@ -45,8 +74,10 @@ namespace detail {
 /// \param ixex Invocable mapping an Index to its extent.
 /// \return A callable <tt>(lhs, rhs, result) -> double</tt> yielding the
 /// flop count of the contraction.
-auto flops_counter(has_index_extent auto&& ixex) {
-  return [ixex = std::forward<decltype(ixex)>(ixex)](
+template <typename InnerPow = std::function<double(Index const&, std::size_t)>>
+auto flops_counter(has_index_extent auto&& ixex, InnerPow inner_pow = {}) {
+  return [ixex = std::forward<decltype(ixex)>(ixex),
+          inner_pow = std::move(inner_pow)](
              meta::range_of<Index> auto const& lhs,
              meta::range_of<Index> auto const& rhs,
              meta::range_of<Index> auto const& result) -> double {
@@ -56,8 +87,7 @@ auto flops_counter(has_index_extent auto&& ixex) {
     // the extent product (cf. memsize_counter, which processes each operand
     // separately and so can use the default vector container).
     auto tot_idxs = tot_indices<IndexSet>(concat(lhs, rhs, result));
-    double total_flops = ranges::accumulate(
-        concat(tot_idxs.outer, tot_idxs.inner), 1., std::multiplies{}, ixex);
+    double total_flops = inner_aware_volume(tot_idxs, ixex, inner_pow);
     // A product of exactly 1. means the index set was empty (the accumulation
     // init value), i.e. a scalar contraction => zero flops. Extents are
     // integer-valued, so this equality is exact.
@@ -75,20 +105,20 @@ auto flops_counter(has_index_extent auto&& ixex) {
 /// \param ixex Invocable mapping an Index to its extent.
 /// \return A callable <tt>(lhs, rhs, result) -> double</tt> yielding the
 /// summed memory size of the three operands.
-auto memsize_counter(has_index_extent auto&& ixex) {
-  return [ixex = std::forward<decltype(ixex)>(ixex)](
+template <typename InnerPow = std::function<double(Index const&, std::size_t)>>
+auto memsize_counter(has_index_extent auto&& ixex, InnerPow inner_pow = {}) {
+  return [ixex = std::forward<decltype(ixex)>(ixex),
+          inner_pow = std::move(inner_pow)](
              meta::range_of<Index> auto const& lhs,
              meta::range_of<Index> auto const& rhs,
              meta::range_of<Index> auto const& result) -> double {
-    using ranges::views::concat;
     double total_mem{0};
     // Each operand is sized independently, so the default (vector) container of
     // tot_indices suffices -- a single operand's index list has no duplicates,
     // unlike the concatenated set flops_counter must dedup.
     for (auto&& tot_idxs :
          {tot_indices(lhs), tot_indices(rhs), tot_indices(result)}) {
-      double mem = ranges::accumulate(concat(tot_idxs.outer, tot_idxs.inner),
-                                      1., std::multiplies{}, ixex);
+      double mem = inner_aware_volume(tot_idxs, ixex, inner_pow);
       // mem == 1. means this operand had no indices (the accumulation init
       // value), i.e. a scalar; it contributes no memory. Same exact-equality
       // convention as flops_counter above.
@@ -125,23 +155,7 @@ auto footprint_counter(has_index_extent auto&& ixex, InnerPow inner_pow = {}) {
   return [ixex = std::forward<decltype(ixex)>(ixex),
           inner_pow = std::move(inner_pow)](
              meta::range_of<Index> auto const& result) -> double {
-    using ranges::views::concat;
-    auto tot_idxs = tot_indices(result);
-    double mem =
-        ranges::accumulate(tot_idxs.outer, 1., std::multiplies{}, ixex);
-    if (inner_pow) {
-      // Size each inner composite by inner_pow(c, k), where k is the number of
-      // inner composites sharing c's proto-index set (the cubic/quartic
-      // compounding the single-extent average cannot represent).
-      for (auto const& c : tot_idxs.inner) {
-        std::size_t k = 0;
-        for (auto const& o : tot_idxs.inner)
-          if (o.proto_indices() == c.proto_indices()) ++k;
-        mem *= inner_pow(c, k);
-      }
-    } else {
-      mem = ranges::accumulate(tot_idxs.inner, mem, std::multiplies{}, ixex);
-    }
+    double mem = inner_aware_volume(tot_indices(result), ixex, inner_pow);
     return mem == 1. ? 0. : mem;
   };
 }
@@ -503,9 +517,12 @@ EvalSequence single_term_opt(
     }
     (void)is_batchable_index;
     (void)batch_target_size;
-    AdditiveModel model{flops_counter(idxsz), footprint_counter(idxsz),
-                        volatile_mask,        nr,
-                        footprint_weight,     subnet_cse};
+    AdditiveModel model{flops_counter(idxsz, inner_pow),
+                        footprint_counter(idxsz, inner_pow),
+                        volatile_mask,
+                        nr,
+                        footprint_weight,
+                        subnet_cse};
     return run_single_term_opt(model, network, tidxs);
   } else {
     static_assert(Metric == ObjectiveFunction::DenseSize,
@@ -513,9 +530,12 @@ EvalSequence single_term_opt(
                   "DensePeakSizeBatched ObjectiveFunction supported.");
     (void)is_batchable_index;
     (void)batch_target_size;
-    AdditiveModel model{memsize_counter(idxsz), footprint_counter(idxsz),
-                        volatile_mask,          nr,
-                        footprint_weight,       subnet_cse};
+    AdditiveModel model{memsize_counter(idxsz, inner_pow),
+                        footprint_counter(idxsz, inner_pow),
+                        volatile_mask,
+                        nr,
+                        footprint_weight,
+                        subnet_cse};
     return run_single_term_opt(model, network, tidxs);
   }
 }
