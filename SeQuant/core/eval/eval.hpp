@@ -1117,19 +1117,22 @@ template <typename F, typename IndexPredicate = accept_any_index,
 [[nodiscard]] auto make_batched_custom_evaluator(
     F le, std::function<std::size_t(Index const&)> target_batch_size,
     IndexPredicate accept = {}, ScopeGuardFactory make_scope_guard = {},
-    IsVolatile is_volatile = {}) {
+    IsVolatile is_volatile = {}, bool persistent_only = false) {
   return [le = std::move(le), target_batch_size = std::move(target_batch_size),
-          accept, is_volatile,
+          accept, is_volatile, persistent_only,
           make_scope_guard](auto const& node, auto& cache) -> ResultPtr {
     auto const K = batch_axis(node, accept);
     if (!K) return nullptr;
 
-    // Persistence gate: only stream subtrees that are amplitude-independent
-    // (built once). If the subtree contains a volatile leaf it is rebuilt on
-    // every evaluation, so batching pays the partition + relaxed-screening cost
-    // each pass for no lasting memory benefit -- decline to the standard
-    // scheme. Default never_volatile => no gating (original behavior).
-    if (subtree_any(node, is_volatile)) return nullptr;
+    // Persistence gate (opt-in via persistent_only): when set, decline to batch
+    // any subtree containing a volatile leaf -- such a subtree is rebuilt every
+    // evaluation, so batching pays the partition + relaxed-screening cost each
+    // pass to amortize over nothing. By default (persistent_only == false) we
+    // batch ACROSS THE BOARD: slicing the batch axis reduces the footprint of
+    // any axis-carrying intermediate regardless of volatility, and the cost
+    // model credits it accordingly, so the runtime must realize it too. (When
+    // is_volatile is never_volatile the gate is moot either way.)
+    if (persistent_only && subtree_any(node, is_volatile)) return nullptr;
 
     auto const leaf = find_leaf_carrying(node, *K);
     if (!leaf) return nullptr;
@@ -1290,7 +1293,8 @@ template <class F, class ScopeGuardFactory = make_no_scope_guard>
   };
   return make_batched_custom_evaluator(
       std::move(yielder), policy.batch_target_size, policy.is_batchable_index,
-      std::move(make_scope_guard), std::move(is_volatile_node));
+      std::move(make_scope_guard), std::move(is_volatile_node),
+      policy.persistent_only);
 }
 
 }  // namespace sequant

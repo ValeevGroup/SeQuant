@@ -1234,3 +1234,370 @@ TEST_CASE("optimize", "[optimize]") {
   REQUIRE(uocc_check);
   REQUIRE(uocc_check->approximate_size() == 10);
 }
+
+// ---------------------------------------------------------------------------
+// Reproducer: an OSV (proto-indexed) contraction C{a<i>;μ̃} * t{a<i>;i} should
+// be done EARLY because it eliminates the OSV index a<i> (rank/size/flops
+// drop), producing I{i;μ̃}. Motif distilled from PNO-CCSD residual intermediate
+// #1.
+// ---------------------------------------------------------------------------
+namespace {
+std::wstring render_tree(sequant::ExprPtr const& e) {
+  using namespace sequant;
+  if (e->is<Tensor>()) {
+    auto const& t = e->as<Tensor>();
+    std::wstring s = std::wstring(t.label()) + L"{";
+    bool first = true;
+    for (auto const& ix : t.bra()) {
+      if (!first) s += L",";
+      s += ix.full_label();
+      first = false;
+    }
+    s += L";";
+    first = true;
+    for (auto const& ix : t.ket()) {
+      if (!first) s += L",";
+      s += ix.full_label();
+      first = false;
+    }
+    if (t.aux().size()) {
+      s += L";";
+      first = true;
+      for (auto const& ix : t.aux()) {
+        if (!first) s += L",";
+        s += ix.full_label();
+        first = false;
+      }
+    }
+    return s + L"}";
+  }
+  if (e->is<Product>()) {
+    std::wstring s = L"(";
+    bool first = true;
+    for (auto const& f : e->as<Product>().factors()) {
+      if (!first) s += L" * ";
+      s += render_tree(f);
+      first = false;
+    }
+    return s + L")";
+  }
+  return L"?";
+}
+}  // namespace
+
+TEST_CASE("OSV early-contraction reproducer", "[optimize][osv]") {
+  using namespace sequant;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  mbpt::add_df_spaces(reg);
+  mbpt::add_pao_spaces(reg);
+  mbpt::add_ao_spaces(reg);
+  for (auto&& [k, v] :
+       std::initializer_list<std::pair<std::wstring_view, size_t>>{
+           {L"i", 10}, {L"a", 40}, {L"μ̃", 50}, {L"Κ", 90}}) {
+    reg->retrieve_ptr(k)->approximate_size(v);
+  }
+  auto idxsz = [](Index const& ix) -> std::size_t {
+    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+  };
+
+  // motif from intermediate #1: g(μ̃μ̃Κ) · C(a<i>;μ̃) · C(μ̃;b<i,j>) · t(a<i>;i)
+  auto prod =
+      deserialize(L"g{μ̃1;μ̃2;Κ1} C{a1<i1>;μ̃1} C{μ̃2;a2<i1,i2>} t{a1<i1>;i1}")
+          ->as<Product>();
+  std::wcout << L"\n=== INPUT: " << render_tree(ex<Product>(prod)) << L"\n";
+
+  auto show = [&](auto metric, std::wstring name,
+                  std::function<double(Index const&, std::size_t)> ip = {}) {
+    auto res = opt::single_term_opt<decltype(metric)::value>(
+        prod, idxsz, /*subnet_cse=*/false, {}, 1.0, 0.0, {}, {}, ip);
+    std::wcout << name << L":  " << render_tree(res) << L"\n";
+  };
+  std::wcout
+      << L"--- without inner_pow (composite a sized as full uocc=40) ---\n";
+  show(std::integral_constant<ObjectiveFunction,
+                              ObjectiveFunction::DenseFLOPs>{},
+       L"FLOPs");
+  show(
+      std::integral_constant<ObjectiveFunction, ObjectiveFunction::DenseSize>{},
+      L"Size ");
+  show(std::integral_constant<ObjectiveFunction,
+                              ObjectiveFunction::DensePeakSize>{},
+       L"Peak ");
+
+  auto ip = [](Index const&, std::size_t) -> double { return 12.0; };
+  std::wcout << L"--- with inner_pow (composite a<i> sized small=12, like a "
+                L"PNO/OSV domain) ---\n";
+  show(std::integral_constant<ObjectiveFunction,
+                              ObjectiveFunction::DenseFLOPs>{},
+       L"FLOPs", ip);
+  show(
+      std::integral_constant<ObjectiveFunction, ObjectiveFunction::DenseSize>{},
+      L"Size ", ip);
+  show(std::integral_constant<ObjectiveFunction,
+                              ObjectiveFunction::DensePeakSize>{},
+       L"Peak ", ip);
+  std::wcout << L"\n";
+}
+
+TEST_CASE("OSV early-contraction reproducer (full term #1)",
+          "[optimize][osv]") {
+  using namespace sequant;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  mbpt::add_df_spaces(reg);
+  mbpt::add_pao_spaces(reg);
+  mbpt::add_ao_spaces(reg);
+  for (auto&& [k, v] :
+       std::initializer_list<std::pair<std::wstring_view, size_t>>{
+           {L"i", 56}, {L"a", 12}, {L"μ̃", 602}, {L"Κ", 1652}}) {
+    reg->retrieve_ptr(k)->approximate_size(v);
+  }
+  auto aux_space = reg->retrieve(L"Κ");
+  auto idxsz = [](Index const& ix) -> std::size_t {
+    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+  };
+  // composite OSV/PNO domain ~ small (like MPQC's ~12-PNO/pair)
+  auto ip = [](Index const&, std::size_t) -> double { return 12.0; };
+  auto is_batch = [aux_space](Index const& ix) {
+    return ix.space() == aux_space;
+  };
+  std::function<std::size_t(Index const&)> bts = [](Index const&) {
+    return std::size_t{236};
+  };
+
+  // verbatim term #1 from the water-14 trace
+  auto prod = deserialize(
+                  L"g{μ̃_1;i_3;Κ_1} C{a_3<i_2>;μ̃_1} g{μ̃_2;μ̃_3;Κ_1} "
+                  L"C{a_4<i_1>;μ̃_2} C{μ̃_3;a_1<i_1,i_2>} t{a_4<i_1>;i_1} "
+                  L"t{a_5<i_3>;i_3} t{a_3<i_2>;i_2} C{μ̃_5;a_5<i_3>} "
+                  L"s{μ̃_4;μ̃_5} C{a_2<i_1,i_2>;μ̃_4}")
+                  ->as<Product>();
+  std::wcout << L"\n=== FULL TERM #1 (" << prod.factors().size()
+             << L" tensors) ===\n";
+
+  {
+    auto res = opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
+        prod, idxsz, false, {}, 1.0, 0.0, {}, {}, ip);
+    std::wcout << L"FLOPs:        " << render_tree(res) << L"\n";
+  }
+  {
+    auto res = opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
+        prod, idxsz, false, {}, 1.0, 0.0, {}, {}, ip);
+    std::wcout << L"PeakSize:     " << render_tree(res) << L"\n";
+  }
+  {
+    auto res = opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
+        prod, idxsz, false, {}, 1.0, 0.0, is_batch, bts, ip);
+    std::wcout << L"PeakBatched:  " << render_tree(res) << L"\n";
+  }
+  std::wcout << L"\n  >>> looking for (C{a_4<i_1>;μ̃_1216} * t{a_4<i_1>;i_1}) "
+                L"contracted EARLY <<<\n\n";
+}
+
+TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
+  using namespace sequant;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  mbpt::add_df_spaces(reg);
+  mbpt::add_pao_spaces(reg);
+  mbpt::add_ao_spaces(reg);
+  for (auto&& [k, v] :
+       std::initializer_list<std::pair<std::wstring_view, size_t>>{
+           {L"i", 16}, {L"a", 12}, {L"μ̃", 170}, {L"Κ", 472}}) {
+    reg->retrieve_ptr(k)->approximate_size(v);
+  }
+  auto aux_space = reg->retrieve(L"Κ");
+  auto idxsz = [](Index const& ix) -> std::size_t {
+    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+  };
+  auto ip = [](Index const&, std::size_t) -> double { return 12.0; };
+  auto is_batch = [aux_space](Index const& ix) {
+    return ix.space() == aux_space;
+  };
+  std::function<std::size_t(Index const&)> bts = [](Index const&) {
+    return std::size_t{236};
+  };
+
+  // tetramer trace term 3 (verbatim, indices renumbered to small ordinals)
+  auto prod =
+      deserialize(
+          L"C{a_3<i_1>;μ̃_1} C{μ̃_2;a_1<i_1>} g{μ̃_1;μ̃_2;Κ_1} g{μ̃_3;i_2;Κ_1} "
+          L"C{a_2<i_2>;μ̃_3} t{a_2<i_2>;i_2} t{a_3<i_1>;i_1}")
+          ->as<Product>();
+  std::wcout << L"\n=== TETRAMER TERM 3 (" << prod.factors().size()
+             << L" tensors) ===\n";
+  std::wcout << L"  trace chose: ...(g{μ̃μ̃Κ} * (...)) * t{a_3<i_1>;i_1}  "
+                L"[a_3<i_1> DEFERRED]\n";
+  auto fp = opt::detail::footprint_counter(
+      idxsz, std::function<double(Index const&, std::size_t)>(ip));
+  auto fp_flops_c = opt::detail::flops_counter(
+      idxsz, std::function<double(Index const&, std::size_t)>(ip));
+  // walk the ExprPtr product tree (no canonicalization); return a subexpr's
+  // free indices and update mx with the largest intermediate (result) size
+  // seen.
+  std::function<std::vector<Index>(ExprPtr const&, double&)> freeix =
+      [&](ExprPtr const& e, double& mx) -> std::vector<Index> {
+    if (e->is<Tensor>()) {
+      std::vector<Index> v;
+      for (auto const& ix : e->as<Tensor>().const_braketaux_indices())
+        v.push_back(ix);
+      return v;
+    }
+    std::map<std::wstring, std::pair<int, Index>> cnt;
+    for (auto const& fct : e->as<Product>().factors()) {
+      for (auto const& ix : freeix(fct, mx)) {
+        auto k = std::wstring(ix.full_label());
+        cnt[k].first++;
+        cnt[k].second = ix;
+      }
+    }
+    std::vector<Index>
+        result;  // appears in exactly one child => not contracted here
+    for (auto const& [k, v] : cnt)
+      if (v.first == 1) result.push_back(v.second);
+    double here = fp(result);
+    if (here > mx) mx = here;
+    return result;
+  };
+  // max LEAF size: the raw DF integral g{μ̃,μ̃,Κ} is a huge leaf that is resident
+  // during its own contraction, so it lower-bounds the peak of EVERY schedule.
+  double max_leaf = 0.0;
+  std::wstring big;
+  for (auto const& fct : prod.factors()) {
+    std::vector<Index> v;
+    for (auto const& ix : fct->as<Tensor>().const_braketaux_indices())
+      v.push_back(ix);
+    double s = fp(v);
+    if (s > max_leaf) {
+      max_leaf = s;
+      big = render_tree(fct);
+    }
+  }
+  std::wcout << L"max LEAF = " << (long long)max_leaf << L"  (" << big
+             << L")\n";
+  for (auto const& fct : prod.factors()) {
+    std::vector<Index> v;
+    for (auto const& ix : fct->as<Tensor>().const_braketaux_indices())
+      v.push_back(ix);
+    std::wcout << L"   leaf " << render_tree(fct) << L" = " << (long long)fp(v)
+               << L"\n";
+  }
+
+  // Replicate PeakModel::relax EXACTLY on a fixed binary tree.
+  struct TP {
+    double peak, leafsum, S;
+  };
+  std::function<TP(ExprPtr const&)> tree_peak = [&](ExprPtr const& e) -> TP {
+    if (e->is<Tensor>()) {
+      std::vector<Index> v;
+      for (auto const& ix : e->as<Tensor>().const_braketaux_indices())
+        v.push_back(ix);
+      double s = fp(v);
+      return TP{s, s, s};
+    }
+    auto const& facs = e->as<Product>().factors();
+    TP L = tree_peak(facs[0]);
+    TP R = tree_peak(facs[1]);
+    double dummy = 0.0;
+    auto resix = freeix(e, dummy);
+    double Snode = fp(resix);
+    double both = L.S + R.S + Snode;
+    double lfirst = std::max({R.leafsum + L.peak, L.S + R.peak, both});
+    double rfirst = std::max({L.leafsum + R.peak, R.S + L.peak, both});
+    return TP{std::min(lfirst, rfirst), L.leafsum + R.leafsum, Snode};
+  };
+
+  // weighted flops of a fixed binary tree: w=vw when subtree contains a 't'.
+  std::function<bool(ExprPtr const&)> has_t = [&](ExprPtr const& e) -> bool {
+    if (e->is<Tensor>()) return e->as<Tensor>().label() == L"t";
+    for (auto const& fct : e->as<Product>().factors())
+      if (has_t(fct)) return true;
+    return false;
+  };
+  auto idxof = [&](ExprPtr const& e) {
+    double d = 0.0;
+    return freeix(e, d);
+  };
+  std::function<double(ExprPtr const&, double)> tree_flops =
+      [&](ExprPtr const& e, double vw) -> double {
+    if (e->is<Tensor>()) return 0.0;
+    auto const& facs = e->as<Product>().factors();
+    auto a = idxof(facs[0]);
+    auto b = idxof(facs[1]);
+    auto r = idxof(e);
+    double here = fp_flops_c(a, b, r);
+    double w = has_t(e) ? vw : 1.0;
+    return w * here + tree_flops(facs[0], vw) + tree_flops(facs[1], vw);
+  };
+
+  auto report = [&](std::wstring name, sequant::ExprPtr res) -> double {
+    double mx = 0.0;
+    freeix(res, mx);
+    double tpk = tree_peak(res).peak;
+    std::wcout << name << L"  recurrence_PEAK=" << (long long)tpk
+               << L"  max_imed=" << (long long)mx << L"  wflops(vw1)="
+               << (long long)tree_flops(res, 1.0) << L"  wflops(vw100)="
+               << (long long)tree_flops(res, 100.0) << L"\n      "
+               << render_tree(res) << L"\n";
+    return mx;
+  };
+  double flops_mx = report(L"FLOPs:        ",
+                           opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
+                               prod, idxsz, false, {}, 1.0, 0.0, {}, {}, ip));
+  double peak_mx = report(
+      L"PeakSize:     ", opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
+                             prod, idxsz, false, {}, 1.0, 0.0, {}, {}, ip));
+  double pbat_mx =
+      report(L"PeakBatched:  ",
+             opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
+                 prod, idxsz, false, {}, 1.0, 0.0, is_batch, bts, ip));
+  // Real MPQC config: t is volatile, volatile_weight=100. The tie-break weights
+  // volatile (replayed) flops, so it must STILL eliminate the OSV early.
+  auto is_t = [](Tensor const& t) { return t.label() == L"t"; };
+  // isolate volatile_weight: hold is_volatile_leaf=is_t FIXED, vary only vw.
+  double peak_v = report(L"PeakSize/is_t,vw1:   ",
+                         opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
+                             prod, idxsz, false, is_t, 1.0, 0.0, {}, {}, ip));
+  double peak_v100 =
+      report(L"PeakSize/is_t,vw100: ",
+             opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
+                 prod, idxsz, false, is_t, 100.0, 0.0, {}, {}, ip));
+  double pbat_v =
+      report(L"PeakBatch/is_t,vw1:  ",
+             opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
+                 prod, idxsz, false, is_t, 1.0, 0.0, is_batch, bts, ip));
+  double pbat_v100 =
+      report(L"PeakBatch/is_t,vw100:",
+             opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
+                 prod, idxsz, false, is_t, 100.0, 0.0, is_batch, bts, ip));
+  (void)peak_v100;
+  (void)pbat_v100;
+  std::wcout << L"\n";
+  // (1) The flop tie-break makes the peak objectives eliminate the OSV early
+  //     (largest intermediate no worse than the flops-optimal tree) when peak
+  //     ties. Holds for the non-batched model at every volatile_weight, and for
+  //     the batched model with no volatility gate.
+  CHECK(peak_mx <= flops_mx);    // DensePeakSize, no volatile predicate
+  CHECK(pbat_mx <= flops_mx);    // DensePeakSizeBatched, no volatile predicate
+  CHECK(peak_v <= flops_mx);     // DensePeakSize, is_t, vw=1
+  CHECK(peak_v100 <= flops_mx);  // DensePeakSize, is_t, vw=100
+  // (2) The flop tie-break is volatile_weight-AWARE but vw does not change THIS
+  //     decision: with is_volatile_leaf=is_t fixed, vw=1 and vw=100 agree.
+  CHECK(peak_v == peak_v100);
+  CHECK(pbat_v == pbat_v100);
+  // (3) Batching is applied across the board (not gated on persistence), so the
+  //     BATCHED model with a volatility gate (is_t) now ALSO eliminates the
+  //     OSV: slicing reduces footprint regardless of volatility.
+  CHECK(pbat_v <= flops_mx);
+  CHECK(pbat_v100 <= flops_mx);
+  // (4) The persistent-only gate is still available as an opt-in: setting
+  //     batch_persistent_only restores the old behavior (volatile subtrees not
+  //     sliced -> the batched model reverts to deferring the OSV).
+  double pbat_po =
+      report(L"PeakBatch/persistent_only:",
+             opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
+                 prod, idxsz, false, is_t, 100.0, 0.0, is_batch, bts, ip,
+                 /*batch_persistent_only=*/true));
+  CHECK(pbat_po > flops_mx);  // gate restored -> OSV deferred again
+}

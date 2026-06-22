@@ -226,21 +226,41 @@ struct PeakModel {
   IdxToSz idxsz;
   /// Optional k-aware inner (CSV/PNO composite) extent; see footprint_counter.
   std::function<double(Index const&, std::size_t)> inner_pow = {};
+  /// Predicate marking a leaf tensor as volatile (amplitude-dependent). Used
+  /// ONLY to weight the secondary flop tie-break: a volatile contraction is
+  /// replayed every iteration, so its flops are scaled by \c volatile_weight.
+  std::function<bool(Tensor const&)> is_volatile_leaf = {};
+  /// Replay weight applied to volatile contractions in the flop tie-break.
+  double volatile_weight = 1.0;
 
   /// Per-subset DP cell: minimum peak to build the subtree rooted at this
-  /// subset, plus the winning bipartition and evaluation order.
+  /// subset, plus the winning bipartition and evaluation order. \c flops is the
+  /// total flop count of that subtree, used only as a secondary, tie-breaking
+  /// objective: peak alone is degenerate when the peak is set by an unavoidable
+  /// leaf/intermediate (e.g. a DF integral) that dominates many factorizations,
+  /// so among equal-peak schedules we pick the one doing the least work (which,
+  /// e.g., contracts an OSV/PNO with its amplitude early instead of carrying it
+  /// or forming an outer product).
   struct State {
     double peak = std::numeric_limits<double>::max();
     size_t lp = 0;
     size_t rp = 0;
     bool lp_first = true;
+    double flops = std::numeric_limits<double>::max();
   };
 
   /// Precomputed tables: S[n] = footprint of subset n's result tensor,
-  /// L[n] = sum of leaf (singleton) sizes in subset n.
+  /// L[n] = sum of leaf (singleton) sizes in subset n, idx[n] = subset n's
+  /// open (result) indices (for the per-contraction flop tie-break), and
+  /// flops_of(lhs, rhs, result) the flop count of one binary contraction.
   struct Context {
     container::vector<double> S;
     container::vector<double> L;
+    container::vector<IndexSet> idx;
+    std::function<double(IndexSet const&, IndexSet const&, IndexSet const&)>
+        flops_of;
+    /// Bitmask of volatile leaf tensors (for the flop tie-break weight).
+    std::size_t volatile_mask = 0;
   };
 
   template <typename TIdxs>
@@ -248,37 +268,61 @@ struct PeakModel {
                         TIdxs const& tidxs) const {
     // CSE is not supported for DensePeakSize.
     Context ctx;
-    ctx.S = subset_footprints(network, tidxs, idxsz, inner_pow);
-    auto const sz = ctx.S.size();
     auto const nt = network.tensors().size();
+    auto const sz = size_t{1} << nt;
+    container::vector<OptRes> results(sz);
+    init_results(network, tidxs, results);
+    auto fp = footprint_counter(idxsz, inner_pow);
+    ctx.S.assign(sz, 0.0);
+    ctx.idx.resize(sz);
+    for (size_t n = 0; n < sz; ++n) {
+      ctx.S[n] = (n == 0) ? 0.0 : fp(results[n].indices);
+      ctx.idx[n] = std::move(results[n].indices);
+    }
     ctx.L.assign(sz, 0.0);
     for (size_t n = 0; n < sz; ++n)
       for (size_t b = 0; b < nt; ++b)
         if (n & (size_t{1} << b)) ctx.L[n] += ctx.S[size_t{1} << b];
+    ctx.flops_of = [c = flops_counter(idxsz, inner_pow)](
+                       IndexSet const& lhs, IndexSet const& rhs,
+                       IndexSet const& result) { return c(lhs, rhs, result); };
+    ctx.volatile_mask = leaf_volatile_mask(network, is_volatile_leaf);
     return ctx;
   }
 
   State leaf(Context const& ctx, size_t n) const {
-    return State{ctx.S[n], 0, 0, true};
+    return State{ctx.S[n], 0, 0, true, 0.0};  // a leaf load does no flops
   }
 
   State init(Context const& /*ctx*/, size_t /*n*/) const {
-    return State{std::numeric_limits<double>::max(), 0, 0, true};
+    return State{std::numeric_limits<double>::max(), 0, 0, true,
+                 std::numeric_limits<double>::max()};
   }
 
-  void relax(Context& ctx, size_t /*n*/, size_t lp, size_t rp,
-             State const& lp_st, State const& rp_st, State& acc) const {
+  void relax(Context& ctx, size_t n, size_t lp, size_t rp, State const& lp_st,
+             State const& rp_st, State& acc) const {
     double const both = ctx.S[lp] + ctx.S[rp] + ctx.S[lp | rp];
     double const lp_first_cand =
         std::max({ctx.L[rp] + lp_st.peak, ctx.S[lp] + rp_st.peak, both});
     double const rp_first_cand =
         std::max({ctx.L[lp] + rp_st.peak, ctx.S[rp] + lp_st.peak, both});
     double const cand = std::min(lp_first_cand, rp_first_cand);
-    if (cand < acc.peak) {
+    // total flops of building subset n via this bipartition
+    // (order-independent): children's flops plus this single contraction's
+    // flops. A volatile contraction (subset n contains a volatile leaf) is
+    // replayed every iteration, so its flops are scaled by volatile_weight --
+    // matching the DenseFLOPs objective's convention.
+    double const w = (ctx.volatile_mask & n) ? volatile_weight : 1.0;
+    double const cand_flops =
+        lp_st.flops + rp_st.flops +
+        w * ctx.flops_of(ctx.idx[lp], ctx.idx[rp], ctx.idx[n]);
+    // lexicographic: minimize peak, then (among equal-peak schedules) flops.
+    if (cand < acc.peak || (cand == acc.peak && cand_flops < acc.flops)) {
       acc.peak = cand;
       acc.lp = lp;
       acc.rp = rp;
       acc.lp_first = (lp_first_cand <= rp_first_cand);
+      acc.flops = cand_flops;
     }
   }
 
@@ -325,6 +369,12 @@ struct PeakBatchedModel {
   std::function<bool(Tensor const&)> is_volatile_leaf;
   /// Optional k-aware inner (CSV/PNO composite) extent; see footprint_counter.
   std::function<double(Index const&, std::size_t)> inner_pow = {};
+  /// Replay weight applied to volatile contractions in the flop tie-break.
+  double volatile_weight = 1.0;
+  /// If true, batch only persistent subtrees (decline any subset containing a
+  /// volatile leaf). Default false = batch across the board. See
+  /// BatchPolicy::persistent_only.
+  bool batch_persistent_only = false;
 
   /// Per-subset DP cell: the full \c [B]-vector (size \c nB = 2^m) of per-
   /// sliced-set \ref BatchedRes back-pointers.
@@ -347,6 +397,11 @@ struct PeakBatchedModel {
     container::vector<std::size_t> open_aux;
     /// Bitmask of volatile leaf tensors.
     std::size_t volatile_mask = 0;
+    /// idx[n] = subset n's open (result) indices, for the flop tie-break.
+    container::vector<IndexSet> idx;
+    /// flops_of(lhs, rhs, result) = flop count of one binary contraction.
+    std::function<double(IndexSet const&, IndexSet const&, IndexSet const&)>
+        flops_of;
 
     /// Context-restricted size of subset s under sliced-set ctx (the table is
     /// indexed by the part of ctx actually open in s; mirrors the oracle).
@@ -375,12 +430,28 @@ struct PeakBatchedModel {
                                    ctx.aux, inner_pow);
     ctx.open_aux = subset_open_aux(network, tidxs, ctx.aux);
     ctx.volatile_mask = leaf_volatile_mask(network, is_volatile_leaf);
+    // Per-subset open indices + a flop counter, for the lexicographic
+    // (peak, then flops) tie-break (mirrors PeakModel). The flop tie-break uses
+    // the unbatched contraction flops; total work summed over batches matches
+    // it (work parity), so it consistently orders equal-peak schedules.
+    auto const sz = std::size_t{1} << ctx.nt;
+    container::vector<OptRes> results(sz);
+    init_results(network, tidxs, results);
+    ctx.idx.resize(sz);
+    for (std::size_t n = 0; n < sz; ++n)
+      ctx.idx[n] = std::move(results[n].indices);
+    ctx.flops_of = [c = flops_counter(idxsz, inner_pow)](
+                       IndexSet const& lhs, IndexSet const& rhs,
+                       IndexSet const& result) { return c(lhs, rhs, result); };
     return ctx;
   }
 
   State leaf(Context const& ctx, size_t n) const {
     State s(ctx.nB);
-    for (std::size_t B = 0; B < ctx.nB; ++B) s[B].peak = ctx.sz(n, B);
+    for (std::size_t B = 0; B < ctx.nB; ++B) {
+      s[B].peak = ctx.sz(n, B);
+      s[B].flops = 0.0;  // a leaf load does no flops
+    }
     return s;
   }
 
@@ -394,8 +465,15 @@ struct PeakBatchedModel {
       auto& curr = acc[B];
       // Batchable indices contracted at THIS node: open at children but not at
       // parent, gated by persistence.
+      // Batchable indices contracted at THIS node: open at children but not at
+      // the parent. By default batching is applied ACROSS THE BOARD: slicing
+      // the batch axis shrinks any intermediate carrying it regardless of
+      // volatility (footprint objective) while leaving flops unchanged, so the
+      // persistence gate would only ever raise the modelled peak. Set
+      // batch_persistent_only to restore the persistent-only gate (decline to
+      // slice subsets that contain a volatile leaf).
       std::size_t const Acand =
-          (ctx.volatile_mask & n)
+          (batch_persistent_only && (ctx.volatile_mask & n))
               ? std::size_t{0}
               : ((ctx.open_aux[lp] | ctx.open_aux[rp]) & ~ctx.open_aux[n]);
       // Enumerate every subset A' of Acand (including the empty set).
@@ -410,12 +488,23 @@ struct PeakBatchedModel {
         double const rpf =
             std::max({ctx.Lof(lp, C) + prr, ctx.sz(rp, C) + pl, both});
         double const cand = std::min(lpf, rpf);
-        if (cand < curr.peak) {
+        // total flops via this bipartition+slice: children's flops (at the
+        // child sliced-set C) plus this contraction's (unbatched) flops, scaled
+        // by volatile_weight when subset n is volatile (replayed every
+        // iteration) -- matching the DenseFLOPs objective's convention.
+        double const w = (ctx.volatile_mask & n) ? volatile_weight : 1.0;
+        double const cand_flops =
+            lp_st[C].flops + rp_st[C].flops +
+            w * ctx.flops_of(ctx.idx[lp], ctx.idx[rp], ctx.idx[n]);
+        // lexicographic: minimize peak, then (among equal-peak) flops.
+        if (cand < curr.peak ||
+            (cand == curr.peak && cand_flops < curr.flops)) {
           curr.peak = cand;
           curr.lp = lp;
           curr.rp = rp;
           curr.lp_first = (lpf <= rpf);
           curr.aprime = Ap;
+          curr.flops = cand_flops;
         }
         if (Ap == 0) break;
         Ap = (Ap - 1) & Acand;

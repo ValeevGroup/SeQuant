@@ -58,7 +58,7 @@ ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
       prod, opts.idx_to_extent, subnet_cse, opts.batch_policy.is_volatile_leaf,
       opts.volatile_weight, opts.footprint_weight,
       opts.batch_policy.is_batchable_index, opts.batch_policy.batch_target_size,
-      opts.inner_pow);
+      opts.inner_pow, opts.batch_policy.persistent_only);
 }
 
 /// Deliberately non-identifier label prefix used to stand in for non-Tensor,
