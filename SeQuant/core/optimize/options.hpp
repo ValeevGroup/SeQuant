@@ -111,6 +111,16 @@ struct OptimizeOptions {
   /// ObjectiveFunction::DenseFLOPs.
   double volatile_weight = 1.0;
 
+  /// Relative peak tolerance for the peak objectives' final selection: among
+  /// the Pareto frontier of (peak, flops) trade-offs, pick the fewest-flops
+  /// schedule whose peak is within (1 + peak_flops_tolerance) of the minimum.
+  /// 0 = strict peak-min (flop tie-break only on exact peak ties). The default
+  /// 0.10 trades up to a 10% peak increase for a (often much larger) flop
+  /// reduction -- e.g. forming a persistent 4-PNO integral instead of
+  /// recomputing a particle-ladder. Only consulted by DensePeakSize /
+  /// DensePeakSizeBatched.
+  double peak_flops_tolerance = 0.10;
+
   /// Per-intermediate memory-footprint penalty added to the single-term
   /// optimization cost. For every binary contraction, the storage footprint of
   /// its RESULT intermediate (the product of the extents of the result's

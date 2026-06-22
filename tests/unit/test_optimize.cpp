@@ -733,7 +733,9 @@ TEST_CASE("optimize", "[optimize]") {
       auto st = opt::detail::solve_single_term(model, net, targets, ctx);
       size_t root = (size_t{1} << ts.size()) - 1;
       size_t allK = (size_t{1} << m) - 1;
-      double dp_allsliced = st[root][allK].peak;
+      double dp_allsliced = std::numeric_limits<double>::max();
+      for (auto const& fp : st[root][allK])
+        dp_allsliced = std::min(dp_allsliced, fp.peak);
       // Phase-1 peak with EVERY batchable index sliced: an extent wrapper that
       // slices iff the index is batchable (no batched_extent helper exists).
       auto be = [&](Index const& ix) -> std::size_t {
@@ -1574,30 +1576,168 @@ TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
   (void)peak_v100;
   (void)pbat_v100;
   std::wcout << L"\n";
-  // (1) The flop tie-break makes the peak objectives eliminate the OSV early
-  //     (largest intermediate no worse than the flops-optimal tree) when peak
-  //     ties. Holds for the non-batched model at every volatile_weight, and for
-  //     the batched model with no volatility gate.
-  CHECK(peak_mx <= flops_mx);    // DensePeakSize, no volatile predicate
-  CHECK(pbat_mx <= flops_mx);    // DensePeakSizeBatched, no volatile predicate
-  CHECK(peak_v <= flops_mx);     // DensePeakSize, is_t, vw=1
-  CHECK(peak_v100 <= flops_mx);  // DensePeakSize, is_t, vw=100
-  // (2) The flop tie-break is volatile_weight-AWARE but vw does not change THIS
-  //     decision: with is_volatile_leaf=is_t fixed, vw=1 and vw=100 agree.
-  CHECK(peak_v == peak_v100);
-  CHECK(pbat_v == pbat_v100);
-  // (3) Batching is applied across the board (not gated on persistence), so the
-  //     BATCHED model with a volatility gate (is_t) now ALSO eliminates the
-  //     OSV: slicing reduces footprint regardless of volatility.
-  CHECK(pbat_v <= flops_mx);
-  CHECK(pbat_v100 <= flops_mx);
-  // (4) The persistent-only gate is still available as an opt-in: setting
+  // The defect this guards against is the OSV-deferred *outer product*: folding
+  // the volatile t-amplitude in before contracting the shared subtree forces a
+  // ~5.5M-element intermediate (`osv_outer_product`, below). The peak
+  // objectives must avoid it; the persistent-only gate must reproduce it.
+  // Asserting on that gross structural threshold -- not on exact max_imed
+  // equality -- keeps the test robust to the (peak, flops) Pareto frontier's
+  // epsilon-tolerant selection, under which a vw-weighted flop reduction may
+  // legitimately pick a schedule with a larger single intermediate but a
+  // within-tolerance DP peak.
+  double const osv_outer_product = 5.0e6;  // actual deferred imed is ~5.5M
+  // (0) The order-independent FLOPs objective never forms the OSV outer product
+  //     (it is a flop blow-up, not just a memory one) -- the reference
+  //     baseline.
+  CHECK(flops_mx < osv_outer_product);
+  // (1) Default (across-the-board batching, epsilon-tolerant Pareto): every
+  // peak
+  //     objective avoids the OSV outer product, at every volatile_weight, with
+  //     or without a volatility gate (is_t).
+  CHECK(peak_mx < osv_outer_product);    // DensePeakSize, no volatile predicate
+  CHECK(pbat_mx < osv_outer_product);    // DensePeakSizeBatched, no predicate
+  CHECK(peak_v < osv_outer_product);     // DensePeakSize, is_t, vw=1
+  CHECK(peak_v100 < osv_outer_product);  // DensePeakSize, is_t, vw=100
+  // (2) Batching is applied across the board (not gated on persistence), so the
+  //     BATCHED model with a volatility gate (is_t) ALSO avoids the OSV outer
+  //     product: slicing reduces footprint regardless of volatility.
+  CHECK(pbat_v < osv_outer_product);
+  CHECK(pbat_v100 < osv_outer_product);
+  // (3) The persistent-only gate is still available as an opt-in: setting
   //     batch_persistent_only restores the old behavior (volatile subtrees not
-  //     sliced -> the batched model reverts to deferring the OSV).
+  //     sliced -> the batched model reverts to deferring the OSV outer
+  //     product).
   double pbat_po =
       report(L"PeakBatch/persistent_only:",
              opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
                  prod, idxsz, false, is_t, 100.0, 0.0, is_batch, bts, ip,
                  /*batch_persistent_only=*/true));
-  CHECK(pbat_po > flops_mx);  // gate restored -> OSV deferred again
+  CHECK(pbat_po >= osv_outer_product);  // gate restored -> OSV deferred again
+}
+
+TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
+          "[optimize][osv]") {
+  using namespace sequant;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  mbpt::add_df_spaces(reg);
+  mbpt::add_pao_spaces(reg);
+  mbpt::add_ao_spaces(reg);
+  for (auto&& [k, v] :
+       std::initializer_list<std::pair<std::wstring_view, size_t>>{
+           {L"i", 16}, {L"a", 12}, {L"μ̃", 170}, {L"Κ", 472}})
+    reg->retrieve_ptr(k)->approximate_size(v);
+  auto aux = reg->retrieve(L"Κ");
+  auto idxsz = [](Index const& ix) -> std::size_t {
+    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+  };
+  auto ip = [](Index const&, std::size_t) -> double { return 12.0; };
+  auto is_batch = [aux](Index const& ix) { return ix.space() == aux; };
+  std::function<std::size_t(Index const&)> bts = [](Index const&) {
+    return std::size_t{236};
+  };
+  auto is_t = [](Tensor const& t) { return t.label() == L"t"; };
+
+  // PPL: R_ij^{a1 a2} = (a1 a3 | a2 a4) t_ij^{a3 a4}, DF: (a1 a3|K)=gCC, (a2
+  // a4|K)=gCC
+  auto prod = deserialize(
+                  L"C{a_1<i_1,i_2>;μ̃_1} g{μ̃_1;μ̃_2;Κ_1} C{μ̃_2;a_3<i_1,i_2>} "
+                  L"C{a_2<i_1,i_2>;μ̃_3} g{μ̃_3;μ̃_4;Κ_1} C{μ̃_4;a_4<i_1,i_2>} "
+                  L"t{a_3<i_1,i_2>,a_4<i_1,i_2>;i_1,i_2}")
+                  ->as<Product>();
+
+  auto fp = opt::detail::footprint_counter(
+      idxsz, std::function<double(Index const&, std::size_t)>(ip));
+  auto fc = opt::detail::flops_counter(
+      idxsz, std::function<double(Index const&, std::size_t)>(ip));
+  std::function<std::vector<Index>(ExprPtr const&, double&)> freeix =
+      [&](ExprPtr const& e, double& mx) -> std::vector<Index> {
+    if (e->is<Tensor>()) {
+      std::vector<Index> v;
+      for (auto const& ix : e->as<Tensor>().const_braketaux_indices())
+        v.push_back(ix);
+      return v;
+    }
+    std::map<std::wstring, std::pair<int, Index>> c;
+    for (auto const& f : e->as<Product>().factors())
+      for (auto const& ix : freeix(f, mx)) {
+        auto k = std::wstring(ix.full_label());
+        c[k].first++;
+        c[k].second = ix;
+      }
+    std::vector<Index> r;
+    for (auto const& [k, v] : c)
+      if (v.first == 1) r.push_back(v.second);
+    double here = fp(r);
+    if (here > mx) mx = here;
+    return r;
+  };
+  std::function<bool(ExprPtr const&)> has_t = [&](ExprPtr const& e) -> bool {
+    if (e->is<Tensor>()) return e->as<Tensor>().label() == L"t";
+    for (auto const& f : e->as<Product>().factors())
+      if (has_t(f)) return true;
+    return false;
+  };
+  std::function<double(ExprPtr const&, double)> wflops =
+      [&](ExprPtr const& e, double vw) -> double {
+    if (e->is<Tensor>()) return 0.0;
+    auto const& f = e->as<Product>().factors();
+    double d = 0;
+    auto a = freeix(f[0], d), b = freeix(f[1], d), r = freeix(e, d);
+    double w = has_t(e) ? vw : 1.0;
+    return w * fc(a, b, r) + wflops(f[0], vw) + wflops(f[1], vw);
+  };
+  auto rep = [&](std::wstring name, ExprPtr res) -> double {
+    double mx = 0;
+    freeix(res, mx);
+    double wf = wflops(res, 100.0);
+    std::wcout << name << L"  max_imed=" << (long long)mx << L"  wflops(vw100)="
+               << (long long)wf << L"\n      " << render_tree(res) << L"\n";
+    return wf;
+  };
+  std::wcout << L"\n=== PPL term: form-W vs fold-t ===\n";
+  // The flop-optimal schedule forms the persistent 4-PNO integral W=(ac|bd)=gCC
+  // *gCC once, then contracts the volatile amplitude t into it -- the volatile
+  // (replayed) flops are the cheap step. The "fold-t" alternative folds t into
+  // a gCC half-transform first; that recomputes the ladder on every replay, a
+  // ~7x larger volatile-weighted flop count. The 4-PNO W carries a free PAO leg
+  // so it is slightly LARGER in peak than fold-t; only the peak_flops_tolerance
+  // (default 0.10) lets the peak objectives accept that within-tolerance peak
+  // bump in exchange for the large volatile-flop win, i.e. form W like FLOPs.
+  double flops_w = rep(L"FLOPs/vw100:  ",
+                       opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
+                           prod, idxsz, false, is_t, 100.0, 0.0, {}, {}, ip));
+  double peak_w = rep(L"PeakSize/vw100:",
+                      opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
+                          prod, idxsz, false, is_t, 100.0, 0.0, {}, {}, ip));
+  double pbat_w =
+      rep(L"PeakB/vw100:  ",
+          opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
+              prod, idxsz, false, is_t, 100.0, 0.0, is_batch, bts, ip));
+  std::wcout << L"\n";
+  // The epsilon-tolerant Pareto selection makes both peak objectives form W,
+  // matching the flop-optimal volatile-weighted flop count.
+  CHECK(peak_w == flops_w);
+  CHECK(pbat_w == flops_w);
+  // Strict peak-min (peak_flops_tolerance=0) instead defers to fold-t: it
+  // refuses the W peak bump, paying the much larger volatile-flop ladder.
+  double peak_w_strict =
+      rep(L"PeakSize/strict:",
+          opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
+              prod, idxsz, false, is_t, 100.0, 0.0, {}, {}, ip,
+              /*batch_persistent_only=*/false, /*peak_flops_tolerance=*/0.0));
+  CHECK(peak_w_strict > flops_w);
+  // At volatile_weight=1 (the caching-off regime, where persistent
+  // intermediates cannot be amortized across replays) the persistent 4-PNO W is
+  // strictly dominated by fold-t on BOTH peak and flops: the batched root
+  // frontier collapses to the single fold-t point, so every objective folds the
+  // amplitude t into a Kappa-batched half-transform ladder instead of
+  // forming/caching W. (mpqc's SeQuantEngine pins volatile_weight to 1 when
+  // eval:cache is off for exactly this reason.) A form-W tree would reproduce
+  // flops_w; fold-t does not.
+  double pbat_w_vw1 =
+      rep(L"PeakB/vw1:    ",
+          opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
+              prod, idxsz, false, is_t, 1.0, 0.0, is_batch, bts, ip));
+  CHECK(pbat_w_vw1 > flops_w);
 }

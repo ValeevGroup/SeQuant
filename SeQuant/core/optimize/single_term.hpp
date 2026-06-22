@@ -505,7 +505,7 @@ EvalSequence single_term_opt(
     std::function<bool(Index const&)> const& is_batchable_index = {},
     std::function<std::size_t(Index const&)> batch_target_size = {},
     std::function<double(Index const&, std::size_t)> const& inner_pow = {},
-    bool batch_persistent_only = false) {
+    bool batch_persistent_only = false, double peak_flops_tolerance = 0.10) {
   decltype(OptRes::indices) tidxs{};
 
   // Volatility weighting is a DenseFLOPs-only notion (persistent intermediates
@@ -523,9 +523,9 @@ EvalSequence single_term_opt(
     (void)batch_persistent_only;
     // is_volatile_leaf / volatile_weight feed only the secondary flop
     // tie-break among equal-peak schedules (peak itself ignores them).
-    return run_single_term_opt(
-        PeakModel{idxsz, inner_pow, is_volatile_leaf, volatile_weight}, network,
-        tidxs);
+    return run_single_term_opt(PeakModel{idxsz, inner_pow, is_volatile_leaf,
+                                         volatile_weight, peak_flops_tolerance},
+                               network, tidxs);
   } else if constexpr (Metric == ObjectiveFunction::DensePeakSizeBatched) {
     SEQUANT_ASSERT(
         !subnet_cse &&
@@ -539,7 +539,7 @@ EvalSequence single_term_opt(
     return run_single_term_opt(
         PeakBatchedModel{idxsz, is_batchable_index, batch_target_size,
                          is_volatile_leaf, inner_pow, volatile_weight,
-                         batch_persistent_only},
+                         batch_persistent_only, peak_flops_tolerance},
         network, tidxs);
   } else if constexpr (Metric == ObjectiveFunction::DenseFLOPs) {
     if (is_volatile_leaf && volatile_weight > 1.0) {
@@ -554,6 +554,7 @@ EvalSequence single_term_opt(
     (void)is_batchable_index;
     (void)batch_target_size;
     (void)batch_persistent_only;
+    (void)peak_flops_tolerance;
     AdditiveModel model{flops_counter(idxsz, inner_pow),
                         footprint_counter(idxsz, inner_pow),
                         volatile_mask,
@@ -568,6 +569,7 @@ EvalSequence single_term_opt(
     (void)is_batchable_index;
     (void)batch_target_size;
     (void)batch_persistent_only;
+    (void)peak_flops_tolerance;
     AdditiveModel model{memsize_counter(idxsz, inner_pow),
                         footprint_counter(idxsz, inner_pow),
                         volatile_mask,
@@ -604,7 +606,7 @@ ExprPtr single_term_opt(
     std::function<bool(Index const&)> const& is_batchable_index = {},
     std::function<std::size_t(Index const&)> batch_target_size = {},
     std::function<double(Index const&, std::size_t)> const& inner_pow = {},
-    bool batch_persistent_only = false) {
+    bool batch_persistent_only = false, double peak_flops_tolerance = 0.10) {
   using ranges::views::filter;
   using ranges::views::reverse;
 
@@ -616,7 +618,8 @@ ExprPtr single_term_opt(
   auto seq = detail::single_term_opt<Metric>(
       TensorNetwork{tensors}, std::forward<IdxToSz>(idxsz), subnet_cse,
       is_volatile_leaf, volatile_weight, footprint_weight, is_batchable_index,
-      batch_target_size, inner_pow, batch_persistent_only);
+      batch_target_size, inner_pow, batch_persistent_only,
+      peak_flops_tolerance);
   auto result = container::svector<ExprPtr>{};
   for (auto i : seq)
     if (i == -1) {

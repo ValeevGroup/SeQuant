@@ -213,12 +213,40 @@ struct AdditiveModel {
   }
 };
 
+/// \brief Insert a (peak, flops) trade-off into a Pareto frontier with
+/// domination pruning: skip the new point if an existing one is no worse in
+/// both objectives; otherwise drop every existing point the new one dominates
+/// and append it. \tparam FP any struct with \c peak and \c flops members.
+template <typename FP>
+void pareto_insert(container::vector<FP>& f, FP p) {
+  for (auto const& e : f)
+    if (e.peak <= p.peak && e.flops <= p.flops) return;  // dominated -> skip
+  f.erase(std::remove_if(f.begin(), f.end(),
+                         [&](FP const& e) {
+                           return p.peak <= e.peak && p.flops <= e.flops;
+                         }),
+          f.end());
+  f.push_back(p);
+}
+
+/// \brief Index of the lexicographic (peak, then flops) optimum on a frontier.
+template <typename FP>
+int pareto_best(container::vector<FP> const& f) {
+  int best = 0;
+  for (int i = 1; i < static_cast<int>(f.size()); ++i)
+    if (f[i].peak < f[best].peak ||
+        (f[i].peak == f[best].peak && f[i].flops < f[best].flops))
+      best = i;
+  return best;
+}
+
 /// \brief Peak-memory single-term cost model (DensePeakSize objective).
 ///
 /// Implements the all-co-resident pebble-game DP, factored into the CostModel
 /// hooks driven by \ref run_single_term_opt. The recurrence minimizes peak
 /// memory: while one child evaluates, the other child's leaf inputs sit
-/// resident. No CSE; no volatile weighting.
+/// resident. A Pareto frontier of (peak, flops) per subset lets the
+/// lexicographic (peak, then flops) optimum be reached. No CSE.
 ///
 /// \tparam IdxToSz A callable mapping an Index to its extent.
 template <typename IdxToSz>
@@ -232,22 +260,40 @@ struct PeakModel {
   std::function<bool(Tensor const&)> is_volatile_leaf = {};
   /// Replay weight applied to volatile contractions in the flop tie-break.
   double volatile_weight = 1.0;
+  /// Relative peak tolerance for the final (root) selection: among frontier
+  /// points whose peak is within (1 + peak_flops_tolerance) of the minimum
+  /// peak, pick the one with the fewest flops. 0 (default) = strict peak-min
+  /// (exact-tie flop tie-break only). A small positive value trades a bounded
+  /// peak increase for a potentially large flop reduction (e.g. forming a
+  /// persistent 4-PNO integral instead of recomputing a ladder).
+  double peak_flops_tolerance = 0.0;
 
-  /// Per-subset DP cell: minimum peak to build the subtree rooted at this
-  /// subset, plus the winning bipartition and evaluation order. \c flops is the
-  /// total flop count of that subtree, used only as a secondary, tie-breaking
-  /// objective: peak alone is degenerate when the peak is set by an unavoidable
-  /// leaf/intermediate (e.g. a DF integral) that dominates many factorizations,
-  /// so among equal-peak schedules we pick the one doing the least work (which,
-  /// e.g., contracts an OSV/PNO with its amplitude early instead of carrying it
-  /// or forming an outer product).
-  struct State {
+  /// One non-dominated (peak, flops) trade-off for a subset, with the
+  /// bipartition / order / child-frontier-indices needed to reconstruct it.
+  /// \c lp_idx / \c rp_idx select which frontier point of each child was used.
+  struct FrontPoint {
     double peak = std::numeric_limits<double>::max();
+    double flops = std::numeric_limits<double>::max();
     size_t lp = 0;
     size_t rp = 0;
     bool lp_first = true;
-    double flops = std::numeric_limits<double>::max();
+    int lp_idx = -1;
+    int rp_idx = -1;
   };
+
+  /// Per-subset DP cell: the PARETO FRONTIER of non-dominated (peak, flops)
+  /// trade-offs for building the subtree rooted at this subset. A pure
+  /// peak-min DP is degenerate when the peak is set by an unavoidable
+  /// leaf/intermediate (e.g. a DF integral) that dominates many factorizations:
+  /// a single peak-min cell with a *local* flop tie-break does not give the
+  /// global flop-min among peak-optimal schedules (the max-recurrence lacks
+  /// optimal substructure for the secondary objective). Carrying the frontier
+  /// lets a parent combine a child's slightly-higher-peak/lower-flops point
+  /// when that peak is hidden under the parent's peak-determining term, so the
+  /// final lexicographic (peak, then flops) optimum is reachable -- e.g. it can
+  /// form a persistent 4-PNO integral (cheap flops) instead of recomputing the
+  /// whole ladder, when both are peak-equal.
+  using State = container::vector<FrontPoint>;
 
   /// Precomputed tables: S[n] = footprint of subset n's result tensor,
   /// L[n] = sum of leaf (singleton) sizes in subset n, idx[n] = subset n's
@@ -291,39 +337,36 @@ struct PeakModel {
   }
 
   State leaf(Context const& ctx, size_t n) const {
-    return State{ctx.S[n], 0, 0, true, 0.0};  // a leaf load does no flops
+    return State{
+        FrontPoint{ctx.S[n], 0.0, 0, 0, true, -1, -1}};  // load: 0 flops
   }
 
   State init(Context const& /*ctx*/, size_t /*n*/) const {
-    return State{std::numeric_limits<double>::max(), 0, 0, true,
-                 std::numeric_limits<double>::max()};
+    return State{};  // empty frontier; relax fills it
   }
 
   void relax(Context& ctx, size_t n, size_t lp, size_t rp, State const& lp_st,
              State const& rp_st, State& acc) const {
     double const both = ctx.S[lp] + ctx.S[rp] + ctx.S[lp | rp];
-    double const lp_first_cand =
-        std::max({ctx.L[rp] + lp_st.peak, ctx.S[lp] + rp_st.peak, both});
-    double const rp_first_cand =
-        std::max({ctx.L[lp] + rp_st.peak, ctx.S[rp] + lp_st.peak, both});
-    double const cand = std::min(lp_first_cand, rp_first_cand);
-    // total flops of building subset n via this bipartition
-    // (order-independent): children's flops plus this single contraction's
-    // flops. A volatile contraction (subset n contains a volatile leaf) is
-    // replayed every iteration, so its flops are scaled by volatile_weight --
-    // matching the DenseFLOPs objective's convention.
+    // A volatile contraction (subset n contains a volatile leaf) is replayed
+    // every iteration, so its flops are scaled by volatile_weight -- matching
+    // the DenseFLOPs convention. The contraction flops are order-independent.
     double const w = (ctx.volatile_mask & n) ? volatile_weight : 1.0;
-    double const cand_flops =
-        lp_st.flops + rp_st.flops +
+    double const cflops =
         w * ctx.flops_of(ctx.idx[lp], ctx.idx[rp], ctx.idx[n]);
-    // lexicographic: minimize peak, then (among equal-peak schedules) flops.
-    if (cand < acc.peak || (cand == acc.peak && cand_flops < acc.flops)) {
-      acc.peak = cand;
-      acc.lp = lp;
-      acc.rp = rp;
-      acc.lp_first = (lp_first_cand <= rp_first_cand);
-      acc.flops = cand_flops;
-    }
+    // Cross every (peak,flops) trade-off of the two children.
+    for (int li = 0; li < static_cast<int>(lp_st.size()); ++li)
+      for (int ri = 0; ri < static_cast<int>(rp_st.size()); ++ri) {
+        double const pL = lp_st[li].peak, pR = rp_st[ri].peak;
+        double const lp_first_cand =
+            std::max({ctx.L[rp] + pL, ctx.S[lp] + pR, both});
+        double const rp_first_cand =
+            std::max({ctx.L[lp] + pR, ctx.S[rp] + pL, both});
+        pareto_insert(
+            acc, FrontPoint{std::min(lp_first_cand, rp_first_cand),
+                            lp_st[li].flops + rp_st[ri].flops + cflops, lp, rp,
+                            lp_first_cand <= rp_first_cand, li, ri});
+      }
   }
 
   void finalize(Context& /*ctx*/, size_t /*n*/,
@@ -331,22 +374,38 @@ struct PeakModel {
 
   EvalSequence reconstruct(Context const& /*ctx*/,
                            container::vector<State> const& st) const {
-    using ranges::views::concat;
-    // Bottom-up emit: a subset's sequence is (first-child seq)(second-child
-    // seq) -1, where first/second are chosen by lp_first (the lower-peak child
-    // is emitted last, i.e. evaluated second / built first in the sequence).
-    container::vector<EvalSequence> seq(st.size());
-    for (size_t n = 0; n < st.size(); ++n) {
-      if (std::popcount(n) == 1) {
-        seq[n] = EvalSequence{static_cast<int>(std::countr_zero(n))};
-      } else if (std::popcount(n) >= 2) {
-        auto const& a = st[n].lp_first ? seq[st[n].lp] : seq[st[n].rp];
-        auto const& b = st[n].lp_first ? seq[st[n].rp] : seq[st[n].lp];
-        seq[n] = concat(a, b) | ranges::to<EvalSequence>;
-        seq[n].push_back(-1);
-      }
-    }
-    return seq.back();
+    size_t const full = st.size() - 1;
+    // ε-tolerant selection: among frontier points within
+    // (1 + peak_flops_tolerance) of the minimum peak, take the fewest flops
+    // (ties broken by lower peak). tolerance == 0 recovers strict peak-min.
+    auto const& root = st[full];
+    double minpeak = std::numeric_limits<double>::max();
+    for (auto const& fp : root) minpeak = std::min(minpeak, fp.peak);
+    double const thresh = minpeak * (1.0 + peak_flops_tolerance);
+    int best = -1;
+    for (int i = 0; i < static_cast<int>(root.size()); ++i)
+      if (root[i].peak <= thresh &&
+          (best < 0 || root[i].flops < root[best].flops ||
+           (root[i].flops == root[best].flops &&
+            root[i].peak < root[best].peak)))
+        best = i;
+    // Follow back-pointers (which child + which child frontier point).
+    std::function<EvalSequence(size_t, int)> build =
+        [&](size_t n, int idx) -> EvalSequence {
+      if (std::popcount(n) == 1)
+        return EvalSequence{static_cast<int>(std::countr_zero(n))};
+      FrontPoint const& fp = st[n][idx];
+      size_t const fs = fp.lp_first ? fp.lp : fp.rp;
+      int const fi = fp.lp_first ? fp.lp_idx : fp.rp_idx;
+      size_t const ss = fp.lp_first ? fp.rp : fp.lp;
+      int const si = fp.lp_first ? fp.rp_idx : fp.lp_idx;
+      EvalSequence s = build(fs, fi);
+      EvalSequence b = build(ss, si);
+      s.insert(s.end(), b.begin(), b.end());
+      s.push_back(-1);
+      return s;
+    };
+    return build(full, best);
   }
 };
 
@@ -375,10 +434,29 @@ struct PeakBatchedModel {
   /// volatile leaf). Default false = batch across the board. See
   /// BatchPolicy::persistent_only.
   bool batch_persistent_only = false;
+  /// Relative peak tolerance for the final (root) selection; see
+  /// PeakModel::peak_flops_tolerance. 0 (default) = strict peak-min.
+  double peak_flops_tolerance = 0.0;
 
-  /// Per-subset DP cell: the full \c [B]-vector (size \c nB = 2^m) of per-
-  /// sliced-set \ref BatchedRes back-pointers.
-  using State = container::vector<BatchedRes>;
+  /// One non-dominated (peak, flops) trade-off for a (subset, sliced-set \c B)
+  /// cell. \c aprime is the sliced-set chosen at this node; the children are
+  /// read at context \c C = B | aprime, at frontier indices \c lp_idx /
+  /// \c rp_idx. See \ref PeakModel::FrontPoint for why a frontier (not a single
+  /// peak-min cell) is needed.
+  struct BFrontPoint {
+    double peak = std::numeric_limits<double>::max();
+    double flops = std::numeric_limits<double>::max();
+    size_t lp = 0;
+    size_t rp = 0;
+    bool lp_first = true;
+    std::size_t aprime = 0;
+    int lp_idx = -1;
+    int rp_idx = -1;
+  };
+
+  /// Per-subset DP cell: a \c [B]-vector (size \c nB = 2^m) of Pareto
+  /// frontiers, one non-dominated (peak, flops) set per sliced-set context B.
+  using State = container::vector<container::vector<BFrontPoint>>;
 
   /// Precomputed tables and per-(subset, sliced-set) lookup parameters built
   /// once by build_context.
@@ -448,23 +526,23 @@ struct PeakBatchedModel {
 
   State leaf(Context const& ctx, size_t n) const {
     State s(ctx.nB);
-    for (std::size_t B = 0; B < ctx.nB; ++B) {
-      s[B].peak = ctx.sz(n, B);
-      s[B].flops = 0.0;  // a leaf load does no flops
-    }
+    for (std::size_t B = 0; B < ctx.nB; ++B)
+      s[B].push_back(BFrontPoint{ctx.sz(n, B), 0.0, 0, 0, true, 0, -1, -1});
     return s;
   }
 
   State init(Context const& ctx, size_t /*n*/) const {
-    return State(ctx.nB);  // BatchedRes defaults to peak == max
+    return State(ctx.nB);  // nB empty frontiers; relax fills them
   }
 
   void relax(Context& ctx, size_t n, size_t lp, size_t rp, State const& lp_st,
              State const& rp_st, State& acc) const {
+    // Contraction flops (order- and slice-independent), scaled by
+    // volatile_weight when subset n is volatile (replayed every iteration).
+    double const w = (ctx.volatile_mask & n) ? volatile_weight : 1.0;
+    double const cflops =
+        w * ctx.flops_of(ctx.idx[lp], ctx.idx[rp], ctx.idx[n]);
     for (std::size_t B = 0; B < ctx.nB; ++B) {
-      auto& curr = acc[B];
-      // Batchable indices contracted at THIS node: open at children but not at
-      // parent, gated by persistence.
       // Batchable indices contracted at THIS node: open at children but not at
       // the parent. By default batching is applied ACROSS THE BOARD: slicing
       // the batch axis shrinks any intermediate carrying it regardless of
@@ -480,32 +558,21 @@ struct PeakBatchedModel {
       std::size_t Ap = Acand;
       while (true) {
         std::size_t const C = B | Ap;
-        double const pl = lp_st[C].peak;
-        double const prr = rp_st[C].peak;
-        double const both = ctx.sz(lp, C) + ctx.sz(rp, C) + ctx.sz(n, B);
-        double const lpf =
-            std::max({ctx.Lof(rp, C) + pl, ctx.sz(lp, C) + prr, both});
-        double const rpf =
-            std::max({ctx.Lof(lp, C) + prr, ctx.sz(rp, C) + pl, both});
-        double const cand = std::min(lpf, rpf);
-        // total flops via this bipartition+slice: children's flops (at the
-        // child sliced-set C) plus this contraction's (unbatched) flops, scaled
-        // by volatile_weight when subset n is volatile (replayed every
-        // iteration) -- matching the DenseFLOPs objective's convention.
-        double const w = (ctx.volatile_mask & n) ? volatile_weight : 1.0;
-        double const cand_flops =
-            lp_st[C].flops + rp_st[C].flops +
-            w * ctx.flops_of(ctx.idx[lp], ctx.idx[rp], ctx.idx[n]);
-        // lexicographic: minimize peak, then (among equal-peak) flops.
-        if (cand < curr.peak ||
-            (cand == curr.peak && cand_flops < curr.flops)) {
-          curr.peak = cand;
-          curr.lp = lp;
-          curr.rp = rp;
-          curr.lp_first = (lpf <= rpf);
-          curr.aprime = Ap;
-          curr.flops = cand_flops;
-        }
+        double const szlp = ctx.sz(lp, C), szrp = ctx.sz(rp, C),
+                     szn = ctx.sz(n, B);
+        double const both = szlp + szrp + szn;
+        double const Lrp = ctx.Lof(rp, C), Llp = ctx.Lof(lp, C);
+        // Cross every (peak,flops) trade-off of the two children at context C.
+        for (int li = 0; li < static_cast<int>(lp_st[C].size()); ++li)
+          for (int ri = 0; ri < static_cast<int>(rp_st[C].size()); ++ri) {
+            double const pl = lp_st[C][li].peak, prr = rp_st[C][ri].peak;
+            double const lpf = std::max({Lrp + pl, szlp + prr, both});
+            double const rpf = std::max({Llp + prr, szrp + pl, both});
+            pareto_insert(acc[B], BFrontPoint{std::min(lpf, rpf),
+                                              lp_st[C][li].flops +
+                                                  rp_st[C][ri].flops + cflops,
+                                              lp, rp, lpf <= rpf, Ap, li, ri});
+          }
         if (Ap == 0) break;
         Ap = (Ap - 1) & Acand;
       }
@@ -517,28 +584,40 @@ struct PeakBatchedModel {
 
   EvalSequence reconstruct(Context const& ctx,
                            container::vector<State> const& st) const {
-    using ranges::views::concat;
-    // Recursive back-pointer walk from the root subset at the empty ancestor
-    // context (root, B=0). At each node (n, B) read the winning aprime, form
-    // the child context C = B | aprime, and recurse into the children at C in
-    // lp_first order (the lower-peak child is emitted last). A singleton emits
-    // its tensor index; an internal node emits concat(first, second), -1. Each
-    // st[child] is a [B]-vector, so children are read at index C.
-    auto build = [&](auto&& self, std::size_t n,
-                     std::size_t B) -> EvalSequence {
+    std::size_t const root = (std::size_t{1} << ctx.nt) - 1;
+    // ε-tolerant selection on the root's B=0 frontier: among points within
+    // (1 + peak_flops_tolerance) of the minimum peak, fewest flops (ties broken
+    // by lower peak). tolerance == 0 recovers strict peak-min.
+    auto const& rootf = st[root][0];
+    double minpeak = std::numeric_limits<double>::max();
+    for (auto const& fp : rootf) minpeak = std::min(minpeak, fp.peak);
+    double const thresh = minpeak * (1.0 + peak_flops_tolerance);
+    int best = -1;
+    for (int i = 0; i < static_cast<int>(rootf.size()); ++i)
+      if (rootf[i].peak <= thresh &&
+          (best < 0 || rootf[i].flops < rootf[best].flops ||
+           (rootf[i].flops == rootf[best].flops &&
+            rootf[i].peak < rootf[best].peak)))
+        best = i;
+    // Recursive back-pointer walk: at (n, B, idx) read the chosen front point,
+    // form child context C = B | aprime, recurse in lp_first order.
+    std::function<EvalSequence(std::size_t, std::size_t, int)> build =
+        [&](std::size_t n, std::size_t B, int idx) -> EvalSequence {
       if (std::popcount(n) == 1)
         return EvalSequence{static_cast<int>(std::countr_zero(n))};
-      auto const& r = st[n][B];
+      BFrontPoint const& r = st[n][B][idx];
       std::size_t const C = B | r.aprime;
-      auto first = self(self, r.lp_first ? r.lp : r.rp, C);
-      auto second = self(self, r.lp_first ? r.rp : r.lp, C);
-      auto seq = concat(first, second) | ranges::to<EvalSequence>;
-      seq.push_back(-1);
-      return seq;
+      std::size_t const fs = r.lp_first ? r.lp : r.rp;
+      int const fi = r.lp_first ? r.lp_idx : r.rp_idx;
+      std::size_t const ss = r.lp_first ? r.rp : r.lp;
+      int const si = r.lp_first ? r.rp_idx : r.lp_idx;
+      EvalSequence s = build(fs, C, fi);
+      EvalSequence b = build(ss, C, si);
+      s.insert(s.end(), b.begin(), b.end());
+      s.push_back(-1);
+      return s;
     };
-
-    std::size_t const root = (std::size_t{1} << ctx.nt) - 1;
-    return build(build, root, 0);
+    return build(root, 0, best);
   }
 };
 
@@ -552,7 +631,11 @@ double peak_cost(TensorNetwork const& network, TIdxs const& tidxs,
   PeakModel<std::decay_t<IdxToSz>> model{std::forward<IdxToSz>(idxsz)};
   auto ctx = model.build_context(network, tidxs);
   auto st = solve_single_term(model, network, tidxs, ctx);
-  return st.back().peak;  // root subset == full set == last element
+  // root subset == full set == last element; its frontier's smallest peak is
+  // the achieved minimum peak memory.
+  double mn = std::numeric_limits<double>::max();
+  for (auto const& fp : st.back()) mn = std::min(mn, fp.peak);
+  return mn;
 }
 
 /// \brief Achieved minimum batched peak memory: the peak[root][B=0] objective
@@ -569,7 +652,10 @@ double peak_cost_batched(
                                                 is_volatile_leaf};
   auto ctx = model.build_context(network, tidxs);
   auto st = solve_single_term(model, network, tidxs, ctx);
-  return st.back()[0].peak;  // root subset's B=0 cell
+  // root subset's B=0 frontier; its smallest peak is the achieved minimum.
+  double mn = std::numeric_limits<double>::max();
+  for (auto const& fp : st.back()[0]) mn = std::min(mn, fp.peak);
+  return mn;
 }
 
 /// \brief Independent memory-simulation recomputation of the chosen batched
@@ -604,14 +690,16 @@ double reconstructed_batched_peak(
   // is the back-pointer walk itself (which children, order, context). The
   // Task-2/Task-3 batched oracle is the independent guard on the staged-peak
   // algebra.
-  auto sim = [&](auto&& self, std::size_t n, std::size_t B) -> double {
+  auto sim = [&](auto&& self, std::size_t n, std::size_t B, int idx) -> double {
     if (std::popcount(n) == 1) return ctx.sz(n, B);
-    auto const& r = st[n][B];
+    auto const& r = st[n][B][idx];
     std::size_t const C = B | r.aprime;
     std::size_t const f = r.lp_first ? r.lp : r.rp;  // evaluated first
+    int const fi = r.lp_first ? r.lp_idx : r.rp_idx;
     std::size_t const s = r.lp_first ? r.rp : r.lp;  // evaluated second
-    double const peak_f = self(self, f, C);
-    double const peak_s = self(self, s, C);
+    int const si = r.lp_first ? r.rp_idx : r.lp_idx;
+    double const peak_f = self(self, f, C, fi);
+    double const peak_s = self(self, s, C, si);
     // While the first child evaluates, the second child's leaf inputs sit
     // resident (Lof(s, C)). While the second child evaluates, the first
     // child's result sits resident (sz(f, C)). When both results exist, the
@@ -623,7 +711,7 @@ double reconstructed_batched_peak(
   };
 
   std::size_t const root = (std::size_t{1} << nt) - 1;
-  return sim(sim, root, 0);
+  return sim(sim, root, 0, pareto_best(st[root][0]));
 }
 
 /// \brief Diagnostic (env-gated): per-term predicted-vs-unsliced peak report
@@ -650,7 +738,8 @@ void peak_batched_debug(
   // Unsliced (full-extent) footprint of every subset.
   auto Sun = subset_footprints(network, tidxs, idxsz);
   std::size_t const root = (std::size_t{1} << nt) - 1;
-  double const predicted = st[root][0].peak;
+  int const root_best = pareto_best(st[root][0]);
+  double const predicted = st[root][0][root_best].peak;
   double max_node_unsliced = 0.0, max_node_sliced = 0.0;
   std::size_t worst = 0;
   // also track the chosen-tree node with the MOST inner (CSV/PNO) composites --
@@ -663,9 +752,9 @@ void peak_batched_debug(
   };
   // Walk the chosen back-pointer tree (root, B=0), recording per-node sliced
   // (ctx.sz at its evaluation context) and unsliced footprints.
-  auto walk = [&](auto&& self, std::size_t n, std::size_t B) -> void {
+  auto walk = [&](auto&& self, std::size_t n, std::size_t B, int idx) -> void {
     if (std::popcount(n) < 2) return;
-    auto const& r = st[n][B];
+    auto const& r = st[n][B][idx];
     std::size_t const C = B | r.aprime;
     double const un = Sun[n];
     double const sl = ctx.sz(n, B);
@@ -679,10 +768,10 @@ void peak_batched_debug(
       mc_node = n;
     }
     max_node_sliced = std::max(max_node_sliced, sl);
-    self(self, r.lp_first ? r.lp : r.rp, C);
-    self(self, r.lp_first ? r.rp : r.lp, C);
+    self(self, r.lp_first ? r.lp : r.rp, C, r.lp_first ? r.lp_idx : r.rp_idx);
+    self(self, r.lp_first ? r.rp : r.lp, C, r.lp_first ? r.rp_idx : r.lp_idx);
   };
-  walk(walk, root, 0);
+  walk(walk, root, 0, root_best);
   // footprints are in ELEMENTS (subset_footprints multiplies extents, no
   // sizeof)
   auto Me = [](double e) { return e / 1.0e6; };  // mega-elements

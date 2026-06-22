@@ -51,14 +51,16 @@ ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
         prod, opts.idx_to_extent, subnet_cse,
         opts.batch_policy.is_volatile_leaf, opts.volatile_weight,
         opts.footprint_weight, opts.batch_policy.is_batchable_index,
-        opts.batch_policy.batch_target_size, opts.inner_pow);
+        opts.batch_policy.batch_target_size, opts.inner_pow,
+        /*batch_persistent_only=*/false, opts.peak_flops_tolerance);
   SEQUANT_ASSERT(opts.objective_function ==
                  ObjectiveFunction::DensePeakSizeBatched);
   return opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
       prod, opts.idx_to_extent, subnet_cse, opts.batch_policy.is_volatile_leaf,
       opts.volatile_weight, opts.footprint_weight,
       opts.batch_policy.is_batchable_index, opts.batch_policy.batch_target_size,
-      opts.inner_pow, opts.batch_policy.persistent_only);
+      opts.inner_pow, opts.batch_policy.persistent_only,
+      opts.peak_flops_tolerance);
 }
 
 /// Deliberately non-identifier label prefix used to stand in for non-Tensor,
