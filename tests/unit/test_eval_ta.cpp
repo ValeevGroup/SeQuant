@@ -1730,10 +1730,10 @@ TEST_CASE("eval_batched_custom_evaluator persistence gate", "[eval]") {
     return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
   };
 
-  // (1) Gate ON: the subtree contains a volatile "t" leaf, so batching is
-  // DECLINED -- the spy scope-guard (invoked only once a node passes every gate
-  // and yields >1 batch) is never called, yet the standard scheme still gives
-  // the correct result.
+  // (1) Gate ON (persistent_only=true): the subtree contains a volatile "t"
+  // leaf, so batching is DECLINED -- the spy scope-guard (invoked only once a
+  // node passes every gate and yields >1 batch) is never called, yet the
+  // standard scheme still gives the correct result.
   {
     bool batched = false;
     auto spy = [&batched](std::size_t) {
@@ -1744,9 +1744,10 @@ TEST_CASE("eval_batched_custom_evaluator persistence gate", "[eval]") {
     cache.set_custom_evaluator(make_batched_custom_evaluator(
         yield_,
         [](sequant::Index const&) -> std::size_t { return std::size_t{4}; },
-        sequant::accept_any_index{}, spy, is_volatile_t));
+        sequant::accept_any_index{}, spy, is_volatile_t,
+        /*persistent_only=*/true));
     auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
-    REQUIRE_FALSE(batched);  // volatile subtree -> not batched
+    REQUIRE_FALSE(batched);  // gated volatile subtree -> not batched
     REQUIRE(equal_tarrays<Loose>(res, ref));
   }
 
@@ -2050,11 +2051,15 @@ TEST_CASE("eval_batched_custom_evaluator group replay", "[eval]") {
     if (n->is_tensor()) ++n_yield[std::wstring(n->as_tensor().label())];
     return yield_(n);
   };
+  // persistent_only=true: gate volatile term heads so the group replay streams
+  // only the persistent finals F1/F2 (the across-the-board default would also
+  // batch volatile triggers, changing the yield counts asserted below).
   cache.set_custom_evaluator(make_batched_custom_evaluator(
       counting_yield,
       [](sequant::Index const&) -> std::size_t { return std::size_t{4}; },
       sequant::accept_any_index{}, sequant::make_no_scope_guard{},
-      is_volatile_t));
+      is_volatile_t,
+      /*persistent_only=*/true));
 
   // evaluating term 1 triggers at F1 and must prebuild F2 in the same passes
   auto const res1 = evaluate(n1, tgt1, counting_yield, cache)->get<TArrayD>();
@@ -2179,17 +2184,20 @@ TEST_CASE("make_evaluator BatchPolicy adapter", "[eval]") {
   // Reference (no batching).
   auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
 
-  // Build a BatchPolicy: batch over any index at size 4; "t" is volatile.
+  // Build a BatchPolicy: batch over any index at size 4; "t" is volatile;
+  // persistent_only=true turns the volatility gate ON (default is across the
+  // board).
   sequant::BatchPolicy policy{
       .is_batchable_index = [](sequant::Index const&) { return true; },
       .batch_target_size = [](sequant::Index const&) -> std::size_t {
         return 4;
       },
       .is_volatile_leaf =
-          [](sequant::Tensor const& t) { return t.label() == L"t"; }};
+          [](sequant::Tensor const& t) { return t.label() == L"t"; },
+      .persistent_only = true};
 
-  // (1) make_evaluator with volatile "t" gate: batching should be DECLINED
-  // (same as the persistence gate test above for
+  // (1) make_evaluator with volatile "t" gate (persistent_only=true): batching
+  // should be DECLINED (same as the persistence gate test above for
   // make_batched_custom_evaluator).
   {
     bool batched = false;
