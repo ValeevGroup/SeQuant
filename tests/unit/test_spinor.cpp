@@ -348,4 +348,37 @@ TEST_CASE("kramers_trace", "[spinor]") {
     REQUIRE(m12->conj);
     REQUIRE(m12->sign == 1);
   }
+
+  SECTION("kramers_external_blocks: symmetric (raw g) generators") {
+    using Perm = container::svector<std::size_t>;
+    // A raw, non-antisymmetrized integral g^{ab}_{ij} folds under particle
+    // interchange sigma (swap BOTH pairs, sign +1) and T -> 6 blocks (vs the
+    // antisymmetrized ḡ[as]'s 5). sigma is passed as a symm_perm (sign +1).
+    const Perm SIGMA = {1, 0, 3, 2};  // swap virt pair AND occ pair
+    auto blocks =
+        kramers_external_blocks(4, /*antisym=*/{}, /*use_T=*/true, {SIGMA});
+    REQUIRE(blocks.size() == 6);
+
+    auto apply_perm = [](const Perm& p, std::uint64_t m) {
+      std::uint64_t out = 0;
+      for (std::size_t k = 0; k < p.size(); ++k)
+        if ((m >> k) & 1u) out |= (std::uint64_t{1} << p[k]);
+      return out;
+    };
+    const std::uint64_t full = 15;
+
+    std::size_t total = 0;
+    for (const auto& b : blocks) {
+      total += b.members.size();
+      for (const auto& mem : b.members) {
+        // same perm/conj <-> config invariant as the antisymm case.
+        const auto pc = apply_perm(mem.perm, b.canonical);
+        REQUIRE(mem.config == (mem.conj ? ((~pc) & full) : pc));
+        // a pure-sigma member (no T, i.e. conj=false, non-identity perm) must
+        // carry sign +1 (sigma is a symmetry, not an antisymmetry).
+        if (!mem.conj && mem.config != b.canonical) REQUIRE(mem.sign == 1);
+      }
+    }
+    REQUIRE(total == 16);
+  }
 }

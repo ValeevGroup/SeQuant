@@ -151,7 +151,8 @@ container::svector<container::svector<std::uint64_t>> kramers_config_orbits(
 container::svector<KramersBlock> kramers_external_blocks(
     std::size_t n,
     const container::svector<container::svector<std::size_t>>& antisym_perms,
-    bool use_T) {
+    bool use_T,
+    const container::svector<container::svector<std::size_t>>& symm_perms) {
   SEQUANT_ASSERT(n <= 62);
   const std::uint64_t full_mask = (std::uint64_t{1} << n) - 1;
 
@@ -190,11 +191,21 @@ container::svector<KramersBlock> kramers_external_blocks(
       for (const std::uint64_t x : frontier) {
         const Xform tx =
             xform.at(x);  // copy: emplace below may invalidate refs
-        // external transpositions: sign -1, no conj, permutation = perm
+        // antisymmetric generators (residual external antisymmetry): sign -1,
+        // no conj, permutation = perm
         for (const auto& perm : antisym_perms) {
           const std::uint64_t y = apply_bit_perm(perm, x, n);
           if (xform.find(y) == xform.end()) {
             xform.emplace(y, compose(tx, -1, false, perm));
+            next.push_back(y);
+          }
+        }
+        // symmetric generators (e.g. particle interchange sigma on a raw,
+        // non-antisymmetrized integral): sign +1, no conj, permutation = perm
+        for (const auto& perm : symm_perms) {
+          const std::uint64_t y = apply_bit_perm(perm, x, n);
+          if (xform.find(y) == xform.end()) {
+            xform.emplace(y, compose(tx, +1, false, perm));
             next.push_back(y);
           }
         }

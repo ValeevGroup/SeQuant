@@ -229,21 +229,26 @@ struct KramersBlock {
 /// @brief External Kramers blocks with per-member reconstruction transforms.
 /// @details Like kramers_config_orbits, but each generator carries a transform
 /// so that every non-canonical member records how its tensor is obtained from
-/// the canonical's: the external transpositions @p antisym_perms each act with
-/// sign -1 (residual antisymmetry), and (if @p use_T) global time reversal T
-/// acts as complex conjugation with sign (-1)^(#down) and the identity slot
-/// permutation. This is the residual external reconstruction (compute the
-/// canonical block, fill the rest by sign/conj/perm) — the eval-time half of
-/// the external fold.
+/// the canonical's: the transposition generators @p antisym_perms each act with
+/// sign -1 (residual antisymmetry), the @p symm_perms each act with sign +1
+/// (e.g. particle interchange sigma on a raw, non-antisymmetrized integral),
+/// and (if @p use_T) global time reversal T acts as complex conjugation with
+/// sign (-1)^(#down) and the identity slot permutation. This is the eval-time
+/// external reconstruction (compute the canonical block, fill the rest by
+/// sign/conj/perm): use {antisym_perms = external transpositions, T} for the
+/// antisymmetric residual (doubles -> 5 blocks), or {symm_perms = sigma, T} for
+/// a raw g leaf (doubles -> 6 blocks).
 /// @param n number of external slots (bits), <= 62
-/// @param antisym_perms external transposition generators (each sign -1)
+/// @param antisym_perms transposition generators acting with sign -1
 /// @param use_T include global time reversal
+/// @param symm_perms permutation generators acting with sign +1 (default none)
 /// @return one KramersBlock per symmetry-unique external representative
 // clang-format on
 container::svector<KramersBlock> kramers_external_blocks(
     std::size_t n,
     const container::svector<container::svector<std::size_t>>& antisym_perms,
-    bool use_T);
+    bool use_T,
+    const container::svector<container::svector<std::size_t>>& symm_perms = {});
 
 // clang-format off
 /// @brief CC residual Kramers trace — external fold (stages 1-2).
