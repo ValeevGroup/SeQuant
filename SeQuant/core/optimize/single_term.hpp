@@ -472,19 +472,16 @@ namespace detail {
 /// \param idxsz An invocable on Index, that maps Index to its dimension.
 /// \param subnet_cse Whether to recognize equivalent subnetworks to try
 ///        minimizing the ops counts.
-/// \param is_volatile_leaf Predicate marking a leaf tensor as volatile (its
-///        value changes on every replay); empty disables weighting. The
-///        predicate MUST be invariant under slot/index canonicalization — key
-///        on tensor label or structure, NOT on anonymous index identity — so
-///        that two subnetworks deemed equivalent by the subnet-CSE
-///        canonicalization also agree on volatility (the CSE path stores one
-///        cost per canonical subnet). ObjectiveFunction::DenseFLOPs only.
-/// \param volatile_weight Multiplier applied to the cost of each
-///        volatile-result contraction (volatile contractions are re-evaluated
-///        on every replay); persistent contractions are counted once. 1
-///        (default) disables weighting.
-/// \param footprint_weight Per-intermediate storage-footprint penalty added to
-///        the cost (ObjectiveFunction::DenseFLOPs only); 0 (default) disables.
+/// \param cost Cost-model knobs (\ref CostParams): is_volatile_leaf,
+///        volatile_weight, footprint_weight, peak_flops_tolerance, roofline.
+///        is_volatile_leaf marks a leaf tensor as volatile (its value changes
+///        on every replay); empty disables weighting. The predicate MUST be
+///        invariant under slot/index canonicalization — key on tensor label or
+///        structure, NOT on anonymous index identity — so that two subnetworks
+///        deemed equivalent by the subnet-CSE canonicalization also agree on
+///        volatility (the CSE path stores one cost per canonical subnet).
+///        volatile_weight/footprint_weight apply to DenseFLOPs only;
+///        peak_flops_tolerance/roofline apply to the peak objectives only.
 /// \param is_batchable_index Predicate marking an index as batchable (sliced);
 ///        ObjectiveFunction::DensePeakSizeBatched only.
 /// \param batch_target_size Per-index slice size for batchable indices;
@@ -493,6 +490,9 @@ namespace detail {
 ///        cost counter; see \ref inner_aware_volume. Empty (default) sizes
 ///        composites by \p idxsz (k=1), which under-counts multi-composite
 ///        tensors.
+/// \param batch_persistent_only When true, only persistent (volatile-leaf-free)
+///        subnetworks are batched; ObjectiveFunction::DensePeakSizeBatched
+///        only.
 /// \return Optimal evaluation sequence under the chosen cost metric. If there
 ///         are equivalent optimal sequences then the result is the one that
 ///         keeps the order of tensors in the network as original as possible.
@@ -500,14 +500,25 @@ namespace detail {
 template <ObjectiveFunction Metric, has_index_extent IdxToSz>
 EvalSequence single_term_opt(
     TensorNetwork const& network, IdxToSz&& idxsz, bool subnet_cse,
-    std::function<bool(Tensor const&)> const& is_volatile_leaf = {},
-    double volatile_weight = 1.0, double footprint_weight = 0.0,
+    CostParams const& cost = {},
     std::function<bool(Index const&)> const& is_batchable_index = {},
     std::function<std::size_t(Index const&)> batch_target_size = {},
     std::function<double(Index const&, std::size_t)> const& inner_pow = {},
-    bool batch_persistent_only = false, double peak_flops_tolerance = 0.10,
-    RooflineParams const& roofline = {}) {
+    bool batch_persistent_only = false) {
   decltype(OptRes::indices) tidxs{};
+  // Unpack the cost knobs into the names the recurrence arms below use, so the
+  // arms are unchanged. (void)-cast all, since each if-constexpr arm uses only
+  // a subset.
+  auto const& is_volatile_leaf = cost.is_volatile_leaf;
+  double const volatile_weight = cost.volatile_weight;
+  double const footprint_weight = cost.footprint_weight;
+  double const peak_flops_tolerance = cost.peak_flops_tolerance;
+  RooflineParams const& roofline = cost.roofline;
+  (void)is_volatile_leaf;
+  (void)volatile_weight;
+  (void)footprint_weight;
+  (void)peak_flops_tolerance;
+  (void)roofline;
 
   // Volatility weighting is a DenseFLOPs-only notion (persistent intermediates
   // cost MORE memory, not less, so it is wrong-signed for DenseSize). Build the
@@ -598,22 +609,20 @@ EvalSequence single_term_opt(
 /// \return Parenthesized product expression.
 ///
 /// @note @c prod is assumed to consist of only Tensor expressions
-/// @note The remaining parameters (\c subnet_cse, \c is_volatile_leaf,
-///       \c volatile_weight, \c footprint_weight, \c is_batchable_index,
-///       \c batch_target_size, \c inner_pow) are forwarded verbatim to the
-///       detail \ref single_term_opt overload; see it for their semantics.
+/// @note The remaining parameters (\c subnet_cse, \c cost,
+///       \c is_batchable_index, \c batch_target_size, \c inner_pow,
+///       \c batch_persistent_only) are forwarded verbatim to the detail
+///       \ref single_term_opt overload; see it for their semantics.
 ///
 template <ObjectiveFunction Metric = ObjectiveFunction::DenseFLOPs,
           has_index_extent IdxToSz>
 ExprPtr single_term_opt(
     Product const& prod, IdxToSz&& idxsz, bool subnet_cse = false,
-    std::function<bool(Tensor const&)> const& is_volatile_leaf = {},
-    double volatile_weight = 1.0, double footprint_weight = 0.0,
+    CostParams const& cost = {},
     std::function<bool(Index const&)> const& is_batchable_index = {},
     std::function<std::size_t(Index const&)> batch_target_size = {},
     std::function<double(Index const&, std::size_t)> const& inner_pow = {},
-    bool batch_persistent_only = false, double peak_flops_tolerance = 0.10,
-    RooflineParams const& roofline = {}) {
+    bool batch_persistent_only = false) {
   using ranges::views::filter;
   using ranges::views::reverse;
 
@@ -623,10 +632,8 @@ ExprPtr single_term_opt(
   auto const tensors =
       prod | filter(&ExprPtr::template is<Tensor>) | ranges::to_vector;
   auto seq = detail::single_term_opt<Metric>(
-      TensorNetwork{tensors}, std::forward<IdxToSz>(idxsz), subnet_cse,
-      is_volatile_leaf, volatile_weight, footprint_weight, is_batchable_index,
-      batch_target_size, inner_pow, batch_persistent_only, peak_flops_tolerance,
-      roofline);
+      TensorNetwork{tensors}, std::forward<IdxToSz>(idxsz), subnet_cse, cost,
+      is_batchable_index, batch_target_size, inner_pow, batch_persistent_only);
   auto result = container::svector<ExprPtr>{};
   for (auto i : seq)
     if (i == -1) {

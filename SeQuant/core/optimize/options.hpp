@@ -75,6 +75,30 @@ struct RooflineParams {
   double block_prefactor = 1.0;
 };
 
+/// Cost-model tuning knobs consumed by \ref opt::single_term_opt and forwarded
+/// to the objective models. Bundled so callers (and \ref sequant::optimize via
+/// \ref OptimizeOptions) pass one object rather than five positional arguments.
+/// All have neutral defaults: an empty \c is_volatile_leaf disables replay
+/// weighting, and \c roofline.machine_balance == 0 keeps the pure-flop
+/// tie-break.
+struct CostParams {
+  /// Marks a LEAF tensor as volatile (amplitude-dependent), so the contraction
+  /// forming any subset that contains it is replayed every iteration. Empty =>
+  /// nothing volatile (replay weighting off).
+  std::function<bool(Tensor const&)> is_volatile_leaf = {};
+  /// Replay weight on volatile contractions (conceptually the replay count).
+  double volatile_weight = 1.0;
+  /// Per-intermediate storage-footprint penalty (DenseFLOPs/DenseSize only; see
+  /// OptimizeOptions::footprint_weight). Not used by the peak objectives.
+  double footprint_weight = 0.0;
+  /// Relative peak tolerance for the peak objectives' final selection; see
+  /// OptimizeOptions::peak_flops_tolerance.
+  double peak_flops_tolerance = 0.10;
+  /// Roofline parameters for the peak objectives' secondary cost; see
+  /// \ref RooflineParams. machine_balance == 0 => pure-flop tie-break.
+  RooflineParams roofline = {};
+};
+
 /// A type-erased provider mapping an Index to its extent. Used by the public
 /// optimize() API. Callers reaching for the templated opt::single_term_opt
 /// overloads (constrained by \ref opt::has_index_extent) should pass the

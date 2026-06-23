@@ -1312,7 +1312,8 @@ TEST_CASE("OSV early-contraction reproducer", "[optimize][osv]") {
   auto show = [&](auto metric, std::wstring name,
                   std::function<double(Index const&, std::size_t)> ip = {}) {
     auto res = opt::single_term_opt<decltype(metric)::value>(
-        prod, idxsz, /*subnet_cse=*/false, {}, 1.0, 0.0, {}, {}, ip);
+        prod, idxsz, /*subnet_cse=*/false, CostParams{{}, 1.0, 0.0}, {}, {},
+        ip);
     std::wcout << name << L":  " << render_tree(res) << L"\n";
   };
   std::wcout
@@ -1380,17 +1381,17 @@ TEST_CASE("OSV early-contraction reproducer (full term #1)",
 
   {
     auto res = opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
-        prod, idxsz, false, {}, 1.0, 0.0, {}, {}, ip);
+        prod, idxsz, false, CostParams{{}, 1.0, 0.0}, {}, {}, ip);
     std::wcout << L"FLOPs:        " << render_tree(res) << L"\n";
   }
   {
     auto res = opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
-        prod, idxsz, false, {}, 1.0, 0.0, {}, {}, ip);
+        prod, idxsz, false, CostParams{{}, 1.0, 0.0}, {}, {}, ip);
     std::wcout << L"PeakSize:     " << render_tree(res) << L"\n";
   }
   {
     auto res = opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
-        prod, idxsz, false, {}, 1.0, 0.0, is_batch, bts, ip);
+        prod, idxsz, false, CostParams{{}, 1.0, 0.0}, is_batch, bts, ip);
     std::wcout << L"PeakBatched:  " << render_tree(res) << L"\n";
   }
   std::wcout << L"\n  >>> looking for (C{a_4<i_1>;μ̃_1216} * t{a_4<i_1>;i_1}) "
@@ -1544,35 +1545,38 @@ TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
                << render_tree(res) << L"\n";
     return mx;
   };
-  double flops_mx = report(L"FLOPs:        ",
-                           opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
-                               prod, idxsz, false, {}, 1.0, 0.0, {}, {}, ip));
-  double peak_mx = report(
-      L"PeakSize:     ", opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
-                             prod, idxsz, false, {}, 1.0, 0.0, {}, {}, ip));
-  double pbat_mx =
-      report(L"PeakBatched:  ",
-             opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
-                 prod, idxsz, false, {}, 1.0, 0.0, is_batch, bts, ip));
+  double flops_mx =
+      report(L"FLOPs:        ",
+             opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
+                 prod, idxsz, false, CostParams{{}, 1.0, 0.0}, {}, {}, ip));
+  double peak_mx =
+      report(L"PeakSize:     ",
+             opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
+                 prod, idxsz, false, CostParams{{}, 1.0, 0.0}, {}, {}, ip));
+  double pbat_mx = report(
+      L"PeakBatched:  ",
+      opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
+          prod, idxsz, false, CostParams{{}, 1.0, 0.0}, is_batch, bts, ip));
   // Real MPQC config: t is volatile, volatile_weight=100. The tie-break weights
   // volatile (replayed) flops, so it must STILL eliminate the OSV early.
   auto is_t = [](Tensor const& t) { return t.label() == L"t"; };
   // isolate volatile_weight: hold is_volatile_leaf=is_t FIXED, vary only vw.
-  double peak_v = report(L"PeakSize/is_t,vw1:   ",
-                         opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
-                             prod, idxsz, false, is_t, 1.0, 0.0, {}, {}, ip));
+  double peak_v =
+      report(L"PeakSize/is_t,vw1:   ",
+             opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
+                 prod, idxsz, false, CostParams{is_t, 1.0, 0.0}, {}, {}, ip));
   double peak_v100 =
       report(L"PeakSize/is_t,vw100: ",
              opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
-                 prod, idxsz, false, is_t, 100.0, 0.0, {}, {}, ip));
-  double pbat_v =
-      report(L"PeakBatch/is_t,vw1:  ",
-             opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
-                 prod, idxsz, false, is_t, 1.0, 0.0, is_batch, bts, ip));
-  double pbat_v100 =
-      report(L"PeakBatch/is_t,vw100:",
-             opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
-                 prod, idxsz, false, is_t, 100.0, 0.0, is_batch, bts, ip));
+                 prod, idxsz, false, CostParams{is_t, 100.0, 0.0}, {}, {}, ip));
+  double pbat_v = report(
+      L"PeakBatch/is_t,vw1:  ",
+      opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
+          prod, idxsz, false, CostParams{is_t, 1.0, 0.0}, is_batch, bts, ip));
+  double pbat_v100 = report(
+      L"PeakBatch/is_t,vw100:",
+      opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
+          prod, idxsz, false, CostParams{is_t, 100.0, 0.0}, is_batch, bts, ip));
   (void)peak_v100;
   (void)pbat_v100;
   std::wcout << L"\n";
@@ -1607,11 +1611,11 @@ TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
   //     batch_persistent_only restores the old behavior (volatile subtrees not
   //     sliced -> the batched model reverts to deferring the OSV outer
   //     product).
-  double pbat_po =
-      report(L"PeakBatch/persistent_only:",
-             opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
-                 prod, idxsz, false, is_t, 100.0, 0.0, is_batch, bts, ip,
-                 /*batch_persistent_only=*/true));
+  double pbat_po = report(
+      L"PeakBatch/persistent_only:",
+      opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
+          prod, idxsz, false, CostParams{is_t, 100.0, 0.0}, is_batch, bts, ip,
+          /*batch_persistent_only=*/true));
   CHECK(pbat_po >= osv_outer_product);  // gate restored -> OSV deferred again
 }
 
@@ -1704,16 +1708,18 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
   // so it is slightly LARGER in peak than fold-t; only the peak_flops_tolerance
   // (default 0.10) lets the peak objectives accept that within-tolerance peak
   // bump in exchange for the large volatile-flop win, i.e. form W like FLOPs.
-  double flops_w = rep(L"FLOPs/vw100:  ",
-                       opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
-                           prod, idxsz, false, is_t, 100.0, 0.0, {}, {}, ip));
-  double peak_w = rep(L"PeakSize/vw100:",
-                      opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
-                          prod, idxsz, false, is_t, 100.0, 0.0, {}, {}, ip));
-  double pbat_w =
-      rep(L"PeakB/vw100:  ",
-          opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
-              prod, idxsz, false, is_t, 100.0, 0.0, is_batch, bts, ip));
+  double flops_w =
+      rep(L"FLOPs/vw100:  ",
+          opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
+              prod, idxsz, false, CostParams{is_t, 100.0, 0.0}, {}, {}, ip));
+  double peak_w =
+      rep(L"PeakSize/vw100:",
+          opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
+              prod, idxsz, false, CostParams{is_t, 100.0, 0.0}, {}, {}, ip));
+  double pbat_w = rep(
+      L"PeakB/vw100:  ",
+      opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
+          prod, idxsz, false, CostParams{is_t, 100.0, 0.0}, is_batch, bts, ip));
   std::wcout << L"\n";
   // The epsilon-tolerant Pareto selection makes both peak objectives form W,
   // matching the flop-optimal volatile-weighted flop count.
@@ -1724,8 +1730,9 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
   double peak_w_strict =
       rep(L"PeakSize/strict:",
           opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
-              prod, idxsz, false, is_t, 100.0, 0.0, {}, {}, ip,
-              /*batch_persistent_only=*/false, /*peak_flops_tolerance=*/0.0));
+              prod, idxsz, false,
+              CostParams{is_t, 100.0, 0.0, /*peak_flops_tolerance=*/0.0}, {},
+              {}, ip));
   CHECK(peak_w_strict > flops_w);
   // At volatile_weight=1 (the caching-off regime, where persistent
   // intermediates cannot be amortized across replays) the persistent 4-PNO W is
@@ -1735,9 +1742,9 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
   // forming/caching W. (mpqc's SeQuantEngine pins volatile_weight to 1 when
   // eval:cache is off for exactly this reason.) A form-W tree would reproduce
   // flops_w; fold-t does not.
-  double pbat_w_vw1 =
-      rep(L"PeakB/vw1:    ",
-          opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
-              prod, idxsz, false, is_t, 1.0, 0.0, is_batch, bts, ip));
+  double pbat_w_vw1 = rep(
+      L"PeakB/vw1:    ",
+      opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
+          prod, idxsz, false, CostParams{is_t, 1.0, 0.0}, is_batch, bts, ip));
   CHECK(pbat_w_vw1 > flops_w);
 }

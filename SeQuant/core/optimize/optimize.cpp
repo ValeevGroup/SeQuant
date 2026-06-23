@@ -34,34 +34,30 @@ index_to_extent_t default_idx_to_size() {
 /// Optimize a Product that contains only Tensor and scalar factors.
 ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
   bool const subnet_cse = opts.CSE.subnet;
+  CostParams const cost{opts.batch_policy.is_volatile_leaf,
+                        opts.volatile_weight, opts.footprint_weight,
+                        opts.peak_flops_tolerance, opts.roofline};
   if (opts.objective_function == ObjectiveFunction::DenseFLOPs)
     return opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
-        prod, opts.idx_to_extent, subnet_cse,
-        opts.batch_policy.is_volatile_leaf, opts.volatile_weight,
-        opts.footprint_weight, opts.batch_policy.is_batchable_index,
+        prod, opts.idx_to_extent, subnet_cse, cost,
+        opts.batch_policy.is_batchable_index,
         opts.batch_policy.batch_target_size, opts.inner_pow);
   if (opts.objective_function == ObjectiveFunction::DenseSize)
     return opt::single_term_opt<ObjectiveFunction::DenseSize>(
-        prod, opts.idx_to_extent, subnet_cse,
-        opts.batch_policy.is_volatile_leaf, opts.volatile_weight,
-        opts.footprint_weight, opts.batch_policy.is_batchable_index,
+        prod, opts.idx_to_extent, subnet_cse, cost,
+        opts.batch_policy.is_batchable_index,
         opts.batch_policy.batch_target_size, opts.inner_pow);
   if (opts.objective_function == ObjectiveFunction::DensePeakSize)
     return opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
-        prod, opts.idx_to_extent, subnet_cse,
-        opts.batch_policy.is_volatile_leaf, opts.volatile_weight,
-        opts.footprint_weight, opts.batch_policy.is_batchable_index,
-        opts.batch_policy.batch_target_size, opts.inner_pow,
-        /*batch_persistent_only=*/false, opts.peak_flops_tolerance,
-        opts.roofline);
+        prod, opts.idx_to_extent, subnet_cse, cost,
+        opts.batch_policy.is_batchable_index,
+        opts.batch_policy.batch_target_size, opts.inner_pow);
   SEQUANT_ASSERT(opts.objective_function ==
                  ObjectiveFunction::DensePeakSizeBatched);
   return opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
-      prod, opts.idx_to_extent, subnet_cse, opts.batch_policy.is_volatile_leaf,
-      opts.volatile_weight, opts.footprint_weight,
+      prod, opts.idx_to_extent, subnet_cse, cost,
       opts.batch_policy.is_batchable_index, opts.batch_policy.batch_target_size,
-      opts.inner_pow, opts.batch_policy.persistent_only,
-      opts.peak_flops_tolerance, opts.roofline);
+      opts.inner_pow, opts.batch_policy.persistent_only);
 }
 
 /// Deliberately non-identifier label prefix used to stand in for non-Tensor,
