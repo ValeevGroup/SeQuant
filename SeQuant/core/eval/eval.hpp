@@ -1291,8 +1291,20 @@ template <class F, class ScopeGuardFactory = make_no_scope_guard>
     if (!n.leaf() || !n->is_tensor()) return false;
     return p && p(n->as_tensor());
   };
+  // BatchPolicy docs: an empty is_batchable_index or batch_target_size means
+  // "no batching". Forwarding an empty std::function would instead throw
+  // std::bad_function_call from batch_axis()/target_batch_size() at evaluation
+  // time, so when either is unset, substitute predicates that decline batching
+  // (accept nothing => batch_axis returns nullopt => target_batch_size is never
+  // called) rather than partially-filled ones.
+  std::function<bool(Index const&)> accept = policy.is_batchable_index;
+  std::function<std::size_t(Index const&)> target = policy.batch_target_size;
+  if (!accept || !target) {
+    accept = [](Index const&) { return false; };
+    target = [](Index const&) -> std::size_t { return 0; };
+  }
   return make_batched_custom_evaluator(
-      std::move(yielder), policy.batch_target_size, policy.is_batchable_index,
+      std::move(yielder), std::move(target), std::move(accept),
       std::move(make_scope_guard), std::move(is_volatile_node),
       policy.persistent_only);
 }

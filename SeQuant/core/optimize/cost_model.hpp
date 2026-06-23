@@ -1,7 +1,7 @@
 #ifndef SEQUANT_CORE_OPTIMIZE_COST_MODEL_HPP
 #define SEQUANT_CORE_OPTIMIZE_COST_MODEL_HPP
 
-#include <SeQuant/core/optimize/single_term.hpp>  // helpers + EvalSequence + OptRes
+#include <SeQuant/core/optimize/single_term_detail.hpp>  // helpers + EvalSequence + OptRes
 
 #include <range/v3/view/concat.hpp>
 
