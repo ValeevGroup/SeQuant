@@ -505,7 +505,8 @@ EvalSequence single_term_opt(
     std::function<bool(Index const&)> const& is_batchable_index = {},
     std::function<std::size_t(Index const&)> batch_target_size = {},
     std::function<double(Index const&, std::size_t)> const& inner_pow = {},
-    bool batch_persistent_only = false, double peak_flops_tolerance = 0.10) {
+    bool batch_persistent_only = false, double peak_flops_tolerance = 0.10,
+    RooflineParams const& roofline = {}) {
   decltype(OptRes::indices) tidxs{};
 
   // Volatility weighting is a DenseFLOPs-only notion (persistent intermediates
@@ -517,28 +518,33 @@ EvalSequence single_term_opt(
   if constexpr (Metric == ObjectiveFunction::DensePeakSize) {
     SEQUANT_ASSERT(!subnet_cse &&
                    "subnet_cse not supported with DensePeakSize (Phase 1)");
-    (void)footprint_weight;
     (void)is_batchable_index;
     (void)batch_target_size;
     (void)batch_persistent_only;
-    // is_volatile_leaf / volatile_weight feed only the secondary flop
+    (void)footprint_weight;  // peak objectives use the roofline tie-break
+    // is_volatile_leaf / volatile_weight / roofline feed only the secondary
     // tie-break among equal-peak schedules (peak itself ignores them).
-    return run_single_term_opt(PeakModel{idxsz, inner_pow, is_volatile_leaf,
-                                         volatile_weight, peak_flops_tolerance},
-                               network, tidxs);
+    return run_single_term_opt(
+        PeakModel{idxsz, inner_pow, is_volatile_leaf, volatile_weight,
+                  roofline.machine_balance, roofline.fast_mem_elems,
+                  roofline.block_tiles, roofline.block_prefactor,
+                  peak_flops_tolerance},
+        network, tidxs);
   } else if constexpr (Metric == ObjectiveFunction::DensePeakSizeBatched) {
     SEQUANT_ASSERT(
         !subnet_cse &&
         "subnet_cse not supported with DensePeakSizeBatched (Phase 2)");
-    (void)footprint_weight;
+    (void)footprint_weight;  // peak objectives use the roofline tie-break
     if (std::getenv("SEQUANT_PEAK_DEBUG"))
       peak_batched_debug(network, tidxs, idxsz, is_batchable_index,
                          batch_target_size, is_volatile_leaf, std::cout);
-    // is_volatile_leaf already gates batching; volatile_weight additionally
-    // feeds the secondary flop tie-break among equal-peak schedules.
+    // is_volatile_leaf gates batching; volatile_weight / roofline feed the
+    // secondary tie-break among equal-peak schedules.
     return run_single_term_opt(
         PeakBatchedModel{idxsz, is_batchable_index, batch_target_size,
                          is_volatile_leaf, inner_pow, volatile_weight,
+                         roofline.machine_balance, roofline.fast_mem_elems,
+                         roofline.block_tiles, roofline.block_prefactor,
                          batch_persistent_only, peak_flops_tolerance},
         network, tidxs);
   } else if constexpr (Metric == ObjectiveFunction::DenseFLOPs) {
@@ -606,7 +612,8 @@ ExprPtr single_term_opt(
     std::function<bool(Index const&)> const& is_batchable_index = {},
     std::function<std::size_t(Index const&)> batch_target_size = {},
     std::function<double(Index const&, std::size_t)> const& inner_pow = {},
-    bool batch_persistent_only = false, double peak_flops_tolerance = 0.10) {
+    bool batch_persistent_only = false, double peak_flops_tolerance = 0.10,
+    RooflineParams const& roofline = {}) {
   using ranges::views::filter;
   using ranges::views::reverse;
 
@@ -618,8 +625,8 @@ ExprPtr single_term_opt(
   auto seq = detail::single_term_opt<Metric>(
       TensorNetwork{tensors}, std::forward<IdxToSz>(idxsz), subnet_cse,
       is_volatile_leaf, volatile_weight, footprint_weight, is_batchable_index,
-      batch_target_size, inner_pow, batch_persistent_only,
-      peak_flops_tolerance);
+      batch_target_size, inner_pow, batch_persistent_only, peak_flops_tolerance,
+      roofline);
   auto result = container::svector<ExprPtr>{};
   for (auto i : seq)
     if (i == -1) {

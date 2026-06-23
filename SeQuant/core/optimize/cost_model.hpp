@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <cmath>
 #include <concepts>
 #include <functional>
 #include <limits>
@@ -240,6 +241,27 @@ int pareto_best(container::vector<FP> const& f) {
   return best;
 }
 
+/// \brief Per-contraction roofline secondary cost (tie-break wall-time proxy).
+///
+/// Returns \c max(flops, beta * Q), with data movement
+/// \c Q = max(traffic, kappa * flops / sqrt(M / c0)) combining compulsory
+/// single-pass traffic with the finite-cache (Hong-Kung) re-read bound. With
+/// \c beta (machine_balance) <= 0 this is exactly \c flops (pure-flop
+/// tie-break, no behavior change). \c traffic is the operand+result footprint
+/// (elements), \c M is fast_mem_elems, \c c0 is block_tiles, \c kappa is
+/// block_prefactor. See doc/dev/specs/2026-06-23-roofline-tiebreak-cost.md.
+inline double roofline_op_cost(double flops, double traffic,
+                               double machine_balance, double fast_mem_elems,
+                               double block_tiles,
+                               double block_prefactor) noexcept {
+  if (machine_balance <= 0.0) return flops;
+  double Q = traffic;
+  if (fast_mem_elems > 0.0 && block_tiles > 0.0)
+    Q = std::max(
+        Q, block_prefactor * flops / std::sqrt(fast_mem_elems / block_tiles));
+  return std::max(flops, machine_balance * Q);
+}
+
 /// \brief Peak-memory single-term cost model (DensePeakSize objective).
 ///
 /// Implements the all-co-resident pebble-game DP, factored into the CostModel
@@ -260,6 +282,13 @@ struct PeakModel {
   std::function<bool(Tensor const&)> is_volatile_leaf = {};
   /// Replay weight applied to volatile contractions in the flop tie-break.
   double volatile_weight = 1.0;
+  /// Roofline parameters for the secondary (tie-break) cost; see
+  /// \ref RooflineParams and \ref roofline_op_cost. machine_balance == 0
+  /// (default) => pure-flop tie-break (no behavior change).
+  double machine_balance = 0.0;
+  double fast_mem_elems = 0.0;
+  double block_tiles = 3.0;
+  double block_prefactor = 1.0;
   /// Relative peak tolerance for the final (root) selection: among frontier
   /// points whose peak is within (1 + peak_flops_tolerance) of the minimum
   /// peak, pick the one with the fewest flops. 0 (default) = strict peak-min
@@ -352,8 +381,13 @@ struct PeakModel {
     // every iteration, so its flops are scaled by volatile_weight -- matching
     // the DenseFLOPs convention. The contraction flops are order-independent.
     double const w = (ctx.volatile_mask & n) ? volatile_weight : 1.0;
+    // Secondary (tie-break) cost: roofline wall-time proxy per replay, charged
+    // w times for volatile (replayed) contractions. traffic = operand+result
+    // footprint. With machine_balance==0 this reduces to flops (no change).
     double const cflops =
-        w * ctx.flops_of(ctx.idx[lp], ctx.idx[rp], ctx.idx[n]);
+        w * roofline_op_cost(ctx.flops_of(ctx.idx[lp], ctx.idx[rp], ctx.idx[n]),
+                             ctx.S[lp] + ctx.S[rp] + ctx.S[n], machine_balance,
+                             fast_mem_elems, block_tiles, block_prefactor);
     // Cross every (peak,flops) trade-off of the two children.
     for (int li = 0; li < static_cast<int>(lp_st.size()); ++li)
       for (int ri = 0; ri < static_cast<int>(rp_st.size()); ++ri) {
@@ -430,6 +464,15 @@ struct PeakBatchedModel {
   std::function<double(Index const&, std::size_t)> inner_pow = {};
   /// Replay weight applied to volatile contractions in the flop tie-break.
   double volatile_weight = 1.0;
+  /// Roofline parameters for the secondary (tie-break) cost; see
+  /// \ref RooflineParams and \ref roofline_op_cost. machine_balance == 0
+  /// (default) => pure-flop tie-break (no behavior change). Uses full
+  /// (unsliced) operand+result footprints (total per-replay traffic; slicing
+  /// reduces peak, not total work).
+  double machine_balance = 0.0;
+  double fast_mem_elems = 0.0;
+  double block_tiles = 3.0;
+  double block_prefactor = 1.0;
   /// If true, batch only persistent subtrees (decline any subset containing a
   /// volatile leaf). Default false = batch across the board. See
   /// BatchPolicy::persistent_only.
@@ -537,11 +580,16 @@ struct PeakBatchedModel {
 
   void relax(Context& ctx, size_t n, size_t lp, size_t rp, State const& lp_st,
              State const& rp_st, State& acc) const {
-    // Contraction flops (order- and slice-independent), scaled by
-    // volatile_weight when subset n is volatile (replayed every iteration).
+    // Secondary (tie-break) cost: roofline wall-time proxy per replay, charged
+    // volatile_weight times for volatile (replayed) contractions. Uses the full
+    // (unsliced) operand+result footprint as the per-replay traffic; slicing
+    // reduces peak (primary axis), not total work. machine_balance==0 => flops.
     double const w = (ctx.volatile_mask & n) ? volatile_weight : 1.0;
     double const cflops =
-        w * ctx.flops_of(ctx.idx[lp], ctx.idx[rp], ctx.idx[n]);
+        w * roofline_op_cost(ctx.flops_of(ctx.idx[lp], ctx.idx[rp], ctx.idx[n]),
+                             ctx.sz(lp, 0) + ctx.sz(rp, 0) + ctx.sz(n, 0),
+                             machine_balance, fast_mem_elems, block_tiles,
+                             block_prefactor);
     for (std::size_t B = 0; B < ctx.nB; ++B) {
       // Batchable indices contracted at THIS node: open at children but not at
       // the parent. By default batching is applied ACROSS THE BOARD: slicing

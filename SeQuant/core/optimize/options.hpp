@@ -53,6 +53,28 @@ struct CSEOptions {
   bool subnet = false;
 };
 
+/// Roofline parameters for the peak objectives' secondary (tie-break) cost.
+/// When \c machine_balance > 0, the per-contraction tie-break cost becomes the
+/// roofline wall-time proxy \c max(flops, machine_balance * Q), where the data
+/// movement \c Q = max(operand+result footprint, block_prefactor * flops /
+/// sqrt(fast_mem_elems / block_tiles)) combines the compulsory single-pass
+/// traffic with the finite-cache (Hong-Kung) re-read bound. This charges
+/// bandwidth-bound contractions (e.g. single-PNO-index ones) their true memory
+/// traffic while leaving compute-bound (dense) contractions at \c flops, so it
+/// is inert in the dense case. \c machine_balance == 0 (default) recovers the
+/// pure-flop tie-break. See doc/dev/specs/2026-06-23-roofline-tiebreak-cost.md.
+struct RooflineParams {
+  /// Machine balance beta = 8*F/B in FLOPs per element of traffic. 0 = off.
+  double machine_balance = 0.0;
+  /// Capacity M of the binding fast memory level, in elements (e.g. LLC/8).
+  double fast_mem_elems = 0.0;
+  /// Resident-tile count c0 in the blocking bound (b ~ sqrt(M/c0)); ~3 for the
+  /// A,B,C tiles of a blocked GEMM. Calibratable.
+  double block_tiles = 3.0;
+  /// Prefactor kappa folding FMA/packing/BLAS constants into the re-read term.
+  double block_prefactor = 1.0;
+};
+
 /// A type-erased provider mapping an Index to its extent. Used by the public
 /// optimize() API. Callers reaching for the templated opt::single_term_opt
 /// overloads (constrained by \ref opt::has_index_extent) should pass the
@@ -145,6 +167,12 @@ struct OptimizeOptions {
   /// useful magnitude is on the order of the contracted-index extent that the
   /// offending intermediate would otherwise leave free.
   double footprint_weight = 0.0;
+
+  /// Roofline parameters for the peak objectives' secondary (tie-break) cost;
+  /// see \ref RooflineParams. machine_balance == 0 (default) => pure-flop
+  /// tie-break (no behavior change). Consulted only by DensePeakSize /
+  /// DensePeakSizeBatched.
+  RooflineParams roofline = {};
 };
 
 }  // namespace sequant
