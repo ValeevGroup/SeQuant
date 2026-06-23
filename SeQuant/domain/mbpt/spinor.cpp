@@ -233,6 +233,10 @@ container::svector<KramersBlock> kramers_external_blocks(
   return blocks;
 }
 
+bool has_antisymmetrizer(const ExprPtr& expr) {
+  return find_antisymmetrizer(expr).has_value();
+}
+
 container::svector<ExprPtr> closed_shell_kramers_CC_trace(const ExprPtr& expr) {
   // Stage 1: factor out the antisymmetrizer Â (kept, not expanded). Its bra/ket
   // are the external virtual/occupied index groups.

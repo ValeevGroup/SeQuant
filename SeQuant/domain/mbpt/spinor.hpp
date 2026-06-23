@@ -267,6 +267,12 @@ container::svector<KramersBlock> kramers_external_blocks(
 // clang-format on
 container::svector<ExprPtr> closed_shell_kramers_CC_trace(const ExprPtr& expr);
 
+/// @brief True if @p expr contains an antisymmetrizer (Â) tensor anywhere.
+/// @details Lets a caller (e.g. the CC spintrace dispatch) tell a residual
+/// equation (carries a leading Â -> closed_shell_kramers_CC_trace) from a fully
+/// contracted scalar like the energy (no Â -> closed_shell_kramers_trace).
+bool has_antisymmetrizer(const ExprPtr& expr);
+
 }  // namespace sequant::mbpt
 
 #endif  // SEQUANT_DOMAIN_MBPT_SPINOR_HPP
