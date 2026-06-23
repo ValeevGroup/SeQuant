@@ -103,9 +103,6 @@ EvalSequence single_term_opt(
         !subnet_cse &&
         "subnet_cse not supported with DensePeakSizeBatched (Phase 2)");
     (void)footprint_weight;  // peak objectives use the roofline tie-break
-    if (std::getenv("SEQUANT_PEAK_DEBUG"))
-      peak_batched_debug(network, tidxs, idxsz, is_batchable_index,
-                         batch_target_size, is_volatile_leaf, std::cout);
     // is_volatile_leaf gates batching; volatile_weight / roofline feed the
     // secondary tie-break among equal-peak schedules.
     return run_single_term_opt(

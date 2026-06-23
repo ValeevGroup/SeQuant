@@ -11,7 +11,6 @@
 #include <concepts>
 #include <functional>
 #include <limits>
-#include <ostream>
 #include <utility>
 
 namespace sequant::opt::detail {
@@ -760,98 +759,6 @@ double reconstructed_batched_peak(
 
   std::size_t const root = (std::size_t{1} << nt) - 1;
   return sim(sim, root, 0, pareto_best(st[root][0]));
-}
-
-/// \brief Diagnostic (env-gated): per-term predicted-vs-unsliced peak report
-/// for the batched peak objective. Walks the DP-chosen tree and reports the
-/// model's predicted (sliced) peak alongside the largest UNSLICED single-node
-/// footprint in that same chosen tree. If predicted_peak << max_node_unsliced,
-/// the model is discounting (crediting batch-slicing to) a node whose full
-/// extent must actually materialize -- the realized peak then tracks the
-/// unsliced value. Emits one line per call to \p os when enabled; cheap (no
-/// tensor eval).
-template <typename TIdxs, typename IdxToSz>
-void peak_batched_debug(
-    TensorNetwork const& network, TIdxs const& tidxs, IdxToSz&& idxsz,
-    std::function<bool(Index const&)> const& is_batchable,
-    std::function<std::size_t(Index const&)> const& batch_target_size,
-    std::function<bool(Tensor const&)> const& is_volatile_leaf,
-    std::ostream& os) {
-  PeakBatchedModel<std::decay_t<IdxToSz>> model{
-      idxsz, is_batchable, batch_target_size, is_volatile_leaf};
-  auto ctx = model.build_context(network, tidxs);
-  auto st = solve_single_term(model, network, tidxs, ctx);
-  auto const nt = network.tensors().size();
-  if (nt < 3) return;  // trivial products carry no factorization choice
-  // Unsliced (full-extent) footprint of every subset.
-  auto Sun = subset_footprints(network, tidxs, idxsz);
-  std::size_t const root = (std::size_t{1} << nt) - 1;
-  int const root_best = pareto_best(st[root][0]);
-  double const predicted = st[root][0][root_best].peak;
-  double max_node_unsliced = 0.0, max_node_sliced = 0.0;
-  std::size_t worst = 0;
-  // also track the chosen-tree node with the MOST inner (CSV/PNO) composites --
-  // the multi-composite mu-tilde class suspected of being under-sized.
-  container::vector<OptRes> results(std::size_t{1} << nt);
-  init_results(network, tidxs, results);
-  std::size_t most_inner = 0, mc_node = 0;
-  auto n_inner = [&](std::size_t n) {
-    return tot_indices(results[n].indices).inner.size();
-  };
-  // Walk the chosen back-pointer tree (root, B=0), recording per-node sliced
-  // (ctx.sz at its evaluation context) and unsliced footprints.
-  auto walk = [&](auto&& self, std::size_t n, std::size_t B, int idx) -> void {
-    if (std::popcount(n) < 2) return;
-    auto const& r = st[n][B][idx];
-    std::size_t const C = B | r.aprime;
-    double const un = Sun[n];
-    double const sl = ctx.sz(n, B);
-    if (un > max_node_unsliced) {
-      max_node_unsliced = un;
-      worst = n;
-    }
-    std::size_t const ni = n_inner(n);
-    if (ni > most_inner || (ni == most_inner && Sun[n] > Sun[mc_node])) {
-      most_inner = ni;
-      mc_node = n;
-    }
-    max_node_sliced = std::max(max_node_sliced, sl);
-    self(self, r.lp_first ? r.lp : r.rp, C, r.lp_first ? r.lp_idx : r.rp_idx);
-    self(self, r.lp_first ? r.rp : r.lp, C, r.lp_first ? r.rp_idx : r.lp_idx);
-  };
-  walk(walk, root, 0, root_best);
-  // footprints are in ELEMENTS (subset_footprints multiplies extents, no
-  // sizeof)
-  auto Me = [](double e) { return e / 1.0e6; };  // mega-elements
-  os << "[PEAKDBG] nt=" << nt << " predicted_peak=" << Me(predicted)
-     << "Me max_node_unsliced=" << Me(max_node_unsliced)
-     << "Me max_node_sliced_in_tree=" << Me(max_node_sliced)
-     << "Me under_count_ratio="
-     << (predicted > 0.0 ? max_node_unsliced / predicted : 0.0);
-  // Index composition of the worst (largest-unsliced) node, to compare against
-  // the realized tensor: per-open-index extent, proto-count, batchable flag.
-  auto dump = [&](char const* tag, std::size_t node) {
-    auto tot = tot_indices(results[node].indices);
-    double prod = 1.0;
-    os << tag << " outer{";
-    for (auto const& ix : tot.outer) {
-      std::size_t const e = idxsz(ix);
-      prod *= static_cast<double>(e);
-      os << e << (ix.has_proto_indices() ? "p" : "")
-         << (is_batchable && is_batchable(ix) ? "K" : "") << ",";
-    }
-    os << "} inner{";
-    for (auto const& ix : tot.inner) {
-      std::size_t const e = idxsz(ix);
-      prod *= static_cast<double>(e);
-      os << e << "p" << ix.proto_indices().size()
-         << (is_batchable && is_batchable(ix) ? "K" : "") << ",";
-    }
-    os << "}=" << Me(prod) << "Me";
-  };
-  dump("  worst_node", worst);
-  dump("  most_composite_node", mc_node);
-  os << "\n";
 }
 
 /// \brief Compile-time concept for a single-term-DP cost model.
