@@ -25,6 +25,7 @@
 #include <range/v3/view/transform.hpp>
 
 #include <algorithm>
+#include <iostream>
 
 namespace sequant::mbpt {
 
@@ -632,6 +633,500 @@ ExprPtr WK_biorthogonalization_filter(
     ExprPtr expr,
     const container::svector<container::svector<Index>>& ext_idxs) {
   return WK_biorthogonalization_filter_impl(expr, ext_idxs);
+}
+
+namespace {
+
+enum class TripletExternalSwapKind {
+  Identity,
+  BraSwap,
+  KetSwap,
+  PairSwap,
+  Other
+};
+
+std::pair<container::svector<Index>, container::svector<Index>>
+triplet_external_slot_labels(const Product& p) {
+  for (const auto& f : p) {
+    if (!f->is<Tensor>()) continue;
+    const auto& t = f->as<Tensor>();
+    if (t.label() == L"R" || t.label() == L"L") {
+      return {container::svector<Index>(t.bra().begin(), t.bra().end()),
+              container::svector<Index>(t.ket().begin(), t.ket().end())};
+    }
+  }
+  for (const auto& f : p) {
+    if (!f->is<Tensor>()) continue;
+    const auto& t = f->as<Tensor>();
+    if (t.rank() >= 2) {
+      return {container::svector<Index>(t.bra().begin(), t.bra().end()),
+              container::svector<Index>(t.ket().begin(), t.ket().end())};
+    }
+  }
+  return {};
+}
+
+TripletExternalSwapKind classify_triplet_external_swap(
+    const container::svector<container::svector<Index>>& ext_idxs,
+    const container::svector<Index>& ref_bra,
+    const container::svector<Index>& ref_ket,
+    const container::svector<Index>& bra,
+    const container::svector<Index>& ket) {
+  if (ext_idxs.size() != 2 || ref_bra.size() != 2 || ref_ket.size() != 2 ||
+      bra.size() != 2 || ket.size() != 2) {
+    return TripletExternalSwapKind::Other;
+  }
+
+  const Index b0 = get_bra_idx(ext_idxs.at(0));
+  const Index b1 = get_bra_idx(ext_idxs.at(1));
+  const Index k0 = get_ket_idx(ext_idxs.at(0));
+  const Index k1 = get_ket_idx(ext_idxs.at(1));
+
+  auto matches = [&](const container::svector<Index>& b,
+                     const container::svector<Index>& k) {
+    return b.at(0) == bra.at(0) && b.at(1) == bra.at(1) &&
+           k.at(0) == ket.at(0) && k.at(1) == ket.at(1);
+  };
+
+  if (matches(ref_bra, ref_ket)) return TripletExternalSwapKind::Identity;
+  if (matches(container::svector<Index>{b1, b0}, ref_ket))
+    return TripletExternalSwapKind::BraSwap;
+  if (matches(ref_bra, container::svector<Index>{k1, k0}))
+    return TripletExternalSwapKind::KetSwap;
+  if (matches(container::svector<Index>{b1, b0},
+              container::svector<Index>{k1, k0}))
+    return TripletExternalSwapKind::PairSwap;
+  return TripletExternalSwapKind::Other;
+}
+
+int triplet_swap_kind_priority(TripletExternalSwapKind kind) {
+  switch (kind) {
+    case TripletExternalSwapKind::Identity:
+      return 4;
+    case TripletExternalSwapKind::BraSwap:
+      return 3;
+    case TripletExternalSwapKind::KetSwap:
+      return 2;
+    case TripletExternalSwapKind::PairSwap:
+      return 1;
+    case TripletExternalSwapKind::Other:
+      return 0;
+  }
+  return 0;
+}
+
+bool prefer_triplet_hash_term(
+    const container::svector<container::svector<Index>>& ext_idxs,
+    const container::svector<Index>& ref_bra,
+    const container::svector<Index>& ref_ket, const ExprPtr& candidate,
+    const ExprPtr& incumbent) {
+  if (!candidate->is<Product>()) return false;
+  if (!incumbent->is<Product>()) return true;
+
+  const auto [cand_bra, cand_ket] =
+      triplet_external_slot_labels(candidate->as<Product>());
+  const auto [inc_bra, inc_ket] =
+      triplet_external_slot_labels(incumbent->as<Product>());
+  const auto cand_kind = classify_triplet_external_swap(
+      ext_idxs, ref_bra, ref_ket, cand_bra, cand_ket);
+  const auto inc_kind = classify_triplet_external_swap(
+      ext_idxs, ref_bra, ref_ket, inc_bra, inc_ket);
+
+  const int cand_pri = triplet_swap_kind_priority(cand_kind);
+  const int inc_pri = triplet_swap_kind_priority(inc_kind);
+  if (cand_pri != inc_pri) return cand_pri > inc_pri;
+
+  const auto cand_abs = abs(candidate->as<Product>().scalar());
+  const auto inc_abs = abs(incumbent->as<Product>().scalar());
+  return cand_abs > inc_abs;
+}
+
+std::size_t product_network_hash(const ExprPtr& term) {
+  SEQUANT_ASSERT(term->is<Product>());
+  auto product = term.as_shared_ptr<Product>();
+  sequant::TensorNetwork tn(*product);
+  return tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels())
+      .hash_value();
+}
+
+}  // namespace
+
+TripletDoublesSwapLayouts triplet_doubles_swap_layouts(
+    std::string const& orig_layout) {
+  std::vector<std::string> parts;
+  parts.reserve(4);
+  std::string part;
+  for (char c : orig_layout) {
+    if (c == ',') {
+      parts.push_back(part);
+      part.clear();
+    } else if (c != ' ') {
+      part.push_back(c);
+    }
+  }
+  if (!part.empty()) parts.push_back(part);
+  SEQUANT_ASSERT(parts.size() == 4 &&
+                 "triplet_doubles_swap_layouts expects a rank-4 layout");
+
+  auto bra_swapped = parts;
+  std::swap(bra_swapped[0], bra_swapped[1]);
+  auto ket_swapped = parts;
+  std::swap(ket_swapped[2], ket_swapped[3]);
+  auto pair_swapped = bra_swapped;
+  std::swap(pair_swapped[2], pair_swapped[3]);
+
+  auto join = [](const std::vector<std::string>& v) {
+    std::string out;
+    for (std::size_t i = 0; i < v.size(); ++i) {
+      if (i) out.push_back(',');
+      out += v[i];
+    }
+    return out;
+  };
+
+  return {orig_layout, join(bra_swapped), join(ket_swapped),
+          join(pair_swapped)};
+}
+
+ExprPtr triplet_doubles_symbolic_nns_compact(
+    ExprPtr expr,
+    const container::svector<container::svector<Index>>& ext_idxs) {
+  if (!expr->is<Sum>()) return expr;
+  if (ext_idxs.size() != 2) return expr;
+
+  auto work = expr->clone();
+  for (auto& term : *work) {
+    if (term->is<Product>())
+      term =
+          remove_tensor(term.as_shared_ptr<Product>(), reserved::symm_label());
+  }
+  canonicalize(work);
+  simplify(work);
+
+  const std::vector<double> weights{5. / 32., -1. / 32., -1. / 32., -3. / 32.};
+
+  container::map<std::size_t, container::vector<ExprPtr>> groups;
+  for (const auto& term : *work) {
+    if (!term->is<Product>()) continue;
+    groups[product_network_hash(term)].push_back(term);
+  }
+
+  Sum filtered;
+  for (const auto& [_, terms] : groups) {
+    if (terms.size() == 4) {
+      container::svector<Index> ref_bra, ref_ket;
+      if (terms.front()->is<Product>())
+        std::tie(ref_bra, ref_ket) =
+            triplet_external_slot_labels(terms.front()->as<Product>());
+
+      container::map<TripletExternalSwapKind, ExprPtr> by_swap;
+      for (const auto& term : terms) {
+        if (!term->is<Product>()) continue;
+        const auto [bra, ket] =
+            triplet_external_slot_labels(term->as<Product>());
+        const auto kind = classify_triplet_external_swap(ext_idxs, ref_bra,
+                                                         ref_ket, bra, ket);
+        if (kind != TripletExternalSwapKind::Other) by_swap.emplace(kind, term);
+      }
+
+      const TripletExternalSwapKind kinds[] = {
+          TripletExternalSwapKind::Identity, TripletExternalSwapKind::BraSwap,
+          TripletExternalSwapKind::KetSwap, TripletExternalSwapKind::PairSwap};
+      if (by_swap.size() == 4) {
+        ExprPtr combined = ex<Constant>(sequant::rational{0});
+        for (std::size_t i = 0; i < 4; ++i) {
+          const auto it = by_swap.find(kinds[i]);
+          SEQUANT_ASSERT(it != by_swap.end());
+          combined = combined + ex<Constant>(weights[i]) * it->second;
+        }
+        simplify(combined);
+        filtered.append(combined);
+        continue;
+      }
+    }
+
+    // Fallback: keep one representative per group (id layout preferred).
+    ExprPtr keep = terms.front();
+    if (terms.size() > 1) {
+      container::svector<Index> ref_bra, ref_ket;
+      if (keep->is<Product>())
+        std::tie(ref_bra, ref_ket) =
+            triplet_external_slot_labels(keep->as<Product>());
+      for (const auto& term : terms) {
+        if (prefer_triplet_hash_term(ext_idxs, ref_bra, ref_ket, term, keep))
+          keep = term;
+      }
+    }
+    filtered.append(keep);
+  }
+  return ex<Sum>(filtered);
+}
+
+ExprPtr triplet_doubles_hash_filter(
+    ExprPtr expr,
+    const container::svector<container::svector<Index>>& ext_idxs) {
+  if (!expr->is<Sum>()) return expr;
+
+  auto work = expr->clone();
+  for (auto& term : *work) {
+    if (term->is<Product>())
+      term =
+          remove_tensor(term.as_shared_ptr<Product>(), reserved::symm_label());
+  }
+  canonicalize(work);
+  simplify(work);
+
+  const bool prefer_id_layout = (ext_idxs.size() == 2);
+
+  // Debug: print every term grouped by network hash, with its coefficient,
+  // before any filtering decision is made.
+  {
+    container::map<std::size_t, container::vector<ExprPtr>> debug_groups;
+    for (const auto& term : *work) {
+      if (!term->is<Product>()) continue;
+      debug_groups[product_network_hash(term)].push_back(term);
+    }
+    std::wcout << L"=== triplet_doubles_hash_filter: " << debug_groups.size()
+               << L" hash group(s) ===\n";
+    std::size_t gi = 0;
+    for (const auto& [hash, terms] : debug_groups) {
+      std::wcout << L"--- group " << gi++ << L" (hash=" << hash << L", "
+                 << terms.size() << L" term(s)) ---\n";
+      for (const auto& term : terms) {
+        std::wcout /*<< L"  coeff = "
+                   << to_latex_align(ex<Constant>(term->as<Product>().scalar()))
+                   */
+            << L"   " << to_latex_align(term) << L"\n";
+      }
+    }
+    std::wcout.flush();
+  }
+
+  // Debug: verify that every hash group has the expected triplet structure:
+  //   - exactly 4 Product terms,
+  //   - coefficients of shape {c, c, c, -3c} (three equal, one odd-one-out).
+  // PASS/FAIL is based purely on the coefficient multiset, which is
+  // well-defined regardless of where the external indices sit. The Klein-four
+  // swap coverage (Identity/BraSwap/KetSwap/PairSwap) is reported separately
+  // and only as information, because classify_triplet_external_swap assumes the
+  // externals live on the R tensor's bra/ket slots; for these EOM residual
+  // terms the external virtuals are distributed over g/t, so it returns Other
+  // here.
+  if (prefer_id_layout) {
+    container::map<std::size_t, container::vector<ExprPtr>> groups;
+    for (const auto& term : *work) {
+      if (!term->is<Product>()) continue;
+      groups[product_network_hash(term)].push_back(term);
+    }
+
+    std::size_t n_pass = 0;
+    std::size_t n_fail = 0;
+    std::size_t n_full_swap_coverage = 0;
+    for (const auto& [hash, terms] : groups) {
+      std::wstring reason;
+      bool coverage_ok = false;
+
+      if (terms.size() != 4) {
+        reason = L"term count != 4 (" + std::to_wstring(terms.size()) + L")";
+      } else {
+        container::svector<Index> ref_bra, ref_ket;
+        std::tie(ref_bra, ref_ket) =
+            triplet_external_slot_labels(terms.front()->as<Product>());
+
+        container::svector<TripletExternalSwapKind> kinds;
+        container::svector<Product::scalar_type> scalars;
+        kinds.reserve(4);
+        scalars.reserve(4);
+        bool all_products = true;
+        for (std::size_t i = 0; i < 4; ++i) {
+          if (!terms[i]->is<Product>()) {
+            all_products = false;
+            break;
+          }
+          const auto [b, k] =
+              triplet_external_slot_labels(terms[i]->as<Product>());
+          kinds.push_back(
+              classify_triplet_external_swap(ext_idxs, ref_bra, ref_ket, b, k));
+          scalars.push_back(terms[i]->as<Product>().scalar());
+        }
+
+        if (!all_products) {
+          reason = L"group contains a non-Product term";
+        } else {
+          // Informational: do the four terms cover all Klein-four swap kinds?
+          container::set<TripletExternalSwapKind> kind_set(kinds.begin(),
+                                                           kinds.end());
+          coverage_ok =
+              kind_set.size() == 4 &&
+              kind_set.find(TripletExternalSwapKind::Other) == kind_set.end();
+
+          // PASS/FAIL: coefficient multiset must be {c, c, c, -3c}. Find an
+          // odd-one-out j with scalars[j] == -3 * c and the other three == c.
+          bool shape_ok = false;
+          for (std::size_t j = 0; j < 4 && !shape_ok; ++j) {
+            const std::size_t a = (j + 1) % 4;
+            const auto c = scalars[a];
+            bool others_equal = true;
+            for (std::size_t i = 0; i < 4; ++i) {
+              if (i == j) continue;
+              if (!(scalars[i] == c)) {
+                others_equal = false;
+                break;
+              }
+            }
+            const auto neg3c = -(c + c + c);
+            if (others_equal && scalars[j] == neg3c) shape_ok = true;
+          }
+          if (!shape_ok) reason = L"coefficients not of shape {c, c, c, -3c}";
+        }
+      }
+
+      if (coverage_ok) ++n_full_swap_coverage;
+
+      if (reason.empty()) {
+        ++n_pass;
+        std::wcout << L"  PASS group hash=" << hash
+                   << (coverage_ok ? L"  (full swap coverage)"
+                                   : L"  (swap coverage incomplete)")
+                   << L"\n";
+      } else {
+        ++n_fail;
+        std::wcout << L"*** GROUP hash=" << hash << L" FAILED: " << reason
+                   << L" ***\n";
+        for (const auto& term : terms) {
+          std::wcout << L"      ";
+          if (term->is<Product>())
+            std::wcout << L"coeff = "
+                       << to_latex_align(
+                              ex<Constant>(term->as<Product>().scalar()))
+                       << L"   ";
+          std::wcout << to_latex_align(term) << L"\n";
+        }
+      }
+    }
+    std::wcout << L"=== triplet group verification: " << groups.size()
+               << L" groups, " << n_pass << L" passing, " << n_fail
+               << L" failing; " << n_full_swap_coverage
+               << L" with full Klein-four swap coverage ===\n";
+    std::wcout.flush();
+  }
+
+  struct HashKeep {
+    ExprPtr term;
+    container::svector<Index> ref_bra;
+    container::svector<Index> ref_ket;
+  };
+  container::map<std::size_t, HashKeep> keep;
+  for (const auto& term : *work) {
+    if (!term->is<Product>()) continue;
+    const auto hash = product_network_hash(term);
+
+    auto it = keep.find(hash);
+    if (it == keep.end()) {
+      auto [rb, rk] = triplet_external_slot_labels(term->as<Product>());
+      keep.emplace(hash, HashKeep{term, std::move(rb), std::move(rk)});
+      continue;
+    }
+    if (prefer_id_layout) {
+      if (prefer_triplet_hash_term(ext_idxs, it->second.ref_bra,
+                                   it->second.ref_ket, term, it->second.term))
+        it->second.term = term;
+    } else {
+      const auto abs_coeff = abs(term->as<Product>().scalar());
+      const auto existing_abs = abs(it->second.term->as<Product>().scalar());
+      if (abs_coeff > existing_abs) it->second.term = term;
+    }
+  }
+
+  // Debug: print the surviving (kept) term for each hash group.
+  {
+    std::wcout << L"=== triplet_doubles_hash_filter: kept term per group ===\n";
+    for (const auto& [hash, entry] : keep) {
+      std::wcout << L"  hash=" << hash << L"   " << to_latex_align(entry.term)
+                 << L"\n";
+    }
+    std::wcout.flush();
+  }
+
+  Sum filtered;
+  for (const auto& [_, entry] : keep) filtered.append(entry.term);
+  return ex<Sum>(filtered);
+}
+
+ExprPtr triplet_doubles_maxcoeff_compact(
+    ExprPtr expr,
+    const container::svector<container::svector<Index>>& ext_idxs) {
+  if (!expr->is<Sum>()) return expr;
+  if (ext_idxs.size() != 2) return expr;
+
+  auto work = expr->clone();
+  for (auto& term : *work) {
+    if (term->is<Product>())
+      term =
+          remove_tensor(term.as_shared_ptr<Product>(), reserved::symm_label());
+  }
+  canonicalize(work);
+  simplify(work);
+
+  // Keep the largest-|coefficient| term per network hash. In each {c, c, c,
+  // -3c} group this uniquely selects the -3c representative (|3c| > |c| for c
+  // != 0), which is the term triplet_doubles_symbolic_reconstruct needs.
+  container::map<std::size_t, ExprPtr> keep;
+  for (const auto& term : *work) {
+    if (!term->is<Product>()) continue;
+    const auto hash = product_network_hash(term);
+    auto it = keep.find(hash);
+    if (it == keep.end()) {
+      keep.emplace(hash, term);
+      continue;
+    }
+    if (abs(term->as<Product>().scalar()) >
+        abs(it->second->as<Product>().scalar()))
+      it->second = term;
+  }
+
+  Sum compact;
+  for (const auto& [_, term] : keep) compact.append(term);
+  return ex<Sum>(compact);
+}
+
+ExprPtr triplet_doubles_symbolic_reconstruct(
+    ExprPtr compact_expr,
+    const container::svector<container::svector<Index>>& ext_idxs) {
+  if (!compact_expr->is<Sum>()) return compact_expr;
+  if (ext_idxs.size() != 2) return compact_expr;
+
+  // External Klein-four generators: bra-swap (b0<->b1), ket-swap (k0<->k1),
+  // pair-swap (both). b/k are the bra/ket external indices of the two groups.
+  const Index b0 = get_bra_idx(ext_idxs.at(0));
+  const Index b1 = get_bra_idx(ext_idxs.at(1));
+  const Index k0 = get_ket_idx(ext_idxs.at(0));
+  const Index k1 = get_ket_idx(ext_idxs.at(1));
+
+  const container::map<Index, Index> bra_swap{{b0, b1}, {b1, b0}};
+  const container::map<Index, Index> ket_swap{{k0, k1}, {k1, k0}};
+  const container::map<Index, Index> pair_swap{
+      {b0, b1}, {b1, b0}, {k0, k1}, {k1, k0}};
+
+  // Each kept term T carries w = -3c; its three external swaps carry
+  // c = -w/3, i.e. T scaled by -1/3 after relabeling.
+  const auto third = ratio(-1, 3);
+
+  Sum out;
+  for (const auto& term : *compact_expr) {
+    if (!term->is<Product>()) {
+      out.append(term);
+      continue;
+    }
+    out.append(term);                                    // -3c representative
+    out.append(transform_expr(term, bra_swap, third));   // c
+    out.append(transform_expr(term, ket_swap, third));   // c
+    out.append(transform_expr(term, pair_swap, third));  // c
+  }
+
+  auto result = ex<Sum>(out);
+  simplify(result);
+  return result;
 }
 
 template <detail::index_group_range IdxGroups>

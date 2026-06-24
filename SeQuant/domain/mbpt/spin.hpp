@@ -274,6 +274,12 @@ struct ClosedShellCCSpintraceOptions {
   /// (spin-free) basis and thus has an exponential cost;
   /// the default is to use closed_shell_spintrace, which is more efficient
   bool naive_spintrace = false;
+  /// EOM triplet doubles only: compact R2 to one (-3c) term per tensor-network
+  /// group (135 terms for 2h2p) via triplet_doubles_maxcoeff_compact; the
+  /// dropped terms are recovered on evaluation by the {1,-1/3,-1/3,-1/3}
+  /// Klein-four reconstruction (numerical) or
+  /// triplet_doubles_symbolic_reconstruct (symbolic).
+  bool triplet_doubles_compact = false;
 };
 
 // clang-format off

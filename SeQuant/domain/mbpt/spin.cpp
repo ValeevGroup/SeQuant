@@ -2407,8 +2407,15 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
     pair_swap.emplace(k1, k0);
 
     triplet = triplet_doubles_paper_combined_residual(triplet, pair_swap);
+    if (options.triplet_doubles_compact)
+      // Keep the -3c representative per hash group so the dropped terms can be
+      // rebuilt exactly by triplet_doubles_symbolic_reconstruct (or, on the
+      // tensor side, by the {1,-1/3,-1/3,-1/3} Klein-four reconstruction).
+      triplet = triplet_doubles_maxcoeff_compact(triplet, ext_groups);
   }
   simplify(triplet);
+  std::wcout << "closed_shell_EOM_triplet_spintrace size: " << triplet->size()
+             << " terms\n";
   return triplet;
 }
 

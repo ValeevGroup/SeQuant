@@ -87,6 +87,61 @@ ExprPtr WK_biorthogonalization_filter(
     ExprPtr expr,
     const container::svector<container::svector<Index>>& ext_idxs);
 
+/// @brief Four index layouts for triplet R2 metric primitives (id, bra, ket,
+/// pair swaps on external index pairs).
+struct TripletDoublesSwapLayouts {
+  std::string orig;
+  std::string bra_swap;
+  std::string ket_swap;
+  std::string pair_swap;
+};
+
+/// @brief Build bra/ket/pair swap layouts from a rank-4 comma-separated
+/// annotation (a_1,a_2,i_1,i_2).
+[[nodiscard]] TripletDoublesSwapLayouts triplet_doubles_swap_layouts(
+    std::string const& orig_layout);
+
+/// @brief Compact closed-shell triplet R2 by applying metric NNS weights
+/// symbolically within each tensor-network hash group (id/bra/ket/pair swaps).
+/// Produces one combined term per group (135 for 2h2p). Evaluation does not
+/// need triplet_doubles_nns_project. Only applies when @p ext_idxs.size() == 2.
+[[nodiscard]] ExprPtr triplet_doubles_symbolic_nns_compact(
+    ExprPtr expr,
+    const container::svector<container::svector<Index>>& ext_idxs);
+
+/// @brief Hash filter for closed-shell triplet R2: keep one term per tensor-
+/// network hash, preferring the identity external-index layout (id swap) so
+/// numerical triplet_doubles_nns_project can recover the full metric residual.
+/// Falls back to largest |coefficient| within a group. Only applies when
+/// @p ext_idxs.size() == 2.
+[[nodiscard]] ExprPtr triplet_doubles_hash_filter(
+    ExprPtr expr,
+    const container::svector<container::svector<Index>>& ext_idxs = {});
+
+/// @brief Lossless compaction of the closed-shell triplet R2 residual: keep one
+/// term per tensor-network hash, choosing the largest-|coefficient| member of
+/// each group. Each group has the structure {c, c, c, -3c} (three external
+/// Klein-four images with weight c and one odd-one-out with -3c), so the kept
+/// term is always the -3c representative. This is the representative required
+/// by triplet_doubles_symbolic_reconstruct to rebuild the dropped terms; the
+/// layout-preferring triplet_doubles_hash_filter is NOT suitable for that since
+/// it may keep a +c term. Only applies when @p ext_idxs.size() == 2.
+[[nodiscard]] ExprPtr triplet_doubles_maxcoeff_compact(
+    ExprPtr expr,
+    const container::svector<container::svector<Index>>& ext_idxs);
+
+/// @brief Symbolic inverse of triplet_doubles_maxcoeff_compact: from each kept
+/// -3c representative T (coefficient w = -3c), rebuild its external Klein-four
+/// orbit by applying the bra-swap (i1<->i2), ket-swap (a1<->a2) and pair-swap
+/// (both) to the external indices, each scaled by -1/3 (= c/w), and keeping T
+/// itself. Reproduces the full 4-term group {w*T, c*bra(T), c*ket(T),
+/// c*pair(T)}. Requires the -3c representative (use
+/// triplet_doubles_maxcoeff_compact); reconstruction from a +c term is
+/// ambiguous. Only applies when @p ext_idxs.size() == 2.
+[[nodiscard]] ExprPtr triplet_doubles_symbolic_reconstruct(
+    ExprPtr compact_expr,
+    const container::svector<container::svector<Index>>& ext_idxs);
+
 /// @brief Performs biorthogonal transformation with factored out NNS projector
 /// @details Applies biorthogonal transformation. When factor_out_nns_projector
 /// is true (default), factors out the NNS projector by applying additional
@@ -481,6 +536,135 @@ auto biorthogonal_nns_project(TAPPTensor<T, Alloc> const& arr,
 }
 
 #endif  // defined(SEQUANT_HAS_TAPP)
+
+#if defined(SEQUANT_HAS_TILEDARRAY)
+
+namespace detail {
+
+/// @brief Weighted average over the triplet-doubles Klein-four orbit:
+///   out(orig) = w_self * arr(orig)
+///             + w_swap * (arr(bra_swap) + arr(ket_swap) + arr(pair_swap)).
+/// All three external swap images share a single weight by the Klein-four
+/// symmetry, so the metric NNS reconstruction (w_self = 1, w_swap = -1/3) and
+/// the idempotent null-space projector (w_self = 3/4, w_swap = -1/4) are both
+/// instances of this combine; the two differ only by the overall scale 4/3.
+template <typename... Args>
+auto triplet_doubles_orbit_combine_ta(
+    TA::DistArray<Args...> const& arr, TripletDoublesSwapLayouts const& layouts,
+    typename TA::DistArray<Args...>::numeric_type w_self,
+    typename TA::DistArray<Args...>::numeric_type w_swap) {
+  TA::DistArray<Args...> result;
+  result(layouts.orig) =
+      w_self * arr(layouts.orig) +
+      w_swap * (arr(layouts.bra_swap) + arr(layouts.ket_swap) +
+                arr(layouts.pair_swap));
+  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
+  result.truncate();
+  return result;
+}
+
+}  // namespace detail
+
+/// @brief Metric NNS reconstruction for compact triplet R2 residuals: rebuilds
+/// the full residual from its compact (-3c) representative via the Klein-four
+/// orbit with the n=2 triplet Gram pseudo-inverse weights {1, -1/3, -1/3,
+/// -1/3}, i.e. out(orig) = arr(orig) - (1/3)(bra + ket + pair). Numerical
+/// analogue of triplet_doubles_symbolic_reconstruct; apply to the H*R residual
+/// when the compact equations were evaluated.
+template <typename... Args>
+auto triplet_doubles_nns_project_ta(TA::DistArray<Args...> const& arr,
+                                    std::string const& orig_layout) {
+  using numeric_type = typename TA::DistArray<Args...>::numeric_type;
+  if (arr.trange().rank() != 4) return arr;
+  const auto layouts = triplet_doubles_swap_layouts(orig_layout);
+  return detail::triplet_doubles_orbit_combine_ta<Args...>(
+      arr, layouts, numeric_type(1), -numeric_type(1) / numeric_type(3));
+}
+
+template <typename... Args>
+auto triplet_doubles_nns_project(TA::DistArray<Args...> const& arr,
+                                 std::string const& orig_layout) {
+  return triplet_doubles_nns_project_ta(arr, orig_layout);
+}
+
+/// @brief Idempotent null-space projector for triplet R2: removes the
+/// metric-null fully symmetric component, P = I - (1/4)Sigma, i.e. the
+/// Klein-four orbit with weights {3/4, -1/4, -1/4, -1/4}. Equals
+/// (3/4) * triplet_doubles_nns_project. Apply to the Davidson trial R2 each
+/// iteration to keep it in the physical (non-null) subspace.
+template <typename... Args>
+auto triplet_doubles_nullspace_project_ta(TA::DistArray<Args...> const& arr,
+                                          std::string const& orig_layout) {
+  using numeric_type = typename TA::DistArray<Args...>::numeric_type;
+  if (arr.trange().rank() != 4) return arr;
+  const auto layouts = triplet_doubles_swap_layouts(orig_layout);
+  return detail::triplet_doubles_orbit_combine_ta<Args...>(
+      arr, layouts, numeric_type(3) / numeric_type(4),
+      -numeric_type(1) / numeric_type(4));
+}
+
+template <typename... Args>
+auto triplet_doubles_nullspace_project(TA::DistArray<Args...> const& arr,
+                                       std::string const& orig_layout) {
+  return triplet_doubles_nullspace_project_ta(arr, orig_layout);
+}
+
+#endif  // defined(SEQUANT_HAS_TILEDARRAY)
+
+#if defined(SEQUANT_HAS_BTAS)
+
+namespace detail {
+
+/// @brief BTAS analogue of triplet_doubles_orbit_combine_ta (no truncation).
+template <typename... Args>
+auto triplet_doubles_orbit_combine_btas(
+    btas::Tensor<Args...> const& arr, TripletDoublesSwapLayouts const& layouts,
+    typename btas::Tensor<Args...>::value_type w_self,
+    typename btas::Tensor<Args...>::value_type w_swap) {
+  btas::Tensor<Args...> result;
+  result(layouts.orig) =
+      w_self * arr(layouts.orig) +
+      w_swap * (arr(layouts.bra_swap) + arr(layouts.ket_swap) +
+                arr(layouts.pair_swap));
+  return result;
+}
+
+}  // namespace detail
+
+template <typename... Args>
+auto triplet_doubles_nns_project_btas(btas::Tensor<Args...> const& arr,
+                                      std::string const& orig_layout) {
+  using numeric_type = typename btas::Tensor<Args...>::value_type;
+  if (arr.rank() != 4) return arr;
+  const auto layouts = triplet_doubles_swap_layouts(orig_layout);
+  return detail::triplet_doubles_orbit_combine_btas<Args...>(
+      arr, layouts, numeric_type(1), -numeric_type(1) / numeric_type(3));
+}
+
+template <typename... Args>
+auto triplet_doubles_nns_project(btas::Tensor<Args...> const& arr,
+                                 std::string const& orig_layout) {
+  return triplet_doubles_nns_project_btas(arr, orig_layout);
+}
+
+template <typename... Args>
+auto triplet_doubles_nullspace_project_btas(btas::Tensor<Args...> const& arr,
+                                            std::string const& orig_layout) {
+  using numeric_type = typename btas::Tensor<Args...>::value_type;
+  if (arr.rank() != 4) return arr;
+  const auto layouts = triplet_doubles_swap_layouts(orig_layout);
+  return detail::triplet_doubles_orbit_combine_btas<Args...>(
+      arr, layouts, numeric_type(3) / numeric_type(4),
+      -numeric_type(1) / numeric_type(4));
+}
+
+template <typename... Args>
+auto triplet_doubles_nullspace_project(btas::Tensor<Args...> const& arr,
+                                       std::string const& orig_layout) {
+  return triplet_doubles_nullspace_project_btas(arr, orig_layout);
+}
+
+#endif  // defined(SEQUANT_HAS_BTAS)
 
 }  // namespace sequant::mbpt
 
