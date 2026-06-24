@@ -5,6 +5,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/optimize/multiterm.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/optimize/single_term.hpp>
 #include <SeQuant/core/optimize/sum.hpp>
@@ -143,17 +144,25 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
     }
 
     Sum new_sum(std::move(new_smands), Sum::move_only_tag{});
-    if (!reorder) return ex<Sum>(std::move(new_sum));
+
+    // Multi-term factorization is opt-in and, like reorder() below, consumes
+    // per-summand binary nodes; both need them built sequentially -- see
+    // invariant (2) above. Skip the build entirely when neither is requested.
+    bool const do_multiterm = opts.multiterm == MultiTermFactor::Enable;
+    if (!reorder && !do_multiterm) return ex<Sum>(std::move(new_sum));
 
     // Binarize once per optimized summand and hand the nodes to reorder()
-    // so they aren't re-built inside clusters(). NOTE: this runs sequentially
-    // by design -- see invariant (2) above.
+    // (so they aren't re-built inside clusters()) and/or to the factorizer.
+    // NOTE: this runs sequentially by design -- see invariant (2) above.
     container::vector<FullBinaryNode<EvalExpr>> nodes;
     nodes.reserve(new_sum.size());
     // per-summand binarize for ordering only; positional head doesn't escape.
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     for (auto const& s : new_sum.summands()) nodes.push_back(binarize(s));
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+    if (do_multiterm) return opt::factorize_multiterm(new_sum, nodes, opts);
+
     return ex<Sum>(opt::reorder(new_sum, nodes));
   }
 

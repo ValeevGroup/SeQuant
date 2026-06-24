@@ -27,6 +27,12 @@ struct CSEOptions {
   bool subnet = false;
 };
 
+/// Whether to perform multi-term factorization, pulling shared factors across
+/// the summands of a Sum (\c A*B + A*C -> A*(B + C)) using a cost-driven
+/// biclique search. Opt-in; disabled by default so existing output is
+/// unchanged.
+enum class MultiTermFactor { Enable, Disable };
+
 /// A type-erased provider mapping an Index to its extent. Used by the public
 /// optimize() API. Callers reaching for the templated opt::single_term_opt
 /// overloads (constrained by \ref opt::has_index_extent) should pass the
@@ -47,6 +53,10 @@ struct OptimizeOptions {
   /// Common-subexpression-elimination options. All disabled by default;
   /// enabling can reduce op counts at the cost of additional optimization time.
   CSEOptions CSE = {};
+
+  /// Whether to pull shared factors across summands via cost-driven
+  /// multi-term factorization. Disabled by default.
+  MultiTermFactor multiterm = MultiTermFactor::Disable;
 
   /// Caller-supplied Index to extent provider. If empty, defaults to
   /// \c IndexSpace::approximate_size().

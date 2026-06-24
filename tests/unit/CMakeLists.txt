@@ -56,6 +56,7 @@ target_compile_definitions(unit_tests-sequant-eval-obj PRIVATE
 set(optimize_test_sources
     "test_extract_subtrees.cpp"
     "test_fusion.cpp"
+    "test_multiterm.cpp"
     "test_optimize.cpp"
 )
 add_library(unit_tests-sequant-optimize-obj OBJECT ${optimize_test_sources})

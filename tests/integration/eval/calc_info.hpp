@@ -12,6 +12,7 @@
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
@@ -22,6 +23,8 @@
 #include <range/v3/view/transform.hpp>
 
 #include <cstddef>
+#include <format>
+#include <iostream>
 
 namespace sequant::eval {
 
@@ -96,23 +99,59 @@ struct CalcInfo {
   template <typename ExprT>
   [[nodiscard]] container::vector<EvalNode<ExprT>> node_(ExprPtr const& expr,
                                                          size_t rank) const {
-    using ranges::views::transform;
     auto trimmed = tail_factor(expr);
-    auto tform_and_save =
-        transform([st = optm_opts.single_term](const auto& expr) {
-          // SCF reference path: per-term binarize for energy/residual building;
-          // the head's bra/ket layout is consumed by integration helpers that
-          // index by slot ordinal and don't depend on conventional layout.
-          SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-          return binarize<ExprT>(st ? optimize(expr) : expr);
-          SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-        }) |
-        ranges::to_vector;
-    if (trimmed.size() > 0) {
-      return *trimmed | tform_and_save;
-    } else {  // corner case: trimmed is an atom (i.e. single tensor)
-      return ranges::views::single(trimmed) | tform_and_save;
+
+    // Optimize the whole sum at once: reorder() and multi-term factorization
+    // both act ACROSS summands, so a per-term optimize() would defeat them.
+    // optimize() single-term-optimizes every summand internally and returns the
+    // (possibly reordered/factored) sum, whose top-level summands become the
+    // eval nodes below.
+    //
+    // NOTE: multi-term factorization is performed inside optimize(), so it is
+    // tied to single_term: it is honored only when single_term is on. When
+    // single_term is off, optimize() is not called and multi_term has no effect
+    // (the raw expression is binarized as-is). OptimizeOptions has no switch to
+    // run multi-term/reorder without single-term optimization, and tying the
+    // two keeps this example's option handling simple (see
+    // OptionsOptimization).
+    OptimizeOptions opts;
+    opts.multiterm = optm_opts.multi_term ? MultiTermFactor::Enable
+                                          : MultiTermFactor::Disable;
+    ExprPtr const optimized =
+        optm_opts.single_term ? optimize(trimmed, opts) : trimmed;
+
+    // Each top-level summand of the result is one eval node; a non-Sum result
+    // (single-term or atomic equation) is a single summand.
+    container::vector<ExprPtr> summands;
+    if (optimized->is<Sum>())
+      for (auto const& s : *optimized) summands.push_back(s);
+    else
+      summands.push_back(optimized);
+
+    // SCF reference path: per-summand binarize for energy/residual building;
+    // the head's bra/ket layout is consumed by integration helpers that index
+    // by slot ordinal and don't depend on conventional layout.
+    container::vector<EvalNode<ExprT>> nodes;
+    nodes.reserve(summands.size());
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    for (auto const& s : summands) nodes.push_back(binarize<ExprT>(s));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+    // Print the optimized expressions once (one summand per line) in the
+    // deserialize text format, just before returning -- before any evaluation.
+    // A header reports the per-equation term counts before/after optimization
+    // (multi-term factorization can merge summands), a footer closes the block.
+    if (log_opts.print_exprs) {
+      const std::size_t nb = expr->is<Sum>() ? expr->size() : 1;
+      const std::size_t na = summands.size();
+      std::wcout << std::format(
+          L"===== R{} terms (# terms before/after opt {}/{}) ======\n", rank,
+          nb, na);
+      for (auto const& s : summands) std::wcout << serialize(s) << L'\n';
+      std::wcout << L"------------\n";
     }
+
+    return nodes;
   }
 };
 
