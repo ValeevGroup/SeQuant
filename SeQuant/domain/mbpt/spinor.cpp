@@ -340,12 +340,17 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(const ExprPtr& expr) {
 ExprPtr closed_shell_kramers_trace(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups,
-    bool fold_T) {
+    bool fold_T, bool expand_g) {
   if (expr->is<Constant>() || expr->is<Variable>()) return expr;
 
-  // Step 0/6: expand the integral `g`'s antisymmetry (Kramers-free, so no Ms
-  // filtering), keep the amplitude `t` antisymmetric (the level-1 form).
-  ExprPtr traced_input = expand_label_antisymm(expr, L"g");
+  // Step 0/6: optionally expand the integral `g`'s antisymmetry (Kramers-free,
+  // so no Ms filtering), keeping the amplitude `t` antisymmetric (the level-1
+  // form). When expand_g is false, `g` stays antisymmetric (ḡ) so the evaluator
+  // fetches the factory [as] block directly — the cross-Kramers antisymmetry is
+  // then handled inside the integral, not by a raw config sum. (Expanding g is
+  // a later optimization stage.)
+  ExprPtr traced_input =
+      expand_g ? expand_label_antisymm(expr, L"g") : expr->clone();
   canonicalize(traced_input);
   rapid_simplify(traced_input);
 

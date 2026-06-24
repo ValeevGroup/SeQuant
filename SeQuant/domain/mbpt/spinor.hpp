@@ -185,12 +185,17 @@ class ImagPart : public sequant::Expr {
 ///        complex and the caller takes its real part. The false form is for
 ///        evaluators that cannot evaluate `Re()` of a tensor network (e.g. the
 ///        CCk energy observable, which sums the blocks then takes the real part).
+/// @param expand_g if true (default), expand the integral `g`'s antisymmetry
+///        (the level-1 raw-g form); if false, keep `g` antisymmetric (ḡ) so the
+///        evaluator fetches the factory [as] block and the cross-Kramers
+///        antisymmetry is handled inside the integral. (g-expansion is a later
+///        optimization stage.)
 /// @return the Kramers-traced expression (unsimplified)
 // clang-format on
 ExprPtr closed_shell_kramers_trace(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups = {},
-    bool fold_T = true);
+    bool fold_T = true, bool expand_g = true);
 
 // clang-format off
 /// @brief Orbits of the n-bit Kramers configurations under a group of bit
