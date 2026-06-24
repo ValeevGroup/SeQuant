@@ -1209,21 +1209,27 @@ template <typename F, typename IndexPredicate = accept_any_index,
       }
     }
 
-    // Trace: the batched path evaluates the trigger plus any cross-term
-    // persistent finals (the replay group) in one pass, so the per-term
-    // Term|Begin/End that the top-level evaluate emits does not bracket these
-    // ops -- without this they appear under whichever term first triggered
-    // batching, with no header of their own. Emit a Term marker for each
-    // batched member so the per-op Eval lines below are attributed to their
-    // expression(s).
-    auto trace_batch_members = [&layers](log::TermMode mode) {
-      if (!log::printing()) return;
+    // Trace: the batched path co-evaluates a GROUP -- the trigger plus any
+    // cross-term persistent finals that slice over the same aux partition --
+    // streaming them together over the aux batches in one pass (so a
+    // sub-intermediate shared between members is computed once per batch, not
+    // once per consumer). The members are SIBLINGS computed alongside each
+    // other, NOT a term hierarchy; the per-op Eval lines below interleave
+    // across members and batches. Bracket the group and list its members so
+    // those ops can be attributed. Distinct "BatchGroup"/"BatchMember" labels
+    // (not Term|Begin/End) to avoid implying nesting; the top-level evaluate
+    // still emits the enclosing per-term Term markers.
+    if (log::printing()) {
+      std::size_t n_members = 0;
+      for (auto const& layer : layers) n_members += layer.size();
+      log::log("BatchGroup", "Begin",
+               std::format("{} members co-evaluated over {} aux batches",
+                           n_members, batches.size()));
       for (auto const& layer : layers)
         for (auto const& mk : layer)
-          log::term(mode,
-                    toUtf8(io::serialization::to_string(to_expr(*mk.first))));
-    };
-    trace_batch_members(log::TermMode::Begin);
+          log::log("BatchMember",
+                   toUtf8(io::serialization::to_string(to_expr(*mk.first))));
+    }
 
     // RAII scope for the batched partial contractions; a backend-supplied
     // factory may relax block-sparse screening here (scaled by the batch count)
@@ -1285,7 +1291,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
         (void)cache.store(*mem, std::move(v));
       }
     }
-    trace_batch_members(log::TermMode::End);
+    if (log::printing()) log::log("BatchGroup", "End");
     SEQUANT_ASSERT(trigger_result);
     return trigger_result;
   };
