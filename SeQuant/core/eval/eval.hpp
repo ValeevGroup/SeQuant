@@ -1128,8 +1128,37 @@ template <typename F, typename IndexPredicate = accept_any_index,
   return [le = std::move(le), target_batch_size = std::move(target_batch_size),
           accept, is_volatile, persistent_only,
           make_scope_guard](auto const& node, auto& cache) -> ResultPtr {
+    // Diagnostic (opt-in via SEQUANT_BATCH_DECLINE_DEBUG): when this evaluator
+    // declines to batch a node whose result carries a batchable axis FREE, that
+    // node is evaluated by the regular path and materialized WHOLE -- the exact
+    // free-axis intermediate the optimizer priced sliced. Logging only those
+    // declines (not every small/leaf decline) pinpoints whether any consumer is
+    // genuinely non-batched (a transient full build) vs. the giant being merely
+    // a held CSE the cache veto already removes. Quiet unless the env is set.
+    // Standalone (does NOT require the eval trace level): writes straight to
+    // std::cout when the env is set, so this can run without the expensive
+    // per-op trace. Runs on every rank, like the trace.
+    auto const decline_log = [&](char const* why) {
+      static bool const on =
+          std::getenv("SEQUANT_BATCH_DECLINE_DEBUG") != nullptr;
+      if (!on) return;
+      bool free_axis = false;
+      for (auto const& ix : node->canon_indices())
+        if (accept(ix)) {
+          free_axis = true;
+          break;
+        }
+      if (free_axis)
+        std::cout << "[BatchDecline] " << why << " | "
+                  << toUtf8(io::serialization::to_string(to_expr(node)))
+                  << std::endl;
+    };
+
     auto const K = batch_axis(node, accept);
-    if (!K) return nullptr;
+    if (!K) {
+      decline_log("no-batch-axis (no contracted index is batchable)");
+      return nullptr;
+    }
 
     // Persistence gate (opt-in via persistent_only): when set, decline to batch
     // any subtree containing a volatile leaf -- such a subtree is rebuilt every
@@ -1139,15 +1168,23 @@ template <typename F, typename IndexPredicate = accept_any_index,
     // any axis-carrying intermediate regardless of volatility, and the cost
     // model credits it accordingly, so the runtime must realize it too. (When
     // is_volatile is never_volatile the gate is moot either way.)
-    if (persistent_only && subtree_any(node, is_volatile)) return nullptr;
+    if (persistent_only && subtree_any(node, is_volatile)) {
+      decline_log("persistence-gate (volatile subtree, persistent_only)");
+      return nullptr;
+    }
 
     auto const leaf = find_leaf_carrying(node, *K);
-    if (!leaf) return nullptr;
+    if (!leaf) {
+      decline_log("no-carrying-leaf (axis carried only by an intermediate)");
+      return nullptr;
+    }
     auto const batches =
         le(leaf->first)->mode_batches(leaf->second, target_batch_size(*K));
 
-    if (batches.size() <= 1)
+    if (batches.size() <= 1) {
+      decline_log("single-batch (nothing to gain)");
       return nullptr;  // nothing to gain (or unbatchable)
+    }
 
     using node_t = std::remove_cvref_t<decltype(node)>;
     using member_t = std::pair<node_t const*, Index>;
