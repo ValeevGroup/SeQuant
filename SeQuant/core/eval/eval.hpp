@@ -1209,6 +1209,22 @@ template <typename F, typename IndexPredicate = accept_any_index,
       }
     }
 
+    // Trace: the batched path evaluates the trigger plus any cross-term
+    // persistent finals (the replay group) in one pass, so the per-term
+    // Term|Begin/End that the top-level evaluate emits does not bracket these
+    // ops -- without this they appear under whichever term first triggered
+    // batching, with no header of their own. Emit a Term marker for each
+    // batched member so the per-op Eval lines below are attributed to their
+    // expression(s).
+    auto trace_batch_members = [&layers](log::TermMode mode) {
+      if (!log::printing()) return;
+      for (auto const& layer : layers)
+        for (auto const& mk : layer)
+          log::term(mode,
+                    toUtf8(io::serialization::to_string(to_expr(*mk.first))));
+    };
+    trace_batch_members(log::TermMode::Begin);
+
     // RAII scope for the batched partial contractions; a backend-supplied
     // factory may relax block-sparse screening here (scaled by the batch count)
     // so per-batch screening does not drop contributions that survive over the
@@ -1269,6 +1285,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
         (void)cache.store(*mem, std::move(v));
       }
     }
+    trace_batch_members(log::TermMode::End);
     SEQUANT_ASSERT(trigger_result);
     return trigger_result;
   };
