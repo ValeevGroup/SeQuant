@@ -179,11 +179,18 @@ class ImagPart : public sequant::Expr {
 /// @param ext_index_groups groups of external indices (empty for a fully
 ///        contracted energy; external-antisymmetry folding is not yet
 ///        implemented and these are treated like internal groups for now)
+/// @param fold_T if true (default), fold each global-T (conjugate) pair into a
+///        single `2 Re[...]` representative; if false, emit every configuration
+///        (sigma-merged) verbatim with no `RealPart` wrapper — the sum is
+///        complex and the caller takes its real part. The false form is for
+///        evaluators that cannot evaluate `Re()` of a tensor network (e.g. the
+///        CCk energy observable, which sums the blocks then takes the real part).
 /// @return the Kramers-traced expression (unsimplified)
 // clang-format on
 ExprPtr closed_shell_kramers_trace(
     const ExprPtr& expr,
-    const container::svector<container::svector<Index>>& ext_index_groups = {});
+    const container::svector<container::svector<Index>>& ext_index_groups = {},
+    bool fold_T = true);
 
 // clang-format off
 /// @brief Orbits of the n-bit Kramers configurations under a group of bit

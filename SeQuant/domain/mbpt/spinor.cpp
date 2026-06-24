@@ -288,18 +288,24 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(const ExprPtr& expr) {
     }
     ExprPtr block = append_spin(inner, ext_repl);
 
-    // Stage 2b (internal fold): the still-unlabeled (spin-any) indices are the
-    // contracted/internal ones. Enumerate all their Kramers configurations and
-    // sum (no Ms filter — relativistic); canonicalize then performs the
-    // particle-interchange (sigma) merge. The internal-T-reach (extra fold in
-    // the self-complementary external block) is deferred.
-    const auto used =
-        get_used_indices<container::set<Index, Index::LabelCompare>>(block);
-    container::svector<Index> internal;
-    for (const auto& idx : used)
-      if (to_spin(idx.space().qns()) == Spin::any) internal.push_back(idx);
-
-    if (!internal.empty()) {
+    // Stage 2b (internal fold): the still-unlabeled (spin-any) indices of a
+    // term are its contracted/internal ones. Enumerate all their Kramers
+    // configurations and sum (no Ms filter — relativistic); canonicalize then
+    // performs the particle-interchange (sigma) merge. The internal-T-reach
+    // (extra fold in the self-complementary external block) is deferred.
+    //
+    // The fold MUST be applied per term (summand): different terms of one
+    // residual carry different internal-index sets, and a term invariant under
+    // a given internal index (e.g. the driver, with no internal index) would be
+    // over-counted 2^k if the whole block were folded over the union of all
+    // terms' internal indices.
+    auto fold_term = [&](const ExprPtr& term) -> ExprPtr {
+      const auto used =
+          get_used_indices<container::set<Index, Index::LabelCompare>>(term);
+      container::svector<Index> internal;
+      for (const auto& idx : used)
+        if (to_spin(idx.space().qns()) == Spin::any) internal.push_back(idx);
+      if (internal.empty()) return term;
       const std::size_t ni = internal.size();
       SEQUANT_ASSERT(ni <= 62);
       const std::uint64_t nconfigs = pow2(ni);
@@ -311,9 +317,17 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(const ExprPtr& expr) {
           int_repl.emplace(internal[k], down ? make_spinbeta(internal[k])
                                              : make_spinalpha(internal[k]));
         }
-        sum->append(append_spin(block, int_repl));
+        sum->append(append_spin(term, int_repl));
       }
-      block = sum;
+      return sum;
+    };
+
+    if (block->is<Sum>()) {
+      auto folded = std::make_shared<Sum>();
+      for (const auto& summand : *block) folded->append(fold_term(summand));
+      block = folded;
+    } else {
+      block = fold_term(block);
     }
 
     canonicalize(block);  // sigma merge + dummy canonicalization
@@ -325,7 +339,8 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(const ExprPtr& expr) {
 
 ExprPtr closed_shell_kramers_trace(
     const ExprPtr& expr,
-    const container::svector<container::svector<Index>>& ext_index_groups) {
+    const container::svector<container::svector<Index>>& ext_index_groups,
+    bool fold_T) {
   if (expr->is<Constant>() || expr->is<Variable>()) return expr;
 
   // Step 0/6: expand the integral `g`'s antisymmetry (Kramers-free, so no Ms
@@ -377,8 +392,10 @@ ExprPtr closed_shell_kramers_trace(
   // of the canonicalized blocks) rather than relying on the Sum machinery.
   container::svector<std::pair<ExprPtr, std::int64_t>> reps;
   for (std::uint64_t cfg = 0; cfg < nconfigs; ++cfg) {
-    const std::uint64_t comp = cfg ^ full_mask;
-    if (cfg > comp) continue;  // keep canonical T-rep (cfg < comp for n >= 1)
+    if (fold_T) {
+      const std::uint64_t comp = cfg ^ full_mask;
+      if (cfg > comp) continue;  // keep canonical T-rep (cfg < comp for n >= 1)
+    }
 
     container::map<Index, Index> replacements;
     for (std::size_t k = 0; k < n; ++k) {
@@ -404,10 +421,16 @@ ExprPtr closed_shell_kramers_trace(
     if (!merged) reps.emplace_back(block, std::int64_t{1});
   }
 
-  // Emit one representative per orbit; coefficient = 2 (T-fold) x multiplicity.
+  // Emit one representative per orbit. With the T-fold, coefficient = 2 x
+  // multiplicity and each block is RealPart-wrapped (A + A* = 2 Re A). Without
+  // it, every configuration is emitted verbatim (coefficient = multiplicity, no
+  // RealPart) — the complex sum whose real part the caller takes.
   auto result = std::make_shared<Sum>();
   for (const auto& [block, mult] : reps) {
-    result->append(ex<Constant>(2 * mult) * real_part(block));
+    if (fold_T)
+      result->append(ex<Constant>(2 * mult) * real_part(block));
+    else
+      result->append(ex<Constant>(mult) * block);
   }
   return result;
 }
