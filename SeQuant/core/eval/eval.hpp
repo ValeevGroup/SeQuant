@@ -273,7 +273,14 @@ auto eval(EvalStat const& stat, Args const&... args) {
   auto const result_s = std::format("result={}", to_string(stat.mem_result));
   auto const alloc_s = std::format("alloc={}", to_string(stat.mem_alloc));
   auto const hw_s = std::format("hw={}", to_string(stat.mem_hwmark));
-  auto const rss_s = std::format("rss={}", to_string(rss()));
+  // Reduce this rank's RSS to the value to report (e.g. sum over ranks = true
+  // total app memory). This runs on every rank (printing() is level>0,
+  // identical across ranks), so an injected collective reducer is matched.
+  auto const rss_local = process_rss_bytes();
+  auto const& rss_reduce = Logger::instance().eval.rss_reduce;
+  auto const rss_s = std::format(
+      "rss={}",
+      to_string(Bytes{rss_reduce ? rss_reduce(rss_local) : rss_local}));
   if (stat.mem_left) {
     SEQUANT_ASSERT(stat.mem_right);
     log("Eval",                                               //
