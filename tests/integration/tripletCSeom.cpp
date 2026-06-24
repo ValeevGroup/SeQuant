@@ -1,5 +1,7 @@
 #include <SeQuant/version.hpp>
 
+#include <SeQuant/core/expressions/expr_algorithms.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/reserved.hpp>
@@ -19,6 +21,8 @@
 #include <range/v3/algorithm/transform.hpp>
 
 #include <chrono>
+#include <iomanip>
+#include <sstream>
 
 using namespace sequant;
 using namespace sequant::mbpt;
@@ -78,7 +82,7 @@ inline const container::map<std::string, EqnType> str2type = {
 inline const container::map<EqnType, std::wstring> type2wstr = {
     {EqnType::left, L"L"}, {EqnType::right, L"R"}};
 
-std::size_t count_distinct_hashes(ExprPtr expr) {
+void prepare_expr_for_hashing(ExprPtr& expr) {
   if (expr->is<Sum>()) {
     for (auto& term : *expr) {
       if (term->is<Product>())
@@ -88,20 +92,426 @@ std::size_t count_distinct_hashes(ExprPtr expr) {
   }
   canonicalize(expr);
   simplify(expr);
+}
+
+std::size_t term_network_hash(const ExprPtr& term) {
+  SEQUANT_ASSERT(term->is<Product>());
+  sequant::TensorNetwork tn(*term.as_shared_ptr<Product>());
+  return tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels())
+      .hash_value();
+}
+
+std::size_t count_distinct_hashes(ExprPtr expr) {
+  prepare_expr_for_hashing(expr);
 
   if (!expr->is<Sum>()) return expr->is<Constant>() ? 0 : 1;
 
   container::set<std::size_t> hashes;
   for (const auto& term : *expr) {
     if (!term->is<Product>()) continue;
-    auto product = term.as_shared_ptr<Product>();
-    sequant::TensorNetwork tn(*product);
-    auto hash =
-        tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels())
-            .hash_value();
-    hashes.insert(hash);
+    hashes.insert(term_network_hash(term));
   }
   return hashes.size();
+}
+
+struct HashGroupStats {
+  std::size_t n_terms = 0;
+  std::size_t n_groups = 0;
+  container::map<std::size_t, std::size_t> size_histogram;
+};
+
+HashGroupStats hash_group_stats(const ExprPtr& expr_in) {
+  HashGroupStats stats;
+  ExprPtr expr = expr_in->clone();
+  prepare_expr_for_hashing(expr);
+
+  if (!expr->is<Sum>()) {
+    stats.n_terms = expr->is<Constant>() ? 0 : 1;
+    stats.n_groups = stats.n_terms;
+    if (stats.n_terms) stats.size_histogram[1] = 1;
+    return stats;
+  }
+
+  container::map<std::size_t, container::vector<ExprPtr>> groups;
+  for (const auto& term : *expr) {
+    if (!term->is<Product>()) continue;
+    ++stats.n_terms;
+    groups[term_network_hash(term)].push_back(term);
+  }
+  stats.n_groups = groups.size();
+  for (const auto& [_, terms] : groups) ++stats.size_histogram[terms.size()];
+
+  return stats;
+}
+
+container::map<std::size_t, container::vector<ExprPtr>> group_by_hash(
+    ExprPtr expr_in) {
+  ExprPtr expr = expr_in->clone();
+  prepare_expr_for_hashing(expr);
+
+  container::map<std::size_t, container::vector<ExprPtr>> groups;
+  if (!expr->is<Sum>()) {
+    if (expr->is<Product>()) groups[term_network_hash(expr)].push_back(expr);
+    return groups;
+  }
+
+  for (const auto& term : *expr) {
+    if (!term->is<Product>()) continue;
+    groups[term_network_hash(term)].push_back(term);
+  }
+  return groups;
+}
+
+std::wstring coeff_to_wstring(const Product::scalar_type& c) {
+  return to_latex_align(ex<Constant>(c), 1, 1);
+}
+
+std::size_t expr_term_count(const ExprPtr& e) {
+  if (e->is<Constant>())
+    return e->as<Constant>().value() == Constant::scalar_type{0} ? 0 : 1;
+  if (e->is<Sum>()) return e->size();
+  return 1;
+}
+
+void print_hash_histogram(const std::wstring& stage_label,
+                          const ExprPtr& expr) {
+  const auto stats = hash_group_stats(expr);
+  std::wcout << L"  [" << stage_label << L"] " << stats.n_terms << L" terms, "
+             << stats.n_groups << L" distinct hashes\n";
+  std::wcout << L"    group-size histogram: ";
+  for (const auto& [sz, cnt] : stats.size_histogram) {
+    std::wcout << L"size=" << sz << L" x" << cnt << L"  ";
+  }
+  std::wcout << L"\n";
+}
+
+enum class ExternalSwapKind { Identity, BraSwap, KetSwap, PairSwap, Other };
+
+ExternalSwapKind classify_external_swap(
+    const container::svector<container::svector<SlottedIndex>>& ext_idxs,
+    const container::svector<Index>& ref_bra,
+    const container::svector<Index>& ref_ket,
+    const container::svector<Index>& bra,
+    const container::svector<Index>& ket) {
+  if (ext_idxs.size() != 2 || ref_bra.size() != 2 || ref_ket.size() != 2 ||
+      bra.size() != 2 || ket.size() != 2) {
+    return ExternalSwapKind::Other;
+  }
+
+  const Index b0 = get_bra_idx(ext_idxs.at(0));
+  const Index b1 = get_bra_idx(ext_idxs.at(1));
+  const Index k0 = get_ket_idx(ext_idxs.at(0));
+  const Index k1 = get_ket_idx(ext_idxs.at(1));
+
+  auto matches = [&](const container::svector<Index>& b,
+                     const container::svector<Index>& k) {
+    return b.at(0) == bra.at(0) && b.at(1) == bra.at(1) &&
+           k.at(0) == ket.at(0) && k.at(1) == ket.at(1);
+  };
+
+  if (matches(ref_bra, ref_ket)) return ExternalSwapKind::Identity;
+  if (matches(container::svector<Index>{b1, b0}, ref_ket))
+    return ExternalSwapKind::BraSwap;
+  if (matches(ref_bra, container::svector<Index>{k1, k0}))
+    return ExternalSwapKind::KetSwap;
+  if (matches(container::svector<Index>{b1, b0},
+              container::svector<Index>{k1, k0}))
+    return ExternalSwapKind::PairSwap;
+  return ExternalSwapKind::Other;
+}
+
+std::wstring swap_kind_label(ExternalSwapKind k) {
+  switch (k) {
+    case ExternalSwapKind::Identity:
+      return L"id";
+    case ExternalSwapKind::BraSwap:
+      return L"bra";
+    case ExternalSwapKind::KetSwap:
+      return L"ket";
+    case ExternalSwapKind::PairSwap:
+      return L"pair";
+    case ExternalSwapKind::Other:
+      return L"?";
+  }
+  return L"?";
+}
+
+// Collect bra/ket index labels from the first EOM amplitude tensor (R/L) in a
+// product, if present; otherwise from the first tensor with rank >= 2.
+std::pair<container::svector<Index>, container::svector<Index>>
+external_slot_labels(const Product& p) {
+  for (const auto& f : p) {
+    if (!f->is<Tensor>()) continue;
+    const auto& t = f->as<Tensor>();
+    if (t.label() == L"R" || t.label() == L"L") {
+      return {container::svector<Index>(t.bra().begin(), t.bra().end()),
+              container::svector<Index>(t.ket().begin(), t.ket().end())};
+    }
+  }
+  for (const auto& f : p) {
+    if (!f->is<Tensor>()) continue;
+    const auto& t = f->as<Tensor>();
+    if (t.rank() >= 2) {
+      return {container::svector<Index>(t.bra().begin(), t.bra().end()),
+              container::svector<Index>(t.ket().begin(), t.ket().end())};
+    }
+  }
+  return {};
+}
+
+void dump_hash_groups(
+    const std::wstring& stage_label, const ExprPtr& expr,
+    const container::svector<container::svector<SlottedIndex>>& ext_idxs,
+    std::size_t max_groups, std::size_t max_terms_per_group) {
+  print_hash_histogram(stage_label, expr);
+
+  const auto groups = group_by_hash(expr->clone());
+  std::size_t printed = 0;
+  for (const auto& [hash, terms] : groups) {
+    if (printed >= max_groups) break;
+    ++printed;
+
+    std::wcout << L"\n    --- hash group 0x" << std::hex << hash << std::dec
+               << L" (" << terms.size() << L" terms) ---\n";
+
+    container::svector<Index> ref_bra, ref_ket;
+    if (!terms.empty() && terms.front()->is<Product>()) {
+      std::tie(ref_bra, ref_ket) =
+          external_slot_labels(terms.front()->as<Product>());
+    }
+
+    std::size_t tidx = 0;
+    for (const auto& term : terms) {
+      if (tidx >= max_terms_per_group) {
+        std::wcout << L"      ... (" << (terms.size() - max_terms_per_group)
+                   << L" more terms)\n";
+        break;
+      }
+      const auto& p = term->as<Product>();
+      const auto coeff = p.scalar();
+      const auto [bra, ket] = external_slot_labels(p);
+      const auto swap =
+          classify_external_swap(ext_idxs, ref_bra, ref_ket, bra, ket);
+
+      std::wcout << L"      [" << tidx << L"] coeff=" << coeff_to_wstring(coeff)
+                 << L" swap=" << swap_kind_label(swap) << L" bra=(";
+      for (std::size_t i = 0; i < bra.size(); ++i) {
+        if (i) std::wcout << L",";
+        std::wcout << bra.at(i).full_label();
+      }
+      std::wcout << L") ket=(";
+      for (std::size_t i = 0; i < ket.size(); ++i) {
+        if (i) std::wcout << L",";
+        std::wcout << ket.at(i).full_label();
+      }
+      std::wcout << L")\n        " << to_latex_align(term, 1, 1) << L"\n";
+      ++tidx;
+    }
+  }
+  if (groups.size() > max_groups) {
+    std::wcout << L"    ... (" << (groups.size() - max_groups)
+               << L" more hash groups not shown)\n";
+  }
+}
+
+// For each group, try to express every term as an external-index transform of
+// the first term. Report groups where all members are {id,bra,ket,pair} swaps.
+void analyze_group_recovery(
+    const std::wstring& stage_label, const ExprPtr& expr,
+    const container::svector<container::svector<SlottedIndex>>& ext_idxs,
+    std::size_t target_group_size) {
+  const auto groups = group_by_hash(expr->clone());
+
+  std::size_t n_target = 0;
+  std::size_t n_swap_classified = 0;
+  std::size_t n_permutation_recovery = 0;
+  std::size_t n_coeff_sum_zero = 0;
+  std::size_t n_symbolic_group_sum_zero = 0;
+
+  for (const auto& [_, terms] : groups) {
+    if (terms.size() != target_group_size) continue;
+    ++n_target;
+
+    sequant::rational coeff_sum{0};
+    bool coeff_sum_exact = true;
+    for (const auto& t : terms) {
+      if (!t->is<Product>()) {
+        coeff_sum_exact = false;
+        break;
+      }
+      const auto s = t->as<Product>().scalar();
+      if (s.imag() != 0) {
+        coeff_sum_exact = false;
+        break;
+      }
+      coeff_sum += s.real();
+    }
+    if (coeff_sum_exact && coeff_sum == sequant::rational{0})
+      ++n_coeff_sum_zero;
+
+    ExprPtr group_sum = ex<Constant>(sequant::rational{0});
+    for (const auto& t : terms) group_sum = group_sum + t;
+    canonicalize(group_sum);
+    simplify(group_sum);
+    if (expr_term_count(group_sum) == 0) ++n_symbolic_group_sum_zero;
+
+    if (target_group_size != 4 || !terms.front()->is<Product>()) continue;
+
+    const auto [ref_bra, ref_ket] =
+        external_slot_labels(terms.front()->as<Product>());
+
+    bool all_classified = true;
+    container::set<ExternalSwapKind> kinds;
+    for (const auto& t : terms) {
+      if (!t->is<Product>()) {
+        all_classified = false;
+        break;
+      }
+      const auto [bra, ket] = external_slot_labels(t->as<Product>());
+      const auto kind =
+          classify_external_swap(ext_idxs, ref_bra, ref_ket, bra, ket);
+      kinds.insert(kind);
+      if (kind == ExternalSwapKind::Other) all_classified = false;
+    }
+    if (all_classified && kinds.size() == 4) ++n_swap_classified;
+
+    // Permutation recovery: term_j == P(term_0) for one of four swaps
+    if (ext_idxs.size() == 2) {
+      const Index b0 = get_bra_idx(ext_idxs.at(0));
+      const Index b1 = get_bra_idx(ext_idxs.at(1));
+      const Index k0 = get_ket_idx(ext_idxs.at(0));
+      const Index k1 = get_ket_idx(ext_idxs.at(1));
+      const container::map<Index, Index> swap_bra{{b0, b1}, {b1, b0}};
+      const container::map<Index, Index> swap_ket{{k0, k1}, {k1, k0}};
+      container::map<Index, Index> swap_pair = swap_bra;
+      for (const auto& [a, b] : swap_ket) swap_pair.emplace(a, b);
+
+      const auto ref = terms.front()->clone();
+      const container::map<Index, Index> id_map;
+      const container::map<Index, Index>* maps[] = {&id_map, &swap_bra,
+                                                    &swap_ket, &swap_pair};
+
+      bool group_ok = true;
+      for (std::size_t j = 1; j < terms.size(); ++j) {
+        bool matched = false;
+        for (const auto* m : maps) {
+          ExprPtr transformed = transform_expr(ref, *m);
+          canonicalize(transformed);
+          simplify(transformed);
+          ExprPtr diff = transformed - terms.at(j);
+          canonicalize(diff);
+          simplify(diff);
+          if (diff->is<Constant>() &&
+              diff->as<Constant>().value() == sequant::rational{0}) {
+            matched = true;
+            break;
+          }
+        }
+        if (!matched) {
+          group_ok = false;
+          break;
+        }
+      }
+      if (group_ok) ++n_permutation_recovery;
+    }
+  }
+
+  std::wcout << L"  [" << stage_label << L"] recovery summary (size-"
+             << target_group_size << L" groups): " << n_target << L" groups\n";
+  std::wcout << L"    coeff sums zero: " << n_coeff_sum_zero << L" / "
+             << n_target << L"\n";
+  std::wcout << L"    symbolic group sums zero: " << n_symbolic_group_sum_zero
+             << L" / " << n_target << L"\n";
+  if (target_group_size == 4) {
+    std::wcout << L"    all 4 swap kinds {id,bra,ket,pair}: "
+               << n_swap_classified << L" / " << n_target << L"\n";
+    std::wcout << L"    permutation recovery from 1st term: "
+               << n_permutation_recovery << L" / " << n_target << L"\n";
+  }
+}
+
+ExprPtr unit_product(const ExprPtr& term) {
+  auto out = term->clone();
+  auto& p = out->as<Product>();
+  p.scale(Product::scalar_type{1} / p.scalar());
+  canonicalize(out);
+  simplify(out);
+  return out;
+}
+
+// Match a term against a pool up to scalar factor (exact product structure).
+bool term_matches_pool(const ExprPtr& term,
+                       const container::vector<ExprPtr>& pool) {
+  if (!term->is<Product>()) return false;
+  const auto term_unit = unit_product(term);
+  for (const auto& cand : pool) {
+    if (!cand->is<Product>()) continue;
+    ExprPtr diff = term_unit - unit_product(cand);
+    canonicalize(diff);
+    simplify(diff);
+    if (expr_term_count(diff) == 0) return true;
+  }
+  return false;
+}
+
+// Trace how paper combine (3V - V_ps)/16 maps V size-3 hash groups to Omega
+// size-4 groups.
+void analyze_v_to_omega_transition(
+    const ExprPtr& V, const ExprPtr& T_ref,
+    const container::map<Index, Index>& pair_swap) {
+  const auto v_groups = group_by_hash(V->clone());
+  ExprPtr V_ps = transform_expr(V, pair_swap);
+  canonicalize(V_ps);
+  simplify(V_ps);
+  const auto vps_groups = group_by_hash(V_ps->clone());
+  const auto t_groups = group_by_hash(T_ref->clone());
+
+  std::size_t n_v3_t4 = 0;
+  std::size_t n_from_v_only = 0;
+  std::size_t n_from_vps_only = 0;
+  std::size_t n_from_both = 0;
+
+  container::vector<ExprPtr> all_v_terms;
+  for (const auto& [_, terms] : v_groups)
+    for (const auto& t : terms) all_v_terms.push_back(t);
+  container::vector<ExprPtr> all_vps_terms;
+  for (const auto& [_, terms] : vps_groups)
+    for (const auto& t : terms) all_vps_terms.push_back(t);
+
+  for (const auto& [hash, t_terms] : t_groups) {
+    const auto v_it = v_groups.find(hash);
+    if (v_it != v_groups.end() && v_it->second.size() == 3 &&
+        t_terms.size() == 4)
+      ++n_v3_t4;
+
+    std::size_t n_v = 0;
+    std::size_t n_vps = 0;
+    const auto v_pool = v_it != v_groups.end() ? v_it->second : all_v_terms;
+    const auto vps_pool = [&]() -> const container::vector<ExprPtr>& {
+      const auto it = vps_groups.find(hash);
+      return it != vps_groups.end() ? it->second : all_vps_terms;
+    }();
+    for (const auto& t : t_terms) {
+      if (term_matches_pool(t, v_pool)) ++n_v;
+      if (term_matches_pool(t, vps_pool)) ++n_vps;
+    }
+    if (n_v == 4 && n_vps == 0)
+      ++n_from_v_only;
+    else if (n_v == 0 && n_vps == 4)
+      ++n_from_vps_only;
+    else if (n_v > 0 && n_vps > 0)
+      ++n_from_both;
+  }
+
+  std::wcout << L"  [V -> Omega] paper-combine transition:\n";
+  std::wcout << L"    hash groups with V size=3 and Omega size=4: " << n_v3_t4
+             << L" / " << t_groups.size() << L"\n";
+  std::wcout << L"    Omega terms traceable to V pool only: " << n_from_v_only
+             << L" groups\n";
+  std::wcout << L"    Omega terms traceable to V_ps pool only: "
+             << n_from_vps_only << L" groups\n";
+  std::wcout << L"    Omega groups with terms from both V and V_ps: "
+             << n_from_both << L" / " << t_groups.size() << L"\n";
 }
 
 container::svector<container::svector<Index>> unwrap_ext_groups(
@@ -120,11 +530,13 @@ class compute_eomcc_closedshell_triplet {
   size_t N, np, nh;
   std::string manifold;
   EqnType type;
+  bool hashgroups_;
 
  public:
   compute_eomcc_closedshell_triplet(size_t n, const std::string& exc_manifold,
-                                    EqnType t = EqnType::right)
-      : N(n), manifold(exc_manifold), type(t) {
+                                    EqnType t = EqnType::right,
+                                    bool hashgroups = false)
+      : N(n), manifold(exc_manifold), type(t), hashgroups_(hashgroups) {
     std::tie(nh, np) = parse_excitation_manifold(manifold);
 
     // triplet spintrace currently supports particle-conserving EE only
@@ -340,6 +752,26 @@ class compute_eomcc_closedshell_triplet {
                  << " terms, and " << count_distinct_hashes(T_ref->clone())
                  << " distinct hashes\n";
 
+      if (hashgroups_ && ext_groups.size() == 2) {
+        const auto& g0 = ext_idxs.at(0);
+        const auto& g1 = ext_idxs.at(1);
+        const container::map<Index, Index> pair_swap{
+            {get_bra_idx(g0), get_bra_idx(g1)},
+            {get_bra_idx(g1), get_bra_idx(g0)},
+            {get_ket_idx(g0), get_ket_idx(g1)},
+            {get_ket_idx(g1), get_ket_idx(g0)}};
+
+        std::wcout
+            << L"\n========== R[" << i
+            << L"] hash-group diagnostics (triplet doubles) ==========\n";
+        dump_hash_groups(L"V (sector sum)", V, ext_idxs, 5, 4);
+        analyze_group_recovery(L"V (sector sum)", V, ext_idxs, 3);
+
+        dump_hash_groups(L"T_ref (paper Omega)", T_ref, ext_idxs, 5, 4);
+        analyze_group_recovery(L"T_ref (paper Omega)", T_ref, ext_idxs, 4);
+        analyze_v_to_omega_transition(V, T_ref, pair_swap);
+      }
+
       try {
         const auto tstart = std::chrono::high_resolution_clock::now();
         auto st = closed_shell_EOM_triplet_spintrace(
@@ -358,6 +790,27 @@ class compute_eomcc_closedshell_triplet {
                    << "] (production triplet) - (reference assembly): "
                    << term_count(T_diff) << " terms (expect 0)\n";
         runtime_assert(term_count(T_diff) == 0);
+
+        if (ext_groups.size() == 2) {
+          auto compact = closed_shell_EOM_triplet_spintrace(
+              eqvec[i], {.method = BiorthogonalizationMethod::V2,
+                         .triplet_doubles_compact = true});
+          const ExprPtr recon =
+              triplet_doubles_symbolic_reconstruct(compact, ext_groups);
+          runtime_assert(recon == st);
+          if (recon == st) {
+            std::wcout << "recon == st\n";
+          }
+
+          std::wcout << "R[" << i
+                     << "] triplet compact (WK factor): " << term_count(compact)
+                     << " terms\n";
+        }
+
+        if (hashgroups_ && ext_groups.size() == 2) {
+          dump_hash_groups(L"st (production spintrace)", st, ext_idxs, 5, 4);
+          analyze_group_recovery(L"st (production spintrace)", st, ext_idxs, 4);
+        }
 
         if (print) {
           // std::wcout << "\n open-shell singlet sum:\n"
@@ -442,6 +895,8 @@ int main(int argc, char* argv[]) {
   const std::string eqn_type = argc > 3 ? argv[3] : "R";
   const std::string print_str = argc > 4 ? argv[4] : "noprint";
   const bool print = print_str == "print";
+  const bool hashgroups = (argc > 5 && std::string(argv[5]) == "hashgroups") ||
+                          print_str == "hashgroups";
 
   sequant::detail::OpIdRegistrar op_id_registrar;
 
@@ -459,6 +914,6 @@ int main(int argc, char* argv[]) {
 
   // compute_all_closedshell_triplet{NMAX, exc_manifold,
   //                                 str2type.at(eqn_type)}(print);
-  compute_eomcc_closedshell_triplet{NMAX, exc_manifold,
-                                    str2type.at(eqn_type)}(print);
+  compute_eomcc_closedshell_triplet{NMAX, exc_manifold, str2type.at(eqn_type),
+                                    hashgroups}(print);
 }
