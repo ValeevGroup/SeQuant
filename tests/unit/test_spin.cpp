@@ -15,10 +15,12 @@
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <cassert>
+#include <cmath>
 #include <cstddef>
 #include <initializer_list>
 #include <memory>
@@ -2303,4 +2305,111 @@ SECTION("ResultExpr") {
     }
   }
 }
+}
+
+TEST_CASE("triplet_doubles_compact", "[spin][triplet]") {
+  using namespace sequant::mbpt;
+
+  const auto layouts = triplet_doubles_swap_layouts("a_1,a_2,i_1,i_2");
+  REQUIRE(layouts.orig == "a_1,a_2,i_1,i_2");
+  REQUIRE(layouts.bra_swap == "a_2,a_1,i_1,i_2");
+  REQUIRE(layouts.ket_swap == "a_1,a_2,i_2,i_1");
+  REQUIRE(layouts.pair_swap == "a_2,a_1,i_2,i_1");
+}
+
+TEST_CASE("triplet_doubles_reconstruct", "[spin][triplet]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  auto ctx = get_default_context();
+  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto _ = set_scoped_default_context(ctx);
+
+  // Build four full {c, c, c, -3c} hash groups taken from the triplet R2
+  // residual (groups 0, 1, 2 and 3). Group 3 is included on purpose: under the
+  // layout-preferring triplet_doubles_hash_filter its kept term is a +1/4 term,
+  // which would make reconstruction ambiguous; triplet_doubles_maxcoeff_compact
+  // must instead keep the -3/4 representative.
+  auto P = [](const wchar_t* s) {
+    return deserialize(std::wstring(s), {.def_perm_symm = Symmetry::Nonsymm});
+  };
+  auto term = [&](rational c, const wchar_t* s) -> ExprPtr {
+    return ex<Constant>(c) * P(s);
+  };
+
+  const ExprPtr full =
+      // --- group 0 ---
+      term(ratio(-3, 4),
+           L"R{i_1,i_2;a_3,a_4} * g{a_3,a_4;i_3,a_2} * t{i_3;a_1}") +
+      term(ratio(1, 4),
+           L"R{i_2,i_1;a_3,a_4} * g{a_3,a_4;i_3,a_2} * t{i_3;a_1}") +
+      term(ratio(1, 4),
+           L"R{i_2,i_1;a_3,a_4} * g{a_3,a_4;i_3,a_1} * t{i_3;a_2}") +
+      term(ratio(1, 4),
+           L"R{i_1,i_2;a_3,a_4} * g{a_3,a_4;i_3,a_1} * t{i_3;a_2}") +
+      // --- group 1 ---
+      term(ratio(1, 2),
+           L"R{i_1;a_3} * g{a_4,a_3;i_3,i_4} * t{i_4;a_2} * "
+           L"t{i_2,i_3;a_1,a_4}") +
+      term(ratio(-3, 2),
+           L"R{i_1;a_3} * g{a_4,a_3;i_3,i_4} * t{i_4;a_1} * "
+           L"t{i_2,i_3;a_2,a_4}") +
+      term(ratio(1, 2),
+           L"R{i_2;a_3} * g{a_4,a_3;i_3,i_4} * t{i_4;a_1} * "
+           L"t{i_1,i_3;a_2,a_4}") +
+      term(ratio(1, 2),
+           L"R{i_2;a_3} * g{a_4,a_3;i_3,i_4} * t{i_4;a_2} * "
+           L"t{i_1,i_3;a_1,a_4}") +
+      // --- group 2 ---
+      term(ratio(3, 4),
+           L"R{i_1;a_3} * g{a_3,a_4;i_3,i_4} * t{i_4;a_2} * "
+           L"t{i_3,i_2;a_1,a_4}") +
+      term(ratio(-1, 4),
+           L"R{i_2;a_3} * g{a_4,a_3;i_3,i_4} * t{i_3;a_1} * "
+           L"t{i_4,i_1;a_2,a_4}") +
+      term(ratio(-1, 4),
+           L"R{i_1;a_3} * g{a_4,a_3;i_3,i_4} * t{i_3;a_1} * "
+           L"t{i_4,i_2;a_2,a_4}") +
+      term(ratio(-1, 4),
+           L"R{i_2;a_3} * g{a_3,a_4;i_3,i_4} * t{i_4;a_2} * "
+           L"t{i_3,i_1;a_1,a_4}") +
+      // --- group 3 (kept term is +1/4 under layout-preferring filter) ---
+      term(ratio(1, 4),
+           L"R{i_1,i_3;a_2,a_3} * g{a_4,a_3;i_3,a_1} * t{i_2;a_4}") +
+      term(ratio(-3, 4),
+           L"R{i_1,i_3;a_1,a_3} * g{a_4,a_3;i_3,a_2} * t{i_2;a_4}") +
+      term(ratio(1, 4),
+           L"R{i_2,i_3;a_2,a_3} * g{a_4,a_3;i_3,a_1} * t{i_1;a_4}") +
+      term(ratio(1, 4),
+           L"R{i_2,i_3;a_1,a_3} * g{a_4,a_3;i_3,a_2} * t{i_1;a_4}");
+
+  // ext index groups: bra-type occ externals i_1,i_2; ket-type virt
+  // ext a_1,a_2 (get_bra_idx -> first, get_ket_idx -> second).
+  const container::svector<container::svector<Index>> ext_idxs{
+      {Index(L"i_1"), Index(L"a_1")}, {Index(L"i_2"), Index(L"a_2")}};
+
+  // compaction keeps one (-3c) representative per group.
+  const ExprPtr compact = triplet_doubles_maxcoeff_compact(full, ext_idxs);
+  REQUIRE(compact->is<Sum>());
+  REQUIRE(compact->size() == 4);
+
+  // symbolic reconstruction rebuilds the full 4 term per group.
+  // then I need to add the numeric function to do this
+  const ExprPtr recon = triplet_doubles_symbolic_reconstruct(compact, ext_idxs);
+  REQUIRE(recon->is<Sum>());
+  REQUIRE(recon->size() == 16);
+
+  // full == reconstruct(compact).
+  // lhs == rhs
+  ExprPtr lhs = full->clone();
+  canonicalize(lhs);
+  simplify(lhs);
+  ExprPtr rhs = recon->clone();
+  canonicalize(rhs);
+  simplify(rhs);
+
+  ExprPtr diff = lhs - rhs;
+  canonicalize(diff);
+  simplify(diff);
+  REQUIRE(diff->size() == 0);
 }
