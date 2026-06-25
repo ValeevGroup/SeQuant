@@ -270,14 +270,30 @@ container::svector<KramersBlock> kramers_external_blocks(
 /// adjacent transpositions of each external group, rank-general) together with
 /// global time reversal T (kramers_config_orbits), and returns one block per
 /// symmetry-unique external representative with the external indices
-/// Kramers-labeled. Â is kept (not expanded) — this is stage 2 of the pipeline
-/// (trace+fold under Â). Doubles -> 5 blocks.
-/// @note Internal tracing/folding, A-expand, g-expansion and the further g TRS
-///       folds (stages 3-5) are not yet implemented (TODO).
+/// Kramers-labeled. Â is A-expanded (expand_A_op) into explicit signed external
+/// permutations so the full external antisymmetry — cross-Kramers pairs included
+/// — is explicit per term (required for the t-dependent terms). Doubles -> 5
+/// blocks.
+/// @note Internal tracing/folding, A-expand and the g TRS folds are handled.
 /// @param expr a CC residual term/expression with a leading Â
+/// @param expand_g if true, expand each integral `g`'s antisymmetry to raw
+///        NonSymm form (Kramers-free, no Ms filter) before labeling/folding, so
+///        the evaluator fetches raw ⟨..|..⟩ blocks rather than the factory [as]
+///        block. The factory [as] block silently omits the cross-Kramers swap
+///        for mixed-Kramers index pairs, so the [as] form is wrong for any term
+///        with a cross-Kramers (occ or virt) pair — INTERNAL pairs included.
+///        Defaults false (keep ḡ antisymmetric).
 /// @return one Kramers-labeled block per external representative
 // clang-format on
-container::svector<ExprPtr> closed_shell_kramers_CC_trace(const ExprPtr& expr);
+/// @param use_T if true (default) fold the external Kramers configs under
+/// global
+///        time reversal T as well (doubles -> 5 blocks); if false fold only
+///        under the external particle-interchange swaps B/K (doubles -> 9
+///        blocks), avoiding the T (conjugation) reduction — a diagnostic to
+///        isolate whether the residual's T-transformation is the issue.
+container::svector<ExprPtr> closed_shell_kramers_CC_trace(const ExprPtr& expr,
+                                                          bool expand_g = false,
+                                                          bool use_T = true);
 
 /// @brief True if @p expr contains an antisymmetrizer (Â) tensor anywhere.
 /// @details Lets a caller (e.g. the CC spintrace dispatch) tell a residual

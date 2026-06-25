@@ -237,7 +237,9 @@ bool has_antisymmetrizer(const ExprPtr& expr) {
   return find_antisymmetrizer(expr).has_value();
 }
 
-container::svector<ExprPtr> closed_shell_kramers_CC_trace(const ExprPtr& expr) {
+container::svector<ExprPtr> closed_shell_kramers_CC_trace(const ExprPtr& expr,
+                                                          bool expand_g,
+                                                          bool use_T) {
   // Stage 1: factor out the antisymmetrizer Â (kept, not expanded). Its bra/ket
   // are the external virtual/occupied index groups.
   auto A = find_antisymmetrizer(expr);
@@ -267,11 +269,32 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(const ExprPtr& expr) {
   add_group_swaps(0, n_bra);  // virtual external group
   add_group_swaps(n_bra, n);  // occupied external group
 
-  const auto orbits = kramers_config_orbits(n, gens, /*use_T=*/true);
+  const auto orbits = kramers_config_orbits(n, gens, use_T);
 
-  // Factor Â out (kept symbolic, reattached at the A-expand stage). The
-  // external indices remain on the other tensors.
-  const ExprPtr inner = strip_antisymmetrizer(expr);
+  // A-expand: expand the antisymmetrizer Â into its explicit signed external
+  // index permutations (the round-1 validated approach). This makes the FULL
+  // external antisymmetry — INCLUDING cross-Kramers pairs — explicit in every
+  // term. The earlier strip-Â + within-block bitwise antisymmetrization could
+  // not supply this for the t-dependent terms: bitwise only antisymmetrizes
+  // SAME-Kramers external pairs, but the cross-Kramers external antisymmetry of
+  // a t-term needs its signed partner permutation, which only A-expand provides
+  // (a post-hoc block-global sign merely flips, it does not antisymmetrize).
+  // With ḡ still antisymmetric here, the driver Â[ḡ] reduces to ḡ: the bra!ket!
+  // signed permutations of an antisymmetric tensor sum to bra!ket!·ḡ,
+  // cancelling expand_A_op's 1/(bra!ket!) normalization.
+  ExprPtr inner = expand_A_op(expr);
+  expand(inner);
+  rapid_simplify(inner);
+
+  // Optional g-expansion (AFTER A-expand, while still Kramers-FREE so
+  // expand_antisymm's Ms-conserving guard keeps every permutation): replace
+  // each ḡ with its raw NonSymm expansion. The factory [as] block omits the
+  // cross- Kramers swap for any mixed-Kramers pair (INTERNAL pairs included),
+  // so the [as] form is wrong there; raw-g leaves are each a correct direct
+  // ⟨..|..⟩ fetch and the antisymmetrization becomes explicit config terms.
+  if (expand_g) {
+    inner = expand_label_antisymm(inner, L"g");
+  }
 
   // Emit one block per external representative.
   container::svector<ExprPtr> blocks;
