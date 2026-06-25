@@ -97,6 +97,10 @@ struct CostParams {
   /// Roofline parameters for the peak objectives' secondary cost; see
   /// \ref RooflineParams. machine_balance == 0 => pure-flop tie-break.
   RooflineParams roofline = {};
+  /// In-flight batch-contribution footprint multiplier for
+  /// DensePeakSizeBatched; see BatchPolicy::accumulation_factor. 0 (default) =
+  /// no penalty.
+  double accumulation_factor = 0.0;
 };
 
 /// A type-erased provider mapping an Index to its extent. Used by the public

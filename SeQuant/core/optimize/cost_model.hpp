@@ -479,6 +479,11 @@ struct PeakBatchedModel {
   /// Relative peak tolerance for the final (root) selection; see
   /// PeakModel::peak_flops_tolerance. 0 (default) = strict peak-min.
   double peak_flops_tolerance = 0.0;
+  /// In-flight batch-contribution footprint multiplier; see
+  /// BatchPolicy::accumulation_factor. Charged only on nodes that contract a
+  /// batchable index (Ap != 0), into the all-co-resident peak term, to price
+  /// the accumulator + contribution co-residency of K += contribution.
+  double accumulation_factor = 0.0;
 
   /// One non-dominated (peak, flops) trade-off for a (subset, sliced-set \c B)
   /// cell. \c aprime is the sliced-set chosen at this node; the children are
@@ -545,6 +550,14 @@ struct PeakBatchedModel {
     ctx.nt = network.tensors().size();
     ctx.aux = batchable_index_list(network, is_batchable);
     ctx.m = ctx.aux.size();
+    // The accumulation_factor charge is per accumulation node (charged on each
+    // node that contracts a batchable index). Its semantics are only
+    // well-defined for a single batch axis; with multiple batchable indices the
+    // per-node, once-per-node charge would conflate independent accumulations.
+    SEQUANT_ASSERT(
+        (accumulation_factor == 0.0 || ctx.m <= 1) &&
+        "DensePeakSizeBatched: accumulation_factor != 0 requires at most one "
+        "batchable index");
     ctx.nB = std::size_t{1} << ctx.m;
     ctx.tables = sliced_footprints(network, tidxs, idxsz, is_batchable, batch,
                                    ctx.aux, inner_pow);
@@ -607,7 +620,14 @@ struct PeakBatchedModel {
         std::size_t const C = B | Ap;
         double const szlp = ctx.sz(lp, C), szrp = ctx.sz(rp, C),
                      szn = ctx.sz(n, B);
-        double const both = szlp + szrp + szn;
+        // A node that contracts a batchable index (Ap != 0) is accumulated over
+        // the aux batches (K += contribution); the in-flight contribution (same
+        // index set as the result, size szn) co-resides with the accumulator.
+        // Charge it once, on the all-co-resident moment only -- the pre-result
+        // staged terms (Lrp+pl, szlp+prr) exclude it since szn is not yet
+        // built.
+        double const contrib = (Ap != 0) ? accumulation_factor * szn : 0.0;
+        double const both = szlp + szrp + szn + contrib;
         double const Lrp = ctx.Lof(rp, C), Llp = ctx.Lof(lp, C);
         // Cross every (peak,flops) trade-off of the two children at context C.
         for (int li = 0; li < static_cast<int>(lp_st[C].size()); ++li)

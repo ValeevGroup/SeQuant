@@ -1748,3 +1748,218 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
           prod, idxsz, false, CostParams{is_t, 1.0, 0.0}, is_batch, bts, ip));
   CHECK(pbat_w_vw1 > flops_w);
 }
+
+// Quadratic-bubble (g·t2·t2) exchange term in PNO/CSV basis: the two competing
+// factorizations of one residual contribution.
+//
+//   early-K: contract the shared DF aux Κ between the two dressed integrals
+//            g{i_4;a_3<i_1,i_3>;Κ}·g{i_3;a_4<i_2,i_4>;Κ} FIRST, forming the
+//            held-whole 4-occ/2-PNO integral I{i_1..i_4; a_3,a_4} (Κ-free,
+//            peak ≈ o⁴·p²), then bring in the amplitudes.
+//   late-K : build each half M_x = t·(gC) FIRST (Κ retained, sliced to K_b:
+//            M_x{i_1..i_4,Κ; a_1<i_1,i_2>}, peak ≈ o⁴·p·K_b), contract Κ LAST;
+//            the two halves co-reside at that final node (peak ≈ 2·o⁴·p·K_b).
+//
+// Crossover (pure peak): early-K wins iff K_b > p/2. With accumulation_factor λ
+// charging the held-whole accumulator's co-resident batch contribution, early-K
+// is priced (1+λ)·o⁴·p², so late-K wins iff K_b < (1+λ)·p/2 — i.e. raising λ
+// favors the (batchable, memory-bounded) late-K route.
+TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
+          "[optimize][bubble]") {
+  using namespace sequant;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  mbpt::add_df_spaces(reg);
+  mbpt::add_pao_spaces(reg);
+  mbpt::add_ao_spaces(reg);
+  // water-20-scale extents (≈ water-14 OSV extents scaled by 20/14).
+  for (auto&& [k, v] :
+       std::initializer_list<std::pair<std::wstring_view, size_t>>{
+           {L"i", 80}, {L"a", 12}, {L"μ̃", 860}, {L"Κ", 2360}}) {
+    reg->retrieve_ptr(k)->approximate_size(v);
+  }
+  auto aux_space = reg->retrieve(L"Κ");
+  auto idxsz = [](Index const& ix) -> std::size_t {
+    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+  };
+  // PNO domain per pair (composite inner extent). Crossover is K_b = p/2 = 6.
+  double const p = 12.0;
+  auto ip = [p](Index const&, std::size_t) -> double { return p; };
+  auto is_batch = [aux_space](Index const& ix) {
+    return ix.space() == aux_space;
+  };
+
+  // Full EXCHANGE quadratic bubble, parenthesized per half then flattened to
+  // 12 leaves. S(PNO-PNO overlap) is written CsC (s = PAO-PAO overlap), the
+  // form MPQC exposes. Externals: i_1,i_2,a_1<i_1,i_2>,a_2<i_1,i_2>; the halves
+  // share/contract Κ_1, i_3, i_4.
+  auto nested = deserialize(
+      L"( g{i_4;μ̃_1;Κ_1} * C{μ̃_1;a_3<i_1,i_3>}"
+      L"  * t{a_1<i_1,i_3>,a_3<i_1,i_3>;i_1,i_3}"
+      L"  * C{a_1<i_1,i_3>;μ̃_2} * s{μ̃_2;μ̃_3} * C{μ̃_3;a_1<i_1,i_2>} )"
+      L"* ( g{i_3;μ̃_4;Κ_1} * C{μ̃_4;a_4<i_2,i_4>}"
+      L"  * t{a_2<i_2,i_4>,a_4<i_2,i_4>;i_2,i_4}"
+      L"  * C{a_2<i_2,i_4>;μ̃_5} * s{μ̃_5;μ̃_6} * C{μ̃_6;a_2<i_1,i_2>} )",
+      {.def_perm_symm = Symmetry::Nonsymm});
+  Product flatp{};
+  for (auto const& half : nested->as<Product>().factors())
+    flatp.append(1, half, Product::Flatten::Yes);
+  REQUIRE(flatp.factors().size() == 12);
+  Product const& prod = flatp;
+
+  // Subtree predicates (robust to scalar/constant factors).
+  std::function<bool(ExprPtr const&)> has_g = [&](ExprPtr const& e) -> bool {
+    if (e->is<Tensor>()) return e->as<Tensor>().label() == L"g";
+    if (e->is<Product>())
+      for (auto const& f : e->as<Product>().factors())
+        if (has_g(f)) return true;
+    return false;
+  };
+  std::function<bool(ExprPtr const&)> has_t = [&](ExprPtr const& e) -> bool {
+    if (e->is<Tensor>()) return e->as<Tensor>().label() == L"t";
+    if (e->is<Product>())
+      for (auto const& f : e->as<Product>().factors())
+        if (has_t(f)) return true;
+    return false;
+  };
+  // True iff the chosen tree builds the held-whole (g·C)(g·C) integral: some
+  // node joins the two DF g's (each in a different factor) with NO amplitude t
+  // anywhere below it. In late-K each g is fused with its t first, so the g's
+  // never share a t-free subtree.
+  std::function<bool(ExprPtr const&)> forms_integral =
+      [&](ExprPtr const& e) -> bool {
+    if (!e->is<Product>()) return false;
+    auto const& facs = e->as<Product>().factors();
+    int gcount = 0;
+    for (auto const& f : facs)
+      if (has_g(f)) ++gcount;
+    if (gcount == 2 && !has_t(e)) return true;
+    for (auto const& f : facs)
+      if (forms_integral(f)) return true;
+    return false;
+  };
+
+  // inner_pow-aware, Kappa-sliced peak of a chosen binary tree (mirrors the
+  // DP's co-resident recurrence). Composites sized by ip; batchable Kappa
+  // capped at K_b. Returns element count; *8 bytes for memory.
+  auto batched_peak = [&](ExprPtr const& root, std::size_t Kb) -> double {
+    auto ext = [&, Kb](Index const& ix) -> std::size_t {
+      std::size_t e = idxsz(ix);
+      return is_batch(ix) ? std::min(e, Kb) : e;
+    };
+    auto fp = opt::detail::footprint_counter(
+        ext, std::function<double(Index const&, std::size_t)>(ip));
+    // result (free) indices of a subtree: those appearing in exactly one child.
+    std::function<std::vector<Index>(ExprPtr const&)> freeix =
+        [&](ExprPtr const& e) -> std::vector<Index> {
+      if (e->is<Tensor>()) {
+        std::vector<Index> v;
+        for (auto const& ix : e->as<Tensor>().const_braketaux_indices())
+          v.push_back(ix);
+        return v;
+      }
+      if (!e->is<Product>()) return {};
+      std::map<std::wstring, std::pair<int, Index>> cnt;
+      for (auto const& fct : e->as<Product>().factors())
+        for (auto const& ix : freeix(fct)) {
+          auto k = std::wstring(ix.full_label());
+          cnt[k].first++;
+          cnt[k].second = ix;
+        }
+      std::vector<Index> result;
+      for (auto const& [k, v] : cnt)
+        if (v.first == 1) result.push_back(v.second);
+      return result;
+    };
+    struct TP {
+      double peak, leafsum, S;
+    };
+    std::function<TP(ExprPtr const&)> tp = [&](ExprPtr const& e) -> TP {
+      if (e->is<Tensor>()) {
+        double s = fp(freeix(e));
+        return TP{s, s, s};
+      }
+      std::vector<ExprPtr> kids;
+      for (auto const& f : e->as<Product>().factors())
+        if (f->is<Tensor>() || f->is<Product>()) kids.push_back(f);
+      if (kids.size() == 1) return tp(kids[0]);
+      TP L = tp(kids[0]), R = tp(kids[1]);
+      double Snode = fp(freeix(e));
+      double both = L.S + R.S + Snode;
+      double lf = std::max({R.leafsum + L.peak, L.S + R.peak, both});
+      double rf = std::max({L.leafsum + R.peak, R.S + L.peak, both});
+      return TP{std::min(lf, rf), L.leafsum + R.leafsum, Snode};
+    };
+    return tp(root).peak;
+  };
+
+  auto choose = [&](std::size_t Kb, double lambda) -> bool {
+    std::function<std::size_t(Index const&)> bts = [Kb](Index const&) {
+      return Kb;
+    };
+    // CostParams: {is_volatile_leaf, volatile_weight, footprint_weight,
+    //              peak_flops_tolerance, roofline, accumulation_factor}.
+    // peak_flops_tolerance = 0 => strict peak-min (no tolerance band).
+    auto res = opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
+        prod, idxsz, false, CostParams{{}, 1.0, 0.0, 0.0, {}, lambda}, is_batch,
+        bts, ip);
+    bool integral = forms_integral(res);
+    double gb = batched_peak(res, Kb) * 8.0 / 1e9;
+    std::wcout << L"  K_b=" << Kb << L"\tlambda=" << lambda
+               << (integral ? L"\tEARLY-K (integral)" : L"\tLATE-K  (t.(gC))")
+               << L"\tpeak=" << gb << L" GB\n";
+    return integral;
+  };
+
+  std::wcout << L"\n=== quadratic bubble exchange: i=80 mu=860 K=2360 p=" << p
+             << L" (crossover K_b=p/2=" << p / 2 << L") ===\n";
+  for (double lam : {0.0, 1.0, 10.0, 40.0}) {
+    std::wcout << L"-- lambda=" << lam << L" --\n";
+    for (std::size_t Kb : {std::size_t{2}, std::size_t{6}, std::size_t{12},
+                           std::size_t{72}, std::size_t{236}})
+      choose(Kb, lam);
+  }
+  // Real MPQC config: t is volatile (replayed), default peak tolerance 0.10
+  // lets the (replay-weighted) flop tie-break trade peak for building the
+  // persistent, t-free, Kappa-free integral ONCE. This is the suspected real
+  // driver of the held-whole 4-occ/2-PNO object (the C60 OOM), independent of
+  // accumulation.
+  auto is_t = [](Tensor const& t) { return t.label() == L"t"; };
+  std::wcout
+      << L"-- volatile t, vw=100, tolerance=0.10 (real config), lambda=0 "
+         L"--\n";
+  for (std::size_t Kb :
+       {std::size_t{2}, std::size_t{12}, std::size_t{72}, std::size_t{236}}) {
+    std::function<std::size_t(Index const&)> bts = [Kb](Index const&) {
+      return Kb;
+    };
+    auto res = opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
+        prod, idxsz, false, CostParams{is_t, 100.0, 0.0, 0.10, {}, 0.0},
+        is_batch, bts, ip);
+    // peak of the actually-chosen tree, plus the rejected alternative's peak
+    // (force pure-peak to recover the late-K tree) to see the traded premium.
+    double gb = batched_peak(res, Kb) * 8.0 / 1e9;
+    auto alt = opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
+        prod, idxsz, false, CostParams{{}, 1.0, 0.0, 0.0, {}, 0.0}, is_batch,
+        bts, ip);
+    double gb_alt = batched_peak(alt, Kb) * 8.0 / 1e9;
+    std::wcout << L"  K_b=" << Kb
+               << (forms_integral(res) ? L"\tEARLY-K (integral)"
+                                       : L"\tLATE-K  (t.(gC))")
+               << L"\tpeak=" << gb << L" GB   (pure-peak alt="
+               << (forms_integral(alt) ? L"early" : L"late") << L" " << gb_alt
+               << L" GB)\n";
+  }
+  std::wcout
+      << L"  chosen tree (K_b=236, lambda=0):\n      "
+      << render_tree(
+             opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
+                 prod, idxsz, false, CostParams{{}, 1.0, 0.0, 0.0, {}, 0.0},
+                 is_batch, [](Index const&) { return std::size_t{236}; }, ip))
+      << L"\n";
+
+  // Robust sanity: with Kappa sliced to a tiny batch the held-whole integral
+  // cannot win (o^4*p^2 > 2*o^4*p*K_b for K_b < p/2), so the optimizer must
+  // take the batchable late-K route.
+  CHECK_FALSE(choose(/*K_b=*/2, /*lambda=*/0.0));
+}

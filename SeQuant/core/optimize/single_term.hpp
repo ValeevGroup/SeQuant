@@ -70,11 +70,13 @@ EvalSequence single_term_opt(
   double const volatile_weight = cost.volatile_weight;
   double const footprint_weight = cost.footprint_weight;
   double const peak_flops_tolerance = cost.peak_flops_tolerance;
+  double const accumulation_factor = cost.accumulation_factor;
   RooflineParams const& roofline = cost.roofline;
   (void)is_volatile_leaf;
   (void)volatile_weight;
   (void)footprint_weight;
   (void)peak_flops_tolerance;
+  (void)accumulation_factor;
   (void)roofline;
 
   // Volatility weighting is a DenseFLOPs-only notion (persistent intermediates
@@ -110,7 +112,8 @@ EvalSequence single_term_opt(
                          is_volatile_leaf, inner_pow, volatile_weight,
                          roofline.machine_balance, roofline.fast_mem_elems,
                          roofline.block_tiles, roofline.block_prefactor,
-                         batch_persistent_only, peak_flops_tolerance},
+                         batch_persistent_only, peak_flops_tolerance,
+                         accumulation_factor},
         network, tidxs);
   } else if constexpr (Metric == ObjectiveFunction::DenseFLOPs) {
     if (is_volatile_leaf && volatile_weight > 1.0) {

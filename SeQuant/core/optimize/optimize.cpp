@@ -88,8 +88,11 @@ void log_chosen_factorization(ExprPtr const& result,
 ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
   bool const subnet_cse = opts.CSE.subnet;
   CostParams const cost{opts.batch_policy.is_volatile_leaf,
-                        opts.volatile_weight, opts.footprint_weight,
-                        opts.peak_flops_tolerance, opts.roofline};
+                        opts.volatile_weight,
+                        opts.footprint_weight,
+                        opts.peak_flops_tolerance,
+                        opts.roofline,
+                        opts.batch_policy.accumulation_factor};
   auto run = [&]() -> ExprPtr {
     if (opts.objective_function == ObjectiveFunction::DenseFLOPs)
       return opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(

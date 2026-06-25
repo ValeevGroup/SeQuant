@@ -26,6 +26,15 @@ struct BatchPolicy {
   /// many reuses, at the price of a higher peak for volatile intermediates).
   /// Read identically by the single-term optimizer and the runtime evaluator.
   bool persistent_only = false;
+
+  /// Footprint multiplier for the in-flight batch contribution that co-resides
+  /// with a batch-accumulated intermediate (K += contribution). 0 = ignore
+  /// (default); ~1 = full contribution materialized; backend-specific (TA's
+  /// eager tile accumulation lowers it, multiple in-flight Summa steps raise it
+  /// ~30%). Read by the single-term optimizer's PeakBatchedModel to price the
+  /// accumulator + contribution co-residency of a node that contracts a
+  /// batchable index.
+  double accumulation_factor = 0.0;
 };
 
 }  // namespace sequant
