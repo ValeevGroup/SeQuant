@@ -145,25 +145,27 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
 
     Sum new_sum(std::move(new_smands), Sum::move_only_tag{});
 
-    // Multi-term factorization is opt-in and, like reorder() below, consumes
-    // per-summand binary nodes; both need them built sequentially -- see
-    // invariant (2) above. Skip the build entirely when neither is requested.
     bool const do_multiterm = opts.multiterm == MultiTermFactor::Enable;
     if (!reorder && !do_multiterm) return ex<Sum>(std::move(new_sum));
 
-    // Binarize once per optimized summand and hand the nodes to reorder()
-    // (so they aren't re-built inside clusters()) and/or to the factorizer.
-    // NOTE: this runs sequentially by design -- see invariant (2) above.
-    container::vector<FullBinaryNode<EvalExpr>> nodes;
-    nodes.reserve(new_sum.size());
-    // per-summand binarize for ordering only; positional head doesn't escape.
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-    for (auto const& s : new_sum.summands()) nodes.push_back(binarize(s));
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    // Optional multi-term factorization first: it can merge summands
+    ExprPtr result;
+    if (do_multiterm) {
+      container::vector<FullBinaryNode<EvalExpr>> nodes;
+      nodes.reserve(new_sum.size());
+      // per-summand binarize; positional head doesn't escape.
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+      for (auto const& s : new_sum.summands()) nodes.push_back(binarize(s));
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+      result = opt::factorize_multiterm(new_sum, nodes, opts);
+    } else {
+      result = ex<Sum>(std::move(new_sum));
+    }
 
-    if (do_multiterm) return opt::factorize_multiterm(new_sum, nodes, opts);
-
-    return ex<Sum>(opt::reorder(new_sum, nodes));
+    // reorder is independent of multiterm
+    if (reorder && result->is<Sum>())
+      return ex<Sum>(opt::reorder(result->as<Sum>()));
+    return result;
   }
 
   return expr->clone();

@@ -386,6 +386,49 @@ TEST_CASE("multiterm DenseSize objective", "[multiterm]") {
   });
 }
 
+TEST_CASE("multiterm honors reorder", "[multiterm]") {
+  using namespace sequant;
+
+  // reorder and multiterm are independent options, so enabling multiterm must
+  // not disable reorder. The input below keeps the two effects separable: its
+  // two g*t summands fully contract to scalars, so folding saves nothing (the
+  // saving()==0 boundary from "multiterm cost decline") and the factorizer
+  // leaves all three summands alone. reorder, on the other hand, does move
+  // them: it groups the two g*t summands and shifts the unrelated p*q term. So
+  // "reorder ran" and "reorder skipped" give different output here.
+  with_sized_spaces([] {
+    auto const expr = parse_antisymm(
+        L"g{i3,i4;a1,a2} t{a1,a2;i5,i6} A{i5,i6;i3,i4}"
+        L" + p{i1;i2} q{i2;i1}"
+        L" + g{i3,i4;a1,a2} t{a1,a2;i5,i6} B{i5,i6;i3,i4}");
+
+    auto const mt_noreorder =
+        optimize(expr, {.reorder = ReorderSum::NoReorder,
+                        .multiterm = MultiTermFactor::Enable});
+    auto const mt_reorder = optimize(
+        expr,
+        {.reorder = ReorderSum::Reorder, .multiterm = MultiTermFactor::Enable});
+
+    // Nothing folds (full contraction, saving 0), so all three summands survive
+    // and reorder is the only thing that can change the output.
+    REQUIRE(mt_noreorder->is<Sum>());
+    REQUIRE(mt_noreorder->size() == 3);
+    REQUIRE_FALSE(find_factored(mt_noreorder));
+
+    // Compare serialized forms (order-sensitive, like elsewhere in this file).
+    // With the bug, reorder got skipped under multiterm and these two came out
+    // identical; fixed, they differ.
+    REQUIRE(latex(mt_noreorder) != latex(mt_reorder));
+
+    // And the order matches plain reorder: with nothing to fold, multiterm
+    // leaves reorder's result untouched.
+    auto const reorder_only =
+        optimize(expr, {.reorder = ReorderSum::Reorder,
+                        .multiterm = MultiTermFactor::Disable});
+    REQUIRE(latex(mt_reorder) == latex(reorder_only));
+  });
+}
+
 TEST_CASE("multiterm bucketing soundness", "[multiterm]") {
   using namespace sequant;
 
