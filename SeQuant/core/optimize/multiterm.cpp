@@ -68,8 +68,10 @@ class CostModel {
   }
 
   /// Cost of the single binary contraction L*R -> result, under the active
-  /// metric. The same counter that drives single-term optimization, so the two
-  /// passes agree on "cheaper".
+  /// metric. This is the same base counter single-term optimization uses
+  /// (\ref detail::flops_counter / \ref detail::memsize_counter), so the two
+  /// passes agree on the base cost of a contraction; single-term's volatile-
+  /// and footprint-weighting is not applied here (see the class \note above).
   double contraction_cost(index_vector const& l, index_vector const& r,
                           index_vector const& res) const {
     if (opts_.objective_function == ObjectiveFunction::DenseSize)
