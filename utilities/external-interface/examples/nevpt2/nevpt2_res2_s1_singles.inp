@@ -1,1 +1,11 @@
-R2{a1;i1} = R1{a1;i1}
+R2{a1;i1} =
+  + f{a1;i1}:A-H-S
+  - Ym1{u2;u1} g{a1,u1;u2,i1}:A-H-S
+  - g{i2;i1}:A-H-S T1s{a1;i2}
+  + g{a1;a2}:A-H-S T1s{a2;i1}
+  + g{i2;i1}:A-H-S Ym1{u2;u1} T2{a1,u1;u2,i2}
+  - g{a1;a2}:A-H-S Ym1{u2;u1} T2{a2,u1;u2,i1}
+  - Ym1{u3;u1} f{u1;u2}:A-H-S T2{a1,u2;u3,i1}
+  + 1/2 Ym2{u4,u5;u1,u2} g{u1,u2;u3,u4}:A-H-S T2{a1,u3;u5,i1}
+  + Ym1{u3;u1} T2{a1,u1;u2,i1} f{u2;u3}:A-H-S
+  - 1/2 Ym2{u4,u5;u1,u2} T2{a1,u1;u3,i1} g{u2,u3;u4,u5}:A-H-S

@@ -9,17 +9,23 @@ namespace sequant {
 class Index;
 class Tensor;
 
-/// Cost metric to optimize for in single-term and top-level optimize routines.
-enum class OptFor { Flops, Memsize };
+/// Objective function to minimize in single-term and top-level optimize
+/// routines. The `Dense*` models assume dense tensors: `DenseFLOPs` counts
+/// floating-point operations, `DenseSize` counts result-tensor storage elements
+/// (summed over intermediates). Leaves room for `Sparse*` models later.
+enum class ObjectiveFunction { DenseFLOPs, DenseSize };
 
 /// Whether to reorder summands so terms with shared intermediates appear
 /// closer to each other.
 enum class ReorderSum { Reorder, NoReorder };
 
-/// Whether single-term optimization should recognize equivalent subnetworks
-/// while searching for an evaluation order, trading extra search time for
-/// potentially lower op counts.
-enum class SubnetCSE { Enable, Disable };
+/// Common-subexpression-elimination (CSE) options for single-term
+/// optimization. `subnet` recognizes equivalent subnetworks while searching for
+/// an evaluation order, trading extra search time for potentially lower op
+/// counts. (Room to grow, e.g. a maximum subnet size to consider.)
+struct CSEOptions {
+  bool subnet = false;
+};
 
 /// A type-erased provider mapping an Index to its extent. Used by the public
 /// optimize() API. Callers reaching for the templated opt::single_term_opt
@@ -31,17 +37,16 @@ using index_to_extent_t = std::function<std::size_t(Index const&)>;
 
 /// Options that control behavior of \ref sequant::optimize.
 struct OptimizeOptions {
-  /// Cost metric to minimize.
-  OptFor opt_for = OptFor::Flops;
+  /// Objective function to minimize.
+  ObjectiveFunction objective_function = ObjectiveFunction::DenseFLOPs;
 
   /// Whether to reorder summands so terms with shared intermediates appear
   /// closer to each other.
   ReorderSum reorder = ReorderSum::Reorder;
 
-  /// Whether single-term optimization should perform subnetwork
-  /// common-subexpression recognition. Disabled by default; enabling can
-  /// reduce op counts at the cost of additional optimization time.
-  SubnetCSE subnet_cse = SubnetCSE::Disable;
+  /// Common-subexpression-elimination options. All disabled by default;
+  /// enabling can reduce op counts at the cost of additional optimization time.
+  CSEOptions CSE = {};
 
   /// Caller-supplied Index to extent provider. If empty, defaults to
   /// \c IndexSpace::approximate_size().
@@ -50,27 +55,27 @@ struct OptimizeOptions {
   /// Marks a LEAF tensor as volatile: its value changes between replays of the
   /// network, so any contraction depending on it is re-evaluated on every
   /// replay. Empty (default) ⇒ no tensor is volatile ⇒ cost weighting is
-  /// disabled and n_replay is ignored (behavior identical to before this
+  /// disabled and volatile_weight is ignored (behavior identical to before this
   /// feature). CC callers pass label==volatile_label, the same classification
   /// the runtime eval cache uses, so the optimizer's cost model and the cache
   /// agree.
   std::function<bool(Tensor const&)> is_volatile_leaf = {};
 
-  /// Expected number of times the network is replayed with the volatile inputs
-  /// mutated; the cost of each volatile contraction is multiplied by this,
-  /// while persistent (volatile-independent) contractions are counted once.
-  /// Default 1 (no change). Only consulted when is_volatile_leaf is non-empty
-  /// and opt_for == Flops.
-  unsigned n_replay = 1;
+  /// Real-valued weight on the cost of each volatile contraction (re-evaluated
+  /// on every replay of the network), while persistent (volatile-independent)
+  /// contractions are counted once. Conceptually the expected number of
+  /// replays. Default 1.0 (no change). Only consulted when is_volatile_leaf is
+  /// non-empty and objective_function == ObjectiveFunction::DenseFLOPs.
+  double volatile_weight = 1.0;
 
   /// Per-intermediate memory-footprint penalty added to the single-term
   /// optimization cost. For every binary contraction, the storage footprint of
   /// its RESULT intermediate (the product of the extents of the result's
   /// indices, i.e. its element count) is multiplied by this weight and added to
   /// the contraction cost. Unlike the FLOPs cost, this penalty is NOT scaled by
-  /// \ref n_replay (peak footprint is a one-time materialization cost, not a
-  /// per-replay one). 0 (default) disables the penalty, recovering the pure
-  /// FLOPs/Memsize behavior.
+  /// \ref volatile_weight (peak footprint is a one-time materialization cost,
+  /// not a per-replay one). 0 (default) disables the penalty, recovering the
+  /// pure FLOPs/Size behavior.
   ///
   /// Rationale: the FLOPs cost is blind to the storage size of the
   /// intermediates it materializes, so it will happily pick an order (and thus
@@ -82,9 +87,10 @@ struct OptimizeOptions {
   /// or avoid materializing such large intermediates (e.g. transforming both
   /// large legs before exposing a shared subtree), trading a controlled amount
   /// of extra FLOPs for a lower peak footprint. Only consulted when
-  /// opt_for == Flops; the units are FLOPs-per-element, so a useful magnitude
-  /// is on the order of the contracted-index extent that the offending
-  /// intermediate would otherwise leave free.
+  /// objective_function == ObjectiveFunction::DenseFLOPs; the units are
+  /// FLOPs-per-element, so a
+  /// useful magnitude is on the order of the contracted-index extent that the
+  /// offending intermediate would otherwise leave free.
   double footprint_weight = 0.0;
 };
 

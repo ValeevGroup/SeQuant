@@ -21,7 +21,6 @@
 #include <cwchar>
 #include <functional>
 #include <initializer_list>
-#include <iostream>
 #include <iterator>
 #include <map>
 #include <memory>
@@ -522,24 +521,59 @@ class Index : public Taggable {
     return result;
   }
 
-  /// @param label an Index label (e.g., returned by Index::label())
-  /// @return base part of @p label
-  static std::wstring base_label(std::wstring_view label) {
-    auto underscore_position = label.find(L'_');
-    if (underscore_position == std::wstring::npos)
-      return {label.begin(), label.end()};
-    else
-      return {label.data(), label.data() + underscore_position};
+  template <std::ranges::contiguous_range View>
+    requires(std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
+                          char> ||
+             std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
+                          wchar_t>)
+  static auto base_label_end(View &&label) {
+    using std::ranges::begin;
+    using std::ranges::end;
+    using CharT = std::remove_cvref_t<std::ranges::range_value_t<View>>;
+
+    auto it = std::ranges::find(label, static_cast<CharT>('_'));
+    if (it != end(label)) {
+      return it;
+    }
+
+    it = std::ranges::find_if(label, [](CharT c) {
+      if constexpr (std::same_as<CharT, char>) {
+        return std::isdigit(c);
+      }
+      return std::iswdigit(c);
+    });
+
+    if (it != end(label) && it != begin(label)) {
+      return it;
+    }
+
+    return end(label);
   }
 
   /// @param label an Index label (e.g., returned by Index::label())
   /// @return base part of @p label
-  static std::wstring base_label(std::string_view label) {
-    auto underscore_position = label.find('_');
-    if (underscore_position == std::string::npos)
-      return toUtf16(label);
-    else
-      return toUtf16(label.substr(0, underscore_position));
+  template <std::ranges::contiguous_range View>
+    requires(std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
+                          char> ||
+             std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
+                          wchar_t>)
+  static std::wstring base_label(View &&label) {
+    using std::ranges::begin;
+    auto end = base_label_end(label);
+
+    if constexpr (std::same_as<
+                      std::remove_cvref_t<std::ranges::range_value_t<View>>,
+                      char>) {
+      return toUtf16(std::string_view(
+          &(*begin(label)), std::ranges::distance(begin(label), end)));
+    } else {
+      return std::wstring(begin(label), end);
+    }
+  }
+
+  template <typename CharT>
+  static std::wstring base_label(const CharT *label) {
+    return base_label(std::basic_string_view<CharT>{label});
   }
 
   template <typename Char, typename = std::enable_if_t<meta::is_char_v<Char>>>
@@ -928,30 +962,32 @@ class Index : public Taggable {
     return std::nullopt;
   }
 
-  static inline std::optional<ordinal_type> to_ordinal(
-      std::string_view label) noexcept {
-    const auto underscore_position = label.rfind('_');
-    if (underscore_position != std::wstring::npos) {
-      // check that there is at least one char past the underscore
-      SEQUANT_ASSERT(underscore_position + 1 < label.size());
-      return string_to<ordinal_type>(
-          label.substr(underscore_position + 1).data());
-    } else
-      return std::nullopt;
+  template <std::ranges::contiguous_range View>
+  requires(std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>, char> ||
+           std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
+                        wchar_t>)
+  static std::optional<ordinal_type> to_ordinal(
+      View && label) noexcept {
+	  auto end = base_label_end(label);
+
+	  if (end == std::ranges::end(label)) {
+		  return std::nullopt;
+	  }
+
+	  if (*end == '_') {
+		  ++end;
+	  }
+
+	  SEQUANT_ASSERT(end != std::ranges::end(label));
+
+	  std::basic_string_view<std::remove_cvref_t<std::ranges::range_value_t<View>>> view(&(*end),
+			  std::ranges::distance(end, std::ranges::end(label)));
+	  return string_to<ordinal_type>(view);
   }
 
-  static inline std::optional<ordinal_type> to_ordinal(
-      std::wstring_view label) noexcept {
-    const auto underscore_position = label.rfind(L'_');
-    if (underscore_position != std::wstring::npos) {
-      SEQUANT_ASSERT(underscore_position + 1 <
-             label.size());  // check that there is at least one char past the
-      // underscore
-      return std::wcstol(
-          label.substr(underscore_position + 1, std::wstring::npos).data(),
-          NULL, 10);
-    } else
-      return std::nullopt;
+  template<typename CharT>
+  static std::optional<ordinal_type> to_ordinal(const CharT *label) noexcept {
+	  return to_ordinal(std::basic_string_view<CharT>{label});
   }
 
   friend class IndexFactory;

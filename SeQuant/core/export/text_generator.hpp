@@ -18,7 +18,31 @@
 namespace sequant {
 
 /// Context for the TextGenerator
-struct TextGeneratorContext : ExportContext {};
+class TextGeneratorContext : public ExportContext {
+ public:
+  void set_batch_indices(std::vector<Index> indices,
+                         std::optional<std::size_t> id = {}) {
+    m_batch_indices[id.value_or(ID_GLOBAL)] = std::move(indices);
+  }
+
+  std::vector<Index> batch_indices(
+      std::optional<std::size_t> id = {}) const override {
+    auto it = m_batch_indices.find(id.value_or(ID_GLOBAL));
+
+    if (it == m_batch_indices.end() && id.has_value()) {
+      it = m_batch_indices.find(ID_GLOBAL);
+    }
+
+    if (it == m_batch_indices.end()) {
+      return {};
+    }
+
+    return it->second;
+  }
+
+ private:
+  std::map<std::size_t, std::vector<Index>> m_batch_indices;
+};
 
 /// A dummy generator producing a plain text representation of the code. Mostly
 /// intended for having a convenient backend for tests available but it is also
@@ -35,6 +59,8 @@ class TextGenerator : public Generator<Context> {
   bool supports_named_sections() const override { return true; }
 
   bool requires_named_sections() const override { return false; }
+
+  bool supports_index_batching() const override { return true; }
 
   DeclarationScope index_declaration_scope() const override {
     return DeclarationScope::Global;
@@ -98,17 +124,13 @@ class TextGenerator : public Generator<Context> {
     const ExprPtr &base = power.base();
     std::string base_str = stringify(*base, ctx);
     if (base->is<Variable>() && base->as<Variable>().conjugated()) {
-      base_str = this->wrap_conj(std::move(base_str));
+      base_str = wrap_conj(std::move(base_str));
     }
     auto s = detail::format_power_base(base, std::move(base_str)) + "^" +
              detail::format_power_exponent(power.exponent(),
                                            /*double_slash*/ false);
-    if (power.conjugated()) s = this->wrap_conj(std::move(s));
+    if (power.conjugated()) s = wrap_conj(std::move(s));
     return s;
-  }
-
-  std::string wrap_conj(std::string s) const override {
-    return "conj(" + std::move(s) + ")";
   }
 
   void create(const Tensor &tensor, bool zero_init,
@@ -268,9 +290,22 @@ class TextGenerator : public Generator<Context> {
     m_generated += m_indent + "end section\n";
   }
 
-  void begin_expression(const Context &) override {
+  void begin_expression(const Context &ctx) override {
     if (!m_generated.empty() && !m_generated.ends_with("\n\n") &&
         !m_generated.ends_with(")\n")) {
+      m_generated += "\n";
+    }
+
+    std::vector<Index> batch = ctx.batch_indices(ctx.current_expression_id());
+    if (!batch.empty()) {
+      m_generated += "Start batching over ";
+      for (std::size_t i = 0; i < batch.size(); ++i) {
+        m_generated += represent(batch.at(i), ctx);
+
+        if (i + 1 < batch.size()) {
+          m_generated += ", ";
+        }
+      }
       m_generated += "\n";
     }
   }
@@ -279,7 +314,12 @@ class TextGenerator : public Generator<Context> {
 
   void end_export(const Context &) override {}
 
-  void end_expression(const Context &) override {}
+  void end_expression(const Context &ctx) override {
+    std::vector<Index> batch = ctx.batch_indices(ctx.current_expression_id());
+    if (!batch.empty()) {
+      m_generated += "End batching\n";
+    }
+  }
 
   std::string get_generated_code() const override { return m_generated; }
 
@@ -329,6 +369,10 @@ class TextGenerator : public Generator<Context> {
     }
 
     throw Exception("Unsupported expression type in TextGenerator::compute");
+  }
+
+  static std::string wrap_conj(std::string s) {
+    return "conj(" + std::move(s) + ")";
   }
 };
 

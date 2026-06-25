@@ -278,7 +278,7 @@ template <typename CostFn, typename FootprintFn>
 EvalSequence single_term_opt_impl(TensorNetwork const& network,
                                   meta::range_of<Index> auto const& tidxs,
                                   CostFn&& cost_fn, bool subnet_cse,
-                                  size_t volatile_mask, double n_replay,
+                                  size_t volatile_mask, double volatile_weight,
                                   FootprintFn&& footprint_fn,
                                   double footprint_weight) {
   using ranges::views::concat;
@@ -305,8 +305,8 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
     if (std::popcount(n) < 2) continue;
     // A subset is volatile iff it contains any volatile leaf; the contraction
     // that forms it is then re-executed on every replay. volatile_mask == 0
-    // (no predicate / Memsize / n_replay<=1) makes w == 1 everywhere.
-    double const w = (volatile_mask & n) ? n_replay : 1.0;
+    // (no predicate / DenseSize / volatile_weight<=1) makes w == 1 everywhere.
+    double const w = (volatile_mask & n) ? volatile_weight : 1.0;
     for (auto& curr_cost = results[n].ops;
          auto&& [lp, rp] : bits::bipartitions(n)) {
       // do nothing with the trivial bipartition
@@ -383,59 +383,64 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
 }
 
 ///
-/// \tparam OptFor Cost metric to optimize for (Flops or Memsize).
-/// \tparam IdxToSz
+/// \tparam Metric Objective function (ObjectiveFunction::DenseFLOPs or
+///         ObjectiveFunction::DenseSize).
+/// \tparam IdxToSz Invocable type mapping an Index to its extent.
 /// \param network A TensorNetwork object.
 /// \param idxsz An invocable on Index, that maps Index to its dimension.
 /// \param subnet_cse Whether to recognize equivalent subnetworks to try
-/// minimizing the ops counts.
+///        minimizing the ops counts.
 /// \param is_volatile_leaf Predicate marking a leaf tensor as volatile (its
-/// value changes on every replay); empty disables weighting. The predicate MUST
-/// be invariant under slot/index canonicalization — key on tensor label or
-/// structure, NOT on anonymous index identity — so that two subnetworks deemed
-/// equivalent by the subnet-CSE canonicalization also agree on volatility (the
-/// CSE path stores one cost per canonical subnet). Flops metric only.
-/// \param n_replay Multiplier applied to the cost of each volatile-result
-/// contraction (volatile contractions are re-evaluated on every replay);
-/// persistent contractions are counted once. 1 (default) disables weighting.
+///        value changes on every replay); empty disables weighting. The
+///        predicate MUST be invariant under slot/index canonicalization — key
+///        on tensor label or structure, NOT on anonymous index identity — so
+///        that two subnetworks deemed equivalent by the subnet-CSE
+///        canonicalization also agree on volatility (the CSE path stores one
+///        cost per canonical subnet). ObjectiveFunction::DenseFLOPs only.
+/// \param volatile_weight Multiplier applied to the cost of each
+///        volatile-result contraction (volatile contractions are re-evaluated
+///        on every replay); persistent contractions are counted once. 1
+///        (default) disables weighting.
+/// \param footprint_weight Per-intermediate storage-footprint penalty added to
+///        the cost (ObjectiveFunction::DenseFLOPs only); 0 (default) disables.
 /// \return Optimal evaluation sequence under the chosen cost metric. If there
 ///         are equivalent optimal sequences then the result is the one that
 ///         keeps the order of tensors in the network as original as possible.
 ///
-template <OptFor Metric, has_index_extent IdxToSz>
+template <ObjectiveFunction Metric, has_index_extent IdxToSz>
 EvalSequence single_term_opt(
     TensorNetwork const& network, IdxToSz&& idxsz, bool subnet_cse,
     std::function<bool(Tensor const&)> const& is_volatile_leaf = {},
-    unsigned n_replay = 1, double footprint_weight = 0.0) {
+    double volatile_weight = 1.0, double footprint_weight = 0.0) {
   decltype(OptRes::indices) tidxs{};
 
   // The per-intermediate footprint penalty needs idxsz too, so build a
   // footprint counter alongside the cost function (idxsz is copied into each).
   auto footprint_fn = footprint_counter(idxsz);
 
-  // Volatility weighting is a Flops-only notion (persistent intermediates cost
-  // MORE memory, not less, so it is wrong-signed for Memsize). Build the
+  // Volatility weighting is a DenseFLOPs-only notion (persistent intermediates
+  // cost MORE memory, not less, so it is wrong-signed for DenseSize). Build the
   // volatile-leaf bitmask in network.tensors() bit order so it aligns with the
   // DP's subset bits.
   size_t volatile_mask = 0;
   double nr = 1.0;
-  if constexpr (Metric == OptFor::Flops) {
-    if (is_volatile_leaf && n_replay > 1) {
+  if constexpr (Metric == ObjectiveFunction::DenseFLOPs) {
+    if (is_volatile_leaf && volatile_weight > 1.0) {
       size_t i = 0;
       for (auto&& t : network.tensors()) {
         auto tp = std::dynamic_pointer_cast<Tensor>(t);
         if (tp && is_volatile_leaf(*tp)) volatile_mask |= (size_t{1} << i);
         ++i;
       }
-      nr = static_cast<double>(n_replay);
+      nr = volatile_weight;
     }
     auto cost_fn = flops_counter(idxsz);
     return single_term_opt_impl(network, tidxs, cost_fn, subnet_cse,
                                 volatile_mask, nr, footprint_fn,
                                 footprint_weight);
   } else {
-    static_assert(Metric == OptFor::Memsize,
-                  "Only Flops and Memsize OptFor supported.");
+    static_assert(Metric == ObjectiveFunction::DenseSize,
+                  "Only DenseFLOPs and DenseSize ObjectiveFunction supported.");
     auto cost_fn = memsize_counter(idxsz);
     return single_term_opt_impl(network, tidxs, cost_fn, subnet_cse,
                                 volatile_mask, nr, footprint_fn,
@@ -446,19 +451,20 @@ EvalSequence single_term_opt(
 }  // namespace detail
 
 ///
-/// \tparam Metric Cost metric to optimize for (Flops by default; Memsize
-///         minimizes total operand memory rather than flops).
+/// \tparam Metric Objective function (DenseFLOPs by default; DenseSize
+///         minimizes total operand storage rather than flops).
 /// \param prod  Product to be optimized.
 /// \param idxsz An invocable object that maps an Index object to size.
 /// \return Parenthesized product expression.
 ///
 /// @note @c prod is assumed to consist of only Tensor expressions
 ///
-template <OptFor Metric = OptFor::Flops, has_index_extent IdxToSz>
+template <ObjectiveFunction Metric = ObjectiveFunction::DenseFLOPs,
+          has_index_extent IdxToSz>
 ExprPtr single_term_opt(
     Product const& prod, IdxToSz&& idxsz, bool subnet_cse = false,
     std::function<bool(Tensor const&)> const& is_volatile_leaf = {},
-    unsigned n_replay = 1, double footprint_weight = 0.0) {
+    double volatile_weight = 1.0, double footprint_weight = 0.0) {
   using ranges::views::filter;
   using ranges::views::reverse;
 
@@ -469,7 +475,7 @@ ExprPtr single_term_opt(
       prod | filter(&ExprPtr::template is<Tensor>) | ranges::to_vector;
   auto seq = detail::single_term_opt<Metric>(
       TensorNetwork{tensors}, std::forward<IdxToSz>(idxsz), subnet_cse,
-      is_volatile_leaf, n_replay, footprint_weight);
+      is_volatile_leaf, volatile_weight, footprint_weight);
   auto result = container::svector<ExprPtr>{};
   for (auto i : seq)
     if (i == -1) {

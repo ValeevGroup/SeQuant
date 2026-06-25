@@ -240,12 +240,12 @@ TEST_CASE("optimize", "[optimize]") {
       // separately via opts_off below.)
       auto opts1 = base;
       opts1.is_volatile_leaf = is_t;
-      opts1.n_replay = 1;
+      opts1.volatile_weight = 1;
       auto res1 = optimize(ex<Product>(prod), opts1);
 
       auto opts10 = base;
       opts10.is_volatile_leaf = is_t;
-      opts10.n_replay = 10;
+      opts10.volatile_weight = 10;
       auto res10 = optimize(ex<Product>(prod), opts10);
 
       // a bare top-level t leaf means t was contracted last (persistent-first)
@@ -258,15 +258,16 @@ TEST_CASE("optimize", "[optimize]") {
 
       // weighting flips the chosen factorization
       REQUIRE(res1 != res10);
-      // n_replay=1 reproduces today's behavior: t buried in an inner
+      // volatile_weight=1 reproduces today's behavior: t buried in an inner
       // intermediate
       REQUIRE_FALSE(top_has_bare_t(res1));
-      // n_replay=10: persistent g*g built first, t contracted last
+      // volatile_weight=10: persistent g*g built first, t contracted last
       REQUIRE(top_has_bare_t(res10));
 
-      // empty predicate => weighting off => identical to n_replay=1 regardless
+      // empty predicate => weighting off => identical to volatile_weight=1
+      // regardless
       auto opts_off = base;
-      opts_off.n_replay = 10;  // ignored: predicate empty
+      opts_off.volatile_weight = 10;  // ignored: predicate empty
       auto res_off = optimize(ex<Product>(prod), opts_off);
       REQUIRE(res_off == res1);
     }
@@ -358,9 +359,11 @@ TEST_CASE("optimize", "[optimize]") {
 
       // both metrics must binarize the 3-tensor product into a binary tree:
       // a 2-factor top product whose leaves are the 3 original tensors
-      for (auto opt_for : {OptFor::Flops, OptFor::Memsize}) {
-        CAPTURE(static_cast<int>(opt_for));
-        auto res = optimize(prod, OptimizeOptions{.opt_for = opt_for});
+      for (auto objective_function :
+           {ObjectiveFunction::DenseFLOPs, ObjectiveFunction::DenseSize}) {
+        CAPTURE(static_cast<int>(objective_function));
+        auto res = optimize(
+            prod, OptimizeOptions{.objective_function = objective_function});
         REQUIRE(res->is<Product>());
         REQUIRE(res->as<Product>().factors().size() == 2);
         REQUIRE(count_tensor_leaves(res) == 3);
@@ -419,106 +422,158 @@ TEST_CASE("optimize", "[optimize]") {
     registry.add("u", 0b100);
     *get_default_context().mutable_index_space_registry() = registry;
 
-    for (bool force_hash_collisions : {false, true}) {
-      CAPTURE(force_hash_collisions);
+    auto binarizer = [](auto&& expr) {
+      // CSE drives binarize() on subexpressions for hash-equivalence
+      // detection; positional head is irrelevant here.
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+      return binarize(expr);
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    };
+
+    auto collect_as_expr = [](auto&& expressions) {
+      std::vector<ResultExpr> actual;
+      for (const auto& current : expressions) {
+        if (current->is_tensor()) {
+          actual.emplace_back(current->expr()->template as<Tensor>(),
+                              to_expr(current));
+        } else {
+          REQUIRE(current->is_scalar());
+          actual.emplace_back(current->expr()->template as<Variable>(),
+                              to_expr(current));
+        }
+      }
+
+      return actual;
+    };
+
+    auto parse_inputs = [](auto&& inputs) {
+      std::vector<EvalNode<EvalExpr>> expressions;
+      for (const std::wstring& current : inputs) {
+        expressions.push_back(binarize(deserialize<ResultExpr>(
+            current, {.def_perm_symm = Symmetry::Nonsymm,
+                      .def_braket_symm = BraKetSymmetry::Nonsymm,
+                      .def_col_symm = ColumnSymmetry::Nonsymm})));
+      }
+      return expressions;
+    };
+
+    auto parse_expected = [](auto&& outputs) {
+      std::vector<ResultExpr> expected;
+      for (const std::wstring& current : outputs) {
+        expected.push_back(deserialize<ResultExpr>(
+            current, {.def_perm_symm = Symmetry::Nonsymm,
+                      .def_braket_symm = BraKetSymmetry::Nonsymm,
+                      .def_col_symm = ColumnSymmetry::Nonsymm}));
+      }
+      return expected;
+    };
+
+    SECTION("standard") {
+      for (bool force_hash_collisions : {false, true}) {
+        CAPTURE(force_hash_collisions);
+
+        for (const auto& [inputs, outputs] :
+             std::vector<std::pair<std::vector<std::wstring>,
+                                   std::vector<std::wstring>>>{
+                 // Basic example with only scalars
+                 {{L"R1 = (A B) C", L"R2 = D (A B)"},
+                  {L"CSE1 = A B", L"R1 = CSE1 C", L"R2 = D CSE1"}},
+                 // Test case in which the same intermediate is reused but
+                 // requires different indexing
+                 {{L"R{a1,a3;i2,i3} = 2 GAM0{a1,a3;a4,a5} T2g{a4,a5;i2,i3} - "
+                   L"GAM0{a1,a3;a4,a5} T2g{a4,a5;i3,i2}"},
+                  {L"CSE1{;;a3,a1,i2,i3} = GAM0{a1,a3;a4,a5} T2g{a4,a5;i2,i3}",
+                   L"R{a1,a3;i2,i3} = 2 CSE1{;;a3,a1,i2,i3} - "
+                   L"CSE1{;;a3,a1,i3,i2}"}},
+                 // Scalar CSE with proto-index tensors
+                 {{L"R1 = (f{i1;a1<i1>} t{a1<i1>;i1}) A",
+                   L"R2 = B (f{i1;a1<i1>} t{a1<i1>;i1})"},
+                  {L"CSE1 = f{i1;a1<i1>} t{a1<i1>;i1}", L"R1 = CSE1 A",
+                   L"R2 = B CSE1"}},
+                 // Tensor CSE with proto-index tensors: reused
+                 // contraction with different external indexing
+                 {{L"R{i1;i2} = 2 g{i1;a1<i1>} t{a1<i1>;i2} - "
+                   L"g{i2;a1<i2>} t{a1<i2>;i1}"},
+                  {L"CSE1{;;i1,i2} = g{i1;a1<i1>} t{a1<i1>;i2}",
+                   L"R{i1;i2} = 2 CSE1{;;i1,i2} - CSE1{;;i2,i1}"}},
+                 // ToT CSE: the intermediate itself has proto-indexed
+                 // indices (tensor-of-tensor)
+                 {{L"R1{i1;i2} = (g{i1;a1} C{a1;a1<i1>}) h{a1<i1>;i2}",
+                   L"R2{i1;i2} = (g{i1;a1} C{a1;a1<i1>}) k{a1<i1>;i2}"},
+                  {L"CSE1{;;a1<i1>,i1} = g{i1;a1} C{a1;a1<i1>}",
+                   L"R1{i1;i2} = CSE1{;;a1<i1>,i1} h{a1<i1>;i2}",
+                   L"R2{i1;i2} = CSE1{;;a1<i1>,i1} k{a1<i1>;i2}"}},
+                 // In this case it is important that the computation of the
+                 // subexpression isn't simply thrown at the beginning of the
+                 // expression list as it depends on B, which has to be computed
+                 // first.
+                 {{L"B = K J", L"R = (A B) C + (A B) D"},
+                  {L"B = K J", L"CSE1 = A B", L"R = CSE1 C + CSE1 D"}},
+                 // CSE in the presence of bra-ket symmetry
+                 {{L"R2{u2,a1;u1,i1} = -2 f{u3;u4}:N-S Y{u2,u3;u1,u5} "
+                   L"t{a1,u5;i1,u4} + f{u3;u4}:N-S Y{u2,u4;u5,u1} "
+                   L"t{a1,u5;i1,u3} "
+                   L"+ f{u3;u4}:N-S Y{u2,u4;u1,u5} t{a1,u5;u3,i1}"},
+                  {L"CSE1{;;u4,u2,u1,u5} = f{u3;u4}:N-S Y{u2,u3;u1,u5}",
+                   L"R2{u2,a1;u1,i1} = -2 CSE1{;;u4,u2,u1,u5} t{a1,u5;i1,u4}"
+                   L" + CSE1{;;u3,u2,u5,u1} t{a1,u5;i1,u3}"
+                   L" + CSE1{;;u3,u2,u1,u5} t{a1,u5;u3,i1}"}},
+             }) {
+          CAPTURE(inputs);
+
+          std::vector<EvalNode<EvalExpr>> expressions = parse_inputs(inputs);
+          const std::vector<ResultExpr> expected = parse_expected(outputs);
+
+          if (force_hash_collisions) {
+            // This code path makes all hashes be computed to be zero and hence
+            // every pair of objects will yield a hash collision which need to
+            // be dealt with by using proper comparison operators.
+            static constexpr bool force_collisions = true;
+            opt::eliminate_common_subexpressions<
+                decltype(expressions), decltype(binarizer), force_collisions>(
+                expressions, binarizer);
+          } else {
+            opt::eliminate_common_subexpressions(expressions, binarizer);
+          }
+
+          REQUIRE(collect_as_expr(expressions) == expected);
+        }
+      }
+    }
+    SECTION("batch indices") {
+      const opt::CSEOptions<EvalNode<EvalExpr>> opts = {.batch_indices = {
+                                                            "i5",
+                                                            "i6",
+                                                            "a5",
+                                                            "a6",
+                                                        }};
 
       for (const auto& [inputs, outputs] : std::vector<
                std::pair<std::vector<std::wstring>, std::vector<std::wstring>>>{
-               // Basic example with only scalars
-               {{L"R1 = (A B) C", L"R2 = D (A B)"},
-                {L"CSE1 = A B", L"R1 = CSE1 C", L"R2 = D CSE1"}},
-               // Test case in which the same intermediate is reused but
-               // requires different indexing
-               {{L"R{a1,a3;i2,i3} = 2 GAM0{a1,a3;a4,a5} T2g{a4,a5;i2,i3} - "
-                 L"GAM0{a1,a3;a4,a5} T2g{a4,a5;i3,i2}"},
-                {L"CSE1{;;a3,a1,i2,i3} = GAM0{a1,a3;a4,a5} T2g{a4,a5;i2,i3}",
-                 L"R{a1,a3;i2,i3} = 2 CSE1{;;a3,a1,i2,i3} - "
-                 L"CSE1{;;a3,a1,i3,i2}"}},
-               // Scalar CSE with proto-index tensors
-               {{L"R1 = (f{i1;a1<i1>} t{a1<i1>;i1}) A",
-                 L"R2 = B (f{i1;a1<i1>} t{a1<i1>;i1})"},
-                {L"CSE1 = f{i1;a1<i1>} t{a1<i1>;i1}", L"R1 = CSE1 A",
-                 L"R2 = B CSE1"}},
-               // Tensor CSE with proto-index tensors: reused
-               // contraction with different external indexing
-               {{L"R{i1;i2} = 2 g{i1;a1<i1>} t{a1<i1>;i2} - "
-                 L"g{i2;a1<i2>} t{a1<i2>;i1}"},
-                {L"CSE1{;;i1,i2} = g{i1;a1<i1>} t{a1<i1>;i2}",
-                 L"R{i1;i2} = 2 CSE1{;;i1,i2} - CSE1{;;i2,i1}"}},
-               // ToT CSE: the intermediate itself has proto-indexed
-               // indices (tensor-of-tensor)
-               {{L"R1{i1;i2} = (g{i1;a1} C{a1;a1<i1>}) h{a1<i1>;i2}",
-                 L"R2{i1;i2} = (g{i1;a1} C{a1;a1<i1>}) k{a1<i1>;i2}"},
-                {L"CSE1{;;a1<i1>,i1} = g{i1;a1} C{a1;a1<i1>}",
-                 L"R1{i1;i2} = CSE1{;;a1<i1>,i1} h{a1<i1>;i2}",
-                 L"R2{i1;i2} = CSE1{;;a1<i1>,i1} k{a1<i1>;i2}"}},
-               // In this case it is important that the computation of the
-               // subexpression isn't simply thrown at the beginning of the
-               // expression list as it depends on B, which has to be computed
-               // first.
-               {{L"B = K J", L"R = (A B) C + (A B) D"},
-                {L"B = K J", L"CSE1 = A B", L"R = CSE1 C + CSE1 D"}},
-               // CSE in the presence of bra-ket symmetry
-               {{L"R2{u2,a1;u1,i1} = -2 f{u3;u4}:N-S Y{u2,u3;u1,u5} "
-                 L"t{a1,u5;i1,u4} + f{u3;u4}:N-S Y{u2,u4;u5,u1} t{a1,u5;i1,u3} "
-                 L"+ f{u3;u4}:N-S Y{u2,u4;u1,u5} t{a1,u5;u3,i1}"},
-                {L"CSE1{;;u4,u2,u1,u5} = f{u3;u4}:N-S Y{u2,u3;u1,u5}",
-                 L"R2{u2,a1;u1,i1} = -2 CSE1{;;u4,u2,u1,u5} t{a1,u5;i1,u4}"
-                 L" + CSE1{;;u3,u2,u5,u1} t{a1,u5;i1,u3}"
-                 L" + CSE1{;;u3,u2,u1,u5} t{a1,u5;u3,i1}"}},
+               // Can't eliminate any CSE due to differences in batching indices
+               {{L"R = (A{i1;i5} B{i5;i2}) C{i2;i1} + "
+                 L"(A{i1;i6} B{i6;i2}) D{i2;i1}"},
+                {L"R = (A{i1;i5} B{i5;i2}) C{i2;i1} + "
+                 L"(A{i1;i6} B{i6;i2}) D{i2;i1}"}},
+               {{L"R = (A{i1;i5} B{i5;i2}) C{i2;i1} + "
+                 L"(A{i1;i3} B{i3;i2}) D{i2;i1}"},
+                {L"R = (A{i1;i5} B{i5;i2}) C{i2;i1} + "
+                 L"(A{i1;i3} B{i3;i2}) D{i2;i1}"}},
+               // Can eliminate if batched index is same
+               {{L"R = (A{i1;i5} B{i5;i2}) C{i2;i1} + "
+                 L"(A{i3;i5} B{i5;i4}) D{i4;i3}"},
+                {L"CSE1{;;i1,i2} = A{i1;i5} B{i5;i2}",
+                 L"R = CSE1{;;i1,i2} C{i2;i1} + "
+                 L"CSE1{;;i3,i4} D{i4;i3}"}},
            }) {
         CAPTURE(inputs);
 
-        std::vector<EvalNode<EvalExpr>> expressions;
-        std::vector<ResultExpr> expected;
+        std::vector<EvalNode<EvalExpr>> expressions = parse_inputs(inputs);
+        const std::vector<ResultExpr> expected = parse_expected(outputs);
 
-        for (const std::wstring& current : inputs) {
-          expressions.push_back(binarize(deserialize<ResultExpr>(
-              current, {.def_perm_symm = Symmetry::Nonsymm,
-                        .def_braket_symm = BraKetSymmetry::Nonsymm,
-                        .def_col_symm = ColumnSymmetry::Nonsymm})));
-        }
-        for (const std::wstring& current : outputs) {
-          expected.push_back(deserialize<ResultExpr>(
-              current, {.def_perm_symm = Symmetry::Nonsymm,
-                        .def_braket_symm = BraKetSymmetry::Nonsymm,
-                        .def_col_symm = ColumnSymmetry::Nonsymm}));
-        }
+        opt::eliminate_common_subexpressions(expressions, binarizer, opts);
 
-        auto binarizer = [](auto&& expr) {
-          // CSE drives binarize() on subexpressions for hash-equivalence
-          // detection; positional head is irrelevant here.
-          SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-          return binarize(expr);
-          SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-        };
-
-        if (force_hash_collisions) {
-          // This code path makes all hashes be computed to be zero and hence
-          // every pair of objects will yield a hash collision which need to be
-          // dealt with by using proper comparison operators.
-          static constexpr bool force_collisions = true;
-          opt::eliminate_common_subexpressions<
-              decltype(expressions), decltype(binarizer),
-              opt::cse::AcceptAllPredicate, force_collisions>(expressions,
-                                                              binarizer);
-        } else {
-          opt::eliminate_common_subexpressions(expressions, binarizer);
-        }
-
-        std::vector<ResultExpr> actual;
-        for (const auto& current : expressions) {
-          if (current->is_tensor()) {
-            actual.emplace_back(current->expr()->as<Tensor>(),
-                                to_expr(current));
-          } else {
-            REQUIRE(current->is_scalar());
-            actual.emplace_back(current->expr()->as<Variable>(),
-                                to_expr(current));
-          }
-        }
-
-        REQUIRE(actual == expected);
+        REQUIRE(collect_as_expr(expressions) == expected);
       }
     }
   }
@@ -634,10 +689,10 @@ TEST_CASE("optimize", "[optimize]") {
       auto expr = ex<Product>(prod);
 
       auto res_cse =
-          optimize(expr, OptimizeOptions{.subnet_cse = SubnetCSE::Enable,
+          optimize(expr, OptimizeOptions{.CSE = {.subnet = true},
                                          .idx_to_extent = idx_to_extent});
       auto res_no_cse =
-          optimize(expr, OptimizeOptions{.subnet_cse = SubnetCSE::Disable,
+          optimize(expr, OptimizeOptions{.CSE = {.subnet = false},
                                          .idx_to_extent = idx_to_extent});
 
       // With CSE: balanced tree -- both children are Products.

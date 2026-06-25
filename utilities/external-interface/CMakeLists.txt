@@ -25,7 +25,15 @@ target_set_warning_flags(external_interface)
 
 foreach(DRIVER IN ITEMS "ccsd" "nevpt2")
     add_test(
-        NAME "sequant/external_interface/${DRIVER}"
+        NAME "sequant/external_interface/${DRIVER}/generate"
         COMMAND external_interface --driver "${CMAKE_CURRENT_LIST_DIR}/examples/${DRIVER}.json"
     )
+    set_tests_properties("sequant/external_interface/${DRIVER}/generate" PROPERTIES FIXTURES_SETUP "SEQUANT_TEST_EXTERNAL_INTERFACE_${DRIVER}")
+
+    add_test(
+        NAME "sequant/external_interface/${DRIVER}/verify"
+        COMMAND "${CMAKE_COMMAND}" -E compare_files "${DRIVER}.itfaa" "${DRIVER}.itfaa.expected"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/examples/"
+    )
+    set_tests_properties("sequant/external_interface/${DRIVER}/verify" PROPERTIES FIXTURES_REQUIRED "SEQUANT_TEST_EXTERNAL_INTERFACE_${DRIVER}")
 endforeach()

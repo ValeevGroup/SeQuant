@@ -3,6 +3,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -27,8 +28,8 @@ std::size_t IndexSpaceMeta::getSize(const Index &index) const {
 std::string IndexSpaceMeta::getName(const IndexSpace &space) const {
   auto iter = m_entries.find(space);
   if (iter == m_entries.end()) {
-    throw std::runtime_error("No known name for index space " +
-                             toUtf8(space.base_key()));
+    throw Exception("No known name for index space " +
+                    toUtf8(space.base_key()));
   }
 
   return iter->second.name;
@@ -37,8 +38,7 @@ std::string IndexSpaceMeta::getName(const IndexSpace &space) const {
 std::string IndexSpaceMeta::getTag(const IndexSpace &space) const {
   auto iter = m_entries.find(space);
   if (iter == m_entries.end()) {
-    throw std::runtime_error("No known tag for index space " +
-                             toUtf8(space.base_key()));
+    throw Exception("No known tag for index space " + toUtf8(space.base_key()));
   }
 
   return iter->second.tag;
@@ -160,7 +160,8 @@ sequant::ExprPtr generateResultSymmetrization(const ResultExpr &result,
     externals.ket.push_back(ket);
   }
 
-  return generateResultSymmetrization(precursorName, externals);
+  return generateResultSymmetrization(precursorName, externals,
+                                      result.result_as_tensor());
 }
 
 sequant::ExprPtr generateResultSymmetrization(const Tensor &result,
@@ -174,12 +175,13 @@ sequant::ExprPtr generateResultSymmetrization(const Tensor &result,
     externals.ket.push_back(ket);
   }
 
-  return generateResultSymmetrization(precursorName, externals);
+  return generateResultSymmetrization(precursorName, externals, result);
 }
 
 sequant::ExprPtr generateResultSymmetrization(
     std::wstring_view precursorName,
-    const sequant::IndexGroups<std::vector<sequant::Index> > &externals) {
+    const sequant::IndexGroups<std::vector<sequant::Index> > &externals,
+    const Tensor &ref) {
   SEQUANT_ASSERT(externals.bra.size() == externals.ket.size());
 
   // Note: we're only symmetrizing over bra-ket, not over auxiliary indices
@@ -193,9 +195,11 @@ sequant::ExprPtr generateResultSymmetrization(
       symKet.push_back(externals.ket[(i + j) % externals.ket.size()]);
     }
 
-    symmetrization += rational(1, externals.bra.size()) *
-                      ex<Tensor>(precursorName, bra(std::move(symBra)),
-                                 ket(std::move(symKet)), aux(externals.aux));
+    symmetrization +=
+        rational(1, externals.bra.size()) *
+        ex<Tensor>(precursorName, bra(std::move(symBra)),
+                   ket(std::move(symKet)), aux(externals.aux), ref.symmetry(),
+                   ref.braket_symmetry(), ref.column_symmetry());
   }
 
   return symmetrization;
