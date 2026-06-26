@@ -327,7 +327,8 @@ namespace {
 constexpr Normalization eom_norm = Normalization::SquareRoot;
 }  // namespace
 
-std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) const {
+std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh,
+                               std::optional<size_t> nbatch) const {
   SEQUANT_ASSERT((np > 0 || nh > 0) && "Unsupported excitation order");
   if (np != nh)
     SEQUANT_ASSERT(
@@ -346,9 +347,9 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) const {
   // for unitary ansatz, we need to compute the commutator [hbar, R], otherwise
   // just hbar * R is sufficient because ref_av uses connectivity
   if (this->unitary()) {
-    hbar_R = commutator(hbar, R(np, nh, eom_norm));
+    hbar_R = commutator(hbar, R(np, nh, eom_norm, {.nbatch = nbatch}));
   } else {
-    hbar_R = hbar * R(np, nh, eom_norm);
+    hbar_R = hbar * R(np, nh, eom_norm, {.nbatch = nbatch});
   }
 
   // connectivity: empty for unitary ansatz, build otherwise
@@ -378,7 +379,8 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) const {
   return result;
 }
 
-std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) const {
+std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh,
+                               std::optional<size_t> nbatch) const {
   SEQUANT_ASSERT(!unitary() &&
                  "there is no need for CC::eom_l for unitary ansatz");
   SEQUANT_ASSERT((np > 0 || nh > 0) && "Unsupported excitation order");
@@ -392,7 +394,7 @@ std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) const {
   const auto hbar = this->hbar();
 
   // L * hbar
-  const auto L_hbar = L(np, nh, eom_norm) * hbar;
+  const auto L_hbar = L(np, nh, eom_norm, {.nbatch = nbatch}) * hbar;
 
   // connectivity:
   // default connections + connect H with projectors

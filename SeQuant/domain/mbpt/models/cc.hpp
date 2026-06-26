@@ -155,14 +155,22 @@ class CC {
   /// @brief derives right-side sigma equations for EOM-CC
   /// @param np number of particle creators in R operator
   /// @param nh number of hole creators in R operator
-  /// @return vector of right side sigma equations, element 0 is always null
-  [[nodiscard]] std::vector<ExprPtr> eom_r(nₚ np, nₕ nh) const;
+  /// @param nbatch if set, R carries this many batching (`z`) indices so the
+  /// sigma equations can be evaluated for a batch of trial vectors at once;
+  /// requires the batching space to be registered (see add_batching_spaces)
+  /// @return vector of right side sigma equations
+  [[nodiscard]] std::vector<ExprPtr> eom_r(
+      nₚ np, nₕ nh, std::optional<size_t> nbatch = std::nullopt) const;
 
   /// @brief derives left-side sigma equations for EOM-CC
   /// @param np number of particle annihilators in L operator
   /// @param nh number of hole annihilators in L operator
-  /// @return vector of left side sigma equations, element 0 is always null
-  [[nodiscard]] std::vector<ExprPtr> eom_l(nₚ np, nₕ nh) const;
+  /// @param nbatch if set, L carries this many batching (`z`) indices so the
+  /// sigma equations can be evaluated for a batch of trial vectors at once;
+  /// requires the batching space to be registered (see add_batching_spaces)
+  /// @return vector of left side sigma equations
+  [[nodiscard]] std::vector<ExprPtr> eom_l(
+      nₚ np, nₕ nh, std::optional<size_t> nbatch = std::nullopt) const;
 
  private:
   size_t N;
