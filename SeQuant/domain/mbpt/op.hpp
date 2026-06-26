@@ -633,8 +633,10 @@ class OpMaker {
   /// @param[in] na number of ket indices/annihilators
   /// @param[in] cre_space IndexSpace referred to be the creator
   /// @param[in] ann_space IndexSpace referred to be the annihilators
+  /// @param[in] params parameters for operator construction (see OpParams)
   OpMaker(const std::wstring& label, ncre nc, nann na,
-          const cre<IndexSpace>& cre_space, const ann<IndexSpace>& ann_space);
+          const cre<IndexSpace>& cre_space, const ann<IndexSpace>& ann_space,
+          const OpParams& params = {});
 
   /// @brief Creates operator from OpParams
   /// @param[in] op the operator type
@@ -871,6 +873,10 @@ class OpMaker {
 
   OpMaker(const std::wstring& op);
 
+  /// sets order_ and batch_indices_ from \p params; shared by the
+  /// OpParams-taking constructors
+  void init_op_params(const OpParams& params);
+
   [[nodiscard]] auto ncreators() const { return cre_spaces_.size(); };
   [[nodiscard]] auto nannihilators() const { return ann_spaces_.size(); };
 };
@@ -1022,10 +1028,12 @@ ExprPtr Λ(std::size_t K, bool skip1 = false);
 /// @param cre_space IndexSpace on which creators act
 /// @param ann_space IndexSpace on which annihilators act
 /// @param norm normalization convention, see Normalization
+/// @param params parameters for operator construction (see OpParams)
 ExprPtr r(nann na, ncre nc,
           const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
           const ann<IndexSpace>& ann_space = ann(get_hole_space(Spin::any)),
-          Normalization norm = Normalization::Default);
+          Normalization norm = Normalization::Default,
+          const OpParams& params = {});
 
 /// @brief Makes generic excitation operator
 /// @param np number of particle creators
@@ -1040,10 +1048,12 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(r);
 /// @param cre_space IndexSpace on which creators act
 /// @param ann_space IndexSpace on which annihilators act
 /// @param norm normalization convention, see Normalization
+/// @param params parameters for operator construction (see OpParams)
 ExprPtr l(nann na, ncre nc,
           const cre<IndexSpace>& cre_space = cre(get_hole_space(Spin::any)),
           const ann<IndexSpace>& ann_space = ann(get_particle_space(Spin::any)),
-          Normalization norm = Normalization::Default);
+          Normalization norm = Normalization::Default,
+          const OpParams& params = {});
 
 /// @brief Makes generic deexcitation operator
 /// @param np number of particle annihilators
@@ -1184,10 +1194,12 @@ ExprPtr Λ(std::size_t K, bool skip1 = false);
 /// @param cre_space IndexSpace on which creators act
 /// @param ann_space IndexSpace on which annihilators act
 /// @param norm normalization convention, see Normalization
+/// @param params parameters for operator construction (see OpParams)
 ExprPtr r(nann na, ncre nc,
           const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
           const ann<IndexSpace>& ann_space = ann(get_hole_space(Spin::any)),
-          Normalization norm = Normalization::Default);
+          Normalization norm = Normalization::Default,
+          const OpParams& params = {});
 
 /// @brief Makes generic excitation operator
 /// @param np number of particle creators
@@ -1202,10 +1214,12 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(r);
 /// @param cre_space IndexSpace on which creators act
 /// @param ann_space IndexSpace on which annihilators act
 /// @param norm normalization convention, see Normalization
+/// @param params parameters for operator construction (see OpParams)
 ExprPtr l(nann na, ncre nc,
           const cre<IndexSpace>& cre_space = cre(get_hole_space(Spin::any)),
           const ann<IndexSpace>& ann_space = ann(get_particle_space(Spin::any)),
-          Normalization norm = Normalization::Default);
+          Normalization norm = Normalization::Default,
+          const OpParams& params = {});
 
 /// @brief Makes generic deexcitation operator
 /// @param np number of particle annihilators
@@ -1220,18 +1234,22 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(l);
 /// @param cre_space IndexSpace on which creators act
 /// @param ann_space IndexSpace on which annihilators act
 /// @param norm normalization convention, see Normalization
+/// @param params parameters for operator construction (see OpParams)
 /// @return `r(na,nc) + r(na-1,nc-1) + ...`
 ExprPtr R(nann na, ncre nc,
           const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
           const ann<IndexSpace>& ann_space = ann(get_hole_space(Spin::any)),
-          Normalization norm = Normalization::Default);
+          Normalization norm = Normalization::Default,
+          const OpParams& params = {});
 
 /// @brief Makes sum of generic excitation operators up to max rank
 /// @param np max number of particle creators
 /// @param nh max number of hole creators
 /// @param norm normalization convention, see Normalization
+/// @param params parameters for operator construction (see OpParams)
 /// @return `r(np,nh) + r(np-1,nh-1) + ...`
-ExprPtr R(nₚ np, nₕ nh, Normalization norm = Normalization::Default);
+ExprPtr R(nₚ np, nₕ nh, Normalization norm = Normalization::Default,
+          const OpParams& params = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(R);
 
 /// @brief Makes sum of generic "left-hand" replacement operators up to max rank
@@ -1240,18 +1258,22 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(R);
 /// @param cre_space IndexSpace on which creators act
 /// @param ann_space IndexSpace on which annihilators act
 /// @param norm normalization convention, see Normalization
+/// @param params parameters for operator construction (see OpParams)
 /// @return `l(na,nc) + l(na-1,nc-1) + ...`
 ExprPtr L(nann na, ncre nc,
           const cre<IndexSpace>& cre_space = cre(get_hole_space(Spin::any)),
           const ann<IndexSpace>& ann_space = ann(get_particle_space(Spin::any)),
-          Normalization norm = Normalization::Default);
+          Normalization norm = Normalization::Default,
+          const OpParams& params = {});
 
 /// @brief Makes sum of deexcitation operators up to max rank
 /// @param np max number of particle annihilators
 /// @param nh max number of hole annihilators
 /// @param norm normalization convention, see Normalization
+/// @param params parameters for operator construction (see OpParams)
 /// @return `l(np,nh) + l(np-1,nh-1) + ...`
-ExprPtr L(nₚ np, nₕ nh, Normalization norm = Normalization::Default);
+ExprPtr L(nₚ np, nₕ nh, Normalization norm = Normalization::Default,
+          const OpParams& params = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(L);
 
 // clang-format off

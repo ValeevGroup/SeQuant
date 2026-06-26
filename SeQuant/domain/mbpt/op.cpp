@@ -515,17 +515,16 @@ OpMaker<S>::OpMaker(const std::wstring& label, std::size_t rank)
 template <Statistics S>
 OpMaker<S>::OpMaker(const std::wstring& label, ncre nc, nann na,
                     const cre<IndexSpace>& cre_space,
-                    const ann<IndexSpace>& ann_space) {
+                    const ann<IndexSpace>& ann_space, const OpParams& params) {
   label_ = label;
   SEQUANT_ASSERT(nc > 0 || na > 0);
   cre_spaces_ = IndexSpaceContainer(nc, cre_space);
   ann_spaces_ = IndexSpaceContainer(na, ann_space);
+  init_op_params(params);
 }
 
 template <Statistics S>
-OpMaker<S>::OpMaker(const std::wstring& label, ncre nc, nann na,
-                    const OpParams& params)
-    : OpMaker<S>(label, nc, na) {
+void OpMaker<S>::init_op_params(const OpParams& params) {
   params.validate();
 
   // set perturbation order
@@ -554,6 +553,13 @@ OpMaker<S>::OpMaker(const std::wstring& label, ncre nc, nann na,
     batch_indices_ = make_batch_indices(
         IndexSpaceContainer(params.nbatch.value(), batch_space));
   }
+}
+
+template <Statistics S>
+OpMaker<S>::OpMaker(const std::wstring& label, ncre nc, nann na,
+                    const OpParams& params)
+    : OpMaker<S>(label, nc, na) {
+  init_op_params(params);
 }
 
 template <Statistics S>
@@ -759,10 +765,11 @@ ExprPtr Λ(std::size_t K, bool skip1) {
 }
 
 ExprPtr r(nann na, ncre nc, const cre<IndexSpace>& cre_space,
-          const ann<IndexSpace>& ann_space, Normalization norm) {
+          const ann<IndexSpace>& ann_space, Normalization norm,
+          const OpParams& params) {
   SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"R"));
-  return OpMaker<Statistics::FermiDirac>(L"R", nc, na, cre_space, ann_space)(
-      {}, {}, norm);
+  return OpMaker<Statistics::FermiDirac>(L"R", nc, na, cre_space, ann_space,
+                                         params)({}, {}, norm);
 }
 ExprPtr r(nₚ np, nₕ nh, Normalization norm) {
   SEQUANT_ASSERT(np >= 0 && nh >= 0);
@@ -772,10 +779,11 @@ ExprPtr r(nₚ np, nₕ nh, Normalization norm) {
 }
 
 ExprPtr l(nann na, ncre nc, const cre<IndexSpace>& cre_space,
-          const ann<IndexSpace>& ann_space, Normalization norm) {
+          const ann<IndexSpace>& ann_space, Normalization norm,
+          const OpParams& params) {
   SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"L"));
-  return OpMaker<Statistics::FermiDirac>(L"L", nc, na, cre_space, ann_space)(
-      {}, {}, norm);
+  return OpMaker<Statistics::FermiDirac>(L"L", nc, na, cre_space, ann_space,
+                                         params)({}, {}, norm);
 }
 
 ExprPtr l(nₚ np, nₕ nh, Normalization norm) {
@@ -1147,20 +1155,23 @@ ExprPtr Λʼ(std::size_t K, const OpParams& params) {
 }
 
 ExprPtr r(nann na, ncre nc, const cre<IndexSpace>& cre_space,
-          const ann<IndexSpace>& ann_space, Normalization norm) {
+          const ann<IndexSpace>& ann_space, Normalization norm,
+          const OpParams& params) {
   SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"R"));
-  return ex<op_t>([]() -> std::wstring_view { return L"R"; },
-                  [=]() -> ExprPtr {
-                    return tensor::r(na, nc, cre_space, ann_space, norm);
-                  },
-                  [=](qnc_t& qns) {
-                    // ex -> creators in particle_space, annihilators in
-                    // hole_space
-                    qns = combine(generic_excitation_qns(/*particle_rank*/ nc,
-                                                         /*hole_rank*/ na,
-                                                         cre_space, ann_space),
-                                  qns);
-                  });
+  return ex<op_t>(
+      []() -> std::wstring_view { return L"R"; },
+      [=]() -> ExprPtr {
+        return tensor::r(na, nc, cre_space, ann_space, norm, params);
+      },
+      [=](qnc_t& qns) {
+        // ex -> creators in particle_space, annihilators in
+        // hole_space
+        qns = combine(
+            generic_excitation_qns(/*particle_rank*/ nc,
+                                   /*hole_rank*/ na, cre_space, ann_space),
+            qns);
+      },
+      params);
 }
 
 ExprPtr r(nₚ np, nₕ nh, Normalization norm) {
@@ -1169,20 +1180,23 @@ ExprPtr r(nₚ np, nₕ nh, Normalization norm) {
 }
 
 ExprPtr l(nann na, ncre nc, const cre<IndexSpace>& cre_space,
-          const ann<IndexSpace>& ann_space, Normalization norm) {
+          const ann<IndexSpace>& ann_space, Normalization norm,
+          const OpParams& params) {
   SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"L"));
-  return ex<op_t>([]() -> std::wstring_view { return L"L"; },
-                  [=]() -> ExprPtr {
-                    return tensor::l(na, nc, cre_space, ann_space, norm);
-                  },
-                  [=](qnc_t& qns) {
-                    // deex -> creators in hole_space, annihilators in
-                    // particle_space
-                    qns = combine(generic_deexcitation_qns(
-                                      /*particle_rank*/ na, /*hole_rank*/ nc,
-                                      ann_space, cre_space),
-                                  qns);
-                  });
+  return ex<op_t>(
+      []() -> std::wstring_view { return L"L"; },
+      [=]() -> ExprPtr {
+        return tensor::l(na, nc, cre_space, ann_space, norm, params);
+      },
+      [=](qnc_t& qns) {
+        // deex -> creators in hole_space, annihilators in
+        // particle_space
+        qns = combine(
+            generic_deexcitation_qns(
+                /*particle_rank*/ na, /*hole_rank*/ nc, ann_space, cre_space),
+            qns);
+      },
+      params);
 }
 
 ExprPtr l(nₚ np, nₕ nh, Normalization norm) {
@@ -1191,7 +1205,8 @@ ExprPtr l(nₚ np, nₕ nh, Normalization norm) {
 }
 
 ExprPtr R(nann na, ncre nc, const cre<IndexSpace>& cre_space,
-          const ann<IndexSpace>& ann_space, Normalization norm) {
+          const ann<IndexSpace>& ann_space, Normalization norm,
+          const OpParams& params) {
   SEQUANT_ASSERT(na > 0 || nc > 0);
   SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"R"));
   ExprPtr result;
@@ -1199,7 +1214,7 @@ ExprPtr R(nann na, ncre nc, const cre<IndexSpace>& cre_space,
   std::int64_t ra = na, rc = nc;
   while (ra >= 0 && rc >= 0) {
     if (ra == 0 && rc == 0) break;
-    result += r(nann(ra), ncre(rc), cre_space, ann_space, norm);
+    result += r(nann(ra), ncre(rc), cre_space, ann_space, norm, params);
     if (ra == 0 || rc == 0) break;
     --ra;
     --rc;
@@ -1207,13 +1222,14 @@ ExprPtr R(nann na, ncre nc, const cre<IndexSpace>& cre_space,
   return result;
 }
 
-ExprPtr R(nₚ np, nₕ nh, Normalization norm) {
+ExprPtr R(nₚ np, nₕ nh, Normalization norm, const OpParams& params) {
   return R(nann(nh), ncre(np), cre(get_particle_space(Spin::any)),
-           ann(get_hole_space(Spin::any)), norm);
+           ann(get_hole_space(Spin::any)), norm, params);
 }
 
 ExprPtr L(nann na, ncre nc, const cre<IndexSpace>& cre_space,
-          const ann<IndexSpace>& ann_space, Normalization norm) {
+          const ann<IndexSpace>& ann_space, Normalization norm,
+          const OpParams& params) {
   SEQUANT_ASSERT(na > 0 || nc > 0);
   SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"L"));
   ExprPtr result;
@@ -1221,7 +1237,7 @@ ExprPtr L(nann na, ncre nc, const cre<IndexSpace>& cre_space,
   std::int64_t ra = na, rc = nc;
   while (ra >= 0 && rc >= 0) {
     if (ra == 0 && rc == 0) break;
-    result += l(nann(ra), ncre(rc), cre_space, ann_space, norm);
+    result += l(nann(ra), ncre(rc), cre_space, ann_space, norm, params);
     if (ra == 0 || rc == 0) break;
     --ra;
     --rc;
@@ -1229,9 +1245,9 @@ ExprPtr L(nann na, ncre nc, const cre<IndexSpace>& cre_space,
   return result;
 }
 
-ExprPtr L(nₚ np, nₕ nh, Normalization norm) {
+ExprPtr L(nₚ np, nₕ nh, Normalization norm, const OpParams& params) {
   return L(nann(np), ncre(nh), cre(get_hole_space(Spin::any)),
-           ann(get_particle_space(Spin::any)), norm);
+           ann(get_particle_space(Spin::any)), norm, params);
 }
 
 // δr/δl are the (de)excitation projectors P, normalized by SquareRoot and

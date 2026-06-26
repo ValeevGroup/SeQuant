@@ -908,6 +908,12 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
               L"ã{i1;a1} * ã{κ1;κ2} * t¹{a1;i1;z1}:A-C-S + h¹{κ4;κ3;z1}:A-C-S "
               L"* h¹{κ2;κ1;z1,z2}:A-C-S * ã{κ3;κ4} * ã{κ1;κ2}"));
 
+      // EOM R/L operators can carry the batching index, just like T'/H' above
+      auto r_b = op::R(nₚ(2), nₕ(2), Normalization::Default, {.nbatch = 1});
+      REQUIRE(to_latex(r_b).find(L"{[{z}_{1}]}") != std::wstring::npos);
+      auto l_b = op::L(nₚ(2), nₕ(2), Normalization::Default, {.nbatch = 1});
+      REQUIRE(to_latex(l_b).find(L"{[{z}_{1}]}") != std::wstring::npos);
+
       // batching + adjoint: verify batch_ordinals are preserved
       auto h1_adj = adjoint(h1);
       REQUIRE(h1_adj.as<op_t>().batch_ordinals().has_value());
