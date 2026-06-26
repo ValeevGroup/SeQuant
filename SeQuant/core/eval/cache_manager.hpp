@@ -15,6 +15,7 @@
 #include <range/v3/view/transform.hpp>
 
 #include <algorithm>
+#include <any>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -148,6 +149,20 @@ class CacheManager {
   /// custom_evaluator_type). Empty => always defer to the standard scheme.
   custom_evaluator_type custom_evaluator_{};
 
+  /// Optional type-erased visitor invoked by evaluate() at each binary-Product
+  /// node before the product is computed.  The argument is a
+  /// std::any holding a
+  /// std::reference_wrapper<key_type const> of the current Product node.
+  /// Empty (default) => no-op; existing behavior is byte-identical.
+  ///
+  /// The intended use-case is backend-specific result-shape injection (e.g.
+  /// the TiledArray backend's TAEvalContext::make_visitor()), where the
+  /// visitor any_cast's the node to its concrete type and may record or return
+  /// a backend-specific shape.  Backends that carry a TAEvalContext (or
+  /// similar) should build the visitor with the backend context's factory
+  /// helper.
+  std::function<void(std::any const&)> product_node_visitor_{};
+
  public:
   /// Sets the custom evaluator (see custom_evaluator_type). Pass an empty
   /// std::function to clear it.
@@ -158,6 +173,19 @@ class CacheManager {
   /// \return the custom evaluator (empty if none is set).
   [[nodiscard]] custom_evaluator_type const& custom_evaluator() const noexcept {
     return custom_evaluator_;
+  }
+
+  /// Sets the binary-Product node visitor (see product_node_visitor_).  Pass
+  /// an empty std::function to clear it.
+  void set_product_node_visitor(
+      std::function<void(std::any const&)> fn) noexcept {
+    product_node_visitor_ = std::move(fn);
+  }
+
+  /// \return the product-node visitor (empty if none is set).
+  [[nodiscard]] std::function<void(std::any const&)> const&
+  product_node_visitor() const noexcept {
+    return product_node_visitor_;
   }
   /// Default persistence classifier: every entry is non-persistent (NP).
   struct all_non_persistent {

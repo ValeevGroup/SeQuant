@@ -612,6 +612,13 @@ ResultPtr evaluate(Node const& node,  //
           [&]() { result = left->sum(*right, ann); });
     } else {
       SEQUANT_ASSERT(node->op_type() == EvalOp::Product);
+      // Invoke the product-node visitor (if set) before evaluating the
+      // product.  The visitor receives the node wrapped in a std::any as a
+      // std::reference_wrapper so it can inspect the full IR node (e.g. to
+      // build a backend-specific result shape) without altering the result.
+      // An empty visitor is a no-op; default-empty => byte-identical behavior.
+      if (auto const& visitor = cache.product_node_visitor(); visitor)
+        visitor(std::any{std::cref(node)});
       auto const de_nest =
           node.left()->tot() && node.right()->tot() && !node->tot();
       time = detail::timed_eval_inplace([&]() {

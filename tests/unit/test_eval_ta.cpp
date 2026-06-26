@@ -4,6 +4,7 @@
 #include "catch2_sequant.hpp"
 
 #include <SeQuant/core/context.hpp>
+#include <SeQuant/core/eval/backends/tiledarray/eval_context.hpp>
 #include <SeQuant/core/eval/backends/tiledarray/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/tiledarray/result.hpp>
 #include <SeQuant/core/eval/eval.hpp>
@@ -2569,5 +2570,80 @@ TEST_CASE("shape_spike_ToT_inner_contraction_to_flat_T", "[shape-spike]") {
     for (std::size_t k = 0; k < t0.size(); ++k) {
       CHECK(t0[k] == Catch::Approx(t1[k]));
     }
+  }
+}
+
+TEST_CASE("shape_provider_plumbing", "[shape-provider]") {
+  // Task 1: verify that the result_shape_provider in TAEvalContext is invoked
+  // at each binary-Product node when a visitor is installed via
+  // CacheManager::set_product_node_visitor(), and that the eval result is
+  // byte-identical when no visitor is installed (default-empty => no-op).
+  //
+  // Graph: ToT * ToT -> ToT (single internal Product node), reusing the
+  // same expression and leaf data as the existing ToT_times_ToT_to_ToT
+  // section.  The provider increments a counter and returns std::nullopt
+  // (Task 2 will act on the returned shape; Task 1 only proves arrival).
+  using sequant::CacheManager;
+  using sequant::evaluate;
+  using sequant::TAEvalContext;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+  using cache_t = CacheManager<node_t>;
+
+  // Use the default SparsePolicy ToT (int, SparsePolicy) from rand_tensor_yield
+  // to keep the test compact; the ToT*ToT->ToT product has exactly one internal
+  // Product node.
+  auto& world = TA::get_default_world();
+  constexpr size_t nocc = 2, nvirt = 3;
+  rand_tensor_yield<int> yield{world, nocc, nvirt};
+
+  using ArrayToT = typename decltype(yield)::array_tot_type;
+
+  // Same expression as the existing ToT_times_ToT_to_ToT section.
+  constexpr std::wstring_view expr_str =
+      L"I{a4<i2,i3>,a1<i1,i2>;i1,i2}"
+      L" * "
+      L"s{a2<i1,i2>;a4<i2,i3>}";
+  auto const node = eval_node(sequant::deserialize<sequant::ExprPtr>(expr_str));
+  std::string const target{"i_2,i_1;a_1i_1i_2,a_2i_1i_2"};
+
+  // Reference result without any visitor installed (default-empty cache).
+  auto const ref = evaluate(node, target, yield)->get<ArrayToT>();
+
+  // TA provider lambda: increments counter, returns nullopt.
+  // (Task 2 will build and return a SparseShape here; for now just probe.)
+  int provider_calls = 0;
+  sequant::TAEvalContext ta_ctx;
+  ta_ctx.result_shape_provider =
+      [&provider_calls](
+          sequant::FullBinaryNode<sequant::EvalExprTA> const& /*node*/,
+          TA::TiledRange const& /*trange*/)
+      -> std::optional<TA::SparseShape<float>> {
+    ++provider_calls;
+    return std::nullopt;
+  };
+
+  SECTION("provider is reached at each binary-Product node") {
+    provider_calls = 0;
+    auto cache = cache_t::empty();
+    cache.set_product_node_visitor(TAEvalContext::make_visitor(ta_ctx));
+    // evaluate returns the same value; provider fires for each Product node.
+    auto const res = evaluate(node, target, yield, cache)->get<ArrayToT>();
+    REQUIRE(provider_calls >= 1);
+
+    // Result must match the no-visitor reference (nullopt => no shape change).
+    std::string const annot{"i,j;a,b"};
+    REQUIRE(Catch::Approx(ref(annot).dot(ref(annot))) ==
+            res(annot).dot(res(annot)));
+  }
+
+  SECTION("no visitor installed => no provider calls, result unchanged") {
+    provider_calls = 0;
+    // Default-empty cache: no visitor, no custom_evaluator.
+    auto const res2 = evaluate(node, target, yield)->get<ArrayToT>();
+    REQUIRE(provider_calls == 0);
+
+    std::string const annot{"i,j;a,b"};
+    REQUIRE(Catch::Approx(ref(annot).dot(ref(annot))) ==
+            res2(annot).dot(res2(annot)));
   }
 }
