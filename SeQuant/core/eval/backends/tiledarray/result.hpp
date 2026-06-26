@@ -209,6 +209,68 @@ inline constexpr TA::DeNest to_ta_denest(DeNest d) noexcept {
   return d == DeNest::True ? TA::DeNest::True : TA::DeNest::False;
 }
 
+/// Split a TA tensor-of-tensor (or flat) annotation string into its OUTER
+/// labels. The annotation format is `outer0,outer1,...[;inner0,inner1,...]`;
+/// only the comma-separated outer labels (the part before the optional `;`)
+/// are returned, in order. Used to map a result's outer modes back onto the
+/// operands' TiledRange1's when building a result outer TiledRange for an
+/// imposed SparseShape.
+[[nodiscard]] inline container::svector<std::string> outer_annot_labels(
+    std::string const& annot) {
+  container::svector<std::string> labels;
+  auto const semi = annot.find(';');
+  std::string const outer =
+      semi == std::string::npos ? annot : annot.substr(0, semi);
+  std::size_t pos = 0;
+  while (pos <= outer.size()) {
+    auto const comma = outer.find(',', pos);
+    auto const end = comma == std::string::npos ? outer.size() : comma;
+    if (end > pos) labels.emplace_back(outer.substr(pos, end - pos));
+    if (comma == std::string::npos) break;
+    pos = comma + 1;
+  }
+  return labels;
+}
+
+/// Build the result's OUTER TiledRange for a binary product, given the two
+/// operand arrays and the three (left, right, result) annotations. Each result
+/// outer label is matched, in order, against the left operand's outer labels
+/// (then the right's), and the corresponding TiledRange1 is taken from that
+/// operand. A result outer label must appear on at least one operand (true for
+/// any well-formed contraction). This is the trange handed to the result-shape
+/// provider so it can assemble a SparseShape over the result's outer tiles.
+template <typename LArrayT, typename RArrayT>
+[[nodiscard]] TA::TiledRange result_outer_trange(LArrayT const& larr,
+                                                 std::string const& lannot,
+                                                 RArrayT const& rarr,
+                                                 std::string const& rannot,
+                                                 std::string const& cannot) {
+  auto const lo = outer_annot_labels(lannot);
+  auto const ro = outer_annot_labels(rannot);
+  auto const co = outer_annot_labels(cannot);
+
+  auto find_dim = [](container::svector<std::string> const& labels,
+                     std::string const& lbl) -> std::optional<std::size_t> {
+    for (std::size_t i = 0; i < labels.size(); ++i)
+      if (labels[i] == lbl) return i;
+    return std::nullopt;
+  };
+
+  std::vector<TA::TiledRange1> dims;
+  dims.reserve(co.size());
+  for (auto const& lbl : co) {
+    if (auto const i = find_dim(lo, lbl)) {
+      dims.emplace_back(larr.trange().dim(*i));
+    } else if (auto const j = find_dim(ro, lbl)) {
+      dims.emplace_back(rarr.trange().dim(*j));
+    } else {
+      throw Exception("result_outer_trange: result outer label '" + lbl +
+                      "' is carried by neither operand of the binary product");
+    }
+  }
+  return TA::TiledRange(dims.begin(), dims.end());
+}
+
 }  // namespace detail
 
 /// TA::Tensor memory use logger
@@ -757,6 +819,143 @@ template <typename... Args>
   out(annot) = arr(annot).block(lo, hi, TA::preserve_lobound);
   TA::DistArray<Args...>::wait_for_lazy_cleanup(arr.world());
   return out;
+}
+
+/// \brief Compute the result's OUTER TiledRange for a binary product from the
+///        type-erased operands and the [left, right, result] annotations.
+///
+/// Dispatches on each operand's concrete result kind (flat \c ResultTensorTA vs
+/// nested \c ResultTensorOfTensorTA) to read its array's TiledRange, then maps
+/// the result's outer labels back onto the operands (see
+/// detail::result_outer_trange). This is the trange handed to the result-shape
+/// provider. \tparam NumericT, \tparam PolicyT name the concrete array types.
+template <typename NumericT, typename PolicyT>
+[[nodiscard]] TA::TiledRange result_outer_trange_from_results(
+    Result const& left, Result const& right,
+    std::array<std::any, 3> const& annot) {
+  using FlatArray = TA::DistArray<TA::Tensor<NumericT>, PolicyT>;
+  using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<NumericT>>, PolicyT>;
+  using FlatResult = ResultTensorTA<FlatArray>;
+  using ToTResult = ResultTensorOfTensorTA<ToTArray>;
+
+  auto const a = Annot<std::string>{annot};
+
+  // Dispatch the left/right array extraction on operand kind, then defer to the
+  // label-matching detail helper.  Four (flat/ToT)^2 combinations.
+  auto with_left = [&](auto const& larr) -> TA::TiledRange {
+    if (right.is<ToTResult>())
+      return detail::result_outer_trange(larr, a.lannot, right.get<ToTArray>(),
+                                         a.rannot, a.this_annot);
+    return detail::result_outer_trange(larr, a.lannot, right.get<FlatArray>(),
+                                       a.rannot, a.this_annot);
+  };
+
+  if (left.is<ToTResult>()) return with_left(left.get<ToTArray>());
+  return with_left(left.get<FlatArray>());
+}
+
+/// \brief Emit a binary product through the STANDARD expression layer with an
+///        imposed result SparseShape, instead of the einsum path used by
+///        Result::prod().
+///
+/// This is the application side of the result-shape-constraint feature: when a
+/// method-supplied provider returns a SparseShape for a Product node, the eval
+/// emits the product as `out(ca) = (lhs(la) * rhs(ra)).set_shape(s)` (general
+/// product) or `out(ca) = lhs(la).dot_inner(rhs(ra)).set_shape(s)` (the
+/// DeNest::True ToT*ToT->flat path), so the result is computed/stored only over
+/// the kept region. The two forms are the ones de-risked in Task 0.
+///
+/// Operand/result nesting determines which `ResultTensor*TA` wraps the output:
+///   - both operands flat (T * T)           -> flat result
+///   - exactly one ToT (T * ToT / ToT * T)  -> ToT result
+///   - both ToT, \p de_nest false           -> ToT result (general product)
+///   - both ToT, \p de_nest true            -> flat result (dot_inner)
+///
+/// \param left,right  The operands (TA tensor or ToT results).
+/// \param annot       [left, right, result] annotations.
+/// \param shape       The SparseShape to impose on the result's outer modes.
+///                    Held by the local expression by pointer; this function
+///                    keeps it alive until the assignment completes.
+/// \param de_nest     The DeNest flag computed at the binary-product site
+///                    (left.tot && right.tot && !result.tot).
+/// \return The shaped product wrapped in the appropriate ResultTensor*TA, or a
+///         null ResultPtr if the operand kinds are not a supported shaped form
+///         (the caller then falls through to the unshaped prod()).
+template <typename NumericT, typename PolicyT>
+[[nodiscard]] ResultPtr apply_shaped_product(
+    Result const& left, Result const& right,
+    std::array<std::any, 3> const& annot, TA::SparseShape<float> const& shape,
+    bool de_nest) {
+  using FlatArray = TA::DistArray<TA::Tensor<NumericT>, PolicyT>;
+  using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<NumericT>>, PolicyT>;
+  using FlatResult = ResultTensorTA<FlatArray>;
+  using ToTResult = ResultTensorOfTensorTA<ToTArray>;
+
+  auto const a = Annot<std::string>{annot};
+
+  bool const l_tot = left.is<ToTResult>();
+  bool const r_tot = right.is<ToTResult>();
+  bool const l_flat = left.is<FlatResult>();
+  bool const r_flat = right.is<FlatResult>();
+
+  // Every branch fences the world after the assignment so the imposed shape
+  // (held by pointer by the expression) is no longer referenced before this
+  // function returns and the caller's shape object goes out of scope.
+
+  // T * T -> T
+  if (l_flat && r_flat) {
+    FlatArray out;
+    out(a.this_annot) =
+        (left.get<FlatArray>()(a.lannot) * right.get<FlatArray>()(a.rannot))
+            .set_shape(shape);
+    out.world().gop.fence();
+    FlatArray::wait_for_lazy_cleanup(out.world());
+    return eval_result<FlatResult>(std::move(out));
+  }
+
+  // T * ToT -> ToT  and  ToT * T -> ToT (general product)
+  if ((l_flat && r_tot) || (l_tot && r_flat)) {
+    ToTArray out;
+    if (l_flat) {
+      out(a.this_annot) =
+          (left.get<FlatArray>()(a.lannot) * right.get<ToTArray>()(a.rannot))
+              .set_shape(shape);
+    } else {
+      out(a.this_annot) =
+          (left.get<ToTArray>()(a.lannot) * right.get<FlatArray>()(a.rannot))
+              .set_shape(shape);
+    }
+    out.world().gop.fence();
+    ToTArray::wait_for_lazy_cleanup(out.world());
+    return eval_result<ToTResult>(std::move(out));
+  }
+
+  // ToT * ToT
+  if (l_tot && r_tot) {
+    if (de_nest) {
+      // ToT * ToT -> flat T (inner contraction / denest)
+      FlatArray out;
+      out(a.this_annot) = left.get<ToTArray>()(a.lannot)
+                              .dot_inner(right.get<ToTArray>()(a.rannot))
+                              .set_shape(shape);
+      out.world().gop.fence();
+      FlatArray::wait_for_lazy_cleanup(out.world());
+      return eval_result<FlatResult>(std::move(out));
+    } else {
+      // ToT * ToT -> ToT (general product)
+      ToTArray out;
+      out(a.this_annot) =
+          (left.get<ToTArray>()(a.lannot) * right.get<ToTArray>()(a.rannot))
+              .set_shape(shape);
+      out.world().gop.fence();
+      ToTArray::wait_for_lazy_cleanup(out.world());
+      return eval_result<ToTResult>(std::move(out));
+    }
+  }
+
+  // Unsupported operand kinds for a shaped product (e.g. a scalar operand):
+  // decline so the caller falls through to the unshaped prod().
+  return nullptr;
 }
 
 }  // namespace sequant

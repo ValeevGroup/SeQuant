@@ -612,19 +612,26 @@ ResultPtr evaluate(Node const& node,  //
           [&]() { result = left->sum(*right, ann); });
     } else {
       SEQUANT_ASSERT(node->op_type() == EvalOp::Product);
-      // Invoke the product-node visitor (if set) before evaluating the
-      // product.  The visitor receives the node wrapped in a std::any as a
-      // std::reference_wrapper so it can inspect the full IR node (e.g. to
-      // build a backend-specific result shape) without altering the result.
-      // An empty visitor is a no-op; default-empty => byte-identical behavior.
-      if (auto const& visitor = cache.product_node_visitor(); visitor)
-        visitor(std::any{std::cref(node)});
+      // Consult the shaped-product hook (if set) before evaluating the product.
+      // The hook receives the node (wrapped in a std::any as a
+      // std::reference_wrapper so the full IR node is inspectable) plus the
+      // evaluated operands and annotations; a non-null return *replaces* the
+      // normal product (e.g. a shape-constrained emission of it), a null return
+      // declines and the standard prod() below runs.  An empty hook is never
+      // consulted; default-empty => byte-identical behavior.
       auto const de_nest =
           node.left()->tot() && node.right()->tot() && !node->tot();
-      time = detail::timed_eval_inplace([&]() {
-        result =
-            left->prod(*right, ann, de_nest ? DeNest::True : DeNest::False);
-      });
+      if (auto const& hook = cache.shaped_product_hook(); hook) {
+        time = detail::timed_eval_inplace([&]() {
+          result = hook(std::any{std::cref(node)}, *left, *right, ann);
+        });
+      }
+      if (!result) {
+        time = detail::timed_eval_inplace([&]() {
+          result =
+              left->prod(*right, ann, de_nest ? DeNest::True : DeNest::False);
+        });
+      }
     }
   }
 

@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <any>
+#include <array>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -51,6 +52,23 @@ class CacheManager {
   /// avoid both re-interception and polluting this cache with partial results.
   using custom_evaluator_type =
       std::function<ResultPtr(key_type const&, CacheManager&)>;
+
+  /// A shaped-product hook type. `evaluate()` consults the cache's shaped-
+  /// product hook (if set) at each binary-Product node *before* the product is
+  /// computed.  It receives the node (wrapped in a std::any as a
+  /// std::reference_wrapper<key_type const>) plus the already-evaluated
+  /// left/right operands and the [left, right, result] annotations.  It returns
+  /// a non-null ResultPtr to *replace* the normal product (e.g. a shape-
+  /// constrained emission of it), or a null ResultPtr to decline (the standard
+  /// prod() then runs).  Empty (default) => never consulted; existing behavior
+  /// is byte-identical.
+  ///
+  /// All backend-specific types (TA shapes, tranges, set_shape) stay inside the
+  /// hook's closure (built by the backend, e.g. TAEvalContext::make_hook());
+  /// the generic CacheManager and eval see only Result/ResultPtr/std::any.
+  using shaped_product_hook_type = std::function<ResultPtr(
+      std::any const& node, Result const& left, Result const& right,
+      std::array<std::any, 3> const& annot)>;
 
  private:
   using hasher_type = TreeNodeHasher<TreeNode, force_hash_collisions>;
@@ -149,19 +167,7 @@ class CacheManager {
   /// custom_evaluator_type). Empty => always defer to the standard scheme.
   custom_evaluator_type custom_evaluator_{};
 
-  /// Optional type-erased visitor invoked by evaluate() at each binary-Product
-  /// node before the product is computed.  The argument is a
-  /// std::any holding a
-  /// std::reference_wrapper<key_type const> of the current Product node.
-  /// Empty (default) => no-op; existing behavior is byte-identical.
-  ///
-  /// The intended use-case is backend-specific result-shape injection (e.g.
-  /// the TiledArray backend's TAEvalContext::make_visitor()), where the
-  /// visitor any_cast's the node to its concrete type and may record or return
-  /// a backend-specific shape.  Backends that carry a TAEvalContext (or
-  /// similar) should build the visitor with the backend context's factory
-  /// helper.
-  std::function<void(std::any const&)> product_node_visitor_{};
+  shaped_product_hook_type shaped_product_hook_{};
 
  public:
   /// Sets the custom evaluator (see custom_evaluator_type). Pass an empty
@@ -175,18 +181,18 @@ class CacheManager {
     return custom_evaluator_;
   }
 
-  /// Sets the binary-Product node visitor (see product_node_visitor_).  Pass
-  /// an empty std::function to clear it.
-  void set_product_node_visitor(
-      std::function<void(std::any const&)> fn) noexcept {
-    product_node_visitor_ = std::move(fn);
+  /// Sets the shaped-product hook (see shaped_product_hook_).  Pass an empty
+  /// std::function to clear it.
+  void set_shaped_product_hook(shaped_product_hook_type fn) noexcept {
+    shaped_product_hook_ = std::move(fn);
   }
 
-  /// \return the product-node visitor (empty if none is set).
-  [[nodiscard]] std::function<void(std::any const&)> const&
-  product_node_visitor() const noexcept {
-    return product_node_visitor_;
+  /// \return the shaped-product hook (empty if none is set).
+  [[nodiscard]] shaped_product_hook_type const& shaped_product_hook()
+      const noexcept {
+    return shaped_product_hook_;
   }
+
   /// Default persistence classifier: every entry is non-persistent (NP).
   struct all_non_persistent {
     bool operator()(key_type const&) const noexcept { return false; }

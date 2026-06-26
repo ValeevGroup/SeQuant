@@ -2573,32 +2573,29 @@ TEST_CASE("shape_spike_ToT_inner_contraction_to_flat_T", "[shape-spike]") {
   }
 }
 
-TEST_CASE("shape_provider_plumbing", "[shape-provider]") {
-  // Task 1: verify that the result_shape_provider in TAEvalContext is invoked
-  // at each binary-Product node when a visitor is installed via
-  // CacheManager::set_product_node_visitor(), and that the eval result is
-  // byte-identical when no visitor is installed (default-empty => no-op).
+TEST_CASE("shape_provider_general_product", "[shape-provider]") {
+  // Task 2: a provider returning a REAL SparseShape for a ToT*ToT->ToT general
+  // product (the `(lhs(la) * rhs(ra)).set_shape(s)` emission form) must
+  // constrain the eval result: the zeroed outer tiles are is_zero and the
+  // surviving tiles equal the unshaped (einsum) baseline. Also covers the
+  // no-op (full-ones shape) and nullopt (decline) cases.
   //
-  // Graph: ToT * ToT -> ToT (single internal Product node), reusing the
-  // same expression and leaf data as the existing ToT_times_ToT_to_ToT
-  // section.  The provider increments a counter and returns std::nullopt
-  // (Task 2 will act on the returned shape; Task 1 only proves arrival).
+  // Graph: ToT * ToT -> ToT, single internal Product node. SparsePolicy so a
+  // SparseShape is meaningful; multi-tiled occ so >=1 outer tile can be zeroed.
   using sequant::CacheManager;
   using sequant::evaluate;
   using sequant::TAEvalContext;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
   using cache_t = CacheManager<node_t>;
 
-  // Use the default SparsePolicy ToT (int, SparsePolicy) from rand_tensor_yield
-  // to keep the test compact; the ToT*ToT->ToT product has exactly one internal
-  // Product node.
   auto& world = TA::get_default_world();
-  constexpr size_t nocc = 2, nvirt = 3;
-  rand_tensor_yield<int> yield{world, nocc, nvirt};
+  // occ extent 4 in tiles of <=2 -> 2 outer tiles per occ mode.
+  rand_tensor_yield<double, TA::SparsePolicy> yield{world, /*nocc=*/4,
+                                                    /*nvirt=*/3};
+  yield.set_max_tile(2);
 
-  using ArrayToT = typename decltype(yield)::array_tot_type;
+  using ToTArray = typename decltype(yield)::array_tot_type;
 
-  // Same expression as the existing ToT_times_ToT_to_ToT section.
   constexpr std::wstring_view expr_str =
       L"I{a4<i2,i3>,a1<i1,i2>;i1,i2}"
       L" * "
@@ -2606,44 +2603,161 @@ TEST_CASE("shape_provider_plumbing", "[shape-provider]") {
   auto const node = eval_node(sequant::deserialize<sequant::ExprPtr>(expr_str));
   std::string const target{"i_2,i_1;a_1i_1i_2,a_2i_1i_2"};
 
-  // Reference result without any visitor installed (default-empty cache).
-  auto const ref = evaluate(node, target, yield)->get<ArrayToT>();
+  // Unshaped reference (no hook).
+  auto const ref = evaluate(node, target, yield)->get<ToTArray>();
+  TA::TiledRange const res_tr = ref.trange();
 
-  // TA provider lambda: increments counter, returns nullopt.
-  // (Task 2 will build and return a SparseShape here; for now just probe.)
-  int provider_calls = 0;
-  sequant::TAEvalContext ta_ctx;
-  ta_ctx.result_shape_provider =
-      [&provider_calls](
-          sequant::FullBinaryNode<sequant::EvalExprTA> const& /*node*/,
-          TA::TiledRange const& /*trange*/)
-      -> std::optional<TA::SparseShape<float>> {
-    ++provider_calls;
-    return std::nullopt;
+  auto make_ctx = [](auto shape_fn) {
+    TAEvalContext ctx;
+    ctx.result_shape_provider =
+        [shape_fn](
+            sequant::FullBinaryNode<sequant::EvalExprTA> const&,
+            TA::TiledRange const& tr) -> std::optional<TA::SparseShape<float>> {
+      return shape_fn(tr);
+    };
+    return ctx;
   };
 
-  SECTION("provider is reached at each binary-Product node") {
-    provider_calls = 0;
+  SECTION("real shape: zeroed tile is_zero, survivors match baseline") {
+    // Zero outer tile (0,0); keep the rest.
+    auto ctx = make_ctx([](TA::TiledRange const& tr) {
+      TA::Tensor<float> norms{tr.tiles_range(), 1.0f};
+      norms[{0, 0}] = 0.0f;
+      return TA::SparseShape<float>{norms, tr, /*do_not_scale=*/true};
+    });
     auto cache = cache_t::empty();
-    cache.set_product_node_visitor(TAEvalContext::make_visitor(ta_ctx));
-    // evaluate returns the same value; provider fires for each Product node.
-    auto const res = evaluate(node, target, yield, cache)->get<ArrayToT>();
-    REQUIRE(provider_calls >= 1);
+    cache.set_shaped_product_hook(
+        TAEvalContext::make_hook<double, TA::SparsePolicy>(ctx));
+    auto const res = evaluate(node, target, yield, cache)->get<ToTArray>();
 
-    // Result must match the no-visitor reference (nullopt => no shape change).
+    // (1) zeroed tile gone.
+    REQUIRE(res.is_zero({0, 0}));
+    // (2) survivors equal the unshaped baseline.
+    for (auto it = res.begin(); it != res.end(); ++it) {
+      if (!res.is_local(it.index()) || res.is_zero(it.index())) continue;
+      auto const& idx = it.index();
+      REQUIRE_FALSE(ref.is_zero(idx));
+      auto const& o0 = ref.find(idx).get();
+      auto const& o1 = it->get();
+      REQUIRE(o0.range() == o1.range());
+      for (std::size_t o = 0; o < o0.size(); ++o) {
+        auto const& in0 = o0[o];
+        auto const& in1 = o1[o];
+        REQUIRE(in0.range() == in1.range());
+        for (std::size_t k = 0; k < in0.size(); ++k)
+          CHECK(in0[k] == Catch::Approx(in1[k]));
+      }
+    }
+  }
+
+  SECTION("no-op full-ones shape: result equals unshaped") {
+    auto ctx = make_ctx([](TA::TiledRange const& tr) {
+      return TA::SparseShape<float>{1.0f, tr};
+    });
+    auto cache = cache_t::empty();
+    cache.set_shaped_product_hook(
+        TAEvalContext::make_hook<double, TA::SparsePolicy>(ctx));
+    auto const res = evaluate(node, target, yield, cache)->get<ToTArray>();
     std::string const annot{"i,j;a,b"};
     REQUIRE(Catch::Approx(ref(annot).dot(ref(annot))) ==
             res(annot).dot(res(annot)));
   }
 
-  SECTION("no visitor installed => no provider calls, result unchanged") {
-    provider_calls = 0;
-    // Default-empty cache: no visitor, no custom_evaluator.
-    auto const res2 = evaluate(node, target, yield)->get<ArrayToT>();
-    REQUIRE(provider_calls == 0);
-
+  SECTION("nullopt: hook declines, falls through to unshaped prod()") {
+    auto ctx = make_ctx(
+        [](TA::TiledRange const&) -> std::optional<TA::SparseShape<float>> {
+          return std::nullopt;
+        });
+    auto cache = cache_t::empty();
+    cache.set_shaped_product_hook(
+        TAEvalContext::make_hook<double, TA::SparsePolicy>(ctx));
+    auto const res = evaluate(node, target, yield, cache)->get<ToTArray>();
     std::string const annot{"i,j;a,b"};
     REQUIRE(Catch::Approx(ref(annot).dot(ref(annot))) ==
-            res2(annot).dot(res2(annot)));
+            res(annot).dot(res(annot)));
+  }
+
+  SECTION("no hook installed => unshaped behavior unchanged") {
+    auto const res = evaluate(node, target, yield)->get<ToTArray>();
+    std::string const annot{"i,j;a,b"};
+    REQUIRE(Catch::Approx(ref(annot).dot(ref(annot))) ==
+            res(annot).dot(res(annot)));
+  }
+}
+
+TEST_CASE("shape_provider_denest_to_flat", "[shape-provider]") {
+  // Task 2: the DeNest::True path (ToT * ToT -> flat T), emitted as
+  // `lhs(la).dot_inner(rhs(ra)).set_shape(s)`. A ResultExpr pins the flat head
+  // (bare occ indices, no protos), so node->tot() is false while both operands
+  // are ToT => de_nest == True at the binary site. A provider returning a real
+  // shape must zero the designated outer tile and leave survivors matching the
+  // unshaped (einsum<DeNest::True>) baseline.
+  using sequant::CacheManager;
+  using sequant::evaluate;
+  using sequant::TAEvalContext;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+  using cache_t = CacheManager<node_t>;
+
+  auto& world = TA::get_default_world();
+  rand_tensor_yield<double, TA::SparsePolicy> yield{world, /*nocc=*/4,
+                                                    /*nvirt=*/3};
+  yield.set_max_tile(2);
+
+  using FlatArray = typename decltype(yield)::array_type;
+
+  // Result head D{i1,i2} (flat): both operands carry composite virtuals
+  // a1<i1,i2>,a2<i1,i2> that fully contract (inner), leaving bare i1,i2.
+  auto const res_expr = sequant::deserialize<sequant::ResultExpr>(
+      L"D{i1,i2} = "
+      L"R{a1<i1,i2>,a2<i1,i2>;i1,i2} * g{i1,i2;a1<i1,i2>,a2<i1,i2>}");
+  auto const node = eval_node(res_expr);
+  // Confirm this really is the denest (DeNest::True) path.
+  REQUIRE(node.left()->tot());
+  REQUIRE(node.right()->tot());
+  REQUIRE_FALSE(node->tot());
+
+  std::string const target{"i_1,i_2"};
+  auto const ref = evaluate(node, target, yield)->get<FlatArray>();
+  TA::TiledRange const res_tr = ref.trange();
+
+  SECTION("real shape on the denest result: zeroed tile + survivors match") {
+    TAEvalContext ctx;
+    ctx.result_shape_provider =
+        [](sequant::FullBinaryNode<sequant::EvalExprTA> const&,
+           TA::TiledRange const& tr) -> std::optional<TA::SparseShape<float>> {
+      TA::Tensor<float> norms{tr.tiles_range(), 1.0f};
+      norms[{0, 0}] = 0.0f;
+      return TA::SparseShape<float>{norms, tr, /*do_not_scale=*/true};
+    };
+    auto cache = cache_t::empty();
+    cache.set_shaped_product_hook(
+        TAEvalContext::make_hook<double, TA::SparsePolicy>(ctx));
+    auto const res = evaluate(node, target, yield, cache)->get<FlatArray>();
+
+    REQUIRE(res.is_zero({0, 0}));
+    for (auto it = res.begin(); it != res.end(); ++it) {
+      if (!res.is_local(it.index()) || res.is_zero(it.index())) continue;
+      auto const& idx = it.index();
+      REQUIRE_FALSE(ref.is_zero(idx));
+      auto const& t0 = ref.find(idx).get();
+      auto const& t1 = it->get();
+      REQUIRE(t0.range() == t1.range());
+      for (std::size_t k = 0; k < t0.size(); ++k)
+        CHECK(t0[k] == Catch::Approx(t1[k]));
+    }
+  }
+
+  SECTION("nullopt on the denest result: unchanged") {
+    TAEvalContext ctx;
+    ctx.result_shape_provider =
+        [](sequant::FullBinaryNode<sequant::EvalExprTA> const&,
+           TA::TiledRange const&) -> std::optional<TA::SparseShape<float>> {
+      return std::nullopt;
+    };
+    auto cache = cache_t::empty();
+    cache.set_shaped_product_hook(
+        TAEvalContext::make_hook<double, TA::SparsePolicy>(ctx));
+    auto const res = evaluate(node, target, yield, cache)->get<FlatArray>();
+    REQUIRE(equal_tarrays(res, ref, "i,j"));
   }
 }
