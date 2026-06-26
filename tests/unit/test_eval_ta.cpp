@@ -2359,3 +2359,215 @@ TEST_CASE("shape_spike_tot_general_product", "[shape-spike]") {
     }
   }
 }
+
+TEST_CASE("shape_spike_T_times_ToT_general_product", "[shape-spike]") {
+  // Case A: T x ToT -> ToT (mixed operand). Models a dressed DF integral g
+  // (flat T) contracted with a PNO coefficient C (ToT) to yield a ToT result.
+  // Confirms (T_op(la) * ToT_op(ra)).set_shape(s) for this mixed general
+  // product (a) evaluates, (b) honors the imposed SparseShape, (c) matches the
+  // TA::einsum baseline on surviving tiles.
+  //
+  // Annotation mirrors the existing T_times_ToT_to_ToT section:
+  //   T_op (flat):  "i_3,i_1"
+  //   ToT_op (ToT): "i_2,i_3;a_3i_2i_3,a_4i_2i_3"
+  //   result (ToT): "i_1,i_2;a_3i_2i_3,a_4i_2i_3"
+  // Shared/contracted outer mode: i_3.  Free outer: i_1 (from T), i_2 (from
+  // ToT).  Result outer (i_1, i_2), each with 2 tiles -> 4 outer tiles.
+
+  using FlatArray = TA::DistArray<TA::Tensor<double>, TA::SparsePolicy>;
+  using ToTArray =
+      TA::DistArray<TA::Tensor<TA::Tensor<double>>, TA::SparsePolicy>;
+
+  auto& world = TA::get_default_world();
+
+  TA::TiledRange1 const tr1_occ{0, 2, 4};  // 2 tiles, occ extent 4
+  std::size_t const virt_ext = 3;
+
+  // T_op outer: (i_3, i_1), both occ.
+  TA::TiledRange const t_outer_tr{tr1_occ, tr1_occ};
+  // ToT_op outer: (i_2, i_3), both occ; inner (a_3, a_4) each virt.
+  TA::TiledRange const tot_outer_tr{tr1_occ, tr1_occ};
+  TA::Range const inner_r{virt_ext, virt_ext};
+
+  // Build a flat sparse T array with all tiles populated.
+  auto make_flat = [&](TA::TiledRange const& otr) -> FlatArray {
+    TA::SparseShape<float> all_nonzero{1.0f, otr};
+    FlatArray arr{world, otr, all_nonzero};
+    for (auto it = arr.begin(); it != arr.end(); ++it) {
+      if (arr.is_local(it.index())) {
+        *it = world.taskq.add(
+            [](TA::Range const& rng) { return random_tensor<double>(rng); },
+            it.make_range());
+      }
+    }
+    world.gop.fence();
+    return arr;
+  };
+
+  // Build a sparse ToT array with all outer tiles populated.
+  auto make_tot = [&](TA::TiledRange const& otr,
+                      TA::Range const& ir) -> ToTArray {
+    TA::SparseShape<float> all_nonzero{1.0f, otr};
+    ToTArray arr{world, otr, all_nonzero};
+    for (auto it = arr.begin(); it != arr.end(); ++it) {
+      if (arr.is_local(it.index())) {
+        TA::Range ir_copy = ir;
+        *it = world.taskq.add(
+            [ir_copy](TA::Range const& orng) {
+              return random_tensor_of_tensor<double>(orng, ir_copy);
+            },
+            it.make_range());
+      }
+    }
+    world.gop.fence();
+    return arr;
+  };
+
+  auto T_op = make_flat(t_outer_tr);
+  auto ToT_op = make_tot(tot_outer_tr, inner_r);
+
+  std::string const la{"i_3,i_1"};
+  std::string const ra{"i_2,i_3;a_3i_2i_3,a_4i_2i_3"};
+  std::string const ca{"i_1,i_2;a_3i_2i_3,a_4i_2i_3"};
+
+  // Baseline: einsum.
+  ToTArray C0 = TA::einsum(T_op(la), ToT_op(ra), ca);
+  world.gop.fence();
+
+  // Result outer TiledRange: 2D (i_1, i_2) -> 2x2 = 4 tiles.
+  TA::TiledRange const res_tr{tr1_occ, tr1_occ};
+  REQUIRE(res_tr == C0.trange());
+
+  // SparseShape zeroing outer tile (0,0).
+  TA::Tensor<float> tile_norms{res_tr.tiles_range(), 1.0f};
+  tile_norms[{0, 0}] = 0.0f;
+  TA::SparseShape<float> s{tile_norms, res_tr, /*do_not_scale=*/true};
+
+  // Standard-layer evaluation with imposed shape.
+  ToTArray C1;
+  REQUIRE_NOTHROW(C1(ca) = (T_op(la) * ToT_op(ra)).set_shape(s));
+  world.gop.fence();
+
+  // (1) shape constraint honored.
+  REQUIRE(C1.is_zero({0, 0}));
+
+  // (2) surviving tiles match einsum baseline.
+  for (auto it = C1.begin(); it != C1.end(); ++it) {
+    if (!C1.is_local(it.index()) || C1.is_zero(it.index())) continue;
+    auto const& idx = it.index();
+    REQUIRE_FALSE(C0.is_zero(idx));
+
+    auto const& outer0 = C0.find(idx).get();
+    auto const& outer1 = it->get();
+    REQUIRE(outer0.range() == outer1.range());
+
+    for (std::size_t o = 0; o < outer0.size(); ++o) {
+      auto const& inner0 = outer0[o];
+      auto const& inner1 = outer1[o];
+      REQUIRE(inner0.range() == inner1.range());
+      for (std::size_t k = 0; k < inner0.size(); ++k) {
+        CHECK(inner0[k] == Catch::Approx(inner1[k]));
+      }
+    }
+  }
+}
+
+TEST_CASE("shape_spike_ToT_inner_contraction_to_flat_T", "[shape-spike]") {
+  // Case B: ToT x ToT inner-contraction -> flat T (the dot_inner / DeNest::True
+  // path; see result.hpp:581 TA::einsum<TA::DeNest::True>). Two ToT operands
+  // share their outer (occ) modes (Hadamard) and fully contract their inner
+  // (composite) modes, denesting to a plain tensor-of-scalars result.
+  //
+  // The standard-expression-layer equivalent of einsum<DeNest::True> is the
+  // .dot_inner() expression (TA einsum/tiledarray.h:603):
+  //   C(c) = A(a + inner.a).dot_inner(B(b + inner.b));
+  // DotInnerExpr derives from Expr, so it exposes set_shape(); the spike here
+  // is whether that override is honored for the denested flat-T result.
+  //
+  // Annotation:
+  //   lhs (ToT): "i_1,i_2;a_1i_1i_2,a_2i_1i_2"
+  //   rhs (ToT): "i_1,i_2;a_1i_1i_2,a_2i_1i_2"
+  //   result (flat T): "i_1,i_2"   (inner a_1,a_2 dotted away)
+  // Outer i_1,i_2 are Hadamard (survive); result outer (i_1,i_2) -> 2x2 tiles.
+
+  using FlatArray = TA::DistArray<TA::Tensor<double>, TA::SparsePolicy>;
+  using ToTArray =
+      TA::DistArray<TA::Tensor<TA::Tensor<double>>, TA::SparsePolicy>;
+
+  auto& world = TA::get_default_world();
+
+  TA::TiledRange1 const tr1_occ{0, 2, 4};  // 2 tiles, occ extent 4
+  std::size_t const virt_ext = 3;
+
+  // Both operands: outer (i_1, i_2) occ; inner (a_1, a_2) virt.
+  TA::TiledRange const outer_tr{tr1_occ, tr1_occ};
+  TA::Range const inner_r{virt_ext, virt_ext};
+
+  auto make_tot = [&](TA::TiledRange const& otr,
+                      TA::Range const& ir) -> ToTArray {
+    TA::SparseShape<float> all_nonzero{1.0f, otr};
+    ToTArray arr{world, otr, all_nonzero};
+    for (auto it = arr.begin(); it != arr.end(); ++it) {
+      if (arr.is_local(it.index())) {
+        TA::Range ir_copy = ir;
+        *it = world.taskq.add(
+            [ir_copy](TA::Range const& orng) {
+              return random_tensor_of_tensor<double>(orng, ir_copy);
+            },
+            it.make_range());
+      }
+    }
+    world.gop.fence();
+    return arr;
+  };
+
+  auto lhs = make_tot(outer_tr, inner_r);
+  auto rhs = make_tot(outer_tr, inner_r);
+
+  // Outer annotations (a/b) and inner annotations (inner.a/inner.b) for
+  // .dot_inner(); the result is the bare outer annotation (no inner part).
+  std::string const a_outer{"i_1,i_2"};
+  std::string const a_inner{";a_1i_1i_2,a_2i_1i_2"};
+  std::string const b_outer{"i_1,i_2"};
+  std::string const b_inner{";a_1i_1i_2,a_2i_1i_2"};
+  std::string const ca{"i_1,i_2"};
+
+  // Baseline: einsum<DeNest::True>. The full ToT annotation carries the inner
+  // part; the result annotation is outer-only (denested).
+  FlatArray C0 = TA::einsum<TA::DeNest::True>(lhs(a_outer + a_inner),
+                                              rhs(b_outer + b_inner), ca);
+  world.gop.fence();
+
+  // Result outer TiledRange: 2D (i_1, i_2) -> 2x2 = 4 tiles.
+  TA::TiledRange const res_tr{tr1_occ, tr1_occ};
+  REQUIRE(res_tr == C0.trange());
+
+  // SparseShape zeroing outer tile (0,0).
+  TA::Tensor<float> tile_norms{res_tr.tiles_range(), 1.0f};
+  tile_norms[{0, 0}] = 0.0f;
+  TA::SparseShape<float> s{tile_norms, res_tr, /*do_not_scale=*/true};
+
+  // Standard-layer denesting product via .dot_inner(), with imposed shape.
+  FlatArray C1;
+  REQUIRE_NOTHROW(C1(ca) = (lhs(a_outer + a_inner))
+                               .dot_inner(rhs(b_outer + b_inner))
+                               .set_shape(s));
+  world.gop.fence();
+
+  // (1) shape constraint honored.
+  REQUIRE(C1.is_zero({0, 0}));
+
+  // (2) surviving flat tiles match the einsum<DeNest::True> baseline.
+  for (auto it = C1.begin(); it != C1.end(); ++it) {
+    if (!C1.is_local(it.index()) || C1.is_zero(it.index())) continue;
+    auto const& idx = it.index();
+    REQUIRE_FALSE(C0.is_zero(idx));
+
+    auto const& t0 = C0.find(idx).get();  // TA::Tensor<double>
+    auto const& t1 = it->get();
+    REQUIRE(t0.range() == t1.range());
+    for (std::size_t k = 0; k < t0.size(); ++k) {
+      CHECK(t0[k] == Catch::Approx(t1[k]));
+    }
+  }
+}
