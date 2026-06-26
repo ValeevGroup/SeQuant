@@ -112,6 +112,25 @@ std::uint64_t apply_bit_perm(const container::svector<std::size_t>& perm,
 
 }  // namespace
 
+container::svector<container::svector<std::size_t>> kramers_external_generators(
+    std::size_t rank) {
+  const std::size_t n = 2 * rank;
+  container::svector<container::svector<std::size_t>> gens;
+  // S_rank adjacent transpositions of each external group: virtual [0,rank),
+  // occupied [rank,n).
+  auto add = [&](std::size_t lo, std::size_t hi) {
+    for (std::size_t p = lo; p + 1 < hi; ++p) {
+      container::svector<std::size_t> perm(n);
+      std::iota(perm.begin(), perm.end(), std::size_t{0});
+      std::swap(perm[p], perm[p + 1]);
+      gens.push_back(std::move(perm));
+    }
+  };
+  add(0, rank);
+  add(rank, n);
+  return gens;
+}
+
 container::svector<container::svector<std::uint64_t>> kramers_config_orbits(
     std::size_t n,
     const container::svector<container::svector<std::size_t>>& bit_perms,
@@ -271,18 +290,10 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(const ExprPtr& expr,
   // Stage 2 (external fold): generators = the S_k adjacent transpositions of
   // each external group (rank-general: the residual's antisymmetry in each
   // external pair/tuple) + global time reversal T. Doubles -> 5 blocks.
-  container::svector<container::svector<std::size_t>> gens;
-  auto add_group_swaps = [&](std::size_t lo, std::size_t hi) {
-    for (std::size_t p = lo; p + 1 < hi; ++p) {
-      container::svector<std::size_t> perm(n);
-      std::iota(perm.begin(), perm.end(), std::size_t{0});
-      std::swap(perm[p], perm[p + 1]);
-      gens.push_back(std::move(perm));
-    }
-  };
-  add_group_swaps(0, n_bra);  // virtual external group
-  add_group_swaps(n_bra, n);  // occupied external group
-
+  SEQUANT_ASSERT(n == 2 * n_bra &&
+                 "closed_shell_kramers_CC_trace: expected equal-rank external "
+                 "virtual/occupied groups");
+  const auto gens = kramers_external_generators(n_bra);
   const auto orbits = kramers_config_orbits(n, gens, use_T);
 
   // A-expand: expand the antisymmetrizer Â into its explicit signed external

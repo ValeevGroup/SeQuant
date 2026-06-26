@@ -219,6 +219,17 @@ container::svector<container::svector<std::uint64_t>> kramers_config_orbits(
     const container::svector<container::svector<std::size_t>>& bit_perms,
     bool use_T);
 
+/// @brief The external-antisymmetry generator set for a rank-@p rank CC
+/// residual block: the S_rank adjacent transpositions of the virtual external
+/// group
+/// `[0,rank)` and of the occupied external group `[rank,2*rank)`, as bit
+/// permutations over the `n = 2*rank` external slots. This is the single source
+/// of the generator set shared by the tracer (closed_shell_kramers_CC_trace),
+/// the amplitude allocator, and the leaf reconstruction (kr_recon) — pass the
+/// result to kramers_config_orbits / kramers_external_blocks together with `T`.
+container::svector<container::svector<std::size_t>> kramers_external_generators(
+    std::size_t rank);
+
 /// One member of a Kramers external block: its configuration plus the transform
 /// that reconstructs its (residual) tensor from the orbit's canonical
 /// representative,  block(config) = sign * [conj] * permute(block(canonical)).
