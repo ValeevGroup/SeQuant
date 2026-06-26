@@ -160,20 +160,34 @@ container::svector<KramersBlock> kramers_external_blocks(
   Perm identity(n);
   std::iota(identity.begin(), identity.end(), std::size_t{0});
 
-  // transform from canonical to a config: block(cfg) = sign*[conj]*perm(canon)
+  // transform from canonical to a config: block(cfg) = sign*[conj]*perm(canon),
+  // where perm acts as block(cfg)[v] = block(canon)[v_perm] (axis q of the
+  // output reads axis perm[q] of the input — the same convention kr_recon /
+  // kramers_leaf reconstruct with: `blk(std) = rep(perm)`).
   struct Xform {
     int sign;
     bool conj;
     Perm perm;
   };
-  // compose: apply generator g (cfg x -> y) on top of transform tx (canon -> x)
+  // compose: apply generator g (cfg x -> y) on top of transform tx (canon ->
+  // x). A generator acts as block(y) = g_sign*[g_conj]*g_perm(block(x)).
+  // Substituting block(x) = tx_sign*[tx_conj]*tx_perm(block(canon)) and using
+  // (p2 . p1)[k] = p2[p1[k]] for the perm convention above gives the COMPOSED
+  // perm g_perm . tx_perm, i.e. ty.perm[k] = g_perm[tx.perm[k]] (NOT
+  // tx.perm[g_perm[k]]). The two orders coincide for rank <= 2 (the external
+  // groups are S_1/S_2, abelian and all-involution, so CCD/CCSD never exposed
+  // the bug) but differ for the non-abelian S_3 (and higher) external groups of
+  // triples and beyond — 3-cycles reconstruct to the wrong tensor with the
+  // reversed order. (Validated offline at ranks 1-4 against a fully
+  // antisymmetric + TRS reference: reversed order FAILs at rank 3, this order
+  // PASSes to machine precision at every rank.)
   auto compose = [n](const Xform& tx, int g_sign, bool g_conj,
                      const Perm& g_perm) {
     Xform ty;
     ty.sign = tx.sign * g_sign;
     ty.conj = tx.conj ^ g_conj;
     ty.perm.resize(n);
-    for (std::size_t k = 0; k < n; ++k) ty.perm[k] = tx.perm[g_perm[k]];
+    for (std::size_t k = 0; k < n; ++k) ty.perm[k] = g_perm[tx.perm[k]];
     return ty;
   };
 
