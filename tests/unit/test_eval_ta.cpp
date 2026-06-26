@@ -284,6 +284,8 @@ class rand_tensor_yield {
 
     auto make_extents = [this, &isr](auto&& ixs) -> container::svector<size_t> {
       return ixs | transform([this, &isr](auto const& ix) -> size_t {
+               // batching index "z" gets extent naux_;
+               if (ix.space().base_key() == L"z") return naux_;
                SEQUANT_ASSERT(ix.space() == isr->retrieve(L"i") ||
                               ix.space() == isr->retrieve(L"a") ||
                               ix.space() == isr->retrieve(L"x"));
@@ -1662,6 +1664,172 @@ TEST_CASE("eval_slice_array_over_mode", "[eval]") {
     REQUIRE((r->mode_batches(1, 4) == batches_t{{0, 6}, {6, 9}}));
     // target 1: every tile is its own batch.
     REQUIRE((r->mode_batches(1, 1) == batches_t{{0, 3}, {3, 6}, {6, 9}}));
+  }
+}
+
+TEST_CASE("eval_ta_batching", "[eval][batch]") {
+  using sequant::deserialize;
+  using sequant::evaluate;
+  using sequant::Symmetry;
+
+  // augment the default registry with the batching space `z`
+  auto isr = sequant::mbpt::make_sr_spaces();
+  sequant::mbpt::add_batching_spaces(isr);
+  auto ctx = sequant::get_default_context();
+  auto ctx_resetter = sequant::set_scoped_default_context(ctx.set(isr));
+  REQUIRE_NOTHROW(
+      sequant::get_default_context().index_space_registry()->retrieve(L"z"));
+
+  auto& world = TA::get_default_world();
+  // batch (z) extent N; kept tiny (single tile).
+  const size_t nocc = 2, nvirt = 4, nbatch = 3;
+  // shared random source for the z-free operator tensors (f, t, v): cached by
+  // label, so the batched eval and every per-guess eval see identical
+  // operators.
+  auto yield_ = rand_tensor_yield<double, TA::DensePolicy>{world, nocc, nvirt,
+                                                           /*naux=*/nbatch};
+
+  // single-tile TiledRange1 of extent e
+  auto tr1 = [](size_t e) {
+    TA::container::svector<std::size_t> b{0, e};
+    return TA::TiledRange1(b.begin(), b.end());
+  };
+
+  // a freshly randomized single-tile array of the given extents
+  auto rand_arr = [&world,
+                   &tr1](std::initializer_list<size_t> ext) -> TA::TArrayD {
+    TA::container::svector<TA::TiledRange1> tr1s;
+    for (size_t e : ext) tr1s.push_back(tr1(e));
+    TA::TArrayD a(world, TA::TiledRange(tr1s.begin(), tr1s.end()));
+    a.set(0, random_tensor<double>(a.trange().make_tile_range(0)));
+    a.world().gop.fence();
+    return a;
+  };
+
+  // stack N identically shaped z-free arrays along a new trailing mode (the
+  // batch index z)
+  auto fuse_z = [&world,
+                 &tr1](std::vector<TA::TArrayD> const& slices) -> TA::TArrayD {
+    const size_t n = slices.size();
+    auto const& tr0 = slices[0].trange();
+    TA::container::svector<TA::TiledRange1> tr1s;
+    for (size_t m = 0; m < tr0.rank(); ++m) tr1s.push_back(tr0.dim(m));
+    tr1s.push_back(tr1(n));
+    TA::TArrayD out(world, TA::TiledRange(tr1s.begin(), tr1s.end()));
+    TA::TensorD tile(out.trange().make_tile_range(0));
+    for (size_t k = 0; k < n; ++k) {
+      auto const src = slices[k].find(0).get();
+      for (auto const& sidx : src.range()) {
+        using idx_t = std::decay_t<decltype(sidx)>;
+        idx_t oidx(sidx);
+        oidx.push_back(static_cast<typename idx_t::value_type>(k));
+        tile(oidx) = src(sidx);
+      }
+    }
+    out.set(0, std::move(tile));
+    out.world().gop.fence();
+    return out;
+  };
+
+  // inverse of fuse_z: drop the k-th slice along the last (z) mode
+  auto slice_z = [&world](TA::TArrayD const& arr, size_t k) -> TA::TArrayD {
+    auto const& tr = arr.trange();
+    TA::container::svector<TA::TiledRange1> tr1s;
+    for (size_t m = 0; m + 1 < tr.rank(); ++m) tr1s.push_back(tr.dim(m));
+    TA::TArrayD out(world, TA::TiledRange(tr1s.begin(), tr1s.end()));
+    auto const src = arr.find(0).get();
+    TA::TensorD tile(out.trange().make_tile_range(0));
+    for (auto const& idx : tile.range()) {
+      using idx_t = std::decay_t<decltype(idx)>;
+      idx_t sidx(idx);
+      sidx.push_back(static_cast<typename idx_t::value_type>(k));
+      tile(idx) = src(sidx);
+    }
+    out.set(0, std::move(tile));
+    out.world().gop.fence();
+    return out;
+  };
+
+  // Mimics eom_cck.ipp's sigma-build `op` loop:
+  auto with_R = [&yield_](TA::TArrayD R1, TA::TArrayD R2) {
+    return [&yield_, R1, R2](auto const& node) -> sequant::ResultPtr {
+      if (node->is_tensor() && node->as_tensor().label() == L"R")
+        return sequant::eval_result<sequant::ResultTensorTA<TA::TArrayD>>(
+            node->as_tensor().bra_rank() == 1 ? R1 : R2);
+      return yield_(node);
+    };
+  };
+
+  auto eval_with = [](sequant::ResultExpr const& r, std::string const& tgt,
+                      auto const& yielder) {
+    return evaluate(eval_node(r), tgt, yielder)->template get<TA::TArrayD>();
+  };
+
+  SECTION("z survives a contraction tree") {
+    // R is the volatile guess; z rides only on R, never contracted, surviving a
+    // two-contraction tree:  Res{a1;;z1} = R{a1;i1;z1} t{i1;i2} v{i2;}.
+    // Build nbatch separate guesses, fuse along z, and check the single batched
+    // evaluation reproduces the per-guess evaluate loop it replaces.
+    std::vector<TA::TArrayD> guesses;
+    for (size_t g = 0; g < nbatch; ++g)
+      guesses.push_back(rand_arr({nvirt, nocc}));
+
+    auto const batched_eqn = deserialize<sequant::ResultExpr>(
+        L"Res{a1;;z1} = R{a1;i1;z1} t{i1;i2} v{i2;}",
+        {.def_perm_symm = Symmetry::Nonsymm});
+    auto const single_eqn =
+        deserialize<sequant::ResultExpr>(L"Res{a1;} = R{a1;i1} t{i1;i2} v{i2;}",
+                                         {.def_perm_symm = Symmetry::Nonsymm});
+
+    auto const batched =
+        eval_with(batched_eqn, "a_1,z_1", with_R(fuse_z(guesses), {}));
+    world.gop.fence();
+    REQUIRE(batched.trange().elements_range().extent(0) == nvirt);
+    REQUIRE(batched.trange().elements_range().extent(1) == nbatch);
+
+    for (size_t g = 0; g < nbatch; ++g) {  // the loop batching replaces
+      auto const ref = eval_with(single_eqn, "a_1", with_R(guesses[g], {}));
+      REQUIRE(equal_tarrays<Loose>(ref, slice_z(batched, g), "a"));
+    }
+  }
+
+  SECTION("EOM-CCS-like sigma build batches the R amplitude") {
+    // A right-hand EOM-CC sigma-singles structure, linear in R, with the batch
+    // index z riding every R leaf (R is the volatile guess vector):
+    //   Sig{a1;i1;z1} =  f{a1;a2} R{a2;i1;z1}        (F_vv . R1)
+    //                 -  f{i2;i1} R{a1;i2;z1}        (F_oo . R1)
+    //                 +  f{i2;a2} R{a1,a2;i1,i2;z1}  (F_ov . R2)
+    // Mimics eom_cck.ipp: build separate guess vectors (R1 singles + R2
+    // doubles), fuse along z, evaluate once, and check it equals the per-guess
+    // evaluate loop it replaces.
+    std::vector<TA::TArrayD> R1s, R2s;
+    for (size_t g = 0; g < nbatch; ++g) {
+      R1s.push_back(rand_arr({nvirt, nocc}));
+      R2s.push_back(rand_arr({nvirt, nvirt, nocc, nocc}));
+    }
+
+    auto const batched_eqn = deserialize<sequant::ResultExpr>(
+        L"Sig{a1;i1;z1} = f{a1;a2} R{a2;i1;z1}"
+        L" - f{i2;i1} R{a1;i2;z1}"
+        L" + f{i2;a2} R{a1,a2;i1,i2;z1}",
+        {.def_perm_symm = Symmetry::Nonsymm});
+    auto const single_eqn = deserialize<sequant::ResultExpr>(
+        L"Sig{a1;i1} = f{a1;a2} R{a2;i1}"
+        L" - f{i2;i1} R{a1;i2}"
+        L" + f{i2;a2} R{a1,a2;i1,i2}",
+        {.def_perm_symm = Symmetry::Nonsymm});
+
+    auto const batched =
+        eval_with(batched_eqn, "a_1,i_1,z_1", with_R(fuse_z(R1s), fuse_z(R2s)));
+    world.gop.fence();
+    REQUIRE(batched.trange().elements_range().extent(0) == nvirt);
+    REQUIRE(batched.trange().elements_range().extent(1) == nocc);
+    REQUIRE(batched.trange().elements_range().extent(2) == nbatch);
+
+    for (size_t g = 0; g < nbatch; ++g) {  // the guess loop batching replaces
+      auto const ref = eval_with(single_eqn, "a_1,i_1", with_R(R1s[g], R2s[g]));
+      REQUIRE(equal_tarrays<Loose>(ref, slice_z(batched, g), "a,i"));
+    }
   }
 }
 
