@@ -2246,3 +2246,116 @@ TEST_CASE("make_evaluator BatchPolicy adapter", "[eval]") {
     REQUIRE(equal_tarrays<Loose>(res_me, res_hb));
   }
 }
+
+TEST_CASE("shape_spike_tot_general_product", "[shape-spike]") {
+  // De-risk spike: can (A(la) * B(ra)).set_shape(s) for a ToT general product
+  // (a) evaluate without throwing, (b) honor the imposed SparseShape (zeroed
+  // tiles stay zero), and (c) produce the same inner data as TA::einsum for
+  // the surviving tiles?
+  //
+  // Uses the same ToT*ToT->ToT annotation as the ToT_times_ToT_to_ToT section
+  // of eval_with_tiledarray, but with SparsePolicy and a multi-tile outer
+  // TiledRange so there are enough outer tiles to zero one.
+  //
+  // Annotation (same structure as the existing ToT*ToT test):
+  //   lhs: "i_1,i_2,i_3;a_4i_2i_3,a_1i_1i_2"
+  //   rhs: "i_1,i_2,i_3;a_2i_1i_2,a_4i_2i_3"
+  //   result: "i_2,i_1;a_1i_1i_2,a_2i_1i_2"
+  // Contraction: outer i_3, inner a_4.  Fused outer (Hadamard): i_1, i_2.
+  // Result outer: (i_2, i_1), each with 2 tiles -> 4 outer tiles total.
+
+  using ToTArray =
+      TA::DistArray<TA::Tensor<TA::Tensor<double>>, TA::SparsePolicy>;
+
+  auto& world = TA::get_default_world();
+
+  // 2 tiles per occ mode; 1 tile per virt mode.
+  // occ extent = 4, tile size = 2; virt extent = 3.
+  TA::TiledRange1 const tr1_occ{0, 2, 4};
+  std::size_t const virt_ext = 3;
+
+  // Outer TiledRange for lhs and rhs: 3D (i1, i2, i3) all occ.
+  TA::TiledRange const outer_tr{tr1_occ, tr1_occ, tr1_occ};
+
+  // Inner tensor Range:
+  //   lhs inner = (a4, a1), each virt_ext = (3, 3)
+  //   rhs inner = (a2, a4), each virt_ext = (3, 3)
+  TA::Range const inner_r{virt_ext, virt_ext};
+
+  // Build a sparse ToT array with all outer tiles populated (norm > threshold).
+  auto make_tot = [&](TA::TiledRange const& otr,
+                      TA::Range const& ir) -> ToTArray {
+    // "Dense" SparseShape: every tile has scaled norm 1.0.
+    TA::SparseShape<float> all_nonzero{1.0f, otr};
+    ToTArray arr{world, otr, all_nonzero};
+    for (auto it = arr.begin(); it != arr.end(); ++it) {
+      if (arr.is_local(it.index())) {
+        // Capture ir by value: the lambda must not capture it by reference
+        // since the taskq may run after this scope.
+        TA::Range ir_copy = ir;
+        *it = world.taskq.add(
+            [ir_copy](TA::Range const& orng) {
+              return random_tensor_of_tensor<double>(orng, ir_copy);
+            },
+            it.make_range());
+      }
+    }
+    world.gop.fence();
+    return arr;
+  };
+
+  auto lhs = make_tot(outer_tr, inner_r);
+  auto rhs = make_tot(outer_tr, inner_r);
+
+  // Matching the existing ToT*ToT test annotations.
+  std::string const la{"i_1,i_2,i_3;a_4i_2i_3,a_1i_1i_2"};
+  std::string const ra{"i_1,i_2,i_3;a_2i_1i_2,a_4i_2i_3"};
+  std::string const ca{"i_2,i_1;a_1i_1i_2,a_2i_1i_2"};
+
+  // Baseline: einsum.
+  ToTArray C0 = TA::einsum(lhs(la), rhs(ra), ca);
+  world.gop.fence();
+  REQUIRE_FALSE(C0.is_initialized() == false);
+
+  // Result outer TiledRange: 2D (i_2, i_1), both with {0,2,4} -> 2x2=4 tiles.
+  TA::TiledRange const res_tr{tr1_occ, tr1_occ};
+  REQUIRE(res_tr == C0.trange());
+
+  // Construct SparseShape that zeros outer tile (0,0) of the result.
+  // tile_norms uses do_not_scale=true: the values are treated as already-scaled
+  // (so a value of 0.0 is exactly zero and >0 is nonzero).
+  TA::Tensor<float> tile_norms{res_tr.tiles_range(), 1.0f};
+  tile_norms[{0, 0}] = 0.0f;
+  TA::SparseShape<float> s{tile_norms, res_tr, /*do_not_scale=*/true};
+  // s must outlive the assignment below (set_shape stores &s internally).
+
+  // Standard-layer evaluation with imposed shape.
+  ToTArray C1;
+  REQUIRE_NOTHROW(C1(ca) = (lhs(la) * rhs(ra)).set_shape(s));
+  world.gop.fence();
+
+  // Outcome (1): shape constraint honored -- tile (0,0) must be zero/absent.
+  REQUIRE(C1.is_zero({0, 0}));
+
+  // Outcome (2): surviving outer tiles must match the einsum baseline.
+  // Walk C1's local tiles; for each nonzero outer tile, compare inner data
+  // element-wise with C0.
+  for (auto it = C1.begin(); it != C1.end(); ++it) {
+    if (!C1.is_local(it.index()) || C1.is_zero(it.index())) continue;
+    auto const& idx = it.index();
+    REQUIRE_FALSE(C0.is_zero(idx));
+
+    auto const& outer0 = C0.find(idx).get();  // TA::Tensor<TA::Tensor<double>>
+    auto const& outer1 = it->get();
+    REQUIRE(outer0.range() == outer1.range());
+
+    for (std::size_t o = 0; o < outer0.size(); ++o) {
+      auto const& inner0 = outer0[o];
+      auto const& inner1 = outer1[o];
+      REQUIRE(inner0.range() == inner1.range());
+      for (std::size_t k = 0; k < inner0.size(); ++k) {
+        CHECK(inner0[k] == Catch::Approx(inner1[k]));
+      }
+    }
+  }
+}
