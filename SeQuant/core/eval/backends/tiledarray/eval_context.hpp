@@ -85,6 +85,21 @@ struct TAEvalContext {
               node_any)
               .get();
 
+      // The result's outer TiledRange computation (below) reads each operand's
+      // array via a kind-dispatched get<>(); it handles only the flat
+      // (ResultTensorTA) and nested (ResultTensorOfTensorTA) kinds.  A product
+      // may legitimately have a SCALAR operand (ResultScalar), which carries no
+      // TiledRange and would mis-cast.  Such a product has no outer tensor
+      // result to shape, so decline early before computing the trange.
+      using FlatArray = TA::DistArray<TA::Tensor<NumericT>, PolicyT>;
+      using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<NumericT>>, PolicyT>;
+      using FlatResult = ResultTensorTA<FlatArray>;
+      using ToTResult = ResultTensorOfTensorTA<ToTArray>;
+      auto is_tensor_like = [](Result const& r) {
+        return r.is<FlatResult>() || r.is<ToTResult>();
+      };
+      if (!is_tensor_like(left) || !is_tensor_like(right)) return nullptr;
+
       // The result's outer TiledRange, over which the provider builds a shape.
       auto const trange = result_outer_trange_from_results<NumericT, PolicyT>(
           left, right, annot);
