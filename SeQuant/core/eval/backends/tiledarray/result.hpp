@@ -12,6 +12,8 @@
 
 #include <range/v3/view/iota.hpp>
 
+#include <algorithm>
+
 namespace sequant {
 
 // implementation details of the TiledArray result backend; prefer
@@ -230,6 +232,56 @@ inline constexpr TA::DeNest to_ta_denest(DeNest d) noexcept {
     pos = comma + 1;
   }
   return labels;
+}
+
+/// Split a TA ToT annotation string into its INNER labels: the comma-separated
+/// labels AFTER the optional `;` (empty if the annotation has no inner part).
+[[nodiscard]] inline container::svector<std::string> inner_annot_labels(
+    std::string const& annot) {
+  container::svector<std::string> labels;
+  auto const semi = annot.find(';');
+  if (semi == std::string::npos) return labels;
+  std::string const inner = annot.substr(semi + 1);
+  std::size_t pos = 0;
+  while (pos <= inner.size()) {
+    auto const comma = inner.find(',', pos);
+    auto const end = comma == std::string::npos ? inner.size() : comma;
+    if (end > pos) labels.emplace_back(inner.substr(pos, end - pos));
+    if (comma == std::string::npos) break;
+    pos = comma + 1;
+  }
+  return labels;
+}
+
+/// Does emitting a ToT*ToT general product `result(this) = (l(lan) * r(ran))`
+/// require a NON-IDENTITY inner result permutation, which TiledArray's
+/// cont_engine does not yet support (it throws "a non-identity inner result
+/// permutation is not yet supported")?  The contraction produces the result's
+/// inner modes in the natural order (left's non-contracted inner labels in left
+/// order, then right's); if \p this_annot's inner labels are in a different
+/// order, TA cannot emit it.  Detecting this lets the shaped-product path
+/// decline gracefully (the caller falls through to the unshaped einsum prod(),
+/// which DOES handle the reorder) instead of throwing.
+[[nodiscard]] inline bool tot_product_needs_inner_reorder(
+    std::string const& lannot, std::string const& rannot,
+    std::string const& this_annot) {
+  auto const li = inner_annot_labels(lannot);
+  auto const ri = inner_annot_labels(rannot);
+  auto const ti = inner_annot_labels(this_annot);
+  if (ti.empty()) return false;  // denest / no inner result modes
+
+  auto contains = [](container::svector<std::string> const& v,
+                     std::string const& s) {
+    return std::find(v.begin(), v.end(), s) != v.end();
+  };
+  // Natural order = left's inner labels that survive (appear in the result),
+  // then right's inner labels that survive and are not already taken from left.
+  container::svector<std::string> natural;
+  for (auto const& s : li)
+    if (contains(ti, s)) natural.push_back(s);
+  for (auto const& s : ri)
+    if (contains(ti, s) && !contains(natural, s)) natural.push_back(s);
+  return natural != ti;  // identity inner perm iff the orders match
 }
 
 /// Build the result's OUTER TiledRange for a binary product, given the two
@@ -829,12 +881,18 @@ template <typename... Args>
 /// the result's outer labels back onto the operands (see
 /// detail::result_outer_trange). This is the trange handed to the result-shape
 /// provider. \tparam NumericT, \tparam PolicyT name the concrete array types.
-template <typename NumericT, typename PolicyT>
+/// \tparam InnerTileT the inner tile type of a nested (ToT) operand; defaults
+/// to the plain \c TA::Tensor<NumericT>, but the CSV/PNO path uses an
+/// arena-pinned inner tile (\c TA::ArenaTensor<NumericT>), which is a distinct
+/// (type-id) Result kind and must be named here for \c Result::is<> to
+/// recognize it.
+template <typename NumericT, typename PolicyT,
+          typename InnerTileT = TA::Tensor<NumericT>>
 [[nodiscard]] TA::TiledRange result_outer_trange_from_results(
     Result const& left, Result const& right,
     std::array<std::any, 3> const& annot) {
   using FlatArray = TA::DistArray<TA::Tensor<NumericT>, PolicyT>;
-  using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<NumericT>>, PolicyT>;
+  using ToTArray = TA::DistArray<TA::Tensor<InnerTileT>, PolicyT>;
   using FlatResult = ResultTensorTA<FlatArray>;
   using ToTResult = ResultTensorOfTensorTA<ToTArray>;
 
@@ -881,13 +939,14 @@ template <typename NumericT, typename PolicyT>
 /// \return The shaped product wrapped in the appropriate ResultTensor*TA, or a
 ///         null ResultPtr if the operand kinds are not a supported shaped form
 ///         (the caller then falls through to the unshaped prod()).
-template <typename NumericT, typename PolicyT>
+template <typename NumericT, typename PolicyT,
+          typename InnerTileT = TA::Tensor<NumericT>>
 [[nodiscard]] ResultPtr apply_shaped_product(
     Result const& left, Result const& right,
     std::array<std::any, 3> const& annot, TA::SparseShape<float> const& shape,
     bool de_nest) {
   using FlatArray = TA::DistArray<TA::Tensor<NumericT>, PolicyT>;
-  using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<NumericT>>, PolicyT>;
+  using ToTArray = TA::DistArray<TA::Tensor<InnerTileT>, PolicyT>;
   using FlatResult = ResultTensorTA<FlatArray>;
   using ToTResult = ResultTensorOfTensorTA<ToTArray>;
 
@@ -915,6 +974,11 @@ template <typename NumericT, typename PolicyT>
 
   // T * ToT -> ToT  and  ToT * T -> ToT (general product)
   if ((l_flat && r_tot) || (l_tot && r_flat)) {
+    // Same inner-reorder limitation as the ToT*ToT branch: decline if the
+    // result's inner annotation needs a non-identity permutation TA can't emit.
+    if (detail::tot_product_needs_inner_reorder(a.lannot, a.rannot,
+                                                a.this_annot))
+      return nullptr;
     ToTArray out;
     if (l_flat) {
       out(a.this_annot) =
@@ -942,7 +1006,15 @@ template <typename NumericT, typename PolicyT>
       FlatArray::wait_for_lazy_cleanup(out.world());
       return eval_result<FlatResult>(std::move(out));
     } else {
-      // ToT * ToT -> ToT (general product)
+      // ToT * ToT -> ToT (general product). TiledArray's expression-layer
+      // general ToT product cannot emit a result whose INNER annotation needs a
+      // non-identity permutation (cont_engine throws). When the result requires
+      // such an inner reorder, decline so the caller falls through to the
+      // unshaped einsum prod() (which handles it); the shape is simply not
+      // imposed on this node -- lossless, just less aggressive.
+      if (detail::tot_product_needs_inner_reorder(a.lannot, a.rannot,
+                                                  a.this_annot))
+        return nullptr;
       ToTArray out;
       out(a.this_annot) =
           (left.get<ToTArray>()(a.lannot) * right.get<ToTArray>()(a.rannot))

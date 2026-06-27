@@ -66,58 +66,70 @@ struct TAEvalContext {
   /// \tparam NumericT  The numeric type of the operand arrays (e.g. double).
   /// \tparam PolicyT   The TA policy of the operand arrays (SparsePolicy for a
   ///                   shape to be meaningful).
+  /// \tparam InnerTileT  The inner tile type of a nested (ToT) operand;
+  /// defaults
+  ///                   to the plain \c TA::Tensor<NumericT>. The CSV/PNO path
+  ///                   produces arena-pinned ToT operands
+  ///                   (\c TA::ArenaTensor<NumericT>), a distinct Result kind;
+  ///                   instantiate with that inner tile so the hook recognizes
+  ///                   (and shapes) CSV intermediates instead of declining
+  ///                   them.
   /// \param ctx  The TAEvalContext whose result_shape_provider is captured.
-  template <typename NumericT, typename PolicyT>
+  template <typename NumericT, typename PolicyT,
+            typename InnerTileT = TA::Tensor<NumericT>>
   static CacheManager<FullBinaryNode<EvalExprTA>>::shaped_product_hook_type
   make_hook(TAEvalContext const& ctx) {
     // Capture the provider BY VALUE so the hook owns its copy and does not
     // dangle on ctx.
     auto provider = ctx.result_shape_provider;
-    return [provider = std::move(provider)](
-               std::any const& node_any, Result const& left,
-               Result const& right,
-               std::array<std::any, 3> const& annot) -> ResultPtr {
-      if (!provider) return nullptr;
+    return
+        [provider = std::move(provider)](
+            std::any const& node_any, Result const& left, Result const& right,
+            std::array<std::any, 3> const& annot) -> ResultPtr {
+          if (!provider) return nullptr;
 
-      auto const& node =
-          std::any_cast<
-              std::reference_wrapper<FullBinaryNode<EvalExprTA> const>>(
-              node_any)
-              .get();
+          auto const& node =
+              std::any_cast<
+                  std::reference_wrapper<FullBinaryNode<EvalExprTA> const>>(
+                  node_any)
+                  .get();
 
-      // The result's outer TiledRange computation (below) reads each operand's
-      // array via a kind-dispatched get<>(); it handles only the flat
-      // (ResultTensorTA) and nested (ResultTensorOfTensorTA) kinds.  A product
-      // may legitimately have a SCALAR operand (ResultScalar), which carries no
-      // TiledRange and would mis-cast.  Such a product has no outer tensor
-      // result to shape, so decline early before computing the trange.
-      using FlatArray = TA::DistArray<TA::Tensor<NumericT>, PolicyT>;
-      using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<NumericT>>, PolicyT>;
-      using FlatResult = ResultTensorTA<FlatArray>;
-      using ToTResult = ResultTensorOfTensorTA<ToTArray>;
-      auto is_tensor_like = [](Result const& r) {
-        return r.is<FlatResult>() || r.is<ToTResult>();
-      };
-      if (!is_tensor_like(left) || !is_tensor_like(right)) return nullptr;
+          // The result's outer TiledRange computation (below) reads each
+          // operand's array via a kind-dispatched get<>(); it handles only the
+          // flat (ResultTensorTA) and nested (ResultTensorOfTensorTA) kinds.  A
+          // product may legitimately have a SCALAR operand (ResultScalar),
+          // which carries no TiledRange and would mis-cast.  Such a product has
+          // no outer tensor result to shape, so decline early before computing
+          // the trange.
+          using FlatArray = TA::DistArray<TA::Tensor<NumericT>, PolicyT>;
+          using ToTArray = TA::DistArray<TA::Tensor<InnerTileT>, PolicyT>;
+          using FlatResult = ResultTensorTA<FlatArray>;
+          using ToTResult = ResultTensorOfTensorTA<ToTArray>;
+          auto is_tensor_like = [](Result const& r) {
+            return r.is<FlatResult>() || r.is<ToTResult>();
+          };
+          if (!is_tensor_like(left) || !is_tensor_like(right)) return nullptr;
 
-      // The result's outer TiledRange, over which the provider builds a shape.
-      auto const trange = result_outer_trange_from_results<NumericT, PolicyT>(
-          left, right, annot);
+          // The result's outer TiledRange, over which the provider builds a
+          // shape.
+          auto const trange =
+              result_outer_trange_from_results<NumericT, PolicyT, InnerTileT>(
+                  left, right, annot);
 
-      auto shape = provider(node, trange);
-      if (!shape) return nullptr;  // decline => unshaped prod()
+          auto shape = provider(node, trange);
+          if (!shape) return nullptr;  // decline => unshaped prod()
 
-      // de_nest: ToT * ToT -> flat (both operands nested, result is not). Read
-      // from the IR node, matching the eval site's computation.
-      bool const de_nest =
-          node.left()->tot() && node.right()->tot() && !node->tot();
+          // de_nest: ToT * ToT -> flat (both operands nested, result is not).
+          // Read from the IR node, matching the eval site's computation.
+          bool const de_nest =
+              node.left()->tot() && node.right()->tot() && !node->tot();
 
-      // shape must outlive the assignment inside apply_shaped_product (TA holds
-      // it by pointer); it does (local here, passed by const&, used fully
-      // within the call which fences before returning).
-      return apply_shaped_product<NumericT, PolicyT>(left, right, annot, *shape,
-                                                     de_nest);
-    };
+          // shape must outlive the assignment inside apply_shaped_product (TA
+          // holds it by pointer); it does (local here, passed by const&, used
+          // fully within the call which fences before returning).
+          return apply_shaped_product<NumericT, PolicyT, InnerTileT>(
+              left, right, annot, *shape, de_nest);
+        };
   }
 };
 
