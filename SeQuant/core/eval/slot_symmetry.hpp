@@ -145,6 +145,30 @@ class Tensor;
 ///
 SlotSymmetry from_leaf_tensor(Tensor const& t);
 
+class EvalExpr;
+
+///
+/// \brief Deduce the SlotSymmetry of a binary-product result from its operands.
+///
+/// \param left   the left operand EvalExpr (with its already-deduced
+/// descriptor)
+/// \param right  the right operand EvalExpr
+/// \param result the product's result Tensor (its bra/ket slot layout is the
+///               coordinate system of the returned descriptor)
+///
+/// \details Phase-0 scope: the column-group inheritance rule (spec 2.3 rule 1).
+/// The result's matched columns form a single ColumnGroup iff every result-bra
+/// index traces to one operand's column-grouped bra (or ket) slots, every
+/// result-ket index traces to one operand's column-grouped slots, and the
+/// indices contracted between those two operands occupy matched positions in
+/// their column groups (the PPL / giant "matched-pair swap absorbed" pattern).
+/// The column-group sign composes from the operand groups (all +1 for pure
+/// column symmetry). Cases that do not match (e.g. a Fock-like factor tying a
+/// single column index) yield no column group.
+///
+SlotSymmetry deduce_slot_symmetry(EvalExpr const& left, EvalExpr const& right,
+                                  Tensor const& result);
+
 }  // namespace sequant
 
 #endif  // SEQUANT_EVAL_SLOT_SYMMETRY_HPP

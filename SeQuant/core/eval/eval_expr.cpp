@@ -531,7 +531,7 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       // scalar * tensor or tensor * scalar
       auto const& tl = left->is_tensor() ? left : right;
       auto const& t = tl->as_tensor();
-      return {
+      EvalExpr res{
           EvalOp::Product,     //
           ResultType::Tensor,  //
           detail::make_tensor_wo_symmetries(opts, bra(t.bra()), ket(t.ket()),
@@ -540,6 +540,11 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
           1,                                                //
           h,
           nullptr};
+      // A scalar factor cannot break permutational symmetry: the tensor
+      // operand's descriptor passes through unchanged (its slot layout is
+      // preserved by make_tensor_wo_symmetries).
+      EvalOpSetter{}.set_slot_symmetry(res, tl->slot_symmetry());
+      return res;
     } else {
       // tensor * tensor
       container::svector<ExprWithHash> subfacs;
@@ -582,15 +587,20 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
                 h,
                 std::move(canon.graph)};
       } else {
-        return {EvalOp::Product,     //
-                ResultType::Tensor,  //
-                detail::make_tensor_wo_symmetries(opts, bra(target_indices.bra),
-                                                  ket(target_indices.ket),
-                                                  aux(target_indices.aux)),
-                canon.get_indices<Index::index_vector>(),  //
-                canon.phase,                               //
-                h,
-                std::move(canon.graph)};
+        EvalExpr res{EvalOp::Product,     //
+                     ResultType::Tensor,  //
+                     detail::make_tensor_wo_symmetries(
+                         opts, bra(target_indices.bra), ket(target_indices.ket),
+                         aux(target_indices.aux)),
+                     canon.get_indices<Index::index_vector>(),  //
+                     canon.phase,                               //
+                     h,
+                     std::move(canon.graph)};
+        // Out-of-band slot-symmetry deduction (does not affect the result
+        // tensor, its hash, canon indices, or graph above).
+        EvalOpSetter{}.set_slot_symmetry(
+            res, deduce_slot_symmetry(*left, *right, res.as_tensor()));
+        return res;
       }
     }
   };
@@ -616,6 +626,12 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
                            1,                      //
                            h,                      //
                            nullptr};
+
+    // The trailing scalar factor preserves the tensor sub-result's slot layout
+    // (make_tensor above keeps its index order), so the descriptor passes
+    // through unchanged.
+    if (left->is_tensor())
+      EvalOpSetter{}.set_slot_symmetry(result, left->slot_symmetry());
 
     return EvalExprNode{std::move(result), std::move(left), std::move(right)};
   }

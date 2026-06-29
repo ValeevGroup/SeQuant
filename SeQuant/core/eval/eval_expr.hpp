@@ -303,6 +303,11 @@ class EvalExpr {
 struct EvalOpSetter {
   void set(EvalExpr& expr, EvalOp op) { expr.op_type_ = op; }
   void reset(EvalExpr& expr) { expr.op_type_ = std::nullopt; }
+  /// Set the out-of-band slot-symmetry descriptor (used by the binarize
+  /// deduction pass; the descriptor is not part of the node's identity).
+  void set_slot_symmetry(EvalExpr& expr, SlotSymmetry sym) {
+    expr.slot_symmetry_ = std::move(sym);
+  }
 };
 
 struct BinarizationOptions {
