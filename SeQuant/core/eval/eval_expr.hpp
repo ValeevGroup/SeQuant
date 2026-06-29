@@ -4,6 +4,7 @@
 #include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
+#include <SeQuant/core/eval/slot_symmetry.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -270,6 +271,15 @@ class EvalExpr {
   [[nodiscard]] std::shared_ptr<bliss::Graph> copy_connectivity_graph()
       const noexcept;
 
+  ///
+  /// \return The out-of-band permutational-symmetry descriptor for this node's
+  ///         result tensor.  Default-constructed (empty) until a later
+  ///         deduction pass writes it.  This field is intentionally NOT
+  ///         referenced by any hashing, canonicalization, bliss-graph, or
+  ///         export code path.
+  ///
+  [[nodiscard]] SlotSymmetry const& slot_symmetry() const noexcept;
+
  protected:
   std::optional<EvalOp> op_type_ = std::nullopt;
 
@@ -284,6 +294,10 @@ class EvalExpr {
   size_t hash_value_;
 
   std::shared_ptr<bliss::Graph> connectivity_;
+
+  /// Out-of-band permutational-symmetry descriptor.
+  /// NOT referenced by hashing, canonicalization, bliss-graph, or export.
+  SlotSymmetry slot_symmetry_{};
 };
 
 struct EvalOpSetter {
