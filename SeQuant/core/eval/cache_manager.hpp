@@ -402,6 +402,13 @@ struct zero_footprint {
   double operator()(auto const&) const noexcept { return 0.; }
 };
 
+/// Default batchability predicate for cache_manager: no index is batchable, so
+/// the free-batchable-axis caching veto is inert (preserves the pre-batch
+/// behavior for callers that do not pass a predicate).
+struct never_batchable {
+  bool operator()(auto const&) const noexcept { return false; }
+};
+
 /// \param nodes the evaluation forest.
 /// \param is_volatile `bool(TreeNode const&)`: true if the node is
 ///        intrinsically volatile. Only its value on leaves matters in practice
@@ -417,12 +424,26 @@ struct zero_footprint {
 ///        of huge intermediates that carry a free large-space index (e.g. a
 ///        half-transformed DF integral with a free projected-AO index), at the
 ///        cost of recomputation. 0 (default) disables the gate.
+/// \param is_batchable_index `bool(Index const&)`: an index the runtime batched
+///        evaluator slices over (typically the DF/RI auxiliary). A node whose
+///        *result* (canonical) indices contain such an index carries a
+///        batchable axis FREE: the evaluator slices it per batch and the
+///        single-term optimizer prices it sliced, so caching it whole would
+///        hold an intermediate both other components mean to slice. Such nodes
+///        are NOT cached (neither NP repeat nor P frontier) -- recomputed
+///        (sliced under each consumer's batch trigger) instead of materialized
+///        whole and held. This is the structural counterpart of \p
+///        max_footprint: the batch axis, not a byte threshold, identifies the
+///        free-large-index intermediates. The default never_batchable accepts
+///        nothing, leaving the veto inert.
 /// \see CacheManager, cache_manager
 template <bool force_hash_collisions = false,
-          typename FootprintOf = zero_footprint>
+          typename FootprintOf = zero_footprint,
+          typename IsBatchableIndex = never_batchable>
 auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
                    size_t min_repeats = 2, FootprintOf footprint_of = {},
-                   double max_footprint = 0.)
+                   double max_footprint = 0.,
+                   IsBatchableIndex is_batchable_index = {})
   requires requires(
       std::ranges::range_value_t<std::remove_cvref_t<decltype(nodes)>> const&
           n) {
@@ -468,10 +489,24 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
   // Footprint gate: a node whose result is larger than max_footprint is never
   // cached (so it is recomputed by each consumer rather than materialized whole
   // and held), bounding the footprint of huge free-large-index intermediates.
+  // Free-batchable-axis veto: a node whose result carries an index the runtime
+  // slices over (is_batchable_index) is, by construction, a free-large-index
+  // intermediate the evaluator builds one batch-slice at a time and the
+  // optimizer prices sliced. Caching it -- as an NP repeat or an NV/V-frontier
+  // P node -- would materialize and hold it whole, contradicting both. Veto its
+  // caching (the structural form of the max_footprint gate) so each consumer
+  // recomputes it sliced under its own batch trigger.
   std::unordered_map<TreeNode, size_t, Hasher, Comp> filtered;
   for (auto&& [n, c] : counts) {
     if (!(c >= min_repeats || persistent.contains(n))) continue;
-    if (max_footprint > 0. && footprint_of(n) > max_footprint) {
+    bool free_batchable_axis = false;
+    for (auto const& ix : n->canon_indices())
+      if (is_batchable_index(ix)) {
+        free_batchable_axis = true;
+        break;
+      }
+    if (free_batchable_axis ||
+        (max_footprint > 0. && footprint_of(n) > max_footprint)) {
       persistent.erase(n);  // keep is_persistent consistent with what is cached
       continue;
     }

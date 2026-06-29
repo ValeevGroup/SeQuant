@@ -1696,8 +1696,10 @@ TEST_CASE("eval_batched_custom_evaluator", "[eval]") {
   for (std::size_t target_batch_size :
        {std::size_t{100}, std::size_t{8}, std::size_t{4}, std::size_t{1}}) {
     auto cache = cache_t::empty();
-    cache.set_custom_evaluator(
-        make_batched_custom_evaluator(yield_, target_batch_size));
+    cache.set_custom_evaluator(make_batched_custom_evaluator(
+        yield_, [target_batch_size](sequant::Index const&) -> std::size_t {
+          return target_batch_size;
+        }));
     auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
     // batched summation reorders the contraction, so allow a looser FP margin
     REQUIRE(equal_tarrays<Loose>(res, ref));
@@ -1728,10 +1730,10 @@ TEST_CASE("eval_batched_custom_evaluator persistence gate", "[eval]") {
     return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
   };
 
-  // (1) Gate ON: the subtree contains a volatile "t" leaf, so batching is
-  // DECLINED -- the spy scope-guard (invoked only once a node passes every gate
-  // and yields >1 batch) is never called, yet the standard scheme still gives
-  // the correct result.
+  // (1) Gate ON (persistent_only=true): the subtree contains a volatile "t"
+  // leaf, so batching is DECLINED -- the spy scope-guard (invoked only once a
+  // node passes every gate and yields >1 batch) is never called, yet the
+  // standard scheme still gives the correct result.
   {
     bool batched = false;
     auto spy = [&batched](std::size_t) {
@@ -1740,10 +1742,12 @@ TEST_CASE("eval_batched_custom_evaluator persistence gate", "[eval]") {
     };
     auto cache = cache_t::empty();
     cache.set_custom_evaluator(make_batched_custom_evaluator(
-        yield_, std::size_t{4}, sequant::accept_any_index{}, spy,
-        is_volatile_t));
+        yield_,
+        [](sequant::Index const&) -> std::size_t { return std::size_t{4}; },
+        sequant::accept_any_index{}, spy, is_volatile_t,
+        /*persistent_only=*/true));
     auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
-    REQUIRE_FALSE(batched);  // volatile subtree -> not batched
+    REQUIRE_FALSE(batched);  // gated volatile subtree -> not batched
     REQUIRE(equal_tarrays<Loose>(res, ref));
   }
 
@@ -1757,8 +1761,9 @@ TEST_CASE("eval_batched_custom_evaluator persistence gate", "[eval]") {
     };
     auto cache = cache_t::empty();
     cache.set_custom_evaluator(make_batched_custom_evaluator(
-        yield_, std::size_t{4}, sequant::accept_any_index{}, spy,
-        sequant::never_volatile{}));
+        yield_,
+        [](sequant::Index const&) -> std::size_t { return std::size_t{4}; },
+        sequant::accept_any_index{}, spy, sequant::never_volatile{}));
     auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
     REQUIRE(batched);  // no gate -> batched as before
     REQUIRE(equal_tarrays<Loose>(res, ref));
@@ -1813,8 +1818,12 @@ TEST_CASE("eval_batched_custom_evaluator_tot", "[eval]") {
   for (std::size_t target_batch_size :
        {std::size_t{100}, std::size_t{4}, std::size_t{1}}) {
     auto cache = cache_t::empty();
-    cache.set_custom_evaluator(
-        make_batched_custom_evaluator(yield, target_batch_size, accept_occ));
+    cache.set_custom_evaluator(make_batched_custom_evaluator(
+        yield,
+        [target_batch_size](sequant::Index const&) -> std::size_t {
+          return target_batch_size;
+        },
+        accept_occ));
     auto const res = evaluate(node, target, yield, cache)->get<ArrayToT>();
     REQUIRE(self_dot(res) == Catch::Approx(ref_dot));
   }
@@ -1984,8 +1993,9 @@ TEST_CASE("eval_batched_custom_evaluator dedups within-batch repeats",
   // x_1 is auxiliary: extent 12, tiles of 4; target 4 elements -> 3 batches
   int const n_b = 3;
   auto cache = cache_t::empty();
-  cache.set_custom_evaluator(
-      make_batched_custom_evaluator(counting_yield, std::size_t{4}));
+  cache.set_custom_evaluator(make_batched_custom_evaluator(
+      counting_yield,
+      [](sequant::Index const&) -> std::size_t { return std::size_t{4}; }));
   auto const res =
       evaluate(node, target, counting_yield, cache)->get<TArrayD>();
   REQUIRE(equal_tarrays<Loose>(res, ref));
@@ -2041,9 +2051,15 @@ TEST_CASE("eval_batched_custom_evaluator group replay", "[eval]") {
     if (n->is_tensor()) ++n_yield[std::wstring(n->as_tensor().label())];
     return yield_(n);
   };
+  // persistent_only=true: gate volatile term heads so the group replay streams
+  // only the persistent finals F1/F2 (the across-the-board default would also
+  // batch volatile triggers, changing the yield counts asserted below).
   cache.set_custom_evaluator(make_batched_custom_evaluator(
-      counting_yield, std::size_t{4}, sequant::accept_any_index{},
-      sequant::make_no_scope_guard{}, is_volatile_t));
+      counting_yield,
+      [](sequant::Index const&) -> std::size_t { return std::size_t{4}; },
+      sequant::accept_any_index{}, sequant::make_no_scope_guard{},
+      is_volatile_t,
+      /*persistent_only=*/true));
 
   // evaluating term 1 triggers at F1 and must prebuild F2 in the same passes
   auto const res1 = evaluate(n1, tgt1, counting_yield, cache)->get<TArrayD>();
@@ -2116,8 +2132,9 @@ TEST_CASE("eval_batched_custom_evaluator group replay layers nested finals",
     return ix.space() == aux_space;
   };
   cache.set_custom_evaluator(make_batched_custom_evaluator(
-      counting_yield, std::size_t{4}, accept_aux,
-      sequant::make_no_scope_guard{}, is_volatile_t));
+      counting_yield,
+      [](sequant::Index const&) -> std::size_t { return std::size_t{4}; },
+      accept_aux, sequant::make_no_scope_guard{}, is_volatile_t));
 
   auto const res_out =
       evaluate(n_out, tgt_out, counting_yield, cache)->get<TArrayD>();
@@ -2139,4 +2156,93 @@ TEST_CASE("eval_batched_custom_evaluator group replay layers nested finals",
   CHECK(n_yield[L"r"] == 4);
   CHECK(n_yield[L"q"] == 3);
   CHECK(n_yield[L"t"] == 2);
+}
+
+TEST_CASE("make_evaluator BatchPolicy adapter", "[eval]") {
+  // Strong equivalence: make_evaluator(policy, yielder) must produce the same
+  // numerical result as a hand-built make_batched_custom_evaluator with the
+  // matching Tensor->EvalNode volatile lift, on the same expression.
+  using sequant::evaluate;
+  using sequant::make_batched_custom_evaluator;
+  using sequant::make_evaluator;
+  using TA::TArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+  using cache_t = sequant::CacheManager<node_t>;
+
+  auto& world = TA::get_default_world();
+  // Multi-tile unoccupied space so batching actually engages (3 tiles of <=4).
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 12};
+  yield_.set_max_tile(4);
+
+  // Contracts a1,a2 (unoccupied) -> batch axis is an unoccupied index (3
+  // tiles). The subtree contains a "t" leaf, which the policy marks volatile.
+  auto const expr = sequant::deserialize<sequant::ExprPtr>(
+      L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
+  std::string const target = "i_1,i_2,i_3,i_4";
+  auto const node = eval_node(expr);
+
+  // Reference (no batching).
+  auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
+
+  // Build a BatchPolicy: batch over any index at size 4; "t" is volatile;
+  // persistent_only=true turns the volatility gate ON (default is across the
+  // board).
+  sequant::BatchPolicy policy{
+      .is_batchable_index = [](sequant::Index const&) { return true; },
+      .batch_target_size = [](sequant::Index const&) -> std::size_t {
+        return 4;
+      },
+      .is_volatile_leaf =
+          [](sequant::Tensor const& t) { return t.label() == L"t"; },
+      .persistent_only = true};
+
+  // (1) make_evaluator with volatile "t" gate (persistent_only=true): batching
+  // should be DECLINED (same as the persistence gate test above for
+  // make_batched_custom_evaluator).
+  {
+    bool batched = false;
+    auto spy = [&batched](std::size_t) {
+      batched = true;
+      return sequant::no_scope_guard{};
+    };
+    auto cache = cache_t::empty();
+    cache.set_custom_evaluator(make_evaluator(policy, yield_, spy));
+    auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
+    REQUIRE_FALSE(batched);  // volatile subtree -> not batched
+    REQUIRE(equal_tarrays<Loose>(res, ref));
+  }
+
+  // (2) Strong equivalence: make_evaluator (no volatile gate: empty predicate)
+  // == hand-built make_batched_custom_evaluator, same result as reference.
+  {
+    sequant::BatchPolicy policy_nv{
+        .is_batchable_index = policy.is_batchable_index,
+        .batch_target_size = policy.batch_target_size,
+        .is_volatile_leaf = {}  // no volatile gate
+    };
+
+    // make_evaluator path
+    auto cache_me = cache_t::empty();
+    cache_me.set_custom_evaluator(make_evaluator(policy_nv, yield_));
+    auto const res_me =
+        evaluate(node, target, yield_, cache_me)->get<TArrayD>();
+
+    // hand-built path
+    auto hand_nv = [](node_t const&) -> bool { return false; };
+    auto cache_hb = cache_t::empty();
+    cache_hb.set_custom_evaluator(make_batched_custom_evaluator(
+        yield_, policy_nv.batch_target_size, policy_nv.is_batchable_index,
+        sequant::make_no_scope_guard{}, hand_nv));
+    auto const res_hb =
+        evaluate(node, target, yield_, cache_hb)->get<TArrayD>();
+
+    // Both must match the reference (batched summation -> loose FP tolerance).
+    REQUIRE(equal_tarrays<Loose>(res_me, ref));
+    REQUIRE(equal_tarrays<Loose>(res_hb, ref));
+    // And agree with each other to the same loose tolerance: both come from
+    // the same batched-summation algorithm, whose accumulation order is
+    // thread-non-deterministic, so the two independent evaluations agree only
+    // up to FP noise (a Tight/exact compare here flakes by a few ULPs).
+    REQUIRE(equal_tarrays<Loose>(res_me, res_hb));
+  }
 }
