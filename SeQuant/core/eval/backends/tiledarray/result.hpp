@@ -8,7 +8,12 @@
 #include <SeQuant/core/utility/exception.hpp>
 
 #include <TiledArray/einsum/tiledarray.h>
+#include <TiledArray/util/retile_probe.h>
 #include <tiledarray.h>
+
+#include <iomanip>
+#include <sstream>
+#include <string>
 
 #include <range/v3/view/iota.hpp>
 
@@ -49,6 +54,50 @@ template <typename ArrayT>
     arr.world().gop.max(r);
   }
   return r;
+}
+
+/// One-line per-product SUMMA retile breakdown for the eval trace, gathered by
+/// the TiledArray retile probe (TA_RETILE_PROBE). Returns an empty string when
+/// the probe is disabled, so the trace stays silent unless the probe is armed.
+///
+/// The probe accumulates process-global, per-thread nanosecond/call counters
+/// across all of a product's einsum work (including the batched custom
+/// evaluator's sub-products). We report the delta since the previous product,
+/// so each `Eval | Product` line is annotated with exactly that product's cost.
+/// The local (all-thread) delta is then summed across the world so the line
+/// reflects every rank, not just the caller.
+///
+/// Collective: every rank must call this at the same point. The eval trace
+/// does -- it is gated on the world-uniform logger level, and the producing
+/// product has already fenced (Result::prod runs wait_for_lazy_cleanup), so the
+/// snapshot is taken at the quiescent point the probe requires. `last` is a
+/// function-local static: eval runs serially on the main thread, one product at
+/// a time, so a single running cursor yields clean per-product deltas.
+[[nodiscard]] inline std::string retile_op_probe_brief(madness::World& world) {
+  namespace tad = TiledArray::detail;
+  if (!tad::retile_probe_enabled()) return {};
+
+  static tad::RetileCounters last{};
+  auto const now = tad::retile_probe_snapshot();  // process-global cumulative
+  tad::RetileCounters delta;
+  for (std::size_t i = 0; i < delta.ns.size(); ++i) {
+    delta.ns[i] = now.ns[i] - last.ns[i];
+    delta.calls[i] = now.calls[i] - last.calls[i];
+  }
+  last = now;
+
+  // Sum this product's local delta over the world (no-op at world size 1).
+  world.gop.sum(delta.ns.data(), delta.ns.size());
+  world.gop.sum(delta.calls.data(), delta.calls.size());
+
+  std::ostringstream oss;
+  oss << "Retile";
+  for (std::size_t i = 0; i < delta.ns.size(); ++i) {
+    oss << " | " << tad::retile_bucket_name(static_cast<tad::RetileBucket>(i))
+        << '=' << std::fixed << std::setprecision(6)
+        << (static_cast<double>(delta.ns[i]) / 1e9) << "s/x" << delta.calls[i];
+  }
+  return oss.str();
 }
 
 ///
@@ -282,6 +331,10 @@ class ResultTensorTA final : public Result {
   using this_type = ResultTensorTA<ArrayT>;
   using annot_wrap = Annot<std::string>;
 
+  [[nodiscard]] std::string op_probe_brief() const override {
+    return detail::retile_op_probe_brief(get<ArrayT>().world());
+  }
+
   [[nodiscard]] id_t type_id() const noexcept override {
     return id_for_type<this_type>();
   }
@@ -472,6 +525,10 @@ class ResultTensorOfTensorTA final : public Result {
  private:
   using this_type = ResultTensorOfTensorTA<ArrayT>;
   using annot_wrap = Annot<std::string>;
+
+  [[nodiscard]] std::string op_probe_brief() const override {
+    return detail::retile_op_probe_brief(get<ArrayT>().world());
+  }
 
   using _inner_tensor_type = typename ArrayT::value_type::value_type;
 

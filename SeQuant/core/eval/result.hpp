@@ -373,6 +373,16 @@ class Result {
   /// @return the size of the object in bytes
   [[nodiscard]] virtual std::size_t size_in_bytes() const = 0;
 
+  /// @return a one-line, backend-specific cost-probe annotation for the
+  /// operation that produced this result, or an empty string when the backend
+  /// has nothing to report. The eval trace emits this immediately after the
+  /// `Eval | Product` line (see eval.hpp). The TiledArray backend uses it to
+  /// report the per-product SUMMA retile breakdown gathered by TA_RETILE_PROBE.
+  /// NOTE: a backend override may perform a collective reduction over the
+  /// result's world, so it must be invoked on every rank under a
+  /// world-uniform gate (the eval trace satisfies this).
+  [[nodiscard]] virtual std::string op_probe_brief() const { return {}; }
+
  protected:
   template <typename T,
             typename = std::enable_if_t<!std::is_convertible_v<T, Result>>>

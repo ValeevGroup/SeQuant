@@ -337,6 +337,21 @@ inline auto term(TermMode mode, std::string_view term) {
   log("Term", to_string(mode), term);
 }
 
+/// Emit a backend op-probe annotation line (e.g. the TiledArray per-product
+/// retile breakdown) immediately after an `Eval | Product` line. The string is
+/// produced by Result::op_probe_brief() and already carries its own
+/// `Tag | field=val | ...` shape, so it is written straight to the eval stream.
+/// An empty string is a no-op, so this stays silent when the backend has no
+/// probe to report or the probe is disabled.
+inline void op_probe(std::string const& line) {
+  if (line.empty()) return;
+  auto& l = Logger::instance();
+  if (l.eval.stream) {
+    *l.eval.stream << line << '\n';
+    l.eval.stream->flush();
+  }
+}
+
 [[nodiscard]] auto label(meta::eval_node auto const& node) {
   return node->is_primary()
              ? node->label()
@@ -580,6 +595,9 @@ ResultPtr evaluate(Node const& node,  //
                                   .mem_hwmark = {cache.note_working_set(
                                       log::bytes(cache, intercepted).value)}},
                     log::label(node));
+          // Backend op-probe for the custom-evaluator (batched) product.
+          if (node->op_type() == EvalOp::Product && log::printing())
+            log::op_probe(intercepted->op_probe_brief());
         }
         return intercepted;
       }
@@ -656,6 +674,12 @@ ResultPtr evaluate(Node const& node,  //
                               .mem_right = log::bytes(right)},
                 log::label(node));
     }
+    // Backend op-probe (e.g. TiledArray per-product retile breakdown) goes
+    // right after the `Eval | Product` line. op_probe_brief() may run a
+    // collective over the result's world, so it is called on every rank under
+    // the world-uniform printing() gate, not only where a stream exists.
+    if (!node.leaf() && node->op_type() == EvalOp::Product && log::printing())
+      log::op_probe(result->op_probe_brief());
   }
 
   return result;
