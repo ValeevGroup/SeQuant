@@ -22,6 +22,22 @@ namespace sequant::opt {
 /// selection); structurally-shareable factors whose saving is non-positive are
 /// left untouched.
 ///
+/// \par Scope (what is and isn't pulled out)
+/// The matcher operates on the two factors of each summand's *top* binary
+/// contraction, as fixed by single-term optimization. Two consequences:
+///  - A shared *composite* factor is pulled out only when single-term
+///    optimization already exposes it as one of those two top-level factors
+///    (e.g. \c A*B*C + A*B*D folds to \c A*B*(C + D) because \c A*B is the
+///    shared top factor). A composite that single-term brackets *away* into a
+///    deeper subtree is not recovered: \c A*B*C*D + A*B*E*F is left as two
+///    products when the chosen evaluation order buries \c A*B (e.g.
+///    \c ((A*B)*C)*D), since the two top factors then differ.
+///  - Only two-sided bicliques are emitted, and partner sums are not
+///    recursively re-factored. An input that mathematically factors into three
+///    or more groups, e.g. \c (A+B)(C+D)(E+F) expanded to eight terms, yields a
+///    single two-sided fold such as \c (AC+AD+BC+BD)*(E+F), not the fully
+///    nested form.
+///
 /// \param sum   The single-term-optimized sum to factor.
 /// \param nodes Per-summand binarized eval nodes, positionally aligned with
 ///              \c sum.summands() (\c nodes[i] is the binary tree of
