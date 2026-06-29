@@ -1121,20 +1121,20 @@ ExprPtr Λʼ(std::size_t K,
 
 // clang-format off
 /// @brief Makes projector 1/√(np! nh!) A_{a1 a2 ... a_np}^{i1 i2 ... i_nh} a_{i1 i2 ... i_nh}^{a1 a2 ... a_np} (excitation operator).
-/// Unlike P, uses SquareRoot normalization (includes the 1/√(np! nh!) prefactor).
+/// Unlike P, uses SquareRoot normalization (in the spin-orbital basis includes the 1/√(np! nh!) prefactor).
 /// @param np number of particle creators
 /// @param nh number of hole annihilators
-/// @note if using spin-free basis, only supports particle-number-conserving operators (\p np == \p nh)
+/// @note if using spin-free basis, only supports particle-number-conserving operators (\p np == \p nh), and the prefactor is 1/√(np!) (= 1/√(K!) with K = np = nh)
 // clang-format on
 ExprPtr δr(nₚ np, nₕ nh);
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(δr);
 
 // clang-format off
 /// @brief Makes projector 1/√(np! nh!) A^{a1 a2 ... a_np}_{i1 i2 ... i_nh} a^{i1 i2 ... i_nh}_{a1 a2 ... a_np} (deexcitation operator).
-/// Unlike P, uses SquareRoot normalization (includes the 1/√(np! nh!) prefactor).
+/// Unlike P, uses SquareRoot normalization (in the spin-orbital basis includes the 1/√(np! nh!) prefactor).
 /// @param np number of particle annihilators
 /// @param nh number of hole creators
-/// @note if using spin-free basis, only supports particle-number-conserving operators (\p np == \p nh)
+/// @note if using spin-free basis, only supports particle-number-conserving operators (\p np == \p nh), and the prefactor is 1/√(np!) (= 1/√(K!) with K = np = nh)
 // clang-format on
 ExprPtr δl(nₚ np, nₕ nh);
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(δl);
@@ -1322,20 +1322,20 @@ ExprPtr Λʼ(std::size_t K,
 
 // clang-format off
 /// @brief Makes projector with tensor form 1/√(np! nh!) A_{a1 a2 ... a_np}^{i1 i2 ... i_nh} a_{i1 i2 ... i_nh}^{a1 a2 ... a_np} (excitation operator).
-/// Unlike P, uses SquareRoot normalization (includes the 1/√(np! nh!) prefactor).
+/// Unlike P, uses SquareRoot normalization (in the spin-orbital basis includes the 1/√(np! nh!) prefactor).
 /// @param np number of particle creators
 /// @param nh number of hole annihilators
-/// @note if using spin-free basis, only supports particle-number-conserving operators (\p np == \p nh)
+/// @note if using spin-free basis, only supports particle-number-conserving operators (\p np == \p nh), and the prefactor is 1/√(np!) (= 1/√(K!) with K = np = nh)
 // clang-format on
 ExprPtr δr(nₚ np, nₕ nh);
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(δr);
 
 // clang-format off
 /// @brief Makes projector with tensor form 1/√(np! nh!) A^{a1 a2 ... a_np}_{i1 i2 ... i_nh} a^{i1 i2 ... i_nh}_{a1 a2 ... a_np} (deexcitation operator).
-/// Unlike P, uses SquareRoot normalization (includes the 1/√(np! nh!) prefactor).
+/// Unlike P, uses SquareRoot normalization (in the spin-orbital basis includes the 1/√(np! nh!) prefactor).
 /// @param np number of particle annihilators
 /// @param nh number of hole creators
-/// @note if using spin-free basis, only supports particle-number-conserving operators (\p np == \p nh)
+/// @note if using spin-free basis, only supports particle-number-conserving operators (\p np == \p nh), and the prefactor is 1/√(np!) (= 1/√(K!) with K = np = nh)
 // clang-format on
 ExprPtr δl(nₚ np, nₕ nh);
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(δl);

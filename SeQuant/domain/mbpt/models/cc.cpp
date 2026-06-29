@@ -323,7 +323,7 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
 }
 
 namespace {
-// EOM eigenvector operators R and L use SquareRoot normalization s
+// EOM eigenvector operators R and L use SquareRoot normalization
 constexpr Normalization eom_norm = Normalization::SquareRoot;
 }  // namespace
 
