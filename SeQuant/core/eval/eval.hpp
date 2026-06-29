@@ -343,13 +343,23 @@ inline auto term(TermMode mode, std::string_view term) {
 /// `Tag | field=val | ...` shape, so it is written straight to the eval stream.
 /// An empty string is a no-op, so this stays silent when the backend has no
 /// probe to report or the probe is disabled.
-inline void op_probe(std::string const& line) {
-  if (line.empty()) return;
+inline void op_probe(std::string const& text) {
+  if (text.empty()) return;
   auto& l = Logger::instance();
-  if (l.eval.stream) {
-    *l.eval.stream << line << '\n';
-    l.eval.stream->flush();
+  auto* s = l.eval.stream;
+  if (!s) return;
+  // `text` may carry several '\n'-separated records (e.g. a Rendezvous line
+  // followed by a Retile line); write each on its own line so the logger's
+  // per-line formatting applies uniformly.
+  std::size_t pos = 0;
+  while (pos < text.size()) {
+    auto const nl = text.find('\n', pos);
+    auto const len = (nl == std::string::npos ? text.size() : nl) - pos;
+    *s << text.substr(pos, len) << '\n';
+    if (nl == std::string::npos) break;
+    pos = nl + 1;
   }
+  s->flush();
 }
 
 [[nodiscard]] auto label(meta::eval_node auto const& node) {

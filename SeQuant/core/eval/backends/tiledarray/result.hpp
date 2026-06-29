@@ -75,29 +75,57 @@ template <typename ArrayT>
 /// a time, so a single running cursor yields clean per-product deltas.
 [[nodiscard]] inline std::string retile_op_probe_brief(madness::World& world) {
   namespace tad = TiledArray::detail;
-  if (!tad::retile_probe_enabled()) return {};
+  std::string out;
+  auto add_line = [&out](std::string s) {
+    if (!out.empty()) out += '\n';
+    out += std::move(s);
+  };
 
-  static tad::RetileCounters last{};
-  auto const now = tad::retile_probe_snapshot();  // process-global cumulative
-  tad::RetileCounters delta;
-  for (std::size_t i = 0; i < delta.ns.size(); ++i) {
-    delta.ns[i] = now.ns[i] - last.ns[i];
-    delta.calls[i] = now.calls[i] - last.calls[i];
+  // Per-product rendezvous (huge-message) count: how many tile serializations
+  // in this product exceeded MAD_BUFFER_SIZE -- forcing MADNESS's slow
+  // rendezvous protocol instead of the eager send -- summed over the world.
+  // Reported PER "Eval | Product" (not once per process) via the delta of TA's
+  // cumulative attempt counter since the previous product. Only meaningful
+  // multi-rank: at world size 1 the RMI buffer is inactive so the counter never
+  // moves, and we skip the (then-pointless) collective entirely.
+  if (world.size() > 1) {
+    static std::size_t last_attempts = 0;
+    std::size_t now =
+        tad::rendezvous_warning_attempts().load(std::memory_order_relaxed);
+    std::size_t d = now - last_attempts;
+    last_attempts = now;
+    world.gop.sum(&d, 1);  // collective: every rank reaches this per product
+    if (d > 0)
+      add_line("Rendezvous | tiles=" + std::to_string(d) +
+               " | serialized > MAD_BUFFER_SIZE");
   }
-  last = now;
 
-  // Sum this product's local delta over the world (no-op at world size 1).
-  world.gop.sum(delta.ns.data(), delta.ns.size());
-  world.gop.sum(delta.calls.data(), delta.calls.size());
+  // Per-product SUMMA retile breakdown (TA_RETILE_PROBE).
+  if (tad::retile_probe_enabled()) {
+    static tad::RetileCounters last{};
+    auto const now = tad::retile_probe_snapshot();  // process-global cumulative
+    tad::RetileCounters delta;
+    for (std::size_t i = 0; i < delta.ns.size(); ++i) {
+      delta.ns[i] = now.ns[i] - last.ns[i];
+      delta.calls[i] = now.calls[i] - last.calls[i];
+    }
+    last = now;
 
-  std::ostringstream oss;
-  oss << "Retile";
-  for (std::size_t i = 0; i < delta.ns.size(); ++i) {
-    oss << " | " << tad::retile_bucket_name(static_cast<tad::RetileBucket>(i))
-        << '=' << std::fixed << std::setprecision(6)
-        << (static_cast<double>(delta.ns[i]) / 1e9) << "s/x" << delta.calls[i];
+    // Sum this product's local delta over the world (no-op at world size 1).
+    world.gop.sum(delta.ns.data(), delta.ns.size());
+    world.gop.sum(delta.calls.data(), delta.calls.size());
+
+    std::ostringstream oss;
+    oss << "Retile";
+    for (std::size_t i = 0; i < delta.ns.size(); ++i) {
+      oss << " | " << tad::retile_bucket_name(static_cast<tad::RetileBucket>(i))
+          << '=' << std::fixed << std::setprecision(6)
+          << (static_cast<double>(delta.ns[i]) / 1e9) << "s/x" << delta.calls[i];
+    }
+    add_line(oss.str());
   }
-  return oss.str();
+
+  return out;
 }
 
 ///
