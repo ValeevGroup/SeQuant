@@ -1764,6 +1764,15 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
 // charging the held-whole accumulator's co-resident batch contribution, early-K
 // is priced (1+λ)·o⁴·p², so late-K wins iff K_b < (1+λ)·p/2 — i.e. raising λ
 // favors the (batchable, memory-bounded) late-K route.
+// Exercises single-term optimization on a 12-leaf network. The DP is ~100x
+// slower in Debug (~100 s per single_term_opt call, tens of minutes total) and
+// times out CI's Debug/Valgrind/Sanitizer jobs; gate it to optimized builds,
+// where the whole test runs in seconds. NDEBUG is defined in all SeQuant build
+// types (asserts are governed separately by SEQUANT_ASSERT_BEHAVIOR_), so it
+// cannot distinguish Debug from Release; __OPTIMIZE__ (defined by GCC and Clang
+// only at -O1 and above, never at -O0) is the reliable discriminator. See
+// PR #559.
+#ifdef __OPTIMIZE__
 TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
           "[optimize][bubble]") {
   using namespace sequant;
@@ -1913,53 +1922,32 @@ TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
 
   std::wcout << L"\n=== quadratic bubble exchange: i=80 mu=860 K=2360 p=" << p
              << L" (crossover K_b=p/2=" << p / 2 << L") ===\n";
-  for (double lam : {0.0, 1.0, 10.0, 40.0}) {
-    std::wcout << L"-- lambda=" << lam << L" --\n";
-    for (std::size_t Kb : {std::size_t{2}, std::size_t{6}, std::size_t{12},
-                           std::size_t{72}, std::size_t{236}})
-      choose(Kb, lam);
-  }
+  // Crossover at K_b = p/2 = 6. With Kappa sliced to a tiny batch the
+  // held-whole integral cannot win (o^4*p^2 > 2*o^4*p*K_b for K_b < p/2), so
+  // the optimizer takes the batchable late-K route; with a peak-trading premium
+  // (lambda) and K_b above the crossover the held-whole (g·C)(g·C) integral
+  // (early-K) wins.
+  CHECK_FALSE(choose(/*K_b=*/2, /*lambda=*/0.0));  // below crossover -> late-K
+  CHECK_FALSE(choose(/*K_b=*/6, /*lambda=*/1.0));  // at crossover   -> late-K
+  CHECK(choose(/*K_b=*/72, /*lambda=*/10.0));      // above crossover -> early-K
+
   // Real MPQC config: t is volatile (replayed), default peak tolerance 0.10
   // lets the (replay-weighted) flop tie-break trade peak for building the
   // persistent, t-free, Kappa-free integral ONCE. This is the suspected real
   // driver of the held-whole 4-occ/2-PNO object (the C60 OOM), independent of
-  // accumulation.
+  // accumulation. Below the crossover it stays late-K; above it flips to
+  // early-K.
   auto is_t = [](Tensor const& t) { return t.label() == L"t"; };
-  std::wcout
-      << L"-- volatile t, vw=100, tolerance=0.10 (real config), lambda=0 "
-         L"--\n";
-  for (std::size_t Kb :
-       {std::size_t{2}, std::size_t{12}, std::size_t{72}, std::size_t{236}}) {
+  auto real_config_integral = [&](std::size_t Kb) -> bool {
     std::function<std::size_t(Index const&)> bts = [Kb](Index const&) {
       return Kb;
     };
     auto res = opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
         prod, idxsz, false, CostParams{is_t, 100.0, 0.0, 0.10, {}, 0.0},
         is_batch, bts, ip);
-    // peak of the actually-chosen tree, plus the rejected alternative's peak
-    // (force pure-peak to recover the late-K tree) to see the traded premium.
-    double gb = batched_peak(res, Kb) * 8.0 / 1e9;
-    auto alt = opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
-        prod, idxsz, false, CostParams{{}, 1.0, 0.0, 0.0, {}, 0.0}, is_batch,
-        bts, ip);
-    double gb_alt = batched_peak(alt, Kb) * 8.0 / 1e9;
-    std::wcout << L"  K_b=" << Kb
-               << (forms_integral(res) ? L"\tEARLY-K (integral)"
-                                       : L"\tLATE-K  (t.(gC))")
-               << L"\tpeak=" << gb << L" GB   (pure-peak alt="
-               << (forms_integral(alt) ? L"early" : L"late") << L" " << gb_alt
-               << L" GB)\n";
-  }
-  std::wcout
-      << L"  chosen tree (K_b=236, lambda=0):\n      "
-      << render_tree(
-             opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
-                 prod, idxsz, false, CostParams{{}, 1.0, 0.0, 0.0, {}, 0.0},
-                 is_batch, [](Index const&) { return std::size_t{236}; }, ip))
-      << L"\n";
-
-  // Robust sanity: with Kappa sliced to a tiny batch the held-whole integral
-  // cannot win (o^4*p^2 > 2*o^4*p*K_b for K_b < p/2), so the optimizer must
-  // take the batchable late-K route.
-  CHECK_FALSE(choose(/*K_b=*/2, /*lambda=*/0.0));
+    return forms_integral(res);
+  };
+  CHECK_FALSE(real_config_integral(/*K_b=*/2));  // below crossover -> late-K
+  CHECK(real_config_integral(/*K_b=*/236));      // above crossover -> early-K
 }
+#endif  // __OPTIMIZE__
