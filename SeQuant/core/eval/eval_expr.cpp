@@ -137,7 +137,8 @@ EvalExpr::index_vector const& EvalExpr::canon_indices() const noexcept {
 EvalExpr::EvalExpr(Tensor const& tnsr)
     : op_type_{std::nullopt},
       result_type_{ResultType::Tensor},
-      expr_{tnsr.clone()} {
+      expr_{tnsr.clone()},
+      slot_symmetry_{from_leaf_tensor(tnsr)} {
   SEQUANT_ASSERT(!tnsr.indices().empty());
   if (is_tot(tnsr)) {
     ExprPtrList tlist{expr_};

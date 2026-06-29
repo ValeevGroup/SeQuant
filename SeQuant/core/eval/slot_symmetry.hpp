@@ -124,6 +124,27 @@ struct SlotSymmetry {
   }
 };
 
+class Tensor;
+
+///
+/// \brief Translate a leaf Tensor's permutational-symmetry attributes into a
+///        SlotSymmetry descriptor over the tensor's slot positions.
+///
+/// \details Maps:
+///   - ColumnSymmetry::Symm  -> one ColumnGroup over all matched
+///     (bra[c], ket[c]) columns (c in [0, min(bra_rank, ket_rank))), sign +1.
+///   - Symmetry::Symm / Antisymm on the bra-and-ket -> a bra_group over the bra
+///     slots and a ket_group over the ket slots, sign +1 (Symm) or -1
+///     (Antisymm). (SeQuant's Symmetry attribute applies jointly to bra and
+///     ket; the bra/ket bundles permute together, per the column-symmetry
+///     invariant.)
+///   - Nonsymm in every axis -> an empty descriptor.
+///
+/// Single-element bra/ket bundles (rank < 2) carry no exploitable
+/// within-bundle permutation, so no bra/ket group is emitted for them.
+///
+SlotSymmetry from_leaf_tensor(Tensor const& t);
+
 }  // namespace sequant
 
 #endif  // SEQUANT_EVAL_SLOT_SYMMETRY_HPP
