@@ -27,7 +27,11 @@ class Tensor;
 ///   batchability model: each index satisfying
 ///   `OptimizeOptions::batch_policy.is_batchable_index` is treated as
 ///   independently sliced to
-///   `min(extent, batch_policy.batch_target_size(ix))` elements per index. The
+///   `min(extent, batch_policy.batch_target_size(ix))` elements per index --
+///   `batch_target_size` is an upper bound, so this is a conservative
+///   (over-)estimate of the realized whole-tile batch, which the backend rounds
+///   *down* to a tile multiple (never above the target; see
+///   `mode_batches_of_trange1`). The
 ///   DP minimises peak over the worst-case sliced configuration. Only consulted
 ///   by the batched oracle and DP; requires
 ///   `batch_policy.is_batchable_index` and `batch_policy.batch_target_size`
@@ -143,9 +147,10 @@ struct OptimizeOptions {
   /// batchable indices, no volatile leaves). The three sub-fields are:
   ///   - `is_batchable_index`: marks an Index as living in a batchable space
   ///     (e.g. DF/RI aux; = the eval cache's accept_aux).
-  ///   - `batch_target_size`: per-index slice size; a sliced batchable index
-  ///     ix contributes min(extent, batch_target_size(ix)). Only consulted by
-  ///     DensePeakSizeBatched.
+  ///   - `batch_target_size`: per-index slice size (an upper bound); a sliced
+  ///     batchable index ix contributes min(extent, batch_target_size(ix)), a
+  ///     conservative over-estimate of the realized tile-floored batch. Only
+  ///     consulted by DensePeakSizeBatched.
   ///   - `is_volatile_leaf`: marks a LEAF tensor as volatile (its value
   ///     changes between replays). Empty => no tensor is volatile => cost
   ///     weighting is disabled and volatile_weight is ignored. CC callers pass

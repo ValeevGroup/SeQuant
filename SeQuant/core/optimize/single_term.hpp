@@ -41,8 +41,8 @@ namespace detail {
 ///        peak_flops_tolerance/roofline apply to the peak objectives only.
 /// \param is_batchable_index Predicate marking an index as batchable (sliced);
 ///        ObjectiveFunction::DensePeakSizeBatched only.
-/// \param batch_target_size Per-index slice size for batchable indices;
-///        ObjectiveFunction::DensePeakSizeBatched only.
+/// \param batch_target_size Per-index per-batch slice size (an upper bound) for
+///        batchable indices; ObjectiveFunction::DensePeakSizeBatched only.
 /// \param inner_pow Optional k-aware CSV/PNO composite extent applied by every
 ///        cost counter; see \ref inner_aware_volume. Empty (default) sizes
 ///        composites by \p idxsz (k=1), which under-counts multi-composite
