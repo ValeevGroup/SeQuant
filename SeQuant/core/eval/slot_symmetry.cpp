@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <map>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -178,45 +179,28 @@ SlotSymmetry deduce_slot_symmetry(EvalExpr const& left, EvalExpr const& right,
   auto const& rbra = result.bra();
   auto const& rket = result.ket();
 
-  // ---- Column-group inheritance (PPL / giant) ----
+  // ---- Column-group inheritance (PPL / giant / n-column / maximal-subset)
+  // ----
   if (ncols >= 2) {
-    // Identify the single bra-supplier and ket-supplier operands, and require
-    // every result column's bra/ket index to trace into that operand's
-    // column-grouped slots.
-    std::optional<int> bra_supplier, ket_supplier;
-    bool all_columns_inherit = true;
-    for (std::size_t c = 0; c < ncols && all_columns_inherit; ++c) {
-      if (!rbra[c].nonnull() || !rket[c].nonnull()) {
-        all_columns_inherit = false;
-        break;
-      }
+    // A result column c inherits iff both rbra[c] and rket[c] are nonnull and
+    // both trace to column-grouped operand slots. Cluster inheriting columns by
+    // their (bra_supplier, ket_supplier) operand-index pair; emit one
+    // ColumnGroup per cluster of size >= 2, sign +1. Non-inheriting columns
+    // (incl. aux slots and unpaired bra/ket positions) are simply excluded.
+    std::map<std::pair<int, int>, container::svector<std::size_t>> clusters;
+    for (std::size_t c = 0; c < ncols; ++c) {
+      if (!rbra[c].nonnull() || !rket[c].nonnull()) continue;
       auto b = trace(rbra[c]);
       auto k = trace(rket[c]);
-      if (!b || !k || !b->second.column_grouped || !k->second.column_grouped) {
-        all_columns_inherit = false;
-        break;
-      }
-      if (!bra_supplier)
-        bra_supplier = b->first;
-      else if (*bra_supplier != b->first)
-        all_columns_inherit = false;
-      if (!ket_supplier)
-        ket_supplier = k->first;
-      else if (*ket_supplier != k->first)
-        all_columns_inherit = false;
+      if (!b || !k || !b->second.column_grouped || !k->second.column_grouped)
+        continue;
+      clusters[{b->first, k->first}].push_back(c);
     }
-
-    if (all_columns_inherit && bra_supplier && ket_supplier) {
-      // The contraction between the two supplying operands is symmetric: each
-      // supplier carries a full column group over its supplying columns, so the
-      // contracted indices (the other bundle of each supplier) sit in matched
-      // grouped columns -- the PPL / giant matched-pair-swap pattern. (When
-      // bra_supplier == ket_supplier the whole column comes from one operand's
-      // ColumnGroup, the leaf-passthrough case.)
+    for (auto& [supplier_pair, cols] : clusters) {
+      if (cols.size() < 2) continue;
       SlotSymmetry::ColumnGroup cg;
       cg.sign = 1;
-      cg.cols.reserve(ncols);
-      for (std::size_t c = 0; c < ncols; ++c) cg.cols.push_back(c);
+      cg.cols = std::move(cols);
       ss.column_groups.push_back(std::move(cg));
     }
   }

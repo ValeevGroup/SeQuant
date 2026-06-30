@@ -364,4 +364,65 @@ TEST_CASE("slot_symmetry", "[slot_symmetry]") {
     auto const& ss = (*node).slot_symmetry();
     REQUIRE(ss.bra_groups.empty());
   }
+
+  // ---- Task 0.7: n-column generalization + maximal-subset ----
+
+  SECTION("3-column triples: g*t both ColumnSymm -> ColumnGroup {0,1,2}") {
+    // g{a_1,a_2,a_3; a_4,a_5,a_6} ColumnSymm * t{a_4,a_5,a_6; i_1,i_2,i_3}
+    // ColumnSymm: all 3 result columns inherit symmetrically -> {0,1,2} sign
+    // +1.
+    Tensor g{L"g",
+             bra(IndexList{L"a_1", L"a_2", L"a_3"}),
+             ket(IndexList{L"a_4", L"a_5", L"a_6"}),
+             Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm,
+             ColumnSymmetry::Symm};
+    Tensor t{L"t",
+             bra(IndexList{L"a_4", L"a_5", L"a_6"}),
+             ket(IndexList{L"i_1", L"i_2", L"i_3"}),
+             Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm,
+             ColumnSymmetry::Symm};
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize(ex<Tensor>(g) * ex<Tensor>(t));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    auto const& ss = (*node).slot_symmetry();
+    REQUIRE(ss.column_groups.size() == 1);
+    REQUIRE(ss.column_groups[0].cols ==
+            container::svector<std::size_t>{0, 1, 2});
+    REQUIRE(ss.column_groups[0].sign == 1);
+    REQUIRE(ss.bra_groups.empty());
+    REQUIRE(ss.ket_groups.empty());
+  }
+
+  SECTION(
+      "sub-group: g{a1,a2,a3;a4,a5,a6} * f{a6;a7} -> ColumnGroup {0,1} only"
+      " (column 2 ket from ColumnNonsymm operand)") {
+    // g has ColumnGroup {0,1,2} (ColumnSymm); f is ColumnSymmetry::Nonsymm
+    // (no column group). Contraction on a_6. Result bra=[a_1,a_2,a_3],
+    // ket=[a_4,a_5,a_7] (all virtual, ascending label order: a_4<a_5<a_7).
+    // Columns 0=(a_1,a_4) and 1=(a_2,a_5) both trace to g (column-grouped);
+    // column 2=(a_3,a_7): a_7 traces to f (NOT column-grouped) -> col 2
+    // skipped. Maximal-subset emits ColumnGroup {0,1} only; not {0,1,2}; not
+    // empty.
+    Tensor g{L"g",
+             bra(IndexList{L"a_1", L"a_2", L"a_3"}),
+             ket(IndexList{L"a_4", L"a_5", L"a_6"}),
+             Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm,
+             ColumnSymmetry::Symm};
+    Tensor f{L"f",
+             bra(IndexList{L"a_6"}),
+             ket(IndexList{L"a_7"}),
+             Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm,
+             ColumnSymmetry::Nonsymm};
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize(ex<Tensor>(g) * ex<Tensor>(f));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    auto const& ss = (*node).slot_symmetry();
+    REQUIRE(ss.column_groups.size() == 1);
+    REQUIRE(ss.column_groups[0].cols == container::svector<std::size_t>{0, 1});
+    REQUIRE(ss.column_groups[0].sign == 1);
+  }
 }
