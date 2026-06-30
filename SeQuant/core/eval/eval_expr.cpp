@@ -475,8 +475,16 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
           1,                                                //
           h,                                                //
           nullptr};
-      EvalOpSetter{}.set_slot_symmetry(
-          res, intersect(left.slot_symmetry(), right.slot_symmetry()));
+      // intersect compares groups by integer slot position; this is valid
+      // because all summands share the same external-slot layout (the Sum
+      // result is built from left.canon_indices()). Only propagate the
+      // descriptor when the result preserves the operand's bra/ket layout
+      // (not the case under merge_indices mode, I1 fix; I3 invariant).
+      if (res.as_tensor().bra_rank() == left.as_tensor().bra_rank() &&
+          res.as_tensor().ket_rank() == left.as_tensor().ket_rank())
+        EvalOpSetter{}.set_slot_symmetry(
+            res, intersect(left.slot_symmetry(), right.slot_symmetry()));
+      // else: leave slot_symmetry empty (default-constructed).
       return res;
     } else {
       return {EvalOp::Sum,              //
@@ -547,10 +555,14 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
           1,                                                //
           h,
           nullptr};
-      // A scalar factor cannot break permutational symmetry: the tensor
-      // operand's descriptor passes through unchanged (its slot layout is
-      // preserved by make_tensor_wo_symmetries).
-      EvalOpSetter{}.set_slot_symmetry(res, tl->slot_symmetry());
+      // A scalar factor cannot break permutational symmetry: pass through the
+      // tensor operand's descriptor only when the result preserves the
+      // operand's bra/ket layout (not the case under merge_indices mode, where
+      // all indices collapse into aux and the slot positions are meaningless).
+      if (res.as_tensor().bra_rank() == t.bra_rank() &&
+          res.as_tensor().ket_rank() == t.ket_rank())
+        EvalOpSetter{}.set_slot_symmetry(res, tl->slot_symmetry());
+      // else: leave slot_symmetry empty (default-constructed).
       return res;
     } else {
       // tensor * tensor
@@ -635,10 +647,17 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
                            nullptr};
 
     // The trailing scalar factor preserves the tensor sub-result's slot layout
-    // (make_tensor above keeps its index order), so the descriptor passes
-    // through unchanged.
-    if (left->is_tensor())
-      EvalOpSetter{}.set_slot_symmetry(result, left->slot_symmetry());
+    // only when the result bra/ket match the sub-result (make_tensor above
+    // keeps the index order under the default mode; under merge_indices all
+    // slots collapse into aux so the positions would be meaningless, I1 fix).
+    if (left->is_tensor()) {
+      auto const& left_t = left->as_tensor();
+      auto const& result_t = result.as_tensor();
+      if (result_t.bra_rank() == left_t.bra_rank() &&
+          result_t.ket_rank() == left_t.ket_rank())
+        EvalOpSetter{}.set_slot_symmetry(result, left->slot_symmetry());
+      // else: leave slot_symmetry empty (default-constructed).
+    }
 
     return EvalExprNode{std::move(result), std::move(left), std::move(right)};
   }

@@ -10,6 +10,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 
 namespace sequant {
@@ -64,20 +65,30 @@ namespace {
 /// Where an index sits in an operand tensor: which bundle and column.
 struct SlotLoc {
   enum class Bundle { Bra, Ket } bundle;
-  std::size_t column;   ///< position within the bra (or ket) bundle
-  bool column_grouped;  ///< true iff this column lies in an operand ColumnGroup
+  std::size_t column;  ///< position within the bra (or ket) bundle
+  /// Index of the operand ColumnGroup this column belongs to, or nullopt if
+  /// the column is not part of any ColumnGroup.
+  std::optional<std::size_t> column_group_idx;
 };
 
-/// Map index-label -> SlotLoc for the matched columns of an operand tensor.
-/// Only bra/ket slots over min(bra_rank, ket_rank) are columns; aux and
-/// unpaired bra/ket slots are excluded.
+/// Map index full_label -> SlotLoc for the matched columns of an operand
+/// tensor. Only bra/ket slots over min(bra_rank, ket_rank) are columns; aux
+/// and unpaired bra/ket slots are excluded.
+///
+/// @note Keys use Index::full_label() (not label()) so that proto-indexed
+///       indices with the same base label but distinct proto-indices are
+///       stored as separate entries (I2 fix).
 std::unordered_map<std::wstring, SlotLoc> column_locations(
     Tensor const& t, SlotSymmetry const& sym) {
-  auto in_column_group = [&sym](std::size_t col) {
-    for (auto const& cg : sym.column_groups)
-      if (std::find(cg.cols.begin(), cg.cols.end(), col) != cg.cols.end())
-        return true;
-    return false;
+  // Return the index of the ColumnGroup in sym that contains col, or nullopt.
+  auto which_column_group =
+      [&sym](std::size_t col) -> std::optional<std::size_t> {
+    for (std::size_t gi = 0; gi < sym.column_groups.size(); ++gi)
+      if (std::find(sym.column_groups[gi].cols.begin(),
+                    sym.column_groups[gi].cols.end(),
+                    col) != sym.column_groups[gi].cols.end())
+        return gi;
+    return std::nullopt;
   };
 
   std::unordered_map<std::wstring, SlotLoc> locs;
@@ -85,13 +96,13 @@ std::unordered_map<std::wstring, SlotLoc> column_locations(
   auto const& bra = t.bra();
   auto const& ket = t.ket();
   for (std::size_t c = 0; c < ncols; ++c) {
-    const bool grouped = in_column_group(c);
+    const auto grp = which_column_group(c);
     if (bra[c].nonnull())
-      locs.emplace(std::wstring{bra[c].label()},
-                   SlotLoc{SlotLoc::Bundle::Bra, c, grouped});
+      locs.emplace(std::wstring{bra[c].full_label()},
+                   SlotLoc{SlotLoc::Bundle::Bra, c, grp});
     if (ket[c].nonnull())
-      locs.emplace(std::wstring{ket[c].label()},
-                   SlotLoc{SlotLoc::Bundle::Ket, c, grouped});
+      locs.emplace(std::wstring{ket[c].full_label()},
+                   SlotLoc{SlotLoc::Bundle::Ket, c, grp});
   }
   return locs;
 }
@@ -176,8 +187,10 @@ SlotSymmetry deduce_slot_symmetry(EvalExpr const& left, EvalExpr const& right,
 
   // Trace a result index to the operand (0 = left, 1 = right) and slot that
   // supplies it. Externals appear in exactly one operand slot.
+  // Keys use full_label() to avoid aliasing proto-indexed indices that share
+  // a base label (I2 fix).
   auto trace = [&](Index const& idx) -> std::optional<std::pair<int, SlotLoc>> {
-    const std::wstring key{idx.label()};
+    const std::wstring key{idx.full_label()};
     if (auto it = lloc.find(key); it != lloc.end()) return {{0, it->second}};
     if (auto it = rloc.find(key); it != rloc.end()) return {{1, it->second}};
     return std::nullopt;
@@ -191,20 +204,26 @@ SlotSymmetry deduce_slot_symmetry(EvalExpr const& left, EvalExpr const& right,
   // ----
   if (ncols >= 2) {
     // A result column c inherits iff both rbra[c] and rket[c] are nonnull and
-    // both trace to column-grouped operand slots. Cluster inheriting columns by
-    // their (bra_supplier, ket_supplier) operand-index pair; emit one
-    // ColumnGroup per cluster of size >= 2, sign +1. Non-inheriting columns
-    // (incl. aux slots and unpaired bra/ket positions) are simply excluded.
-    std::map<std::pair<int, int>, container::svector<std::size_t>> clusters;
+    // both trace to column-grouped operand slots with known group identities.
+    // Cluster inheriting columns by their 4-tuple
+    //   (bra_supplier, bra_group_idx, ket_supplier, ket_group_idx)
+    // so that columns from distinct source groups in the same operand are
+    // never merged into one oversized ColumnGroup (C1 fix). Emit one
+    // ColumnGroup per cluster of size >= 2, sign +1.
+    using ClusterKey = std::tuple<int, std::size_t, int, std::size_t>;
+    std::map<ClusterKey, container::svector<std::size_t>> clusters;
     for (std::size_t c = 0; c < ncols; ++c) {
       if (!rbra[c].nonnull() || !rket[c].nonnull()) continue;
       auto b = trace(rbra[c]);
       auto k = trace(rket[c]);
-      if (!b || !k || !b->second.column_grouped || !k->second.column_grouped)
+      if (!b || !k || !b->second.column_group_idx ||
+          !k->second.column_group_idx)
         continue;
-      clusters[{b->first, k->first}].push_back(c);
+      clusters[{b->first, *b->second.column_group_idx, k->first,
+                *k->second.column_group_idx}]
+          .push_back(c);
     }
-    for (auto& [supplier_pair, cols] : clusters) {
+    for (auto& [key, cols] : clusters) {
       if (cols.size() < 2) continue;
       SlotSymmetry::ColumnGroup cg;
       cg.sign = 1;
@@ -214,15 +233,19 @@ SlotSymmetry deduce_slot_symmetry(EvalExpr const& left, EvalExpr const& right,
   }
 
   // ---- Bra-only / ket-only group inheritance ----
-  // Build label -> result-bundle-position maps for fast membership checks.
+  // Build full_label -> result-bundle-position maps for fast membership checks.
+  // Using full_label() (not label()) avoids aliasing proto-indexed indices
+  // that share a base label but differ in proto-indices (I2 fix).
   const std::size_t rbra_rank = result.bra_rank();
   const std::size_t rket_rank = result.ket_rank();
 
   std::unordered_map<std::wstring, std::size_t> rbra_pos, rket_pos;
   for (std::size_t p = 0; p < rbra_rank; ++p)
-    if (rbra[p].nonnull()) rbra_pos.emplace(std::wstring{rbra[p].label()}, p);
+    if (rbra[p].nonnull())
+      rbra_pos.emplace(std::wstring{rbra[p].full_label()}, p);
   for (std::size_t p = 0; p < rket_rank; ++p)
-    if (rket[p].nonnull()) rket_pos.emplace(std::wstring{rket[p].label()}, p);
+    if (rket[p].nonnull())
+      rket_pos.emplace(std::wstring{rket[p].full_label()}, p);
 
   // Try to inherit one operand slot-group into one result bundle. All member
   // indices of the operand group must appear in the result bundle
@@ -239,7 +262,7 @@ SlotSymmetry deduce_slot_symmetry(EvalExpr const& left, EvalExpr const& right,
         result_positions.reserve(og.slots.size());
         for (std::size_t s : og.slots) {
           if (s >= ot_bundle_rank || !ot_bundle[s].nonnull()) return;
-          auto it = res_pos.find(std::wstring{ot_bundle[s].label()});
+          auto it = res_pos.find(std::wstring{ot_bundle[s].full_label()});
           if (it == res_pos.end()) return;
           result_positions.push_back(it->second);
         }

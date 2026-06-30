@@ -572,4 +572,149 @@ TEST_CASE("slot_symmetry", "[slot_symmetry]") {
     REQUIRE(exprs[1]->slot_symmetry().empty());
     REQUIRE(exprs[2]->slot_symmetry().empty());
   }
+
+  // ---- Review-findings regression tests (C1, I1, I2, Symm+1) ----
+
+  SECTION(
+      "C1: 3-tensor outer-product keeps two column groups separate"
+      " (no false group merge)") {
+    // L{a_1,a_2;a_3,a_4} and R{a_5,a_6;a_7,a_8} both ColumnSymm.
+    // L*R is an outer product with TWO column groups: {0,1} (from L, cols
+    // (a_1,a_3)/(a_2,a_4)) and {2,3} (from R, cols (a_5,a_7)/(a_6,a_8)).
+    // P{a_3,a_4,a_7,a_8;i_1,i_2,i_3,i_4} ColumnSymm contracts L*R's ket.
+    //
+    // Bug (pre-fix): deduce_slot_symmetry for (L*R)*P sees all four L*R
+    // columns as "column_grouped=true" (bool flattened from ANY group), so
+    // all four cluster under the single (bra_supplier=LR, ket_supplier=P)
+    // pair -> one merged ColumnGroup {0,1,2,3}.
+    //
+    // Fix: the 4-tuple key (bra_supplier, bra_group_idx, ket_supplier,
+    // ket_group_idx) keeps columns from L*R group 0 separate from group 1 ->
+    // two ColumnGroups {0,1} and {2,3}.
+    Tensor L{L"L",
+             bra(IndexList{L"a_1", L"a_2"}),
+             ket(IndexList{L"a_3", L"a_4"}),
+             Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm,
+             ColumnSymmetry::Symm};
+    Tensor R{L"R",
+             bra(IndexList{L"a_5", L"a_6"}),
+             ket(IndexList{L"a_7", L"a_8"}),
+             Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm,
+             ColumnSymmetry::Symm};
+    Tensor P{L"P",
+             bra(IndexList{L"a_3", L"a_4", L"a_7", L"a_8"}),
+             ket(IndexList{L"i_1", L"i_2", L"i_3", L"i_4"}),
+             Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm,
+             ColumnSymmetry::Symm};
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize(ex<Tensor>(L) * ex<Tensor>(R) * ex<Tensor>(P));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    auto const& ss = (*node).slot_symmetry();
+
+    // With the C1 fix: two separate ColumnGroups {0,1} and {2,3}.
+    // Without the fix: one merged ColumnGroup {0,1,2,3} (false positive).
+    REQUIRE(ss.column_groups.size() == 2);
+    for (auto const& cg : ss.column_groups) {
+      REQUIRE(cg.cols.size() == 2);
+      REQUIRE(cg.sign == 1);
+    }
+  }
+
+  SECTION("I1 merge_indices: scalar*tensor result descriptor is empty") {
+    // Under merge_indices mode, make_tensor_wo_symmetries puts all indices
+    // into aux (bra_rank=0, ket_rank=0). The passthrough of the operand's
+    // descriptor (whose slot positions refer to non-aux bra/ket) would be
+    // meaningless. The fix guards on rank match and returns empty instead.
+    Tensor g{L"g",
+             bra(IndexList{L"a_1", L"a_2"}),
+             ket(IndexList{L"i_1", L"i_2"}),
+             Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm,
+             ColumnSymmetry::Symm};
+    BinarizationOptions opts;
+    opts.merge_indices = true;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize(ex<Constant>(rational{1, 2}) * ex<Tensor>(g),
+                         IndexSet{}, opts);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    // Without the fix the column group from g would be copied verbatim
+    // (column positions 0,1 now meaninglessly refer to aux slots).
+    REQUIRE((*node).slot_symmetry().empty());
+  }
+
+  SECTION(
+      "I2 proto-index: full_label prevents base-label collision in"
+      " bra-group inheritance") {
+    // Two proto-indexed indices a_1<i_1> and a_1<i_2> share the same
+    // base label "a_1" but have distinct proto-indices.  Under the buggy
+    // label()-keyed maps only one entry is stored (emplace keeps the first),
+    // so try_inherit maps BOTH operand bra slots to position 0 in the result
+    // bra -> SlotGroup {0,0} (nonsensical).  With full_label() the two
+    // entries are distinct -> correct SlotGroup {0,1}.
+    auto ctx_resetter =
+        set_scoped_default_context(get_default_context().clone());
+    IndexSpaceRegistry registry;
+    registry.add("a", 0b01);
+    registry.add("i", 0b10);
+    *get_default_context().mutable_index_space_registry() = registry;
+
+    Index i1(L"i_1"), i2(L"i_2");
+    Index a1_i1(L"a_1", {i1});  // a_1<i_1>
+    Index a1_i2(L"a_1", {i2});  // a_1<i_2>
+
+    // Left: bra=[a_1<i_1>, a_1<i_2>], ket=[a_3, a_4], Antisymm
+    // -> bra_group {0,1} sign -1 from from_leaf_tensor.
+    Tensor L_t{L"L",
+               bra(Index::index_vector{a1_i1, a1_i2}),
+               ket(IndexList{L"a_3", L"a_4"}),
+               Symmetry::Antisymm,
+               BraKetSymmetry::Nonsymm,
+               ColumnSymmetry::Symm};
+    // Right: bra=[a_3, a_4], ket=[a_5], Nonsymm
+    Tensor R_t{L"R",
+               bra(IndexList{L"a_3", L"a_4"}),
+               ket(IndexList{L"a_5"}),
+               Symmetry::Nonsymm,
+               BraKetSymmetry::Nonsymm,
+               ColumnSymmetry::Nonsymm};
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize(ex<Tensor>(L_t) * ex<Tensor>(R_t));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    auto const& ss = (*node).slot_symmetry();
+
+    // L's bra_group {0,1} sign -1 must be inherited into the result bra.
+    // Bug: rbra_pos["a_1"]=0 only -> try_inherit gives result_positions=[0,0]
+    //      -> SlotGroup {0,0} (both map to same slot).
+    // Fix: rbra_pos has distinct "a_1<i_1>"->0 and "a_1<i_2>"->1
+    //      -> SlotGroup {0,1} (correct distinct positions).
+    REQUIRE(ss.bra_groups.size() == 1);
+    REQUIRE(ss.bra_groups[0].slots.size() == 2);
+    // The two result-bra positions must be distinct (not both 0).
+    REQUIRE(ss.bra_groups[0].slots[0] != ss.bra_groups[0].slots[1]);
+    REQUIRE(ss.bra_groups[0].sign == -1);
+  }
+
+  SECTION("Symm leaf: bra_group and ket_group with sign +1") {
+    // Symmetry::Symm -> sign +1 in both bra_group and ket_group.
+    // This path was previously untested (only Antisymm sign -1 was covered).
+    Tensor t{L"t",
+             bra(IndexList{L"a_1", L"a_2"}),
+             ket(IndexList{L"i_1", L"i_2"}),
+             Symmetry::Symm,
+             BraKetSymmetry::Nonsymm,
+             ColumnSymmetry::Nonsymm};
+    EvalExpr ee{t};
+    auto const& ss = ee.slot_symmetry();
+
+    REQUIRE(ss.bra_groups.size() == 1);
+    REQUIRE(ss.bra_groups[0].slots == container::svector<std::size_t>{0, 1});
+    REQUIRE(ss.bra_groups[0].sign == 1);
+    REQUIRE(ss.ket_groups.size() == 1);
+    REQUIRE(ss.ket_groups[0].slots == container::svector<std::size_t>{0, 1});
+    REQUIRE(ss.ket_groups[0].sign == 1);
+    REQUIRE(ss.column_groups.empty());
+  }
 }
