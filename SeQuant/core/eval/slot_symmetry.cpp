@@ -98,6 +98,14 @@ std::unordered_map<std::wstring, SlotLoc> column_locations(
 
 }  // namespace
 
+SlotSymmetry adjoint(SlotSymmetry const& s) {
+  SlotSymmetry result;
+  result.column_groups = s.column_groups;
+  result.bra_groups = s.ket_groups;
+  result.ket_groups = s.bra_groups;
+  return result;
+}
+
 SlotSymmetry intersect(SlotSymmetry const& a, SlotSymmetry const& b) {
   SlotSymmetry result;
 

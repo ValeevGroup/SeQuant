@@ -5,14 +5,17 @@
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
+#include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/eval/slot_symmetry.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/optimize/common_subexpression_elimination.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <memory>
+#include <vector>
 
 TEST_CASE("slot_symmetry", "[slot_symmetry]") {
   using namespace sequant;
@@ -424,5 +427,149 @@ TEST_CASE("slot_symmetry", "[slot_symmetry]") {
     REQUIRE(ss.column_groups.size() == 1);
     REQUIRE(ss.column_groups[0].cols == container::svector<std::size_t>{0, 1});
     REQUIRE(ss.column_groups[0].sign == 1);
+  }
+
+  // ---- Task 0.8 Part A: adjoint() free function ----
+
+  SECTION("adjoint(s): bra_group moves to ket_group, column_group preserved") {
+    // Input: one bra_group {0,1} sign -1, one column_group {0,1} sign +1,
+    // no ket_group. Output: column_group preserved, bra_groups empty,
+    // ket_group {0,1} sign -1 (the original bra_group).
+    SlotSymmetry s;
+    s.column_groups.push_back(
+        SlotSymmetry::ColumnGroup{container::svector<std::size_t>{0, 1}, 1});
+    s.bra_groups.push_back(
+        SlotSymmetry::SlotGroup{container::svector<std::size_t>{0, 1}, -1});
+
+    auto r = sequant::adjoint(s);
+
+    REQUIRE(r.column_groups.size() == 1);
+    REQUIRE(r.column_groups[0].cols == container::svector<std::size_t>{0, 1});
+    REQUIRE(r.column_groups[0].sign == 1);
+    REQUIRE(r.bra_groups.empty());
+    REQUIRE(r.ket_groups.size() == 1);
+    REQUIRE(r.ket_groups[0].slots == container::svector<std::size_t>{0, 1});
+    REQUIRE(r.ket_groups[0].sign == -1);
+  }
+
+  SECTION("adjoint(adjoint(s)) == s (involution)") {
+    SlotSymmetry s;
+    s.column_groups.push_back(
+        SlotSymmetry::ColumnGroup{container::svector<std::size_t>{0, 1}, 1});
+    s.bra_groups.push_back(
+        SlotSymmetry::SlotGroup{container::svector<std::size_t>{0, 1}, -1});
+    REQUIRE(sequant::adjoint(sequant::adjoint(s)) == s);
+  }
+
+  SECTION("Adjoint EvalExpr node carries swapped descriptor") {
+    // t{a_1,a_2; i_1}: bra_rank=2 >= 2, ket_rank=1 < 2.
+    // from_leaf_tensor: bra_group {0,1} sign -1 (Antisymm), no ket_group,
+    // no column_group (ncols = min(2,1) = 1 < 2).
+    // After adjoint: ket_group {0,1} sign -1, no bra_group, no column_group.
+    Tensor t{L"t",
+             bra(IndexList{L"a_1", L"a_2"}),
+             ket(IndexList{L"i_1"}),
+             Symmetry::Antisymm,
+             BraKetSymmetry::Nonsymm,
+             ColumnSymmetry::Nonsymm};
+    Tensor t_adj = t;
+    t_adj.adjoint();
+    // Adjoint marker must have been applied (BraKetSymmetry::Nonsymm).
+    REQUIRE(!t_adj.label().empty());
+    REQUIRE(t_adj.label().back() == adjoint_label);
+
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto tree = binarize(ex<Tensor>(t_adj));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+    REQUIRE(tree->op_type() == EvalOp::Adjoint);
+
+    auto const& ss = tree->slot_symmetry();
+    REQUIRE(!ss.empty());
+    // bra_groups: ket_groups of bare = empty (ket_rank=1 < 2).
+    REQUIRE(ss.bra_groups.empty());
+    // ket_groups: bra_groups of bare = [{0,1}, -1].
+    REQUIRE(ss.ket_groups.size() == 1);
+    REQUIRE(ss.ket_groups[0].slots == container::svector<std::size_t>{0, 1});
+    REQUIRE(ss.ket_groups[0].sign == -1);
+    // column_groups: preserved from bare = empty (ncols=1 < 2).
+    REQUIRE(ss.column_groups.empty());
+  }
+
+  // ---- Task 0.8 Part B: CSE descriptor probe ----
+  //
+  // Observation: the CSE round-trips through Expr (to_expr -> cse_placeholder
+  // rebuild -> binarize). The definition tree is re-binarized from the
+  // original expression so its root carries the deduced descriptor. The
+  // reference nodes in parent trees are fresh Nonsymm leaves (built as
+  // ColumnSymmetry::Nonsymm in common_subexpression_elimination.hpp) and
+  // therefore have empty descriptors.
+  //
+  // This is a Phase-1 concern: consumers must look up the definition tree to
+  // learn the CSE intermediate's symmetry. No production fix in Phase 0.
+
+  SECTION(
+      "CSE: definition tree root has descriptor; reference leaf is empty"
+      " (Phase-1 TODO)") {
+    auto ctx_resetter =
+        set_scoped_default_context(get_default_context().clone());
+    IndexSpaceRegistry registry;
+    registry.add("a", 0b01);
+    registry.add("i", 0b10);
+    *get_default_context().mutable_index_space_registry() = registry;
+
+    // g{a_1,a_2; a_3,a_4} * t{a_3,a_4; i_1,i_2}: column-symmetric PPL product.
+    // The product tree carries ColumnGroup {0,1} at its root.
+    Tensor g{L"g",
+             bra(IndexList{L"a_1", L"a_2"}),
+             ket(IndexList{L"a_3", L"a_4"}),
+             Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm,
+             ColumnSymmetry::Symm};
+    Tensor t{L"t",
+             bra(IndexList{L"a_3", L"a_4"}),
+             ket(IndexList{L"i_1", L"i_2"}),
+             Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm,
+             ColumnSymmetry::Symm};
+
+    auto binarizer = [](auto&& expr) {
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+      return binarize(std::forward<decltype(expr)>(expr));
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    };
+
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    EvalNode<EvalExpr> tree1 = binarize(ex<Tensor>(g) * ex<Tensor>(t));
+    EvalNode<EvalExpr> tree2 = binarize(ex<Tensor>(g) * ex<Tensor>(t));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+    // Pre-CSE: both roots have non-empty descriptor (column group {0,1}).
+    REQUIRE(!tree1->slot_symmetry().empty());
+    REQUIRE(tree1->slot_symmetry().column_groups.size() == 1u);
+
+    std::vector<EvalNode<EvalExpr>> exprs;
+    exprs.push_back(std::move(tree1));
+    exprs.push_back(std::move(tree2));
+
+    opt::eliminate_common_subexpressions(exprs, binarizer);
+
+    // After CSE: exprs[0] is the definition tree (CSE1 = g*t). The definition
+    // is built by re-running binarize on the original product expression, so
+    // the root node retains the deduced ColumnGroup {0,1} descriptor.
+    REQUIRE(exprs.size() == 3u);
+    REQUIRE(!exprs[0]->slot_symmetry().empty());
+    REQUIRE(exprs[0]->slot_symmetry().column_groups.size() == 1u);
+
+    // exprs[1] and exprs[2] are the modified reference trees. Each is now a
+    // Product node whose effective content is a CSE placeholder leaf. The
+    // placeholder is constructed with ColumnSymmetry::Nonsymm (see
+    // common_subexpression_elimination.hpp), so from_leaf_tensor returns
+    // empty. The root descriptor of the reference tree is therefore empty.
+    //
+    // Phase-1 TODO: propagate the definition tree's descriptor to consumers
+    // that reference the CSE intermediate as a leaf.
+    REQUIRE(exprs[1]->slot_symmetry().empty());
+    REQUIRE(exprs[2]->slot_symmetry().empty());
   }
 }

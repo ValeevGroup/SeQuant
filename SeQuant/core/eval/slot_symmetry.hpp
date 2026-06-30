@@ -156,6 +156,13 @@ class EvalExpr;
 SlotSymmetry intersect(SlotSymmetry const& a, SlotSymmetry const& b);
 
 ///
+/// \brief Adjoint of a descriptor: swap bra_groups <-> ket_groups, preserve
+///        column_groups and all signs (real-field; complex conjugation
+///        deferred to spec OQ-3).
+///
+SlotSymmetry adjoint(SlotSymmetry const& s);
+
+///
 /// \brief Deduce the SlotSymmetry of a binary-product result from its operands.
 ///
 /// \param left   the left operand EvalExpr (with its already-deduced

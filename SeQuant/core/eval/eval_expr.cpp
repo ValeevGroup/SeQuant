@@ -429,6 +429,9 @@ EvalExprNode binarize(Tensor const& t) {
                  1,                                                 //
                  h,                                                 //
                  nullptr};
+    // Out-of-band: adjoint swaps bra_groups <-> ket_groups and preserves
+    // column_groups (real-field; complex conjugation deferred to Phase 1).
+    EvalOpSetter{}.set_slot_symmetry(adj, adjoint(bare_leaf->slot_symmetry()));
     return EvalExprNode{std::move(adj), std::move(bare_leaf),
                         std::move(sentinel)};
   }
