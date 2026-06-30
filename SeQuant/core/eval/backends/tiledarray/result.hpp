@@ -348,9 +348,12 @@ template <typename... Args>
     std::size_t tile_hi);
 
 /// Partition a TiledRange1 into contiguous, tile-aligned element-range batches,
-/// each covering at least \p target_batch_size elements where possible. Tiles
-/// are not uniformly sized, so batches are uneven; the last batch may be
-/// smaller, and any single tile larger than the target forms its own batch.
+/// each covering at most \p target_batch_size elements: whole tiles are
+/// appended to a batch until the next tile would push it over the target, so \p
+/// target_batch_size is an UPPER BOUND, not a goal. Tiles are not uniformly
+/// sized, so batches are uneven; the last batch may be smaller, and any single
+/// tile larger than the target forms its own batch (the one-tile floor -- the
+/// only way a batch may exceed the target).
 /// Element ranges `[lo, hi)` are in the TiledRange1's element coordinate system
 /// (honoring a nonzero element lobound, e.g. a frozen-core offset). This is the
 /// TA realization of Result::mode_batches(): the caller requests a target batch
@@ -368,12 +371,19 @@ mode_batches_of_trange1(TA::TiledRange1 const& tr1,
   std::size_t const ntiles = tr1.tile_extent();
   for (std::size_t t = 0; t < ntiles; ++t) {
     auto const& tr = tr1.tile(t);
-    acc += tr.second - tr.first;
-    if (acc >= target || t + 1 == ntiles) {
-      batches.emplace_back(grp_lo, tr.second);
-      grp_lo = tr.second;
+    std::size_t const tsz = tr.second - tr.first;
+    // target_batch_size is an UPPER BOUND on the realized (whole-tile) batch:
+    // if appending this tile to a non-empty batch would push it over the
+    // target, close the batch at the previous tile boundary first. A batch thus
+    // never exceeds the target, except via the one-tile floor (a lone tile
+    // larger than the target still forms its own batch).
+    if (acc > 0 && acc + tsz > target) {
+      batches.emplace_back(grp_lo, tr.first);
+      grp_lo = tr.first;
       acc = 0;
     }
+    acc += tsz;
+    if (t + 1 == ntiles) batches.emplace_back(grp_lo, tr.second);
   }
   return batches;
 }

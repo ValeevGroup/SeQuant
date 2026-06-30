@@ -13,6 +13,11 @@ class Tensor;
 /// batched evaluator (make_evaluator, Task A3). All predicates default empty.
 struct BatchPolicy {
   std::function<bool(Index const&)> is_batchable_index = {};
+  /// Per-index per-batch slice size (in elements) for a batchable index -- an
+  /// UPPER BOUND, not a goal. Both the single-term optimizer and the runtime
+  /// batched evaluator treat it as a ceiling: the realized whole-tile batch is
+  /// rounded *down* to a tile multiple and never exceeds this value, except the
+  /// one-tile floor (a lone tile larger than the target forms its own batch).
   std::function<std::size_t(Index const&)> batch_target_size = {};
   std::function<bool(Tensor const&)> is_volatile_leaf = {};
 

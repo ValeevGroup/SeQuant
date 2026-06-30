@@ -1655,13 +1655,26 @@ TEST_CASE("eval_slice_array_over_mode", "[eval]") {
     using batches_t = sequant::container::svector<std::pair<size_t, size_t>>;
     sequant::ResultPtr const r =
         sequant::eval_result<sequant::ResultTensorTA<TA::TArrayD>>(arr);
-    // mode 1 (b) has 3 tiles of 3 elements each (extent 9).
+    // mode 1 (b) has 3 tiles of 3 elements each (extent 9). target_batch_size
+    // is an UPPER BOUND: each batch is the largest whole-tile group whose total
+    // size does not exceed the target, with a floor of one tile (so a target
+    // below the tile size still yields one tile per batch). A batch must never
+    // exceed the target except via that one-tile floor.
     // (extra parens: compare as a single bool so Catch2 needn't stringify
-    // pairs) target larger than the extent -> a single batch (caller declines).
+    // pairs) target >= extent -> a single batch (whole mode).
     REQUIRE((r->mode_batches(1, 100) == batches_t{{0, 9}}));
-    // target 4: tile0 (3<4) + tile1 reaches 6>=4 -> [0,6); remainder [6,9).
-    REQUIRE((r->mode_batches(1, 4) == batches_t{{0, 6}, {6, 9}}));
-    // target 1: every tile is its own batch.
+    // target == 2 tiles -> two-tile batches (6 <= 6).
+    REQUIRE((r->mode_batches(1, 6) == batches_t{{0, 6}, {6, 9}}));
+    // target just above the tile size (but below 2 tiles) -> ONE tile per
+    // batch: a 2-tile batch (6) would exceed the target. Regression: the old
+    // `acc >= target` rule rounded UP to a 2-tile batch, so any target a hair
+    // above the tile size doubled the realized batch -- the aux_target_size
+    // 236->243 crash (236-wide K tiles, 243 target -> 472-wide batch).
+    REQUIRE((r->mode_batches(1, 5) == batches_t{{0, 3}, {3, 6}, {6, 9}}));
+    REQUIRE((r->mode_batches(1, 4) == batches_t{{0, 3}, {3, 6}, {6, 9}}));
+    // target == tile size -> one tile per batch.
+    REQUIRE((r->mode_batches(1, 3) == batches_t{{0, 3}, {3, 6}, {6, 9}}));
+    // target below the tile size -> still one tile per batch (the floor).
     REQUIRE((r->mode_batches(1, 1) == batches_t{{0, 3}, {3, 6}, {6, 9}}));
   }
 }

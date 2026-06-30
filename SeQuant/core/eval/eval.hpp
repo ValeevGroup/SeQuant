@@ -923,10 +923,10 @@ ResultPtr evaluate_antisymm(Args&&... args) {
 ///
 /// For each node it is consulted on, the returned evaluator chooses a batch
 /// axis \c K via `batch_axis(node, accept)` (declining if none). It asks the
-/// backend to partition \c K into contiguous element-range batches of about
-/// \p target_batch_size(K) elements each (Result::mode_batches); if that
-/// yields at most one batch it declines (so small / unselected indices are
-/// left to the standard scheme).
+/// backend to partition \c K into contiguous, whole-tile element-range batches
+/// of at most \p target_batch_size(K) elements each -- the target is an upper
+/// bound, not a goal (Result::mode_batches); if that yields at most one batch
+/// it declines (so small / unselected indices are left to the standard scheme).
 ///
 /// Otherwise it *replays the build of every compatible persistent final* in
 /// the same batch passes: the group is the trigger node plus every key of
@@ -964,11 +964,12 @@ ResultPtr evaluate_antisymm(Args&&... args) {
 ///
 /// \param le the leaf evaluator (captured).
 /// \param target_batch_size per-index function
-///        `std::function<std::size_t(Index const&)>` returning the desired
-///        batch size for a given (batch-axis) index. Backend-neutral: a tiled
-///        backend rounds batch boundaries to tile boundaries, so realized
-///        batches are uneven and each covers at least this many elements where
-///        possible.
+///        `std::function<std::size_t(Index const&)>` returning the per-batch
+///        slice size (in elements) for a given (batch-axis) index -- an UPPER
+///        BOUND, not a goal. Backend-neutral: a tiled backend rounds batch
+///        boundaries to tile boundaries (down to a tile multiple), so realized
+///        batches are uneven and each covers at most this many elements, except
+///        the one-tile floor (a lone tile larger than the target).
 /// \param accept predicate selecting which contracted indices may be batched
 ///        (e.g. only those in the auxiliary/RI IndexSpace). Defaults to any.
 /// \param make_scope_guard factory, called with the batch count, returning an
