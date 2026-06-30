@@ -310,4 +310,58 @@ TEST_CASE("slot_symmetry", "[slot_symmetry]") {
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     REQUIRE((*node).slot_symmetry().column_groups.empty());
   }
+
+  // ---- Task 0.6: bra-only / ket-only group inheritance ----
+
+  SECTION("antisymm bra group inherited whole into result bra (primary)") {
+    // A{a_1,a_2; i_3,i_4} Antisymm contracted on ket with B{i_3,i_4; i_1}
+    // Nonsymm. Result r{a_1,a_2; i_1}: bra traces whole to A's antisymm bra
+    // group -> result bra_group {0,1} sign -1; ket rank 1 -> no ket group;
+    // min(2,1)=1 -> no column group.
+    Tensor A{L"A",
+             bra(IndexList{L"a_1", L"a_2"}),
+             ket(IndexList{L"i_3", L"i_4"}),
+             Symmetry::Antisymm,
+             BraKetSymmetry::Nonsymm,
+             ColumnSymmetry::Symm};
+    Tensor B{L"B",
+             bra(IndexList{L"i_3", L"i_4"}),
+             ket(IndexList{L"i_1"}),
+             Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm,
+             ColumnSymmetry::Nonsymm};
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize(ex<Tensor>(A) * ex<Tensor>(B));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    auto const& ss = (*node).slot_symmetry();
+    REQUIRE(ss.bra_groups.size() == 1);
+    REQUIRE(ss.bra_groups[0].slots == container::svector<std::size_t>{0, 1});
+    REQUIRE(ss.bra_groups[0].sign == -1);
+    REQUIRE(ss.ket_groups.empty());
+    REQUIRE(ss.column_groups.empty());
+  }
+
+  SECTION("antisymm bra group partially contracted -> no bra_group (break)") {
+    // A{a_1,a_2,a_3; i_3,i_4} Antisymm: bra_group {0,1,2} sign -1.
+    // B{i_3,i_4; a_3,i_1} Nonsymm: contracts i_3,i_4 (A ket) and a_3 (A
+    // bra). Result r{a_1,a_2; i_1}: only a_1,a_2 survive in result bra, not
+    // a_3. Whole-group guard fires: no bra_group emitted.
+    Tensor A{L"A",
+             bra(IndexList{L"a_1", L"a_2", L"a_3"}),
+             ket(IndexList{L"i_3", L"i_4"}),
+             Symmetry::Antisymm,
+             BraKetSymmetry::Nonsymm,
+             ColumnSymmetry::Symm};
+    Tensor B{L"B",
+             bra(IndexList{L"i_3", L"i_4"}),
+             ket(IndexList{L"a_3", L"i_1"}),
+             Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm,
+             ColumnSymmetry::Nonsymm};
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize(ex<Tensor>(A) * ex<Tensor>(B));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    auto const& ss = (*node).slot_symmetry();
+    REQUIRE(ss.bra_groups.empty());
+  }
 }

@@ -175,50 +175,107 @@ SlotSymmetry deduce_slot_symmetry(EvalExpr const& left, EvalExpr const& right,
   };
 
   const std::size_t ncols = std::min(result.bra_rank(), result.ket_rank());
-  if (ncols < 2) return ss;
-
   auto const& rbra = result.bra();
   auto const& rket = result.ket();
 
-  // Identify the single bra-supplier and ket-supplier operands, and require
-  // every result column's bra/ket index to trace into that operand's
-  // column-grouped slots.
-  std::optional<int> bra_supplier, ket_supplier;
-  bool all_columns_inherit = true;
-  for (std::size_t c = 0; c < ncols && all_columns_inherit; ++c) {
-    if (!rbra[c].nonnull() || !rket[c].nonnull()) {
-      all_columns_inherit = false;
-      break;
+  // ---- Column-group inheritance (PPL / giant) ----
+  if (ncols >= 2) {
+    // Identify the single bra-supplier and ket-supplier operands, and require
+    // every result column's bra/ket index to trace into that operand's
+    // column-grouped slots.
+    std::optional<int> bra_supplier, ket_supplier;
+    bool all_columns_inherit = true;
+    for (std::size_t c = 0; c < ncols && all_columns_inherit; ++c) {
+      if (!rbra[c].nonnull() || !rket[c].nonnull()) {
+        all_columns_inherit = false;
+        break;
+      }
+      auto b = trace(rbra[c]);
+      auto k = trace(rket[c]);
+      if (!b || !k || !b->second.column_grouped || !k->second.column_grouped) {
+        all_columns_inherit = false;
+        break;
+      }
+      if (!bra_supplier)
+        bra_supplier = b->first;
+      else if (*bra_supplier != b->first)
+        all_columns_inherit = false;
+      if (!ket_supplier)
+        ket_supplier = k->first;
+      else if (*ket_supplier != k->first)
+        all_columns_inherit = false;
     }
-    auto b = trace(rbra[c]);
-    auto k = trace(rket[c]);
-    if (!b || !k || !b->second.column_grouped || !k->second.column_grouped) {
-      all_columns_inherit = false;
-      break;
+
+    if (all_columns_inherit && bra_supplier && ket_supplier) {
+      // The contraction between the two supplying operands is symmetric: each
+      // supplier carries a full column group over its supplying columns, so the
+      // contracted indices (the other bundle of each supplier) sit in matched
+      // grouped columns -- the PPL / giant matched-pair-swap pattern. (When
+      // bra_supplier == ket_supplier the whole column comes from one operand's
+      // ColumnGroup, the leaf-passthrough case.)
+      SlotSymmetry::ColumnGroup cg;
+      cg.sign = 1;
+      cg.cols.reserve(ncols);
+      for (std::size_t c = 0; c < ncols; ++c) cg.cols.push_back(c);
+      ss.column_groups.push_back(std::move(cg));
     }
-    if (!bra_supplier)
-      bra_supplier = b->first;
-    else if (*bra_supplier != b->first)
-      all_columns_inherit = false;
-    if (!ket_supplier)
-      ket_supplier = k->first;
-    else if (*ket_supplier != k->first)
-      all_columns_inherit = false;
   }
 
-  if (all_columns_inherit && bra_supplier && ket_supplier) {
-    // The contraction between the two supplying operands is symmetric: each
-    // supplier carries a full column group over its supplying columns, so the
-    // contracted indices (the other bundle of each supplier) sit in matched
-    // grouped columns -- the PPL / giant matched-pair-swap pattern. (When
-    // bra_supplier == ket_supplier the whole column comes from one operand's
-    // ColumnGroup, the leaf-passthrough case.)
-    SlotSymmetry::ColumnGroup cg;
-    cg.sign = 1;
-    cg.cols.reserve(ncols);
-    for (std::size_t c = 0; c < ncols; ++c) cg.cols.push_back(c);
-    ss.column_groups.push_back(std::move(cg));
-  }
+  // ---- Bra-only / ket-only group inheritance ----
+  // Build label -> result-bundle-position maps for fast membership checks.
+  const std::size_t rbra_rank = result.bra_rank();
+  const std::size_t rket_rank = result.ket_rank();
+
+  std::unordered_map<std::wstring, std::size_t> rbra_pos, rket_pos;
+  for (std::size_t p = 0; p < rbra_rank; ++p)
+    if (rbra[p].nonnull()) rbra_pos.emplace(std::wstring{rbra[p].label()}, p);
+  for (std::size_t p = 0; p < rket_rank; ++p)
+    if (rket[p].nonnull()) rket_pos.emplace(std::wstring{rket[p].label()}, p);
+
+  // Try to inherit one operand slot-group into one result bundle. All member
+  // indices of the operand group must appear in the result bundle
+  // (whole-group-survives guard). Emits a result SlotGroup over the result
+  // positions, with the operand sign carried verbatim.
+  auto try_inherit =
+      [&](SlotSymmetry::SlotGroup const& og, auto const& ot_bundle,
+          std::size_t ot_bundle_rank,
+          std::unordered_map<std::wstring, std::size_t> const& res_pos,
+          std::size_t res_rank,
+          container::svector<SlotSymmetry::SlotGroup>& res_groups) {
+        if (res_rank < 2) return;
+        container::svector<std::size_t> result_positions;
+        result_positions.reserve(og.slots.size());
+        for (std::size_t s : og.slots) {
+          if (s >= ot_bundle_rank || !ot_bundle[s].nonnull()) return;
+          auto it = res_pos.find(std::wstring{ot_bundle[s].label()});
+          if (it == res_pos.end()) return;
+          result_positions.push_back(it->second);
+        }
+        if (result_positions.empty()) return;
+        SlotSymmetry::SlotGroup rg;
+        rg.sign = og.sign;
+        rg.slots = std::move(result_positions);
+        res_groups.push_back(std::move(rg));
+      };
+
+  // Check each operand's bra_groups and ket_groups for whole-group survival
+  // into the result bra or ket bundle.
+  auto inherit_from_operand = [&](Tensor const& ot, SlotSymmetry const& oss) {
+    for (auto const& og : oss.bra_groups) {
+      try_inherit(og, ot.bra(), ot.bra_rank(), rbra_pos, rbra_rank,
+                  ss.bra_groups);
+      try_inherit(og, ot.bra(), ot.bra_rank(), rket_pos, rket_rank,
+                  ss.ket_groups);
+    }
+    for (auto const& og : oss.ket_groups) {
+      try_inherit(og, ot.ket(), ot.ket_rank(), rbra_pos, rbra_rank,
+                  ss.bra_groups);
+      try_inherit(og, ot.ket(), ot.ket_rank(), rket_pos, rket_rank,
+                  ss.ket_groups);
+    }
+  };
+  inherit_from_operand(lt, left.slot_symmetry());
+  inherit_from_operand(rt, right.slot_symmetry());
 
   return ss;
 }
