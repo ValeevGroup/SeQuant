@@ -148,6 +148,14 @@ SlotSymmetry from_leaf_tensor(Tensor const& t);
 class EvalExpr;
 
 ///
+/// \brief Intersection of two descriptors: a column/bra/ket group survives iff
+///        it is present in BOTH with the same sign and the same set of
+///        positions (order-insensitive). Used to deduce a Sum node's descriptor
+///        from its summands. Empty in -> empty out.
+///
+SlotSymmetry intersect(SlotSymmetry const& a, SlotSymmetry const& b);
+
+///
 /// \brief Deduce the SlotSymmetry of a binary-product result from its operands.
 ///
 /// \param left   the left operand EvalExpr (with its already-deduced

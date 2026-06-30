@@ -211,4 +211,103 @@ TEST_CASE("slot_symmetry", "[slot_symmetry]") {
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     REQUIRE((*node).slot_symmetry().column_groups.empty());
   }
+
+  // ---- Task 0.5: Sum intersection ----
+
+  SECTION("intersect: same 2-column group in both -> retained") {
+    SlotSymmetry a, b;
+    a.column_groups.push_back(
+        SlotSymmetry::ColumnGroup{container::svector<std::size_t>{0, 1}, 1});
+    b.column_groups.push_back(
+        SlotSymmetry::ColumnGroup{container::svector<std::size_t>{0, 1}, 1});
+    auto result = sequant::intersect(a, b);
+    REQUIRE(result.column_groups.size() == 1);
+    REQUIRE(result.column_groups[0].cols ==
+            container::svector<std::size_t>{0, 1});
+    REQUIRE(result.column_groups[0].sign == 1);
+  }
+
+  SECTION("intersect: group in a but b is empty -> dropped") {
+    SlotSymmetry a, b;
+    a.column_groups.push_back(
+        SlotSymmetry::ColumnGroup{container::svector<std::size_t>{0, 1}, 1});
+    // b has no column groups
+    auto result = sequant::intersect(a, b);
+    REQUIRE(result.column_groups.empty());
+    REQUIRE(result.empty());
+  }
+
+  SECTION("Sum of PPL+PPL products -> column group {0,1} retained (positive)") {
+    // Two PPL-style products: g1*t1 and g2*t2, both yielding r{a_1,a_2;i_1,i_2}
+    // with a 2-column group.  Their sum must also carry the column group.
+    Tensor g1{L"g",
+              bra(IndexList{L"a_1", L"a_2"}),
+              ket(IndexList{L"a_3", L"a_4"}),
+              Symmetry::Nonsymm,
+              BraKetSymmetry::Nonsymm,
+              ColumnSymmetry::Symm};
+    Tensor t1{L"t",
+              bra(IndexList{L"a_3", L"a_4"}),
+              ket(IndexList{L"i_1", L"i_2"}),
+              Symmetry::Nonsymm,
+              BraKetSymmetry::Nonsymm,
+              ColumnSymmetry::Symm};
+    Tensor g2{L"g2",
+              bra(IndexList{L"a_1", L"a_2"}),
+              ket(IndexList{L"a_5", L"a_6"}),
+              Symmetry::Nonsymm,
+              BraKetSymmetry::Nonsymm,
+              ColumnSymmetry::Symm};
+    Tensor t2{L"t2",
+              bra(IndexList{L"a_5", L"a_6"}),
+              ket(IndexList{L"i_1", L"i_2"}),
+              Symmetry::Nonsymm,
+              BraKetSymmetry::Nonsymm,
+              ColumnSymmetry::Symm};
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize(ex<Tensor>(g1) * ex<Tensor>(t1) +
+                         ex<Tensor>(g2) * ex<Tensor>(t2));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    auto const& ss = (*node).slot_symmetry();
+    REQUIRE(ss.column_groups.size() == 1);
+    REQUIRE(ss.column_groups[0].cols == container::svector<std::size_t>{0, 1});
+    REQUIRE(ss.column_groups[0].sign == 1);
+  }
+
+  SECTION("Sum of PPL+g.f products -> column group empty (negative)") {
+    // First summand: PPL g{a_1,a_2;a_3,a_4} * t{a_3,a_4;i_1,i_2}
+    //   -> 2-column group {0,1}
+    // Second summand: g2{a_1,a_2;i_1,a_5} * f{a_5;i_2} (g.f-like)
+    //   -> no column group (ket of column 1 traces to f, not column-grouped)
+    // Sum result must have empty column group.
+    Tensor g{L"g",
+             bra(IndexList{L"a_1", L"a_2"}),
+             ket(IndexList{L"a_3", L"a_4"}),
+             Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm,
+             ColumnSymmetry::Symm};
+    Tensor t{L"t",
+             bra(IndexList{L"a_3", L"a_4"}),
+             ket(IndexList{L"i_1", L"i_2"}),
+             Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm,
+             ColumnSymmetry::Symm};
+    Tensor g2{L"g2",
+              bra(IndexList{L"a_1", L"a_2"}),
+              ket(IndexList{L"i_1", L"a_5"}),
+              Symmetry::Nonsymm,
+              BraKetSymmetry::Nonsymm,
+              ColumnSymmetry::Symm};
+    Tensor f{L"f",
+             bra(IndexList{L"a_5"}),
+             ket(IndexList{L"i_2"}),
+             Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm,
+             ColumnSymmetry::Nonsymm};
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize(ex<Tensor>(g) * ex<Tensor>(t) +
+                         ex<Tensor>(g2) * ex<Tensor>(f));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE((*node).slot_symmetry().column_groups.empty());
+  }
 }

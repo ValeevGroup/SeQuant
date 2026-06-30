@@ -457,12 +457,13 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
 
   auto make_sum = [i = 0,                    //
                    hs = imed_hashes(hvals),  //
-                   all_tensors, &opts](EvalExpr const& left,
-                                       EvalExpr const&) mutable -> EvalExpr {
+                   all_tensors,
+                   &opts](EvalExpr const& left,
+                          EvalExpr const& right) mutable -> EvalExpr {
     auto h = ranges::at(hs, ++i);
     if (all_tensors) {
       auto const& t = left.as_tensor();
-      return {
+      EvalExpr res{
           EvalOp::Sum,         //
           ResultType::Tensor,  //
           detail::make_tensor_wo_symmetries(opts, bra(t.bra()), ket(t.ket()),
@@ -471,6 +472,9 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
           1,                                                //
           h,                                                //
           nullptr};
+      EvalOpSetter{}.set_slot_symmetry(
+          res, intersect(left.slot_symmetry(), right.slot_symmetry()));
+      return res;
     } else {
       return {EvalOp::Sum,              //
               ResultType::Scalar,       //

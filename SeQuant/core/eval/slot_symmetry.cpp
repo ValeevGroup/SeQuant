@@ -97,6 +97,62 @@ std::unordered_map<std::wstring, SlotLoc> column_locations(
 
 }  // namespace
 
+SlotSymmetry intersect(SlotSymmetry const& a, SlotSymmetry const& b) {
+  SlotSymmetry result;
+
+  // Column groups: keep a group from a iff b contains a group with the same
+  // sign and the same set of column positions (order-insensitive).
+  auto col_match = [](SlotSymmetry::ColumnGroup const& ga,
+                      SlotSymmetry::ColumnGroup const& gb) {
+    if (ga.sign != gb.sign) return false;
+    auto ac = ga.cols;
+    auto bc = gb.cols;
+    std::sort(ac.begin(), ac.end());
+    std::sort(bc.begin(), bc.end());
+    return ac == bc;
+  };
+  for (auto const& ga : a.column_groups) {
+    for (auto const& gb : b.column_groups) {
+      if (col_match(ga, gb)) {
+        result.column_groups.push_back(ga);
+        break;
+      }
+    }
+  }
+
+  // Bra groups: keep a group from a iff b contains a group with the same sign
+  // and the same set of slot positions (order-insensitive).
+  auto slot_match = [](SlotSymmetry::SlotGroup const& ga,
+                       SlotSymmetry::SlotGroup const& gb) {
+    if (ga.sign != gb.sign) return false;
+    auto as = ga.slots;
+    auto bs = gb.slots;
+    std::sort(as.begin(), as.end());
+    std::sort(bs.begin(), bs.end());
+    return as == bs;
+  };
+  for (auto const& ga : a.bra_groups) {
+    for (auto const& gb : b.bra_groups) {
+      if (slot_match(ga, gb)) {
+        result.bra_groups.push_back(ga);
+        break;
+      }
+    }
+  }
+
+  // Ket groups.
+  for (auto const& ga : a.ket_groups) {
+    for (auto const& gb : b.ket_groups) {
+      if (slot_match(ga, gb)) {
+        result.ket_groups.push_back(ga);
+        break;
+      }
+    }
+  }
+
+  return result;
+}
+
 SlotSymmetry deduce_slot_symmetry(EvalExpr const& left, EvalExpr const& right,
                                   Tensor const& result) {
   SlotSymmetry ss;
