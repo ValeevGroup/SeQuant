@@ -446,6 +446,7 @@ set(SeQuant_eval_src
 # Optimize sources (depends on eval)
 set(SeQuant_optimize_src
         SeQuant/core/optimize/common_subexpression_elimination.hpp
+        SeQuant/core/optimize/cost_model.hpp
         SeQuant/core/optimize/extract_subtrees.hpp
         SeQuant/core/optimize/fusion.cpp
         SeQuant/core/optimize/fusion.hpp
@@ -453,6 +454,7 @@ set(SeQuant_optimize_src
         SeQuant/core/optimize/optimize.cpp
         SeQuant/core/optimize/optimize.hpp
         SeQuant/core/optimize/single_term.hpp
+        SeQuant/core/optimize/single_term_detail.hpp
         SeQuant/core/optimize/sum.cpp
         SeQuant/core/optimize/sum.hpp
 )

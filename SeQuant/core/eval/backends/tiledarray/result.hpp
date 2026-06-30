@@ -12,6 +12,8 @@
 
 #include <range/v3/view/iota.hpp>
 
+#include <algorithm>
+
 namespace sequant {
 
 // implementation details of the TiledArray result backend; prefer
@@ -209,6 +211,118 @@ inline constexpr TA::DeNest to_ta_denest(DeNest d) noexcept {
   return d == DeNest::True ? TA::DeNest::True : TA::DeNest::False;
 }
 
+/// Split a TA tensor-of-tensor (or flat) annotation string into its OUTER
+/// labels. The annotation format is `outer0,outer1,...[;inner0,inner1,...]`;
+/// only the comma-separated outer labels (the part before the optional `;`)
+/// are returned, in order. Used to map a result's outer modes back onto the
+/// operands' TiledRange1's when building a result outer TiledRange for an
+/// imposed SparseShape.
+[[nodiscard]] inline container::svector<std::string> outer_annot_labels(
+    std::string const& annot) {
+  container::svector<std::string> labels;
+  auto const semi = annot.find(';');
+  std::string const outer =
+      semi == std::string::npos ? annot : annot.substr(0, semi);
+  std::size_t pos = 0;
+  while (pos <= outer.size()) {
+    auto const comma = outer.find(',', pos);
+    auto const end = comma == std::string::npos ? outer.size() : comma;
+    if (end > pos) labels.emplace_back(outer.substr(pos, end - pos));
+    if (comma == std::string::npos) break;
+    pos = comma + 1;
+  }
+  return labels;
+}
+
+/// Split a TA ToT annotation string into its INNER labels: the comma-separated
+/// labels AFTER the optional `;` (empty if the annotation has no inner part).
+[[nodiscard]] inline container::svector<std::string> inner_annot_labels(
+    std::string const& annot) {
+  container::svector<std::string> labels;
+  auto const semi = annot.find(';');
+  if (semi == std::string::npos) return labels;
+  std::string const inner = annot.substr(semi + 1);
+  std::size_t pos = 0;
+  while (pos <= inner.size()) {
+    auto const comma = inner.find(',', pos);
+    auto const end = comma == std::string::npos ? inner.size() : comma;
+    if (end > pos) labels.emplace_back(inner.substr(pos, end - pos));
+    if (comma == std::string::npos) break;
+    pos = comma + 1;
+  }
+  return labels;
+}
+
+/// Does emitting a ToT*ToT general product `result(this) = (l(lan) * r(ran))`
+/// require a NON-IDENTITY inner result permutation, which TiledArray's
+/// cont_engine does not yet support (it throws "a non-identity inner result
+/// permutation is not yet supported")?  The contraction produces the result's
+/// inner modes in the natural order (left's non-contracted inner labels in left
+/// order, then right's); if \p this_annot's inner labels are in a different
+/// order, TA cannot emit it.  Detecting this lets the shaped-product path
+/// decline gracefully (the caller falls through to the unshaped einsum prod(),
+/// which DOES handle the reorder) instead of throwing.
+[[nodiscard]] inline bool tot_product_needs_inner_reorder(
+    std::string const& lannot, std::string const& rannot,
+    std::string const& this_annot) {
+  auto const li = inner_annot_labels(lannot);
+  auto const ri = inner_annot_labels(rannot);
+  auto const ti = inner_annot_labels(this_annot);
+  if (ti.empty()) return false;  // denest / no inner result modes
+
+  auto contains = [](container::svector<std::string> const& v,
+                     std::string const& s) {
+    return std::find(v.begin(), v.end(), s) != v.end();
+  };
+  // Natural order = left's inner labels that survive (appear in the result),
+  // then right's inner labels that survive and are not already taken from left.
+  container::svector<std::string> natural;
+  for (auto const& s : li)
+    if (contains(ti, s)) natural.push_back(s);
+  for (auto const& s : ri)
+    if (contains(ti, s) && !contains(natural, s)) natural.push_back(s);
+  return natural != ti;  // identity inner perm iff the orders match
+}
+
+/// Build the result's OUTER TiledRange for a binary product, given the two
+/// operand arrays and the three (left, right, result) annotations. Each result
+/// outer label is matched, in order, against the left operand's outer labels
+/// (then the right's), and the corresponding TiledRange1 is taken from that
+/// operand. A result outer label must appear on at least one operand (true for
+/// any well-formed contraction). This is the trange handed to the result-shape
+/// provider so it can assemble a SparseShape over the result's outer tiles.
+template <typename LArrayT, typename RArrayT>
+[[nodiscard]] TA::TiledRange result_outer_trange(LArrayT const& larr,
+                                                 std::string const& lannot,
+                                                 RArrayT const& rarr,
+                                                 std::string const& rannot,
+                                                 std::string const& cannot) {
+  auto const lo = outer_annot_labels(lannot);
+  auto const ro = outer_annot_labels(rannot);
+  auto const co = outer_annot_labels(cannot);
+
+  auto find_dim = [](container::svector<std::string> const& labels,
+                     std::string const& lbl) -> std::optional<std::size_t> {
+    for (std::size_t i = 0; i < labels.size(); ++i)
+      if (labels[i] == lbl) return i;
+    return std::nullopt;
+  };
+
+  std::vector<TA::TiledRange1> dims;
+  dims.reserve(co.size());
+  for (auto const& lbl : co) {
+    if (auto const i = find_dim(lo, lbl)) {
+      dims.emplace_back(larr.trange().dim(*i));
+    } else if (auto const j = find_dim(ro, lbl)) {
+      dims.emplace_back(rarr.trange().dim(*j));
+    } else {
+      throw Exception("result_outer_trange: result outer label '" + lbl +
+                      "' is carried by neither operand of the binary product");
+    }
+  }
+  return TA::TiledRange(dims.begin(), dims.end());
+}
+
 }  // namespace detail
 
 /// TA::Tensor memory use logger
@@ -234,9 +348,12 @@ template <typename... Args>
     std::size_t tile_hi);
 
 /// Partition a TiledRange1 into contiguous, tile-aligned element-range batches,
-/// each covering at least \p target_batch_size elements where possible. Tiles
-/// are not uniformly sized, so batches are uneven; the last batch may be
-/// smaller, and any single tile larger than the target forms its own batch.
+/// each covering at most \p target_batch_size elements: whole tiles are
+/// appended to a batch until the next tile would push it over the target, so \p
+/// target_batch_size is an UPPER BOUND, not a goal. Tiles are not uniformly
+/// sized, so batches are uneven; the last batch may be smaller, and any single
+/// tile larger than the target forms its own batch (the one-tile floor -- the
+/// only way a batch may exceed the target).
 /// Element ranges `[lo, hi)` are in the TiledRange1's element coordinate system
 /// (honoring a nonzero element lobound, e.g. a frozen-core offset). This is the
 /// TA realization of Result::mode_batches(): the caller requests a target batch
@@ -254,12 +371,19 @@ mode_batches_of_trange1(TA::TiledRange1 const& tr1,
   std::size_t const ntiles = tr1.tile_extent();
   for (std::size_t t = 0; t < ntiles; ++t) {
     auto const& tr = tr1.tile(t);
-    acc += tr.second - tr.first;
-    if (acc >= target || t + 1 == ntiles) {
-      batches.emplace_back(grp_lo, tr.second);
-      grp_lo = tr.second;
+    std::size_t const tsz = tr.second - tr.first;
+    // target_batch_size is an UPPER BOUND on the realized (whole-tile) batch:
+    // if appending this tile to a non-empty batch would push it over the
+    // target, close the batch at the previous tile boundary first. A batch thus
+    // never exceeds the target, except via the one-tile floor (a lone tile
+    // larger than the target still forms its own batch).
+    if (acc > 0 && acc + tsz > target) {
+      batches.emplace_back(grp_lo, tr.first);
+      grp_lo = tr.first;
       acc = 0;
     }
+    acc += tsz;
+    if (t + 1 == ntiles) batches.emplace_back(grp_lo, tr.second);
   }
   return batches;
 }
@@ -757,6 +881,162 @@ template <typename... Args>
   out(annot) = arr(annot).block(lo, hi, TA::preserve_lobound);
   TA::DistArray<Args...>::wait_for_lazy_cleanup(arr.world());
   return out;
+}
+
+/// \brief Compute the result's OUTER TiledRange for a binary product from the
+///        type-erased operands and the [left, right, result] annotations.
+///
+/// Dispatches on each operand's concrete result kind (flat \c ResultTensorTA vs
+/// nested \c ResultTensorOfTensorTA) to read its array's TiledRange, then maps
+/// the result's outer labels back onto the operands (see
+/// detail::result_outer_trange). This is the trange handed to the result-shape
+/// provider. \tparam NumericT, \tparam PolicyT name the concrete array types.
+/// \tparam InnerTileT the inner tile type of a nested (ToT) operand; defaults
+/// to the plain \c TA::Tensor<NumericT>, but the CSV/PNO path uses an
+/// arena-pinned inner tile (\c TA::ArenaTensor<NumericT>), which is a distinct
+/// (type-id) Result kind and must be named here for \c Result::is<> to
+/// recognize it.
+template <typename NumericT, typename PolicyT,
+          typename InnerTileT = TA::Tensor<NumericT>>
+[[nodiscard]] TA::TiledRange result_outer_trange_from_results(
+    Result const& left, Result const& right,
+    std::array<std::any, 3> const& annot) {
+  using FlatArray = TA::DistArray<TA::Tensor<NumericT>, PolicyT>;
+  using ToTArray = TA::DistArray<TA::Tensor<InnerTileT>, PolicyT>;
+  using ToTResult = ResultTensorOfTensorTA<ToTArray>;
+
+  auto const a = Annot<std::string>{annot};
+
+  // Dispatch the left/right array extraction on operand kind, then defer to the
+  // label-matching detail helper.  Four (flat/ToT)^2 combinations.
+  auto with_left = [&](auto const& larr) -> TA::TiledRange {
+    if (right.is<ToTResult>())
+      return detail::result_outer_trange(larr, a.lannot, right.get<ToTArray>(),
+                                         a.rannot, a.this_annot);
+    return detail::result_outer_trange(larr, a.lannot, right.get<FlatArray>(),
+                                       a.rannot, a.this_annot);
+  };
+
+  if (left.is<ToTResult>()) return with_left(left.get<ToTArray>());
+  return with_left(left.get<FlatArray>());
+}
+
+/// \brief Emit a binary product through the STANDARD expression layer with an
+///        imposed result SparseShape, instead of the einsum path used by
+///        Result::prod().
+///
+/// This is the application side of the result-shape-constraint feature: when a
+/// method-supplied provider returns a SparseShape for a Product node, the eval
+/// emits the product as `out(ca) = (lhs(la) * rhs(ra)).set_shape(s)` (general
+/// product) or `out(ca) = lhs(la).dot_inner(rhs(ra)).set_shape(s)` (the
+/// DeNest::True ToT*ToT->flat path), so the result is computed/stored only over
+/// the kept region. The two forms are the ones de-risked in Task 0.
+///
+/// Operand/result nesting determines which `ResultTensor*TA` wraps the output:
+///   - both operands flat (T * T)           -> flat result
+///   - exactly one ToT (T * ToT / ToT * T)  -> ToT result
+///   - both ToT, \p de_nest false           -> ToT result (general product)
+///   - both ToT, \p de_nest true            -> flat result (dot_inner)
+///
+/// \param left,right  The operands (TA tensor or ToT results).
+/// \param annot       [left, right, result] annotations.
+/// \param shape       The SparseShape to impose on the result's outer modes.
+///                    Held by the local expression by pointer; this function
+///                    keeps it alive until the assignment completes.
+/// \param de_nest     The DeNest flag computed at the binary-product site
+///                    (left.tot && right.tot && !result.tot).
+/// \return The shaped product wrapped in the appropriate ResultTensor*TA, or a
+///         null ResultPtr if the operand kinds are not a supported shaped form
+///         (the caller then falls through to the unshaped prod()).
+template <typename NumericT, typename PolicyT,
+          typename InnerTileT = TA::Tensor<NumericT>>
+[[nodiscard]] ResultPtr apply_shaped_product(
+    Result const& left, Result const& right,
+    std::array<std::any, 3> const& annot, TA::SparseShape<float> const& shape,
+    bool de_nest) {
+  using FlatArray = TA::DistArray<TA::Tensor<NumericT>, PolicyT>;
+  using ToTArray = TA::DistArray<TA::Tensor<InnerTileT>, PolicyT>;
+  using FlatResult = ResultTensorTA<FlatArray>;
+  using ToTResult = ResultTensorOfTensorTA<ToTArray>;
+
+  auto const a = Annot<std::string>{annot};
+
+  bool const l_tot = left.is<ToTResult>();
+  bool const r_tot = right.is<ToTResult>();
+  bool const l_flat = left.is<FlatResult>();
+  bool const r_flat = right.is<FlatResult>();
+
+  // Every branch fences the world after the assignment so the imposed shape
+  // (held by pointer by the expression) is no longer referenced before this
+  // function returns and the caller's shape object goes out of scope.
+
+  // T * T -> T
+  if (l_flat && r_flat) {
+    FlatArray out;
+    out(a.this_annot) =
+        (left.get<FlatArray>()(a.lannot) * right.get<FlatArray>()(a.rannot))
+            .set_shape(shape);
+    out.world().gop.fence();
+    FlatArray::wait_for_lazy_cleanup(out.world());
+    return eval_result<FlatResult>(std::move(out));
+  }
+
+  // T * ToT -> ToT  and  ToT * T -> ToT (general product)
+  if ((l_flat && r_tot) || (l_tot && r_flat)) {
+    // Same inner-reorder limitation as the ToT*ToT branch: decline if the
+    // result's inner annotation needs a non-identity permutation TA can't emit.
+    if (detail::tot_product_needs_inner_reorder(a.lannot, a.rannot,
+                                                a.this_annot))
+      return nullptr;
+    ToTArray out;
+    if (l_flat) {
+      out(a.this_annot) =
+          (left.get<FlatArray>()(a.lannot) * right.get<ToTArray>()(a.rannot))
+              .set_shape(shape);
+    } else {
+      out(a.this_annot) =
+          (left.get<ToTArray>()(a.lannot) * right.get<FlatArray>()(a.rannot))
+              .set_shape(shape);
+    }
+    out.world().gop.fence();
+    ToTArray::wait_for_lazy_cleanup(out.world());
+    return eval_result<ToTResult>(std::move(out));
+  }
+
+  // ToT * ToT
+  if (l_tot && r_tot) {
+    if (de_nest) {
+      // ToT * ToT -> flat T (inner contraction / denest)
+      FlatArray out;
+      out(a.this_annot) = left.get<ToTArray>()(a.lannot)
+                              .dot_inner(right.get<ToTArray>()(a.rannot))
+                              .set_shape(shape);
+      out.world().gop.fence();
+      FlatArray::wait_for_lazy_cleanup(out.world());
+      return eval_result<FlatResult>(std::move(out));
+    } else {
+      // ToT * ToT -> ToT (general product). TiledArray's expression-layer
+      // general ToT product cannot emit a result whose INNER annotation needs a
+      // non-identity permutation (cont_engine throws). When the result requires
+      // such an inner reorder, decline so the caller falls through to the
+      // unshaped einsum prod() (which handles it); the shape is simply not
+      // imposed on this node -- lossless, just less aggressive.
+      if (detail::tot_product_needs_inner_reorder(a.lannot, a.rannot,
+                                                  a.this_annot))
+        return nullptr;
+      ToTArray out;
+      out(a.this_annot) =
+          (left.get<ToTArray>()(a.lannot) * right.get<ToTArray>()(a.rannot))
+              .set_shape(shape);
+      out.world().gop.fence();
+      ToTArray::wait_for_lazy_cleanup(out.world());
+      return eval_result<ToTResult>(std::move(out));
+    }
+  }
+
+  // Unsupported operand kinds for a shaped product (e.g. a scalar operand):
+  // decline so the caller falls through to the unshaped prod().
+  return nullptr;
 }
 
 }  // namespace sequant

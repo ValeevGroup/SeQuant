@@ -2294,7 +2294,7 @@ ExprPtr triplet_adapt_amplitudes(const ExprPtr& spin_labeled,
         Tensor stored(t.label(), bra(t.bra()), ket(t.ket()), t.aux(),
                       Symmetry::Nonsymm, t.braket_symmetry(), col_symm);
 
-        // EFV idea: just TE (not TE_swap), emit a single R amplitude (no
+        // EFV test: just TE (not TE_swap), emit a single R amplitude (no
         // R_swap),
         if (amp_no_swap) {
           out->scale(s0);
@@ -2340,9 +2340,9 @@ ExprPtr triplet_adapt_amplitudes(const ExprPtr& spin_labeled,
 ExprPtr triplet_doubles_paper_combined_residual(
     const ExprPtr& TE, const container::map<Index, Index>& pair_swap,
     bool te_only = false) {
-  // EFV idea, te_only, ter_only
-  // post processing for te_only restores the dropped TE_swap. This is what I
-  // checked, not what EFV asked me to check. Omega = (3*TE - TE_ps)/16 = TE/4 +
+  // EFV test, te_only, ter_only
+  // post-processing for te_only restores the dropped TE_swap. This is what I
+  // checked, not what EFV asked me to test. Omega = (3*TE - TE_ps)/16 = TE/4 +
   // (TE_bs + TE_ks)/16 (null-space identity TE + TE_ps + TE_bs + TE_ks = 0).
   if (te_only) return ex<Constant>(ratio(1, 4)) * TE;
   ExprPtr TE_ps = transform_expr(TE, pair_swap);

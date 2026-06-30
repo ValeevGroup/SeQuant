@@ -2,6 +2,7 @@
 #define SEQUANT_CORE_EXPORT_CONTEXT_HPP
 
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
 
 #include <limits>
@@ -9,6 +10,7 @@
 #include <optional>
 #include <string>
 #include <type_traits>
+#include <vector>
 
 namespace sequant {
 
@@ -199,9 +201,17 @@ class ExportContext {
   /// Resets the ID of the current expression
   virtual void clear_current_expression_id();
 
- private:
-  static constexpr std::size_t GLOBAL = std::numeric_limits<std::size_t>::max();
+  /// @param id The ID of the relevant expression
+  /// @returns The list of indices that the given expression should be batched
+  /// over
+  virtual std::vector<Index> batch_indices(
+      std::optional<std::size_t> id = {}) const;
 
+ protected:
+  static constexpr std::size_t ID_GLOBAL =
+      std::numeric_limits<std::size_t>::max();
+
+ private:
   std::map<std::size_t, TensorStrategyMap> m_tensorStrategies;
   std::map<std::size_t, VariableStrategyMap> m_variableStrategies;
   std::optional<std::string> m_currentSection;
