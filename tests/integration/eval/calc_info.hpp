@@ -142,7 +142,7 @@ struct CalcInfo {
     // A header reports the per-equation term counts before/after optimization
     // (multi-term factorization can merge summands), a footer closes the block.
     if (log_opts.print_exprs) {
-      const std::size_t nb = expr->is<Sum>() ? expr->size() : 1;
+      const std::size_t nb = trimmed->is<Sum>() ? trimmed->size() : 1;
       const std::size_t na = summands.size();
       std::wcout << std::format(
           L"===== R{} terms (# terms before/after opt {}/{}) ======\n", rank,

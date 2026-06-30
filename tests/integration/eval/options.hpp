@@ -29,7 +29,7 @@ struct OptionsOptimization {
   /// part of the optimize() call and therefore only takes effect when \c
   /// single_term is also on; with \c single_term off, optimize() is not called
   /// and this flag has no effect.
-  bool multi_term = true;
+  bool multi_term = false;
 };
 
 struct OptionsSCF {
