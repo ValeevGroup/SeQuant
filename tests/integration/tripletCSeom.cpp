@@ -20,9 +20,13 @@
 
 #include <range/v3/algorithm/transform.hpp>
 
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <iomanip>
+#include <map>
 #include <sstream>
+#include <vector>
 
 using namespace sequant;
 using namespace sequant::mbpt;
@@ -171,6 +175,92 @@ std::size_t expr_term_count(const ExprPtr& e) {
     return e->as<Constant>().value() == Constant::scalar_type{0} ? 0 : 1;
   if (e->is<Sum>()) return e->size();
   return 1;
+}
+
+// Map each (scalar-stripped) product term to its real coefficient. Key is the
+// concatenated canonical latex of the non-scalar factors, so structurally
+// identical terms across expressions share a key.
+std::map<std::wstring, double> term_coeff_map(ExprPtr e) {
+  prepare_expr_for_hashing(e);
+  std::map<std::wstring, double> m;
+  auto add = [&m](const Product& p) {
+    std::wstring key;
+    for (const auto& f : p.nonscalar_factors()) key += f->to_latex();
+    m[key] += Constant(p.scalar()).value<double>();
+  };
+  if (e->is<Product>())
+    add(e->as<Product>());
+  else if (e->is<Sum>())
+    for (const auto& t : *e)
+      if (t->is<Product>()) add(t->as<Product>());
+  return m;
+}
+
+// Least-squares fit of `target` by the columns `basis` over the union of term
+// keys (solved via 4x4 normal equations, Gauss elimination). Returns the
+// coefficients and the max |residual| over all keys. residual ~ 0 means
+// `target` lies exactly in the span of `basis` (i.e. a reconstruction exists).
+struct FitResult {
+  std::vector<double> weights;
+  double max_residual = 0;
+};
+FitResult fit_in_span(const std::vector<ExprPtr>& basis,
+                      const ExprPtr& target) {
+  const std::size_t n = basis.size();
+  std::vector<std::map<std::wstring, double>> B;
+  B.reserve(n);
+  for (const auto& b : basis) B.push_back(term_coeff_map(b->clone()));
+  const auto T = term_coeff_map(target->clone());
+
+  container::set<std::wstring> keys;
+  for (const auto& bm : B)
+    for (const auto& [k, _] : bm) keys.insert(k);
+  for (const auto& [k, _] : T) keys.insert(k);
+
+  // normal equations  (BᵀB) x = Bᵀ t
+  std::vector<std::vector<double>> A(n, std::vector<double>(n + 1, 0.0));
+  for (const auto& k : keys) {
+    std::vector<double> row(n);
+    for (std::size_t j = 0; j < n; ++j) {
+      auto it = B[j].find(k);
+      row[j] = it == B[j].end() ? 0.0 : it->second;
+    }
+    double tv = 0.0;
+    if (auto it = T.find(k); it != T.end()) tv = it->second;
+    for (std::size_t i = 0; i < n; ++i) {
+      for (std::size_t j = 0; j < n; ++j) A[i][j] += row[i] * row[j];
+      A[i][n] += row[i] * tv;
+    }
+  }
+  // Gauss elimination with partial pivoting
+  for (std::size_t c = 0; c < n; ++c) {
+    std::size_t piv = c;
+    for (std::size_t r = c + 1; r < n; ++r)
+      if (std::abs(A[r][c]) > std::abs(A[piv][c])) piv = r;
+    std::swap(A[c], A[piv]);
+    if (std::abs(A[c][c]) < 1e-14) continue;
+    for (std::size_t r = 0; r < n; ++r) {
+      if (r == c) continue;
+      const double f = A[r][c] / A[c][c];
+      for (std::size_t j = c; j <= n; ++j) A[r][j] -= f * A[c][j];
+    }
+  }
+  FitResult res;
+  res.weights.resize(n, 0.0);
+  for (std::size_t i = 0; i < n; ++i)
+    res.weights[i] = std::abs(A[i][i]) < 1e-14 ? 0.0 : A[i][n] / A[i][i];
+
+  for (const auto& k : keys) {
+    double v = 0.0;
+    for (std::size_t j = 0; j < n; ++j) {
+      auto it = B[j].find(k);
+      if (it != B[j].end()) v += res.weights[j] * it->second;
+    }
+    double tv = 0.0;
+    if (auto it = T.find(k); it != T.end()) tv = it->second;
+    res.max_residual = std::max(res.max_residual, std::abs(v - tv));
+  }
+  return res;
 }
 
 void print_hash_histogram(const std::wstring& stage_label,
@@ -805,6 +895,148 @@ class compute_eomcc_closedshell_triplet {
           std::wcout << "R[" << i
                      << "] triplet compact (WK factor): " << term_count(compact)
                      << " terms\n";
+
+          // ===== PI conjecture experiment: bare-TE residual =================
+          // Knob A: drop the external pair-swap TE_ps -> residual = TE/4.
+          // Knob A+B: also drop the column-swapped R amplitude partner.
+          auto te_a = closed_shell_EOM_triplet_spintrace(
+              eqvec[i], {.method = BiorthogonalizationMethod::V2,
+                         .triplet_te_only = true});
+          auto te_ab = closed_shell_EOM_triplet_spintrace(
+              eqvec[i], {.method = BiorthogonalizationMethod::V2,
+                         .triplet_te_only = true,
+                         .triplet_amp_no_swap = true});
+          simplify(te_a);
+          simplify(te_ab);
+
+          std::wcout << "\n----- PI conjecture (TE-only) comparison R[" << i
+                     << "] -----\n";
+          std::wcout << "  production Omega = (3TE-TE_ps)/16 : "
+                     << term_count(st) << " terms, "
+                     << count_distinct_hashes(st->clone())
+                     << " distinct hashes\n";
+          std::wcout << "  compact (-3c representative)      : "
+                     << term_count(compact) << " terms, "
+                     << count_distinct_hashes(compact->clone())
+                     << " distinct hashes\n";
+          std::wcout << "  TE-only (Knob A)                 : "
+                     << term_count(te_a) << " terms, "
+                     << count_distinct_hashes(te_a->clone())
+                     << " distinct hashes\n";
+          std::wcout << "  TE-only + no R_swap (Knob A+B)   : "
+                     << term_count(te_ab) << " terms, "
+                     << count_distinct_hashes(te_ab->clone())
+                     << " distinct hashes\n";
+          ExprPtr ab_diff = te_a->clone() - te_ab->clone();
+          canonicalize(ab_diff);
+          simplify(ab_diff);
+          std::wcout << "  Knob A vs A+B (te_a - te_ab)     : "
+                     << term_count(ab_diff)
+                     << " terms (0 => Knob B is a no-op on the residual)\n";
+
+          // external single/pair swap maps on the projector (mu) indices
+          const auto& eg0 = ext_idxs.at(0);
+          const auto& eg1 = ext_idxs.at(1);
+          const Index b0 = get_bra_idx(eg0);
+          const Index b1 = get_bra_idx(eg1);
+          const Index k0 = get_ket_idx(eg0);
+          const Index k1 = get_ket_idx(eg1);
+          const container::map<Index, Index> e_swap_bra{{b0, b1}, {b1, b0}};
+          const container::map<Index, Index> e_swap_ket{{k0, k1}, {k1, k0}};
+          const container::map<Index, Index> e_swap_pair{
+              {b0, b1}, {b1, b0}, {k0, k1}, {k1, k0}};
+
+          // Sanity identity: Omega == TE/4 + (TE_bs + TE_ks)/16.
+          // (Uses the null-space identity TE + TE_ps + TE_bs + TE_ks = 0.)
+          ExprPtr V_bs = transform_expr(V, e_swap_bra);
+          ExprPtr V_ks = transform_expr(V, e_swap_ket);
+          ExprPtr identity_check =
+              st->clone() - (ex<Constant>(ratio(1, 4)) * V->clone() +
+                             ex<Constant>(ratio(1, 16)) * (V_bs + V_ks));
+          canonicalize(identity_check);
+          simplify(identity_check);
+          std::wcout << "  sanity: Omega - [TE/4 + (TE_bs+TE_ks)/16] = "
+                     << term_count(identity_check) << " terms (expect 0)\n";
+          runtime_assert(term_count(identity_check) == 0);
+
+          // POSTPROCESSING test (user's idea): TE-only lives in the same 135
+          // hash groups as Omega, so a Klein-four postprocessing should rebuild
+          // Omega. Since te_a == TE/4, the sanity identity becomes
+          //   Omega == te_a + (1/4)( bra_swap(te_a) + ket_swap(te_a) ).
+          ExprPtr te_recon =
+              te_a->clone() +
+              ex<Constant>(ratio(1, 4)) * (transform_expr(te_a, e_swap_bra) +
+                                           transform_expr(te_a, e_swap_ket));
+          ExprPtr te_recon_diff = st->clone() - te_recon;
+          canonicalize(te_recon_diff);
+          simplify(te_recon_diff);
+          std::wcout << "  postproc: Omega - [te_a + 1/4(bs+ks)te_a] = "
+                     << term_count(te_recon_diff) << " terms (expect 0)\n";
+          runtime_assert(term_count(te_recon_diff) == 0);
+
+          // ===== TER-only (te_ab, R-only) reconstructability ================
+          // Does ANY Klein-four postprocessing rebuild Omega from te_ab?
+          // Fit Omega in span{te_ab, bs te_ab, ks te_ab, ps te_ab}; residual ~0
+          // => a kernel exists (weights printed), else te_ab is NOT
+          // Klein-four-reconstructable (dropped R_swap is unrecoverable).
+          std::wcout << "\n  --- TER-only (R-only) reconstructability ---\n";
+          ExprPtr ter_naive = st->clone() - te_ab->clone();
+          canonicalize(ter_naive);
+          simplify(ter_naive);
+          std::wcout << "  raw  : Omega - te_ab            = "
+                     << term_count(ter_naive) << " terms\n";
+
+          ExprPtr ter_kA =
+              st->clone() -
+              (te_ab->clone() +
+               ex<Constant>(ratio(1, 4)) * (transform_expr(te_ab, e_swap_bra) +
+                                            transform_expr(te_ab, e_swap_ket)));
+          canonicalize(ter_kA);
+          simplify(ter_kA);
+          std::wcout << "  kА   : Omega - [te_ab+1/4(bs+ks)te_ab] = "
+                     << term_count(ter_kA) << " terms\n";
+
+          const std::vector<ExprPtr> ter_basis{
+              te_ab->clone(), transform_expr(te_ab, e_swap_bra),
+              transform_expr(te_ab, e_swap_ket),
+              transform_expr(te_ab, e_swap_pair)};
+          const auto fit = fit_in_span(ter_basis, st);
+          std::wcout << "  fit  : Omega = a*te_ab + b*bs + c*ks + d*ps, "
+                     << "weights {a,b,c,d} = {" << fit.weights.at(0) << ", "
+                     << fit.weights.at(1) << ", " << fit.weights.at(2) << ", "
+                     << fit.weights.at(3)
+                     << "}, max|resid| = " << fit.max_residual << "\n";
+          std::wcout << "  => TER-only "
+                     << (fit.max_residual < 1e-9 ? "IS" : "is NOT")
+                     << " Klein-four reconstructable\n";
+
+          // What TE-only drops (raw, expected nonzero): D = Omega - TE/4.
+          ExprPtr D = st->clone() - te_a->clone();
+          canonicalize(D);
+          simplify(D);
+          std::wcout << "  raw difference Omega - TE-only   : " << term_count(D)
+                     << " terms (nonzero => not a free identity)\n";
+
+          // Physical-subspace test: project the difference onto the
+          // Non-Null-Space, P_nns = 1 - 1/4 (1+Pij)(1+Pab), acting on the
+          // external mu indices (Pij = bra swap, Pab = ket swap). If P_nns D =
+          // 0 the two residuals agree on the physical triplet bra space => the
+          // PI conjecture holds; nonzero => the single-cross symmetrization is
+          // load-bearing.
+          auto project_nns = [&](const ExprPtr& e) -> ExprPtr {
+            ExprPtr avg = e->clone() + transform_expr(e, e_swap_bra) +
+                          transform_expr(e, e_swap_ket) +
+                          transform_expr(e, e_swap_pair);
+            ExprPtr res = e->clone() - ex<Constant>(ratio(1, 4)) * avg;
+            canonicalize(res);
+            simplify(res);
+            return res;
+          };
+          ExprPtr nns_D = project_nns(D);
+          std::wcout << "  P_nns (Omega - TE-only)          : "
+                     << term_count(nns_D)
+                     << " terms (0 => TE-only physically equivalent)\n";
+          std::wcout << "-----------------------------------------------\n";
         }
 
         if (hashgroups_ && ext_groups.size() == 2) {

@@ -2257,8 +2257,9 @@ int spin_line_sign(const Index& idx) {
   return s == mbpt::Spin::alpha ? 1 : -1;
 }
 
-ExprPtr triplet_adapt_amplitudes(const ExprPtr& spin_labeled) {
-  auto adapt_product = [](const Product& p) -> ExprPtr {
+ExprPtr triplet_adapt_amplitudes(const ExprPtr& spin_labeled,
+                                 bool amp_no_swap = false) {
+  auto adapt_product = [amp_no_swap](const Product& p) -> ExprPtr {
     auto out = std::make_shared<Product>();
     out->scale(p.scalar());
 
@@ -2285,11 +2286,22 @@ ExprPtr triplet_adapt_amplitudes(const ExprPtr& spin_labeled) {
         const int s1 = spin_line_sign(t.bra().at(1));
         const bool same_spin = (s0 == s1);
 
-        // set ColumnSymmetry::Nonsymm so that canonicalization cannot combine
-        // R_{a1i1 a2i2j} with R_{a2i2 a1i1}
+        // Production (R + R_swap): ColumnSymmetry::Nonsymm keeps R_{a1i1;a2i2}
+        // and R_{a2i2;a1i1} distinct. ter_only (amp_no_swap): single R only, so
+        // use default ColumnSymmetry::Symm and let canonicalization fix order.
+        const auto col_symm =
+            amp_no_swap ? ColumnSymmetry::Nonsymm : ColumnSymmetry::Nonsymm;
         Tensor stored(t.label(), bra(t.bra()), ket(t.ket()), t.aux(),
-                      Symmetry::Nonsymm, t.braket_symmetry(),
-                      ColumnSymmetry::Nonsymm);
+                      Symmetry::Nonsymm, t.braket_symmetry(), col_symm);
+
+        // EFV idea: just TE (not TE_swap), emit a single R amplitude (no
+        // R_swap),
+        if (amp_no_swap) {
+          out->scale(s0);
+          out->append(1, ex<Tensor>(std::move(stored)), Product::Flatten::No);
+          continue;
+        }
+
         // swap columns
         container::svector<Index> swapped_bra{t.bra().at(1), t.bra().at(0)};
         container::svector<Index> swapped_ket{t.ket().at(1), t.ket().at(0)};
@@ -2304,9 +2316,7 @@ ExprPtr triplet_adapt_amplitudes(const ExprPtr& spin_labeled) {
         out->append(1, ExprPtr(channel), Product::Flatten::No);
       } else {
         throw Exception(
-            "triplet spin adaptation is implemented for singles and doubles "
-            "amplitudes only (T (x) E (x) E coupling of triples is not "
-            "implemented)");
+            "Triplet spin tracing EOM is implemented for singles and doubles ");
       }
     }
 
@@ -2328,14 +2338,21 @@ ExprPtr triplet_adapt_amplitudes(const ExprPtr& spin_labeled) {
 }
 
 ExprPtr triplet_doubles_paper_combined_residual(
-    const ExprPtr& TE, const container::map<Index, Index>& pair_swap) {
+    const ExprPtr& TE, const container::map<Index, Index>& pair_swap,
+    bool te_only = false) {
+  // EFV idea, te_only, ter_only
+  // post processing for te_only restores the dropped TE_swap. This is what I
+  // checked, not what EFV asked me to check. Omega = (3*TE - TE_ps)/16 = TE/4 +
+  // (TE_bs + TE_ks)/16 (null-space identity TE + TE_ps + TE_bs + TE_ks = 0).
+  if (te_only) return ex<Constant>(ratio(1, 4)) * TE;
   ExprPtr TE_ps = transform_expr(TE, pair_swap);
   ExprPtr tauSymm = TE + TE_ps;
   ExprPtr tauAnti = TE - TE_ps;
   ExprPtr tauSymm_N = ex<Constant>(ratio(1, 8)) * tauSymm;
   ExprPtr tauAnti_N = ex<Constant>(ratio(1, 8)) * tauAnti;
   return ex<Constant>(ratio(1, 2)) * tauSymm_N +
-         tauAnti_N;  // paper does not have this 1/2. why?
+         tauAnti_N;  // paper does not have this 1/2. why? it correct. Faber
+                     // paper has the factor.
 }
 
 }  // namespace
@@ -2355,11 +2372,11 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
   if (n_ext == 0 || n_ext > 2)
     throw Exception(
         "closed_shell_EOM_triplet_spintrace: the explicitly spin-coupled "
-        "triplet manifold is implemented for singles and doubles projections "
-        "only");
+        "triplet manifold is implemented for singles and doubles");
 
   // spintrace_by_sector already called remove_spin_with_relabel on each sector.
-  auto sectors = spintrace_by_sector(expr, ext_groups, /*triplet_R=*/true);
+  auto sectors = spintrace_by_sector(expr, ext_groups, /*triplet_R=*/true,
+                                     options.triplet_amp_no_swap);
   SEQUANT_ASSERT(sectors.size() == (std::size_t{1} << n_ext));
 
   // V_mu: weight every sector by the sign of the spin of external group 0
@@ -2376,8 +2393,8 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
 
   if (n_ext == 1) {
     // metric of the T_{ai} kets is 2*delta -> the rank-1 biorthogonal
-    // for now I am calling v1/v2, but later I just add a normalization 1/2
-    // factor
+    // for now I am calling v1/v2, but later I will just add a normalization
+    // factor 1/2
     switch (options.method) {
       case BiorthogonalizationMethod::V1:
         triplet =
@@ -2406,7 +2423,8 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
     pair_swap.emplace(k0, k1);
     pair_swap.emplace(k1, k0);
 
-    triplet = triplet_doubles_paper_combined_residual(triplet, pair_swap);
+    triplet = triplet_doubles_paper_combined_residual(triplet, pair_swap,
+                                                      options.triplet_te_only);
     if (options.triplet_doubles_compact)
       // Keep the -3c representative per hash group so the dropped terms can be
       // rebuilt exactly by triplet_doubles_symbolic_reconstruct (or, on the
@@ -2427,7 +2445,7 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
 container::svector<std::pair<std::wstring, ExprPtr>> spintrace_by_sector(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups,
-    bool triplet_R) {
+    bool triplet_R, bool amp_no_swap) {
   ExprPtr work = expr->clone();
   if (has_tensor(work, reserved::antisymm_label())) {
     work = expand_A_op(work);
@@ -2455,7 +2473,7 @@ container::svector<std::pair<std::wstring, ExprPtr>> spintrace_by_sector(
     detail::reset_idx_tags(sector);
     canonicalize(sector);
     simplify(sector);
-    if (triplet_R) sector = triplet_adapt_amplitudes(sector);
+    if (triplet_R) sector = triplet_adapt_amplitudes(sector, amp_no_swap);
     sector = remove_spin_with_relabel(sector);
     detail::reset_idx_tags(sector);
     canonicalize(sector);

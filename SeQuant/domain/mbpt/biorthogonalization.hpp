@@ -609,6 +609,34 @@ auto triplet_doubles_nullspace_project(TA::DistArray<Args...> const& arr,
   return triplet_doubles_nullspace_project_ta(arr, orig_layout);
 }
 
+/// @brief TE-only -> full-metric reconstruction for triplet R2 (PI conjecture
+/// experiment). The bare-TE residual te_a = TE/4 sits in the same Klein-four
+/// orbits as the production residual Omega = (3TE - TE_ps)/16, and the exact
+/// identity Omega = te_a + (1/4)(bra_swap(te_a) + ket_swap(te_a)) recovers the
+/// production residual via a partial (bra + ket, NO pair) Klein-four
+/// symmetrization. Apply to the H*R residual when the te_only equations were
+/// evaluated (Knob A: TE_ps dropped, R+R_swap amplitude kept).
+template <typename... Args>
+auto triplet_doubles_te_reconstruct_ta(TA::DistArray<Args...> const& arr,
+                                       std::string const& orig_layout) {
+  using numeric_type = typename TA::DistArray<Args...>::numeric_type;
+  if (arr.trange().rank() != 4) return arr;
+  const auto layouts = triplet_doubles_swap_layouts(orig_layout);
+  TA::DistArray<Args...> result;
+  result(layouts.orig) =
+      arr(layouts.orig) + (numeric_type(1) / numeric_type(4)) *
+                              (arr(layouts.bra_swap) + arr(layouts.ket_swap));
+  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
+  result.truncate();
+  return result;
+}
+
+template <typename... Args>
+auto triplet_doubles_te_reconstruct(TA::DistArray<Args...> const& arr,
+                                    std::string const& orig_layout) {
+  return triplet_doubles_te_reconstruct_ta(arr, orig_layout);
+}
+
 #endif  // defined(SEQUANT_HAS_TILEDARRAY)
 
 #if defined(SEQUANT_HAS_BTAS)
