@@ -78,29 +78,6 @@ std::optional<Tensor> find_antisymmetrizer(const ExprPtr& e) {
   return std::nullopt;
 }
 
-/// Removes every antisymmetrizer (Â) tensor from @p e (factor it out / set it
-/// aside). The external indices it carried remain on the other tensors; Â is
-/// reattached later by the A-expand stage. Handles Product and Sum.
-ExprPtr strip_antisymmetrizer(const ExprPtr& e) {
-  if (e->is<Product>()) {
-    const auto& p = e->as<Product>();
-    auto result = std::make_shared<Product>();
-    result->scale(p.scalar());
-    for (const auto& f : p) {
-      if (f->is<Tensor>() &&
-          f->as<Tensor>().label() == reserved::antisymm_label())
-        continue;
-      result->append(1, f, Product::Flatten::No);
-    }
-    return result;
-  } else if (e->is<Sum>()) {
-    auto result = std::make_shared<Sum>();
-    for (const auto& s : *e) result->append(strip_antisymmetrizer(s));
-    return result;
-  }
-  return e;
-}
-
 /// Applies a bit permutation @p perm (bit p -> bit perm[p]) to config @p m.
 std::uint64_t apply_bit_perm(const container::svector<std::size_t>& perm,
                              std::uint64_t m, std::size_t n) {
