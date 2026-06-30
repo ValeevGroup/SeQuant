@@ -275,9 +275,12 @@ inline container::vector<Index> batchable_index_list(
 /// \param tidxs      Target (open) indices of the network.
 /// \param idxsz      Callable mapping an Index to its full extent.
 /// \param is_batchable  Predicate identifying batchable indices.
-/// \param batch_target_size  Per-index slice-size function: a sliced batchable
-///        index \c ix contributes
-///        min(full_extent, batch_target_size(aux_list[k])).
+/// \param batch_target_size  Per-index slice-size function (an upper bound): a
+///        sliced batchable index \c ix contributes
+///        min(full_extent, batch_target_size(aux_list[k])). This is a
+///        conservative (over-)estimate of the realized whole-tile batch, which
+///        the backend rounds *down* to a tile multiple (never above the
+///        target).
 /// \param aux_list   Ordered list of distinct batchable indices (as returned
 ///        by \ref batchable_index_list).
 /// \param inner_pow Optional k-aware CSV/PNO composite extent forwarded to each
