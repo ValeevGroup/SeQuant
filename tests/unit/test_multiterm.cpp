@@ -342,6 +342,47 @@ TEST_CASE("multiterm factorization", "[multiterm]") {
     REQUIRE(latex(mt_reorder) == latex(reorder_only));
   }
 
+  SECTION("reorder operates on a folded Product(Sum) summand") {
+    // The section above folds nothing, so reorder never re-binarizes a
+    // Product(Sum). Here a fold and a reorder happen together:
+    //   V*T + V*B          -> V*(T + B)   partial contraction, saving > 0
+    //   g*t*A, p*q, g*t*C                 full contraction, saving 0 (no fold)
+    // g*t*A and g*t*C share g*t, split by p*q, so reorder has something to
+    // cluster.
+    auto const expr = parse_antisymm(
+        L"V{a1,a2;a3,a4} T{a3,a4;i1,i2}"
+        L" + V{a1,a2;a3,a4} B{a3,a4;i1,i2}"
+        L" + g{i3,i4;a5,a6} t{a5,a6;i5,i6} A{i5,i6;i3,i4}"
+        L" + p{i7;i8} q{i8;i7}"
+        L" + g{i3,i4;a5,a6} t{a5,a6;i5,i6} C{i5,i6;i3,i4}");
+
+    auto const noreorder =
+        optimize(expr, {.reorder = ReorderSum::NoReorder,
+                        .multiterm = MultiTermFactor::Enable});
+    auto const reordered = optimize(
+        expr,
+        {.reorder = ReorderSum::Reorder, .multiterm = MultiTermFactor::Enable});
+
+    // V*(T + B) + g*t*A + p*q + g*t*C: four summands either way.
+    REQUIRE(noreorder->is<Sum>());
+    REQUIRE(noreorder->size() == 4);
+    REQUIRE(reordered->is<Sum>());
+    REQUIRE(reordered->size() == 4);
+
+    // V*(T + B) survives reorder's clusters()/binarize round-trip on the
+    // Product(Sum): present in both, structurally identical (reorder permutes,
+    // never rewrites).
+    auto const folded_noreorder = find_factored(noreorder);
+    auto const folded_reordered = find_factored(reordered);
+    REQUIRE(folded_noreorder);
+    REQUIRE(folded_reordered);
+    REQUIRE(*folded_reordered == *folded_noreorder);
+
+    // reorder clustered g*t*A next to g*t*C: same summands, different order,
+    // so unequal.
+    REQUIRE_FALSE(*noreorder == *reordered);
+  }
+
   SECTION("distinct contraction signatures fold independently, not merged") {
     // All four summands share the external indices {a1,a2,i1,i2}. The first two
     // contract over a virtual pair (a3,a4); the last two over an occupied pair
