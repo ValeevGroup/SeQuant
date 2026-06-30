@@ -1831,6 +1831,70 @@ TEST_CASE("eval_ta_batching", "[eval][batch]") {
       REQUIRE(equal_tarrays<Loose>(ref, slice_z(batched, g), "a,i"));
     }
   }
+
+  SECTION(
+      "evaluate_antisymm does not treat a trailing aux index as spectator") {
+    // Known SeQuant limitation: evaluate_antisymm derives ket_rank as
+    // (rank - bra_rank), folding a trailing auxiliary (batch) index into the
+    // ket modes instead of leaving it as a spectator. Antisymmetrizing a
+    // z-batched residual therefore fails. MPQC's EOM batching sidesteps this by
+    // using sequant::evaluate and antisymmetrizing each z-free slice separately
+    // (see the next section). Lock in the current behavior so a future fix that
+    // makes evaluate_antisymm aux-aware flips this expectation.
+    std::vector<TA::TArrayD> R2s;
+    for (size_t g = 0; g < nbatch; ++g)
+      R2s.push_back(rand_arr({nvirt, nvirt, nocc, nocc}));
+
+    auto const batched_eqn = deserialize<sequant::ResultExpr>(
+        L"Sig{a1,a2;i1,i2;z1} = f{a1;a3} R{a3,a2;i1,i2;z1}",
+        {.def_perm_symm = Symmetry::Antisymm});
+
+    CHECK_THROWS(sequant::evaluate_antisymm(eval_node(batched_eqn),
+                                            std::string("a_1,a_2,i_1,i_2,z_1"),
+                                            with_R({}, fuse_z(R2s))));
+  }
+
+  SECTION(
+      "batched evaluate + per-slice antisymmetrize matches per-guess loop") {
+    // The strategy MPQC's EOM batching uses: evaluate the antisymmetrized
+    // residual once with the batch index z as a spectator (plain evaluate, no
+    // folded antisymmetrization), then split along z and antisymmetrize each
+    // z-free slice with the per-array primitive. This must equal the per-guess
+    // evaluate_antisymm loop it replaces.
+    std::vector<TA::TArrayD> R2s;
+    for (size_t g = 0; g < nbatch; ++g)
+      R2s.push_back(rand_arr({nvirt, nvirt, nocc, nocc}));
+
+    auto const batched_eqn = deserialize<sequant::ResultExpr>(
+        L"Sig{a1,a2;i1,i2;z1} = f{a1;a3} R{a3,a2;i1,i2;z1}",
+        {.def_perm_symm = Symmetry::Antisymm});
+    auto const single_eqn = deserialize<sequant::ResultExpr>(
+        L"Sig{a1,a2;i1,i2} = f{a1;a3} R{a3,a2;i1,i2}",
+        {.def_perm_symm = Symmetry::Antisymm});
+
+    // batched, z spectator, NOT yet antisymmetrized
+    auto const batched =
+        eval_with(batched_eqn, "a_1,a_2,i_1,i_2,z_1", with_R({}, fuse_z(R2s)));
+    world.gop.fence();
+    REQUIRE(batched.trange().elements_range().extent(4) == nbatch);
+
+    const size_t bra_rank = 2;             // Sig{a1,a2;...}: two bra modes
+    for (size_t g = 0; g < nbatch; ++g) {  // the guess loop batching replaces
+      // reference: per-guess evaluate_antisymm (contraction + antisymmetrize)
+      auto const ref = sequant::evaluate_antisymm(
+                           eval_node(single_eqn),
+                           std::string("a_1,a_2,i_1,i_2"), with_R({}, R2s[g]))
+                           ->get<TA::TArrayD>();
+      // MPQC strategy: antisymmetrize the z-free slice via the per-array
+      // primitive
+      auto const got =
+          sequant::eval_result<sequant::ResultTensorTA<TA::TArrayD>>(
+              slice_z(batched, g))
+              ->antisymmetrize(bra_rank)
+              ->get<TA::TArrayD>();
+      REQUIRE(equal_tarrays<Loose>(ref, got, "a,a,i,i"));
+    }
+  }
 }
 
 TEST_CASE("eval_batched_custom_evaluator", "[eval]") {

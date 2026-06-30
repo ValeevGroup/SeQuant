@@ -542,67 +542,81 @@ TEST_CASE("utilities", "[utilities]") {
 
   SECTION("external_indices") {
     for (const auto& [input, expected] : std::vector<
-             std::pair<std::wstring, std::vector<std::vector<SlottedIndex>>>>{
-             {L"1/2", {}},
-             {L"t", {}},
-             {L"t{}", {}},
-             {L"t{i1;a1}",
-              {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}}},
-             {L"t{i1,i2;a1,a2}",
+             std::pair<std::wstring, std::vector<std::vector<SlottedIndex>>>> {
+           {L"1/2", {}}, {L"t", {}}, {L"t{}", {}},
+               {L"t{i1;a1}",
+                {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}}},
+               {L"t{i1,i2;a1,a2}",
+                {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+                 {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}}}},
+               {L"t{i1,i2;a2,a1}",
+                {{{L"i_1", SlotType::Bra}, {L"a_2", SlotType::Ket}},
+                 {{L"i_2", SlotType::Bra}, {L"a_1", SlotType::Ket}}}},
+               {L"t{;;i1,i2}",
+                {{{L"i_2", SlotType::Aux}}, {{L"i_1", SlotType::Aux}}}},
+               {L"t{a1;a2;i1,i2}",
+                {{{L"a_1", SlotType::Bra}, {L"a_2", SlotType::Ket}},
+                 {{L"i_1", SlotType::Aux}},
+                 {{L"i_2", SlotType::Aux}}}},
+               {L"t{a1,a2;a3,a4;i1,i2}",
+                {{{L"a_1", SlotType::Bra}, {L"a_3", SlotType::Ket}},
+                 {{L"a_2", SlotType::Bra}, {L"a_4", SlotType::Ket}},
+                 {{L"i_1", SlotType::Aux}},
+                 {{L"i_2", SlotType::Aux}}}},
+               {L"g{a3;a2;i2} t{a1,a2;a3,a4;i1,i2}",
+                {{{L"a_1", SlotType::Bra}, {L"a_4", SlotType::Ket}},
+                 {{L"i_1", SlotType::Aux}}}},
+               {L"t{a1,a2;i1,i2} + t{a1;i1} t{a2;i2}",
+                {{{L"a_1", SlotType::Bra}, {L"i_1", SlotType::Ket}},
+                 {{L"a_2", SlotType::Bra}, {L"i_2", SlotType::Ket}}}},
+               // When present, external indices are deduced from the
+               // symmetrizer (though bra/ket will be swapped)
+               {L"Â{a1;i1} t{i1;a1}",
+                {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}}},
+               {L"Â{a1,a2;i1,i2} t{i1;a1} t{i2;a2}",
+                {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+                 {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}}}},
+               {L"Ŝ{a1;i1} t{i1;a1}",
+                {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}}},
+               {L"Ŝ{a1,a2;i1,i2} t{i1;a1} t{i2;a2}",
+                {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+                 {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}}}},
+               // We still want the "swap" behavior when called on an isolated
+               // symmetrizer Note: this is the inverse behavior to a regular
+               // tensor
+               {L"Ŝ{a1,a2;i1,i2}",
+                {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+                 {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}}}},
+               {L"Â{a1;i1}",
+                {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}}},
+               // For number-non-conserving antisymmetrizer (bra_rank !=
+               // ket_rank), which appears in EOM-IP / EOM-EA expressions, the
+               // bra<->ket conjugation must still hold and unpaired indices get
+               // their slot type flipped.
+               {L"Â{i1,i2;a1}",
+                {{{L"a_1", SlotType::Bra}, {L"i_1", SlotType::Ket}},
+                 {{L"i_2", SlotType::Ket}}}},
+               {L"Â{a1;i1,i2}",
+                {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+                 {{L"i_2", SlotType::Bra}}}},
+               {L"Â{i1,i2;} R{;i1,i2}",
+                {{{L"i_1", SlotType::Ket}}, {{L"i_2", SlotType::Ket}}}},
+#if 0
+             // KNOWN LIMITATION (disabled): when a symmetrizer is present,
+             // external_indices reports only the symmetrizer's bra/ket indices
+             // and drops auxiliary externals (e.g. an EOM guess-batch index)
+             // that ride the operand tensors. MPQC's EOM batching works around
+             // this by collecting aux externals itself when building the
+             // residual head. Re-enable these cases if external_indices learns
+             // to report aux externals under a symmetrizer.
+             {L"Â{a1;i1} R{a1;i1;i2}",
               {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
-               {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}}}},
-             {L"t{i1,i2;a2,a1}",
-              {{{L"i_1", SlotType::Bra}, {L"a_2", SlotType::Ket}},
-               {{L"i_2", SlotType::Bra}, {L"a_1", SlotType::Ket}}}},
-             {L"t{;;i1,i2}",
-              {{{L"i_2", SlotType::Aux}}, {{L"i_1", SlotType::Aux}}}},
-             {L"t{a1;a2;i1,i2}",
-              {{{L"a_1", SlotType::Bra}, {L"a_2", SlotType::Ket}},
-               {{L"i_1", SlotType::Aux}},
                {{L"i_2", SlotType::Aux}}}},
-             {L"t{a1,a2;a3,a4;i1,i2}",
-              {{{L"a_1", SlotType::Bra}, {L"a_3", SlotType::Ket}},
-               {{L"a_2", SlotType::Bra}, {L"a_4", SlotType::Ket}},
-               {{L"i_1", SlotType::Aux}},
-               {{L"i_2", SlotType::Aux}}}},
-             {L"g{a3;a2;i2} t{a1,a2;a3,a4;i1,i2}",
-              {{{L"a_1", SlotType::Bra}, {L"a_4", SlotType::Ket}},
-               {{L"i_1", SlotType::Aux}}}},
-             {L"t{a1,a2;i1,i2} + t{a1;i1} t{a2;i2}",
-              {{{L"a_1", SlotType::Bra}, {L"i_1", SlotType::Ket}},
-               {{L"a_2", SlotType::Bra}, {L"i_2", SlotType::Ket}}}},
-             // When present, external indices are deduced from the symmetrizer
-             // (though bra/ket will be swapped)
-             {L"Â{a1;i1} t{i1;a1}",
-              {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}}},
-             {L"Â{a1,a2;i1,i2} t{i1;a1} t{i2;a2}",
+             {L"Â{a1,a2;i1,i2} t{i1;a1} t{i2;a2;i3}",
               {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
-               {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}}}},
-             {L"Ŝ{a1;i1} t{i1;a1}",
-              {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}}},
-             {L"Ŝ{a1,a2;i1,i2} t{i1;a1} t{i2;a2}",
-              {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
-               {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}}}},
-             // We still want the "swap" behavior when called on an isolated
-             // symmetrizer Note: this is the inverse behavior to a regular
-             // tensor
-             {L"Ŝ{a1,a2;i1,i2}",
-              {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
-               {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}}}},
-             {L"Â{a1;i1}",
-              {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}}},
-             // For number-non-conserving antisymmetrizer (bra_rank !=
-             // ket_rank), which appears in EOM-IP / EOM-EA expressions, the
-             // bra<->ket conjugation must still hold and unpaired indices get
-             // their slot type flipped.
-             {L"Â{i1,i2;a1}",
-              {{{L"a_1", SlotType::Bra}, {L"i_1", SlotType::Ket}},
-               {{L"i_2", SlotType::Ket}}}},
-             {L"Â{a1;i1,i2}",
-              {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
-               {{L"i_2", SlotType::Bra}}}},
-             {L"Â{i1,i2;} R{;i1,i2}",
-              {{{L"i_1", SlotType::Ket}}, {{L"i_2", SlotType::Ket}}}},
+               {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}},
+               {{L"i_3", SlotType::Aux}}}},
+#endif
          }) {
       CAPTURE(toUtf8(input));
 
