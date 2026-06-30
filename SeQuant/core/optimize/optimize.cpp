@@ -150,8 +150,8 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
 
     // Optional multi-term factorization first: it can merge summands
     ExprPtr result;
+    container::vector<FullBinaryNode<EvalExpr>> nodes;
     if (do_multiterm) {
-      container::vector<FullBinaryNode<EvalExpr>> nodes;
       nodes.reserve(new_sum.size());
       // per-summand binarize; positional head doesn't escape.
       SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
@@ -162,9 +162,14 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
       result = ex<Sum>(std::move(new_sum));
     }
 
-    // reorder is independent of multiterm
-    if (reorder && result->is<Sum>())
-      return ex<Sum>(opt::reorder(result->as<Sum>()));
+    // reorder (independent of multiterm). An unchanged summand count means
+    // multiterm folded nothing, leaving `nodes` positionally valid, so reorder
+    // can reuse them; a fold shrinks the sum and forces a re-binarize.
+    if (reorder && result->is<Sum>()) {
+      auto const& s = result->as<Sum>();
+      auto reuse_nodes = do_multiterm && s.size() == nodes.size();
+      return ex<Sum>(reuse_nodes ? opt::reorder(s, nodes) : opt::reorder(s));
+    }
     return result;
   }
 

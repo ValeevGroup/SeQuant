@@ -584,7 +584,8 @@ ExprPtr factorize_multiterm(
     folds.push_back(emit_biclique(*best));
   }
 
-  if (folds.empty()) return ex<Sum>(sum);  // nothing profitable
+  // Nothing profitable: return the same summands in the same order.
+  if (folds.empty()) return ex<Sum>(sum);
 
   // Reassemble: untouched summands (original order) followed by folds.
   Sum::summands_type out;
