@@ -903,7 +903,6 @@ template <typename NumericT, typename PolicyT,
     std::array<std::any, 3> const& annot) {
   using FlatArray = TA::DistArray<TA::Tensor<NumericT>, PolicyT>;
   using ToTArray = TA::DistArray<TA::Tensor<InnerTileT>, PolicyT>;
-  using FlatResult = ResultTensorTA<FlatArray>;
   using ToTResult = ResultTensorOfTensorTA<ToTArray>;
 
   auto const a = Annot<std::string>{annot};
