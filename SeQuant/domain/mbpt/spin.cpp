@@ -2290,7 +2290,7 @@ ExprPtr triplet_adapt_amplitudes(const ExprPtr& spin_labeled,
         // and R_{a2i2;a1i1} distinct. ter_only (amp_no_swap): single R only, so
         // use default ColumnSymmetry::Symm and let canonicalization fix order.
         const auto col_symm =
-            amp_no_swap ? ColumnSymmetry::Nonsymm : ColumnSymmetry::Nonsymm;
+            amp_no_swap ? ColumnSymmetry::Symm : ColumnSymmetry::Nonsymm;
         Tensor stored(t.label(), bra(t.bra()), ket(t.ket()), t.aux(),
                       Symmetry::Nonsymm, t.braket_symmetry(), col_symm);
 
