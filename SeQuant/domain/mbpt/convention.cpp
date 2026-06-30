@@ -104,7 +104,11 @@ void add_df_spaces(std::shared_ptr<IndexSpaceRegistry>& isr) {
 }
 
 void add_batching_spaces(std::shared_ptr<IndexSpaceRegistry>& isr) {
-  isr->add(IndexSpace{L"z", 0b100000, BatchingQNS::batch});  // Batching Space
+  // Batching Space. approximate_size=1: a batch index is a pure outer-product
+  // spectator (never contracted), so it must not influence the optimizer's
+  // contraction ordering.
+  isr->add(
+      IndexSpace{L"z", 0b100000, BatchingQNS::batch, 1});  // Batching Space
 }
 
 void add_thc_spaces(std::shared_ptr<IndexSpaceRegistry>& isr) {
