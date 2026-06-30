@@ -185,4 +185,30 @@ TEST_CASE("slot_symmetry", "[slot_symmetry]") {
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     REQUIRE((*node).slot_symmetry().empty());
   }
+
+  // ---- Task 0.4: column-group break (g.f gate negative) ----
+
+  SECTION("g{a,b;i,k} f{k,j} -> no column group (gate negative)") {
+    // g is a 2-column column-symmetric factor; f is a 1-column Fock-like
+    // factor.  One ket index of g (a_3) is contracted with f's bra.  The
+    // result r{a_1,a_2; i_1,i_2} has 2 columns, but column 1's ket (i_2)
+    // traces to f which carries no ColumnGroup (ncols < 2 guard in
+    // from_leaf_tensor), so column_grouped == false and the break rule fires.
+    Tensor g{L"g",
+             bra(IndexList{L"a_1", L"a_2"}),
+             ket(IndexList{L"i_1", L"a_3"}),
+             Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm,
+             ColumnSymmetry::Symm};
+    Tensor f{L"f",
+             bra(IndexList{L"a_3"}),
+             ket(IndexList{L"i_2"}),
+             Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm,
+             ColumnSymmetry::Nonsymm};
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize(ex<Tensor>(g) * ex<Tensor>(f));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE((*node).slot_symmetry().column_groups.empty());
+  }
 }
