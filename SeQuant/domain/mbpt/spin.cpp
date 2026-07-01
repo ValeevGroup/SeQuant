@@ -2290,7 +2290,7 @@ ExprPtr triplet_adapt_amplitudes(const ExprPtr& spin_labeled,
         // and R_{a2i2;a1i1} distinct. ter_only (amp_no_swap): single R only, so
         // use default ColumnSymmetry::Symm and let canonicalization fix order.
         const auto col_symm =
-            amp_no_swap ? ColumnSymmetry::Symm : ColumnSymmetry::Nonsymm;
+            amp_no_swap ? ColumnSymmetry::Nonsymm : ColumnSymmetry::Nonsymm;
         Tensor stored(t.label(), bra(t.bra()), ket(t.ket()), t.aux(),
                       Symmetry::Nonsymm, t.braket_symmetry(), col_symm);
 
@@ -2428,7 +2428,7 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
     if (options.triplet_doubles_compact)
       // Keep the -3c representative per hash group so the dropped terms can be
       // rebuilt exactly by triplet_doubles_symbolic_reconstruct (or, on the
-      // tensor side, by the {1,-1/3,-1/3,-1/3} Klein-four reconstruction).
+      // tensor side, by the {1,-1/3,-1/3,-1/3} four swpa reconstruction).
       triplet = triplet_doubles_maxcoeff_compact(triplet, ext_groups);
   }
   simplify(triplet);

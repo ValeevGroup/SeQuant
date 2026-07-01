@@ -788,80 +788,6 @@ TripletDoublesSwapLayouts triplet_doubles_swap_layouts(
           join(pair_swapped)};
 }
 
-ExprPtr triplet_doubles_symbolic_nns_compact(
-    ExprPtr expr,
-    const container::svector<container::svector<Index>>& ext_idxs) {
-  if (!expr->is<Sum>()) return expr;
-  if (ext_idxs.size() != 2) return expr;
-
-  auto work = expr->clone();
-  for (auto& term : *work) {
-    if (term->is<Product>())
-      term =
-          remove_tensor(term.as_shared_ptr<Product>(), reserved::symm_label());
-  }
-  canonicalize(work);
-  simplify(work);
-
-  const std::vector<double> weights{5. / 32., -1. / 32., -1. / 32., -3. / 32.};
-
-  container::map<std::size_t, container::vector<ExprPtr>> groups;
-  for (const auto& term : *work) {
-    if (!term->is<Product>()) continue;
-    groups[product_network_hash(term)].push_back(term);
-  }
-
-  Sum filtered;
-  for (const auto& [_, terms] : groups) {
-    if (terms.size() == 4) {
-      container::svector<Index> ref_bra, ref_ket;
-      if (terms.front()->is<Product>())
-        std::tie(ref_bra, ref_ket) =
-            triplet_external_slot_labels(terms.front()->as<Product>());
-
-      container::map<TripletExternalSwapKind, ExprPtr> by_swap;
-      for (const auto& term : terms) {
-        if (!term->is<Product>()) continue;
-        const auto [bra, ket] =
-            triplet_external_slot_labels(term->as<Product>());
-        const auto kind = classify_triplet_external_swap(ext_idxs, ref_bra,
-                                                         ref_ket, bra, ket);
-        if (kind != TripletExternalSwapKind::Other) by_swap.emplace(kind, term);
-      }
-
-      const TripletExternalSwapKind kinds[] = {
-          TripletExternalSwapKind::Identity, TripletExternalSwapKind::BraSwap,
-          TripletExternalSwapKind::KetSwap, TripletExternalSwapKind::PairSwap};
-      if (by_swap.size() == 4) {
-        ExprPtr combined = ex<Constant>(sequant::rational{0});
-        for (std::size_t i = 0; i < 4; ++i) {
-          const auto it = by_swap.find(kinds[i]);
-          SEQUANT_ASSERT(it != by_swap.end());
-          combined = combined + ex<Constant>(weights[i]) * it->second;
-        }
-        simplify(combined);
-        filtered.append(combined);
-        continue;
-      }
-    }
-
-    // Fallback: keep one representative per group (id layout preferred).
-    ExprPtr keep = terms.front();
-    if (terms.size() > 1) {
-      container::svector<Index> ref_bra, ref_ket;
-      if (keep->is<Product>())
-        std::tie(ref_bra, ref_ket) =
-            triplet_external_slot_labels(keep->as<Product>());
-      for (const auto& term : terms) {
-        if (prefer_triplet_hash_term(ext_idxs, ref_bra, ref_ket, term, keep))
-          keep = term;
-      }
-    }
-    filtered.append(keep);
-  }
-  return ex<Sum>(filtered);
-}
-
 ExprPtr triplet_doubles_hash_filter(
     ExprPtr expr,
     const container::svector<container::svector<Index>>& ext_idxs) {
@@ -879,7 +805,7 @@ ExprPtr triplet_doubles_hash_filter(
   const bool prefer_id_layout = (ext_idxs.size() == 2);
 
   // Debug: print every term grouped by network hash, with its coefficient,
-  // before any filtering decision is made.
+  // to see what filtering is needed.
   {
     container::map<std::size_t, container::vector<ExprPtr>> debug_groups;
     for (const auto& term : *work) {
@@ -902,16 +828,10 @@ ExprPtr triplet_doubles_hash_filter(
     std::wcout.flush();
   }
 
-  // Debug: verify that every hash group has the expected triplet structure:
+  // every hash group has the expected triplet structure:
   //   - exactly 4 Product terms,
-  //   - coefficients of shape {c, c, c, -3c} (three equal, one odd-one-out).
-  // PASS/FAIL is based purely on the coefficient multiset, which is
-  // well-defined regardless of where the external indices sit. The Klein-four
-  // swap coverage (Identity/BraSwap/KetSwap/PairSwap) is reported separately
-  // and only as information, because classify_triplet_external_swap assumes the
-  // externals live on the R tensor's bra/ket slots; for these EOM residual
-  // terms the external virtuals are distributed over g/t, so it returns Other
-  // here.
+  //   - coefficients of shape {c, c, c, -3c}.
+  // filtering based on the coefficients, not external indices.
   if (prefer_id_layout) {
     container::map<std::size_t, container::vector<ExprPtr>> groups;
     for (const auto& term : *work) {
@@ -953,14 +873,15 @@ ExprPtr triplet_doubles_hash_filter(
         if (!all_products) {
           reason = L"group contains a non-Product term";
         } else {
-          // Informational: do the four terms cover all Klein-four swap kinds?
+          // Informational: do the four terms cover all four swaps?
           container::set<TripletExternalSwapKind> kind_set(kinds.begin(),
                                                            kinds.end());
           coverage_ok =
               kind_set.size() == 4 &&
               kind_set.find(TripletExternalSwapKind::Other) == kind_set.end();
 
-          // PASS/FAIL: coefficient multiset must be {c, c, c, -3c}. Find an
+          // debugging for now
+          // coefficient multiset must be {c, c, c, -3c}. Find an
           // odd-one-out j with scalars[j] == -3 * c and the other three == c.
           bool shape_ok = false;
           for (std::size_t j = 0; j < 4 && !shape_ok; ++j) {
@@ -1007,7 +928,7 @@ ExprPtr triplet_doubles_hash_filter(
     std::wcout << L"=== triplet group verification: " << groups.size()
                << L" groups, " << n_pass << L" passing, " << n_fail
                << L" failing; " << n_full_swap_coverage
-               << L" with full Klein-four swap coverage ===\n";
+               << L" with full four swaps coverage ===\n";
     std::wcout.flush();
   }
 
@@ -1038,7 +959,7 @@ ExprPtr triplet_doubles_hash_filter(
     }
   }
 
-  // Debug: print the surviving (kept) term for each hash group.
+  // debugging for now: print the surviving (filtered) term for each hash group.
   {
     std::wcout << L"=== triplet_doubles_hash_filter: kept term per group ===\n";
     for (const auto& [hash, entry] : keep) {
@@ -1096,7 +1017,7 @@ ExprPtr triplet_doubles_symbolic_reconstruct(
   if (!compact_expr->is<Sum>()) return compact_expr;
   if (ext_idxs.size() != 2) return compact_expr;
 
-  // External Klein-four generators: bra-swap (b0<->b1), ket-swap (k0<->k1),
+  // permutation generators: bra-swap (b0<->b1), ket-swap (k0<->k1),
   // pair-swap (both). b/k are the bra/ket external indices of the two groups.
   const Index b0 = get_bra_idx(ext_idxs.at(0));
   const Index b1 = get_bra_idx(ext_idxs.at(1));

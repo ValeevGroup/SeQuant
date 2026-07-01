@@ -96,18 +96,10 @@ struct TripletDoublesSwapLayouts {
   std::string pair_swap;
 };
 
-/// @brief Build bra/ket/pair swap layouts from a rank-4 comma-separated
+/// @brief Build bra/ket/pair swap layouts from a rank-4
 /// annotation (a_1,a_2,i_1,i_2).
 [[nodiscard]] TripletDoublesSwapLayouts triplet_doubles_swap_layouts(
     std::string const& orig_layout);
-
-/// @brief Compact closed-shell triplet R2 by applying metric NNS weights
-/// symbolically within each tensor-network hash group (id/bra/ket/pair swaps).
-/// Produces one combined term per group (135 for 2h2p). Evaluation does not
-/// need triplet_doubles_nns_project. Only applies when @p ext_idxs.size() == 2.
-[[nodiscard]] ExprPtr triplet_doubles_symbolic_nns_compact(
-    ExprPtr expr,
-    const container::svector<container::svector<Index>>& ext_idxs);
 
 /// @brief Hash filter for closed-shell triplet R2: keep one term per tensor-
 /// network hash, preferring the identity external-index layout (id swap) so
@@ -120,8 +112,7 @@ struct TripletDoublesSwapLayouts {
 
 /// @brief Lossless compaction of the closed-shell triplet R2 residual: keep one
 /// term per tensor-network hash, choosing the largest-|coefficient| member of
-/// each group. Each group has the structure {c, c, c, -3c} (three external
-/// Klein-four images with weight c and one odd-one-out with -3c), so the kept
+/// each group. Each group has the structure {c, c, c, -3c}, so the kept
 /// term is always the -3c representative. This is the representative required
 /// by triplet_doubles_symbolic_reconstruct to rebuild the dropped terms; the
 /// layout-preferring triplet_doubles_hash_filter is NOT suitable for that since
@@ -131,13 +122,12 @@ struct TripletDoublesSwapLayouts {
     const container::svector<container::svector<Index>>& ext_idxs);
 
 /// @brief Symbolic inverse of triplet_doubles_maxcoeff_compact: from each kept
-/// -3c representative T (coefficient w = -3c), rebuild its external Klein-four
-/// orbit by applying the bra-swap (i1<->i2), ket-swap (a1<->a2) and pair-swap
-/// (both) to the external indices, each scaled by -1/3 (= c/w), and keeping T
-/// itself. Reproduces the full 4-term group {w*T, c*bra(T), c*ket(T),
-/// c*pair(T)}. Requires the -3c representative (use
-/// triplet_doubles_maxcoeff_compact); reconstruction from a +c term is
-/// ambiguous. Only applies when @p ext_idxs.size() == 2.
+/// -3c representative T (coefficient w = -3c), rebuild by applying the bra-swap
+/// (i1<->i2), ket-swap (a1<->a2) and pair-swap (both) to the external indices,
+/// each scaled by -1/3 (= c/w), and keeping T itself. Reproduces the full
+/// 4-term group {w*T, c*bra(T), c*ket(T), c*pair(T)}. Requires the -3c
+/// representative (use triplet_doubles_maxcoeff_compact); reconstruction from a
+/// +c term is ambiguous. Only applies when @p ext_idxs.size() == 2.
 [[nodiscard]] ExprPtr triplet_doubles_symbolic_reconstruct(
     ExprPtr compact_expr,
     const container::svector<container::svector<Index>>& ext_idxs);
@@ -541,13 +531,14 @@ auto biorthogonal_nns_project(TAPPTensor<T, Alloc> const& arr,
 
 namespace detail {
 
-/// @brief Weighted average over the triplet-doubles Klein-four orbit:
+/// @brief Weighted average over the triplet-doubles permutations:
 ///   out(orig) = w_self * arr(orig)
 ///             + w_swap * (arr(bra_swap) + arr(ket_swap) + arr(pair_swap)).
-/// All three external swap images share a single weight by the Klein-four
-/// symmetry, so the metric NNS reconstruction (w_self = 1, w_swap = -1/3) and
-/// the idempotent null-space projector (w_self = 3/4, w_swap = -1/4) are both
-/// instances of this combine; the two differ only by the overall scale 4/3.
+/// All three external swap images share a single weight by the four
+/// permutations symmetry, so the metric NNS reconstruction (w_self = 1, w_swap
+/// = -1/3) and the idempotent null-space projector (w_self = 3/4, w_swap =
+/// -1/4) are both instances of this combine; the two differ only by the overall
+/// scale 4/3.
 template <typename... Args>
 auto triplet_doubles_orbit_combine_ta(
     TA::DistArray<Args...> const& arr, TripletDoublesSwapLayouts const& layouts,
@@ -566,11 +557,11 @@ auto triplet_doubles_orbit_combine_ta(
 }  // namespace detail
 
 /// @brief Metric NNS reconstruction for compact triplet R2 residuals: rebuilds
-/// the full residual from its compact (-3c) representative via the Klein-four
-/// orbit with the n=2 triplet Gram pseudo-inverse weights {1, -1/3, -1/3,
-/// -1/3}, i.e. out(orig) = arr(orig) - (1/3)(bra + ket + pair). Numerical
-/// analogue of triplet_doubles_symbolic_reconstruct; apply to the H*R residual
-/// when the compact equations were evaluated.
+/// the full residual from its compact (-3c) representative via the all swaps
+/// with the n=2 triplet pseudo-inverse weights {1, -1/3, -1/3, -1/3}, i.e.
+/// out(orig) = arr(orig) - (1/3)(bra + ket + pair). Numerical analogue of
+/// triplet_doubles_symbolic_reconstruct; apply to the H*R residual when the
+/// compact equations were evaluated.
 template <typename... Args>
 auto triplet_doubles_nns_project_ta(TA::DistArray<Args...> const& arr,
                                     std::string const& orig_layout) {
@@ -589,7 +580,7 @@ auto triplet_doubles_nns_project(TA::DistArray<Args...> const& arr,
 
 /// @brief Idempotent null-space projector for triplet R2: removes the
 /// metric-null fully symmetric component, P = I - (1/4)Sigma, i.e. the
-/// Klein-four orbit with weights {3/4, -1/4, -1/4, -1/4}. Equals
+/// four swaps with weights {3/4, -1/4, -1/4, -1/4}. Equals
 /// (3/4) * triplet_doubles_nns_project. Apply to the Davidson trial R2 each
 /// iteration to keep it in the physical (non-null) subspace.
 template <typename... Args>
@@ -610,10 +601,10 @@ auto triplet_doubles_nullspace_project(TA::DistArray<Args...> const& arr,
 }
 
 /// @brief TE-only -> full-metric reconstruction for triplet R2 (PI conjecture
-/// experiment). The bare-TE residual te_a = TE/4 sits in the same Klein-four
-/// orbits as the production residual Omega = (3TE - TE_ps)/16, and the exact
+/// experiment). The bare-TE residual te_a = TE/4 sits in the same four
+/// swaps as the production residual Omega = (3TE - TE_ps)/16, and the exact
 /// identity Omega = te_a + (1/4)(bra_swap(te_a) + ket_swap(te_a)) recovers the
-/// production residual via a partial (bra + ket, NO pair) Klein-four
+/// production residual via a partial (bra + ket, NO pair)
 /// symmetrization. Apply to the H*R residual when the te_only equations were
 /// evaluated (Knob A: TE_ps dropped, R+R_swap amplitude kept).
 template <typename... Args>

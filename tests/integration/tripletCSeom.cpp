@@ -896,9 +896,9 @@ class compute_eomcc_closedshell_triplet {
                      << "] triplet compact (WK factor): " << term_count(compact)
                      << " terms\n";
 
-          // ===== PI conjecture experiment: bare-TE residual =================
-          // Knob A: drop the external pair-swap TE_ps -> residual = TE/4.
-          // Knob A+B: also drop the column-swapped R amplitude partner.
+          // ===== EFV experiment: bare-TE residual =================
+          // te_only: drop the external pair-swap TE_ps -> residual = TE/4.
+          // ter_only: also drop the column-swapped R amplitude partner.
           auto te_a = closed_shell_EOM_triplet_spintrace(
               eqvec[i], {.method = BiorthogonalizationMethod::V2,
                          .triplet_te_only = true});
@@ -919,20 +919,26 @@ class compute_eomcc_closedshell_triplet {
                      << term_count(compact) << " terms, "
                      << count_distinct_hashes(compact->clone())
                      << " distinct hashes\n";
-          std::wcout << "  TE-only (Knob A)                 : "
-                     << term_count(te_a) << " terms, "
-                     << count_distinct_hashes(te_a->clone())
+          std::wcout << "  TE-only                 : " << term_count(te_a)
+                     << " terms, " << count_distinct_hashes(te_a->clone())
                      << " distinct hashes\n";
-          std::wcout << "  TE-only + no R_swap (Knob A+B)   : "
-                     << term_count(te_ab) << " terms, "
-                     << count_distinct_hashes(te_ab->clone())
+          std::wcout << "  TE-only + no R_swap  : " << term_count(te_ab)
+                     << " terms, " << count_distinct_hashes(te_ab->clone())
                      << " distinct hashes\n";
           ExprPtr ab_diff = te_a->clone() - te_ab->clone();
           canonicalize(ab_diff);
           simplify(ab_diff);
-          std::wcout << "  Knob A vs A+B (te_a - te_ab)     : "
+          std::wcout << "  te_only vs ter_only (te_a - te_ab)     : "
                      << term_count(ab_diff)
-                     << " terms (0 => Knob B is a no-op on the residual)\n";
+                     << " terms (0 => R_only is a no-op on the residual)\n";
+
+          if (hashgroups_ && ext_groups.size() == 2) {
+            std::wcout << "hashgroups for ter_only\n";
+            dump_hash_groups(L"te_ab (TE-only, no R_swap)", te_ab, ext_idxs, 5,
+                             4);
+            analyze_group_recovery(L"te_ab (TE-only, no R_swap)", te_ab,
+                                   ext_idxs, 4);
+          }
 
           // external single/pair swap maps on the projector (mu) indices
           const auto& eg0 = ext_idxs.at(0);

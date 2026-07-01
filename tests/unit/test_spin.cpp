@@ -2326,10 +2326,7 @@ TEST_CASE("triplet_doubles_reconstruct", "[spin][triplet]") {
   auto _ = set_scoped_default_context(ctx);
 
   // Build four full {c, c, c, -3c} hash groups taken from the triplet R2
-  // residual (groups 0, 1, 2 and 3). Group 3 is included on purpose: under the
-  // layout-preferring triplet_doubles_hash_filter its kept term is a +1/4 term,
-  // which would make reconstruction ambiguous; triplet_doubles_maxcoeff_compact
-  // must instead keep the -3/4 representative.
+  // residual
   auto P = [](const wchar_t* s) {
     return deserialize(std::wstring(s), {.def_perm_symm = Symmetry::Nonsymm});
   };

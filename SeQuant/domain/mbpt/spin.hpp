@@ -277,15 +277,15 @@ struct ClosedShellCCSpintraceOptions {
   /// EOM triplet doubles only: compact R2 to one (-3c) term per tensor-network
   /// group (135 terms for 2h2p) via triplet_doubles_maxcoeff_compact; the
   /// dropped terms are recovered on evaluation by the {1,-1/3,-1/3,-1/3}
-  /// Klein-four reconstruction (numerical) or
+  /// four swap reconstruction (numerical) or
   /// triplet_doubles_symbolic_reconstruct (symbolic).
   bool triplet_doubles_compact = false;
-  /// EOM triplet doubles experiment (PI conjecture): build the residual from
+  /// EOM triplet doubles experiment: build the residual from
   /// the bare TE primitive only, i.e. return (1/4)*TE instead of the
   /// two-channel paper combination (3*TE - TE_ps)/16. Drops the external
   /// pair-swap TE_ps.
   bool triplet_te_only = false;
-  /// EOM triplet doubles experiment (PI conjecture, Knob B / ter_only): emit a
+  /// EOM triplet doubles experiment: emit a
   /// single R amplitude per rank-2 channel instead of the s0*(R +/- R_swap)
   /// column-swap pair in triplet_adapt_amplitudes. Uses ColumnSymmetry::Symm on
   /// that lone R (production uses Nonsymm to keep R and R_swap distinct). Only
