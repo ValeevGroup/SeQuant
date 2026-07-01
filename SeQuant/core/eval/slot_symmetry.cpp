@@ -182,6 +182,36 @@ SlotSymmetry deduce_slot_symmetry(EvalExpr const& left, EvalExpr const& right,
 
   Tensor const& lt = left.as_tensor();
   Tensor const& rt = right.as_tensor();
+
+  // ---- Soundness guards ----
+  // The flat index->slot trace below assumes each external occupies exactly one
+  // slot and that the two factors are distinguishable. Two cases violate that;
+  // both bail to an empty descriptor (a false negative is safe, a false
+  // positive would corrupt a consumer). See design note
+  // doc/dev/specs/2026-07-01-symmetry-deduction-via-tn-canonicalization.md.
+  //
+  // Guard 1: proto-indexed externals. An index that also appears as a proto-
+  // index of another slot (e.g. i1 in F{a1<i1,i2>; i1}) couples slots the trace
+  // treats as independent, which can yield a WRONG symmetry. If any index of
+  // either operand or the result carries proto-indices, decline. (This declines
+  // on CSV/PNO intermediates until the graph-canonicalization deducer lands.)
+  auto any_proto = [](Tensor const& t) {
+    auto has = [](auto const& bundle) {
+      for (auto const& idx : bundle)
+        if (idx.has_proto_indices()) return true;
+      return false;
+    };
+    return has(t.bra()) || has(t.ket()) || has(t.aux());
+  };
+  if (any_proto(lt) || any_proto(rt) || any_proto(result)) return ss;
+
+  // NB: repeated identical factors (e.g. A{a1;i1} A{a2;i2}) carry an emergent
+  // exchange symmetry the flat rules cannot see, but that is a SAFE false
+  // negative -- the deduced group is always a subset of the true symmetry (the
+  // 4-tuple supplier key prevents wrong cross-copy merges), so no guard is
+  // warranted. Recovering the emergent symmetry needs the
+  // graph-canonicalization deducer (Phase 0.5), not a guard.
+
   auto lloc = column_locations(lt, left.slot_symmetry());
   auto rloc = column_locations(rt, right.slot_symmetry());
 

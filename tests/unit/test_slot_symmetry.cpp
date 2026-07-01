@@ -645,15 +645,15 @@ TEST_CASE("slot_symmetry", "[slot_symmetry]") {
     REQUIRE((*node).slot_symmetry().empty());
   }
 
-  SECTION(
-      "I2 proto-index: full_label prevents base-label collision in"
-      " bra-group inheritance") {
-    // Two proto-indexed indices a_1<i_1> and a_1<i_2> share the same
-    // base label "a_1" but have distinct proto-indices.  Under the buggy
-    // label()-keyed maps only one entry is stored (emplace keeps the first),
-    // so try_inherit maps BOTH operand bra slots to position 0 in the result
-    // bra -> SlotGroup {0,0} (nonsensical).  With full_label() the two
-    // entries are distinct -> correct SlotGroup {0,1}.
+  SECTION("Guard 1: proto-indexed externals -> empty descriptor (soundness)") {
+    // A product whose operands carry proto-indexed externals (here a_1<i_1>,
+    // a_1<i_2>) violates the flat index->slot trace's bijectivity assumption:
+    // a proto-index also lives inside another slot, coupling slots the trace
+    // treats as independent, which can produce a WRONG symmetry. Rather than
+    // trust the model where its precondition fails, deduce_slot_symmetry
+    // declines (empty) on any proto-indexed participant. (The full_label()
+    // keying stays for the non-proto paths; this SECTION formerly asserted an
+    // inherited bra_group, before the guard was added -- an intended change.)
     auto ctx_resetter =
         set_scoped_default_context(get_default_context().clone());
     IndexSpaceRegistry registry;
@@ -665,15 +665,12 @@ TEST_CASE("slot_symmetry", "[slot_symmetry]") {
     Index a1_i1(L"a_1", {i1});  // a_1<i_1>
     Index a1_i2(L"a_1", {i2});  // a_1<i_2>
 
-    // Left: bra=[a_1<i_1>, a_1<i_2>], ket=[a_3, a_4], Antisymm
-    // -> bra_group {0,1} sign -1 from from_leaf_tensor.
     Tensor L_t{L"L",
                bra(Index::index_vector{a1_i1, a1_i2}),
                ket(IndexList{L"a_3", L"a_4"}),
                Symmetry::Antisymm,
                BraKetSymmetry::Nonsymm,
                ColumnSymmetry::Symm};
-    // Right: bra=[a_3, a_4], ket=[a_5], Nonsymm
     Tensor R_t{L"R",
                bra(IndexList{L"a_3", L"a_4"}),
                ket(IndexList{L"a_5"}),
@@ -683,18 +680,36 @@ TEST_CASE("slot_symmetry", "[slot_symmetry]") {
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     auto node = binarize(ex<Tensor>(L_t) * ex<Tensor>(R_t));
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-    auto const& ss = (*node).slot_symmetry();
+    // Guard 1: proto-indexed externals -> deduction declines.
+    REQUIRE((*node).slot_symmetry().empty());
+  }
 
-    // L's bra_group {0,1} sign -1 must be inherited into the result bra.
-    // Bug: rbra_pos["a_1"]=0 only -> try_inherit gives result_positions=[0,0]
-    //      -> SlotGroup {0,0} (both map to same slot).
-    // Fix: rbra_pos has distinct "a_1<i_1>"->0 and "a_1<i_2>"->1
-    //      -> SlotGroup {0,1} (correct distinct positions).
-    REQUIRE(ss.bra_groups.size() == 1);
-    REQUIRE(ss.bra_groups[0].slots.size() == 2);
-    // The two result-bra positions must be distinct (not both 0).
-    REQUIRE(ss.bra_groups[0].slots[0] != ss.bra_groups[0].slots[1]);
-    REQUIRE(ss.bra_groups[0].sign == -1);
+  SECTION("repeated identical factors: emergent symmetry MISSED (documented)") {
+    // A{a_1;i_1} * A{a_2;i_2}: the two factors are the same tensor core, so the
+    // outer product has an emergent column symmetry {a_1,i_1} <-> {a_2,i_2}
+    // (topological equivalence of the two column bundles). The flat rules
+    // cannot see it, so the descriptor is empty here. This is a SAFE false
+    // negative -- the deduced group is always a subset of the true symmetry,
+    // never a superset -- so it is left UNGUARDED (a guard would only drop
+    // correct claims elsewhere). The emergent symmetry awaits the
+    // graph-canonicalization deducer (Phase 0.5). This SECTION documents the
+    // known incompleteness.
+    Tensor A1{L"A",
+              bra(IndexList{L"a_1"}),
+              ket(IndexList{L"i_1"}),
+              Symmetry::Nonsymm,
+              BraKetSymmetry::Nonsymm,
+              ColumnSymmetry::Symm};
+    Tensor A2{L"A",
+              bra(IndexList{L"a_2"}),
+              ket(IndexList{L"i_2"}),
+              Symmetry::Nonsymm,
+              BraKetSymmetry::Nonsymm,
+              ColumnSymmetry::Symm};
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize(ex<Tensor>(A1) * ex<Tensor>(A2));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE((*node).slot_symmetry().empty());
   }
 
   SECTION("Symm leaf: bra_group and ket_group with sign +1") {
