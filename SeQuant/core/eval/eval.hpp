@@ -198,7 +198,7 @@ enum struct TermMode { Begin, End };
 /// One log record per eval op. Line format:
 ///
 // clang-format off
-/// Eval | <mode> | <time> | [left=L | right=R |] result=X | alloc=A | hw=H | rss=R | <label>
+/// Eval | <mode> | <time> | [left=L | right=R |] result=X | alloc=A | hw=H | rss=R | [<heap suffix> |] <label>
 // clang-format on
 ///
 /// Which fields are set depends on the op's arity:
@@ -281,21 +281,31 @@ auto eval(EvalStat const& stat, Args const&... args) {
   auto const rss_s = std::format(
       "rss={}",
       to_string(Bytes{rss_reduce ? rss_reduce(rss_local) : rss_local}));
-  if (stat.mem_left) {
-    SEQUANT_ASSERT(stat.mem_right);
-    log("Eval",                                               //
-        to_string(stat.mode),                                 //
-        stat.time,                                            //
-        std::format("left={}", to_string(*stat.mem_left)),    //
-        std::format("right={}", to_string(*stat.mem_right)),  //
-        result_s, alloc_s, hw_s, rss_s,                       //
-        args...);
-  } else {
-    log("Eval",                //
-        to_string(stat.mode),  //
-        stat.time,             //
-        result_s, alloc_s, hw_s, rss_s, args...);
-  }
+  // Optional backend-supplied suffix (already reduced across ranks); omitted
+  // entirely when the hook is unset or returns empty.
+  auto const& heap_stats = Logger::instance().eval.heap_stats;
+  auto const heap_s = heap_stats ? heap_stats() : std::string{};
+  auto emit = [&](auto const&... trailer) {
+    if (stat.mem_left) {
+      SEQUANT_ASSERT(stat.mem_right);
+      log("Eval",                                               //
+          to_string(stat.mode),                                 //
+          stat.time,                                            //
+          std::format("left={}", to_string(*stat.mem_left)),    //
+          std::format("right={}", to_string(*stat.mem_right)),  //
+          result_s, alloc_s, hw_s, rss_s,                       //
+          trailer...);
+    } else {
+      log("Eval",                //
+          to_string(stat.mode),  //
+          stat.time,             //
+          result_s, alloc_s, hw_s, rss_s, trailer...);
+    }
+  };
+  if (heap_s.empty())
+    emit(args...);
+  else
+    emit(heap_s, args...);
 }
 
 template <typename... Args>

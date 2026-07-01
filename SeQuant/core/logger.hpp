@@ -51,7 +51,18 @@ struct Logger : public Singleton<Logger> {
     /// (printing() is level>0, identical across ranks), so a collective reducer
     /// here is matched across ranks. Empty = report this rank's RSS unchanged.
     std::function<std::size_t(std::size_t)> rss_reduce = {};
-  } eval = {0, nullptr, {}};
+
+    /// Optional supplier of an extra, backend-defined suffix appended to each
+    /// eval-trace line (after the rss field). Injected by the tensor-algebra
+    /// backend to report allocator-level memory that RSS alone cannot
+    /// distinguish -- e.g. glibc all-arena in-use vs system bytes, so one can
+    /// tell live heap from retained-free heap right at an RSS jump. Runs on
+    /// EVERY rank on the eval log path (printing() is level>0, identical across
+    /// ranks), so an injected collective reduction here is matched across
+    /// ranks. Returns a preformatted, already-reduced string (e.g.
+    /// "heap_inuse=...B | heap_sys=...B"); empty function = omit the suffix.
+    std::function<std::string()> heap_stats = {};
+  } eval = {0, nullptr, {}, {}};
 
  private:
   friend class Singleton<Logger>;
