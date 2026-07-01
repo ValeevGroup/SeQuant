@@ -253,7 +253,7 @@ TEST_CASE("multiterm factorization", "[multiterm]") {
     // size(T) is that same whole index set. With the one-sided
     // saving = (m*n - 1)*C - (n - 1)*size(T) at m=1, n=2 this is C - size(T) =
     // 0 for any extents, so nothing folds. The cancellation is exact only under
-    // the current (m*n - 1)/(n - 1) coefficients (CostModel::saving,
+    // the current (m*n - 1)/(n - 1) coefficients (BicliqueCostModel::saving,
     // multiterm.cpp); revisit this no-fold check if those change. The
     // partial-contraction sibling below brackets this boundary from above.
     auto const expr = parse_antisymm(
@@ -285,8 +285,9 @@ TEST_CASE("multiterm factorization", "[multiterm]") {
 
   SECTION("DenseSize objective: the fold still pays") {
     // Unlike the other sections (default DenseFLOPs metric), this one sets
-    // objective_function to DenseSize, routing CostModel::contraction_cost
-    // through memsize_counter instead of flops_counter. V*T + V*B still folds:
+    // objective_function to DenseSize, routing
+    // BicliqueCostModel::contraction_cost through memsize_counter instead of
+    // flops_counter. V*T + V*B still folds:
     // under DenseSize the avoided contraction's element footprint (O(a^4), the
     // V leg dominating) far exceeds the cost of building the (T + B) partner
     // sum.

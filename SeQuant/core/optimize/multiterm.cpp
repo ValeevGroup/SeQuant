@@ -38,25 +38,19 @@ using Signature = std::vector<std::int64_t>;  ///< per-bucket signature key
 /// factorize_multiterm call so the metric and extent map need not be threaded
 /// through every search signature.
 ///
-/// \note To be reconciled later with the existing cost counters in
-/// \c single_term.hpp (\ref detail::flops_counter, \ref
-/// detail::memsize_counter, \ref detail::footprint_counter) and the way
-/// single-term optimization consumes them (compile-time \c ObjectiveFunction
-/// dispatch, plus the volatile- and footprint-weighting in \ref
-/// OptimizeOptions). \c contraction_cost already delegates to those counters;
-/// \c tensor_size re-derives \c footprint_counter's element-count with a
-/// different scalar/proto-index convention rather than calling it. We knowingly
-/// keep it this way for now: a single cost model that every optimization pass
-/// (single-term, multi-term, and whatever follows) shares is a longer-term
-/// goal, and forcing premature unification here would either change single-term
-/// behavior or freeze an interface before its requirements are clear. This
-/// class is the first options-owning cost facade and the intended seam for that
-/// consolidation.
-class CostModel {
+/// \note Distinct from \ref detail::CostModel (the \c cost_model.hpp concept
+/// for the single-term DP's \c AdditiveModel / \c PeakModel /
+/// \c PeakBatchedModel): that optimizes contraction order within one term,
+/// this scores cross-summand factoring. \c contraction_cost already reuses
+/// \ref detail::flops_counter / \ref detail::memsize_counter, and
+/// \c tensor_size re-derives \ref detail::footprint_counter's element count
+/// under a different convention -- unifying the two is deferred until Stage 3
+/// (dummy-invariant matching) settles this class's interface.
+class BicliqueCostModel {
   OptimizeOptions const& opts_;
 
  public:
-  explicit CostModel(OptimizeOptions const& o) : opts_(o) {}
+  explicit BicliqueCostModel(OptimizeOptions const& o) : opts_(o) {}
 
   /// Product of index extents -- the number of elements of a tensor with the
   /// given result modes (1 for a scalar / empty index list).
@@ -299,7 +293,7 @@ Live Live::build(Bucket const& bucket, std::vector<bool> const& consumed,
 /// (signature-only, hence equal for every member).
 std::map<Signature, Bucket> build_buckets(container::vector<Node> const& nodes,
                                           Interner& interner,
-                                          CostModel const& cost) {
+                                          BicliqueCostModel const& cost) {
   std::map<Signature, Bucket> buckets;
   for (std::size_t i = 0; i < nodes.size(); ++i) {
     auto core = extract_core(nodes[i]);
@@ -392,7 +386,7 @@ factor_coeffs(std::vector<int> const& left, std::vector<int> const& right,
 Biclique make_biclique(std::vector<int> left, std::vector<int> right,
                        std::vector<scalar_type> alpha,
                        std::vector<scalar_type> beta, double c_final,
-                       Live const& live, CostModel const& cost) {
+                       Live const& live, BicliqueCostModel const& cost) {
   Biclique bc;
   std::size_t const m = left.size(), n = right.size();
   double const l_size =
@@ -426,7 +420,8 @@ Biclique make_biclique(std::vector<int> left, std::vector<int> right,
 /// entirely on the partner side). Returns nullopt if nothing is profitable.
 std::optional<Biclique> best_fold(std::vector<int> const& left,
                                   std::vector<int> const& right, double c_final,
-                                  Live const& live, CostModel const& cost) {
+                                  Live const& live,
+                                  BicliqueCostModel const& cost) {
   std::optional<Biclique> best;
   auto consider = [&](Biclique bc) {
     if (bc.saving > 0. && supersedes(bc, best)) best = std::move(bc);
@@ -474,7 +469,7 @@ constexpr std::size_t max_closure_size = 50000;
 /// (still correct -- the greedy driver re-enumerates each round, so a bounded
 /// round only risks sub-optimality, never an invalid fold).
 std::optional<Biclique> best_biclique(Live const& live, double c_final,
-                                      CostModel const& cost,
+                                      BicliqueCostModel const& cost,
                                       std::size_t cap = max_closure_size) {
   // Closure of the left neighborhoods under intersection -> candidate right
   // vertex sets. Each closed set induces a maximal biclique.
@@ -557,7 +552,7 @@ ExprPtr factorize_multiterm(
   SEQUANT_ASSERT(opts.idx_to_extent);
   SEQUANT_ASSERT(nodes.size() == sum.size());
 
-  CostModel cost{opts};
+  BicliqueCostModel cost{opts};
   std::size_t const N = sum.size();
 
   // Build: intern factor vertices and group splittable summands into
