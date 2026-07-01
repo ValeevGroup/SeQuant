@@ -533,9 +533,8 @@ TEST_CASE("serialization", "[serialization]") {
       REQUIRE(result.ket()[0].full_label() == L"e_1");
       REQUIRE(result.ket()[1].full_label() == L"e_2");
       REQUIRE(result.symmetry() == Symmetry::Antisymm);
-      // serialized form `R{...}:A` omits braket_symmetry; deserializer's
-      // legacy fallback is Conjugate (see v1/deserialize.cpp to_default_symms)
-      REQUIRE(result.braket_symmetry() == BraKetSymmetry::Conjugate);
+      REQUIRE(result.braket_symmetry() == BraKetSymmetry::Nonsymm);
+      // This column symmetry is implicit with Symmetry::Antisymm
       REQUIRE(result.column_symmetry() == ColumnSymmetry::Symm);
 
       REQUIRE(result.expression().is<Product>());

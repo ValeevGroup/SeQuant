@@ -283,14 +283,6 @@ struct Transformer {
     auto [braIndices, ketIndices, auxiliaries] =
         make_indices(tensor.indices, position_cache.get(), begin.get());
 
-    // braket_symm is a std::variant<BraKetSymmetry, Hermiticity>: a concrete
-    // BraKetSymmetry (a 'C'/'S'/'N' spec, or the default fallback) is forwarded
-    // verbatim, while a Hermiticity (an 'H'/'A' spec, or a Hermiticity-valued
-    // default) defers to the Tensor ctor, which resolves it against
-    // base_field(bra, ket) — matching the programmatic ex<Tensor>(label, bra,
-    // ket) default. The std::visit below dispatches on which alternative is
-    // held to the matching Tensor ctor overload (BraKetSymmetry- vs
-    // Hermiticity-taking).
     auto [perm_symm, braket_symm, column_symm] =
         to_symmetries(tensor.symmetry, default_symms.get(),
                       position_cache.get(), begin.get());
@@ -329,6 +321,13 @@ struct Transformer {
                        : Vacuum::SingleProduct;
       return ex<BNOperator>(cre(std::move(ketIndices)),
                             ann(std::move(braIndices)), vac);
+    }
+
+    // Set required symmetries for symmetrization operators
+    if (tensor.name == reserved::antisymm_label()) {
+      perm_symm = Symmetry::Antisymm;
+    } else if (tensor.name == reserved::symm_label()) {
+      column_symm = ColumnSymmetry::Symm;
     }
 
     // Dispatch to correct Tensor constructor (taking either BraKetSymmetry or

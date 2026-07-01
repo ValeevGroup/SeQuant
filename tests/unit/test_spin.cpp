@@ -1180,7 +1180,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     REQUIRE_THAT(
         result,
         EquivalentTo(
-            L"3 Ŝ{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * "
+            L"3 Ŝ{i_1,i_2,i_3;a_1,a_2,a_3} * "
             "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_3,i_1,i_2}:N-C-S"));
   }
 
@@ -1195,7 +1195,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     REQUIRE_THAT(
         result,
         EquivalentTo(
-            L"-6/5 Ŝ{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * "
+            L"-6/5 Ŝ{i_1,i_2,i_3;a_1,a_2,a_3} * "
             "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_1,i_2,i_3}:N-C-S + "
             "3 Ŝ{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * g{a_1,a_2;a_4,a_5}:N-C-S *"
             " t{a_3,a_4,a_5;i_3,i_1,i_2}:N-C-S -"

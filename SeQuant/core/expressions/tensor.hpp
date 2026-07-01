@@ -15,6 +15,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/reserved.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/strong.hpp>
@@ -268,46 +269,15 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         ket_(make_indices(ket_indices)),
         aux_(make_indices(aux_indices)),
         symmetry_(s),
-        // Derive bra<->ket exchange symmetry from the indices' fields with a
-        // default Hermitian abstract trait, unless the caller explicitly
-        // requested a particular BraKetSymmetry (e.g. Nonsymm for amplitudes).
-        // base_field(bra_, ket_) is well-defined here: declaration order of the
-        // private members guarantees bra_/ket_ are constructed before
-        // braket_symmetry_.
-        // If the caller didn't specify a BraKetSymmetry: when at least one
-        // of bra/ket is nonempty, derive from base_field(bra_, ket_) +
-        // Hermitian (matches the field-agnostic Hermiticity-taking ctor).
-        // When both bra and ket are empty, the bra↔ket exchange has no
-        // physical meaning — fall back to the literal Conjugate default
-        // (historical Context::braket_symmetry() value); deriving Symm there
-        // would break the spintrace bookkeeping for vacuum-aux tensors.
-        braket_symmetry_(bks_opt.value_or(
-            (bra_.empty() && ket_.empty())
-                ? BraKetSymmetry::Conjugate
-                : to_braket_symmetry(Hermiticity::Hermitian,
-                                     sequant::base_field(bra_, ket_)))),
+        braket_symmetry_(bks_opt.value_or(BraKetSymmetry::Nonsymm)),
         hermiticity_(to_hermiticity(braket_symmetry_)),
         column_symmetry_(ps),
         bra_net_rank_(ranges::count_if(
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
         ket_net_rank_(ranges::count_if(
             ket_, [](const Index &idx) { return static_cast<bool>(idx); })) {
-    // The (anti)symmetrizer is a permutation-bookkeeping operator whose
-    // bra<->ket orientation defines/extracts the external indices and must be
-    // preserved; it must never be bra<->ket-symmetric (Symm), or
-    // canonicalization would swap its bra and ket and corrupt external-index
-    // extraction. Over a real field a Hermitian operator becomes Symm, so
-    // demote Symm to Conjugate here (Conjugate is treated as no-swap by the
-    // canonicalizer, matching the complex-field behavior) before
-    // canonicalize_slots() may act on it.
-    if ((label_ == reserved::antisymm_label() ||
-         label_ == reserved::symm_label()) &&
-        braket_symmetry_ == BraKetSymmetry::Symm) {
-      braket_symmetry_ = BraKetSymmetry::Conjugate;
-      hermiticity_ = to_hermiticity(BraKetSymmetry::Conjugate);
-    }
     validate_indices();
-    validate_symmetries();
+    check_symmetries();
     canonicalize_slots();
   }
 
@@ -323,40 +293,15 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         ket_(std::move(ket_indices)),
         aux_(std::move(aux_indices)),
         symmetry_(s),
-        // If the caller didn't specify a BraKetSymmetry: when at least one
-        // of bra/ket is nonempty, derive from base_field(bra_, ket_) +
-        // Hermitian (matches the field-agnostic Hermiticity-taking ctor).
-        // When both bra and ket are empty, the bra↔ket exchange has no
-        // physical meaning — fall back to the literal Conjugate default
-        // (historical Context::braket_symmetry() value); deriving Symm there
-        // would break the spintrace bookkeeping for vacuum-aux tensors.
-        braket_symmetry_(bks_opt.value_or(
-            (bra_.empty() && ket_.empty())
-                ? BraKetSymmetry::Conjugate
-                : to_braket_symmetry(Hermiticity::Hermitian,
-                                     sequant::base_field(bra_, ket_)))),
+        braket_symmetry_(bks_opt.value_or(BraKetSymmetry::Nonsymm)),
         hermiticity_(to_hermiticity(braket_symmetry_)),
         column_symmetry_(ps),
         bra_net_rank_(ranges::count_if(
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
         ket_net_rank_(ranges::count_if(
             ket_, [](const Index &idx) { return static_cast<bool>(idx); })) {
-    // The (anti)symmetrizer is a permutation-bookkeeping operator whose
-    // bra<->ket orientation defines/extracts the external indices and must be
-    // preserved; it must never be bra<->ket-symmetric (Symm), or
-    // canonicalization would swap its bra and ket and corrupt external-index
-    // extraction. Over a real field a Hermitian operator becomes Symm, so
-    // demote Symm to Conjugate here (Conjugate is treated as no-swap by the
-    // canonicalizer, matching the complex-field behavior) before
-    // canonicalize_slots() may act on it.
-    if ((label_ == reserved::antisymm_label() ||
-         label_ == reserved::symm_label()) &&
-        braket_symmetry_ == BraKetSymmetry::Symm) {
-      braket_symmetry_ = BraKetSymmetry::Conjugate;
-      hermiticity_ = to_hermiticity(BraKetSymmetry::Conjugate);
-    }
     validate_indices();
-    validate_symmetries();
+    check_symmetries();
     canonicalize_slots();
   }
 
@@ -798,11 +743,27 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   std::size_t bra_net_rank_;
   std::size_t ket_net_rank_;
 
-  void validate_symmetries() {
-    // (anti)symmetric bra or ket makes sense only for particle-symmetric
-    // tensors
-    if (symmetry_ == Symmetry::Symm || symmetry_ == Symmetry::Antisymm)
-      SEQUANT_ASSERT(column_symmetry_ == ColumnSymmetry::Symm);
+  void check_symmetries() {
+    // The (anti)symmetrizer is a permutation-bookkeeping operator whose
+    // bra<->ket orientation defines/extracts the external indices and must be
+    // preserved; it must never be bra<->ket-symmetric (Symm), or
+    // canonicalization would swap its bra and ket and corrupt external-index
+    // extraction. Over a real field a Hermitian operator becomes Symm, so
+    // demote Symm to Conjugate here (Conjugate is treated as no-swap by the
+    // canonicalizer, matching the complex-field behavior) before
+    // canonicalize_slots() may act on it.
+    if ((label_ == reserved::antisymm_label() ||
+         label_ == reserved::symm_label()) &&
+        braket_symmetry_ != BraKetSymmetry::Nonsymm) {
+      throw Exception(
+          "(Anti)symmetrization operators must not have braket symmetry");
+    }
+
+    if (symmetry_ == Symmetry::Symm || symmetry_ == Symmetry::Antisymm) {
+      // (Anti)symmetry in bra and ket indices automatically implies column
+      // symmetry
+      column_symmetry_ = ColumnSymmetry::Symm;
+    }
   }
 
   hash_type memoizing_hash() const override {
