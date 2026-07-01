@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1reserved_1ac6c35baf9f4ffcc7e119d4c517a54ce2:
+
+Function sequant::reserved::transposition_label
+===============================================
+
+- Defined in :ref:`file_SeQuant_core_reserved.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::reserved::transposition_label()
+   :project: SeQuant

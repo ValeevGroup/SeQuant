@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1a092c208018c60c22e09fbca5bb2c1150:
+
+Template Function sequant::opt::detail::sliced_footprints
+=========================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_single_term_detail.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::sliced_footprints(TensorNetwork const&, TIdxs const&, IdxToSz&&, std::function<bool(Index const&)> const&, std::function<std::size_t(Index const&)> const&, container::vector<Index> const&, std::function<double(Index const&, std::size_t)> const&)
+   :project: SeQuant

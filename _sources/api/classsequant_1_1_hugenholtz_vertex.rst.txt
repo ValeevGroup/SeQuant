@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1_hugenholtz_vertex:
+
+Template Class HugenholtzVertex
+===============================
+
+- Defined in :ref:`file_SeQuant_core_hugenholtz.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::HugenholtzVertex
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

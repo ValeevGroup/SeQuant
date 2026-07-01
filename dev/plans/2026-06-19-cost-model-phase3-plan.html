@@ -1,0 +1,667 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../../genindex.html"><link rel="search" title="Search" href="../../search.html">
+        <link rel="prefetch" href="../../_static/logo.svg" as="image">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>Cost-model Phase 3: generic single-term-opt driver + CostModel types - SeQuant Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../_static/bootstrap-treeview/bootstrap-treeview.min.css?v=8176a87d" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/custom.css?v=821744c5" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --sidebar-item-font-size: 0.95em;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../index.html"><div class="brand">SeQuant Documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="../../_static/logo.svg" alt="Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">User</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../user/getting_started/index.html">Getting started</a><input aria-label="Toggle navigation of Getting started" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../user/getting_started/wick.html">Wick’s Theorem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../user/getting_started/index_spaces.html">Register Index Spaces</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../user/getting_started/operators.html">Operators</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../user/getting_started/installing.html">Installation</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../user/guide/index.html">User Guide</a><input aria-label="Toggle navigation of User Guide" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../user/guide/operator.html">Operator Interface for Symbolic Many-Body Algebra</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../user/guide/cc.html">Coupled-Cluster Class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../user/guide/io.html">I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../user/guide/evaluation.html">Evaluation Trace Analysis</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../user/utilities/index.html">Utilities</a><input aria-label="Toggle navigation of Utilities" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../user/utilities/external_interface.html">External interface</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../developer/index.html">Developer docs</a><input aria-label="Toggle navigation of Developer docs" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../developer/documentation.html">Documentation Guide</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../api.html">API reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Maintainer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../maintainer/index.html">Maintainer docs</a><input aria-label="Toggle navigation of Maintainer docs" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../maintainer/release.html">Release Guide</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">See Also</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/tiledarray">TiledArray</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/mpqc">Massively Parallel Quantum Chemistry</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io">Valeev Research Group</a></li>
+</ul>
+
+</div></div>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="../../_sources/dev/plans/2026-06-19-cost-model-phase3-plan.md.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section class="tex2jax_ignore mathjax_ignore" id="cost-model-phase-3-generic-single-term-opt-driver-costmodel-types">
+<h1>Cost-model Phase 3: generic single-term-opt driver + CostModel types<a class="headerlink" href="#cost-model-phase-3-generic-single-term-opt-driver-costmodel-types" title="Link to this heading">¶</a></h1>
+<blockquote>
+<div><p><strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (<code class="docutils literal notranslate"><span class="pre">-</span> <span class="pre">[</span> <span class="pre">]</span></code>) syntax for tracking.</p>
+</div></blockquote>
+<p><strong>Goal:</strong> Factor the duplicated subset-lattice + bipartition orchestration of SeQuant’s four single-term-optimization objectives into one compile-time generic driver <code class="docutils literal notranslate"><span class="pre">run_single_term_opt&lt;Model&gt;</span></code>, with each objective expressed as a <code class="docutils literal notranslate"><span class="pre">CostModel</span></code> type, <strong>without changing any optimization result</strong>.</p>
+<p><strong>Architecture:</strong> A generic driver owns the subset lattice + bipartition loop; each objective is a model type with associated <code class="docutils literal notranslate"><span class="pre">State</span></code>/<code class="docutils literal notranslate"><span class="pre">Context</span></code> and <code class="docutils literal notranslate"><span class="pre">leaf/init/relax/finalize/reconstruct</span></code>. Production dispatch (<code class="docutils literal notranslate"><span class="pre">opt_pure_product</span></code>, detail <code class="docutils literal notranslate"><span class="pre">single_term_opt&lt;Metric&gt;</span></code>) routes through the models; the existing standalone DP/cost functions stay as independent reference oracles, and per-objective equivalence tests prove the model path reproduces them.</p>
+<p><strong>Tech Stack:</strong> C++20, SeQuant <code class="docutils literal notranslate"><span class="pre">core/optimize</span></code>, Catch2 (<code class="docutils literal notranslate"><span class="pre">tests/unit/test_optimize.cpp</span></code>).</p>
+<section id="global-constraints">
+<h2>Global Constraints<a class="headerlink" href="#global-constraints" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>Style: Google <code class="docutils literal notranslate"><span class="pre">.clang-format</span></code>, 80-col, 2-space, no tabs. <code class="docutils literal notranslate"><span class="pre">clang-format</span> <span class="pre">--style=file</span> <span class="pre">-i</span> <span class="pre">&lt;file&gt;</span></code> before each commit.</p></li>
+<li><p>No en-dashes (U+2013) or non-breaking spaces (pre-commit hook rejects them); ASCII hyphen only.</p></li>
+<li><p>No <code class="docutils literal notranslate"><span class="pre">Co-Authored-By</span></code> trailers.</p></li>
+<li><p>Branch: <code class="docutils literal notranslate"><span class="pre">feature/cost-model-batch-aware</span></code> (continue on it).</p></li>
+<li><p><strong>Behavior-preserving (hard):</strong> no existing <code class="docutils literal notranslate"><span class="pre">[optimize]</span></code> assertion may change. The full <code class="docutils literal notranslate"><span class="pre">[optimize]</span></code> suite passing after each task is the primary gate.</p></li>
+<li><p><strong>Scope:</strong> cost side only. NO evaluator face (<code class="docutils literal notranslate"><span class="pre">evaluate&lt;Backend&gt;</span></code>), NO mpqc, NO removal of the existing standalone DP/cost functions (<code class="docutils literal notranslate"><span class="pre">single_term_opt_impl</span></code>, <code class="docutils literal notranslate"><span class="pre">peak_dp</span></code>/<code class="docutils literal notranslate"><span class="pre">peak_cost</span></code>, <code class="docutils literal notranslate"><span class="pre">single_term_opt_peak_impl</span></code>, <code class="docutils literal notranslate"><span class="pre">peak_dp_batched</span></code>/<code class="docutils literal notranslate"><span class="pre">peak_cost_batched</span></code>, <code class="docutils literal notranslate"><span class="pre">single_term_opt_peak_batched_impl</span></code>) - those remain as reference oracles; their removal is a deliberate fast-follow. The brute-force oracles (<code class="docutils literal notranslate"><span class="pre">brute_force_min_peak</span></code>, <code class="docutils literal notranslate"><span class="pre">batched_min_peak</span></code>) also stay.</p></li>
+<li><p>Reference: spec <code class="docutils literal notranslate"><span class="pre">doc/dev/specs/2026-06-18-cost-model-phase3-generic-driver-design.md</span></code>.</p></li>
+<li><p>Models are compile-time TYPES; the <code class="docutils literal notranslate"><span class="pre">ObjectiveFunction</span></code> enum stays as the runtime selector.</p></li>
+</ul>
+</section>
+<section id="file-structure">
+<h2>File structure<a class="headerlink" href="#file-structure" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">core/optimize/cost_model.hpp</span></code> (new) - the <code class="docutils literal notranslate"><span class="pre">CostModel</span></code> concept, <code class="docutils literal notranslate"><span class="pre">solve_single_term</span></code>/<code class="docutils literal notranslate"><span class="pre">run_single_term_opt</span></code> driver, and the four built-in model types (<code class="docutils literal notranslate"><span class="pre">AdditiveModel</span></code>, <code class="docutils literal notranslate"><span class="pre">PeakModel</span></code>, <code class="docutils literal notranslate"><span class="pre">PeakBatchedModel</span></code>). Includes <code class="docutils literal notranslate"><span class="pre">single_term.hpp</span></code> for the reused helpers.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">core/optimize/single_term.hpp</span></code> - unchanged helpers (<code class="docutils literal notranslate"><span class="pre">subset_footprints</span></code>, <code class="docutils literal notranslate"><span class="pre">sliced_footprints</span></code>, <code class="docutils literal notranslate"><span class="pre">subset_open_aux</span></code>, <code class="docutils literal notranslate"><span class="pre">build_subnet_metadata</span></code>, <code class="docutils literal notranslate"><span class="pre">init_results</span></code>, the cost/footprint counters, the standalone DP/cost functions kept as oracles). The detail <code class="docutils literal notranslate"><span class="pre">single_term_opt&lt;Metric&gt;</span></code> arms are rerouted to build a model + call the driver.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">core/optimize/optimize.cpp</span></code> - <code class="docutils literal notranslate"><span class="pre">opt_pure_product</span></code> unchanged in behavior (still dispatches the enum), now via the model path through <code class="docutils literal notranslate"><span class="pre">single_term_opt&lt;Metric&gt;</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/unit/test_optimize.cpp</span></code> - existing tests unchanged; add per-objective equivalence SECTIONs + the concept/custom-model checks.</p></li>
+</ul>
+<p>Build/run each test step:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>cmake<span class="w"> </span>--build<span class="w"> </span>build-test<span class="w"> </span>--target<span class="w"> </span>unit_tests-sequant<span class="w"> </span>-j
+./build-test/tests/unit/unit_tests-sequant<span class="w"> </span><span class="s2">&quot;[optimize]&quot;</span>
+</pre></div>
+</div>
+<hr class="docutils" />
+<section id="task-1-generic-driver-costmodel-concept-additivemodel">
+<h3>Task 1: Generic driver + <code class="docutils literal notranslate"><span class="pre">CostModel</span></code> concept + <code class="docutils literal notranslate"><span class="pre">AdditiveModel</span></code><a class="headerlink" href="#task-1-generic-driver-costmodel-concept-additivemodel" title="Link to this heading">¶</a></h3>
+<p><strong>Files:</strong></p>
+<ul class="simple">
+<li><p>Create: <code class="docutils literal notranslate"><span class="pre">core/optimize/cost_model.hpp</span></code></p></li>
+<li><p>Modify: <code class="docutils literal notranslate"><span class="pre">core/optimize/single_term.hpp</span></code> (reroute the <code class="docutils literal notranslate"><span class="pre">DenseFLOPs</span></code>/<code class="docutils literal notranslate"><span class="pre">DenseSize</span></code> arms of detail <code class="docutils literal notranslate"><span class="pre">single_term_opt&lt;Metric&gt;</span></code>)</p></li>
+<li><p>Test: <code class="docutils literal notranslate"><span class="pre">tests/unit/test_optimize.cpp</span></code></p></li>
+</ul>
+<p><strong>Interfaces:</strong></p>
+<ul class="contains-task-list simple">
+<li><p>Produces: <code class="docutils literal notranslate"><span class="pre">sequant::opt::detail::CostModel</span></code> concept; <code class="docutils literal notranslate"><span class="pre">template&lt;class</span> <span class="pre">M&gt;</span> <span class="pre">container::vector&lt;typename</span> <span class="pre">M::State&gt;</span> <span class="pre">solve_single_term(M</span> <span class="pre">const&amp;,</span> <span class="pre">TensorNetwork</span> <span class="pre">const&amp;,</span> <span class="pre">TIdxs</span> <span class="pre">const&amp;)</span></code>; <code class="docutils literal notranslate"><span class="pre">template&lt;class</span> <span class="pre">M&gt;</span> <span class="pre">EvalSequence</span> <span class="pre">run_single_term_opt(M</span> <span class="pre">const&amp;,</span> <span class="pre">TensorNetwork</span> <span class="pre">const&amp;,</span> <span class="pre">TIdxs</span> <span class="pre">const&amp;)</span></code>; <code class="docutils literal notranslate"><span class="pre">struct</span> <span class="pre">AdditiveModel&lt;CostFn&gt;</span></code> with nested <code class="docutils literal notranslate"><span class="pre">State</span></code>/<code class="docutils literal notranslate"><span class="pre">Context</span></code>. The detail <code class="docutils literal notranslate"><span class="pre">single_term_opt&lt;DenseFLOPs|DenseSize&gt;</span></code> returns <code class="docutils literal notranslate"><span class="pre">run_single_term_opt(AdditiveModel{...},</span> <span class="pre">...)</span></code>.</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 1: Write the failing equivalence test</strong></p></li>
+</ul>
+<p>Add a SECTION to <code class="docutils literal notranslate"><span class="pre">TEST_CASE(&quot;optimize&quot;)</span></code> (inside the sized-context block). It asserts the model-via-driver yields the SAME <code class="docutils literal notranslate"><span class="pre">EvalSequence</span></code> as the existing <code class="docutils literal notranslate"><span class="pre">single_term_opt_impl</span></code> for FLOPs and Size, including the CSE, volatile-weight, and footprint-weight paths:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">SECTION</span><span class="p">(</span><span class="s">&quot;AdditiveModel via driver == single_term_opt_impl&quot;</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">using</span><span class="w"> </span><span class="k">namespace</span><span class="w"> </span><span class="nn">sequant</span><span class="p">;</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">idxsz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[](</span><span class="n">Index</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">ix</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">ix</span><span class="p">.</span><span class="n">space</span><span class="p">().</span><span class="n">approximate_size</span><span class="p">();</span><span class="w"> </span><span class="p">};</span>
+<span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">wstring</span><span class="o">&gt;</span><span class="w"> </span><span class="n">spec</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;g{a1;i1}&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;g{a1;a2}&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;g{a2;a3}&quot;</span><span class="p">,</span>
+<span class="w">                                    </span><span class="sa">L</span><span class="s">&quot;g{a3;i2}&quot;</span><span class="p">};</span>
+<span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">ExprPtr</span><span class="o">&gt;</span><span class="w"> </span><span class="n">ts</span><span class="p">;</span>
+<span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">spec</span><span class="p">)</span><span class="w"> </span><span class="n">ts</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="n">deserialize</span><span class="p">(</span><span class="n">s</span><span class="p">,</span><span class="w"> </span><span class="p">{.</span><span class="n">def_perm_symm</span><span class="o">=</span><span class="n">Symmetry</span><span class="o">::</span><span class="n">Nonsymm</span><span class="p">}));</span>
+<span class="w">  </span><span class="n">TensorNetwork</span><span class="w"> </span><span class="n">net</span><span class="p">{</span><span class="n">ts</span><span class="p">};</span>
+<span class="w">  </span><span class="n">container</span><span class="o">::</span><span class="n">svector</span><span class="o">&lt;</span><span class="n">Index</span><span class="o">&gt;</span><span class="w"> </span><span class="n">targets</span><span class="p">;</span>
+<span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">bool</span><span class="w"> </span><span class="n">cse</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="nb">false</span><span class="p">,</span><span class="w"> </span><span class="nb">true</span><span class="p">})</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">double</span><span class="w"> </span><span class="n">fw</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="mf">0.0</span><span class="p">,</span><span class="w"> </span><span class="mf">1000.0</span><span class="p">})</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="c1">// OLD path:</span>
+<span class="w">      </span><span class="k">auto</span><span class="w"> </span><span class="n">old_flops</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">single_term_opt_impl</span><span class="p">(</span>
+<span class="w">          </span><span class="n">net</span><span class="p">,</span><span class="w"> </span><span class="n">targets</span><span class="p">,</span><span class="w"> </span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">flops_counter</span><span class="p">(</span><span class="n">idxsz</span><span class="p">),</span><span class="w"> </span><span class="n">cse</span><span class="p">,</span>
+<span class="w">          </span><span class="cm">/*volatile_mask=*/</span><span class="mi">0u</span><span class="p">,</span><span class="w"> </span><span class="cm">/*volatile_weight=*/</span><span class="mf">1.0</span><span class="p">,</span>
+<span class="w">          </span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">footprint_counter</span><span class="p">(</span><span class="n">idxsz</span><span class="p">),</span><span class="w"> </span><span class="n">fw</span><span class="p">);</span>
+<span class="w">      </span><span class="c1">// NEW path via the model+driver:</span>
+<span class="w">      </span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">AdditiveModel</span><span class="w"> </span><span class="n">model</span><span class="p">{</span>
+<span class="w">          </span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">flops_counter</span><span class="p">(</span><span class="n">idxsz</span><span class="p">),</span><span class="w"> </span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">footprint_counter</span><span class="p">(</span><span class="n">idxsz</span><span class="p">),</span>
+<span class="w">          </span><span class="cm">/*volatile_mask=*/</span><span class="mi">0u</span><span class="p">,</span><span class="w"> </span><span class="cm">/*volatile_weight=*/</span><span class="mf">1.0</span><span class="p">,</span><span class="w"> </span><span class="n">fw</span><span class="p">,</span><span class="w"> </span><span class="n">cse</span><span class="p">};</span>
+<span class="w">      </span><span class="k">auto</span><span class="w"> </span><span class="n">neww</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">run_single_term_opt</span><span class="p">(</span><span class="n">model</span><span class="p">,</span><span class="w"> </span><span class="n">net</span><span class="p">,</span><span class="w"> </span><span class="n">targets</span><span class="p">);</span>
+<span class="w">      </span><span class="n">REQUIRE</span><span class="p">(</span><span class="n">neww</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">old_flops</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>(<code class="docutils literal notranslate"><span class="pre">EvalSequence</span></code> is a <code class="docutils literal notranslate"><span class="pre">container::vector&lt;int&gt;</span></code>; <code class="docutils literal notranslate"><span class="pre">==</span></code> compares element-wise.)</p>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 2: Run to verify it fails</strong> (compile error: <code class="docutils literal notranslate"><span class="pre">AdditiveModel</span></code>/<code class="docutils literal notranslate"><span class="pre">run_single_term_opt</span></code> undeclared).</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 3: Write <code class="docutils literal notranslate"><span class="pre">cost_model.hpp</span></code> - the concept + driver + <code class="docutils literal notranslate"><span class="pre">AdditiveModel</span></code></strong></p></li>
+</ul>
+<p>Create <code class="docutils literal notranslate"><span class="pre">core/optimize/cost_model.hpp</span></code>. The driver (the spec sketch, split into <code class="docutils literal notranslate"><span class="pre">solve</span></code> + <code class="docutils literal notranslate"><span class="pre">run</span></code>):</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="cp">#ifndef SEQUANT_CORE_OPTIMIZE_COST_MODEL_HPP</span>
+<span class="cp">#define SEQUANT_CORE_OPTIMIZE_COST_MODEL_HPP</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/optimize/single_term.hpp&gt;</span><span class="c1">  // helpers + EvalSequence + OptRes</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;bit&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">sequant</span><span class="o">::</span><span class="nn">opt</span><span class="o">::</span><span class="nn">detail</span><span class="w"> </span><span class="p">{</span>
+
+<span class="c1">/// Fills the per-subset State table bottom-up via the model&#39;s hooks.</span>
+<span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">class</span><span class="w"> </span><span class="nc">Model</span><span class="p">,</span><span class="w"> </span><span class="k">typename</span><span class="w"> </span><span class="nc">TIdxs</span><span class="o">&gt;</span>
+<span class="n">container</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">Model</span><span class="o">::</span><span class="n">State</span><span class="o">&gt;</span><span class="w"> </span><span class="n">solve_single_term</span><span class="p">(</span>
+<span class="w">    </span><span class="n">Model</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">m</span><span class="p">,</span><span class="w"> </span><span class="n">TensorNetwork</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">network</span><span class="p">,</span><span class="w"> </span><span class="n">TIdxs</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">tidxs</span><span class="p">,</span>
+<span class="w">    </span><span class="k">typename</span><span class="w"> </span><span class="nc">Model</span><span class="o">::</span><span class="n">Context</span><span class="o">&amp;</span><span class="w"> </span><span class="n">ctx</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">nt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">network</span><span class="p">.</span><span class="n">tensors</span><span class="p">().</span><span class="n">size</span><span class="p">();</span>
+<span class="w">  </span><span class="n">container</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">Model</span><span class="o">::</span><span class="n">State</span><span class="o">&gt;</span><span class="w"> </span><span class="n">st</span><span class="p">(</span><span class="kt">size_t</span><span class="p">{</span><span class="mi">1</span><span class="p">}</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">nt</span><span class="p">);</span>
+<span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">size_t</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">st</span><span class="p">.</span><span class="n">size</span><span class="p">();</span><span class="w"> </span><span class="o">++</span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">popcount</span><span class="p">(</span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="n">st</span><span class="p">[</span><span class="n">n</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">m</span><span class="p">.</span><span class="n">leaf</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">);</span>
+<span class="w">      </span><span class="k">continue</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">typename</span><span class="w"> </span><span class="nc">Model</span><span class="o">::</span><span class="n">State</span><span class="w"> </span><span class="n">acc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">m</span><span class="p">.</span><span class="n">init</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">);</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="p">[</span><span class="n">lp</span><span class="p">,</span><span class="w"> </span><span class="n">rp</span><span class="p">]</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">bits</span><span class="o">::</span><span class="n">bipartitions</span><span class="p">(</span><span class="n">n</span><span class="p">))</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">lp</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">rp</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="n">m</span><span class="p">.</span><span class="n">relax</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">,</span><span class="w"> </span><span class="n">lp</span><span class="p">,</span><span class="w"> </span><span class="n">rp</span><span class="p">,</span><span class="w"> </span><span class="n">st</span><span class="p">[</span><span class="n">lp</span><span class="p">],</span><span class="w"> </span><span class="n">st</span><span class="p">[</span><span class="n">rp</span><span class="p">],</span><span class="w"> </span><span class="n">acc</span><span class="p">);</span>
+<span class="w">    </span><span class="n">st</span><span class="p">[</span><span class="n">n</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">acc</span><span class="p">);</span>
+<span class="w">    </span><span class="n">m</span><span class="p">.</span><span class="n">finalize</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">,</span><span class="w"> </span><span class="n">st</span><span class="p">);</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">st</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="c1">/// Generic single-term optimization: build context, solve, reconstruct.</span>
+<span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">class</span><span class="w"> </span><span class="nc">Model</span><span class="p">,</span><span class="w"> </span><span class="k">typename</span><span class="w"> </span><span class="nc">TIdxs</span><span class="o">&gt;</span>
+<span class="n">EvalSequence</span><span class="w"> </span><span class="n">run_single_term_opt</span><span class="p">(</span><span class="n">Model</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">m</span><span class="p">,</span><span class="w"> </span><span class="n">TensorNetwork</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">network</span><span class="p">,</span>
+<span class="w">                                 </span><span class="n">TIdxs</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">tidxs</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">nt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">network</span><span class="p">.</span><span class="n">tensors</span><span class="p">().</span><span class="n">size</span><span class="p">();</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">nt</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">EvalSequence</span><span class="p">{</span><span class="mi">0</span><span class="p">};</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">nt</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">EvalSequence</span><span class="p">{</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">-1</span><span class="p">};</span>
+<span class="w">  </span><span class="k">typename</span><span class="w"> </span><span class="nc">Model</span><span class="o">::</span><span class="n">Context</span><span class="w"> </span><span class="n">ctx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">m</span><span class="p">.</span><span class="n">build_context</span><span class="p">(</span><span class="n">network</span><span class="p">,</span><span class="w"> </span><span class="n">tidxs</span><span class="p">);</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">st</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">solve_single_term</span><span class="p">(</span><span class="n">m</span><span class="p">,</span><span class="w"> </span><span class="n">network</span><span class="p">,</span><span class="w"> </span><span class="n">tidxs</span><span class="p">,</span><span class="w"> </span><span class="n">ctx</span><span class="p">);</span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">m</span><span class="p">.</span><span class="n">reconstruct</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="n">st</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace sequant::opt::detail</span>
+
+<span class="cp">#endif</span>
+</pre></div>
+</div>
+<p>Then <code class="docutils literal notranslate"><span class="pre">AdditiveModel</span></code> in the same file. Its <code class="docutils literal notranslate"><span class="pre">State</span></code>/<code class="docutils literal notranslate"><span class="pre">Context</span></code>/methods relocate the body of <code class="docutils literal notranslate"><span class="pre">single_term_opt_impl</span></code> (single_term.hpp ~389-460): <code class="docutils literal notranslate"><span class="pre">Context</span></code> holds <code class="docutils literal notranslate"><span class="pre">container::vector&lt;OptRes&gt;</span> <span class="pre">results</span></code> (from <code class="docutils literal notranslate"><span class="pre">init_results</span></code>, providing per-subset open indices + the <code class="docutils literal notranslate"><span class="pre">ops</span></code>/<code class="docutils literal notranslate"><span class="pre">lp</span></code>/<code class="docutils literal notranslate"><span class="pre">rp</span></code>/<code class="docutils literal notranslate"><span class="pre">subnets</span></code> scratch), <code class="docutils literal notranslate"><span class="pre">cost_fn</span></code>, <code class="docutils literal notranslate"><span class="pre">footprint_fn</span></code>, <code class="docutils literal notranslate"><span class="pre">footprint_weight</span></code>, <code class="docutils literal notranslate"><span class="pre">volatile_mask</span></code>, <code class="docutils literal notranslate"><span class="pre">volatile_weight</span></code>, the bool <code class="docutils literal notranslate"><span class="pre">subnet_cse</span></code>, and (when CSE) <code class="docutils literal notranslate"><span class="pre">meta_ids</span></code> + <code class="docutils literal notranslate"><span class="pre">unique_meta_costs</span></code> from <code class="docutils literal notranslate"><span class="pre">build_subnet_metadata</span></code>. <code class="docutils literal notranslate"><span class="pre">State</span></code> mirrors the relevant <code class="docutils literal notranslate"><span class="pre">OptRes</span></code> fields the DP mutates: <code class="docutils literal notranslate"><span class="pre">{double</span> <span class="pre">ops;</span> <span class="pre">size_t</span> <span class="pre">lp,</span> <span class="pre">rp;</span> <span class="pre">container::vector&lt;size_t&gt;</span> <span class="pre">subnets;}</span></code>.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">build_context</span></code>: <code class="docutils literal notranslate"><span class="pre">init_results(network,</span> <span class="pre">tidxs,</span> <span class="pre">results)</span></code>; if <code class="docutils literal notranslate"><span class="pre">subnet_cse</span></code> run <code class="docutils literal notranslate"><span class="pre">build_subnet_metadata</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">leaf(ctx,n)</span></code>: <code class="docutils literal notranslate"><span class="pre">{0.0,</span> <span class="pre">0,</span> <span class="pre">0,</span> <span class="pre">{}}</span></code> (ops 0; the singleton sequence is implicit in reconstruct).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">init(ctx,n)</span></code>: <code class="docutils literal notranslate"><span class="pre">{max,</span> <span class="pre">0,</span> <span class="pre">0,</span> <span class="pre">{}}</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">relax(ctx,n,lp,rp,lp_st,rp_st,acc)</span></code>: the body of the bipartition loop (single_term.hpp ~304-353) - compute <code class="docutils literal notranslate"><span class="pre">w</span></code>, <code class="docutils literal notranslate"><span class="pre">fp</span></code>, <code class="docutils literal notranslate"><span class="pre">new_cost</span></code> (CSE vs non-CSE branch using <code class="docutils literal notranslate"><span class="pre">unique_meta_costs</span></code>/<code class="docutils literal notranslate"><span class="pre">combined_subnets</span></code>), and if <code class="docutils literal notranslate"><span class="pre">&lt;</span> <span class="pre">acc.ops</span></code> update <code class="docutils literal notranslate"><span class="pre">acc.ops/lp/rp/subnets</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">finalize(ctx,n,st)</span></code>: the post-loop CSE bookkeeping (~356-371) updating <code class="docutils literal notranslate"><span class="pre">ctx.unique_meta_costs[ctx.meta_ids[n]]</span></code> and <code class="docutils literal notranslate"><span class="pre">st[n].subnets</span></code>; no-op when <code class="docutils literal notranslate"><span class="pre">!subnet_cse</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">reconstruct(ctx,st)</span></code>: relocate the sequence assembly (~374-383) - walk <code class="docutils literal notranslate"><span class="pre">st[*].lp/rp</span></code> from the full set, emitting <code class="docutils literal notranslate"><span class="pre">(lseq,</span> <span class="pre">rseq)</span></code> ordered by <code class="docutils literal notranslate"><span class="pre">lseq[0]</span> <span class="pre">&lt;</span> <span class="pre">rseq[0]</span></code>, then <code class="docutils literal notranslate"><span class="pre">-1</span></code>; build a <code class="docutils literal notranslate"><span class="pre">seq</span></code> table over subsets bottom-up exactly as the old code does its final pass.</p></li>
+</ul>
+<p>IMPORTANT: copy the existing logic verbatim (same <code class="docutils literal notranslate"><span class="pre">w</span></code>, <code class="docutils literal notranslate"><span class="pre">fp</span></code>, CSE accounting, tie-break) so results match bit-for-bit; the equivalence test guards this.</p>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 4: Reroute the additive arms of <code class="docutils literal notranslate"><span class="pre">single_term_opt&lt;Metric&gt;</span></code></strong></p></li>
+</ul>
+<p>In <code class="docutils literal notranslate"><span class="pre">single_term.hpp</span></code> detail <code class="docutils literal notranslate"><span class="pre">single_term_opt&lt;Metric&gt;</span></code> (~931-996), replace the <code class="docutils literal notranslate"><span class="pre">DenseFLOPs</span></code> and <code class="docutils literal notranslate"><span class="pre">DenseSize</span></code> arm bodies so each builds an <code class="docutils literal notranslate"><span class="pre">AdditiveModel</span></code> (with <code class="docutils literal notranslate"><span class="pre">flops_counter</span></code>/<code class="docutils literal notranslate"><span class="pre">memsize_counter</span></code>, the <code class="docutils literal notranslate"><span class="pre">volatile_mask</span></code> computed as today via <code class="docutils literal notranslate"><span class="pre">leaf_volatile_mask</span></code> or the existing inline mask, <code class="docutils literal notranslate"><span class="pre">volatile_weight</span></code>, <code class="docutils literal notranslate"><span class="pre">footprint_counter</span></code>, <code class="docutils literal notranslate"><span class="pre">footprint_weight</span></code>, <code class="docutils literal notranslate"><span class="pre">subnet_cse</span></code>) and returns <code class="docutils literal notranslate"><span class="pre">run_single_term_opt(model,</span> <span class="pre">network,</span> <span class="pre">tidxs)</span></code>. Include <code class="docutils literal notranslate"><span class="pre">cost_model.hpp</span></code>. Leave the <code class="docutils literal notranslate"><span class="pre">DensePeakSize</span></code>/<code class="docutils literal notranslate"><span class="pre">DensePeakSizeBatched</span></code> arms untouched (Tasks 2-3).</p>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 5: Run to verify the equivalence test AND the full suite pass</strong></p></li>
+</ul>
+<p>Run build/run. Expected: the new SECTION passes AND all existing <code class="docutils literal notranslate"><span class="pre">[optimize]</span></code> assertions still pass (the public-API DenseFLOPs/DenseSize tests now exercise <code class="docutils literal notranslate"><span class="pre">AdditiveModel</span></code>).</p>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 6: clang-format + commit</strong></p></li>
+</ul>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>clang-format<span class="w"> </span>--style<span class="o">=</span>file<span class="w"> </span>-i<span class="w"> </span>core/optimize/cost_model.hpp<span class="w"> </span>core/optimize/single_term.hpp<span class="w"> </span>tests/unit/test_optimize.cpp
+git<span class="w"> </span>add<span class="w"> </span>core/optimize/cost_model.hpp<span class="w"> </span>core/optimize/single_term.hpp<span class="w"> </span>tests/unit/test_optimize.cpp
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;optimize: generic run_single_term_opt driver + AdditiveModel (FLOPs/Size)&quot;</span>
+</pre></div>
+</div>
+</section>
+<hr class="docutils" />
+<section id="task-2-peakmodel">
+<h3>Task 2: <code class="docutils literal notranslate"><span class="pre">PeakModel</span></code><a class="headerlink" href="#task-2-peakmodel" title="Link to this heading">¶</a></h3>
+<p><strong>Files:</strong> <code class="docutils literal notranslate"><span class="pre">core/optimize/cost_model.hpp</span></code>, <code class="docutils literal notranslate"><span class="pre">core/optimize/single_term.hpp</span></code> (reroute <code class="docutils literal notranslate"><span class="pre">DensePeakSize</span></code> arm), test.</p>
+<p><strong>Interfaces:</strong></p>
+<ul class="contains-task-list simple">
+<li><p>Consumes: the driver + concept (Task 1).</p></li>
+<li><p>Produces: <code class="docutils literal notranslate"><span class="pre">struct</span> <span class="pre">PeakModel</span></code> (nested <code class="docutils literal notranslate"><span class="pre">State</span></code>/<code class="docutils literal notranslate"><span class="pre">Context</span></code>); detail <code class="docutils literal notranslate"><span class="pre">single_term_opt&lt;DensePeakSize&gt;</span></code> returns <code class="docutils literal notranslate"><span class="pre">run_single_term_opt(PeakModel{...},</span> <span class="pre">...)</span></code>.</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 1: Failing equivalence test</strong></p></li>
+</ul>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">SECTION</span><span class="p">(</span><span class="s">&quot;PeakModel via driver == single_term_opt_peak_impl&quot;</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">using</span><span class="w"> </span><span class="k">namespace</span><span class="w"> </span><span class="nn">sequant</span><span class="p">;</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">idxsz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[](</span><span class="n">Index</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">ix</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">ix</span><span class="p">.</span><span class="n">space</span><span class="p">().</span><span class="n">approximate_size</span><span class="p">();</span><span class="w"> </span><span class="p">};</span>
+<span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">spec</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">wstring</span><span class="o">&gt;&gt;</span><span class="p">{</span>
+<span class="w">         </span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;g{a1;i1}&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;g{a1;a2}&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;g{a2;i2}&quot;</span><span class="p">},</span>
+<span class="w">         </span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;g{a1;i1}&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;g{a1;a2}&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;g{a2;a3}&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;g{a3;i2}&quot;</span><span class="p">}})</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">ExprPtr</span><span class="o">&gt;</span><span class="w"> </span><span class="n">ts</span><span class="p">;</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">spec</span><span class="p">)</span><span class="w"> </span><span class="n">ts</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="n">deserialize</span><span class="p">(</span><span class="n">s</span><span class="p">,</span><span class="w"> </span><span class="p">{.</span><span class="n">def_perm_symm</span><span class="o">=</span><span class="n">Symmetry</span><span class="o">::</span><span class="n">Nonsymm</span><span class="p">}));</span>
+<span class="w">    </span><span class="n">TensorNetwork</span><span class="w"> </span><span class="n">net</span><span class="p">{</span><span class="n">ts</span><span class="p">};</span><span class="w"> </span><span class="n">container</span><span class="o">::</span><span class="n">svector</span><span class="o">&lt;</span><span class="n">Index</span><span class="o">&gt;</span><span class="w"> </span><span class="n">targets</span><span class="p">;</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">old_seq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">single_term_opt_peak_impl</span><span class="p">(</span><span class="n">net</span><span class="p">,</span><span class="w"> </span><span class="n">targets</span><span class="p">,</span><span class="w"> </span><span class="n">idxsz</span><span class="p">);</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">new_seq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">run_single_term_opt</span><span class="p">(</span>
+<span class="w">        </span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">PeakModel</span><span class="p">{</span><span class="n">idxsz</span><span class="p">},</span><span class="w"> </span><span class="n">net</span><span class="p">,</span><span class="w"> </span><span class="n">targets</span><span class="p">);</span>
+<span class="w">    </span><span class="n">REQUIRE</span><span class="p">(</span><span class="n">new_seq</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">old_seq</span><span class="p">);</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 2: Run to verify it fails</strong> (<code class="docutils literal notranslate"><span class="pre">PeakModel</span></code> undeclared).</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 3: Implement <code class="docutils literal notranslate"><span class="pre">PeakModel</span></code></strong> in <code class="docutils literal notranslate"><span class="pre">cost_model.hpp</span></code>. <code class="docutils literal notranslate"><span class="pre">Context</span></code> holds <code class="docutils literal notranslate"><span class="pre">S</span></code> (<code class="docutils literal notranslate"><span class="pre">subset_footprints</span></code>) and <code class="docutils literal notranslate"><span class="pre">L</span></code> (per-subset leaf-sum, as <code class="docutils literal notranslate"><span class="pre">peak_dp</span></code> precomputes). <code class="docutils literal notranslate"><span class="pre">State</span></code> = <code class="docutils literal notranslate"><span class="pre">{double</span> <span class="pre">peak;</span> <span class="pre">size_t</span> <span class="pre">lp,</span> <span class="pre">rp;</span> <span class="pre">bool</span> <span class="pre">lp_first;}</span></code>. <code class="docutils literal notranslate"><span class="pre">build_context</span></code> asserts <code class="docutils literal notranslate"><span class="pre">!subnet_cse</span></code> (PeakModel takes no CSE; if a <code class="docutils literal notranslate"><span class="pre">subnet_cse</span></code> flag is threaded, assert it false). <code class="docutils literal notranslate"><span class="pre">leaf</span></code> = <code class="docutils literal notranslate"><span class="pre">{S[n],0,0,true}</span></code>. <code class="docutils literal notranslate"><span class="pre">init</span></code> = <code class="docutils literal notranslate"><span class="pre">{max,0,0,true}</span></code>. <code class="docutils literal notranslate"><span class="pre">relax</span></code> = the <code class="docutils literal notranslate"><span class="pre">peak_dp</span></code> bipartition body (single_term.hpp ~516-560): both/lp_first/rp_first/cand, update <code class="docutils literal notranslate"><span class="pre">acc</span></code> + <code class="docutils literal notranslate"><span class="pre">lp_first</span></code>. <code class="docutils literal notranslate"><span class="pre">reconstruct</span></code> = <code class="docutils literal notranslate"><span class="pre">single_term_opt_peak_impl</span></code>’s emission (~737-770). Relocate verbatim.</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 4: Reroute the <code class="docutils literal notranslate"><span class="pre">DensePeakSize</span></code> arm</strong> of detail <code class="docutils literal notranslate"><span class="pre">single_term_opt&lt;Metric&gt;</span></code> to <code class="docutils literal notranslate"><span class="pre">return</span> <span class="pre">run_single_term_opt(PeakModel{idxsz},</span> <span class="pre">network,</span> <span class="pre">tidxs);</span></code> (keep the <code class="docutils literal notranslate"><span class="pre">SEQUANT_ASSERT(!subnet_cse)</span></code>).</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 5: Run - equivalence SECTION + full suite green</strong> (the public-API DensePeakSize tests + the reconstruction/oracle SECTIONs that go through the public path now exercise <code class="docutils literal notranslate"><span class="pre">PeakModel</span></code>; the direct <code class="docutils literal notranslate"><span class="pre">peak_cost</span></code>/oracle SECTIONs still test the kept standalone functions).</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 6: clang-format + commit</strong></p></li>
+</ul>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>clang-format<span class="w"> </span>--style<span class="o">=</span>file<span class="w"> </span>-i<span class="w"> </span>core/optimize/cost_model.hpp<span class="w"> </span>core/optimize/single_term.hpp<span class="w"> </span>tests/unit/test_optimize.cpp
+git<span class="w"> </span>add<span class="w"> </span>-A<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;optimize: PeakModel via generic driver (DensePeakSize)&quot;</span>
+</pre></div>
+</div>
+</section>
+<hr class="docutils" />
+<section id="task-3-peakbatchedmodel">
+<h3>Task 3: <code class="docutils literal notranslate"><span class="pre">PeakBatchedModel</span></code><a class="headerlink" href="#task-3-peakbatchedmodel" title="Link to this heading">¶</a></h3>
+<p><strong>Files:</strong> <code class="docutils literal notranslate"><span class="pre">core/optimize/cost_model.hpp</span></code>, <code class="docutils literal notranslate"><span class="pre">core/optimize/single_term.hpp</span></code> (reroute <code class="docutils literal notranslate"><span class="pre">DensePeakSizeBatched</span></code> arm), test.</p>
+<p><strong>Interfaces:</strong></p>
+<ul class="contains-task-list simple">
+<li><p>Consumes: driver + concept.</p></li>
+<li><p>Produces: <code class="docutils literal notranslate"><span class="pre">struct</span> <span class="pre">PeakBatchedModel</span></code> (nested <code class="docutils literal notranslate"><span class="pre">State</span> <span class="pre">=</span> <span class="pre">container::vector&lt;BatchedRes&gt;</span></code>, <code class="docutils literal notranslate"><span class="pre">Context</span></code>); detail <code class="docutils literal notranslate"><span class="pre">single_term_opt&lt;DensePeakSizeBatched&gt;</span></code> returns <code class="docutils literal notranslate"><span class="pre">run_single_term_opt(PeakBatchedModel{...},</span> <span class="pre">...)</span></code>.</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 1: Failing equivalence test</strong> (shared-aux AND two-distinct-aux nets; reuse the <code class="docutils literal notranslate"><span class="pre">F</span></code>-space setup from the existing batched SECTIONs):</p></li>
+</ul>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">SECTION</span><span class="p">(</span><span class="s">&quot;PeakBatchedModel via driver == single_term_opt_peak_batched_impl&quot;</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">using</span><span class="w"> </span><span class="k">namespace</span><span class="w"> </span><span class="nn">sequant</span><span class="p">;</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">idxsz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[](</span><span class="n">Index</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">ix</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">ix</span><span class="p">.</span><span class="n">space</span><span class="p">().</span><span class="n">approximate_size</span><span class="p">();</span><span class="w"> </span><span class="p">};</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">is_batchable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[](</span><span class="n">Index</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">ix</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">ix</span><span class="p">.</span><span class="n">space</span><span class="p">().</span><span class="n">base_key</span><span class="p">()</span><span class="o">==</span><span class="sa">L</span><span class="s">&quot;F&quot;</span><span class="p">;</span><span class="w"> </span><span class="p">};</span>
+<span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">batch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">spec</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">wstring</span><span class="o">&gt;&gt;</span><span class="p">{</span>
+<span class="w">         </span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;g{a1;i1;F1}&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;g{a2;i1;F1}&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;g{a2;i2;F2}&quot;</span><span class="p">},</span>
+<span class="w">         </span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;g{a1;i1;F1}&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;g{a2;i1;F2}&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;g{a2;i2;F2}&quot;</span><span class="p">}})</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">ExprPtr</span><span class="o">&gt;</span><span class="w"> </span><span class="n">ts</span><span class="p">;</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">spec</span><span class="p">)</span><span class="w"> </span><span class="n">ts</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="n">deserialize</span><span class="p">(</span><span class="n">s</span><span class="p">,</span><span class="w"> </span><span class="p">{.</span><span class="n">def_perm_symm</span><span class="o">=</span><span class="n">Symmetry</span><span class="o">::</span><span class="n">Nonsymm</span><span class="p">}));</span>
+<span class="w">    </span><span class="n">TensorNetwork</span><span class="w"> </span><span class="n">net</span><span class="p">{</span><span class="n">ts</span><span class="p">};</span><span class="w"> </span><span class="n">container</span><span class="o">::</span><span class="n">svector</span><span class="o">&lt;</span><span class="n">Index</span><span class="o">&gt;</span><span class="w"> </span><span class="n">targets</span><span class="p">;</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">old_seq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">single_term_opt_peak_batched_impl</span><span class="p">(</span>
+<span class="w">        </span><span class="n">net</span><span class="p">,</span><span class="w"> </span><span class="n">targets</span><span class="p">,</span><span class="w"> </span><span class="n">idxsz</span><span class="p">,</span><span class="w"> </span><span class="n">is_batchable</span><span class="p">,</span><span class="w"> </span><span class="n">batch</span><span class="p">,</span><span class="w"> </span><span class="p">{});</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">new_seq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">run_single_term_opt</span><span class="p">(</span>
+<span class="w">        </span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">PeakBatchedModel</span><span class="p">{</span><span class="n">idxsz</span><span class="p">,</span><span class="w"> </span><span class="n">is_batchable</span><span class="p">,</span><span class="w"> </span><span class="n">batch</span><span class="p">,</span>
+<span class="w">                                      </span><span class="cm">/*is_volatile_leaf=*/</span><span class="p">{}},</span>
+<span class="w">        </span><span class="n">net</span><span class="p">,</span><span class="w"> </span><span class="n">targets</span><span class="p">);</span>
+<span class="w">    </span><span class="n">REQUIRE</span><span class="p">(</span><span class="n">new_seq</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">old_seq</span><span class="p">);</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>(<code class="docutils literal notranslate"><span class="pre">F</span></code> must be registered in the cloned context as the existing batched SECTIONs do.)</p>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 2: Run to verify it fails</strong> (<code class="docutils literal notranslate"><span class="pre">PeakBatchedModel</span></code> undeclared).</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 3: Implement <code class="docutils literal notranslate"><span class="pre">PeakBatchedModel</span></code></strong> in <code class="docutils literal notranslate"><span class="pre">cost_model.hpp</span></code>. Members: <code class="docutils literal notranslate"><span class="pre">idxsz</span></code>, <code class="docutils literal notranslate"><span class="pre">is_batchable</span></code>, <code class="docutils literal notranslate"><span class="pre">batch</span></code>, <code class="docutils literal notranslate"><span class="pre">is_volatile_leaf</span></code>. <code class="docutils literal notranslate"><span class="pre">Context</span></code> holds <code class="docutils literal notranslate"><span class="pre">aux=batchable_index_list</span></code>, <code class="docutils literal notranslate"><span class="pre">m</span></code>, <code class="docutils literal notranslate"><span class="pre">tables=sliced_footprints</span></code>, per-<code class="docutils literal notranslate"><span class="pre">B</span></code> <code class="docutils literal notranslate"><span class="pre">L</span></code>, <code class="docutils literal notranslate"><span class="pre">open_aux=subset_open_aux</span></code>, <code class="docutils literal notranslate"><span class="pre">volatile_mask=leaf_volatile_mask</span></code>, <code class="docutils literal notranslate"><span class="pre">nB=1&lt;&lt;m</span></code>. <code class="docutils literal notranslate"><span class="pre">State</span></code> = <code class="docutils literal notranslate"><span class="pre">container::vector&lt;BatchedRes&gt;</span></code> (size <code class="docutils literal notranslate"><span class="pre">nB</span></code>). <code class="docutils literal notranslate"><span class="pre">build_context</span></code> asserts <code class="docutils literal notranslate"><span class="pre">!subnet_cse</span></code>. <code class="docutils literal notranslate"><span class="pre">leaf(ctx,n)</span></code>: per <code class="docutils literal notranslate"><span class="pre">B</span></code>, <code class="docutils literal notranslate"><span class="pre">tables[B</span> <span class="pre">&amp;</span> <span class="pre">open_aux[n]][n]</span></code>. <code class="docutils literal notranslate"><span class="pre">init(ctx,n)</span></code>: per <code class="docutils literal notranslate"><span class="pre">B</span></code>, <code class="docutils literal notranslate"><span class="pre">max</span></code>. <code class="docutils literal notranslate"><span class="pre">relax</span></code>: the <code class="docutils literal notranslate"><span class="pre">peak_dp_batched</span></code> body (single_term.hpp ~632-720) over <code class="docutils literal notranslate"><span class="pre">B</span></code> and <code class="docutils literal notranslate"><span class="pre">A'</span></code>, updating <code class="docutils literal notranslate"><span class="pre">acc[B]</span></code> + <code class="docutils literal notranslate"><span class="pre">aprime</span></code>. <code class="docutils literal notranslate"><span class="pre">reconstruct</span></code>: the <code class="docutils literal notranslate"><span class="pre">single_term_opt_peak_batched_impl</span></code> back-pointer walk from <code class="docutils literal notranslate"><span class="pre">(root,0)</span></code> (~779-900). Relocate verbatim; the only change is reading children from the driver’s <code class="docutils literal notranslate"><span class="pre">st</span></code> table instead of an internal one.</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 4: Reroute the <code class="docutils literal notranslate"><span class="pre">DensePeakSizeBatched</span></code> arm</strong> to <code class="docutils literal notranslate"><span class="pre">return</span> <span class="pre">run_single_term_opt(PeakBatchedModel{idxsz,</span> <span class="pre">is_batchable_index,</span> <span class="pre">batch_target_size,</span> <span class="pre">is_volatile_leaf},</span> <span class="pre">network,</span> <span class="pre">tidxs);</span></code> (keep <code class="docutils literal notranslate"><span class="pre">SEQUANT_ASSERT(!subnet_cse)</span></code>).</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 5: Run - equivalence SECTION + full suite green</strong> (public-API + reconstruction batched SECTIONs now exercise <code class="docutils literal notranslate"><span class="pre">PeakBatchedModel</span></code>; the direct <code class="docutils literal notranslate"><span class="pre">peak_cost_batched</span></code>/oracle SECTIONs still test the kept standalone functions).</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 6: clang-format + commit</strong></p></li>
+</ul>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>clang-format<span class="w"> </span>--style<span class="o">=</span>file<span class="w"> </span>-i<span class="w"> </span>core/optimize/cost_model.hpp<span class="w"> </span>core/optimize/single_term.hpp<span class="w"> </span>tests/unit/test_optimize.cpp
+git<span class="w"> </span>add<span class="w"> </span>-A<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;optimize: PeakBatchedModel via generic driver (DensePeakSizeBatched)&quot;</span>
+</pre></div>
+</div>
+</section>
+<hr class="docutils" />
+<section id="task-4-concept-conformance-custom-model-extension-point">
+<h3>Task 4: Concept conformance + custom-model extension point<a class="headerlink" href="#task-4-concept-conformance-custom-model-extension-point" title="Link to this heading">¶</a></h3>
+<p><strong>Files:</strong> <code class="docutils literal notranslate"><span class="pre">core/optimize/cost_model.hpp</span></code> (the <code class="docutils literal notranslate"><span class="pre">CostModel</span></code> concept definition, if expressed as a C++20 <code class="docutils literal notranslate"><span class="pre">concept</span></code>), test.</p>
+<p><strong>Interfaces:</strong></p>
+<ul class="contains-task-list simple">
+<li><p>Consumes: the driver + the four models.</p></li>
+<li><p>Produces: a <code class="docutils literal notranslate"><span class="pre">template&lt;class</span> <span class="pre">M&gt;</span> <span class="pre">concept</span> <span class="pre">CostModel</span> <span class="pre">=</span> <span class="pre">...;</span></code> (a compile-checkable concept) and a <code class="docutils literal notranslate"><span class="pre">static_assert</span></code> that the four built-ins satisfy it; a tiny custom model demonstrating <code class="docutils literal notranslate"><span class="pre">run_single_term_opt&lt;Custom&gt;</span></code> directly.</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 1: Define the <code class="docutils literal notranslate"><span class="pre">CostModel</span></code> concept</strong> in <code class="docutils literal notranslate"><span class="pre">cost_model.hpp</span></code>:</p></li>
+</ul>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">class</span><span class="w"> </span><span class="nc">M</span><span class="o">&gt;</span>
+<span class="k">concept</span><span class="w"> </span><span class="nc">CostModel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">requires</span><span class="p">(</span><span class="n">M</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">m</span><span class="p">,</span><span class="w"> </span><span class="k">typename</span><span class="w"> </span><span class="nc">M</span><span class="o">::</span><span class="n">Context</span><span class="o">&amp;</span><span class="w"> </span><span class="n">ctx</span><span class="p">,</span>
+<span class="w">                             </span><span class="n">TensorNetwork</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">net</span><span class="p">,</span>
+<span class="w">                             </span><span class="n">container</span><span class="o">::</span><span class="n">svector</span><span class="o">&lt;</span><span class="n">Index</span><span class="o">&gt;</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">tidxs</span><span class="p">,</span><span class="w"> </span><span class="kt">size_t</span><span class="w"> </span><span class="n">n</span><span class="p">,</span>
+<span class="w">                             </span><span class="n">container</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">M</span><span class="o">::</span><span class="n">State</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">st</span><span class="p">,</span>
+<span class="w">                             </span><span class="k">typename</span><span class="w"> </span><span class="nc">M</span><span class="o">::</span><span class="n">State</span><span class="o">&amp;</span><span class="w"> </span><span class="n">acc</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">m</span><span class="p">.</span><span class="n">build_context</span><span class="p">(</span><span class="n">net</span><span class="p">,</span><span class="w"> </span><span class="n">tidxs</span><span class="p">)</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">same_as</span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">M</span><span class="o">::</span><span class="n">Context</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">m</span><span class="p">.</span><span class="n">leaf</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">same_as</span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">M</span><span class="o">::</span><span class="n">State</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">m</span><span class="p">.</span><span class="n">init</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">same_as</span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">M</span><span class="o">::</span><span class="n">State</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="w">  </span><span class="n">m</span><span class="p">.</span><span class="n">relax</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">,</span><span class="w"> </span><span class="n">acc</span><span class="p">,</span><span class="w"> </span><span class="n">acc</span><span class="p">,</span><span class="w"> </span><span class="n">acc</span><span class="p">);</span>
+<span class="w">  </span><span class="n">m</span><span class="p">.</span><span class="n">finalize</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">,</span><span class="w"> </span><span class="n">st</span><span class="p">);</span>
+<span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">m</span><span class="p">.</span><span class="n">reconstruct</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="n">st</span><span class="p">)</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">same_as</span><span class="o">&lt;</span><span class="n">EvalSequence</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+<p>(Adjust the exact <code class="docutils literal notranslate"><span class="pre">requires</span></code> expressions to the real method signatures from Tasks 1-3; the point is a compile-time conformance gate.)</p>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 2: Failing test - conformance + a custom model</strong></p></li>
+</ul>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">SECTION</span><span class="p">(</span><span class="s">&quot;CostModel concept conformance + custom model&quot;</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">using</span><span class="w"> </span><span class="k">namespace</span><span class="w"> </span><span class="nn">sequant</span><span class="p">;</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">idxsz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[](</span><span class="n">Index</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">ix</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">ix</span><span class="p">.</span><span class="n">space</span><span class="p">().</span><span class="n">approximate_size</span><span class="p">();</span><span class="w"> </span><span class="p">};</span>
+<span class="w">  </span><span class="k">static_assert</span><span class="p">(</span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">CostModel</span><span class="o">&lt;</span>
+<span class="w">                </span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">AdditiveModel</span><span class="o">&lt;</span><span class="k">decltype</span><span class="p">(</span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">flops_counter</span><span class="p">(</span><span class="n">idxsz</span><span class="p">))</span><span class="o">&gt;&gt;</span><span class="p">);</span>
+<span class="w">  </span><span class="k">static_assert</span><span class="p">(</span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">CostModel</span><span class="o">&lt;</span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">PeakModel</span><span class="o">&lt;</span><span class="k">decltype</span><span class="p">(</span><span class="n">idxsz</span><span class="p">)</span><span class="o">&gt;&gt;</span><span class="p">);</span>
+<span class="w">  </span><span class="c1">// a trivial custom model: gross-size additive with a doubled footprint</span>
+<span class="w">  </span><span class="c1">// weight, driven directly (proves the public extension point).</span>
+<span class="w">  </span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">AdditiveModel</span><span class="w"> </span><span class="n">custom</span><span class="p">{</span>
+<span class="w">      </span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">memsize_counter</span><span class="p">(</span><span class="n">idxsz</span><span class="p">),</span><span class="w"> </span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">footprint_counter</span><span class="p">(</span><span class="n">idxsz</span><span class="p">),</span>
+<span class="w">      </span><span class="mi">0u</span><span class="p">,</span><span class="w"> </span><span class="mf">1.0</span><span class="p">,</span><span class="w"> </span><span class="cm">/*footprint_weight=*/</span><span class="mf">2.0</span><span class="p">,</span><span class="w"> </span><span class="cm">/*subnet_cse=*/</span><span class="nb">false</span><span class="p">};</span>
+<span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">ExprPtr</span><span class="o">&gt;</span><span class="w"> </span><span class="n">ts</span><span class="p">;</span>
+<span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;g{a1;i1}&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;g{a1;a2}&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;g{a2;i2}&quot;</span><span class="p">})</span>
+<span class="w">    </span><span class="n">ts</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="n">deserialize</span><span class="p">(</span><span class="n">s</span><span class="p">,</span><span class="w"> </span><span class="p">{.</span><span class="n">def_perm_symm</span><span class="o">=</span><span class="n">Symmetry</span><span class="o">::</span><span class="n">Nonsymm</span><span class="p">}));</span>
+<span class="w">  </span><span class="n">TensorNetwork</span><span class="w"> </span><span class="n">net</span><span class="p">{</span><span class="n">ts</span><span class="p">};</span><span class="w"> </span><span class="n">container</span><span class="o">::</span><span class="n">svector</span><span class="o">&lt;</span><span class="n">Index</span><span class="o">&gt;</span><span class="w"> </span><span class="n">targets</span><span class="p">;</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">seq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">run_single_term_opt</span><span class="p">(</span><span class="n">custom</span><span class="p">,</span><span class="w"> </span><span class="n">net</span><span class="p">,</span><span class="w"> </span><span class="n">targets</span><span class="p">);</span>
+<span class="w">  </span><span class="kt">size_t</span><span class="w"> </span><span class="n">leaves</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">merges</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">t</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">seq</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="n">t</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="n">leaves</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">merges</span><span class="p">)</span><span class="o">++</span><span class="p">;</span>
+<span class="w">  </span><span class="n">REQUIRE</span><span class="p">(</span><span class="n">leaves</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">3u</span><span class="p">);</span>
+<span class="w">  </span><span class="n">REQUIRE</span><span class="p">(</span><span class="n">merges</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">2u</span><span class="p">);</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>(If <code class="docutils literal notranslate"><span class="pre">AdditiveModel</span></code>/<code class="docutils literal notranslate"><span class="pre">PeakModel</span></code> are class templates, spell the template args to match Tasks 1-2; if non-template, drop the <code class="docutils literal notranslate"><span class="pre">&lt;...&gt;</span></code>.)</p>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 3: Make the conformance compile</strong> - adjust the <code class="docutils literal notranslate"><span class="pre">concept</span></code> and/or the models so the <code class="docutils literal notranslate"><span class="pre">static_assert</span></code>s hold; no behavior change.</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 4: Run - the new SECTION + full suite green.</strong></p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 5: clang-format + commit</strong></p></li>
+</ul>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>clang-format<span class="w"> </span>--style<span class="o">=</span>file<span class="w"> </span>-i<span class="w"> </span>core/optimize/cost_model.hpp<span class="w"> </span>tests/unit/test_optimize.cpp
+git<span class="w"> </span>add<span class="w"> </span>-A<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;optimize: CostModel concept + custom-model extension-point test&quot;</span>
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="self-review-notes">
+<h2>Self-review notes<a class="headerlink" href="#self-review-notes" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>Spec coverage:</strong> generic driver + concept (spec 2) -&gt; Task 1; the four models (spec 3) -&gt; Tasks 1-3 (<code class="docutils literal notranslate"><span class="pre">AdditiveModel</span></code> x2, <code class="docutils literal notranslate"><span class="pre">PeakModel</span></code>, <code class="docutils literal notranslate"><span class="pre">PeakBatchedModel</span></code>); CSE via <code class="docutils literal notranslate"><span class="pre">finalize</span></code> (spec 3) -&gt; Task 1 <code class="docutils literal notranslate"><span class="pre">AdditiveModel::finalize</span></code>; dispatch transition (spec 4) -&gt; the per-task arm rerouting; scope/no-evaluator/no-mpqc (spec 5) -&gt; Global Constraints; testing (spec 6: regression net + concept + custom) -&gt; existing suite green each task + Task 4. Spec 7 file split -&gt; <code class="docutils literal notranslate"><span class="pre">cost_model.hpp</span></code> (Task 1). Deliberately deferred per Global Constraints: removal of the old standalone DP/cost functions (spec 4’s “replaced by” is realized for <em>dispatch</em>; the functions remain as oracles).</p></li>
+<li><p><strong>Behavior preservation:</strong> every model method is a verbatim relocation of an existing loop body (exact source line ranges named); the equivalence SECTIONs assert <code class="docutils literal notranslate"><span class="pre">model-via-driver</span> <span class="pre">==</span> <span class="pre">old-impl</span></code> per objective, and the full existing suite must stay green - no assertion changes.</p></li>
+<li><p><strong>Type consistency:</strong> <code class="docutils literal notranslate"><span class="pre">State</span></code>/<code class="docutils literal notranslate"><span class="pre">Context</span></code> names and the <code class="docutils literal notranslate"><span class="pre">leaf/init/relax/finalize/reconstruct</span></code> signatures are used identically across Tasks 1-4; <code class="docutils literal notranslate"><span class="pre">run_single_term_opt</span></code>/<code class="docutils literal notranslate"><span class="pre">solve_single_term</span></code> names fixed in Task 1.</p></li>
+<li><p><strong>Risk to flag to reviewer:</strong> (a) whether <code class="docutils literal notranslate"><span class="pre">AdditiveModel</span></code>/<code class="docutils literal notranslate"><span class="pre">PeakModel</span></code> end up class templates (over the cost-fn / idxsz type) - the concept <code class="docutils literal notranslate"><span class="pre">static_assert</span></code>s and the dispatch sites must spell matching template args; (b) <code class="docutils literal notranslate"><span class="pre">volatile_mask</span></code> is computed in the additive arm exactly as today (reuse the existing inline computation or <code class="docutils literal notranslate"><span class="pre">leaf_volatile_mask</span></code>) so the equivalence holds; © <code class="docutils literal notranslate"><span class="pre">reconstruct</span></code> for additive must reproduce the <code class="docutils literal notranslate"><span class="pre">lseq[0]</span> <span class="pre">&lt;</span> <span class="pre">rseq[0]</span></code> tie-break to match sequences bit-for-bit.</p></li>
+</ul>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, SeQuant developers
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            <div class="last-updated">
+              Last updated on Jul 1, 2026 10:36:51 AM</div>
+          </div>
+          <div class="right-details">
+            <div class="icons">
+              <a class="muted-link fa-brands fa-solid fa-github fa-2x" href="https://github.com/ValeevGroup/SeQuant" aria-label="GitHub"></a>
+              
+            </div>
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Cost-model Phase 3: generic single-term-opt driver + CostModel types</a><ul>
+<li><a class="reference internal" href="#global-constraints">Global Constraints</a></li>
+<li><a class="reference internal" href="#file-structure">File structure</a><ul>
+<li><a class="reference internal" href="#task-1-generic-driver-costmodel-concept-additivemodel">Task 1: Generic driver + <code class="docutils literal notranslate"><span class="pre">CostModel</span></code> concept + <code class="docutils literal notranslate"><span class="pre">AdditiveModel</span></code></a></li>
+<li><a class="reference internal" href="#task-2-peakmodel">Task 2: <code class="docutils literal notranslate"><span class="pre">PeakModel</span></code></a></li>
+<li><a class="reference internal" href="#task-3-peakbatchedmodel">Task 3: <code class="docutils literal notranslate"><span class="pre">PeakBatchedModel</span></code></a></li>
+<li><a class="reference internal" href="#task-4-concept-conformance-custom-model-extension-point">Task 4: Concept conformance + custom-model extension point</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#self-review-notes">Self-review notes</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=f281be69"></script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script src="../../_static/bootstrap-treeview/bootstrap-treeview.min.js?v=6a1e96b4"></script>
+    </body>
+</html>

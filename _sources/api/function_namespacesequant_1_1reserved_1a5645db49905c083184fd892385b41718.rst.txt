@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1reserved_1a5645db49905c083184fd892385b41718:
+
+Function sequant::reserved::labels
+==================================
+
+- Defined in :ref:`file_SeQuant_core_reserved.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::reserved::labels()
+   :project: SeQuant

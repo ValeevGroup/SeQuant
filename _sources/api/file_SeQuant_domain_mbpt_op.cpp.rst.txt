@@ -1,0 +1,228 @@
+
+.. _file_SeQuant_domain_mbpt_op.cpp:
+
+File op.cpp
+===========
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_mbpt>` (``SeQuant/domain/mbpt``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/domain/mbpt/op.cpp``)
+-------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_mbpt_op.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/io/latex/latex.hpp`` (:ref:`file_SeQuant_core_io_latex_latex.hpp`)
+
+- ``SeQuant/core/math.hpp`` (:ref:`file_SeQuant_core_math.hpp`)
+
+- ``SeQuant/core/op.hpp`` (:ref:`file_SeQuant_core_op.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/core/wick.hpp`` (:ref:`file_SeQuant_core_wick.hpp`)
+
+- ``SeQuant/domain/mbpt/context.hpp`` (:ref:`file_SeQuant_domain_mbpt_context.hpp`)
+
+- ``SeQuant/domain/mbpt/op.hpp`` (:ref:`file_SeQuant_domain_mbpt_op.hpp`)
+
+- ``SeQuant/domain/mbpt/op.ipp`` (:ref:`file_SeQuant_domain_mbpt_op.ipp`)
+
+- ``SeQuant/domain/mbpt/op_registry.hpp`` (:ref:`file_SeQuant_domain_mbpt_op_registry.hpp`)
+
+- ``range/v3/algorithm/contains.hpp``
+
+- ``range/v3/algorithm/for_each.hpp``
+
+- ``range/v3/algorithm/is_sorted.hpp``
+
+- ``range/v3/view/filter.hpp``
+
+- ``range/v3/view/iota.hpp``
+
+- ``range/v3/view/map.hpp``
+
+- ``range/v3/view/reverse.hpp``
+
+- ``range/v3/view/transform.hpp``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__mbpt`
+
+- :ref:`namespace_sequant__mbpt__op`
+
+- :ref:`namespace_sequant__mbpt__op__sequant__mbpt__tensor`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a0493377bc5a2010bcde7945eea92581d`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1ab6d4886b1e83d70b0616a5ffb1915d72`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a35157b2f39c73b38cbcb3914134e2143`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a6cd2be82b4b665371221aaa97259e5a3`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a50a856ae3d1823bcc179e048aadf66c1`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a04c8bdf96518cd26950dd0d0c6551f52`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a3a5c3ab393c20432bc0e95f648e75b00`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a2930443c6b4cf2d0827a684d7fe3868a`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a29a59328767d23d90451c49dc13c92dc`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1aa64d7523d93abfe7b2178f41d9e15a26`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1ae6890607010607fb4a575d3ed552f121`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1ad1217f3d7352e8267ab3431630aab051`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a6ba850bbdaf51a53690b5d6f045af432`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1ad03798e8e3c0f8d916fd2e5fa1397928`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a971f7f4a2e3cca07763576481dfbd028`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1af02bfd1ec06ddd7288f129a099bad551`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1ac389de58f04c5ccf7279da092b6adc0c`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a313982e9e908aa0e57b3bc26cd4f83a2`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1ae8bee657232a7e236d6107ad8e939bb0`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a5011094ae91aab5654082f94dd41e055`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1af202eeff0db87e23579e5ae5f095b2d4`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1ad3155f3c8a3c93f67d8100c08c16db5c`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a48425eefec4b9fb72ee4bc5cb21a438f`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a027c8fbac813db708c772228dbfbfffe`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a35656a88e39638ca1c776e777728f802`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a4ce1cc500dd8636390de046d8ca9d1d2`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1aa99b0c2d90f9f6a3c169d26031d622ca`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a26e0678a871ed9ee35163ff580252f8e`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a7358ef8522dcbbd01b2de2e5318b1a87`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1af5689550f4672fbd0aed61116f09d144`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a36256db089763a4d2ed9a36750abe50b`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1abc0b3ac339a3a198de3036d8b103d5fc`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a24318215aabfc86d8b74ca01136ba2c3`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1aa187510f3fecaddc5dba641a8f00e69f`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a6edf78ee4773d1beada57aa907a27529`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1ace6bf2c33303fc40abcdb9d4844441de`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1af475241af0939fa50b4eb05f27dcca65`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a71d1058bdb90c554bc537eb4c78ba3ea`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a13d31756bd70cbff519ec94aed5ee4f3`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1ae0484dc19c7bf432f43c71b92f26a52b`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1abab27526a7118203fd10277dad1401aa`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a23ce18eca198e2a06097c46b7107d73d`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a1331f75a688a50371cd85c25654772f3`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1ac19321590c2010062a14c60a82384ab0`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a7c87c8f6d7210db53f5538988cedbd37`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1ad327681c4d9f70efb2dd419651806050`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1adede6d276ce6c1da0038c04a1a973e5f`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1ac4d9e7ba63955da12e554ad293aac029`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a9f4eaa8aaa88a014049ac8247fbe9fd5`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a53fba9c09d6fdcfafd45c458ae0381a2`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1ab401785bfd9bc7e8b77b099c4541793e`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1aa59e58867079d84ad1bd288d6b2ce7c7`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1ae23dc07f7a143edf733e4878cfac28e7`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a3fd3b571962803d72871fc98c78dd8c9`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a1f35c029373067dafe84821c2154ff2e`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1aeeb19f8cacf3bd09c6df97bf7483bf1d`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1afd74e2df63819ec20dc46e4f6b8d0f42`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a48e72a6f0452094609de54abe97a932d`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a7bc386a01ed4ff1fd0e86eed4859f289`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a7caf19ecaeb3c7fc134f07dce02b5b2c`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a72f0ea04e4d78e73663e874b5b437b5a`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a386ca3b67dadb45e20d496c1008a6e1c`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a6a08c241765a9af3a3b5069efd7972d9`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1ac0c40867e53ab9b3af97e260309a9f02`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a8987a7f20835e5e625a48820fec3ead9`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1acc2583d703c6770fcc1ccb960305b958`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a095ec04bb060adcc6ff8c66ed8585436`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a3f0cd6da3f89097a424a2af3cf5f1007`
+
+- :ref:`exhale_function_namespacesequant_1a80f616e9c6d19edacfcd8bed4a5fc2c1`
+

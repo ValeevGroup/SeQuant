@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a5e15ea8a1b4723a25b907a76f866a99c:
+
+Template Function sequant::detail::compute_index_replacement_rules
+==================================================================
+
+- Defined in :ref:`file_SeQuant_core_wick.impl.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::compute_index_replacement_rules(std::shared_ptr<Product>&, const container::set<Index>&, const container::set<Index>&, const std::set<Index, Index::LabelCompare>&, const std::shared_ptr<const IndexSpaceRegistry>&)
+   :project: SeQuant

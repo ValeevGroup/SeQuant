@@ -1,0 +1,115 @@
+
+.. _file_SeQuant_core_optimize_cost_model.hpp:
+
+File cost_model.hpp
+===================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_optimize>` (``SeQuant/core/optimize``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/optimize/cost_model.hpp``)
+-----------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_optimize_cost_model.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/optimize/single_term_detail.hpp`` (:ref:`file_SeQuant_core_optimize_single_term_detail.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``bit`` (:ref:`file_SeQuant_core_bitset.hpp`)
+
+- ``cmath``
+
+- ``concepts`` (:ref:`file_SeQuant_core_io_concepts.hpp`)
+
+- ``functional``
+
+- ``limits``
+
+- ``range/v3/view/concat.hpp``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_atomic.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_optimize_single_term.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__opt`
+
+- :ref:`namespace_sequant__opt__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_additive_model`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_additive_model_1_1_context`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_additive_model_1_1_state`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_peak_batched_model`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_b_front_point`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_context`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_peak_model`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_peak_model_1_1_context`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_peak_model_1_1_front_point`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a2ccf80d7606a2b31b6682ee9323a2685`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a1c4af781bc0362a9c638dd37ce960b1d`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a69544acb1b4ceb97c299aafa5ded4203`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a95b08841fdd47dd8a1c548d38dc44ce1`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a42a1743a74f9d201e863d7db0f527634`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1af41aa7df99078f36cca02868bb312fe7`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a442ca6386978f275168b2678d03402f4`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a2589584bd07db3b29fe9326b89e6a0cf`
+

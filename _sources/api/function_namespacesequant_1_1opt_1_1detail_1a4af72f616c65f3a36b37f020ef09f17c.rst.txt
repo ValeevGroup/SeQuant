@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1a4af72f616c65f3a36b37f020ef09f17c:
+
+Template Function sequant::opt::detail::subset_open_aux
+=======================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_single_term_detail.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::subset_open_aux(TensorNetwork const&, TIdxs const&, container::vector<Index> const&)
+   :project: SeQuant

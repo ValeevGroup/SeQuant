@@ -1,0 +1,32 @@
+.. _exhale_struct_structsequant_1_1_index_space_1_1bad__key:
+
+Struct IndexSpace::bad_key
+==========================
+
+- Defined in :ref:`file_SeQuant_core_space.hpp`
+
+
+Nested Relationships
+--------------------
+
+This struct is a nested type of :ref:`exhale_class_classsequant_1_1_index_space`.
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public sequant::Exception`` (:ref:`exhale_class_classsequant_1_1_exception`)
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::IndexSpace::bad_key
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1mbpt_1_1_op_registry:
+
+Class OpRegistry
+================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op_registry.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::mbpt::OpRegistry
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

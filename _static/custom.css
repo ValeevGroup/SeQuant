@@ -1,0 +1,10 @@
+/* Custom logo sizing */
+.sidebar-logo {
+    max-width: 50%;  /* Adjust this value to make logo smaller/larger */
+    margin: 10% auto;
+}
+
+.sidebar-logo img {
+    max-width: 100%;
+    height: auto;
+}

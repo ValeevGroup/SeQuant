@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a3e63e86bb1509bbbd71fe2fc6cf71407:
+
+Function sequant::includes(IndexSpace::Type, IndexSpace::Type)
+==============================================================
+
+- Defined in :ref:`file_SeQuant_core_space.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::includes(IndexSpace::Type, IndexSpace::Type)
+   :project: SeQuant

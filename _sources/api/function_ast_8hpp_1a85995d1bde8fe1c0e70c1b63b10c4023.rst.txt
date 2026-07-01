@@ -1,0 +1,14 @@
+.. _exhale_function_ast_8hpp_1a85995d1bde8fe1c0e70c1b63b10c4023:
+
+Function BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::SymmetrySpec, perm_symm, braket_symm, column_symm)
+==========================================================================================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_ast.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::SymmetrySpec, perm_symm, braket_symm, column_symm)
+   :project: SeQuant

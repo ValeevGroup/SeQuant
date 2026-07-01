@@ -1,0 +1,679 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../../genindex.html"><link rel="search" title="Search" href="../../search.html">
+        <link rel="prefetch" href="../../_static/logo.svg" as="image">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>CostModel old-impl removal (full DRY) Implementation Plan - SeQuant Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../_static/bootstrap-treeview/bootstrap-treeview.min.css?v=8176a87d" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/custom.css?v=821744c5" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --sidebar-item-font-size: 0.95em;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../index.html"><div class="brand">SeQuant Documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="../../_static/logo.svg" alt="Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">User</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../user/getting_started/index.html">Getting started</a><input aria-label="Toggle navigation of Getting started" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../user/getting_started/wick.html">Wick’s Theorem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../user/getting_started/index_spaces.html">Register Index Spaces</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../user/getting_started/operators.html">Operators</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../user/getting_started/installing.html">Installation</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../user/guide/index.html">User Guide</a><input aria-label="Toggle navigation of User Guide" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../user/guide/operator.html">Operator Interface for Symbolic Many-Body Algebra</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../user/guide/cc.html">Coupled-Cluster Class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../user/guide/io.html">I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../user/guide/evaluation.html">Evaluation Trace Analysis</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../user/utilities/index.html">Utilities</a><input aria-label="Toggle navigation of Utilities" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../user/utilities/external_interface.html">External interface</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../developer/index.html">Developer docs</a><input aria-label="Toggle navigation of Developer docs" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../developer/documentation.html">Documentation Guide</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../api.html">API reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Maintainer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../maintainer/index.html">Maintainer docs</a><input aria-label="Toggle navigation of Maintainer docs" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../maintainer/release.html">Release Guide</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">See Also</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/tiledarray">TiledArray</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/mpqc">Massively Parallel Quantum Chemistry</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io">Valeev Research Group</a></li>
+</ul>
+
+</div></div>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="../../_sources/dev/plans/2026-06-19-cost-model-oldimpl-removal-plan.md.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section class="tex2jax_ignore mathjax_ignore" id="costmodel-old-impl-removal-full-dry-implementation-plan">
+<h1>CostModel old-impl removal (full DRY) Implementation Plan<a class="headerlink" href="#costmodel-old-impl-removal-full-dry-implementation-plan" title="Link to this heading">¶</a></h1>
+<blockquote>
+<div><p><strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (<code class="docutils literal notranslate"><span class="pre">-</span> <span class="pre">[</span> <span class="pre">]</span></code>) syntax for tracking.</p>
+</div></blockquote>
+<p><strong>Goal:</strong> Remove the now-dead standalone single-term-DP driver/table functions left behind by the Phase 3 CostModel refactor, routing the kept cost-only oracle helpers through the models (full DRY), so each DP recurrence exists in exactly one place.</p>
+<p><strong>Architecture:</strong> Phase 3 made every production single-term-optimization arm route through <code class="docutils literal notranslate"><span class="pre">run_single_term_opt(Model)</span></code>, leaving three reconstruction-driver functions (<code class="docutils literal notranslate"><span class="pre">single_term_opt_impl</span></code>, <code class="docutils literal notranslate"><span class="pre">single_term_opt_peak_impl</span></code>, <code class="docutils literal notranslate"><span class="pre">single_term_opt_peak_batched_impl</span></code>) and two DP table-builders (<code class="docutils literal notranslate"><span class="pre">peak_dp</span></code>, <code class="docutils literal notranslate"><span class="pre">peak_dp_batched</span></code>) referenced only by tests and by the cost-only oracle helpers (<code class="docutils literal notranslate"><span class="pre">peak_cost</span></code>, <code class="docutils literal notranslate"><span class="pre">peak_cost_batched</span></code>, <code class="docutils literal notranslate"><span class="pre">reconstructed_batched_peak</span></code>). The chosen scope (option B) is full DRY: rewire the three oracle helpers to delegate to the models (<code class="docutils literal notranslate"><span class="pre">PeakModel</span></code>/<code class="docutils literal notranslate"><span class="pre">PeakBatchedModel</span></code> via <code class="docutils literal notranslate"><span class="pre">solve_single_term</span></code>), which requires moving them from <code class="docutils literal notranslate"><span class="pre">single_term.hpp</span></code> into <code class="docutils literal notranslate"><span class="pre">cost_model.hpp</span></code> (the models live there, and <code class="docutils literal notranslate"><span class="pre">cost_model.hpp</span></code> already <code class="docutils literal notranslate"><span class="pre">#include</span></code>s <code class="docutils literal notranslate"><span class="pre">single_term.hpp</span></code>); then delete all five dead functions plus the <code class="docutils literal notranslate"><span class="pre">PeakRes</span></code> struct. The independent regression net becomes the brute-force oracles (<code class="docutils literal notranslate"><span class="pre">brute_force_min_peak</span></code>, <code class="docutils literal notranslate"><span class="pre">batched_min_peak</span></code>) plus the reconstruction-simulation checks — the model-vs-old-impl equivalence SECTIONs (refactor scaffolding) are deleted.</p>
+<p><strong>Tech Stack:</strong> C++20, SeQuant <code class="docutils literal notranslate"><span class="pre">sequant::opt::detail</span></code> namespace, Catch2 v3 unit tests (<code class="docutils literal notranslate"><span class="pre">tests/unit/test_optimize.cpp</span></code>), CMake+Ninja build.</p>
+<section id="global-constraints">
+<h2>Global Constraints<a class="headerlink" href="#global-constraints" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>Behavior-preserving: the full <code class="docutils literal notranslate"><span class="pre">[optimize]</span></code> Catch2 suite stays green with no test-number changes (the kept oracle helpers reproduce their prior values bit-for-bit, because the models are the Phase-3 behavior-preserving extractions of the deleted DPs). — copied from the Phase-3 spec hard constraint.</p></li>
+<li><p>No <code class="docutils literal notranslate"><span class="pre">Co-Authored-By</span></code> / tooling-attribution trailers in commits (matches SeQuant + mpqc <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">log</span></code>).</p></li>
+<li><p>Keep the independent oracles: <code class="docutils literal notranslate"><span class="pre">brute_force_min_peak</span></code> and <code class="docutils literal notranslate"><span class="pre">batched_min_peak</span></code> (the brute-force simulations in <code class="docutils literal notranslate"><span class="pre">test_optimize.cpp</span></code>) are NOT touched — they remain the independent cross-checks.</p></li>
+<li><p>All work on branch <code class="docutils literal notranslate"><span class="pre">feature/cost-model-batch-aware</span></code> (the Phases 1-4 branch); do not create a new branch.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">peak_cost</span></code> / <code class="docutils literal notranslate"><span class="pre">peak_cost_batched</span></code> / <code class="docutils literal notranslate"><span class="pre">reconstructed_batched_peak</span></code> keep their exact current signatures (only their bodies and their home header change), so test call sites need no signature edits.</p></li>
+</ul>
+<hr class="docutils" />
+<section id="task-1-rewire-the-cost-only-oracle-helpers-to-delegate-to-the-models">
+<h3>Task 1: Rewire the cost-only oracle helpers to delegate to the models<a class="headerlink" href="#task-1-rewire-the-cost-only-oracle-helpers-to-delegate-to-the-models" title="Link to this heading">¶</a></h3>
+<p>Move <code class="docutils literal notranslate"><span class="pre">peak_cost</span></code>, <code class="docutils literal notranslate"><span class="pre">peak_cost_batched</span></code>, and <code class="docutils literal notranslate"><span class="pre">reconstructed_batched_peak</span></code> out of <code class="docutils literal notranslate"><span class="pre">single_term.hpp</span></code> into <code class="docutils literal notranslate"><span class="pre">cost_model.hpp</span></code> (placed AFTER the model definitions, before the <code class="docutils literal notranslate"><span class="pre">CostModel</span></code> concept / <code class="docutils literal notranslate"><span class="pre">#endif</span></code>), rewiring each body to build the matching model, run <code class="docutils literal notranslate"><span class="pre">solve_single_term</span></code>, and read the root cell — instead of calling <code class="docutils literal notranslate"><span class="pre">peak_dp</span></code> / <code class="docutils literal notranslate"><span class="pre">peak_dp_batched</span></code>. This makes the models the single source of each recurrence while preserving the helpers’ signatures and values.</p>
+<p><strong>Files:</strong></p>
+<ul class="simple">
+<li><p>Modify: <code class="docutils literal notranslate"><span class="pre">SeQuant/core/optimize/single_term.hpp</span></code> — delete the bodies of <code class="docutils literal notranslate"><span class="pre">peak_cost</span></code> (lines ~558-569), <code class="docutils literal notranslate"><span class="pre">peak_cost_batched</span></code> (lines ~712-741), <code class="docutils literal notranslate"><span class="pre">reconstructed_batched_peak</span></code> (lines ~827-end of that function). Leave <code class="docutils literal notranslate"><span class="pre">peak_dp</span></code> / <code class="docutils literal notranslate"><span class="pre">peak_dp_batched</span></code> / the <code class="docutils literal notranslate"><span class="pre">*_impl</span></code> functions in place for now (Task 3 deletes them); they are still referenced by the not-yet-rewired tests.</p></li>
+<li><p>Modify: <code class="docutils literal notranslate"><span class="pre">SeQuant/core/optimize/cost_model.hpp</span></code> — add the three rewired free functions after <code class="docutils literal notranslate"><span class="pre">PeakBatchedModel</span></code> (so they can name the models) and before <code class="docutils literal notranslate"><span class="pre">concept</span> <span class="pre">CostModel</span></code>.</p></li>
+<li><p>Test: <code class="docutils literal notranslate"><span class="pre">tests/unit/test_optimize.cpp</span></code> (no edits this task — call sites keep working because the signatures are unchanged and the test TU already includes <code class="docutils literal notranslate"><span class="pre">cost_model.hpp</span></code>).</p></li>
+</ul>
+<p><strong>Interfaces:</strong></p>
+<ul class="contains-task-list simple">
+<li><p>Consumes (from <code class="docutils literal notranslate"><span class="pre">cost_model.hpp</span></code>, already present): <code class="docutils literal notranslate"><span class="pre">solve_single_term(Model</span> <span class="pre">const&amp;,</span> <span class="pre">TensorNetwork</span> <span class="pre">const&amp;,</span> <span class="pre">TIdxs</span> <span class="pre">const&amp;,</span> <span class="pre">typename</span> <span class="pre">Model::Context&amp;)</span> <span class="pre">-&gt;</span> <span class="pre">container::vector&lt;Model::State&gt;</span></code>; <code class="docutils literal notranslate"><span class="pre">PeakModel{IdxToSz}</span></code> with <code class="docutils literal notranslate"><span class="pre">State{double</span> <span class="pre">peak;</span> <span class="pre">size_t</span> <span class="pre">lp,rp;</span> <span class="pre">bool</span> <span class="pre">lp_first;}</span></code> and <code class="docutils literal notranslate"><span class="pre">Context</span> <span class="pre">build_context(net,tidxs)</span></code>; <code class="docutils literal notranslate"><span class="pre">PeakBatchedModel{IdxToSz,</span> <span class="pre">is_batchable,</span> <span class="pre">batch,</span> <span class="pre">is_volatile_leaf}</span></code> with <code class="docutils literal notranslate"><span class="pre">using</span> <span class="pre">State</span> <span class="pre">=</span> <span class="pre">container::vector&lt;BatchedRes&gt;</span></code> and <code class="docutils literal notranslate"><span class="pre">Context</span></code> exposing <code class="docutils literal notranslate"><span class="pre">double</span> <span class="pre">sz(size_t</span> <span class="pre">s,</span> <span class="pre">size_t</span> <span class="pre">ctx)</span> <span class="pre">const</span></code> and <code class="docutils literal notranslate"><span class="pre">double</span> <span class="pre">Lof(size_t</span> <span class="pre">s,</span> <span class="pre">size_t</span> <span class="pre">ctx)</span> <span class="pre">const</span></code>, plus members <code class="docutils literal notranslate"><span class="pre">aux</span></code>, <code class="docutils literal notranslate"><span class="pre">m</span></code>, <code class="docutils literal notranslate"><span class="pre">nB</span></code>, <code class="docutils literal notranslate"><span class="pre">nt</span></code>, <code class="docutils literal notranslate"><span class="pre">open_aux</span></code>.</p></li>
+<li><p>Consumes (from <code class="docutils literal notranslate"><span class="pre">single_term.hpp</span></code>, stay): <code class="docutils literal notranslate"><span class="pre">BatchedRes{double</span> <span class="pre">peak;</span> <span class="pre">size_t</span> <span class="pre">lp,rp;</span> <span class="pre">bool</span> <span class="pre">lp_first;</span> <span class="pre">size_t</span> <span class="pre">aprime;}</span></code>, <code class="docutils literal notranslate"><span class="pre">bits::bipartitions</span></code>.</p></li>
+<li><p>Produces (signatures UNCHANGED, new home <code class="docutils literal notranslate"><span class="pre">cost_model.hpp</span></code>): <code class="docutils literal notranslate"><span class="pre">double</span> <span class="pre">peak_cost(TensorNetwork</span> <span class="pre">const&amp;,</span> <span class="pre">TIdxs</span> <span class="pre">const&amp;,</span> <span class="pre">IdxToSz&amp;&amp;)</span></code>; <code class="docutils literal notranslate"><span class="pre">double</span> <span class="pre">peak_cost_batched(TensorNetwork</span> <span class="pre">const&amp;,</span> <span class="pre">TIdxs</span> <span class="pre">const&amp;,</span> <span class="pre">IdxToSz&amp;&amp;,</span> <span class="pre">std::function&lt;bool(Index</span> <span class="pre">const&amp;)&gt;</span> <span class="pre">const&amp;,</span> <span class="pre">std::function&lt;std::size_t(Index</span> <span class="pre">const&amp;)&gt;</span> <span class="pre">const&amp;,</span> <span class="pre">std::function&lt;bool(Tensor</span> <span class="pre">const&amp;)&gt;</span> <span class="pre">const&amp;)</span></code>; <code class="docutils literal notranslate"><span class="pre">double</span> <span class="pre">reconstructed_batched_peak(/*</span> <span class="pre">same</span> <span class="pre">6</span> <span class="pre">params</span> <span class="pre">as</span> <span class="pre">peak_cost_batched</span> <span class="pre">*/)</span></code>.</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 1: Verify the suite is green before touching anything (baseline)</strong></p></li>
+</ul>
+<p>Run (build dir already configured at <code class="docutils literal notranslate"><span class="pre">/Users/efv/code/SeQuant/cmake-build-release</span></code>; if absent, configure with <code class="docutils literal notranslate"><span class="pre">cmake</span> <span class="pre">-S</span> <span class="pre">/Users/efv/code/SeQuant</span> <span class="pre">-B</span> <span class="pre">/Users/efv/code/SeQuant/cmake-build-release</span> <span class="pre">-G</span> <span class="pre">Ninja</span></code>):</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>cmake<span class="w"> </span>--build<span class="w"> </span>/Users/efv/code/SeQuant/cmake-build-release<span class="w"> </span>--target<span class="w"> </span>unit_tests-sequant<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-5
+/Users/efv/code/SeQuant/cmake-build-release/tests/unit/unit_tests-sequant<span class="w"> </span><span class="s2">&quot;[optimize]&quot;</span><span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-8
+</pre></div>
+</div>
+<p>Expected: build succeeds; all <code class="docutils literal notranslate"><span class="pre">[optimize]</span></code> assertions pass (<code class="docutils literal notranslate"><span class="pre">All</span> <span class="pre">tests</span> <span class="pre">passed</span></code> line lists the SECTION count).</p>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 2: Add the rewired <code class="docutils literal notranslate"><span class="pre">peak_cost</span></code> to <code class="docutils literal notranslate"><span class="pre">cost_model.hpp</span></code></strong></p></li>
+</ul>
+<p>Insert after <code class="docutils literal notranslate"><span class="pre">PeakBatchedModel</span></code>’s closing <code class="docutils literal notranslate"><span class="pre">};</span></code> (currently line ~450) and before <code class="docutils literal notranslate"><span class="pre">concept</span> <span class="pre">CostModel</span></code>:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="c1">/// \brief Achieved minimum peak memory (the DensePeakSize objective value) for</span>
+<span class="c1">/// the whole network under its optimal order. Builds \ref PeakModel, runs the</span>
+<span class="c1">/// generic driver&#39;s \ref solve_single_term, and returns the root subset&#39;s peak.</span>
+<span class="c1">/// Used by tests to compare against the brute-force oracle.</span>
+<span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">TIdxs</span><span class="p">,</span><span class="w"> </span><span class="k">typename</span><span class="w"> </span><span class="nc">IdxToSz</span><span class="o">&gt;</span>
+<span class="kt">double</span><span class="w"> </span><span class="n">peak_cost</span><span class="p">(</span><span class="n">TensorNetwork</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">network</span><span class="p">,</span><span class="w"> </span><span class="n">TIdxs</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">tidxs</span><span class="p">,</span>
+<span class="w">                 </span><span class="n">IdxToSz</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">idxsz</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">PeakModel</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">decay_t</span><span class="o">&lt;</span><span class="n">IdxToSz</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="n">model</span><span class="p">{</span><span class="n">std</span><span class="o">::</span><span class="n">forward</span><span class="o">&lt;</span><span class="n">IdxToSz</span><span class="o">&gt;</span><span class="p">(</span><span class="n">idxsz</span><span class="p">)};</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">ctx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">model</span><span class="p">.</span><span class="n">build_context</span><span class="p">(</span><span class="n">network</span><span class="p">,</span><span class="w"> </span><span class="n">tidxs</span><span class="p">);</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">st</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">solve_single_term</span><span class="p">(</span><span class="n">model</span><span class="p">,</span><span class="w"> </span><span class="n">network</span><span class="p">,</span><span class="w"> </span><span class="n">tidxs</span><span class="p">,</span><span class="w"> </span><span class="n">ctx</span><span class="p">);</span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">st</span><span class="p">.</span><span class="n">back</span><span class="p">().</span><span class="n">peak</span><span class="p">;</span><span class="w">  </span><span class="c1">// root subset == full set == last element</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 3: Add the rewired <code class="docutils literal notranslate"><span class="pre">peak_cost_batched</span></code> to <code class="docutils literal notranslate"><span class="pre">cost_model.hpp</span></code></strong></p></li>
+</ul>
+<p>Immediately below <code class="docutils literal notranslate"><span class="pre">peak_cost</span></code>:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="c1">/// \brief Achieved minimum batched peak memory: the peak[root][B=0] objective</span>
+<span class="c1">/// of the multi-mode batched DP. Builds \ref PeakBatchedModel, runs</span>
+<span class="c1">/// \ref solve_single_term, and returns the root subset&#39;s B=0 peak.</span>
+<span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">TIdxs</span><span class="p">,</span><span class="w"> </span><span class="k">typename</span><span class="w"> </span><span class="nc">IdxToSz</span><span class="o">&gt;</span>
+<span class="kt">double</span><span class="w"> </span><span class="n">peak_cost_batched</span><span class="p">(</span>
+<span class="w">    </span><span class="n">TensorNetwork</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">network</span><span class="p">,</span><span class="w"> </span><span class="n">TIdxs</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">tidxs</span><span class="p">,</span><span class="w"> </span><span class="n">IdxToSz</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">idxsz</span><span class="p">,</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">function</span><span class="o">&lt;</span><span class="kt">bool</span><span class="p">(</span><span class="n">Index</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="p">)</span><span class="o">&gt;</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">is_batchable</span><span class="p">,</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">function</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="p">(</span><span class="n">Index</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="p">)</span><span class="o">&gt;</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">batch_target_size</span><span class="p">,</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">function</span><span class="o">&lt;</span><span class="kt">bool</span><span class="p">(</span><span class="n">Tensor</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="p">)</span><span class="o">&gt;</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">is_volatile_leaf</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">PeakBatchedModel</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">decay_t</span><span class="o">&lt;</span><span class="n">IdxToSz</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="n">model</span><span class="p">{</span>
+<span class="w">      </span><span class="n">std</span><span class="o">::</span><span class="n">forward</span><span class="o">&lt;</span><span class="n">IdxToSz</span><span class="o">&gt;</span><span class="p">(</span><span class="n">idxsz</span><span class="p">),</span><span class="w"> </span><span class="n">is_batchable</span><span class="p">,</span><span class="w"> </span><span class="n">batch_target_size</span><span class="p">,</span>
+<span class="w">      </span><span class="n">is_volatile_leaf</span><span class="p">};</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">ctx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">model</span><span class="p">.</span><span class="n">build_context</span><span class="p">(</span><span class="n">network</span><span class="p">,</span><span class="w"> </span><span class="n">tidxs</span><span class="p">);</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">st</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">solve_single_term</span><span class="p">(</span><span class="n">model</span><span class="p">,</span><span class="w"> </span><span class="n">network</span><span class="p">,</span><span class="w"> </span><span class="n">tidxs</span><span class="p">,</span><span class="w"> </span><span class="n">ctx</span><span class="p">);</span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">st</span><span class="p">.</span><span class="n">back</span><span class="p">()[</span><span class="mi">0</span><span class="p">].</span><span class="n">peak</span><span class="p">;</span><span class="w">  </span><span class="c1">// root subset&#39;s B=0 cell</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 4: Add the rewired <code class="docutils literal notranslate"><span class="pre">reconstructed_batched_peak</span></code> to <code class="docutils literal notranslate"><span class="pre">cost_model.hpp</span></code></strong></p></li>
+</ul>
+<p>Immediately below <code class="docutils literal notranslate"><span class="pre">peak_cost_batched</span></code>. Build the model, solve, then preserve the existing simulation walk VERBATIM from the current <code class="docutils literal notranslate"><span class="pre">reconstructed_batched_peak</span></code> body in <code class="docutils literal notranslate"><span class="pre">single_term.hpp</span></code> (the <code class="docutils literal notranslate"><span class="pre">build</span></code> lambda that walks back-pointers and the live-set memory simulation, lines ~868 to the function’s closing <code class="docutils literal notranslate"><span class="pre">}</span></code>), swapping only the data sources: where the old body reads <code class="docutils literal notranslate"><span class="pre">at(n,</span> <span class="pre">B)</span></code> (its local <code class="docutils literal notranslate"><span class="pre">pr[n*nB+B]</span></code>) read <code class="docutils literal notranslate"><span class="pre">st[n][B]</span></code>; where it calls its local <code class="docutils literal notranslate"><span class="pre">sz</span></code>/<code class="docutils literal notranslate"><span class="pre">Lof</span></code> lambdas use <code class="docutils literal notranslate"><span class="pre">ctx.sz</span></code>/<code class="docutils literal notranslate"><span class="pre">ctx.Lof</span></code>; delete the old local setup (<code class="docutils literal notranslate"><span class="pre">vmask</span></code>, <code class="docutils literal notranslate"><span class="pre">pr</span></code>, <code class="docutils literal notranslate"><span class="pre">aux</span></code>, <code class="docutils literal notranslate"><span class="pre">nB</span></code>, <code class="docutils literal notranslate"><span class="pre">tables</span></code>, <code class="docutils literal notranslate"><span class="pre">open_aux</span></code>, the <code class="docutils literal notranslate"><span class="pre">at</span></code>/<code class="docutils literal notranslate"><span class="pre">sz</span></code>/<code class="docutils literal notranslate"><span class="pre">Lof</span></code> lambdas) since <code class="docutils literal notranslate"><span class="pre">ctx</span></code> and <code class="docutils literal notranslate"><span class="pre">st</span></code> now supply them. The function signature is unchanged.</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="c1">/// \brief Independent memory-simulation recomputation of the chosen batched</span>
+<span class="c1">/// reconstruction&#39;s model-A peak. Builds \ref PeakBatchedModel, runs</span>
+<span class="c1">/// \ref solve_single_term for the back-pointer table, and recomputes the</span>
+<span class="c1">/// subtree peak by direct memory simulation (NOT the DP&#39;s max/+ formula). Must</span>
+<span class="c1">/// EQUAL \ref peak_cost_batched; a mismatch signals a DP/reconstruction bug.</span>
+<span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">TIdxs</span><span class="p">,</span><span class="w"> </span><span class="k">typename</span><span class="w"> </span><span class="nc">IdxToSz</span><span class="o">&gt;</span>
+<span class="kt">double</span><span class="w"> </span><span class="n">reconstructed_batched_peak</span><span class="p">(</span>
+<span class="w">    </span><span class="n">TensorNetwork</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">network</span><span class="p">,</span><span class="w"> </span><span class="n">TIdxs</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">tidxs</span><span class="p">,</span><span class="w"> </span><span class="n">IdxToSz</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">idxsz</span><span class="p">,</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">function</span><span class="o">&lt;</span><span class="kt">bool</span><span class="p">(</span><span class="n">Index</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="p">)</span><span class="o">&gt;</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">is_batchable</span><span class="p">,</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">function</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="p">(</span><span class="n">Index</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="p">)</span><span class="o">&gt;</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">batch_target_size</span><span class="p">,</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">function</span><span class="o">&lt;</span><span class="kt">bool</span><span class="p">(</span><span class="n">Tensor</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="p">)</span><span class="o">&gt;</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">is_volatile_leaf</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">PeakBatchedModel</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">decay_t</span><span class="o">&lt;</span><span class="n">IdxToSz</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="n">model</span><span class="p">{</span>
+<span class="w">      </span><span class="n">std</span><span class="o">::</span><span class="n">forward</span><span class="o">&lt;</span><span class="n">IdxToSz</span><span class="o">&gt;</span><span class="p">(</span><span class="n">idxsz</span><span class="p">),</span><span class="w"> </span><span class="n">is_batchable</span><span class="p">,</span><span class="w"> </span><span class="n">batch_target_size</span><span class="p">,</span>
+<span class="w">      </span><span class="n">is_volatile_leaf</span><span class="p">};</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">ctx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">model</span><span class="p">.</span><span class="n">build_context</span><span class="p">(</span><span class="n">network</span><span class="p">,</span><span class="w"> </span><span class="n">tidxs</span><span class="p">);</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">st</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">solve_single_term</span><span class="p">(</span><span class="n">model</span><span class="p">,</span><span class="w"> </span><span class="n">network</span><span class="p">,</span><span class="w"> </span><span class="n">tidxs</span><span class="p">,</span><span class="w"> </span><span class="n">ctx</span><span class="p">);</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">nt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">network</span><span class="p">.</span><span class="n">tensors</span><span class="p">().</span><span class="n">size</span><span class="p">();</span>
+<span class="w">  </span><span class="c1">// &lt;-- preserve the existing simulation walk verbatim here, reading st[n][B]</span>
+<span class="w">  </span><span class="c1">//     for back-pointers and ctx.sz / ctx.Lof for sizes (see step text). The</span>
+<span class="w">  </span><span class="c1">//     walk starts at (root = (1&lt;&lt;nt)-1, B=0) and returns the simulated peak.</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Note: <code class="docutils literal notranslate"><span class="pre">ctx.sz</span></code>/<code class="docutils literal notranslate"><span class="pre">ctx.Lof</span></code> are <code class="docutils literal notranslate"><span class="pre">const</span></code> methods (Task 0 of Phase 4 added them); <code class="docutils literal notranslate"><span class="pre">ctx</span></code> may be <code class="docutils literal notranslate"><span class="pre">const</span> <span class="pre">auto&amp;</span></code> here. If the existing simulation used <code class="docutils literal notranslate"><span class="pre">m</span></code> (number of aux) or <code class="docutils literal notranslate"><span class="pre">aux</span></code>, read <code class="docutils literal notranslate"><span class="pre">ctx.m</span></code> / <code class="docutils literal notranslate"><span class="pre">ctx.aux</span></code>.</p>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 5: Delete the three helper bodies from <code class="docutils literal notranslate"><span class="pre">single_term.hpp</span></code></strong></p></li>
+</ul>
+<p>Remove the entire definitions of <code class="docutils literal notranslate"><span class="pre">peak_cost</span></code> (the <code class="docutils literal notranslate"><span class="pre">template</span> <span class="pre">...</span> <span class="pre">double</span> <span class="pre">peak_cost(...)</span> <span class="pre">{</span> <span class="pre">...</span> <span class="pre">}</span></code> block, ~lines 558-569), <code class="docutils literal notranslate"><span class="pre">peak_cost_batched</span></code> (~lines 712-741), and <code class="docutils literal notranslate"><span class="pre">reconstructed_batched_peak</span></code> (~lines 827 through its closing brace). Leave <code class="docutils literal notranslate"><span class="pre">peak_dp</span></code>, <code class="docutils literal notranslate"><span class="pre">peak_dp_batched</span></code>, <code class="docutils literal notranslate"><span class="pre">single_term_opt_impl</span></code>, <code class="docutils literal notranslate"><span class="pre">single_term_opt_peak_impl</span></code>, <code class="docutils literal notranslate"><span class="pre">single_term_opt_peak_batched_impl</span></code> in place (Task 3 removes them). Do NOT remove <code class="docutils literal notranslate"><span class="pre">subset_open_aux</span></code>, <code class="docutils literal notranslate"><span class="pre">BatchedRes</span></code>, <code class="docutils literal notranslate"><span class="pre">subset_footprints</span></code>, <code class="docutils literal notranslate"><span class="pre">sliced_footprints</span></code> — they are reused by the models.</p>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 6: Build and run the suite — values must be unchanged</strong></p></li>
+</ul>
+<p>Run:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>clang-format<span class="w"> </span>--style<span class="o">=</span>file<span class="w"> </span>-i<span class="w"> </span>/Users/efv/code/SeQuant/SeQuant/core/optimize/cost_model.hpp<span class="w"> </span>/Users/efv/code/SeQuant/SeQuant/core/optimize/single_term.hpp
+cmake<span class="w"> </span>--build<span class="w"> </span>/Users/efv/code/SeQuant/cmake-build-release<span class="w"> </span>--target<span class="w"> </span>unit_tests-sequant<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-5
+/Users/efv/code/SeQuant/cmake-build-release/tests/unit/unit_tests-sequant<span class="w"> </span><span class="s2">&quot;[optimize]&quot;</span><span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-8
+</pre></div>
+</div>
+<p>Expected: clean build; <code class="docutils literal notranslate"><span class="pre">[optimize]</span></code> all pass (same SECTION/assertion counts as Step 1). The peak/batched oracle SECTIONs (<code class="docutils literal notranslate"><span class="pre">DensePeakSize</span> <span class="pre">DP</span> <span class="pre">matches</span> <span class="pre">brute-force</span> <span class="pre">oracle</span></code>, <code class="docutils literal notranslate"><span class="pre">DensePeakSizeBatched</span> <span class="pre">objective</span> <span class="pre">matches</span> <span class="pre">per-index</span> <span class="pre">oracle</span></code>, <code class="docutils literal notranslate"><span class="pre">DensePeakSizeBatched</span> <span class="pre">reconstruction</span> <span class="pre">achieves</span> <span class="pre">the</span> <span class="pre">optimum</span> <span class="pre">(numeric)</span></code>, etc.) now run through the models and still match their independent oracles.</p>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 7: Commit</strong></p></li>
+</ul>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>/Users/efv/code/SeQuant
+git<span class="w"> </span>add<span class="w"> </span>SeQuant/core/optimize/cost_model.hpp<span class="w"> </span>SeQuant/core/optimize/single_term.hpp
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;optimize: route peak_cost/peak_cost_batched/reconstructed_batched_peak through the models&quot;</span>
+</pre></div>
+</div>
+</section>
+<hr class="docutils" />
+<section id="task-2-rewire-the-tests-off-the-soon-to-be-removed-functions">
+<h3>Task 2: Rewire the tests off the soon-to-be-removed functions<a class="headerlink" href="#task-2-rewire-the-tests-off-the-soon-to-be-removed-functions" title="Link to this heading">¶</a></h3>
+<p>Delete the three model-vs-old-impl equivalence SECTIONs (pure refactor scaffolding) and rewire the two remaining tests that use a soon-removed function as their production source, so that after this task NO test references <code class="docutils literal notranslate"><span class="pre">single_term_opt_impl</span></code>, <code class="docutils literal notranslate"><span class="pre">single_term_opt_peak_impl</span></code>, <code class="docutils literal notranslate"><span class="pre">single_term_opt_peak_batched_impl</span></code>, <code class="docutils literal notranslate"><span class="pre">peak_dp</span></code>, or <code class="docutils literal notranslate"><span class="pre">peak_dp_batched</span></code>.</p>
+<p><strong>Files:</strong></p>
+<ul class="simple">
+<li><p>Modify: <code class="docutils literal notranslate"><span class="pre">tests/unit/test_optimize.cpp</span></code>.</p></li>
+</ul>
+<p><strong>Interfaces:</strong></p>
+<ul class="contains-task-list simple">
+<li><p>Consumes: <code class="docutils literal notranslate"><span class="pre">opt::detail::run_single_term_opt(Model</span> <span class="pre">const&amp;,</span> <span class="pre">net,</span> <span class="pre">targets)</span> <span class="pre">-&gt;</span> <span class="pre">EvalSequence</span></code>; <code class="docutils literal notranslate"><span class="pre">opt::detail::PeakModel{idxsz}</span></code>; <code class="docutils literal notranslate"><span class="pre">opt::detail::PeakBatchedModel{idxsz,</span> <span class="pre">is_batchable,</span> <span class="pre">batch_fn,</span> <span class="pre">is_volatile_leaf}</span></code>; <code class="docutils literal notranslate"><span class="pre">opt::detail::solve_single_term(model,</span> <span class="pre">net,</span> <span class="pre">targets,</span> <span class="pre">ctx)</span></code>; <code class="docutils literal notranslate"><span class="pre">PeakBatchedModel::Context</span></code> (from <code class="docutils literal notranslate"><span class="pre">model.build_context(net,</span> <span class="pre">targets)</span></code>) and <code class="docutils literal notranslate"><span class="pre">State</span> <span class="pre">=</span> <span class="pre">container::vector&lt;BatchedRes&gt;</span></code> (so <code class="docutils literal notranslate"><span class="pre">st[n][B].peak</span></code>); <code class="docutils literal notranslate"><span class="pre">opt::detail::peak_cost</span></code> (now from <code class="docutils literal notranslate"><span class="pre">cost_model.hpp</span></code>, signature unchanged).</p></li>
+<li><p>Produces: a test file with zero references to the five doomed symbols.</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 1: Delete the three equivalence SECTIONs</strong></p></li>
+</ul>
+<p>Remove these three SECTIONs in full (they assert <code class="docutils literal notranslate"><span class="pre">model-via-driver</span> <span class="pre">==</span> <span class="pre">old</span> <span class="pre">standalone</span> <span class="pre">impl</span></code>, which becomes meaningless once the old impls are deleted; the models’ correctness is covered by the brute-force-oracle and reconstruction SECTIONs):</p>
+<ul class="contains-task-list simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">SECTION(&quot;AdditiveModel</span> <span class="pre">via</span> <span class="pre">driver</span> <span class="pre">==</span> <span class="pre">single_term_opt_impl&quot;)</span></code> (~lines 541-583).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">SECTION(&quot;PeakModel</span> <span class="pre">via</span> <span class="pre">driver</span> <span class="pre">==</span> <span class="pre">single_term_opt_peak_impl&quot;)</span></code> (~lines 905-924).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">SECTION(&quot;PeakBatchedModel</span> <span class="pre">via</span> <span class="pre">driver</span> <span class="pre">==</span> <span class="pre">single_term_opt_peak_batched_impl&quot;)</span></code> (~lines 926-956).</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 2: Rewire the <code class="docutils literal notranslate"><span class="pre">single_term_opt_peak_impl</span></code> use in the reconstruction SECTION</strong></p></li>
+</ul>
+<p>In <code class="docutils literal notranslate"><span class="pre">SECTION(&quot;DensePeakSize</span> <span class="pre">reconstructed</span> <span class="pre">sequence</span> <span class="pre">achieves</span> <span class="pre">the</span> <span class="pre">DP</span> <span class="pre">optimum&quot;)</span></code>, replace the line:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">seq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">single_term_opt_peak_impl</span><span class="p">(</span><span class="n">net</span><span class="p">,</span><span class="w"> </span><span class="n">targets</span><span class="p">,</span><span class="w"> </span><span class="n">idxsz</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>with:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">seq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">run_single_term_opt</span><span class="p">(</span>
+<span class="w">            </span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">PeakModel</span><span class="p">{</span><span class="n">idxsz</span><span class="p">},</span><span class="w"> </span><span class="n">net</span><span class="p">,</span><span class="w"> </span><span class="n">targets</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>(<code class="docutils literal notranslate"><span class="pre">peak_of_sequence(seq,</span> <span class="pre">S,</span> <span class="pre">ts.size())</span> <span class="pre">==</span> <span class="pre">peak_cost(...)</span></code> still holds: the model’s reconstruct is the Phase-3 extraction of <code class="docutils literal notranslate"><span class="pre">single_term_opt_peak_impl</span></code>.)</p>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 3: Rewire the direct <code class="docutils literal notranslate"><span class="pre">peak_dp_batched</span></code> use in the all-sliced-corner SECTION</strong></p></li>
+</ul>
+<p>In <code class="docutils literal notranslate"><span class="pre">SECTION(&quot;DensePeakSizeBatched</span> <span class="pre">all-sliced</span> <span class="pre">corner</span> <span class="pre">equals</span> <span class="pre">Phase-1</span> <span class="pre">batched</span> <span class="pre">peak&quot;)</span></code>, replace the block:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="w">      </span><span class="k">auto</span><span class="w"> </span><span class="n">pr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">peak_dp_batched</span><span class="p">(</span>
+<span class="w">          </span><span class="n">net</span><span class="p">,</span><span class="w"> </span><span class="n">targets</span><span class="p">,</span><span class="w"> </span><span class="n">idxsz</span><span class="p">,</span><span class="w"> </span><span class="n">is_batchable</span><span class="p">,</span><span class="w"> </span><span class="n">batch_fn</span><span class="p">,</span>
+<span class="w">          </span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">leaf_volatile_mask</span><span class="p">(</span><span class="n">net</span><span class="p">,</span><span class="w"> </span><span class="p">{}));</span>
+<span class="w">      </span><span class="kt">size_t</span><span class="w"> </span><span class="n">root</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">size_t</span><span class="p">{</span><span class="mi">1</span><span class="p">}</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">ts</span><span class="p">.</span><span class="n">size</span><span class="p">())</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="w">      </span><span class="kt">size_t</span><span class="w"> </span><span class="n">allK</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">size_t</span><span class="p">{</span><span class="mi">1</span><span class="p">}</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">m</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="w">      </span><span class="kt">double</span><span class="w"> </span><span class="n">dp_allsliced</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pr</span><span class="p">[</span><span class="n">root</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="p">(</span><span class="kt">size_t</span><span class="p">{</span><span class="mi">1</span><span class="p">}</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">m</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">allK</span><span class="p">].</span><span class="n">peak</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>with a solve through the model (its <code class="docutils literal notranslate"><span class="pre">State</span></code> is the per-subset <code class="docutils literal notranslate"><span class="pre">[B]</span></code>-vector of <code class="docutils literal notranslate"><span class="pre">BatchedRes</span></code>, so <code class="docutils literal notranslate"><span class="pre">st[root][allK].peak</span></code> is the same cell <code class="docutils literal notranslate"><span class="pre">pr[root*nB+allK].peak</span></code> was):</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="w">      </span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">PeakBatchedModel</span><span class="w"> </span><span class="n">model</span><span class="p">{</span><span class="n">idxsz</span><span class="p">,</span><span class="w"> </span><span class="n">is_batchable</span><span class="p">,</span><span class="w"> </span><span class="n">batch_fn</span><span class="p">,</span>
+<span class="w">                                          </span><span class="cm">/*is_volatile_leaf=*/</span><span class="p">{}};</span>
+<span class="w">      </span><span class="k">auto</span><span class="w"> </span><span class="n">ctx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">model</span><span class="p">.</span><span class="n">build_context</span><span class="p">(</span><span class="n">net</span><span class="p">,</span><span class="w"> </span><span class="n">targets</span><span class="p">);</span>
+<span class="w">      </span><span class="k">auto</span><span class="w"> </span><span class="n">st</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">solve_single_term</span><span class="p">(</span><span class="n">model</span><span class="p">,</span><span class="w"> </span><span class="n">net</span><span class="p">,</span><span class="w"> </span><span class="n">targets</span><span class="p">,</span><span class="w"> </span><span class="n">ctx</span><span class="p">);</span>
+<span class="w">      </span><span class="kt">size_t</span><span class="w"> </span><span class="n">root</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">size_t</span><span class="p">{</span><span class="mi">1</span><span class="p">}</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">ts</span><span class="p">.</span><span class="n">size</span><span class="p">())</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="w">      </span><span class="kt">size_t</span><span class="w"> </span><span class="n">allK</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">size_t</span><span class="p">{</span><span class="mi">1</span><span class="p">}</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">m</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="w">      </span><span class="kt">double</span><span class="w"> </span><span class="n">dp_allsliced</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">st</span><span class="p">[</span><span class="n">root</span><span class="p">][</span><span class="n">allK</span><span class="p">].</span><span class="n">peak</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>(The downstream <code class="docutils literal notranslate"><span class="pre">phase1</span> <span class="pre">=</span> <span class="pre">opt::detail::peak_cost(net,</span> <span class="pre">targets,</span> <span class="pre">be)</span></code> and <code class="docutils literal notranslate"><span class="pre">REQUIRE(dp_allsliced</span> <span class="pre">==</span> <span class="pre">phase1)</span></code> are unchanged.)</p>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 4: Confirm no test still references the doomed symbols</strong></p></li>
+</ul>
+<p>Run:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>grep<span class="w"> </span>-nE<span class="w"> </span><span class="s1">&#39;\b(single_term_opt_impl|single_term_opt_peak_impl|single_term_opt_peak_batched_impl|peak_dp|peak_dp_batched)\b&#39;</span><span class="w"> </span>/Users/efv/code/SeQuant/tests/unit/test_optimize.cpp
+</pre></div>
+</div>
+<p>Expected: NO output (empty). If any line prints, rewire it as above before continuing.</p>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 5: Build and run the suite</strong></p></li>
+</ul>
+<p>Run:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>clang-format<span class="w"> </span>--style<span class="o">=</span>file<span class="w"> </span>-i<span class="w"> </span>/Users/efv/code/SeQuant/tests/unit/test_optimize.cpp
+cmake<span class="w"> </span>--build<span class="w"> </span>/Users/efv/code/SeQuant/cmake-build-release<span class="w"> </span>--target<span class="w"> </span>unit_tests-sequant<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-5
+/Users/efv/code/SeQuant/cmake-build-release/tests/unit/unit_tests-sequant<span class="w"> </span><span class="s2">&quot;[optimize]&quot;</span><span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-8
+</pre></div>
+</div>
+<p>Expected: clean build; all <code class="docutils literal notranslate"><span class="pre">[optimize]</span></code> pass (three fewer SECTIONs than Task 1 Step 1; all kept SECTIONs still pass).</p>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 6: Commit</strong></p></li>
+</ul>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>/Users/efv/code/SeQuant
+git<span class="w"> </span>add<span class="w"> </span>tests/unit/test_optimize.cpp
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;optimize tests: drop model-vs-old-impl equivalence SECTIONs, route remaining uses through the models&quot;</span>
+</pre></div>
+</div>
+</section>
+<hr class="docutils" />
+<section id="task-3-delete-the-dead-standalone-functions-and-the-peakres-struct">
+<h3>Task 3: Delete the dead standalone functions and the <code class="docutils literal notranslate"><span class="pre">PeakRes</span></code> struct<a class="headerlink" href="#task-3-delete-the-dead-standalone-functions-and-the-peakres-struct" title="Link to this heading">¶</a></h3>
+<p>With no production or test caller remaining, delete the five dead functions and the now-unused <code class="docutils literal notranslate"><span class="pre">PeakRes</span></code> struct from <code class="docutils literal notranslate"><span class="pre">single_term.hpp</span></code>, and fix any dangling Doxygen <code class="docutils literal notranslate"><span class="pre">\ref</span></code> to them.</p>
+<p><strong>Files:</strong></p>
+<ul class="simple">
+<li><p>Modify: <code class="docutils literal notranslate"><span class="pre">SeQuant/core/optimize/single_term.hpp</span></code>.</p></li>
+</ul>
+<p><strong>Interfaces:</strong></p>
+<ul class="contains-task-list simple">
+<li><p>Consumes: nothing new.</p></li>
+<li><p>Produces: a <code class="docutils literal notranslate"><span class="pre">single_term.hpp</span></code> with the five functions and <code class="docutils literal notranslate"><span class="pre">PeakRes</span></code> removed; the surviving helpers (<code class="docutils literal notranslate"><span class="pre">subset_footprints</span></code>, <code class="docutils literal notranslate"><span class="pre">sliced_footprints</span></code>, <code class="docutils literal notranslate"><span class="pre">subset_open_aux</span></code>, <code class="docutils literal notranslate"><span class="pre">init_results</span></code>, <code class="docutils literal notranslate"><span class="pre">build_subnet_metadata</span></code>, the counters, <code class="docutils literal notranslate"><span class="pre">batchable_index_list</span></code>, <code class="docutils literal notranslate"><span class="pre">leaf_volatile_mask</span></code>, <code class="docutils literal notranslate"><span class="pre">BatchedRes</span></code>, <code class="docutils literal notranslate"><span class="pre">bits::bipartitions</span></code>) untouched.</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 1: Confirm no production caller remains</strong></p></li>
+</ul>
+<p>Run:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>grep<span class="w"> </span>-rnE<span class="w"> </span><span class="s1">&#39;\b(single_term_opt_impl|single_term_opt_peak_impl|single_term_opt_peak_batched_impl|peak_dp|peak_dp_batched)\b&#39;</span><span class="w"> </span>/Users/efv/code/SeQuant/SeQuant<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-vE<span class="w"> </span><span class="s1">&#39;^\S+:[0-9]+:\s*(///|//|\*)&#39;</span>
+</pre></div>
+</div>
+<p>Expected: only the definition lines in <code class="docutils literal notranslate"><span class="pre">single_term.hpp</span></code> (and possibly a <code class="docutils literal notranslate"><span class="pre">\ref</span></code> inside a comment, which is fine — Step 3 fixes comments). No call sites in other <code class="docutils literal notranslate"><span class="pre">.hpp</span></code>/<code class="docutils literal notranslate"><span class="pre">.cpp</span></code>. If a real (non-comment) call site appears outside the definitions, STOP and report — the prior tasks missed a caller.</p>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 2: Delete the five function definitions and <code class="docutils literal notranslate"><span class="pre">PeakRes</span></code></strong></p></li>
+</ul>
+<p>Remove from <code class="docutils literal notranslate"><span class="pre">single_term.hpp</span></code>:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">struct</span> <span class="pre">PeakRes</span> <span class="pre">{</span> <span class="pre">...</span> <span class="pre">};</span></code> (~lines 500-506) and its preceding <code class="docutils literal notranslate"><span class="pre">///</span> <span class="pre">Per-subset</span> <span class="pre">state</span> <span class="pre">for</span> <span class="pre">the</span> <span class="pre">peak</span> <span class="pre">DP.</span></code> doc comment.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">peak_dp(...)</span></code> (the <code class="docutils literal notranslate"><span class="pre">template</span> <span class="pre">...</span> <span class="pre">container::vector&lt;PeakRes&gt;</span> <span class="pre">peak_dp(...)</span> <span class="pre">{</span> <span class="pre">...</span> <span class="pre">}</span></code> block, ~lines 508-556, including its doc comment).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">peak_dp_batched(...)</span></code> (~lines 603-710, the doc comment + body; keep <code class="docutils literal notranslate"><span class="pre">struct</span> <span class="pre">BatchedRes</span></code> which precedes it and is reused by <code class="docutils literal notranslate"><span class="pre">PeakBatchedModel</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">single_term_opt_impl(...)</span></code> (the additive reconstruction driver, ~line 393 through its closing brace, including its doc comment).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">single_term_opt_peak_impl(...)</span></code> (~lines 743-768).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">single_term_opt_peak_batched_impl(...)</span></code> (~lines 770-825).</p></li>
+</ul>
+<p>Be careful to KEEP <code class="docutils literal notranslate"><span class="pre">struct</span> <span class="pre">BatchedRes</span></code> (~lines 603-610) and <code class="docutils literal notranslate"><span class="pre">subset_open_aux</span></code> (~lines 585-601) — both are consumed by <code class="docutils literal notranslate"><span class="pre">PeakBatchedModel</span></code>.</p>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 3: Fix dangling <code class="docutils literal notranslate"><span class="pre">\ref</span></code> in comments</strong></p></li>
+</ul>
+<p>Run to find comment references to the removed names:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>grep<span class="w"> </span>-nE<span class="w"> </span><span class="s1">&#39;\\ref (single_term_opt_impl|single_term_opt_peak_impl|single_term_opt_peak_batched_impl|peak_dp|peak_dp_batched)|single_term_opt_impl&#39;</span><span class="w"> </span>/Users/efv/code/SeQuant/SeQuant/core/optimize/single_term.hpp<span class="w"> </span>/Users/efv/code/SeQuant/SeQuant/core/optimize/cost_model.hpp
+</pre></div>
+</div>
+<p>For each hit (e.g. the line ~235 comment <code class="docutils literal notranslate"><span class="pre">construction</span> <span class="pre">inside</span> <span class="pre">\ref</span> <span class="pre">single_term_opt_impl</span></code> and the model doc comments in <code class="docutils literal notranslate"><span class="pre">cost_model.hpp</span></code> that say <code class="docutils literal notranslate"><span class="pre">Reproduces</span> <span class="pre">\ref</span> <span class="pre">single_term_opt_impl</span></code> / <code class="docutils literal notranslate"><span class="pre">\ref</span> <span class="pre">peak_dp</span></code> / <code class="docutils literal notranslate"><span class="pre">\ref</span> <span class="pre">single_term_opt_peak_impl</span></code> / <code class="docutils literal notranslate"><span class="pre">\ref</span> <span class="pre">single_term_opt_peak_batched_impl</span></code> / <code class="docutils literal notranslate"><span class="pre">\ref</span> <span class="pre">peak_dp_batched</span></code>), reword to refer to the model itself rather than the deleted symbol — e.g. change <code class="docutils literal notranslate"><span class="pre">Reproduces</span> <span class="pre">\ref</span> <span class="pre">single_term_opt_peak_impl</span> <span class="pre">/</span> <span class="pre">\ref</span> <span class="pre">peak_dp</span> <span class="pre">exactly,</span> <span class="pre">factored</span> <span class="pre">into...</span></code> to <code class="docutils literal notranslate"><span class="pre">Implements</span> <span class="pre">the</span> <span class="pre">all-co-resident</span> <span class="pre">pebble-game</span> <span class="pre">DP,</span> <span class="pre">factored</span> <span class="pre">into...</span></code>. Do not leave a <code class="docutils literal notranslate"><span class="pre">\ref</span></code> pointing at a deleted symbol (it breaks the Doxygen build).</p>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 4: Build the full SeQuant library + tests and run the suite</strong></p></li>
+</ul>
+<p>Run:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>clang-format<span class="w"> </span>--style<span class="o">=</span>file<span class="w"> </span>-i<span class="w"> </span>/Users/efv/code/SeQuant/SeQuant/core/optimize/single_term.hpp<span class="w"> </span>/Users/efv/code/SeQuant/SeQuant/core/optimize/cost_model.hpp
+cmake<span class="w"> </span>--build<span class="w"> </span>/Users/efv/code/SeQuant/cmake-build-release<span class="w"> </span>--target<span class="w"> </span>unit_tests-sequant<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-8
+/Users/efv/code/SeQuant/cmake-build-release/tests/unit/unit_tests-sequant<span class="w"> </span><span class="s2">&quot;[optimize]&quot;</span><span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-8
+</pre></div>
+</div>
+<p>Expected: clean build (no “undeclared identifier” for any removed name); all <code class="docutils literal notranslate"><span class="pre">[optimize]</span></code> pass.</p>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 5: Commit</strong></p></li>
+</ul>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>/Users/efv/code/SeQuant
+git<span class="w"> </span>add<span class="w"> </span>SeQuant/core/optimize/single_term.hpp<span class="w"> </span>SeQuant/core/optimize/cost_model.hpp
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;optimize: delete dead standalone single-term DP drivers/tables (peak_dp, *_impl, PeakRes)&quot;</span>
+</pre></div>
+</div>
+</section>
+<hr class="docutils" />
+<section id="task-4-negative-direction-costmodel-concept-test-deferred-follow-up-4">
+<h3>Task 4: Negative-direction <code class="docutils literal notranslate"><span class="pre">CostModel</span></code> concept test (deferred follow-up #4)<a class="headerlink" href="#task-4-negative-direction-costmodel-concept-test-deferred-follow-up-4" title="Link to this heading">¶</a></h3>
+<p>Strengthen the concept-conformance SECTION with a negative check proving the <code class="docutils literal notranslate"><span class="pre">CostModel</span></code> concept actually rejects a non-conforming type (today only positive <code class="docutils literal notranslate"><span class="pre">static_assert</span></code>s exist, so a vacuously-true concept would pass unnoticed).</p>
+<p><strong>Files:</strong></p>
+<ul class="simple">
+<li><p>Modify: <code class="docutils literal notranslate"><span class="pre">tests/unit/test_optimize.cpp</span></code> — inside <code class="docutils literal notranslate"><span class="pre">SECTION(&quot;CostModel</span> <span class="pre">concept</span> <span class="pre">conformance</span> <span class="pre">+</span> <span class="pre">custom</span> <span class="pre">model&quot;)</span></code> (~line 1009), after the existing positive <code class="docutils literal notranslate"><span class="pre">static_assert</span></code>s.</p></li>
+</ul>
+<p><strong>Interfaces:</strong></p>
+<ul class="contains-task-list simple">
+<li><p>Consumes: <code class="docutils literal notranslate"><span class="pre">opt::detail::CostModel&lt;M&gt;</span></code> concept.</p></li>
+<li><p>Produces: a compile-time negative assertion.</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 1: Add the negative <code class="docutils literal notranslate"><span class="pre">static_assert</span></code></strong></p></li>
+</ul>
+<p>After the positive <code class="docutils literal notranslate"><span class="pre">static_assert</span></code>s (and before / alongside the custom-model runtime check) in that SECTION, add a local incomplete type that is missing the required members and assert the concept rejects it:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="w">      </span><span class="c1">// Negative direction: a type lacking State/Context/the six methods must</span>
+<span class="w">      </span><span class="c1">// NOT satisfy CostModel (guards against a vacuously-true concept).</span>
+<span class="w">      </span><span class="k">struct</span><span class="w"> </span><span class="nc">NotAModel</span><span class="w"> </span><span class="p">{};</span>
+<span class="w">      </span><span class="k">static_assert</span><span class="p">(</span><span class="o">!</span><span class="n">opt</span><span class="o">::</span><span class="n">detail</span><span class="o">::</span><span class="n">CostModel</span><span class="o">&lt;</span><span class="n">NotAModel</span><span class="o">&gt;</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>(A local <code class="docutils literal notranslate"><span class="pre">struct</span></code> inside a Catch2 SECTION is a function-local type; that is fine for a <code class="docutils literal notranslate"><span class="pre">static_assert</span></code> referencing it in the same scope.)</p>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 2: Build and run the SECTION</strong></p></li>
+</ul>
+<p>Run:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>cmake<span class="w"> </span>--build<span class="w"> </span>/Users/efv/code/SeQuant/cmake-build-release<span class="w"> </span>--target<span class="w"> </span>unit_tests-sequant<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-5
+/Users/efv/code/SeQuant/cmake-build-release/tests/unit/unit_tests-sequant<span class="w"> </span><span class="s2">&quot;[optimize]&quot;</span><span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-6
+</pre></div>
+</div>
+<p>Expected: clean build (the negative <code class="docutils literal notranslate"><span class="pre">static_assert</span></code> compiles, i.e. the concept is genuinely <code class="docutils literal notranslate"><span class="pre">false</span></code> for <code class="docutils literal notranslate"><span class="pre">NotAModel</span></code>); <code class="docutils literal notranslate"><span class="pre">[optimize]</span></code> all pass. If the build fails on that <code class="docutils literal notranslate"><span class="pre">static_assert</span></code>, the concept is broken (accepts a non-model) — report it.</p>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"><strong>Step 3: Commit</strong></p></li>
+</ul>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>/Users/efv/code/SeQuant
+git<span class="w"> </span>add<span class="w"> </span>tests/unit/test_optimize.cpp
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;optimize tests: add negative-direction CostModel concept check&quot;</span>
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="self-review">
+<h2>Self-Review<a class="headerlink" href="#self-review" title="Link to this heading">¶</a></h2>
+<p><strong>Spec coverage (vs. the option-B scope decision + Phase-3 spec §7):</strong></p>
+<ul class="simple">
+<li><p>“Remove the per-objective <code class="docutils literal notranslate"><span class="pre">*_impl</span></code> driver functions” → Task 3 deletes <code class="docutils literal notranslate"><span class="pre">single_term_opt_impl</span></code>, <code class="docutils literal notranslate"><span class="pre">single_term_opt_peak_impl</span></code>, <code class="docutils literal notranslate"><span class="pre">single_term_opt_peak_batched_impl</span></code>. ✓</p></li>
+<li><p>“Full DRY: also remove <code class="docutils literal notranslate"><span class="pre">peak_dp</span></code>/<code class="docutils literal notranslate"><span class="pre">peak_dp_batched</span></code>, route <code class="docutils literal notranslate"><span class="pre">peak_cost</span></code>/<code class="docutils literal notranslate"><span class="pre">peak_cost_batched</span></code> through the models” → Task 1 rewires the oracles to the models; Task 3 deletes both table-builders. ✓</p></li>
+<li><p>“Keep the brute-force oracles” → <code class="docutils literal notranslate"><span class="pre">brute_force_min_peak</span></code>/<code class="docutils literal notranslate"><span class="pre">batched_min_peak</span></code> are untouched (Global Constraints; not referenced by any task’s removals). ✓</p></li>
+<li><p>“Delete the equivalence tests; rewire reconstruction tests to the model path” → Task 2. ✓</p></li>
+<li><p>Deferred follow-up #4 (negative concept assert) → Task 4. ✓</p></li>
+</ul>
+<p><strong>Placeholder scan:</strong> The only intentional “preserve verbatim” is Task 1 Step 4’s simulation walk — the engineer reads the existing body in <code class="docutils literal notranslate"><span class="pre">single_term.hpp</span></code> and performs the named mechanical data-source swap (<code class="docutils literal notranslate"><span class="pre">at(n,B)</span></code>→<code class="docutils literal notranslate"><span class="pre">st[n][B]</span></code>, local <code class="docutils literal notranslate"><span class="pre">sz</span></code>/<code class="docutils literal notranslate"><span class="pre">Lof</span></code>→<code class="docutils literal notranslate"><span class="pre">ctx.sz</span></code>/<code class="docutils literal notranslate"><span class="pre">ctx.Lof</span></code>); the surrounding signature, model build, and solve are spelled out. No “TBD”/“handle edge cases”/“similar to” placeholders elsewhere.</p>
+<p><strong>Type consistency:</strong> <code class="docutils literal notranslate"><span class="pre">peak_cost</span></code>/<code class="docutils literal notranslate"><span class="pre">peak_cost_batched</span></code>/<code class="docutils literal notranslate"><span class="pre">reconstructed_batched_peak</span></code> signatures are copied unchanged from the current source; <code class="docutils literal notranslate"><span class="pre">PeakModel</span></code>/<code class="docutils literal notranslate"><span class="pre">PeakBatchedModel</span></code> ctor field order matches <code class="docutils literal notranslate"><span class="pre">cost_model.hpp</span></code> (<code class="docutils literal notranslate"><span class="pre">{idxsz}</span></code> and <code class="docutils literal notranslate"><span class="pre">{idxsz,</span> <span class="pre">is_batchable,</span> <span class="pre">batch,</span> <span class="pre">is_volatile_leaf}</span></code>); <code class="docutils literal notranslate"><span class="pre">State</span></code> access <code class="docutils literal notranslate"><span class="pre">st.back().peak</span></code> (PeakModel), <code class="docutils literal notranslate"><span class="pre">st.back()[0].peak</span></code> / <code class="docutils literal notranslate"><span class="pre">st[root][allK].peak</span></code> (PeakBatchedModel, <code class="docutils literal notranslate"><span class="pre">State</span> <span class="pre">=</span> <span class="pre">vector&lt;BatchedRes&gt;</span></code>) matches the model definitions; <code class="docutils literal notranslate"><span class="pre">ctx.sz</span></code>/<code class="docutils literal notranslate"><span class="pre">ctx.Lof</span></code> match the Phase-4 <code class="docutils literal notranslate"><span class="pre">PeakBatchedModel::Context</span></code> methods. Line numbers are approximate (<code class="docutils literal notranslate"><span class="pre">~</span></code>) and the engineer locates by symbol name.</p>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, SeQuant developers
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            <div class="last-updated">
+              Last updated on Jul 1, 2026 10:36:51 AM</div>
+          </div>
+          <div class="right-details">
+            <div class="icons">
+              <a class="muted-link fa-brands fa-solid fa-github fa-2x" href="https://github.com/ValeevGroup/SeQuant" aria-label="GitHub"></a>
+              
+            </div>
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">CostModel old-impl removal (full DRY) Implementation Plan</a><ul>
+<li><a class="reference internal" href="#global-constraints">Global Constraints</a><ul>
+<li><a class="reference internal" href="#task-1-rewire-the-cost-only-oracle-helpers-to-delegate-to-the-models">Task 1: Rewire the cost-only oracle helpers to delegate to the models</a></li>
+<li><a class="reference internal" href="#task-2-rewire-the-tests-off-the-soon-to-be-removed-functions">Task 2: Rewire the tests off the soon-to-be-removed functions</a></li>
+<li><a class="reference internal" href="#task-3-delete-the-dead-standalone-functions-and-the-peakres-struct">Task 3: Delete the dead standalone functions and the <code class="docutils literal notranslate"><span class="pre">PeakRes</span></code> struct</a></li>
+<li><a class="reference internal" href="#task-4-negative-direction-costmodel-concept-test-deferred-follow-up-4">Task 4: Negative-direction <code class="docutils literal notranslate"><span class="pre">CostModel</span></code> concept test (deferred follow-up #4)</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#self-review">Self-Review</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=f281be69"></script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script src="../../_static/bootstrap-treeview/bootstrap-treeview.min.js?v=6a1e96b4"></script>
+    </body>
+</html>

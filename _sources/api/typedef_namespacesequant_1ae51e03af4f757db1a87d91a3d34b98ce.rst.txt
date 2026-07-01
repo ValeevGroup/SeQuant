@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1ae51e03af4f757db1a87d91a3d34b98ce:
+
+Typedef sequant::FNOperatorSeq
+==============================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::FNOperatorSeq
+   :project: SeQuant

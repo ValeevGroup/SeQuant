@@ -1,0 +1,33 @@
+.. _dir_SeQuant_core_tensor_network:
+
+
+Directory tensor_network
+========================
+
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+*Directory path:* ``SeQuant/core/tensor_network``
+
+
+Files
+-----
+
+- :ref:`file_SeQuant_core_tensor_network_canonicals.hpp`
+- :ref:`file_SeQuant_core_tensor_network_slot.hpp`
+- :ref:`file_SeQuant_core_tensor_network_typedefs.hpp`
+- :ref:`file_SeQuant_core_tensor_network_utils.hpp`
+- :ref:`file_SeQuant_core_tensor_network_v1.cpp`
+- :ref:`file_SeQuant_core_tensor_network_v1.hpp`
+- :ref:`file_SeQuant_core_tensor_network_v2.cpp`
+- :ref:`file_SeQuant_core_tensor_network_v2.hpp`
+- :ref:`file_SeQuant_core_tensor_network_v3.cpp`
+- :ref:`file_SeQuant_core_tensor_network_v3.hpp`
+- :ref:`file_SeQuant_core_tensor_network_vertex.hpp`
+- :ref:`file_SeQuant_core_tensor_network_vertex_painter.cpp`
+- :ref:`file_SeQuant_core_tensor_network_vertex_painter.hpp`
+
+

@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1meta_1_1detail_1a9ecac57f3ab312a889b8952becb14dec:
+
+Variable sequant::meta::detail::is_eval_expr
+============================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_expr.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::meta::detail::is_eval_expr
+   :project: SeQuant

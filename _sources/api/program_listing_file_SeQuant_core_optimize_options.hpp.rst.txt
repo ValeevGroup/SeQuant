@@ -1,0 +1,81 @@
+
+.. _program_listing_file_SeQuant_core_optimize_options.hpp:
+
+Program Listing for File options.hpp
+====================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_optimize_options.hpp>` (``SeQuant/core/optimize/options.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_OPTIMIZE_OPTIONS_HPP
+   #define SEQUANT_CORE_OPTIMIZE_OPTIONS_HPP
+   
+   #include <SeQuant/core/batch_policy.hpp>
+   
+   #include <cstddef>
+   #include <functional>
+   
+   namespace sequant {
+   
+   class Index;
+   class Tensor;
+   
+   enum class ObjectiveFunction {
+     DenseFLOPs,
+     DenseSize,
+     DensePeakSize,
+     DensePeakSizeBatched
+   };
+   
+   enum class ReorderSum { Reorder, NoReorder };
+   
+   struct CSEOptions {
+     bool subnet = false;
+   };
+   
+   struct RooflineParams {
+     double machine_balance = 0.0;
+     double fast_mem_elems = 0.0;
+     double block_tiles = 3.0;
+     double block_prefactor = 1.0;
+   };
+   
+   struct CostParams {
+     std::function<bool(Tensor const&)> is_volatile_leaf = {};
+     double volatile_weight = 1.0;
+     double footprint_weight = 0.0;
+     double peak_flops_tolerance = 0.10;
+     RooflineParams roofline = {};
+     double accumulation_factor = 0.0;
+   };
+   
+   using index_to_extent_t = std::function<std::size_t(Index const&)>;
+   
+   struct OptimizeOptions {
+     ObjectiveFunction objective_function = ObjectiveFunction::DenseFLOPs;
+   
+     ReorderSum reorder = ReorderSum::Reorder;
+   
+     CSEOptions CSE = {};
+   
+     index_to_extent_t idx_to_extent = {};
+   
+     std::function<double(Index const&, std::size_t)> inner_pow = {};
+   
+     BatchPolicy batch_policy = {};
+   
+     double volatile_weight = 1.0;
+   
+     double peak_flops_tolerance = 0.10;
+   
+     double footprint_weight = 0.0;
+   
+     RooflineParams roofline = {};
+   };
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_CORE_OPTIMIZE_OPTIONS_HPP

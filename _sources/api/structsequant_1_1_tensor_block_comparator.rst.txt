@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_tensor_block_comparator:
+
+Template Struct TensorBlockComparator
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_utility_tensor.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::TensorBlockComparator
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

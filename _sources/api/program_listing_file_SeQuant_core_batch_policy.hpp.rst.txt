@@ -1,0 +1,36 @@
+
+.. _program_listing_file_SeQuant_core_batch_policy.hpp:
+
+Program Listing for File batch_policy.hpp
+=========================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_batch_policy.hpp>` (``SeQuant/core/batch_policy.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_BATCH_POLICY_HPP
+   #define SEQUANT_CORE_BATCH_POLICY_HPP
+   
+   #include <cstddef>
+   #include <functional>
+   
+   namespace sequant {
+   
+   class Index;
+   class Tensor;
+   
+   struct BatchPolicy {
+     std::function<bool(Index const&)> is_batchable_index = {};
+     std::function<std::size_t(Index const&)> batch_target_size = {};
+     std::function<bool(Tensor const&)> is_volatile_leaf = {};
+   
+     bool persistent_only = false;
+   
+     double accumulation_factor = 0.0;
+   };
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_CORE_BATCH_POLICY_HPP

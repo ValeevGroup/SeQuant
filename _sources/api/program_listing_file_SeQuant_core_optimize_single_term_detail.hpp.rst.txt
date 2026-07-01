@@ -1,0 +1,317 @@
+
+.. _program_listing_file_SeQuant_core_optimize_single_term_detail.hpp:
+
+Program Listing for File single_term_detail.hpp
+===============================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_optimize_single_term_detail.hpp>` (``SeQuant/core/optimize/single_term_detail.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_OPTIMIZE_SINGLE_TERM_DETAIL_HPP
+   #define SEQUANT_CORE_OPTIMIZE_SINGLE_TERM_DETAIL_HPP
+   
+   // Shared single-term-optimization detail: cost counters, OptRes/EvalSequence,
+   // init_results, and the subset/bipartition DP scaffolding. Split out of
+   // single_term.hpp so that cost_model.hpp can include just these helpers
+   // without the public single_term_opt<Metric> definitions (which themselves
+   // depend on cost_model.hpp). This breaks the single_term.hpp <-> cost_model.hpp
+   // include cycle and lets cost_model.hpp be included standalone.
+   
+   #include <SeQuant/core/algorithm.hpp>
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/expr.hpp>
+   #include <SeQuant/core/optimize/options.hpp>
+   #include <SeQuant/core/tensor_canonicalizer.hpp>
+   #include <SeQuant/core/tensor_network.hpp>
+   #include <SeQuant/core/utility/indices.hpp>
+   #include <SeQuant/core/utility/macros.hpp>
+   #include <SeQuant/external/bliss/graph.hh>
+   
+   #include <range/v3/algorithm/find.hpp>
+   #include <range/v3/view/concat.hpp>
+   
+   #include <range/v3/view/filter.hpp>
+   #include <range/v3/view/indirect.hpp>
+   #include <range/v3/view/move.hpp>
+   #include <range/v3/view/reverse.hpp>
+   #include <range/v3/view/transform.hpp>
+   
+   #include <algorithm>
+   #include <bit>
+   #include <functional>
+   #include <limits>
+   #include <type_traits>
+   
+   namespace sequant::opt {
+   
+   template <typename F>
+   concept has_index_extent = std::is_invocable_r_v<size_t, F, Index const&>;
+   
+   namespace detail {
+   
+   template <typename F>
+   constexpr bool option_engaged(F const& f) {
+     if constexpr (std::is_constructible_v<bool, F const&>)
+       return static_cast<bool>(f);
+     else
+       return true;
+   }
+   
+   template <typename Tot, typename Ixex, typename InnerPow>
+   double inner_aware_volume(Tot const& tot_idxs, Ixex const& ixex,
+                             InnerPow const& inner_pow) {
+     double mem = ranges::accumulate(tot_idxs.outer, 1., std::multiplies{}, ixex);
+     if (option_engaged(inner_pow)) {
+       for (auto const& c : tot_idxs.inner) {
+         std::size_t k = 0;
+         for (auto const& o : tot_idxs.inner)
+           if (o.proto_indices() == c.proto_indices()) ++k;
+         mem *= inner_pow(c, k);
+       }
+     } else {
+       mem = ranges::accumulate(tot_idxs.inner, mem, std::multiplies{}, ixex);
+     }
+     return mem;
+   }
+   
+   template <typename InnerPow = std::function<double(Index const&, std::size_t)>>
+   auto flops_counter(has_index_extent auto&& ixex, InnerPow inner_pow = {}) {
+     return [ixex = std::forward<decltype(ixex)>(ixex),
+             inner_pow = std::move(inner_pow)](
+                meta::range_of<Index> auto const& lhs,
+                meta::range_of<Index> auto const& rhs,
+                meta::range_of<Index> auto const& result) -> double {
+       using ranges::views::concat;
+       // <IndexSet> is required here: concatenating the three operands repeats
+       // every contracted/shared index, so it must be deduplicated before taking
+       // the extent product (cf. memsize_counter, which processes each operand
+       // separately and so can use the default vector container).
+       auto tot_idxs = tot_indices<IndexSet>(concat(lhs, rhs, result));
+       double total_flops = inner_aware_volume(tot_idxs, ixex, inner_pow);
+       // A product of exactly 1. means the index set was empty (the accumulation
+       // init value), i.e. a scalar contraction => zero flops. Extents are
+       // integer-valued, so this equality is exact.
+       return total_flops == 1. ? 0. : total_flops;
+     };
+   }
+   
+   template <typename InnerPow = std::function<double(Index const&, std::size_t)>>
+   auto memsize_counter(has_index_extent auto&& ixex, InnerPow inner_pow = {}) {
+     return [ixex = std::forward<decltype(ixex)>(ixex),
+             inner_pow = std::move(inner_pow)](
+                meta::range_of<Index> auto const& lhs,
+                meta::range_of<Index> auto const& rhs,
+                meta::range_of<Index> auto const& result) -> double {
+       double total_mem{0};
+       // Each operand is sized independently, so the default (vector) container of
+       // tot_indices suffices -- a single operand's index list has no duplicates,
+       // unlike the concatenated set flops_counter must dedup.
+       for (auto&& tot_idxs :
+            {tot_indices(lhs), tot_indices(rhs), tot_indices(result)}) {
+         double mem = inner_aware_volume(tot_idxs, ixex, inner_pow);
+         // mem == 1. means this operand had no indices (the accumulation init
+         // value), i.e. a scalar; it contributes no memory. Same exact-equality
+         // convention as flops_counter above.
+         if (mem != 1.) total_mem += mem;
+       }
+       return total_mem;
+     };
+   }
+   
+   template <typename InnerPow = std::function<double(Index const&, std::size_t)>>
+   auto footprint_counter(has_index_extent auto&& ixex, InnerPow inner_pow = {}) {
+     return [ixex = std::forward<decltype(ixex)>(ixex),
+             inner_pow = std::move(inner_pow)](
+                meta::range_of<Index> auto const& result) -> double {
+       double mem = inner_aware_volume(tot_indices(result), ixex, inner_pow);
+       return mem == 1. ? 0. : mem;
+     };
+   }
+   
+   struct OptRes {
+     IndexSet indices;
+   
+     double ops;
+   
+     EvalSequence sequence;
+   
+     size_t lp = 0;
+     size_t rp = 0;
+   
+     container::vector<size_t> subnets;
+   };
+   
+   template <typename TIdxs, typename IdxToSz>
+   container::vector<double> subset_footprints(
+       TensorNetwork const& network, TIdxs const& tidxs, IdxToSz&& idxsz,
+       std::function<double(Index const&, std::size_t)> const& inner_pow = {}) {
+     container::vector<OptRes> results((size_t{1} << network.tensors().size()));
+     init_results(network, tidxs, results);
+     auto fp = footprint_counter(std::forward<IdxToSz>(idxsz), inner_pow);
+     container::vector<double> S(results.size(), 0.0);
+     for (size_t n = 0; n < results.size(); ++n)
+       S[n] = (n == 0) ? 0.0 : fp(results[n].indices);
+     return S;
+   }
+   
+   inline container::vector<Index> batchable_index_list(
+       TensorNetwork const& network,
+       std::function<bool(Index const&)> const& is_batchable) {
+     container::vector<Index> aux;
+     if (!is_batchable) return aux;
+     for (auto&& t : network.tensors()) {
+       auto tp = std::dynamic_pointer_cast<Tensor>(t);
+       for (auto&& ix : ranges::views::concat(tp->bra(), tp->ket(), tp->aux()))
+         if (is_batchable(ix) && ranges::find(aux, ix) == ranges::end(aux))
+           aux.push_back(ix);
+     }
+     return aux;
+   }
+   
+   template <typename TIdxs, typename IdxToSz>
+   container::vector<container::vector<double>> sliced_footprints(
+       TensorNetwork const& network, TIdxs const& tidxs, IdxToSz&& idxsz,
+       std::function<bool(Index const&)> const& is_batchable,
+       std::function<std::size_t(Index const&)> const& batch_target_size,
+       container::vector<Index> const& aux_list,
+       std::function<double(Index const&, std::size_t)> const& inner_pow = {}) {
+     std::size_t const m = aux_list.size();
+     container::vector<container::vector<double>> tables(std::size_t{1} << m);
+     for (std::size_t B = 0; B < tables.size(); ++B) {
+       auto extent = [&, B](Index const& ix) -> std::size_t {
+         std::size_t e = idxsz(ix);
+         if (is_batchable && is_batchable(ix)) {
+           auto it = ranges::find(aux_list, ix);
+           if (it != ranges::end(aux_list)) {
+             std::size_t k =
+                 static_cast<std::size_t>(it - ranges::begin(aux_list));
+             if (B & (std::size_t{1} << k))
+               return std::min(e, batch_target_size(ix));
+           }
+         }
+         return e;
+       };
+       tables[B] = subset_footprints(network, tidxs, extent, inner_pow);
+     }
+     return tables;
+   }
+   
+   inline std::size_t leaf_volatile_mask(
+       TensorNetwork const& network,
+       std::function<bool(Tensor const&)> const& is_volatile_leaf) {
+     std::size_t mask = 0;
+     if (!is_volatile_leaf) return mask;
+     std::size_t i = 0;
+     for (auto&& t : network.tensors()) {
+       auto tp = std::dynamic_pointer_cast<Tensor>(t);
+       if (tp && is_volatile_leaf(*tp)) mask |= (std::size_t{1} << i);
+       ++i;
+     }
+     return mask;
+   }
+   
+   struct SubNetHash {
+     size_t operator()(
+         TensorNetwork::SlotCanonicalizationMetadata const& data) const noexcept {
+       return data.hash_value();
+     }
+   };
+   
+   struct SubNetEqual {
+     bool operator()(
+         TensorNetwork::SlotCanonicalizationMetadata const& left,
+         TensorNetwork::SlotCanonicalizationMetadata const& right) const {
+       return bliss::ConstGraphCmp::cmp(*left.graph, *right.graph) == 0;
+     }
+   };
+   
+   template <typename TIdxs>
+   void init_results(TensorNetwork const& network, TIdxs const& tidxs,
+                     container::vector<OptRes>& results) {
+     using IndexContainer = decltype(OptRes::indices);
+     auto tensor_indices = network.tensors()          //
+                           | ranges::views::indirect  //
+                           | ranges::views::transform(slots);
+     auto imed_indices = subset_target_indices(tensor_indices, tidxs);
+     SEQUANT_ASSERT(ranges::distance(imed_indices) == ranges::distance(results));
+     for (size_t i = 0; i < results.size(); ++i) {
+       results[i].indices =
+           imed_indices[i] | ranges::views::move | ranges::to<IndexContainer>;
+       results[i].ops = std::popcount(i) > 1
+                            ? std::numeric_limits<decltype(OptRes::ops)>::max()
+                            : 0;
+       if (std::popcount(i) == 1)
+         results[i].sequence.emplace_back(std::countr_zero(i));
+       // else results[i].sequence is left uninitialized
+     }
+   }
+   
+   struct SubnetMetadata {
+     container::vector<size_t> meta_ids;
+     container::vector<double> unique_meta_costs;
+   };
+   
+   inline SubnetMetadata build_subnet_metadata(
+       TensorNetwork const& network, container::vector<OptRes>& results) {
+     SubnetMetadata out;
+     // Use max as sentinel for entries with popcount < 2 (singletons/empty),
+     // which are skipped below and never assigned a real meta ID.
+     out.meta_ids.resize(results.size(), std::numeric_limits<size_t>::max());
+     container::unordered_map<TensorNetwork::SlotCanonicalizationMetadata, size_t,
+                              SubNetHash, SubNetEqual>
+         meta_to_id;
+   
+     for (size_t n = 0; n < results.size(); ++n) {
+       if (std::popcount(n) < 2) continue;
+       auto ts = bits::on_bits_index(n) | bits::sieve(network.tensors());
+       container::vector<ExprPtr> ts_expr;
+       for (auto&& t : ts)
+         ts_expr.emplace_back(std::dynamic_pointer_cast<Tensor>(t)->clone());
+   
+       auto tn = TensorNetwork{ts_expr};
+       auto meta = tn.canonicalize_slots(
+           TensorCanonicalizer::cardinal_tensor_labels(), &results[n].indices);
+   
+       auto [it, inserted] = meta_to_id.try_emplace(std::move(meta), 0);
+       if (inserted) it->second = meta_to_id.size() - 1;
+   
+       out.meta_ids[n] = it->second;
+     }
+     out.unique_meta_costs.resize(meta_to_id.size(), 0.0);
+     return out;
+   }
+   
+   template <typename TIdxs>
+   container::vector<std::size_t> subset_open_aux(
+       TensorNetwork const& network, TIdxs const& tidxs,
+       container::vector<Index> const& aux_list) {
+     container::vector<OptRes> results(
+         (std::size_t{1} << network.tensors().size()));
+     init_results(network, tidxs, results);
+     container::vector<std::size_t> open_aux(results.size(), 0);
+     for (std::size_t n = 0; n < results.size(); ++n) {
+       for (std::size_t k = 0; k < aux_list.size(); ++k) {
+         if (ranges::find(results[n].indices, aux_list[k]) !=
+             ranges::end(results[n].indices))
+           open_aux[n] |= (std::size_t{1} << k);
+       }
+     }
+     return open_aux;
+   }
+   
+   struct BatchedRes {
+     double peak = std::numeric_limits<double>::max();  // min peak for (n, B)
+     std::size_t lp = 0, rp = 0;  // winning bipartition (0 for singletons)
+     bool lp_first = true;        // winning evaluation order
+     std::size_t aprime = 0;  // winning subset of batchable indices sliced here
+     double flops = std::numeric_limits<double>::max();  // tie-break (min work
+                                                         // among equal-peak)
+   };
+   
+   }  // namespace detail
+   }  // namespace sequant::opt
+   
+   #endif  // SEQUANT_CORE_OPTIMIZE_SINGLE_TERM_DETAIL_HPP

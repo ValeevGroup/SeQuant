@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1parse_1a50b2364c46b0f8e0a786f591d2765ade:
+
+Template Function sequant::io::serialization::v1::parse::parse
+==============================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_deserialize.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::io::serialization::v1::parse::parse(const StartRule&, std::wstring_view, PositionCache&)
+   :project: SeQuant

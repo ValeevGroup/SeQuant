@@ -1,0 +1,97 @@
+
+.. _namespace_sequant__opt__detail:
+
+Namespace sequant::opt::detail
+==============================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_additive_model`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_additive_model_1_1_context`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_additive_model_1_1_state`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_batched_res`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_opt_res`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_peak_batched_model`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_b_front_point`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_context`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_peak_model`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_peak_model_1_1_context`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_peak_model_1_1_front_point`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_sub_net_equal`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_sub_net_hash`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_subnet_metadata`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a68bd649c2fc715c78647ce5d4e755db4`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a6ea80776b6c05947efef837161d97a34`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a2b839e3c301c3e67566df6af550aa5fa`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a03b74d1a22c9fa5027001eab86254707`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a08dd5ac790e19031d9aab842165ae7df`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1ae118e04c3baa5430b4ab5ac087ae6f69`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1ac40920fc746e08faa3e816ad4b1f09d6`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a21acfafbdde0e75f826564fe5460c978`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a03e313b06689fc6b488744bdcd78ebfe`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a30c5c21f27adadd6140d475ea5b20585`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a5aaa380a45cae7d9e7bc8a6364b8cd88`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a2ccf80d7606a2b31b6682ee9323a2685`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a1c4af781bc0362a9c638dd37ce960b1d`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a69544acb1b4ceb97c299aafa5ded4203`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a95b08841fdd47dd8a1c548d38dc44ce1`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a42a1743a74f9d201e863d7db0f527634`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1af41aa7df99078f36cca02868bb312fe7`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a442ca6386978f275168b2678d03402f4`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a2b22dd7f0f635171f61169081821ff29`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a092c208018c60c22e09fbca5bb2c1150`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a2589584bd07db3b29fe9326b89e6a0cf`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a576836d7e21c586f7084225e4e737859`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a4af72f616c65f3a36b37f020ef09f17c`

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1_1detail_1a2cf223aeefce975b72d965aa6a6c9c79:
+
+Function sequant::mbpt::detail::make_index_with_spincase
+========================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::detail::make_index_with_spincase(const Index&, mbpt::Spin)
+   :project: SeQuant

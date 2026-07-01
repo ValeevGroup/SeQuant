@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1io_1_1serialization_1af2f2a53fe6eb46db8defae04594c631f:
+
+Function sequant::io::serialization::SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ResultExpr)
+====================================================================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_serialization.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::io::serialization::SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ResultExpr)
+   :project: SeQuant

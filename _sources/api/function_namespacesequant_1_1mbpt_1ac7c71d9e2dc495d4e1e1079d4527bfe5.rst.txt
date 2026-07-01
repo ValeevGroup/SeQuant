@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1ac7c71d9e2dc495d4e1e1079d4527bfe5:
+
+Function sequant::mbpt::add_thc_spaces
+======================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_convention.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::add_thc_spaces(std::shared_ptr<IndexSpaceRegistry>&)
+   :project: SeQuant

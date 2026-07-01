@@ -1,0 +1,593 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html">
+        <link rel="prefetch" href="../_static/logo.svg" as="image">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>Template Struct PeakModel - SeQuant Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/bootstrap-treeview/bootstrap-treeview.min.css?v=8176a87d" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=821744c5" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --sidebar-item-font-size: 0.95em;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">SeQuant Documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="../_static/logo.svg" alt="Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">User</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/getting_started/index.html">Getting started</a><input aria-label="Toggle navigation of Getting started" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/wick.html">Wick’s Theorem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/index_spaces.html">Register Index Spaces</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/operators.html">Operators</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../user/getting_started/installing.html">Installation</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/guide/index.html">User Guide</a><input aria-label="Toggle navigation of User Guide" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/operator.html">Operator Interface for Symbolic Many-Body Algebra</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/cc.html">Coupled-Cluster Class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/io.html">I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/evaluation.html">Evaluation Trace Analysis</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/utilities/index.html">Utilities</a><input aria-label="Toggle navigation of Utilities" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/utilities/external_interface.html">External interface</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../developer/index.html">Developer docs</a><input aria-label="Toggle navigation of Developer docs" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../developer/documentation.html">Documentation Guide</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">API reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Maintainer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../maintainer/index.html">Maintainer docs</a><input aria-label="Toggle navigation of Maintainer docs" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../maintainer/release.html">Release Guide</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">See Also</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/tiledarray">TiledArray</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/mpqc">Massively Parallel Quantum Chemistry</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io">Valeev Research Group</a></li>
+</ul>
+
+</div></div>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="../_sources/api/structsequant_1_1opt_1_1detail_1_1_peak_model.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="template-struct-peakmodel">
+<span id="exhale-struct-structsequant-1-1opt-1-1detail-1-1-peak-model"></span><h1>Template Struct PeakModel<a class="headerlink" href="#template-struct-peakmodel" title="Link to this heading">¶</a></h1>
+<ul class="simple">
+<li><p>Defined in <a class="reference internal" href="file_SeQuant_core_optimize_cost_model.hpp.html#file-sequant-core-optimize-cost-model-hpp"><span class="std std-ref">File cost_model.hpp</span></a></p></li>
+</ul>
+<section id="nested-relationships">
+<h2>Nested Relationships<a class="headerlink" href="#nested-relationships" title="Link to this heading">¶</a></h2>
+<section id="nested-types">
+<h3>Nested Types<a class="headerlink" href="#nested-types" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><a class="reference internal" href="structsequant_1_1opt_1_1detail_1_1_peak_model_1_1_context.html#exhale-struct-structsequant-1-1opt-1-1detail-1-1-peak-model-1-1-context"><span class="std std-ref">Struct PeakModel::Context</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1opt_1_1detail_1_1_peak_model_1_1_front_point.html#exhale-struct-structsequant-1-1opt-1-1detail-1-1-peak-model-1-1-front-point"><span class="std std-ref">Struct PeakModel::FrontPoint</span></a></p></li>
+</ul>
+</section>
+</section>
+<section id="struct-documentation">
+<h2>Struct Documentation<a class="headerlink" href="#struct-documentation" title="Link to this heading">¶</a></h2>
+<dl class="cpp struct">
+<dt class="sig sig-object cpp" id="_CPPv4I0EN7sequant3opt6detail9PeakModelE">
+<span id="_CPPv3I0EN7sequant3opt6detail9PeakModelE"></span><span id="_CPPv2I0EN7sequant3opt6detail9PeakModelE"></span><span class="k"><span class="pre">template</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">typename</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">IdxToSz</span></span></span><span class="p"><span class="pre">&gt;</span></span><br /><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model"></span><span class="k"><span class="pre">struct</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">PeakModel</span></span></span><a class="headerlink" href="#_CPPv4I0EN7sequant3opt6detail9PeakModelE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Peak-memory single-term cost model (DensePeakSize objective). </p>
+<p>Implements the all-co-resident pebble-game DP, factored into the CostModel hooks driven by <a class="reference internal" href="function_namespacesequant_1_1opt_1_1detail_1a442ca6386978f275168b2678d03402f4.html#namespacesequant_1_1opt_1_1detail_1a442ca6386978f275168b2678d03402f4"><span class="std std-ref">run_single_term_opt</span></a>. The recurrence minimizes peak memory: while one child evaluates, the other child’s leaf inputs sit resident. A Pareto frontier of (peak, flops) per subset lets the lexicographic (peak, then flops) optimum be reached. No CSE.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Template Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>IdxToSz</strong> – A callable mapping an <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a> to its extent. </p>
+</dd>
+</dl>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-types">Public Types</p>
+<dl class="cpp type">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail9PeakModel5StateE">
+<span id="_CPPv3N7sequant3opt6detail9PeakModel5StateE"></span><span id="_CPPv2N7sequant3opt6detail9PeakModel5StateE"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1a107c9f1cb98936d0c9640cb2604dae53"></span><span class="k"><span class="pre">using</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">State</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1aaa8384c5d22396ccd9a2368a088e24bd.html#_CPPv4I0EN7sequant9container6vectorE" title="sequant::container::vector"><span class="n"><span class="pre">vector</span></span></a><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel10FrontPointE" title="sequant::opt::detail::PeakModel::FrontPoint"><span class="n"><span class="pre">FrontPoint</span></span></a><span class="p"><span class="pre">&gt;</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail9PeakModel5StateE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Per-subset DP cell: the PARETO FRONTIER of non-dominated (peak, flops) trade-offs for building the subtree rooted at this subset. A pure peak-min DP is degenerate when the peak is set by an unavoidable leaf/intermediate (e.g. a DF integral) that dominates many factorizations: a single peak-min cell with a <em>local</em> flop tie-break does not give the global flop-min among peak-optimal schedules (the max-recurrence lacks optimal substructure for the secondary objective). Carrying the frontier lets a parent combine a child’s slightly-higher-peak/lower-flops point when that peak is hidden under the parent’s peak-determining term, so the final lexicographic (peak, then flops) optimum is reachable &amp;#8212; e.g. it can form a persistent 4-PNO integral (cheap flops) instead of recomputing the whole ladder, when both are peak-equal. </p>
+</dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-functions">Public Functions</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4I0ENK7sequant3opt6detail9PeakModel13build_contextE7ContextRK13TensorNetworkRK5TIdxs">
+<span id="_CPPv3I0ENK7sequant3opt6detail9PeakModel13build_contextERK13TensorNetworkRK5TIdxs"></span><span id="_CPPv2I0ENK7sequant3opt6detail9PeakModel13build_contextERK13TensorNetworkRK5TIdxs"></span><span class="k"><span class="pre">template</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">typename</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">TIdxs</span></span></span><span class="p"><span class="pre">&gt;</span></span><br /><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1a949b91320abeeff46338207050de0609"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel7ContextE" title="sequant::opt::detail::PeakModel::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">build_context</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="typedef_namespacesequant_1a76768b73f1c0253327883b48d1591fc7.html#_CPPv4N7sequant13TensorNetworkE" title="sequant::TensorNetwork"><span class="n"><span class="pre">TensorNetwork</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">network</span></span>, <a class="reference internal" href="#_CPPv4I0ENK7sequant3opt6detail9PeakModel13build_contextE7ContextRK13TensorNetworkRK5TIdxs" title="sequant::opt::detail::PeakModel::build_context::TIdxs"><span class="n"><span class="pre">TIdxs</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">tidxs</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4I0ENK7sequant3opt6detail9PeakModel13build_contextE7ContextRK13TensorNetworkRK5TIdxs" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant3opt6detail9PeakModel4leafERK7Context6size_t">
+<span id="_CPPv3NK7sequant3opt6detail9PeakModel4leafERK7Context6size_t"></span><span id="_CPPv2NK7sequant3opt6detail9PeakModel4leafERK7Context6size_t"></span><span id="sequant::opt::detail::PeakModel::leaf__ContextCR.sC"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1a7afc755d36f38c53f052bfb10c49b63d"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel5StateE" title="sequant::opt::detail::PeakModel::State"><span class="n"><span class="pre">State</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">leaf</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel7ContextE" title="sequant::opt::detail::PeakModel::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span>, <span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">n</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant3opt6detail9PeakModel4leafERK7Context6size_t" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant3opt6detail9PeakModel4initERK7Context6size_t">
+<span id="_CPPv3NK7sequant3opt6detail9PeakModel4initERK7Context6size_t"></span><span id="_CPPv2NK7sequant3opt6detail9PeakModel4initERK7Context6size_t"></span><span id="sequant::opt::detail::PeakModel::init__ContextCR.sC"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1a58a2fa950d3d70ec800ce3d2bd9d4d75"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel5StateE" title="sequant::opt::detail::PeakModel::State"><span class="n"><span class="pre">State</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">init</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel7ContextE" title="sequant::opt::detail::PeakModel::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="p"><span class="pre">&amp;</span></span>, <span class="n"><span class="pre">size_t</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant3opt6detail9PeakModel4initERK7Context6size_t" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant3opt6detail9PeakModel5relaxER7Context6size_t6size_t6size_tRK5StateRK5StateR5State">
+<span id="_CPPv3NK7sequant3opt6detail9PeakModel5relaxER7Context6size_t6size_t6size_tRK5StateRK5StateR5State"></span><span id="_CPPv2NK7sequant3opt6detail9PeakModel5relaxER7Context6size_t6size_t6size_tRK5StateRK5StateR5State"></span><span id="sequant::opt::detail::PeakModel::relax__ContextR.s.s.s.StateCR.StateCR.StateRC"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1add163d12b59ad4374175f9e44ee267a7"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">relax</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel7ContextE" title="sequant::opt::detail::PeakModel::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span>, <span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">n</span></span>, <span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">lp</span></span>, <span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">rp</span></span>, <a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel5StateE" title="sequant::opt::detail::PeakModel::State"><span class="n"><span class="pre">State</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">lp_st</span></span>, <a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel5StateE" title="sequant::opt::detail::PeakModel::State"><span class="n"><span class="pre">State</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">rp_st</span></span>, <a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel5StateE" title="sequant::opt::detail::PeakModel::State"><span class="n"><span class="pre">State</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">acc</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant3opt6detail9PeakModel5relaxER7Context6size_t6size_t6size_tRK5StateRK5StateR5State" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant3opt6detail9PeakModel8finalizeER7Context6size_tRN9container6vectorI5StateEE">
+<span id="_CPPv3NK7sequant3opt6detail9PeakModel8finalizeER7Context6size_tRN9container6vectorI5StateEE"></span><span id="_CPPv2NK7sequant3opt6detail9PeakModel8finalizeER7Context6size_tRN9container6vectorI5StateEE"></span><span id="sequant::opt::detail::PeakModel::finalize__ContextR.s.container::vector:State:RC"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1acd87a73d943fb9d83b82ab5d7ac837dc"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">finalize</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel7ContextE" title="sequant::opt::detail::PeakModel::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span>, <span class="n"><span class="pre">size_t</span></span>, <span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1aaa8384c5d22396ccd9a2368a088e24bd.html#_CPPv4I0EN7sequant9container6vectorE" title="sequant::container::vector"><span class="n"><span class="pre">vector</span></span></a><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel5StateE" title="sequant::opt::detail::PeakModel::State"><span class="n"><span class="pre">State</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant3opt6detail9PeakModel8finalizeER7Context6size_tRN9container6vectorI5StateEE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant3opt6detail9PeakModel11reconstructERK7ContextRKN9container6vectorI5StateEE">
+<span id="_CPPv3NK7sequant3opt6detail9PeakModel11reconstructERK7ContextRKN9container6vectorI5StateEE"></span><span id="_CPPv2NK7sequant3opt6detail9PeakModel11reconstructERK7ContextRKN9container6vectorI5StateEE"></span><span id="sequant::opt::detail::PeakModel::reconstruct__ContextCR.container::vector:State:CRC"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1a7bc5f6df7b264f05742e7f95a688ab5f"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><a class="reference internal" href="typedef_namespacesequant_1a1635f01fc0a05c311a8ffdd1d4f79126.html#_CPPv4N7sequant12EvalSequenceE" title="sequant::EvalSequence"><span class="n"><span class="pre">EvalSequence</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">reconstruct</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel7ContextE" title="sequant::opt::detail::PeakModel::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="p"><span class="pre">&amp;</span></span>, <span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1aaa8384c5d22396ccd9a2368a088e24bd.html#_CPPv4I0EN7sequant9container6vectorE" title="sequant::container::vector"><span class="n"><span class="pre">vector</span></span></a><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel5StateE" title="sequant::opt::detail::PeakModel::State"><span class="n"><span class="pre">State</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">st</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant3opt6detail9PeakModel11reconstructERK7ContextRKN9container6vectorI5StateEE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-members">Public Members</p>
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail9PeakModel5idxszE">
+<span id="_CPPv3N7sequant3opt6detail9PeakModel5idxszE"></span><span id="_CPPv2N7sequant3opt6detail9PeakModel5idxszE"></span><span id="sequant::opt::detail::PeakModel::idxsz__IdxToSz"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1abdc02544e84e090f06441595e0aa5dfc"></span><a class="reference internal" href="#_CPPv4I0EN7sequant3opt6detail9PeakModelE" title="sequant::opt::detail::PeakModel::IdxToSz"><span class="n"><span class="pre">IdxToSz</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">idxsz</span></span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail9PeakModel5idxszE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail9PeakModel9inner_powE">
+<span id="_CPPv3N7sequant3opt6detail9PeakModel9inner_powE"></span><span id="_CPPv2N7sequant3opt6detail9PeakModel9inner_powE"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1ae6728f0da116fc7574820e3bcb3d46e7"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">function</span></span><span class="p"><span class="pre">&lt;</span></span><span class="kt"><span class="pre">double</span></span><span class="p"><span class="pre">(</span></span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="p"><span class="pre">)</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">inner_pow</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="p"><span class="pre">{</span></span><span class="p"><span class="pre">}</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail9PeakModel9inner_powE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Optional k-aware inner (CSV/PNO composite) extent; see footprint_counter. </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail9PeakModel16is_volatile_leafE">
+<span id="_CPPv3N7sequant3opt6detail9PeakModel16is_volatile_leafE"></span><span id="_CPPv2N7sequant3opt6detail9PeakModel16is_volatile_leafE"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1aad9019a706a45b5d87381d3a17bb3d02"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">function</span></span><span class="p"><span class="pre">&lt;</span></span><span class="kt"><span class="pre">bool</span></span><span class="p"><span class="pre">(</span></span><a class="reference internal" href="classsequant_1_1_tensor.html#_CPPv4N7sequant6TensorE" title="sequant::Tensor"><span class="n"><span class="pre">Tensor</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">)</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">is_volatile_leaf</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="p"><span class="pre">{</span></span><span class="p"><span class="pre">}</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail9PeakModel16is_volatile_leafE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Predicate marking a leaf tensor as volatile (amplitude-dependent). Used ONLY to weight the secondary flop tie-break: a volatile contraction is replayed every iteration, so its flops are scaled by <code class="docutils literal notranslate"><span class="pre">volatile_weight</span></code>. </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail9PeakModel15volatile_weightE">
+<span id="_CPPv3N7sequant3opt6detail9PeakModel15volatile_weightE"></span><span id="_CPPv2N7sequant3opt6detail9PeakModel15volatile_weightE"></span><span id="sequant::opt::detail::PeakModel::volatile_weight__double"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1a471a66ec8af8c7d433f2b11cb033b0c1"></span><span class="kt"><span class="pre">double</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">volatile_weight</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">1.0</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail9PeakModel15volatile_weightE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Replay weight applied to volatile contractions in the flop tie-break. </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail9PeakModel15machine_balanceE">
+<span id="_CPPv3N7sequant3opt6detail9PeakModel15machine_balanceE"></span><span id="_CPPv2N7sequant3opt6detail9PeakModel15machine_balanceE"></span><span id="sequant::opt::detail::PeakModel::machine_balance__double"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1ac31379fb76b987ba7bc7668045021a7e"></span><span class="kt"><span class="pre">double</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">machine_balance</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">0.0</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail9PeakModel15machine_balanceE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Roofline parameters for the secondary (tie-break) cost; see <a class="reference internal" href="structsequant_1_1_roofline_params.html#structsequant_1_1_roofline_params"><span class="std std-ref">RooflineParams</span></a> and <a class="reference internal" href="function_namespacesequant_1_1opt_1_1detail_1af41aa7df99078f36cca02868bb312fe7.html#namespacesequant_1_1opt_1_1detail_1af41aa7df99078f36cca02868bb312fe7"><span class="std std-ref">roofline_op_cost</span></a>. machine_balance == 0 (default) =&gt; pure-flop tie-break (no behavior change). </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail9PeakModel14fast_mem_elemsE">
+<span id="_CPPv3N7sequant3opt6detail9PeakModel14fast_mem_elemsE"></span><span id="_CPPv2N7sequant3opt6detail9PeakModel14fast_mem_elemsE"></span><span id="sequant::opt::detail::PeakModel::fast_mem_elems__double"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1a188ce85e42049c56611047b102b80cae"></span><span class="kt"><span class="pre">double</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">fast_mem_elems</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">0.0</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail9PeakModel14fast_mem_elemsE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail9PeakModel11block_tilesE">
+<span id="_CPPv3N7sequant3opt6detail9PeakModel11block_tilesE"></span><span id="_CPPv2N7sequant3opt6detail9PeakModel11block_tilesE"></span><span id="sequant::opt::detail::PeakModel::block_tiles__double"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1af4f48eb37d988a9ec322d730ae739d46"></span><span class="kt"><span class="pre">double</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">block_tiles</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">3.0</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail9PeakModel11block_tilesE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail9PeakModel15block_prefactorE">
+<span id="_CPPv3N7sequant3opt6detail9PeakModel15block_prefactorE"></span><span id="_CPPv2N7sequant3opt6detail9PeakModel15block_prefactorE"></span><span id="sequant::opt::detail::PeakModel::block_prefactor__double"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1a2b1ad79b5c9c17deef35797da0cacf9d"></span><span class="kt"><span class="pre">double</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">block_prefactor</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">1.0</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail9PeakModel15block_prefactorE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail9PeakModel20peak_flops_toleranceE">
+<span id="_CPPv3N7sequant3opt6detail9PeakModel20peak_flops_toleranceE"></span><span id="_CPPv2N7sequant3opt6detail9PeakModel20peak_flops_toleranceE"></span><span id="sequant::opt::detail::PeakModel::peak_flops_tolerance__double"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1a4a702a016c1d5524ca3abfc946f5f976"></span><span class="kt"><span class="pre">double</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">peak_flops_tolerance</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">0.0</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail9PeakModel20peak_flops_toleranceE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Relative peak tolerance for the final (root) selection: among frontier points whose peak is within (1 + peak_flops_tolerance) of the minimum peak, pick the one with the fewest flops. 0 (default) = strict peak-min (exact-tie flop tie-break only). A small positive value trades a bounded peak increase for a potentially large flop reduction (e.g. forming a persistent 4-PNO integral instead of recomputing a ladder). </p>
+</dd></dl>
+
+</div>
+<dl class="cpp struct">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail9PeakModel7ContextE">
+<span id="_CPPv3N7sequant3opt6detail9PeakModel7ContextE"></span><span id="_CPPv2N7sequant3opt6detail9PeakModel7ContextE"></span><span id="sequant::opt::detail::PeakModel::Context"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1_1_context"></span><span class="k"><span class="pre">struct</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Context</span></span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail9PeakModel7ContextE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Precomputed tables: S[n] = footprint of subset n’s result tensor, L[n] = sum of leaf (singleton) sizes in subset n, idx[n] = subset n’s open (result) indices (for the per-contraction flop tie-break), and <a class="reference internal" href="structsequant_1_1opt_1_1detail_1_1_peak_model_1_1_context.html#structsequant_1_1opt_1_1detail_1_1_peak_model_1_1_context_1a0102ce663939e1be24f60a886920eefb"><span class="std std-ref">flops_of(lhs, rhs, result)</span></a> the flop count of one binary contraction. </p>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-members">Public Members</p>
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail9PeakModel7Context1SE">
+<span id="_CPPv3N7sequant3opt6detail9PeakModel7Context1SE"></span><span id="_CPPv2N7sequant3opt6detail9PeakModel7Context1SE"></span><span id="sequant::opt::detail::PeakModel::Context::S__container::vector:double:"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1_1_context_1ad4e093e61d5aad596b9a09eddb8e9b59"></span><span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1aaa8384c5d22396ccd9a2368a088e24bd.html#_CPPv4I0EN7sequant9container6vectorE" title="sequant::container::vector"><span class="n"><span class="pre">vector</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="kt"><span class="pre">double</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">S</span></span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail9PeakModel7Context1SE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail9PeakModel7Context1LE">
+<span id="_CPPv3N7sequant3opt6detail9PeakModel7Context1LE"></span><span id="_CPPv2N7sequant3opt6detail9PeakModel7Context1LE"></span><span id="sequant::opt::detail::PeakModel::Context::L__container::vector:double:"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1_1_context_1adcebcae7936f8ba59a93552a0b9be186"></span><span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1aaa8384c5d22396ccd9a2368a088e24bd.html#_CPPv4I0EN7sequant9container6vectorE" title="sequant::container::vector"><span class="n"><span class="pre">vector</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="kt"><span class="pre">double</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">L</span></span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail9PeakModel7Context1LE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail9PeakModel7Context3idxE">
+<span id="_CPPv3N7sequant3opt6detail9PeakModel7Context3idxE"></span><span id="_CPPv2N7sequant3opt6detail9PeakModel7Context3idxE"></span><span id="sequant::opt::detail::PeakModel::Context::idx__container::vector:IndexSet:"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1_1_context_1aa4707e4a2c31b16bc043d04ced32c357"></span><span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1aaa8384c5d22396ccd9a2368a088e24bd.html#_CPPv4I0EN7sequant9container6vectorE" title="sequant::container::vector"><span class="n"><span class="pre">vector</span></span></a><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="typedef_namespacesequant_1ad7a231d19dfd09d4da6527eaa13ff41d.html#_CPPv4N7sequant8IndexSetE" title="sequant::IndexSet"><span class="n"><span class="pre">IndexSet</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">idx</span></span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail9PeakModel7Context3idxE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail9PeakModel7Context8flops_ofE">
+<span id="_CPPv3N7sequant3opt6detail9PeakModel7Context8flops_ofE"></span><span id="_CPPv2N7sequant3opt6detail9PeakModel7Context8flops_ofE"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1_1_context_1a0102ce663939e1be24f60a886920eefb"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">function</span></span><span class="p"><span class="pre">&lt;</span></span><span class="kt"><span class="pre">double</span></span><span class="p"><span class="pre">(</span></span><a class="reference internal" href="typedef_namespacesequant_1ad7a231d19dfd09d4da6527eaa13ff41d.html#_CPPv4N7sequant8IndexSetE" title="sequant::IndexSet"><span class="n"><span class="pre">IndexSet</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="typedef_namespacesequant_1ad7a231d19dfd09d4da6527eaa13ff41d.html#_CPPv4N7sequant8IndexSetE" title="sequant::IndexSet"><span class="n"><span class="pre">IndexSet</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="typedef_namespacesequant_1ad7a231d19dfd09d4da6527eaa13ff41d.html#_CPPv4N7sequant8IndexSetE" title="sequant::IndexSet"><span class="n"><span class="pre">IndexSet</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">)</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">flops_of</span></span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail9PeakModel7Context8flops_ofE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail9PeakModel7Context13volatile_maskE">
+<span id="_CPPv3N7sequant3opt6detail9PeakModel7Context13volatile_maskE"></span><span id="_CPPv2N7sequant3opt6detail9PeakModel7Context13volatile_maskE"></span><span id="sequant::opt::detail::PeakModel::Context::volatile_mask__std::s"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1_1_context_1a755b8392b29da5d117734ea8d6828e08"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">volatile_mask</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">0</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail9PeakModel7Context13volatile_maskE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Bitmask of volatile leaf tensors (for the flop tie-break weight). </p>
+</dd></dl>
+
+</div>
+</dd></dl>
+
+<dl class="cpp struct">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail9PeakModel10FrontPointE">
+<span id="_CPPv3N7sequant3opt6detail9PeakModel10FrontPointE"></span><span id="_CPPv2N7sequant3opt6detail9PeakModel10FrontPointE"></span><span id="sequant::opt::detail::PeakModel::FrontPoint"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1_1_front_point"></span><span class="k"><span class="pre">struct</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">FrontPoint</span></span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail9PeakModel10FrontPointE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>One non-dominated (peak, flops) trade-off for a subset, with the bipartition / order / child-frontier-indices needed to reconstruct it. <code class="docutils literal notranslate"><span class="pre">lp_idx</span></code> / <code class="docutils literal notranslate"><span class="pre">rp_idx</span></code> select which frontier point of each child was used. </p>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-members">Public Members</p>
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail9PeakModel10FrontPoint4peakE">
+<span id="_CPPv3N7sequant3opt6detail9PeakModel10FrontPoint4peakE"></span><span id="_CPPv2N7sequant3opt6detail9PeakModel10FrontPoint4peakE"></span><span id="sequant::opt::detail::PeakModel::FrontPoint::peak__double"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1_1_front_point_1a1aa56215d2442e97698f25eb65cba9c4"></span><span class="kt"><span class="pre">double</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">peak</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">numeric_limits</span></span><span class="p"><span class="pre">&lt;</span></span><span class="kt"><span class="pre">double</span></span><span class="p"><span class="pre">&gt;</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">max</span></span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail9PeakModel10FrontPoint4peakE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail9PeakModel10FrontPoint5flopsE">
+<span id="_CPPv3N7sequant3opt6detail9PeakModel10FrontPoint5flopsE"></span><span id="_CPPv2N7sequant3opt6detail9PeakModel10FrontPoint5flopsE"></span><span id="sequant::opt::detail::PeakModel::FrontPoint::flops__double"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1_1_front_point_1a4dd9698efbca4afbf01d3f7918dce13f"></span><span class="kt"><span class="pre">double</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">flops</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">numeric_limits</span></span><span class="p"><span class="pre">&lt;</span></span><span class="kt"><span class="pre">double</span></span><span class="p"><span class="pre">&gt;</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">max</span></span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail9PeakModel10FrontPoint5flopsE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail9PeakModel10FrontPoint2lpE">
+<span id="_CPPv3N7sequant3opt6detail9PeakModel10FrontPoint2lpE"></span><span id="_CPPv2N7sequant3opt6detail9PeakModel10FrontPoint2lpE"></span><span id="sequant::opt::detail::PeakModel::FrontPoint::lp__s"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1_1_front_point_1a91333cef0ab72ac82528d1068ab449da"></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">lp</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">0</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail9PeakModel10FrontPoint2lpE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail9PeakModel10FrontPoint2rpE">
+<span id="_CPPv3N7sequant3opt6detail9PeakModel10FrontPoint2rpE"></span><span id="_CPPv2N7sequant3opt6detail9PeakModel10FrontPoint2rpE"></span><span id="sequant::opt::detail::PeakModel::FrontPoint::rp__s"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1_1_front_point_1a99e39b4520f7a43ed1e5ce339e0a4813"></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">rp</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">0</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail9PeakModel10FrontPoint2rpE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail9PeakModel10FrontPoint8lp_firstE">
+<span id="_CPPv3N7sequant3opt6detail9PeakModel10FrontPoint8lp_firstE"></span><span id="_CPPv2N7sequant3opt6detail9PeakModel10FrontPoint8lp_firstE"></span><span id="sequant::opt::detail::PeakModel::FrontPoint::lp_first__b"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1_1_front_point_1a856671e928d2630e0a802afc468e1536"></span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">lp_first</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">true</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail9PeakModel10FrontPoint8lp_firstE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail9PeakModel10FrontPoint6lp_idxE">
+<span id="_CPPv3N7sequant3opt6detail9PeakModel10FrontPoint6lp_idxE"></span><span id="_CPPv2N7sequant3opt6detail9PeakModel10FrontPoint6lp_idxE"></span><span id="sequant::opt::detail::PeakModel::FrontPoint::lp_idx__i"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1_1_front_point_1a3fe4909450175b485cc923c105c3cd4b"></span><span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">lp_idx</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="o"><span class="pre">-</span></span><span class="m"><span class="pre">1</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail9PeakModel10FrontPoint6lp_idxE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail9PeakModel10FrontPoint6rp_idxE">
+<span id="_CPPv3N7sequant3opt6detail9PeakModel10FrontPoint6rp_idxE"></span><span id="_CPPv2N7sequant3opt6detail9PeakModel10FrontPoint6rp_idxE"></span><span id="sequant::opt::detail::PeakModel::FrontPoint::rp_idx__i"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_model_1_1_front_point_1abd296b325cca5b43bd961dec08e4e5bf"></span><span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">rp_idx</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="o"><span class="pre">-</span></span><span class="m"><span class="pre">1</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail9PeakModel10FrontPoint6rp_idxE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, SeQuant developers
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            <div class="last-updated">
+              Last updated on Jul 1, 2026 10:36:51 AM</div>
+          </div>
+          <div class="right-details">
+            <div class="icons">
+              <a class="muted-link fa-brands fa-solid fa-github fa-2x" href="https://github.com/ValeevGroup/SeQuant" aria-label="GitHub"></a>
+              
+            </div>
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Template Struct PeakModel</a><ul>
+<li><a class="reference internal" href="#nested-relationships">Nested Relationships</a><ul>
+<li><a class="reference internal" href="#nested-types">Nested Types</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#struct-documentation">Struct Documentation</a><ul>
+<li><a class="reference internal" href="#_CPPv4I0EN7sequant3opt6detail9PeakModelE"><code class="docutils literal notranslate"><span class="pre">sequant::opt::detail::PeakModel</span></code></a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel5StateE"><code class="docutils literal notranslate"><span class="pre">State</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4I0ENK7sequant3opt6detail9PeakModel13build_contextE7ContextRK13TensorNetworkRK5TIdxs"><code class="docutils literal notranslate"><span class="pre">build_context()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant3opt6detail9PeakModel4leafERK7Context6size_t"><code class="docutils literal notranslate"><span class="pre">leaf()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant3opt6detail9PeakModel4initERK7Context6size_t"><code class="docutils literal notranslate"><span class="pre">init()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant3opt6detail9PeakModel5relaxER7Context6size_t6size_t6size_tRK5StateRK5StateR5State"><code class="docutils literal notranslate"><span class="pre">relax()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant3opt6detail9PeakModel8finalizeER7Context6size_tRN9container6vectorI5StateEE"><code class="docutils literal notranslate"><span class="pre">finalize()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant3opt6detail9PeakModel11reconstructERK7ContextRKN9container6vectorI5StateEE"><code class="docutils literal notranslate"><span class="pre">reconstruct()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel5idxszE"><code class="docutils literal notranslate"><span class="pre">idxsz</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel9inner_powE"><code class="docutils literal notranslate"><span class="pre">inner_pow</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel16is_volatile_leafE"><code class="docutils literal notranslate"><span class="pre">is_volatile_leaf</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel15volatile_weightE"><code class="docutils literal notranslate"><span class="pre">volatile_weight</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel15machine_balanceE"><code class="docutils literal notranslate"><span class="pre">machine_balance</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel14fast_mem_elemsE"><code class="docutils literal notranslate"><span class="pre">fast_mem_elems</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel11block_tilesE"><code class="docutils literal notranslate"><span class="pre">block_tiles</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel15block_prefactorE"><code class="docutils literal notranslate"><span class="pre">block_prefactor</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel20peak_flops_toleranceE"><code class="docutils literal notranslate"><span class="pre">peak_flops_tolerance</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel7ContextE"><code class="docutils literal notranslate"><span class="pre">sequant::opt::detail::PeakModel::Context</span></code></a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel7Context1SE"><code class="docutils literal notranslate"><span class="pre">S</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel7Context1LE"><code class="docutils literal notranslate"><span class="pre">L</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel7Context3idxE"><code class="docutils literal notranslate"><span class="pre">idx</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel7Context8flops_ofE"><code class="docutils literal notranslate"><span class="pre">flops_of</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel7Context13volatile_maskE"><code class="docutils literal notranslate"><span class="pre">volatile_mask</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel10FrontPointE"><code class="docutils literal notranslate"><span class="pre">sequant::opt::detail::PeakModel::FrontPoint</span></code></a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel10FrontPoint4peakE"><code class="docutils literal notranslate"><span class="pre">peak</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel10FrontPoint5flopsE"><code class="docutils literal notranslate"><span class="pre">flops</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel10FrontPoint2lpE"><code class="docutils literal notranslate"><span class="pre">lp</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel10FrontPoint2rpE"><code class="docutils literal notranslate"><span class="pre">rp</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel10FrontPoint8lp_firstE"><code class="docutils literal notranslate"><span class="pre">lp_first</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel10FrontPoint6lp_idxE"><code class="docutils literal notranslate"><span class="pre">lp_idx</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail9PeakModel10FrontPoint6rp_idxE"><code class="docutils literal notranslate"><span class="pre">rp_idx</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script src="../_static/bootstrap-treeview/bootstrap-treeview.min.js?v=6a1e96b4"></script>
+    </body>
+</html>

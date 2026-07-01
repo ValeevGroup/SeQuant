@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ad25720c9e51bc3487b81bf843dad6776:
+
+Function sequant::diff
+======================
+
+- Defined in :ref:`file_SeQuant_core_utility_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::diff(const Expr&, const Expr&)
+   :project: SeQuant

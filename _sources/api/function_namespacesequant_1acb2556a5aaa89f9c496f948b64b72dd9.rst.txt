@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1acb2556a5aaa89f9c496f948b64b72dd9:
+
+Function sequant::num_indices
+=============================
+
+- Defined in :ref:`file_SeQuant_core_expressions_abstract_tensor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::num_indices()
+   :project: SeQuant

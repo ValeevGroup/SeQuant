@@ -1,0 +1,14 @@
+.. _exhale_define_domain_2mbpt_2op_8hpp_1a445c980540247f80e555564a896203ab:
+
+Define DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT
+===============================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT
+   :project: SeQuant

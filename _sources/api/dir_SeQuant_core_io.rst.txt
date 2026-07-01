@@ -1,0 +1,28 @@
+.. _dir_SeQuant_core_io:
+
+
+Directory io
+============
+
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+*Directory path:* ``SeQuant/core/io``
+
+Subdirectories
+--------------
+
+- :ref:`dir_SeQuant_core_io_latex`
+- :ref:`dir_SeQuant_core_io_serialization`
+
+
+Files
+-----
+
+- :ref:`file_SeQuant_core_io_concepts.hpp`
+- :ref:`file_SeQuant_core_io_shorthands.hpp`
+
+

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1a75a16863c89f64526cb10c4f156edde4:
+
+Function sequant::mbpt::ms_uniform_tensor
+=========================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::ms_uniform_tensor(const AbstractTensor&)
+   :project: SeQuant

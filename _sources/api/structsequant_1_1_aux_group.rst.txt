@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_aux_group:
+
+Struct AuxGroup
+===============
+
+- Defined in :ref:`file_SeQuant_core_tensor_network_vertex_painter.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::AuxGroup
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

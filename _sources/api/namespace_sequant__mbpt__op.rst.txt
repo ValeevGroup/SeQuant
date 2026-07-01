@@ -1,0 +1,142 @@
+
+.. _namespace_sequant__mbpt__op:
+
+Namespace sequant::mbpt::op
+===========================
+
+
+the namespace containing MBPT operators 
+
+
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant__mbpt__op__@200`
+
+- :ref:`namespace_sequant__mbpt__op__sequant__mbpt__tensor`
+
+- :ref:`namespace_sequant__mbpt__op__tensor`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1mbpt_1_1op_1_1_e_v_options`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1ad1217f3d7352e8267ab3431630aab051`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a6ba850bbdaf51a53690b5d6f045af432`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1ad03798e8e3c0f8d916fd2e5fa1397928`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a697e8721d87766c0fc66f49dad83abc2`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a7b98a92c3dbfae2c10d1bc57981619c4`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1af161234050fe577073b8bbd6c7e84932`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1ad97f824dc8e70f3d08efa66c0f1b1777`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a6c5129991470bb898128bf0afe47fc58`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a71085738dbaeb28335934c1393032a9a`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1aa5ac40c2ff5699895da4c62e671bf529`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1acd42ab0ff44948945f5566851b49d67d`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a68a2abb6ba76514c8a40bbe5c90fd45a`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1aeb5122c034369695044f7ea5fef5686f`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1aba6c2ff2c72452e0c77d06d3e1b92d94`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a971f7f4a2e3cca07763576481dfbd028`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1af02bfd1ec06ddd7288f129a099bad551`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1ac389de58f04c5ccf7279da092b6adc0c`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a313982e9e908aa0e57b3bc26cd4f83a2`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1ae8bee657232a7e236d6107ad8e939bb0`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a5011094ae91aab5654082f94dd41e055`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1af202eeff0db87e23579e5ae5f095b2d4`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1ad3155f3c8a3c93f67d8100c08c16db5c`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a6eb224d07b96ee459e3720cdab99b3bd`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1ab5a51703fa1be2baf0e03afbba941858`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a48425eefec4b9fb72ee4bc5cb21a438f`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a027c8fbac813db708c772228dbfbfffe`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a35656a88e39638ca1c776e777728f802`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a4ce1cc500dd8636390de046d8ca9d1d2`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1aa99b0c2d90f9f6a3c169d26031d622ca`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a26e0678a871ed9ee35163ff580252f8e`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a7358ef8522dcbbd01b2de2e5318b1a87`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1af5689550f4672fbd0aed61116f09d144`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a36256db089763a4d2ed9a36750abe50b`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1ad4fc92193661d071d0f8923e93e4db0f`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1abc0b3ac339a3a198de3036d8b103d5fc`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a48e72a6f0452094609de54abe97a932d`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a7bc386a01ed4ff1fd0e86eed4859f289`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a7caf19ecaeb3c7fc134f07dce02b5b2c`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a72f0ea04e4d78e73663e874b5b437b5a`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a0e1122a134da5432314009da7d604b77`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a386ca3b67dadb45e20d496c1008a6e1c`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a6a08c241765a9af3a3b5069efd7972d9`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1ac0c40867e53ab9b3af97e260309a9f02`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a8987a7f20835e5e625a48820fec3ead9`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1acc2583d703c6770fcc1ccb960305b958`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a095ec04bb060adcc6ff8c66ed8585436`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a3f0cd6da3f89097a424a2af3cf5f1007`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1_1mbpt_1_1op_1a6f2d374cd7ee2e1be35988da01e545a7`

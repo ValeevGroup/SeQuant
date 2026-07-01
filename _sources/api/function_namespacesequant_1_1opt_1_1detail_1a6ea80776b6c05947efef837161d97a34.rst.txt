@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1a6ea80776b6c05947efef837161d97a34:
+
+Function sequant::opt::detail::build_subnet_metadata
+====================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_single_term_detail.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::build_subnet_metadata(TensorNetwork const&, container::vector<OptRes>&)
+   :project: SeQuant

@@ -1,0 +1,35 @@
+
+.. _program_listing_file_SeQuant_core_eval_fwd.hpp:
+
+Program Listing for File fwd.hpp
+================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_fwd.hpp>` (``SeQuant/core/eval/fwd.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Bimal Gaudel on 3/27/25.
+   //
+   
+   #ifndef SEQUANT_EVAL_FWD_HPP
+   #define SEQUANT_EVAL_FWD_HPP
+   
+   #include <memory>
+   
+   namespace sequant {
+   
+   enum class DeNest { True, False };
+   
+   template <typename TreeNode, bool force_hash_collisions = false>
+   class CacheManager;
+   
+   class Result;
+   
+   using ResultPtr = std::shared_ptr<Result>;
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_EVAL_FWD_HPP

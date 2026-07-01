@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1_1log_1a25acc020490a0ebdc59f74b1e47f6203:
+
+Enum EvalMode
+=============
+
+- Defined in :ref:`file_SeQuant_core_eval_eval.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::log::EvalMode
+   :project: SeQuant

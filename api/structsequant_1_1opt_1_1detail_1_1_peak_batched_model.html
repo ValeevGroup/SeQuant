@@ -1,0 +1,673 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html">
+        <link rel="prefetch" href="../_static/logo.svg" as="image">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>Template Struct PeakBatchedModel - SeQuant Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/bootstrap-treeview/bootstrap-treeview.min.css?v=8176a87d" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=821744c5" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --sidebar-item-font-size: 0.95em;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">SeQuant Documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="../_static/logo.svg" alt="Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">User</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/getting_started/index.html">Getting started</a><input aria-label="Toggle navigation of Getting started" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/wick.html">Wick’s Theorem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/index_spaces.html">Register Index Spaces</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/operators.html">Operators</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../user/getting_started/installing.html">Installation</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/guide/index.html">User Guide</a><input aria-label="Toggle navigation of User Guide" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/operator.html">Operator Interface for Symbolic Many-Body Algebra</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/cc.html">Coupled-Cluster Class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/io.html">I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/evaluation.html">Evaluation Trace Analysis</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/utilities/index.html">Utilities</a><input aria-label="Toggle navigation of Utilities" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/utilities/external_interface.html">External interface</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../developer/index.html">Developer docs</a><input aria-label="Toggle navigation of Developer docs" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../developer/documentation.html">Documentation Guide</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">API reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Maintainer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../maintainer/index.html">Maintainer docs</a><input aria-label="Toggle navigation of Maintainer docs" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../maintainer/release.html">Release Guide</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">See Also</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/tiledarray">TiledArray</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/mpqc">Massively Parallel Quantum Chemistry</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io">Valeev Research Group</a></li>
+</ul>
+
+</div></div>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="../_sources/api/structsequant_1_1opt_1_1detail_1_1_peak_batched_model.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="template-struct-peakbatchedmodel">
+<span id="exhale-struct-structsequant-1-1opt-1-1detail-1-1-peak-batched-model"></span><h1>Template Struct PeakBatchedModel<a class="headerlink" href="#template-struct-peakbatchedmodel" title="Link to this heading">¶</a></h1>
+<ul class="simple">
+<li><p>Defined in <a class="reference internal" href="file_SeQuant_core_optimize_cost_model.hpp.html#file-sequant-core-optimize-cost-model-hpp"><span class="std std-ref">File cost_model.hpp</span></a></p></li>
+</ul>
+<section id="nested-relationships">
+<h2>Nested Relationships<a class="headerlink" href="#nested-relationships" title="Link to this heading">¶</a></h2>
+<section id="nested-types">
+<h3>Nested Types<a class="headerlink" href="#nested-types" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><a class="reference internal" href="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_b_front_point.html#exhale-struct-structsequant-1-1opt-1-1detail-1-1-peak-batched-model-1-1-b-front-point"><span class="std std-ref">Struct PeakBatchedModel::BFrontPoint</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_context.html#exhale-struct-structsequant-1-1opt-1-1detail-1-1-peak-batched-model-1-1-context"><span class="std std-ref">Struct PeakBatchedModel::Context</span></a></p></li>
+</ul>
+</section>
+</section>
+<section id="struct-documentation">
+<h2>Struct Documentation<a class="headerlink" href="#struct-documentation" title="Link to this heading">¶</a></h2>
+<dl class="cpp struct">
+<dt class="sig sig-object cpp" id="_CPPv4I0EN7sequant3opt6detail16PeakBatchedModelE">
+<span id="_CPPv3I0EN7sequant3opt6detail16PeakBatchedModelE"></span><span id="_CPPv2I0EN7sequant3opt6detail16PeakBatchedModelE"></span><span class="k"><span class="pre">template</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">typename</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">IdxToSz</span></span></span><span class="p"><span class="pre">&gt;</span></span><br /><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model"></span><span class="k"><span class="pre">struct</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">PeakBatchedModel</span></span></span><a class="headerlink" href="#_CPPv4I0EN7sequant3opt6detail16PeakBatchedModelE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Multi-mode batched peak-memory single-term cost model (DensePeakSizeBatched objective). </p>
+<p>Implements the per-batchable-index all-co-resident pebble-game DP, factored into the CostModel hooks driven by <a class="reference internal" href="function_namespacesequant_1_1opt_1_1detail_1a442ca6386978f275168b2678d03402f4.html#namespacesequant_1_1opt_1_1detail_1a442ca6386978f275168b2678d03402f4"><span class="std std-ref">run_single_term_opt</span></a>. Follows the batch-aware cost model design (section 6.2, model A): each DP cell is indexed by both a subset <code class="docutils literal notranslate"><span class="pre">n</span></code> and a sliced-set context <code class="docutils literal notranslate"><span class="pre">B</span></code> over the batchable indices, so a model State is the <code class="docutils literal notranslate"></code>[B]-vector of per-context <a class="reference internal" href="structsequant_1_1opt_1_1detail_1_1_batched_res.html#structsequant_1_1opt_1_1detail_1_1_batched_res"><span class="std std-ref">BatchedRes</span></a>. No CSE; persistence-gated batching.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Template Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>IdxToSz</strong> – A callable mapping an <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a> to its extent. </p>
+</dd>
+</dl>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-types">Public Types</p>
+<dl class="cpp type">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel5StateE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel5StateE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel5StateE"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1a60f722abe18d50f61ecbee5a35ed2028"></span><span class="k"><span class="pre">using</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">State</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1aaa8384c5d22396ccd9a2368a088e24bd.html#_CPPv4I0EN7sequant9container6vectorE" title="sequant::container::vector"><span class="n"><span class="pre">vector</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1aaa8384c5d22396ccd9a2368a088e24bd.html#_CPPv4I0EN7sequant9container6vectorE" title="sequant::container::vector"><span class="n"><span class="pre">vector</span></span></a><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel11BFrontPointE" title="sequant::opt::detail::PeakBatchedModel::BFrontPoint"><span class="n"><span class="pre">BFrontPoint</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="p"><span class="pre">&gt;</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel5StateE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Per-subset DP cell: a <code class="docutils literal notranslate"></code>[B]-vector (size <code class="docutils literal notranslate"><span class="pre">nB</span></code> = 2^m) of Pareto frontiers, one non-dominated (peak, flops) set per sliced-set context B. </p>
+</dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-functions">Public Functions</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4I0ENK7sequant3opt6detail16PeakBatchedModel13build_contextE7ContextRK13TensorNetworkRK5TIdxs">
+<span id="_CPPv3I0ENK7sequant3opt6detail16PeakBatchedModel13build_contextERK13TensorNetworkRK5TIdxs"></span><span id="_CPPv2I0ENK7sequant3opt6detail16PeakBatchedModel13build_contextERK13TensorNetworkRK5TIdxs"></span><span class="k"><span class="pre">template</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">typename</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">TIdxs</span></span></span><span class="p"><span class="pre">&gt;</span></span><br /><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1a6902d5c4ed28ae1d0eea7737e420d59c"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel7ContextE" title="sequant::opt::detail::PeakBatchedModel::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">build_context</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="typedef_namespacesequant_1a76768b73f1c0253327883b48d1591fc7.html#_CPPv4N7sequant13TensorNetworkE" title="sequant::TensorNetwork"><span class="n"><span class="pre">TensorNetwork</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">network</span></span>, <a class="reference internal" href="#_CPPv4I0ENK7sequant3opt6detail16PeakBatchedModel13build_contextE7ContextRK13TensorNetworkRK5TIdxs" title="sequant::opt::detail::PeakBatchedModel::build_context::TIdxs"><span class="n"><span class="pre">TIdxs</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">tidxs</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4I0ENK7sequant3opt6detail16PeakBatchedModel13build_contextE7ContextRK13TensorNetworkRK5TIdxs" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant3opt6detail16PeakBatchedModel4leafERK7Context6size_t">
+<span id="_CPPv3NK7sequant3opt6detail16PeakBatchedModel4leafERK7Context6size_t"></span><span id="_CPPv2NK7sequant3opt6detail16PeakBatchedModel4leafERK7Context6size_t"></span><span id="sequant::opt::detail::PeakBatchedModel::leaf__ContextCR.sC"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1abb327a099a2a52855bf4ee2b1acbcc0e"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel5StateE" title="sequant::opt::detail::PeakBatchedModel::State"><span class="n"><span class="pre">State</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">leaf</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel7ContextE" title="sequant::opt::detail::PeakBatchedModel::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span>, <span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">n</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant3opt6detail16PeakBatchedModel4leafERK7Context6size_t" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant3opt6detail16PeakBatchedModel4initERK7Context6size_t">
+<span id="_CPPv3NK7sequant3opt6detail16PeakBatchedModel4initERK7Context6size_t"></span><span id="_CPPv2NK7sequant3opt6detail16PeakBatchedModel4initERK7Context6size_t"></span><span id="sequant::opt::detail::PeakBatchedModel::init__ContextCR.sC"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1a872478d281ae644e6fbbc96b66b35b7e"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel5StateE" title="sequant::opt::detail::PeakBatchedModel::State"><span class="n"><span class="pre">State</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">init</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel7ContextE" title="sequant::opt::detail::PeakBatchedModel::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span>, <span class="n"><span class="pre">size_t</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant3opt6detail16PeakBatchedModel4initERK7Context6size_t" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant3opt6detail16PeakBatchedModel5relaxER7Context6size_t6size_t6size_tRK5StateRK5StateR5State">
+<span id="_CPPv3NK7sequant3opt6detail16PeakBatchedModel5relaxER7Context6size_t6size_t6size_tRK5StateRK5StateR5State"></span><span id="_CPPv2NK7sequant3opt6detail16PeakBatchedModel5relaxER7Context6size_t6size_t6size_tRK5StateRK5StateR5State"></span><span id="sequant::opt::detail::PeakBatchedModel::relax__ContextR.s.s.s.StateCR.StateCR.StateRC"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1a0b236c78885f426a4a2525807859967c"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">relax</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel7ContextE" title="sequant::opt::detail::PeakBatchedModel::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span>, <span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">n</span></span>, <span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">lp</span></span>, <span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">rp</span></span>, <a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel5StateE" title="sequant::opt::detail::PeakBatchedModel::State"><span class="n"><span class="pre">State</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">lp_st</span></span>, <a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel5StateE" title="sequant::opt::detail::PeakBatchedModel::State"><span class="n"><span class="pre">State</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">rp_st</span></span>, <a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel5StateE" title="sequant::opt::detail::PeakBatchedModel::State"><span class="n"><span class="pre">State</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">acc</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant3opt6detail16PeakBatchedModel5relaxER7Context6size_t6size_t6size_tRK5StateRK5StateR5State" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant3opt6detail16PeakBatchedModel8finalizeER7Context6size_tRN9container6vectorI5StateEE">
+<span id="_CPPv3NK7sequant3opt6detail16PeakBatchedModel8finalizeER7Context6size_tRN9container6vectorI5StateEE"></span><span id="_CPPv2NK7sequant3opt6detail16PeakBatchedModel8finalizeER7Context6size_tRN9container6vectorI5StateEE"></span><span id="sequant::opt::detail::PeakBatchedModel::finalize__ContextR.s.container::vector:State:RC"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1a50dc65627fbecac3f598c6c45a5d8687"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">finalize</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel7ContextE" title="sequant::opt::detail::PeakBatchedModel::Context"><span class="n"><span class="pre">Context</span></span></a><span class="p"><span class="pre">&amp;</span></span>, <span class="n"><span class="pre">size_t</span></span>, <span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1aaa8384c5d22396ccd9a2368a088e24bd.html#_CPPv4I0EN7sequant9container6vectorE" title="sequant::container::vector"><span class="n"><span class="pre">vector</span></span></a><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel5StateE" title="sequant::opt::detail::PeakBatchedModel::State"><span class="n"><span class="pre">State</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="p"><span class="pre">&amp;</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant3opt6detail16PeakBatchedModel8finalizeER7Context6size_tRN9container6vectorI5StateEE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant3opt6detail16PeakBatchedModel11reconstructERK7ContextRKN9container6vectorI5StateEE">
+<span id="_CPPv3NK7sequant3opt6detail16PeakBatchedModel11reconstructERK7ContextRKN9container6vectorI5StateEE"></span><span id="_CPPv2NK7sequant3opt6detail16PeakBatchedModel11reconstructERK7ContextRKN9container6vectorI5StateEE"></span><span id="sequant::opt::detail::PeakBatchedModel::reconstruct__ContextCR.container::vector:State:CRC"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1a64a9c9c8df963460f4c9283f9f15cf32"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><a class="reference internal" href="typedef_namespacesequant_1a1635f01fc0a05c311a8ffdd1d4f79126.html#_CPPv4N7sequant12EvalSequenceE" title="sequant::EvalSequence"><span class="n"><span class="pre">EvalSequence</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">reconstruct</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel7ContextE" title="sequant::opt::detail::PeakBatchedModel::Context"><span class="n"><span class="pre">Context</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">ctx</span></span>, <span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1aaa8384c5d22396ccd9a2368a088e24bd.html#_CPPv4I0EN7sequant9container6vectorE" title="sequant::container::vector"><span class="n"><span class="pre">vector</span></span></a><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel5StateE" title="sequant::opt::detail::PeakBatchedModel::State"><span class="n"><span class="pre">State</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">st</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant3opt6detail16PeakBatchedModel11reconstructERK7ContextRKN9container6vectorI5StateEE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-members">Public Members</p>
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel5idxszE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel5idxszE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel5idxszE"></span><span id="sequant::opt::detail::PeakBatchedModel::idxsz__IdxToSz"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1a08a848e19e73490887bd1feb3f2aa5b3"></span><a class="reference internal" href="#_CPPv4I0EN7sequant3opt6detail16PeakBatchedModelE" title="sequant::opt::detail::PeakBatchedModel::IdxToSz"><span class="n"><span class="pre">IdxToSz</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">idxsz</span></span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel5idxszE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel12is_batchableE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel12is_batchableE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel12is_batchableE"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1a94cbc2b925aae3cc983318bd828cc765"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">function</span></span><span class="p"><span class="pre">&lt;</span></span><span class="kt"><span class="pre">bool</span></span><span class="p"><span class="pre">(</span></span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">)</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">is_batchable</span></span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel12is_batchableE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel5batchE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel5batchE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel5batchE"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1a6c5b92c07fcd8435193693e5524ee745"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">function</span></span><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="p"><span class="pre">(</span></span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">)</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">batch</span></span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel5batchE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel16is_volatile_leafE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel16is_volatile_leafE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel16is_volatile_leafE"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1a7c501a59e5c8241b9ad5a6238605e475"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">function</span></span><span class="p"><span class="pre">&lt;</span></span><span class="kt"><span class="pre">bool</span></span><span class="p"><span class="pre">(</span></span><a class="reference internal" href="classsequant_1_1_tensor.html#_CPPv4N7sequant6TensorE" title="sequant::Tensor"><span class="n"><span class="pre">Tensor</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">)</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">is_volatile_leaf</span></span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel16is_volatile_leafE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel9inner_powE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel9inner_powE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel9inner_powE"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1a09d42fe0157e41372c83e7aba3e4a031"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">function</span></span><span class="p"><span class="pre">&lt;</span></span><span class="kt"><span class="pre">double</span></span><span class="p"><span class="pre">(</span></span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="p"><span class="pre">)</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">inner_pow</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="p"><span class="pre">{</span></span><span class="p"><span class="pre">}</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel9inner_powE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Optional k-aware inner (CSV/PNO composite) extent; see footprint_counter. </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel15volatile_weightE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel15volatile_weightE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel15volatile_weightE"></span><span id="sequant::opt::detail::PeakBatchedModel::volatile_weight__double"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1a88be13c9dde53d8f900511fdb90d7c8c"></span><span class="kt"><span class="pre">double</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">volatile_weight</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">1.0</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel15volatile_weightE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Replay weight applied to volatile contractions in the flop tie-break. </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel15machine_balanceE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel15machine_balanceE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel15machine_balanceE"></span><span id="sequant::opt::detail::PeakBatchedModel::machine_balance__double"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1ae20fa222ab9345521757c36ae40f25ef"></span><span class="kt"><span class="pre">double</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">machine_balance</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">0.0</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel15machine_balanceE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Roofline parameters for the secondary (tie-break) cost; see <a class="reference internal" href="structsequant_1_1_roofline_params.html#structsequant_1_1_roofline_params"><span class="std std-ref">RooflineParams</span></a> and <a class="reference internal" href="function_namespacesequant_1_1opt_1_1detail_1af41aa7df99078f36cca02868bb312fe7.html#namespacesequant_1_1opt_1_1detail_1af41aa7df99078f36cca02868bb312fe7"><span class="std std-ref">roofline_op_cost</span></a>. machine_balance == 0 (default) =&gt; pure-flop tie-break (no behavior change). Uses full (unsliced) operand+result footprints (total per-replay traffic; slicing reduces peak, not total work). </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel14fast_mem_elemsE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel14fast_mem_elemsE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel14fast_mem_elemsE"></span><span id="sequant::opt::detail::PeakBatchedModel::fast_mem_elems__double"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1a71bacfadbe744113ac665dac8ffd5e34"></span><span class="kt"><span class="pre">double</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">fast_mem_elems</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">0.0</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel14fast_mem_elemsE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel11block_tilesE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel11block_tilesE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel11block_tilesE"></span><span id="sequant::opt::detail::PeakBatchedModel::block_tiles__double"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1a9a9182e86d2ac6517883de4fefef5db2"></span><span class="kt"><span class="pre">double</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">block_tiles</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">3.0</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel11block_tilesE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel15block_prefactorE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel15block_prefactorE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel15block_prefactorE"></span><span id="sequant::opt::detail::PeakBatchedModel::block_prefactor__double"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1a05a1fa16c793b6954b665edb8eafbbea"></span><span class="kt"><span class="pre">double</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">block_prefactor</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">1.0</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel15block_prefactorE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel21batch_persistent_onlyE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel21batch_persistent_onlyE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel21batch_persistent_onlyE"></span><span id="sequant::opt::detail::PeakBatchedModel::batch_persistent_only__b"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1a473f6487ba02e94e38ea50d30bb54246"></span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">batch_persistent_only</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">false</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel21batch_persistent_onlyE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>If true, batch only persistent subtrees (decline any subset containing a volatile leaf). Default false = batch across the board. See <a class="reference internal" href="structsequant_1_1_batch_policy.html#structsequant_1_1_batch_policy_1a8be8770fef76840477cc6329dca8f473"><span class="std std-ref">BatchPolicy::persistent_only</span></a>. </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel20peak_flops_toleranceE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel20peak_flops_toleranceE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel20peak_flops_toleranceE"></span><span id="sequant::opt::detail::PeakBatchedModel::peak_flops_tolerance__double"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1ab9f2161be854d85c71a4c461f418399f"></span><span class="kt"><span class="pre">double</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">peak_flops_tolerance</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">0.0</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel20peak_flops_toleranceE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Relative peak tolerance for the final (root) selection; see <a class="reference internal" href="structsequant_1_1opt_1_1detail_1_1_peak_model.html#structsequant_1_1opt_1_1detail_1_1_peak_model_1a4a702a016c1d5524ca3abfc946f5f976"><span class="std std-ref">PeakModel::peak_flops_tolerance</span></a>. 0 (default) = strict peak-min. </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel19accumulation_factorE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel19accumulation_factorE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel19accumulation_factorE"></span><span id="sequant::opt::detail::PeakBatchedModel::accumulation_factor__double"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1af12f83fa4b0efc3aaf076f0d921bad8e"></span><span class="kt"><span class="pre">double</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">accumulation_factor</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">0.0</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel19accumulation_factorE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>In-flight batch-contribution footprint multiplier; see <a class="reference internal" href="structsequant_1_1_batch_policy.html#structsequant_1_1_batch_policy_1adabb4c89d4879c3061cc642087037e17"><span class="std std-ref">BatchPolicy::accumulation_factor</span></a>. Charged only on nodes that contract a batchable index (Ap != 0), into the all-co-resident peak term, to price the accumulator + contribution co-residency of K += contribution. </p>
+</dd></dl>
+
+</div>
+<dl class="cpp struct">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel11BFrontPointE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel11BFrontPointE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel11BFrontPointE"></span><span id="sequant::opt::detail::PeakBatchedModel::BFrontPoint"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_b_front_point"></span><span class="k"><span class="pre">struct</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">BFrontPoint</span></span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel11BFrontPointE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>One non-dominated (peak, flops) trade-off for a (subset, sliced-set <code class="docutils literal notranslate"><span class="pre">B</span></code>) cell. <code class="docutils literal notranslate"><span class="pre">aprime</span></code> is the sliced-set chosen at this node; the children are read at context <code class="docutils literal notranslate"><span class="pre">C</span></code> = B | aprime, at frontier indices <code class="docutils literal notranslate"><span class="pre">lp_idx</span></code> / <code class="docutils literal notranslate"><span class="pre">rp_idx</span></code>. See <a class="reference internal" href="structsequant_1_1opt_1_1detail_1_1_peak_model_1_1_front_point.html#structsequant_1_1opt_1_1detail_1_1_peak_model_1_1_front_point"><span class="std std-ref">PeakModel::FrontPoint</span></a> for why a frontier (not a single peak-min cell) is needed. </p>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-members">Public Members</p>
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel11BFrontPoint4peakE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel11BFrontPoint4peakE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel11BFrontPoint4peakE"></span><span id="sequant::opt::detail::PeakBatchedModel::BFrontPoint::peak__double"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_b_front_point_1a73c1e824abbe9b9c47c0edc4ba9a8c37"></span><span class="kt"><span class="pre">double</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">peak</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">numeric_limits</span></span><span class="p"><span class="pre">&lt;</span></span><span class="kt"><span class="pre">double</span></span><span class="p"><span class="pre">&gt;</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">max</span></span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel11BFrontPoint4peakE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel11BFrontPoint5flopsE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel11BFrontPoint5flopsE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel11BFrontPoint5flopsE"></span><span id="sequant::opt::detail::PeakBatchedModel::BFrontPoint::flops__double"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_b_front_point_1a83e5c14bdeee0ce3af752be87bb94249"></span><span class="kt"><span class="pre">double</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">flops</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">numeric_limits</span></span><span class="p"><span class="pre">&lt;</span></span><span class="kt"><span class="pre">double</span></span><span class="p"><span class="pre">&gt;</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">max</span></span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel11BFrontPoint5flopsE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel11BFrontPoint2lpE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel11BFrontPoint2lpE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel11BFrontPoint2lpE"></span><span id="sequant::opt::detail::PeakBatchedModel::BFrontPoint::lp__s"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_b_front_point_1a8e027a9190d2db93693e0f58f7ff95db"></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">lp</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">0</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel11BFrontPoint2lpE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel11BFrontPoint2rpE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel11BFrontPoint2rpE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel11BFrontPoint2rpE"></span><span id="sequant::opt::detail::PeakBatchedModel::BFrontPoint::rp__s"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_b_front_point_1a950683150647a15e28aecd9fde5a10bd"></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">rp</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">0</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel11BFrontPoint2rpE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel11BFrontPoint8lp_firstE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel11BFrontPoint8lp_firstE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel11BFrontPoint8lp_firstE"></span><span id="sequant::opt::detail::PeakBatchedModel::BFrontPoint::lp_first__b"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_b_front_point_1ab41b89b1943efa4e0783587438e7eb9e"></span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">lp_first</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">true</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel11BFrontPoint8lp_firstE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel11BFrontPoint6aprimeE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel11BFrontPoint6aprimeE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel11BFrontPoint6aprimeE"></span><span id="sequant::opt::detail::PeakBatchedModel::BFrontPoint::aprime__std::s"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_b_front_point_1ad60acf72a9a5fdc8ab993932342b66fa"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">aprime</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">0</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel11BFrontPoint6aprimeE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel11BFrontPoint6lp_idxE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel11BFrontPoint6lp_idxE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel11BFrontPoint6lp_idxE"></span><span id="sequant::opt::detail::PeakBatchedModel::BFrontPoint::lp_idx__i"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_b_front_point_1a6f6cb5ab4e68f414c9bd87025ad5ab8a"></span><span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">lp_idx</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="o"><span class="pre">-</span></span><span class="m"><span class="pre">1</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel11BFrontPoint6lp_idxE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel11BFrontPoint6rp_idxE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel11BFrontPoint6rp_idxE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel11BFrontPoint6rp_idxE"></span><span id="sequant::opt::detail::PeakBatchedModel::BFrontPoint::rp_idx__i"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_b_front_point_1a2240e1e8a0237ef0250f6762776d1894"></span><span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">rp_idx</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="o"><span class="pre">-</span></span><span class="m"><span class="pre">1</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel11BFrontPoint6rp_idxE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+</dd></dl>
+
+<dl class="cpp struct">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel7ContextE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel7ContextE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel7ContextE"></span><span id="sequant::opt::detail::PeakBatchedModel::Context"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_context"></span><span class="k"><span class="pre">struct</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Context</span></span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel7ContextE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Precomputed tables and per-(subset, sliced-set) lookup parameters built once by build_context. </p>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-functions">Public Functions</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant3opt6detail16PeakBatchedModel7Context2szENSt6size_tENSt6size_tE">
+<span id="_CPPv3NK7sequant3opt6detail16PeakBatchedModel7Context2szENSt6size_tENSt6size_tE"></span><span id="_CPPv2NK7sequant3opt6detail16PeakBatchedModel7Context2szENSt6size_tENSt6size_tE"></span><span id="sequant::opt::detail::PeakBatchedModel::Context::sz__std::s.std::sC"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_context_1af7e3d7743ea482d79fc9819a5ac82b9e"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">double</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">sz</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">s</span></span>, <span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant3opt6detail16PeakBatchedModel7Context2szENSt6size_tENSt6size_tE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Context-restricted size of subset s under sliced-set ctx (the table is indexed by the part of ctx actually open in s; mirrors the oracle). </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant3opt6detail16PeakBatchedModel7Context3LofENSt6size_tENSt6size_tE">
+<span id="_CPPv3NK7sequant3opt6detail16PeakBatchedModel7Context3LofENSt6size_tENSt6size_tE"></span><span id="_CPPv2NK7sequant3opt6detail16PeakBatchedModel7Context3LofENSt6size_tENSt6size_tE"></span><span id="sequant::opt::detail::PeakBatchedModel::Context::Lof__std::s.std::sC"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_context_1a0d910f2389dfadd6c582990c5049159f"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">double</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Lof</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">s</span></span>, <span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">ctx</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant3opt6detail16PeakBatchedModel7Context3LofENSt6size_tENSt6size_tE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Per-context leaf-sum of subset s (sum of singleton sizes under ctx). </p>
+</dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-members">Public Members</p>
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel7Context3auxE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel7Context3auxE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel7Context3auxE"></span><span id="sequant::opt::detail::PeakBatchedModel::Context::aux__container::vector:Index:"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_context_1a2510990b1be8196c0c5e0f1ef8cf45c0"></span><span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1aaa8384c5d22396ccd9a2368a088e24bd.html#_CPPv4I0EN7sequant9container6vectorE" title="sequant::container::vector"><span class="n"><span class="pre">vector</span></span></a><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">aux</span></span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel7Context3auxE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Ordered, deduplicated batchable indices (bit <code class="docutils literal notranslate"><span class="pre">k</span></code> maps to <code class="docutils literal notranslate"><span class="pre">aux</span></code>[k]). </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel7Context1mE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel7Context1mE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel7Context1mE"></span><span id="sequant::opt::detail::PeakBatchedModel::Context::m__std::s"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_context_1a6c2e22e6b6ca87820f743e03c9573cf7"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">m</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">0</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel7Context1mE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Number of batchable indices (= aux.size()). </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel7Context2nBE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel7Context2nBE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel7Context2nBE"></span><span id="sequant::opt::detail::PeakBatchedModel::Context::nB__std::s"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_context_1ae604cde9537a2e18727cd06b489c535e"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">nB</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">1</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel7Context2nBE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Number of sliced-sets (= 2^m). </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel7Context2ntE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel7Context2ntE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel7Context2ntE"></span><span id="sequant::opt::detail::PeakBatchedModel::Context::nt__std::s"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_context_1a7485d9b6862d9b18cfc40dbfd3b6cad3"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">nt</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">0</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel7Context2ntE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Number of tensors in the network. </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel7Context6tablesE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel7Context6tablesE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel7Context6tablesE"></span><span id="sequant::opt::detail::PeakBatchedModel::Context::tables__container::vector:container::vector:double::"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_context_1aee1aacbfe89dcbbd0605bd331f5a5382"></span><span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1aaa8384c5d22396ccd9a2368a088e24bd.html#_CPPv4I0EN7sequant9container6vectorE" title="sequant::container::vector"><span class="n"><span class="pre">vector</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1aaa8384c5d22396ccd9a2368a088e24bd.html#_CPPv4I0EN7sequant9container6vectorE" title="sequant::container::vector"><span class="n"><span class="pre">vector</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="kt"><span class="pre">double</span></span><span class="p"><span class="pre">&gt;</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">tables</span></span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel7Context6tablesE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>tables[B][n] = footprint of subset n under sliced-set B. </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel7Context8open_auxE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel7Context8open_auxE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel7Context8open_auxE"></span><span id="sequant::opt::detail::PeakBatchedModel::Context::open_aux__container::vector:std::s:"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_context_1a9a3f05f37b5014ca1a579dc94f18dad5"></span><span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1aaa8384c5d22396ccd9a2368a088e24bd.html#_CPPv4I0EN7sequant9container6vectorE" title="sequant::container::vector"><span class="n"><span class="pre">vector</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">open_aux</span></span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel7Context8open_auxE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>open_aux[n] = bitmask of batchable indices open in subset n. </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel7Context13volatile_maskE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel7Context13volatile_maskE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel7Context13volatile_maskE"></span><span id="sequant::opt::detail::PeakBatchedModel::Context::volatile_mask__std::s"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_context_1a9df17d29dc6be6bb4c2b92108e9b7ef9"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">volatile_mask</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">0</span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel7Context13volatile_maskE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Bitmask of volatile leaf tensors. </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel7Context3idxE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel7Context3idxE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel7Context3idxE"></span><span id="sequant::opt::detail::PeakBatchedModel::Context::idx__container::vector:IndexSet:"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_context_1a8a3659fd16c31c2b20e46e4194b9f0a1"></span><span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1aaa8384c5d22396ccd9a2368a088e24bd.html#_CPPv4I0EN7sequant9container6vectorE" title="sequant::container::vector"><span class="n"><span class="pre">vector</span></span></a><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="typedef_namespacesequant_1ad7a231d19dfd09d4da6527eaa13ff41d.html#_CPPv4N7sequant8IndexSetE" title="sequant::IndexSet"><span class="n"><span class="pre">IndexSet</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">idx</span></span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel7Context3idxE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>idx[n] = subset n’s open (result) indices, for the flop tie-break. </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant3opt6detail16PeakBatchedModel7Context8flops_ofE">
+<span id="_CPPv3N7sequant3opt6detail16PeakBatchedModel7Context8flops_ofE"></span><span id="_CPPv2N7sequant3opt6detail16PeakBatchedModel7Context8flops_ofE"></span><span class="target" id="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_context_1a7681535d46968f55763ee7b1cdfbae41"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">function</span></span><span class="p"><span class="pre">&lt;</span></span><span class="kt"><span class="pre">double</span></span><span class="p"><span class="pre">(</span></span><a class="reference internal" href="typedef_namespacesequant_1ad7a231d19dfd09d4da6527eaa13ff41d.html#_CPPv4N7sequant8IndexSetE" title="sequant::IndexSet"><span class="n"><span class="pre">IndexSet</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="typedef_namespacesequant_1ad7a231d19dfd09d4da6527eaa13ff41d.html#_CPPv4N7sequant8IndexSetE" title="sequant::IndexSet"><span class="n"><span class="pre">IndexSet</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="typedef_namespacesequant_1ad7a231d19dfd09d4da6527eaa13ff41d.html#_CPPv4N7sequant8IndexSetE" title="sequant::IndexSet"><span class="n"><span class="pre">IndexSet</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">)</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">flops_of</span></span></span><a class="headerlink" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel7Context8flops_ofE" title="Link to this definition">¶</a><br /></dt>
+<dd><p><a class="reference internal" href="structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_context.html#structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_context_1a7681535d46968f55763ee7b1cdfbae41"><span class="std std-ref">flops_of(lhs, rhs, result)</span></a> = flop count of one binary contraction. </p>
+</dd></dl>
+
+</div>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, SeQuant developers
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            <div class="last-updated">
+              Last updated on Jul 1, 2026 10:36:51 AM</div>
+          </div>
+          <div class="right-details">
+            <div class="icons">
+              <a class="muted-link fa-brands fa-solid fa-github fa-2x" href="https://github.com/ValeevGroup/SeQuant" aria-label="GitHub"></a>
+              
+            </div>
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Template Struct PeakBatchedModel</a><ul>
+<li><a class="reference internal" href="#nested-relationships">Nested Relationships</a><ul>
+<li><a class="reference internal" href="#nested-types">Nested Types</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#struct-documentation">Struct Documentation</a><ul>
+<li><a class="reference internal" href="#_CPPv4I0EN7sequant3opt6detail16PeakBatchedModelE"><code class="docutils literal notranslate"><span class="pre">sequant::opt::detail::PeakBatchedModel</span></code></a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel5StateE"><code class="docutils literal notranslate"><span class="pre">State</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4I0ENK7sequant3opt6detail16PeakBatchedModel13build_contextE7ContextRK13TensorNetworkRK5TIdxs"><code class="docutils literal notranslate"><span class="pre">build_context()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant3opt6detail16PeakBatchedModel4leafERK7Context6size_t"><code class="docutils literal notranslate"><span class="pre">leaf()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant3opt6detail16PeakBatchedModel4initERK7Context6size_t"><code class="docutils literal notranslate"><span class="pre">init()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant3opt6detail16PeakBatchedModel5relaxER7Context6size_t6size_t6size_tRK5StateRK5StateR5State"><code class="docutils literal notranslate"><span class="pre">relax()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant3opt6detail16PeakBatchedModel8finalizeER7Context6size_tRN9container6vectorI5StateEE"><code class="docutils literal notranslate"><span class="pre">finalize()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant3opt6detail16PeakBatchedModel11reconstructERK7ContextRKN9container6vectorI5StateEE"><code class="docutils literal notranslate"><span class="pre">reconstruct()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel5idxszE"><code class="docutils literal notranslate"><span class="pre">idxsz</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel12is_batchableE"><code class="docutils literal notranslate"><span class="pre">is_batchable</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel5batchE"><code class="docutils literal notranslate"><span class="pre">batch</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel16is_volatile_leafE"><code class="docutils literal notranslate"><span class="pre">is_volatile_leaf</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel9inner_powE"><code class="docutils literal notranslate"><span class="pre">inner_pow</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel15volatile_weightE"><code class="docutils literal notranslate"><span class="pre">volatile_weight</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel15machine_balanceE"><code class="docutils literal notranslate"><span class="pre">machine_balance</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel14fast_mem_elemsE"><code class="docutils literal notranslate"><span class="pre">fast_mem_elems</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel11block_tilesE"><code class="docutils literal notranslate"><span class="pre">block_tiles</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel15block_prefactorE"><code class="docutils literal notranslate"><span class="pre">block_prefactor</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel21batch_persistent_onlyE"><code class="docutils literal notranslate"><span class="pre">batch_persistent_only</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel20peak_flops_toleranceE"><code class="docutils literal notranslate"><span class="pre">peak_flops_tolerance</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel19accumulation_factorE"><code class="docutils literal notranslate"><span class="pre">accumulation_factor</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel11BFrontPointE"><code class="docutils literal notranslate"><span class="pre">sequant::opt::detail::PeakBatchedModel::BFrontPoint</span></code></a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel11BFrontPoint4peakE"><code class="docutils literal notranslate"><span class="pre">peak</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel11BFrontPoint5flopsE"><code class="docutils literal notranslate"><span class="pre">flops</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel11BFrontPoint2lpE"><code class="docutils literal notranslate"><span class="pre">lp</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel11BFrontPoint2rpE"><code class="docutils literal notranslate"><span class="pre">rp</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel11BFrontPoint8lp_firstE"><code class="docutils literal notranslate"><span class="pre">lp_first</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel11BFrontPoint6aprimeE"><code class="docutils literal notranslate"><span class="pre">aprime</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel11BFrontPoint6lp_idxE"><code class="docutils literal notranslate"><span class="pre">lp_idx</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel11BFrontPoint6rp_idxE"><code class="docutils literal notranslate"><span class="pre">rp_idx</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel7ContextE"><code class="docutils literal notranslate"><span class="pre">sequant::opt::detail::PeakBatchedModel::Context</span></code></a><ul>
+<li><a class="reference internal" href="#_CPPv4NK7sequant3opt6detail16PeakBatchedModel7Context2szENSt6size_tENSt6size_tE"><code class="docutils literal notranslate"><span class="pre">sz()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant3opt6detail16PeakBatchedModel7Context3LofENSt6size_tENSt6size_tE"><code class="docutils literal notranslate"><span class="pre">Lof()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel7Context3auxE"><code class="docutils literal notranslate"><span class="pre">aux</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel7Context1mE"><code class="docutils literal notranslate"><span class="pre">m</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel7Context2nBE"><code class="docutils literal notranslate"><span class="pre">nB</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel7Context2ntE"><code class="docutils literal notranslate"><span class="pre">nt</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel7Context6tablesE"><code class="docutils literal notranslate"><span class="pre">tables</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel7Context8open_auxE"><code class="docutils literal notranslate"><span class="pre">open_aux</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel7Context13volatile_maskE"><code class="docutils literal notranslate"><span class="pre">volatile_mask</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel7Context3idxE"><code class="docutils literal notranslate"><span class="pre">idx</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant3opt6detail16PeakBatchedModel7Context8flops_ofE"><code class="docutils literal notranslate"><span class="pre">flops_of</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script src="../_static/bootstrap-treeview/bootstrap-treeview.min.js?v=6a1e96b4"></script>
+    </body>
+</html>

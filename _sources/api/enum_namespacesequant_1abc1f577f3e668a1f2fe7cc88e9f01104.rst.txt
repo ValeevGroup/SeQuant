@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1abc1f577f3e668a1f2fe7cc88e9f01104:
+
+Enum VertexType
+===============
+
+- Defined in :ref:`file_SeQuant_core_tensor_network_vertex.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::VertexType
+   :project: SeQuant

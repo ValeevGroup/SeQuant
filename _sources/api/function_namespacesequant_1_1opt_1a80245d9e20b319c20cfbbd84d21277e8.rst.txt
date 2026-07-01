@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1a80245d9e20b319c20cfbbd84d21277e8:
+
+Template Function sequant::opt::single_term_opt
+===============================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_single_term.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::single_term_opt(Product const&, IdxToSz&&, bool, CostParams const&, std::function<bool(Index const&)> const&, std::function<std::size_t(Index const&)>, std::function<double(Index const&, std::size_t)> const&, bool)
+   :project: SeQuant

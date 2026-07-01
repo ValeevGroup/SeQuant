@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aae31702484c00a1814784c51d16bd60e:
+
+Function sequant::adjoint(const ExprPtr&)
+=========================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::adjoint(const ExprPtr&)
+   :project: SeQuant

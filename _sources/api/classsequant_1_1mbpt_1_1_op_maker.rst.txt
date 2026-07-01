@@ -1,0 +1,27 @@
+.. _exhale_class_classsequant_1_1mbpt_1_1_op_maker:
+
+Template Class OpMaker
+======================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+
+Nested Relationships
+--------------------
+
+
+Nested Types
+************
+
+- :ref:`exhale_struct_structsequant_1_1mbpt_1_1_op_maker_1_1_op_info`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::mbpt::OpMaker
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

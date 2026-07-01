@@ -1,0 +1,141 @@
+
+.. _file_SeQuant_core_optimize_single_term_detail.hpp:
+
+File single_term_detail.hpp
+===========================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_optimize>` (``SeQuant/core/optimize``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/optimize/single_term_detail.hpp``)
+-------------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_optimize_single_term_detail.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/algorithm.hpp`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/optimize/options.hpp`` (:ref:`file_SeQuant_core_optimize_options.hpp`)
+
+- ``SeQuant/core/tensor_canonicalizer.hpp`` (:ref:`file_SeQuant_core_tensor_canonicalizer.hpp`)
+
+- ``SeQuant/core/tensor_network.hpp`` (:ref:`file_SeQuant_core_tensor_network.hpp`)
+
+- ``SeQuant/core/utility/indices.hpp`` (:ref:`file_SeQuant_core_utility_indices.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/external/bliss/graph.hh``
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``bit`` (:ref:`file_SeQuant_core_bitset.hpp`)
+
+- ``functional``
+
+- ``limits``
+
+- ``range/v3/algorithm/find.hpp``
+
+- ``range/v3/view/concat.hpp``
+
+- ``range/v3/view/filter.hpp``
+
+- ``range/v3/view/indirect.hpp``
+
+- ``range/v3/view/move.hpp``
+
+- ``range/v3/view/reverse.hpp``
+
+- ``range/v3/view/transform.hpp``
+
+- ``type_traits``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_optimize_cost_model.hpp`
+
+- :ref:`file_SeQuant_core_optimize_single_term.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__opt`
+
+- :ref:`namespace_sequant__opt__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_batched_res`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_opt_res`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_sub_net_equal`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_sub_net_hash`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_subnet_metadata`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a68bd649c2fc715c78647ce5d4e755db4`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a6ea80776b6c05947efef837161d97a34`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a08dd5ac790e19031d9aab842165ae7df`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1ae118e04c3baa5430b4ab5ac087ae6f69`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1ac40920fc746e08faa3e816ad4b1f09d6`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a21acfafbdde0e75f826564fe5460c978`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a03e313b06689fc6b488744bdcd78ebfe`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a30c5c21f27adadd6140d475ea5b20585`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a5aaa380a45cae7d9e7bc8a6364b8cd88`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a092c208018c60c22e09fbca5bb2c1150`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a576836d7e21c586f7084225e4e737859`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a4af72f616c65f3a36b37f020ef09f17c`
+

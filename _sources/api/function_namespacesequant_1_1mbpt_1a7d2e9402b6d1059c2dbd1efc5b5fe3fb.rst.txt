@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1a7d2e9402b6d1059c2dbd1efc5b5fe3fb:
+
+Function sequant::mbpt::swap_spin(const Tensor&)
+================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::swap_spin(const Tensor&)
+   :project: SeQuant

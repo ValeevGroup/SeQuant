@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a782bc57ebdd7f7353101c508f7d3171d:
+
+Function sequant::bann(Index)
+=============================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::bann(Index)
+   :project: SeQuant

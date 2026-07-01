@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a9c74d51e38e03935b835dbb203884842:
+
+Template Function sequant::fold_left_to_node
+============================================
+
+- Defined in :ref:`file_SeQuant_core_binary_node.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::fold_left_to_node(Rng, F)
+   :project: SeQuant
