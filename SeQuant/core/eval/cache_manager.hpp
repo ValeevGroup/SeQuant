@@ -70,6 +70,23 @@ class CacheManager {
       std::any const& node, Result const& left, Result const& right,
       std::array<std::any, 3> const& annot)>;
 
+  /// An observe-only predicted-footprint hook.  `evaluate()` consults it (if
+  /// set, and only when tracing) at each binary-Product node *before* the
+  /// product is computed.  Unlike shaped_product_hook it NEVER replaces the
+  /// result: it emits a pre-materialization "Predict" trace line giving the
+  /// predicted result footprint (and, when \p shapeable, the result-shape
+  /// decision), so an op that exhausts memory is still named in the log -- the
+  /// post-hoc Eval line never prints for an OOMing op.  \p shapeable tells the
+  /// hook whether this cache will actually try to shape the product (true iff a
+  /// shaped-product hook is set on the same cache): the batched scratch carries
+  /// the predict hook but no shaped hook, so its products materialize dense and
+  /// must be predicted as dense.  All backend-specific types (TA tranges,
+  /// shapes) stay inside the hook's closure; the generic CacheManager and eval
+  /// see only Result/std::any.
+  using predict_hook_type = std::function<void(
+      std::any const& node, Result const& left, Result const& right,
+      std::array<std::any, 3> const& annot, bool shapeable)>;
+
  private:
   using hasher_type = TreeNodeHasher<TreeNode, force_hash_collisions>;
   using comparator_type = TreeNodeEqualityComparator<TreeNode>;
@@ -169,6 +186,8 @@ class CacheManager {
 
   shaped_product_hook_type shaped_product_hook_{};
 
+  predict_hook_type predict_hook_{};
+
  public:
   /// Sets the custom evaluator (see custom_evaluator_type). Pass an empty
   /// std::function to clear it.
@@ -191,6 +210,17 @@ class CacheManager {
   [[nodiscard]] shaped_product_hook_type const& shaped_product_hook()
       const noexcept {
     return shaped_product_hook_;
+  }
+
+  /// Sets the predicted-footprint hook (see predict_hook_type). Pass an empty
+  /// std::function to clear it.
+  void set_predict_hook(predict_hook_type fn) noexcept {
+    predict_hook_ = std::move(fn);
+  }
+
+  /// \return the predicted-footprint hook (empty if none is set).
+  [[nodiscard]] predict_hook_type const& predict_hook() const noexcept {
+    return predict_hook_;
   }
 
   /// Default persistence classifier: every entry is non-persistent (NP).
