@@ -5,9 +5,10 @@
 		"default_options": {
 			"projection": "biorthogonal",
 			"spintracing": "closed_shell",
-			"density_fitting": false,
+			"density_fitting": true,
 			"term_by_term": false,
-			"subexpression_elimination": true
+			"subexpression_elimination": true,
+			"index_batching": "None"
 		},
 		"code_blocks": [
 			{
@@ -100,6 +101,20 @@
 			"tag": "c",
 			"label": "i",
 			"size": 80,
+			"real_valued": true
+		},
+		{
+			"name": "BasisMp2Fit",
+			"tag": "F",
+			"label": "F",
+			"size": 1500,
+			"real_valued": true
+		},
+		{
+			"name": "ConfigI0",
+			"tag": "",
+			"label": "I",
+			"size": 50,
 			"real_valued": true
 		}
 	]

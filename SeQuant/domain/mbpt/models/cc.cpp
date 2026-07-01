@@ -322,6 +322,11 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
   return result;
 }
 
+namespace {
+// EOM eigenvector operators R and L use SquareRoot normalization
+constexpr Normalization eom_norm = Normalization::SquareRoot;
+}  // namespace
+
 std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) const {
   SEQUANT_ASSERT((np > 0 || nh > 0) && "Unsupported excitation order");
   if (np != nh)
@@ -341,9 +346,9 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) const {
   // for unitary ansatz, we need to compute the commutator [hbar, R], otherwise
   // just hbar * R is sufficient because ref_av uses connectivity
   if (this->unitary()) {
-    hbar_R = commutator(hbar, R(np, nh));
+    hbar_R = commutator(hbar, R(np, nh, eom_norm));
   } else {
-    hbar_R = hbar * R(np, nh);
+    hbar_R = hbar * R(np, nh, eom_norm);
   }
 
   // connectivity: empty for unitary ansatz, build otherwise
@@ -361,9 +366,10 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) const {
   std::int64_t rp = np, rh = nh;
   while (rp >= 0 && rh >= 0) {
     if (rp == 0 && rh == 0) break;
-    // project with <rp, rh| (i.e., multiply P(rp, rh)) and compute VEV
+    // project with <rp, rh| (i.e., multiply δl(rp, rh)) and compute VEV
+    // use δl for consistent normalization
     result.at(min(rp, rh)) =
-        this->ref_av(P(nₚ(rp), nₕ(rh)) * hbar_R, op_connect);
+        this->ref_av(δl(nₚ(rp), nₕ(rh)) * hbar_R, op_connect);
     if (rp == 0 || rh == 0) break;
     rp--;
     rh--;
@@ -386,7 +392,7 @@ std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) const {
   const auto hbar = this->hbar();
 
   // L * hbar
-  const auto L_hbar = L(np, nh) * hbar;
+  const auto L_hbar = L(np, nh, eom_norm) * hbar;
 
   // connectivity:
   // default connections + connect H with projectors
@@ -405,9 +411,9 @@ std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) const {
   std::int64_t rp = np, rh = nh;
   while (rp >= 0 && rh >= 0) {
     if (rp == 0 && rh == 0) break;
-    // right project with |rp,rh> (i.e., multiply P(-rp, -rh)) and compute VEV
+    // right project with |rp,rh> (i.e., multiply δr(rp, rh)) and compute VEV
     result.at(min(rp, rh)) =
-        this->ref_av(L_hbar * P(nₚ(-rp), nₕ(-rh)), op_connect);
+        this->ref_av(L_hbar * δr(nₚ(rp), nₕ(rh)), op_connect);
     if (rp == 0 || rh == 0) break;
     rp--;
     rh--;

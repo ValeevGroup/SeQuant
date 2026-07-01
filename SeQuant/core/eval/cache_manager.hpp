@@ -15,6 +15,8 @@
 #include <range/v3/view/transform.hpp>
 
 #include <algorithm>
+#include <any>
+#include <array>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -50,6 +52,23 @@ class CacheManager {
   /// avoid both re-interception and polluting this cache with partial results.
   using custom_evaluator_type =
       std::function<ResultPtr(key_type const&, CacheManager&)>;
+
+  /// A shaped-product hook type. `evaluate()` consults the cache's shaped-
+  /// product hook (if set) at each binary-Product node *before* the product is
+  /// computed.  It receives the node (wrapped in a std::any as a
+  /// std::reference_wrapper<key_type const>) plus the already-evaluated
+  /// left/right operands and the [left, right, result] annotations.  It returns
+  /// a non-null ResultPtr to *replace* the normal product (e.g. a shape-
+  /// constrained emission of it), or a null ResultPtr to decline (the standard
+  /// prod() then runs).  Empty (default) => never consulted; existing behavior
+  /// is byte-identical.
+  ///
+  /// All backend-specific types (TA shapes, tranges, set_shape) stay inside the
+  /// hook's closure (built by the backend, e.g. TAEvalContext::make_hook());
+  /// the generic CacheManager and eval see only Result/ResultPtr/std::any.
+  using shaped_product_hook_type = std::function<ResultPtr(
+      std::any const& node, Result const& left, Result const& right,
+      std::array<std::any, 3> const& annot)>;
 
  private:
   using hasher_type = TreeNodeHasher<TreeNode, force_hash_collisions>;
@@ -148,6 +167,8 @@ class CacheManager {
   /// custom_evaluator_type). Empty => always defer to the standard scheme.
   custom_evaluator_type custom_evaluator_{};
 
+  shaped_product_hook_type shaped_product_hook_{};
+
  public:
   /// Sets the custom evaluator (see custom_evaluator_type). Pass an empty
   /// std::function to clear it.
@@ -159,6 +180,19 @@ class CacheManager {
   [[nodiscard]] custom_evaluator_type const& custom_evaluator() const noexcept {
     return custom_evaluator_;
   }
+
+  /// Sets the shaped-product hook (see shaped_product_hook_).  Pass an empty
+  /// std::function to clear it.
+  void set_shaped_product_hook(shaped_product_hook_type fn) noexcept {
+    shaped_product_hook_ = std::move(fn);
+  }
+
+  /// \return the shaped-product hook (empty if none is set).
+  [[nodiscard]] shaped_product_hook_type const& shaped_product_hook()
+      const noexcept {
+    return shaped_product_hook_;
+  }
+
   /// Default persistence classifier: every entry is non-persistent (NP).
   struct all_non_persistent {
     bool operator()(key_type const&) const noexcept { return false; }
@@ -402,6 +436,13 @@ struct zero_footprint {
   double operator()(auto const&) const noexcept { return 0.; }
 };
 
+/// Default batchability predicate for cache_manager: no index is batchable, so
+/// the free-batchable-axis caching veto is inert (preserves the pre-batch
+/// behavior for callers that do not pass a predicate).
+struct never_batchable {
+  bool operator()(auto const&) const noexcept { return false; }
+};
+
 /// \param nodes the evaluation forest.
 /// \param is_volatile `bool(TreeNode const&)`: true if the node is
 ///        intrinsically volatile. Only its value on leaves matters in practice
@@ -417,12 +458,26 @@ struct zero_footprint {
 ///        of huge intermediates that carry a free large-space index (e.g. a
 ///        half-transformed DF integral with a free projected-AO index), at the
 ///        cost of recomputation. 0 (default) disables the gate.
+/// \param is_batchable_index `bool(Index const&)`: an index the runtime batched
+///        evaluator slices over (typically the DF/RI auxiliary). A node whose
+///        *result* (canonical) indices contain such an index carries a
+///        batchable axis FREE: the evaluator slices it per batch and the
+///        single-term optimizer prices it sliced, so caching it whole would
+///        hold an intermediate both other components mean to slice. Such nodes
+///        are NOT cached (neither NP repeat nor P frontier) -- recomputed
+///        (sliced under each consumer's batch trigger) instead of materialized
+///        whole and held. This is the structural counterpart of \p
+///        max_footprint: the batch axis, not a byte threshold, identifies the
+///        free-large-index intermediates. The default never_batchable accepts
+///        nothing, leaving the veto inert.
 /// \see CacheManager, cache_manager
 template <bool force_hash_collisions = false,
-          typename FootprintOf = zero_footprint>
+          typename FootprintOf = zero_footprint,
+          typename IsBatchableIndex = never_batchable>
 auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
                    size_t min_repeats = 2, FootprintOf footprint_of = {},
-                   double max_footprint = 0.)
+                   double max_footprint = 0.,
+                   IsBatchableIndex is_batchable_index = {})
   requires requires(
       std::ranges::range_value_t<std::remove_cvref_t<decltype(nodes)>> const&
           n) {
@@ -468,10 +523,24 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
   // Footprint gate: a node whose result is larger than max_footprint is never
   // cached (so it is recomputed by each consumer rather than materialized whole
   // and held), bounding the footprint of huge free-large-index intermediates.
+  // Free-batchable-axis veto: a node whose result carries an index the runtime
+  // slices over (is_batchable_index) is, by construction, a free-large-index
+  // intermediate the evaluator builds one batch-slice at a time and the
+  // optimizer prices sliced. Caching it -- as an NP repeat or an NV/V-frontier
+  // P node -- would materialize and hold it whole, contradicting both. Veto its
+  // caching (the structural form of the max_footprint gate) so each consumer
+  // recomputes it sliced under its own batch trigger.
   std::unordered_map<TreeNode, size_t, Hasher, Comp> filtered;
   for (auto&& [n, c] : counts) {
     if (!(c >= min_repeats || persistent.contains(n))) continue;
-    if (max_footprint > 0. && footprint_of(n) > max_footprint) {
+    bool free_batchable_axis = false;
+    for (auto const& ix : n->canon_indices())
+      if (is_batchable_index(ix)) {
+        free_batchable_axis = true;
+        break;
+      }
+    if (free_batchable_axis ||
+        (max_footprint > 0. && footprint_of(n) > max_footprint)) {
       persistent.erase(n);  // keep is_persistent consistent with what is cached
       continue;
     }

@@ -20,9 +20,13 @@
 #include <range/v3/view/iota.hpp>
 
 #include <cstddef>
+#include <cstdlib>
+#include <functional>
+#include <iostream>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace sequant {
 
@@ -32,17 +36,92 @@ index_to_extent_t default_idx_to_size() {
   return [](Index const& ix) { return ix.space().approximate_size(); };
 }
 
+/// Diagnostic (env SEQUANT_FACTORIZER_DEBUG): for the chosen factorization
+/// \p result of a single term, log each intermediate's result footprint AS THE
+/// COST MODEL SIZES IT (idx_to_extent + inner_pow), plus the peak (the value
+/// the DensePeakSize objective minimizes), so one can see why the factorizer
+/// accepted a given intermediate -- e.g. an under-sized multi-composite tensor.
+/// Footprints in mega-elements; outer{...} lists each free outer index extent,
+/// inner{Np:e,...} lists each CSV/PNO composite's proto-index count N and the
+/// extent e the model assigns it.
+void log_chosen_factorization(ExprPtr const& result,
+                              OptimizeOptions const& opts) {
+  if (!opts.idx_to_extent || !result) return;
+  auto describe = [&](ExprPtr const& e) -> std::pair<double, std::string> {
+    auto g = get_unique_indices(e);
+    std::vector<Index> all;
+    all.insert(all.end(), g.bra.begin(), g.bra.end());
+    all.insert(all.end(), g.ket.begin(), g.ket.end());
+    all.insert(all.end(), g.aux.begin(), g.aux.end());
+    auto const tot = tot_indices(all);
+    double const fp = opt::detail::inner_aware_volume(tot, opts.idx_to_extent,
+                                                      opts.inner_pow);
+    std::string s = "outer{";
+    for (auto const& o : tot.outer)
+      s += std::to_string(opts.idx_to_extent(o)) + ",";
+    s += "} inner{";
+    for (auto const& i : tot.inner)
+      s += std::to_string(i.proto_indices().size()) +
+           "p:" + std::to_string(opts.idx_to_extent(i)) + ",";
+    s += "}";
+    return {fp, std::move(s)};
+  };
+  double peak = 0.;
+  std::string peak_s;
+  std::function<void(ExprPtr const&)> rec = [&](ExprPtr const& e) {
+    if (!e->is<Product>()) return;
+    auto const desc = describe(e);
+    std::clog << "[FACTORIZE-NODE] fp=" << desc.first / 1e6 << "Me "
+              << desc.second << "\n";
+    if (desc.first > peak) {
+      peak = desc.first;
+      peak_s = desc.second;
+    }
+    for (auto const& f : e->as<Product>().factors()) rec(f);
+  };
+  std::clog << "[FACTORIZE] -------- chosen tree --------\n";
+  rec(result);
+  std::clog << "[FACTORIZE] PEAK fp=" << peak / 1e6 << "Me " << peak_s << "\n";
+  std::clog.flush();
+}
+
 /// Optimize a Product that contains only Tensor and scalar factors.
 ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
   bool const subnet_cse = opts.CSE.subnet;
-  if (opts.objective_function == ObjectiveFunction::DenseFLOPs)
-    return opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
-        prod, opts.idx_to_extent, subnet_cse, opts.is_volatile_leaf,
-        opts.volatile_weight, opts.footprint_weight);
-  SEQUANT_ASSERT(opts.objective_function == ObjectiveFunction::DenseSize);
-  return opt::single_term_opt<ObjectiveFunction::DenseSize>(
-      prod, opts.idx_to_extent, subnet_cse, opts.is_volatile_leaf,
-      opts.volatile_weight, opts.footprint_weight);
+  CostParams const cost{opts.batch_policy.is_volatile_leaf,
+                        opts.volatile_weight,
+                        opts.footprint_weight,
+                        opts.peak_flops_tolerance,
+                        opts.roofline,
+                        opts.batch_policy.accumulation_factor};
+  auto run = [&]() -> ExprPtr {
+    if (opts.objective_function == ObjectiveFunction::DenseFLOPs)
+      return opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
+          prod, opts.idx_to_extent, subnet_cse, cost,
+          opts.batch_policy.is_batchable_index,
+          opts.batch_policy.batch_target_size, opts.inner_pow);
+    if (opts.objective_function == ObjectiveFunction::DenseSize)
+      return opt::single_term_opt<ObjectiveFunction::DenseSize>(
+          prod, opts.idx_to_extent, subnet_cse, cost,
+          opts.batch_policy.is_batchable_index,
+          opts.batch_policy.batch_target_size, opts.inner_pow);
+    if (opts.objective_function == ObjectiveFunction::DensePeakSize)
+      return opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
+          prod, opts.idx_to_extent, subnet_cse, cost,
+          opts.batch_policy.is_batchable_index,
+          opts.batch_policy.batch_target_size, opts.inner_pow);
+    SEQUANT_ASSERT(opts.objective_function ==
+                   ObjectiveFunction::DensePeakSizeBatched);
+    return opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
+        prod, opts.idx_to_extent, subnet_cse, cost,
+        opts.batch_policy.is_batchable_index,
+        opts.batch_policy.batch_target_size, opts.inner_pow,
+        opts.batch_policy.persistent_only);
+  };
+  ExprPtr result = run();
+  if (std::getenv("SEQUANT_FACTORIZER_DEBUG"))
+    log_chosen_factorization(result, opts);
+  return result;
 }
 
 /// Deliberately non-identifier label prefix used to stand in for non-Tensor,

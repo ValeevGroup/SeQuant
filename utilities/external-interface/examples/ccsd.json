@@ -7,7 +7,10 @@
 			"spintracing": "closed_shell",
 			"density_fitting": false,
 			"term_by_term": false,
-			"subexpression_elimination": true
+			"subexpression_elimination": true,
+			"index_batching": {
+				"batch": "Slowest"
+			}
 		},
 		"code_blocks": [
 			{

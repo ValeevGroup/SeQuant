@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/eval/fwd.hpp>
 
+#include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
@@ -272,7 +273,14 @@ auto eval(EvalStat const& stat, Args const&... args) {
   auto const result_s = std::format("result={}", to_string(stat.mem_result));
   auto const alloc_s = std::format("alloc={}", to_string(stat.mem_alloc));
   auto const hw_s = std::format("hw={}", to_string(stat.mem_hwmark));
-  auto const rss_s = std::format("rss={}", to_string(rss()));
+  // Reduce this rank's RSS to the value to report (e.g. sum over ranks = true
+  // total app memory). This runs on every rank (printing() is level>0,
+  // identical across ranks), so an injected collective reducer is matched.
+  auto const rss_local = process_rss_bytes();
+  auto const& rss_reduce = Logger::instance().eval.rss_reduce;
+  auto const rss_s = std::format(
+      "rss={}",
+      to_string(Bytes{rss_reduce ? rss_reduce(rss_local) : rss_local}));
   if (stat.mem_left) {
     SEQUANT_ASSERT(stat.mem_right);
     log("Eval",                                               //
@@ -604,12 +612,26 @@ ResultPtr evaluate(Node const& node,  //
           [&]() { result = left->sum(*right, ann); });
     } else {
       SEQUANT_ASSERT(node->op_type() == EvalOp::Product);
+      // Consult the shaped-product hook (if set) before evaluating the product.
+      // The hook receives the node (wrapped in a std::any as a
+      // std::reference_wrapper so the full IR node is inspectable) plus the
+      // evaluated operands and annotations; a non-null return *replaces* the
+      // normal product (e.g. a shape-constrained emission of it), a null return
+      // declines and the standard prod() below runs.  An empty hook is never
+      // consulted; default-empty => byte-identical behavior.
       auto const de_nest =
           node.left()->tot() && node.right()->tot() && !node->tot();
-      time = detail::timed_eval_inplace([&]() {
-        result =
-            left->prod(*right, ann, de_nest ? DeNest::True : DeNest::False);
-      });
+      if (auto const& hook = cache.shaped_product_hook(); hook) {
+        time = detail::timed_eval_inplace([&]() {
+          result = hook(std::any{std::cref(node)}, *left, *right, ann);
+        });
+      }
+      if (!result) {
+        time = detail::timed_eval_inplace([&]() {
+          result =
+              left->prod(*right, ann, de_nest ? DeNest::True : DeNest::False);
+        });
+      }
     }
   }
 
@@ -901,10 +923,10 @@ ResultPtr evaluate_antisymm(Args&&... args) {
 ///
 /// For each node it is consulted on, the returned evaluator chooses a batch
 /// axis \c K via `batch_axis(node, accept)` (declining if none). It asks the
-/// backend to partition \c K into contiguous element-range batches of about
-/// \p target_batch_size elements each (Result::mode_batches); if that yields at
-/// most one batch it declines (so small / unselected indices are left to the
-/// standard scheme).
+/// backend to partition \c K into contiguous, whole-tile element-range batches
+/// of at most \p target_batch_size(K) elements each -- the target is an upper
+/// bound, not a goal (Result::mode_batches); if that yields at most one batch
+/// it declines (so small / unselected indices are left to the standard scheme).
 ///
 /// Otherwise it *replays the build of every compatible persistent final* in
 /// the same batch passes: the group is the trigger node plus every key of
@@ -941,11 +963,13 @@ ResultPtr evaluate_antisymm(Args&&... args) {
 /// rather than full intermediate peak memory).
 ///
 /// \param le the leaf evaluator (captured).
-/// \param target_batch_size the desired size of each batch *in elements* (a
-///        user knob; no memory model is assumed). Backend-neutral: a tiled
-///        backend rounds batch boundaries to tile boundaries, so realized
-///        batches are uneven and each covers at least this many elements where
-///        possible.
+/// \param target_batch_size per-index function
+///        `std::function<std::size_t(Index const&)>` returning the per-batch
+///        slice size (in elements) for a given (batch-axis) index -- an UPPER
+///        BOUND, not a goal. Backend-neutral: a tiled backend rounds batch
+///        boundaries to tile boundaries (down to a tile multiple), so realized
+///        batches are uneven and each covers at most this many elements, except
+///        the one-tile floor (a lone tile larger than the target).
 /// \param accept predicate selecting which contracted indices may be batched
 ///        (e.g. only those in the auxiliary/RI IndexSpace). Defaults to any.
 /// \param make_scope_guard factory, called with the batch count, returning an
@@ -1113,27 +1137,39 @@ template <typename F, typename IndexPredicate = accept_any_index,
           typename ScopeGuardFactory = make_no_scope_guard,
           typename IsVolatile = never_volatile>
 [[nodiscard]] auto make_batched_custom_evaluator(
-    F le, std::size_t target_batch_size, IndexPredicate accept = {},
-    ScopeGuardFactory make_scope_guard = {}, IsVolatile is_volatile = {}) {
-  return [le = std::move(le), target_batch_size, accept, is_volatile,
+    F le, std::function<std::size_t(Index const&)> target_batch_size,
+    IndexPredicate accept = {}, ScopeGuardFactory make_scope_guard = {},
+    IsVolatile is_volatile = {}, bool persistent_only = false) {
+  return [le = std::move(le), target_batch_size = std::move(target_batch_size),
+          accept, is_volatile, persistent_only,
           make_scope_guard](auto const& node, auto& cache) -> ResultPtr {
     auto const K = batch_axis(node, accept);
-    if (!K) return nullptr;
+    if (!K) {
+      return nullptr;
+    }
 
-    // Persistence gate: only stream subtrees that are amplitude-independent
-    // (built once). If the subtree contains a volatile leaf it is rebuilt on
-    // every evaluation, so batching pays the partition + relaxed-screening cost
-    // each pass for no lasting memory benefit -- decline to the standard
-    // scheme. Default never_volatile => no gating (original behavior).
-    if (subtree_any(node, is_volatile)) return nullptr;
+    // Persistence gate (opt-in via persistent_only): when set, decline to batch
+    // any subtree containing a volatile leaf -- such a subtree is rebuilt every
+    // evaluation, so batching pays the partition + relaxed-screening cost each
+    // pass to amortize over nothing. By default (persistent_only == false) we
+    // batch ACROSS THE BOARD: slicing the batch axis reduces the footprint of
+    // any axis-carrying intermediate regardless of volatility, and the cost
+    // model credits it accordingly, so the runtime must realize it too. (When
+    // is_volatile is never_volatile the gate is moot either way.)
+    if (persistent_only && subtree_any(node, is_volatile)) {
+      return nullptr;
+    }
 
     auto const leaf = find_leaf_carrying(node, *K);
-    if (!leaf) return nullptr;
+    if (!leaf) {
+      return nullptr;
+    }
     auto const batches =
-        le(leaf->first)->mode_batches(leaf->second, target_batch_size);
+        le(leaf->first)->mode_batches(leaf->second, target_batch_size(*K));
 
-    if (batches.size() <= 1)
+    if (batches.size() <= 1) {
       return nullptr;  // nothing to gain (or unbatchable)
+    }
 
     using node_t = std::remove_cvref_t<decltype(node)>;
     using member_t = std::pair<node_t const*, Index>;
@@ -1158,7 +1194,8 @@ template <typename F, typename IndexPredicate = accept_any_index,
       if (subtree_any(k, is_volatile)) return;  // defensive: P implies NV
       auto const lk = find_leaf_carrying(k, *Kk);
       if (!lk) return;
-      if (le(lk->first)->mode_batches(lk->second, target_batch_size) != batches)
+      if (le(lk->first)->mode_batches(lk->second, target_batch_size(*Kk)) !=
+          batches)
         return;
       group.emplace_back(&k, *Kk);
     });
@@ -1192,6 +1229,28 @@ template <typename F, typename IndexPredicate = accept_any_index,
         layers.push_back(std::move(layer));
         remaining = std::move(rest);
       }
+    }
+
+    // Trace: the batched path co-evaluates a GROUP -- the trigger plus any
+    // cross-term persistent finals that slice over the same aux partition --
+    // streaming them together over the aux batches in one pass (so a
+    // sub-intermediate shared between members is computed once per batch, not
+    // once per consumer). The members are SIBLINGS computed alongside each
+    // other, NOT a term hierarchy; the per-op Eval lines below interleave
+    // across members and batches. Bracket the group and list its members so
+    // those ops can be attributed. Distinct "BatchGroup"/"BatchMember" labels
+    // (not Term|Begin/End) to avoid implying nesting; the top-level evaluate
+    // still emits the enclosing per-term Term markers.
+    if (log::printing()) {
+      std::size_t n_members = 0;
+      for (auto const& layer : layers) n_members += layer.size();
+      log::log("BatchGroup", "Begin",
+               std::format("{} members co-evaluated over {} aux batches",
+                           n_members, batches.size()));
+      for (auto const& layer : layers)
+        for (auto const& mk : layer)
+          log::log("BatchMember",
+                   toUtf8(io::serialization::to_string(to_expr(*mk.first))));
     }
 
     // RAII scope for the batched partial contractions; a backend-supplied
@@ -1254,9 +1313,52 @@ template <typename F, typename IndexPredicate = accept_any_index,
         (void)cache.store(*mem, std::move(v));
       }
     }
+    if (log::printing()) log::log("BatchGroup", "End");
     SEQUANT_ASSERT(trigger_result);
     return trigger_result;
   };
+}
+
+/// \brief Builds a batched custom evaluator (see make_batched_custom_evaluator)
+/// from a \p policy object, lifting the policy's canonical Tensor-based
+/// volatile-leaf predicate to the EvalNode predicate the batched evaluator
+/// expects.
+///
+/// Exactly equivalent to calling make_batched_custom_evaluator with:
+///   - target_batch_size = policy.batch_target_size
+///   - accept           = policy.is_batchable_index
+///   - make_scope_guard = make_scope_guard (forwarded)
+///   - is_volatile      = EvalNode lift of policy.is_volatile_leaf:
+///       n.leaf() && n->is_tensor() && policy.is_volatile_leaf(n->as_tensor())
+///     (when policy.is_volatile_leaf is empty, no node is volatile)
+///
+/// \param policy       BatchPolicy carrying the three batchability predicates.
+/// \param yielder      The leaf evaluator (captured and forwarded).
+/// \param make_scope_guard  Optional scope-guard factory (same semantics as in
+///        make_batched_custom_evaluator; defaults to make_no_scope_guard).
+template <class F, class ScopeGuardFactory = make_no_scope_guard>
+[[nodiscard]] auto make_evaluator(BatchPolicy const& policy, F yielder,
+                                  ScopeGuardFactory make_scope_guard = {}) {
+  auto is_volatile_node = [p = policy.is_volatile_leaf](auto const& n) -> bool {
+    if (!n.leaf() || !n->is_tensor()) return false;
+    return p && p(n->as_tensor());
+  };
+  // BatchPolicy docs: an empty is_batchable_index or batch_target_size means
+  // "no batching". Forwarding an empty std::function would instead throw
+  // std::bad_function_call from batch_axis()/target_batch_size() at evaluation
+  // time, so when either is unset, substitute predicates that decline batching
+  // (accept nothing => batch_axis returns nullopt => target_batch_size is never
+  // called) rather than partially-filled ones.
+  std::function<bool(Index const&)> accept = policy.is_batchable_index;
+  std::function<std::size_t(Index const&)> target = policy.batch_target_size;
+  if (!accept || !target) {
+    accept = [](Index const&) { return false; };
+    target = [](Index const&) -> std::size_t { return 0; };
+  }
+  return make_batched_custom_evaluator(
+      std::move(yielder), std::move(target), std::move(accept),
+      std::move(make_scope_guard), std::move(is_volatile_node),
+      policy.persistent_only);
 }
 
 }  // namespace sequant
