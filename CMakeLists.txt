@@ -448,8 +448,8 @@ set(SeQuant_optimize_src
         SeQuant/core/optimize/common_subexpression_elimination.hpp
         SeQuant/core/optimize/cost_model.hpp
         SeQuant/core/optimize/extract_subtrees.hpp
-        SeQuant/core/optimize/fusion.cpp
-        SeQuant/core/optimize/fusion.hpp
+        SeQuant/core/optimize/multiterm.cpp
+        SeQuant/core/optimize/multiterm.hpp
         SeQuant/core/optimize/options.hpp
         SeQuant/core/optimize/optimize.cpp
         SeQuant/core/optimize/optimize.hpp

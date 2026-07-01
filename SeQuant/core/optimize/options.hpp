@@ -57,6 +57,12 @@ struct CSEOptions {
   bool subnet = false;
 };
 
+/// Whether to perform multi-term factorization, pulling shared factors across
+/// the summands of a Sum (\c A*B + A*C -> A*(B + C)) using a cost-driven
+/// biclique search. Opt-in; disabled by default so existing output is
+/// unchanged.
+enum class MultiTermFactor { Disable, Enable };
+
 /// Roofline parameters for the peak objectives' secondary (tie-break) cost.
 /// When \c machine_balance > 0, the per-contraction tie-break cost becomes the
 /// roofline wall-time proxy \c max(flops, machine_balance * Q), where the data
@@ -127,6 +133,10 @@ struct OptimizeOptions {
   /// Common-subexpression-elimination options. All disabled by default;
   /// enabling can reduce op counts at the cost of additional optimization time.
   CSEOptions CSE = {};
+
+  /// Whether to pull shared factors across summands via cost-driven
+  /// multi-term factorization. Disabled by default.
+  MultiTermFactor multiterm = MultiTermFactor::Disable;
 
   /// Caller-supplied Index to extent provider. If empty, defaults to
   /// \c IndexSpace::approximate_size().

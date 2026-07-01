@@ -5,6 +5,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/optimize/multiterm.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/optimize/single_term.hpp>
 #include <SeQuant/core/optimize/sum.hpp>
@@ -222,18 +223,33 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
     }
 
     Sum new_sum(std::move(new_smands), Sum::move_only_tag{});
-    if (!reorder) return ex<Sum>(std::move(new_sum));
 
-    // Binarize once per optimized summand and hand the nodes to reorder()
-    // so they aren't re-built inside clusters(). NOTE: this runs sequentially
-    // by design -- see invariant (2) above.
+    bool const do_multiterm = opts.multiterm == MultiTermFactor::Enable;
+    if (!reorder && !do_multiterm) return ex<Sum>(std::move(new_sum));
+
+    // Optional multi-term factorization first: it can merge summands
+    ExprPtr result;
     container::vector<FullBinaryNode<EvalExpr>> nodes;
-    nodes.reserve(new_sum.size());
-    // per-summand binarize for ordering only; positional head doesn't escape.
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-    for (auto const& s : new_sum.summands()) nodes.push_back(binarize(s));
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-    return ex<Sum>(opt::reorder(new_sum, nodes));
+    if (do_multiterm) {
+      nodes.reserve(new_sum.size());
+      // per-summand binarize; positional head doesn't escape.
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+      for (auto const& s : new_sum.summands()) nodes.push_back(binarize(s));
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+      result = opt::factorize_multiterm(new_sum, nodes, opts);
+    } else {
+      result = ex<Sum>(std::move(new_sum));
+    }
+
+    // reorder (independent of multiterm). An unchanged summand count means
+    // multiterm folded nothing, leaving `nodes` positionally valid, so reorder
+    // can reuse them; a fold shrinks the sum and forces a re-binarize.
+    if (reorder && result->is<Sum>()) {
+      auto const& s = result->as<Sum>();
+      auto reuse_nodes = do_multiterm && s.size() == nodes.size();
+      return ex<Sum>(reuse_nodes ? opt::reorder(s, nodes) : opt::reorder(s));
+    }
+    return result;
   }
 
   return expr->clone();

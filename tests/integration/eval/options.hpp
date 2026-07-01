@@ -25,6 +25,11 @@ struct OptionsOptimization {
   bool single_term = true;
   bool reuse_imeds = true;
   bool cache_leaves = true;
+  /// Multi-term factorization (\c A*B + A*C -> A*(B + C)). It is applied as
+  /// part of the optimize() call and therefore only takes effect when \c
+  /// single_term is also on; with \c single_term off, optimize() is not called
+  /// and this flag has no effect.
+  bool multi_term = false;
 };
 
 struct OptionsSCF {
@@ -41,6 +46,10 @@ struct OptionsLog {
   inline static constexpr size_t MAX_LEVEL = 1;
   size_t level = 1;
   std::string file = "";
+  /// Whether to print the optimized SeQuant expressions (one summand per line,
+  /// in the deserialize/serialization text format) once, after optimization and
+  /// before any evaluation.
+  bool print_exprs = false;
 };
 
 namespace detail {
@@ -146,6 +155,8 @@ class ParseOptionsOptimization {
 
   inline static std::string_view const cache_leaves{"cache_leaves"};
 
+  inline static std::string_view const multi_term{"multi_term"};
+
   OptionsOptimization opts_;
 
  public:
@@ -186,7 +197,11 @@ class ParseOptionsLog {
   inline static ArgValInt const level_parser{OptionsLog::MIN_LEVEL,
                                              OptionsLog::MAX_LEVEL};
 
+  inline static const auto bool_parser = ArgValBool{};
+
   inline static std::string_view const level{"level"};
+
+  inline static std::string_view const print_exprs{"print_exprs"};
 
   OptionsLog opts_{};
 

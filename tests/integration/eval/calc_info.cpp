@@ -40,6 +40,12 @@ CalcInfo make_calc_info(std::string_view config_file,
   auto const scf_opts = parser.opts_scf();
   auto log_opts = parser.opts_log();
   if (!output_file.empty()) log_opts.file = output_file.data();
+
+  // multi-term factorization is only in effect when single-term
+  // factorization is enabled
+  if (optm_opts.multi_term && !optm_opts.single_term)
+    std::wcerr << L"warning: multi_term ignored because single_term is off\n";
+
   auto const data_info = DataInfo{fock_or_eri_file, eri_or_fock_file};
   return CalcInfo{eq_opts, optm_opts, scf_opts, log_opts, data_info};
 }
