@@ -612,6 +612,19 @@ ResultPtr evaluate(Node const& node,  //
           [&]() { result = left->sum(*right, ann); });
     } else {
       SEQUANT_ASSERT(node->op_type() == EvalOp::Product);
+      // Observe-only predicted-footprint trace: consulted BEFORE materializing
+      // the product, so an op that exhausts memory is still named in the log
+      // (the post-hoc Eval line below never prints for an OOMing op). Gated on
+      // trace + level so it is inert by default; the batched scratch carries
+      // this hook too (see make_batched_scratch), so batched products -- which
+      // do NOT consult the shaped-product hook -- are still predicted (as
+      // dense, via the shapeable=false argument).
+      if constexpr (detail::trace(EvalTrace)) {
+        if (auto const& ph = cache.predict_hook();
+            ph && log::printing() && Logger::instance().eval.level >= 2)
+          ph(std::any{std::cref(node)}, *left, *right, ann,
+             static_cast<bool>(cache.shaped_product_hook()));
+      }
       // Consult the shaped-product hook (if set) before evaluating the product.
       // The hook receives the node (wrapped in a std::any as a
       // std::reference_wrapper so the full IR node is inspectable) plus the
@@ -1127,8 +1140,13 @@ template <typename TreeNode, bool FHC, typename Members>
   auto is_persistent = [seed_keys = std::move(seed_keys)](TreeNode const& n) {
     return seed_keys.contains(n);
   };
-  return {CacheManager<TreeNode, FHC>{std::move(reg), std::move(is_persistent)},
-          std::move(seeds)};
+  CacheManager<TreeNode, FHC> scratch{std::move(reg), std::move(is_persistent)};
+  // Carry the observe-only predicted-footprint hook into the scratch so batched
+  // products are predicted too; deliberately NOT the shaped-product hook --
+  // batched products stay unshaped (existing behavior), which the predict hook
+  // reflects via shapeable=false (it has no shaped hook here).
+  scratch.set_predict_hook(real.predict_hook());
+  return {std::move(scratch), std::move(seeds)};
 }
 
 }  // namespace detail
