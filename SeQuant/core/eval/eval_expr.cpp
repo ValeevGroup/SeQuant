@@ -4,6 +4,7 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
+#include <SeQuant/core/eval/slot_symmetry.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
@@ -136,7 +137,8 @@ EvalExpr::index_vector const& EvalExpr::canon_indices() const noexcept {
 EvalExpr::EvalExpr(Tensor const& tnsr)
     : op_type_{std::nullopt},
       result_type_{ResultType::Tensor},
-      expr_{tnsr.clone()} {
+      expr_{tnsr.clone()},
+      slot_symmetry_{from_leaf_tensor(tnsr)} {
   SEQUANT_ASSERT(!tnsr.indices().empty());
   if (is_tot(tnsr)) {
     ExprPtrList tlist{expr_};
@@ -290,6 +292,10 @@ std::shared_ptr<bliss::Graph> EvalExpr::copy_connectivity_graph()
   return connectivity_;
 }
 
+SlotSymmetry const& EvalExpr::slot_symmetry() const noexcept {
+  return slot_symmetry_;
+}
+
 namespace {
 
 ///
@@ -423,6 +429,9 @@ EvalExprNode binarize(Tensor const& t) {
                  1,                                                 //
                  h,                                                 //
                  nullptr};
+    // Out-of-band: adjoint swaps bra_groups <-> ket_groups and preserves
+    // column_groups (real-field; complex conjugation deferred to Phase 1).
+    EvalOpSetter{}.set_slot_symmetry(adj, adjoint(bare_leaf->slot_symmetry()));
     return EvalExprNode{std::move(adj), std::move(bare_leaf),
                         std::move(sentinel)};
   }
@@ -451,12 +460,13 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
 
   auto make_sum = [i = 0,                    //
                    hs = imed_hashes(hvals),  //
-                   all_tensors, &opts](EvalExpr const& left,
-                                       EvalExpr const&) mutable -> EvalExpr {
+                   all_tensors,
+                   &opts](EvalExpr const& left,
+                          EvalExpr const& right) mutable -> EvalExpr {
     auto h = ranges::at(hs, ++i);
     if (all_tensors) {
       auto const& t = left.as_tensor();
-      return {
+      EvalExpr res{
           EvalOp::Sum,         //
           ResultType::Tensor,  //
           detail::make_tensor_wo_symmetries(opts, bra(t.bra()), ket(t.ket()),
@@ -465,6 +475,17 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
           1,                                                //
           h,                                                //
           nullptr};
+      // intersect compares groups by integer slot position; this is valid
+      // because all summands share the same external-slot layout (the Sum
+      // result is built from left.canon_indices()). Only propagate the
+      // descriptor when the result preserves the operand's bra/ket layout
+      // (not the case under merge_indices mode, I1 fix; I3 invariant).
+      if (res.as_tensor().bra_rank() == left.as_tensor().bra_rank() &&
+          res.as_tensor().ket_rank() == left.as_tensor().ket_rank())
+        EvalOpSetter{}.set_slot_symmetry(
+            res, intersect(left.slot_symmetry(), right.slot_symmetry()));
+      // else: leave slot_symmetry empty (default-constructed).
+      return res;
     } else {
       return {EvalOp::Sum,              //
               ResultType::Scalar,       //
@@ -525,7 +546,7 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       // scalar * tensor or tensor * scalar
       auto const& tl = left->is_tensor() ? left : right;
       auto const& t = tl->as_tensor();
-      return {
+      EvalExpr res{
           EvalOp::Product,     //
           ResultType::Tensor,  //
           detail::make_tensor_wo_symmetries(opts, bra(t.bra()), ket(t.ket()),
@@ -534,6 +555,15 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
           1,                                                //
           h,
           nullptr};
+      // A scalar factor cannot break permutational symmetry: pass through the
+      // tensor operand's descriptor only when the result preserves the
+      // operand's bra/ket layout (not the case under merge_indices mode, where
+      // all indices collapse into aux and the slot positions are meaningless).
+      if (res.as_tensor().bra_rank() == t.bra_rank() &&
+          res.as_tensor().ket_rank() == t.ket_rank())
+        EvalOpSetter{}.set_slot_symmetry(res, tl->slot_symmetry());
+      // else: leave slot_symmetry empty (default-constructed).
+      return res;
     } else {
       // tensor * tensor
       container::svector<ExprWithHash> subfacs;
@@ -576,15 +606,20 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
                 h,
                 std::move(canon.graph)};
       } else {
-        return {EvalOp::Product,     //
-                ResultType::Tensor,  //
-                detail::make_tensor_wo_symmetries(opts, bra(target_indices.bra),
-                                                  ket(target_indices.ket),
-                                                  aux(target_indices.aux)),
-                canon.get_indices<Index::index_vector>(),  //
-                canon.phase,                               //
-                h,
-                std::move(canon.graph)};
+        EvalExpr res{EvalOp::Product,     //
+                     ResultType::Tensor,  //
+                     detail::make_tensor_wo_symmetries(
+                         opts, bra(target_indices.bra), ket(target_indices.ket),
+                         aux(target_indices.aux)),
+                     canon.get_indices<Index::index_vector>(),  //
+                     canon.phase,                               //
+                     h,
+                     std::move(canon.graph)};
+        // Out-of-band slot-symmetry deduction (does not affect the result
+        // tensor, its hash, canon indices, or graph above).
+        EvalOpSetter{}.set_slot_symmetry(
+            res, deduce_slot_symmetry(*left, *right, res.as_tensor()));
+        return res;
       }
     }
   };
@@ -610,6 +645,19 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
                            1,                      //
                            h,                      //
                            nullptr};
+
+    // The trailing scalar factor preserves the tensor sub-result's slot layout
+    // only when the result bra/ket match the sub-result (make_tensor above
+    // keeps the index order under the default mode; under merge_indices all
+    // slots collapse into aux so the positions would be meaningless, I1 fix).
+    if (left->is_tensor()) {
+      auto const& left_t = left->as_tensor();
+      auto const& result_t = result.as_tensor();
+      if (result_t.bra_rank() == left_t.bra_rank() &&
+          result_t.ket_rank() == left_t.ket_rank())
+        EvalOpSetter{}.set_slot_symmetry(result, left->slot_symmetry());
+      // else: leave slot_symmetry empty (default-constructed).
+    }
 
     return EvalExprNode{std::move(result), std::move(left), std::move(right)};
   }
