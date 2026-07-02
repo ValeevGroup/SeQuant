@@ -198,7 +198,7 @@ enum struct TermMode { Begin, End };
 /// One log record per eval op. Line format:
 ///
 // clang-format off
-/// Eval | <mode> | <time> | [left=L | right=R |] result=X | alloc=A | hw=H | rss=R | <label>
+/// Eval | <mode> | <time> | [left=L | right=R |] result=X | alloc=A | hw=H | rss=R | [<heap suffix> |] <label>
 // clang-format on
 ///
 /// Which fields are set depends on the op's arity:
@@ -281,21 +281,31 @@ auto eval(EvalStat const& stat, Args const&... args) {
   auto const rss_s = std::format(
       "rss={}",
       to_string(Bytes{rss_reduce ? rss_reduce(rss_local) : rss_local}));
-  if (stat.mem_left) {
-    SEQUANT_ASSERT(stat.mem_right);
-    log("Eval",                                               //
-        to_string(stat.mode),                                 //
-        stat.time,                                            //
-        std::format("left={}", to_string(*stat.mem_left)),    //
-        std::format("right={}", to_string(*stat.mem_right)),  //
-        result_s, alloc_s, hw_s, rss_s,                       //
-        args...);
-  } else {
-    log("Eval",                //
-        to_string(stat.mode),  //
-        stat.time,             //
-        result_s, alloc_s, hw_s, rss_s, args...);
-  }
+  // Optional backend-supplied suffix (already reduced across ranks); omitted
+  // entirely when the hook is unset or returns empty.
+  auto const& heap_stats = Logger::instance().eval.heap_stats;
+  auto const heap_s = heap_stats ? heap_stats() : std::string{};
+  auto emit = [&](auto const&... trailer) {
+    if (stat.mem_left) {
+      SEQUANT_ASSERT(stat.mem_right);
+      log("Eval",                                               //
+          to_string(stat.mode),                                 //
+          stat.time,                                            //
+          std::format("left={}", to_string(*stat.mem_left)),    //
+          std::format("right={}", to_string(*stat.mem_right)),  //
+          result_s, alloc_s, hw_s, rss_s,                       //
+          trailer...);
+    } else {
+      log("Eval",                //
+          to_string(stat.mode),  //
+          stat.time,             //
+          result_s, alloc_s, hw_s, rss_s, trailer...);
+    }
+  };
+  if (heap_s.empty())
+    emit(args...);
+  else
+    emit(heap_s, args...);
 }
 
 template <typename... Args>
@@ -335,6 +345,15 @@ auto cache(N const& node, CacheManager<N, F>& cm, Args const&... args) {
 
 inline auto term(TermMode mode, std::string_view term) {
   log("Term", to_string(mode), term);
+}
+
+/// Invoke the optional post-op memory-release hook
+/// (Logger::eval.release_memory) if set. Called after each freshly evaluated op
+/// regardless of trace level, so a large transient's freed pages can be
+/// returned before the next op allocates. The injected hook self-throttles;
+/// empty hook = no-op.
+inline void release_after_op() {
+  if (auto const& rel = Logger::instance().eval.release_memory; rel) rel();
 }
 
 [[nodiscard]] auto label(meta::eval_node auto const& node) {
@@ -581,6 +600,7 @@ ResultPtr evaluate(Node const& node,  //
                                       log::bytes(cache, intercepted).value)}},
                     log::label(node));
         }
+        log::release_after_op();
         return intercepted;
       }
     }
@@ -612,6 +632,19 @@ ResultPtr evaluate(Node const& node,  //
           [&]() { result = left->sum(*right, ann); });
     } else {
       SEQUANT_ASSERT(node->op_type() == EvalOp::Product);
+      // Observe-only predicted-footprint trace: consulted BEFORE materializing
+      // the product, so an op that exhausts memory is still named in the log
+      // (the post-hoc Eval line below never prints for an OOMing op). Gated on
+      // trace + level so it is inert by default; the batched scratch carries
+      // this hook too (see make_batched_scratch), so batched products -- which
+      // do NOT consult the shaped-product hook -- are still predicted (as
+      // dense, via the shapeable=false argument).
+      if constexpr (detail::trace(EvalTrace)) {
+        if (auto const& ph = cache.predict_hook();
+            ph && log::printing() && Logger::instance().eval.level >= 2)
+          ph(std::any{std::cref(node)}, *left, *right, ann,
+             static_cast<bool>(cache.shaped_product_hook()));
+      }
       // Consult the shaped-product hook (if set) before evaluating the product.
       // The hook receives the node (wrapped in a std::any as a
       // std::reference_wrapper so the full IR node is inspectable) plus the
@@ -672,6 +705,7 @@ ResultPtr evaluate(Node const& node,  //
     }
   }
 
+  log::release_after_op();
   return result;
 }
 
@@ -1127,8 +1161,13 @@ template <typename TreeNode, bool FHC, typename Members>
   auto is_persistent = [seed_keys = std::move(seed_keys)](TreeNode const& n) {
     return seed_keys.contains(n);
   };
-  return {CacheManager<TreeNode, FHC>{std::move(reg), std::move(is_persistent)},
-          std::move(seeds)};
+  CacheManager<TreeNode, FHC> scratch{std::move(reg), std::move(is_persistent)};
+  // Carry the observe-only predicted-footprint hook into the scratch so batched
+  // products are predicted too; deliberately NOT the shaped-product hook --
+  // batched products stay unshaped (existing behavior), which the predict hook
+  // reflects via shapeable=false (it has no shaped hook here).
+  scratch.set_predict_hook(real.predict_hook());
+  return {std::move(scratch), std::move(seeds)};
 }
 
 }  // namespace detail
