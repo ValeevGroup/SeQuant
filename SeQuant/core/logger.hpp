@@ -62,7 +62,17 @@ struct Logger : public Singleton<Logger> {
     /// ranks. Returns a preformatted, already-reduced string (e.g.
     /// "heap_inuse=...B | heap_sys=...B"); empty function = omit the suffix.
     std::function<std::string()> heap_stats = {};
-  } eval = {0, nullptr, {}, {}};
+
+    /// Optional post-op memory-release hook, invoked after each freshly
+    /// evaluated op (leaf/product/sum) regardless of trace level -- so a large
+    /// transient's freed pages can be returned to the OS before the next op
+    /// allocates, rather than lingering as allocator-retained free heap. The
+    /// injected hook is expected to self-throttle (a cheap no-op when little is
+    /// reclaimable) since it runs per op. Local/non-collective by contract
+    /// (e.g. glibc malloc_trim), so it needs no cross-rank matching. Empty
+    /// function = no release (default).
+    std::function<void()> release_memory = {};
+  } eval = {0, nullptr, {}, {}, {}};
 
  private:
   friend class Singleton<Logger>;

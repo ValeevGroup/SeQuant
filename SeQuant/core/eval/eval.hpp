@@ -347,6 +347,15 @@ inline auto term(TermMode mode, std::string_view term) {
   log("Term", to_string(mode), term);
 }
 
+/// Invoke the optional post-op memory-release hook
+/// (Logger::eval.release_memory) if set. Called after each freshly evaluated op
+/// regardless of trace level, so a large transient's freed pages can be
+/// returned before the next op allocates. The injected hook self-throttles;
+/// empty hook = no-op.
+inline void release_after_op() {
+  if (auto const& rel = Logger::instance().eval.release_memory; rel) rel();
+}
+
 [[nodiscard]] auto label(meta::eval_node auto const& node) {
   return node->is_primary()
              ? node->label()
@@ -591,6 +600,7 @@ ResultPtr evaluate(Node const& node,  //
                                       log::bytes(cache, intercepted).value)}},
                     log::label(node));
         }
+        log::release_after_op();
         return intercepted;
       }
     }
@@ -695,6 +705,7 @@ ResultPtr evaluate(Node const& node,  //
     }
   }
 
+  log::release_after_op();
   return result;
 }
 
