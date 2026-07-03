@@ -757,10 +757,22 @@ double reconstructed_batched_peak(
     TensorNetwork const& network, TIdxs const& tidxs, IdxToSz&& idxsz,
     std::function<bool(Index const&)> const& is_batchable,
     std::function<std::size_t(Index const&)> const& batch_target_size,
-    std::function<bool(Tensor const&)> const& is_volatile_leaf) {
-  PeakBatchedModel<std::decay_t<IdxToSz>> model{std::forward<IdxToSz>(idxsz),
-                                                is_batchable, batch_target_size,
-                                                is_volatile_leaf};
+    std::function<bool(Tensor const&)> const& is_volatile_leaf,
+    double accumulation_factor = 0.0) {
+  PeakBatchedModel<std::decay_t<IdxToSz>> model{
+      std::forward<IdxToSz>(idxsz),
+      is_batchable,
+      batch_target_size,
+      is_volatile_leaf,
+      /* inner_pow */ {},
+      /* volatile_weight */ 1.0,
+      /* machine_balance */ 0.0,
+      /* fast_mem_elems */ 0.0,
+      /* block_tiles */ 3.0,
+      /* block_prefactor */ 1.0,
+      /* batch_persistent_only */ false,
+      /* peak_flops_tolerance */ 0.0,
+      accumulation_factor};
   auto ctx = model.build_context(network, tidxs);
   auto st = solve_single_term(model, network, tidxs, ctx);
   auto const nt = network.tensors().size();
@@ -795,7 +807,14 @@ double reconstructed_batched_peak(
     // parent result (sz(n, B)) is materialized alongside them.
     double const stage_first = ctx.Lof(s, C) + peak_f;
     double const stage_second = ctx.sz(f, C) + peak_s;
-    double const stage_form = ctx.sz(f, C) + ctx.sz(s, C) + ctx.sz(n, B);
+    // Mirror the DP's relax() contribution charge: a node that contracts a
+    // batchable index (aprime != 0) is accumulated over the aux batches, so
+    // the in-flight contribution (sized like the result, ctx.sz(n, B))
+    // co-resides with the accumulator at the all-co-resident moment.
+    double const contrib =
+        (r.aprime != 0) ? model.accumulation_factor * ctx.sz(n, B) : 0.0;
+    double const stage_form =
+        ctx.sz(f, C) + ctx.sz(s, C) + ctx.sz(n, B) + contrib;
     return std::max({stage_first, stage_second, stage_form});
   };
 
