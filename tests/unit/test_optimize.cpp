@@ -24,6 +24,7 @@
 #include <initializer_list>
 #include <limits>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 sequant::ExprPtr extract(sequant::ExprPtr expr,
@@ -2327,4 +2328,84 @@ TEST_CASE("batched DP peak matches oracle with two axes and accumulation",
       net, tidxs, idxsz, is_batch_mu, bts, novol, acc);
   CHECK(dp < dp_K_only);
   CHECK(dp < dp_mu_only);
+}
+
+// Task 3.3: binarize() must stamp EvalExpr::batch_axes() from the optimizer's
+// per-node sliced-sets (OptimizeOptions::term_batch_axes ->
+// BinarizationOptions::node_batch_axes), and the two post-orders (the
+// optimizer's DP reconstruction and binarize's Product recursion) must line
+// up exactly -- this round-trips a real optimize() -> binarize() call and
+// checks that (a) some node actually got annotated and (b) the annotated
+// axis is the aux index the batch policy was forced to slice.
+TEST_CASE("binarize stamps per-node batch axes from optimize()",
+          "[optimize][annotate]") {
+  using namespace sequant;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  mbpt::add_df_spaces(reg);
+  for (auto&& [k, v] :
+       std::initializer_list<std::pair<std::wstring_view, size_t>>{
+           {L"i", 30}, {L"a", 30}, {L"Κ", 500}}) {
+    reg->retrieve_ptr(k)->approximate_size(v);
+  }
+  auto aux = reg->retrieve(L"Κ");
+  auto idxsz = [](Index const& ix) -> std::size_t {
+    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+  };
+  auto is_batch = [aux](Index const& ix) { return ix.space() == aux; };
+  std::function<std::size_t(Index const&)> bts = [](Index const&) {
+    return std::size_t{20};
+  };
+
+  // 4-tensor network with Κ_1 shared between the two g's (the only batchable
+  // contraction) so a forced-batching run must slice Κ at that node.
+  auto expr =
+      deserialize(L"g{a_1;i_1;Κ_1} g{a_2;i_2;Κ_1} f{i_1;i_3} f{i_2;i_4}");
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      Expr const*, container::vector<container::svector<Index>>>>();
+
+  OptimizeOptions opts;
+  opts.objective_function = ObjectiveFunction::DensePeakSizeBatched;
+  opts.idx_to_extent = idxsz;
+  opts.batch_policy.is_batchable_index = is_batch;
+  opts.batch_policy.batch_target_size = bts;
+  opts.batch_policy.peak_threshold = 1.0;  // tiny budget => force batching
+  opts.term_batch_axes = axes_map;
+
+  auto optimized = optimize(expr, opts);
+  REQUIRE(optimized);
+
+  // optimize() on a bare Product returns opt_pure_product's result directly
+  // (no enclosing Sum), so `optimized` itself is the key term_batch_axes was
+  // recorded under.
+  auto it = axes_map->find(optimized.get());
+  REQUIRE(it != axes_map->end());
+  auto const& node_axes = it->second;
+  REQUIRE(!node_axes.empty());
+
+  BinarizationOptions bopts;
+  bopts.node_batch_axes = node_axes;
+
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  // binarize(ExprPtr) is deprecated in favor of binarize(ResultExpr); using it
+  // here for ordering only -- the positional head layout it warns about does
+  // not matter for this internal-node annotation check.
+  auto node = binarize(optimized, {}, bopts);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+  bool any_annotated = false;
+  bool aux_found = false;
+  node.visit([&](auto const& n) {
+    if (n->batch_axes().empty()) return;
+    any_annotated = true;
+    for (auto const& ix : n->batch_axes())
+      if (ix.space() == aux) aux_found = true;
+  });
+  // The essential assertion: the round-trip actually annotated a node. If the
+  // optimizer's and binarize's post-orders had diverged, either this would be
+  // false (silently under-annotated) or the SEQUANT_ASSERT inside binarize()
+  // would have already fired above.
+  CHECK(any_annotated);
+  CHECK(aux_found);
 }

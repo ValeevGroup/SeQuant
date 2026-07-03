@@ -270,6 +270,24 @@ class EvalExpr {
   [[nodiscard]] std::shared_ptr<bliss::Graph> copy_connectivity_graph()
       const noexcept;
 
+  ///
+  /// \brief Batchable indices the single-term optimizer chose to slice AT
+  /// this node (its DP `aprime`). Empty unless set by \c binarize from
+  /// \c BinarizationOptions::node_batch_axes (itself populated from
+  /// \c OptimizeOptions::term_batch_axes by the optimizer). The runtime
+  /// batched evaluator slices exactly these indices at this node.
+  ///
+  [[nodiscard]] container::svector<Index> const& batch_axes() const noexcept {
+    return batch_axes_;
+  }
+
+  ///
+  /// \brief Sets the batch axes for this node; see \c batch_axes.
+  ///
+  void set_batch_axes(container::svector<Index> axes) noexcept {
+    batch_axes_ = std::move(axes);
+  }
+
  protected:
   std::optional<EvalOp> op_type_ = std::nullopt;
 
@@ -284,6 +302,9 @@ class EvalExpr {
   size_t hash_value_;
 
   std::shared_ptr<bliss::Graph> connectivity_;
+
+  /// See \c batch_axes.
+  container::svector<Index> batch_axes_{};
 };
 
 struct EvalOpSetter {
@@ -296,6 +317,13 @@ struct BinarizationOptions {
   /// (stored as aux indices) instead of retaining the bra, ket and aux
   /// separation
   bool merge_indices = false;
+
+  /// Per-contraction-node sliced-sets (RPN / post-order, left-first) to stamp
+  /// onto the produced tree's Product (contraction) nodes; typically set from
+  /// the corresponding entry of \c OptimizeOptions::term_batch_axes for the
+  /// summand being binarized. Empty (default) => no stamping, no behavior
+  /// change. See \c EvalExpr::batch_axes.
+  container::vector<container::svector<Index>> node_batch_axes = {};
 };
 
 namespace meta {
@@ -384,8 +412,15 @@ concept leaf_node_evaluator =
 
 namespace impl {
 
+/// \param node_counter Running left-first-post-order count of contraction
+///        (Product) nodes constructed so far, threaded by reference through
+///        the whole recursive descent for ONE top-level \c binarize call, so
+///        it can be checked against \c opts.node_batch_axes.size() by the
+///        caller. Must be the SAME counter object across the entire call
+///        tree of a single top-level invocation; do not reset per subtree.
 FullBinaryNode<EvalExpr> binarize(ExprPtr const&, IndexSet const& uncontract,
-                                  const BinarizationOptions& opts);
+                                  const BinarizationOptions& opts,
+                                  std::size_t& node_counter);
 }  // namespace impl
 
 ///
@@ -427,7 +462,17 @@ binarize(ExprPtr const& expr, IndexSet const& external = {},
          const BinarizationOptions& opts = {}) {
   SEQUANT_ASSERT(
       ranges::all_of(external, [](const auto& idx) { return idx.nonnull(); }));
-  auto tree = impl::binarize(expr, external, opts);
+  std::size_t node_counter = 0;
+  auto tree = impl::binarize(expr, external, opts, node_counter);
+  // A non-empty opts.node_batch_axes means the caller expects every entry to
+  // be consumed by exactly one contraction node, in the same left-first
+  // post-order the optimizer emitted them in (see PeakBatchedModel::
+  // reconstruct_axes and single_term_opt's Product-building loop). A count
+  // mismatch means the optimizer's and binarize's post-orders diverged --
+  // fail loudly rather than silently stamp the wrong nodes.
+  if (!opts.node_batch_axes.empty()) {
+    SEQUANT_ASSERT(node_counter == opts.node_batch_axes.size());
+  }
   if constexpr (std::is_same_v<ExprT, EvalExpr>)
     return tree;
   else
