@@ -559,14 +559,10 @@ struct PeakBatchedModel {
     ctx.nt = network.tensors().size();
     ctx.aux = batchable_index_list(network, is_batchable);
     ctx.m = ctx.aux.size();
-    // The accumulation_factor charge is per accumulation node (charged on each
-    // node that contracts a batchable index). Its semantics are only
-    // well-defined for a single batch axis; with multiple batchable indices the
-    // per-node, once-per-node charge would conflate independent accumulations.
-    SEQUANT_ASSERT(
-        (accumulation_factor == 0.0 || ctx.m <= 1) &&
-        "DensePeakSizeBatched: accumulation_factor != 0 requires at most one "
-        "batchable index");
+    // accumulation_factor is charged per accumulation node (Ap != 0) and is
+    // valid for any number of batchable indices: with nested accumulation the
+    // per-node charges co-exist at the peak. Validated by the identity
+    // peak_cost_batched == reconstructed_batched_peak (test [batched-accum]).
     ctx.nB = std::size_t{1} << ctx.m;
     ctx.tables = sliced_footprints(network, tidxs, idxsz, is_batchable, batch,
                                    ctx.aux, inner_pow);
@@ -735,10 +731,22 @@ double peak_cost_batched(
     TensorNetwork const& network, TIdxs const& tidxs, IdxToSz&& idxsz,
     std::function<bool(Index const&)> const& is_batchable,
     std::function<std::size_t(Index const&)> const& batch_target_size,
-    std::function<bool(Tensor const&)> const& is_volatile_leaf) {
-  PeakBatchedModel<std::decay_t<IdxToSz>> model{std::forward<IdxToSz>(idxsz),
-                                                is_batchable, batch_target_size,
-                                                is_volatile_leaf};
+    std::function<bool(Tensor const&)> const& is_volatile_leaf,
+    double accumulation_factor = 0.0) {
+  PeakBatchedModel<std::decay_t<IdxToSz>> model{
+      std::forward<IdxToSz>(idxsz),
+      is_batchable,
+      batch_target_size,
+      is_volatile_leaf,
+      /* inner_pow */ {},
+      /* volatile_weight */ 1.0,
+      /* machine_balance */ 0.0,
+      /* fast_mem_elems */ 0.0,
+      /* block_tiles */ 3.0,
+      /* block_prefactor */ 1.0,
+      /* batch_persistent_only */ false,
+      /* peak_flops_tolerance */ 0.0,
+      accumulation_factor};
   auto ctx = model.build_context(network, tidxs);
   auto st = solve_single_term(model, network, tidxs, ctx);
   // root subset's B=0 frontier; its smallest peak is the achieved minimum.

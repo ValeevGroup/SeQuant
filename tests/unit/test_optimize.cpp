@@ -1,3 +1,4 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include "catch2_sequant.hpp"
@@ -2259,4 +2260,71 @@ TEST_CASE(
   // A near-zero peak_threshold makes every point infeasible => min-peak
   // fallback => reproduces the old (peak-driven) answer: late-K.
   CHECK_FALSE(integral_at(/*Kb=*/2, /*peak_threshold(bytes)=*/1.0));
+}
+
+// Task 2.2: validate that the batched DP's accumulation_factor charge is
+// priced correctly under NESTED accumulation -- i.e. more than one batchable
+// index, contracted at *different* nodes of the binarized tree -- and that
+// the ctx.m <= 1 restriction that used to guard accumulation_factor != 0 can
+// be lifted. Network: T0=g{i;a;K}, T1=g{mu1;mu2;K}, T2=f{mu1;a2},
+// T3=f{mu2;a3}. T1 is a hub carrying K, mu1 AND mu2 simultaneously; K is
+// contracted between T0/T1, mu1 between T1/T2, mu2 between T1/T3 -- three
+// distinct batchable Index instances (K, mu1, mu2) spanning the aux (Κ) and
+// PAO (μ̃) spaces, forcing the DP to slice more than one axis, at more than
+// one node, to reach its minimum-peak schedule.
+TEST_CASE("batched DP peak matches oracle with two axes and accumulation",
+          "[optimize][batched-accum]") {
+  using namespace sequant;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  mbpt::add_df_spaces(reg);
+  mbpt::add_pao_spaces(reg);
+  mbpt::add_ao_spaces(reg);
+  for (auto&& [k, v] :
+       std::initializer_list<std::pair<std::wstring_view, size_t>>{
+           {L"i", 20}, {L"a", 20}, {L"μ̃", 200}, {L"Κ", 300}}) {
+    reg->retrieve_ptr(k)->approximate_size(v);
+  }
+  auto aux = reg->retrieve(L"Κ");
+  auto pao = reg->retrieve(L"μ̃");
+  auto idxsz = [](Index const& ix) -> std::size_t {
+    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+  };
+  auto is_batch = [aux, pao](Index const& ix) {
+    return ix.space() == aux || ix.space() == pao;
+  };
+  auto is_batch_K = [aux](Index const& ix) { return ix.space() == aux; };
+  auto is_batch_mu = [pao](Index const& ix) { return ix.space() == pao; };
+  std::function<std::size_t(Index const&)> bts = [](Index const&) {
+    return std::size_t{10};
+  };
+  std::function<bool(Tensor const&)> novol = {};
+  // Two batchable contracted indices K and mu-tilde, contracted at different
+  // nodes (nested accumulation).
+  auto prod = deserialize(
+                  L"g{i_1;a_1;Κ_1} g{μ̃_1;μ̃_2;Κ_1} f{μ̃_1;a_2} "
+                  L"f{μ̃_2;a_3}")
+                  ->as<Product>();
+  TensorNetwork net(prod.factors());
+  container::svector<Index> tidxs{};
+  double const acc = 1.0;
+  double const dp = opt::detail::peak_cost_batched(net, tidxs, idxsz, is_batch,
+                                                   bts, novol, acc);
+  double const oracle = opt::detail::reconstructed_batched_peak(
+      net, tidxs, idxsz, is_batch, bts, novol, acc);
+  // The correctness gate: the DP's max/+ recurrence for the accumulation
+  // charge must agree with the independent memory-simulation oracle even
+  // when more than one batchable index is sliced along the chosen tree.
+  CHECK(dp == Catch::Approx(oracle));
+
+  // Confirm the identity is not vacuous: the chosen 2-axis schedule must
+  // actually be lower-peak than slicing either axis alone, proving the DP
+  // engaged (and nested) both K and mu-tilde rather than degenerating to a
+  // single-axis schedule.
+  double const dp_K_only = opt::detail::peak_cost_batched(
+      net, tidxs, idxsz, is_batch_K, bts, novol, acc);
+  double const dp_mu_only = opt::detail::peak_cost_batched(
+      net, tidxs, idxsz, is_batch_mu, bts, novol, acc);
+  CHECK(dp < dp_K_only);
+  CHECK(dp < dp_mu_only);
 }
