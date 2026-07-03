@@ -60,6 +60,35 @@ EvalSequence run_single_term_opt(Model const& m, TensorNetwork const& network,
   return m.reconstruct(ctx, st);
 }
 
+/// \brief Companion to \ref run_single_term_opt that also reports, for each
+/// contraction (\c -1) node of the returned \c EvalSequence in emission order,
+/// the sliced-set of batchable \c Index values realized at that node. Requires
+/// \p Model to additionally expose \c reconstruct_axes (currently only \ref
+/// PeakBatchedModel does); see its doc comment for the precise per-node
+/// convention (RPN / post-order, left-first, matching the shared \c build
+/// recursion used by \ref reconstruct).
+///
+/// \return The optimal EvalSequence, paired with one \c container::svector
+///         of sliced \c Index per \c -1 token of that sequence, in the same
+///         left-first post-order the sequence itself was emitted in. For the
+///         nt==1 shortcut (no contractions) the axes vector is empty; for the
+///         nt==2 shortcut (single contraction, no DP context is built) the
+///         axes vector holds one empty entry (no batching info available).
+template <class Model, typename TIdxs>
+std::pair<EvalSequence, container::vector<container::svector<Index>>>
+run_single_term_opt_axes(Model const& m, TensorNetwork const& network,
+                         TIdxs const& tidxs) {
+  auto const nt = network.tensors().size();
+  if (nt == 1) return {EvalSequence{0}, {}};
+  if (nt == 2)
+    return {EvalSequence{0, 1, -1},
+            container::vector<container::svector<Index>>{
+                container::svector<Index>{}}};
+  typename Model::Context ctx = m.build_context(network, tidxs);
+  auto st = solve_single_term(m, network, tidxs, ctx);
+  return m.reconstruct_axes(ctx, st);
+}
+
 /// \brief Additive single-term cost model (FLOPs or operand storage size).
 ///
 /// Implements the additive single-term DP, factored into the CostModel hooks

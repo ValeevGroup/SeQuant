@@ -2,15 +2,19 @@
 #define SEQUANT_CORE_OPTIMIZE_OPTIONS_HPP
 
 #include <SeQuant/core/batch_policy.hpp>
+#include <SeQuant/core/container.hpp>
 
 #include <cstddef>
 #include <functional>
 #include <limits>
+#include <memory>
+#include <unordered_map>
 
 namespace sequant {
 
 class Index;
 class Tensor;
+class Expr;
 
 /// Objective function to minimize in single-term and top-level optimize
 /// routines. The `Dense*` models assume dense tensors:
@@ -212,6 +216,18 @@ struct OptimizeOptions {
   /// tie-break (no behavior change). Consulted only by DensePeakSize /
   /// DensePeakSizeBatched.
   RooflineParams roofline = {};
+
+  /// Optional out-channel: when non-null, optimize() records for each
+  /// top-level summand's optimized ExprPtr its per-contraction-node
+  /// sliced-sets (RPN / post-order, left-first, matching single_term_opt's
+  /// Product construction). Consumed by binarize via BinarizationOptions to
+  /// annotate eval nodes. Default null => no behavior change. Only populated
+  /// when objective_function == ObjectiveFunction::DensePeakSizeBatched;
+  /// every other objective leaves any pre-existing map entry for that
+  /// summand untouched (it is simply never written).
+  std::shared_ptr<std::unordered_map<
+      sequant::Expr const*, container::vector<container::svector<Index>>>>
+      term_batch_axes = {};
 };
 
 }  // namespace sequant

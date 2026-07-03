@@ -94,6 +94,11 @@ ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
                         opts.roofline,
                         opts.batch_policy.accumulation_factor,
                         opts.batch_policy.peak_threshold};
+  // Filled only by the DensePeakSizeBatched arm below (via out_axes); every
+  // other objective leaves it empty, so the term_batch_axes insertion at the
+  // end is then a no-op-shaped empty-vector entry (harmless: Task 3.3 only
+  // consumes entries for summands the batched objective actually annotated).
+  container::vector<container::svector<Index>> node_axes;
   auto run = [&]() -> ExprPtr {
     if (opts.objective_function == ObjectiveFunction::DenseFLOPs)
       return opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
@@ -116,9 +121,12 @@ ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
         prod, opts.idx_to_extent, subnet_cse, cost,
         opts.batch_policy.is_batchable_index,
         opts.batch_policy.batch_target_size, opts.inner_pow,
-        opts.batch_policy.persistent_only);
+        opts.batch_policy.persistent_only,
+        opts.term_batch_axes ? &node_axes : nullptr);
   };
   ExprPtr result = run();
+  if (opts.term_batch_axes)
+    (*opts.term_batch_axes)[result.get()] = std::move(node_axes);
   if (std::getenv("SEQUANT_FACTORIZER_DEBUG"))
     log_chosen_factorization(result, opts);
   return result;

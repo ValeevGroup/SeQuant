@@ -52,6 +52,12 @@ namespace detail {
 /// \param batch_persistent_only When true, only persistent (volatile-leaf-free)
 ///        subnetworks are batched; ObjectiveFunction::DensePeakSizeBatched
 ///        only.
+/// \param out_axes When non-null AND \p Metric ==
+///        ObjectiveFunction::DensePeakSizeBatched, filled with the per-node
+///        sliced-sets of the returned sequence's contraction (\c -1) nodes, in
+///        the same left-first post-order the sequence itself was built in
+///        (see \ref opt::detail::run_single_term_opt_axes). Cleared (left
+///        empty) otherwise. Ignored (must stay null) for every other metric.
 /// \return Optimal evaluation sequence under the chosen cost metric. If there
 ///         are equivalent optimal sequences then the result is the one that
 ///         keeps the order of tensors in the network as original as possible.
@@ -63,7 +69,9 @@ EvalSequence single_term_opt(
     std::function<bool(Index const&)> const& is_batchable_index = {},
     std::function<std::size_t(Index const&)> batch_target_size = {},
     std::function<double(Index const&, std::size_t)> const& inner_pow = {},
-    bool batch_persistent_only = false) {
+    bool batch_persistent_only = false,
+    container::vector<container::svector<Index>>* out_axes = nullptr) {
+  if (out_axes) out_axes->clear();
   decltype(OptRes::indices) tidxs{};
   // Unpack the cost knobs into the names the recurrence arms below use, so the
   // arms are unchanged. (void)-cast all, since each if-constexpr arm uses only
@@ -90,6 +98,8 @@ EvalSequence single_term_opt(
   if constexpr (Metric == ObjectiveFunction::DensePeakSize) {
     SEQUANT_ASSERT(!subnet_cse &&
                    "subnet_cse not supported with DensePeakSize (Phase 1)");
+    SEQUANT_ASSERT(!out_axes &&
+                   "out_axes only supported with DensePeakSizeBatched");
     (void)is_batchable_index;
     (void)batch_target_size;
     (void)batch_persistent_only;
@@ -109,15 +119,29 @@ EvalSequence single_term_opt(
     (void)footprint_weight;  // peak objectives use the roofline tie-break
     // is_volatile_leaf gates batching; volatile_weight / roofline feed the
     // secondary tie-break among equal-peak schedules.
-    return run_single_term_opt(
-        PeakBatchedModel{idxsz, is_batchable_index, batch_target_size,
-                         is_volatile_leaf, inner_pow, volatile_weight,
-                         roofline.machine_balance, roofline.fast_mem_elems,
-                         roofline.block_tiles, roofline.block_prefactor,
-                         batch_persistent_only, peak_flops_tolerance,
-                         accumulation_factor, cost.peak_threshold},
-        network, tidxs);
+    PeakBatchedModel model{idxsz,
+                           is_batchable_index,
+                           batch_target_size,
+                           is_volatile_leaf,
+                           inner_pow,
+                           volatile_weight,
+                           roofline.machine_balance,
+                           roofline.fast_mem_elems,
+                           roofline.block_tiles,
+                           roofline.block_prefactor,
+                           batch_persistent_only,
+                           peak_flops_tolerance,
+                           accumulation_factor,
+                           cost.peak_threshold};
+    if (out_axes) {
+      auto [seq, axes] = run_single_term_opt_axes(model, network, tidxs);
+      *out_axes = std::move(axes);
+      return seq;
+    }
+    return run_single_term_opt(model, network, tidxs);
   } else if constexpr (Metric == ObjectiveFunction::DenseFLOPs) {
+    SEQUANT_ASSERT(!out_axes &&
+                   "out_axes only supported with DensePeakSizeBatched");
     if (is_volatile_leaf && volatile_weight > 1.0) {
       size_t i = 0;
       for (auto&& t : network.tensors()) {
@@ -142,6 +166,8 @@ EvalSequence single_term_opt(
     static_assert(Metric == ObjectiveFunction::DenseSize,
                   "Only DenseFLOPs, DenseSize, DensePeakSize, and "
                   "DensePeakSizeBatched ObjectiveFunction supported.");
+    SEQUANT_ASSERT(!out_axes &&
+                   "out_axes only supported with DensePeakSizeBatched");
     (void)is_batchable_index;
     (void)batch_target_size;
     (void)batch_persistent_only;
@@ -172,6 +198,14 @@ EvalSequence single_term_opt(
 ///       \c is_batchable_index, \c batch_target_size, \c inner_pow,
 ///       \c batch_persistent_only) are forwarded verbatim to the detail
 ///       \ref single_term_opt overload; see it for their semantics.
+/// \param out_axes When non-null AND \p Metric ==
+///        ObjectiveFunction::DensePeakSizeBatched, filled with the per-node
+///        sliced-sets of the returned Product tree's contraction nodes, in
+///        the same left-first post-order the nested Product below is built
+///        in (so \c (*out_axes)[j] annotates the j-th Product node formed by
+///        the \c -1-handling arm of the loop below). Left empty if \p prod
+///        has fewer than 3 factors (no factorization is performed) or if
+///        \p Metric != DensePeakSizeBatched.
 ///
 template <ObjectiveFunction Metric = ObjectiveFunction::DenseFLOPs,
           has_index_extent IdxToSz>
@@ -181,10 +215,12 @@ ExprPtr single_term_opt(
     std::function<bool(Index const&)> const& is_batchable_index = {},
     std::function<std::size_t(Index const&)> batch_target_size = {},
     std::function<double(Index const&, std::size_t)> const& inner_pow = {},
-    bool batch_persistent_only = false) {
+    bool batch_persistent_only = false,
+    container::vector<container::svector<Index>>* out_axes = nullptr) {
   using ranges::views::filter;
   using ranges::views::reverse;
 
+  if (out_axes) out_axes->clear();
   if (prod.factors().size() < 3)
     return ex<Product>(Product{prod.scalar(), prod.factors().begin(),
                                prod.factors().end(), Product::Flatten::No});
@@ -192,7 +228,8 @@ ExprPtr single_term_opt(
       prod | filter(&ExprPtr::template is<Tensor>) | ranges::to_vector;
   auto seq = detail::single_term_opt<Metric>(
       TensorNetwork{tensors}, std::forward<IdxToSz>(idxsz), subnet_cse, cost,
-      is_batchable_index, batch_target_size, inner_pow, batch_persistent_only);
+      is_batchable_index, batch_target_size, inner_pow, batch_persistent_only,
+      out_axes);
   auto result = container::svector<ExprPtr>{};
   for (auto i : seq)
     if (i == -1) {
