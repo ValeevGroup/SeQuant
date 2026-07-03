@@ -654,14 +654,16 @@ struct PeakBatchedModel {
   void finalize(Context& /*ctx*/, size_t /*n*/,
                 container::vector<State>& /*st*/) const {}
 
-  EvalSequence reconstruct(Context const& ctx,
-                           container::vector<State> const& st) const {
+  /// Threshold-gated root-frontier selection shared by \ref reconstruct and
+  /// \ref reconstruct_axes: among points whose peak (bytes) fits
+  /// peak_threshold, pick fewest flops (ties by lower peak). If none fit, pick
+  /// min peak (best effort). peak_threshold == +inf => all feasible => min
+  /// flops => the non-batched schedule. Returns the chosen index into
+  /// \c st[root][0].
+  int select_root(Context const& ctx,
+                  container::vector<State> const& st) const {
     std::size_t const root = (std::size_t{1} << ctx.nt) - 1;
     auto const& rootf = st[root][0];
-    // Threshold-gated selection: among points whose peak (bytes) fits
-    // peak_threshold, pick fewest flops (ties by lower peak). If none fit, pick
-    // min peak (best effort). peak_threshold == +inf => all feasible => min
-    // flops => the non-batched schedule.
     auto peak_bytes = [this](double peak_elems) {
       return peak_elems * numeric_size;
     };
@@ -684,6 +686,13 @@ struct PeakBatchedModel {
           best = i;
         }
     }
+    return best;
+  }
+
+  EvalSequence reconstruct(Context const& ctx,
+                           container::vector<State> const& st) const {
+    std::size_t const root = (std::size_t{1} << ctx.nt) - 1;
+    int const best = select_root(ctx, st);
     // Recursive back-pointer walk: at (n, B, idx) read the chosen front point,
     // form child context C = B | aprime, recurse in lp_first order.
     std::function<EvalSequence(std::size_t, std::size_t, int)> build =
@@ -703,6 +712,42 @@ struct PeakBatchedModel {
       return s;
     };
     return build(root, 0, best);
+  }
+
+  /// Companion to \ref reconstruct that additionally reports, for each \c -1
+  /// (contraction) entry emitted in the returned \c EvalSequence in emission
+  /// order, the vector of \c Index sliced at that node (\c ctx.aux[bit] for
+  /// each set bit of that node's \c aprime). Leaf entries contribute nothing.
+  /// Does not change \ref reconstruct's own output; the two walks are kept in
+  /// lock-step so the RPN order and the per-node axes line up.
+  std::pair<EvalSequence, container::vector<container::svector<Index>>>
+  reconstruct_axes(Context const& ctx,
+                   container::vector<State> const& st) const {
+    std::size_t const root = (std::size_t{1} << ctx.nt) - 1;
+    int const best = select_root(ctx, st);  // shared helper (see below)
+    container::vector<container::svector<Index>> node_axes;
+    std::function<EvalSequence(std::size_t, std::size_t, int)> build =
+        [&](std::size_t n, std::size_t B, int idx) -> EvalSequence {
+      if (std::popcount(n) == 1)
+        return EvalSequence{static_cast<int>(std::countr_zero(n))};
+      BFrontPoint const& r = st[n][B][idx];
+      std::size_t const C = B | r.aprime;
+      std::size_t const fs = r.lp_first ? r.lp : r.rp;
+      int const fi = r.lp_first ? r.lp_idx : r.rp_idx;
+      std::size_t const ss = r.lp_first ? r.rp : r.lp;
+      int const si = r.lp_first ? r.rp_idx : r.lp_idx;
+      EvalSequence s = build(fs, C, fi);
+      EvalSequence b = build(ss, C, si);
+      s.insert(s.end(), b.begin(), b.end());
+      container::svector<Index> axes;
+      for (std::size_t k = 0; k < ctx.m; ++k)
+        if (r.aprime & (std::size_t{1} << k)) axes.push_back(ctx.aux[k]);
+      node_axes.push_back(std::move(axes));  // one entry per -1, in RPN order
+      s.push_back(-1);
+      return s;
+    };
+    auto seq = build(root, 0, best);
+    return {std::move(seq), std::move(node_axes)};
   }
 };
 
