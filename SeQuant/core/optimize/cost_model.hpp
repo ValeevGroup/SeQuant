@@ -476,8 +476,10 @@ struct PeakBatchedModel {
   /// volatile leaf). Default false = batch across the board. See
   /// BatchPolicy::persistent_only.
   bool batch_persistent_only = false;
-  /// Relative peak tolerance for the final (root) selection; see
-  /// PeakModel::peak_flops_tolerance. 0 (default) = strict peak-min.
+  /// Unused by \ref reconstruct (superseded by the threshold-gated selection
+  /// below, driven by \ref peak_threshold / \ref numeric_size); retained for
+  /// source compatibility. See PeakModel::peak_flops_tolerance, which is
+  /// still consulted by the (unbatched) DensePeakSize model.
   double peak_flops_tolerance = 0.0;
   /// In-flight batch-contribution footprint multiplier; see
   /// BatchPolicy::accumulation_factor. Charged only on nodes that contract a
@@ -659,20 +661,33 @@ struct PeakBatchedModel {
   EvalSequence reconstruct(Context const& ctx,
                            container::vector<State> const& st) const {
     std::size_t const root = (std::size_t{1} << ctx.nt) - 1;
-    // ε-tolerant selection on the root's B=0 frontier: among points within
-    // (1 + peak_flops_tolerance) of the minimum peak, fewest flops (ties broken
-    // by lower peak). tolerance == 0 recovers strict peak-min.
     auto const& rootf = st[root][0];
-    double minpeak = std::numeric_limits<double>::max();
-    for (auto const& fp : rootf) minpeak = std::min(minpeak, fp.peak);
-    double const thresh = minpeak * (1.0 + peak_flops_tolerance);
+    // Threshold-gated selection: among points whose peak (bytes) fits
+    // peak_threshold, pick fewest flops (ties by lower peak). If none fit, pick
+    // min peak (best effort). peak_threshold == +inf => all feasible => min
+    // flops => the non-batched schedule.
+    auto peak_bytes = [this](double peak_elems) {
+      return peak_elems * numeric_size;
+    };
     int best = -1;
+    bool any_feasible = false;
     for (int i = 0; i < static_cast<int>(rootf.size()); ++i)
-      if (rootf[i].peak <= thresh &&
-          (best < 0 || rootf[i].flops < rootf[best].flops ||
-           (rootf[i].flops == rootf[best].flops &&
-            rootf[i].peak < rootf[best].peak)))
-        best = i;
+      if (peak_bytes(rootf[i].peak) <= peak_threshold) {
+        any_feasible = true;
+        if (best < 0 || rootf[i].flops < rootf[best].flops ||
+            (rootf[i].flops == rootf[best].flops &&
+             rootf[i].peak < rootf[best].peak))
+          best = i;
+      }
+    if (!any_feasible) {
+      // Infeasible: no schedule fits the budget. Fall back to min peak.
+      double minpeak = std::numeric_limits<double>::max();
+      for (int i = 0; i < static_cast<int>(rootf.size()); ++i)
+        if (rootf[i].peak < minpeak) {
+          minpeak = rootf[i].peak;
+          best = i;
+        }
+    }
     // Recursive back-pointer walk: at (n, B, idx) read the chosen front point,
     // form child context C = B | aprime, recurse in lp_first order.
     std::function<EvalSequence(std::size_t, std::size_t, int)> build =

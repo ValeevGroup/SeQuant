@@ -1662,12 +1662,18 @@ TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
   // (3) The persistent-only gate is still available as an opt-in: setting
   //     batch_persistent_only restores the old behavior (volatile subtrees not
   //     sliced -> the batched model reverts to deferring the OSV outer
-  //     product).
-  double pbat_po = report(
-      L"PeakBatch/persistent_only:",
-      opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
-          prod, idxsz, false, CostParams{is_t, 100.0, 0.0}, is_batch, bts, ip,
-          /*batch_persistent_only=*/true));
+  //     product). This specifically probes peak-driven (memory-constrained)
+  //     selection under the gate, so it needs a finite (near-zero)
+  //     peak_threshold: the default +inf would pick the min-flops schedule
+  //     regardless of the gate (flops do not depend on which nodes may be
+  //     sliced), masking the effect the gate is meant to demonstrate.
+  CostParams po_cost{is_t, 100.0, 0.0};
+  po_cost.peak_threshold = 1.0;  // near-zero => infeasible => min-peak fallback
+  double pbat_po =
+      report(L"PeakBatch/persistent_only:",
+             opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
+                 prod, idxsz, false, po_cost, is_batch, bts, ip,
+                 /*batch_persistent_only=*/true));
   CHECK(pbat_po >= osv_outer_product);  // gate restored -> OSV deferred again
 }
 
@@ -2092,10 +2098,16 @@ TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
     };
     // CostParams: {is_volatile_leaf, volatile_weight, footprint_weight,
     //              peak_flops_tolerance, roofline, accumulation_factor}.
-    // peak_flops_tolerance = 0 => strict peak-min (no tolerance band).
+    // peak_flops_tolerance is no longer consulted by DensePeakSizeBatched's
+    // final selection (Task 1.2: threshold-gated). This probe is inherently
+    // about PEAK (which factorization is smaller in memory, not flops), so it
+    // needs a near-zero peak_threshold to force the min-peak fallback path
+    // (the default +inf would instead pick purely by flops, masking the
+    // crossover this test demonstrates).
+    CostParams cost{{}, 1.0, 0.0, 0.0, {}, lambda};
+    cost.peak_threshold = 1.0;
     auto res = opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
-        prod, idxsz, false, CostParams{{}, 1.0, 0.0, 0.0, {}, lambda}, is_batch,
-        bts, ip);
+        prod, idxsz, false, cost, is_batch, bts, ip);
     bool integral = forms_integral(res);
     double gb = batched_peak(res, Kb) * 8.0 / 1e9;
     std::wcout << L"  K_b=" << Kb << L"\tlambda=" << lambda
@@ -2115,23 +2127,136 @@ TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
   CHECK_FALSE(choose(/*K_b=*/6, /*lambda=*/1.0));  // at crossover   -> late-K
   CHECK(choose(/*K_b=*/72, /*lambda=*/10.0));      // above crossover -> early-K
 
-  // Real MPQC config: t is volatile (replayed), default peak tolerance 0.10
-  // lets the (replay-weighted) flop tie-break trade peak for building the
-  // persistent, t-free, Kappa-free integral ONCE. This is the suspected real
-  // driver of the held-whole 4-occ/2-PNO object (the C60 OOM), independent of
-  // accumulation. Below the crossover it stays late-K; above it flips to
-  // early-K.
+  // Real MPQC config: t is volatile (replayed). This probes the same PEAK
+  // crossover under replay-weighted flops (is_t, volatile_weight=100), so it
+  // needs the same near-zero peak_threshold as choose() above: the default
+  // +inf would instead pick purely by (replay-weighted) flops, which favor
+  // forming the persistent, t-free, Kappa-free integral ONCE REGARDLESS of
+  // K_b (flops do not depend on the aux batch size) -- exactly the behavior
+  // exercised by the "threshold gates batching" test (Task 1.2, below), which
+  // reuses this same motif. With peak_threshold forced near-zero (min-peak
+  // fallback), this instead reproduces the peak-driven crossover: below the
+  // crossover it stays late-K; above it flips to early-K -- the suspected
+  // real driver of the held-whole 4-occ/2-PNO object (the C60 OOM),
+  // independent of accumulation.
   auto is_t = [](Tensor const& t) { return t.label() == L"t"; };
   auto real_config_integral = [&](std::size_t Kb) -> bool {
     std::function<std::size_t(Index const&)> bts = [Kb](Index const&) {
       return Kb;
     };
+    CostParams cost{is_t, 100.0, 0.0, 0.10, {}, 0.0};
+    cost.peak_threshold = 1.0;
     auto res = opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
-        prod, idxsz, false, CostParams{is_t, 100.0, 0.0, 0.10, {}, 0.0},
-        is_batch, bts, ip);
+        prod, idxsz, false, cost, is_batch, bts, ip);
     return forms_integral(res);
   };
   CHECK_FALSE(real_config_integral(/*K_b=*/2));  // below crossover -> late-K
   CHECK(real_config_integral(/*K_b=*/236));      // above crossover -> early-K
 }
 #endif  // __OPTIMIZE__
+
+// Task 1.2: threshold-gated root selection in PeakBatchedModel::reconstruct.
+// Reuses the "quadratic bubble" motif (early-K integral vs late-K t.(gC),
+// above) since it is a proven, already-tuned case where the OLD
+// (peak-first, epsilon-tolerant) root selection and the flop-optimal choice
+// diverge: at K_b=2 (below the peak crossover), the replay-weighted flops
+// (is_t volatile, volatile_weight=100) still favor forming the persistent
+// Kappa-free integral ONCE (early-K) -- flops do not depend on K_b at all,
+// only peak does -- but the old peak_flops_tolerance=0.10 band rejects it
+// there because its peak exceeds the tolerance band around the (much
+// smaller) late-K peak (see CHECK_FALSE(real_config_integral(2)) above).
+// The new threshold-gated selection no longer consults peak_flops_tolerance:
+// with the default peak_threshold = +inf every root-frontier point is
+// feasible, so pure min-flops wins, forming the integral even at this small
+// K_b. A near-zero peak_threshold instead makes every point infeasible,
+// triggering the min-peak fallback, which reproduces the old (peak-driven)
+// answer.
+TEST_CASE(
+    "threshold gates batching: default (+inf) picks min-flops regardless of "
+    "K_b; near-zero threshold falls back to min-peak",
+    "[optimize][threshold]") {
+  using namespace sequant;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  mbpt::add_df_spaces(reg);
+  mbpt::add_pao_spaces(reg);
+  mbpt::add_ao_spaces(reg);
+  // water-20-scale extents (matches the "quadratic bubble" test above).
+  for (auto&& [k, v] :
+       std::initializer_list<std::pair<std::wstring_view, size_t>>{
+           {L"i", 80}, {L"a", 12}, {L"μ̃", 860}, {L"Κ", 2360}}) {
+    reg->retrieve_ptr(k)->approximate_size(v);
+  }
+  auto aux_space = reg->retrieve(L"Κ");
+  auto idxsz = [](Index const& ix) -> std::size_t {
+    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+  };
+  double const p = 12.0;
+  auto ip = [p](Index const&, std::size_t) -> double { return p; };
+  auto is_batch = [aux_space](Index const& ix) {
+    return ix.space() == aux_space;
+  };
+
+  auto nested = deserialize(
+      L"( g{i_4;μ̃_1;Κ_1} * C{μ̃_1;a_3<i_1,i_3>}"
+      L"  * t{a_1<i_1,i_3>,a_3<i_1,i_3>;i_1,i_3}"
+      L"  * C{a_1<i_1,i_3>;μ̃_2} * s{μ̃_2;μ̃_3} * C{μ̃_3;a_1<i_1,i_2>} )"
+      L"* ( g{i_3;μ̃_4;Κ_1} * C{μ̃_4;a_4<i_2,i_4>}"
+      L"  * t{a_2<i_2,i_4>,a_4<i_2,i_4>;i_2,i_4}"
+      L"  * C{a_2<i_2,i_4>;μ̃_5} * s{μ̃_5;μ̃_6} * C{μ̃_6;a_2<i_1,i_2>} )",
+      {.def_perm_symm = Symmetry::Nonsymm});
+  Product flatp{};
+  for (auto const& half : nested->as<Product>().factors())
+    flatp.append(1, half, Product::Flatten::Yes);
+  REQUIRE(flatp.factors().size() == 12);
+  Product const& prod = flatp;
+
+  std::function<bool(ExprPtr const&)> has_g = [&](ExprPtr const& e) -> bool {
+    if (e->is<Tensor>()) return e->as<Tensor>().label() == L"g";
+    if (e->is<Product>())
+      for (auto const& f : e->as<Product>().factors())
+        if (has_g(f)) return true;
+    return false;
+  };
+  std::function<bool(ExprPtr const&)> has_t = [&](ExprPtr const& e) -> bool {
+    if (e->is<Tensor>()) return e->as<Tensor>().label() == L"t";
+    if (e->is<Product>())
+      for (auto const& f : e->as<Product>().factors())
+        if (has_t(f)) return true;
+    return false;
+  };
+  std::function<bool(ExprPtr const&)> forms_integral =
+      [&](ExprPtr const& e) -> bool {
+    if (!e->is<Product>()) return false;
+    auto const& facs = e->as<Product>().factors();
+    int gcount = 0;
+    for (auto const& f : facs)
+      if (has_g(f)) ++gcount;
+    if (gcount == 2 && !has_t(e)) return true;
+    for (auto const& f : facs)
+      if (forms_integral(f)) return true;
+    return false;
+  };
+
+  auto is_t = [](Tensor const& t) { return t.label() == L"t"; };
+  auto integral_at = [&](std::size_t Kb, double peak_threshold) -> bool {
+    std::function<std::size_t(Index const&)> bts = [Kb](Index const&) {
+      return Kb;
+    };
+    CostParams cost{is_t, 100.0, 0.0};
+    cost.peak_threshold = peak_threshold;
+    auto res = opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
+        prod, idxsz, false, cost, is_batch, bts, ip);
+    return forms_integral(res);
+  };
+
+  double const inf = std::numeric_limits<double>::infinity();
+  // Below the peak crossover (K_b=2): default peak_threshold (+inf) => every
+  // root point is feasible => pure min-(replay-weighted)-flops selection =>
+  // forms the persistent integral (early-K), unlike the old peak-tolerance-
+  // band selection (CHECK_FALSE(real_config_integral(2)) in the test above).
+  CHECK(integral_at(/*Kb=*/2, inf));
+  // A near-zero peak_threshold makes every point infeasible => min-peak
+  // fallback => reproduces the old (peak-driven) answer: late-K.
+  CHECK_FALSE(integral_at(/*Kb=*/2, /*peak_threshold(bytes)=*/1.0));
+}

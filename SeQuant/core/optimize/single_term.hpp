@@ -38,7 +38,9 @@ namespace detail {
 ///        deemed equivalent by the subnet-CSE canonicalization also agree on
 ///        volatility (the CSE path stores one cost per canonical subnet).
 ///        volatile_weight/footprint_weight apply to DenseFLOPs only;
-///        peak_flops_tolerance/roofline apply to the peak objectives only.
+///        roofline applies to the peak objectives only; peak_flops_tolerance
+///        applies to DensePeakSize only (DensePeakSizeBatched's final
+///        selection is instead threshold-gated by peak_threshold).
 /// \param is_batchable_index Predicate marking an index as batchable (sliced);
 ///        ObjectiveFunction::DensePeakSizeBatched only.
 /// \param batch_target_size Per-index per-batch slice size (an upper bound) for

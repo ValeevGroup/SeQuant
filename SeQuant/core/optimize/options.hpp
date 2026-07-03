@@ -96,8 +96,9 @@ struct CostParams {
   /// Per-intermediate storage-footprint penalty (DenseFLOPs/DenseSize only; see
   /// OptimizeOptions::footprint_weight). Not used by the peak objectives.
   double footprint_weight = 0.0;
-  /// Relative peak tolerance for the peak objectives' final selection; see
-  /// OptimizeOptions::peak_flops_tolerance.
+  /// Relative peak tolerance for DensePeakSize's final selection; see
+  /// OptimizeOptions::peak_flops_tolerance. Unused by DensePeakSizeBatched,
+  /// whose final selection is instead threshold-gated by \c peak_threshold.
   double peak_flops_tolerance = 0.10;
   /// Roofline parameters for the peak objectives' secondary cost; see
   /// \ref RooflineParams. machine_balance == 0 => pure-flop tie-break.
@@ -176,8 +177,9 @@ struct OptimizeOptions {
   /// 0 = strict peak-min (flop tie-break only on exact peak ties). The default
   /// 0.10 trades up to a 10% peak increase for a (often much larger) flop
   /// reduction -- e.g. forming a persistent 4-PNO integral instead of
-  /// recomputing a particle-ladder. Only consulted by DensePeakSize /
-  /// DensePeakSizeBatched.
+  /// recomputing a particle-ladder. Only consulted by DensePeakSize.
+  /// DensePeakSizeBatched's final selection is instead threshold-gated by
+  /// \ref BatchPolicy::peak_threshold.
   double peak_flops_tolerance = 0.10;
 
   /// Per-intermediate memory-footprint penalty added to the single-term
