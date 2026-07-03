@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <limits>
 
 namespace sequant {
 
@@ -40,6 +41,13 @@ struct BatchPolicy {
   /// accumulator + contribution co-residency of a node that contracts a
   /// batchable index.
   double accumulation_factor = 0.0;
+
+  /// Peak-memory budget in BYTES for the batched objective. The single-term
+  /// optimizer minimizes flops among schedules whose modeled peak is <=
+  /// peak_threshold, falling back to min-peak (best effort) when none fit.
+  /// Default +infinity => every schedule feasible => min flops => no batching.
+  /// This is the *enable* trigger for batching (a finite value turns it on).
+  double peak_threshold = std::numeric_limits<double>::infinity();
 };
 
 }  // namespace sequant

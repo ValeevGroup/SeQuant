@@ -92,7 +92,8 @@ ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
                         opts.footprint_weight,
                         opts.peak_flops_tolerance,
                         opts.roofline,
-                        opts.batch_policy.accumulation_factor};
+                        opts.batch_policy.accumulation_factor,
+                        opts.batch_policy.peak_threshold};
   auto run = [&]() -> ExprPtr {
     if (opts.objective_function == ObjectiveFunction::DenseFLOPs)
       return opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(

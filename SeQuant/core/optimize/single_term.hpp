@@ -113,7 +113,7 @@ EvalSequence single_term_opt(
                          roofline.machine_balance, roofline.fast_mem_elems,
                          roofline.block_tiles, roofline.block_prefactor,
                          batch_persistent_only, peak_flops_tolerance,
-                         accumulation_factor},
+                         accumulation_factor, cost.peak_threshold},
         network, tidxs);
   } else if constexpr (Metric == ObjectiveFunction::DenseFLOPs) {
     if (is_volatile_leaf && volatile_weight > 1.0) {

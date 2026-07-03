@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <limits>
 
 namespace sequant {
 
@@ -105,6 +106,9 @@ struct CostParams {
   /// DensePeakSizeBatched; see BatchPolicy::accumulation_factor. 0 (default) =
   /// no penalty.
   double accumulation_factor = 0.0;
+  /// Peak-memory budget in BYTES for DensePeakSizeBatched; see
+  /// BatchPolicy::peak_threshold. +infinity (default) => no batching.
+  double peak_threshold = std::numeric_limits<double>::infinity();
 };
 
 /// A type-erased provider mapping an Index to its extent. Used by the public

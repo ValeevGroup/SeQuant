@@ -484,6 +484,13 @@ struct PeakBatchedModel {
   /// batchable index (Ap != 0), into the all-co-resident peak term, to price
   /// the accumulator + contribution co-residency of K += contribution.
   double accumulation_factor = 0.0;
+  /// Peak-memory budget (BYTES) for threshold-gated selection; see
+  /// BatchPolicy::peak_threshold. +infinity (default) => min-flops (no
+  /// batching).
+  double peak_threshold = std::numeric_limits<double>::infinity();
+  /// Bytes per stored element, to compare the model's element-count peak to
+  /// peak_threshold (bytes). Default 8 (double / TensorD).
+  double numeric_size = 8.0;
 
   /// One non-dominated (peak, flops) trade-off for a (subset, sliced-set \c B)
   /// cell. \c aprime is the sliced-set chosen at this node; the children are
