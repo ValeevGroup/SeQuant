@@ -1671,6 +1671,138 @@ TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
   CHECK(pbat_po >= osv_outer_product);  // gate restored -> OSV deferred again
 }
 
+// C60 PNO-CCSD residual "member 2": the batched intermediate that OOMs (~185 GB
+// materialized) is the double-proto I(i_1,i_2,i_3,Κ; a_3<i_2,i_3>,
+// a_1<i_1,i_2>).
+//   flat product:  g{i_3;i_1;Κ} · C{a_1<i_1,i_2>;μ̃} · g{μ̃;μ̃;Κ} ·
+//   C{μ̃;a_3<i_2,i_3>}
+// Two 2-occ PNO composites sharing i_2, no t amplitude. This probe answers:
+//  (1) does STO form the double-proto intermediate, and under which objective;
+//  (2) how does the (block-sparse) cost model size it (max_imed);
+//  (3) do the rejected brackets avoid it, i.e. does a cheaper schedule exist?
+TEST_CASE("C60 member-2 double-proto probe", "[optimize][osv][c60]") {
+  using namespace sequant;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  mbpt::add_df_spaces(reg);
+  mbpt::add_pao_spaces(reg);
+  mbpt::add_ao_spaces(reg);
+  // C60 cc-pVDZ-F12-ish extents: active occ 120, PNO domain 42, PAO 1800,
+  // DF aux 6000 (sliced to batch 30 by the batched objective).
+  for (auto&& [k, v] :
+       std::initializer_list<std::pair<std::wstring_view, size_t>>{
+           {L"i", 120}, {L"a", 42}, {L"μ̃", 1800}, {L"Κ", 6000}}) {
+    reg->retrieve_ptr(k)->approximate_size(v);
+  }
+  auto aux_space = reg->retrieve(L"Κ");
+  auto idxsz = [](Index const& ix) -> std::size_t {
+    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+  };
+  // constant PNO domain 42 => all power means equal, neutralizing the
+  // RMS-vs-mean magnitude question; here we test STRUCTURE (which tree, is the
+  // double-proto avoidable), not the heavy-tail correction.
+  auto ip = [](Index const&, std::size_t) -> double { return 42.0; };
+  auto is_batch = [aux_space](Index const& ix) {
+    return ix.space() == aux_space;
+  };
+  std::function<std::size_t(Index const&)> bts = [](Index const&) {
+    return std::size_t{30};
+  };
+
+  auto prod = deserialize(
+                  L"g{i_3;i_1;Κ_1} C{a_1<i_1,i_2>;μ̃_1} "
+                  L"g{μ̃_1;μ̃_2;Κ_1} C{μ̃_2;a_3<i_2,i_3>}")
+                  ->as<Product>();
+
+  auto fp = opt::detail::footprint_counter(
+      idxsz, std::function<double(Index const&, std::size_t)>(ip));
+
+  std::function<std::vector<Index>(ExprPtr const&, double&)> freeix =
+      [&](ExprPtr const& e, double& mx) -> std::vector<Index> {
+    if (e->is<Tensor>()) {
+      std::vector<Index> v;
+      for (auto const& ix : e->as<Tensor>().const_braketaux_indices())
+        v.push_back(ix);
+      return v;
+    }
+    std::map<std::wstring, std::pair<int, Index>> cnt;
+    for (auto const& fct : e->as<Product>().factors())
+      for (auto const& ix : freeix(fct, mx)) {
+        auto k = std::wstring(ix.full_label());
+        cnt[k].first++;
+        cnt[k].second = ix;
+      }
+    std::vector<Index> result;
+    for (auto const& [k, v] : cnt)
+      if (v.first == 1) result.push_back(v.second);
+    double here = fp(result);
+    if (here > mx) mx = here;
+    return result;
+  };
+  struct TP {
+    double peak, leafsum, S;
+  };
+  std::function<TP(ExprPtr const&)> tree_peak = [&](ExprPtr const& e) -> TP {
+    if (e->is<Tensor>()) {
+      std::vector<Index> v;
+      for (auto const& ix : e->as<Tensor>().const_braketaux_indices())
+        v.push_back(ix);
+      double s = fp(v);
+      return TP{s, s, s};
+    }
+    auto const& facs = e->as<Product>().factors();
+    TP L = tree_peak(facs[0]);
+    TP R = tree_peak(facs[1]);
+    double dummy = 0.0;
+    double Snode = fp(freeix(e, dummy));
+    double both = L.S + R.S + Snode;
+    double lfirst = std::max({R.leafsum + L.peak, L.S + R.peak, both});
+    double rfirst = std::max({L.leafsum + R.peak, R.S + L.peak, both});
+    return TP{std::min(lfirst, rfirst), L.leafsum + R.leafsum, Snode};
+  };
+  auto report = [&](std::wstring name, ExprPtr res) {
+    double mx = 0.0;
+    freeix(res, mx);
+    double tpk = tree_peak(res).peak;
+    std::wcout << name << L"  max_imed(elems)=" << (long long)mx
+               << L"  recurrence_PEAK(elems)=" << (long long)tpk << L"\n      "
+               << render_tree(res) << L"\n";
+  };
+
+  std::wcout
+      << L"\n=== C60 MEMBER-2 (i=120, a=42, μ̃=1800, Κ=6000, batch=30) ===\n";
+  report(L"FLOPs:       ",
+         opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
+             prod, idxsz, false, CostParams{{}, 1.0, 0.0}, {}, {}, ip));
+  report(L"PeakSize:    ",
+         opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
+             prod, idxsz, false, CostParams{{}, 1.0, 0.0}, {}, {}, ip));
+  report(L"PeakBatched: ",
+         opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
+             prod, idxsz, false, CostParams{{}, 1.0, 0.0}, is_batch, bts, ip));
+  // Experiment: make PAO (μ̃) batchable TOO (batch 100). Prediction: STO
+  // switches away from the double-proto to a g·g-first tree whose worst
+  // intermediate carries μ̃ and is now sliceable.
+  auto mu_space = reg->retrieve(L"μ̃");
+  auto is_batch2 = [aux_space, mu_space](Index const& ix) {
+    return ix.space() == aux_space || ix.space() == mu_space;
+  };
+  std::function<std::size_t(Index const&)> bts2 = [aux_space](Index const& ix) {
+    return ix.space() == aux_space ? std::size_t{30} : std::size_t{100};
+  };
+  report(
+      L"PeakBatched(+μ̃):",
+      opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
+          prod, idxsz, false, CostParams{{}, 1.0, 0.0}, is_batch2, bts2, ip));
+  // Reference: the double-proto intermediate as the model sizes it, dense at
+  // d=42 (== the block-sparse upper bound), with Κ at one batch of 30:
+  //   i^3 * Κ_batch * a * a  elements.
+  std::wcout << L"double-proto imed (i^3*Κbatch*a^2) elems = "
+             << (long long)(120.0 * 120 * 120 * 30 * 42 * 42) << L"  (="
+             << (long long)(120.0 * 120 * 120 * 30 * 42 * 42 * 8)
+             << L" B dense)\n\n";
+}
+
 TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
           "[optimize][osv]") {
   using namespace sequant;
