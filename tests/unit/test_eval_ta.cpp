@@ -2172,6 +2172,106 @@ TEST_CASE("eval_batched_custom_evaluator group replay layers nested finals",
   CHECK(n_yield[L"t"] == 2);
 }
 
+TEST_CASE("eval_batched_custom_evaluator nests inner axis", "[eval]") {
+  // Task 4.2 exactness gate: two batchable axes annotated at DIFFERENT nodes of
+  // one tree must batch by nesting -- the outer node slices axis A at the top
+  // and, WITHIN each A batch, the evaluator re-enters on the per-batch scratch
+  // to slice axis B at an inner node (`for A-batch: for B-batch: replay`). The
+  // inner slice must compose on top of the outer one; the nested sum equals the
+  // unbatched contraction because `sum_K = sum_b sum_{K in b}` applies per
+  // axis.
+  using sequant::evaluate;
+  using sequant::make_batched_custom_evaluator;
+  using TA::TArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+  using cache_t = sequant::CacheManager<node_t>;
+
+  auto& world = TA::get_default_world();
+  // occ single-tiled (4); aux multi-tiled (12 in tiles of 4 -> 3 tiles) so both
+  // batch axes slice into 3 batches each and depth-2 nesting genuinely engages.
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 4, 12};
+  yield_.set_max_tile(4);
+
+  // Root (outer) contracts the aux axis x_1; the inner product (u*v) contracts
+  // a DIFFERENT aux axis x_2. Crucially, the inner leaf u carries BOTH x_1 and
+  // x_2, so the inner re-derivation MUST slice x_1 to the outer batch (compose
+  // le_g) -- reusing the original leaf evaluator would leave u at the full x_1
+  // extent and the x_1 contraction above would then mismatch. Every product is
+  // written fully binary so binarize preserves the nesting.
+  auto const expr = sequant::deserialize<sequant::ExprPtr>(
+      L"(((u{i_1;i_2;x_1,x_2} * v{i_1;i_3;x_2}) * w{i_2;i_5;x_1})"
+      L" * p{i_3;i_6;x_1})");
+  std::string const target = "i_5,i_6";
+  auto node = eval_node(expr);  // mutable: batch axes are annotated below
+
+  auto const aux_space =
+      sequant::get_default_context().index_space_registry()->retrieve(L"x");
+  auto accept_aux = [aux_space](sequant::Index const& ix) {
+    return ix.space() == aux_space;
+  };
+
+  // Annotate the root with its aux axis (x_1) and the unique descendant that
+  // contracts an aux axis (the inner u*v, x_2). Locating the inner node by its
+  // contracted aux axis keeps this robust to binarize's operand ordering.
+  auto const root_axis = sequant::batch_axis(node, accept_aux);
+  REQUIRE(root_axis.has_value());
+  node->set_batch_axes({*root_axis});
+
+  node_t* inner = nullptr;
+  std::optional<sequant::Index> inner_axis;
+  auto find_inner = [&](auto&& self, node_t& n) -> void {
+    if (n.leaf()) return;
+    if (&n != &node) {
+      if (auto ax = sequant::batch_axis(n, accept_aux)) {
+        inner = &n;
+        inner_axis = *ax;
+      }
+    }
+    self(self, n.left());
+    self(self, n.right());
+  };
+  find_inner(find_inner, node);
+  REQUIRE(inner != nullptr);
+  REQUIRE(inner_axis.has_value());
+  REQUIRE(*inner_axis != *root_axis);  // the two nested axes differ
+  (*inner)->set_batch_axes({*inner_axis});
+
+  // Reference: plain (unbatched) evaluation. Computed first so yield_'s random
+  // leaf arrays are generated and cached; the batched evaluator reuses them.
+  auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
+
+  // Spy scope-guard: records the batch count each time an evaluator FIRES (i.e.
+  // picks an axis partitioning into >1 batch). Without the re-entrant scratch
+  // only the root fires (one record); with nesting the inner evaluator fires
+  // once per outer batch -- this vector is what proves depth-2 nesting engaged.
+  std::vector<std::size_t> guard_calls;
+  auto spy = [&guard_calls](std::size_t n) {
+    guard_calls.push_back(n);
+    return sequant::no_scope_guard{};
+  };
+
+  auto cache = cache_t::empty();
+  cache.set_custom_evaluator(make_batched_custom_evaluator(
+      yield_,
+      [](sequant::Index const&) -> std::size_t { return std::size_t{4}; },
+      accept_aux, spy, sequant::never_volatile{}));
+  auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
+
+  // Exactness gate: the nested batched result equals the unbatched one.
+  TArrayD diff;
+  diff("i,j") = ref("i,j") - res("i,j");
+  auto const err = TA::norm2(diff);
+  REQUIRE(err < 1e-10);
+
+  // Depth-2 nesting engaged: the root fires once over x_1 (3 batches) and, per
+  // x_1 batch, the inner evaluator fires over x_2 (3 batches) -- 1 + 3 = 4
+  // firings, each partitioning into 3 batches. Before the re-entrant scratch,
+  // only the root fired (guard_calls == {3}); size > 1 is the RED/GREEN gate.
+  REQUIRE(guard_calls.size() > 1);
+  CHECK(guard_calls.size() == 4);
+  for (auto n : guard_calls) CHECK(n == 3);
+}
+
 TEST_CASE("make_evaluator BatchPolicy adapter", "[eval]") {
   // Strong equivalence: make_evaluator(policy, yielder) must produce the same
   // numerical result as a hand-built make_batched_custom_evaluator with the

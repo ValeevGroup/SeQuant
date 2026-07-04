@@ -943,11 +943,24 @@ ResultPtr evaluate_antisymm(Args&&... args) {
 /// peak memory of intermediates that carry that index.
 ///
 /// For each node it is consulted on, the returned evaluator chooses a batch
-/// axis \c K via `batch_axis(node, accept)` (declining if none). It asks the
-/// backend to partition \c K into contiguous, whole-tile element-range batches
-/// of at most \p target_batch_size(K) elements each -- the target is an upper
-/// bound, not a goal (Result::mode_batches); if that yields at most one batch
-/// it declines (so small / unselected indices are left to the standard scheme).
+/// axis \c K, preferring an axis the optimizer annotated at that node
+/// (\c EvalExpr::batch_axes; see the \c pick_axis lambda) and falling back to
+/// the largest accepted contracted index (`batch_axis(node, accept)`); it
+/// declines if neither yields an accepted axis. It asks the backend to
+/// partition \c K into contiguous, whole-tile element-range batches of at most
+/// \p target_batch_size(K) elements each -- the target is an upper bound, not a
+/// goal (Result::mode_batches); if that yields at most one batch it declines
+/// (so small / unselected indices are left to the standard scheme).
+///
+/// Because annotated axes may sit at *different* nodes of one tree, the
+/// batching nests: the per-batch scratch cache carries a reinstalled copy of
+/// this evaluator, so when the standard-scheme replay of an outer batch reaches
+/// an inner annotated node the evaluator fires again and slices that node's
+/// axis WITHIN the outer batch -- `for outer-batch: for inner-batch: replay`.
+/// The reinstalled evaluator closes over the outer-sliced leaf evaluator, so
+/// inner slicing composes on top of the outer slice; nesting is exact by the
+/// same `sum_K = sum_{batches} sum_{K in batch}` identity applied per axis, and
+/// a captured depth counter backstops runaway re-entry.
 ///
 /// Otherwise it *replays the build of every compatible persistent final* in
 /// the same batch passes: the group is the trigger node plus every key of
@@ -1160,16 +1173,28 @@ template <typename F, typename IndexPredicate = accept_any_index,
 [[nodiscard]] auto make_batched_custom_evaluator(
     F le, std::function<std::size_t(Index const&)> target_batch_size,
     IndexPredicate accept = {}, ScopeGuardFactory make_scope_guard = {},
-    IsVolatile is_volatile = {}, bool persistent_only = false) {
+    IsVolatile is_volatile = {}, bool persistent_only = false,
+    std::size_t depth = 0) {
   return [le = std::move(le), target_batch_size = std::move(target_batch_size),
-          accept, is_volatile, persistent_only,
+          accept, is_volatile, persistent_only, depth,
           make_scope_guard](auto const& node, auto& cache) -> ResultPtr {
+    // Runaway backstop: nesting re-enters this evaluator on the per-batch
+    // scratch (see the reinstall below), incrementing depth once per nested
+    // axis. Real trees nest a handful of axes deep; a large depth signals a
+    // non-terminating re-entry (e.g. a mis-annotated axis that never shrinks).
+    SEQUANT_ASSERT(depth < 8);
     // Prefer the axis the optimizer annotated at this node (see
-    // EvalExpr::batch_axes); fall back to today's largest-accepted-contracted-
-    // index heuristic when the node carries no (accepted) annotation.
-    auto pick_axis = [&accept](auto const& n) -> std::optional<Index> {
+    // EvalExpr::batch_axes); at the top level (depth 0) fall back to today's
+    // largest-accepted-contracted-index heuristic when the node carries no
+    // (accepted) annotation. NESTED re-entries (depth > 0) batch strictly on
+    // annotations: the heuristic fallback is a single-axis legacy convenience,
+    // and applying it again on the per-batch scratch would re-batch inner nodes
+    // of an unannotated subtree (extra, unintended work) rather than realizing
+    // the optimizer's chosen multi-axis nesting.
+    auto pick_axis = [&accept, depth](auto const& n) -> std::optional<Index> {
       for (Index const& ix : n->batch_axes())
         if (accept(ix)) return ix;
+      if (depth > 0) return std::nullopt;
       return batch_axis(n, accept);
     };
 
@@ -1318,6 +1343,20 @@ template <typename F, typename IndexPredicate = accept_any_index,
               return r->slice_mode(*p, e_lo, e_hi);
             return r;
           };
+          // Nest: reinstall a batched evaluator on the scratch so an inner
+          // annotated node slices its own axis WITHIN this outer batch,
+          // realizing `for outer-batch: for inner-batch: replay`. It must close
+          // over le_g -- the leaf evaluator already sliced to this outer batch
+          // -- so the inner slice composes on top of the outer one (dropping
+          // the outer slice by reusing the original `le` would be a silent
+          // correctness bug). le_g is type-erased into a std::function so this
+          // template's self-instantiation is finite: the leaf-evaluator type is
+          // std::function at every deeper level, so the reinstalled evaluator
+          // is the same specialization as the one that reinstalls it.
+          bs.cache.set_custom_evaluator(make_batched_custom_evaluator(
+              std::function<ResultPtr(node_t const&)>{le_g}, target_batch_size,
+              accept, make_scope_guard, is_volatile, persistent_only,
+              depth + 1));
           ResultPtr part = evaluate(*mem, le_g, bs.cache);
           if (!acc[m])
             acc[m] = std::move(part);
