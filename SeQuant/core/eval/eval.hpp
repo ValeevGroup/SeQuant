@@ -1012,6 +1012,28 @@ ResultPtr evaluate_antisymm(Args&&... args) {
 ///        (scaled by the batch count) so per-batch screening does not drop
 ///        small contributions that are significant once summed over the full
 ///        batch axis. Defaults to a no-op (make_no_scope_guard).
+///        NESTED levels: when annotated axes sit at different nodes of one
+///        tree (see the nesting note above the class), the re-entrant inner
+///        evaluator is built with this SAME factory (unchanged, along with
+///        \p accept, \p is_volatile, \p persistent_only and \p
+///        target_batch_size -- see the reinstall below), so the inner level
+///        constructs its own guard from `make_scope_guard(inner_batches)`.
+///        The outer guard is held for the outer level's entire batch loop,
+///        which includes the per-batch evaluate() calls that re-enter and
+///        construct the inner guard -- so both guards are alive
+///        simultaneously while the innermost contractions run. A backend
+///        factory that relaxes screening scaled by ITS OWN level's batch
+///        count therefore composes multiplicatively across nesting depth:
+///        net relaxation = product of batch counts over all nesting levels
+///        (outer_batches * inner_batches * ...), matching the invariant that
+///        a contribution significant over the full product of batch axes
+///        must not be screened away in any individual (outer-cell,
+///        inner-cell, ...) combination. No extra bookkeeping is needed to
+///        achieve this -- it falls out of RAII scoping plus unchanged
+///        threading of the factory through re-entry; see
+///        "nested scope guards compose multiplicatively" in test_eval_ta.cpp
+///        for a structural proof (dense TensorD has no real screening to
+///        relax, so it spies on guard construction/destruction instead).
 /// \param is_volatile predicate flagging a volatile leaf node (e.g. an
 ///        amplitude tensor); the evaluator declines to batch any node whose
 ///        subtree contains such a leaf, so only persistent (build-once)
@@ -1033,6 +1055,16 @@ struct accept_any_index {
 /// (e.g. divide a Cauchy-Schwarz norm-product screening threshold by n_batches:
 /// the bound for a sub-sum over 1/n of the batch axis is ~1/n of the full
 /// bound). See make_batched_custom_evaluator's \p make_scope_guard parameter.
+///
+/// Nesting: the factory is reused unchanged at every re-entrant (nested) level
+/// (see \p make_scope_guard's doc on make_batched_custom_evaluator), so nested
+/// levels each construct their own guard, scaled by their own level's batch
+/// count, and the outer guard(s) remain alive while the inner one is
+/// constructed and used. A per-level relaxation therefore composes
+/// MULTIPLICATIVELY: net relaxation = product of batch counts over all alive
+/// nesting levels, which is exactly the factor needed for a contribution
+/// significant over the full product of batch axes to survive per-cell
+/// screening at every nesting depth.
 struct no_scope_guard {};
 struct make_no_scope_guard {
   no_scope_guard operator()(std::size_t /*n_batches*/) const noexcept {
@@ -1311,7 +1343,13 @@ template <typename F, typename IndexPredicate = accept_any_index,
     // RAII scope for the batched partial contractions; a backend-supplied
     // factory may relax block-sparse screening here (scaled by the batch count)
     // so per-batch screening does not drop contributions that survive over the
-    // full batch axis.
+    // full batch axis. Held for the ENTIRE loop below, including the per-batch
+    // evaluate() calls that may re-enter this evaluator on an inner annotated
+    // node (see the reinstall's `make_scope_guard` argument): the inner
+    // level's own guard is then constructed and destroyed while this (outer)
+    // guard is still alive, so a backend that relaxes screening scaled by its
+    // own level's batch count composes multiplicatively across nesting depth
+    // (net relaxation = product of batch counts over all alive levels).
     auto const scope_guard = make_scope_guard(batches.size());
     (void)scope_guard;
 

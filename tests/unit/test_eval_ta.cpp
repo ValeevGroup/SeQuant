@@ -2272,6 +2272,138 @@ TEST_CASE("eval_batched_custom_evaluator nests inner axis", "[eval]") {
   for (auto n : guard_calls) CHECK(n == 3);
 }
 
+TEST_CASE(
+    "eval_batched_custom_evaluator nested scope guards compose "
+    "multiplicatively",
+    "[eval]") {
+  // Task 4.3: prove that screening relaxation composes over nested batch
+  // levels. The re-entrant inner evaluator (Task 4.2) is built by threading
+  // make_scope_guard (along with accept/is_volatile/persistent_only/
+  // target_batch_size) INTO the nested make_batched_custom_evaluator call
+  // unchanged -- so the inner level constructs its own guard via
+  // make_scope_guard(inner_batches), not a no-op. The outer scope_guard is a
+  // local RAII variable held for the outer level's entire batch loop, which
+  // includes the per-batch evaluate() calls that trigger the inner re-entry;
+  // so when the inner guard is constructed, the outer guard is STILL ALIVE.
+  // A backend guard that relaxes block-sparse screening scaled by its own
+  // level's batch count therefore composes MULTIPLICATIVELY across nesting:
+  // net relaxation = outer_batches * inner_batches, matching "a contribution
+  // significant over the full product of batch axes must not be screened
+  // away in an individual (outer-cell, inner-cell) cell."
+  //
+  // This test cannot exercise REAL block-sparse screening -- the TA eval
+  // tests here use dense TensorD, which has no SparseShape to relax. Instead
+  // it proves the STRUCTURAL composition: a custom ScopeGuardFactory whose
+  // RAII guard records, on construction/destruction, the batch count it was
+  // built with against a shared "currently alive" stack. If both guards are
+  // ever alive at once with the stack holding {outer_n, inner_n}, that is
+  // exactly the multiplicative-composition invariant a real backend guard
+  // would exploit. Numeric validation against an actual screening threshold
+  // is deferred to the Phase 6 end-to-end MPQC run, where a real
+  // TiledArray-SparseShape-backed guard exists to relax.
+  using sequant::evaluate;
+  using sequant::make_batched_custom_evaluator;
+  using TA::TArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+  using cache_t = sequant::CacheManager<node_t>;
+
+  auto& world = TA::get_default_world();
+  // Same depth-2 nesting shape as the "nests inner axis" test above: occ
+  // single-tiled (4), aux multi-tiled (12 in tiles of 4 -> 3 tiles) so both
+  // batch axes realize 3 batches each.
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 4, 12};
+  yield_.set_max_tile(4);
+
+  auto const expr = sequant::deserialize<sequant::ExprPtr>(
+      L"(((u{i_1;i_2;x_1,x_2} * v{i_1;i_3;x_2}) * w{i_2;i_5;x_1})"
+      L" * p{i_3;i_6;x_1})");
+  std::string const target = "i_5,i_6";
+  auto node = eval_node(expr);
+
+  auto const aux_space =
+      sequant::get_default_context().index_space_registry()->retrieve(L"x");
+  auto accept_aux = [aux_space](sequant::Index const& ix) {
+    return ix.space() == aux_space;
+  };
+
+  auto const root_axis = sequant::batch_axis(node, accept_aux);
+  REQUIRE(root_axis.has_value());
+  node->set_batch_axes({*root_axis});
+
+  node_t* inner = nullptr;
+  std::optional<sequant::Index> inner_axis;
+  auto find_inner = [&](auto&& self, node_t& n) -> void {
+    if (n.leaf()) return;
+    if (&n != &node) {
+      if (auto ax = sequant::batch_axis(n, accept_aux)) {
+        inner = &n;
+        inner_axis = *ax;
+      }
+    }
+    self(self, n.left());
+    self(self, n.right());
+  };
+  find_inner(find_inner, node);
+  REQUIRE(inner != nullptr);
+  REQUIRE(inner_axis.has_value());
+  REQUIRE(*inner_axis != *root_axis);
+  (*inner)->set_batch_axes({*inner_axis});
+
+  auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
+
+  // Shared recording state: a stack of currently-alive guards' batch counts
+  // (pushed on construction, popped on destruction). Whenever a guard is
+  // constructed while another is already alive (stack depth becomes 2), the
+  // product of the two counts is recorded -- that product is the net
+  // relaxation factor a composing backend guard would apply at that instant.
+  struct GuardState {
+    std::vector<std::size_t> live;
+    std::size_t max_depth = 0;
+    std::vector<std::size_t> products_at_depth2;
+  } state;
+
+  struct TrackingGuard {
+    GuardState* st;
+    TrackingGuard(GuardState* s, std::size_t n) : st(s) {
+      st->live.push_back(n);
+      st->max_depth = std::max(st->max_depth, st->live.size());
+      if (st->live.size() == 2)
+        st->products_at_depth2.push_back(st->live[0] * st->live[1]);
+    }
+    TrackingGuard(TrackingGuard const&) = delete;
+    TrackingGuard& operator=(TrackingGuard const&) = delete;
+    ~TrackingGuard() { st->live.pop_back(); }
+  };
+  auto make_tracking_guard = [&state](std::size_t n) {
+    return TrackingGuard(&state, n);
+  };
+
+  auto cache = cache_t::empty();
+  cache.set_custom_evaluator(make_batched_custom_evaluator(
+      yield_,
+      [](sequant::Index const&) -> std::size_t { return std::size_t{4}; },
+      accept_aux, make_tracking_guard, sequant::never_volatile{}));
+  auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
+
+  // Exactness: nesting the guard-instrumented evaluator changes no numerics.
+  TArrayD diff;
+  diff("i,j") = ref("i,j") - res("i,j");
+  auto const err = TA::norm2(diff);
+  REQUIRE(err < 1e-10);
+
+  // The real deliverable: both guards were alive simultaneously (depth 2
+  // reached) at least once, and every such simultaneity records the product
+  // of outer_batches (3, over x_1) and inner_batches (3, over x_2) -- 9, the
+  // net relaxation a composing backend would apply. This happens once per
+  // outer batch (3 outer batches), matching the "nests inner axis" test's
+  // guard_calls count of 4 total firings (1 outer + 3 inner).
+  REQUIRE(state.max_depth == 2);
+  REQUIRE(state.products_at_depth2.size() == 3);
+  for (auto const p : state.products_at_depth2) CHECK(p == 9);
+  // All guards are popped by the end: no leaked / mismatched RAII scope.
+  CHECK(state.live.empty());
+}
+
 TEST_CASE("make_evaluator BatchPolicy adapter", "[eval]") {
   // Strong equivalence: make_evaluator(policy, yielder) must produce the same
   // numerical result as a hand-built make_batched_custom_evaluator with the
