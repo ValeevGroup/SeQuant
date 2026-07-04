@@ -83,12 +83,14 @@ Two Result types implementing the abstract `Result` interface:
 
 Virtuals implemented (pure virtuals from `result.hpp`):
 
-- `size_in_bytes()`: moment-aware. Partitions the Result's proto-indexed
-  modes by shared proto-index set and sizes each k-group with
-  `csv_moment(rank, k)`; non-proto modes contribute their scalar extent;
-  multiply by `numeric_size`. Reuses the cost model's `inner_aware_volume` /
-  `memsize_counter` helper so the byte formula is IDENTICAL to the DP's, not
-  a re-derivation.
+- `size_in_bytes()`: consults a pluggable **size oracle** (see "Size oracle"
+  below) over the Result's current index set + extents. The DEFAULT oracle is
+  the dense moment model: partition the proto-indexed modes by shared
+  proto-index set, size each k-group with `csv_moment(rank, k)`, multiply by
+  the non-proto scalar extents and `numeric_size`, reusing the cost model's
+  `inner_aware_volume` / `memsize_counter` helper so the byte formula is
+  IDENTICAL to the DP's, not a re-derivation. The backend does not hardwire
+  dense: any oracle (sparse-shape-aware, adversarial) plugs in here.
 - `prod(other, target, DeNest)`: computes the result index set (union minus
   contracted) and its extents; honors `DeNest` for ToT -> T. Returns a new
   `ResultSize`/`ResultSizeOfSize`.
@@ -105,6 +107,34 @@ Virtuals implemented (pure virtuals from `result.hpp`):
 `eval_expr.hpp`: a thin adapter (like the other backends) so the leaf
 evaluator can build these Results from an `EvalExpr`, carrying its indices
 (including proto structure) and `batch_axes_`.
+
+### Size oracle: dense default, sparsity as a plug-in
+
+The backend does NOT assume dense tensors as a baked-in property. Only
+`size_in_bytes` needs a size model; every other mechanism -- index-set
+tracking, `prod`/`sum`/`DeNest`, `slice_mode`, `mode_batches`, and the
+batching loop -- is sparsity-agnostic (batching tiles by ELEMENT count,
+slicing shrinks EXTENTS). So the size model is a single pluggable seam: a
+`SizeOracle` = invocable `(index set + extents + proto structure) -> bytes`.
+
+The default oracle is the dense moment model above. This is the RIGHT default,
+not a limitation, for the C60 target:
+
+- The C60 optimizer runs `objective_function: dense_peak_size` -- the DP is
+  itself dense -- so the dense oracle reproduces the factorizer's decisions
+  (and `batch_axes` annotations) exactly. This is what the Phase 1 probe
+  needs.
+- The C60 runtime has `result_shape_constraints: true` (SparseShape on CC
+  intermediates), so realized sizes can be below dense. The dense oracle is
+  therefore a CONSERVATIVE UPPER BOUND on the realized peak: dense-under-budget
+  implies sparse-under-budget, so it never yields a false "fix worked."
+- The leaking intermediate is fully dense anyway (`nnz_tiles=54000/54000`), so
+  the dense oracle reproduces the 186 GB leak with no sparsity to model.
+
+A sparse-shape-aware or adversarial oracle is a future plug-in at this same
+seam, with NO change to backend mechanics. Reimplementing SparseShape
+propagation is explicitly out of scope for the first cut (heavy, and
+unnecessary for a dense leak).
 
 ### Component 2: `SizeRegime` config and leaf yielder
 
