@@ -1,4 +1,4 @@
-# Cost-model replay eval backend and PNO-CCSD cost harness
+# DryRun eval backend and PNO-CCSD cost harness
 
 _Design spec. Repo: SeQuant. Related: the aux+PAO nested batching feature on
 `feature/eval-predicted-peak-trace` (SeQuant) / mpqc4 CSV-CCk._
@@ -6,35 +6,13 @@ _Design spec. Repo: SeQuant. Related: the aux+PAO nested batching feature on
 ## Goal
 
 A cost-model replay eval backend plus a Catch2 harness that factorizes and
-replays the PNO-CCSD (CSV-CCk) residual schedule over `CacheManager` against
-thin structural tokens (no numeric data, no TiledArray, no MPQC), reporting
+replays IR over `CacheManager` (dry-run only, no numeric data or compute), reporting
 for each evaluation exactly what the optimizer's OWN cost model reports:
 projected memory size, FLOPs, and projected execution cost. This lets us
-reproduce arbitrary size regimes -- including the C60 out-of-memory -- as a
-unit test in seconds instead of a multi-hour cluster build-run-debug loop, and
-see the optimizer-projected cost (the `dense_peak_size` frontier) side by side
-with the cost actually realized when the schedule is replayed.
-
-## Motivation
-
-The C60 PNO-CCSD run (job 614336) was OUT_OF_MEMORY: aggregate MaxRSS 770 GB
-vs a 743 GB node limit. It died building the intermediate
-
-    I(i_3, i_2, mu-tilde_1241, Kappa_2; a_3) = C(...;mu-tilde_1242) * g(mu-tilde_1241, mu-tilde_1242, Kappa_2)
-
-which the trace projected at ~186 GB. This intermediate carries BOTH a free
-PAO index (mu-tilde_1241) and a free aux index (Kappa_2). The batched
-evaluator sliced only aux ("over 60 aux batches") and never sliced mu-tilde,
-so the intermediate materialized full. The optimizer ran
-`objective_function: dense_peak_size` at `peak_threshold = 40 GB`, yet the
-schedule did single-mode aux batching only.
-
-`dense_peak_size` optimizes on a frontier of two quantities: peak memory and a
-projected execution cost (roofline of FLOPs against `machine_balance` /
-`fast_mem_elems`). To understand why the frontier search chose an aux-only
-schedule -- and whether the runtime then diverged from it -- we want to report
-those SAME quantities, per evaluation, on a local replay. Diagnosing this on
-the cluster is intractable (hours per iteration).
+(1) rapid exploration
+of the dependence of projected resource (memory, time) costs on the cost model
+for arbitrary problem sizes, as well as (2) estimate resource use
+by production computations before starting actual evaluation.
 
 ## Non-goals (YAGNI)
 
@@ -82,7 +60,7 @@ Add a cost-model replay backend as a fourth backend alongside
 
 1. Peak memory reuses CacheManager verbatim. `CacheManager::note_working_set`
    maintains `working_set_hwmark_` (printed as `hw=`, documented as the running
-   peak), driven by `Result::size_in_bytes()`. The cost-token Result's
+   peak), driven by `Result::size_in_bytes()`. The dry-run Result's
    `size_in_bytes()` DELEGATES to the cost model's `memsize`. This is a
    modeling backend: it holds no data, so its only "size" IS the modeled one
    -- not an actual-size abuse but the sole size the token has. So the hwmark
@@ -96,7 +74,7 @@ Add a cost-model replay backend as a fourth backend alongside
 ### Component 1: the cost model object
 
 Location: reuse `SeQuant/core/optimize/` cost functors; expose a small bundle
-(e.g. `SeQuant/core/eval/backends/costtoken/cost_model_object.hpp`).
+(e.g. `SeQuant/core/eval/backends/dryrun/cost_model_object.hpp`).
 
 A queryable object bundling the optimizer's OWN functors, built from a
 `SizeRegime` (Component 3):
@@ -106,23 +84,21 @@ A queryable object bundling the optimizer's OWN functors, built from a
 - `exec_cost(op) -> double` (from `roofline_op_cost(..., machine_balance,
   fast_mem_elems, block_tiles, block_prefactor)`).
 
-Default construction mirrors `DensePeakSize` (dense, moment-aware) so the
-replay reports exactly what the C60 `dense_peak_size` optimization used. The
-object is the single seam for the size model: a SparseShape-aware or
+The  object is the single seam for the size model: a SparseShape-aware or
 adversarial cost model plugs in here with NO change to the token or the replay.
 Nothing is re-derived -- `memsize_counter`/`flops_counter`/`roofline_op_cost`
 are the optimizer's own code.
 
-### Component 2: cost-token Result backend
+### Component 2: dry-run Result backend
 
-Location: `SeQuant/core/eval/backends/costtoken/{result.hpp, eval_expr.hpp}`
+Location: `SeQuant/core/eval/backends/dryrun/{result.hpp, eval_expr.hpp}`
 (mirroring `backends/tiledarray`).
 
 Two Result types implementing the abstract `Result` interface:
 
-- `ResultCostToken` (flat / Tensor-of-scalars): carries an ordered `Index`
+- `ResultDryRun` (flat / Tensor-of-scalars): carries an ordered `Index`
   list (with proto info) and per-mode extents. No buffer.
-- `ResultCostTokenNested` (Tensor-of-Tensor, for CSV amplitudes/coefficients):
+- `ResultDryRunNested` (Tensor-of-Tensor, for CSV amplitudes/coefficients):
   carries the outer (occ proto) and inner (PNO/OSV composite) index lists.
 
 Virtuals:
@@ -149,9 +125,9 @@ per op from the cost model object (Architecture hook 2).
 
 ### Component 3: `SizeRegime` + harness
 
-Location: `SeQuant/tests/unit/test_eval_costtoken.cpp` plus a committed
+Location: `SeQuant/tests/unit/test_eval_dryrun.cpp` plus a committed
 readable residual fixture under `SeQuant/tests/unit/data/`. `SizeRegime` may
-live test-side or in `backends/costtoken/regime.hpp`.
+live test-side or in `backends/dryrun/regime.hpp`.
 
 `SizeRegime` supplies the cost model's parameters:
 
@@ -163,9 +139,8 @@ live test-side or in `backends/costtoken/regime.hpp`.
   moment-dependent (`<#PNO^2>` != `<#PNO>^2`). This is the
   `average_csv_extent_pow(rank, k)` shape MPQC feeds the optimizer; k up to 4
   covers the 4-occ PHL terms (CC with a 2-body Hamiltonian).
-- roofline parameters: `machine_balance`, `fast_mem_elems`, block params
-  (matching the C60 `optimize` block: `machine_balance 200`, `fast_mem_elems
-  1000000`), so the projected exec cost matches the run.
+- roofline parameters: `machine_balance`, `fast_mem_elems`, block params, 
+   so the projected exec cost matches the run.
 
 One `SizeRegime` builds the single cost model object used by BOTH
 `single_term_opt` (the DP frontier) and the replay (token `size_in_bytes` +
@@ -185,7 +160,7 @@ Driver flow, given `SizeRegime` + batch config (`peak_threshold`,
    DP-projected frontier point (peak, exec cost);
 3. `binarize` -> `EvalNode`;
 4. replay: `make_batched_custom_evaluator` + `evaluate` over `CacheManager`
-   with the cost-token backend, tracing on;
+   with the dry-run backend, tracing on;
 5. report, per op: cost-model `{memsize, flops, exec_cost}`; and overall:
    realized peak memory (hwmark), total FLOPs, total exec cost; alongside the
    DP-projected frontier point from step 2;
@@ -226,7 +201,7 @@ and de-risks the cost model object.
   and the ~186 GB free-mu-tilde intermediate) within a small factor, and the
   FLOPs/exec cost should be sane, else the regime is mis-modeled.
 
-- **Phase 2: cost model object + cost-token backend** (Components 1-2), with
+- **Phase 2: cost model object + dry-run backend** (Components 1-2), with
   `size_in_bytes` delegating to `memsize`, plus `slice_mode`, `mode_batches`,
   `prod`/`sum`/`DeNest`.
 
@@ -255,14 +230,14 @@ exec cost on one known contraction too.
 
 ## File layout
 
-- `SeQuant/core/eval/backends/costtoken/cost_model_object.hpp` -- the queryable
+- `SeQuant/core/eval/backends/dryrun/cost_model_object.hpp` -- the queryable
   bundle over the optimizer's functors.
-- `SeQuant/core/eval/backends/costtoken/result.hpp` -- `ResultCostToken`,
-  `ResultCostTokenNested`.
-- `SeQuant/core/eval/backends/costtoken/eval_expr.hpp` -- leaf adapter.
-- `SeQuant/core/eval/backends/costtoken/regime.hpp` -- `SizeRegime` + builders
+- `SeQuant/core/eval/backends/dryrun/result.hpp` -- `ResultDryRun`,
+  `ResultDryRunNested`.
+- `SeQuant/core/eval/backends/dryrun/eval_expr.hpp` -- leaf adapter.
+- `SeQuant/core/eval/backends/dryrun/regime.hpp` -- `SizeRegime` + builders
   (or test-side if it stays test-only).
-- `SeQuant/tests/unit/test_eval_costtoken.cpp` -- probe + harness cases.
+- `SeQuant/tests/unit/test_eval_dryrun.cpp` -- probe + harness cases.
 - `SeQuant/tests/unit/data/csv_ccsd_residual.txt` -- committed residual
   fixture (readable deserialize form).
 
@@ -276,7 +251,7 @@ exec cost on one known contraction too.
   trace numbers.
 - **`size_in_bytes` delegation.** Semantically `size_in_bytes` is the actual
   size on real backends; here it returns the modeled `memsize`. Contained: only
-  the cost-token backend does this, documented as a modeling backend with no
+  the dry-run backend does this, documented as a modeling backend with no
   data. Real backends are untouched.
 - **DP/replay cost drift.** If the DP and the replay ever computed cost
   differently, gaps would be artifacts. Mitigated by building both from one
