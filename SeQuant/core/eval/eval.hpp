@@ -1164,7 +1164,16 @@ template <typename F, typename IndexPredicate = accept_any_index,
   return [le = std::move(le), target_batch_size = std::move(target_batch_size),
           accept, is_volatile, persistent_only,
           make_scope_guard](auto const& node, auto& cache) -> ResultPtr {
-    auto const K = batch_axis(node, accept);
+    // Prefer the axis the optimizer annotated at this node (see
+    // EvalExpr::batch_axes); fall back to today's largest-accepted-contracted-
+    // index heuristic when the node carries no (accepted) annotation.
+    auto pick_axis = [&accept](auto const& n) -> std::optional<Index> {
+      for (Index const& ix : n->batch_axes())
+        if (accept(ix)) return ix;
+      return batch_axis(n, accept);
+    };
+
+    auto const K = pick_axis(node);
     if (!K) {
       return nullptr;
     }
@@ -1210,7 +1219,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
     cache.for_each_key([&](node_t const& k) {
       if (!cache.persistent(k) || cache.alive(k)) return;
       if (eq(k, node)) return;  // the trigger occupies its own slot
-      auto const Kk = batch_axis(k, accept);
+      auto const Kk = pick_axis(k);
       if (!Kk) return;
       if (subtree_any(k, is_volatile)) return;  // defensive: P implies NV
       auto const lk = find_leaf_carrying(k, *Kk);
