@@ -38,13 +38,36 @@
 //   4. a self-consistency memsize check against SizeRegime's own extents/
 //      moments (replaces the unreachable cluster K-anchors).
 
+// Flip Trace::Default -> Trace::On for this ENTIRE translation unit (must
+// precede every SeQuant/core/eval/eval.hpp inclusion, directly or
+// transitively -- header include guards mean the Trace enum's Default member
+// is fixed, for this whole TU, by whether this macro is defined before the
+// header's FIRST inclusion). This is load-bearing for the [dryrun-eval]
+// replay below: make_batched_custom_evaluator's inner per-batch/per-member
+// replay calls `evaluate(*mem, le_g, bs.cache)` WITHOUT an explicit `<Trace::
+// ...>` argument, so those nested calls (and their note_working_set() calls,
+// which are gated at COMPILE TIME on the EvalTrace template argument, not
+// just Logger's runtime level) only fire if Trace::Default resolves to On.
+// Without this, working_set_hwmark() would reflect only the outermost
+// custom-evaluator interception and stay blind to everything the batched
+// replay does inside it -- exactly the visibility Task 6's witness needs.
+// mpqc's own C60 trace (614336.log, cited throughout this file) was captured
+// the same way (SEQUANT_EVAL_TRACE defined in that build).
+#define SEQUANT_EVAL_TRACE 1
+
+#include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
+#include <SeQuant/core/eval/backends/dryrun/eval_expr.hpp>
+#include <SeQuant/core/eval/backends/dryrun/result.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
 
+#include <SeQuant/core/batch_policy.hpp>
+#include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/optimize/options.hpp>
 #include <SeQuant/core/optimize/single_term_detail.hpp>
@@ -56,6 +79,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <fstream>
@@ -475,4 +499,734 @@ TEST_CASE(
   // one real summand must have produced a non-empty per-node axes vector.
   REQUIRE(n_summands_with_nonempty_axes_entry > 0);
   SUCCEED();
+}
+
+// ===========================================================================
+// POST-TRANSFORM VERDICT: the actual PAO(mu~)/DF-aux(K) go/no-go probe.
+//
+// Fixture data/csv_ccsd_doubles_residual_df.txt is the CSV CCSD DOUBLES
+// residual dumped from mpqc (repro/w8-batch-min.json) at the EXACT point it is
+// handed to sequant::optimize() -- i.e. AFTER the CSV->PAO base transform and
+// DF refactorization. It therefore contains the real PAO index "mu~"
+// (μ̃_NNNN) and DF-aux index "K" (Κ_N), the 3-center DF integrals
+// g{μ̃;i;Κ}, and the CSV coefficients C{a<i>;μ̃}. Standalone SeQuant's default
+// mbpt registry has neither mu~ nor K, so we augment a cloned context with
+// mbpt::add_pao_spaces (mu~) + mbpt::add_df_spaces (K).
+//
+// This case reproduces, offline and in milliseconds, the batched-objective DP
+// decision that on the cluster left the free-mu~ giant un-sliced (single-mode
+// aux batching -> OOM). It reports, per contraction node carrying a free mu~,
+// whether the DP annotated a mu~ (or K) batch axis -- the localizing signal:
+//   - if the giant mu~-carrying intermediate never gets a mu~ axis even as its
+//     modeled size dwarfs the threshold => the COST MODEL / DP is the gap;
+//   - if it does get one here => the gap is downstream (binarize/runtime).
+// The DryRun harness's value is that the SAME fixture can be swept across size
+// regimes (water-8 vs C60) by changing only the SizeRegime extents.
+// ===========================================================================
+
+namespace {
+
+// Regime for the post-transform (mu~ + K) residual. Extents are per-index
+// domain sizes fed to the DP's idx_to_extent; proto-indexed "a" legs are
+// PNO/OSV composites sized by the moment tables (same dispatch as the
+// pre-transform regime). Defaults are water-8-scale (from the w8-batch-min
+// run: active occ = 32, DF aux cc-pvdz-ri = 672, avg PNOs/pair ~19); the
+// giant-relevant knob is the mu~ (PAO domain) extent, swept below.
+SizeRegime df_regime(std::size_t mu_tilde, std::size_t aux, std::size_t i_occ,
+                     double pno, double osv) {
+  SizeRegime r;
+  r.space_extent = {
+      {L"i", i_occ},
+      {L"μ̃", mu_tilde},
+      {L"Κ", aux},
+      {L"a", mu_tilde},  // bare "a" should not appear (all a are proto here)
+  };
+  for (std::size_t k = 0; k <= 4; ++k) {
+    r.csv_pno_moment[k] = std::pow(pno, double(k));
+    r.csv_osv_moment[k] = std::pow(osv, double(k));
+  }
+  return r;
+}
+
+// Batchable = the two axes mpqc's runtime batches on the CSV path: PAO (mu~)
+// and DF aux (K). Both are non-proto base spaces (mu~ = PAO, K = DFBS aux).
+bool is_df_batchable(Index const& ix) {
+  auto const k = ix.space().base_key();
+  return k == L"μ̃" || k == L"Κ";
+}
+
+}  // namespace
+
+TEST_CASE("dryrun POST-transform PAO/K batch-axis verdict", "[dryrun-df]") {
+  // Augment the default mbpt registry with PAO (mu~) and DF-aux (K) so the
+  // post-transform fixture deserializes; raise the dummy-ordinal ceiling for
+  // mpqc's high internal ordinals (mu~_1152, a_21674, ...).
+  auto ctx = get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr);  // mu~
+  sequant::mbpt::add_df_spaces(isr);   // K
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+
+  auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                          "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+
+  // The fixture body is a single line: one Sum of Products (the whole doubles
+  // residual). Deserialize, then split into summands and re-flatten each
+  // (deserialize keeps literal nesting; single_term_opt needs a flat factor
+  // list or term_batch_axes silently comes back empty -- see the mechanics
+  // case above).
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = deserialize<ExprPtr>(line);
+  bool const parsed = static_cast<bool>(expr);
+  REQUIRE(parsed);
+
+  auto flatten_product = [](ExprPtr const& e) -> ExprPtr {
+    if (!e->is<Product>()) return e;
+    auto const& p = e->as<Product>();
+    return ex<Product>(p.scalar(), p.factors(), Product::Flatten::Yes);
+  };
+  std::vector<ExprPtr> terms;
+  if (expr->is<Sum>())
+    for (auto const& s : expr->as<Sum>()) terms.push_back(flatten_product(s));
+  else
+    terms.push_back(flatten_product(expr));
+  REQUIRE(!terms.empty());
+  std::wcout << L"\n=== POST-TRANSFORM DOUBLES RESIDUAL: " << terms.size()
+             << L" summands (mu~ + K present) ===\n";
+
+  // One regime (C60-scale mu~ domain) at the C60 peak_threshold. Per-term
+  // progress + timing to std::cerr (unbuffered) so a slow/pathological term is
+  // visible; each term reports whether its largest free-mu~ intermediate got a
+  // mu~/K batch axis.
+  double const peak_threshold = 40e9;  // 40 GB, matches the C60 run
+  // C60 pVDZ-F12 scale
+  auto regime = df_regime(/*mu_tilde=*/1800u, /*aux=*/4320u, /*i_occ=*/32u,
+                          /*pno=*/19.0, /*osv=*/57.0);
+  auto memsize = sequant::opt::detail::memsize_counter(regime.idx_to_extent(),
+                                                       regime.inner_pow_fn());
+  auto has_free_mu_tilde = [](std::vector<Index> const& ixs) {
+    for (auto const& ix : ixs)
+      if (ix.space().base_key() == L"μ̃") return true;
+    return false;
+  };
+
+  std::size_t total_mu_nodes = 0, n_terms_with_giant = 0;
+  std::size_t total_mu_nodes_with_mu_axis = 0, total_mu_nodes_with_k_only = 0;
+  double overall_biggest = 0.0;
+  bool overall_biggest_has_mu = false, overall_biggest_has_k = false;
+  std::wstring overall_biggest_desc, overall_biggest_axes;
+
+  for (std::size_t ti = 0; ti < terms.size(); ++ti) {
+    auto t0 = std::chrono::steady_clock::now();
+    std::cerr << "[dryrun-df] optimizing term " << (ti + 1) << "/"
+              << terms.size() << " ..." << std::flush;
+
+    auto axes_map = std::make_shared<std::unordered_map<
+        Expr const*, container::vector<container::svector<Index>>>>();
+    OptimizeOptions opts;
+    opts.objective_function = ObjectiveFunction::DensePeakSizeBatched;
+    opts.idx_to_extent = regime.idx_to_extent();
+    opts.inner_pow = regime.inner_pow_fn();
+    opts.batch_policy.is_batchable_index = is_df_batchable;
+    opts.batch_policy.batch_target_size = [](Index const&) {
+      return std::size_t{100};
+    };
+    opts.batch_policy.peak_threshold = peak_threshold;
+    opts.term_batch_axes = axes_map;
+
+    auto term = optimize(terms[ti], opts);
+    if (!static_cast<bool>(term)) {
+      std::cerr << " (skipped)\n";
+      continue;
+    }
+    auto it = axes_map->find(term.get());
+    container::vector<container::svector<Index>> node_axes;
+    if (it != axes_map->end()) node_axes = it->second;
+    BinarizationOptions bopts;
+    bopts.node_batch_axes = node_axes;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize(term, {}, bopts);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+    // Does a node's batch_axes contain a mu~ / a K axis specifically?
+    auto axis_has = [](auto const& n, std::wstring const& base) {
+      for (auto const& ax : n->batch_axes())
+        if (ax.space().base_key() == base) return true;
+      return false;
+    };
+    double term_biggest = 0.0;
+    std::wstring term_biggest_desc, term_biggest_axes;
+    bool term_biggest_has_mu = false, term_biggest_has_k = false;
+    std::size_t term_mu_nodes = 0;
+    node.visit_internal([&](auto const& n) {
+      auto free_ixs = node_free_indices(*n);
+      if (!has_free_mu_tilde(free_ixs)) return;
+      ++term_mu_nodes;
+      ++total_mu_nodes;
+      bool const has_mu = axis_has(n, L"μ̃");
+      bool const has_k = axis_has(n, L"Κ");
+      if (has_mu) ++total_mu_nodes_with_mu_axis;
+      if (has_k && !has_mu) ++total_mu_nodes_with_k_only;
+      double const bytes =
+          memsize(free_ixs, std::vector<Index>{}, std::vector<Index>{}) * 8.0;
+      // For a genuinely large (un-sliced would-be OOM) free-mu~ node, print its
+      // full index set AND its exact batch axes so we can see mu~ vs K.
+      if (bytes > 5e10) {
+        std::wcerr << L"\n  [GIANT " << (bytes / 1e9) << L"GB] free={"
+                   << describe_indices(free_ixs) << L"} batch_axes={"
+                   << describe_indices(container::vector<Index>(
+                          n->batch_axes().begin(), n->batch_axes().end()))
+                   << L"} mu~axis=" << (has_mu ? L"YES" : L"NO") << L" Kaxis="
+                   << (has_k ? L"YES" : L"NO") << L"\n";
+      }
+      if (bytes > term_biggest) {
+        term_biggest = bytes;
+        term_biggest_desc = describe_indices(free_ixs);
+        term_biggest_has_mu = has_mu;
+        term_biggest_has_k = has_k;
+        term_biggest_axes = describe_indices(container::vector<Index>(
+            n->batch_axes().begin(), n->batch_axes().end()));
+      }
+    });
+    if (term_mu_nodes > 0) ++n_terms_with_giant;
+    if (term_biggest > overall_biggest) {
+      overall_biggest = term_biggest;
+      overall_biggest_desc = term_biggest_desc;
+      overall_biggest_axes = term_biggest_axes;
+      overall_biggest_has_mu = term_biggest_has_mu;
+      overall_biggest_has_k = term_biggest_has_k;
+    }
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                  std::chrono::steady_clock::now() - t0)
+                  .count();
+    std::cerr << " " << ms << "ms  free-mu~ nodes=" << term_mu_nodes
+              << " biggest=" << (term_biggest / 1e9)
+              << "GB mu~axis=" << (term_biggest_has_mu ? "YES" : "NO")
+              << " Kaxis=" << (term_biggest_has_k ? "YES" : "NO") << "\n";
+  }
+
+  std::wcerr << L"\n=== POST-TRANSFORM VERDICT (mu~=1800, thr=40GB) ===\n"
+             << L"terms with a free-mu~ intermediate: " << n_terms_with_giant
+             << L"/" << terms.size() << L"\n"
+             << L"free-mu~ contraction nodes: " << total_mu_nodes << L"\n"
+             << L"  ... with a mu~ batch axis:      "
+             << total_mu_nodes_with_mu_axis << L"\n"
+             << L"  ... with a K-ONLY batch axis:   "
+             << total_mu_nodes_with_k_only << L"\n"
+             << L"LARGEST free-mu~ intermediate: {" << overall_biggest_desc
+             << L"} = " << (overall_biggest / 1e9) << L" GB\n"
+             << L"  batch_axes = {" << overall_biggest_axes << L"}\n"
+             << L"  -> mu~ sliced: "
+             << (overall_biggest_has_mu ? L"YES" : L"NO") << L" | K sliced: "
+             << (overall_biggest_has_k ? L"YES" : L"NO") << L"\n"
+             << L"INTERPRETATION: if the giant has K-only (mu~=NO), the DP "
+                L"reproduces the C60 single-mode-aux symptom -> cost-model "
+                L"gap; if mu~=YES, the DP slices mu~ and the C60 bug is "
+                L"downstream (binarize/runtime).\n";
+
+  REQUIRE(total_mu_nodes > 0);
+  SUCCEED();
+}
+
+// ===========================================================================
+// Task 2-6: DryRun eval BACKEND (zero-data Result + eval_expr) and the
+// end-to-end replay harness that WITNESSES the runtime's batch-axis
+// realization on the real post-transform giant term. The POST-TRANSFORM
+// VERDICT case above established the DP side of this story (the DP DOES
+// annotate a mu~ batch axis on the giant, surviving binarize). These new
+// cases do NOT modify anything above; [dryrun-probe]/[dryrun-df] stay exactly
+// as committed.
+// ===========================================================================
+
+namespace {
+
+using sequant::eval::dryrun::CostModel;
+using sequant::eval::dryrun::DryRunLeafEvaluator;
+using sequant::eval::dryrun::EvalExprDryRun;
+using sequant::eval::dryrun::EvalNodeDryRun;
+using sequant::eval::dryrun::ExtentOverrides;
+using sequant::eval::dryrun::make_dryrun_result;
+using sequant::eval::dryrun::ResultDryRun;
+using sequant::eval::dryrun::ResultDryRunNested;
+
+// A small, self-consistent regime for the backend unit tests below (distinct
+// from c60_regime()/df_regime() above -- this one just needs a couple of
+// named spaces plus non-trivial PNO moments).
+SizeRegime backend_test_regime() {
+  SizeRegime r;
+  r.space_extent = {
+      {L"i", 10},
+      {L"a", 20},
+  };
+  double const pno = 4.0;
+  for (std::size_t k = 0; k <= 4; ++k)
+    r.csv_pno_moment[k] = std::pow(pno, double(k));
+  r.csv_osv_moment = r.csv_pno_moment;
+  return r;
+}
+
+std::array<std::any, 3> annot3(container::svector<Index> l,
+                               container::svector<Index> r,
+                               container::svector<Index> res) {
+  return {std::any{std::move(l)}, std::any{std::move(r)},
+          std::any{std::move(res)}};
+}
+
+}  // namespace
+
+TEST_CASE("dryrun cost model memsize matches memsize_counter",
+          "[dryrun-costmodel]") {
+  auto r = backend_test_regime();
+  CostModel cm{r};
+  container::svector<Index> idx{Index{L"i_1"}, Index{L"i_2"}, Index{L"a_4"}};
+  auto direct = sequant::opt::detail::memsize_counter(
+      r.idx_to_extent(), r.inner_pow_fn())(idx, container::svector<Index>{},
+                                           container::svector<Index>{});
+  CHECK(cm.memsize(idx) == static_cast<std::size_t>(direct * 8.0));
+}
+
+TEST_CASE("dryrun cost model memsize honors an extent override",
+          "[dryrun-costmodel]") {
+  auto r = backend_test_regime();
+  CostModel cm{r};
+  container::svector<Index> idx{Index{L"a_3"}, Index{L"i_1"}};
+  auto const full = cm.memsize(idx);
+  ExtentOverrides ov;
+  ov[Index{L"a_3"}] = 5;  // narrowed from 20 to 5
+  auto const sliced = cm.memsize(idx, ov);
+  CHECK(sliced < full);
+  CHECK(full == sliced * 4);  // linear in a_3's extent
+}
+
+TEST_CASE("dryrun cost model flops and exec_cost are finite/positive",
+          "[dryrun-costmodel]") {
+  auto r = backend_test_regime();
+  CostModel cm{r};
+  container::svector<Index> out{Index{L"a_3"}, Index{L"i_1"}};
+  container::svector<Index> contracted{Index{L"i_2"}};
+  auto const f = cm.flops(out, contracted);
+  CHECK(f > 0.0);
+  CHECK(cm.exec_cost(f, cm.memsize(out), 4096) > 0.0);
+}
+
+TEST_CASE("dryrun flat result size delegates to cost model",
+          "[dryrun-result]") {
+  // Result::prod/sum/permute/slice_mode/mode_batches/size_in_bytes are all
+  // overridden PRIVATE in the concrete DryRun classes (mirroring
+  // ResultTensorTAPP), since real callers only ever reach a Result through a
+  // ResultPtr/Result const& (base-class access); tests that want to call
+  // them on a concrete object must do the same -- via a `Result const&`.
+  auto r = backend_test_regime();
+  auto cm = std::make_shared<CostModel const>(r);
+  container::svector<Index> idx{Index{L"i_1"}, Index{L"i_2"}, Index{L"a_4"}};
+  ResultDryRun t{idx, cm};
+  Result const& rt = t;
+  CHECK(rt.size_in_bytes() == cm->memsize(idx));
+}
+
+TEST_CASE("dryrun flat result prod yields the result annotation index set",
+          "[dryrun-result]") {
+  auto r = backend_test_regime();
+  auto cm = std::make_shared<CostModel const>(r);
+  ResultDryRun l{{Index{L"a_3"}, Index{L"i_2"}}, cm};
+  ResultDryRun rr{{Index{L"i_2"}, Index{L"i_1"}}, cm};
+  Result const& rl = l;
+  container::svector<Index> res{Index{L"a_3"}, Index{L"i_1"}};
+  auto out = rl.prod(rr, annot3(l.indices(), rr.indices(), res), DeNest::False);
+  REQUIRE(out);
+  bool const is_flat = out->is<ResultDryRun>();
+  CHECK(is_flat);
+  auto const& ot = out->as<ResultDryRun>();
+  CHECK(ot.indices() == res);
+  CHECK(out->size_in_bytes() == cm->memsize(res));
+}
+
+TEST_CASE("dryrun flat result full contraction yields a scalar",
+          "[dryrun-result]") {
+  auto r = backend_test_regime();
+  auto cm = std::make_shared<CostModel const>(r);
+  ResultDryRun l{{Index{L"i_1"}}, cm};
+  ResultDryRun rr{{Index{L"i_1"}}, cm};
+  Result const& rl = l;
+  auto out = rl.prod(rr, annot3(l.indices(), rr.indices(), {}), DeNest::False);
+  REQUIRE(out);
+  bool const is_scalar = out->is<ResultScalar<double>>();
+  CHECK(is_scalar);
+}
+
+TEST_CASE("dryrun flat result slice_mode shrinks the sliced mode",
+          "[dryrun-result]") {
+  auto r = backend_test_regime();
+  auto cm = std::make_shared<CostModel const>(r);
+  ResultDryRun t{{Index{L"a_3"}, Index{L"i_2"}}, cm};  // mu~ extent 20
+  Result const& rt = t;
+  auto const full = rt.size_in_bytes();
+  auto sliced = rt.slice_mode(0, 0, 5);  // quarter of mu~
+  REQUIRE(sliced);
+  CHECK(sliced->size_in_bytes() < full);
+  CHECK(sliced->size_in_bytes() == full / 4);
+}
+
+TEST_CASE("dryrun flat result mode_batches tiles the mode extent",
+          "[dryrun-result]") {
+  auto r = backend_test_regime();
+  auto cm = std::make_shared<CostModel const>(r);
+  ResultDryRun t{{Index{L"a_3"}, Index{L"i_2"}}, cm};
+  Result const& rt = t;
+  auto batches = rt.mode_batches(0, 5);  // 20 / 5 = 4 batches
+  CHECK(batches.size() == 4);
+  CHECK(batches.front().first == 0);
+  CHECK(batches.back().second == 20);
+}
+
+TEST_CASE("dryrun nested result uses moment-aware inner extent, not extent^k",
+          "[dryrun-nested]") {
+  auto r = backend_test_regime();
+  // Non-trivial second moment: <#PNO^2> != <#PNO>^2 (dispersion inflates it).
+  r.csv_pno_moment[1] = 4.0;
+  r.csv_pno_moment[2] = 4.0 * 4.0 * 1.5;
+  auto cm = std::make_shared<CostModel const>(r);
+
+  Index i1{L"i_1"}, i2{L"i_2"};
+  Index a_pno{L"a_1", {i1, i2}};  // proto-indexed (CSV/PNO composite) leg
+  container::svector<Index> outer{i1, i2, Index{L"a_3"}};
+  container::svector<Index> inner{a_pno};
+  ResultDryRunNested c{outer, inner, cm};
+
+  CHECK(c.outer() == outer);
+  CHECK(c.inner() == inner);
+
+  container::svector<Index> combined = outer;
+  combined.push_back(a_pno);
+  CHECK(c.indices() == combined);
+
+  auto const without_composite = cm->memsize(outer);  // just i1*i2*mu~
+  auto const with_composite = cm->memsize(combined);  // routes a_pno via k=1
+  // The composite contributes the FIRST moment (4.0), not extent(a_pno)^1
+  // (a_pno's own "extent" as a bare, non-composite space is never queried
+  // here -- only backend_test_regime()'s csv_pno_moment[1] is), so the ratio
+  // is exactly the first moment.
+  CHECK(with_composite == without_composite * 4);
+  Result const& rc = c;
+  CHECK(rc.size_in_bytes() == with_composite);
+}
+
+TEST_CASE("dryrun make_dryrun_result dispatches flat vs nested by content",
+          "[dryrun-nested]") {
+  auto r = backend_test_regime();
+  auto cm = std::make_shared<CostModel const>(r);
+  Index i1{L"i_1"}, i2{L"i_2"};
+  Index a_pno{L"a_1", {i1, i2}};
+
+  auto flat = make_dryrun_result({Index{L"i_1"}, Index{L"i_2"}}, cm);
+  CHECK(flat->is<ResultDryRun>());
+
+  auto nested = make_dryrun_result({i1, i2, a_pno}, cm);
+  CHECK(nested->is<ResultDryRunNested>());
+}
+
+TEST_CASE("dryrun leaf yielder builds a sized token from a tensor leaf",
+          "[dryrun-leaf]") {
+  auto ctx = get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+
+  auto r = backend_test_regime();
+  auto cm = std::make_shared<CostModel const>(r);
+
+  auto expr = deserialize<ExprPtr>("g{i_1,i_2;a_4}");
+  bool const parsed = static_cast<bool>(expr);
+  REQUIRE(parsed);
+
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto node = binarize<EvalExprDryRun>(expr);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(node.leaf());
+
+  DryRunLeafEvaluator yield{cm};
+  auto res = yield(node);
+  REQUIRE(res);
+  bool const is_flat = res->is<ResultDryRun>();
+  CHECK(is_flat);
+
+  container::svector<Index> idx{Index{L"i_1"}, Index{L"i_2"}, Index{L"a_4"}};
+  CHECK(res->size_in_bytes() == cm->memsize(idx));
+}
+
+// ===========================================================================
+// Task 6: THE replay harness. Deserializes the real post-transform giant
+// term (the FIRST summand of csv_ccsd_doubles_residual_df.txt -- see the
+// POST-TRANSFORM VERDICT case above, which already established this is the
+// ~13-tensor free-mu~ giant), optimizes it once under the SAME C60-scale
+// regime/BatchPolicy the DP verdict used, binarizes with the DP's
+// batch-axis annotations, then REPLAYS it through the REAL runtime
+// (make_evaluator / evaluate<Trace::On>) against zero-data DryRun tokens --
+// witnessing what the runtime actually realizes, not what the DP annotated.
+// ===========================================================================
+
+TEST_CASE(
+    "dryrun eval backend replays the post-transform giant term through the "
+    "real batched runtime",
+    "[dryrun-eval]") {
+  auto ctx = get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr);  // mu~
+  sequant::mbpt::add_df_spaces(isr);   // K
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+
+  auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                          "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = deserialize<ExprPtr>(line);
+  bool const parsed = static_cast<bool>(expr);
+  REQUIRE(parsed);
+  bool const is_sum = expr->is<Sum>();
+  REQUIRE(is_sum);
+
+  // Focus the replay on the GIANT TERM only -- the batched DP is 20-60s per
+  // term (running it on all 55 would take ~20-30 minutes). The [dryrun-df]
+  // verdict case above's exhaustive sweep (`for (auto const& s :
+  // expr->as<Sum>()) ...`, the SAME deserialize-order iteration as
+  // `summands()` below) empirically identified summand index 38 (term 39/55,
+  // 1-indexed in that sweep's log) as the giant: the ~13-tensor
+  // g.C.g.C.s.C.C.s.C.C.t.t.t chain reporting the 1.2 TB free-mu~
+  // intermediate at C60 (mu~=1800, K=4320) scale. A cheap proxy (picking the
+  // summand with the most flattened tensor factors) was tried first and
+  // picked a DIFFERENT, structurally-similar but much smaller term (14
+  // factors, ~0.0005 GB giant) -- factor count alone does not identify the
+  // giant, only the DP's actual index-space accounting does. So this uses
+  // the exhaustively-verified positional index directly rather than a
+  // heuristic that was empirically shown to pick the wrong term.
+  auto const& summands = expr->as<Sum>().summands();
+  REQUIRE(!summands.empty());
+  auto flatten_product = [](ExprPtr const& e) -> ExprPtr {
+    if (!e->is<Product>()) return e;
+    auto const& p = e->as<Product>();
+    return ex<Product>(p.scalar(), p.factors(), Product::Flatten::Yes);
+  };
+  std::size_t const giant_idx = 38 < summands.size() ? 38 : 0;
+  ExprPtr giant = flatten_product(summands[giant_idx]);
+  REQUIRE(giant);
+  std::size_t const giant_nfactors =
+      giant->is<Product>() ? giant->as<Product>().factors().size() : 1;
+  std::cerr << "[dryrun-eval] selected giant term (index " << giant_idx
+            << "): " << giant_nfactors << " flattened factors (of "
+            << summands.size() << " summands)\n";
+
+  // C60 pVDZ-F12 scale regime -- SAME regime and SAME batchable predicate the
+  // [dryrun-df] verdict case used (df_regime/is_df_batchable, defined above).
+  auto regime = df_regime(/*mu_tilde=*/1800u, /*aux=*/4320u, /*i_occ=*/32u,
+                          /*pno=*/19.0, /*osv=*/57.0);
+  auto cm = std::make_shared<CostModel const>(regime);
+
+  // ONE BatchPolicy object, reused verbatim for both optimize() and the
+  // runtime evaluator factory (make_evaluator) -- the plan's hard
+  // constraint, so the DP's and the runtime's notion of "batchable" and
+  // "target batch size" cannot drift apart.
+  sequant::BatchPolicy policy;
+  policy.is_batchable_index = is_df_batchable;
+  policy.batch_target_size = [](Index const&) { return std::size_t{100}; };
+  policy.peak_threshold = 40e9;  // DP-side knob only; the runtime evaluator
+                                 // never consults peak_threshold.
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      Expr const*, container::vector<container::svector<Index>>>>();
+  OptimizeOptions opts;
+  opts.objective_function = ObjectiveFunction::DensePeakSizeBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.term_batch_axes = axes_map;
+
+  auto t0 = std::chrono::steady_clock::now();
+  auto optimized = optimize(giant, opts);
+  auto const opt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                          std::chrono::steady_clock::now() - t0)
+                          .count();
+  std::cerr << "[dryrun-eval] optimize(giant) took " << opt_ms << "ms\n";
+  bool const have_optimized = static_cast<bool>(optimized);
+  REQUIRE(have_optimized);
+
+  auto it = axes_map->find(optimized.get());
+  container::vector<container::svector<Index>> node_axes;
+  if (it != axes_map->end()) node_axes = it->second;
+  REQUIRE(!node_axes.empty());
+
+  BinarizationOptions bopts;
+  bopts.node_batch_axes = node_axes;
+
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto node = binarize<EvalExprDryRun>(optimized, {}, bopts);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+  // Locate the giant sub-node (the free-mu~ contraction node whose modeled
+  // size dwarfs everything else -- same identification criterion the
+  // [dryrun-df] verdict case above used) purely to REPORT what the DP
+  // annotated on it before the runtime replay, for side-by-side comparison
+  // with what the runtime actually realizes.
+  auto memsize_ext = sequant::opt::detail::memsize_counter(
+      regime.idx_to_extent(), regime.inner_pow_fn());
+  auto has_free_mu_tilde = [](std::vector<Index> const& ixs) {
+    for (auto const& ix : ixs)
+      if (ix.space().base_key() == L"μ̃") return true;
+    return false;
+  };
+  double giant_nominal_bytes = 0.0;
+  std::wstring giant_desc, giant_axes_desc;
+  node.visit_internal([&](auto const& n) {
+    auto free_ixs = node_free_indices(*n);
+    if (!has_free_mu_tilde(free_ixs)) return;
+    double const bytes =
+        memsize_ext(free_ixs, std::vector<Index>{}, std::vector<Index>{}) * 8.0;
+    if (bytes > giant_nominal_bytes) {
+      giant_nominal_bytes = bytes;
+      giant_desc = describe_indices(free_ixs);
+      giant_axes_desc = describe_indices(container::vector<Index>(
+          n->batch_axes().begin(), n->batch_axes().end()));
+    }
+  });
+  REQUIRE(giant_nominal_bytes > 0.0);
+
+  auto cache = sequant::cache_manager(std::vector<EvalNodeDryRun>{node});
+  cache.set_custom_evaluator(
+      sequant::make_evaluator(policy, DryRunLeafEvaluator{cm}));
+
+  // Enable eval tracing (redirected to a private ostringstream, not stdout)
+  // so working_set_hwmark() actually accumulates: the engine's per-op hwmark
+  // input is gated at RUNTIME on Logger::instance().eval.level > 0
+  // (log::printing()), independent of the Trace::On COMPILE-TIME template
+  // argument below (which only gates whether the tracing code path exists at
+  // all). Restore the previous logger state afterward so this test does not
+  // leak global state to others.
+  std::ostringstream trace_os;
+  auto& logger = Logger::instance();
+  auto const prev_level = logger.eval.level;
+  auto* const prev_stream = logger.eval.stream;
+  logger.eval.level = 2;
+  logger.eval.stream = &trace_os;
+
+  std::cerr << "[dryrun-eval] replaying giant term through the batched "
+               "runtime evaluator ...\n";
+  auto t1 = std::chrono::steady_clock::now();
+  ResultPtr result;
+  bool threw = false;
+  std::string what;
+  try {
+    result = sequant::evaluate<Trace::On>(node, DryRunLeafEvaluator{cm}, cache);
+  } catch (std::exception const& e) {
+    threw = true;
+    what = e.what();
+  }
+  auto const eval_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                           std::chrono::steady_clock::now() - t1)
+                           .count();
+
+  logger.eval.level = prev_level;
+  logger.eval.stream = prev_stream;
+
+  INFO("evaluate() threw: " << what);
+  REQUIRE(!threw);
+  REQUIRE(result);
+
+  auto const peak = cache.working_set_hwmark();
+  auto const root_bytes = result->size_in_bytes();
+
+  // Parse the captured per-op trace for the largest single `result=<N>B`
+  // materialized anywhere during the replay -- the most direct witness of
+  // whether the giant was EVER realized at (close to) its full un-sliced
+  // size, regardless of caching/accounting nuances in working_set_hwmark().
+  std::size_t max_single_result_bytes = 0;
+  {
+    std::string const trace = trace_os.str();
+    std::size_t pos = 0;
+    while ((pos = trace.find("result=", pos)) != std::string::npos) {
+      pos += std::string("result=").size();
+      std::size_t end = trace.find('B', pos);
+      if (end == std::string::npos) break;
+      std::string const num = trace.substr(pos, end - pos);
+      if (!num.empty() &&
+          num.find_first_not_of("0123456789") == std::string::npos) {
+        std::size_t const v = std::stoull(num);
+        max_single_result_bytes = std::max(max_single_result_bytes, v);
+      }
+      pos = end;
+    }
+  }
+
+  bool const giant_realized_full =
+      max_single_result_bytes >= 0.9 * giant_nominal_bytes;
+
+  // Extra corroborating diagnostics: how many ops ran, and how many distinct
+  // BatchGroup interceptions fired (a real nested multi-batch replay should
+  // show many -- the giant's mu~ (extent 1800, target 100 => ~18 batches) and
+  // K (extent 4320, target 100 => ~44 batches) axes, nested, would fire
+  // hundreds of small batched ops if genuinely realized).
+  std::string const trace = trace_os.str();
+  auto count_occurrences = [](std::string const& hay,
+                              std::string const& needle) {
+    std::size_t n = 0, pos = 0;
+    while ((pos = hay.find(needle, pos)) != std::string::npos) {
+      ++n;
+      pos += needle.size();
+    }
+    return n;
+  };
+  std::size_t const n_eval_lines = count_occurrences(trace, "Eval |");
+  std::size_t const n_batch_group_begin =
+      count_occurrences(trace, "BatchGroup | Begin");
+  // Distribution of result= sizes >= 100 MB, to see whether many large
+  // (but sub-nominal) intermediates appeared (consistent with a partially-
+  // sliced axis) or none did (consistent with the OTHER axis alone already
+  // bounding everything well below 100 MB).
+  std::size_t n_results_over_100mb = 0;
+  {
+    std::size_t pos = 0;
+    while ((pos = trace.find("result=", pos)) != std::string::npos) {
+      pos += std::string("result=").size();
+      std::size_t end = trace.find('B', pos);
+      if (end == std::string::npos) break;
+      std::string const num = trace.substr(pos, end - pos);
+      if (!num.empty() &&
+          num.find_first_not_of("0123456789") == std::string::npos) {
+        if (std::stoull(num) >= 100'000'000ull) ++n_results_over_100mb;
+      }
+      pos = end;
+    }
+  }
+
+  std::wcout << L"\n=== [dryrun-eval] GIANT TERM RUNTIME REPLAY ===\n"
+             << L"optimize(): " << opt_ms << L"ms, evaluate(): " << eval_ms
+             << L"ms\n"
+             << L"DP-annotated giant: free={" << giant_desc << L"} nominal="
+             << (giant_nominal_bytes / 1e9) << L" GB batch_axes={"
+             << giant_axes_desc << L"}\n"
+             << L"root result size = " << root_bytes << L" bytes ("
+             << (double(root_bytes) / 1e9) << L" GB)\n"
+             << L"cache.working_set_hwmark() = " << peak << L" bytes ("
+             << (double(peak) / 1e9) << L" GB)\n"
+             << L"max single result= observed in trace = "
+             << max_single_result_bytes << L" bytes ("
+             << (double(max_single_result_bytes) / 1e9) << L" GB)\n"
+             << L"trace ops: " << n_eval_lines << L" Eval lines, "
+             << n_batch_group_begin << L" BatchGroup interceptions, "
+             << n_results_over_100mb << L" results >=100MB\n"
+             << L"=> giant realized at (>=90% of) its FULL nominal size during "
+                L"replay: "
+             << (giant_realized_full
+                     ? L"YES (mu~ NOT sliced in practice -- bug "
+                       L"reproduced)"
+                     : L"NO (sliced down from nominal)")
+             << L"\n";
+
+  CHECK(peak > 0);
 }
