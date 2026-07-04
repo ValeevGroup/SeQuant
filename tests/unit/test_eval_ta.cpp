@@ -25,6 +25,7 @@
 #include <range/v3/view/single.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <complex>
 #include <cstdlib>
@@ -2270,6 +2271,121 @@ TEST_CASE("eval_batched_custom_evaluator nests inner axis", "[eval]") {
   REQUIRE(guard_calls.size() > 1);
   CHECK(guard_calls.size() == 4);
   for (auto n : guard_calls) CHECK(n == 3);
+}
+
+TEST_CASE("eval_batched_custom_evaluator nests two axes on one node",
+          "[eval]") {
+  // Finding N2 regression gate: the single-term-opt DP can stamp MORE THAN ONE
+  // batch axis on a SINGLE eval node (aprime is a bitmask; reconstruct_axes
+  // pushes one Index per set bit into that node's batch_axes()). The runtime
+  // must slice ALL of them by nesting -- `for K-batch: for mu1-batch: replay`
+  // at the SAME node -- otherwise the modeled peak (which priced BOTH axes
+  // sliced) is a lie. Here ONE product node carries two aux batch axes x_1 and
+  // x_2, both present on both leaves; the evaluator must slice x_1 at depth 0
+  // and, WITHIN each x_1 batch, re-enter on the SAME node to slice x_2 at
+  // depth 1. Before the sliceability-aware pick the runtime re-picked x_1 (the
+  // first annotated axis) on the re-entry, found it already fully sliced
+  // (one batch), and DECLINED -- x_2 was never sliced (max_depth stayed 1).
+  using sequant::evaluate;
+  using sequant::make_batched_custom_evaluator;
+  using TA::TArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+  using cache_t = sequant::CacheManager<node_t>;
+
+  auto& world = TA::get_default_world();
+  // occ single-tiled (4); aux multi-tiled (12 in tiles of 4 -> 3 tiles).
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 4, 12};
+  yield_.set_max_tile(4);
+
+  // ONE product contracting i_1 (occ) plus BOTH aux axes x_1 and x_2; each
+  // leaf carries x_1 and x_2, so slicing either aux axis slices both leaves.
+  // Result free indices are i_5, i_6.
+  auto const expr = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{i_1;i_5;x_1,x_2} * h{i_1;i_6;x_1,x_2})");
+  std::string const target = "i_5,i_6";
+  auto node = eval_node(expr);  // mutable: both batch axes annotated below
+
+  auto const aux_space =
+      sequant::get_default_context().index_space_registry()->retrieve(L"x");
+  auto accept_aux = [aux_space](sequant::Index const& ix) {
+    return ix.space() == aux_space;
+  };
+
+  // Stamp BOTH aux contracted indices on the single node (the two-set-bit
+  // aprime case). contracted_indices lists them; keep the aux ones.
+  sequant::container::svector<sequant::Index> two_axes;
+  for (sequant::Index const& ix : sequant::contracted_indices(node))
+    if (accept_aux(ix)) two_axes.push_back(ix);
+  REQUIRE(two_axes.size() == 2);
+  REQUIRE(two_axes[0] != two_axes[1]);
+  node->set_batch_axes(two_axes);
+
+  // Reference: plain (unbatched) evaluation; also generates yield_'s random
+  // leaf arrays that the batched evaluator reuses.
+  auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
+
+  // Distinct per-axis target sizes so the two nested levels realize DIFFERENT
+  // batch counts. Batches snap to whole tiles of 4 and the target is an upper
+  // bound: x_1 -> target 4 over extent 12 = 3 single-tile batches; x_2 ->
+  // target 8 = 2 batches (two 4-tiles fit, then the last). A depth-2 product of
+  // 3*2 = 6 (rather than 3*3 or 2*2) proves the outer and inner levels sliced
+  // DISTINCT axes with distinct partitions.
+  auto const& x1 = two_axes[0];
+  auto target_batch_size = [x1](sequant::Index const& ix) -> std::size_t {
+    return ix == x1 ? std::size_t{4} : std::size_t{8};
+  };
+
+  // Tracking guard (as in the compose test): records the live-guard stack so
+  // depth-2 simultaneity and the per-instant product are observable.
+  struct GuardState {
+    std::vector<std::size_t> live;
+    std::size_t max_depth = 0;
+    std::vector<std::size_t> counts;
+    std::vector<std::size_t> products_at_depth2;
+  } state;
+  struct TrackingGuard {
+    GuardState* st;
+    TrackingGuard(GuardState* s, std::size_t n) : st(s) {
+      st->counts.push_back(n);
+      st->live.push_back(n);
+      st->max_depth = std::max(st->max_depth, st->live.size());
+      if (st->live.size() == 2)
+        st->products_at_depth2.push_back(st->live[0] * st->live[1]);
+    }
+    TrackingGuard(TrackingGuard const&) = delete;
+    TrackingGuard& operator=(TrackingGuard const&) = delete;
+    ~TrackingGuard() { st->live.pop_back(); }
+  };
+  auto make_tracking_guard = [&state](std::size_t n) {
+    return TrackingGuard(&state, n);
+  };
+
+  auto cache = cache_t::empty();
+  cache.set_custom_evaluator(make_batched_custom_evaluator(
+      yield_, target_batch_size, accept_aux, make_tracking_guard,
+      sequant::never_volatile{}));
+  auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
+
+  // Exactness: nesting two axes on one node changes no numerics.
+  TArrayD diff;
+  diff("i,j") = ref("i,j") - res("i,j");
+  auto const err = TA::norm2(diff);
+  REQUIRE(err < 1e-10);
+
+  // Depth 2 reached on ONE node: x_1 sliced at depth 0, x_2 at depth 1. Before
+  // the fix the node re-picked x_1 and declined -> max_depth would stay 1.
+  REQUIRE(state.max_depth == 2);
+  // The outer level fires once over x_1 (3 batches); per outer batch the inner
+  // level fires once over x_2 (2 batches) -> 1 + 3 = 4 firings, counts a
+  // permutation of {3, 2, 2, 2}.
+  REQUIRE(state.counts.size() == 4);
+  CHECK(std::count(state.counts.begin(), state.counts.end(), 3u) == 1);
+  CHECK(std::count(state.counts.begin(), state.counts.end(), 2u) == 3);
+  // Every depth-2 instant multiplies 3 (outer x_1) by 2 (inner x_2) = 6, i.e.
+  // two DISTINCT axes with DISTINCT partitions were live together.
+  REQUIRE(state.products_at_depth2.size() == 3);
+  for (auto const p : state.products_at_depth2) CHECK(p == 6);
+  CHECK(state.live.empty());
 }
 
 TEST_CASE(

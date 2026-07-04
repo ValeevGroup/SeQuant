@@ -944,19 +944,25 @@ ResultPtr evaluate_antisymm(Args&&... args) {
 ///
 /// For each node it is consulted on, the returned evaluator chooses a batch
 /// axis \c K, preferring an axis the optimizer annotated at that node
-/// (\c EvalExpr::batch_axes; see the \c pick_axis lambda) and falling back to
-/// the largest accepted contracted index (`batch_axis(node, accept)`); it
+/// (\c EvalExpr::batch_axes; see the \c pick_sliceable lambda) and falling back
+/// to the largest accepted contracted index (`batch_axis(node, accept)`); it
 /// declines if neither yields an accepted axis. It asks the backend to
 /// partition \c K into contiguous, whole-tile element-range batches of at most
 /// \p target_batch_size(K) elements each -- the target is an upper bound, not a
-/// goal (Result::mode_batches); if that yields at most one batch it declines
-/// (so small / unselected indices are left to the standard scheme).
+/// goal (Result::mode_batches). Axis selection is sliceability-aware: it takes
+/// the first accepted axis that actually partitions into more than one batch in
+/// the current (possibly already-outer-sliced) context, so an axis already
+/// sliced by an outer re-entry is skipped and the node advances to its next
+/// annotated axis; if no candidate is sliceable it declines (leaving small /
+/// unselected / already-fully-sliced indices to the standard scheme).
 ///
-/// Because annotated axes may sit at *different* nodes of one tree, the
-/// batching nests: the per-batch scratch cache carries a reinstalled copy of
-/// this evaluator, so when the standard-scheme replay of an outer batch reaches
-/// an inner annotated node the evaluator fires again and slices that node's
-/// axis WITHIN the outer batch -- `for outer-batch: for inner-batch: replay`.
+/// A node the optimizer priced with *several* annotated axes is sliced on each
+/// of them, and annotated axes may also sit at *different* nodes of one tree;
+/// either way the batching nests. The per-batch scratch cache carries a
+/// reinstalled copy of this evaluator, so when the standard-scheme replay of an
+/// outer batch reaches an annotated node -- an inner one, or the SAME node with
+/// a still-unsliced axis -- the evaluator fires again and slices the next axis
+/// WITHIN the outer batch -- `for outer-batch: for inner-batch: replay`.
 /// The reinstalled evaluator closes over the outer-sliced leaf evaluator, so
 /// inner slicing composes on top of the outer slice; nesting is exact by the
 /// same `sum_K = sum_{batches} sum_{K in batch}` identity applied per axis, and
@@ -1215,25 +1221,45 @@ template <typename F, typename IndexPredicate = accept_any_index,
     // axis. Real trees nest a handful of axes deep; a large depth signals a
     // non-terminating re-entry (e.g. a mis-annotated axis that never shrinks).
     SEQUANT_ASSERT(depth < 8);
-    // Prefer the axis the optimizer annotated at this node (see
-    // EvalExpr::batch_axes); at the top level (depth 0) fall back to today's
-    // largest-accepted-contracted-index heuristic when the node carries no
-    // (accepted) annotation. NESTED re-entries (depth > 0) batch strictly on
-    // annotations: the heuristic fallback is a single-axis legacy convenience,
-    // and applying it again on the per-batch scratch would re-batch inner nodes
-    // of an unannotated subtree (extra, unintended work) rather than realizing
-    // the optimizer's chosen multi-axis nesting.
-    auto pick_axis = [&accept, depth](auto const& n) -> std::optional<Index> {
+    // Axis selection is SLICEABILITY-AWARE and realizes the optimizer's
+    // multi-axis nesting one axis per depth level. candidate_axes lists this
+    // node's batch axes in the optimizer's annotated order (see
+    // EvalExpr::batch_axes), keeping the accepted annotations; at the top level
+    // (depth 0) it falls back to today's largest-accepted-contracted-index
+    // heuristic when the node carries no accepted annotation. NESTED re-entries
+    // (depth > 0) batch strictly on annotations: the heuristic fallback is a
+    // single-axis legacy convenience, and applying it again on the per-batch
+    // scratch would re-batch inner nodes of an unannotated subtree (extra,
+    // unintended work) rather than realizing the optimizer's chosen multi-axis
+    // nesting.
+    auto candidate_axes = [&accept,
+                           depth](auto const& n) -> container::svector<Index> {
+      container::svector<Index> out;
       for (Index const& ix : n->batch_axes())
-        if (accept(ix)) return ix;
-      if (depth > 0) return std::nullopt;
-      return batch_axis(n, accept);
+        if (accept(ix)) out.push_back(ix);
+      if (out.empty() && depth == 0)
+        if (auto const h = batch_axis(n, accept)) out.push_back(*h);
+      return out;
     };
-
-    auto const K = pick_axis(node);
-    if (!K) {
-      return nullptr;
-    }
+    // Pick the FIRST candidate axis that is actually sliceable (partitions into
+    // > 1 batch) in THIS (possibly already-outer-sliced) context, returning it
+    // together with its realized partition. An axis already sliced by an outer
+    // re-entry yields a single batch on the sliced leaf and is skipped, so a
+    // nested re-entry on the SAME node advances to the node's next annotated
+    // axis -- realizing `for K-batch: for mu1-batch: replay` at one multi-axis
+    // node. The recursive reinstall below walks one axis per depth level (the
+    // depth < 8 backstop bounds the re-entry).
+    auto pick_sliceable = [&](auto const& n)
+        -> std::optional<std::pair<
+            Index, container::svector<std::pair<std::size_t, std::size_t>>>> {
+      for (Index const& ix : candidate_axes(n)) {
+        auto const lf = find_leaf_carrying(n, ix);
+        if (!lf) continue;
+        auto b = le(lf->first)->mode_batches(lf->second, target_batch_size(ix));
+        if (b.size() > 1) return std::make_pair(ix, std::move(b));
+      }
+      return std::nullopt;
+    };
 
     // Persistence gate (opt-in via persistent_only): when set, decline to batch
     // any subtree containing a volatile leaf -- such a subtree is rebuilt every
@@ -1247,16 +1273,12 @@ template <typename F, typename IndexPredicate = accept_any_index,
       return nullptr;
     }
 
-    auto const leaf = find_leaf_carrying(node, *K);
-    if (!leaf) {
-      return nullptr;
+    auto picked = pick_sliceable(node);
+    if (!picked) {
+      return nullptr;  // no accepted, sliceable axis (nothing to gain)
     }
-    auto const batches =
-        le(leaf->first)->mode_batches(leaf->second, target_batch_size(*K));
-
-    if (batches.size() <= 1) {
-      return nullptr;  // nothing to gain (or unbatchable)
-    }
+    Index const K = std::move(picked->first);
+    auto const batches = std::move(picked->second);
 
     using node_t = std::remove_cvref_t<decltype(node)>;
     using member_t = std::pair<node_t const*, Index>;
@@ -1272,19 +1294,17 @@ template <typename F, typename IndexPredicate = accept_any_index,
     // The cost of considering a candidate is one leaf evaluation (the
     // mode_batches probe). With an unregistered (empty) real cache the group
     // is just the trigger.
-    std::vector<member_t> group{{&node, *K}};
+    std::vector<member_t> group{{&node, K}};
     cache.for_each_key([&](node_t const& k) {
       if (!cache.persistent(k) || cache.alive(k)) return;
       if (eq(k, node)) return;  // the trigger occupies its own slot
-      auto const Kk = pick_axis(k);
-      if (!Kk) return;
       if (subtree_any(k, is_volatile)) return;  // defensive: P implies NV
-      auto const lk = find_leaf_carrying(k, *Kk);
-      if (!lk) return;
-      if (le(lk->first)->mode_batches(lk->second, target_batch_size(*Kk)) !=
-          batches)
-        return;
-      group.emplace_back(&k, *Kk);
+      auto const pk = pick_sliceable(k);
+      if (!pk) return;
+      // Join iff this member's first sliceable axis realizes the identical
+      // partition as the trigger (so all members stream over the same batches).
+      if (pk->second != batches) return;
+      group.emplace_back(&k, pk->first);
     });
 
     // Layer by nesting: a member whose subtree contains another member
