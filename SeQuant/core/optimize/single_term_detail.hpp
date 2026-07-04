@@ -305,7 +305,7 @@ container::vector<container::vector<double>> sliced_footprints(
           std::size_t k =
               static_cast<std::size_t>(it - ranges::begin(aux_list));
           if (B & (std::size_t{1} << k))
-            return std::min(e, batch_target_size(ix));
+            return std::min(e, std::max<std::size_t>(batch_target_size(ix), 1));
         }
       }
       return e;
