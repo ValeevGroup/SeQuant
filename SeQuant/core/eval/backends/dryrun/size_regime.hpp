@@ -17,6 +17,15 @@ namespace sequant::eval::dryrun {
 /// power means over occupied pairs (PNO) or singles (OSV).
 struct SizeRegime {
   std::map<std::wstring, std::size_t> space_extent;
+
+  // csv_pno_moment[k] / csv_osv_moment[k] hold the k-th POWER MEAN
+  // M_k = (mean_over_pairs d^k)^(1/k) of the per-pair PNO / per-orbital OSV
+  // domain size d, for k in [1,4] (index 0 is unused, set to 1). inner_pow()
+  // returns M_k so that inner_aware_volume's per-member product over a
+  // k-composite group is M_k^k = mean(d^k), and outer_nocc^N * M_k^k equals
+  // the true block-sparse volume Sum_pairs d^k. Do NOT store raw moments
+  // mean(d^k) here: that would over-count k-composite groups by a further
+  // power of k. For a constant domain d, M_k = d for all k.
   std::array<double, 5> csv_pno_moment{1.0, 1.0, 1.0, 1.0, 1.0};
   std::array<double, 5> csv_osv_moment{1.0, 1.0, 1.0, 1.0, 1.0};
 

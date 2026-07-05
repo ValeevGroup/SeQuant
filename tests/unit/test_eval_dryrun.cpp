@@ -225,6 +225,53 @@ TEST_CASE("dryrun regime self-consistency (no cluster anchors needed)",
   }
 }
 
+// Regression lock (Task 1, a1 verification): inner_pow() must return the
+// k-th POWER MEAN M_k, not the raw k-th MOMENT <d^k>, so that
+// inner_aware_volume's per-member product over a k-composite group
+// (M_k multiplied once per member) telescopes to mean(d^k) rather than
+// over-counting by a further power of k. This pins the contract with a
+// heavy-tailed (non-constant-in-k) moment table so a future regression to
+// raw moments would be caught even though the CURRENT SizeRegime factories
+// in this file (c60_regime/df_regime) all use a constant domain, for which
+// M_k == d for every k and the bug would otherwise be invisible.
+TEST_CASE("dryrun power-mean sizing contract", "[dryrun][sizing]") {
+  // Heavy-tailed PNO domain: power means strictly increasing in k.
+  // (For any non-degenerate distribution, M_1 < M_2 < M_3 < M_4 by Jensen.)
+  SizeRegime r;
+  const std::size_t occ = 10;
+  r.space_extent[L"i"] = occ;  // occupied index extent
+  const std::array<double, 5> Mk{1.0, 30.0, 40.0, 55.0, 75.0};  // M_0..M_4
+  for (std::size_t k = 0; k <= 4; ++k) {
+    r.csv_pno_moment[k] = Mk[k];
+    r.csv_osv_moment[k] = Mk[k];
+  }
+  auto ip = r.inner_pow_fn();
+
+  // A composite PNO index a<i_1,i_2> has a 2-proto (PNO) domain.
+  Index i1{L"i_1"}, i2{L"i_2"};
+  Index a1{L"a_1", {i1, i2}};
+  Index a2{L"a_2", {i1, i2}};
+
+  // Two composites sharing the SAME proto-set => a k=2 group.
+  // inner_aware_volume multiplies ip(c,2) once per member => M_2^2.
+  auto tot = tot_indices(std::vector<Index>{a1, a2});
+  auto ixex = [&](Index const& ix) {
+    return static_cast<double>(r.extent(ix));
+  };
+  const double vol = sequant::opt::detail::inner_aware_volume(tot, ixex, ip);
+
+  const double expected =
+      double(occ) * double(occ) * Mk[2] * Mk[2];  // occ^2 * M_2^2
+  CHECK(vol == Catch::Approx(expected));
+  // Guard against the two wrong models:
+  CHECK(vol !=
+        Catch::Approx(double(occ) * occ * Mk[1] * Mk[1]));  // flat-average
+                                                            // under-count
+  CHECK(vol != Catch::Approx(double(occ) * occ *
+                             std::pow(Mk[1], 4)));  // old "occ^2*PNO^4
+                                                    // artifact"
+}
+
 // Sanity check for the probe's own plumbing (is_stand_in_batchable /
 // batch_policy / term_batch_axes / binarize round-trip), independent of the
 // real residual: with a tiny peak_threshold that makes every schedule
