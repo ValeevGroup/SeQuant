@@ -1474,32 +1474,24 @@ TEST_CASE("dryrun perf-first vs peak-first factorization of the C60 giant term",
     return ix.space().base_key() == L"μ̃" ? 256.0 : 72.0;
   };
   auto keyof = [](Index const& ix) { return std::wstring(ix.full_label()); };
-  auto cm = std::make_shared<CostModel const>(regime);
 
   struct Analysis {
     std::size_t max_free_mu = 0;       // >= 4 => 4-PAO AO integral formed
     double largest_realized_gb = 0.0;  // DP-model realized free-mu~ (static)
     std::wstring largest_desc;
-    // Runtime-replay metrics (zero-data eval through the REAL eval loop + REAL
-    // CacheManager):
-    double hwmark_gb =
-        0.0;  // cache.working_set_hwmark() = per-op running max
-              // of (sum of alive cached entries + in-flight
-              // result). "high watermark of cached intermediates"
-    double max_single_result_gb = 0.0;  // largest single result= in the trace =
-                                        // the largest transient materialized
-    std::string largest_result_line;    // full trace line of that result=
-                                        // (shows result= and hw= together)
-    bool replay_threw = false;
+    // Peak/flops/exec from the single shared cost_profile() entry point (Task
+    // 4: gated-cache peak replay + static flops/exec walk), replacing the
+    // ad-hoc manual replay + hwmark read this case used before Task 5.
+    sequant::eval::dryrun::CostProfile cp;
   };
 
   // Optimize the giant under `obj`, binarize, and walk the tree computing per
-  // node (a) its free-mu~ count and (b) its REALIZED free-mu~ size after
-  // ancestor slicing (same active-ancestor accounting as the [dryrun-df]
-  // verdict case). Then REPLAY the zero-data schedule through the real eval
-  // loop + real CacheManager to capture the cached-intermediate high watermark
-  // (working_set_hwmark) alongside the largest single transient (result=), so
-  // the cache-vs-transient accounting gap is visible per objective.
+  // node (a) its free-mu~ count (the 4-PAO structural signature) and (b) its
+  // REALIZED free-mu~ size after ancestor slicing (same active-ancestor
+  // accounting as the [dryrun-df] verdict case). Then call the single shared
+  // cost_profile() entry point (Task 4) to get the modeled peak/flops/exec via
+  // the gated-cache replay -- replacing the ad-hoc manual replay + hwmark read
+  // this case used before Task 5, so there is ONE peak/flops code path.
   auto analyze = [&](ObjectiveFunction obj) -> Analysis {
     sequant::BatchPolicy policy;
     policy.is_batchable_index = is_df_batchable;
@@ -1604,59 +1596,26 @@ TEST_CASE("dryrun perf-first vs peak-first factorization of the C60 giant term",
         };
     walk(node, {});
 
-    // ---- runtime replay: predict the cached-intermediate high watermark ----
-    // Zero-data eval through the real eval loop + real CacheManager, with the
-    // real batched custom evaluator. working_set_hwmark() folds, per op, (sum
-    // of alive cached entries + in-flight result) into a running max; the
-    // trace's result= field is the largest single materialized transient.
-    // (Single-term, default cache_manager: this is the WITHIN-TERM cached
-    // working set. The whole-residual / cross-iteration watermark -- one shared
-    // cache over the full DAG with the real max_footprint gate -- is the
-    // deferred DryRun-as-prefix wiring.)
-    auto cache = sequant::cache_manager(std::vector<EvalNodeDryRun>{node});
-    cache.set_custom_evaluator(
-        sequant::make_evaluator(policy, DryRunLeafEvaluator{cm}));
-    std::ostringstream trace_os;
-    auto& logger = Logger::instance();
-    auto const prev_level = logger.eval.level;
-    auto* const prev_stream = logger.eval.stream;
-    logger.eval.level = 2;  // gate log::printing() on so hwmark accumulates
-    logger.eval.stream = &trace_os;
-    try {
-      (void)sequant::evaluate<Trace::On>(node, DryRunLeafEvaluator{cm}, cache);
-    } catch (std::exception const&) {
-      a.replay_threw = true;
-    }
-    logger.eval.level = prev_level;
-    logger.eval.stream = prev_stream;
-    a.hwmark_gb = double(cache.working_set_hwmark()) / 1e9;
-    // Largest single result= in the trace, and its full line (result= and hw=
-    // appear together, so the line exposes whether the giant transient is
-    // folded into the cache hwmark).
-    {
-      std::string const trace = trace_os.str();
-      std::size_t pos = 0, best = 0;
-      while ((pos = trace.find("result=", pos)) != std::string::npos) {
-        std::size_t const np = pos + std::string("result=").size();
-        std::size_t const end = trace.find('B', np);
-        if (end == std::string::npos) break;
-        std::string const num = trace.substr(np, end - np);
-        if (!num.empty() &&
-            num.find_first_not_of("0123456789") == std::string::npos) {
-          std::size_t const v = std::stoull(num);
-          if (v > best) {
-            best = v;
-            std::size_t ls = trace.rfind('\n', pos);
-            ls = (ls == std::string::npos) ? 0 : ls + 1;
-            std::size_t const le = trace.find('\n', pos);
-            a.largest_result_line = trace.substr(
-                ls, (le == std::string::npos ? trace.size() : le) - ls);
-          }
-        }
-        pos = end;
-      }
-      a.max_single_result_gb = double(best) / 1e9;
-    }
+    // ---- modeled cost via the single shared cost_profile() entry point ----
+    // Replaces the ad-hoc manual replay + working_set_hwmark read this case
+    // used before Task 5. cost_profile() builds the gated dry-run cache (Task
+    // 2: free-batchable-axis veto + footprint gate), replays zero-data through
+    // the real eval loop with the Task-3 scratch-fold PeakSink, forces the
+    // printing gate on internally, and folds the outer cached residency -- so
+    // peak_bytes captures the batched-inner transient the raw outer hwmark
+    // misses. The same CacheConfig the [cost_profile] test uses;
+    // is_batchable_index is set from `policy` inside cost_profile() (advisory
+    // here).
+    sequant::eval::dryrun::CacheConfig cfg;
+    cfg.max_footprint = 1e11;
+    cfg.min_repeats = 1;
+    cfg.is_volatile = [](EvalNodeDryRun const& n) {
+      if (!n.leaf() || !n->is_tensor()) return false;
+      return n->as_tensor().label() == L"t";
+    };
+    a.cp = sequant::eval::dryrun::cost_profile(
+        std::vector<EvalNodeDryRun>{node}, policy, cfg, regime,
+        /*trace=*/nullptr);
 
     wchar_t const* obj_name = (obj == ObjectiveFunction::DenseTimeSpaceBatched)
                                   ? L"perf-first (DenseTimeSpaceBatched)"
@@ -1664,11 +1623,9 @@ TEST_CASE("dryrun perf-first vs peak-first factorization of the C60 giant term",
     std::wcerr << L"[dryrun-perf] " << obj_name << L": optimize " << opt_ms
                << L"ms  max free-mu~ on a node=" << a.max_free_mu
                << L"  largest realized free-mu~={" << a.largest_desc << L"}="
-               << a.largest_realized_gb << L" GB\n               replay: cache "
-               << L"working_set_hwmark=" << a.hwmark_gb
-               << L" GB  largest single transient(result=)="
-               << a.max_single_result_gb << L" GB"
-               << (a.replay_threw ? L"  [replay threw]" : L"") << L"\n";
+               << a.largest_realized_gb << L" GB\n               cost_profile: "
+               << L"n_ops=" << a.cp.n_ops << L" flops=" << a.cp.flops
+               << L" peak_bytes=" << (a.cp.peak_bytes / 1e9) << L" GB\n";
     return a;
   };
 
@@ -1680,77 +1637,37 @@ TEST_CASE("dryrun perf-first vs peak-first factorization of the C60 giant term",
                << (a.max_free_mu >= 4 ? L"YES" : L"NO") << L" (max free mu~="
                << a.max_free_mu << L")\n    DP-model largest realized free-mu~="
                << a.largest_realized_gb << L" GB {" << a.largest_desc << L"}\n"
-               << L"    replay cache working_set_hwmark=" << a.hwmark_gb
-               << L" GB  largest single transient(result=)="
-               << a.max_single_result_gb << L" GB\n";
+               << L"    cost_profile: n_ops=" << a.cp.n_ops << L" flops="
+               << a.cp.flops << L" peak_bytes=" << (a.cp.peak_bytes / 1e9)
+               << L" GB\n";
   };
   std::wcerr << L"\n=== [dryrun-perf] VERDICT (C60 giant, index 38) ===\n";
   report(L"peak-first (DenseSpaceTimeBatched)", peak_first);
   report(L"perf-first (DenseTimeSpaceBatched)", perf_first);
-  // (b) The cache-vs-transient accounting gap: print the full trace line of the
-  // largest single materialized result for each objective. result= (the
-  // transient) and hw= (the cache watermark at that op) appear together, so a
-  // large result= with a small hw= means the transient is NOT folded into the
-  // cache high watermark (it is a streamed/batched result, never a cached
-  // co-resident entry) -- i.e. working_set_hwmark tracks CACHED residency, not
-  // the transient peak. The two together bound the true peak memory.
-  std::wcerr
-      << L"\n--- largest transient trace line (result= with its hw=) ---\n";
-  {
-    std::string const& pl = peak_first.largest_result_line;
-    std::string const& tl = perf_first.largest_result_line;
-    std::wcerr << L"peak-first: " << std::wstring(pl.begin(), pl.end()) << L"\n"
-               << L"perf-first: " << std::wstring(tl.begin(), tl.end())
-               << L"\n";
-  }
 
-  // INTERPRETATION -- why the outer working_set_hwmark is NOT the whole peak,
-  // and why the replay sizes are not directly comparable to the DP-model sizes:
-  //
-  // (1) Batched transients are invisible to the OUTER cache accessor. The
-  //     batched custom evaluator runs each batch against a SEPARATE scratch
-  //     cache (detail::make_batched_scratch, eval.hpp:1386), so the per-op hw=
-  //     field on the peak-first giant reaches ~38.9 GB (the 34 GB 4-PAO result
-  //     + operands) INSIDE that scratch, while the outer
-  //     cache.working_set_hwmark() reports only ~0.2 GB (outer-scope ops). So
-  //     the outer accessor tracks CACHED (persistent, cross-batch) residency,
-  //     not the batched-inner transient peak. Reading the whole peak requires
-  //     folding each scratch cache's hwmark into a global accumulator.
-  //
-  // (2) Twin-PNO composite Results are mis-sized by the runtime backend. The
-  //     perf-first largest transient = 358.47 GB = 120^2 * 42^4 * 8 EXACTLY
-  //     (occ^2 * PNO^4): the DryRun Result's size_in_bytes() sizes the
-  //     twin-PNO result R{a<i,i>,a<i,i>;i,i} as the naive product, NOT the
-  //     power-mean moment (occ^2 * PNO^2 ~ 89 GB) the DP cost model uses via
-  //     inner_pow. So the perf-first replay hwmark (~358 GB) is a sizing
-  //     artifact, ~4x the true ~89 GB; the DP-model realized size (89 GB) is
-  //     the trustworthy number. A faithful cached-watermark predictor needs the
-  //     runtime Result sizing to be moment-aware too.
-  //
-  // Bottom line: the moment-aware DP peak model is the reliable predictor
-  // today; the runtime replay hwmark is not, until (1) scratch hwmarks
-  // propagate and (2) the Result sizing is moment-aware.
-  std::wcerr
-      << L"\n--- INTERPRETATION ---\n"
-      << L"(1) peak-first outer hwmark (" << peak_first.hwmark_gb
-      << L" GB) << its batched-inner transient ("
-      << peak_first.max_single_result_gb
-      << L" GB, hw= inside a make_batched_scratch cache): the OUTER accessor "
-         L"misses batched transients.\n"
-      << L"(2) perf-first transient " << perf_first.max_single_result_gb
-      << L" GB = 120^2*42^4*8 (occ^2*PNO^4) = the twin-PNO size_in_bytes() "
-         L"artifact; the moment-aware DP size ("
-      << perf_first.largest_realized_gb
-      << L" GB) is the real number. Runtime Result sizing is NOT "
-         L"moment-aware.\n"
-      << L"=> DP-model peak is the reliable predictor; the replay hwmark is "
-         L"not "
-         L"(yet).\n";
-
-  // Peak-first forms the fully-sliceable 4-PAO AO integral (the C60 pathology).
+  // STRUCTURAL PROOF (the direct in-harness proof of the fix), read from the
+  // static tree walk above -- NOT from the cost_profile replay: peak-first
+  // forms the fully-sliceable 4-PAO AO integral (the C60 pathology),
+  // perf-first, being flops-primary, must NEVER form it. Kept as a plain
+  // tree-walk check because the free-mu~ signature is a property of the
+  // FACTORIZATION the DP picked, not of the peak replay; cost_profile() models
+  // cost, it does not expose per-node free-index structure.
   CHECK(peak_first.max_free_mu >= 4);
-  // Perf-first, being flops-primary, must never form it.
   CHECK(perf_first.max_free_mu < 4);
+
+  // COST PROOF via the single shared cost_profile() entry point.
+  // (a) perf-first is flops-primary: it must not pick a higher-flops
+  //     factorization than peak-first.
+  CHECK(perf_first.cp.flops <= peak_first.cp.flops);
+  // (b) perf-first's modeled peak lands in a realistic band for this
+  //     constant-moment C60 giant. Observed perf peak_bytes ~= 358 GB (the
+  //     4-PNO twin-composite W the perf-first schedule forms: 120^2*42^4*8,
+  //     the naive-product size_in_bytes() of R{a<i,i>,a<i,i>;i,i}). A
+  //     100 GB..1 TB band brackets it with comfortable margin and is
+  //     non-flaky. NOTE: with real heavy-tailed PNO moments (not the constant
+  //     moments this regime uses) this rises further.
+  CHECK(perf_first.cp.peak_bytes < 1e12);
+  CHECK(perf_first.cp.peak_bytes > 1e11);
 }
 
 // Task 3: the opt-in scratch-fold peak sink captures the batched-inner peak the
@@ -2008,6 +1925,114 @@ TEST_CASE("cost_profile returns peak/flops/exec/n_ops",
   CHECK(cp.peak_bytes == Catch::Approx(expected_peak).epsilon(1e-9));
 }
 
+// Task 5 (Minor b): cover the UTF-8 -> wide bridge cost_profile() uses to fill
+// a caller's wide trace stream. The eval loop writes a NARROW (UTF-8) trace
+// whose per-op label field carries multi-byte index labels (mu~ = U+03BC
+// U+0303, aux = U+039A). cost_profile transcodes that narrow buffer into the
+// wide sink by decoding UTF-8 code points (a plain widen() would mojibake the
+// labels). This runs cost_profile on the single C60 giant with a real
+// std::wostringstream and asserts the wide output is non-empty and contains a
+// token the eval trace emits -- both an ASCII field (`result=`) and a
+// multi-byte index label (mu~), so the code-point decode path (not just the
+// ASCII path) is exercised.
+TEST_CASE("cost_profile trace stream round-trips", "[dryrun][cost_profile]") {
+  using sequant::eval::dryrun::CacheConfig;
+  using sequant::eval::dryrun::cost_profile;
+  using sequant::eval::dryrun::CostProfile;
+
+  auto ctx = get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr);  // mu~
+  sequant::mbpt::add_df_spaces(isr);   // K
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+
+  auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                          "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = deserialize<ExprPtr>(line);
+  REQUIRE(static_cast<bool>(expr));
+  REQUIRE(expr->is<Sum>());
+  auto const& summands = expr->as<Sum>().summands();
+  REQUIRE(!summands.empty());
+  auto flatten_product = [](ExprPtr const& e) -> ExprPtr {
+    if (!e->is<Product>()) return e;
+    auto const& p = e->as<Product>();
+    return ex<Product>(p.scalar(), p.factors(), Product::Flatten::Yes);
+  };
+  std::size_t const giant_idx = 38 < summands.size() ? 38 : 0;
+  ExprPtr giant = flatten_product(summands[giant_idx]);
+  REQUIRE(giant);
+
+  auto regime = df_regime(1800u, 4320u, 120u, 42.0, 310.0);
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_index = is_df_batchable;
+  policy.batch_target_size = [](Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
+  };
+  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+  policy.accumulation_factor = 1.0;
+  policy.peak_threshold = 40e9;
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      Expr const*, container::vector<container::svector<Index>>>>();
+  OptimizeOptions opts;
+  opts.objective_function = ObjectiveFunction::DenseSpaceTimeBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = axes_map;
+
+  auto optimized = optimize(giant, opts);
+  REQUIRE(static_cast<bool>(optimized));
+  auto it = axes_map->find(optimized.get());
+  container::vector<container::svector<Index>> node_axes;
+  if (it != axes_map->end()) node_axes = it->second;
+  BinarizationOptions bopts;
+  bopts.node_batch_axes = node_axes;
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto node = binarize<EvalExprDryRun>(optimized, {}, bopts);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+  std::vector<EvalNodeDryRun> forest{node};
+
+  CacheConfig cfg;
+  cfg.max_footprint = 1e11;
+  cfg.min_repeats = 1;
+  cfg.is_volatile = [](EvalNodeDryRun const& n) {
+    if (!n.leaf() || !n->is_tensor()) return false;
+    return n->as_tensor().label() == L"t";
+  };
+
+  // Real wide sink: exercise the UTF-8 -> wide transcode.
+  std::wostringstream trace;
+  CostProfile const cp = cost_profile(forest, policy, cfg, regime, &trace);
+
+  std::wstring const w = trace.str();
+  if (std::getenv("DRYRUN_DUMP_TRACE"))
+    std::wcerr << L"[round-trip] first 600 wide chars:\n"
+               << w.substr(0, std::min<std::size_t>(600, w.size())) << L"\n";
+
+  CHECK(std::isfinite(cp.peak_bytes));
+  CHECK(cp.peak_bytes > 0.0);
+  // Non-empty wide output.
+  CHECK(!w.empty());
+  // ASCII field the eval trace always emits (exercises the 1-byte decode path).
+  CHECK(w.find(L"result=") != std::wstring::npos);
+  // Multi-byte index label in an op's label field (exercises the multi-byte
+  // code-point decode path -- the whole point of the transcode). mu~ =
+  // U+03BC U+0303; a plain widen() of the UTF-8 bytes would NOT produce it.
+  CHECK(w.find(L"μ̃") != std::wstring::npos);
+}
+
 // Task 2: the FAITHFUL (gated) dry-run cache built by build_dryrun_cache must
 // VETO caching of a free-batchable giant -- a node whose result carries a free
 // mu~/K axis the runtime slices over -- exactly as the real batched eval loop
@@ -2257,7 +2282,6 @@ TEST_CASE("dryrun whole-residual trace (PNO-CCSD doubles)",
 
   // FAITHFUL real C60 config (614336 job log), identical to [dryrun-eval].
   auto regime = df_regime(1800u, 4320u, 120u, 42.0, 310.0);
-  auto cm = std::make_shared<CostModel const>(regime);
   sequant::BatchPolicy policy;
   policy.is_batchable_index = is_df_batchable;
   policy.batch_target_size = [](Index const& ix) -> std::size_t {
@@ -2303,50 +2327,74 @@ TEST_CASE("dryrun whole-residual trace (PNO-CCSD doubles)",
   }
   REQUIRE(!nodes.empty());
 
-  // Phase 2: one shared cache over ALL trees (cross-term CSE), the real batched
-  // evaluator, trace -> file. The cache is NOT reset between summands, so
-  // working_set_hwmark() reflects cross-term cached residency (subject to the
-  // [dryrun-perf] caveats: batched-inner transients and twin-PNO sizing).
-  auto cache = sequant::cache_manager(nodes);
-  cache.set_custom_evaluator(
-      sequant::make_evaluator(policy, DryRunLeafEvaluator{cm}));
+  // Phase 2: route the whole-residual forest through the single shared
+  // cost_profile() entry point (Task 4/5) -- replacing the ad-hoc
+  // cache_manager(nodes) + manual per-summand replay + logger juggling this
+  // case used before Task 5. cost_profile() builds the gated dry-run cache,
+  // forces the printing gate on, replays every summand (resetting per-term
+  // non-persistent scratch while keeping persistent cross-term CSE entries),
+  // folds the batched-scratch peak, and transcodes the narrow (UTF-8) eval
+  // trace into the requested wide trace stream. We point that stream at a FILE.
+  sequant::eval::dryrun::CacheConfig cfg;
+  cfg.max_footprint = 1e11;  // faithful footprint gate
+  cfg.min_repeats = 2;       // real CSE rule (cache only 2+ repeats)
+  cfg.is_volatile = [](EvalNodeDryRun const& n) {
+    if (!n.leaf() || !n->is_tensor()) return false;
+    return n->as_tensor().label() == L"t";
+  };
 
   char const* const file_env = std::getenv("DRYRUN_TRACE_FILE");
   std::string const trace_path =
       file_env ? file_env : "/tmp/dryrun_residual_trace.txt";
-  std::ofstream trace_file(trace_path);
-  REQUIRE(trace_file.is_open());
-  auto& logger = Logger::instance();
-  auto const prev_level = logger.eval.level;
-  auto* const prev_stream = logger.eval.stream;
-  logger.eval.level = 2;  // gate log::printing() on
-  logger.eval.stream = &trace_file;
 
-  std::size_t n_ok = 0;
-  for (std::size_t i = 0; i < nodes.size(); ++i) {
-    try {
-      (void)sequant::evaluate<Trace::On>(nodes[i], DryRunLeafEvaluator{cm},
-                                         cache);
-      ++n_ok;
-    } catch (std::exception const& e) {
-      trace_file << "  [summand " << i << " threw: " << e.what() << "]\n";
+  // Capture the wide trace, then re-encode it to UTF-8 bytes for the file
+  // (a raw std::wofstream would re-narrow the multi-byte index labels via the
+  // classic-locale codecvt and mangle/truncate them).
+  std::wostringstream trace_capture;
+  sequant::eval::dryrun::CostProfile const cp =
+      sequant::eval::dryrun::cost_profile(nodes, policy, cfg, regime,
+                                          &trace_capture);
+
+  std::wstring const wtrace = trace_capture.str();
+  std::string utf8;
+  utf8.reserve(wtrace.size());
+  for (wchar_t const wc : wtrace) {
+    char32_t const cp32 = static_cast<char32_t>(wc);
+    if (cp32 < 0x80) {
+      utf8.push_back(static_cast<char>(cp32));
+    } else if (cp32 < 0x800) {
+      utf8.push_back(static_cast<char>(0xC0 | (cp32 >> 6)));
+      utf8.push_back(static_cast<char>(0x80 | (cp32 & 0x3F)));
+    } else if (cp32 < 0x10000) {
+      utf8.push_back(static_cast<char>(0xE0 | (cp32 >> 12)));
+      utf8.push_back(static_cast<char>(0x80 | ((cp32 >> 6) & 0x3F)));
+      utf8.push_back(static_cast<char>(0x80 | (cp32 & 0x3F)));
+    } else {
+      utf8.push_back(static_cast<char>(0xF0 | (cp32 >> 18)));
+      utf8.push_back(static_cast<char>(0x80 | ((cp32 >> 12) & 0x3F)));
+      utf8.push_back(static_cast<char>(0x80 | ((cp32 >> 6) & 0x3F)));
+      utf8.push_back(static_cast<char>(0x80 | (cp32 & 0x3F)));
     }
   }
-
-  logger.eval.level = prev_level;
-  logger.eval.stream = prev_stream;
-  trace_file.flush();
-  auto const hwmark_gb = double(cache.working_set_hwmark()) / 1e9;
+  {
+    std::ofstream trace_file(trace_path, std::ios::binary);
+    REQUIRE(trace_file.is_open());
+    trace_file.write(utf8.data(), static_cast<std::streamsize>(utf8.size()));
+  }
+  std::size_t const trace_bytes = utf8.size();
 
   std::wcerr << L"\n=== [dryrun-trace] whole-residual trace written ===\n"
              << L"objective    = "
              << (obj == ObjectiveFunction::DenseTimeSpaceBatched
                      ? L"dense_time_space (perf-first)"
                      : L"dense_space_time (peak-first)")
-             << L"\nsummands     = " << n_ok << L"/" << nodes.size()
-             << L" evaluated\ncache hwmark = " << hwmark_gb
-             << L" GB (cross-term cached residency; see [dryrun-perf] caveats)"
-             << L"\ntrace file   = "
-             << std::wstring(trace_path.begin(), trace_path.end()) << L"\n";
-  SUCCEED();
+             << L"\nsummands     = " << nodes.size() << L" optimized"
+             << L"\nn_ops        = " << cp.n_ops << L"  peak_bytes="
+             << (cp.peak_bytes / 1e9) << L" GB" << L"\ntrace file   = "
+             << std::wstring(trace_path.begin(), trace_path.end()) << L" ("
+             << trace_bytes << L" bytes)\n";
+
+  CHECK(std::isfinite(cp.peak_bytes));
+  CHECK(cp.peak_bytes > 0.0);
+  CHECK(trace_bytes > 0);
 }

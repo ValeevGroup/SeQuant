@@ -49,6 +49,11 @@ struct CacheConfig {
   /// `bool(Index const&)`: true for an index the runtime batched evaluator
   /// slices over (e.g. DF aux `K` / PAO `mu~`). A node whose result carries
   /// such a free index is vetoed from caching. Empty => nothing is batchable.
+  ///
+  /// ADVISORY when passed to \c cost_profile(): that entry point OVERWRITES
+  /// this field with \c policy.is_batchable_index before building the cache, so
+  /// the cache veto and the replay evaluator can never batch on different
+  /// predicates. Only \c build_dryrun_cache() called directly honors it as-is.
   std::function<bool(Index const&)> is_batchable_index;
 };
 
@@ -137,7 +142,9 @@ struct CostProfile {
 ///
 /// \param forest per-summand optimized+binarized eval forest (the real IR).
 /// \param policy the batch policy driving the replay evaluator; its
-///        \c is_batchable_index MUST match \c cfg.is_batchable_index.
+///        \c is_batchable_index is COPIED over \c cfg.is_batchable_index
+///        internally so the cache veto and the evaluator batch on the same
+///        axis predicate (the \c cfg field is advisory here).
 /// \param cfg    gated-cache config (footprint gate, axis veto, volatile,
 ///        repeats).
 /// \param regime the size regime supplying extents and CSV moment tables;
@@ -179,7 +186,12 @@ inline CostProfile cost_profile(std::vector<EvalNodeDryRun> const& forest,
   for (auto const& root : forest) walk(root);
 
   // ---- peak replay through the real eval loop --------------------------
-  auto cache = build_dryrun_cache(forest, cfg, regime);
+  // Force the cache veto and the replay evaluator to slice on the SAME axis
+  // predicate: a mismatch would let the cache retain a giant the evaluator
+  // batches (or vice versa), silently diverging the modeled peak from the run.
+  CacheConfig local_cfg = cfg;
+  local_cfg.is_batchable_index = policy.is_batchable_index;
+  auto cache = build_dryrun_cache(forest, local_cfg, regime);
 
   auto& logger = Logger::instance();
   auto const prev_level = logger.eval.level;
