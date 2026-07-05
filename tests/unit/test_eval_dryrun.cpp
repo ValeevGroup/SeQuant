@@ -1660,12 +1660,20 @@ TEST_CASE("dryrun perf-first vs peak-first factorization of the C60 giant term",
   //     factorization than peak-first.
   CHECK(perf_first.cp.flops <= peak_first.cp.flops);
   // (b) perf-first's modeled peak lands in a realistic band for this
-  //     constant-moment C60 giant. Observed perf peak_bytes ~= 358 GB (the
-  //     4-PNO twin-composite W the perf-first schedule forms: 120^2*42^4*8,
-  //     the naive-product size_in_bytes() of R{a<i,i>,a<i,i>;i,i}). A
-  //     100 GB..1 TB band brackets it with comfortable margin and is
-  //     non-flaky. NOTE: with real heavy-tailed PNO moments (not the constant
-  //     moments this regime uses) this rises further.
+  //     constant-moment C60 giant. Observed perf peak_bytes ~= 387 GB,
+  //     dominated by the GENUINE 4-PNO intermediate the perf-first schedule
+  //     forms -- the CC doubles W node {a_1<i,i> a_2<i,i> a_3<i,i> a_4<i,i>}
+  //     with FOUR distinct PNO legs over one occ-pair (see DRYRUN_PERF_TREE
+  //     dump), sized occ^2 * M_4^4 = 120^2*42^4*8 = 358 GB (+ co-resident).
+  //     This is the CORRECT, moment-aware size (df_regime's csv_pno_moment[k]
+  //     are power means), NOT a naive-product artifact and NOT a mis-sized
+  //     twin R{a<i,i>,a<i,i>}: the sizing was made moment-aware and the twin
+  //     would be occ^2*M_2^2 ~= 0.2 GB. The Kappa axis is CONTRACTED at this
+  //     node, so batching cannot shrink the W (irreducible peak floor of the
+  //     flop-optimal factorization). A 100 GB..1 TB band brackets it with
+  //     comfortable margin and is non-flaky. NOTE: with real heavy-tailed PNO
+  //     moments (M_4 > 42) this rises further -- the OOM question Tasks 6-8
+  //     quantify for C60.
   CHECK(perf_first.cp.peak_bytes < 1e12);
   CHECK(perf_first.cp.peak_bytes > 1e11);
 }
