@@ -80,6 +80,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
@@ -1750,6 +1751,123 @@ TEST_CASE("dryrun perf-first vs peak-first factorization of the C60 giant term",
   CHECK(peak_first.max_free_mu >= 4);
   // Perf-first, being flops-primary, must never form it.
   CHECK(perf_first.max_free_mu < 4);
+}
+
+// Task 3: the opt-in scratch-fold peak sink captures the batched-inner peak the
+// OUTER cache.working_set_hwmark() misses. Reuse the [dryrun-perf] peak-first
+// (DenseSpaceTimeBatched) setup -- the objective whose batched-inner transient
+// (~38.9 GB, materialized INSIDE a make_batched_scratch cache) dwarfs the
+// outer, cross-batch cached residency (~0.2 GB). A PeakSink passed to
+// make_evaluator folds each scratch cache's high-watermark into one global
+// accumulator, so the global peak reflects the true batched-replay peak rather
+// than just the outer residency the accessor sees today.
+TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
+  auto ctx = get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr);  // mu~
+  sequant::mbpt::add_df_spaces(isr);   // K
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+
+  auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                          "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = deserialize<ExprPtr>(line);
+  REQUIRE(static_cast<bool>(expr));
+  REQUIRE(expr->is<Sum>());
+  auto const& summands = expr->as<Sum>().summands();
+  REQUIRE(!summands.empty());
+  auto flatten_product = [](ExprPtr const& e) -> ExprPtr {
+    if (!e->is<Product>()) return e;
+    auto const& p = e->as<Product>();
+    return ex<Product>(p.scalar(), p.factors(), Product::Flatten::Yes);
+  };
+  std::size_t const giant_idx = 38 < summands.size() ? 38 : 0;
+  ExprPtr giant = flatten_product(summands[giant_idx]);
+  REQUIRE(giant);
+
+  // FAITHFUL real C60 config (identical to [dryrun-perf]).
+  auto regime = df_regime(/*mu_tilde=*/1800u, /*aux=*/4320u, /*i_occ=*/120u,
+                          /*pno=*/42.0, /*osv=*/310.0);
+  auto cm = std::make_shared<CostModel const>(regime);
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_index = is_df_batchable;
+  policy.batch_target_size = [](Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
+  };
+  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+  policy.accumulation_factor = 1.0;
+  policy.peak_threshold = 40e9;
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      Expr const*, container::vector<container::svector<Index>>>>();
+  OptimizeOptions opts;
+  // peak-first: forms the fully-sliceable 4-PAO node whose per-batch scratch
+  // transient is the batched-inner peak we want the sink to capture.
+  opts.objective_function = ObjectiveFunction::DenseSpaceTimeBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = axes_map;
+
+  auto optimized = optimize(giant, opts);
+  REQUIRE(static_cast<bool>(optimized));
+  auto it = axes_map->find(optimized.get());
+  container::vector<container::svector<Index>> node_axes;
+  if (it != axes_map->end()) node_axes = it->second;
+  BinarizationOptions bopts;
+  bopts.node_batch_axes = node_axes;
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto node = binarize<EvalExprDryRun>(optimized, {}, bopts);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+  // Zero-data replay through the real eval loop + real CacheManager, with the
+  // real batched custom evaluator, but now with a PeakSink threaded through
+  // make_evaluator so each per-batch scratch cache's working_set_hwmark folds
+  // into `peak`.
+  auto cache = sequant::cache_manager(std::vector<EvalNodeDryRun>{node});
+  std::atomic<double> peak{0.0};
+  cache.set_custom_evaluator(sequant::make_evaluator(
+      policy, DryRunLeafEvaluator{cm}, sequant::make_no_scope_guard{}, &peak));
+
+  std::ostringstream trace_os;
+  auto& logger = Logger::instance();
+  auto const prev_level = logger.eval.level;
+  auto* const prev_stream = logger.eval.stream;
+  logger.eval.level = 2;  // gate log::printing() on so hwmark accumulates
+  logger.eval.stream = &trace_os;
+  try {
+    (void)sequant::evaluate<Trace::On>(node, DryRunLeafEvaluator{cm}, cache);
+  } catch (std::exception const&) {
+    // mirror [dryrun-perf]: a DryRun sizing throw must not mask the sink read
+  }
+  logger.eval.level = prev_level;
+  logger.eval.stream = prev_stream;
+
+  double const global_peak = peak.load();
+  double const outer_hwmark = double(cache.working_set_hwmark());
+
+  std::wcerr << L"\n[dryrun-peak] global scratch-folded peak="
+             << (global_peak / 1e9) << L" GB  outer working_set_hwmark="
+             << (outer_hwmark / 1e9) << L" GB  ratio="
+             << (outer_hwmark > 0.0 ? global_peak / outer_hwmark : 0.0)
+             << L"\n";
+
+  // The sink must have captured something (batched replay ran).
+  CHECK(global_peak > 0.0);
+  // The global (scratch-folded) peak is at least the outer cached residency.
+  CHECK(global_peak >= outer_hwmark);
+  // For this specifically-batched term the batched-inner transient dwarfs the
+  // outer residency (~195x observed); a 2x floor is safe and non-flaky.
+  CHECK(global_peak > outer_hwmark * 2.0);
 }
 
 // Task 2: the FAITHFUL (gated) dry-run cache built by build_dryrun_cache must

@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <any>
+#include <atomic>
 #include <chrono>
 #include <iostream>
 #include <optional>
@@ -1205,6 +1206,16 @@ template <typename TreeNode, bool FHC, typename Members>
 
 }  // namespace detail
 
+/// Opt-in sink for the batched evaluator's per-batch scratch high-watermarks.
+/// The batched replay runs each aux/mu~ batch in a SEPARATE scratch
+/// CacheManager whose transients never enter the outer cache, so the outer
+/// cache's working_set_hwmark() misses the batched-inner peak. When a non-null
+/// PeakSink is threaded through make_batched_custom_evaluator (and its nested
+/// re-instantiations), each scratch's high-watermark folds (max) into this one
+/// global accumulator, yielding the true batched-replay peak. A null sink
+/// (the default) leaves all existing behavior byte-identical.
+using PeakSink = std::atomic<double>*;
+
 template <typename F, typename IndexPredicate = accept_any_index,
           typename ScopeGuardFactory = make_no_scope_guard,
           typename IsVolatile = never_volatile>
@@ -1212,9 +1223,9 @@ template <typename F, typename IndexPredicate = accept_any_index,
     F le, std::function<std::size_t(Index const&)> target_batch_size,
     IndexPredicate accept = {}, ScopeGuardFactory make_scope_guard = {},
     IsVolatile is_volatile = {}, bool persistent_only = false,
-    std::size_t depth = 0) {
+    std::size_t depth = 0, PeakSink peak = nullptr) {
   return [le = std::move(le), target_batch_size = std::move(target_batch_size),
-          accept, is_volatile, persistent_only, depth,
+          accept, is_volatile, persistent_only, depth, peak,
           make_scope_guard](auto const& node, auto& cache) -> ResultPtr {
     // Runaway backstop: nesting re-enters this evaluator on the per-batch
     // scratch (see the reinstall below), incrementing depth once per nested
@@ -1413,13 +1424,28 @@ template <typename F, typename IndexPredicate = accept_any_index,
           // is the same specialization as the one that reinstalls it.
           bs.cache.set_custom_evaluator(make_batched_custom_evaluator(
               std::function<ResultPtr(node_t const&)>{le_g}, target_batch_size,
-              accept, make_scope_guard, is_volatile, persistent_only,
-              depth + 1));
+              accept, make_scope_guard, is_volatile, persistent_only, depth + 1,
+              peak));
           ResultPtr part = evaluate(*mem, le_g, bs.cache);
           if (!acc[m])
             acc[m] = std::move(part);
           else
             acc[m]->add_inplace(*part);
+        }
+        // Fold this batch's scratch high-watermark into the global sink. The
+        // next iteration calls bs.cache.reset(), which ZEROES the scratch
+        // hwmark, so the fold MUST happen here (per batch), not after the
+        // batches loop. The loop is serial (the nested evaluate() re-entry is
+        // serial too), but the sink is atomic; a relaxed fetch-max CAS keeps it
+        // correct regardless. A null sink skips the fold entirely, leaving
+        // existing (sink-less) callers byte-unchanged.
+        if (peak) {
+          const double cand =
+              static_cast<double>(bs.cache.working_set_hwmark());
+          double cur = peak->load(std::memory_order_relaxed);
+          while (cand > cur && !peak->compare_exchange_weak(
+                                   cur, cand, std::memory_order_relaxed)) {
+          }
         }
       }
 
@@ -1463,9 +1489,12 @@ template <typename F, typename IndexPredicate = accept_any_index,
 /// \param yielder      The leaf evaluator (captured and forwarded).
 /// \param make_scope_guard  Optional scope-guard factory (same semantics as in
 ///        make_batched_custom_evaluator; defaults to make_no_scope_guard).
+/// \param peak      Optional PeakSink (same semantics as in
+///        make_batched_custom_evaluator); defaults to null (no folding).
 template <class F, class ScopeGuardFactory = make_no_scope_guard>
 [[nodiscard]] auto make_evaluator(BatchPolicy const& policy, F yielder,
-                                  ScopeGuardFactory make_scope_guard = {}) {
+                                  ScopeGuardFactory make_scope_guard = {},
+                                  PeakSink peak = nullptr) {
   auto is_volatile_node = [p = policy.is_volatile_leaf](auto const& n) -> bool {
     if (!n.leaf() || !n->is_tensor()) return false;
     return p && p(n->as_tensor());
@@ -1485,7 +1514,7 @@ template <class F, class ScopeGuardFactory = make_no_scope_guard>
   return make_batched_custom_evaluator(
       std::move(yielder), std::move(target), std::move(accept),
       std::move(make_scope_guard), std::move(is_volatile_node),
-      policy.persistent_only);
+      policy.persistent_only, /*depth=*/0, peak);
 }
 
 }  // namespace sequant
