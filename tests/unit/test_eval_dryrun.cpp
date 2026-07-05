@@ -1703,3 +1703,154 @@ TEST_CASE("dryrun perf-first vs peak-first factorization of the C60 giant term",
   // Perf-first, being flops-primary, must never form it.
   CHECK(perf_first.max_free_mu < 4);
 }
+
+// Whole-residual dry-run trace: optimize+binarize EVERY summand of the
+// post-transform PNO-CCSD doubles residual, then replay them all through the
+// real eval loop and ONE SHARED CacheManager (so cross-term CSE / persistent
+// caching is exercised, as in MPQC's process_for_evaluation), with the per-op
+// trace ("Eval | ... result= ... hw= ...") written to a FILE. Hidden ([.])
+// because the batched DP runs per summand and the trace can be hundreds of MB;
+// select it explicitly:
+//   ./unit_tests-sequant "[dryrun-trace]"
+// Env knobs (all optional):
+//   DRYRUN_OBJ         dense_time_space (default, perf-first) |
+//   dense_space_time DRYRUN_TRACE_FILE  output path (default
+//   /tmp/dryrun_residual_trace.txt) DRYRUN_MAX_TERMS   cap #summands (default 0
+//   = all) -- for a quick smoke run
+TEST_CASE("dryrun whole-residual trace (PNO-CCSD doubles)",
+          "[.][dryrun-trace]") {
+  auto ctx = get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr);  // mu~
+  sequant::mbpt::add_df_spaces(isr);   // K
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+
+  auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                          "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = deserialize<ExprPtr>(line);
+  REQUIRE(static_cast<bool>(expr));
+  REQUIRE(expr->is<Sum>());
+  auto flatten_product = [](ExprPtr const& e) -> ExprPtr {
+    if (!e->is<Product>()) return e;
+    auto const& p = e->as<Product>();
+    return ex<Product>(p.scalar(), p.factors(), Product::Flatten::Yes);
+  };
+  std::vector<ExprPtr> terms;
+  for (auto const& s : expr->as<Sum>().summands())
+    terms.push_back(flatten_product(s));
+  REQUIRE(!terms.empty());
+
+  // Objective (perf-first default; dense_space_time / dense_peak_size = peak).
+  char const* const obj_env = std::getenv("DRYRUN_OBJ");
+  std::string const obj_s = obj_env ? obj_env : "dense_time_space";
+  ObjectiveFunction const obj =
+      (obj_s == "dense_space_time" || obj_s == "dense_peak_size")
+          ? ObjectiveFunction::DenseSpaceTimeBatched
+          : ObjectiveFunction::DenseTimeSpaceBatched;
+  char const* const max_env = std::getenv("DRYRUN_MAX_TERMS");
+  std::size_t const max_terms =
+      max_env ? static_cast<std::size_t>(std::atoll(max_env)) : 0u;
+  std::size_t const n_terms =
+      (max_terms > 0 && max_terms < terms.size()) ? max_terms : terms.size();
+
+  // FAITHFUL real C60 config (614336 job log), identical to [dryrun-eval].
+  auto regime = df_regime(1800u, 4320u, 120u, 42.0, 310.0);
+  auto cm = std::make_shared<CostModel const>(regime);
+  sequant::BatchPolicy policy;
+  policy.is_batchable_index = is_df_batchable;
+  policy.batch_target_size = [](Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
+  };
+  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+  policy.accumulation_factor = 1.0;
+  policy.peak_threshold = 40e9;
+
+  // Phase 1: optimize + binarize every summand; collect the DryRun trees so one
+  // shared cache can count cross-term repeats.
+  std::vector<EvalNodeDryRun> nodes;
+  nodes.reserve(n_terms);
+  for (std::size_t ti = 0; ti < n_terms; ++ti) {
+    std::cerr << "[dryrun-trace] optimizing summand " << (ti + 1) << "/"
+              << n_terms << " ..." << std::flush;
+    auto axes_map = std::make_shared<std::unordered_map<
+        Expr const*, container::vector<container::svector<Index>>>>();
+    OptimizeOptions opts;
+    opts.objective_function = obj;
+    opts.idx_to_extent = regime.idx_to_extent();
+    opts.inner_pow = regime.inner_pow_fn();
+    opts.batch_policy = policy;
+    opts.volatile_weight = 20.0;
+    opts.roofline.machine_balance = 200.0;
+    opts.roofline.fast_mem_elems = 1000000.0;
+    opts.term_batch_axes = axes_map;
+    auto t0 = std::chrono::steady_clock::now();
+    auto optimized = optimize(terms[ti], opts);
+    auto const ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - t0)
+                        .count();
+    std::cerr << " " << ms << "ms\n";
+    if (!static_cast<bool>(optimized)) continue;
+    auto it = axes_map->find(optimized.get());
+    container::vector<container::svector<Index>> node_axes;
+    if (it != axes_map->end()) node_axes = it->second;
+    BinarizationOptions bopts;
+    bopts.node_batch_axes = node_axes;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    nodes.push_back(binarize<EvalExprDryRun>(optimized, {}, bopts));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+  REQUIRE(!nodes.empty());
+
+  // Phase 2: one shared cache over ALL trees (cross-term CSE), the real batched
+  // evaluator, trace -> file. The cache is NOT reset between summands, so
+  // working_set_hwmark() reflects cross-term cached residency (subject to the
+  // [dryrun-perf] caveats: batched-inner transients and twin-PNO sizing).
+  auto cache = sequant::cache_manager(nodes);
+  cache.set_custom_evaluator(
+      sequant::make_evaluator(policy, DryRunLeafEvaluator{cm}));
+
+  char const* const file_env = std::getenv("DRYRUN_TRACE_FILE");
+  std::string const trace_path =
+      file_env ? file_env : "/tmp/dryrun_residual_trace.txt";
+  std::ofstream trace_file(trace_path);
+  REQUIRE(trace_file.is_open());
+  auto& logger = Logger::instance();
+  auto const prev_level = logger.eval.level;
+  auto* const prev_stream = logger.eval.stream;
+  logger.eval.level = 2;  // gate log::printing() on
+  logger.eval.stream = &trace_file;
+
+  std::size_t n_ok = 0;
+  for (std::size_t i = 0; i < nodes.size(); ++i) {
+    try {
+      (void)sequant::evaluate<Trace::On>(nodes[i], DryRunLeafEvaluator{cm},
+                                         cache);
+      ++n_ok;
+    } catch (std::exception const& e) {
+      trace_file << "  [summand " << i << " threw: " << e.what() << "]\n";
+    }
+  }
+
+  logger.eval.level = prev_level;
+  logger.eval.stream = prev_stream;
+  trace_file.flush();
+  auto const hwmark_gb = double(cache.working_set_hwmark()) / 1e9;
+
+  std::wcerr << L"\n=== [dryrun-trace] whole-residual trace written ===\n"
+             << L"objective    = "
+             << (obj == ObjectiveFunction::DenseTimeSpaceBatched
+                     ? L"dense_time_space (perf-first)"
+                     : L"dense_space_time (peak-first)")
+             << L"\nsummands     = " << n_ok << L"/" << nodes.size()
+             << L" evaluated\ncache hwmark = " << hwmark_gb
+             << L" GB (cross-term cached residency; see [dryrun-perf] caveats)"
+             << L"\ntrace file   = "
+             << std::wstring(trace_path.begin(), trace_path.end()) << L"\n";
+  SUCCEED();
+}
