@@ -667,9 +667,10 @@ TEST_CASE("dryrun POST-transform PAO/K batch-axis verdict", "[dryrun-df]") {
   // mu~/K batch axis.
   double const peak_threshold = 40e9;  // 40 GB, matches the C60 run
   // Env overrides for the root-cause BISECT (default = faithful real C60
-  // config). DRYRUN_OCC/PNO/OSV vary extents; DRYRUN_PAO_TS/AUX_TS vary batch
-  // target sizes; DRYRUN_VW varies volatile_weight; DRYRUN_ROOFLINE=0 disables
-  // the roofline tie-break. Absent env var => real-config default.
+  // config). SEQUANT_UT_DRYRUN_OCC/PNO/OSV vary extents;
+  // SEQUANT_UT_DRYRUN_PAO_TS/AUX_TS vary batch target sizes;
+  // SEQUANT_UT_DRYRUN_VW varies volatile_weight; SEQUANT_UT_DRYRUN_ROOFLINE=0
+  // disables the roofline tie-break. Absent env var => real-config default.
   auto env_d = [](char const* k, double dflt) {
     char const* v = std::getenv(k);
     return v ? std::atof(v) : dflt;
@@ -678,18 +679,18 @@ TEST_CASE("dryrun POST-transform PAO/K batch-axis verdict", "[dryrun-df]") {
     char const* v = std::getenv(k);
     return v ? static_cast<std::size_t>(std::atoll(v)) : dflt;
   };
-  std::size_t const occ_ext = env_u("DRYRUN_OCC", 120u);
-  double const pno_mom = env_d("DRYRUN_PNO", 42.0);
-  double const osv_mom = env_d("DRYRUN_OSV", 310.0);
-  std::size_t const pao_ts = env_u("DRYRUN_PAO_TS", 256u);
-  std::size_t const aux_ts = env_u("DRYRUN_AUX_TS", 72u);
-  double const vol_weight = env_d("DRYRUN_VW", 20.0);
-  bool const use_roofline = env_u("DRYRUN_ROOFLINE", 1u) != 0;
-  // DRYRUN_AUX_ONLY=1 makes ONLY the DF aux (K) sliceable, NOT PAO (mu~) --
-  // reproduces MPQC's aux-only batching to check the proper (gC)^2 PPL
+  std::size_t const occ_ext = env_u("SEQUANT_UT_DRYRUN_OCC", 120u);
+  double const pno_mom = env_d("SEQUANT_UT_DRYRUN_PNO", 42.0);
+  double const osv_mom = env_d("SEQUANT_UT_DRYRUN_OSV", 310.0);
+  std::size_t const pao_ts = env_u("SEQUANT_UT_DRYRUN_PAO_TS", 256u);
+  std::size_t const aux_ts = env_u("SEQUANT_UT_DRYRUN_AUX_TS", 72u);
+  double const vol_weight = env_d("SEQUANT_UT_DRYRUN_VW", 20.0);
+  bool const use_roofline = env_u("SEQUANT_UT_DRYRUN_ROOFLINE", 1u) != 0;
+  // SEQUANT_UT_DRYRUN_AUX_ONLY=1 makes ONLY the DF aux (K) sliceable, NOT PAO
+  // (mu~) -- reproduces MPQC's aux-only batching to check the proper (gC)^2 PPL
   // factorization keeps the mu~-full giant (large realized peak = OOM) and
   // does NOT form the fully-sliceable 4-PAO integral.
-  bool const aux_only = env_u("DRYRUN_AUX_ONLY", 0u) != 0;
+  bool const aux_only = env_u("SEQUANT_UT_DRYRUN_AUX_ONLY", 0u) != 0;
   auto is_batchable = [aux_only](Index const& ix) {
     auto const k = ix.space().base_key();
     return aux_only ? (k == L"Κ") : (k == L"μ̃" || k == L"Κ");
@@ -1529,10 +1530,11 @@ TEST_CASE("dryrun perf-first vs peak-first factorization of the C60 giant term",
     auto node = binarize<EvalExprDryRun>(optimized, {}, bopts);
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 
-    // Optional full-tree dump (DRYRUN_PERF_TREE=1): every node's free indices
-    // and batch_axes (the indices SLICED, i.e. batched, at that node), in
-    // post-order-ish indentation, so the exact schedule is inspectable.
-    if (std::getenv("DRYRUN_PERF_TREE")) {
+    // Optional full-tree dump (SEQUANT_UT_DRYRUN_PERF_TREE=1): every node's
+    // free indices and batch_axes (the indices SLICED, i.e. batched, at that
+    // node), in post-order-ish indentation, so the exact schedule is
+    // inspectable.
+    if (std::getenv("SEQUANT_UT_DRYRUN_PERF_TREE")) {
       wchar_t const* on = (obj == ObjectiveFunction::DenseTimeSpaceBatched)
                               ? L"perf-first (DenseTimeSpaceBatched)"
                               : L"peak-first (DenseSpaceTimeBatched)";
@@ -1663,17 +1665,17 @@ TEST_CASE("dryrun perf-first vs peak-first factorization of the C60 giant term",
   //     constant-moment C60 giant. Observed perf peak_bytes ~= 387 GB,
   //     dominated by the GENUINE 4-PNO intermediate the perf-first schedule
   //     forms -- the CC doubles W node {a_1<i,i> a_2<i,i> a_3<i,i> a_4<i,i>}
-  //     with FOUR distinct PNO legs over one occ-pair (see DRYRUN_PERF_TREE
-  //     dump), sized occ^2 * M_4^4 = 120^2*42^4*8 = 358 GB (+ co-resident).
-  //     This is the CORRECT, moment-aware size (df_regime's csv_pno_moment[k]
-  //     are power means), NOT a naive-product artifact and NOT a mis-sized
-  //     twin R{a<i,i>,a<i,i>}: the sizing was made moment-aware and the twin
-  //     would be occ^2*M_2^2 ~= 0.2 GB. The Kappa axis is CONTRACTED at this
-  //     node, so batching cannot shrink the W (irreducible peak floor of the
-  //     flop-optimal factorization). A 100 GB..1 TB band brackets it with
-  //     comfortable margin and is non-flaky. NOTE: with real heavy-tailed PNO
-  //     moments (M_4 > 42) this rises further -- the OOM question Tasks 6-8
-  //     quantify for C60.
+  //     with FOUR distinct PNO legs over one occ-pair (see
+  //     SEQUANT_UT_DRYRUN_PERF_TREE dump), sized occ^2 * M_4^4 = 120^2*42^4*8 =
+  //     358 GB (+ co-resident). This is the CORRECT, moment-aware size
+  //     (df_regime's csv_pno_moment[k] are power means), NOT a naive-product
+  //     artifact and NOT a mis-sized twin R{a<i,i>,a<i,i>}: the sizing was made
+  //     moment-aware and the twin would be occ^2*M_2^2 ~= 0.2 GB. The Kappa
+  //     axis is CONTRACTED at this node, so batching cannot shrink the W
+  //     (irreducible peak floor of the flop-optimal factorization). A 100 GB..1
+  //     TB band brackets it with comfortable margin and is non-flaky. NOTE:
+  //     with real heavy-tailed PNO moments (M_4 > 42) this rises further -- the
+  //     OOM question Tasks 6-8 quantify for C60.
   CHECK(perf_first.cp.peak_bytes < 1e12);
   CHECK(perf_first.cp.peak_bytes > 1e11);
 }
@@ -2025,7 +2027,7 @@ TEST_CASE("cost_profile trace stream round-trips", "[dryrun][cost_profile]") {
   CostProfile const cp = cost_profile(forest, policy, cfg, regime, &trace);
 
   std::wstring const w = trace.str();
-  if (std::getenv("DRYRUN_DUMP_TRACE"))
+  if (std::getenv("SEQUANT_UT_DRYRUN_DUMP_TRACE"))
     std::wcerr << L"[round-trip] first 600 wide chars:\n"
                << w.substr(0, std::min<std::size_t>(600, w.size())) << L"\n";
 
@@ -2242,10 +2244,10 @@ TEST_CASE("dryrun gated cache vetoes free-batchable giant", "[dryrun][cache]") {
 // select it explicitly:
 //   ./unit_tests-sequant "[dryrun-trace]"
 // Env knobs (all optional):
-//   DRYRUN_OBJ         dense_time_space (default, perf-first) |
-//   dense_space_time DRYRUN_TRACE_FILE  output path (default
-//   /tmp/dryrun_residual_trace.txt) DRYRUN_MAX_TERMS   cap #summands (default 0
-//   = all) -- for a quick smoke run
+//   SEQUANT_UT_DRYRUN_OBJ         dense_time_space (default, perf-first) |
+//   dense_space_time SEQUANT_UT_DRYRUN_TRACE_FILE  output path (default
+//   /tmp/dryrun_residual_trace.txt) SEQUANT_UT_DRYRUN_MAX_TERMS   cap #summands
+//   (default 0 = all) -- for a quick smoke run
 TEST_CASE("dryrun whole-residual trace (PNO-CCSD doubles)",
           "[.][dryrun-trace]") {
   auto ctx = get_default_context().clone();
@@ -2276,13 +2278,13 @@ TEST_CASE("dryrun whole-residual trace (PNO-CCSD doubles)",
   REQUIRE(!terms.empty());
 
   // Objective (perf-first default; dense_space_time / dense_peak_size = peak).
-  char const* const obj_env = std::getenv("DRYRUN_OBJ");
+  char const* const obj_env = std::getenv("SEQUANT_UT_DRYRUN_OBJ");
   std::string const obj_s = obj_env ? obj_env : "dense_time_space";
   ObjectiveFunction const obj =
       (obj_s == "dense_space_time" || obj_s == "dense_peak_size")
           ? ObjectiveFunction::DenseSpaceTimeBatched
           : ObjectiveFunction::DenseTimeSpaceBatched;
-  char const* const max_env = std::getenv("DRYRUN_MAX_TERMS");
+  char const* const max_env = std::getenv("SEQUANT_UT_DRYRUN_MAX_TERMS");
   std::size_t const max_terms =
       max_env ? static_cast<std::size_t>(std::atoll(max_env)) : 0u;
   std::size_t const n_terms =
@@ -2351,7 +2353,7 @@ TEST_CASE("dryrun whole-residual trace (PNO-CCSD doubles)",
     return n->as_tensor().label() == L"t";
   };
 
-  char const* const file_env = std::getenv("DRYRUN_TRACE_FILE");
+  char const* const file_env = std::getenv("SEQUANT_UT_DRYRUN_TRACE_FILE");
   std::string const trace_path =
       file_env ? file_env : "/tmp/dryrun_residual_trace.txt";
 
