@@ -1,15 +1,26 @@
 #ifndef SEQUANT_CORE_EVAL_BACKENDS_DRYRUN_COST_PROFILE_HPP
 #define SEQUANT_CORE_EVAL_BACKENDS_DRYRUN_COST_PROFILE_HPP
 
+#include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
 #include <SeQuant/core/eval/backends/dryrun/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
 
+#include <SeQuant/core/batch_policy.hpp>
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
+#include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/optimize/single_term_detail.hpp>
 
+#include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <functional>
+#include <memory>
+#include <ostream>
+#include <sstream>
+#include <string>
 #include <vector>
 
 namespace sequant::eval::dryrun {
@@ -92,6 +103,151 @@ auto build_dryrun_cache(NodeRange const& nodes, CacheConfig const& cfg,
   return sequant::cache_manager(nodes, std::move(is_volatile), cfg.min_repeats,
                                 std::move(footprint_of), cfg.max_footprint,
                                 std::move(is_batchable_index));
+}
+
+/// Summary of the modeled cost of a factorized dry-run eval forest, as produced
+/// by \c cost_profile(). All quantities are summed/maxed over every summand
+/// tree in the forest.
+struct CostProfile {
+  /// Predicted peak working-set (bytes): the max over summands of the
+  /// batched-scratch high-watermark folded by the Task-3 \c PeakSink and the
+  /// outer gated cache's \c working_set_hwmark().
+  double peak_bytes = 0;
+  /// Summed unweighted static contraction FLOPs over all internal nodes.
+  double flops = 0;
+  /// Summed roofline-projected execution cost over all internal nodes.
+  double exec_cost = 0;
+  /// Number of internal (contraction) nodes across the forest.
+  std::size_t n_ops = 0;
+};
+
+/// Replays a factorized eval forest zero-data through the real eval loop --
+/// with a gated cache built from \p cfg (Task 2) and a \c PeakSink threaded
+/// through the batched evaluator (Task 3) -- and, alongside, does a static walk
+/// of the forest to accumulate FLOPs / roofline exec cost / op count. This is
+/// the single reusable entry point both SeQuant tests and MPQC call.
+///
+/// \par The printing gate
+/// \c CacheManager::working_set_hwmark() only accumulates while
+/// \c sequant::eval::log::printing() is true (the hwmark update sits on the
+/// trace-printing path). This routine therefore FORCES the eval logger's level
+/// > 0 around the replay -- discarding the narrow trace to a null sink when no
+/// \p trace is requested -- and restores the previous logger state afterward,
+/// so \c peak_bytes is non-zero even with no trace stream.
+///
+/// \param forest per-summand optimized+binarized eval forest (the real IR).
+/// \param policy the batch policy driving the replay evaluator; its
+///        \c is_batchable_index MUST match \c cfg.is_batchable_index.
+/// \param cfg    gated-cache config (footprint gate, axis veto, volatile,
+///        repeats).
+/// \param regime the size regime supplying extents and CSV moment tables;
+///        the internal \c CostModel and \c DryRunLeafEvaluator are built from
+///        it.
+/// \param trace  optional per-op trace sink (nullptr = no trace). When
+///        non-null, the eval loop's narrow trace is transcoded (UTF-8) into it.
+/// \return the accumulated \c CostProfile.
+inline CostProfile cost_profile(std::vector<EvalNodeDryRun> const& forest,
+                                BatchPolicy const& policy,
+                                CacheConfig const& cfg,
+                                SizeRegime const& regime,
+                                std::wostream* trace = nullptr) {
+  CostProfile profile;
+
+  auto cm = std::make_shared<CostModel const>(regime);
+  DryRunLeafEvaluator const leaf{cm};
+
+  // ---- static cost walk (independent of the replay) --------------------
+  // For every internal node: flops = flops_counter(left, right, result); the
+  // roofline exec cost uses the left operand's footprint as the transferred
+  // bytes and the arena convention (4096) the [dryrun-costmodel] test fixes.
+  auto const flops_of = sequant::opt::detail::flops_counter(
+      regime.idx_to_extent(), regime.inner_pow_fn());
+  std::function<void(EvalNodeDryRun const&)> walk =
+      [&](EvalNodeDryRun const& n) {
+        if (n.leaf()) return;
+        profile.n_ops += 1;
+        double const node_flops =
+            flops_of(n.left()->canon_indices(), n.right()->canon_indices(),
+                     n->canon_indices());
+        profile.flops += node_flops;
+        container::svector<Index> const left(n.left()->canon_indices().begin(),
+                                             n.left()->canon_indices().end());
+        profile.exec_cost += cm->exec_cost(node_flops, cm->memsize(left), 4096);
+        walk(n.left());
+        walk(n.right());
+      };
+  for (auto const& root : forest) walk(root);
+
+  // ---- peak replay through the real eval loop --------------------------
+  auto cache = build_dryrun_cache(forest, cfg, regime);
+
+  auto& logger = Logger::instance();
+  auto const prev_level = logger.eval.level;
+  auto* const prev_stream = logger.eval.stream;
+  // Force printing() on so working_set_hwmark() accumulates. The eval logger
+  // stream is narrow; capture into a narrow buffer only when a (wide) trace
+  // sink was requested, else discard to a null stream.
+  std::ostringstream trace_capture;
+  logger.eval.level = 2;
+  logger.eval.stream = trace ? &trace_capture : nullptr;
+
+  std::atomic<double> peak{0.0};
+  for (auto const& root : forest) {
+    cache.set_custom_evaluator(sequant::make_evaluator(
+        policy, leaf, sequant::make_no_scope_guard{}, &peak));
+    try {
+      (void)sequant::evaluate<Trace::On>(root, leaf, cache);
+    } catch (std::exception const&) {
+      // A zero-data DryRun sizing throw must not mask the peak read.
+    }
+    // Fold the outer cached residency BEFORE reset() (which zeroes the
+    // hwmark). `peak` folds every batched scratch high-watermark across all
+    // summands via std::max, so its running load() is the global scratch peak.
+    profile.peak_bytes = std::max(
+        {profile.peak_bytes, peak.load(), double(cache.working_set_hwmark())});
+    cache.reset();  // drop per-term non-persistent scratch; keep persistent
+  }
+
+  logger.eval.level = prev_level;
+  logger.eval.stream = prev_stream;
+
+  // If a wide trace sink was requested, transcode the captured narrow (UTF-8)
+  // eval trace into it (the eval loop writes only to the narrow logger stream;
+  // index labels such as mu~/K are multi-byte, so a plain widen would corrupt
+  // them -- decode UTF-8 to code points instead).
+  if (trace) {
+    std::string const s = trace_capture.str();
+    std::wstring w;
+    w.reserve(s.size());
+    for (std::size_t i = 0; i < s.size();) {
+      unsigned char const c = static_cast<unsigned char>(s[i]);
+      char32_t cp;
+      std::size_t len;
+      if (c < 0x80) {
+        cp = c;
+        len = 1;
+      } else if ((c >> 5) == 0x6) {
+        cp = c & 0x1Fu;
+        len = 2;
+      } else if ((c >> 4) == 0xE) {
+        cp = c & 0x0Fu;
+        len = 3;
+      } else if ((c >> 3) == 0x1E) {
+        cp = c & 0x07u;
+        len = 4;
+      } else {
+        cp = c;  // invalid lead byte: pass through
+        len = 1;
+      }
+      for (std::size_t k = 1; k < len && i + k < s.size(); ++k)
+        cp = (cp << 6) | (static_cast<unsigned char>(s[i + k]) & 0x3Fu);
+      w.push_back(static_cast<wchar_t>(cp));
+      i += len;
+    }
+    *trace << w;
+  }
+
+  return profile;
 }
 
 }  // namespace sequant::eval::dryrun

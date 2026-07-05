@@ -1870,6 +1870,144 @@ TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
   CHECK(global_peak > outer_hwmark * 2.0);
 }
 
+// Task 4: cost_profile() is the single reusable entry point that ties the
+// static cost walk (flops/exec_cost/n_ops) to the gated-cache peak replay
+// (Task 2 build_dryrun_cache + Task 3 PeakSink scratch-fold) behind one API
+// that MPQC and these tests share. The key regression guard is peak_bytes > 0
+// with NO trace stream: cost_profile MUST force log::printing() on internally
+// (the CacheManager hwmark only accumulates on the printing path), otherwise
+// the sink and the outer hwmark would both be zero.
+TEST_CASE("cost_profile returns peak/flops/exec/n_ops",
+          "[dryrun][cost_profile]") {
+  using sequant::eval::dryrun::build_dryrun_cache;
+  using sequant::eval::dryrun::CacheConfig;
+  using sequant::eval::dryrun::cost_profile;
+  using sequant::eval::dryrun::CostProfile;
+
+  auto ctx = get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr);  // mu~
+  sequant::mbpt::add_df_spaces(isr);   // K
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+
+  auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                          "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = deserialize<ExprPtr>(line);
+  REQUIRE(static_cast<bool>(expr));
+  REQUIRE(expr->is<Sum>());
+  auto const& summands = expr->as<Sum>().summands();
+  REQUIRE(!summands.empty());
+  auto flatten_product = [](ExprPtr const& e) -> ExprPtr {
+    if (!e->is<Product>()) return e;
+    auto const& p = e->as<Product>();
+    return ex<Product>(p.scalar(), p.factors(), Product::Flatten::Yes);
+  };
+  std::size_t const giant_idx = 38 < summands.size() ? 38 : 0;
+  ExprPtr giant = flatten_product(summands[giant_idx]);
+  REQUIRE(giant);
+
+  // FAITHFUL real C60 config (identical to [dryrun-perf] / [peak]).
+  auto regime = df_regime(/*mu_tilde=*/1800u, /*aux=*/4320u, /*i_occ=*/120u,
+                          /*pno=*/42.0, /*osv=*/310.0);
+
+  // ONE BatchPolicy, reused for optimize() and the replay evaluator (its
+  // is_batchable_index MUST equal CacheConfig::is_batchable_index).
+  sequant::BatchPolicy policy;
+  policy.is_batchable_index = is_df_batchable;
+  policy.batch_target_size = [](Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
+  };
+  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+  policy.accumulation_factor = 1.0;
+  policy.peak_threshold = 40e9;
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      Expr const*, container::vector<container::svector<Index>>>>();
+  OptimizeOptions opts;
+  // peak-first: forms the fully-sliceable 4-PAO node whose per-batch scratch
+  // transient is the batched-inner peak the sink must capture.
+  opts.objective_function = ObjectiveFunction::DenseSpaceTimeBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = axes_map;
+
+  auto optimized = optimize(giant, opts);
+  REQUIRE(static_cast<bool>(optimized));
+  auto it = axes_map->find(optimized.get());
+  container::vector<container::svector<Index>> node_axes;
+  if (it != axes_map->end()) node_axes = it->second;
+  BinarizationOptions bopts;
+  bopts.node_batch_axes = node_axes;
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto node = binarize<EvalExprDryRun>(optimized, {}, bopts);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+  std::vector<EvalNodeDryRun> forest{node};
+
+  // CacheConfig mirroring the real batched run: footprint gate + free-batchable
+  // axis veto; is_volatile adapts policy.is_volatile_leaf onto tree nodes.
+  CacheConfig cfg;
+  cfg.max_footprint = 1e11;
+  cfg.min_repeats = 1;
+  cfg.is_batchable_index = policy.is_batchable_index;
+  cfg.is_volatile = [](EvalNodeDryRun const& n) {
+    if (!n.leaf() || !n->is_tensor()) return false;
+    return n->as_tensor().label() == L"t";
+  };
+
+  // Call cost_profile with NO trace stream: this is the printing-gate gotcha
+  // regression guard -- peak_bytes must still be > 0.
+  CostProfile const cp = cost_profile(forest, policy, cfg, regime,
+                                      /*trace=*/nullptr);
+
+  std::wcerr << L"\n[cost_profile] n_ops=" << cp.n_ops << L" flops=" << cp.flops
+             << L" exec_cost=" << cp.exec_cost << L" peak_bytes="
+             << (cp.peak_bytes / 1e9) << L" GB\n";
+
+  CHECK(cp.n_ops > 0);
+  CHECK(cp.flops > 0.0);
+  CHECK(cp.exec_cost > 0.0);
+  // The gotcha guard: printing was forced on internally, so the hwmark/sink
+  // accumulated even with no trace stream.
+  CHECK(cp.peak_bytes > 0.0);
+
+  // Cross-check that cost_profile's peak wires the SAME fold as the Task-3
+  // [peak] test: replay the same forest through the same gated cache + the same
+  // make_evaluator(&peak2) sink, force printing on identically, and fold the
+  // outer hwmark. cost_profile's peak_bytes must equal max(sink, outer hwmark).
+  auto cm = std::make_shared<CostModel const>(regime);
+  DryRunLeafEvaluator leaf{cm};
+  auto cache = build_dryrun_cache(forest, cfg, regime);
+  std::atomic<double> peak2{0.0};
+  cache.set_custom_evaluator(sequant::make_evaluator(
+      policy, leaf, sequant::make_no_scope_guard{}, &peak2));
+  auto& logger = Logger::instance();
+  auto const prev_level = logger.eval.level;
+  auto* const prev_stream = logger.eval.stream;
+  logger.eval.level = 2;
+  logger.eval.stream = nullptr;
+  try {
+    (void)sequant::evaluate<Trace::On>(node, leaf, cache);
+  } catch (std::exception const&) {
+  }
+  logger.eval.level = prev_level;
+  logger.eval.stream = prev_stream;
+  double const expected_peak =
+      std::max(peak2.load(), double(cache.working_set_hwmark()));
+  CHECK(expected_peak > 0.0);
+  CHECK(cp.peak_bytes == Catch::Approx(expected_peak).epsilon(1e-9));
+}
+
 // Task 2: the FAITHFUL (gated) dry-run cache built by build_dryrun_cache must
 // VETO caching of a free-batchable giant -- a node whose result carries a free
 // mu~/K axis the runtime slices over -- exactly as the real batched eval loop
