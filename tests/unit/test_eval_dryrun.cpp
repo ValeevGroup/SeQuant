@@ -56,6 +56,7 @@
 #define SEQUANT_EVAL_TRACE 1
 
 #include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
+#include <SeQuant/core/eval/backends/dryrun/cost_profile.hpp>
 #include <SeQuant/core/eval/backends/dryrun/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/dryrun/result.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
@@ -1749,6 +1750,198 @@ TEST_CASE("dryrun perf-first vs peak-first factorization of the C60 giant term",
   CHECK(peak_first.max_free_mu >= 4);
   // Perf-first, being flops-primary, must never form it.
   CHECK(perf_first.max_free_mu < 4);
+}
+
+// Task 2: the FAITHFUL (gated) dry-run cache built by build_dryrun_cache must
+// VETO caching of a free-batchable giant -- a node whose result carries a free
+// mu~/K axis the runtime slices over -- exactly as the real batched eval loop
+// does, instead of materializing it whole. The SIMPLE cache_manager(nodes) the
+// ad-hoc [dryrun-perf]/[dryrun-trace] sites use caches such a giant; the gated
+// build must not. We prove this by contrasting three configs over the SAME
+// binarized C60 giant term (index 38):
+//   ref:  no gate  (max_footprint=0, never batchable) -> giant IS cached
+//   axis: axis veto only (max_footprint=0, is_df_batchable) -> giant NOT cached
+//   task: axis veto + footprint gate (max_footprint=1e11, is_df_batchable)
+//                                                            -> giant NOT
+//                                                            cached
+// A small non-batchable intermediate stays cached under all three. Residency is
+// read via CacheManager::exists() (the veto is a registration-time decision:
+// a vetoed node is never registered, so it is not, and cannot become, resident;
+// this is a stronger/cleaner signal than working_set_hwmark, which only tracks
+// alive cached bytes and is confounded by batched-inner scratch -- see the
+// [dryrun-perf] INTERPRETATION notes).
+TEST_CASE("dryrun gated cache vetoes free-batchable giant", "[dryrun][cache]") {
+  auto ctx = get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr);  // mu~
+  sequant::mbpt::add_df_spaces(isr);   // K
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+
+  auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                          "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = deserialize<ExprPtr>(line);
+  REQUIRE(static_cast<bool>(expr));
+  REQUIRE(expr->is<Sum>());
+  auto const& summands = expr->as<Sum>().summands();
+  REQUIRE(!summands.empty());
+  auto flatten_product = [](ExprPtr const& e) -> ExprPtr {
+    if (!e->is<Product>()) return e;
+    auto const& p = e->as<Product>();
+    return ex<Product>(p.scalar(), p.factors(), Product::Flatten::Yes);
+  };
+  std::size_t const giant_idx = 38 < summands.size() ? 38 : 0;
+  ExprPtr giant = flatten_product(summands[giant_idx]);
+  REQUIRE(giant);
+
+  // FAITHFUL real C60 config (614336 job log), identical to [dryrun-perf].
+  auto regime = df_regime(/*mu_tilde=*/1800u, /*aux=*/4320u, /*i_occ=*/120u,
+                          /*pno=*/42.0, /*osv=*/310.0);
+  auto memsize = sequant::opt::detail::memsize_counter(regime.idx_to_extent(),
+                                                       regime.inner_pow_fn());
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_index = is_df_batchable;
+  policy.batch_target_size = [](Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
+  };
+  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+  policy.accumulation_factor = 1.0;
+  policy.peak_threshold = 40e9;
+
+  // Optimize (perf-first) + binarize the giant, carrying the per-node batch
+  // axes so the binarized tree matches the real schedule.
+  auto axes_map = std::make_shared<std::unordered_map<
+      Expr const*, container::vector<container::svector<Index>>>>();
+  OptimizeOptions opts;
+  opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = axes_map;
+  auto optimized = optimize(giant, opts);
+  REQUIRE(static_cast<bool>(optimized));
+  auto it = axes_map->find(optimized.get());
+  container::vector<container::svector<Index>> node_axes;
+  if (it != axes_map->end()) node_axes = it->second;
+  BinarizationOptions bopts;
+  bopts.node_batch_axes = node_axes;
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto node = binarize<EvalExprDryRun>(optimized, {}, bopts);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  std::vector<EvalNodeDryRun> const nodes{node};
+
+  // A node carries a free-batchable axis iff any of its RESULT (canon) indices
+  // is a batch axis -- the exact condition the gated factory's veto keys off.
+  auto carries_batchable = [](EvalNodeDryRun const& n) {
+    for (auto const& ix : n->canon_indices())
+      if (is_df_batchable(ix)) return true;
+    return false;
+  };
+
+  // Walk the binarized tree: pick the internal free-batchable node with the
+  // largest result footprint (THE giant), and any internal non-batchable node
+  // (a small intermediate that must stay cacheable).
+  EvalNodeDryRun giant_node = node;
+  double giant_bytes = -1.0;
+  bool giant_found = false;
+  EvalNodeDryRun small_node = node;
+  bool small_found = false;
+  std::function<void(EvalNodeDryRun const&)> walk =
+      [&](EvalNodeDryRun const& n) {
+        if (!n.leaf()) {
+          std::vector<Index> const free(n->canon_indices().begin(),
+                                        n->canon_indices().end());
+          double const bytes =
+              memsize(std::vector<Index>{}, std::vector<Index>{}, free) * 8.0;
+          if (carries_batchable(n)) {
+            if (bytes > giant_bytes) {
+              giant_bytes = bytes;
+              giant_node = n;
+              giant_found = true;
+            }
+          } else if (!small_found) {
+            small_node = n;
+            small_found = true;
+          }
+          walk(n.left());
+          walk(n.right());
+        }
+      };
+  walk(node);
+  REQUIRE(giant_found);  // the term has a free-mu~/K internal node
+  REQUIRE(small_found);  // and at least one non-batchable internal node
+
+  // is_volatile for the gated factory (the amplitude leaves are volatile).
+  auto is_vol = [](EvalNodeDryRun const& n) {
+    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
+  };
+
+  using sequant::eval::dryrun::build_dryrun_cache;
+  using sequant::eval::dryrun::CacheConfig;
+
+  // ref: no gates -> the giant IS cached (baseline; this is what the SIMPLE
+  // ad-hoc factory would do).
+  CacheConfig ref_cfg;
+  ref_cfg.max_footprint = 0.;
+  ref_cfg.min_repeats = 1;
+  ref_cfg.is_volatile = is_vol;
+  ref_cfg.is_batchable_index = [](Index const&) { return false; };
+  auto ref_cache = build_dryrun_cache(nodes, ref_cfg, regime);
+
+  // axis: batchable-axis veto ONLY (footprint gate disabled) -> giant NOT
+  // cached, isolating the veto from the footprint gate.
+  CacheConfig axis_cfg = ref_cfg;
+  axis_cfg.is_batchable_index = is_df_batchable;
+  auto axis_cache = build_dryrun_cache(nodes, axis_cfg, regime);
+
+  // task: the config the task asks for (footprint gate + axis veto).
+  CacheConfig task_cfg = axis_cfg;
+  task_cfg.max_footprint = 1e11;
+  auto task_cache = build_dryrun_cache(nodes, task_cfg, regime);
+
+  // Without any gate the giant is registered/cacheable...
+  CHECK(ref_cache.exists(giant_node));
+  // ...the batchable-axis veto alone removes it...
+  CHECK_FALSE(axis_cache.exists(giant_node));
+  // ...and so does the task config.
+  CHECK_FALSE(task_cache.exists(giant_node));
+
+  // A small non-batchable intermediate stays cached under all three.
+  CHECK(ref_cache.exists(small_node));
+  CHECK(axis_cache.exists(small_node));
+  CHECK(task_cache.exists(small_node));
+
+  // Faithful end-to-end: replay the schedule through the real eval loop against
+  // the gated (task) cache; the giant must not become resident, while eval
+  // completes without materializing it whole.
+  auto cm = std::make_shared<CostModel const>(regime);
+  task_cache.set_custom_evaluator(
+      sequant::make_evaluator(policy, DryRunLeafEvaluator{cm}));
+  REQUIRE_NOTHROW(
+      (void)sequant::evaluate(node, DryRunLeafEvaluator{cm}, task_cache));
+  CHECK_FALSE(task_cache.exists(giant_node));  // still not registered => never
+                                               // resident
+  CHECK_FALSE(task_cache.alive(giant_node));
+
+  std::wcerr << L"\n=== [dryrun][cache] gated-veto verdict (C60 giant, index "
+             << giant_idx << L") ===\n  giant free-batchable node footprint = "
+             << (giant_bytes / 1e9) << L" GB\n  ref (no gate)  exists(giant) = "
+             << (ref_cache.exists(giant_node) ? L"YES" : L"no")
+             << L"\n  axis veto      exists(giant) = "
+             << (axis_cache.exists(giant_node) ? L"YES" : L"no")
+             << L"\n  task config    exists(giant) = "
+             << (task_cache.exists(giant_node) ? L"YES" : L"no")
+             << L"\n  small intermediate exists (task) = "
+             << (task_cache.exists(small_node) ? L"YES" : L"no") << L"\n";
 }
 
 // Whole-residual dry-run trace: optimize+binarize EVERY summand of the
