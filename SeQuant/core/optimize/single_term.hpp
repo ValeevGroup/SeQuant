@@ -95,24 +95,31 @@ EvalSequence single_term_opt(
   // DP's subset bits.
   size_t volatile_mask = 0;
   double nr = 1.0;
-  if constexpr (Metric == ObjectiveFunction::DensePeakSize) {
+  if constexpr (Metric == ObjectiveFunction::DenseSpaceTime ||
+                Metric == ObjectiveFunction::DenseTimeSpace) {
     SEQUANT_ASSERT(!subnet_cse &&
-                   "subnet_cse not supported with DensePeakSize (Phase 1)");
+                   "subnet_cse not supported with DenseSpaceTime (Phase 1)");
     SEQUANT_ASSERT(!out_axes &&
-                   "out_axes only supported with DensePeakSizeBatched");
+                   "out_axes only supported with the batched peak objectives");
     (void)is_batchable_index;
     (void)batch_target_size;
     (void)batch_persistent_only;
     (void)footprint_weight;  // peak objectives use the roofline tie-break
     // is_volatile_leaf / volatile_weight / roofline feed only the secondary
     // tie-break among equal-peak schedules (peak itself ignores them).
-    return run_single_term_opt(
-        PeakModel{idxsz, inner_pow, is_volatile_leaf, volatile_weight,
-                  roofline.machine_balance, roofline.fast_mem_elems,
-                  roofline.block_tiles, roofline.block_prefactor,
-                  peak_flops_tolerance},
-        network, tidxs);
-  } else if constexpr (Metric == ObjectiveFunction::DensePeakSizeBatched) {
+    PeakModel model{idxsz,
+                    inner_pow,
+                    is_volatile_leaf,
+                    volatile_weight,
+                    roofline.machine_balance,
+                    roofline.fast_mem_elems,
+                    roofline.block_tiles,
+                    roofline.block_prefactor,
+                    peak_flops_tolerance};
+    model.perf_first = (Metric == ObjectiveFunction::DenseTimeSpace);
+    return run_single_term_opt(model, network, tidxs);
+  } else if constexpr (Metric == ObjectiveFunction::DenseSpaceTimeBatched ||
+                       Metric == ObjectiveFunction::DenseTimeSpaceBatched) {
     SEQUANT_ASSERT(
         !subnet_cse &&
         "subnet_cse not supported with DensePeakSizeBatched (Phase 2)");
@@ -133,6 +140,7 @@ EvalSequence single_term_opt(
                            peak_flops_tolerance,
                            accumulation_factor,
                            cost.peak_threshold};
+    model.perf_first = (Metric == ObjectiveFunction::DenseTimeSpaceBatched);
     if (out_axes) {
       auto [seq, axes] = run_single_term_opt_axes(model, network, tidxs);
       *out_axes = std::move(axes);
@@ -164,8 +172,9 @@ EvalSequence single_term_opt(
     return run_single_term_opt(model, network, tidxs);
   } else {
     static_assert(Metric == ObjectiveFunction::DenseSize,
-                  "Only DenseFLOPs, DenseSize, DensePeakSize, and "
-                  "DensePeakSizeBatched ObjectiveFunction supported.");
+                  "Only DenseFLOPs, DenseSize, DenseSpaceTime, "
+                  "DenseSpaceTimeBatched, DenseTimeSpace, and "
+                  "DenseTimeSpaceBatched ObjectiveFunction supported.");
     SEQUANT_ASSERT(!out_axes &&
                    "out_axes only supported with DensePeakSizeBatched");
     (void)is_batchable_index;

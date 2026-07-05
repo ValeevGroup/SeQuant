@@ -21,18 +21,19 @@ class Expr;
 /// - `DenseFLOPs` counts floating-point operations.
 /// - `DenseSize` counts result-tensor storage elements (summed over
 ///   intermediates) -- a gross-traffic proxy, not a peak.
-/// - `DensePeakSize` minimizes peak memory: the maximum over the evaluation
-///   schedule of the combined size of all simultaneously-live tensors
-///   (intermediates AND resident input leaves, the all-co-resident model),
-///   and it chooses the evaluation order that minimizes that peak. Unlike the
-///   order-independent `DenseFLOPs`/`DenseSize`, the contraction order is a
-///   real lever here. NOTE: `DensePeakSize` does not yet support
+/// - `DenseSpaceTime` (formerly `DensePeakSize`; that name is kept as a
+///   deprecated alias) is PEAK-FIRST, perf-second: it minimizes peak memory --
+///   the maximum over the evaluation schedule of the combined size of all
+///   simultaneously-live tensors (intermediates AND resident input leaves, the
+///   all-co-resident model) -- and breaks ties by the roofline perf cost.
+///   Unlike the order-independent `DenseFLOPs`/`DenseSize`, the contraction
+///   order is a real lever here. NOTE: does not yet support
 ///   common-subexpression elimination (`CSEOptions::subnet` must be false).
-/// - `DensePeakSizeBatched` extends `DensePeakSize` with a per-index
-///   batchability model: each index satisfying
-///   `OptimizeOptions::batch_policy.is_batchable_index` is treated as
-///   independently sliced to
-///   `min(extent, batch_policy.batch_target_size(ix))` elements per index --
+/// - `DenseSpaceTimeBatched` (formerly `DensePeakSizeBatched`) extends
+///   `DenseSpaceTime` with a per-index batchability model: each index
+///   satisfying `OptimizeOptions::batch_policy.is_batchable_index` is treated
+///   as independently sliced to `min(extent,
+///   batch_policy.batch_target_size(ix))` elements per index --
 ///   `batch_target_size` is an upper bound, so this is a conservative
 ///   (over-)estimate of the realized whole-tile batch, which the backend rounds
 ///   *down* to a tile multiple (never above the target; see
@@ -40,14 +41,35 @@ class Expr;
 ///   DP minimises peak over the worst-case sliced configuration. Only consulted
 ///   by the batched oracle and DP; requires
 ///   `batch_policy.is_batchable_index` and `batch_policy.batch_target_size`
-///   to be set.
+///   to be set. Final selection is threshold-gated by `peak_threshold`.
+/// - `DenseTimeSpace` / `DenseTimeSpaceBatched` are the PERF-FIRST, peak-second
+///   duals of `DenseSpaceTime` / `DenseSpaceTimeBatched`: they select a
+///   factorization by roofline perf first and peak second (same Pareto-frontier
+///   and roofline machinery, opposite lexicographic order). Because slicing is
+///   perf-neutral, a perf-first primary never prefers a FLOPS-catastrophic
+///   factorization merely for its sliceability, and `peak_threshold` is NOT a
+///   feasibility gate for these (it cannot force such a choice). Naming:
+///   `Dense{Primary}{Secondary}`, `Space` = peak/size, `Time` = perf.
 ///
 /// Leaves room for `Sparse*` models later.
 enum class ObjectiveFunction {
   DenseFLOPs,
   DenseSize,
-  DensePeakSize,
-  DensePeakSizeBatched
+  /// Peak-first, perf-second. (Formerly `DensePeakSize`.)
+  DenseSpaceTime,
+  /// Batched variant of `DenseSpaceTime`. (Formerly `DensePeakSizeBatched`.)
+  DenseSpaceTimeBatched,
+  /// Perf-first, peak-second: never prefers a FLOPS-catastrophic factorization
+  /// for its sliceability.
+  DenseTimeSpace,
+  /// Batched variant of `DenseTimeSpace`.
+  DenseTimeSpaceBatched,
+  /// Deprecated aliases (same underlying values as the renamed constants above,
+  /// placed AFTER them so `DenseSpaceTime` keeps `DensePeakSize`'s old value).
+  /// Kept so existing code and JSON inputs ("dense_peak_size") keep compiling;
+  /// every existing `== DensePeakSize` guard still catches `DenseSpaceTime`.
+  DensePeakSize = DenseSpaceTime,
+  DensePeakSizeBatched = DenseSpaceTimeBatched
 };
 
 /// Whether to reorder summands so terms with shared intermediates appear

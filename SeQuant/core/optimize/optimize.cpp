@@ -110,14 +110,26 @@ ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
           prod, opts.idx_to_extent, subnet_cse, cost,
           opts.batch_policy.is_batchable_index,
           opts.batch_policy.batch_target_size, opts.inner_pow);
-    if (opts.objective_function == ObjectiveFunction::DensePeakSize)
-      return opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
+    if (opts.objective_function == ObjectiveFunction::DenseSpaceTime)
+      return opt::single_term_opt<ObjectiveFunction::DenseSpaceTime>(
           prod, opts.idx_to_extent, subnet_cse, cost,
           opts.batch_policy.is_batchable_index,
           opts.batch_policy.batch_target_size, opts.inner_pow);
+    if (opts.objective_function == ObjectiveFunction::DenseTimeSpace)
+      return opt::single_term_opt<ObjectiveFunction::DenseTimeSpace>(
+          prod, opts.idx_to_extent, subnet_cse, cost,
+          opts.batch_policy.is_batchable_index,
+          opts.batch_policy.batch_target_size, opts.inner_pow);
+    if (opts.objective_function == ObjectiveFunction::DenseSpaceTimeBatched)
+      return opt::single_term_opt<ObjectiveFunction::DenseSpaceTimeBatched>(
+          prod, opts.idx_to_extent, subnet_cse, cost,
+          opts.batch_policy.is_batchable_index,
+          opts.batch_policy.batch_target_size, opts.inner_pow,
+          opts.batch_policy.persistent_only,
+          opts.term_batch_axes ? &node_axes : nullptr);
     SEQUANT_ASSERT(opts.objective_function ==
-                   ObjectiveFunction::DensePeakSizeBatched);
-    return opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
+                   ObjectiveFunction::DenseTimeSpaceBatched);
+    return opt::single_term_opt<ObjectiveFunction::DenseTimeSpaceBatched>(
         prod, opts.idx_to_extent, subnet_cse, cost,
         opts.batch_policy.is_batchable_index,
         opts.batch_policy.batch_target_size, opts.inner_pow,

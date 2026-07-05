@@ -324,6 +324,10 @@ struct PeakModel {
   /// peak increase for a potentially large flop reduction (e.g. forming a
   /// persistent 4-PNO integral instead of recomputing a ladder).
   double peak_flops_tolerance = 0.0;
+  /// Perf-first / peak-second selection: when true, `reconstruct` selects the
+  /// root-frontier point by (flops, then peak) instead of (peak, then flops),
+  /// bypassing `peak_flops_tolerance`. Default false = peak-first (unchanged).
+  bool perf_first = false;
 
   /// One non-dominated (peak, flops) trade-off for a subset, with the
   /// bipartition / order / child-frontier-indices needed to reconstruct it.
@@ -437,6 +441,34 @@ struct PeakModel {
   EvalSequence reconstruct(Context const& /*ctx*/,
                            container::vector<State> const& st) const {
     size_t const full = st.size() - 1;
+    if (perf_first) {
+      // Perf-first / peak-second (non-batched): min flops, ties by lower peak,
+      // bypassing the peak_flops_tolerance epsilon band (a peak-first knob).
+      auto const& rootf = st[full];
+      int pbest = 0;
+      for (int i = 1; i < static_cast<int>(rootf.size()); ++i)
+        if (rootf[i].flops < rootf[pbest].flops ||
+            (rootf[i].flops == rootf[pbest].flops &&
+             rootf[i].peak < rootf[pbest].peak))
+          pbest = i;
+      // Reuse the existing back-pointer walk with the chosen root index.
+      std::function<EvalSequence(size_t, int)> pbuild =
+          [&](size_t n, int idx) -> EvalSequence {
+        if (std::popcount(n) == 1)
+          return EvalSequence{static_cast<int>(std::countr_zero(n))};
+        FrontPoint const& fp = st[n][idx];
+        size_t const fs = fp.lp_first ? fp.lp : fp.rp;
+        int const fi = fp.lp_first ? fp.lp_idx : fp.rp_idx;
+        size_t const ss = fp.lp_first ? fp.rp : fp.lp;
+        int const si = fp.lp_first ? fp.rp_idx : fp.lp_idx;
+        EvalSequence s = pbuild(fs, fi);
+        EvalSequence b = pbuild(ss, si);
+        s.insert(s.end(), b.begin(), b.end());
+        s.push_back(-1);
+        return s;
+      };
+      return pbuild(full, pbest);
+    }
     // ε-tolerant selection: among frontier points within
     // (1 + peak_flops_tolerance) of the minimum peak, take the fewest flops
     // (ties broken by lower peak). tolerance == 0 recovers strict peak-min.
@@ -522,6 +554,12 @@ struct PeakBatchedModel {
   /// Bytes per stored element, to compare the model's element-count peak to
   /// peak_threshold (bytes). Default 8 (double / TensorD).
   double numeric_size = 8.0;
+  /// Perf-first / peak-second selection: when true, `select_root` selects the
+  /// root-frontier point by (flops, then peak) and does NOT consult
+  /// `peak_threshold` as a feasibility gate (it can no longer force a
+  /// FLOPS-catastrophic factorization for its sliceability). Default false =
+  /// peak-first threshold-gated selection (unchanged).
+  bool perf_first = false;
 
   /// One non-dominated (peak, flops) trade-off for a (subset, sliced-set \c B)
   /// cell. \c aprime is the sliced-set chosen at this node; the children are
@@ -696,6 +734,20 @@ struct PeakBatchedModel {
     auto peak_bytes = [this](double peak_elems) {
       return peak_elems * numeric_size;
     };
+    if (perf_first) {
+      // Perf-first / peak-second: min flops, ties by lower peak. The frontier
+      // keeps one min-peak point per distinct flops value (pareto_insert prunes
+      // equal-flops higher-peak points), so this both picks the cheapest
+      // factorization and takes its fully-sliced (min-peak) realization.
+      // peak_threshold is deliberately NOT consulted here.
+      int pbest = 0;
+      for (int i = 1; i < static_cast<int>(rootf.size()); ++i)
+        if (rootf[i].flops < rootf[pbest].flops ||
+            (rootf[i].flops == rootf[pbest].flops &&
+             rootf[i].peak < rootf[pbest].peak))
+          pbest = i;
+      return pbest;
+    }
     int best = -1;
     bool any_feasible = false;
     for (int i = 0; i < static_cast<int>(rootf.size()); ++i)

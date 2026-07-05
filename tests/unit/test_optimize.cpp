@@ -200,6 +200,23 @@ TEST_CASE("optimize", "[optimize]") {
       return deserialize(xpr, {.def_perm_symm = Symmetry::Antisymm});
     };
 
+    SECTION("ObjectiveFunction aliases share enum values") {
+      using sequant::ObjectiveFunction;
+      // The deprecated names are aliases (same underlying value), so all
+      // existing `== DensePeakSize` guards keep catching the renamed constant.
+      STATIC_REQUIRE(ObjectiveFunction::DensePeakSize ==
+                     ObjectiveFunction::DenseSpaceTime);
+      STATIC_REQUIRE(ObjectiveFunction::DensePeakSizeBatched ==
+                     ObjectiveFunction::DenseSpaceTimeBatched);
+      // The new perf-first values are distinct from the peak-first ones.
+      STATIC_REQUIRE(ObjectiveFunction::DenseTimeSpace !=
+                     ObjectiveFunction::DenseSpaceTime);
+      STATIC_REQUIRE(ObjectiveFunction::DenseTimeSpaceBatched !=
+                     ObjectiveFunction::DenseSpaceTimeBatched);
+      // ABI: DenseSpaceTime keeps DensePeakSize's old numeric value (2).
+      STATIC_REQUIRE(static_cast<int>(ObjectiveFunction::DenseSpaceTime) == 2);
+    }
+
     SECTION("Single term optimization") {
       const auto prod1 = parse_expr_antisymm(
                              L"g_{i3,i4}^{a3,a4}"     // T1
@@ -1939,6 +1956,25 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
       opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
           prod, idxsz, false, CostParams{is_t, 1.0, 0.0}, is_batch, bts, ip));
   CHECK(pbat_w_vw1 > flops_w);
+
+  // Perf-first (DenseTimeSpaceBatched) is flops-primary, so it forms the
+  // flop-optimal W REGARDLESS of peak_flops_tolerance and regardless of a tight
+  // peak_threshold: its replay-weighted flop count equals the FLOPs optimum.
+  // (Peak-first at strict tolerance did NOT: peak_w_strict > flops_w above.)
+  double tbat_w = rep(
+      L"TimeSpaceB/vw100:",
+      opt::single_term_opt<ObjectiveFunction::DenseTimeSpaceBatched>(
+          prod, idxsz, false, CostParams{is_t, 100.0, 0.0}, is_batch, bts, ip));
+  CHECK(tbat_w == flops_w);
+  // Even with a near-zero peak budget, perf-first stays flop-optimal (threshold
+  // is not a feasibility gate), unlike peak-first's min-peak fallback.
+  CostParams tight{is_t, 100.0, 0.0};
+  tight.peak_threshold = 1.0;
+  double tbat_w_tight =
+      rep(L"TimeSpaceB/tight:",
+          opt::single_term_opt<ObjectiveFunction::DenseTimeSpaceBatched>(
+              prod, idxsz, false, tight, is_batch, bts, ip));
+  CHECK(tbat_w_tight == flops_w);
 }
 
 // Quadratic-bubble (g·t2·t2) exchange term in PNO/CSV basis: the two competing
@@ -2261,6 +2297,25 @@ TEST_CASE(
   // A near-zero peak_threshold makes every point infeasible => min-peak
   // fallback => reproduces the old (peak-driven) answer: late-K.
   CHECK_FALSE(integral_at(/*Kb=*/2, /*peak_threshold(bytes)=*/1.0));
+
+  // Perf-first (DenseTimeSpaceBatched): min-flops is primary and peak_threshold
+  // is NOT a feasibility gate, so the persistent Kappa-free integral (the
+  // min-(replay-weighted)-flops choice) is formed REGARDLESS of the threshold.
+  // Contrast the peak-first checks above: at a near-zero threshold peak-first
+  // fell back to min-peak (CHECK_FALSE), whereas perf-first still forms it.
+  auto integral_at_perf = [&](std::size_t Kb, double peak_threshold) -> bool {
+    std::function<std::size_t(Index const&)> bts = [Kb](Index const&) {
+      return Kb;
+    };
+    CostParams cost{is_t, 100.0, 0.0};
+    cost.peak_threshold = peak_threshold;
+    auto res = opt::single_term_opt<ObjectiveFunction::DenseTimeSpaceBatched>(
+        prod, idxsz, false, cost, is_batch, bts, ip);
+    return forms_integral(res);
+  };
+  // Threshold-insensitive: forms the integral at +inf AND at near-zero.
+  CHECK(integral_at_perf(/*Kb=*/2, inf));
+  CHECK(integral_at_perf(/*Kb=*/2, /*peak_threshold(bytes)=*/1.0));
 }
 
 // Task 2.2: validate that the batched DP's accumulation_factor charge is
