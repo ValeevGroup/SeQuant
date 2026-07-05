@@ -1488,6 +1488,37 @@ TEST_CASE("dryrun perf-first vs peak-first factorization of the C60 giant term",
     auto node = binarize<EvalExprDryRun>(optimized, {}, bopts);
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 
+    // Optional full-tree dump (DRYRUN_PERF_TREE=1): every node's free indices
+    // and batch_axes (the indices SLICED, i.e. batched, at that node), in
+    // post-order-ish indentation, so the exact schedule is inspectable.
+    if (std::getenv("DRYRUN_PERF_TREE")) {
+      wchar_t const* on = (obj == ObjectiveFunction::DenseTimeSpaceBatched)
+                              ? L"perf-first (DenseTimeSpaceBatched)"
+                              : L"peak-first (DenseSpaceTimeBatched)";
+      std::wcerr << L"\n[dryrun-perf] TREE for " << on << L":\n";
+      std::function<void(std::remove_cvref_t<decltype(node)> const&, int)>
+          dump = [&](auto const& n, int depth) {
+            std::wstring const pad(2 * depth + 2, L' ');
+            auto const free = node_free_indices(*n);
+            container::vector<Index> const bax(n->batch_axes().begin(),
+                                               n->batch_axes().end());
+            std::size_t nmu = 0, nk = 0;
+            for (auto const& ix : free) {
+              if (ix.space().base_key() == L"μ̃") ++nmu;
+              if (ix.space().base_key() == L"Κ") ++nk;
+            }
+            std::wcerr << pad << (n.leaf() ? L"leaf  " : L"CONTRACT ")
+                       << L"free={" << describe_indices(free) << L"} (mu~="
+                       << nmu << L" K=" << nk << L")  batch_axes={"
+                       << describe_indices(bax) << L"}\n";
+            if (!n.leaf()) {
+              dump(n.left(), depth + 1);
+              dump(n.right(), depth + 1);
+            }
+          };
+      dump(node, 0);
+    }
+
     Analysis a;
     std::function<void(std::remove_cvref_t<decltype(node)> const&,
                        std::map<std::wstring, std::wstring>)>
