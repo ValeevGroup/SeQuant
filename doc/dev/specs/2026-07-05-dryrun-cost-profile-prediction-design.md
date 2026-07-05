@@ -61,14 +61,28 @@ with real `M_1..M_4`.
 
 ## Components
 
-### a1. Moment-aware runtime Result sizing (SeQuant)
+### a1. Verify (do not "fix") moment-aware runtime sizing (SeQuant)
 
-The DryRun `Result::size_in_bytes()` currently sizes a twin-PNO result
-`R{a<i,i>,a<i,i>;i,i}` as the naive product `occ^2 * PNO^4` (the 358 GB
-artifact). Route the runtime Result footprint through the SAME `inner_pow` the
-DP uses (the `SizeRegime`/`CostModel` already holds it), so a group of `k`
-proto-sharing composites contributes `M_k^k` and the result sizes as
-`occ^2 * M_2^2` (~89 GB). One source of sizing truth for DP and runtime.
+The DryRun `Result::size_in_bytes()` already routes through the SAME `inner_pow`
+the DP uses: `size_in_bytes() = cm_->memsize(indices_, overrides_)`
+(`result.hpp:254,384`), and `memsize` runs `inner_aware_volume`
+(`single_term_detail.hpp:82`), which for a group of `k` composites sharing a
+proto-set multiplies `inner_pow(c, k)` over members. So a result with `k`
+proto-sharing PNO legs over one occ-pair sizes as `occ^N * M_k^k = occ^N *
+<d^k>` -- the true block-sparse volume -- PROVIDED `inner_pow` returns the power
+mean `M_k`. This is correct today: `df_regime` sets `csv_pno_moment[k] = pno`
+(the power mean of a CONSTANT domain), so a 4-PNO intermediate
+`{a_1<i,i>..a_4<i,i>}` sizes as `occ^2 * pno^4` (= 358 GB at C60 constant
+extents) -- the genuine size of the CC doubles PPL `W`, NOT an artifact.
+
+Therefore a1 is a VERIFICATION task, not a fix: add a unit test pinning that a
+k-composite result sizes as `occ^N * M_k^k` for a NON-constant `M_k`, so the
+power-mean contract is locked before (b) supplies real, heavy-tailed moments.
+Real moments have `M_k > M_1` for `k>1` (Jensen), so composite intermediates
+size LARGER than the constant-domain model, not smaller; the dry-run's job is to
+quantify that. (The earlier "twin-PNO occ^2*PNO^4 sizing artifact" framing was a
+misdiagnosis: the sizing was always moment-aware; only the moment VALUES were a
+constant stand-in.)
 
 ### a2. Faithful dry-run cache (SeQuant)
 
