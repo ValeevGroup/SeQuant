@@ -1496,9 +1496,15 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
         SEQUANT_ASSERT(exptr.template is<Sum>());
         auto result = std::make_shared<Sum>();
         for (auto& summand : exptr.template as<Sum>().summands()) {
-          SEQUANT_ASSERT(summand.template is<Product>());
-          auto result_summand = summand.template as<Product>().clone();
-          auto product_ptr = result_summand.template as_shared_ptr<Product>();
+          // a summand may collapse to a single factor rather than a Product
+          // (e.g. a fully-contracted one-body term like h^O_O with unit
+          // coefficient); wrap it so it can be processed uniformly
+          auto product_ptr =
+              summand.template is<Product>()
+                  ? summand.template as<Product>()
+                        .clone()
+                        .as_shared_ptr<Product>()
+                  : std::make_shared<Product>(ExprPtrList{summand->clone()});
           impl_for_single_tn(product_ptr);
           result->append(product_ptr);
         }
