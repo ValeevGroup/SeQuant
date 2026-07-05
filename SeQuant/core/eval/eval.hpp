@@ -1491,6 +1491,13 @@ template <typename F, typename IndexPredicate = accept_any_index,
 ///        make_batched_custom_evaluator; defaults to make_no_scope_guard).
 /// \param peak      Optional PeakSink (same semantics as in
 ///        make_batched_custom_evaluator); defaults to null (no folding).
+///        NOTE: \p peak is the 4th positional argument, AFTER \p
+///        make_scope_guard -- a caller who wants the sink but not a custom
+///        scope guard must still pass the scope-guard factory explicitly
+///        (e.g. `make_evaluator(policy, leaf, make_no_scope_guard{},
+///        &sink)`); passing `&sink` in the 3rd slot silently binds it to
+///        \p make_scope_guard (via template deduction) and leaves \p peak
+///        null.
 template <class F, class ScopeGuardFactory = make_no_scope_guard>
 [[nodiscard]] auto make_evaluator(BatchPolicy const& policy, F yielder,
                                   ScopeGuardFactory make_scope_guard = {},

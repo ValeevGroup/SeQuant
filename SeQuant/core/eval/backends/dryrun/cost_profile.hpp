@@ -117,10 +117,22 @@ struct CostProfile {
   /// Predicted peak working-set (bytes): the max over summands of the
   /// batched-scratch high-watermark folded by the Task-3 \c PeakSink and the
   /// outer gated cache's \c working_set_hwmark().
+  ///
+  /// This is computed as \c max(batched-inner scratch high-watermark,
+  /// outer cross-term cached residency), NOT their sum. When a persistent
+  /// cross-term cache entry co-resides in memory with a batched-inner
+  /// transient at the same instant, the two are actually additive, so this
+  /// value is a LOWER BOUND on the true peak in that case. It is exact
+  /// whenever one of the two terms dominates the other (e.g. the C60 4-PNO
+  /// \c W case, where the batched-inner scratch dwarfs any persistent
+  /// cross-term residency).
   double peak_bytes = 0;
   /// Summed unweighted static contraction FLOPs over all internal nodes.
+  /// NOT CSE-aware across summands: a cross-term shared intermediate is
+  /// walked (and its FLOPs counted) once per occurrence, not once overall.
   double flops = 0;
-  /// Summed roofline-projected execution cost over all internal nodes.
+  /// Summed roofline-projected execution cost over all internal nodes. Same
+  /// per-occurrence (not CSE-deduplicated) accounting caveat as \c flops.
   double exec_cost = 0;
   /// Number of internal (contraction) nodes across the forest.
   std::size_t n_ops = 0;
@@ -139,6 +151,24 @@ struct CostProfile {
 /// > 0 around the replay -- discarding the narrow trace to a null sink when no
 /// \p trace is requested -- and restores the previous logger state afterward,
 /// so \c peak_bytes is non-zero even with no trace stream.
+///
+/// \par Global state / threading
+/// This routine mutates the process-global \c Logger::instance().eval state
+/// (\c level and \c stream) for the duration of the replay (restored on every
+/// exit path, including exceptions). Because that state is a singleton shared
+/// by the whole process, \c cost_profile() MUST be called single-threaded --
+/// e.g. as a pre-flight step before, or a post-hoc step after, the real
+/// multi-threaded eval -- never concurrently with other code that reads or
+/// writes \c Logger::instance().eval (including another concurrent
+/// \c cost_profile() call).
+///
+/// \par FLOPs / exec_cost accounting
+/// \c CostProfile::flops and \c CostProfile::exec_cost are accumulated by a
+/// static walk that sums a contribution per BINARIZED internal node of the
+/// forest; they are NOT CSE-aware across summands. A shared intermediate
+/// that recurs across multiple summand trees (or multiple times within one)
+/// is counted once per occurrence, not once overall -- unlike \c peak_bytes,
+/// which is driven by the gated cache and so does reflect cross-term reuse.
 ///
 /// \param forest per-summand optimized+binarized eval forest (the real IR).
 /// \param policy the batch policy driving the replay evaluator; its
@@ -194,8 +224,26 @@ inline CostProfile cost_profile(std::vector<EvalNodeDryRun> const& forest,
   auto cache = build_dryrun_cache(forest, local_cfg, regime);
 
   auto& logger = Logger::instance();
-  auto const prev_level = logger.eval.level;
-  auto* const prev_stream = logger.eval.stream;
+  // RAII guard restoring the process-global Logger::eval state on EVERY exit
+  // path from this point on -- normal return, early return, or an exception
+  // unwinding out of the replay loop below -- not just the two trailing
+  // assignments a plain save/restore would rely on. Without this, a throw
+  // from anything in the loop OTHER than evaluate<Trace::On> (e.g.
+  // std::bad_alloc from make_evaluator/set_custom_evaluator/
+  // working_set_hwmark/cache.reset()) would unwind past the local
+  // `trace_capture` destructor while `logger.eval.stream` still points at it,
+  // leaving a dangling pointer in the process-global singleton with
+  // level == 2 still set.
+  struct LoggerEvalGuard {
+    decltype(logger.eval)& eval;
+    std::size_t const prev_level;
+    std::ostream* const prev_stream;
+    ~LoggerEvalGuard() {
+      eval.level = prev_level;
+      eval.stream = prev_stream;
+    }
+  } logger_eval_guard{logger.eval, logger.eval.level, logger.eval.stream};
+
   // Force printing() on so working_set_hwmark() accumulates. The eval logger
   // stream is narrow; capture into a narrow buffer only when a (wide) trace
   // sink was requested, else discard to a null stream.
@@ -220,8 +268,8 @@ inline CostProfile cost_profile(std::vector<EvalNodeDryRun> const& forest,
     cache.reset();  // drop per-term non-persistent scratch; keep persistent
   }
 
-  logger.eval.level = prev_level;
-  logger.eval.stream = prev_stream;
+  // logger_eval_guard's destructor restores logger.eval.{level,stream} at
+  // function exit (see above); no manual restore needed here.
 
   // If a wide trace sink was requested, transcode the captured narrow (UTF-8)
   // eval trace into it (the eval loop writes only to the narrow logger stream;
