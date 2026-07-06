@@ -340,7 +340,11 @@ bool is_df_batchable(Index const& ix) {
 
 }  // namespace
 
-TEST_CASE("dryrun POST-transform PAO/K batch-axis verdict", "[dryrun-df]") {
+// Hidden ([.]) whole-residual dev sweep (no correctness assertions): optimizes
+// every summand and prints, per term, whether its free-mu~ giant got a mu~/K
+// batch axis or escaped slicing. Select explicitly:
+//   ./unit_tests-sequant "[dryrun-df]"
+TEST_CASE("dryrun POST-transform PAO/K batch-axis verdict", "[.][dryrun-df]") {
   // Augment the default mbpt registry with PAO (mu~) and DF-aux (K) so the
   // post-transform fixture deserializes; raise the dummy-ordinal ceiling for
   // mpqc's high internal ordinals (mu~_1152, a_21674, ...).
@@ -1866,8 +1870,8 @@ TEST_CASE("cost_profile trace stream round-trips", "[dryrun][cost_profile]") {
 // VETO caching of a free-batchable giant -- a node whose result carries a free
 // mu~/K axis the runtime slices over -- exactly as the real batched eval loop
 // does, instead of materializing it whole. The SIMPLE cache_manager(nodes) the
-// ad-hoc [dryrun-objective]/[dryrun-trace] sites use caches such a giant; the
-// gated build must not. We prove this by contrasting three configs over the
+// ad-hoc [dryrun-objective] site uses caches such a giant; the gated
+// build must not. We prove this by contrasting three configs over the
 // SAME binarized C60 giant term (index 38):
 //   ref:  no gate  (max_footprint=0, never batchable) -> giant IS cached
 //   axis: axis veto only (max_footprint=0, is_df_batchable) -> giant NOT cached
@@ -2051,178 +2055,4 @@ TEST_CASE("dryrun gated cache vetoes free-batchable giant", "[dryrun][cache]") {
              << (task_cache.exists(giant_node) ? L"YES" : L"no")
              << L"\n  small intermediate exists (task) = "
              << (task_cache.exists(small_node) ? L"YES" : L"no") << L"\n";
-}
-
-// Whole-residual dry-run trace: optimize+binarize EVERY summand of the
-// post-transform PNO-CCSD doubles residual, then replay them all through the
-// real eval loop and ONE SHARED CacheManager (so cross-term CSE / persistent
-// caching is exercised, as in MPQC's process_for_evaluation), with the per-op
-// trace ("Eval | ... result= ... hw= ...") written to a FILE. Hidden ([.])
-// because the batched DP runs per summand and the trace can be hundreds of MB;
-// select it explicitly:
-//   ./unit_tests-sequant "[dryrun-trace]"
-// Env knobs (all optional):
-//   SEQUANT_UT_DRYRUN_OBJ         dense_time_space (default, perf-first) |
-//   dense_space_time SEQUANT_UT_DRYRUN_TRACE_FILE  output path (default
-//   /tmp/dryrun_residual_trace.txt) SEQUANT_UT_DRYRUN_MAX_TERMS   cap #summands
-//   (default 0 = all) -- for a quick smoke run
-TEST_CASE("dryrun whole-residual trace (PNO-CCSD doubles)",
-          "[.][dryrun-trace]") {
-  auto ctx = get_default_context().clone();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  auto isr = ctx.mutable_index_space_registry();
-  REQUIRE(isr != nullptr);
-  sequant::mbpt::add_pao_spaces(isr);  // mu~
-  sequant::mbpt::add_df_spaces(isr);   // K
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
-
-  auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
-                          "/data/csv_ccsd_doubles_residual_df.txt");
-  REQUIRE(!body.empty());
-  std::string line = body;
-  if (auto nl = line.find('\n'); nl != std::string::npos)
-    line = line.substr(0, nl);
-  auto expr = deserialize<ExprPtr>(line);
-  REQUIRE(static_cast<bool>(expr));
-  REQUIRE(expr->is<Sum>());
-  auto flatten_product = [](ExprPtr const& e) -> ExprPtr {
-    if (!e->is<Product>()) return e;
-    auto const& p = e->as<Product>();
-    return ex<Product>(p.scalar(), p.factors(), Product::Flatten::Yes);
-  };
-  std::vector<ExprPtr> terms;
-  for (auto const& s : expr->as<Sum>().summands())
-    terms.push_back(flatten_product(s));
-  REQUIRE(!terms.empty());
-
-  // Objective (perf-first default; dense_space_time / dense_peak_size = peak).
-  char const* const obj_env = std::getenv("SEQUANT_UT_DRYRUN_OBJ");
-  std::string const obj_s = obj_env ? obj_env : "dense_time_space";
-  ObjectiveFunction const obj =
-      (obj_s == "dense_space_time" || obj_s == "dense_peak_size")
-          ? ObjectiveFunction::DenseSpaceTimeBatched
-          : ObjectiveFunction::DenseTimeSpaceBatched;
-  char const* const max_env = std::getenv("SEQUANT_UT_DRYRUN_MAX_TERMS");
-  std::size_t const max_terms =
-      max_env ? static_cast<std::size_t>(std::atoll(max_env)) : 0u;
-  std::size_t const n_terms =
-      (max_terms > 0 && max_terms < terms.size()) ? max_terms : terms.size();
-
-  // FAITHFUL real C60 config (614336 job log), identical to [dryrun-eval].
-  auto regime = df_regime(kC60_pVDZF12);
-  sequant::BatchPolicy policy;
-  policy.is_batchable_index = is_df_batchable;
-  policy.batch_target_size = [](Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
-  };
-  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
-  policy.accumulation_factor = 1.0;
-  policy.peak_threshold = 40e9;
-
-  // Phase 1: optimize + binarize every summand; collect the DryRun trees so one
-  // shared cache can count cross-term repeats.
-  std::vector<EvalNodeDryRun> nodes;
-  nodes.reserve(n_terms);
-  for (std::size_t ti = 0; ti < n_terms; ++ti) {
-    std::cerr << "[dryrun-trace] optimizing summand " << (ti + 1) << "/"
-              << n_terms << " ..." << std::flush;
-    auto axes_map = std::make_shared<std::unordered_map<
-        Expr const*, container::vector<container::svector<Index>>>>();
-    OptimizeOptions opts;
-    opts.objective_function = obj;
-    opts.idx_to_extent = regime.idx_to_extent();
-    opts.inner_pow = regime.inner_pow_fn();
-    opts.batch_policy = policy;
-    opts.volatile_weight = 20.0;
-    opts.roofline.machine_balance = 200.0;
-    opts.roofline.fast_mem_elems = 1000000.0;
-    opts.term_batch_axes = axes_map;
-    auto t0 = std::chrono::steady_clock::now();
-    auto optimized = optimize(terms[ti], opts);
-    auto const ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::steady_clock::now() - t0)
-                        .count();
-    std::cerr << " " << ms << "ms\n";
-    if (!static_cast<bool>(optimized)) continue;
-    auto it = axes_map->find(optimized.get());
-    container::vector<container::svector<Index>> node_axes;
-    if (it != axes_map->end()) node_axes = it->second;
-    BinarizationOptions bopts;
-    bopts.node_batch_axes = node_axes;
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-    nodes.push_back(binarize<EvalExprDryRun>(optimized, {}, bopts));
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-  }
-  REQUIRE(!nodes.empty());
-
-  // Phase 2: route the whole-residual forest through the single shared
-  // cost_profile() entry point (Task 4/5) -- replacing the ad-hoc
-  // cache_manager(nodes) + manual per-summand replay + logger juggling this
-  // case used before Task 5. cost_profile() builds the gated dry-run cache,
-  // forces the printing gate on, replays every summand (resetting per-term
-  // non-persistent scratch while keeping persistent cross-term CSE entries),
-  // folds the batched-scratch peak, and transcodes the narrow (UTF-8) eval
-  // trace into the requested wide trace stream. We point that stream at a FILE.
-  sequant::eval::dryrun::CacheConfig cfg;
-  cfg.max_footprint = 1e11;  // faithful footprint gate
-  cfg.min_repeats = 2;       // real CSE rule (cache only 2+ repeats)
-  cfg.is_volatile = [](EvalNodeDryRun const& n) {
-    if (!n.leaf() || !n->is_tensor()) return false;
-    return n->as_tensor().label() == L"t";
-  };
-
-  char const* const file_env = std::getenv("SEQUANT_UT_DRYRUN_TRACE_FILE");
-  std::string const trace_path =
-      file_env ? file_env : "/tmp/dryrun_residual_trace.txt";
-
-  // Capture the wide trace, then re-encode it to UTF-8 bytes for the file
-  // (a raw std::wofstream would re-narrow the multi-byte index labels via the
-  // classic-locale codecvt and mangle/truncate them).
-  std::wostringstream trace_capture;
-  sequant::eval::dryrun::CostProfile const cp =
-      sequant::eval::dryrun::cost_profile(nodes, policy, cfg, regime,
-                                          &trace_capture);
-
-  std::wstring const wtrace = trace_capture.str();
-  std::string utf8;
-  utf8.reserve(wtrace.size());
-  for (wchar_t const wc : wtrace) {
-    char32_t const cp32 = static_cast<char32_t>(wc);
-    if (cp32 < 0x80) {
-      utf8.push_back(static_cast<char>(cp32));
-    } else if (cp32 < 0x800) {
-      utf8.push_back(static_cast<char>(0xC0 | (cp32 >> 6)));
-      utf8.push_back(static_cast<char>(0x80 | (cp32 & 0x3F)));
-    } else if (cp32 < 0x10000) {
-      utf8.push_back(static_cast<char>(0xE0 | (cp32 >> 12)));
-      utf8.push_back(static_cast<char>(0x80 | ((cp32 >> 6) & 0x3F)));
-      utf8.push_back(static_cast<char>(0x80 | (cp32 & 0x3F)));
-    } else {
-      utf8.push_back(static_cast<char>(0xF0 | (cp32 >> 18)));
-      utf8.push_back(static_cast<char>(0x80 | ((cp32 >> 12) & 0x3F)));
-      utf8.push_back(static_cast<char>(0x80 | ((cp32 >> 6) & 0x3F)));
-      utf8.push_back(static_cast<char>(0x80 | (cp32 & 0x3F)));
-    }
-  }
-  {
-    std::ofstream trace_file(trace_path, std::ios::binary);
-    REQUIRE(trace_file.is_open());
-    trace_file.write(utf8.data(), static_cast<std::streamsize>(utf8.size()));
-  }
-  std::size_t const trace_bytes = utf8.size();
-
-  std::wcerr << L"\n=== [dryrun-trace] whole-residual trace written ===\n"
-             << L"objective    = "
-             << (obj == ObjectiveFunction::DenseTimeSpaceBatched
-                     ? L"dense_time_space (perf-first)"
-                     : L"dense_space_time (peak-first)")
-             << L"\nsummands     = " << nodes.size() << L" optimized"
-             << L"\nn_ops        = " << cp.n_ops << L"  peak_bytes="
-             << (cp.peak_bytes / 1e9) << L" GB" << L"\ntrace file   = "
-             << std::wstring(trace_path.begin(), trace_path.end()) << L" ("
-             << trace_bytes << L" bytes)\n";
-
-  CHECK(std::isfinite(cp.peak_bytes));
-  CHECK(cp.peak_bytes > 0.0);
-  CHECK(trace_bytes > 0);
 }
