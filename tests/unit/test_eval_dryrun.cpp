@@ -807,6 +807,7 @@ TEST_CASE("dryrun POST-transform PAO/K batch-axis verdict", "[dryrun-df]") {
   std::size_t total_mu_nodes = 0, n_terms_with_giant = 0;
   std::size_t total_mu_nodes_with_mu_axis = 0, total_mu_nodes_with_k_only = 0;
   double overall_flops = 0.0;  // summed schedule flops over all terms
+  double overall_exec = 0.0;   // summed roofline exec cost (DP's real axis)
   double overall_biggest = 0.0;
   bool overall_biggest_has_mu = false, overall_biggest_has_k = false;
   std::wstring overall_biggest_desc, overall_biggest_axes,
@@ -886,6 +887,7 @@ TEST_CASE("dryrun POST-transform PAO/K batch-axis verdict", "[dryrun-df]") {
     bool term_biggest_has_k = false;   // its free K ESCAPED slicing
     std::size_t term_mu_nodes = 0;
     double term_flops = 0.0;  // summed nominal contraction flops for this term
+    double term_exec = 0.0;   // summed roofline exec cost for this term
     // active maps a sliced index's FULL label -> a descriptor of the ANCESTOR
     // node that slices it (its result free-index signature + its batch_axes).
     // This is the node-dump: it turns "escaped={}" from an inference into a
@@ -944,8 +946,20 @@ TEST_CASE("dryrun POST-transform PAO/K batch-axis verdict", "[dryrun-df]") {
             // Nominal flops of THIS contraction: union of children's free
             // indices and this node's result free indices (slicing does not
             // change the flop count).
-            term_flops += flops(node_free_indices(*n.left()),
-                                node_free_indices(*n.right()), free_ixs);
+            auto const lf = node_free_indices(*n.left());
+            auto const rf = node_free_indices(*n.right());
+            double const nf = flops(lf, rf, free_ixs);
+            term_flops += nf;
+            // Roofline exec cost = the DP's ACTUAL optimization axis (NOT raw
+            // flops): max(flops, mb * max(traffic, prefac*flops/sqrt(fastmem/
+            // tiles))), mb=200, fastmem=1e6, tiles=3, prefac=1. Traffic = the
+            // UNBATCHED operand+result footprint, so exec cost is batch-
+            // INDEPENDENT (batching moves only the peak). This is why raw flops
+            // can be non-monotone in the threshold while the DP's objective is
+            // monotone. Element units (matches the DP).
+            double const traffic = memsize(lf, rf, free_ixs);
+            double const Q = std::max(traffic, nf / std::sqrt(1e6 / 3.0));
+            term_exec += std::max(nf, 200.0 * Q);
             std::map<std::wstring, std::wstring> child_active = active;
             std::wstring const self_desc =
                 L"[free={" + describe_indices(node_free_indices(*n)) +
@@ -961,6 +975,7 @@ TEST_CASE("dryrun POST-transform PAO/K batch-axis verdict", "[dryrun-df]") {
         };
     walk(node, {});
     overall_flops += term_flops;
+    overall_exec += term_exec;
     if (term_mu_nodes > 0) ++n_terms_with_giant;
     if (term_biggest > overall_biggest) {
       overall_biggest = term_biggest;
@@ -986,6 +1001,8 @@ TEST_CASE("dryrun POST-transform PAO/K batch-axis verdict", "[dryrun-df]") {
              << L"/" << terms.size() << L"\n"
              << L"TOTAL SCHEDULE FLOPS (nominal, all terms): "
              << (overall_flops / 1e12) << L" Tflop\n"
+             << L"TOTAL ROOFLINE EXEC COST (the DP's real axis): "
+             << (overall_exec / 1e12) << L" (mb=200, batch-independent)\n"
              << L"free-mu~ contraction nodes: " << total_mu_nodes << L"\n"
              << L"  ... with a free mu~ that ESCAPED slicing: "
              << total_mu_nodes_with_mu_axis << L"\n"
