@@ -9,7 +9,9 @@
 #include <bit>
 #include <cmath>
 #include <concepts>
+#include <cstdlib>
 #include <functional>
+#include <iostream>
 #include <limits>
 #include <utility>
 
@@ -766,6 +768,20 @@ struct PeakBatchedModel {
           minpeak = rootf[i].peak;
           best = i;
         }
+    }
+    // DIAGNOSTIC (gated): the DP's OWN chosen frontier cost (.flops is the
+    // roofline exec cost, volatile-weighted -- the true objective), plus the
+    // global-min .flops over the WHOLE frontier (feasible or not) so a
+    // non-min-feasible selection is visible. Sum the printed chosen_flops
+    // across terms to test threshold monotonicity of the DP's real objective.
+    if (best >= 0 && std::getenv("SEQUANT_SELROOT_DEBUG")) {
+      double gmin = std::numeric_limits<double>::max();
+      for (auto const& p : rootf) gmin = std::min(gmin, p.flops);
+      std::cerr << "[selroot] chosen_flops=" << rootf[best].flops
+                << " chosen_peak_gb=" << (peak_bytes(rootf[best].peak) / 1e9)
+                << " feasible=" << (any_feasible ? 1 : 0)
+                << " nfront=" << rootf.size() << " global_min_flops=" << gmin
+                << "\n";
     }
     return best;
   }
