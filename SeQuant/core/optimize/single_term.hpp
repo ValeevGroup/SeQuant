@@ -16,7 +16,6 @@
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/reverse.hpp>
 
-#include <cstdlib>
 #include <functional>
 
 namespace sequant::opt {
@@ -142,11 +141,8 @@ EvalSequence single_term_opt(
                            accumulation_factor,
                            cost.peak_threshold};
     model.perf_first = (Metric == ObjectiveFunction::DenseTimeSpaceBatched);
-    // Opt-in (env-gated) batch recomputation charge for validation; see
-    // PeakBatchedModel::charge_batch_recompute. TODO: promote to an
-    // OptimizeOptions/BatchPolicy field once validated.
-    model.charge_batch_recompute =
-        (std::getenv("SEQUANT_CHARGE_RECOMPUTE") != nullptr);
+    // charge_batch_recompute defaults to true (see PeakBatchedModel): the batch
+    // recomputation cost is always reflected on the flops/exec axis.
     if (out_axes) {
       auto [seq, axes] = run_single_term_opt_axes(model, network, tidxs);
       *out_axes = std::move(axes);

@@ -563,17 +563,17 @@ struct PeakBatchedModel {
   /// peak-first threshold-gated selection (unchanged).
   bool perf_first = false;
 
-  /// If true, charge the batch RECOMPUTATION cost on the flops/exec axis. The
-  /// batched evaluator re-executes each contraction per tile of the ancestor
-  /// batch axes its result does NOT carry (across-batch work is recomputed;
-  /// within-batch sharing is cached -- see eval.hpp "replays the build of every
-  /// compatible persistent final"). The default (false) assumes WORK PARITY
-  /// (batching is free on flops), which under-costs heavily-sliced families
-  /// (e.g. the 4-PAO integral) and lets peak-first pick them. When true, a node
-  /// at ancestor-sliced-set B is charged nbatch(b) for each b in B not open in
-  /// the node -- so a schedule that slices many axes it must recompute across
-  /// pays for it. Default false preserves the historical cost model.
-  bool charge_batch_recompute = false;
+  /// If true (the default), charge the batch RECOMPUTATION cost on the flops/
+  /// exec axis. The batched evaluator re-executes each contraction per tile of
+  /// the ancestor batch axes its result does NOT carry (across-batch work is
+  /// recomputed; within-batch sharing is cached -- see eval.hpp "replays the
+  /// build of every compatible persistent final"). A node at ancestor-sliced-
+  /// set B is charged nbatch(b) for each b in B not open in the node, so a
+  /// schedule that slices many axes it must recompute across pays for it. The
+  /// alternative (false) assumes WORK PARITY (batching is free on flops), which
+  /// under-costs heavily-sliced families and does not reflect the true cost of
+  /// batching; kept only as an escape hatch for comparison.
+  bool charge_batch_recompute = true;
 
   /// One non-dominated (peak, flops) trade-off for a (subset, sliced-set \c B)
   /// cell. \c aprime is the sliced-set chosen at this node; the children are
