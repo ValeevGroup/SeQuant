@@ -1240,9 +1240,23 @@ TEST_CASE("dryrun perf-first vs peak-first factorization of the C60 giant term",
     auto const& p = e->as<Product>();
     return ex<Product>(p.scalar(), p.factors(), Product::Flatten::Yes);
   };
-  std::size_t const giant_idx = 38 < summands.size() ? 38 : 0;
+  // SEQUANT_UT_DRYRUN_LIST_TERMS=1 prints every summand's factor structure so
+  // the PPL/ladder term (the one whose early-K factorization would form a
+  // 4-PNO integral) can be located by eye.
+  if (std::getenv("SEQUANT_UT_DRYRUN_LIST_TERMS")) {
+    for (std::size_t s = 0; s < summands.size(); ++s)
+      std::wcerr << L"[term " << s << L"] "
+                 << to_latex(flatten_product(summands[s])) << L"\n";
+  }
+  // Term selector (default 38): SEQUANT_UT_DRYRUN_TERM.
+  std::size_t giant_idx = 38;
+  if (char const* te = std::getenv("SEQUANT_UT_DRYRUN_TERM"))
+    giant_idx = static_cast<std::size_t>(std::atoll(te));
+  if (giant_idx >= summands.size()) giant_idx = 0;
   ExprPtr giant = flatten_product(summands[giant_idx]);
   REQUIRE(giant);
+  std::wcerr << L"[dryrun-perf] selected term " << giant_idx << L" = "
+             << to_latex(giant) << L"\n";
 
   // FAITHFUL real C60 config (614336 job log), identical to [dryrun-eval].
   auto regime = df_regime(/*mu_tilde=*/1800u, /*aux=*/4320u, /*i_occ=*/120u,
@@ -1285,7 +1299,11 @@ TEST_CASE("dryrun perf-first vs peak-first factorization of the C60 giant term",
     };
     policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
     policy.accumulation_factor = 1.0;
-    policy.peak_threshold = 40e9;
+    policy.peak_threshold =
+        (std::getenv("SEQUANT_UT_DRYRUN_PEAK_THR_GB")
+             ? std::atof(std::getenv("SEQUANT_UT_DRYRUN_PEAK_THR_GB"))
+             : 40.0) *
+        1e9;
 
     auto axes_map = std::make_shared<std::unordered_map<
         Expr const*, container::vector<container::svector<Index>>>>();
@@ -1329,15 +1347,22 @@ TEST_CASE("dryrun perf-first vs peak-first factorization of the C60 giant term",
             auto const free = node_free_indices(*n);
             container::vector<Index> const bax(n->batch_axes().begin(),
                                                n->batch_axes().end());
-            std::size_t nmu = 0, nk = 0;
+            std::size_t nmu = 0, nk = 0, npno = 0, nosv = 0;
             for (auto const& ix : free) {
               if (ix.space().base_key() == L"μ̃") ++nmu;
               if (ix.space().base_key() == L"Κ") ++nk;
+              if (ix.has_proto_indices()) {
+                if (ix.proto_indices().size() >= 2)
+                  ++npno;  // 2-proto (or higher) = PNO composite
+                else
+                  ++nosv;  // 1-proto = OSV composite
+              }
             }
             std::wcerr << pad << (n.leaf() ? L"leaf  " : L"CONTRACT ")
                        << L"free={" << describe_indices(free) << L"} (mu~="
-                       << nmu << L" K=" << nk << L")  batch_axes={"
-                       << describe_indices(bax) << L"}\n";
+                       << nmu << L" K=" << nk << L" PNO=" << npno << L" OSV="
+                       << nosv << L")  batch_axes={" << describe_indices(bax)
+                       << L"}\n";
             if (!n.leaf()) {
               dump(n.left(), depth + 1);
               dump(n.right(), depth + 1);
