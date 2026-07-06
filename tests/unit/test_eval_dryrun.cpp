@@ -330,6 +330,20 @@ SizeRegime df_regime(std::size_t mu_tilde, std::size_t aux, std::size_t i_occ,
   return r;
 }
 
+// REAL measured C60 cc-pVDZ-F12 CSV size moments (mpqc PaoPnoRMP2 print, jobs
+// 617609/617653/617809): the k-th power means M_1..M_4 of the per-pair PNO
+// domain and per-orbital OSV domain. Index 0 unused (kept 1). These are the
+// FAITHFUL, heavy-tailed moments -- use them (via the array df_regime overload)
+// instead of a flat scalar so a k-composite intermediate is sized by mean(d^k),
+// e.g. the 4-PNO PPL integral by occ^2 * M_4^4 (~2 TB dense) rather than the
+// flat-42 under-count (~0.36 TB).
+constexpr std::array<double, 5> kC60PnoM{1.0, 48.597142857142856,
+                                         54.335293566742848, 59.625213617564981,
+                                         64.347555914574883};
+constexpr std::array<double, 5> kC60OsvM{1.0, 206.48333333333332,
+                                         216.66121788020425, 226.15064540004298,
+                                         234.51208523659201};
+
 // Batchable = the two axes mpqc's runtime batches on the CSV path: PAO (mu~)
 // and DF aux (K). Both are non-proto base spaces (mu~ = PAO, K = DFBS aux).
 bool is_df_batchable(Index const& ix) {
@@ -1258,9 +1272,11 @@ TEST_CASE("dryrun perf-first vs peak-first factorization of the C60 giant term",
   std::wcerr << L"[dryrun-perf] selected term " << giant_idx << L" = "
              << to_latex(giant) << L"\n";
 
-  // FAITHFUL real C60 config (614336 job log), identical to [dryrun-eval].
+  // FAITHFUL real C60 config: measured heavy-tailed CSV moments (kC60PnoM/
+  // kC60OsvM), NOT a flat scalar -- so the 4-PNO PPL node is sized occ^2*M_4^4
+  // (real ~2 TB dense) instead of the flat-42 under-count (~0.36 TB).
   auto regime = df_regime(/*mu_tilde=*/1800u, /*aux=*/4320u, /*i_occ=*/120u,
-                          /*pno=*/42.0, /*osv=*/310.0);
+                          kC60PnoM, kC60OsvM);
   auto memsize = sequant::opt::detail::memsize_counter(regime.idx_to_extent(),
                                                        regime.inner_pow_fn());
   auto ext_of = [](Index const& ix) -> double {
@@ -1470,23 +1486,22 @@ TEST_CASE("dryrun perf-first vs peak-first factorization of the C60 giant term",
   // (a) perf-first is flops-primary: it must not pick a higher-flops
   //     factorization than peak-first.
   CHECK(perf_first.cp.flops <= peak_first.cp.flops);
-  // (b) perf-first's modeled peak lands in a realistic band for this
-  //     constant-moment C60 giant. Observed perf peak_bytes ~= 387 GB,
-  //     dominated by the GENUINE 4-PNO intermediate the perf-first schedule
-  //     forms -- the CC doubles W node {a_1<i,i> a_2<i,i> a_3<i,i> a_4<i,i>}
-  //     with FOUR distinct PNO legs over one occ-pair (see
-  //     SEQUANT_UT_DRYRUN_PERF_TREE dump), sized occ^2 * M_4^4 = 120^2*42^4*8 =
-  //     358 GB (+ co-resident). This is the CORRECT, moment-aware size
+  // (b) perf-first's modeled peak is dominated by the GENUINE 4-PNO
+  //     intermediate the perf-first schedule forms -- the CC doubles W node
+  //     {a_1<i,i> a_2<i,i> a_3<i,i> a_4<i,i>} with FOUR distinct PNO legs over
+  //     one occ-pair (see SEQUANT_UT_DRYRUN_PERF_TREE dump). With the FAITHFUL
+  //     heavy-tailed moments (kC60PnoM), it is sized occ^2 * M_4^4 =
+  //     120^2 * 64.348^4 * 8 ~= 2.0 TB (dense occ^2 pairs; the screened ~6300
+  //     CC pairs would give ~0.86 TB). This is the CORRECT, moment-aware size
   //     (df_regime's csv_pno_moment[k] are power means), NOT a naive-product
-  //     artifact and NOT a mis-sized twin R{a<i,i>,a<i,i>}: the sizing was made
-  //     moment-aware and the twin would be occ^2*M_2^2 ~= 0.2 GB. The Kappa
-  //     axis is CONTRACTED at this node, so batching cannot shrink the W
-  //     (irreducible peak floor of the flop-optimal factorization). A 100 GB..1
-  //     TB band brackets it with comfortable margin and is non-flaky. NOTE:
-  //     with real heavy-tailed PNO moments (M_4 > 42) this rises further -- the
-  //     OOM question Tasks 6-8 quantify for C60.
-  CHECK(perf_first.cp.peak_bytes < 1e12);
-  CHECK(perf_first.cp.peak_bytes > 1e11);
+  //     artifact and NOT a mis-sized twin R{a<i,i>,a<i,i>} (which would be
+  //     occ^2*M_2^2 ~= 0.4 GB). The Kappa axis is CONTRACTED at this node, so
+  //     batching cannot shrink W -- it is the irreducible peak floor of the
+  //     flop-optimal factorization, and precisely why perf-first (which forms
+  //     it) OOMs C60 while peak-first (which does not) does not. A 1..4 TB band
+  //     brackets the real-moment value with margin and is non-flaky.
+  CHECK(perf_first.cp.peak_bytes < 4e12);
+  CHECK(perf_first.cp.peak_bytes > 1e12);
 }
 
 // Task 3: the opt-in scratch-fold peak sink captures the batched-inner peak the
