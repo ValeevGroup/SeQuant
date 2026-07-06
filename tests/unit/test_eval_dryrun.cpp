@@ -639,6 +639,29 @@ SizeRegime df_regime(std::size_t mu_tilde, std::size_t aux, std::size_t i_occ,
   return r;
 }
 
+// FAITHFUL variant: takes the real per-nonnull-cluster power means M_1..M_4
+// (heavy tail) as measured by mpqc's PaoPnoRMP2 -- the two lines it prints,
+// "PNO domain power means M_1..M_4 per pair" and "OSV domain power means
+// M_1..M_4 per orbital". Unlike the scalar overload above (constant domain,
+// M_k = mean for all k, which under-sizes multi-composite intermediates), this
+// preserves M_2 > M_1 > ... so a k-composite group is sized by mean(d^k), the
+// true block-sparse volume. pno_M[k]/osv_M[k] for k in [1,4]; index 0 unused
+// (kept 1). Rank >= 3 (CSV-CCSDT) is not populated here (CCSD is ranks 1-2).
+SizeRegime df_regime(std::size_t mu_tilde, std::size_t aux, std::size_t i_occ,
+                     std::array<double, 5> const& pno_M,
+                     std::array<double, 5> const& osv_M) {
+  SizeRegime r;
+  r.space_extent = {
+      {L"i", i_occ},
+      {L"μ̃", mu_tilde},
+      {L"Κ", aux},
+      {L"a", mu_tilde},
+  };
+  r.csv_pno_moment = pno_M;
+  r.csv_osv_moment = osv_M;
+  return r;
+}
+
 // Batchable = the two axes mpqc's runtime batches on the CSV path: PAO (mu~)
 // and DF aux (K). Both are non-proto base spaces (mu~ = PAO, K = DFBS aux).
 bool is_df_batchable(Index const& ix) {
@@ -694,7 +717,13 @@ TEST_CASE("dryrun POST-transform PAO/K batch-axis verdict", "[dryrun-df]") {
   // progress + timing to std::cerr (unbuffered) so a slow/pathological term is
   // visible; each term reports whether its largest free-mu~ intermediate got a
   // mu~/K batch axis.
-  double const peak_threshold = 40e9;  // 40 GB, matches the C60 run
+  // 40 GB matches the (too-tight) C60 run; override to explore realistic
+  // budgets where the mu~-sliced sensible schedule becomes feasible.
+  double const peak_threshold =
+      (std::getenv("SEQUANT_UT_DRYRUN_PEAK_THR_GB")
+           ? std::atof(std::getenv("SEQUANT_UT_DRYRUN_PEAK_THR_GB"))
+           : 40.0) *
+      1e9;
   // Env overrides for the root-cause BISECT (default = faithful real C60
   // config). SEQUANT_UT_DRYRUN_OCC/PNO/OSV vary extents;
   // SEQUANT_UT_DRYRUN_PAO_TS/AUX_TS vary batch target sizes;
@@ -715,6 +744,20 @@ TEST_CASE("dryrun POST-transform PAO/K batch-axis verdict", "[dryrun-df]") {
   std::size_t const aux_ts = env_u("SEQUANT_UT_DRYRUN_AUX_TS", 72u);
   double const vol_weight = env_d("SEQUANT_UT_DRYRUN_VW", 20.0);
   bool const use_roofline = env_u("SEQUANT_UT_DRYRUN_ROOFLINE", 1u) != 0;
+  // FAITHFUL heavy-tail moments: real M_2..M_4 (default to M_1 = the constant
+  // domain, so absent env vars reproduce the old scalar df_regime exactly).
+  // Feed the mpqc-printed "PNO/OSV domain power means M_1..M_4" here.
+  double const pno_m2 = env_d("SEQUANT_UT_DRYRUN_PNO_M2", pno_mom);
+  double const pno_m3 = env_d("SEQUANT_UT_DRYRUN_PNO_M3", pno_mom);
+  double const pno_m4 = env_d("SEQUANT_UT_DRYRUN_PNO_M4", pno_mom);
+  double const osv_m2 = env_d("SEQUANT_UT_DRYRUN_OSV_M2", osv_mom);
+  double const osv_m3 = env_d("SEQUANT_UT_DRYRUN_OSV_M3", osv_mom);
+  double const osv_m4 = env_d("SEQUANT_UT_DRYRUN_OSV_M4", osv_mom);
+  // Objective: "perf" = dense_time_space (perf-first, min-flops), else
+  // "peak" = dense_space_time (peak-first, min-flops s.t. peak<=threshold).
+  // Default "peak" reproduces the old DensePeakSizeBatched behavior.
+  char const* obj_env = std::getenv("SEQUANT_UT_DRYRUN_OBJ");
+  std::string const obj = obj_env ? std::string(obj_env) : std::string("peak");
   // SEQUANT_UT_DRYRUN_AUX_ONLY=1 makes ONLY the DF aux (K) sliceable, NOT PAO
   // (mu~) -- reproduces MPQC's aux-only batching to check the proper (gC)^2 PPL
   // factorization keeps the mu~-full giant (large realized peak = OOM) and
@@ -737,10 +780,24 @@ TEST_CASE("dryrun POST-transform PAO/K batch-axis verdict", "[dryrun-df]") {
   // The earlier water-8 occ/PNO (i=32, PNO=19, OSV=57) were as wrong as the
   // K=672; they under-scaled every intermediate and (via peak_threshold
   // pruning) changed the DP's axis choice.
-  auto regime = df_regime(/*mu_tilde=*/1800u, /*aux=*/4320u, /*i_occ=*/occ_ext,
-                          /*pno=*/pno_mom, /*osv=*/osv_mom);
+  auto regime = df_regime(
+      /*mu_tilde=*/1800u, /*aux=*/4320u, /*i_occ=*/occ_ext,
+      std::array<double, 5>{1.0, pno_mom, pno_m2, pno_m3, pno_m4},
+      std::array<double, 5>{1.0, osv_mom, osv_m2, osv_m3, osv_m4});
+  std::wcerr << L"[dryrun-df] moments: PNO M_1..M_4=" << pno_mom << L","
+             << pno_m2 << L"," << pno_m3 << L"," << pno_m4 << L"  OSV M_1..M_4="
+             << osv_mom << L"," << osv_m2 << L"," << osv_m3 << L"," << osv_m4
+             << L"  objective="
+             << (obj == "perf" ? L"perf(dense_time_space)"
+                               : L"peak(dense_space_time)")
+             << L"\n";
   auto memsize = sequant::opt::detail::memsize_counter(regime.idx_to_extent(),
                                                        regime.inner_pow_fn());
+  // Static NOMINAL flops per contraction node (slicing does not reduce total
+  // work, so this is the true schedule flops). The 4-PAO fully-sliced integral
+  // is memory-cheap but flops-catastrophic; only this metric surfaces it.
+  auto flops = sequant::opt::detail::flops_counter(regime.idx_to_extent(),
+                                                   regime.inner_pow_fn());
   auto has_free_mu_tilde = [](std::vector<Index> const& ixs) {
     for (auto const& ix : ixs)
       if (ix.space().base_key() == L"μ̃") return true;
@@ -749,6 +806,7 @@ TEST_CASE("dryrun POST-transform PAO/K batch-axis verdict", "[dryrun-df]") {
 
   std::size_t total_mu_nodes = 0, n_terms_with_giant = 0;
   std::size_t total_mu_nodes_with_mu_axis = 0, total_mu_nodes_with_k_only = 0;
+  double overall_flops = 0.0;  // summed schedule flops over all terms
   double overall_biggest = 0.0;
   bool overall_biggest_has_mu = false, overall_biggest_has_k = false;
   std::wstring overall_biggest_desc, overall_biggest_axes,
@@ -762,7 +820,9 @@ TEST_CASE("dryrun POST-transform PAO/K batch-axis verdict", "[dryrun-df]") {
     auto axes_map = std::make_shared<std::unordered_map<
         Expr const*, container::vector<container::svector<Index>>>>();
     OptimizeOptions opts;
-    opts.objective_function = ObjectiveFunction::DensePeakSizeBatched;
+    opts.objective_function = (obj == "perf")
+                                  ? ObjectiveFunction::DenseTimeSpaceBatched
+                                  : ObjectiveFunction::DenseSpaceTimeBatched;
     opts.idx_to_extent = regime.idx_to_extent();
     opts.inner_pow = regime.inner_pow_fn();
     opts.batch_policy.is_batchable_index = is_batchable;
@@ -825,6 +885,7 @@ TEST_CASE("dryrun POST-transform PAO/K batch-axis verdict", "[dryrun-df]") {
     bool term_biggest_has_mu = false;  // its free mu~ ESCAPED slicing
     bool term_biggest_has_k = false;   // its free K ESCAPED slicing
     std::size_t term_mu_nodes = 0;
+    double term_flops = 0.0;  // summed nominal contraction flops for this term
     // active maps a sliced index's FULL label -> a descriptor of the ANCESTOR
     // node that slices it (its result free-index signature + its batch_axes).
     // This is the node-dump: it turns "escaped={}" from an inference into a
@@ -880,6 +941,11 @@ TEST_CASE("dryrun POST-transform PAO/K batch-axis verdict", "[dryrun-df]") {
             }
           }
           if (!n.leaf()) {
+            // Nominal flops of THIS contraction: union of children's free
+            // indices and this node's result free indices (slicing does not
+            // change the flop count).
+            term_flops += flops(node_free_indices(*n.left()),
+                                node_free_indices(*n.right()), free_ixs);
             std::map<std::wstring, std::wstring> child_active = active;
             std::wstring const self_desc =
                 L"[free={" + describe_indices(node_free_indices(*n)) +
@@ -894,6 +960,7 @@ TEST_CASE("dryrun POST-transform PAO/K batch-axis verdict", "[dryrun-df]") {
           }
         };
     walk(node, {});
+    overall_flops += term_flops;
     if (term_mu_nodes > 0) ++n_terms_with_giant;
     if (term_biggest > overall_biggest) {
       overall_biggest = term_biggest;
@@ -909,13 +976,16 @@ TEST_CASE("dryrun POST-transform PAO/K batch-axis verdict", "[dryrun-df]") {
     std::cerr << " " << ms << "ms  free-mu~ nodes=" << term_mu_nodes
               << " biggest_realized=" << (term_biggest / 1e9)
               << "GB mu~escaped=" << (term_biggest_has_mu ? "YES" : "NO")
-              << " Kescaped=" << (term_biggest_has_k ? "YES" : "NO") << "\n";
+              << " Kescaped=" << (term_biggest_has_k ? "YES" : "NO")
+              << " flops=" << (term_flops / 1e12) << "T\n";
   }
 
   std::wcerr << L"\n=== POST-TRANSFORM VERDICT (REALIZED peak, mu~=1800, "
                 L"thr=40GB) ===\n"
              << L"terms with a free-mu~ intermediate: " << n_terms_with_giant
              << L"/" << terms.size() << L"\n"
+             << L"TOTAL SCHEDULE FLOPS (nominal, all terms): "
+             << (overall_flops / 1e12) << L" Tflop\n"
              << L"free-mu~ contraction nodes: " << total_mu_nodes << L"\n"
              << L"  ... with a free mu~ that ESCAPED slicing: "
              << total_mu_nodes_with_mu_axis << L"\n"
