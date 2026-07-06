@@ -274,6 +274,35 @@ TEST_CASE("dryrun power-mean sizing contract", "[dryrun][sizing]") {
                                                     // artifact"
 }
 
+// Rank-general CSV moment dispatch (CSV-CCSDT and beyond): inner_pow() selects
+// the moment table by cluster rank (= number of proto indices). Rank 1 -> OSV,
+// rank 2 -> PNO, rank >= 3 -> the csv_moment_by_rank[rank] table if present,
+// else a fallback to the PNO (rank-2) table (preserving the pre-rank-general
+// behavior where every proto-rank >= 2 used the PNO table).
+TEST_CASE("dryrun rank-general CSV moment dispatch", "[dryrun][sizing]") {
+  SizeRegime r;
+  for (std::size_t k = 0; k <= 4; ++k) {
+    r.csv_osv_moment[k] = 3.0;   // rank-1 table (flat, distinct value)
+    r.csv_pno_moment[k] = 30.0;  // rank-2 table (flat, distinct value)
+  }
+  // rank-3 (triple) table, distinct from both rank-1 and rank-2.
+  r.csv_moment_by_rank[3] = {1.0, 100.0, 100.0, 100.0, 100.0};
+  auto ip = r.inner_pow_fn();
+
+  Index i1{L"i_1"}, i2{L"i_2"}, i3{L"i_3"};
+  Index osv{L"a_1", {i1}};               // rank-1 composite
+  Index pno{L"a_2", {i1, i2}};           // rank-2 composite
+  Index triple{L"a_3", {i1, i2, i3}};    // rank-3 composite
+  Index quad{L"a_4", {i1, i2, i3, i1}};  // rank-4 composite (no table)
+
+  // Each rank draws from its own table.
+  CHECK(ip(osv, 2) == Catch::Approx(3.0));
+  CHECK(ip(pno, 2) == Catch::Approx(30.0));
+  CHECK(ip(triple, 2) == Catch::Approx(100.0));
+  // A rank with no table falls back to the PNO (rank-2) table, NOT the OSV one.
+  CHECK(ip(quad, 2) == Catch::Approx(30.0));
+}
+
 // Sanity check for the probe's own plumbing (is_stand_in_batchable /
 // batch_policy / term_batch_axes / binarize round-trip), independent of the
 // real residual: with a tiny peak_threshold that makes every schedule

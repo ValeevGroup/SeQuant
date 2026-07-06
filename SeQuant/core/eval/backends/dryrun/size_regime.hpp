@@ -29,6 +29,15 @@ struct SizeRegime {
   std::array<double, 5> csv_pno_moment{1.0, 1.0, 1.0, 1.0, 1.0};
   std::array<double, 5> csv_osv_moment{1.0, 1.0, 1.0, 1.0, 1.0};
 
+  // Moment tables for CSV cluster ranks >= 3 (CSV-CCSDT triples and beyond),
+  // keyed by cluster rank (= number of proto indices). csv_moment_by_rank[r][k]
+  // is the k-th power mean of the rank-r cluster domain. A rank not present
+  // falls back to csv_pno_moment (the rank-2 table) in inner_pow(), preserving
+  // the pre-rank-general behavior where every proto-rank >= 2 used the PNO
+  // table. Ranks 1 and 2 are held by csv_osv_moment / csv_pno_moment above and
+  // are NOT expected here (an entry for 1 or 2 is ignored by inner_pow()).
+  std::map<std::size_t, std::array<double, 5>> csv_moment_by_rank;
+
   /// \return the flat extent of \p ix's space; throws \c std::out_of_range
   ///         if the space is not present in \c space_extent (fail loud rather
   ///         than silently defaulting to 1).
@@ -39,14 +48,20 @@ struct SizeRegime {
   /// \return the k-th power-mean moment for a proto-indexed CSV/PNO composite
   ///         index (\p k clamped to 0..4), or \c pow(extent, k) for a plain
   ///         (non-composite) index. Rank is determined by the number of proto
-  ///         indices: 2 => PNO (occupied pair), 1 => OSV (occupied single).
+  ///         indices: 1 => OSV (occupied single), 2 => PNO (occupied pair),
+  ///         >= 3 => the rank-specific csv_moment_by_rank table if present,
+  ///         else the PNO (rank-2) table.
   [[nodiscard]] double inner_pow(Index const& composite, std::size_t k) const {
     if (k > 4) k = 4;
     auto const& protos = composite.proto_indices();
     if (protos.empty())
       return std::pow(static_cast<double>(extent(composite)),
                       static_cast<double>(k));
-    return (protos.size() >= 2) ? csv_pno_moment[k] : csv_osv_moment[k];
+    auto const rank = protos.size();
+    if (rank <= 1) return csv_osv_moment[k];
+    if (rank == 2) return csv_pno_moment[k];
+    auto const it = csv_moment_by_rank.find(rank);
+    return (it != csv_moment_by_rank.end()) ? it->second[k] : csv_pno_moment[k];
   }
 
   [[nodiscard]] std::function<std::size_t(Index const&)> idx_to_extent() const {
