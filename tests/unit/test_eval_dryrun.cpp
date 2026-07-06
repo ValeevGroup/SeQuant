@@ -278,43 +278,13 @@ namespace {
 
 // Regime for the post-transform (mu~ + K) residual. Extents are per-index
 // domain sizes fed to the DP's idx_to_extent; proto-indexed "a" legs are
-// PNO/OSV composites sized by the moment tables (same dispatch as the
-// pre-transform regime). Defaults are water-8-scale (from the w8-batch-min
-// run: active occ = 32, DF aux cc-pvdz-ri = 672, avg PNOs/pair ~19); the
-// giant-relevant knob is the mu~ (PAO domain) extent, swept below.
-SizeRegime df_regime(std::size_t mu_tilde, std::size_t aux, std::size_t i_occ,
-                     double pno, double osv) {
-  SizeRegime r;
-  r.space_extent = {
-      {L"i", i_occ},
-      {L"μ̃", mu_tilde},
-      {L"Κ", aux},
-      {L"a", mu_tilde},  // bare "a" should not appear (all a are proto here)
-  };
-  // csv_{pno,osv}_moment[k] must be the k-th POWER MEAN M_k=(<d^k>)^(1/k) of
-  // the per-pair domain, NOT the k-th moment <d^k>. inner_aware_volume sizes a
-  // k-group of proto-sharing composites as the PRODUCT of inner_pow(c,k) over
-  // its k members, so M_k^k telescopes to <d^k> and (times outer occ^N) equals
-  // the true block volume Sum_pairs d^k. With only the scalar mean (no per-pair
-  // histogram), approximate the domain as constant -> M_k = mean for ALL k.
-  // pow(pno,k) (the k-th MOMENT) is wrong: for a k=2 result like
-  // R{a_1<i,i>,a_2<i,i>;i,i} it gives occ^2*pno^4 not occ^2*pno^2 (the 358 GB
-  // root artifact). k=1 single-composite giants are unaffected (pno^1==pno).
-  for (std::size_t k = 0; k <= 4; ++k) {
-    r.csv_pno_moment[k] = pno;
-    r.csv_osv_moment[k] = osv;
-  }
-  return r;
-}
-
-// FAITHFUL variant: takes the real per-nonnull-cluster power means M_1..M_4
-// (heavy tail) as measured by mpqc's PaoPnoRMP2 -- the two lines it prints,
-// "PNO domain power means M_1..M_4 per pair" and "OSV domain power means
-// M_1..M_4 per orbital". Unlike the scalar overload above (constant domain,
-// M_k = mean for all k, which under-sizes multi-composite intermediates), this
-// preserves M_2 > M_1 > ... so a k-composite group is sized by mean(d^k), the
-// true block-sparse volume. pno_M[k]/osv_M[k] for k in [1,4]; index 0 unused
-// (kept 1). Rank >= 3 (CSV-CCSDT) is not populated here (CCSD is ranks 1-2).
+// PNO/OSV composites sized by the moment tables. Takes the real per-nonnull-
+// cluster power means M_1..M_4 (heavy tail) as measured by mpqc's PaoPnoRMP2 --
+// the two lines it prints, "PNO domain power means M_1..M_4 per pair" and "OSV
+// domain power means M_1..M_4 per orbital". A per-k power mean (M_2 > M_1 >
+// ...) sizes a k-composite group as mean(d^k), the true block-sparse volume.
+// pno_M[k]/osv_M[k] for k in [1,4]; index 0 unused (kept 1). Rank >= 3
+// (CSV-CCSDT) is not populated here (CCSD is ranks 1-2).
 SizeRegime df_regime(std::size_t mu_tilde, std::size_t aux, std::size_t i_occ,
                      std::array<double, 5> const& pno_M,
                      std::array<double, 5> const& osv_M) {
@@ -330,19 +300,36 @@ SizeRegime df_regime(std::size_t mu_tilde, std::size_t aux, std::size_t i_occ,
   return r;
 }
 
-// REAL measured C60 cc-pVDZ-F12 CSV size moments (mpqc PaoPnoRMP2 print, jobs
-// 617609/617653/617809): the k-th power means M_1..M_4 of the per-pair PNO
-// domain and per-orbital OSV domain. Index 0 unused (kept 1). These are the
-// FAITHFUL, heavy-tailed moments -- use them (via the array df_regime overload)
-// instead of a flat scalar so a k-composite intermediate is sized by mean(d^k),
-// e.g. the 4-PNO PPL integral by occ^2 * M_4^4 (~2 TB dense) rather than the
-// flat-42 under-count (~0.36 TB).
-constexpr std::array<double, 5> kC60PnoM{1.0, 48.597142857142856,
-                                         54.335293566742848, 59.625213617564981,
-                                         64.347555914574883};
-constexpr std::array<double, 5> kC60OsvM{1.0, 206.48333333333332,
-                                         216.66121788020425, 226.15064540004298,
-                                         234.51208523659201};
+// One named (molecule, basis, parameter-set) problem size for the DryRun cost
+// model: base-space extents + the measured heavy-tailed CSV power means. Single
+// source of truth -- use df_regime(kFoo) at every call site instead of
+// repeating the literals, so a moment re-measurement is a one-line edit.
+struct ProblemSize {
+  std::size_t mu_tilde;         // PAO domain extent (= #AO)
+  std::size_t aux;              // DF aux (K) extent
+  std::size_t i_occ;            // active occupied extent
+  std::array<double, 5> pno_M;  // per-pair PNO power means M_0..M_4 (0 unused)
+  std::array<double, 5> osv_M;  // per-orbital OSV power means M_0..M_4
+};
+
+// C60, cc-pVDZ-F12, TCUTPNO=1e-8 / TCUTOSV=1e-9. Extents from the Owl job log;
+// PNO/OSV power means M_1..M_4 measured by mpqc PaoPnoRMP2 (job 617809 -- the
+// TRUE pVDZ-F12 values; NOTE the earlier 48.60/64.35 PNO + 206/234 OSV numbers
+// were from job 617653, which was mis-configured with an aug-cc-pVTZ OBS).
+inline constexpr ProblemSize kC60_pVDZF12{
+    /*mu_tilde=*/1800u,
+    /*aux=*/4320u,
+    /*i_occ=*/120u,
+    /*pno_M=*/
+    {1.0, 42.029069767441861, 46.039206412923569, 49.766252354482994,
+     53.151291880343109},
+    /*osv_M=*/
+    {1.0, 148.25, 155.04434849422921, 161.33527408797721, 166.85553430303926}};
+
+// Build a SizeRegime from a named ProblemSize.
+SizeRegime df_regime(ProblemSize const& p) {
+  return df_regime(p.mu_tilde, p.aux, p.i_occ, p.pno_M, p.osv_M);
+}
 
 // Batchable = the two axes mpqc's runtime batches on the CSV path: PAO (mu~)
 // and DF aux (K). Both are non-proto base spaces (mu~ = PAO, K = DFBS aux).
@@ -419,9 +406,10 @@ TEST_CASE("dryrun POST-transform PAO/K batch-axis verdict", "[dryrun-df]") {
     char const* v = std::getenv(k);
     return v ? static_cast<std::size_t>(std::atoll(v)) : dflt;
   };
-  std::size_t const occ_ext = env_u("SEQUANT_UT_DRYRUN_OCC", 120u);
-  double const pno_mom = env_d("SEQUANT_UT_DRYRUN_PNO", 42.0);
-  double const osv_mom = env_d("SEQUANT_UT_DRYRUN_OSV", 310.0);
+  std::size_t const occ_ext =
+      env_u("SEQUANT_UT_DRYRUN_OCC", kC60_pVDZF12.i_occ);
+  double const pno_mom = env_d("SEQUANT_UT_DRYRUN_PNO", kC60_pVDZF12.pno_M[1]);
+  double const osv_mom = env_d("SEQUANT_UT_DRYRUN_OSV", kC60_pVDZF12.osv_M[1]);
   std::size_t const pao_ts = env_u("SEQUANT_UT_DRYRUN_PAO_TS", 256u);
   std::size_t const aux_ts = env_u("SEQUANT_UT_DRYRUN_AUX_TS", 72u);
   double const vol_weight = env_d("SEQUANT_UT_DRYRUN_VW", 20.0);
@@ -429,12 +417,18 @@ TEST_CASE("dryrun POST-transform PAO/K batch-axis verdict", "[dryrun-df]") {
   // FAITHFUL heavy-tail moments: real M_2..M_4 (default to M_1 = the constant
   // domain, so absent env vars reproduce the old scalar df_regime exactly).
   // Feed the mpqc-printed "PNO/OSV domain power means M_1..M_4" here.
-  double const pno_m2 = env_d("SEQUANT_UT_DRYRUN_PNO_M2", pno_mom);
-  double const pno_m3 = env_d("SEQUANT_UT_DRYRUN_PNO_M3", pno_mom);
-  double const pno_m4 = env_d("SEQUANT_UT_DRYRUN_PNO_M4", pno_mom);
-  double const osv_m2 = env_d("SEQUANT_UT_DRYRUN_OSV_M2", osv_mom);
-  double const osv_m3 = env_d("SEQUANT_UT_DRYRUN_OSV_M3", osv_mom);
-  double const osv_m4 = env_d("SEQUANT_UT_DRYRUN_OSV_M4", osv_mom);
+  double const pno_m2 =
+      env_d("SEQUANT_UT_DRYRUN_PNO_M2", kC60_pVDZF12.pno_M[2]);
+  double const pno_m3 =
+      env_d("SEQUANT_UT_DRYRUN_PNO_M3", kC60_pVDZF12.pno_M[3]);
+  double const pno_m4 =
+      env_d("SEQUANT_UT_DRYRUN_PNO_M4", kC60_pVDZF12.pno_M[4]);
+  double const osv_m2 =
+      env_d("SEQUANT_UT_DRYRUN_OSV_M2", kC60_pVDZF12.osv_M[2]);
+  double const osv_m3 =
+      env_d("SEQUANT_UT_DRYRUN_OSV_M3", kC60_pVDZF12.osv_M[3]);
+  double const osv_m4 =
+      env_d("SEQUANT_UT_DRYRUN_OSV_M4", kC60_pVDZF12.osv_M[4]);
   // Objective: "perf" = dense_time_space (perf-first, min-flops), else
   // "peak" = dense_space_time (peak-first, min-flops s.t. peak<=threshold).
   // Default "peak" reproduces the old DensePeakSizeBatched behavior.
@@ -463,7 +457,8 @@ TEST_CASE("dryrun POST-transform PAO/K batch-axis verdict", "[dryrun-df]") {
   // K=672; they under-scaled every intermediate and (via peak_threshold
   // pruning) changed the DP's axis choice.
   auto regime = df_regime(
-      /*mu_tilde=*/1800u, /*aux=*/4320u, /*i_occ=*/occ_ext,
+      /*mu_tilde=*/kC60_pVDZF12.mu_tilde, /*aux=*/kC60_pVDZF12.aux,
+      /*i_occ=*/occ_ext,
       std::array<double, 5>{1.0, pno_mom, pno_m2, pno_m3, pno_m4},
       std::array<double, 5>{1.0, osv_mom, osv_m2, osv_m3, osv_m4});
   std::wcerr << L"[dryrun-df] moments: PNO M_1..M_4=" << pno_mom << L","
@@ -1005,8 +1000,7 @@ TEST_CASE(
   // mu~=1800, aux=4320, pao_target_size=256, aux_target_size=72,
   // volatile_weight=20, machine_balance=200, fast_mem_elems=1e6. SAME regime
   // and SAME batchable predicate the [dryrun-df] verdict case uses.
-  auto regime = df_regime(/*mu_tilde=*/1800u, /*aux=*/4320u, /*i_occ=*/120u,
-                          /*pno=*/42.0, /*osv=*/310.0);
+  auto regime = df_regime(kC60_pVDZF12);
   auto cm = std::make_shared<CostModel const>(regime);
 
   // ONE BatchPolicy object, reused verbatim for both optimize() and the
@@ -1228,8 +1222,10 @@ TEST_CASE(
 // survives the hard filter despite astronomically higher flops); perf-first is
 // flops-primary and must NEVER form it. This is the direct in-harness proof of
 // the fix, on ONE term (~seconds), without the [dryrun-df] full-sweep cost.
-TEST_CASE("dryrun perf-first vs peak-first factorization of the C60 giant term",
-          "[dryrun-perf]") {
+TEST_CASE(
+    "dryrun objective determines the C60 PPL factorization (perf-first forms "
+    "the 4-PNO integral, peak-first does not)",
+    "[dryrun-objective]") {
   auto ctx = get_default_context().clone();
   ctx.set_first_dummy_index_ordinal(1000000);
   auto isr = ctx.mutable_index_space_registry();
@@ -1269,20 +1265,19 @@ TEST_CASE("dryrun perf-first vs peak-first factorization of the C60 giant term",
   if (giant_idx >= summands.size()) giant_idx = 0;
   ExprPtr giant = flatten_product(summands[giant_idx]);
   REQUIRE(giant);
-  std::wcerr << L"[dryrun-perf] selected term " << giant_idx << L" = "
+  std::wcerr << L"[dryrun-objective] selected term " << giant_idx << L" = "
              << to_latex(giant) << L"\n";
 
-  // FAITHFUL real C60 config: measured heavy-tailed CSV moments (kC60PnoM/
-  // kC60OsvM), NOT a flat scalar -- so the 4-PNO PPL node is sized occ^2*M_4^4
-  // (real ~2 TB dense) instead of the flat-42 under-count (~0.36 TB).
-  auto regime = df_regime(/*mu_tilde=*/1800u, /*aux=*/4320u, /*i_occ=*/120u,
-                          kC60PnoM, kC60OsvM);
+  // FAITHFUL real C60 config: the measured heavy-tailed CSV moments in
+  // kC60_pVDZF12, NOT a flat scalar -- so the 4-PNO PPL node is sized
+  // occ^2 * M_4^4 (real, per the measured M_4) instead of a flat under-count.
+  auto regime = df_regime(kC60_pVDZF12);
   auto memsize = sequant::opt::detail::memsize_counter(regime.idx_to_extent(),
                                                        regime.inner_pow_fn());
   auto ext_of = [](Index const& ix) -> double {
     auto bk = ix.space().base_key();
-    if (bk == L"μ̃") return 1800.0;
-    if (bk == L"Κ") return 4320.0;
+    if (bk == L"μ̃") return double(kC60_pVDZF12.mu_tilde);
+    if (bk == L"Κ") return double(kC60_pVDZF12.aux);
     return 0.0;
   };
   auto tgt_of = [](Index const& ix) -> double {
@@ -1356,7 +1351,7 @@ TEST_CASE("dryrun perf-first vs peak-first factorization of the C60 giant term",
       wchar_t const* on = (obj == ObjectiveFunction::DenseTimeSpaceBatched)
                               ? L"perf-first (DenseTimeSpaceBatched)"
                               : L"peak-first (DenseSpaceTimeBatched)";
-      std::wcerr << L"\n[dryrun-perf] TREE for " << on << L":\n";
+      std::wcerr << L"\n[dryrun-objective] TREE for " << on << L":\n";
       std::function<void(std::remove_cvref_t<decltype(node)> const&, int)>
           dump = [&](auto const& n, int depth) {
             std::wstring const pad(2 * depth + 2, L' ');
@@ -1447,7 +1442,7 @@ TEST_CASE("dryrun perf-first vs peak-first factorization of the C60 giant term",
     wchar_t const* obj_name = (obj == ObjectiveFunction::DenseTimeSpaceBatched)
                                   ? L"perf-first (DenseTimeSpaceBatched)"
                                   : L"peak-first (DenseSpaceTimeBatched)";
-    std::wcerr << L"[dryrun-perf] " << obj_name << L": optimize " << opt_ms
+    std::wcerr << L"[dryrun-objective] " << obj_name << L": optimize " << opt_ms
                << L"ms  max free-mu~ on a node=" << a.max_free_mu
                << L"  largest realized free-mu~={" << a.largest_desc << L"}="
                << a.largest_realized_gb << L" GB\n               cost_profile: "
@@ -1468,7 +1463,7 @@ TEST_CASE("dryrun perf-first vs peak-first factorization of the C60 giant term",
                << a.cp.flops << L" peak_bytes=" << (a.cp.peak_bytes / 1e9)
                << L" GB\n";
   };
-  std::wcerr << L"\n=== [dryrun-perf] VERDICT (C60 giant, index 38) ===\n";
+  std::wcerr << L"\n=== [dryrun-objective] VERDICT (C60 giant, index 38) ===\n";
   report(L"peak-first (DenseSpaceTimeBatched)", peak_first);
   report(L"perf-first (DenseTimeSpaceBatched)", perf_first);
 
@@ -1490,23 +1485,24 @@ TEST_CASE("dryrun perf-first vs peak-first factorization of the C60 giant term",
   //     intermediate the perf-first schedule forms -- the CC doubles W node
   //     {a_1<i,i> a_2<i,i> a_3<i,i> a_4<i,i>} with FOUR distinct PNO legs over
   //     one occ-pair (see SEQUANT_UT_DRYRUN_PERF_TREE dump). With the FAITHFUL
-  //     heavy-tailed moments (kC60PnoM), it is sized occ^2 * M_4^4 =
-  //     120^2 * 64.348^4 * 8 ~= 2.0 TB (dense occ^2 pairs; the screened ~6300
-  //     CC pairs would give ~0.86 TB). This is the CORRECT, moment-aware size
+  //     measured moments (kC60_pVDZF12), it is sized occ^2 * M_4^4 =
+  //     120^2 * 53.151^4 * 8 ~= 0.92 TB (dense occ^2 pairs; the screened ~6300
+  //     CC pairs would give ~0.40 TB). This is the CORRECT, moment-aware size
   //     (df_regime's csv_pno_moment[k] are power means), NOT a naive-product
   //     artifact and NOT a mis-sized twin R{a<i,i>,a<i,i>} (which would be
-  //     occ^2*M_2^2 ~= 0.4 GB). The Kappa axis is CONTRACTED at this node, so
+  //     occ^2*M_2^2 ~= 0.3 GB). The Kappa axis is CONTRACTED at this node, so
   //     batching cannot shrink W -- it is the irreducible peak floor of the
   //     flop-optimal factorization, and precisely why perf-first (which forms
-  //     it) OOMs C60 while peak-first (which does not) does not. A 1..4 TB band
-  //     brackets the real-moment value with margin and is non-flaky.
-  CHECK(perf_first.cp.peak_bytes < 4e12);
-  CHECK(perf_first.cp.peak_bytes > 1e12);
+  //     it) OOMs C60 while peak-first (which does not) does not. A 0.5..2 TB
+  //     band brackets the real-moment value with margin and is non-flaky.
+  CHECK(perf_first.cp.peak_bytes < 2e12);
+  CHECK(perf_first.cp.peak_bytes > 5e11);
 }
 
 // Task 3: the opt-in scratch-fold peak sink captures the batched-inner peak the
-// OUTER cache.working_set_hwmark() misses. Reuse the [dryrun-perf] peak-first
-// (DenseSpaceTimeBatched) setup -- the objective whose batched-inner transient
+// OUTER cache.working_set_hwmark() misses. Reuse the [dryrun-objective]
+// peak-first (DenseSpaceTimeBatched) setup -- the objective whose batched-inner
+// transient
 // (~38.9 GB, materialized INSIDE a make_batched_scratch cache) dwarfs the
 // outer, cross-batch cached residency (~0.2 GB). A PeakSink passed to
 // make_evaluator folds each scratch cache's high-watermark into one global
@@ -1541,9 +1537,8 @@ TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
   ExprPtr giant = flatten_product(summands[giant_idx]);
   REQUIRE(giant);
 
-  // FAITHFUL real C60 config (identical to [dryrun-perf]).
-  auto regime = df_regime(/*mu_tilde=*/1800u, /*aux=*/4320u, /*i_occ=*/120u,
-                          /*pno=*/42.0, /*osv=*/310.0);
+  // FAITHFUL real C60 config (identical to [dryrun-objective]).
+  auto regime = df_regime(kC60_pVDZF12);
   auto cm = std::make_shared<CostModel const>(regime);
 
   sequant::BatchPolicy policy;
@@ -1598,7 +1593,8 @@ TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
   try {
     (void)sequant::evaluate<Trace::On>(node, DryRunLeafEvaluator{cm}, cache);
   } catch (std::exception const&) {
-    // mirror [dryrun-perf]: a DryRun sizing throw must not mask the sink read
+    // mirror [dryrun-objective]: a DryRun sizing throw must not mask the sink
+    // read
   }
   logger.eval.level = prev_level;
   logger.eval.stream = prev_stream;
@@ -1663,9 +1659,8 @@ TEST_CASE("cost_profile returns peak/flops/exec/n_ops",
   ExprPtr giant = flatten_product(summands[giant_idx]);
   REQUIRE(giant);
 
-  // FAITHFUL real C60 config (identical to [dryrun-perf] / [peak]).
-  auto regime = df_regime(/*mu_tilde=*/1800u, /*aux=*/4320u, /*i_occ=*/120u,
-                          /*pno=*/42.0, /*osv=*/310.0);
+  // FAITHFUL real C60 config (identical to [dryrun-objective] / [peak]).
+  auto regime = df_regime(kC60_pVDZF12);
 
   // ONE BatchPolicy, reused for optimize() and the replay evaluator (its
   // is_batchable_index MUST equal CacheConfig::is_batchable_index).
@@ -1802,7 +1797,7 @@ TEST_CASE("cost_profile trace stream round-trips", "[dryrun][cost_profile]") {
   ExprPtr giant = flatten_product(summands[giant_idx]);
   REQUIRE(giant);
 
-  auto regime = df_regime(1800u, 4320u, 120u, 42.0, 310.0);
+  auto regime = df_regime(kC60_pVDZF12);
 
   sequant::BatchPolicy policy;
   policy.is_batchable_index = is_df_batchable;
@@ -1871,9 +1866,9 @@ TEST_CASE("cost_profile trace stream round-trips", "[dryrun][cost_profile]") {
 // VETO caching of a free-batchable giant -- a node whose result carries a free
 // mu~/K axis the runtime slices over -- exactly as the real batched eval loop
 // does, instead of materializing it whole. The SIMPLE cache_manager(nodes) the
-// ad-hoc [dryrun-perf]/[dryrun-trace] sites use caches such a giant; the gated
-// build must not. We prove this by contrasting three configs over the SAME
-// binarized C60 giant term (index 38):
+// ad-hoc [dryrun-objective]/[dryrun-trace] sites use caches such a giant; the
+// gated build must not. We prove this by contrasting three configs over the
+// SAME binarized C60 giant term (index 38):
 //   ref:  no gate  (max_footprint=0, never batchable) -> giant IS cached
 //   axis: axis veto only (max_footprint=0, is_df_batchable) -> giant NOT cached
 //   task: axis veto + footprint gate (max_footprint=1e11, is_df_batchable)
@@ -1884,7 +1879,7 @@ TEST_CASE("cost_profile trace stream round-trips", "[dryrun][cost_profile]") {
 // a vetoed node is never registered, so it is not, and cannot become, resident;
 // this is a stronger/cleaner signal than working_set_hwmark, which only tracks
 // alive cached bytes and is confounded by batched-inner scratch -- see the
-// [dryrun-perf] INTERPRETATION notes).
+// [dryrun-objective] INTERPRETATION notes).
 TEST_CASE("dryrun gated cache vetoes free-batchable giant", "[dryrun][cache]") {
   auto ctx = get_default_context().clone();
   ctx.set_first_dummy_index_ordinal(1000000);
@@ -1914,9 +1909,8 @@ TEST_CASE("dryrun gated cache vetoes free-batchable giant", "[dryrun][cache]") {
   ExprPtr giant = flatten_product(summands[giant_idx]);
   REQUIRE(giant);
 
-  // FAITHFUL real C60 config (614336 job log), identical to [dryrun-perf].
-  auto regime = df_regime(/*mu_tilde=*/1800u, /*aux=*/4320u, /*i_occ=*/120u,
-                          /*pno=*/42.0, /*osv=*/310.0);
+  // FAITHFUL real C60 config (614336 job log), identical to [dryrun-objective].
+  auto regime = df_regime(kC60_pVDZF12);
   auto memsize = sequant::opt::detail::memsize_counter(regime.idx_to_extent(),
                                                        regime.inner_pow_fn());
 
@@ -2115,7 +2109,7 @@ TEST_CASE("dryrun whole-residual trace (PNO-CCSD doubles)",
       (max_terms > 0 && max_terms < terms.size()) ? max_terms : terms.size();
 
   // FAITHFUL real C60 config (614336 job log), identical to [dryrun-eval].
-  auto regime = df_regime(1800u, 4320u, 120u, 42.0, 310.0);
+  auto regime = df_regime(kC60_pVDZF12);
   sequant::BatchPolicy policy;
   policy.is_batchable_index = is_df_batchable;
   policy.batch_target_size = [](Index const& ix) -> std::size_t {
