@@ -563,6 +563,18 @@ struct PeakBatchedModel {
   /// peak-first threshold-gated selection (unchanged).
   bool perf_first = false;
 
+  /// If true, charge the batch RECOMPUTATION cost on the flops/exec axis. The
+  /// batched evaluator re-executes each contraction per tile of the ancestor
+  /// batch axes its result does NOT carry (across-batch work is recomputed;
+  /// within-batch sharing is cached -- see eval.hpp "replays the build of every
+  /// compatible persistent final"). The default (false) assumes WORK PARITY
+  /// (batching is free on flops), which under-costs heavily-sliced families
+  /// (e.g. the 4-PAO integral) and lets peak-first pick them. When true, a node
+  /// at ancestor-sliced-set B is charged nbatch(b) for each b in B not open in
+  /// the node -- so a schedule that slices many axes it must recompute across
+  /// pays for it. Default false preserves the historical cost model.
+  bool charge_batch_recompute = false;
+
   /// One non-dominated (peak, flops) trade-off for a (subset, sliced-set \c B)
   /// cell. \c aprime is the sliced-set chosen at this node; the children are
   /// read at context \c C = B | aprime, at frontier indices \c lp_idx /
@@ -605,6 +617,11 @@ struct PeakBatchedModel {
     /// flops_of(lhs, rhs, result) = flop count of one binary contraction.
     std::function<double(IndexSet const&, IndexSet const&, IndexSet const&)>
         flops_of;
+    /// nbatch[k] = number of batch tiles of aux[k] = ceil(extent / target),
+    /// clamped to >= 1. Used to charge batch recomputation (see
+    /// charge_batch_recompute): a node inside an ancestor batch loop over
+    /// aux[k] that does not carry aux[k] is re-executed nbatch[k] times.
+    container::vector<double> nbatch;
 
     /// Context-restricted size of subset s under sliced-set ctx (the table is
     /// indexed by the part of ctx actually open in s; mirrors the oracle).
@@ -628,6 +645,15 @@ struct PeakBatchedModel {
     ctx.nt = network.tensors().size();
     ctx.aux = batchable_index_list(network, is_batchable);
     ctx.m = ctx.aux.size();
+    // Per-axis batch-tile count for the recompute charge: ceil(extent/target),
+    // >= 1. batch() returns the target tile size; a 0/absent target => 1 tile
+    // (no batching of that axis => no recompute).
+    ctx.nbatch.assign(ctx.m, 1.0);
+    for (std::size_t k = 0; k < ctx.m; ++k) {
+      double const ext = static_cast<double>(idxsz(ctx.aux[k]));
+      double const tgt = static_cast<double>(batch(ctx.aux[k]));
+      ctx.nbatch[k] = (tgt > 0.0) ? std::max(1.0, std::ceil(ext / tgt)) : 1.0;
+    }
     // accumulation_factor is charged per accumulation node (Ap != 0) and is
     // valid for any number of batchable indices: with nested accumulation the
     // per-node charges co-exist at the peak. Validated by the identity
@@ -677,6 +703,19 @@ struct PeakBatchedModel {
                              machine_balance, fast_mem_elems, block_tiles,
                              block_prefactor);
     for (std::size_t B = 0; B < ctx.nB; ++B) {
+      // Batch recomputation charge: this node sits inside the ancestor batch
+      // loops over the axes in B. For each b in B whose axis this node's result
+      // does NOT carry (b not open in n), the node is re-executed nbatch(b)
+      // times (across-batch recompute); axes it carries are partitioned (x1).
+      // Default off => rf==1 => historical work-parity cost.
+      double rf = 1.0;
+      if (charge_batch_recompute) {
+        std::size_t const esc =
+            B & ~ctx.open_aux[n];  // B axes n does not carry
+        for (std::size_t k = 0; k < ctx.m; ++k)
+          if (esc & (std::size_t{1} << k)) rf *= ctx.nbatch[k];
+      }
+      double const cflops_B = cflops * rf;
       // Batchable indices contracted at THIS node: open at children but not at
       // the parent. By default batching is applied ACROSS THE BOARD: slicing
       // the batch axis shrinks any intermediate carrying it regardless of
@@ -711,7 +750,7 @@ struct PeakBatchedModel {
             double const rpf = std::max({Llp + prr, szrp + pl, both});
             pareto_insert(acc[B], BFrontPoint{std::min(lpf, rpf),
                                               lp_st[C][li].flops +
-                                                  rp_st[C][ri].flops + cflops,
+                                                  rp_st[C][ri].flops + cflops_B,
                                               lp, rp, lpf <= rpf, Ap, li, ri});
           }
         if (Ap == 0) break;
