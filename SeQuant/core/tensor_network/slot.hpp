@@ -39,8 +39,6 @@ enum class IndexSlotType {
   TensorBraKet,
   /// in tensor aux index slot
   TensorAux,
-  /// connecting two tensor aux index slots
-  TensorAuxAux,
 };
 
 }  // namespace sequant
