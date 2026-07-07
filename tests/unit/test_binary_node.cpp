@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <range/v3/view/all.hpp>
 #include <range/v3/view/iota.hpp>
@@ -345,4 +346,48 @@ TEST_CASE("binary_node", "[FullBinaryNode]") {
       str2.clear();
     }
   }
+}
+
+// Deep-tree operations must not recurse to the tree's depth: deep_copy,
+// transform_node, and the destructor are all iterative, so a chain thousands of
+// nodes deep -- which overflowed the pre-refactor recursive versions at depth
+// ~thousands (default ~8 MB stack) -- is handled by the heap instead. Built
+// iteratively (O(N) moves) with int data so the test stays cheap. visit() is
+// used to read the tree because it is an iterative (parent-pointer) walk;
+// size()/operator== are still recursive and would themselves overflow here.
+TEST_CASE("FullBinaryNode deep-tree ops are stack-safe",
+          "[FullBinaryNode][stack-safety]") {
+  using sequant::FullBinaryNode;
+  using sequant::transform_node;
+
+  constexpr int N = 200000;
+  FullBinaryNode<int> node{0};
+  for (int k = 1; k < N; ++k)
+    node = FullBinaryNode<int>{k, std::move(node), FullBinaryNode<int>{-k}};
+  // depth-N left-deep chain: root value N-1, leftmost leaf value 0; each
+  // internal node k has a right leaf -k. Node count = (N-1) internal + N
+  // leaves.
+
+  auto values = [](auto const& root) {
+    std::vector<std::decay_t<decltype(*root)>> v;
+    root.visit([&v](auto const& n) { v.push_back(*n); });
+    return v;
+  };
+
+  auto const orig = values(node);
+  REQUIRE(orig.size() == static_cast<std::size_t>(2 * N - 1));
+
+  // Copy ctor -> iterative deep_copy (would have overflowed).
+  FullBinaryNode<int> const copy = node;
+  CHECK(values(copy) == orig);
+
+  // transform_node -> iterative (would have overflowed).
+  auto const doubled =
+      transform_node(node, [](int v) { return static_cast<long>(2 * v); });
+  std::vector<long> expected;
+  expected.reserve(orig.size());
+  for (int v : orig) expected.push_back(2L * v);
+  CHECK(values(doubled) == expected);
+
+  // node, copy, doubled are destroyed here via the iterative destructor.
 }

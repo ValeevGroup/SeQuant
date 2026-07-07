@@ -3,10 +3,12 @@
 
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <deque>
 #include <memory>
 #include <sstream>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 #include <range/v3/numeric/accumulate.hpp>
 #include <range/v3/range/access.hpp>
@@ -240,9 +242,44 @@ class FullBinaryNode {
   FullBinaryNode<T>* parent_{nullptr};
 
   node_ptr deep_copy() const {
-    return leaf() ? std::make_unique<FullBinaryNode<T>>(data_)
-                  : std::make_unique<FullBinaryNode<T>>(
-                        data_, left_->deep_copy(), right_->deep_copy());
+    // Iterative post-order clone: build the copy bottom-up with an explicit
+    // stack so cloning a deep tree does not recurse to the tree's depth (which
+    // could overflow the C++ call stack).
+    struct Frame {
+      explicit Frame(FullBinaryNode const* s) : src{s} {}
+      FullBinaryNode const* src;
+      int stage = 0;
+      node_ptr left, right;
+    };
+    std::deque<Frame> stk;
+    stk.push_back(Frame{this});
+    node_ptr ret;
+    while (!stk.empty()) {
+      Frame& f = stk.back();
+      if (f.src->leaf()) {
+        ret = std::make_unique<FullBinaryNode<T>>(f.src->data_);
+        stk.pop_back();
+        continue;
+      }
+      switch (f.stage) {
+        case 0:
+          f.stage = 1;
+          stk.push_back(Frame{f.src->left_.get()});
+          break;
+        case 1:
+          f.left = std::move(ret);
+          f.stage = 2;
+          stk.push_back(Frame{f.src->right_.get()});
+          break;
+        default:
+          f.right = std::move(ret);
+          ret = std::make_unique<FullBinaryNode<T>>(
+              f.src->data_, std::move(f.left), std::move(f.right));
+          stk.pop_back();
+          break;
+      }
+    }
+    return ret;
   }
 
   template <typename Ptr>
@@ -358,6 +395,26 @@ class FullBinaryNode {
     // parent_ remains unchanged
 
     return *this;
+  }
+
+  ///
+  /// Destructor. Dismantles the subtree iteratively so that destroying a deep
+  /// tree does not recurse to the tree's depth: children are owned by
+  /// unique_ptr, so the implicitly-generated destructor would recurse and can
+  /// overflow the C++ call stack. Each node is detached from its children
+  /// before being destroyed, so every individual node destruction is O(1).
+  ~FullBinaryNode() {
+    if (!left_ && !right_) return;
+    std::vector<node_ptr> pending;
+    if (left_) pending.push_back(std::move(left_));
+    if (right_) pending.push_back(std::move(right_));
+    while (!pending.empty()) {
+      node_ptr n = std::move(pending.back());
+      pending.pop_back();
+      if (n->left_) pending.push_back(std::move(n->left_));
+      if (n->right_) pending.push_back(std::move(n->right_));
+      // n is destroyed here with both children already detached => O(1).
+    }
   }
 
   ///
@@ -643,12 +700,49 @@ bool operator==(FullBinaryNode<T> const& lhs, FullBinaryNode<U> const& rhs) {
 template <typename T, typename F,
           typename = std::enable_if_t<std::is_invocable_v<F, T>>>
 auto transform_node(FullBinaryNode<T> const& node, F fun) {
-  if (node.leaf())
-    return FullBinaryNode(fun(*node));
-  else {
-    return FullBinaryNode(fun(*node), transform_node(node.left(), fun),
-                          transform_node(node.right(), fun));
+  using R = std::decay_t<std::invoke_result_t<F, T const&>>;
+  using RNode = FullBinaryNode<R>;
+  using rptr = typename RNode::node_ptr;
+  // Iterative post-order transform: build the transformed tree bottom-up with
+  // an explicit stack so transforming a deep tree does not recurse to the
+  // tree's depth (which could overflow the C++ call stack). `fun` is applied to
+  // each node's data exactly once; as a pure data map its application order is
+  // immaterial.
+  struct Frame {
+    explicit Frame(FullBinaryNode<T> const* s) : src{s} {}
+    FullBinaryNode<T> const* src;
+    int stage = 0;
+    rptr left, right;
+  };
+  std::deque<Frame> stk;
+  stk.push_back(Frame{&node});
+  rptr ret;
+  while (!stk.empty()) {
+    Frame& f = stk.back();
+    if (f.src->leaf()) {
+      ret = std::make_unique<RNode>(fun(**f.src));
+      stk.pop_back();
+      continue;
+    }
+    switch (f.stage) {
+      case 0:
+        f.stage = 1;
+        stk.push_back(Frame{&f.src->left()});
+        break;
+      case 1:
+        f.left = std::move(ret);
+        f.stage = 2;
+        stk.push_back(Frame{&f.src->right()});
+        break;
+      default:
+        f.right = std::move(ret);
+        ret = std::make_unique<RNode>(fun(**f.src), std::move(f.left),
+                                      std::move(f.right));
+        stk.pop_back();
+        break;
+    }
   }
+  return RNode{std::move(*ret)};
 }
 
 ///
