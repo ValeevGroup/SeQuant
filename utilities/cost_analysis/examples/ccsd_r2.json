@@ -1,0 +1,29 @@
+{
+  "context": {
+    "spbasis": "spinor"
+  },
+  "sizes": {
+    "i": 10,
+    "a": 38
+  },
+  "optimize": {
+    "objective": "dense_flops",
+    "reorder": true,
+    "volatile_leaf": "R"
+  },
+  "cache": {
+    "enabled": true,
+    "min_repeats": 2
+  },
+  "output": {
+    "path": "ccsd_r2.md",
+    "top_n": 20,
+    "dump_tree": true
+  },
+  "results": [
+    {
+      "name": "R2",
+      "equation_file": "ccsd_r2.inp"
+    }
+  ]
+}

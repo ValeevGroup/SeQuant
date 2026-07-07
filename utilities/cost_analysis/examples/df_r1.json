@@ -1,0 +1,8 @@
+{
+  "context": { "spbasis": "spinor", "convention": "sr", "aux": ["df"] },
+  "sizes": { "i": 10, "a": 38, "Κ": 400 },
+  "optimize": { "objective": "dense_flops", "reorder": true, "volatile_leaf": "R" },
+  "cache": { "enabled": true, "min_repeats": 2 },
+  "output": { "path": "df_r1.md", "top_n": 20 },
+  "results": [ { "name": "R1", "equation_file": "df_r1.inp" } ]
+}
