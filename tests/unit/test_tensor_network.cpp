@@ -243,6 +243,50 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV1,
       REQUIRE(canon1.phase != canon2.phase);
     }
 
+    SECTION("exploit_conjugate") {
+      if constexpr (TN::version() >= 3) {
+        // A Hermitian (BraKetSymmetry::Conjugate) tensor satisfies
+        //   h{bra;ket} = conj(h{ket;bra}),
+        // so its two bra<->ket orientations should fold onto a single canonical
+        // form carrying a recorded conjugation -- but only when the caller opts
+        // in via exploit_conjugate. Default keeps Conjugate bra/ket distinctly
+        // colored (no fold, no conj), mirroring historical behavior.
+        const auto cardinal = TensorCanonicalizer::cardinal_tensor_labels();
+        auto md = [&cardinal](const std::wstring& s, bool exploit) {
+          TN tn(deserialize(s));
+          return tn.canonicalize_slots(cardinal, nullptr, {}, exploit);
+        };
+
+        // Conjugate, exploit OFF (default): orientations do NOT fold; no conj.
+        {
+          auto a = md(L"h{a_1;i_1}:N-C-S", false);
+          auto b = md(L"h{i_1;a_1}:N-C-S", false);
+          REQUIRE(a.graph->cmp(*b.graph) != 0);
+          REQUIRE(!a.conj);
+          REQUIRE(!b.conj);
+        }
+
+        // Conjugate, exploit ON: orientations fold onto one canonical graph,
+        // and exactly one carries the conjugation byproduct.
+        {
+          auto a = md(L"h{a_1;i_1}:N-C-S", true);
+          auto b = md(L"h{i_1;a_1}:N-C-S", true);
+          REQUIRE(a.graph->cmp(*b.graph) == 0);
+          REQUIRE(a.hash_value() == b.hash_value());
+          REQUIRE(a.conj != b.conj);
+        }
+
+        // Symm braket already folds and never sets conj: exploit is a no-op.
+        {
+          auto a = md(L"h{a_1;i_1}:N-S-S", true);
+          auto b = md(L"h{i_1;a_1}:N-S-S", true);
+          REQUIRE(a.graph->cmp(*b.graph) == 0);
+          REQUIRE(!a.conj);
+          REQUIRE(!b.conj);
+        }
+      }
+    }
+
     SECTION("amazing hash collision") {
       auto _ = set_scoped_default_context(
           {.index_space_registry_shared_ptr = mbpt::make_min_sr_spaces(),
