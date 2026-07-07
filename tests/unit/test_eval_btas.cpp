@@ -151,6 +151,63 @@ class rand_tensor_yield {
   }
 };
 
+// Like rand_tensor_yield but aux-aware: lays out tensor axes in full
+// bra-ket-aux order (const_braketaux_indices) and sizes indices by space,
+// including the batching space z. Used to evaluate expressions that carry an
+// auxiliary/batching hyperindex (Laplace-MP2 / THC style) end to end.
+template <typename Tensor_t>
+class aux_rand_tensor_yield {
+ private:
+  size_t const nocc_, nvirt_, nz_;
+  mutable std::map<std::wstring, sequant::ResultPtr> cache_;
+
+  static std::wstring key(sequant::Tensor const& t) {
+    // normalize away specific index ordinals within a space so a canonicalized
+    // leaf and the original deserialized tensor map to the same entry
+    return boost::regex_replace(
+        sequant::serialize(t.clone(), {.annot_symm = false}),
+        boost::wregex{L"([iaz])[↑↓]?_?\\d+"}, L"$1");
+  }
+
+  size_t extent(sequant::Index const& idx) const {
+    auto isr = sequant::get_default_context().index_space_registry();
+    if (idx.space() == isr->retrieve(L"i")) return nocc_;
+    if (idx.space() == isr->retrieve(L"a")) return nvirt_;
+    if (idx.space() == isr->retrieve(L"z")) return nz_;
+    SEQUANT_ASSERT(false && "aux_rand_tensor_yield: unsupported IndexSpace");
+    return 0;
+  }
+
+ public:
+  aux_rand_tensor_yield(size_t nocc, size_t nvirt, size_t nz)
+      : nocc_{nocc}, nvirt_{nvirt}, nz_{nz} {}
+
+  sequant::ResultPtr operator()(sequant::Tensor const& tnsr) const {
+    using namespace sequant;
+    auto const k = key(tnsr);
+    if (auto it = cache_.find(k); it != cache_.end()) return it->second;
+    auto rng = btas::Range{tnsr.const_braketaux_indices() |
+                           ranges::views::transform(
+                               [this](auto const& ix) { return extent(ix); }) |
+                           ranges::to_vector};
+    Tensor_t t{rng};
+    t.generate([]() { return static_cast<double>(std::rand()) / RAND_MAX; });
+    return cache_
+        .emplace(k, eval_result<ResultTensorBTAS<Tensor_t>>(std::move(t)))
+        .first->second;
+  }
+
+  sequant::ResultPtr operator()(
+      sequant::meta::can_evaluate auto const& node) const {
+    using namespace sequant;
+    if (node->result_type() == ResultType::Tensor)
+      return (*this)(node->expr()->template as<Tensor>());
+    SEQUANT_ASSERT(node->expr()->template is<Constant>());
+    return eval_result<ResultScalar<double>>(
+        node->as_constant().template value<double>());
+  }
+};
+
 using namespace sequant;
 
 template <
@@ -578,4 +635,142 @@ TEST_CASE("binarize_highorder_aux_hyperindex", "[eval_btas][hyperindex]") {
   // 9 leaves + 8 contraction intermediates per summand, plus the sum head and
   // the (-1) scaling node -- comfortably more than a handful of tensor nodes.
   CHECK(tensor_nodes > 10);
+}
+
+// Directly exercises ResultTensorBTAS::prod on a contraction that carries a
+// batch (Hadamard) axis -- a label shared by both operands AND the result. A
+// plain btas::contract cannot express one (it always sums an index common to
+// both operands), so prod() detects the batch axis and slices over it. Every
+// slice shape that batched_contract() must handle is covered: a genuine
+// contraction, a dot (result-remainder empty), and a scalar*tensor (one
+// operand-remainder empty).
+TEST_CASE("btas_batched_contract", "[eval_btas][hyperindex]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+
+  // arbitrary distinct annotation labels; x is the batch axis
+  const long a = 1, b = 2, k = 3, x = 9;
+  const std::size_t na = 2, nb = 4, nk = 3, nx = 5;
+
+  auto make = [](std::initializer_list<std::size_t> ext) {
+    BTensorD t{btas::Range{container::svector<std::size_t>{ext}}};
+    // deterministic, non-trivial fill: distinct value per element
+    double v = 0.0;
+    t.generate([&v]() { return (v += 1.0) / 7.0; });
+    return t;
+  };
+  auto annots = [](container::svector<long> l, container::svector<long> r,
+                   container::svector<long> c) {
+    return std::array<std::any, 3>{std::move(l), std::move(r), std::move(c)};
+  };
+  auto prod = [](BTensorD const& L, BTensorD const& R,
+                 std::array<std::any, 3> const& ann) {
+    ResultPtr lr = eval_result<ResultTensorBTAS<BTensorD>>(L);
+    ResultPtr rr = eval_result<ResultTensorBTAS<BTensorD>>(R);
+    return lr->prod(*rr, ann, DeNest::False)->get<BTensorD>();
+  };
+
+  SECTION("contraction + batch: L[a,k,x] R[k,b,x] -> C[a,b,x]") {
+    auto L = make({na, nk, nx}), R = make({nk, nb, nx});
+    auto C = prod(L, R, annots({a, k, x}, {k, b, x}, {a, b, x}));
+    REQUIRE(C.rank() == 3);
+    CHECK(C.extent(0) == na);
+    CHECK(C.extent(1) == nb);
+    CHECK(C.extent(2) == nx);
+    for (std::size_t ia = 0; ia < na; ++ia)
+      for (std::size_t ib = 0; ib < nb; ++ib)
+        for (std::size_t ix = 0; ix < nx; ++ix) {
+          double ref = 0.0;
+          for (std::size_t ik = 0; ik < nk; ++ik)
+            ref += L(ia, ik, ix) * R(ik, ib, ix);
+          CHECK(C(ia, ib, ix) == Catch::Approx(ref));
+        }
+  }
+
+  SECTION("dot + batch (empty result remainder): L[k,x] R[k,x] -> C[x]") {
+    auto L = make({nk, nx}), R = make({nk, nx});
+    auto C = prod(L, R, annots({k, x}, {k, x}, {x}));
+    REQUIRE(C.rank() == 1);
+    CHECK(C.extent(0) == nx);
+    for (std::size_t ix = 0; ix < nx; ++ix) {
+      double ref = 0.0;
+      for (std::size_t ik = 0; ik < nk; ++ik) ref += L(ik, ix) * R(ik, ix);
+      CHECK(C(ix) == Catch::Approx(ref));
+    }
+  }
+
+  SECTION("scalar*tensor + batch (empty operand remainder): L[x] R[b,x]") {
+    auto L = make({nx}), R = make({nb, nx});
+    auto C = prod(L, R, annots({x}, {b, x}, {b, x}));
+    REQUIRE(C.rank() == 2);
+    CHECK(C.extent(0) == nb);
+    CHECK(C.extent(1) == nx);
+    for (std::size_t ib = 0; ib < nb; ++ib)
+      for (std::size_t ix = 0; ix < nx; ++ix)
+        CHECK(C(ib, ix) == Catch::Approx(L(ix) * R(ib, ix)));
+  }
+
+  SECTION(
+      "result axis order differs from [batch,rest]: L[a,x] R[b,x] -> "
+      "C[x,a,b]") {
+    auto L = make({na, nx}), R = make({nb, nx});
+    auto C = prod(L, R, annots({a, x}, {b, x}, {x, a, b}));
+    REQUIRE(C.rank() == 3);
+    CHECK(C.extent(0) == nx);
+    CHECK(C.extent(1) == na);
+    CHECK(C.extent(2) == nb);
+    for (std::size_t ix = 0; ix < nx; ++ix)
+      for (std::size_t ia = 0; ia < na; ++ia)
+        for (std::size_t ib = 0; ib < nb; ++ib)
+          CHECK(C(ix, ia, ib) == Catch::Approx(L(ia, ix) * R(ib, ix)));
+  }
+}
+
+// End-to-end through binarize + evaluate: a batched-over-aux contraction whose
+// batching index z1 is shared by 3 tensors (the >2-tensor case the TNv3 fix
+// unlocks) and carried into the result. Every contraction node evaluates via
+// the batched prod() path, and the answer must match a hand-computed reference.
+//   R{;;z1} = A{;a1;z1} * B{a1;a2;z1} * C{a2;;z1}
+//   R[z] = sum_{a1,a2} A[a1,z] * B[a1,a2,z] * C[a2,z]
+TEST_CASE("eval_btas_batched_over_aux", "[eval_btas][hyperindex]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+
+  auto isr = mbpt::make_sr_spaces();
+  mbpt::add_batching_spaces(isr);  // z
+  auto ctx_resetter =
+      set_scoped_default_context(Context{get_default_context()}.set(isr));
+
+  // Nonsymm so bra<->ket orientation is never folded by canonicalization: the
+  // leaf identities (hence the yielder cache keys) stay put.
+  const io::serialization::DeserializationOptions opts{
+      .def_perm_symm = Symmetry::Nonsymm,
+      .def_braket_symm = BraKetSymmetry::Nonsymm};
+
+  std::srand(42);
+  const size_t nocc = 2, nvirt = 3, nz = 5;
+  aux_rand_tensor_yield<BTensorD> yield_{nocc, nvirt, nz};
+
+  auto res = deserialize<ResultExpr>(
+      L"R{;;z1} = A{;a1;z1} * B{a1;a2;z1} * C{a2;;z1}", opts);
+  auto node = binarize<EvalExprBTAS>(res);
+
+  auto got = evaluate(node, node->annot(), yield_)->get<BTensorD>();
+  REQUIRE(got.rank() == 1);
+  REQUIRE(got.extent(0) == nz);
+
+  auto leaf = [&](std::wstring_view s) -> BTensorD const& {
+    return yield_(deserialize<ExprPtr>(s, opts)->as<Tensor>())->get<BTensorD>();
+  };
+  auto const& A = leaf(L"A{;a1;z1}");    // [a1, z]
+  auto const& B = leaf(L"B{a1;a2;z1}");  // [a1, a2, z]
+  auto const& C = leaf(L"C{a2;;z1}");    // [a2, z]
+
+  for (size_t z = 0; z < nz; ++z) {
+    double ref = 0.0;
+    for (size_t a1 = 0; a1 < nvirt; ++a1)
+      for (size_t a2 = 0; a2 < nvirt; ++a2)
+        ref += A(a1, z) * B(a1, a2, z) * C(a2, z);
+    CHECK(got(z) == Catch::Approx(ref));
+  }
 }
