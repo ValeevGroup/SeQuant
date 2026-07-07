@@ -133,7 +133,7 @@ EvalExpr::index_vector const& EvalExpr::canon_indices() const noexcept {
   return canon_indices_;
 }
 
-EvalExpr::EvalExpr(Tensor const& tnsr)
+EvalExpr::EvalExpr(Tensor const& tnsr, bool exploit_conjugate)
     : op_type_{std::nullopt},
       result_type_{ResultType::Tensor},
       expr_{tnsr.clone()} {
@@ -142,9 +142,16 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     ExprPtrList tlist{expr_};
     auto tn = TensorNetwork(tlist);
     auto md =
-        tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
+        tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels(),
+                              nullptr, {}, exploit_conjugate);
     hash_value_ = md.hash_value();
     canon_phase_ = md.phase;
+    // Kept OUT of hash_value(): a Conjugate leaf and its bra<->ket-swapped
+    // partner canonicalize to the same graph/hash so they share a cache slot;
+    // binarize(Tensor) reads this bit to wrap the swapped one in an
+    // EvalOp::Adjoint node that conjugates the shared cached value on
+    // retrieval.
+    canon_conj_ = md.conj;
     canon_indices_ = md.get_indices<index_vector>();
     connectivity_ = std::move(md.graph);
   } else {
@@ -288,6 +295,8 @@ std::string EvalExpr::label() const noexcept {
 
 std::int8_t EvalExpr::canon_phase() const noexcept { return canon_phase_; }
 
+bool EvalExpr::canon_conj() const noexcept { return canon_conj_; }
+
 bool EvalExpr::has_connectivity_graph() const noexcept {
   return connectivity_ != nullptr;
 }
@@ -398,7 +407,7 @@ EvalExprNode binarize(Variable const& v) { return EvalExprNode{EvalExpr{v}}; }
 
 EvalExprNode binarize(Power const& p) { return EvalExprNode{EvalExpr{p}}; }
 
-EvalExprNode binarize(Tensor const& t) {
+EvalExprNode binarize(Tensor const& t, const BinarizationOptions& opts) {
   // Detect adjoint-marked tensor leaves (label ending in U+207A '⁺'). These
   // arise when the user wrote an adjoint of a BraKetSymmetry::Nonsymm tensor,
   // see Tensor::adjoint() in expressions/tensor.cpp. We surface the adjoint
@@ -438,6 +447,48 @@ EvalExprNode binarize(Tensor const& t) {
     return EvalExprNode{std::move(adj), std::move(bare_leaf),
                         std::move(sentinel)};
   }
+
+  // Opt-in: fold the two bra<->ket orientations of a BraKetSymmetry::Conjugate
+  // leaf onto one cached value and serve the conjugated orientation via an
+  // EvalOp::Adjoint wrapper. Unlike the '⁺' case above (an explicit Nonsymm
+  // adjoint = conjugate *and* transpose), here the fold already put both
+  // orientations on the same canonical slot order, so the wrapper carries that
+  // *same* order as its operand: the adjoint() eval then degenerates to a pure
+  // elementwise conjugation (result(post) = operand(pre).conj() with post ==
+  // pre, no permutation). Kept behind opts.exploit_conjugate so paths that do
+  // not opt in are byte-identical.
+  if (opts.exploit_conjugate) {
+    EvalExpr leaf{t, /*exploit_conjugate=*/true};
+    if (leaf.canon_conj()) {
+      // adjoint() swaps bra<->ket of a Conjugate tensor (no '⁺' marker; see
+      // Tensor::adjoint), landing on the canonical (conj=false) orientation
+      // whose leaf holds the shared cached value.
+      Tensor bare{t};
+      bare.adjoint();
+      EvalExprNode bare_leaf{EvalExpr{bare, /*exploit_conjugate=*/true}};
+      SEQUANT_ASSERT(!bare_leaf->canon_conj());
+
+      // Sentinel right child (see the '⁺' path above).
+      EvalExprNode sentinel{EvalExpr{Constant{1}}};
+
+      // Wrapper: same canonical index order as the bare leaf (so eval is pure
+      // conj), hash distinct from the bare leaf so the conjugated orientation
+      // gets its own cache slot layered over the shared operand.
+      auto h = bare_leaf->hash_value();
+      hash::combine(h, static_cast<size_t>(EvalOp::Adjoint));
+      EvalExpr adj{EvalOp::Adjoint,             //
+                   ResultType::Tensor,          //
+                   t.clone(),                   //
+                   bare_leaf->canon_indices(),  //
+                   bare_leaf->canon_phase(),    //
+                   h,                           //
+                   nullptr};
+      return EvalExprNode{std::move(adj), std::move(bare_leaf),
+                          std::move(sentinel)};
+    }
+    return EvalExprNode{std::move(leaf)};
+  }
+
   return EvalExprNode{EvalExpr{t}};
 }
 
@@ -638,7 +689,7 @@ EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract,
     return binarize(expr->as<Variable>());
 
   if (expr->is<Tensor>())  //
-    return binarize(expr->as<Tensor>());
+    return binarize(expr->as<Tensor>(), opts);
 
   if (expr->is<Sum>())  //
     return binarize(expr->as<Sum>(), uncontract, opts);

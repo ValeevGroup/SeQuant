@@ -13,6 +13,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <initializer_list>
+#include <iostream>
 #include <memory>
 #include <set>
 #include <string>
@@ -531,5 +532,89 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
                            ->as<Tensor>()};
 
     REQUIRE_NOTHROW(result_expr(t1, t2, EvalOp::Product));
+  }
+}
+
+// B2: the opt-in exploit_conjugate path folds the two bra<->ket orientations of
+// a BraKetSymmetry::Conjugate leaf onto one cached value, serving the
+// conjugated orientation via an EvalOp::Adjoint wrapper (pure conjugation, no
+// transpose) so the two share a cache slot. Off by default = historical
+// behavior (the orientations get distinct leaf identities and do not fold).
+TEST_CASE("exploit_conjugate eval fold", "[eval_expr][exploit_conjugate]") {
+  using namespace sequant;
+  TensorCanonicalizer::register_instance(
+      std::make_shared<DefaultTensorCanonicalizer>());
+  auto ctx = set_scoped_default_context(
+      Context{get_default_context()}.set(AssertStrictBraKetSymmetry::No));
+
+  // A proto-indexed (Tensor-of-Tensor) Conjugate leaf and its bra<->ket swap.
+  // These evaluate to complex conjugates of each other. Proto indices route the
+  // leaf ctor through canonicalize_slots (the exploit path); a flat tensor
+  // would take the block-canonicalization branch instead.
+  auto C = deserialize(L"C{a_1<i_1>;i_2}:N-C-S")->as<Tensor>();
+  REQUIRE(ranges::any_of(C.const_indices(), &Index::has_proto_indices));
+  auto C_swap = C;
+  C_swap.adjoint();  // swaps bra<->ket; no '⁺' marker for Conjugate
+  REQUIRE(C_swap.label() == L"C");
+
+  SECTION("leaf identity: fold with exploit on, distinct with it off") {
+    // Off (historical): the two orientations get distinct leaf hashes.
+    EvalExpr off{C};
+    EvalExpr off_swap{C_swap};
+    REQUIRE_FALSE(off.canon_conj());
+    REQUIRE_FALSE(off_swap.canon_conj());
+    REQUIRE(off.hash_value() != off_swap.hash_value());
+
+    // On: they fold to one hash; exactly one carries the conjugation byproduct.
+    EvalExpr on{C, /*exploit_conjugate=*/true};
+    EvalExpr on_swap{C_swap, /*exploit_conjugate=*/true};
+    REQUIRE(on.hash_value() == on_swap.hash_value());
+    REQUIRE(on.canon_conj() != on_swap.canon_conj());
+  }
+
+  SECTION("binarize wraps the conjugated orientation in EvalOp::Adjoint") {
+    // Which orientation bliss picks as canonical (conj=false) is its choice;
+    // key off the byproduct bit rather than assuming.
+    EvalExpr probe{C, /*exploit_conjugate=*/true};
+    Tensor const& canonical = probe.canon_conj() ? C_swap : C;
+    Tensor const& swapped = probe.canon_conj() ? C : C_swap;
+
+    BinarizationOptions opts{.exploit_conjugate = true};
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto canon_tree = binarize(ex<Tensor>(canonical), {}, opts);
+    auto swap_tree = binarize(ex<Tensor>(swapped), {}, opts);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+    // Canonical orientation: a plain leaf (no conj byproduct).
+    REQUIRE(canon_tree.leaf());
+    REQUIRE_FALSE(canon_tree->is_adjoint());
+
+    // Swapped orientation: an EvalOp::Adjoint over the bare canonical leaf,
+    // plus the Constant(1) sentinel right child.
+    REQUIRE_FALSE(swap_tree.leaf());
+    REQUIRE(swap_tree->is_adjoint());
+    REQUIRE(swap_tree.right().leaf());
+    REQUIRE(swap_tree.right()->is_constant());
+
+    // Fold: the Adjoint's bare operand shares the canonical leaf's cache slot
+    // (equal hash), while the Adjoint node itself is a distinct slot layered
+    // over it.
+    REQUIRE(swap_tree.left()->hash_value() == canon_tree->hash_value());
+    REQUIRE(swap_tree->hash_value() != canon_tree->hash_value());
+
+    // Pure conjugation, no transpose: the wrapper presents the SAME canonical
+    // index order as its operand, so eval's adjoint() is an elementwise conj.
+    REQUIRE(swap_tree->canon_indices() == swap_tree.left()->canon_indices());
+  }
+
+  SECTION("off by default: no fold, no Adjoint") {
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto canon_tree = binarize(ex<Tensor>(C));
+    auto swap_tree = binarize(ex<Tensor>(C_swap));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(canon_tree.leaf());
+    REQUIRE(swap_tree.leaf());
+    REQUIRE_FALSE(swap_tree->is_adjoint());
+    REQUIRE(canon_tree->hash_value() != swap_tree->hash_value());
   }
 }
