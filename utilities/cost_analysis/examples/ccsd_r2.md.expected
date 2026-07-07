@@ -1,0 +1,41 @@
+# SeQuant cost analysis
+
+_Generated: 2026-07-06 06:53:47 UTC_  
+_SeQuant: v2.0.0-4039-g4ebad601a-dirty (4ebad601a3c97ef8753b0bb4dc69c386a4581613)_
+
+Sizes in MB (8 bytes/element).
+
+## R2
+
+Terms: 2; distinct intermediates: 1; reused: 0; largest: 0.0763 MB; peak storage: 2.2797 MB.
+
+Total FLOPs (symbolic): 4*i^4a^2 + i^2a^2
+
+Total FLOPs (computed, index extents): 5.7904e+07
+
+### Largest intermediates
+
+| Rank | Result | Spaces | Memory (MB) | Uses | Construction | Local FLOPs |
+|---|---|---|---|---|---|---|
+| 1 | I(i_4,i_3,i_2,i_1) | OOOO | 0.0763 | 1 | (g(a_3,a_4,i_1,i_2) * t(i_3,i_4,a_3,a_4)) | 2*i^4a^2 |
+
+### Most expensive contractions
+
+| Rank | Result | Spaces | FLOPs | Uses | Construction | Cost |
+|---|---|---|---|---|---|---|
+| 1 | I(i_4,i_3,i_2,i_1) | OOOO | 2.8880e+07 | 1 | (g(a_3,a_4,i_1,i_2) * t(i_3,i_4,a_3,a_4)) | 2*i^4a^2 |
+
+### Shape census
+
+| Shape | Size (MB) | # Distinct | Total uses |
+|---|---|---|---|
+| OOOO | 0.0763 | 1 | 1 |
+
+## Cache (gated, volatile leaf = "R", min_repeats = 2)
+
+| Metric | Value |
+|---|---|
+| Cached | 1 |
+| Persistent | 1 |
+| Persistent footprint (MB) | 0.0763 |
+| Total cached footprint (MB) | 0.0763 |
