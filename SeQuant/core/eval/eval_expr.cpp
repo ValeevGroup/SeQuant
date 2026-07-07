@@ -161,6 +161,15 @@ EvalExpr::EvalExpr(Tensor const& tnsr, bool exploit_conjugate)
     // and it normalizes bra<->ket orientation for braket-symmetric tensors so
     // that equivalent half-tensor forms (e.g. X{a;;x} and X{;a;x}) fold.
     auto& t = expr_->as<Tensor>();
+    // Opt-in: also fold the two bra<->ket orientations of a flat Conjugate
+    // tensor (which apply() leaves distinct, since that swap carries a
+    // conjugation) and record the byproduct in canon_conj_ -- kept out of the
+    // hash so the two orientations share a cache slot; binarize(Tensor) serves
+    // the swapped one via an EvalOp::Adjoint on retrieval. Done before apply()
+    // so apply()'s within-bundle sort sees the canonical orientation. This is
+    // the flat-leaf analog of the ToT canonicalize_slots path above.
+    if (exploit_conjugate)
+      canon_conj_ = TensorBlockCanonicalizer{}.fold_conjugate_braket(t);
     auto phase = TensorBlockCanonicalizer{}.apply(t);
     canon_phase_ = phase ? -1 : 1;
     hash_value_ = hash_terminal_tensor(t);

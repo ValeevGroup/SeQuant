@@ -617,4 +617,46 @@ TEST_CASE("exploit_conjugate eval fold", "[eval_expr][exploit_conjugate]") {
     REQUIRE_FALSE(swap_tree->is_adjoint());
     REQUIRE(canon_tree->hash_value() != swap_tree->hash_value());
   }
+
+  SECTION("flat (block-canon) Conjugate leaf folds too") {
+    // A flat (protoindex-free) Conjugate leaf takes the block-canonicalization
+    // branch, not canonicalize_slots. Its bra/ket spaces differ, so the fold
+    // engages there as well (TensorBlockCanonicalizer::fold_conjugate_braket)
+    // -- this is the path the flat Kramers t/g take.
+    auto F = deserialize(L"C{a_1;i_1}:N-C-S")->as<Tensor>();
+    REQUIRE_FALSE(ranges::any_of(F.const_indices(), &Index::has_proto_indices));
+    auto F_swap = F;
+    F_swap.adjoint();
+    REQUIRE(F_swap.label() == L"C");
+
+    // Off: distinct leaf hashes, no conj byproduct.
+    EvalExpr foff{F};
+    EvalExpr foff_swap{F_swap};
+    REQUIRE_FALSE(foff.canon_conj());
+    REQUIRE_FALSE(foff_swap.canon_conj());
+    REQUIRE(foff.hash_value() != foff_swap.hash_value());
+
+    // On: fold to one hash; exactly one carries the byproduct.
+    EvalExpr fon{F, /*exploit_conjugate=*/true};
+    EvalExpr fon_swap{F_swap, /*exploit_conjugate=*/true};
+    REQUIRE(fon.hash_value() == fon_swap.hash_value());
+    REQUIRE(fon.canon_conj() != fon_swap.canon_conj());
+
+    // binarize wraps the conjugated orientation in EvalOp::Adjoint over the
+    // shared bare leaf, same canonical index order (pure conj).
+    EvalExpr probe{F, /*exploit_conjugate=*/true};
+    Tensor const& canonical = probe.canon_conj() ? F_swap : F;
+    Tensor const& swapped = probe.canon_conj() ? F : F_swap;
+    BinarizationOptions opts{.exploit_conjugate = true};
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto canon_tree = binarize(ex<Tensor>(canonical), {}, opts);
+    auto swap_tree = binarize(ex<Tensor>(swapped), {}, opts);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(canon_tree.leaf());
+    REQUIRE_FALSE(canon_tree->is_adjoint());
+    REQUIRE(swap_tree->is_adjoint());
+    REQUIRE(swap_tree.left()->hash_value() == canon_tree->hash_value());
+    REQUIRE(swap_tree->hash_value() != canon_tree->hash_value());
+    REQUIRE(swap_tree->canon_indices() == swap_tree.left()->canon_indices());
+  }
 }
