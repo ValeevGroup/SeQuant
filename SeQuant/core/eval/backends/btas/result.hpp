@@ -196,8 +196,16 @@ T batched_contract(typename T::numeric_type alpha, T const& L, Annot const& la,
     }
     return std::pair{std::move(e), sz};
   };
+  // both operands were permuted to [batch..., rest...], so their leading nb
+  // axes are the batch axes in the same order; a well-formed annotation gives
+  // them identical extents. Guard against a malformed one before slicing (P is
+  // taken from the left operand below).
   std::size_t P = 1;
-  for (std::size_t i = 0; i != nb; ++i) P *= Lp.extent(i);
+  for (std::size_t i = 0; i != nb; ++i) {
+    SEQUANT_ASSERT(Lp.extent(i) == Rp.extent(i) &&
+                   "batched_contract: operands disagree on a batch extent");
+    P *= Lp.extent(i);
+  }
   auto const [rlext, rlsz] = tail_extents(Lp, nb);
   auto const [rrext, rrsz] = tail_extents(Rp, nb);
 
