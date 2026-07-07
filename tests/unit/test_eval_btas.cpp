@@ -3,12 +3,16 @@
 
 #include "catch2_sequant.hpp"
 
+#include <SeQuant/core/binary_node.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/backends/btas/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/btas/result.hpp>
 #include <SeQuant/core/eval/eval.hpp>
+#include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <btas/btas.h>
 #include <btas/tensor_func.h>
@@ -508,4 +512,70 @@ TEST_CASE("eval_adjoint_complex_btas", "[eval_btas]") {
       CHECK(got.real() == Catch::Approx(expected.real()).margin(1e-12));
       CHECK(got.imag() == Catch::Approx(expected.imag()).margin(1e-12));
     }
+}
+
+// A high-order hyperindex is an index shared among MORE than two tensor slots.
+// When such an index is also *external* (named -- it survives into the result),
+// TensorNetworkV3::canonicalize_slots used to assert that every named-index
+// edge connects at most two vertices, so binarizing an expression carrying a
+// batching/auxiliary index across many factors threw. This reproduces the
+// Laplace-transform MP2 energy denominator, where the batching index z1 rides
+// in the aux slot of every factor and of the result E{;;z1}.
+//
+// NB This only exercises tree construction (what the reported failure did):
+// binarize<EvalExprBTAS>(deserialize<ResultExpr>(...)). Actually *evaluating*
+// the tree is a separate matter -- every node is a batched (Hadamard)
+// contraction over z1, which the BTAS backend's btas::contract (an index in
+// both operands is always summed, never batched) does not support.
+TEST_CASE("binarize_highorder_aux_hyperindex", "[eval_btas][hyperindex]") {
+  using namespace sequant;
+
+  // register the OBS AO space (μ) and the batching space (z) on top of the
+  // standard single-reference spaces
+  auto isr = mbpt::make_sr_spaces();
+  mbpt::add_ao_spaces(isr);        // μ (OBS AO)
+  mbpt::add_batching_spaces(isr);  // z (batching)
+  auto ctx_resetter =
+      set_scoped_default_context(Context{get_default_context()}.set(isr));
+
+  const std::wstring e_a_expr =
+      L"E{;;z1} = w{;;z1} * g{μ5,μ6;μ7,μ8;z1} * c{μ1;i1;z1} * ć{i1;μ5;z1} * "
+      L"d{μ7;μ3;z1} * c{μ2;i2;z1} * ć{i2;μ6;z1} * d{μ8;μ4;z1} * "
+      L"g{μ3,μ4;μ1,μ2;z1}"
+      L" - w{;;z1} * g{μ5,μ6;μ7,μ8;z1} * c{μ1;i1;z1} * ć{i1;μ5;z1} * "
+      L"d{μ7;μ3;z1} * c{μ2;i2;z1} * ć{i2;μ6;z1} * d{μ8;μ4;z1} * "
+      L"g{μ4,μ3;μ1,μ2;z1}";
+
+  auto res = deserialize<ResultExpr>(e_a_expr);
+
+  // the regression: this used to throw
+  //   SEQUANT_ASSERT(edge_it->vertex_count() == 2) in canonicalize_slots
+  REQUIRE_NOTHROW(binarize<EvalExprBTAS>(res));
+  auto node = binarize<EvalExprBTAS>(res);
+
+  const auto z1 = Index{L"z_1"};
+  auto has_aux_z1 = [&z1](Tensor const& t) {
+    return ranges::any_of(t.aux(), [&z1](Index const& ix) { return ix == z1; });
+  };
+
+  // the result carries z1 in its (only) aux slot ...
+  REQUIRE(node->is_tensor());
+  CHECK(node->as_tensor().aux_rank() == 1);
+  CHECK(has_aux_z1(node->as_tensor()));
+
+  // ... and z1 rides in the aux slot of every tensor node of the tree (leaves
+  // and contraction intermediates alike): the batching index is never
+  // contracted away.
+  std::size_t tensor_nodes = 0;
+  node.visit(
+      [&](auto const& n) {
+        if (n->is_tensor()) {
+          ++tensor_nodes;
+          CHECK(has_aux_z1(n->as_tensor()));
+        }
+      },
+      TreeTraversal::PreOrder);
+  // 9 leaves + 8 contraction intermediates per summand, plus the sum head and
+  // the (-1) scaling node -- comfortably more than a handful of tensor nodes.
+  CHECK(tensor_nodes > 10);
 }
