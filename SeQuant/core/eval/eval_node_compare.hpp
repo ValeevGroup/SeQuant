@@ -63,20 +63,13 @@ struct TreeNodeEqualityComparator {
       return false;
     }
 
-    // HACK (complex / Kramers CSE): distinct canonicalization phase => distinct
-    // node. The canonical colored graph is value-invariant for ordinary
-    // tensors, but not for complex tensors whose leaf value is reconstructed
-    // downstream (e.g. MPQC's Kramers t-amplitudes via kr_recon): two
-    // contractions can share a canonical graph yet evaluate to genuinely
-    // different (NOT merely sign- flipped) tensors, which surfaces here as a
-    // +1/-1 canon_phase collision. Keying the phase apart prevents that wrong
-    // CSE merge. This only ever *splits* cache entries (never merges), so it is
-    // correctness-preserving; real closed-shell paths (all phase +1) are
-    // unaffected and lose no CSE.
-    // TODO replace with a faithful conjugation-aware eval-node identity once
-    //      TensorNetworkV3 exploits BraKetSymmetry::Conjugate (carry the
-    //      conjugation through canonicalization, like canon_phase carries
-    //      sign).
+    // canon_phase (+1/-1) is part of the node's value identity: two nodes with
+    // the same canonical graph/leaf but opposite antisymmetric-reorder parity
+    // evaluate to negatives of each other (+T vs -T) and must not share a CSE
+    // cache slot. It is already folded into hash_value() (so cross-phase pairs
+    // normally hash apart and fail the check above), which is a no-op for real
+    // closed-shell paths where every phase is +1; this guards the residual case
+    // of a hash collision, mirroring how the graph is both hashed and compared.
     if (lhs->canon_phase() != rhs->canon_phase()) {
       return false;
     }

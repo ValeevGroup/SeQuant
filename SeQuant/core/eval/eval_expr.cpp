@@ -208,7 +208,19 @@ const std::optional<EvalOp>& EvalExpr::op_type() const noexcept {
 
 ResultType EvalExpr::result_type() const noexcept { return result_type_; }
 
-size_t EvalExpr::hash_value() const noexcept { return hash_value_; }
+size_t EvalExpr::hash_value() const noexcept {
+  // canon_phase (+1/-1) is part of the node's *value* identity: two nodes that
+  // share a canonical graph/leaf but differ in antisymmetric-reorder parity
+  // evaluate to negatives of each other (+T vs -T), so they must not share a
+  // CSE cache slot. Folding it in here (rather than special-casing the
+  // comparator) makes every node hash carry the phase. It is a no-op for real
+  // closed-shell paths (every phase is +1, so all hashes shift uniformly and
+  // the equality structure is unchanged); complex/Kramers paths, which do
+  // produce -1 phases, are thereby kept apart.
+  auto h = hash_value_;
+  hash::combine(h, canon_phase_);
+  return h;
+}
 
 ExprPtr EvalExpr::expr() const noexcept { return expr_; }
 
