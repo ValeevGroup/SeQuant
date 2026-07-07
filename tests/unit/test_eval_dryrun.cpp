@@ -1503,6 +1503,173 @@ TEST_CASE(
   CHECK(perf_first.cp.peak_bytes > 5e11);
 }
 
+// Task 1 (P0, dry-run cost-model comparison): perf-first
+// (DenseTimeSpaceBatched) vs peak-first (DenseSpaceTimeBatched) modelled
+// flops/peak, swept over ALL summands of the real C60 residual (not just the
+// index-38 giant the case above focuses on). This is the decision input for
+// whether enabling perf-first at scale is worth it: the summed-flops ratio
+// (perf-first total flops / peak-first total flops) is the modelled
+// per-iteration speedup ceiling, and the max modelled peak per objective
+// shows the memory spread. This is a MODELLED (flops) proxy, not a
+// wall-clock measurement -- see the note at the end of this case.
+TEST_CASE(
+    "dryrun perf-first vs peak-first modelled cost across all C60 residual "
+    "terms",
+    "[dryrun-perfcost]") {
+  auto ctx = get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr);  // mu~
+  sequant::mbpt::add_df_spaces(isr);   // K
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+
+  auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                          "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = deserialize<ExprPtr>(line);
+  REQUIRE(static_cast<bool>(expr));
+  REQUIRE(expr->is<Sum>());
+  auto const& summands = expr->as<Sum>().summands();
+  REQUIRE(!summands.empty());
+  auto flatten_product = [](ExprPtr const& e) -> ExprPtr {
+    if (!e->is<Product>()) return e;
+    auto const& p = e->as<Product>();
+    return ex<Product>(p.scalar(), p.factors(), Product::Flatten::Yes);
+  };
+
+  // FAITHFUL real C60 config (same regime as [dryrun-objective] above): the
+  // measured heavy-tailed CSV moments in kC60_pVDZF12.
+  auto regime = df_regime(kC60_pVDZF12);
+
+  struct Analysis {
+    sequant::eval::dryrun::CostProfile cp;
+  };
+
+  // Optimize `giant` under `obj`, binarize, and return the modeled cost
+  // profile (flops/peak_bytes/exec_cost) via the single shared
+  // cost_profile() entry point -- the same policy/cache setup as
+  // [dryrun-objective]'s analyze() above, minus the per-node free-mu~
+  // structural walk (not needed for this aggregate sweep).
+  auto analyze = [&](ExprPtr const& giant, ObjectiveFunction obj) -> Analysis {
+    sequant::BatchPolicy policy;
+    policy.is_batchable_index = is_df_batchable;
+    policy.batch_target_size = [](Index const& ix) -> std::size_t {
+      return ix.space().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
+    };
+    policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+    policy.accumulation_factor = 1.0;
+    policy.peak_threshold =
+        (std::getenv("SEQUANT_UT_DRYRUN_PEAK_THR_GB")
+             ? std::atof(std::getenv("SEQUANT_UT_DRYRUN_PEAK_THR_GB"))
+             : 40.0) *
+        1e9;
+
+    auto axes_map = std::make_shared<std::unordered_map<
+        Expr const*, container::vector<container::svector<Index>>>>();
+    OptimizeOptions opts;
+    opts.objective_function = obj;
+    opts.idx_to_extent = regime.idx_to_extent();
+    opts.inner_pow = regime.inner_pow_fn();
+    opts.batch_policy = policy;
+    opts.volatile_weight = 20.0;
+    opts.roofline.machine_balance = 200.0;
+    opts.roofline.fast_mem_elems = 1000000.0;
+    opts.term_batch_axes = axes_map;
+
+    auto optimized = optimize(giant, opts);
+    REQUIRE(static_cast<bool>(optimized));
+    auto it = axes_map->find(optimized.get());
+    container::vector<container::svector<Index>> node_axes;
+    if (it != axes_map->end()) node_axes = it->second;
+    BinarizationOptions bopts;
+    bopts.node_batch_axes = node_axes;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize<EvalExprDryRun>(optimized, {}, bopts);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+    sequant::eval::dryrun::CacheConfig cfg;
+    cfg.max_footprint = 1e11;
+    cfg.min_repeats = 1;
+    cfg.is_volatile = [](EvalNodeDryRun const& n) {
+      if (!n.leaf() || !n->is_tensor()) return false;
+      return n->as_tensor().label() == L"t";
+    };
+    Analysis a;
+    a.cp = sequant::eval::dryrun::cost_profile(
+        std::vector<EvalNodeDryRun>{node}, policy, cfg, regime,
+        /*trace=*/nullptr);
+    return a;
+  };
+
+  double total_peak_first_flops = 0.0, total_perf_first_flops = 0.0;
+  double max_peak_first_peak_gb = 0.0, max_perf_first_peak_gb = 0.0;
+  std::size_t n_ok = 0, n_skipped = 0;
+
+  std::wcerr << L"\n=== [dryrun-perfcost] per-term peak-first vs perf-first "
+                L"modelled cost (C60 residual, "
+             << summands.size() << L" terms) ===\n";
+
+  for (std::size_t t = 0; t < summands.size(); ++t) {
+    ExprPtr giant = flatten_product(summands[t]);
+    if (!giant) {
+      std::wcerr << L"perfcost term " << t << L": skipped (null term)\n";
+      ++n_skipped;
+      continue;
+    }
+
+    bool ok = true;
+    Analysis peak_first, perf_first;
+    try {
+      peak_first = analyze(giant, ObjectiveFunction::DenseSpaceTimeBatched);
+      perf_first = analyze(giant, ObjectiveFunction::DenseTimeSpaceBatched);
+    } catch (std::exception const&) {
+      ok = false;
+    } catch (...) {
+      ok = false;
+    }
+    if (!ok) {
+      std::wcerr << L"term " << t << L": skipped\n";
+      ++n_skipped;
+      continue;
+    }
+
+    ++n_ok;
+    double const peak_first_gb = peak_first.cp.peak_bytes / 1e9;
+    double const perf_first_gb = perf_first.cp.peak_bytes / 1e9;
+    std::wcerr << L"perfcost term " << t << L" | peak_first flops="
+               << peak_first.cp.flops << L" peak_GB=" << peak_first_gb
+               << L" | perf_first flops=" << perf_first.cp.flops << L" peak_GB="
+               << perf_first_gb << L"\n";
+
+    total_peak_first_flops += peak_first.cp.flops;
+    total_perf_first_flops += perf_first.cp.flops;
+    if (peak_first_gb > max_peak_first_peak_gb)
+      max_peak_first_peak_gb = peak_first_gb;
+    if (perf_first_gb > max_perf_first_peak_gb)
+      max_perf_first_peak_gb = perf_first_gb;
+  }
+
+  double const ratio = total_peak_first_flops > 0.0
+                           ? total_perf_first_flops / total_peak_first_flops
+                           : 0.0;
+  std::wcerr << L"perfcost TOTAL peak_first_flops=" << total_peak_first_flops
+             << L" perf_first_flops=" << total_perf_first_flops
+             << L" ratio(perf/peak)=" << ratio << L"\n";
+  std::wcerr << L"perfcost MAXPEAK peak_first=" << max_peak_first_peak_gb
+             << L" perf_first=" << max_perf_first_peak_gb << L"\n";
+  std::wcerr << L"perfcost: " << n_ok << L" of " << summands.size()
+             << L" terms analyzed, " << n_skipped << L" skipped\n";
+
+  // Deliverable is the printed table + ratio above (decision input for D1),
+  // not a pass/fail gate -- assert only basic sanity: at least one term
+  // produced a positive modelled flops count under the peak-first objective.
+  REQUIRE(total_peak_first_flops > 0.0);
+}
+
 // Task 3: the opt-in scratch-fold peak sink captures the batched-inner peak the
 // OUTER cache.working_set_hwmark() misses. Reuse the [dryrun-objective]
 // peak-first (DenseSpaceTimeBatched) setup -- the objective whose batched-inner
