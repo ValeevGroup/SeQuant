@@ -799,7 +799,10 @@ TensorNetworkV3::canonicalize_slots(
           // factors, as in Laplace-transform MP2 or tensor hypercontraction).
           // Supported for auxiliary indices, which carry no vector-space
           // (bra/ket) character; classify by the aux slot it occupies.
-          bool all_aux = true;
+          // (all_aux is only read by the assertion, which is compiled out when
+          // assertions are disabled -- mark it maybe_unused to stay -Werror
+          // clean in that configuration)
+          [[maybe_unused]] bool all_aux = true;
           for (std::size_t v = 0; v != edge_it->vertex_count(); ++v)
             if (edge_it->vertex(v).getOrigin() != Origin::Aux) {
               all_aux = false;
