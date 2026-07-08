@@ -13,6 +13,7 @@
 #include <functional>
 #include <iostream>
 #include <limits>
+#include <optional>
 #include <utility>
 
 namespace sequant::opt::detail {
@@ -762,16 +763,51 @@ struct PeakBatchedModel {
   void finalize(Context& /*ctx*/, size_t /*n*/,
                 container::vector<State>& /*st*/) const {}
 
+  /// \brief True iff batchable axis bit \p k is a genuine external spectator of
+  /// this network: it is OPEN on the root result AND is contracted at NO node.
+  ///
+  /// A spectator is carried unchanged from the leaves up to the root: whenever
+  /// any tensor in a subset carries the axis, the axis stays OPEN in that
+  /// subset, so it never appears in any node's contracted-at-node set
+  /// (\c Acand = (open_aux[lp]|open_aux[rp]) & ~open_aux[n]) and slicing it is
+  /// purely a footprint change with identical work. The forest-batching seed
+  /// path asserts this before honoring a seed axis: seeding an axis that is
+  /// actually contracted somewhere would mis-size the nodes that contract it.
+  bool is_spectator_axis(Context const& ctx, std::size_t k) const {
+    std::size_t const root = (std::size_t{1} << ctx.nt) - 1;
+    // Must be carried on the root result (a genuine external index).
+    if (!((ctx.open_aux[root] >> k) & 1u)) return false;
+    // Leaves (single-tensor subsets) that carry axis k.
+    std::size_t leafmask = 0;
+    for (std::size_t b = 0; b < ctx.nt; ++b)
+      if ((ctx.open_aux[std::size_t{1} << b] >> k) & 1u)
+        leafmask |= (std::size_t{1} << b);
+    // Whenever the axis is AVAILABLE in a subset (some carrying leaf is in it)
+    // it must be OPEN in that subset -- else it is contracted at the node that
+    // forms that subset, i.e. not a pure spectator.
+    for (std::size_t n = 1; n <= root; ++n)
+      if ((leafmask & n) && !((ctx.open_aux[n] >> k) & 1u)) return false;
+    return true;
+  }
+
   /// Threshold-gated root-frontier selection shared by \ref reconstruct and
   /// \ref reconstruct_axes: among points whose peak (bytes) fits
   /// peak_threshold, pick fewest flops (ties by lower peak). If none fit, pick
   /// min peak (best effort). peak_threshold == +inf => all feasible => min
   /// flops => the non-batched schedule. Returns the chosen index into
-  /// \c st[root][0].
-  int select_root(Context const& ctx,
-                  container::vector<State> const& st) const {
+  /// \c st[root][root_B].
+  ///
+  /// \param root_B The batch context read at the ROOT. The default 0 (the
+  ///        empty sliced-set) is the historical behavior, kept byte-identical.
+  ///        The forest-batching seed path passes a non-zero mask to SEED a
+  ///        spectator external axis into the root frontier, so the whole tree
+  ///        is sized (and its peak reported) with that axis sliced --
+  ///        \c st[root][root_B] is already computed by the DP's B-loop; only
+  ///        which B the root selection reads changes.
+  int select_root(Context const& ctx, container::vector<State> const& st,
+                  std::size_t root_B = 0) const {
     std::size_t const root = (std::size_t{1} << ctx.nt) - 1;
-    auto const& rootf = st[root][0];
+    auto const& rootf = st[root][root_B];
     auto peak_bytes = [this](double peak_elems) {
       return peak_elems * numeric_size;
     };
@@ -934,6 +970,97 @@ double peak_cost_batched(
   double mn = std::numeric_limits<double>::max();
   for (auto const& fp : st.back()[0]) mn = std::min(mn, fp.peak);
   return mn;
+}
+
+/// \brief Result of seeding a spectator external axis into the batched DP's
+/// ROOT frontier (forest batching, P1). The seed axis is contracted at NO node
+/// (a pure spectator carried on the root and every subtree holding a composite
+/// leg that bears it), so slicing it does NOT change total work (flops) but
+/// shrinks every intermediate that carries it -- in particular the perf-first
+/// PPL W giant -- by ~occ_block/occ. Carries both the unseeded (B=0) and seeded
+/// (B={k_seed}) root selections so a caller can report the drop, plus the
+/// chosen axis + block size for Task 4 to thread through the public optimize
+/// API.
+struct SeededBatchedResult {
+  double unseeded_peak_bytes = 0;
+  double seeded_peak_bytes = 0;
+  double unseeded_flops = 0;
+  double seeded_flops = 0;
+  std::optional<Index> seeded_axis;
+  std::size_t occ_block = 0;
+  bool spectator_ok = false;
+};
+
+/// \brief Runs the batched peak DP once and reports the ROOT-frontier selection
+/// at B=0 (unseeded) and at B={k_seed} (the seed axis sliced into the root
+/// batch context), under the model's own (perf-first or peak-first) selector.
+///
+/// The spectator external axis (e.g. the residual's own external occupied
+/// index, carried only as a composite protoindex) is admitted to \c ctx.aux by
+/// \ref batchable_index_list's proto pass regardless of the base
+/// \c is_batchable predicate; but \ref sliced_footprints only shrinks an axis
+/// for which \c is_batchable is true. This routine therefore extends the
+/// predicate (and gives the seed axis a block-sized batch target \p occ_block)
+/// so the DP tables actually slice the seed axis when its bit is set. Every
+/// other axis is untouched, and B=0 never sets the seed bit (the spectator is
+/// contracted nowhere, so it never enters any node's \c Acand and hence never
+/// enters any child context at B=0), so the unseeded (B=0) selection is
+/// byte-identical to \p base_model's.
+///
+/// \p seed_axis MUST be a genuine external spectator (asserted via
+/// \ref PeakBatchedModel::is_spectator_axis): carried on the root and
+/// contracted at no node. Seeding a contracted axis would mis-size the nodes
+/// that contract it, so this asserts rather than silently mis-report.
+template <typename TIdxs, typename IdxToSz>
+SeededBatchedResult seeded_root_peak_batched(
+    PeakBatchedModel<IdxToSz> base_model, TensorNetwork const& network,
+    TIdxs const& tidxs, Index const& seed_axis, std::size_t occ_block) {
+  SeededBatchedResult out;
+  out.occ_block = occ_block;
+  std::wstring const seed_label(seed_axis.full_label());
+
+  auto base_batchable = base_model.is_batchable;
+  auto base_batch = base_model.batch;
+  base_model.is_batchable = [base_batchable, seed_label](Index const& ix) {
+    return (base_batchable && base_batchable(ix)) ||
+           std::wstring(ix.full_label()) == seed_label;
+  };
+  base_model.batch = [base_batch, seed_label, occ_block](Index const& ix) {
+    if (std::wstring(ix.full_label()) == seed_label) return occ_block;
+    return base_batch ? base_batch(ix) : std::size_t{0};
+  };
+
+  auto ctx = base_model.build_context(network, tidxs);
+  // Locate the seed axis's bit in ctx.aux.
+  std::size_t k_seed = ctx.m;  // sentinel == not found
+  for (std::size_t k = 0; k < ctx.m; ++k)
+    if (std::wstring(ctx.aux[k].full_label()) == seed_label) {
+      k_seed = k;
+      break;
+    }
+  SEQUANT_ASSERT(k_seed < ctx.m &&
+                 "seed axis not recognized as a batchable axis");
+  // SAFEGUARD: only honor a genuine external spectator.
+  out.spectator_ok = base_model.is_spectator_axis(ctx, k_seed);
+  SEQUANT_ASSERT(out.spectator_ok &&
+                 "seed axis is not a pure external spectator "
+                 "(open on the root AND contracted at no node)");
+  out.seeded_axis = ctx.aux[k_seed];
+
+  auto st = solve_single_term(base_model, network, tidxs, ctx);
+  std::size_t const root = (std::size_t{1} << ctx.nt) - 1;
+  std::size_t const seed = std::size_t{1} << k_seed;
+
+  int const best0 = base_model.select_root(ctx, st, 0);
+  int const bestS = base_model.select_root(ctx, st, seed);
+  SEQUANT_ASSERT(best0 >= 0 && bestS >= 0);
+  auto const& p0 = st[root][0][best0];
+  auto const& pS = st[root][seed][bestS];
+  out.unseeded_peak_bytes = p0.peak * base_model.numeric_size;
+  out.seeded_peak_bytes = pS.peak * base_model.numeric_size;
+  out.unseeded_flops = p0.flops;
+  out.seeded_flops = pS.flops;
+  return out;
 }
 
 /// \brief Independent memory-simulation recomputation of the chosen batched

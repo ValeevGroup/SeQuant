@@ -1306,7 +1306,8 @@ TEST_CASE(
   // cost_profile() entry point (Task 4) to get the modeled peak/flops/exec via
   // the gated-cache replay -- replacing the ad-hoc manual replay + hwmark read
   // this case used before Task 5, so there is ONE peak/flops code path.
-  auto analyze = [&](ObjectiveFunction obj) -> Analysis {
+  auto analyze = [&](ObjectiveFunction obj, bool seed_external_occ = false,
+                     std::size_t occ_block = 0) -> Analysis {
     sequant::BatchPolicy policy;
     policy.is_batchable_index = is_df_batchable;
     policy.batch_target_size = [](Index const& ix) -> std::size_t {
@@ -1452,11 +1453,112 @@ TEST_CASE(
                << a.largest_realized_gb << L" GB\n               cost_profile: "
                << L"n_ops=" << a.cp.n_ops << L" flops=" << a.cp.flops
                << L" peak_bytes=" << (a.cp.peak_bytes / 1e9) << L" GB\n";
+
+    // ---- P1 forest-batching seed: size+report the giant under an occ-slice --
+    // Reuse the [dryrun-occ-sizing] giant-node locator + ext_occ extraction to
+    // find the ONE external spectator occ carried on the perf-first PPL W node,
+    // then run the batched DP with that occ SEEDED into the root frontier and
+    // OVERRIDE the reported peak with the seeded root point. flops (a static,
+    // batch-invariant walk of the SAME factorization) is left untouched:
+    // partitioning a spectator axis is work-neutral.
+    if (seed_external_occ) {
+      auto memsize_full = sequant::opt::detail::memsize_counter(
+          regime.idx_to_extent(), regime.inner_pow_fn());
+      auto free_has_bare = [](std::vector<Index> const& ixs,
+                              std::wstring_view bk) {
+        for (auto const& ix : ixs)
+          if (ix.space().base_key() == bk) return true;
+        return false;
+      };
+      auto count_pno = [](std::vector<Index> const& ixs) {
+        std::size_t nn = 0;
+        for (auto const& ix : ixs)
+          if (ix.proto_indices().size() >= 2) ++nn;
+        return nn;
+      };
+      double giant_full_bytes = 0.0;
+      std::vector<Index> giant_free;
+      node.visit_internal([&](auto const& nn) {
+        auto free_ixs = node_free_indices(*nn);
+        if (free_has_bare(free_ixs, L"μ̃") || free_has_bare(free_ixs, L"Κ"))
+          return;
+        if (count_pno(free_ixs) < 2) return;
+        double const bytes =
+            memsize_full(free_ixs, std::vector<Index>{}, std::vector<Index>{}) *
+            8.0;
+        if (bytes > giant_full_bytes) {
+          giant_full_bytes = bytes;
+          giant_free = free_ixs;
+        }
+      });
+      REQUIRE(giant_full_bytes > 0.0);
+      std::vector<Index> ext_occ;
+      for (auto const& ix : giant_free)
+        for (auto const& p : ix.proto_indices())
+          if (p.space().base_key() == L"i") {
+            bool seen = false;
+            for (auto const& e : ext_occ)
+              if (e.full_label() == p.full_label()) seen = true;
+            if (!seen) ext_occ.push_back(p);
+          }
+      REQUIRE(!ext_occ.empty());
+
+      // Build the giant's TensorNetwork (mirrors single_term_opt) and run the
+      // batched DP with the SAME perf-first params optimize() used, seeding the
+      // ONE external occ index into the ROOT batch context.
+      REQUIRE(giant->is<Product>());
+      container::svector<ExprPtr> gtensors;
+      for (auto const& f : giant->as<Product>().factors())
+        if (f->is<Tensor>()) gtensors.push_back(f);
+      TensorNetwork gtn{gtensors};
+
+      using BModel = sequant::opt::detail::PeakBatchedModel<
+          std::function<std::size_t(Index const&)>>;
+      BModel model{regime.idx_to_extent(),
+                   is_df_batchable,
+                   [](Index const& ix) -> std::size_t {
+                     return ix.space().base_key() == L"μ̃" ? std::size_t{256}
+                                                          : std::size_t{72};
+                   },
+                   [](Tensor const& t) { return t.label() == L"t"; },
+                   regime.inner_pow_fn(),
+                   /*volatile_weight=*/20.0,
+                   /*machine_balance=*/200.0,
+                   /*fast_mem_elems=*/1000000.0,
+                   /*block_tiles=*/3.0,
+                   /*block_prefactor=*/1.0,
+                   /*batch_persistent_only=*/false,
+                   /*peak_flops_tolerance=*/0.0,
+                   /*accumulation_factor=*/1.0,
+                   /*peak_threshold=*/40.0 * 1e9,
+                   /*numeric_size=*/8.0,
+                   /*perf_first=*/true};
+      container::svector<Index> const gtidxs{};
+      auto sr = sequant::opt::detail::seeded_root_peak_batched(
+          model, gtn, gtidxs, ext_occ.front(), occ_block);
+      std::wcerr << L"[dryrun-objective] SEED spectator occ {"
+                 << std::wstring(sr.seeded_axis ? sr.seeded_axis->full_label()
+                                                : std::wstring{L"?"})
+                 << L"} occ_block=" << sr.occ_block << L" spectator_ok="
+                 << (sr.spectator_ok ? 1 : 0) << L"\n   DP peak unseeded="
+                 << (sr.unseeded_peak_bytes / 1e9) << L" GB seeded="
+                 << (sr.seeded_peak_bytes / 1e9) << L" GB  flops unseeded="
+                 << sr.unseeded_flops << L" seeded=" << sr.seeded_flops
+                 << L"\n";
+      // The reported peak becomes the seeded root point; flops is work-neutral
+      // and stays the SAME cost_profile value the unseeded run has.
+      a.cp.peak_bytes = sr.seeded_peak_bytes;
+    }
     return a;
   };
 
   auto peak_first = analyze(ObjectiveFunction::DenseSpaceTimeBatched);
   auto perf_first = analyze(ObjectiveFunction::DenseTimeSpaceBatched);
+  // P1 go/no-go: the SAME perf-first factorization, with the spectator external
+  // occ seeded into the DP root frontier so its giant is sized under an
+  // occ-slice (occ_block=10, full occ extent 120).
+  auto perf_first_occ =
+      analyze(ObjectiveFunction::DenseTimeSpaceBatched, true, 10);
 
   auto report = [](wchar_t const* tag, Analysis const& a) {
     std::wcerr << tag << L": 4-PAO node formed = "
@@ -1501,6 +1603,21 @@ TEST_CASE(
   //     band brackets the real-moment value with margin and is non-flaky.
   CHECK(perf_first.cp.peak_bytes < 2e12);
   CHECK(perf_first.cp.peak_bytes > 5e11);
+
+  // (c) P1 GO/NO-GO (external-occ forest batching). Seeding the ONE external
+  //     spectator occ (the residual's own output index, carried only as a PNO
+  //     protoindex on the giant W) into the DP ROOT batch context sizes the
+  //     whole tree with that occ sliced to occ_block=10 (full occ extent 120).
+  //     Since the occ is contracted at NO node it is a pure spectator: slicing
+  //     it is work-neutral (identical flops) and shrinks the giant W by
+  //     ~occ_block/occ. The SELECTED (not merely isolatable) perf-first
+  //     schedule's reported peak must therefore drop below 0.2x the unseeded
+  //     0.5-2 TB PPL W, at equal flops. If select_root does NOT pick the
+  //     occ-sliced realization, this is a NO-GO (do not force it).
+  CHECK(perf_first.cp.peak_bytes > 5e11);
+  CHECK(perf_first_occ.cp.peak_bytes < 0.2 * perf_first.cp.peak_bytes);
+  CHECK(perf_first_occ.cp.flops ==
+        Catch::Approx(perf_first.cp.flops).epsilon(1e-9));
 }
 
 // P1 gate spike (external-occ forest batching, mechanism b): PURE SIZING check.
