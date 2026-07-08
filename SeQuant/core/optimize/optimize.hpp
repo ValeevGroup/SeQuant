@@ -10,15 +10,15 @@
 
 namespace sequant {
 
-/// A forest-level batching signal: the single spectator external index (e.g. a
-/// CC residual's own external OCCUPIED index, carried only as a composite
-/// protoindex on the output PNOs and therefore contracted at NO node) over
-/// which the whole optimized term should be evaluated in blocks of
-/// \c block_size, so every intermediate carrying that axis shrinks by
-/// ~block_size/extent while total work is unchanged (partitioning a spectator
-/// is work-neutral). Because a never-contracted axis has no eval node to hang
-/// on, this is reported per optimized term rather than as a per-node
-/// \c EvalExpr::batch_axes entry; the runtime (P3) and MPQC (P4) read it here.
+/// A forest-level batching signal: the single spectator external index (an
+/// index that is open on the whole network's result but contracted at NO node
+/// -- e.g. one carried only as a composite protoindex on the result) over which
+/// the whole optimized term should be evaluated in blocks of \c block_size, so
+/// every intermediate carrying that axis shrinks by ~block_size/extent while
+/// total work is unchanged (partitioning a spectator is work-neutral). Because
+/// a never-contracted axis has no eval node to hang on, this is reported per
+/// optimized term rather than as a per-node \c EvalExpr::batch_axes entry; the
+/// runtime and downstream consumers read it here.
 struct ExternalBatchAxis {
   /// The spectator external axis to block over.
   Index axis;

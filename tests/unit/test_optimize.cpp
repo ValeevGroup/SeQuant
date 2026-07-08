@@ -1977,15 +1977,17 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
   CHECK(tbat_w_tight == flops_w);
 }
 
-// Task 4 (forest batching, G4): the public optimize() surfaces the chosen
-// spectator external-occupied axis + block size as a forest-level signal
-// (ExternalBatchAxis) that the runtime (P3) and MPQC (P4) read. The PPL
-// residual carries its external occ (i_1,i_2) ONLY as a composite protoindex on
-// the output PNOs a<i,i> (never a contracted top-level slot), so no eval node
-// hangs it -- it is emitted per optimized term instead. The perf-first
-// DenseTimeSpaceBatched factorization forms the 4-PNO W giant (~40 MB here);
-// with a budget it exceeds, optimize() reports the occ axis sliced to
-// occ_block_target=10.
+// Task 4 (forest batching, G4): the public optimize_result() surfaces the
+// chosen spectator external axis + block size as a forest-level signal
+// (ExternalBatchAxis) that the runtime and downstream consumers read. In this
+// (chemistry) test the PPL residual carries its external occ (i_1,i_2) ONLY as
+// a composite protoindex on the output PNOs a<i,i> (never a contracted
+// top-level slot), so no eval node hangs it -- it is emitted per optimized term
+// instead. The perf-first DenseTimeSpaceBatched factorization forms the 4-PNO W
+// giant
+// (~40 MB here); with a budget it exceeds, optimize_result() reports the
+// spectator axis sliced to batch_target_size=10, enabled by the domain-neutral
+// BatchPolicy::batch_spectator_indices flag.
 TEST_CASE("optimize emits an external batch axis for the PPL term",
           "[optimize][external-occ]") {
   using namespace sequant;
