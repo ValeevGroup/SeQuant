@@ -3248,3 +3248,128 @@ TEST_CASE("shape_provider_denest_to_flat", "[shape-provider]") {
     REQUIRE(equal_tarrays(res, ref, "i,j"));
   }
 }
+
+// Task 8 (P3) crux-3 gate: numeric invariance of the free/spectator external
+// axis forest evaluator. A small forest of two summand trees shares an EXTERNAL
+// spectator occupied index i_1 (present -- as a composite protoindex -- on
+// every operand and result, contracted NOWHERE) and a cross-term
+// sub-intermediate S = g*h. Evaluated UNBATCHED (multi-root sum) it is the
+// reference R = F1 + F2. evaluate_forest_over_external_axis partitions i_1 into
+// blocks, co-evaluates the forest one block at a time on a shared scratch (S
+// built once per block, reused by both summands), sums the summands per block,
+// and write_into_slice's each block into the pre-sized destination. The
+// assembled destination must equal R ELEMENTWISE for every block size -- a
+// memory schedule, not an approximation. The occupied outer mode i_1 is
+// multi-tiled (occ_tile_size > 1) so blocks are tile-aligned multi-element
+// (and, for one size, tile-spanning).
+TEST_CASE("eval_forest_over_external_occ", "[eval][forest-external-occ]") {
+  using sequant::eval_result;
+  using sequant::evaluate;
+  using sequant::evaluate_forest_over_external_axis;
+  using sequant::ExternalBatchAxis;
+  using sequant::ResultPtr;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+
+  auto& world = TA::get_default_world();
+  // occ i_1 extent 6 in tiles of <= 2 -> 3 tiles (occ_tile_size == 2 > 1); the
+  // virtual (OSV) space extent 3 (single-occ protos a<i_1>).
+  rand_tensor_yield<double, TA::DensePolicy> yield{world, /*nocc=*/6,
+                                                   /*nvirt=*/3};
+  yield.set_max_tile(2);
+
+  using ArrayToT = typename decltype(yield)::array_tot_type;
+  using ResultToT = sequant::ResultTensorOfTensorTA<ArrayToT>;
+
+  // Two summand trees sharing S = g*h (a proto-only ToT carrying i_1 as its
+  // sole outer/spectator mode). Every leg is a single-occ OSV composite a<i_1>,
+  // so i_1 is a pure spectator: an outer Hadamard mode, contracted at no node.
+  // The contracted indices are the inner virtuals (a_2, a_4).
+  //   F1 = (g{a1<i1>;a2<i1>} * h{a2<i1>;a4<i1>}) * p{a4<i1>;a5<i1>}
+  //   F2 = (g{a1<i1>;a2<i1>} * h{a2<i1>;a4<i1>}) * r{a4<i1>;a5<i1>}
+  // Both produce {a1<i1>;a5<i1>}; R = F1 + F2.
+  auto const e1 = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{a1<i1>;a2<i1>} * h{a2<i1>;a4<i1>}) * p{a4<i1>;a5<i1>}");
+  auto const e2 = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{a1<i1>;a2<i1>} * h{a2<i1>;a4<i1>}) * r{a4<i1>;a5<i1>}");
+  auto const n1 = eval_node(e1);
+  auto const n2 = eval_node(e2);
+  std::vector<node_t> const forest{n1, n2};
+
+  // The spectator axis: i_1, extracted from a composite leg's protos (so the
+  // Index object exactly matches the parsed one). Also confirm proto-only
+  // shape.
+  sequant::Index axis;
+  for (auto const& leg : n1->canon_indices())
+    if (leg.has_proto_indices()) {
+      axis = leg.proto_indices()[0];
+      break;
+    }
+  REQUIRE(axis.nonnull());
+  REQUIRE(
+      axis.space() ==
+      sequant::get_default_context().index_space_registry()->retrieve(L"i"));
+  // Structural precondition: the shared sub-intermediate S = g*h repeats across
+  // the forest (cache_manager registers it with max_life 2), so a per-block
+  // shared scratch builds it once per block and reuses it across F1 and F2.
+  {
+    sequant::TreeNodeEqualityComparator<node_t> const eq;
+    REQUIRE(eq(n1.left(), n2.left()));  // both left children are S
+    auto cm = sequant::cache_manager(forest, 2);
+    REQUIRE(cm.max_life(n1.left()) == 2);
+  }
+  // The ToT annotation convention (NestedTensorIndices -> indices_annot) hoists
+  // the spectator's protoindex into a plain top-level outer slot of the TA
+  // node's canon_indices (so the "outer;inner" annotation can name it as an
+  // outer mode). So i_1 is addressed as outer mode 0 directly by
+  // index_position; the proto-only outer_proto_position fallback (Task 7) is
+  // not needed for these hoisted nodes and its mixed-node guard is never
+  // tripped (the spine consults index_position first). Calling
+  // outer_proto_position directly on this hoisted (mixed: plain i_1 + composite
+  // legs) node WOULD trip its proto-only precondition guard, which is exactly
+  // why the spine's spectator_outer_mode tries index_position first.
+  REQUIRE(sequant::index_position(n1, axis) == std::size_t{0});
+
+  // Unbatched reference R = F1 + F2 (each in the head's natural layout).
+  std::string const target = n1->annot();
+  ResultPtr ref = evaluate(n1, target, yield);
+  ref->add_inplace(*evaluate(n2, target, yield));
+  auto const& R = ref->get<ArrayToT>();
+  double const ref_dot = R(target).dot(R(target));
+  REQUIRE(ref_dot > 0.0);  // guard: reference is nontrivially nonzero
+
+  // block sizes (in elements of i_1, extent 6, tiles of 2):
+  //   1000 -> 1 block (no partition; the trivial schedule)
+  //   4    -> 2 blocks [0,4),[4,6) (first block SPANS two tiles)
+  //   2    -> 3 blocks [0,2),[2,4),[4,6) (one tile each)
+  for (std::size_t const block_size :
+       {std::size_t{1000}, std::size_t{4}, std::size_t{2}}) {
+    // Pre-sized, ZERO destination with R's exact ToT structure (R - R). A block
+    // that silently no-op'd would leave a zero region and fail the equality.
+    ArrayToT dest_arr;
+    dest_arr(target) = R(target) - R(target);
+    world.gop.fence();
+    auto dest = eval_result<ResultToT>(dest_arr);
+
+    // Fresh registered scratch per run (registration = the shared-subtree map;
+    // the evaluator reset()s alive values between blocks).
+    auto scratch = sequant::cache_manager(forest, 2);
+    ExternalBatchAxis const ext{axis, block_size};
+    auto const n_blocks =
+        evaluate_forest_over_external_axis(forest, ext, scratch, yield, dest);
+
+    // partition sanity: expected block counts for the tiling above.
+    std::size_t const expected_blocks =
+        (block_size >= 6) ? 1 : (block_size == 4 ? 2 : 3);
+    REQUIRE(n_blocks == expected_blocks);
+
+    // ELEMENTWISE numeric invariance: ||dest - R||^2 == 0 exactly (ToT norm via
+    // self-dot of the difference; TA::norm2 is unsupported for ToT tiles).
+    auto const& out = dest->get<ArrayToT>();
+    ArrayToT diff;
+    diff(target) = out(target) - R(target);
+    world.gop.fence();
+    REQUIRE(Catch::Approx(diff(target).dot(diff(target))).margin(1e-12) == 0.0);
+    // and the assembled result is nonzero (guards a trivial all-zero pass).
+    REQUIRE(out(target).dot(out(target)) == Catch::Approx(ref_dot));
+  }
+}

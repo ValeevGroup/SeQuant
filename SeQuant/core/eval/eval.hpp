@@ -12,6 +12,7 @@
 #include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
@@ -1613,6 +1614,156 @@ template <class F, class ScopeGuardFactory = make_no_scope_guard>
       std::move(yielder), std::move(target), std::move(accept),
       std::move(make_scope_guard), std::move(is_volatile_node),
       policy.persistent_only, /*depth=*/0, peak);
+}
+
+/// \brief Position of the spectator external axis \p axis among a node's OUTER
+/// modes, or nullopt if the node does not carry it.
+///
+/// A spectator external index can occupy a node's outer modes in two ways: as a
+/// plain top-level slot of \c canon_indices() (\c index_position), or -- on a
+/// proto-only tensor-of-tensor node whose legs are all composite (CSV/PNO/OSV),
+/// where the axis appears exclusively as a protoindex -- as one of the distinct
+/// outer protos (\c outer_proto_position). Either way the returned position is
+/// the physical outer-mode index that \c Result::slice_mode() and
+/// \c Result::write_into_slice() address as their \c mode argument.
+///
+/// \note On a MIXED node (a plain non-proto outer index NOT equal to \p axis,
+///       alongside composite proto legs) \c index_position(axis) misses, so
+///       this falls through to \c outer_proto_position, whose precondition
+///       assert fires -- a deliberate signal that the proto-only outer-mode
+///       computation does not model the true interleaved outer-trange position
+///       of a mixed node. The core external-occ spine slices only proto-only or
+///       plain-outer spectator nodes; a mixed spectator carrier requires
+///       upgrading the accessor to compute the interleaved physical position.
+template <typename Node>
+[[nodiscard]] std::optional<std::size_t> spectator_outer_mode(
+    Node const& node, Index const& axis) {
+  if (auto const p = index_position(node, axis)) return p;
+  return outer_proto_position(*node, axis);
+}
+
+/// \brief Co-evaluate a forest of residual summand trees one block of a
+/// free/spectator external axis at a time, on a single shared scratch cache,
+/// assembling each block into a pre-sized destination.
+///
+/// This is the free-axis / explicit-forest generalization of the batched-eval
+/// group/replay loop (\c make_batched_custom_evaluator). The differences:
+///
+///   - The batch axis is a Hadamard/spectator external index -- present on
+///     every operand and the result of every contraction on its path,
+///     contracted nowhere -- rather than a contracted axis. Because it is never
+///     contracted, it is not sliced node-locally by an in-tree custom evaluator
+///     (no node's DP `aprime` can carry it); it is sliced by seeding the outer
+///     block loop here and re-slicing every leaf that carries it per block.
+///   - The co-batched group is the EXPLICIT \p forest (the summands of the
+///     residual Sum), not a \c persistent()-gated cache scan, so volatile term
+///     roots are included.
+///   - The cross-batch combinator is \c Result::write_into_slice (PARTITION:
+///     the blocks are disjoint slices of \p dest), not \c add_inplace
+///     (ACCUMULATE, correct only for a contracted axis). Within a block the
+///     summands are still summed by \c add_inplace (they share the block's
+///     result layout); across blocks they are scattered into disjoint slices.
+///
+/// Per block: reset the shared scratch, evaluate every summand tree with every
+/// leaf carrying \p axis sliced to the block's element range
+/// (\c spectator_outer_mode -> \c slice_mode), sum the summands, and
+/// \c write_into_slice the summed block into \p dest's \p axis slice. Because
+/// the whole forest streams over the same block on ONE registered scratch,
+/// cross-term sub-intermediates (e.g. gC shared between summands) are built
+/// once per block and reused; the per-block reset drops the previous block's
+/// sliced partials while the registration (repeat structure) survives. Exact by
+/// `R = union_blocks R[block]` on the disjoint spectator partition, with each
+/// block itself an exact sum of its summands -- a memory schedule, never an
+/// approximation. Stays on the lazy path: each per-block \c evaluate is an
+/// ordinary decision-at-the-node traversal; \p t amplitudes stay resident in
+/// \p le.
+///
+/// \param forest        the residual summand trees (each already binarized).
+/// \param external_axis the spectator axis + per-block element extent (P1).
+/// \param shared_cache  a registered scratch cache over \p forest (typically
+///                      \c cache_manager(forest, ...)); reset() per block.
+/// \param le            the leaf evaluator (\p t stays resident here).
+/// \param dest          the pre-sized destination result (full spectator
+///                      extent); each block is scattered into its slice.
+/// \return the number of (non-empty) blocks processed (>= 1).
+template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
+          typename F, typename N, bool FHC>
+  requires meta::leaf_node_evaluator<std::ranges::range_value_t<Nodes>, F>
+std::size_t evaluate_forest_over_external_axis(
+    Nodes const& forest, ExternalBatchAxis const& external_axis,
+    CacheManager<N, FHC>& shared_cache, F const& le, ResultPtr const& dest) {
+  using node_t = std::ranges::range_value_t<Nodes>;
+  SEQUANT_ASSERT(dest);
+  SEQUANT_ASSERT(std::ranges::begin(forest) != std::ranges::end(forest));
+  Index const& axis = external_axis.axis;
+
+  // The common block-result layout: the first summand's head annotation. Every
+  // summand of a residual shares the result's index layout, so all block
+  // partials permute to this and add_inplace into one accumulator.
+  auto const& head = *std::ranges::begin(forest);
+  auto const layout = head->annot();
+  // The destination outer mode of the spectator axis (the write_into_slice
+  // `mode` argument): the same for dest and every block partial.
+  auto const dest_mode = spectator_outer_mode(head, axis);
+  SEQUANT_ASSERT(dest_mode &&
+                 "forest head does not carry the external spectator axis");
+
+  // Learn the spectator axis's tiling from the first leaf (in any tree) that
+  // carries it, then partition it into tile-aligned element blocks. A leaf's
+  // result knows the axis's true trange (tiles, lobound), so the partition
+  // snaps to whole tiles and preserves a frozen-core element lobound.
+  auto find_carrier = [&axis](auto&& self, node_t const& n)
+      -> std::optional<std::pair<node_t, std::size_t>> {
+    if (n.leaf()) {
+      if (auto const p = spectator_outer_mode(n, axis)) return std::pair{n, *p};
+      return std::nullopt;
+    }
+    if (auto l = self(self, n.left())) return l;
+    return self(self, n.right());
+  };
+  std::optional<std::pair<node_t, std::size_t>> carrier;
+  for (auto const& tree : forest)
+    if ((carrier = find_carrier(find_carrier, tree))) break;
+  SEQUANT_ASSERT(carrier && "no leaf carries the external spectator axis");
+  auto const batches =
+      le(carrier->first)
+          ->mode_batches(carrier->second, external_axis.block_size);
+
+  std::size_t n_blocks = 0;
+  for (auto const& [e_lo, e_hi] : batches) {
+    if (e_lo == e_hi) continue;
+    ++n_blocks;
+    // Fresh block: the previous block's sliced partials are dropped, the
+    // registration (shared-subtree structure) survives, so a cross-term
+    // sub-intermediate is rebuilt once for this block and reused across the
+    // summands that share it.
+    shared_cache.reset();
+
+    // Leaf evaluator that slices every leaf carrying the spectator axis to this
+    // element block; other leaves pass through. `le` (with `t` resident) is the
+    // captured underlying evaluator.
+    auto le_block = [&le, &axis, e_lo = e_lo,
+                     e_hi = e_hi](node_t const& leaf) -> ResultPtr {
+      ResultPtr r = le(leaf);
+      if (auto const p = spectator_outer_mode(leaf, axis))
+        return r->slice_mode(*p, e_lo, e_hi);
+      return r;
+    };
+
+    ResultPtr block_acc;
+    for (auto const& tree : forest) {
+      ResultPtr part =
+          evaluate<EvalTrace>(tree, layout, le_block, shared_cache);
+      if (!block_acc)
+        block_acc = std::move(part);
+      else
+        block_acc->add_inplace(*part);
+    }
+    SEQUANT_ASSERT(block_acc);
+    dest->write_into_slice(*block_acc, *dest_mode, e_lo, e_hi);
+  }
+  SEQUANT_ASSERT(n_blocks >= 1);
+  return n_blocks;
 }
 
 }  // namespace sequant
