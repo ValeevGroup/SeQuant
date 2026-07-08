@@ -961,11 +961,18 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     // demote Symm to Conjugate here (Conjugate is treated as no-swap by the
     // canonicalizer, matching the complex-field behavior) before
     // canonicalize_slots() may act on it.
-    if ((label_ == reserved::antisymm_label() ||
-         label_ == reserved::symm_label()) &&
-        braket_symmetry_ != BraKetSymmetry::Nonsymm) {
-      throw Exception(
-          "(Anti)symmetrization operators must not have braket symmetry");
+    if (label_ == reserved::antisymm_label() ||
+        label_ == reserved::symm_label()) {
+      if (braket_symmetry_ != BraKetSymmetry::Nonsymm)
+        throw Exception(
+            "(Anti)symmetrization operators must not have braket symmetry");
+      // (Anti)symmetrization operators act on indistinguishable particles, so
+      // they are always particle- (column-) symmetric. Enforce it here -- like
+      // the fixed braket symmetry above -- so that a symmetrizer is identical
+      // however it was built (programmatically, where the column-symmetry
+      // default is the Context-independent Nonsymm, or by deserialization); a
+      // mismatch would silently prevent otherwise-equal terms from cancelling.
+      column_symmetry_ = ColumnSymmetry::Symm;
     }
 
     if (symmetry_ == Symmetry::Symm || symmetry_ == Symmetry::Antisymm) {
