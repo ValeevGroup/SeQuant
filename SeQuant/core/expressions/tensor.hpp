@@ -332,15 +332,19 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       std::optional<Symmetry> s, std::optional<BraKetSymmetry> bks_opt,
       std::optional<ColumnSymmetry> ps, std::optional<Hermiticity> herm_opt,
       Field base_fld) {
-    const Symmetry s_resolved = s.value_or(Symmetry::Nonsymm);
-    const ColumnSymmetry ps_resolved = ps.value_or(ColumnSymmetry::Nonsymm);
-    const Hermiticity h_resolved = herm_opt.value_or(Hermiticity::NonHermitian);
+    // unspecified attributes fall back to the single source of truth
+    const Symmetry s_resolved = s.value_or(Defaults::symmetry);
+    const ColumnSymmetry ps_resolved = ps.value_or(Defaults::column_symmetry);
+    const Hermiticity h_resolved = herm_opt.value_or(Defaults::hermiticity);
+    // braket symmetry is derived from the explicit-or-default Hermiticity and
+    // the base field unless it was given explicitly
     const BraKetSymmetry bks_resolved =
         bks_opt.has_value() ? *bks_opt
                             : to_braket_symmetry(h_resolved, base_fld);
-    // preserve the exact #Hermiticity trait (incl. AntiHermitian, which the
-    // BraKetSymmetry round-trip cannot represent) when it was given; otherwise
-    // back-fill it from the explicit-or-derived braket symmetry
+    // report the exact #Hermiticity trait (incl. AntiHermitian, which the
+    // BraKetSymmetry round-trip cannot represent) when Hermiticity was given;
+    // otherwise, if only BraKetSymmetry was given, back-fill Hermiticity from
+    // it; otherwise use the (default) Hermiticity that already fed bks_resolved
     const Hermiticity hermiticity_resolved =
         herm_opt.has_value()
             ? *herm_opt
