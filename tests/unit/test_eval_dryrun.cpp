@@ -1503,6 +1503,208 @@ TEST_CASE(
   CHECK(perf_first.cp.peak_bytes > 5e11);
 }
 
+// P1 gate spike (external-occ forest batching, mechanism b): PURE SIZING check.
+// Does the cost model's footprint of the perf-first PPL W giant respond to
+// slicing ONE external occupied index to a block? The external occ (the
+// residual's own output i,j) appears ONLY as protoindices of the output PNO
+// composites a<i,j>, never as a top-level slot and never contracted -- so the
+// question is whether inner_aware_volume, which pulls those protos into the
+// OUTER extent product (tot_indices; sized by idx_to_extent) while sizing the
+// PNO composites themselves by the k-th CSV power mean (independent of the occ
+// block), still shrinks the node when idx_to_extent is overridden to return
+// occ_block for one occ proto. If the occ lives in the outer product, the whole
+// footprint scales by occ_block/occ (GO). If the composite moment sizing
+// swallowed the occ (it does not, but this is the NO-GO hypothesis the spike
+// tests), the footprint would not move.
+//
+// This does NOT touch runtime, optimize() selection, or emit wiring. It sizes
+// ONE node's free-index set twice, with two extent functions. Hidden tag; run:
+//   ./tests/unit/unit_tests-sequant "[dryrun-occ-sizing]"
+TEST_CASE(
+    "dryrun external-occ slicing shrinks the PPL W footprint (P1 sizing gate)",
+    "[.][dryrun-occ-sizing]") {
+  auto ctx = get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr);  // mu~
+  sequant::mbpt::add_df_spaces(isr);   // K
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+
+  auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                          "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = deserialize<ExprPtr>(line);
+  REQUIRE(static_cast<bool>(expr));
+  REQUIRE(expr->is<Sum>());
+  auto const& summands = expr->as<Sum>().summands();
+  REQUIRE(!summands.empty());
+  auto flatten_product = [](ExprPtr const& e) -> ExprPtr {
+    if (!e->is<Product>()) return e;
+    auto const& p = e->as<Product>();
+    return ex<Product>(p.scalar(), p.factors(), Product::Flatten::Yes);
+  };
+  // Same term as [dryrun-objective]: index 38 is the C60 PPL/ladder giant.
+  std::size_t giant_idx = 38;
+  if (giant_idx >= summands.size()) giant_idx = 0;
+  ExprPtr giant = flatten_product(summands[giant_idx]);
+  REQUIRE(giant);
+
+  // FAITHFUL real C60 config -- SAME regime the [dryrun-objective] case uses.
+  auto regime = df_regime(kC60_pVDZF12);
+
+  // Optimize + binarize the giant under the perf-first objective
+  // (DenseTimeSpaceBatched) with the SAME policy the [dryrun-objective] analyze
+  // uses, so we walk the exact tree that forms the occ^2 * PNO^4 W node.
+  sequant::BatchPolicy policy;
+  policy.is_batchable_index = is_df_batchable;
+  policy.batch_target_size = [](Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
+  };
+  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+  policy.accumulation_factor = 1.0;
+  policy.peak_threshold = 40.0 * 1e9;
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      Expr const*, container::vector<container::svector<Index>>>>();
+  OptimizeOptions opts;
+  opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = axes_map;
+
+  auto optimized = optimize(giant, opts);
+  REQUIRE(static_cast<bool>(optimized));
+  auto it = axes_map->find(optimized.get());
+  container::vector<container::svector<Index>> node_axes;
+  if (it != axes_map->end()) node_axes = it->second;
+  BinarizationOptions bopts;
+  bopts.node_batch_axes = node_axes;
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto node = binarize<EvalExprDryRun>(optimized, {}, bopts);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+  // Locate the GIANT PPL W node = the perf-first (gC)^2 ladder intermediate
+  // W(a1a2a3a4) whose FOUR PNO composite legs a<i,j> share one occ-pair, sized
+  // occ^2 * M_4^4 = ~0.92 TB (matches cost_profile's ~954 GB peak). The
+  // defining, batching-relevant property is that it carries NO free mu~ and NO
+  // free K -- those are contracted at/below it -- so mu~/K batching cannot
+  // shrink it and the external occ is its ONLY memory lever. (This is why a
+  // plain max-footprint pick is WRONG: the larger 3-center {mu~ a K} nodes ARE
+  // mu~/K-sliceable and are not the term that OOMs after batching.) Among the
+  // no-free-mu~/K nodes, take the max-footprint one; require >= 2 PNO legs so
+  // we land on the ladder intermediate, not a tiny scalar.
+  auto memsize_full = sequant::opt::detail::memsize_counter(
+      regime.idx_to_extent(), regime.inner_pow_fn());
+  auto free_has_bare = [](std::vector<Index> const& ixs, std::wstring_view bk) {
+    for (auto const& ix : ixs)
+      if (ix.space().base_key() == bk) return true;
+    return false;
+  };
+  auto count_pno = [](std::vector<Index> const& ixs) {
+    std::size_t n = 0;
+    for (auto const& ix : ixs)
+      if (ix.proto_indices().size() >= 2) ++n;
+    return n;
+  };
+  double giant_full_bytes = 0.0;
+  std::vector<Index> giant_free;
+  node.visit_internal([&](auto const& n) {
+    auto free_ixs = node_free_indices(*n);
+    if (free_has_bare(free_ixs, L"μ̃") || free_has_bare(free_ixs, L"Κ")) return;
+    if (count_pno(free_ixs) < 2) return;
+    double const bytes =
+        memsize_full(free_ixs, std::vector<Index>{}, std::vector<Index>{}) *
+        8.0;
+    if (bytes > giant_full_bytes) {
+      giant_full_bytes = bytes;
+      giant_free = free_ixs;
+    }
+  });
+  REQUIRE(giant_full_bytes > 0.0);
+
+  // The external occ indices on the giant node = the distinct proto indices of
+  // its composite legs whose base space is the active occupied ("i"). These are
+  // the residual's own output occ (i,j): never a top-level slot, never
+  // contracted, present only as PNO protos -- exactly the spectator axis the
+  // forest batching targets.
+  std::vector<Index> ext_occ;
+  for (auto const& ix : giant_free)
+    for (auto const& p : ix.proto_indices())
+      if (p.space().base_key() == L"i") {
+        bool seen = false;
+        for (auto const& e : ext_occ)
+          if (e.full_label() == p.full_label()) seen = true;
+        if (!seen) ext_occ.push_back(p);
+      }
+
+  std::wcerr << L"\n=== [dryrun-occ-sizing] P1 SIZING GATE (C60 giant, term "
+             << giant_idx << L") ===\n"
+             << L"giant node free indices = {" << describe_indices(giant_free)
+             << L"}\n"
+             << L"external occ protos found (" << ext_occ.size() << L") = {"
+             << describe_indices(ext_occ) << L"}\n";
+  REQUIRE(!ext_occ.empty());
+
+  // Slice exactly ONE external occ index to a block (rank-general design:
+  // batch an occupied INDEX, never a pair). occ_block = 10 (a plausible occ
+  // tile size; full occ extent = kC60_pVDZF12.i_occ = 120).
+  std::size_t const occ_block = 10;
+  Index const sliced = ext_occ.front();
+  std::wstring const sliced_label(sliced.full_label());
+  std::wcerr << L"slicing ONE external occ index {" << sliced_label
+             << L"} to occ_block=" << occ_block << L" (full occ extent="
+             << kC60_pVDZF12.i_occ << L")\n";
+
+  // Sliced extent function: identical to the regime's, except the ONE chosen
+  // external occ index returns min(full, occ_block).
+  auto full_ext = regime.idx_to_extent();
+  auto sliced_ext = [full_ext, sliced_label,
+                     occ_block](Index const& ix) -> std::size_t {
+    if (std::wstring(ix.full_label()) == sliced_label)
+      return std::min<std::size_t>(full_ext(ix), occ_block);
+    return full_ext(ix);
+  };
+  auto memsize_sliced =
+      sequant::opt::detail::memsize_counter(sliced_ext, regime.inner_pow_fn());
+
+  double const sliced_bytes =
+      memsize_sliced(giant_free, std::vector<Index>{}, std::vector<Index>{}) *
+      8.0;
+  double const ratio = sliced_bytes / giant_full_bytes;
+
+  std::wcerr << L"full   footprint = " << giant_full_bytes << L" bytes ("
+             << (giant_full_bytes / 1e9) << L" GB)\n"
+             << L"sliced footprint = " << sliced_bytes << L" bytes ("
+             << (sliced_bytes / 1e9) << L" GB)\n"
+             << L"sliced/full ratio = " << ratio
+             << L"  (expected ~ occ_block/occ = "
+             << (double(occ_block) / double(kC60_pVDZF12.i_occ)) << L")\n"
+             << L"VERDICT: external-occ slicing "
+             << (ratio < 0.6 ? L"SHRINKS the PPL W footprint => GO"
+                             : L"does NOT shrink the footprint => NO-GO")
+             << L"\n";
+
+  // GO criterion: the modelled footprint must scale EXACTLY with the sliced
+  // occ extent, not just "shrink". The outer (idx_to_extent) factor scales
+  // linearly in the sliced occ extent; the inner PNO M4^4 factor is untouched.
+  // So the footprint ratio is exactly occ_block/occ. Pin that, not just
+  // "smaller". If this fails, the finding is that the mechanism is not purely
+  // multiplicative as expected (NO-GO); report the measured ratio vs
+  // occ_block/occ.
+  double const expected_ratio =
+      static_cast<double>(occ_block) / static_cast<double>(kC60_pVDZF12.i_occ);
+  CHECK(sliced_bytes ==
+        Catch::Approx(giant_full_bytes * expected_ratio).epsilon(1e-9));
+}
+
 // Task 1 (P0, dry-run cost-model comparison): perf-first
 // (DenseTimeSpaceBatched) vs peak-first (DenseSpaceTimeBatched) modelled
 // flops/peak, swept over ALL summands of the real C60 residual (not just the
