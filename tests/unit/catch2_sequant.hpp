@@ -6,6 +6,7 @@
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/op.hpp>
@@ -21,6 +22,17 @@
 #include <string_view>
 #include <type_traits>
 #include <variant>
+
+namespace sequant {
+/// Shared particle-symmetric default symmetry pack (column = Symm) for the MBPT
+/// test TUs. Programmatic Tensor construction is Context-independent (see
+/// Tensor::Defaults), so tests spell out MBPT particle symmetry explicitly and
+/// feed this at the construction sites that must match parsed references.
+/// Defined `inline` in this shared header (rather than once per TU) so that
+/// unity/jumbo test builds see a single definition instead of colliding
+/// anonymous-namespace copies.
+inline constexpr TensorSymmetries ps{.column = ColumnSymmetry::Symm};
+}  // namespace sequant
 
 namespace Catch {
 

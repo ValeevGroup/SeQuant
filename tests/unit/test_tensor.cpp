@@ -25,12 +25,8 @@
 #include <string_view>
 #include <type_traits>
 
-namespace {
-/// the MBPT-style particle-symmetric default (column = Symm); used where these
-/// tests exercise particle-symmetric behavior (programmatic Tensor ctors are
-/// Context-independent -- see Tensor::Defaults -- so it is spelled out here)
-constexpr sequant::TensorSymmetries ps{.column = sequant::ColumnSymmetry::Symm};
-}  // namespace
+// the particle-symmetric default symmetry pack `ps` (column = Symm) is defined
+// in catch2_sequant.hpp and shared across the MBPT test TUs
 
 TEST_CASE("tensor", "[elements]") {
   using namespace sequant;

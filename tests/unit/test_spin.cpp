@@ -33,13 +33,8 @@
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/view.hpp>
 
-namespace {
-/// this TU exercises MBPT tensors, whose particles are indistinguishable, hence
-/// they are particle- (column-) symmetric; programmatic Tensor construction is
-/// Context-independent (see Tensor::Defaults), so spell that default out once
-/// here and feed it at every construction site that must match parsed refs
-constexpr sequant::TensorSymmetries ps{.column = sequant::ColumnSymmetry::Symm};
-}  // namespace
+// the particle-symmetric default symmetry pack `ps` (column = Symm) is defined
+// in catch2_sequant.hpp and shared across the MBPT test TUs
 
 TEST_CASE("spin", "[spin]") {
   using namespace sequant;

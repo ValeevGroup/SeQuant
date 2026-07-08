@@ -35,14 +35,8 @@
 
 namespace sequant {
 
-namespace {
-// mbpt convention: tensors describe indistinguishable particles and so are
-// particle (column) symmetric. The fixed (Context-independent) Tensor ctor
-// defaults column symmetry to Nonsymm, so pass this named-parameter pack to opt
-// the TU's tensors into particle symmetry (unset fields keep the library
-// defaults). Defining it once here keeps the per-site cost to a single `, ps`.
-constexpr TensorSymmetries ps{.column = ColumnSymmetry::Symm};
-}  // namespace
+// the particle-symmetric default symmetry pack `ps` (column = Symm) is defined
+// in catch2_sequant.hpp and shared across the MBPT test TUs
 
 struct WickAccessor {};
 
