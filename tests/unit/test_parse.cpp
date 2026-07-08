@@ -89,6 +89,30 @@ TEST_CASE("serialization", "[serialization]") {
     ctx.set(mbpt::make_sr_spaces());
     auto ctx_resetter = set_scoped_default_context(ctx);
 
+    SECTION("default symmetries follow the Context") {
+      // the deserializer sources unspecified tensor symmetries from the active
+      // Context (unlike the programmatic Tensor ctor, which uses fixed
+      // defaults -- see test_tensor "programmatic ctor defaults are
+      // Context-independent"). Flip the Context column-symmetry default and
+      // confirm parsed tensors follow it.
+      auto ctx_symm = get_default_context();
+      ctx_symm.set(ColumnSymmetry::Symm);
+      {
+        auto resetter = set_scoped_default_context(ctx_symm);
+        REQUIRE(deserialize<ExprPtr>(L"t{i1,i2;a1,a2}")
+                    ->as<Tensor>()
+                    .column_symmetry() == ColumnSymmetry::Symm);
+      }
+      auto ctx_nonsymm = get_default_context();
+      ctx_nonsymm.set(ColumnSymmetry::Nonsymm);
+      {
+        auto resetter = set_scoped_default_context(ctx_nonsymm);
+        REQUIRE(deserialize<ExprPtr>(L"t{i1,i2;a1,a2}")
+                    ->as<Tensor>()
+                    .column_symmetry() == ColumnSymmetry::Nonsymm);
+      }
+    }
+
     SECTION("Scalar tensor") {
       auto expr = deserialize<ExprPtr>(L"t{}");
       REQUIRE(expr->is<Tensor>());

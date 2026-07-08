@@ -25,6 +25,13 @@
 #include <string_view>
 #include <type_traits>
 
+namespace {
+/// the MBPT-style particle-symmetric default (column = Symm); used where these
+/// tests exercise particle-symmetric behavior (programmatic Tensor ctors are
+/// Context-independent -- see Tensor::Defaults -- so it is spelled out here)
+constexpr sequant::TensorSymmetries ps{.column = sequant::ColumnSymmetry::Symm};
+}  // namespace
+
 TEST_CASE("tensor", "[elements]") {
   using namespace sequant;
 
@@ -59,11 +66,12 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE(ranges::distance(t2.const_indices().begin(),
                              t2.const_indices().end()) == 2);
     REQUIRE(t2.symmetry() == Symmetry::Nonsymm);
-    // bare ctor: braket symmetry is derived from the default Context's
-    // Hermiticity (NonHermitian here) -> Nonsymm; column symmetry follows the
-    // Context default (Symm in the test context)
+    // programmatic ctor defaults are fixed and Context-independent: braket
+    // symmetry derives from the default NonHermitian -> Nonsymm, and column
+    // symmetry defaults to the safe Nonsymm (the Context's Symm default applies
+    // only to deserialized tensors)
     REQUIRE(t2.braket_symmetry() == BraKetSymmetry::Nonsymm);
-    REQUIRE(t2.column_symmetry() == ColumnSymmetry::Symm);
+    REQUIRE(t2.column_symmetry() == ColumnSymmetry::Nonsymm);
     REQUIRE(t2.label() == L"F");
 
     // bra/kets of different rank
@@ -86,7 +94,7 @@ TEST_CASE("tensor", "[elements]") {
                              t3.const_indices().end()) == 2);
     REQUIRE(t3.symmetry() == Symmetry::Nonsymm);
     REQUIRE(t3.braket_symmetry() == BraKetSymmetry::Nonsymm);
-    REQUIRE(t3.column_symmetry() == ColumnSymmetry::Symm);
+    REQUIRE(t3.column_symmetry() == ColumnSymmetry::Nonsymm);
     REQUIRE(t3.label() == L"N");
 
     REQUIRE_NOTHROW(Tensor(L"g", bra{Index{L"i_1"}, Index{L"i_2"}},
@@ -113,14 +121,12 @@ TEST_CASE("tensor", "[elements]") {
     SECTION("null indices") {
       // null indices ok in asymmetric bra or ket
       REQUIRE_NOTHROW(Tensor(L"N", bra{L"i_2", L"", L"i_3"},
-                             ket{L"", L"i_1", L""}, aux{}, Symmetry::Nonsymm));
+                             ket{L"", L"i_1", L""}, aux{}, ps));
       REQUIRE_NOTHROW(Tensor(L"N", bra{L"", L"i_1", L""},
-                             ket{L"i_2", L"", L"i_3"}, aux{},
-                             Symmetry::Nonsymm));
+                             ket{L"i_2", L"", L"i_3"}, aux{}, ps));
 
-      REQUIRE_NOTHROW(
-          Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::Nonsymm));
-      Tensor t(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::Nonsymm);
+      REQUIRE_NOTHROW(Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, ps));
+      Tensor t(L"N", bra{L""}, ket{L"i_1"}, aux{}, ps);
       REQUIRE(t.bra_rank() == 0);
       REQUIRE(t.ket_rank() == 1);
       REQUIRE(t.bra_net_rank() == 0);
@@ -130,29 +136,25 @@ TEST_CASE("tensor", "[elements]") {
 
       // in fact slots of asymmetric particle-symmetric tensors are kept in
       // canonical order
-      REQUIRE(Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::Nonsymm) ==
-              Tensor(L"N", bra{}, ket{L"i_1"}, aux{}, Symmetry::Nonsymm));
+      REQUIRE(Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, ps) ==
+              Tensor(L"N", bra{}, ket{L"i_1"}, aux{}, ps));
       REQUIRE(Tensor(L"N", bra{L"i_2", L"", L"i_3"}, ket{L"", L"i_1", L""},
-                     aux{}, Symmetry::Nonsymm) ==
-              Tensor(L"N", bra{L"i_2", L"i_3"}, ket{L"", L"", L"i_1"}, aux{},
-                     Symmetry::Nonsymm));
+                     aux{}, ps) == Tensor(L"N", bra{L"i_2", L"i_3"},
+                                          ket{L"", L"", L"i_1"}, aux{}, ps));
       REQUIRE(Tensor(L"N", bra{L"", L"i_1", L""}, ket{L"i_2", L"", L"i_3"},
-                     aux{}, Symmetry::Nonsymm) ==
-              Tensor(L"N", bra{L"i_1", L"", L""}, ket{L"", L"i_2", L"i_3"},
-                     aux{}, Symmetry::Nonsymm));
-      REQUIRE(
-          Tensor(L"N", bra{L"", L"i_1", L"", L"i_4"},
-                 ket{L"i_2", L"", L"i_3", L"i_5"}, aux{}, Symmetry::Nonsymm) ==
-          Tensor(L"N", bra{L"i_4", L"i_1", L"", L""},
-                 ket{L"i_5", L"", L"i_2", L"i_3"}, aux{}, Symmetry::Nonsymm));
+                     aux{}, ps) == Tensor(L"N", bra{L"i_1", L"", L""},
+                                          ket{L"", L"i_2", L"i_3"}, aux{}, ps));
+      REQUIRE(Tensor(L"N", bra{L"", L"i_1", L"", L"i_4"},
+                     ket{L"i_2", L"", L"i_3", L"i_5"}, aux{}, ps) ==
+              Tensor(L"N", bra{L"i_4", L"i_1", L"", L""},
+                     ket{L"i_5", L"", L"i_2", L"i_3"}, aux{}, ps));
       // in fact unnecessary null indices are dropped in canonicalization
-      REQUIRE(
-          Tensor(L"N", bra{L"", L"i_1", L"", L"i_4"},
-                 ket{L"i_2", L"", L"i_3", L"i_5"}, aux{}, Symmetry::Nonsymm) ==
-          Tensor(L"N", bra{L"i_4", L"i_1"}, ket{L"i_5", L"", L"i_2", L"i_3"},
-                 aux{}, Symmetry::Nonsymm));
+      REQUIRE(Tensor(L"N", bra{L"", L"i_1", L"", L"i_4"},
+                     ket{L"i_2", L"", L"i_3", L"i_5"}, aux{}, ps) ==
+              Tensor(L"N", bra{L"i_4", L"i_1"},
+                     ket{L"i_5", L"", L"i_2", L"i_3"}, aux{}, ps));
       Tensor t5(L"N", bra{L"", L"i_1", L"", L"i_4"},
-                ket{L"i_2", L"", L"i_3", L"i_5"}, aux{}, Symmetry::Nonsymm);
+                ket{L"i_2", L"", L"i_3", L"i_5"}, aux{}, ps);
       REQUIRE(t5.bra_rank() == 2);
       REQUIRE(t5.bra_net_rank() == 2);
       REQUIRE(t5.bra()[0] == L"i_4");
@@ -347,7 +349,7 @@ TEST_CASE("tensor", "[elements]") {
     auto t2 = Tensor(L"F", bra{L"i_1"}, ket{L"i_2"}, aux{L"i_3"});
     auto t3 = Tensor(L"F", bra{L"i_1"}, ket{L"i_2"}, aux{L"i_3", L"i_4"});
     auto t4 = Tensor(L"F", bra{Index(L"i_1", {L"i_5", L"i_6"}), Index{}},
-                     ket{L"", L"i_2"}, aux{L"i_3", L"i_4"}, Symmetry::Nonsymm);
+                     ket{L"", L"i_2"}, aux{L"i_3", L"i_4"}, ps);
     auto h1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"}) *
               ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}));
 
@@ -556,9 +558,11 @@ TEST_CASE("tensor_hermiticity", "[elements]") {
     };
     auto make_diff = [&idx](Field f) {
       auto a = ex<Tensor>(L"g", bra{idx(L"i_1", f)}, ket{idx(L"i_2", f)},
-                          Symmetry::Nonsymm, Hermiticity::Hermitian);
+                          Symmetry::Nonsymm, Hermiticity::Hermitian,
+                          ColumnSymmetry::Symm);
       auto b = ex<Tensor>(L"g", bra{idx(L"i_2", f)}, ket{idx(L"i_1", f)},
-                          Symmetry::Nonsymm, Hermiticity::Hermitian);
+                          Symmetry::Nonsymm, Hermiticity::Hermitian,
+                          ColumnSymmetry::Symm);
       ExprPtr diff = a - b;
       simplify(diff);
       return diff;
@@ -570,24 +574,26 @@ TEST_CASE("tensor_hermiticity", "[elements]") {
     REQUIRE_FALSE(make_diff(Field::Complex) == ex<Constant>(0));
   }
 
-  SECTION("default symmetries are taken from the Context") {
-    // unspecified symmetries are resolved against the active default Context;
-    // braket symmetry is *derived* from the Context's default Hermiticity and
-    // the tensor's base field (there is no braket-symmetry Context knob)
+  SECTION("programmatic ctor defaults are Context-independent") {
+    // The Context's default symmetries govern *deserialization* only (see
+    // test_parse). A programmatic Tensor ctor always resolves unspecified
+    // attributes against fixed library defaults -- fully non-symmetric /
+    // non-Hermitian -- regardless of the active Context. Set the Context
+    // defaults to non-default values and confirm they are ignored here.
     auto ctx = get_default_context();
-    ctx.set(Symmetry::Nonsymm)
+    ctx.set(Symmetry::Antisymm)
         .set(Hermiticity::Hermitian)
-        .set(ColumnSymmetry::Nonsymm);
+        .set(ColumnSymmetry::Symm);
     auto resetter = set_scoped_default_context(ctx);
 
-    auto g = Tensor(L"g", bra{L"i_1"}, ket{L"i_2"});
+    auto g = Tensor(L"g", bra{L"i_1", L"i_2"}, ket{L"i_3", L"i_4"});
     REQUIRE(g.symmetry() == Symmetry::Nonsymm);
-    REQUIRE(g.hermiticity() == Hermiticity::Hermitian);
+    REQUIRE(g.hermiticity() == Hermiticity::NonHermitian);
     REQUIRE(g.column_symmetry() == ColumnSymmetry::Nonsymm);
     REQUIRE(g.braket_symmetry() ==
-            to_braket_symmetry(Hermiticity::Hermitian, g.base_field()));
+            to_braket_symmetry(Hermiticity::NonHermitian, g.base_field()));
 
-    // explicitly-specified symmetries override the Context defaults
+    // explicitly-specified symmetries override the fixed defaults
     auto t = Tensor(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
                     BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
     REQUIRE(t.braket_symmetry() == BraKetSymmetry::Nonsymm);

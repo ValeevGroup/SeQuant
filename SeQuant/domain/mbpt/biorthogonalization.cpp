@@ -651,8 +651,11 @@ ExprPtr biorthogonal_transform_pre_nnsproject_impl(
 
   auto bixs = ext_idxs | transform([](auto&& vec) { return get_bra_idx(vec); });
   auto kixs = ext_idxs | transform([](auto&& vec) { return get_ket_idx(vec); });
+  // the reserved symmetrizer Ŝ is column (particle) symmetric; request Symm
+  // explicitly since the programmatic Tensor default is column-Nonsymm
   ExprPtr S_tensor =
-      ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs), ket(bixs)});
+      ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs), ket(bixs),
+                        Symmetry::Nonsymm, std::nullopt, ColumnSymmetry::Symm});
 
   if (factor_out_nns_projector) {
     if (ext_idxs.size() > 1) {

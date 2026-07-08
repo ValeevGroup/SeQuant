@@ -34,6 +34,16 @@
 #include <vector>
 
 namespace sequant {
+
+namespace {
+// mbpt convention: tensors describe indistinguishable particles and so are
+// particle (column) symmetric. The fixed (Context-independent) Tensor ctor
+// defaults column symmetry to Nonsymm, so pass this named-parameter pack to opt
+// the TU's tensors into particle symmetry (unset fields keep the library
+// defaults). Defining it once here keeps the per-site cost to a single `, ps`.
+constexpr TensorSymmetries ps{.column = ColumnSymmetry::Symm};
+}  // namespace
+
 struct WickAccessor {};
 
 template <>
@@ -1014,10 +1024,8 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
 
         // multiply tensor factors and expand
         auto wick_result_2 =
-            ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
-                       Symmetry::Nonsymm) *
-            ex<Tensor>(L"t", bra{L"a_4", L"a_5"}, ket{L"i_4", L"i_5"},
-                       Symmetry::Nonsymm) *
+            ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"}, ps) *
+            ex<Tensor>(L"t", bra{L"a_4", L"a_5"}, ket{L"i_4", L"i_5"}, ps) *
             wick_result;
         expand(wick_result_2);
         REQUIRE(wick_result_2->size() == 4);  // still 4 terms
@@ -1305,21 +1313,23 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         // sequant::wprintf(to_latex_align(Ld_H2N_L), L" = \n",
         //                  to_latex_align(result2, 0, 2), L"\n");
         REQUIRE(result2.as<Sum>().size() == 5);
-        // Sum-term ordering depends on the tensors' (Context-derived) braket
-        // and column symmetries; the canonical sort key for these ã·v̄·w terms
-        // shifted vs master as those defaults changed. The expression is
-        // mathematically unchanged.
+        // Sum-term ordering depends on the tensors' braket and column
+        // symmetries; the canonical sort key for these ã·v̄·w terms reflects the
+        // fixed (Context-independent) Tensor ctor defaults -- notably w, which
+        // carries no bra/ket and so is column-Nonsymm by default -- and shifted
+        // vs the previous (Context-Symm) ordering. The expression is
+        // mathematically unchanged (same five terms, reordered).
         REQUIRE(
             result2.to_latex() ==
             L"{ \\bigl( - "
-            L"{{{\\frac{1}{2}}}{\\tilde{a}^{{e_1}{p_3}}_{{p_1}{p_2}}}{\\bar{v}^"
-            L"{{p_1}{p_2}}_{{e_1}{p_3}}}{w^{}_{}[{e_1}]}} - "
             L"{{{\\frac{1}{4}}}{\\tilde{a}^{{p_3}{p_4}{p_5}}_{{p_1}{p_2}{p_5}}}"
-            L"{\\bar{v}^{{p_1}{p_2}}_{{p_3}{p_4}}}{w^{}_{}[{p_5}]}} + "
-            L"{{\\tilde{a}^{{p_2}}_{{p_1}}}{\\bar{v}^{{e_1}{p_1}}_{{e_1}{p_2}}}"
-            L"{w^{}_{}[{e_1}]}} + "
+            L"{\\bar{v}^{{p_1}{p_2}}_{{p_3}{p_4}}}{w^{}_{}[{p_5}]}} - "
+            L"{{{\\frac{1}{2}}}{\\tilde{a}^{{e_1}{p_3}}_{{p_1}{p_2}}}{\\bar{v}^"
+            L"{{p_1}{p_2}}_{{e_1}{p_3}}}{w^{}_{}[{e_1}]}} + "
             L"{{{\\frac{1}{4}}}{\\tilde{a}^{{p_3}{p_4}}_{{p_1}{p_2}}}{\\bar{v}^"
-            L"{{p_1}{p_2}}_{{p_3}{p_4}}}{w^{}_{}[{e_1}]}} - "
+            L"{{p_1}{p_2}}_{{p_3}{p_4}}}{w^{}_{}[{e_1}]}} + "
+            L"{{\\tilde{a}^{{p_2}}_{{p_1}}}{\\bar{v}^{{e_1}{p_1}}_{{e_1}{p_2}}}"
+            L"{w^{}_{}[{e_1}]}} - "
             L"{{{\\frac{1}{2}}}{\\tilde{a}^{{p_2}{p_3}}_{{e_1}{p_1}}}{\\bar{v}^"
             L"{{e_1}{p_1}}_{{p_2}{p_3}}}{w^{}_{}[{e_1}]}}\\bigr) }");
       }
@@ -1340,12 +1350,15 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         REQUIRE(result.as<Sum>().size() == 5);
 
         // clang-format off
+        // h is aux-only (no bra/ket particle columns) -> column-Nonsymm, like
+        // the programmatic h in `input`; pin it so the parsed reference matches
+        // the fixed-default programmatic ctor (overlaps/deltas stay Symm)
         auto expected = deserialize(
-            "- h{;;p_3} ã{p_1<i_1>,p_3;p_2<i_2>,p_3}"
-            "+ h{;;p_3} δ{p_1<i_1>;a_1<i_1>} δ{a_2<i_2>;p_2<i_2>} ã{p_3;p_3} s{a_1<i_1>;a_2<i_2>} "
-            "- h{;;a_1} δ{a_2<i_2>;p_2<i_2>} ã{p_1<i_1>;a_1} s{a_1;a_2<i_2>} "
-            "- h{;;a_2} δ{p_1<i_1>;a_1<i_1>} s{a_1<i_1>;a_2} ã{a_2;p_2<i_2>} "
-            "+ h{;;a_3} δ{p_1<i_1>;a_1<i_1>} δ{a_2<i_2>;p_2<i_2>} s{a_1<i_1>;a_3} s{a_3;a_2<i_2>} ");
+            "- h{;;p_3}:N-N-N ã{p_1<i_1>,p_3;p_2<i_2>,p_3}"
+            "+ h{;;p_3}:N-N-N δ{p_1<i_1>;a_1<i_1>} δ{a_2<i_2>;p_2<i_2>} ã{p_3;p_3} s{a_1<i_1>;a_2<i_2>} "
+            "- h{;;a_1}:N-N-N δ{a_2<i_2>;p_2<i_2>} ã{p_1<i_1>;a_1} s{a_1;a_2<i_2>} "
+            "- h{;;a_2}:N-N-N δ{p_1<i_1>;a_1<i_1>} s{a_1<i_1>;a_2} ã{a_2;p_2<i_2>} "
+            "+ h{;;a_3}:N-N-N δ{p_1<i_1>;a_1<i_1>} δ{a_2<i_2>;p_2<i_2>} s{a_1<i_1>;a_3} s{a_3;a_2<i_2>} ");
         // clang-format on
         simplify(expected);
 
