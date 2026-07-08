@@ -1680,6 +1680,132 @@ TEST_CASE("eval_slice_array_over_mode", "[eval]") {
   }
 }
 
+// Numeric-invariance for Result::write_into_slice on the TA backend: the union
+// of disjoint, tile-aligned blocks scattered into a pre-sized destination must
+// reconstruct the whole array EXACTLY. write_into_slice() is the inverse of
+// slice_array_over_mode() (which GATHERS a block out): here we gather disjoint
+// blocks of a whole array R and scatter each back into a fresh, pre-sized
+// destination, then require the reassembled destination == R elementwise.
+TEST_CASE("eval_write_into_slice", "[eval]") {
+  using sequant::eval_result;
+  using sequant::ResultPtr;
+  using sequant::ResultTensorOfTensorTA;
+  using sequant::ResultTensorTA;
+  using sequant::slice_array_over_mode;
+  auto& world = TA::get_default_world();
+
+  SECTION("flat: disjoint tile-aligned blocks reassemble exactly") {
+    // mode 0 has 3 multi-element tiles (size 3 each; occ_tile_size>1 analog),
+    // mode 1 a single tile. Split mode 0 into element ranges [0,3) and [3,9)
+    // (tiles [0,1) and [1,3)): disjoint, tile-aligned, and tile-SPANNING.
+    TA::TArrayD R(world, TA::TiledRange{{0, 3, 6, 9}, {0, 5}});
+    R.fill_random();
+    world.gop.fence();
+
+    auto const b0 = slice_array_over_mode(R, 0, 0, 1);  // elements [0,3)
+    auto const b1 = slice_array_over_mode(R, 0, 1, 3);  // elements [3,9)
+
+    // destination pre-sized to R's full shape, then filled block by block.
+    TA::TArrayD dest(world, R.trange());
+    dest.fill_local(0.0);
+    world.gop.fence();
+
+    auto rdest = eval_result<ResultTensorTA<TA::TArrayD>>(dest);
+    rdest->write_into_slice(*eval_result<ResultTensorTA<TA::TArrayD>>(b0), 0, 0,
+                            3);
+    rdest->write_into_slice(*eval_result<ResultTensorTA<TA::TArrayD>>(b1), 0, 3,
+                            9);
+
+    REQUIRE(equal_tarrays<Tight>(rdest->get<TA::TArrayD>(), R));
+  }
+
+  SECTION("flat: nonzero element lobound (frozen-core offset) is preserved") {
+    // mode 0 has element lobound 2 (a frozen-core-like offset) and two size-3
+    // tiles; split into [2,5) and [5,8). The block bounds honor the lobound.
+    TA::TArrayD R(world, TA::TiledRange{{2, 5, 8}, {0, 4}});
+    R.fill_random();
+    world.gop.fence();
+
+    auto const b0 = slice_array_over_mode(R, 0, 0, 1);  // elements [2,5)
+    auto const b1 = slice_array_over_mode(R, 0, 1, 2);  // elements [5,8)
+    // the gathered blocks keep the source element lobound
+    REQUIRE(b0.trange().dim(0).elements_range().first == 2);
+
+    TA::TArrayD dest(world, R.trange());
+    dest.fill_local(0.0);
+    world.gop.fence();
+
+    auto rdest = eval_result<ResultTensorTA<TA::TArrayD>>(dest);
+    rdest->write_into_slice(*eval_result<ResultTensorTA<TA::TArrayD>>(b0), 0, 2,
+                            5);
+    rdest->write_into_slice(*eval_result<ResultTensorTA<TA::TArrayD>>(b1), 0, 5,
+                            8);
+
+    auto const& out = rdest->get<TA::TArrayD>();
+    REQUIRE(out.trange().dim(0).elements_range().first == 2);  // lobound kept
+    REQUIRE(equal_tarrays<Tight>(out, R));
+  }
+
+  SECTION("tot: disjoint tile-aligned blocks reassemble exactly") {
+    using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<double>>>;
+    using ResultToT = ResultTensorOfTensorTA<ToTArray>;
+
+    // outer mode 0: two size-3 tiles (multi-element, tile-spanning split);
+    // outer mode 1: one size-2 tile. Inner tensors are 2x2. Inner values are
+    // position-dependent (derived from the outer coordinate) so a mis-scattered
+    // block -- wrong offset -- would change the reassembled norm.
+    TA::TiledRange const outer_tr{{0, 3, 6}, {0, 2}};
+    TA::Range const inner_r(std::array<std::size_t, 2>{2, 2});
+
+    auto build = [&world, inner_r](TA::TiledRange const& otr,
+                                   bool zero) -> ToTArray {
+      auto tile_fn = [inner_r, zero](TA::Range const& orng) {
+        TA::Tensor<TA::Tensor<double>> t{orng};
+        std::size_t o = 0;
+        for (auto const& coord : orng) {
+          auto& inner = t[o++];
+          inner = TA::Tensor<double>{inner_r};
+          double base = 0.0;
+          if (!zero)
+            for (auto c : coord)
+              base = base * 37.0 + static_cast<double>(c + 1);
+          std::size_t k = 0;
+          for (auto& x : inner) x = zero ? 0.0 : base * 100.0 + (++k);
+        }
+        return t;
+      };
+      ToTArray arr{world, otr};
+      for (auto it = arr.begin(); it != arr.end(); ++it)
+        if (arr.is_local(it.index()))
+          *it = world.taskq.add(tile_fn, it.make_range());
+      world.gop.fence();
+      return arr;
+    };
+
+    ToTArray R = build(outer_tr, /*zero=*/false);
+
+    auto const b0 = slice_array_over_mode(R, 0, 0, 1);  // outer elements [0,3)
+    auto const b1 = slice_array_over_mode(R, 0, 1, 2);  // outer elements [3,6)
+
+    // destination pre-sized to R's full shape with well-formed (zero) inners.
+    ToTArray dest = build(outer_tr, /*zero=*/true);
+
+    auto rdest = eval_result<ResultToT>(dest);
+    rdest->write_into_slice(*eval_result<ResultToT>(b0), 0, 0, 3);
+    rdest->write_into_slice(*eval_result<ResultToT>(b1), 0, 3, 6);
+
+    // ToT elementwise invariance: norm of the difference (dot of the diff with
+    // itself) must vanish. TA::norm2 does not support ToT tiles, so use dot.
+    auto const& out = rdest->get<ToTArray>();
+    ToTArray diff;
+    diff("i,j;a,b") = out("i,j;a,b") - R("i,j;a,b");
+    REQUIRE(Catch::Approx(diff("i,j;a,b").dot(diff("i,j;a,b"))) == 0.0);
+    // and the reassembled result is nonzero (guards against a trivial all-zero
+    // pass, e.g. if both blocks silently no-op'd).
+    REQUIRE(out("i,j;a,b").dot(out("i,j;a,b")) > 0.0);
+  }
+}
+
 TEST_CASE("eval_batched_custom_evaluator", "[eval]") {
   using sequant::evaluate;
   using sequant::make_batched_custom_evaluator;
