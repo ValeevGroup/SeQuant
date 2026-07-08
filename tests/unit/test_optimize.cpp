@@ -2017,24 +2017,30 @@ TEST_CASE("optimize emits an external batch axis for the PPL term",
   opts.batch_policy.is_batchable_index = [aux](Index const& ix) {
     return ix.space() == aux;
   };
-  opts.batch_policy.batch_target_size = [](Index const&) -> std::size_t {
-    return 236;
+  // All batch sizes live together on BatchPolicy: the DF aux Κ keeps its 236
+  // slice; the spectator occ axis "i" gets its own per-block extent of 10.
+  auto occ = reg->retrieve(L"i");
+  opts.batch_policy.batch_target_size = [occ](Index const& ix) -> std::size_t {
+    return ix.space() == occ ? 10 : 236;
   };
   opts.batch_policy.is_volatile_leaf = [](Tensor const& t) {
     return t.label() == L"t";
   };
   // A budget the unseeded 4-PNO W giant (~40 MB) exceeds: 1 MB.
   opts.batch_policy.peak_threshold = 1.0e6;
+  // Enable spectator-index batching (the domain-neutral trigger).
+  opts.batch_policy.batch_spectator_indices = true;
 
-  auto res = optimize(prod, opts, /*occ_block_target=*/10);
+  auto res = optimize_result(prod, opts);
   REQUIRE(res.external_batch_axis.has_value());
   CHECK(res.external_batch_axis->axis.space().base_key() == L"i");
   CHECK(res.external_batch_axis->block_size == 10);
   REQUIRE(static_cast<bool>(res.expr));
 
-  // occ_block_target == 0 disables the signal (the default 2-arg optimize path
-  // is byte-identical; the [optimize] suite is its regression witness).
-  auto res_off = optimize(prod, opts, /*occ_block_target=*/0);
+  // batch_spectator_indices == false disables the signal (the default
+  // optimize() path is byte-identical; the [optimize] suite is its witness).
+  opts.batch_policy.batch_spectator_indices = false;
+  auto res_off = optimize_result(prod, opts);
   CHECK_FALSE(res_off.external_batch_axis.has_value());
 }
 

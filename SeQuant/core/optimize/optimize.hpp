@@ -22,14 +22,14 @@ namespace sequant {
 struct ExternalBatchAxis {
   /// The spectator external axis to block over.
   Index axis;
-  /// The per-block extent (== the requested occ_block_target, snapped down to
-  /// the axis extent).
+  /// The per-block extent (== \c batch_target_size(axis), snapped down to the
+  /// axis extent).
   std::size_t block_size = 0;
 };
 
-/// Result of the forest-batching optimize overload: the optimized expression
-/// plus an optional \ref ExternalBatchAxis (empty when no external-occ batching
-/// was selected).
+/// Result of \ref optimize_result: the optimized expression plus an optional
+/// \ref ExternalBatchAxis (empty when no spectator-index batching was
+/// selected).
 struct OptimizeResult {
   ExprPtr expr;
   std::optional<ExternalBatchAxis> external_batch_axis;
@@ -45,19 +45,20 @@ struct OptimizeResult {
 /// \return Optimized expression.
 ExprPtr optimize(ExprPtr const& expr, OptimizeOptions opts = {});
 
-/// Forest-batching overload: optimize \p expr, and additionally report an
-/// optional \ref ExternalBatchAxis --- the spectator external OCCUPIED axis
-/// over which the whole term should be evaluated in blocks of \p
-/// occ_block_target (snapped down to the axis extent).
+/// Forest-batching entry point: optimize \p expr, and additionally report an
+/// optional \ref ExternalBatchAxis --- the spectator external axis over which
+/// the whole term should be evaluated in blocks of
+/// \c opts.batch_policy.batch_target_size(axis) (snapped down to the axis
+/// extent).
 ///
 /// The axis is emitted only when ALL of the following hold:
-///   (i)   \p occ_block_target > 0 (0 = disabled; then \c external_batch_axis
-///         is empty and the optimized expression is byte-identical to the
-///         2-argument overload);
+///   (i)   \p opts.batch_policy.batch_spectator_indices == true (false =
+///         disabled; then \c external_batch_axis is empty and the optimized
+///         expression is byte-identical to \ref optimize);
 ///   (ii)  \p opts.objective_function == \c DenseTimeSpaceBatched (the
 ///         perf-first batched objective);
 ///   (iii) \p expr is a single tensor Product with a genuine spectator external
-///         occupied axis (open on the root, contracted at no node); and
+///         axis (open on the root, contracted at no node); and
 ///   (iv)  the perf-first factorization's UNSEEDED peak exceeds
 ///         \p opts.batch_policy.peak_threshold --- i.e. the term actually needs
 ///         batching to fit the budget. (perf-first ignores \c peak_threshold
@@ -65,17 +66,16 @@ ExprPtr optimize(ExprPtr const& expr, OptimizeOptions opts = {});
 ///         WHEN to emit the axis.)
 /// Otherwise \c external_batch_axis is empty.
 ///
-/// The chosen factorization (\c OptimizeResult::expr) is identical to what the
-/// 2-argument overload produces under the same \p opts; only the extra signal
-/// is computed.
+/// The chosen factorization (\c OptimizeResult::expr) is byte-identical to what
+/// \ref optimize produces under the same \p opts; only the extra signal is
+/// computed.
 ///
-/// \param expr             Expression to be optimized.
-/// \param opts             Optimization parameters; see \ref OptimizeOptions.
-/// \param occ_block_target Requested per-block extent of the external occupied
-///                         axis (0 = disabled).
+/// \param expr Expression to be optimized.
+/// \param opts Optimization parameters; see \ref OptimizeOptions. The spectator
+///             per-block extent comes from
+///             \c opts.batch_policy.batch_target_size(axis).
 /// \return The optimized expression paired with the optional forest signal.
-OptimizeResult optimize(ExprPtr const& expr, OptimizeOptions opts,
-                        std::size_t occ_block_target);
+OptimizeResult optimize_result(ExprPtr const& expr, OptimizeOptions opts = {});
 
 /// \copydoc optimize(ExprPtr const&, OptimizeOptions)
 ResultExpr& optimize(ResultExpr& expr, OptimizeOptions opts = {});

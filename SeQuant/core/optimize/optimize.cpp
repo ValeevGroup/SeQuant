@@ -267,17 +267,16 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
 }
 
 /// Task 4 (forest batching): decide whether \p expr's optimized form should be
-/// evaluated blocked over a spectator external OCCUPIED axis, and if so which
-/// axis and block size. Returns std::nullopt unless ALL of the trigger
-/// conditions hold (see the doc of the public 3-argument \ref optimize). The
-/// perf-first PeakBatchedModel is built EXACTLY as single_term_opt's
-/// DenseTimeSpaceBatched arm builds it, so the chosen factorization the caller
-/// keeps and this analysis agree.
+/// evaluated blocked over a spectator external axis, and if so which axis and
+/// block size. Returns std::nullopt unless ALL of the trigger conditions hold
+/// (see the doc of the public \ref optimize_result). The perf-first
+/// PeakBatchedModel is built EXACTLY as single_term_opt's DenseTimeSpaceBatched
+/// arm builds it, so the chosen factorization the caller keeps and this
+/// analysis agree.
 std::optional<ExternalBatchAxis> compute_external_batch_axis(
-    ExprPtr const& expr, OptimizeOptions const& opts,
-    std::size_t occ_block_target) {
+    ExprPtr const& expr, OptimizeOptions const& opts) {
   // (i) disabled.
-  if (occ_block_target == 0) return std::nullopt;
+  if (!opts.batch_policy.batch_spectator_indices) return std::nullopt;
   // (ii) perf-first batched objective only. peak_threshold is NOT a
   // factorization gate for this objective; it is consulted below only to decide
   // WHEN to emit the axis.
@@ -329,11 +328,16 @@ std::optional<ExternalBatchAxis> compute_external_batch_axis(
   }
   if (!occ_axis) return std::nullopt;
 
-  // Snap the requested block down to the axis extent.
+  // The per-block extent for the spectator comes from batch_target_size, like
+  // any batchable index; snap it down to the axis extent.
+  std::size_t const target =
+      opts.batch_policy.batch_target_size
+          ? opts.batch_policy.batch_target_size(*occ_axis)
+          : 0;
+  if (target == 0) return std::nullopt;
   std::size_t const ext =
-      opts.idx_to_extent ? opts.idx_to_extent(*occ_axis) : occ_block_target;
-  std::size_t const block =
-      ext > 0 ? std::min(occ_block_target, ext) : occ_block_target;
+      opts.idx_to_extent ? opts.idx_to_extent(*occ_axis) : target;
+  std::size_t const block = ext > 0 ? std::min(target, ext) : target;
 
   // Seed the axis into the DP root frontier to size the tree under the occ
   // slice, and read the UNSEEDED peak for the trigger gate.
@@ -356,8 +360,7 @@ ExprPtr optimize(ExprPtr const& expr, OptimizeOptions opts) {
                        /*parallel_outer=*/true);
 }
 
-OptimizeResult optimize(ExprPtr const& expr, OptimizeOptions opts,
-                        std::size_t occ_block_target) {
+OptimizeResult optimize_result(ExprPtr const& expr, OptimizeOptions opts) {
   if (!opts.idx_to_extent) opts.idx_to_extent = default_idx_to_size();
   OptimizeResult res;
   res.expr = optimize_impl(expr, opts, opts.reorder == ReorderSum::Reorder,
@@ -365,8 +368,7 @@ OptimizeResult optimize(ExprPtr const& expr, OptimizeOptions opts,
   // The forest signal is derived from the ORIGINAL term's tensor network (the
   // batched DP is order-independent), so it does not depend on the chosen
   // parenthesization above.
-  res.external_batch_axis =
-      compute_external_batch_axis(expr, opts, occ_block_target);
+  res.external_batch_axis = compute_external_batch_axis(expr, opts);
   return res;
 }
 

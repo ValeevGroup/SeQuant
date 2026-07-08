@@ -22,6 +22,12 @@ struct BatchPolicy {
   std::function<std::size_t(Index const&)> batch_target_size = {};
   std::function<bool(Tensor const&)> is_volatile_leaf = {};
 
+  /// If true, an external/spectator index -- open on the whole network's result
+  /// yet contracted at no node -- is eligible for batching; its per-slice size
+  /// comes from \c batch_target_size(ix) like any batchable index. Default
+  /// false = no spectator batching (byte-identical to non-spectator behavior).
+  bool batch_spectator_indices = false;
+
   /// If true, restrict batching to persistent (amplitude-independent) subtrees,
   /// declining to batch any subtree that contains a volatile leaf. If false
   /// (the default), batch ACROSS THE BOARD: slicing the batch axis shrinks any
