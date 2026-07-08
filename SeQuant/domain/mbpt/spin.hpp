@@ -279,6 +279,11 @@ struct ClosedShellCCSpintraceOptions {
   /// dropped terms are recovered on evaluation by the {1,-1/3,-1/3,-1/3}
   /// four swap reconstruction (numerical) or
   /// triplet_doubles_symbolic_reconstruct (symbolic).
+  /// Combined with triplet_te_only it instead compacts the bare-TE residual,
+  /// whose groups are {c, c, -2c} (405 -> 135 terms for 2h2p); the kept -2c
+  /// representative is expanded by triplet_doubles_te_nns_project
+  /// ({1,-1/2,-1/2,0}, numerical) or triplet_doubles_te_symbolic_reconstruct
+  /// (symbolic).
   bool triplet_doubles_compact = false;
   /// EOM triplet doubles experiment: build the residual from
   /// the bare TE primitive only, i.e. return (1/4)*TE instead of the

@@ -1050,6 +1050,42 @@ ExprPtr triplet_doubles_symbolic_reconstruct(
   return result;
 }
 
+ExprPtr triplet_doubles_te_symbolic_reconstruct(
+    ExprPtr compact_expr,
+    const container::svector<container::svector<Index>>& ext_idxs) {
+  if (!compact_expr->is<Sum>()) return compact_expr;
+  if (ext_idxs.size() != 2) return compact_expr;
+
+  // permutation generators: bra-swap (b0<->b1) and ket-swap (k0<->k1) only;
+  // the pair-swap member of each bare-TE group carries coefficient 0.
+  const Index b0 = get_bra_idx(ext_idxs.at(0));
+  const Index b1 = get_bra_idx(ext_idxs.at(1));
+  const Index k0 = get_ket_idx(ext_idxs.at(0));
+  const Index k1 = get_ket_idx(ext_idxs.at(1));
+
+  const container::map<Index, Index> bra_swap{{b0, b1}, {b1, b0}};
+  const container::map<Index, Index> ket_swap{{k0, k1}, {k1, k0}};
+
+  // Each kept term T carries w = -2c; its bra and ket external swaps carry
+  // c = -w/2, i.e. T scaled by -1/2 after relabeling.
+  const auto half = ratio(-1, 2);
+
+  Sum out;
+  for (const auto& term : *compact_expr) {
+    if (!term->is<Product>()) {
+      out.append(term);
+      continue;
+    }
+    out.append(term);                                  // -2c representative
+    out.append(transform_expr(term, bra_swap, half));  // c
+    out.append(transform_expr(term, ket_swap, half));  // c
+  }
+
+  auto result = ex<Sum>(out);
+  simplify(result);
+  return result;
+}
+
 template <detail::index_group_range IdxGroups>
 ExprPtr biorthogonal_transform_pre_nnsproject_impl(
     ExprPtr& expr, IdxGroups&& ext_idxs, bool factor_out_nns_projector) {

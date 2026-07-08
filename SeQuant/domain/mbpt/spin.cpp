@@ -2425,10 +2425,16 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
 
     triplet = triplet_doubles_paper_combined_residual(triplet, pair_swap,
                                                       options.triplet_te_only);
+    // the te_only combined residual is a Constant*Sum Product;
+    // triplet_doubles_maxcoeff_compact only acts on a top-level Sum.
+    simplify(triplet);
     if (options.triplet_doubles_compact)
-      // Keep the -3c representative per hash group so the dropped terms can be
-      // rebuilt exactly by triplet_doubles_symbolic_reconstruct (or, on the
-      // tensor side, by the {1,-1/3,-1/3,-1/3} four swpa reconstruction).
+      // Keep the largest-|coeff| representative per hash group so the dropped
+      // terms can be rebuilt exactly: paper metric keeps the -3c member of
+      // each {c,c,c,-3c} group (triplet_doubles_symbolic_reconstruct, or the
+      // {1,-1/3,-1/3,-1/3} four-swap reconstruction on the tensor side);
+      // te_only keeps the -2c member of each {c,c,-2c} group
+      // (triplet_doubles_te_symbolic_reconstruct, or {1,-1/2,-1/2,0}).
       triplet = triplet_doubles_maxcoeff_compact(triplet, ext_groups);
   }
   simplify(triplet);

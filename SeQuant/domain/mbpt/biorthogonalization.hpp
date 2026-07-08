@@ -112,8 +112,12 @@ struct TripletDoublesSwapLayouts {
 
 /// @brief Lossless compaction of the closed-shell triplet R2 residual: keep one
 /// term per tensor-network hash, choosing the largest-|coefficient| member of
-/// each group. Each group has the structure {c, c, c, -3c}, so the kept
-/// term is always the -3c representative. This is the representative required
+/// each group. Each paper-metric group has the structure {c, c, c, -3c}, so
+/// the kept term is always the -3c representative; the bare-TE (te_only)
+/// residual is served by the same logic, its groups being {c, c, -2c} with the
+/// -2c representative kept (rebuild via
+/// triplet_doubles_te_symbolic_reconstruct / triplet_doubles_te_nns_project).
+/// For paper metric this is the representative required
 /// by triplet_doubles_symbolic_reconstruct to rebuild the dropped terms; the
 /// layout-preferring triplet_doubles_hash_filter is NOT suitable for that since
 /// it may keep a +c term. Only applies when @p ext_idxs.size() == 2.
@@ -129,6 +133,19 @@ struct TripletDoublesSwapLayouts {
 /// representative (use triplet_doubles_maxcoeff_compact); reconstruction from a
 /// +c term is ambiguous. Only applies when @p ext_idxs.size() == 2.
 [[nodiscard]] ExprPtr triplet_doubles_symbolic_reconstruct(
+    ExprPtr compact_expr,
+    const container::svector<container::svector<Index>>& ext_idxs);
+
+/// @brief Symbolic inverse of triplet_doubles_maxcoeff_compact for the bare-TE
+/// (te_only) residual: from each kept -2c representative T (coefficient
+/// w = -2c), rebuild the bra-swap (i1<->i2) and ket-swap (a1<->a2) images of
+/// the external indices, each scaled by -1/2 (= c/w), and keep T itself.
+/// Reproduces the full 3-term group {w*T, c*bra(T), c*ket(T)}; the pair-swap
+/// member carries coefficient 0 in TE (this is what makes
+/// Omega = (3*TE - TE_ps)/16 come out as {c, c, c, -3c} groups). Requires the
+/// -2c representative (use triplet_doubles_maxcoeff_compact). Only applies
+/// when @p ext_idxs.size() == 2.
+[[nodiscard]] ExprPtr triplet_doubles_te_symbolic_reconstruct(
     ExprPtr compact_expr,
     const container::svector<container::svector<Index>>& ext_idxs);
 
@@ -598,6 +615,37 @@ template <typename... Args>
 auto triplet_doubles_nullspace_project(TA::DistArray<Args...> const& arr,
                                        std::string const& orig_layout) {
   return triplet_doubles_nullspace_project_ta(arr, orig_layout);
+}
+
+/// @brief Bare-TE undo-compact for compact triplet R2 residuals: rebuilds the
+/// full bare-TE residual from its compact (-2c) representative via
+///   out(orig) = arr(orig) - (1/2)(arr(bra_swap) + arr(ket_swap)),
+/// i.e. weights {1, -1/2, -1/2, 0} (the pair-swap member of each TE group
+/// carries coefficient 0). Numerical analogue of
+/// triplet_doubles_te_symbolic_reconstruct; apply to the H*R residual when the
+/// compact te_only equations were evaluated, BEFORE
+/// triplet_doubles_te_reconstruct. Composed with te_reconstruct
+/// ({1, 1/4, 1/4, 0}) this equals triplet_doubles_nullspace_project
+/// ({3/4, -1/4, -1/4, -1/4}).
+template <typename... Args>
+auto triplet_doubles_te_nns_project_ta(TA::DistArray<Args...> const& arr,
+                                       std::string const& orig_layout) {
+  using numeric_type = typename TA::DistArray<Args...>::numeric_type;
+  if (arr.trange().rank() != 4) return arr;
+  const auto layouts = triplet_doubles_swap_layouts(orig_layout);
+  TA::DistArray<Args...> result;
+  result(layouts.orig) =
+      arr(layouts.orig) - (numeric_type(1) / numeric_type(2)) *
+                              (arr(layouts.bra_swap) + arr(layouts.ket_swap));
+  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
+  result.truncate();
+  return result;
+}
+
+template <typename... Args>
+auto triplet_doubles_te_nns_project(TA::DistArray<Args...> const& arr,
+                                    std::string const& orig_layout) {
+  return triplet_doubles_te_nns_project_ta(arr, orig_layout);
 }
 
 /// @brief TE-only -> full-metric reconstruction for triplet R2 (PI conjecture
