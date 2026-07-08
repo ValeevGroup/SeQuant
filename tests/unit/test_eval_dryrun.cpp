@@ -1705,6 +1705,171 @@ TEST_CASE(
         Catch::Approx(giant_full_bytes * expected_ratio).epsilon(1e-9));
 }
 
+// P1 recognition gate: prove the batched DP's batchable-axis scan
+// (batchable_index_list) now admits the external occupied protoindices carried
+// on the C60 giant's composite (PNO) legs. Before the proto-aware change,
+// batchable_index_list scanned only the top-level bra/ket/aux slots, so the
+// residual's external occ pair -- which lives ONLY as protoindices of the
+// composite legs and never as a top-level slot -- was dropped from
+// canon_indices_ and could never enter the batchable set. The forest-batching
+// feature needs it there. This is the recognition twin of the
+// [dryrun-occ-sizing] sizing gate: same C60 term, same optimize+binarize, same
+// giant-node locator and ext_occ extraction; it asserts on the batchable list,
+// not the footprint. Hidden tag; run:
+//   ./tests/unit/unit_tests-sequant "[dryrun-occ-recognize]"
+TEST_CASE(
+    "dryrun external occ is recognized as a batchable axis (P1 recognition "
+    "gate)",
+    "[.][dryrun-occ-recognize]") {
+  auto ctx = get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr);  // mu~
+  sequant::mbpt::add_df_spaces(isr);   // K
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+
+  auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                          "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = deserialize<ExprPtr>(line);
+  REQUIRE(static_cast<bool>(expr));
+  REQUIRE(expr->is<Sum>());
+  auto const& summands = expr->as<Sum>().summands();
+  REQUIRE(!summands.empty());
+  auto flatten_product = [](ExprPtr const& e) -> ExprPtr {
+    if (!e->is<Product>()) return e;
+    auto const& p = e->as<Product>();
+    return ex<Product>(p.scalar(), p.factors(), Product::Flatten::Yes);
+  };
+  // Same term as [dryrun-occ-sizing]: index 38 is the C60 PPL/ladder giant.
+  std::size_t giant_idx = 38;
+  if (giant_idx >= summands.size()) giant_idx = 0;
+  ExprPtr giant = flatten_product(summands[giant_idx]);
+  REQUIRE(giant);
+
+  // FAITHFUL real C60 config -- SAME regime/policy as [dryrun-occ-sizing].
+  auto regime = df_regime(kC60_pVDZF12);
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_index = is_df_batchable;
+  policy.batch_target_size = [](Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
+  };
+  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+  policy.accumulation_factor = 1.0;
+  policy.peak_threshold = 40.0 * 1e9;
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      Expr const*, container::vector<container::svector<Index>>>>();
+  OptimizeOptions opts;
+  opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = axes_map;
+
+  auto optimized = optimize(giant, opts);
+  REQUIRE(static_cast<bool>(optimized));
+  auto it = axes_map->find(optimized.get());
+  container::vector<container::svector<Index>> node_axes;
+  if (it != axes_map->end()) node_axes = it->second;
+  BinarizationOptions bopts;
+  bopts.node_batch_axes = node_axes;
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto node = binarize<EvalExprDryRun>(optimized, {}, bopts);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+  // Locate the giant PPL W node (identical locator to [dryrun-occ-sizing]) and
+  // grab its intermediate tensor: the perf-first (gC)^2 ladder W whose four PNO
+  // composite legs share one occ pair, carries NO free mu~ and NO free K, and
+  // has >= 2 PNO legs. That tensor's composite legs carry the external occ pair
+  // as protoindices -- the spectator axis the forest batching targets.
+  auto memsize_full = sequant::opt::detail::memsize_counter(
+      regime.idx_to_extent(), regime.inner_pow_fn());
+  auto free_has_bare = [](std::vector<Index> const& ixs, std::wstring_view bk) {
+    for (auto const& ix : ixs)
+      if (ix.space().base_key() == bk) return true;
+    return false;
+  };
+  auto count_pno = [](std::vector<Index> const& ixs) {
+    std::size_t n = 0;
+    for (auto const& ix : ixs)
+      if (ix.proto_indices().size() >= 2) ++n;
+    return n;
+  };
+  double giant_full_bytes = 0.0;
+  ExprPtr giant_tensor;
+  node.visit_internal([&](auto const& n) {
+    if (!n->is_tensor()) return;
+    auto free_ixs = node_free_indices(*n);
+    if (free_has_bare(free_ixs, L"μ̃") || free_has_bare(free_ixs, L"Κ")) return;
+    if (count_pno(free_ixs) < 2) return;
+    double const bytes =
+        memsize_full(free_ixs, std::vector<Index>{}, std::vector<Index>{}) *
+        8.0;
+    if (bytes > giant_full_bytes) {
+      giant_full_bytes = bytes;
+      giant_tensor = n->as_tensor().clone();
+    }
+  });
+  REQUIRE(giant_full_bytes > 0.0);
+  REQUIRE(static_cast<bool>(giant_tensor));
+
+  // The external occ protos the recognition must surface (same extraction as
+  // [dryrun-occ-sizing]): distinct occupied ("i") protos of the giant's
+  // composite legs.
+  std::vector<Index> ext_occ;
+  for (auto const& ix : giant_tensor->as<Tensor>().const_braketaux_indices())
+    for (auto const& p : ix.proto_indices())
+      if (p.space().base_key() == L"i") {
+        bool seen = false;
+        for (auto const& e : ext_occ)
+          if (e.full_label() == p.full_label()) seen = true;
+        if (!seen) ext_occ.push_back(p);
+      }
+  REQUIRE(!ext_occ.empty());
+
+  // Build a one-tensor network from the giant W node and scan it exactly as the
+  // batched DP does (cost_model's build_context calls this same function with
+  // the same is_batchable predicate). is_df_batchable admits ONLY mu~/K; before
+  // the proto-aware change the returned list carries NO occupied index, so this
+  // gate FAILS. After it, the external occ pair must appear.
+  auto tn = TensorNetwork{container::vector<ExprPtr>{giant_tensor}};
+  auto batchable =
+      sequant::opt::detail::batchable_index_list(tn, is_df_batchable);
+
+  std::vector<Index> batchable_v(batchable.begin(), batchable.end());
+  std::wcerr << L"\n=== [dryrun-occ-recognize] P1 RECOGNITION GATE (C60 giant, "
+             << L"term " << giant_idx << L") ===\n"
+             << L"external occ protos on giant (" << ext_occ.size() << L") = {"
+             << describe_indices(ext_occ) << L"}\n"
+             << L"batchable_index_list (" << batchable_v.size() << L") = {"
+             << describe_indices(batchable_v) << L"}\n";
+
+  auto is_active_occ = [](Index const& ix) {
+    return ix.space().base_key() == L"i";
+  };
+  // The giant's external occ must now be a batchable axis, even though it has
+  // no top-level slot on the node.
+  CHECK(std::any_of(batchable.begin(), batchable.end(), is_active_occ));
+
+  // ...and the surfaced occ axis is exactly one of the giant's external occ
+  // protos, not some unrelated occupied index.
+  bool matches_ext = false;
+  for (auto const& b : batchable)
+    if (is_active_occ(b))
+      for (auto const& e : ext_occ)
+        if (b.full_label() == e.full_label()) matches_ext = true;
+  CHECK(matches_ext);
+}
+
 // Task 1 (P0, dry-run cost-model comparison): perf-first
 // (DenseTimeSpaceBatched) vs peak-first (DenseSpaceTimeBatched) modelled
 // flops/peak, swept over ALL summands of the real C60 residual (not just the

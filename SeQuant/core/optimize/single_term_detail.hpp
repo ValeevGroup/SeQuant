@@ -10,6 +10,7 @@
 
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/optimize/options.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
@@ -246,6 +247,15 @@ container::vector<double> subset_footprints(
 /// it.  The returned list assigns each index a stable bit position: index at
 /// position \c k is bit \c k of a sliced-set bitmask \c B.
 ///
+/// In addition to the top-level slots, a second pass admits the pure-occupied
+/// protoindices of composite (CSV/PNO/OSV tensor-of-tensor) legs. A composite
+/// leg carries its external occupied indices ONLY as protoindices -- they never
+/// appear as a top-level bra/ket/aux slot -- so the slot scan alone drops them.
+/// Admitting them lets the batched DP slice that external-occ spectator axis
+/// (mirrored in \ref subset_open_aux). The proto pass is guarded by index space
+/// (only pure-occupied protos are admitted) and short-circuits on non-composite
+/// indices, so PAO/aux/internal-occ recognition is unchanged.
+///
 /// \param network  The TensorNetwork to scan.
 /// \param is_batchable  Predicate returning true for indices in a batchable
 ///        space (e.g. a DF/RI auxiliary space).
@@ -255,11 +265,31 @@ inline container::vector<Index> batchable_index_list(
     std::function<bool(Index const&)> const& is_batchable) {
   container::vector<Index> aux;
   if (!is_batchable) return aux;
+  // Registry used to recognize the pure-occupied protoindices of composite
+  // legs. Guarded by has_vacocc: occupancy is defined relative to the
+  // vacuum-occupied space, so a registry without one (or no registry) admits no
+  // protos and leaves behavior byte-identical. is_pure_occupied is NOT used
+  // directly: its space reconstruction throws for proto quantum numbers absent
+  // from the registry; instead we replicate its core type-bitset test (a space
+  // is pure-occupied iff its type is at or below the vacuum-occupied type),
+  // which needs no space retrieval.
+  auto const isr = get_default_context().index_space_registry();
+  auto const vacocc = isr ? isr->vacuum_occupied_space(/*nulltype_ok=*/true)
+                          : IndexSpace::Type::null;
+  bool const has_vacocc = vacocc != IndexSpace::Type::null;
+  auto is_occ_proto = [&](Index const& p) {
+    return has_vacocc && p.space() &&
+           p.space().type().to_int32() <= vacocc.to_int32();
+  };
   for (auto&& t : network.tensors()) {
     auto tp = std::dynamic_pointer_cast<Tensor>(t);
-    for (auto&& ix : ranges::views::concat(tp->bra(), tp->ket(), tp->aux()))
+    for (auto&& ix : ranges::views::concat(tp->bra(), tp->ket(), tp->aux())) {
       if (is_batchable(ix) && ranges::find(aux, ix) == ranges::end(aux))
         aux.push_back(ix);
+      for (auto&& p : ix.proto_indices())
+        if (is_occ_proto(p) && ranges::find(aux, p) == ranges::end(aux))
+          aux.push_back(p);
+    }
   }
   return aux;
 }
@@ -453,12 +483,36 @@ container::vector<std::size_t> subset_open_aux(
   container::vector<OptRes> results(
       (std::size_t{1} << network.tensors().size()));
   init_results(network, tidxs, results);
+  // Occupied spectator axes admitted by batchable_index_list live only as
+  // protoindices of composite legs, never as a top-level open index, so the
+  // direct-membership test below never sees them. Recognize them the same way:
+  // such an axis is open in subset n iff some open index of n carries it as a
+  // protoindex. Non-occupied axes never enter this branch, so their (direct)
+  // recognition stays byte-identical.
+  auto const isr = get_default_context().index_space_registry();
+  auto const vacocc = isr ? isr->vacuum_occupied_space(/*nulltype_ok=*/true)
+                          : IndexSpace::Type::null;
+  bool const has_vacocc = vacocc != IndexSpace::Type::null;
+  auto is_occ_proto = [&](Index const& ax) {
+    return has_vacocc && ax.space() &&
+           ax.space().type().to_int32() <= vacocc.to_int32();
+  };
   container::vector<std::size_t> open_aux(results.size(), 0);
   for (std::size_t n = 0; n < results.size(); ++n) {
     for (std::size_t k = 0; k < aux_list.size(); ++k) {
-      if (ranges::find(results[n].indices, aux_list[k]) !=
-          ranges::end(results[n].indices))
-        open_aux[n] |= (std::size_t{1} << k);
+      Index const& ax = aux_list[k];
+      bool open = ranges::find(results[n].indices, ax) !=
+                  ranges::end(results[n].indices);
+      if (!open && is_occ_proto(ax)) {
+        for (auto const& ix : results[n].indices) {
+          auto const& pr = ix.proto_indices();
+          if (ranges::find(pr, ax) != ranges::end(pr)) {
+            open = true;
+            break;
+          }
+        }
+      }
+      if (open) open_aux[n] |= (std::size_t{1} << k);
     }
   }
   return open_aux;
