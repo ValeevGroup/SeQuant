@@ -1297,6 +1297,13 @@ TEST_CASE(
     // 4: gated-cache peak replay + static flops/exec walk), replacing the
     // ad-hoc manual replay + hwmark read this case used before Task 5.
     sequant::eval::dryrun::CostProfile cp;
+    // P1 seed-path result (populated only when seed_external_occ=true): the
+    // honest WITHIN-MODEL (DP-staged) unseeded/seeded peak_bytes and flops.
+    // Unlike `cp`, which mixes an unseeded cost_profile()-replay hwmark with
+    // (when seeded) an OVERRIDDEN peak_bytes, both sr.unseeded_* and
+    // sr.seeded_* come from the SAME PeakBatchedModel/DP so they are
+    // comparable to each other.
+    sequant::opt::detail::SeededBatchedResult sr;
   };
 
   // Optimize the giant under `obj`, binarize, and walk the tree computing per
@@ -1548,6 +1555,7 @@ TEST_CASE(
       // The reported peak becomes the seeded root point; flops is work-neutral
       // and stays the SAME cost_profile value the unseeded run has.
       a.cp.peak_bytes = sr.seeded_peak_bytes;
+      a.sr = sr;
     }
     return a;
   };
@@ -1610,14 +1618,20 @@ TEST_CASE(
   //     whole tree with that occ sliced to occ_block=10 (full occ extent 120).
   //     Since the occ is contracted at NO node it is a pure spectator: slicing
   //     it is work-neutral (identical flops) and shrinks the giant W by
-  //     ~occ_block/occ. The SELECTED (not merely isolatable) perf-first
-  //     schedule's reported peak must therefore drop below 0.2x the unseeded
-  //     0.5-2 TB PPL W, at equal flops. If select_root does NOT pick the
-  //     occ-sliced realization, this is a NO-GO (do not force it).
+  //     ~occ_block/occ. Gate WITHIN one peak model: both sr.unseeded_peak_bytes
+  //     and sr.seeded_peak_bytes come from the SAME DP-staged
+  //     PeakBatchedModel/seeded_root_peak_batched() run (unlike cp.peak_bytes,
+  //     which for the unseeded case is an unrelated cost_profile()-replay
+  //     hwmark). If select_root does NOT pick the occ-sliced realization, this
+  //     is a NO-GO (do not force it).
   CHECK(perf_first.cp.peak_bytes > 5e11);
-  CHECK(perf_first_occ.cp.peak_bytes < 0.2 * perf_first.cp.peak_bytes);
-  CHECK(perf_first_occ.cp.flops ==
-        Catch::Approx(perf_first.cp.flops).epsilon(1e-9));
+  auto const& sr = perf_first_occ.sr;
+  CHECK(sr.seeded_peak_bytes < 0.2 * sr.unseeded_peak_bytes);
+  // flops proof: partitioning a pure spectator axis must be EXACTLY
+  // work-neutral (same DP factorization, same total flops) -- exact integer
+  // equality, not an Approx across two independently-computed cost_profile()
+  // values (which would be equal by construction and prove nothing).
+  CHECK(sr.seeded_flops == sr.unseeded_flops);
 }
 
 // P1 gate spike (external-occ forest batching, mechanism b): PURE SIZING check.
