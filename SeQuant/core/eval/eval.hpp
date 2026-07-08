@@ -1685,13 +1685,35 @@ template <typename Node>
 /// \param le            the leaf evaluator (\p t stays resident here).
 /// \param dest          the pre-sized destination result (full spectator
 ///                      extent); each block is scattered into its slice.
+/// \param intra_term_batching  OPTIONAL nested intra-term batching (P3). When
+///        engaged, a giant WITHIN a summand tree is additionally batched over
+///        its CONTRACTED aux/PAO/internal-occ axis INSIDE the current external
+///        block, composing the two mechanisms: the external-occ partition is
+///        the OUTER loop (this function), the intra-term batched custom
+///        evaluator is the INNER mechanism (\c make_batched_custom_evaluator),
+///        installed on the shared scratch. The parameter is a FACTORY: it is
+///        handed THIS block's leaf evaluator (already sliced to the external
+///        block), and returns the \c custom_evaluator_type to install on the
+///        shared scratch for the block; because the intra-term evaluator closes
+///        over that external-sliced leaf evaluator, its contracted-axis slices
+///        compose ON TOP of the external slice. The intra-term evaluator starts
+///        at its OWN depth 0 (the external partition is a SEPARATE outer loop,
+///        NOT part of the intra-term depth counter) and nests/caps internally
+///        (cap 8); it builds its own per-interception scratch, so nothing leaks
+///        across external blocks. It is reinstalled per block (the factory
+///        closes over the block's element range). DEFAULT (empty): the shared
+///        scratch carries no custom evaluator and this path is byte-identical
+///        to the un-nested spine (P2).
 /// \return the number of (non-empty) blocks processed (>= 1).
 template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
           typename F, typename N, bool FHC>
   requires meta::leaf_node_evaluator<std::ranges::range_value_t<Nodes>, F>
 std::size_t evaluate_forest_over_external_axis(
     Nodes const& forest, ExternalBatchAxis const& external_axis,
-    CacheManager<N, FHC>& shared_cache, F const& le, ResultPtr const& dest) {
+    CacheManager<N, FHC>& shared_cache, F const& le, ResultPtr const& dest,
+    std::function<typename CacheManager<N, FHC>::custom_evaluator_type(
+        std::function<ResultPtr(N const&)> const&)> const& intra_term_batching =
+        {}) {
   using node_t = std::ranges::range_value_t<Nodes>;
   SEQUANT_ASSERT(dest);
   SEQUANT_ASSERT(std::ranges::begin(forest) != std::ranges::end(forest));
@@ -1749,6 +1771,22 @@ std::size_t evaluate_forest_over_external_axis(
         return r->slice_mode(*p, e_lo, e_hi);
       return r;
     };
+
+    // Optional NESTED intra-term batching (P3): install a per-block custom
+    // evaluator on the shared scratch so a giant WITHIN a summand is batched
+    // over its CONTRACTED aux/PAO/internal-occ axis INSIDE this external block.
+    // The factory is handed this block's (external-sliced) leaf evaluator, so
+    // the intra-term contracted-axis slices compose ON TOP of the external
+    // slice. Reinstalled here (after reset, with THIS block's le_block) because
+    // le_block closes over the block's element range; the intra-term evaluator
+    // starts at its own depth 0 and manages its own per-interception scratch
+    // and depth cap, independent of this outer loop. When the factory is empty
+    // the shared scratch keeps its (empty) custom evaluator and the loop stays
+    // byte-identical to the un-nested spine.
+    if (intra_term_batching) {
+      std::function<ResultPtr(N const&)> le_block_erased = le_block;
+      shared_cache.set_custom_evaluator(intra_term_batching(le_block_erased));
+    }
 
     ResultPtr block_acc;
     for (auto const& tree : forest) {

@@ -3373,3 +3373,171 @@ TEST_CASE("eval_forest_over_external_occ", "[eval][forest-external-occ]") {
     REQUIRE(out(target).dot(out(target)) == Catch::Approx(ref_dot));
   }
 }
+
+// P3 nesting gate: intra-term (contracted-aux) batching NESTED inside the
+// external-occ forest loop. Each summand carries BOTH (i) the shared external
+// spectator occ i_9 -- a Hadamard outer mode present on every operand and the
+// result, contracted at no node -- AND (ii) a contracted aux axis x_1 whose
+// intermediate S = g*h carries x_1 free (a batching target). The external-occ
+// partition is the OUTER loop; WITHIN each external block the intra-term
+// batched custom evaluator slices x_1 on the shared scratch. The assembled
+// destination must equal the unbatched reference R = F1 + F2 ELEMENTWISE for
+// every external block size (a memory schedule, never an approximation), and
+// the intra-term evaluator must ACTUALLY FIRE inside each block (proven by a
+// spy scope guard that records every firing). occ_tile_size > 1 (i_9 tiled).
+TEST_CASE("eval_forest_over_external_occ nests intra-term aux batching",
+          "[eval][forest-external-occ][forest-external-occ-nested]") {
+  using sequant::eval_result;
+  using sequant::evaluate;
+  using sequant::evaluate_forest_over_external_axis;
+  using sequant::ExternalBatchAxis;
+  using sequant::make_batched_custom_evaluator;
+  using sequant::ResultPtr;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+  using cache_t = sequant::CacheManager<node_t>;
+
+  auto& world = TA::get_default_world();
+  // occ i_9 extent 6 in tiles of 2 -> 3 tiles (occ_tile_size == 2 > 1); aux x
+  // extent 6 in tiles of 2 -> 3 tiles (so x_1 partitions into 3 aux batches at
+  // target size 2 -> intra-term batching genuinely engages); virt extent 4.
+  rand_tensor_yield<double, TA::DensePolicy> yield{world, /*nocc=*/6,
+                                                   /*nvirt=*/4, /*naux=*/6};
+  yield.set_max_tile(2);
+  using ArrayT = typename decltype(yield)::array_type;
+  using ResultT = sequant::ResultTensorTA<ArrayT>;
+
+  // Two flat summand trees sharing S = g*h. i_9 is a Hadamard spectator: it
+  // rides every tensor and is declared external (in the result's aux slot via
+  // the ResultExpr LHS) so binarize keeps it uncontracted on every node. x_1
+  // rides g and the final factor and is CONTRACTED at each root; S = g*h
+  // carries x_1 free, so the root's x_1 contraction is a batching target whose
+  // intermediate is S. (The deprecated binarize(ExprPtr) would infer i_9 as
+  // contracted; the ResultExpr API pins it external -- same mechanism as the
+  // GAM{...;i1,i2} = t T2 Hadamard test above.)
+  //   F1 = (g{a_1,i_9;a_2;x_1} * h{a_2,i_9;a_5}) * p{a_5,i_9;a_6;x_1}
+  //   F2 = (g{a_1,i_9;a_2;x_1} * h{a_2,i_9;a_5}) * q{a_5,i_9;a_6;x_1}
+  // Both produce R{a_1;a_6;i_9}; R = F1 + F2.
+  auto const e1 = sequant::deserialize<sequant::ResultExpr>(
+      L"R{a_1;a_6;i_9} = "
+      L"(g{a_1,i_9;a_2;x_1} * h{a_2,i_9;a_5}) * p{a_5,i_9;a_6;x_1}");
+  auto const e2 = sequant::deserialize<sequant::ResultExpr>(
+      L"R{a_1;a_6;i_9} = "
+      L"(g{a_1,i_9;a_2;x_1} * h{a_2,i_9;a_5}) * q{a_5,i_9;a_6;x_1}");
+  auto const n1 = eval_node(e1);
+  auto const n2 = eval_node(e2);
+  std::vector<node_t> const forest{n1, n2};
+
+  auto const isr = sequant::get_default_context().index_space_registry();
+  auto const occ_space = isr->retrieve(L"i");
+  auto const aux_space = isr->retrieve(L"x");
+
+  // The spectator axis: the unique occ index i_9 among the head's outer modes.
+  sequant::Index axis;
+  for (auto const& ix : n1->canon_indices())
+    if (ix.space() == occ_space && !ix.has_proto_indices()) {
+      axis = ix;
+      break;
+    }
+  REQUIRE(axis.nonnull());
+  REQUIRE(axis.space() == occ_space);
+  // Structural preconditions: S = g*h repeats across the forest (shared scratch
+  // builds it once per external block), and i_9 is a plain outer mode.
+  {
+    sequant::TreeNodeEqualityComparator<node_t> const eq;
+    REQUIRE(eq(n1.left(), n2.left()));  // both left children are S
+    auto cm = sequant::cache_manager(forest, 2);
+    REQUIRE(cm.max_life(n1.left()) == 2);
+  }
+  REQUIRE(sequant::index_position(n1, axis).has_value());
+  // The intra-term batch axis x_1 is a CONTRACTED aux index at the root, and S
+  // carries it free (so it is a real batching target, not the external axis).
+  auto accept_aux = [aux_space](sequant::Index const& ix) {
+    return ix.space() == aux_space;
+  };
+  auto const root_axis = sequant::batch_axis(n1, accept_aux);
+  REQUIRE(root_axis.has_value());
+  REQUIRE(root_axis->space() == aux_space);
+  REQUIRE(root_axis->space() != occ_space);
+
+  // Unbatched reference R = F1 + F2 (each in the head's natural layout).
+  std::string const target = n1->annot();
+  ResultPtr ref = evaluate(n1, target, yield);
+  ref->add_inplace(*evaluate(n2, target, yield));
+  auto const& R = ref->get<ArrayT>();
+  double const ref_nrm = TA::norm2(R);
+  REQUIRE(ref_nrm > 0.0);  // guard: reference is nontrivially nonzero
+
+  // The intra-term batching FACTORY: given THIS block's (external-sliced) leaf
+  // evaluator, build a make_batched_custom_evaluator that batches the aux axis
+  // x_1. A spy scope guard records every firing so the test can prove the
+  // intra-term evaluator engaged INSIDE the external blocks (not just once).
+  std::vector<std::size_t> guard_calls;
+  auto spy = [&guard_calls](std::size_t n) {
+    guard_calls.push_back(n);
+    return sequant::no_scope_guard{};
+  };
+  std::function<std::size_t(sequant::Index const&)> const aux_target =
+      [](sequant::Index const&) -> std::size_t { return 2; };
+  std::function<cache_t::custom_evaluator_type(
+      std::function<ResultPtr(node_t const&)> const&)>
+      intra_factory = [&](std::function<ResultPtr(node_t const&)> const& le_blk)
+      -> cache_t::custom_evaluator_type {
+    return make_batched_custom_evaluator(le_blk, aux_target, accept_aux, spy,
+                                         sequant::never_volatile{});
+  };
+
+  // block sizes (in elements of i_9, extent 6, tiles of 2):
+  //   1000 -> 1 block; 4 -> 2 blocks (first spans two tiles); 2 -> 3 blocks.
+  for (std::size_t const block_size :
+       {std::size_t{1000}, std::size_t{4}, std::size_t{2}}) {
+    std::size_t const expected_blocks =
+        (block_size >= 6) ? 1 : (block_size == 4 ? 2 : 3);
+
+    // (A) NESTED run: external-occ partition (outer) WITH intra-term aux
+    // batching (inner). Assert exactness AND that intra-term batching fired
+    // once per (external block, summand) -- i.e. INSIDE every block.
+    guard_calls.clear();
+    ArrayT dest_arr;
+    dest_arr(target) = R(target) - R(target);  // pre-sized zero
+    world.gop.fence();
+    auto dest = eval_result<ResultT>(dest_arr);
+    auto scratch = sequant::cache_manager(forest, 2);
+    ExternalBatchAxis const ext{axis, block_size};
+    auto const n_blocks = evaluate_forest_over_external_axis(
+        forest, ext, scratch, yield, dest, intra_factory);
+    REQUIRE(n_blocks == expected_blocks);
+
+    auto const& out = dest->get<ArrayT>();
+    ArrayT diff;
+    diff(target) = out(target) - R(target);
+    world.gop.fence();
+    REQUIRE(TA::norm2(diff) < 1e-12);
+    REQUIRE(TA::norm2(out) == Catch::Approx(ref_nrm));
+
+    // Nesting fired inside blocks: the root of each of the 2 summands is
+    // intercepted and batched over x_1 in EACH external block -> n_blocks * 2
+    // firings, each partitioning x_1 into 3 aux batches. size > n_summands is
+    // the RED/GREEN gate that intra-term batching ran INSIDE the blocks (not
+    // once globally).
+    REQUIRE(guard_calls.size() == expected_blocks * forest.size());
+    for (auto const n : guard_calls) CHECK(n == 3);
+
+    // (B) DEFAULT (no intra-term batching): byte-identical spine, same result,
+    // and the spy is never touched.
+    guard_calls.clear();
+    ArrayT dest_arr2;
+    dest_arr2(target) = R(target) - R(target);
+    world.gop.fence();
+    auto dest2 = eval_result<ResultT>(dest_arr2);
+    auto scratch2 = sequant::cache_manager(forest, 2);
+    auto const n_blocks2 =
+        evaluate_forest_over_external_axis(forest, ext, scratch2, yield, dest2);
+    REQUIRE(n_blocks2 == expected_blocks);
+    auto const& out2 = dest2->get<ArrayT>();
+    ArrayT diff2;
+    diff2(target) = out2(target) - R(target);
+    world.gop.fence();
+    REQUIRE(TA::norm2(diff2) < 1e-12);
+    REQUIRE(guard_calls.empty());  // default path never installs the evaluator
+  }
+}
