@@ -28,6 +28,14 @@ namespace sequant::eval::dryrun {
 ///
 using annot_t = container::svector<Index>;
 
+/// Per-mode assembled element coverage recorded by write_into_slice(): maps an
+/// outer mode position to the contiguous `[lo, hi)` element range filled so far
+/// by scattered blocks. Lets a zero-data DryRun destination report the REALIZED
+/// (assembled) size along a partitioned mode and detect gaps/overlaps between
+/// blocks -- the assemble-side analogue of ExtentOverrides for slice_mode().
+using AssembledCoverage =
+    container::map<std::size_t, std::pair<std::size_t, std::size_t>>;
+
 class ResultDryRun;
 class ResultDryRunNested;
 
@@ -134,6 +142,51 @@ struct DryRunOps {
     return make_dryrun_result(idx, cm, std::move(merged));
   }
 
+  /// Scatter \p block into the `[block_lo, block_hi)` element slice of the
+  /// destination's mode \p mode -- the inverse of slice_mode(). Zero-data:
+  /// updates only the destination's modelled size and assembled-coverage
+  /// bookkeeping. \p ov and \p cov are the destination's (mutated in place).
+  static void write_into_slice(container::svector<Index> const& idx,
+                               ExtentOverrides& ov, AssembledCoverage& cov,
+                               std::shared_ptr<CostModel const> const& cm,
+                               Result const& block, std::size_t mode,
+                               std::size_t block_lo, std::size_t block_hi) {
+    SEQUANT_ASSERT(mode < idx.size());
+    SEQUANT_ASSERT(block_lo < block_hi);
+    Index const& mix = idx[mode];
+    // Tile/width consistency: the block's own modelled extent on the shared
+    // mode index must equal the slice width it is being written into.
+    auto const bov = overrides_of(block);
+    std::size_t const block_extent = [&] {
+      if (auto it = bov.find(mix); it != bov.end()) return it->second;
+      return cm->regime().extent(mix);
+    }();
+    SEQUANT_ASSERT(block_extent == block_hi - block_lo);
+    // Merge the block's range into the assembled coverage, requiring
+    // contiguity: a block that neither appends after nor prepends before the
+    // filled range would leave a gap or overlap another block (a
+    // double-count). This is what makes disjoint gap-free tiling the only
+    // accepted assembly.
+    if (auto it = cov.find(mode); it == cov.end()) {
+      cov.emplace(mode,
+                  std::pair<std::size_t, std::size_t>{block_lo, block_hi});
+    } else {
+      auto& lohi = it->second;
+      bool const append = block_lo == lohi.second;
+      bool const prepend = block_hi == lohi.first;
+      SEQUANT_ASSERT(append || prepend);
+      if (append)
+        lohi.second = block_hi;
+      else
+        lohi.first = block_lo;
+    }
+    // Reflect the assembled element width (hi - lo, lobound preserved) as the
+    // realized extent of the batch mode so size_in_bytes() tracks the
+    // reconstructed footprint.
+    auto const& lohi = cov.at(mode);
+    ov[mix] = lohi.second - lohi.first;
+  }
+
   [[nodiscard]] static container::svector<std::pair<std::size_t, std::size_t>>
   mode_batches(container::svector<Index> const& idx, ExtentOverrides const& ov,
                std::shared_ptr<CostModel const> const& cm, std::size_t mode,
@@ -192,6 +245,15 @@ class ResultDryRun final : public Result {
     return overrides_;
   }
 
+  /// The contiguous `[lo, hi)` element range of outer mode \p mode assembled so
+  /// far by write_into_slice() (empty `{0, 0}` if nothing written).
+  [[nodiscard]] std::pair<std::size_t, std::size_t> assembled_range(
+      std::size_t mode) const {
+    if (auto it = assembled_.find(mode); it != assembled_.end())
+      return it->second;
+    return {0, 0};
+  }
+
  private:
   struct Payload {};
 
@@ -233,6 +295,12 @@ class ResultDryRun final : public Result {
                                            target_batch_size);
   }
 
+  void write_into_slice(Result const& block, std::size_t mode,
+                        std::size_t block_lo, std::size_t block_hi) override {
+    detail::DryRunOps::write_into_slice(indices_, overrides_, assembled_, cm_,
+                                        block, mode, block_lo, block_hi);
+  }
+
   void add_inplace(Result const& other) override {
     SEQUANT_ASSERT(other.is<ResultDryRun>() || other.is<ResultDryRunNested>());
     overrides_ =
@@ -258,6 +326,7 @@ class ResultDryRun final : public Result {
   container::svector<Index> indices_;
   std::shared_ptr<CostModel const> cm_;
   ExtentOverrides overrides_;
+  AssembledCoverage assembled_;
 };
 
 ///
@@ -319,6 +388,15 @@ class ResultDryRunNested final : public Result {
     return overrides_;
   }
 
+  /// The contiguous `[lo, hi)` element range of outer mode \p mode assembled so
+  /// far by write_into_slice() (empty `{0, 0}` if nothing written).
+  [[nodiscard]] std::pair<std::size_t, std::size_t> assembled_range(
+      std::size_t mode) const {
+    if (auto it = assembled_.find(mode); it != assembled_.end())
+      return it->second;
+    return {0, 0};
+  }
+
  private:
   struct Payload {};
 
@@ -360,6 +438,12 @@ class ResultDryRunNested final : public Result {
                                            target_batch_size);
   }
 
+  void write_into_slice(Result const& block, std::size_t mode,
+                        std::size_t block_lo, std::size_t block_hi) override {
+    detail::DryRunOps::write_into_slice(indices_, overrides_, assembled_, cm_,
+                                        block, mode, block_lo, block_hi);
+  }
+
   void add_inplace(Result const& other) override {
     SEQUANT_ASSERT(other.is<ResultDryRun>() || other.is<ResultDryRunNested>());
     overrides_ =
@@ -390,6 +474,7 @@ class ResultDryRunNested final : public Result {
   container::svector<Index> indices_;  // canon order; outer_++inner_ content
   std::shared_ptr<CostModel const> cm_;
   ExtentOverrides overrides_;
+  AssembledCoverage assembled_;
 };
 
 [[nodiscard]] inline ResultPtr make_dryrun_result(

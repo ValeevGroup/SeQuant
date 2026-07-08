@@ -861,6 +861,59 @@ TEST_CASE("dryrun flat result mode_batches tiles the mode extent",
   CHECK(batches.back().second == 20);
 }
 
+TEST_CASE(
+    "dryrun result write_into_slice assembles disjoint blocks into a "
+    "pre-sized destination",
+    "[dryrun-result][write-into-slice]") {
+  auto r = backend_test_regime();
+  auto cm = std::make_shared<CostModel const>(r);
+
+  // A ToT template whose outer batch mode (position 0) is the occupied index
+  // i_1 (extent 10). Its full modelled size is the reference we must
+  // reconstruct by assembling disjoint outer-mode blocks.
+  Index i1{L"i_1"}, i2{L"i_2"}, a3{L"a_3"};
+  Index a_pno{L"a_1", {i1, i2}};  // proto-indexed composite (CSV/PNO) leg
+  container::svector<Index> outer{i1, a3};
+  container::svector<Index> inner{a_pno};
+  container::svector<Index> canon{i1, a3, a_pno};
+
+  ResultDryRunNested tmpl{outer, inner, cm, {}, canon};
+  Result const& tmpl_r = tmpl;
+  auto const whole = tmpl_r.size_in_bytes();
+
+  // Two disjoint element blocks [0,5) and [5,10) that tile the full extent 10
+  // of the batch mode with no overlap and no gap. Slice each out of the
+  // template (mirrors how the batched evaluator produces per-block results).
+  auto block0 = tmpl_r.slice_mode(0, 0, 5);
+  auto block1 = tmpl_r.slice_mode(0, 5, 10);
+  REQUIRE(block0);
+  REQUIRE(block1);
+
+  // A fresh pre-sized destination whose batch mode starts UNFILLED (extent 0):
+  // its shape/index-set is fixed, but its assembled size grows as blocks are
+  // written in. Assemble the two blocks into it.
+  ResultDryRunNested dest{outer, inner, cm, {{i1, 0}}, canon};
+  Result& dest_w = dest;  // the mutator is reached through the base interface
+  dest_w.write_into_slice(*block0, 0, 0, 5);
+  dest_w.write_into_slice(*block1, 0, 5, 10);
+
+  // No double-count, no gap: the assembled modelled size equals the whole
+  // array's size exactly, and the covered element range is the full extent.
+  CHECK(dest_w.size_in_bytes() == whole);
+  CHECK(dest.assembled_range(0) == std::pair<std::size_t, std::size_t>{0, 10});
+
+  // Lobounds are preserved: a block written at a nonzero element offset (a
+  // frozen-core-style occupied offset) assembles at that offset, not rebased
+  // to 0.
+  ResultDryRunNested dest_fc{outer, inner, cm, {{i1, 0}}, canon};
+  Result& dest_fc_w = dest_fc;
+  auto block_fc = tmpl_r.slice_mode(0, 2, 6);
+  REQUIRE(block_fc);
+  dest_fc_w.write_into_slice(*block_fc, 0, 2, 6);
+  CHECK(dest_fc.assembled_range(0) ==
+        std::pair<std::size_t, std::size_t>{2, 6});
+}
+
 TEST_CASE("dryrun nested result uses moment-aware inner extent, not extent^k",
           "[dryrun-nested]") {
   auto r = backend_test_regime();
