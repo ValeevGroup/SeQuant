@@ -1,14 +1,18 @@
 #include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/index_space_registry.hpp>
+#include <SeQuant/core/optimize/cost_model.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/optimize/single_term.hpp>
 #include <SeQuant/core/optimize/sum.hpp>
 #include <SeQuant/core/runtime.hpp>
+#include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
@@ -18,10 +22,12 @@
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/iota.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdlib>
 #include <functional>
 #include <iostream>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -260,12 +266,108 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
   return expr->clone();
 }
 
+/// Task 4 (forest batching): decide whether \p expr's optimized form should be
+/// evaluated blocked over a spectator external OCCUPIED axis, and if so which
+/// axis and block size. Returns std::nullopt unless ALL of the trigger
+/// conditions hold (see the doc of the public 3-argument \ref optimize). The
+/// perf-first PeakBatchedModel is built EXACTLY as single_term_opt's
+/// DenseTimeSpaceBatched arm builds it, so the chosen factorization the caller
+/// keeps and this analysis agree.
+std::optional<ExternalBatchAxis> compute_external_batch_axis(
+    ExprPtr const& expr, OptimizeOptions const& opts,
+    std::size_t occ_block_target) {
+  // (i) disabled.
+  if (occ_block_target == 0) return std::nullopt;
+  // (ii) perf-first batched objective only. peak_threshold is NOT a
+  // factorization gate for this objective; it is consulted below only to decide
+  // WHEN to emit the axis.
+  if (opts.objective_function != ObjectiveFunction::DenseTimeSpaceBatched)
+    return std::nullopt;
+  // (iii) a single tensor Product with at least one factorization (>= 3
+  // tensors); anything else has no giant to batch.
+  if (!expr->is<Product>()) return std::nullopt;
+  container::svector<ExprPtr> tensors;
+  for (auto const& f : expr->as<Product>().factors())
+    if (f->is<Tensor>()) tensors.push_back(f);
+  if (tensors.size() < 3) return std::nullopt;
+  TensorNetwork net{tensors};
+
+  // Build the perf-first batched model with the same knobs single_term.hpp's
+  // DenseTimeSpaceBatched arm uses (idxsz, batch policy, inner_pow, roofline,
+  // accumulation_factor, peak_threshold); perf_first is set to true.
+  using Model = opt::detail::PeakBatchedModel<index_to_extent_t>;
+  Model model{opts.idx_to_extent,
+              opts.batch_policy.is_batchable_index,
+              opts.batch_policy.batch_target_size,
+              opts.batch_policy.is_volatile_leaf,
+              opts.inner_pow,
+              opts.volatile_weight,
+              opts.roofline.machine_balance,
+              opts.roofline.fast_mem_elems,
+              opts.roofline.block_tiles,
+              opts.roofline.block_prefactor,
+              opts.batch_policy.persistent_only,
+              opts.peak_flops_tolerance,
+              opts.batch_policy.accumulation_factor,
+              opts.batch_policy.peak_threshold};
+  model.perf_first = true;
+
+  container::svector<Index> const tidxs{};
+  auto ctx = model.build_context(net, tidxs);
+
+  // (iii, cont.) find a genuine external-occupied spectator axis: open on the
+  // root, contracted at no node (is_spectator_axis), and in a pure-occupied
+  // space. The proto pass of batchable_index_list admits such a protoindex to
+  // ctx.aux regardless of is_batchable, so it is discoverable here.
+  auto isr = get_default_context().index_space_registry();
+  std::optional<Index> occ_axis;
+  for (std::size_t k = 0; k < ctx.m; ++k) {
+    if (isr && !isr->is_pure_occupied(ctx.aux[k].space())) continue;
+    if (!model.is_spectator_axis(ctx, k)) continue;
+    occ_axis = ctx.aux[k];
+    break;
+  }
+  if (!occ_axis) return std::nullopt;
+
+  // Snap the requested block down to the axis extent.
+  std::size_t const ext =
+      opts.idx_to_extent ? opts.idx_to_extent(*occ_axis) : occ_block_target;
+  std::size_t const block =
+      ext > 0 ? std::min(occ_block_target, ext) : occ_block_target;
+
+  // Seed the axis into the DP root frontier to size the tree under the occ
+  // slice, and read the UNSEEDED peak for the trigger gate.
+  auto sr = opt::detail::seeded_root_peak_batched(model, net, tidxs, *occ_axis,
+                                                  block);
+
+  // (iv) only emit when the term actually needs batching to fit the budget:
+  // the unseeded (whole) peak exceeds peak_threshold. (+inf default => never.)
+  if (!(sr.unseeded_peak_bytes > opts.batch_policy.peak_threshold))
+    return std::nullopt;
+
+  return ExternalBatchAxis{sr.seeded_axis.value_or(*occ_axis), block};
+}
+
 }  // namespace
 
 ExprPtr optimize(ExprPtr const& expr, OptimizeOptions opts) {
   if (!opts.idx_to_extent) opts.idx_to_extent = default_idx_to_size();
   return optimize_impl(expr, opts, opts.reorder == ReorderSum::Reorder,
                        /*parallel_outer=*/true);
+}
+
+OptimizeResult optimize(ExprPtr const& expr, OptimizeOptions opts,
+                        std::size_t occ_block_target) {
+  if (!opts.idx_to_extent) opts.idx_to_extent = default_idx_to_size();
+  OptimizeResult res;
+  res.expr = optimize_impl(expr, opts, opts.reorder == ReorderSum::Reorder,
+                           /*parallel_outer=*/true);
+  // The forest signal is derived from the ORIGINAL term's tensor network (the
+  // batched DP is order-independent), so it does not depend on the chosen
+  // parenthesization above.
+  res.external_batch_axis =
+      compute_external_batch_axis(expr, opts, occ_block_target);
+  return res;
 }
 
 ResultExpr& optimize(ResultExpr& expr, OptimizeOptions opts) {

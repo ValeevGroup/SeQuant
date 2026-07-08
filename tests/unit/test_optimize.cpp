@@ -1977,6 +1977,67 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
   CHECK(tbat_w_tight == flops_w);
 }
 
+// Task 4 (forest batching, G4): the public optimize() surfaces the chosen
+// spectator external-occupied axis + block size as a forest-level signal
+// (ExternalBatchAxis) that the runtime (P3) and MPQC (P4) read. The PPL
+// residual carries its external occ (i_1,i_2) ONLY as a composite protoindex on
+// the output PNOs a<i,i> (never a contracted top-level slot), so no eval node
+// hangs it -- it is emitted per optimized term instead. The perf-first
+// DenseTimeSpaceBatched factorization forms the 4-PNO W giant (~40 MB here);
+// with a budget it exceeds, optimize() reports the occ axis sliced to
+// occ_block_target=10.
+TEST_CASE("optimize emits an external batch axis for the PPL term",
+          "[optimize][external-occ]") {
+  using namespace sequant;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  mbpt::add_df_spaces(reg);
+  mbpt::add_pao_spaces(reg);
+  mbpt::add_ao_spaces(reg);
+  for (auto&& [k, v] :
+       std::initializer_list<std::pair<std::wstring_view, size_t>>{
+           {L"i", 16}, {L"a", 12}, {L"μ̃", 170}, {L"Κ", 472}})
+    reg->retrieve_ptr(k)->approximate_size(v);
+  auto aux = reg->retrieve(L"Κ");
+
+  // Same PPL residual as the form-W test above: R_ij^{a1 a2} = (a1 a3|a2 a4)
+  // t_ij^{a3 a4}, DF-factored, i_1/i_2 external occ carried only as protos.
+  auto prod = deserialize(
+      L"C{a_1<i_1,i_2>;μ̃_1} g{μ̃_1;μ̃_2;Κ_1} C{μ̃_2;a_3<i_1,i_2>} "
+      L"C{a_2<i_1,i_2>;μ̃_3} g{μ̃_3;μ̃_4;Κ_1} C{μ̃_4;a_4<i_1,i_2>} "
+      L"t{a_3<i_1,i_2>,a_4<i_1,i_2>;i_1,i_2}");
+
+  OptimizeOptions opts;
+  opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.reorder = ReorderSum::NoReorder;
+  opts.idx_to_extent = [](Index const& ix) -> std::size_t {
+    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+  };
+  opts.inner_pow = [](Index const&, std::size_t) -> double { return 12.0; };
+  opts.batch_policy.is_batchable_index = [aux](Index const& ix) {
+    return ix.space() == aux;
+  };
+  opts.batch_policy.batch_target_size = [](Index const&) -> std::size_t {
+    return 236;
+  };
+  opts.batch_policy.is_volatile_leaf = [](Tensor const& t) {
+    return t.label() == L"t";
+  };
+  // A budget the unseeded 4-PNO W giant (~40 MB) exceeds: 1 MB.
+  opts.batch_policy.peak_threshold = 1.0e6;
+
+  auto res = optimize(prod, opts, /*occ_block_target=*/10);
+  REQUIRE(res.external_batch_axis.has_value());
+  CHECK(res.external_batch_axis->axis.space().base_key() == L"i");
+  CHECK(res.external_batch_axis->block_size == 10);
+  REQUIRE(static_cast<bool>(res.expr));
+
+  // occ_block_target == 0 disables the signal (the default 2-arg optimize path
+  // is byte-identical; the [optimize] suite is its regression witness).
+  auto res_off = optimize(prod, opts, /*occ_block_target=*/0);
+  CHECK_FALSE(res_off.external_batch_axis.has_value());
+}
+
 // Quadratic-bubble (g·t2·t2) exchange term in PNO/CSV basis: the two competing
 // factorizations of one residual contribution.
 //
