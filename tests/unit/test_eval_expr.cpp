@@ -12,8 +12,10 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <algorithm>
 #include <initializer_list>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
@@ -532,4 +534,67 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
     REQUIRE_NOTHROW(result_expr(t1, t2, EvalOp::Product));
   }
+}
+
+TEST_CASE("eval_expr_outer_proto_position",
+          "[EvalExpr][outer-proto-position]") {
+  using namespace sequant;
+
+  // A proto-only spectator node: both legs are PNO-like composites
+  // a_1<i_1,i_2> and a_2<i_1,i_2> that share the occ protos i_1, i_2. The occ
+  // indices appear ONLY as protoindices; there is no top-level occ slot. Yet
+  // the tensor-of-tensor array's outer modes are exactly these distinct protos,
+  // in canonical order, which is what slice_mode()/write_into_slice() address.
+  //
+  // Build the node directly via the low-level EvalExpr ctor with canon_indices
+  // = the two composite legs, mirroring a real contraction intermediate (e.g.
+  // the PPL residual W) whose proto-only externals are dropped from the result
+  // slots by binarize (target_indices, eval_expr.cpp). The leaf ctor is NOT
+  // used here: its per-tensor slot canonicalization promotes the shared protos
+  // to top-level named slots, which is not the proto-only shape under test.
+  auto const tnsr = parse_tensor(L"W{a_1<i_1,i_2>;a_2<i_1,i_2>}",
+                                 {.def_perm_symm = Symmetry::Nonsymm});
+  EvalExpr::index_vector composite_legs;
+  for (auto const& ix : tnsr.const_indices())
+    if (ix.has_proto_indices()) composite_legs.push_back(ix);
+  EvalExpr const node{EvalOp::Product,
+                      ResultType::Tensor,
+                      tnsr.clone(),
+                      composite_legs,  //
+                      /*phase=*/1,     //
+                      /*hash=*/0,      //
+                      /*connectivity=*/nullptr};
+
+  // The node is a tensor-of-tensor whose canonical legs are all composite (they
+  // each carry proto indices) -- so there is no top-level plain occ slot.
+  REQUIRE(node.tot());
+  auto const& legs = node.canon_indices();
+  REQUIRE(legs.size() == 2);
+  REQUIRE(std::all_of(legs.begin(), legs.end(),
+                      [](Index const& ix) { return ix.has_proto_indices(); }));
+
+  // The occ protos, in the order they appear on a leg == their canonical outer
+  // order (both legs share the same, canonicalized, proto list).
+  Index const i1 = legs.front().proto_indices().front();
+  Index const i2 = legs.front().proto_indices().back();
+  REQUIRE(i1 != i2);
+
+  // Distinct outer protos in canonical order: {i1, i2} -> positions 0, 1.
+  auto const p1 = outer_proto_position(node, i1);
+  REQUIRE(p1.has_value());
+  REQUIRE(*p1 == 0);
+
+  auto const p2 = outer_proto_position(node, i2);
+  REQUIRE(p2.has_value());
+  REQUIRE(*p2 == 1);
+
+  // An index that is not one of the node's outer protos -> nullopt.
+  Index const absent{L"i_5"};
+  REQUIRE_FALSE(outer_proto_position(node, absent).has_value());
+
+  // The occ proto has no top-level slot: it does not appear as a top-level
+  // entry of canon_indices() (the proto-only property that makes index_position
+  // -- which scans top-level slots only -- miss it).
+  REQUIRE(std::none_of(legs.begin(), legs.end(),
+                       [&](Index const& ix) { return ix == i1; }));
 }

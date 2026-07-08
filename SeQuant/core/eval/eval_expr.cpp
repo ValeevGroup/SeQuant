@@ -133,6 +133,27 @@ EvalExpr::index_vector const& EvalExpr::canon_indices() const noexcept {
   return canon_indices_;
 }
 
+std::optional<std::size_t> outer_proto_position(EvalExpr const& node,
+                                                Index const& ix) {
+  // Enumerate the node's distinct outer protoindices in canonical order: walk
+  // canon_indices() (already canonical -- no re-canonicalization here) and, for
+  // each composite (proto-bearing) leg, append its proto_indices() that have
+  // not been seen yet, preserving the order of first appearance. That
+  // deduplicated sequence is the outer-mode order of the tensor-of-tensor
+  // array, so the match position is the `mode` argument slice_mode() addresses.
+  container::svector<Index> distinct;
+  for (auto const& leg : node.canon_indices()) {
+    if (!leg.has_proto_indices()) continue;
+    for (auto const& proto : leg.proto_indices())
+      if (std::ranges::find(distinct, proto) == distinct.end())
+        distinct.push_back(proto);
+  }
+
+  for (std::size_t p = 0; p < distinct.size(); ++p)
+    if (distinct[p] == ix) return p;
+  return std::nullopt;
+}
+
 EvalExpr::EvalExpr(Tensor const& tnsr)
     : op_type_{std::nullopt},
       result_type_{ResultType::Tensor},
