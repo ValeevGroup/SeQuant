@@ -598,3 +598,52 @@ TEST_CASE("eval_expr_outer_proto_position",
   REQUIRE(std::none_of(legs.begin(), legs.end(),
                        [&](Index const& ix) { return ix == i1; }));
 }
+
+TEST_CASE("eval_expr_outer_proto_position_mixed_node_guard",
+          "[EvalExpr][outer-proto-position]") {
+  using namespace sequant;
+
+  // A MIXED node: one plain (non-proto) top-level outer index p_1 alongside a
+  // composite proto-bearing leg a_1<i_1,i_2>. Unlike the proto-only node
+  // above, here "position among distinct protos" does not correspond to the
+  // node's physical ToT outer-trange position (the plain leg p_1 also
+  // occupies an outer trange mode, uncounted by outer_proto_position), so the
+  // accessor must refuse to answer instead of silently mis-slicing. Built via
+  // the same low-level EvalExpr ctor technique as the proto-only case, but
+  // keeping BOTH legs (not filtering to composites only) so canon_indices()
+  // actually mixes a plain index with a proto-bearing one.
+  auto const tnsr = parse_tensor(L"W{p_1;a_1<i_1,i_2>}",
+                                 {.def_perm_symm = Symmetry::Nonsymm});
+  EvalExpr::index_vector mixed_legs;
+  for (auto const& ix : tnsr.const_indices()) mixed_legs.push_back(ix);
+  EvalExpr const node{EvalOp::Product,
+                      ResultType::Tensor,
+                      tnsr.clone(),
+                      mixed_legs,   //
+                      /*phase=*/1,  //
+                      /*hash=*/0,   //
+                      /*connectivity=*/nullptr};
+
+  auto const& legs = node.canon_indices();
+  REQUIRE(legs.size() == 2);
+
+  // Confirm this is genuinely mixed: NOT all legs carry proto indices (that
+  // is precisely the precondition outer_proto_position's guard checks).
+  bool const all_have_protos =
+      std::all_of(legs.begin(), legs.end(),
+                  [](Index const& ix) { return ix.has_proto_indices(); });
+  REQUIRE_FALSE(all_have_protos);
+
+  Index const i1 = [&] {
+    for (auto const& ix : legs)
+      if (ix.has_proto_indices()) return ix.proto_indices().front();
+    throw std::logic_error("no proto-bearing leg found");
+  }();
+
+  // Misuse on a mixed node must fail loudly (SEQUANT_ASSERT throws in this
+  // build, SEQUANT_ASSERT_BEHAVIOR=THROW) rather than silently returning a
+  // wrong outer-trange position.
+  if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
+    REQUIRE_THROWS_AS(outer_proto_position(node, i1), sequant::Exception);
+  }
+}

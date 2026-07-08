@@ -320,11 +320,12 @@ struct EvalOpSetter {
 ///          canonical slots only). A spectator index can appear on a node
 ///          exclusively as a protoindex of composite (CSV/PNO/OSV) legs like
 ///          `a<i,j>`, with no top-level slot in \c canon_indices() -- so
-///          \c index_position misses it. For such a tensor-of-tensor node the
-///          array's OUTER modes are precisely the distinct protoindices of its
-///          composite legs, in canonical order; that is the position
-///          \c Result::slice_mode()/\c write_into_slice() address as their
-///          `mode` argument.
+///          \c index_position misses it. For a PROTO-ONLY node (every leg of
+///          \c canon_indices() is composite, e.g. the PPL residual W) the
+///          tensor-of-tensor array's OUTER modes are precisely the distinct
+///          protoindices of its composite legs, in canonical order; that is
+///          the position \c Result::slice_mode()/\c write_into_slice() address
+///          as their `mode` argument.
 ///
 ///          The distinct outer protoindices are enumerated by walking
 ///          \c canon_indices() (whose order is already canonical -- this does
@@ -333,7 +334,24 @@ struct EvalOpSetter {
 ///          canonical order of first appearance. The returned position indexes
 ///          that deduplicated sequence.
 ///
-/// \param node A (typically tensor-of-tensor) EvalExpr node.
+/// \pre Every index in \p node.canon_indices() carries proto indices (i.e.
+///      \p node has no plain, non-proto outer mode). Violating this aborts
+///      (via \c SEQUANT_ASSERT) rather than returning a silently wrong
+///      position.
+///
+/// \warning On a MIXED node -- one that carries both a plain non-proto
+///          top-level outer index and proto outer modes -- the "position
+///          among distinct protos" computed here does NOT correspond to the
+///          physical ToT outer-trange position that \c slice_mode() addresses
+///          (the plain outer index also occupies an outer trange mode, but is
+///          not counted by this function). Computing the correct physical
+///          position for a mixed node requires interleaving the plain and
+///          proto outer modes in their true trange order, which this
+///          function does not attempt; such callers must not use this
+///          accessor as-is.
+///
+/// \param node A (typically tensor-of-tensor) EvalExpr node with no plain
+///             (non-proto) outer modes; see \pre.
 /// \param ix   The index to locate among \p node's distinct outer protos.
 /// \return The 0-based outer-mode position of \p ix, or nullopt if absent.
 ///
