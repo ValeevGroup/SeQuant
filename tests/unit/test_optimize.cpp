@@ -2149,7 +2149,36 @@ TEST_CASE("outer-product pruning parity (pruned == unpruned)",
       L"g_{i1,i2}^{a1,a2} t_{a1}^{i1} t_{a2}^{i2} t_{a3}^{i3}",
       // hyperedge-flavored: three tensors sharing a common summed index a5
       L"p_{i1}^{a5} q_{i2}^{a5} r_{i3}^{a5} s_{a5}^{i4}",
+      // "star": g bridges both t's (whole network connected), but {t,t}
+      // shares no index, so the {t,t} subset is a genuinely prunable outer
+      // product. This is the fixture that actually exercises the pruning
+      // skip -- see the non-vacuousness guard below.
+      L"g_{i1,i2}^{a1,a2} t_{a1}^{i1} t_{a2}^{i2}",
   };
+
+  // Non-vacuousness guard: the parity checks below only prove pruning is
+  // loss-free if the pruned DP actually skips subsets the unpruned DP visits.
+  // A fixture whose full network is disconnected falls back to an all-connected
+  // mask (pruning is a no-op), so parity would hold even with a broken skip.
+  // Assert that the "star" fixture yields a connected full network yet a
+  // disconnected proper subset -- i.e. its mask really does prune something.
+  {
+    namespace o = sequant::opt::detail;
+    unsetenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING");
+    auto star = deserialize(L"g_{i1,i2}^{a1,a2} t_{a1}^{i1} t_{a2}^{i2}",
+                            {.def_perm_symm = Symmetry::Antisymm});
+    container::vector<ExprPtr> sv;
+    for (auto&& f : star->as<Product>().factors())
+      if (f->is<Tensor>()) sv.push_back(f);
+    TensorNetwork star_tn{sv};
+    std::vector<Index> const star_tgt{};  // fully contracted -> empty target
+    auto star_mask = o::outer_product_connectivity(star_tn, star_tgt);
+    REQUIRE(star_mask.back() == 1);  // full network connected (not fallback)
+    bool has_pruned_subset = false;
+    for (auto v : star_mask)
+      if (v == 0) has_pruned_subset = true;
+    REQUIRE(has_pruned_subset);  // at least one subset is genuinely pruned
+  }
 
   auto run = [&](std::wstring const& term, ObjectiveFunction obj, bool prune) {
     if (prune)
