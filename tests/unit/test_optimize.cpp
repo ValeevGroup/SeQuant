@@ -2200,3 +2200,67 @@ TEST_CASE("outer-product pruning parity (pruned == unpruned)",
       CHECK(pruned == unpruned);
     }
 }
+
+TEST_CASE("outer-product pruning: large connected term optimizes quickly",
+          "[optimize][pruning]") {
+  using namespace sequant;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  reg->retrieve_ptr(L"i")->approximate_size(10);
+  reg->retrieve_ptr(L"a")->approximate_size(100);
+  reg->retrieve_ptr(L"x")->approximate_size(4);
+  // A connected chain: each adjacent pair shares one summed index, so the whole
+  // term is one connected component. The pruned DP explores only connected
+  // subsets and finishes fast; the unpruned 3^n enumeration is far slower.
+  auto expr = deserialize(
+      L"g_{a0,a1}^{a2,a3} t_{a2}^{a4} t_{a3}^{a5} t_{a4}^{a6} t_{a5}^{a7} "
+      L"t_{a6}^{a8} t_{a7}^{a9} v_{a8,a9}^{a0,a1}",
+      {.def_perm_symm = Symmetry::Antisymm});
+  OptimizeOptions o;
+  o.objective_function = ObjectiveFunction::DensePeakSize;
+  o.idx_to_extent = [](Index const& ix) -> std::size_t {
+    return ix.nonnull() ? ix.space().approximate_size() : 1;
+  };
+  // Pruning ON (default): must complete (the assertion is that it returns).
+  auto out = optimize(expr, o);
+  CHECK(out);
+}
+
+TEST_CASE("outer-product pruning: multi-component product falls back unpruned",
+          "[optimize][pruning]") {
+  using namespace sequant;
+  namespace o = sequant::opt::detail;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  reg->retrieve_ptr(L"i")->approximate_size(10);
+  reg->retrieve_ptr(L"a")->approximate_size(100);
+  reg->retrieve_ptr(L"x")->approximate_size(4);
+  auto net_of = [](ExprPtr const& p) {
+    container::vector<ExprPtr> v;
+    for (auto&& f : p->as<Product>().factors())
+      if (f->is<Tensor>()) v.push_back(f);
+    return TensorNetwork{v};
+  };
+
+  // Two independent contractions sharing NO summed index: {f,g} over a1,
+  // {p,q} over a2. The full adjacency graph has two components.
+  auto prod = deserialize(L"f_{i1}^{a1} g_{a1}^{i2} p_{i3}^{a2} q_{a2}^{i4}",
+                          {.def_perm_symm = Symmetry::Antisymm});
+  auto tn = net_of(prod);
+  std::vector<Index> tgt{Index{L"i_1"}, Index{L"i_2"}, Index{L"i_3"},
+                         Index{L"i_4"}};
+  auto mask = o::outer_product_connectivity(tn, tgt);
+  for (auto v : mask) CHECK(v == 1);  // disconnected full net -> all-connected
+
+  // And optimize() on the product term must match the env-disabled result.
+  OptimizeOptions opt;
+  opt.objective_function = ObjectiveFunction::DenseFLOPs;
+  opt.idx_to_extent = [](Index const& ix) -> std::size_t {
+    return ix.nonnull() ? ix.space().approximate_size() : 1;
+  };
+  auto with = to_latex(optimize(prod, opt));
+  setenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING", "1", 1);
+  auto without = to_latex(optimize(prod, opt));
+  unsetenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING");
+  CHECK(with == without);
+}
