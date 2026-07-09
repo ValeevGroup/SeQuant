@@ -2115,3 +2115,59 @@ TEST_CASE("connected_subsets and outer_product_connectivity",
   unsetenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING");
   for (auto val : m_off) CHECK(val == 1);
 }
+
+TEST_CASE("outer-product pruning parity (pruned == unpruned)",
+          "[optimize][pruning]") {
+  using namespace sequant;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  reg->retrieve_ptr(L"i")->approximate_size(10);
+  reg->retrieve_ptr(L"a")->approximate_size(100);
+  reg->retrieve_ptr(L"x")->approximate_size(4);
+
+  auto opts_for = [&](ObjectiveFunction obj) {
+    OptimizeOptions o;
+    o.objective_function = obj;
+    o.idx_to_extent = [](Index const& ix) -> std::size_t {
+      return ix.nonnull() ? ix.space().approximate_size() : 1;
+    };
+    o.batch_policy.is_batchable_index = [](Index const&) { return false; };
+    o.batch_policy.batch_target_size = [](Index const&) -> std::size_t {
+      return 1;
+    };
+    return o;
+  };
+
+  std::vector<ObjectiveFunction> const objs{
+      ObjectiveFunction::DenseFLOPs, ObjectiveFunction::DenseSize,
+      ObjectiveFunction::DensePeakSize,
+      ObjectiveFunction::DensePeakSizeBatched};
+
+  std::vector<std::wstring> const terms{
+      L"1/4 g_{i2,i3}^{a2,a3} t_{a2,a3}^{i2,i3} t_{a1}^{i1}",
+      L"x_{i1,i2}^{a3,a4} y_{a1,a2}^{i1,i2} z_{a3,a4}^{a1,a2}",
+      L"g_{i1,i2}^{a1,a2} t_{a1}^{i1} t_{a2}^{i2} t_{a3}^{i3}",
+      // hyperedge-flavored: three tensors sharing a common summed index a5
+      L"p_{i1}^{a5} q_{i2}^{a5} r_{i3}^{a5} s_{a5}^{i4}",
+  };
+
+  auto run = [&](std::wstring const& term, ObjectiveFunction obj, bool prune) {
+    if (prune)
+      unsetenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING");
+    else
+      setenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING", "1", 1);
+    auto expr = deserialize(term, {.def_perm_symm = Symmetry::Antisymm});
+    auto out = optimize(expr, opts_for(obj));
+    unsetenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING");
+    REQUIRE(out);
+    return to_latex(out);
+  };
+
+  for (std::size_t ti = 0; ti < terms.size(); ++ti)
+    for (auto obj : objs) {
+      auto pruned = run(terms[ti], obj, true);
+      auto unpruned = run(terms[ti], obj, false);
+      CAPTURE(ti, static_cast<int>(obj));
+      CHECK(pruned == unpruned);
+    }
+}
