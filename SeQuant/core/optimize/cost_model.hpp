@@ -24,17 +24,19 @@ template <class Model, typename TIdxs>
 container::vector<typename Model::State> solve_single_term(
     Model const& m, TensorNetwork const& network, TIdxs const& tidxs,
     typename Model::Context& ctx) {
-  (void)tidxs;
   auto const nt = network.tensors().size();
   container::vector<typename Model::State> st(size_t{1} << nt);
+  auto const connected = outer_product_connectivity(network, tidxs);
   for (size_t n = 1; n < st.size(); ++n) {
     if (std::popcount(n) == 1) {
       st[n] = m.leaf(ctx, n);
       continue;
     }
+    if (!connected[n]) continue;  // never form a disconnected subset
     typename Model::State acc = m.init(ctx, n);
     for (auto&& [lp, rp] : bits::bipartitions(n))
-      if (lp != 0 && rp != 0) m.relax(ctx, n, lp, rp, st[lp], st[rp], acc);
+      if (lp != 0 && rp != 0 && connected[lp] && connected[rp])
+        m.relax(ctx, n, lp, rp, st[lp], st[rp], acc);
     st[n] = std::move(acc);
     m.finalize(ctx, n, st);
   }
@@ -105,7 +107,8 @@ struct AdditiveModel {
     ctx.results.resize(size_t{1} << network.tensors().size());
     init_results(network, tidxs, ctx.results);
     if (subnet_cse) {
-      auto md = build_subnet_metadata(network, ctx.results);
+      auto connected = outer_product_connectivity(network, tidxs);
+      auto md = build_subnet_metadata(network, ctx.results, connected);
       ctx.meta_ids = std::move(md.meta_ids);
       ctx.unique_meta_costs = std::move(md.unique_meta_costs);
     }
@@ -202,6 +205,13 @@ struct AdditiveModel {
       if (pc == 1) {
         seq[n].emplace_back(std::countr_zero(n));
       } else if (pc >= 2) {
+        // Pruned (outer-product) subsets are never relaxed, so lp/rp stay at
+        // their default 0/0 sentinel (bits::bipartitions guarantees a real
+        // split always assigns both nonzero together); skip them here too --
+        // they are never referenced as a child by a subset actually on the
+        // reconstructed path, since solve_single_term only relaxes into a
+        // parent through children that are themselves connected.
+        if (st[n].lp == 0 && st[n].rp == 0) continue;
         auto const& lseq = seq[st[n].lp];
         auto const& rseq = seq[st[n].rp];
         seq[n] = (lseq[0] < rseq[0] ? concat(lseq, rseq) : concat(rseq, lseq)) |

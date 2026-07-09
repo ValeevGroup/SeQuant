@@ -491,7 +491,8 @@ struct SubnetMetadata {
 ///
 /// Side effect: `results[n].indices` may be reordered by `canonicalize_slots`.
 inline SubnetMetadata build_subnet_metadata(
-    TensorNetwork const& network, container::vector<OptRes>& results) {
+    TensorNetwork const& network, container::vector<OptRes>& results,
+    container::vector<char> const& connected) {
   SubnetMetadata out;
   // Use max as sentinel for entries with popcount < 2 (singletons/empty),
   // which are skipped below and never assigned a real meta ID.
@@ -502,6 +503,7 @@ inline SubnetMetadata build_subnet_metadata(
 
   for (size_t n = 0; n < results.size(); ++n) {
     if (std::popcount(n) < 2) continue;
+    if (!connected[n]) continue;  // outer-product subset, never an intermediate
     auto ts = bits::on_bits_index(n) | bits::sieve(network.tensors());
     container::vector<ExprPtr> ts_expr;
     for (auto&& t : ts)
