@@ -2201,6 +2201,41 @@ TEST_CASE("outer-product pruning parity (pruned == unpruned)",
     }
 }
 
+TEST_CASE("prune_outer_products option controls pruning (default on)",
+          "[optimize][pruning]") {
+  using namespace sequant;
+  // The requirement: pruning is user-controllable and ON by default.
+  CHECK(OptimizeOptions{}.prune_outer_products == true);
+
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  reg->retrieve_ptr(L"i")->approximate_size(10);
+  reg->retrieve_ptr(L"a")->approximate_size(100);
+  reg->retrieve_ptr(L"x")->approximate_size(4);
+  // "star" term: g bridges two mutually-disconnected t's, so the {t,t} subset
+  // is a genuinely prunable outer product (the option's code path fires).
+  auto expr = deserialize(L"g_{i1,i2}^{a1,a2} t_{a1}^{i1} t_{a2}^{i2}",
+                          {.def_perm_symm = Symmetry::Antisymm});
+  auto opts_for = [&](bool prune) {
+    OptimizeOptions o;
+    o.objective_function = ObjectiveFunction::DensePeakSize;
+    o.idx_to_extent = [](Index const& ix) -> std::size_t {
+      return ix.nonnull() ? ix.space().approximate_size() : 1;
+    };
+    o.prune_outer_products = prune;
+    return o;
+  };
+  // Pruning is loss-free, so both option values give the same factorization.
+  auto with_prune = to_latex(optimize(expr, opts_for(true)));
+  auto no_prune = to_latex(optimize(expr, opts_for(false)));
+  CHECK(with_prune == no_prune);
+  // prune_outer_products == false must reproduce the env force-disable path.
+  setenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING", "1", 1);
+  auto env_disabled = to_latex(optimize(expr, opts_for(true)));
+  unsetenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING");
+  CHECK(no_prune == env_disabled);
+}
+
 TEST_CASE("outer-product pruning: large connected term optimizes quickly",
           "[optimize][pruning]") {
   using namespace sequant;

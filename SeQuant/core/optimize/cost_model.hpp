@@ -26,7 +26,8 @@ container::vector<typename Model::State> solve_single_term(
     typename Model::Context& ctx) {
   auto const nt = network.tensors().size();
   container::vector<typename Model::State> st(size_t{1} << nt);
-  auto const connected = outer_product_connectivity(network, tidxs);
+  auto const connected =
+      outer_product_connectivity(network, tidxs, m.prune_outer_products);
   for (size_t n = 1; n < st.size(); ++n) {
     if (std::popcount(n) == 1) {
       st[n] = m.leaf(ctx, n);
@@ -80,6 +81,9 @@ struct AdditiveModel {
   double volatile_weight;
   double footprint_weight;
   bool subnet_cse;
+  /// Prune disconnected (outer-product) subsets from the DP (see
+  /// OptimizeOptions::prune_outer_products). Default true.
+  bool prune_outer_products = true;
 
   /// Per-subset DP cell: the relevant OptRes fields the additive DP mutates.
   struct State {
@@ -107,7 +111,8 @@ struct AdditiveModel {
     ctx.results.resize(size_t{1} << network.tensors().size());
     init_results(network, tidxs, ctx.results);
     if (subnet_cse) {
-      auto connected = outer_product_connectivity(network, tidxs);
+      auto connected =
+          outer_product_connectivity(network, tidxs, prune_outer_products);
       auto md = build_subnet_metadata(network, ctx.results, connected);
       ctx.meta_ids = std::move(md.meta_ids);
       ctx.unique_meta_costs = std::move(md.unique_meta_costs);
@@ -305,6 +310,9 @@ struct PeakModel {
   /// peak increase for a potentially large flop reduction (e.g. forming a
   /// persistent 4-PNO integral instead of recomputing a ladder).
   double peak_flops_tolerance = 0.0;
+  /// Prune disconnected (outer-product) subsets from the DP (see
+  /// OptimizeOptions::prune_outer_products). Default true.
+  bool prune_outer_products = true;
 
   /// One non-dominated (peak, flops) trade-off for a subset, with the
   /// bipartition / order / child-frontier-indices needed to reconstruct it.
@@ -494,6 +502,9 @@ struct PeakBatchedModel {
   /// batchable index (Ap != 0), into the all-co-resident peak term, to price
   /// the accumulator + contribution co-residency of K += contribution.
   double accumulation_factor = 0.0;
+  /// Prune disconnected (outer-product) subsets from the DP (see
+  /// OptimizeOptions::prune_outer_products). Default true.
+  bool prune_outer_products = true;
 
   /// One non-dominated (peak, flops) trade-off for a (subset, sliced-set \c B)
   /// cell. \c aprime is the sliced-set chosen at this node; the children are

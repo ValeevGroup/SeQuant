@@ -453,17 +453,19 @@ inline container::vector<char> connected_subsets(
 
 /// \brief Outer-product pruning mask for a term. Returns \ref
 /// connected_subsets over \ref contractible_adjacency, EXCEPT it returns an
-/// all-connected mask when pruning is disabled (env
-/// `SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING`) or when the full network is
-/// itself disconnected (a genuine product term -- never a CC residual
-/// summand, by the linked-cluster theorem). Callers then apply one uniform
-/// `if (!mask[n]) skip` test and get unpruned behavior in both those cases.
+/// all-connected mask when pruning is disabled (\p prune == false, or the env
+/// `SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING` force-override) or when the full
+/// network is itself disconnected (a genuine product term -- never a CC
+/// residual summand, by the linked-cluster theorem). Callers then apply one
+/// uniform `if (!mask[n]) skip` test and get unpruned behavior in those cases.
+/// \param prune Whether to prune (OptimizeOptions::prune_outer_products). When
+///        false, the returned mask is all-connected (unpruned DP).
 template <typename TIdxs>
 inline container::vector<char> outer_product_connectivity(
-    TensorNetwork const& network, TIdxs const& tidxs) {
+    TensorNetwork const& network, TIdxs const& tidxs, bool prune = true) {
   std::size_t const nt = network.tensors().size();
   std::size_t const sz = std::size_t{1} << nt;
-  if (std::getenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING"))
+  if (!prune || std::getenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING"))
     return container::vector<char>(sz, 1);
   auto mask = connected_subsets(contractible_adjacency(network, tidxs), nt);
   if (!mask.empty() && !mask.back())  // full network disconnected: disable
