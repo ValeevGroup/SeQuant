@@ -230,13 +230,15 @@ struct OptRes {
 template <typename TIdxs, typename IdxToSz>
 container::vector<double> subset_footprints(
     TensorNetwork const& network, TIdxs const& tidxs, IdxToSz&& idxsz,
-    std::function<double(Index const&, std::size_t)> const& inner_pow = {}) {
+    std::function<double(Index const&, std::size_t)> const& inner_pow = {},
+    container::vector<char> const* connected = nullptr) {
   container::vector<OptRes> results((size_t{1} << network.tensors().size()));
-  init_results(network, tidxs, results);
+  init_results(network, tidxs, results, connected);
   auto fp = footprint_counter(std::forward<IdxToSz>(idxsz), inner_pow);
   container::vector<double> S(results.size(), 0.0);
   for (size_t n = 0; n < results.size(); ++n)
-    S[n] = (n == 0) ? 0.0 : fp(results[n].indices);
+    S[n] = (n == 0 || (connected && !(*connected)[n])) ? 0.0
+                                                       : fp(results[n].indices);
   return S;
 }
 
@@ -295,7 +297,8 @@ container::vector<container::vector<double>> sliced_footprints(
     std::function<bool(Index const&)> const& is_batchable,
     std::function<std::size_t(Index const&)> const& batch_target_size,
     container::vector<Index> const& aux_list,
-    std::function<double(Index const&, std::size_t)> const& inner_pow = {}) {
+    std::function<double(Index const&, std::size_t)> const& inner_pow = {},
+    container::vector<char> const* connected = nullptr) {
   std::size_t const m = aux_list.size();
   container::vector<container::vector<double>> tables(std::size_t{1} << m);
   for (std::size_t B = 0; B < tables.size(); ++B) {
@@ -312,7 +315,7 @@ container::vector<container::vector<double>> sliced_footprints(
       }
       return e;
     };
-    tables[B] = subset_footprints(network, tidxs, extent, inner_pow);
+    tables[B] = subset_footprints(network, tidxs, extent, inner_pow, connected);
   }
   return tables;
 }
@@ -366,14 +369,22 @@ struct SubNetEqual {
 /// Singleton subsets also get their one-element \c sequence pre-populated.
 template <typename TIdxs>
 void init_results(TensorNetwork const& network, TIdxs const& tidxs,
-                  container::vector<OptRes>& results) {
+                  container::vector<OptRes>& results,
+                  container::vector<char> const* connected = nullptr) {
   using IndexContainer = decltype(OptRes::indices);
   auto tensor_indices = network.tensors()          //
                         | ranges::views::indirect  //
                         | ranges::views::transform(slots);
-  auto imed_indices = subset_target_indices(tensor_indices, tidxs);
+  auto imed_indices = subset_target_indices(tensor_indices, tidxs, connected);
   SEQUANT_ASSERT(ranges::distance(imed_indices) == ranges::distance(results));
   for (size_t i = 0; i < results.size(); ++i) {
+    // Outer-product pruning: a disconnected subset is never an intermediate the
+    // DP forms; leave the sentinel. connected[i]==1 for singletons/empty, so
+    // leaves are always computed. See outer_product_connectivity.
+    if (connected && !(*connected)[i]) {
+      results[i].ops = std::numeric_limits<decltype(OptRes::ops)>::max();
+      continue;
+    }
     results[i].indices =
         imed_indices[i] | ranges::views::move | ranges::to<IndexContainer>;
     results[i].ops = std::popcount(i) > 1
@@ -544,6 +555,8 @@ container::vector<std::size_t> subset_open_aux(
     container::vector<Index> const& aux_list) {
   container::vector<OptRes> results(
       (std::size_t{1} << network.tensors().size()));
+  // NOT pruned: is_spectator_axis consumes open_aux over the full subset
+  // lattice (including disconnected subsets), so every entry must be real.
   init_results(network, tidxs, results);
   container::vector<std::size_t> open_aux(results.size(), 0);
   for (std::size_t n = 0; n < results.size(); ++n) {

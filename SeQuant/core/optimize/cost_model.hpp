@@ -109,10 +109,12 @@ struct AdditiveModel {
                         TIdxs const& tidxs) const {
     Context ctx;
     ctx.results.resize(size_t{1} << network.tensors().size());
-    init_results(network, tidxs, ctx.results);
+    // Outer-product pruning: skip building index sets for disconnected subsets
+    // the DP will never form (solve_single_term also skips them).
+    auto const connected =
+        outer_product_connectivity(network, tidxs, prune_outer_products);
+    init_results(network, tidxs, ctx.results, &connected);
     if (subnet_cse) {
-      auto connected =
-          outer_product_connectivity(network, tidxs, prune_outer_products);
       auto md = build_subnet_metadata(network, ctx.results, connected);
       ctx.meta_ids = std::move(md.meta_ids);
       ctx.unique_meta_costs = std::move(md.unique_meta_costs);
@@ -363,12 +365,16 @@ struct PeakModel {
     auto const nt = network.tensors().size();
     auto const sz = size_t{1} << nt;
     container::vector<OptRes> results(sz);
-    init_results(network, tidxs, results);
+    // Outer-product pruning: skip building tables for disconnected subsets the
+    // DP will never form (solve_single_term also skips them).
+    auto const connected =
+        outer_product_connectivity(network, tidxs, prune_outer_products);
+    init_results(network, tidxs, results, &connected);
     auto fp = footprint_counter(idxsz, inner_pow);
     ctx.S.assign(sz, 0.0);
     ctx.idx.resize(sz);
     for (size_t n = 0; n < sz; ++n) {
-      ctx.S[n] = (n == 0) ? 0.0 : fp(results[n].indices);
+      ctx.S[n] = (n == 0 || !connected[n]) ? 0.0 : fp(results[n].indices);
       ctx.idx[n] = std::move(results[n].indices);
     }
     ctx.L.assign(sz, 0.0);
@@ -580,8 +586,17 @@ struct PeakBatchedModel {
         "DensePeakSizeBatched: accumulation_factor != 0 requires at most one "
         "batchable index");
     ctx.nB = std::size_t{1} << ctx.m;
+    // Outer-product pruning: skip building tables for disconnected subsets the
+    // DP will never form (solve_single_term also skips them). connected[n]==1
+    // for singletons/empty and for connected subsets; the (~2x connected)
+    // needed-mask is derived internally where a complement lookup requires it.
+    auto const connected =
+        outer_product_connectivity(network, tidxs, prune_outer_products);
     ctx.tables = sliced_footprints(network, tidxs, idxsz, is_batchable, batch,
-                                   ctx.aux, inner_pow);
+                                   ctx.aux, inner_pow, &connected);
+    // open_aux is NOT pruned: is_spectator_axis scans open_aux over the FULL
+    // subset lattice (including disconnected subsets) to verify an axis is
+    // never contracted, so every subset's open-axis bitmask must be real.
     ctx.open_aux = subset_open_aux(network, tidxs, ctx.aux);
     ctx.volatile_mask = leaf_volatile_mask(network, is_volatile_leaf);
     // Per-subset open indices + a flop counter, for the lexicographic
@@ -590,7 +605,7 @@ struct PeakBatchedModel {
     // it (work parity), so it consistently orders equal-peak schedules.
     auto const sz = std::size_t{1} << ctx.nt;
     container::vector<OptRes> results(sz);
-    init_results(network, tidxs, results);
+    init_results(network, tidxs, results, &connected);
     ctx.idx.resize(sz);
     for (std::size_t n = 0; n < sz; ++n)
       ctx.idx[n] = std::move(results[n].indices);
