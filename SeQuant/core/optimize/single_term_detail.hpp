@@ -414,8 +414,14 @@ inline container::vector<std::size_t> contractible_adjacency(
   container::map<Index, std::size_t, Index::FullLabelCompare> carriers;
   std::size_t i = 0;
   for (auto&& t : network.tensors()) {
-    auto tp = std::dynamic_pointer_cast<Tensor>(t);
-    for (auto&& ix : ranges::views::concat(tp->bra(), tp->ket(), tp->aux())) {
+    // Iterate the abstract-tensor slots (bra/ket/aux) directly rather than
+    // casting to Tensor: TensorNetwork stores AbstractTensorPtr (not
+    // necessarily Tensor), and slot bundles may carry null (empty) placeholder
+    // indices -- a null carrier would be shared across every tensor with an
+    // empty slot and create a spurious edge that needlessly disables pruning.
+    // Mirrors init_results, which also enumerates indices via slots().
+    for (auto&& ix : slots(*t)) {
+      if (!ix.nonnull()) continue;                // skip empty slots
       if (ranges::contains(tidxs, ix)) continue;  // target/output: not summed
       carriers[ix] |= (std::size_t{1} << i);
     }
