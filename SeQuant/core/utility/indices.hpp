@@ -764,13 +764,18 @@ decltype(auto) as_view_of_index_groups(
 /// @return A vector of maps, where `result[mask]` contains a map of
 /// `Index` to its count in the subset defined by `mask`.
 ///
-auto subset_index_counts(meta::range_of<Index, 2> auto const& rng) {
+auto subset_index_counts(meta::range_of<Index, 2> auto const& rng,
+                         container::vector<char> const* needed = nullptr) {
   size_t const N = ranges::distance(rng);
   SEQUANT_ASSERT(N <= 24 &&
                  "subset_index_counts: N > 24 would require excessive memory");
   container::vector<container::map<Index, size_t, Index::FullLabelCompare>>
       result((size_t{1} << N));
   for (size_t i = 1; i < result.size(); ++i) {
+    // When a `needed` mask is supplied, only these subsets' counts are ever
+    // consulted (see subset_target_indices); skip the rest (result[i] stays
+    // empty). Callers pass the pruning-derived mask to avoid the full 2^N work.
+    if (needed && !(*needed)[i]) continue;
     for (auto&& ixs : bits::on_bits_index(i) | bits::sieve(rng)) {
       for (auto&& ix : ixs)
         if (auto [it, inserted] = result[i].try_emplace(ix, 1); !inserted)  //
@@ -802,26 +807,44 @@ auto subset_index_counts(meta::range_of<Index, 2> auto const& rng) {
 /// `Index` objects for the subset defined by `mask`.
 ///
 auto subset_target_indices(meta::range_of<Index, 2> auto const& rng,
-                           meta::range_of<Index> auto const& tixs) {
+                           meta::range_of<Index> auto const& tixs,
+                           container::vector<char> const* connected = nullptr) {
   using IndexSet = container::set<Index, Index::FullLabelCompare>;
   size_t const N = ranges::distance(rng);
   SEQUANT_ASSERT(
       N <= 24 &&
       "subset_target_indices: N > 24 would require excessive memory");
-  container::vector<IndexSet> result((size_t{1} << N));
+  size_t const S = size_t{1} << N;
+  container::vector<IndexSet> result(S);
+
+  // Outer-product pruning: the caller only reads result[i] for connected
+  // subsets i, but computing result[i] consults counts[i] AND counts of the
+  // COMPLEMENT (S-1-i) -- the complement of a connected subset is usually
+  // disconnected -- so the index-count work is needed for the wider set
+  // `needed[i] = connected[i] || connected[complement(i)]`.
+  container::vector<char> needed_storage;
+  container::vector<char> const* needed = nullptr;
+  if (connected) {
+    needed_storage.assign(S, 0);
+    for (size_t i = 0; i < S; ++i)
+      needed_storage[i] = (*connected)[i] || (*connected)[S - 1 - i];
+    needed = &needed_storage;
+  }
 
   for (size_t i = 0; i < N; ++i)
     for (auto&& ix : ranges::at(rng, i)) result[(size_t{1} << i)].emplace(ix);
 
-  auto counts = subset_index_counts(rng);
+  auto counts = subset_index_counts(rng, needed);
 
   for (auto&& [k, v] : *counts.rbegin())
     if (v == 1 || ranges::contains(tixs, k)) result.rbegin()->emplace(k);
 
-  for (size_t i = 0; i < result.size(); ++i)
+  for (size_t i = 0; i < result.size(); ++i) {
+    if (connected && !(*connected)[i]) continue;  // pruned: result[i] unused
     for (auto&& [k, v] : counts[i])
       if (v == 1 || (v > 0 && counts.at(counts.size() - i - 1).contains(k)))
         result[i].emplace(k);
+  }
 
   return result;
 }

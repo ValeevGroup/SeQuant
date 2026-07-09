@@ -82,6 +82,7 @@ EvalSequence single_term_opt(
   double const peak_flops_tolerance = cost.peak_flops_tolerance;
   double const accumulation_factor = cost.accumulation_factor;
   RooflineParams const& roofline = cost.roofline;
+  bool const prune_outer_products = cost.prune_outer_products;
   (void)is_volatile_leaf;
   (void)volatile_weight;
   (void)footprint_weight;
@@ -117,6 +118,7 @@ EvalSequence single_term_opt(
                     roofline.block_prefactor,
                     peak_flops_tolerance};
     model.perf_first = (Metric == ObjectiveFunction::DenseTimeSpace);
+    model.prune_outer_products = prune_outer_products;
     return run_single_term_opt(model, network, tidxs);
   } else if constexpr (Metric == ObjectiveFunction::DenseSpaceTimeBatched ||
                        Metric == ObjectiveFunction::DenseTimeSpaceBatched) {
@@ -141,6 +143,7 @@ EvalSequence single_term_opt(
                            accumulation_factor,
                            cost.peak_threshold};
     model.perf_first = (Metric == ObjectiveFunction::DenseTimeSpaceBatched);
+    model.prune_outer_products = prune_outer_products;
     // charge_batch_recompute defaults to true (see PeakBatchedModel): the batch
     // recomputation cost is always reflected on the flops/exec axis.
     if (out_axes) {
@@ -171,6 +174,7 @@ EvalSequence single_term_opt(
                         nr,
                         footprint_weight,
                         subnet_cse};
+    model.prune_outer_products = prune_outer_products;
     return run_single_term_opt(model, network, tidxs);
   } else {
     static_assert(Metric == ObjectiveFunction::DenseSize,
@@ -189,6 +193,7 @@ EvalSequence single_term_opt(
                         nr,
                         footprint_weight,
                         subnet_cse};
+    model.prune_outer_products = prune_outer_products;
     return run_single_term_opt(model, network, tidxs);
   }
 }

@@ -136,6 +136,9 @@ struct CostParams {
   /// Peak-memory budget in BYTES for DensePeakSizeBatched; see
   /// BatchPolicy::peak_threshold. +infinity (default) => no batching.
   double peak_threshold = std::numeric_limits<double>::infinity();
+  /// Prune disconnected (outer-product) subsets from the single-term DP; see
+  /// OptimizeOptions::prune_outer_products. true (default) = prune.
+  bool prune_outer_products = true;
 };
 
 /// A type-erased provider mapping an Index to its extent. Used by the public
@@ -250,6 +253,16 @@ struct OptimizeOptions {
   std::shared_ptr<std::unordered_map<
       sequant::Expr const*, container::vector<container::svector<Index>>>>
       term_batch_axes = {};
+
+  /// Prune disconnected (outer-product) subsets from the single-term
+  /// contraction DP: a subset whose induced subgraph is disconnected under the
+  /// "share a contractible (non-target) index" relation is an outer product the
+  /// optimal tree never forms, so skipping it prunes search space without
+  /// changing the result. \c true (default) prunes; \c false searches the full
+  /// (unpruned) space and is exposed mainly for validation. (The environment
+  /// variable \c SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING force-disables pruning
+  /// regardless of this flag.)
+  bool prune_outer_products = true;
 };
 
 }  // namespace sequant

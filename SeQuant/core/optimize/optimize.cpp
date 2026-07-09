@@ -99,7 +99,8 @@ ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
                         opts.peak_flops_tolerance,
                         opts.roofline,
                         opts.batch_policy.accumulation_factor,
-                        opts.batch_policy.peak_threshold};
+                        opts.batch_policy.peak_threshold,
+                        opts.prune_outer_products};
   // Filled only by the DensePeakSizeBatched arm below (via out_axes); every
   // other objective leaves it empty, so the term_batch_axes insertion at the
   // end is then a no-op-shaped empty-vector entry (harmless: Task 3.3 only

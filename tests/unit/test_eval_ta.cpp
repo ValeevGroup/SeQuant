@@ -1098,6 +1098,27 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
         }();
         REQUIRE(equal_tarrays(eval3, man3, "i1,i2,i3"));
       }
+
+      {  // high-order aux hyperindex carried into the result: aux index x1 is
+         // shared by 3 tensors AND external (in the result aux slot). This is
+         // the >2-tensor named-hyperedge case the TNv3 canonicalize_slots fix
+         // unlocks; TA evaluates the resulting batched-over-x1 contraction
+         // natively (einsum keeps an index common to both operands and result).
+         //   R{;;x1} = A{;a1;x1} B{a1;a2;x1} C{a2;;x1}
+         //   R[x] = sum_{a1,a2} A[a1,x] B[a1,a2,x] C[a2,x]
+        auto res = deserialize<sequant::ResultExpr>(
+            L"R{;;x1} = A{;a1;x1} B{a1;a2;x1} C{a2;;x1}");
+        auto evalR = evaluate(eval_node(res), std::string("x_1"), yield_)
+                         ->get<TA::TArrayD>();
+        auto manR = [&]() {
+          auto A = yield(L"A{;a1;x1}");    // [a1, x]
+          auto B = yield(L"B{a1;a2;x1}");  // [a1, a2, x]
+          auto C = yield(L"C{a2;;x1}");    // [a2, x]
+          auto AB = TA::einsum("ax,abx->bx", A, B);
+          return TA::einsum("bx,bx->x", AB, C);
+        }();
+        REQUIRE(equal_tarrays(evalR, manR, "x1"));
+      }
     }  // multiple bra or ket indices
   }
 
