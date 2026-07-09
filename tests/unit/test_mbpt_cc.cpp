@@ -4,6 +4,7 @@
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/domain/mbpt/bernoulli.hpp>
@@ -410,6 +411,51 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
               CC(N, {.ansatz = CC::Ansatz::oT, .skip_singles = true}).rdm(1)));
     }
   }  // SECTION("rdm")
+
+  SECTION("extra singles commutators") {
+    // hbar_singles_comm_rank wraps H̄_R with a factored t1 similarity transform
+    // to order K:  H̄ = Σ_a (1/a!) [H̄_R, t1−t1†]_a.
+    const auto N = 2;
+    const CC::Options base{.ansatz = CC::Ansatz::U, .hbar_comm_rank = 2};
+    const auto hbar_R = CC(N, base).hbar();  // K unset == the R=2 baseline
+
+    // anti-Hermitian singles generator σ1 = t1 − t1†
+    const auto sigma1 = op::t(1) - adjoint(op::t(1));
+    // commutator built independently of mbpt::lst (plain expression arithmetic)
+    const auto comm = [](const ExprPtr& A, const ExprPtr& B) {
+      auto r = A * B - B * A;
+      simplify(r);
+      return r;
+    };
+
+    SECTION("K=0/unset reproduces plain hbar") {
+      CC::Options k0 = base;
+      k0.hbar_singles_comm_rank = 0;
+      REQUIRE_THAT(CC(N, k0).hbar(), EquivalentTo(hbar_R));
+    }
+
+    SECTION("K=1: extra term is exactly [H̄_R, σ1]") {
+      CC::Options k1 = base;
+      k1.hbar_singles_comm_rank = 1;
+      const auto hbar_k1 = CC(N, k1).hbar();
+
+      // the wrap genuinely adds terms not present in the baseline
+      const auto extra = comm(hbar_R, sigma1);
+      REQUIRE(size(extra) > 0);
+      REQUIRE(size(hbar_k1) > size(hbar_R));
+
+      REQUIRE_THAT(hbar_k1, EquivalentTo(hbar_R + extra));
+    }
+
+    SECTION("K=2: increment is (1/2!)[[H̄_R, σ1], σ1]") {
+      CC::Options k2 = base;
+      k2.hbar_singles_comm_rank = 2;
+      const auto expected =
+          hbar_R + comm(hbar_R, sigma1) +
+          ex<Constant>(rational{1, 2}) * comm(comm(hbar_R, sigma1), sigma1);
+      REQUIRE_THAT(CC(N, k2).hbar(), EquivalentTo(expected));
+    }
+  }  // SECTION("extra singles commutators")
 
   SECTION("eom_cc"){SECTION("EOM-CCSD"){const auto N = 2;
   auto cc = CC{N};
