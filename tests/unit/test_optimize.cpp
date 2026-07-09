@@ -2046,4 +2046,31 @@ TEST_CASE("contractible_adjacency", "[optimize][pruning]") {
   std::vector<Index> tgt_spec{Index{L"i_1"}, Index{L"a_1"}, Index{L"a_2"}};
   auto adj_spec = o::contractible_adjacency(spec, tgt_spec);
   CHECK(edge_count(adj_spec) == 0);
+
+  // Composite (CSV/PNO) indices: u and v carry DIFFERENT top-level composite
+  // indices (distinct base labels a vs g) that happen to share the SAME
+  // occupied protoindices {i1,i2}. contractible_adjacency only iterates
+  // top-level bra/ket/aux indices, so a1<i1,i2> and g1<i1,i2> are two
+  // distinct entries in the carrier map (different base label/space) even
+  // though their protoindices coincide; those shared protoindices i1,i2 are
+  // never themselves iterated as standalone indices, so no edge must form.
+  // Targets are the plain externals i3,i4 only -- neither the composite
+  // indices nor their protoindices are targets, so a zero edge count here is
+  // not merely an artifact of exclusion-via-target.
+  auto composite_diff = net_of(parse(L"u_{i3}^{a1<i1,i2>} v_{i4}^{g1<i1,i2>}"));
+  std::vector<Index> tgt_composite_diff{Index{L"i_3"}, Index{L"i_4"}};
+  auto adj_composite_diff =
+      o::contractible_adjacency(composite_diff, tgt_composite_diff);
+  CHECK(edge_count(adj_composite_diff) == 0);
+
+  // Positive control: u and v now genuinely share the SAME top-level
+  // composite index a1<i1,i2> (not merely the same protoindices), which
+  // must produce an edge. This confirms the zero count above is because the
+  // composites differ, not because composite indices can never be
+  // adjacency carriers at all.
+  auto composite_same = net_of(parse(L"u_{i5}^{a1<i1,i2>} v_{a1<i1,i2>}^{i6}"));
+  std::vector<Index> tgt_composite_same{Index{L"i_5"}, Index{L"i_6"}};
+  auto adj_composite_same =
+      o::contractible_adjacency(composite_same, tgt_composite_same);
+  CHECK(edge_count(adj_composite_same) == 1);
 }
