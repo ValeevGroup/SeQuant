@@ -42,6 +42,7 @@ CC::CC(size_t n, const Options& opts)
       screen_(opts.screen),
       use_topology_(opts.use_topology),
       hbar_comm_rank_(opts.hbar_comm_rank),
+      hbar_singles_comm_rank_(opts.hbar_singles_comm_rank),
       pertbar_comm_rank_(opts.pertbar_comm_rank) {
   if (unitary())
     SEQUANT_ASSERT(hbar_comm_rank_,
@@ -72,7 +73,17 @@ ExprPtr CC::hbar(std::optional<size_t> truncation_rank) const {
   // for a non-unitary ansatz this is the cheaper connected-product form, which
   // is only equivalent to the commutator once the caller supplies operator
   // connectivity to ref_av (see lst_options() and the @warning on hbar())
-  return mbpt::lst(H(), T(N, skip_singles()), truncation, lst_options());
+  auto result = mbpt::lst(H(), T(N, skip_singles()), truncation, lst_options());
+
+  // extra singles-only commutators: wrap H̄ with the t1 similarity transform
+  // to order K. Same commutator form as above, since the same connectivity is
+  // supplied downstream.
+  if (hbar_singles_comm_rank_.value_or(0) > 0) {
+    auto opts = lst_options();
+    opts.skip_clone = true;
+    result = mbpt::lst(result, op::t(1), *hbar_singles_comm_rank_, opts);
+  }
+  return result;
 }
 
 ExprPtr CC::energy(std::optional<size_t> comm_rank) const {

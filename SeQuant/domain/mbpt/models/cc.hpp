@@ -50,6 +50,12 @@ class CC {
     /// maximum order of nested commutators in H̄; must be specified if unitary
     /// ansatz is used
     std::optional<size_t> hbar_comm_rank = std::nullopt;
+    /// order K of the additional singles-only (t1) similarity transform applied
+    /// on top of the standard hbar_comm_rank (R) commutator series. nullopt or
+    /// 0 disables it (default). Designed for the unitary ansatz; applied
+    /// generically. See docs/superpowers/specs/2026-07-07-ucc-extra-singles-
+    /// commutators-design.md
+    std::optional<size_t> hbar_singles_comm_rank = std::nullopt;
     /// maximum order of nested commutators in the similarity transformed
     /// perturbation operator; must be specified if unitary ansatz is used in
     /// perturbed amplitude derivation
@@ -218,6 +224,7 @@ class CC {
   bool screen_ = true;
   bool use_topology_ = true;
   std::optional<size_t> hbar_comm_rank_ = std::nullopt;
+  std::optional<size_t> hbar_singles_comm_rank_ = std::nullopt;
   std::optional<size_t> pertbar_comm_rank_ = std::nullopt;
 
   /// @return the `LSTOptions` this engine uses for every `mbpt::lst()` call
