@@ -2236,6 +2236,79 @@ TEST_CASE("prune_outer_products option controls pruning (default on)",
   CHECK(no_prune == env_disabled);
 }
 
+// PeakBatchedModel's relax tie-break reads the precomputed per-subset atom
+// tables (Context::fast_flops) instead of rebuilding index sets and calling
+// flops_of per bipartition. fast_flops is loss-free by construction (atom IDs
+// in FullLabelCompare order => same multiply order as inner_aware_volume). Gate
+// that construction directly: for every connected bipartition of a composite
+// (PNO/OSV) term and a plain term, with and without inner_pow engaged,
+// fast_flops(lp, rp) must equal flops_of(idx[lp], idx[rp], idx[lp|rp]) exactly.
+TEST_CASE("fast_flops equals flops_of over all bipartitions (parity)",
+          "[optimize][fast-flops-parity]") {
+  using namespace sequant;
+  namespace o = opt::detail;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  mbpt::add_df_spaces(reg);
+  mbpt::add_pao_spaces(reg);
+  mbpt::add_ao_spaces(reg);
+  for (auto&& [k, v] :
+       std::initializer_list<std::pair<std::wstring_view, size_t>>{
+           {L"i", 10}, {L"a", 40}, {L"μ̃", 50}, {L"Κ", 90}})
+    reg->retrieve_ptr(k)->approximate_size(v);
+  auto idxsz = [](Index const& ix) -> std::size_t {
+    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+  };
+  auto is_batchable = [](Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  auto batch = [](Index const&) -> std::size_t { return 30; };
+
+  std::function<double(Index const&, std::size_t)> const ip_on =
+      [](Index const&, std::size_t) -> double { return 12.0; };
+  std::function<double(Index const&, std::size_t)> const ip_off = {};
+
+  bool composite_inner_checked = false;
+  for (std::wstring const term :
+       {std::wstring(L"g{μ̃1;μ̃2;Κ1} C{a1<i1>;μ̃1} C{μ̃2;a2<i1,i2>} t{a1<i1>;i1}"),
+        std::wstring(L"g{i1;a1;Κ1} g{i2;a2;Κ1} t{a1;i1} t{a2;i2}")}) {
+    for (auto const* ip : {&ip_on, &ip_off}) {
+      auto prod = deserialize(term)->as<Product>();
+      std::vector<ExprPtr> ts;
+      for (auto&& f : prod.factors())
+        if (f->is<Tensor>()) ts.push_back(f);
+      TensorNetwork net{ts};
+      container::svector<Index> const targets;
+      o::PeakBatchedModel<decltype(idxsz)> model{idxsz, is_batchable, batch,
+                                                 /*is_volatile_leaf=*/{}, *ip};
+      auto ctx = model.build_context(net, targets);
+      REQUIRE(ctx.use_fast_flops);
+      auto const connected = o::outer_product_connectivity(net, targets);
+      std::size_t const root = (std::size_t{1} << ts.size()) - 1;
+      bool checked_bipart = false;
+      for (std::size_t n = 1; n <= root; ++n) {
+        if (std::popcount(n) < 2 || !connected[n]) continue;
+        // enumerate every proper non-empty submask lp of n (rp = n ^ lp)
+        for (std::size_t lp = (n - 1) & n; lp; lp = (lp - 1) & n) {
+          std::size_t const rp = n ^ lp;
+          if (rp == 0 || !connected[lp] || !connected[rp]) continue;
+          checked_bipart = true;
+          double const fast = ctx.fast_flops(lp, rp);
+          double const slow =
+              ctx.flops_of(ctx.idx[lp], ctx.idx[rp], ctx.idx[n]);
+          CAPTURE(term, (ip == &ip_on), n, lp, rp, fast, slow);
+          CHECK(fast == slow);  // bit-identical by construction
+          if (!ctx.f_inner[lp].empty() || !ctx.f_inner[rp].empty())
+            composite_inner_checked = true;
+        }
+      }
+      REQUIRE(checked_bipart);  // non-vacuous
+    }
+  }
+  // The composite term must actually exercise the inner (CSV/PNO) atom path.
+  REQUIRE(composite_inner_checked);
+}
+
 TEST_CASE("outer-product pruning: large connected term optimizes quickly",
           "[optimize][pruning]") {
   using namespace sequant;
