@@ -4,7 +4,6 @@
 #include <SeQuant/version.hpp>
 
 #include <algorithm>
-#include <chrono>
 #include <format>
 #include <map>
 
@@ -105,10 +104,7 @@ void write_report(
     const Config& cfg,
     const std::vector<std::pair<std::string, CellResult>>& results,
     const SimResult& sim, std::ostream& out) {
-  const auto now = std::chrono::floor<std::chrono::seconds>(
-      std::chrono::system_clock::now());
   out << "# SeQuant cost analysis\n\n"
-      << std::format("_Generated: {:%Y-%m-%d %H:%M:%S} UTC_  \n", now)
       << std::format("_SeQuant: {}_\n\n", git_revision())
       << std::format("Sizes in MB ({} bytes/element).\n\n", bytes_per_elem);
   for (const auto& [name, cell] : results) {
