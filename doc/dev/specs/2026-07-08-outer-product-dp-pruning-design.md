@@ -296,10 +296,67 @@ points, which share `solve_single_term`.
    perf-first now optimizes in seconds (assert an upper bound on wall time, or
    simply that it completes within the test's normal budget).
 
+## Results (C60 dry-run) and the build_context correction
+
+Measuring the pruned DP on the real C60 term revealed that the DP-level
+subset skip (`solve_single_term`) alone was **not** where the wall time went.
+Two follow-on changes, landed with this PR, were needed to actually realize the
+speedup; the dry-run spike (`test_eval_dryrun.cpp`, local/uncommitted)
+quantified each.
+
+### The dominant cost was `build_context`, not the relax loop
+
+The motivation section above framed the waste as outer-product *relaxes*. In
+practice, for the batched objective the dominant cost is
+`build_context`: `sliced_footprints` builds `2^m` copies (one per sliced-set
+`B`) of the full `2^N`-subset footprint table, and `init_results` /
+`subset_target_indices` build the per-subset index sets for all `2^N` subsets.
+The DP-level subset skip does not touch any of this -- it runs *after*
+`build_context` -- so pruning alone left ~`2^N/connected` (~ 43x on term 0,
+8192 subsets vs ~190 connected) of the work in place.
+
+The fix (see `cost_model.hpp` build_contexts) threads the `connected` mask into
+`init_results` / `subset_footprints` / `sliced_footprints` so tables are built
+only for the subsets the DP will form. Because `sliced_footprints` is
+`2^m * 2^N`, cutting `2^N` to the connected count also cuts the `2^m` factor --
+so the skip **does** attack the batched machinery's cost, contra the initial
+expectation that pruning was orthogonal to `2^m`. `open_aux` is deliberately
+left unpruned: `PeakBatchedModel::is_spectator_axis` scans it over the full
+subset lattice.
+
+### Fast per-subset flop cost
+
+The residual per-relax cost (rebuilding a deduplicated index set and running
+range-v3 views through a `std::function` on every bipartition) is removed by
+`Context::fast_flops`, a precomputed sorted-union merge over per-subset integer
+atom IDs, bit-identical to `flops_of` by construction (gated by
+`[optimize][fast-flops-parity]`).
+
+### Measured (RelWithDebInfo, faithful C60 regime, PAO batching on, m = 7)
+
+All configurations produce the **byte-identical** optimum
+(`biggest_realized = 20.916354976744188 GB` on term 0), confirming loss-free.
+
+| term 0 configuration (fast_flops on)        | wall     |
+|---------------------------------------------|----------|
+| unpruned (no DP skip, no build_context skip)| 430.4 s  |
+| pruned + build_context skip                 | 2.47 s   |
+
+That is ~174x on a single term; before these changes term 0 alone did not
+finish in 10 min. The **full 55-term C60 residual** now sweeps in **~50 s**
+(all terms complete), versus previously un-sweepable. Isolating the
+build_context skip alone (PAO off, m = 1) it is ~15x on top of the DP skip; the
+remaining gain at m = 7 comes from the `2^m` interaction above.
+
+(The remaining over-budget *peak-memory* verdicts in the sweep are a separate
+axis -- node footprint vs the memory budget -- addressed by external-occ forest
+batching, not by this DP-speed work.)
+
 ## Non-goals / future work
 
 - No change to any objective's cost formula, selection policy, or the batched
-  sliced-set (`B`/`Acand`) machinery.
+  sliced-set (`B`/`Acand`) machinery (the build_context skip changes only
+  *which* subsets' tables are built, not their values).
 - **Per-component optimization of product terms.** Multi-component terms disable
   pruning (unpruned DP). Optimizing each component separately and combining by
   outer products is a possible future refinement, deferred because CC residual
