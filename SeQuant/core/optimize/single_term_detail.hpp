@@ -18,6 +18,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/external/bliss/graph.hh>
 
+#include <range/v3/algorithm/contains.hpp>
 #include <range/v3/algorithm/find.hpp>
 #include <range/v3/view/concat.hpp>
 
@@ -29,6 +30,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <cstdlib>
 #include <functional>
 #include <limits>
 #include <type_traits>
@@ -381,6 +383,43 @@ void init_results(TensorNetwork const& network, TIdxs const& tidxs,
       results[i].sequence.emplace_back(std::countr_zero(i));
     // else results[i].sequence is left uninitialized
   }
+}
+
+/// \brief Per-tensor adjacency bitmask over "contractible" shared indices.
+///
+/// `adj[i]` has bit `j` set iff tensors `i` and `j` share at least one
+/// top-level (bra/ket/aux) index that is NOT a target index (`tidxs`) -- i.e.
+/// an index that is summed somewhere in the term. Protoindices are never
+/// compared, so two composites `a<i,j>`, `b<i,j>` that share only occupied
+/// protos create no edge. A hyperedge (a contractible index on three-plus
+/// tensors) makes all its carriers mutually adjacent. A tensor is never
+/// adjacent to itself.
+template <typename TIdxs>
+inline container::vector<std::size_t> contractible_adjacency(
+    TensorNetwork const& network, TIdxs const& tidxs) {
+  std::size_t const nt = network.tensors().size();
+  container::vector<std::size_t> adj(nt, 0);
+  // carrier bitmask per contractible (non-target) top-level index
+  container::map<Index, std::size_t, Index::FullLabelCompare> carriers;
+  std::size_t i = 0;
+  for (auto&& t : network.tensors()) {
+    auto tp = std::dynamic_pointer_cast<Tensor>(t);
+    for (auto&& ix : ranges::views::concat(tp->bra(), tp->ket(), tp->aux())) {
+      if (ranges::contains(tidxs, ix)) continue;  // target/output: not summed
+      carriers[ix] |= (std::size_t{1} << i);
+    }
+    ++i;
+  }
+  for (auto&& [ix, cm] : carriers) {
+    if (std::popcount(cm) < 2) continue;  // appears on < 2 tensors
+    std::size_t rest = cm;
+    while (rest) {
+      std::size_t const b = static_cast<std::size_t>(std::countr_zero(rest));
+      adj[b] |= (cm & ~(std::size_t{1} << b));  // neighbors, excluding self
+      rest &= rest - 1;
+    }
+  }
+  return adj;
 }
 
 struct SubnetMetadata {

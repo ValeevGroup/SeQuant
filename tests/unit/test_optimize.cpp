@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <bit>
 #include <cstddef>
+#include <cstdlib>
 #include <functional>
 #include <initializer_list>
 #include <limits>
@@ -2003,3 +2004,46 @@ TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
   CHECK(real_config_integral(/*K_b=*/236));      // above crossover -> early-K
 }
 #endif  // __OPTIMIZE__
+
+TEST_CASE("contractible_adjacency", "[optimize][pruning]") {
+  using namespace sequant;
+  namespace o = sequant::opt::detail;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  reg->retrieve_ptr(L"i")->approximate_size(10);
+  reg->retrieve_ptr(L"a")->approximate_size(100);
+  reg->retrieve_ptr(L"x")->approximate_size(4);
+  auto parse = [](auto const& s) {
+    return deserialize(s, {.def_perm_symm = Symmetry::Antisymm});
+  };
+  auto net_of = [](ExprPtr const& prod) {
+    container::vector<ExprPtr> v;
+    for (auto&& f : prod->as<Product>().factors())
+      if (f->is<Tensor>()) v.push_back(f);
+    return TensorNetwork{v};
+  };
+  auto edge_count = [](container::vector<std::size_t> const& adj) {
+    std::size_t s = 0;
+    for (auto m : adj) s += static_cast<std::size_t>(std::popcount(m));
+    return s / 2;  // each undirected edge counted twice
+  };
+
+  // Chain: f-g share a1; g-h share a2. Targets {i1,i2}. 2 edges.
+  auto chain = net_of(parse(L"f_{i1}^{a1} g_{a1}^{a2} h_{a2}^{i2}"));
+  std::vector<Index> tgt2{Index{L"i_1"}, Index{L"i_2"}};
+  auto adj_chain = o::contractible_adjacency(chain, tgt2);
+  REQUIRE(adj_chain.size() == 3);
+  CHECK(edge_count(adj_chain) == 2);
+
+  // Hyperedge: p,q,r all carry summed a5 -> clique (3 edges).
+  auto hyper = net_of(parse(L"p_{i1}^{a5} q_{i2}^{a5} r_{i3}^{a5}"));
+  std::vector<Index> tgt3{Index{L"i_1"}, Index{L"i_2"}, Index{L"i_3"}};
+  auto adj_hyper = o::contractible_adjacency(hyper, tgt3);
+  CHECK(edge_count(adj_hyper) == 3);
+
+  // Spectator-only: two tensors share only the target index i1 -> no edges.
+  auto spec = net_of(parse(L"u_{i1}^{a1} v_{i1}^{a2}"));
+  std::vector<Index> tgt_spec{Index{L"i_1"}, Index{L"a_1"}, Index{L"a_2"}};
+  auto adj_spec = o::contractible_adjacency(spec, tgt_spec);
+  CHECK(edge_count(adj_spec) == 0);
+}
