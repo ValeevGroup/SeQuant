@@ -217,6 +217,30 @@ Disconnected subsets keep the `numeric_limits<size_t>::max()` sentinel `meta_id`
 `ctx.meta_ids[n]` only for subsets the driver actually DPs -- now connected-only
 -- so no sentinel id is ever dereferenced.
 
+### Reconstruct skips the unrelaxed (pruned) subsets
+
+`AdditiveModel::reconstruct` walks **every** subset to rebuild the winning
+expression from the DP table's `lp`/`rp` back-pointers. A pruned subset was
+never relaxed, so its entry keeps the `lp == 0, rp == 0` sentinel; feeding that
+to the reconstruction arithmetic aborts. The reconstruct loop therefore skips
+the same subsets the driver pruned, keyed off the sentinel rather than
+recomputing connectivity:
+
+```cpp
+else if (std::popcount(n) >= 2) {
+  if (st[n].lp == 0 && st[n].rp == 0) continue;   // pruned: never relaxed
+  ... rebuild n from st[n].lp, st[n].rp ...
+}
+```
+
+This is safe because singletons are handled earlier (the `popcount == 1`
+branch), a genuinely relaxed subset always has non-zero `lp`/`rp` (bit 0 can
+never be a standalone left/right part of a >= 2-bit split), and the connected
+root is always relaxed, so the final expression is always populated. The parity
+test exercises this path: the connected "star" fixture is the one term whose
+`{t,t}` subset is left unrelaxed, so a mishandled sentinel here surfaces as a
+parity mismatch.
+
 ## Correctness
 
 **Loss-free for connected components (under the standard property).** Every
