@@ -422,6 +422,55 @@ inline container::vector<std::size_t> contractible_adjacency(
   return adj;
 }
 
+/// \brief `connected[n] == 1` iff the subgraph induced on the set bits of
+/// subset mask `n` is connected under `adjacency` (from \ref
+/// contractible_adjacency). Empty and singleton subsets are connected by
+/// definition. Size `1 << nt`.
+inline container::vector<char> connected_subsets(
+    container::vector<std::size_t> const& adjacency, std::size_t nt) {
+  container::vector<char> connected(std::size_t{1} << nt, 0);
+  for (std::size_t n = 0; n < connected.size(); ++n) {
+    if (std::popcount(n) <= 1) {
+      connected[n] = 1;
+      continue;
+    }
+    std::size_t const start = n & (~n + 1);  // lowest set bit
+    std::size_t reached = start, frontier = start;
+    while (frontier) {
+      std::size_t next = 0, f = frontier;
+      while (f) {
+        next |= adjacency[static_cast<std::size_t>(std::countr_zero(f))];
+        f &= f - 1;
+      }
+      next &= n & ~reached;
+      reached |= next;
+      frontier = next;
+    }
+    connected[n] = (reached == n) ? 1 : 0;
+  }
+  return connected;
+}
+
+/// \brief Outer-product pruning mask for a term. Returns \ref
+/// connected_subsets over \ref contractible_adjacency, EXCEPT it returns an
+/// all-connected mask when pruning is disabled (env
+/// `SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING`) or when the full network is
+/// itself disconnected (a genuine product term -- never a CC residual
+/// summand, by the linked-cluster theorem). Callers then apply one uniform
+/// `if (!mask[n]) skip` test and get unpruned behavior in both those cases.
+template <typename TIdxs>
+inline container::vector<char> outer_product_connectivity(
+    TensorNetwork const& network, TIdxs const& tidxs) {
+  std::size_t const nt = network.tensors().size();
+  std::size_t const sz = std::size_t{1} << nt;
+  if (std::getenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING"))
+    return container::vector<char>(sz, 1);
+  auto mask = connected_subsets(contractible_adjacency(network, tidxs), nt);
+  if (!mask.empty() && !mask.back())  // full network disconnected: disable
+    return container::vector<char>(sz, 1);
+  return mask;
+}
+
 struct SubnetMetadata {
   /// meta_ids[n] is the canonical-subnet id of subset n, or
   /// numeric_limits<size_t>::max() for subsets with popcount < 2.

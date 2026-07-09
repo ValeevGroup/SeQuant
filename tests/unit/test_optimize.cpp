@@ -2074,3 +2074,44 @@ TEST_CASE("contractible_adjacency", "[optimize][pruning]") {
       o::contractible_adjacency(composite_same, tgt_composite_same);
   CHECK(edge_count(adj_composite_same) == 1);
 }
+
+TEST_CASE("connected_subsets and outer_product_connectivity",
+          "[optimize][pruning]") {
+  using namespace sequant;
+  namespace o = sequant::opt::detail;
+
+  // Path 0-1-2 : adj[0]={1}, adj[1]={0,2}, adj[2]={1}.
+  container::vector<std::size_t> path{0b010, 0b101, 0b010};
+  auto c = o::connected_subsets(path, 3);
+  REQUIRE(c.size() == 8);
+  CHECK(c[0b001] == 1);  // singleton
+  CHECK(c[0b011] == 1);  // {0,1} share edge
+  CHECK(c[0b110] == 1);  // {1,2} share edge
+  CHECK(c[0b101] == 0);  // {0,2} NOT adjacent -> disconnected
+  CHECK(c[0b111] == 1);  // {0,1,2} connected via 1
+
+  // Two disjoint components {0,1} and {2,3}: full set disconnected.
+  container::vector<std::size_t> prod{0b0010, 0b0001, 0b1000, 0b0100};
+  auto cp = o::connected_subsets(prod, 4);
+  CHECK(cp[0b0011] == 1);  // {0,1}
+  CHECK(cp[0b1100] == 1);  // {2,3}
+  CHECK(cp[0b1111] == 0);  // full: disconnected product
+
+  // outer_product_connectivity: env-disabled -> all ones.
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  reg->retrieve_ptr(L"i")->approximate_size(10);
+  reg->retrieve_ptr(L"a")->approximate_size(100);
+  reg->retrieve_ptr(L"x")->approximate_size(4);
+  auto prod_expr = deserialize(L"f_{i1}^{a1} g_{a1}^{i2}",
+                               {.def_perm_symm = Symmetry::Antisymm});
+  container::vector<ExprPtr> v;
+  for (auto&& f : prod_expr->as<Product>().factors())
+    if (f->is<Tensor>()) v.push_back(f);
+  TensorNetwork tn{v};
+  std::vector<Index> tgt{Index{L"i_1"}, Index{L"i_2"}};
+  setenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING", "1", 1);
+  auto m_off = o::outer_product_connectivity(tn, tgt);
+  unsetenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING");
+  for (auto val : m_off) CHECK(val == 1);
+}
