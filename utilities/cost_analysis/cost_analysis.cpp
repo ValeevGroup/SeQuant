@@ -78,7 +78,12 @@ Config load_config(const json& d) {
   if (d.contains("cache")) {
     const auto& ca = d.at("cache");
     c.cache.enabled = ca.value("enabled", true);
-    c.cache.min_repeats = ca.value("min_repeats", std::size_t{2});
+    // A negative min_repeats wraps to a huge size_t (JSON ints are signed) and
+    // silently disables caching; the other knobs degrade harmlessly, so guard
+    // only this one.
+    const long mr = ca.value("min_repeats", 2L);
+    if (mr < 0) throw std::runtime_error("cache.min_repeats must be >= 0");
+    c.cache.min_repeats = static_cast<std::size_t>(mr);
     c.cache.max_footprint = ca.value("max_footprint", 0.0);
   }
   if (d.contains("output")) {
