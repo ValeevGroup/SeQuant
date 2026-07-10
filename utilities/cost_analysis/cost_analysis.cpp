@@ -119,13 +119,22 @@ void setup_context(const Config& cfg) {
       add_thc_spaces(isr);
   }
 
+  // Field is a single global choice for the computation, so apply it to every
+  // registry space (not just the sized ones) the way MPQC's
+  // scoped_sequant_field does: bra<->ket symmetry must be consistent for all
+  // used spaces, else a used-but-unsized space keeps the registry's default
+  // (complex) and its tensors canonicalize wrongly over a real field. Collect
+  // keys first (iteration is const) then set via mutable lookup.
   const Field field = cfg.real_field ? Field::Real : Field::Complex;
+  std::vector<std::wstring> keys;
+  for (const auto& sp : *isr) keys.push_back(sp.base_key());
+  for (const auto& key : keys)
+    if (IndexSpace* sp = isr->retrieve_ptr(key)) sp->field(field);
 
   for (const auto& [label, size] : cfg.sizes) {
     IndexSpace* sp = isr->retrieve_ptr(toUtf16(label));
     if (!sp) throw std::runtime_error("unknown index space: " + label);
     sp->approximate_size(size);
-    sp->field(field);
   }
 
   auto ctx = get_default_context();
