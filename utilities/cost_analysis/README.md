@@ -3,9 +3,11 @@
 A standalone utility that estimates the cost of evaluating a tensor equation
 without running it. It reads a serialized equation, optimizes and binarizes it,
 then writes a Markdown report on the largest intermediates, the most expensive
-contractions, peak storage, total FLOPs, and (optionally) cache reuse. All
-figures are symbolic `AsyCost` polynomials in the index-space sizes, evaluated
-at the sizes given in the driver.
+contractions, peak storage, total operation count, and (optionally) cache reuse.
+Figures are symbolic `AsyCost` polynomials in the index-space sizes; memory and
+storage are additionally evaluated to megabytes at the driver's sizes (element
+width follows the field: 8 bytes real, 16 bytes complex). Operation counts are
+reported symbolically only.
 
 The optimize/binarize step mirrors the choices MPQC's `SeQuantEngine` makes
 (symmetrizer stripping, per-summand factorization, volatile-leaf weighting,
@@ -48,6 +50,11 @@ Each `equation_file` holds one `<head> = <rhs>` in SeQuant serialization V1, e.g
 R{a1,a2;i1,i2} = g{a1,a2;i1,i2} + g{a3,a4;i1,i2} t{i3,i4;a3,a4} R{a1,a2;i3,i4}
 ```
 
+> [!NOTE]
+> CSV/PNO expressions (composite hyper-indices like `a<i,j>`) are not supported:
+> `AsyCost` is not proto-index aware, so it would size such an index as a bare
+> one and report wrong costs.
+
 ## Workflow
 
 Per result equation (`process()` in `cost_analysis.cpp`):
@@ -62,7 +69,8 @@ Per result equation (`process()` in `cost_analysis.cpp`):
    the single source of truth for every reported number.
 5. **Catalog** the tree's internal nodes, keyed by structural hash/equality so
    equal intermediates across terms collapse into one entry (with a `uses`
-   count). Record each node's memory, local FLOPs, and O/V/X space signature.
+   count). Record each node's memory, local operation count, and O/V/X space
+   signature.
 
 A final **cache simulation** (`cache_manager`) runs over all results' trees to
 count intermediates that would be cached / persist across iterations.
@@ -70,7 +78,7 @@ count intermediates that would be cached / persist across iterations.
 ## Report
 
 For each result: a one-line summary (terms, distinct/reused intermediates,
-largest, peak storage), total FLOPs (symbolic and evaluated), then **Largest
+largest, peak storage), the total operation count (symbolic), then **Largest
 intermediates**, **Most expensive contractions**, and a **Shape census** grouped
 by O/V/X signature. A trailing **Cache** table summarizes the simulation.
 

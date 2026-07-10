@@ -1,6 +1,7 @@
 {
   "context": {
-    "spbasis": "spinor"
+    "spbasis": "spinor",
+    "field": "real"
   },
   "sizes": {
     "i": 10,

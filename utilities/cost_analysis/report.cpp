@@ -10,31 +10,31 @@
 using namespace sequant;
 
 namespace {
-constexpr double bytes_per_elem = 8.0;
-
-double mb(const AsyCost& c) {
+// Bytes per stored scalar (real=8, complex=16), threaded from the field.
+double mb(const AsyCost& c, double bytes_per_elem) {
   return c.ops() * bytes_per_elem / (1024.0 * 1024.0);
 }
 
 void report_largest(const CellResult& cell, std::size_t top_n,
-                    std::ostream& out) {
+                    double bytes_per_elem, std::ostream& out) {
   std::vector<std::pair<const TreeNode*, const Record*>> rows;
   for (const auto& [node, rec] : cell.catalog)
     if (rec.memory != AsyCost::zero()) rows.emplace_back(&node, &rec);
   // Sort by size (largest first); tie-break on the construction string so the
   // row order is deterministic regardless of unordered_map iteration order.
-  std::ranges::sort(rows, [](const auto& a, const auto& b) {
-    const double sa = mb(a.second->memory), sb = mb(b.second->memory);
+  std::ranges::sort(rows, [bytes_per_elem](const auto& a, const auto& b) {
+    const double sa = mb(a.second->memory, bytes_per_elem),
+                 sb = mb(b.second->memory, bytes_per_elem);
     if (sa != sb) return sb < sa;
     return full_expr(*a.first) < full_expr(*b.first);
   });
   out << "| Rank | Result | Spaces | Memory (MB) | Uses | Construction | "
-         "Local FLOPs |\n|---|---|---|---|---|---|---|\n";
+         "Local ops |\n|---|---|---|---|---|---|---|\n";
   for (std::size_t i = 0; i < rows.size() && i < top_n; ++i) {
     const auto& [node, rec] = rows[i];
     out << std::format("| {} | {} | {} | {:.4f} | {} | {} | {} |\n", i + 1,
-                       rec->label, rec->spaces, mb(rec->memory), rec->uses,
-                       full_expr(*node), rec->flops.text());
+                       rec->label, rec->spaces, mb(rec->memory, bytes_per_elem),
+                       rec->uses, full_expr(*node), rec->flops.text());
   }
   out << "\n";
 }
@@ -44,24 +44,26 @@ void report_expensive(const CellResult& cell, std::size_t top_n,
   std::vector<std::pair<const TreeNode*, const Record*>> rows;
   for (const auto& [node, rec] : cell.catalog)
     if (rec.flops != AsyCost::zero()) rows.emplace_back(&node, &rec);
-  // Most FLOPs first; tie-break on the construction string for determinism.
+  // Most operations first, tie-broken on the construction string for
+  // determinism. The op count only orders rows
   std::ranges::sort(rows, [](const auto& a, const auto& b) {
     const double fa = a.second->flops.ops(), fb = b.second->flops.ops();
     if (fa != fb) return fb < fa;
     return full_expr(*a.first) < full_expr(*b.first);
   });
-  out << "| Rank | Result | Spaces | FLOPs | Uses | Construction | "
-         "Cost |\n|---|---|---|---|---|---|---|\n";
+  out << "| Rank | Result | Spaces | Uses | Construction | "
+         "Operations |\n|---|---|---|---|---|---|\n";
   for (std::size_t i = 0; i < rows.size() && i < top_n; ++i) {
     const auto& [node, rec] = rows[i];
-    out << std::format("| {} | {} | {} | {:.4e} | {} | {} | {} |\n", i + 1,
-                       rec->label, rec->spaces, rec->flops.ops(), rec->uses,
-                       full_expr(*node), rec->flops.text());
+    out << std::format("| {} | {} | {} | {} | {} | {} |\n", i + 1, rec->label,
+                       rec->spaces, rec->uses, full_expr(*node),
+                       rec->flops.text());
   }
   out << "\n";
 }
 
-void report_shape_histogram(const CellResult& cell, std::ostream& out) {
+void report_shape_histogram(const CellResult& cell, double bytes_per_elem,
+                            std::ostream& out) {
   struct Agg {
     std::size_t count = 0, uses = 0;
     AsyCost mem;
@@ -75,19 +77,21 @@ void report_shape_histogram(const CellResult& cell, std::ostream& out) {
     // Representative size of the shape = its largest instance. A single O/V/X
     // signature can group differing sizes only when multiple aux spaces (Κ, L)
     // are registered; taking the max keeps this deterministic either way.
-    if (mb(g.mem) < mb(rec.memory)) g.mem = rec.memory;
+    if (mb(g.mem, bytes_per_elem) < mb(rec.memory, bytes_per_elem))
+      g.mem = rec.memory;
   }
   std::vector<std::pair<std::string, Agg>> rows(by_shape.begin(),
                                                 by_shape.end());
-  std::ranges::sort(rows, [](const auto& a, const auto& b) {
-    const double sa = mb(a.second.mem), sb = mb(b.second.mem);
+  std::ranges::sort(rows, [bytes_per_elem](const auto& a, const auto& b) {
+    const double sa = mb(a.second.mem, bytes_per_elem),
+                 sb = mb(b.second.mem, bytes_per_elem);
     if (sa != sb) return sb < sa;
     return a.first < b.first;  // tie-break on shape string
   });
   out << "| Shape | Size (MB) | # Distinct | Total uses |\n|---|---|---|---|\n";
   for (const auto& [shape, g] : rows)
-    out << std::format("| {} | {:.4f} | {} | {} |\n", shape, mb(g.mem), g.count,
-                       g.uses);
+    out << std::format("| {} | {:.4f} | {} | {} |\n", shape,
+                       mb(g.mem, bytes_per_elem), g.count, g.uses);
   out << "\n";
 }
 
@@ -104,6 +108,7 @@ void write_report(
     const Config& cfg,
     const std::vector<std::pair<std::string, CellResult>>& results,
     const SimResult& sim, std::ostream& out) {
+  const double bytes_per_elem = cfg.real_field ? 8.0 : 16.0;
   out << "# SeQuant cost analysis\n\n"
       << std::format("_SeQuant: {}_\n\n", git_revision())
       << std::format("Sizes in MB ({} bytes/element).\n\n", bytes_per_elem);
@@ -112,18 +117,18 @@ void write_report(
     out << std::format(
         "Terms: {}; distinct intermediates: {}; reused: {}; largest: {:.4f} "
         "MB; peak storage: {:.4f} MB.\n\n",
-        cell.n_terms, cell.n_distinct, cell.n_reused, mb(cell.largest_mem),
-        mb(cell.peak_storage));
-    out << std::format("Total FLOPs (symbolic): {}\n\n",
+        cell.n_terms, cell.n_distinct, cell.n_reused,
+        mb(cell.largest_mem, bytes_per_elem),
+        mb(cell.peak_storage, bytes_per_elem));
+    // Op-count only; no concrete FLOP number.
+    out << std::format("Total operations (symbolic): {}\n\n",
                        cell.total_flops.text());
-    out << std::format("Total FLOPs (computed, index extents): {:.4e}\n\n",
-                       cell.total_flops.ops());
     out << "### Largest intermediates\n\n";
-    report_largest(cell, cfg.out.top_n, out);
+    report_largest(cell, cfg.out.top_n, bytes_per_elem, out);
     out << "### Most expensive contractions\n\n";
     report_expensive(cell, cfg.out.top_n, out);
     out << "### Shape census\n\n";
-    report_shape_histogram(cell, out);
+    report_shape_histogram(cell, bytes_per_elem, out);
   }
   if (cfg.cache.enabled) {
     out << std::format(
@@ -133,8 +138,8 @@ void write_report(
     out << std::format("| Cached | {} |\n", sim.n_cached);
     out << std::format("| Persistent | {} |\n", sim.n_persistent);
     out << std::format("| Persistent footprint (MB) | {:.4f} |\n",
-                       mb(sim.persistent_footprint));
+                       mb(sim.persistent_footprint, bytes_per_elem));
     out << std::format("| Total cached footprint (MB) | {:.4f} |\n\n",
-                       mb(sim.cached_footprint));
+                       mb(sim.cached_footprint, bytes_per_elem));
   }
 }
