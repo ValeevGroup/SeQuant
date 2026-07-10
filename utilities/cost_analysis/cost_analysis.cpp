@@ -275,10 +275,11 @@ bool is_leaf_labeled(const TreeNode& n, const std::wstring& label) {
   return n.leaf() && n->is_tensor() && n->as_tensor().label() == label;
 }
 
-SimResult simulate_cache(const Config& cfg,
-                         const std::vector<CellResult>& cells) {
+SimResult simulate_cache(
+    const Config& cfg,
+    const std::vector<std::pair<std::string, CellResult>>& results) {
   std::vector<TreeNode> forest;
-  for (const auto& cell : cells)
+  for (const auto& [name, cell] : results)
     for (const auto& tree : cell.trees) forest.push_back(tree);
 
   const std::wstring vl = toUtf16(cfg.optimize.volatile_leaf);
@@ -334,7 +335,6 @@ int main(int argc, char** argv) {
     setup_context(cfg);  // registry baked before any parse
 
     std::vector<std::pair<std::string, CellResult>> results;
-    std::vector<CellResult> cells;
     for (const auto& r : cfg.results) {
       const ResultExpr res = parse_equation(read_file(r.equation_file));
       CellResult cell = process(cfg, res.expression(), res.result_as_tensor());
@@ -346,12 +346,11 @@ int main(int argc, char** argv) {
           throw std::runtime_error("cannot open dump file: " + dump_path);
         for (const auto& tree : cell.trees) to << full_expr(tree) << "\n";
       }
-      cells.push_back(cell);
       results.emplace_back(r.name, std::move(cell));
     }
 
     const SimResult sim =
-        cfg.cache.enabled ? simulate_cache(cfg, cells) : SimResult{};
+        cfg.cache.enabled ? simulate_cache(cfg, results) : SimResult{};
 
     std::ofstream out(cfg.out.path);
     if (!out)
