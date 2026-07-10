@@ -3396,16 +3396,26 @@ TEST_CASE("eval_forest_over_external_occ", "[eval][forest-external-occ]") {
 }
 
 // P3 nesting gate: intra-term (contracted-aux) batching NESTED inside the
-// external-occ forest loop. Each summand carries BOTH (i) the shared external
-// spectator occ i_9 -- a Hadamard outer mode present on every operand and the
+// external forest loop. Each summand carries BOTH (i) a shared external
+// spectator x_9 -- a Hadamard outer mode present on every operand and the
 // result, contracted at no node -- AND (ii) a contracted aux axis x_1 whose
-// intermediate S = g*h carries x_1 free (a batching target). The external-occ
+// intermediate S = g*h carries x_1 free (a batching target). The external
 // partition is the OUTER loop; WITHIN each external block the intra-term
 // batched custom evaluator slices x_1 on the shared scratch. The assembled
 // destination must equal the unbatched reference R = F1 + F2 ELEMENTWISE for
 // every external block size (a memory schedule, never an approximation), and
 // the intra-term evaluator must ACTUALLY FIRE inside each block (proven by a
-// spy scope guard that records every firing). occ_tile_size > 1 (i_9 tiled).
+// spy scope guard that records every firing). external axis tiled (> 1 tile).
+//
+// NOTE on the external axis space: the spectator here is an AUXILIARY index
+// (x_9), NOT an occupied one. TNv3::canonicalize_slots deliberately forbids a
+// *non-auxiliary* index shared among >2 tensor slots (it has no well-defined
+// bra/ket slot type); a high-order AUX hyperindex carried into the result IS
+// supported (same case exercised in "eval_with_tiledarray"). The forest +
+// nested-batching MECHANISM under test is axis-agnostic, so an aux spectator
+// exercises it identically. Occupied-external RECOGNITION and SIZING (where
+// the occ-vs-aux distinction actually matters) are covered at the DP/cost
+// level by the [dryrun-occ-recognize] / [dryrun-occ-sizing] gates.
 TEST_CASE("eval_forest_over_external_occ nests intra-term aux batching",
           "[eval][forest-external-occ][forest-external-occ-nested]") {
   using sequant::eval_result;
@@ -3418,51 +3428,55 @@ TEST_CASE("eval_forest_over_external_occ nests intra-term aux batching",
   using cache_t = sequant::CacheManager<node_t>;
 
   auto& world = TA::get_default_world();
-  // occ i_9 extent 6 in tiles of 2 -> 3 tiles (occ_tile_size == 2 > 1); aux x
-  // extent 6 in tiles of 2 -> 3 tiles (so x_1 partitions into 3 aux batches at
-  // target size 2 -> intra-term batching genuinely engages); virt extent 4.
+  // aux x (both x_9 and x_1 live in this space) extent 6 in tiles of 2 -> 3
+  // tiles: the external axis x_9 partitions into 1/2/3 blocks, and the inner
+  // axis x_1 partitions into 3 aux batches at target size 2 (so intra-term
+  // batching genuinely engages); virt extent 4. (nocc unused here.)
   rand_tensor_yield<double, TA::DensePolicy> yield{world, /*nocc=*/6,
                                                    /*nvirt=*/4, /*naux=*/6};
   yield.set_max_tile(2);
   using ArrayT = typename decltype(yield)::array_type;
   using ResultT = sequant::ResultTensorTA<ArrayT>;
 
-  // Two flat summand trees sharing S = g*h. i_9 is a Hadamard spectator: it
-  // rides every tensor and is declared external (in the result's aux slot via
-  // the ResultExpr LHS) so binarize keeps it uncontracted on every node. x_1
+  // Two flat summand trees sharing S = g*h. x_9 is a Hadamard spectator: it
+  // rides every tensor (in the aux slot) and is declared external (in the
+  // result's aux slot via the ResultExpr LHS) so binarize keeps it uncontracted
+  // on every node -- a high-order AUX hyperindex carried into the result. x_1
   // rides g and the final factor and is CONTRACTED at each root; S = g*h
   // carries x_1 free, so the root's x_1 contraction is a batching target whose
-  // intermediate is S. (The deprecated binarize(ExprPtr) would infer i_9 as
+  // intermediate is S. (The deprecated binarize(ExprPtr) would infer x_9 as
   // contracted; the ResultExpr API pins it external -- same mechanism as the
   // GAM{...;i1,i2} = t T2 Hadamard test above.)
-  //   F1 = (g{a_1,i_9;a_2;x_1} * h{a_2,i_9;a_5}) * p{a_5,i_9;a_6;x_1}
-  //   F2 = (g{a_1,i_9;a_2;x_1} * h{a_2,i_9;a_5}) * q{a_5,i_9;a_6;x_1}
-  // Both produce R{a_1;a_6;i_9}; R = F1 + F2.
+  //   F1 = (g{a_1;a_2;x_1,x_9} * h{a_2;a_5;x_9}) * p{a_5;a_6;x_1,x_9}
+  //   F2 = (g{a_1;a_2;x_1,x_9} * h{a_2;a_5;x_9}) * q{a_5;a_6;x_1,x_9}
+  // Both produce R{a_1;a_6;x_9}; R = F1 + F2.
   auto const e1 = sequant::deserialize<sequant::ResultExpr>(
-      L"R{a_1;a_6;i_9} = "
-      L"(g{a_1,i_9;a_2;x_1} * h{a_2,i_9;a_5}) * p{a_5,i_9;a_6;x_1}");
+      L"R{a_1;a_6;x_9} = "
+      L"(g{a_1;a_2;x_1,x_9} * h{a_2;a_5;x_9}) * p{a_5;a_6;x_1,x_9}");
   auto const e2 = sequant::deserialize<sequant::ResultExpr>(
-      L"R{a_1;a_6;i_9} = "
-      L"(g{a_1,i_9;a_2;x_1} * h{a_2,i_9;a_5}) * q{a_5,i_9;a_6;x_1}");
+      L"R{a_1;a_6;x_9} = "
+      L"(g{a_1;a_2;x_1,x_9} * h{a_2;a_5;x_9}) * q{a_5;a_6;x_1,x_9}");
   auto const n1 = eval_node(e1);
   auto const n2 = eval_node(e2);
   std::vector<node_t> const forest{n1, n2};
 
   auto const isr = sequant::get_default_context().index_space_registry();
-  auto const occ_space = isr->retrieve(L"i");
   auto const aux_space = isr->retrieve(L"x");
 
-  // The spectator axis: the unique occ index i_9 among the head's outer modes.
+  // The external spectator axis: the aux index carried in the head's result
+  // (uncontracted) -- i.e. among the root node's free/canon indices. The
+  // contracted inner batch axis x_1 is summed at the root, so it is absent
+  // there; the sole aux among the root's free modes is the spectator x_9.
   sequant::Index axis;
   for (auto const& ix : n1->canon_indices())
-    if (ix.space() == occ_space && !ix.has_proto_indices()) {
+    if (ix.space() == aux_space && !ix.has_proto_indices()) {
       axis = ix;
       break;
     }
   REQUIRE(axis.nonnull());
-  REQUIRE(axis.space() == occ_space);
+  REQUIRE(axis.space() == aux_space);
   // Structural preconditions: S = g*h repeats across the forest (shared scratch
-  // builds it once per external block), and i_9 is a plain outer mode.
+  // builds it once per external block), and x_9 is a plain outer mode.
   {
     sequant::TreeNodeEqualityComparator<node_t> const eq;
     REQUIRE(eq(n1.left(), n2.left()));  // both left children are S
@@ -3470,15 +3484,17 @@ TEST_CASE("eval_forest_over_external_occ nests intra-term aux batching",
     REQUIRE(cm.max_life(n1.left()) == 2);
   }
   REQUIRE(sequant::index_position(n1, axis).has_value());
-  // The intra-term batch axis x_1 is a CONTRACTED aux index at the root, and S
-  // carries it free (so it is a real batching target, not the external axis).
-  auto accept_aux = [aux_space](sequant::Index const& ix) {
-    return ix.space() == aux_space;
+  // The intra-term batch axis is the CONTRACTED aux index at the root (x_1),
+  // and S carries it free (so it is a real batching target, not the external
+  // spectator x_9). accept_inner_aux matches aux indices OTHER than the
+  // external spectator so the inner evaluator never tries to batch x_9.
+  auto accept_inner_aux = [aux_space, axis](sequant::Index const& ix) {
+    return ix.space() == aux_space && ix != axis;
   };
-  auto const root_axis = sequant::batch_axis(n1, accept_aux);
+  auto const root_axis = sequant::batch_axis(n1, accept_inner_aux);
   REQUIRE(root_axis.has_value());
   REQUIRE(root_axis->space() == aux_space);
-  REQUIRE(root_axis->space() != occ_space);
+  REQUIRE(*root_axis != axis);
 
   // Unbatched reference R = F1 + F2 (each in the head's natural layout).
   std::string const target = n1->annot();
@@ -3503,11 +3519,11 @@ TEST_CASE("eval_forest_over_external_occ nests intra-term aux batching",
       std::function<ResultPtr(node_t const&)> const&)>
       intra_factory = [&](std::function<ResultPtr(node_t const&)> const& le_blk)
       -> cache_t::custom_evaluator_type {
-    return make_batched_custom_evaluator(le_blk, aux_target, accept_aux, spy,
-                                         sequant::never_volatile{});
+    return make_batched_custom_evaluator(le_blk, aux_target, accept_inner_aux,
+                                         spy, sequant::never_volatile{});
   };
 
-  // block sizes (in elements of i_9, extent 6, tiles of 2):
+  // block sizes (in elements of x_9, extent 6, tiles of 2):
   //   1000 -> 1 block; 4 -> 2 blocks (first spans two tiles); 2 -> 3 blocks.
   for (std::size_t const block_size :
        {std::size_t{1000}, std::size_t{4}, std::size_t{2}}) {
