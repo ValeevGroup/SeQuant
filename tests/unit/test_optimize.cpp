@@ -1166,8 +1166,8 @@ TEST_CASE("optimize", "[optimize]") {
         set_scoped_default_context(get_default_context().clone());
     auto reg = get_default_context().mutable_index_space_registry();
     mbpt::add_df_spaces(reg);
-    mbpt::add_pao_spaces(reg);
-    mbpt::add_ao_spaces(reg);
+    mbpt::add_pao_spaces(reg, mbpt::Spin::any);
+    mbpt::add_ao_spaces(reg, mbpt::Spin::any);
     // i 10
     // a 40
     // μ̃ 50
@@ -1364,8 +1364,8 @@ TEST_CASE("OSV early-contraction reproducer", "[optimize][osv]") {
   auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
   auto reg = get_default_context().mutable_index_space_registry();
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_spaces(reg);
-  mbpt::add_ao_spaces(reg);
+  mbpt::add_pao_spaces(reg, mbpt::Spin::any);
+  mbpt::add_ao_spaces(reg, mbpt::Spin::any);
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 10}, {L"a", 40}, {L"μ̃", 50}, {L"Κ", 90}}) {
@@ -1421,8 +1421,8 @@ TEST_CASE("OSV early-contraction reproducer (full term #1)",
   auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
   auto reg = get_default_context().mutable_index_space_registry();
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_spaces(reg);
-  mbpt::add_ao_spaces(reg);
+  mbpt::add_pao_spaces(reg, mbpt::Spin::any);
+  mbpt::add_ao_spaces(reg, mbpt::Spin::any);
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 56}, {L"a", 12}, {L"μ̃", 602}, {L"Κ", 1652}}) {
@@ -1475,8 +1475,8 @@ TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
   auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
   auto reg = get_default_context().mutable_index_space_registry();
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_spaces(reg);
-  mbpt::add_ao_spaces(reg);
+  mbpt::add_pao_spaces(reg, mbpt::Spin::any);
+  mbpt::add_ao_spaces(reg, mbpt::Spin::any);
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 16}, {L"a", 12}, {L"μ̃", 170}, {L"Κ", 472}}) {
@@ -1711,8 +1711,8 @@ TEST_CASE("C60 member-2 double-proto probe", "[optimize][osv][c60]") {
   auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
   auto reg = get_default_context().mutable_index_space_registry();
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_spaces(reg);
-  mbpt::add_ao_spaces(reg);
+  mbpt::add_pao_spaces(reg, mbpt::Spin::any);
+  mbpt::add_ao_spaces(reg, mbpt::Spin::any);
   // C60 cc-pVDZ-F12-ish extents: active occ 120, PNO domain 42, PAO 1800,
   // DF aux 6000 (sliced to batch 30 by the batched objective).
   for (auto&& [k, v] :
@@ -1835,8 +1835,8 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
   auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
   auto reg = get_default_context().mutable_index_space_registry();
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_spaces(reg);
-  mbpt::add_ao_spaces(reg);
+  mbpt::add_pao_spaces(reg, mbpt::Spin::any);
+  mbpt::add_ao_spaces(reg, mbpt::Spin::any);
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 16}, {L"a", 12}, {L"μ̃", 170}, {L"Κ", 472}})
@@ -1995,8 +1995,8 @@ TEST_CASE("optimize emits an external batch axis for the PPL term",
   auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
   auto reg = get_default_context().mutable_index_space_registry();
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_spaces(reg);
-  mbpt::add_ao_spaces(reg);
+  mbpt::add_pao_spaces(reg, mbpt::Spin::any);
+  mbpt::add_ao_spaces(reg, mbpt::Spin::any);
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 16}, {L"a", 12}, {L"μ̃", 170}, {L"Κ", 472}})
@@ -2077,8 +2077,8 @@ TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
   auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
   auto reg = get_default_context().mutable_index_space_registry();
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_spaces(reg);
-  mbpt::add_ao_spaces(reg);
+  mbpt::add_pao_spaces(reg, mbpt::Spin::any);
+  mbpt::add_ao_spaces(reg, mbpt::Spin::any);
   // water-20-scale extents (≈ water-14 OSV extents scaled by 20/14).
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
@@ -2287,8 +2287,8 @@ TEST_CASE(
   auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
   auto reg = get_default_context().mutable_index_space_registry();
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_spaces(reg);
-  mbpt::add_ao_spaces(reg);
+  mbpt::add_pao_spaces(reg, mbpt::Spin::any);
+  mbpt::add_ao_spaces(reg, mbpt::Spin::any);
   // water-20-scale extents (matches the "quadratic bubble" test above).
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
@@ -2404,8 +2404,8 @@ TEST_CASE("batched DP peak matches oracle with two axes and accumulation",
   auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
   auto reg = get_default_context().mutable_index_space_registry();
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_spaces(reg);
-  mbpt::add_ao_spaces(reg);
+  mbpt::add_pao_spaces(reg, mbpt::Spin::any);
+  mbpt::add_ao_spaces(reg, mbpt::Spin::any);
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 20}, {L"a", 20}, {L"μ̃", 200}, {L"Κ", 300}}) {
@@ -2780,8 +2780,8 @@ TEST_CASE("fast_flops equals flops_of over all bipartitions (parity)",
   auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
   auto reg = get_default_context().mutable_index_space_registry();
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_spaces(reg);
-  mbpt::add_ao_spaces(reg);
+  mbpt::add_pao_spaces(reg, mbpt::Spin::any);
+  mbpt::add_ao_spaces(reg, mbpt::Spin::any);
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 10}, {L"a", 40}, {L"μ̃", 50}, {L"Κ", 90}})
