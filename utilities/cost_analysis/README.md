@@ -39,6 +39,7 @@ to the driver's own directory.
 | | `reorder`, `cse_subnet`, `volatile_weight`, `machine_balance`, `fast_mem_elems` | forwarded to `sequant::OptimizeOptions` | see `OptSpec` |
 | `cache` | `enabled` | run the cache-reuse simulation | `true` |
 | | `min_repeats` | reuse threshold to cache an intermediate | `2` |
+| | `max_footprint` | cache budget, in **elements** (not MB); `0` = unlimited | `0` |
 | `output` | `path` | report filename | `cost_analysis.md` |
 | | `top_n` | rows in the largest/expensive tables | `20` |
 | | `dump_tree` | also write each result's binarized tree to `<name>.tree.txt` | `false` |
@@ -77,10 +78,24 @@ count intermediates that would be cached / persist across iterations.
 
 ## Report
 
-For each result: a one-line summary (terms, distinct/reused intermediates,
-largest, peak storage), the total operation count (symbolic), then **Largest
-intermediates**, **Most expensive contractions**, and a **Shape census** grouped
-by O/V/X signature. A trailing **Cache** table summarizes the simulation.
+One `##` section per result — a one-line summary, the **Largest intermediates**,
+**Most expensive contractions**, and **Shape census** tables, then a trailing
+**Cache** table. Memory is the tensor's element count (product of its
+index-space sizes) times the field's element width (8 B real / 16 B complex), in
+MB; operation counts stay symbolic.
+
+The quantities that aren't self-evident:
+- **distinct intermediates** — structurally-unique internal contraction nodes;
+  equal intermediates across terms collapse to one, scalars excluded.
+- **peak storage** — the transient working set of the *heaviest single
+  contraction* (its two operands plus result, via `min_storage`), maxed over the
+  terms. **Not** the cache footprint — the **Cache** table covers that.
+- **Shape census `Size`** — the largest instance of each O/V/X signature.
+- **Cache** — a simulation over the volatile-gated `cache_manager` (as MPQC
+  builds it), pooled across all results. **Cached** / **Persistent** count
+  intermediates reused ≥ `min_repeats` (volatile-leaf gated) / those that persist
+  across iterations; **footprints** are their summed element counts in MB — a
+  cache-content total, distinct from the per-result transient **peak storage**.
 
 ## Tests
 
