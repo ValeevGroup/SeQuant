@@ -1108,6 +1108,20 @@ SECTION("MRSO") {
     REQUIRE(simplify(result - result_top) == ex<Constant>(0));
   }
 
+  // non-normal-ordered one-body operator in product form: h * a†_p * a_q
+  SECTION("ref_av of non-normal-ordered one-body product") {
+    const Index p{L"p_1"};  // complete space (spans core + active + virtual)
+    const Index q{L"p_2"};
+    // creator index (p) -> tensor bra, annihilator index (q) -> tensor ket
+    auto H1 = ex<Tensor>(L"h", bra{p}, ket{q}, Symmetry::Nonsymm,
+                         BraKetSymmetry::Conjugate) *
+              fcrex(p) * fannx(q);
+    ExprPtr result;
+    REQUIRE_NOTHROW(result = t::ref_av(H1));
+    REQUIRE_THAT(result, SimplifiesTo(L"h{O_1;O_1}:N-C-S + "
+                                      L"h{u_2;u_1}:N-C-S * γ{u_1;u_2}:N-C-S"));
+  }
+
 #if 0
     // H**T12 -> R2
     SECTION("wick(H**T2 -> R2)") {

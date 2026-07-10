@@ -39,7 +39,13 @@ template <typename ArrayT>
     // views (e.g. a screened pair), so skip those -- calling range() on an
     // empty view asserts (ArenaTensor) or is UB (TA::Tensor).
     for (auto it = arr.begin(); it != arr.end() && r == 0; ++it) {
-      auto const& outer_tile = it->get();
+      // NOTE: own the tile by value. it->get() (TileReference::get) returns the
+      // tile by value; binding it to a reference does not lifetime-extend the
+      // temporary through this proxy chain, so a reference would dangle and the
+      // inner loop below would read freed stack (ASan: stack-use-after-scope).
+      // The copy is shallow over ArenaTensor's Cell pointers, which alias the
+      // arena owned by the DistArray-resident tile (valid for arr's lifetime).
+      auto const outer_tile = it->get();
       for (auto const& inner : outer_tile) {
         if (inner.empty()) continue;
         if (inner.range().rank() > 0) {

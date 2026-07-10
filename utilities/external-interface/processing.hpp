@@ -38,7 +38,7 @@ struct ProcessingOptions {
   bool subexpression_elimination = true;
   std::size_t min_cse_usage = 2;
   std::variant<IndexBatching, std::vector<sequant::Index>> batching =
-      IndexBatching::Slowest;
+      IndexBatching::None;
   std::size_t min_unbatched_indices = 2;
   std::size_t max_batched_indices = std::numeric_limits<std::size_t>::max();
 };

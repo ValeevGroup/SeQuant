@@ -9,8 +9,11 @@
 #include <bit>
 #include <cmath>
 #include <concepts>
+#include <cstdint>
 #include <functional>
 #include <limits>
+#include <map>
+#include <set>
 #include <utility>
 
 namespace sequant::opt::detail {
@@ -24,17 +27,20 @@ template <class Model, typename TIdxs>
 container::vector<typename Model::State> solve_single_term(
     Model const& m, TensorNetwork const& network, TIdxs const& tidxs,
     typename Model::Context& ctx) {
-  (void)tidxs;
   auto const nt = network.tensors().size();
   container::vector<typename Model::State> st(size_t{1} << nt);
+  auto const connected =
+      outer_product_connectivity(network, tidxs, m.prune_outer_products);
   for (size_t n = 1; n < st.size(); ++n) {
     if (std::popcount(n) == 1) {
       st[n] = m.leaf(ctx, n);
       continue;
     }
+    if (!connected[n]) continue;  // never form a disconnected subset
     typename Model::State acc = m.init(ctx, n);
     for (auto&& [lp, rp] : bits::bipartitions(n))
-      if (lp != 0 && rp != 0) m.relax(ctx, n, lp, rp, st[lp], st[rp], acc);
+      if (lp != 0 && rp != 0 && connected[lp] && connected[rp])
+        m.relax(ctx, n, lp, rp, st[lp], st[rp], acc);
     st[n] = std::move(acc);
     m.finalize(ctx, n, st);
   }
@@ -78,6 +84,9 @@ struct AdditiveModel {
   double volatile_weight;
   double footprint_weight;
   bool subnet_cse;
+  /// Prune disconnected (outer-product) subsets from the DP (see
+  /// OptimizeOptions::prune_outer_products). Default true.
+  bool prune_outer_products = true;
 
   /// Per-subset DP cell: the relevant OptRes fields the additive DP mutates.
   struct State {
@@ -103,9 +112,13 @@ struct AdditiveModel {
                         TIdxs const& tidxs) const {
     Context ctx;
     ctx.results.resize(size_t{1} << network.tensors().size());
-    init_results(network, tidxs, ctx.results);
+    // Outer-product pruning: skip building index sets for disconnected subsets
+    // the DP will never form (solve_single_term also skips them).
+    auto const connected =
+        outer_product_connectivity(network, tidxs, prune_outer_products);
+    init_results(network, tidxs, ctx.results, &connected);
     if (subnet_cse) {
-      auto md = build_subnet_metadata(network, ctx.results);
+      auto md = build_subnet_metadata(network, ctx.results, connected);
       ctx.meta_ids = std::move(md.meta_ids);
       ctx.unique_meta_costs = std::move(md.unique_meta_costs);
     }
@@ -202,6 +215,13 @@ struct AdditiveModel {
       if (pc == 1) {
         seq[n].emplace_back(std::countr_zero(n));
       } else if (pc >= 2) {
+        // Pruned (outer-product) subsets are never relaxed, so lp/rp stay at
+        // their default 0/0 sentinel (bits::bipartitions guarantees a real
+        // split always assigns both nonzero together); skip them here too --
+        // they are never referenced as a child by a subset actually on the
+        // reconstructed path, since solve_single_term only relaxes into a
+        // parent through children that are themselves connected.
+        if (st[n].lp == 0 && st[n].rp == 0) continue;
         auto const& lseq = seq[st[n].lp];
         auto const& rseq = seq[st[n].rp];
         seq[n] = (lseq[0] < rseq[0] ? concat(lseq, rseq) : concat(rseq, lseq)) |
@@ -295,6 +315,9 @@ struct PeakModel {
   /// peak increase for a potentially large flop reduction (e.g. forming a
   /// persistent 4-PNO integral instead of recomputing a ladder).
   double peak_flops_tolerance = 0.0;
+  /// Prune disconnected (outer-product) subsets from the DP (see
+  /// OptimizeOptions::prune_outer_products). Default true.
+  bool prune_outer_products = true;
 
   /// One non-dominated (peak, flops) trade-off for a subset, with the
   /// bipartition / order / child-frontier-indices needed to reconstruct it.
@@ -345,12 +368,16 @@ struct PeakModel {
     auto const nt = network.tensors().size();
     auto const sz = size_t{1} << nt;
     container::vector<OptRes> results(sz);
-    init_results(network, tidxs, results);
+    // Outer-product pruning: skip building tables for disconnected subsets the
+    // DP will never form (solve_single_term also skips them).
+    auto const connected =
+        outer_product_connectivity(network, tidxs, prune_outer_products);
+    init_results(network, tidxs, results, &connected);
     auto fp = footprint_counter(idxsz, inner_pow);
     ctx.S.assign(sz, 0.0);
     ctx.idx.resize(sz);
     for (size_t n = 0; n < sz; ++n) {
-      ctx.S[n] = (n == 0) ? 0.0 : fp(results[n].indices);
+      ctx.S[n] = (n == 0 || !connected[n]) ? 0.0 : fp(results[n].indices);
       ctx.idx[n] = std::move(results[n].indices);
     }
     ctx.L.assign(sz, 0.0);
@@ -484,6 +511,9 @@ struct PeakBatchedModel {
   /// batchable index (Ap != 0), into the all-co-resident peak term, to price
   /// the accumulator + contribution co-residency of K += contribution.
   double accumulation_factor = 0.0;
+  /// Prune disconnected (outer-product) subsets from the DP (see
+  /// OptimizeOptions::prune_outer_products). Default true.
+  bool prune_outer_products = true;
 
   /// One non-dominated (peak, flops) trade-off for a (subset, sliced-set \c B)
   /// cell. \c aprime is the sliced-set chosen at this node; the children are
@@ -525,8 +555,87 @@ struct PeakBatchedModel {
     /// idx[n] = subset n's open (result) indices, for the flop tie-break.
     container::vector<IndexSet> idx;
     /// flops_of(lhs, rhs, result) = flop count of one binary contraction.
+    /// Retained as the reference for the fast_flops parity test; the relax
+    /// hot loop uses fast_flops (see below).
     std::function<double(IndexSet const&, IndexSet const&, IndexSet const&)>
         flops_of;
+
+    // --- fast per-subset flop precompute (relax tie-break hot path) ---
+    // Per subset, sorted (FullLabelCompare-ordered) atom IDs: outer atoms are
+    // the plain indices + the proto-indices of composites; inner atoms are the
+    // composites themselves -- exactly tot_indices()'s outer/inner split. IDs
+    // are assigned in FullLabelCompare order so the union merge multiplies in
+    // the SAME order as inner_aware_volume, giving a bit-identical result.
+    // fast_flops(lp, rp) == flops_of(idx[lp], idx[rp], idx[lp|rp]) by
+    // construction (gated by the [fast-flops-parity] test). use_fast_flops is
+    // false only in that test, to exercise the flops_of reference path.
+    bool use_fast_flops = true;
+    container::vector<container::svector<std::uint32_t>> f_outer;
+    container::vector<container::svector<std::uint32_t>> f_inner;
+    container::vector<double> fo_ext;         // outer atom -> extent
+    container::vector<double> fi_ext;         // inner atom -> extent (fallback)
+    container::vector<Index> fi_index;        // inner atom -> composite Index
+    container::vector<std::uint32_t> fi_grp;  // inner atom -> proto-group id
+    bool f_inner_engaged = false;
+    std::function<double(Index const&, std::size_t)> f_inner_pow;
+    mutable container::vector<std::uint32_t> f_grpcount;   // scratch (ngrp)
+    mutable container::svector<std::uint32_t> f_union_in;  // scratch
+
+    /// Flop count of the binary contraction (subset \c lp) x (subset \c rp),
+    /// equivalent to flops_of(idx[lp], idx[rp], idx[n]) with n = lp|rp, but
+    /// reading precomputed atom-ID lists instead of rebuilding index sets per
+    /// call. (idx[n] is a subset of idx[lp] U idx[rp], so it adds nothing.)
+    double fast_flops(std::size_t lp, std::size_t rp) const {
+      double mem = 1.0;
+      {
+        auto const& A = f_outer[lp];
+        auto const& B = f_outer[rp];
+        std::size_t i = 0, j = 0;
+        while (i < A.size() && j < B.size()) {
+          if (A[i] < B[j])
+            mem *= fo_ext[A[i++]];
+          else if (B[j] < A[i])
+            mem *= fo_ext[B[j++]];
+          else {
+            mem *= fo_ext[A[i]];
+            ++i;
+            ++j;
+          }
+        }
+        while (i < A.size()) mem *= fo_ext[A[i++]];
+        while (j < B.size()) mem *= fo_ext[B[j++]];
+      }
+      auto const& AI = f_inner[lp];
+      auto const& BI = f_inner[rp];
+      if (!AI.empty() || !BI.empty()) {
+        f_union_in.clear();
+        std::size_t i = 0, j = 0;
+        while (i < AI.size() && j < BI.size()) {
+          std::uint32_t id;
+          if (AI[i] < BI[j])
+            id = AI[i++];
+          else if (BI[j] < AI[i])
+            id = BI[j++];
+          else {
+            id = AI[i];
+            ++i;
+            ++j;
+          }
+          f_union_in.push_back(id);
+        }
+        while (i < AI.size()) f_union_in.push_back(AI[i++]);
+        while (j < BI.size()) f_union_in.push_back(BI[j++]);
+        if (f_inner_engaged) {
+          for (auto id : f_union_in) ++f_grpcount[fi_grp[id]];
+          for (auto id : f_union_in)
+            mem *= f_inner_pow(fi_index[id], f_grpcount[fi_grp[id]]);
+          for (auto id : f_union_in) f_grpcount[fi_grp[id]] = 0;
+        } else {
+          for (auto id : f_union_in) mem *= fi_ext[id];
+        }
+      }
+      return mem == 1.0 ? 0.0 : mem;
+    }
 
     /// Context-restricted size of subset s under sliced-set ctx (the table is
     /// indexed by the part of ctx actually open in s; mirrors the oracle).
@@ -559,8 +668,17 @@ struct PeakBatchedModel {
         "DensePeakSizeBatched: accumulation_factor != 0 requires at most one "
         "batchable index");
     ctx.nB = std::size_t{1} << ctx.m;
+    // Outer-product pruning: skip building tables for disconnected subsets the
+    // DP will never form (solve_single_term also skips them). connected[n]==1
+    // for singletons/empty and for connected subsets; the (~2x connected)
+    // needed-mask is derived internally where a complement lookup requires it.
+    auto const connected =
+        outer_product_connectivity(network, tidxs, prune_outer_products);
     ctx.tables = sliced_footprints(network, tidxs, idxsz, is_batchable, batch,
-                                   ctx.aux, inner_pow);
+                                   ctx.aux, inner_pow, &connected);
+    // open_aux is NOT pruned: is_spectator_axis scans open_aux over the FULL
+    // subset lattice (including disconnected subsets) to verify an axis is
+    // never contracted, so every subset's open-axis bitmask must be real.
     ctx.open_aux = subset_open_aux(network, tidxs, ctx.aux);
     ctx.volatile_mask = leaf_volatile_mask(network, is_volatile_leaf);
     // Per-subset open indices + a flop counter, for the lexicographic
@@ -569,13 +687,76 @@ struct PeakBatchedModel {
     // it (work parity), so it consistently orders equal-peak schedules.
     auto const sz = std::size_t{1} << ctx.nt;
     container::vector<OptRes> results(sz);
-    init_results(network, tidxs, results);
+    init_results(network, tidxs, results, &connected);
     ctx.idx.resize(sz);
     for (std::size_t n = 0; n < sz; ++n)
       ctx.idx[n] = std::move(results[n].indices);
     ctx.flops_of = [c = flops_counter(idxsz, inner_pow)](
                        IndexSet const& lhs, IndexSet const& rhs,
                        IndexSet const& result) { return c(lhs, rhs, result); };
+
+    // Fast-flops atom tables (see Context::fast_flops). Atom IDs are assigned
+    // in FullLabelCompare order so the union-merge multiply order matches
+    // inner_aware_volume exactly (bit-identical flops). Disconnected subsets
+    // have empty ctx.idx (pruned) and contribute no atoms; fast_flops is only
+    // ever called for connected bipartitions.
+    {
+      std::set<Index, Index::FullLabelCompare> outer_atoms, inner_atoms;
+      for (std::size_t n = 0; n < sz; ++n)
+        for (auto const& ix : ctx.idx[n]) {
+          if (ix.has_proto_indices()) {
+            inner_atoms.insert(ix);
+            for (auto const& p : ix.proto_indices()) outer_atoms.insert(p);
+          } else {
+            outer_atoms.insert(ix);
+          }
+        }
+      std::map<Index, std::uint32_t, Index::FullLabelCompare> oid, iid;
+      ctx.fo_ext.reserve(outer_atoms.size());
+      for (auto const& a : outer_atoms) {
+        oid.emplace(a, static_cast<std::uint32_t>(ctx.fo_ext.size()));
+        ctx.fo_ext.push_back(static_cast<double>(idxsz(a)));
+      }
+      std::map<std::wstring, std::uint32_t> gid;  // proto-signature -> group id
+      ctx.fi_ext.reserve(inner_atoms.size());
+      for (auto const& c : inner_atoms) {
+        iid.emplace(c, static_cast<std::uint32_t>(ctx.fi_index.size()));
+        ctx.fi_index.push_back(c);
+        ctx.fi_ext.push_back(static_cast<double>(idxsz(c)));
+        std::wstring sig;
+        for (auto const& p : c.proto_indices()) {
+          sig += p.full_label();
+          sig += L',';
+        }
+        auto it = gid.find(sig);
+        ctx.fi_grp.push_back(
+            it != gid.end()
+                ? it->second
+                : gid.emplace(sig, static_cast<std::uint32_t>(gid.size()))
+                      .first->second);
+      }
+      ctx.f_grpcount.assign(gid.size(), 0);
+      ctx.f_outer.resize(sz);
+      ctx.f_inner.resize(sz);
+      for (std::size_t n = 0; n < sz; ++n) {
+        auto& oo = ctx.f_outer[n];
+        auto& ii = ctx.f_inner[n];
+        for (auto const& ix : ctx.idx[n]) {
+          if (ix.has_proto_indices()) {
+            ii.push_back(iid.at(ix));
+            for (auto const& p : ix.proto_indices()) oo.push_back(oid.at(p));
+          } else {
+            oo.push_back(oid.at(ix));
+          }
+        }
+        std::sort(oo.begin(), oo.end());
+        oo.erase(std::unique(oo.begin(), oo.end()), oo.end());
+        std::sort(ii.begin(), ii.end());
+        ii.erase(std::unique(ii.begin(), ii.end()), ii.end());
+      }
+      ctx.f_inner_engaged = option_engaged(inner_pow);
+      ctx.f_inner_pow = inner_pow;
+    }
     return ctx;
   }
 
@@ -598,10 +779,12 @@ struct PeakBatchedModel {
     // reduces peak (primary axis), not total work. machine_balance==0 => flops.
     double const w = (ctx.volatile_mask & n) ? volatile_weight : 1.0;
     double const cflops =
-        w * roofline_op_cost(ctx.flops_of(ctx.idx[lp], ctx.idx[rp], ctx.idx[n]),
-                             ctx.sz(lp, 0) + ctx.sz(rp, 0) + ctx.sz(n, 0),
-                             machine_balance, fast_mem_elems, block_tiles,
-                             block_prefactor);
+        w * roofline_op_cost(
+                ctx.use_fast_flops
+                    ? ctx.fast_flops(lp, rp)
+                    : ctx.flops_of(ctx.idx[lp], ctx.idx[rp], ctx.idx[n]),
+                ctx.sz(lp, 0) + ctx.sz(rp, 0) + ctx.sz(n, 0), machine_balance,
+                fast_mem_elems, block_tiles, block_prefactor);
     for (std::size_t B = 0; B < ctx.nB; ++B) {
       // Batchable indices contracted at THIS node: open at children but not at
       // the parent. By default batching is applied ACROSS THE BOARD: slicing

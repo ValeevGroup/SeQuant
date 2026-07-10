@@ -509,3 +509,59 @@ TEST_CASE("eval_adjoint_complex_tapp", "[eval_tapp]") {
       CHECK(got.imag() == Catch::Approx(expected.imag()).margin(1e-12));
     }
 }
+
+// Custom-evaluator interception (the pruning mechanism batched eval relies on),
+// exercised on the plain non-batched code path: evaluate() must consult the
+// cache's custom evaluator on each non-leaf node before its standard scheme,
+// and a non-null return must short-circuit the subtree -- its children are
+// never evaluated. The iterative traversal must preserve this exactly.
+TEST_CASE("evaluate consults the custom evaluator and short-circuits",
+          "[eval_tapp][custom-evaluator]") {
+  using namespace sequant;
+
+  std::srand(2023);
+  const size_t nocc = 2, nvirt = 20;
+  auto yield_ = rand_tensor_yield<TAPPTensorD>{nocc, nvirt};
+
+  // A two-tensor product binarizes to a single non-leaf (Product) root with two
+  // tensor leaves.
+  auto node = eval_node(deserialize(L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i1,i2}",
+                                    {.def_perm_symm = Symmetry::Antisymm}));
+  REQUIRE_FALSE(node.leaf());
+
+  // Leaf evaluator that counts how many leaves get evaluated.
+  size_t leaf_calls = 0;
+  auto counting_leaf = [&](auto const& n) -> ResultPtr {
+    ++leaf_calls;
+    return yield_(n);
+  };
+
+  SECTION("non-null result short-circuits: children are never evaluated") {
+    auto cache = cache_manager(std::vector{node});
+    size_t intercept_calls = 0;
+    ResultPtr const marker = eval_result<ResultScalar<double>>(42.0);
+    cache.set_custom_evaluator([&](auto const&, auto&) -> ResultPtr {
+      ++intercept_calls;
+      return marker;  // "I evaluated this subtree myself"
+    });
+
+    auto const result = evaluate(node, counting_leaf, cache);
+    CHECK(intercept_calls == 1);  // consulted once, on the only non-leaf (root)
+    CHECK(leaf_calls == 0);       // children never descended into
+    CHECK(result == marker);      // the custom result is used as-is
+  }
+
+  SECTION("null result declines: the standard scheme evaluates the children") {
+    auto cache = cache_manager(std::vector{node});
+    size_t decline_calls = 0;
+    cache.set_custom_evaluator([&](auto const&, auto&) -> ResultPtr {
+      ++decline_calls;
+      return nullptr;  // decline
+    });
+
+    auto const result = evaluate(node, counting_leaf, cache);
+    CHECK(decline_calls == 1);  // consulted once on the root (non-leaf)
+    CHECK(leaf_calls == 2);     // both tensor leaves evaluated
+    REQUIRE(result);
+  }
+}

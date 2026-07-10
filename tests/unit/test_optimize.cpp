@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <bit>
 #include <cstddef>
+#include <cstdlib>
 #include <functional>
 #include <initializer_list>
 #include <limits>
@@ -2003,3 +2004,371 @@ TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
   CHECK(real_config_integral(/*K_b=*/236));      // above crossover -> early-K
 }
 #endif  // __OPTIMIZE__
+
+TEST_CASE("contractible_adjacency", "[optimize][pruning]") {
+  using namespace sequant;
+  namespace o = sequant::opt::detail;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  reg->retrieve_ptr(L"i")->approximate_size(10);
+  reg->retrieve_ptr(L"a")->approximate_size(100);
+  reg->retrieve_ptr(L"x")->approximate_size(4);
+  auto parse = [](auto const& s) {
+    return deserialize(s, {.def_perm_symm = Symmetry::Antisymm});
+  };
+  auto net_of = [](ExprPtr const& prod) {
+    container::vector<ExprPtr> v;
+    for (auto&& f : prod->as<Product>().factors())
+      if (f->is<Tensor>()) v.push_back(f);
+    return TensorNetwork{v};
+  };
+  auto edge_count = [](container::vector<std::size_t> const& adj) {
+    std::size_t s = 0;
+    for (auto m : adj) s += static_cast<std::size_t>(std::popcount(m));
+    return s / 2;  // each undirected edge counted twice
+  };
+
+  // Chain: f-g share a1; g-h share a2. Targets {i1,i2}. 2 edges.
+  auto chain = net_of(parse(L"f_{i1}^{a1} g_{a1}^{a2} h_{a2}^{i2}"));
+  std::vector<Index> tgt2{Index{L"i_1"}, Index{L"i_2"}};
+  auto adj_chain = o::contractible_adjacency(chain, tgt2);
+  REQUIRE(adj_chain.size() == 3);
+  CHECK(edge_count(adj_chain) == 2);
+
+  // Hyperedge: p,q,r all carry summed a5 -> clique (3 edges).
+  auto hyper = net_of(parse(L"p_{i1}^{a5} q_{i2}^{a5} r_{i3}^{a5}"));
+  std::vector<Index> tgt3{Index{L"i_1"}, Index{L"i_2"}, Index{L"i_3"}};
+  auto adj_hyper = o::contractible_adjacency(hyper, tgt3);
+  CHECK(edge_count(adj_hyper) == 3);
+
+  // Spectator-only: two tensors share only the target index i1 -> no edges.
+  auto spec = net_of(parse(L"u_{i1}^{a1} v_{i1}^{a2}"));
+  std::vector<Index> tgt_spec{Index{L"i_1"}, Index{L"a_1"}, Index{L"a_2"}};
+  auto adj_spec = o::contractible_adjacency(spec, tgt_spec);
+  CHECK(edge_count(adj_spec) == 0);
+
+  // Composite (CSV/PNO) indices: u and v carry DIFFERENT top-level composite
+  // indices (distinct base labels a vs g) that happen to share the SAME
+  // occupied protoindices {i1,i2}. contractible_adjacency only iterates
+  // top-level bra/ket/aux indices, so a1<i1,i2> and g1<i1,i2> are two
+  // distinct entries in the carrier map (different base label/space) even
+  // though their protoindices coincide; those shared protoindices i1,i2 are
+  // never themselves iterated as standalone indices, so no edge must form.
+  // Targets are the plain externals i3,i4 only -- neither the composite
+  // indices nor their protoindices are targets, so a zero edge count here is
+  // not merely an artifact of exclusion-via-target.
+  auto composite_diff = net_of(parse(L"u_{i3}^{a1<i1,i2>} v_{i4}^{g1<i1,i2>}"));
+  std::vector<Index> tgt_composite_diff{Index{L"i_3"}, Index{L"i_4"}};
+  auto adj_composite_diff =
+      o::contractible_adjacency(composite_diff, tgt_composite_diff);
+  CHECK(edge_count(adj_composite_diff) == 0);
+
+  // Positive control: u and v now genuinely share the SAME top-level
+  // composite index a1<i1,i2> (not merely the same protoindices), which
+  // must produce an edge. This confirms the zero count above is because the
+  // composites differ, not because composite indices can never be
+  // adjacency carriers at all.
+  auto composite_same = net_of(parse(L"u_{i5}^{a1<i1,i2>} v_{a1<i1,i2>}^{i6}"));
+  std::vector<Index> tgt_composite_same{Index{L"i_5"}, Index{L"i_6"}};
+  auto adj_composite_same =
+      o::contractible_adjacency(composite_same, tgt_composite_same);
+  CHECK(edge_count(adj_composite_same) == 1);
+}
+
+TEST_CASE("connected_subsets and outer_product_connectivity",
+          "[optimize][pruning]") {
+  using namespace sequant;
+  namespace o = sequant::opt::detail;
+
+  // Path 0-1-2 : adj[0]={1}, adj[1]={0,2}, adj[2]={1}.
+  container::vector<std::size_t> path{0b010, 0b101, 0b010};
+  auto c = o::connected_subsets(path, 3);
+  REQUIRE(c.size() == 8);
+  CHECK(c[0b001] == 1);  // singleton
+  CHECK(c[0b011] == 1);  // {0,1} share edge
+  CHECK(c[0b110] == 1);  // {1,2} share edge
+  CHECK(c[0b101] == 0);  // {0,2} NOT adjacent -> disconnected
+  CHECK(c[0b111] == 1);  // {0,1,2} connected via 1
+
+  // Two disjoint components {0,1} and {2,3}: full set disconnected.
+  container::vector<std::size_t> prod{0b0010, 0b0001, 0b1000, 0b0100};
+  auto cp = o::connected_subsets(prod, 4);
+  CHECK(cp[0b0011] == 1);  // {0,1}
+  CHECK(cp[0b1100] == 1);  // {2,3}
+  CHECK(cp[0b1111] == 0);  // full: disconnected product
+
+  // outer_product_connectivity: env-disabled -> all ones.
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  reg->retrieve_ptr(L"i")->approximate_size(10);
+  reg->retrieve_ptr(L"a")->approximate_size(100);
+  reg->retrieve_ptr(L"x")->approximate_size(4);
+  auto prod_expr = deserialize(L"f_{i1}^{a1} g_{a1}^{i2}",
+                               {.def_perm_symm = Symmetry::Antisymm});
+  container::vector<ExprPtr> v;
+  for (auto&& f : prod_expr->as<Product>().factors())
+    if (f->is<Tensor>()) v.push_back(f);
+  TensorNetwork tn{v};
+  std::vector<Index> tgt{Index{L"i_1"}, Index{L"i_2"}};
+  setenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING", "1", 1);
+  auto m_off = o::outer_product_connectivity(tn, tgt);
+  unsetenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING");
+  for (auto val : m_off) CHECK(val == 1);
+}
+
+TEST_CASE("outer-product pruning parity (pruned == unpruned)",
+          "[optimize][pruning]") {
+  using namespace sequant;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  reg->retrieve_ptr(L"i")->approximate_size(10);
+  reg->retrieve_ptr(L"a")->approximate_size(100);
+  reg->retrieve_ptr(L"x")->approximate_size(4);
+
+  auto opts_for = [&](ObjectiveFunction obj) {
+    OptimizeOptions o;
+    o.objective_function = obj;
+    o.idx_to_extent = [](Index const& ix) -> std::size_t {
+      return ix.nonnull() ? ix.space().approximate_size() : 1;
+    };
+    o.batch_policy.is_batchable_index = [](Index const&) { return false; };
+    o.batch_policy.batch_target_size = [](Index const&) -> std::size_t {
+      return 1;
+    };
+    return o;
+  };
+
+  std::vector<ObjectiveFunction> const objs{
+      ObjectiveFunction::DenseFLOPs, ObjectiveFunction::DenseSize,
+      ObjectiveFunction::DensePeakSize,
+      ObjectiveFunction::DensePeakSizeBatched};
+
+  std::vector<std::wstring> const terms{
+      L"1/4 g_{i2,i3}^{a2,a3} t_{a2,a3}^{i2,i3} t_{a1}^{i1}",
+      L"x_{i1,i2}^{a3,a4} y_{a1,a2}^{i1,i2} z_{a3,a4}^{a1,a2}",
+      L"g_{i1,i2}^{a1,a2} t_{a1}^{i1} t_{a2}^{i2} t_{a3}^{i3}",
+      // hyperedge-flavored: three tensors sharing a common summed index a5
+      L"p_{i1}^{a5} q_{i2}^{a5} r_{i3}^{a5} s_{a5}^{i4}",
+      // "star": g bridges both t's (whole network connected), but {t,t}
+      // shares no index, so the {t,t} subset is a genuinely prunable outer
+      // product. This is the fixture that actually exercises the pruning
+      // skip -- see the non-vacuousness guard below.
+      L"g_{i1,i2}^{a1,a2} t_{a1}^{i1} t_{a2}^{i2}",
+  };
+
+  // Non-vacuousness guard: the parity checks below only prove pruning is
+  // loss-free if the pruned DP actually skips subsets the unpruned DP visits.
+  // A fixture whose full network is disconnected falls back to an all-connected
+  // mask (pruning is a no-op), so parity would hold even with a broken skip.
+  // Assert that the "star" fixture yields a connected full network yet a
+  // disconnected proper subset -- i.e. its mask really does prune something.
+  {
+    namespace o = sequant::opt::detail;
+    unsetenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING");
+    auto star = deserialize(L"g_{i1,i2}^{a1,a2} t_{a1}^{i1} t_{a2}^{i2}",
+                            {.def_perm_symm = Symmetry::Antisymm});
+    container::vector<ExprPtr> sv;
+    for (auto&& f : star->as<Product>().factors())
+      if (f->is<Tensor>()) sv.push_back(f);
+    TensorNetwork star_tn{sv};
+    std::vector<Index> const star_tgt{};  // fully contracted -> empty target
+    auto star_mask = o::outer_product_connectivity(star_tn, star_tgt);
+    REQUIRE(star_mask.back() == 1);  // full network connected (not fallback)
+    bool has_pruned_subset = false;
+    for (auto v : star_mask)
+      if (v == 0) has_pruned_subset = true;
+    REQUIRE(has_pruned_subset);  // at least one subset is genuinely pruned
+  }
+
+  auto run = [&](std::wstring const& term, ObjectiveFunction obj, bool prune) {
+    if (prune)
+      unsetenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING");
+    else
+      setenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING", "1", 1);
+    auto expr = deserialize(term, {.def_perm_symm = Symmetry::Antisymm});
+    auto out = optimize(expr, opts_for(obj));
+    unsetenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING");
+    REQUIRE(out);
+    return to_latex(out);
+  };
+
+  for (std::size_t ti = 0; ti < terms.size(); ++ti)
+    for (auto obj : objs) {
+      auto pruned = run(terms[ti], obj, true);
+      auto unpruned = run(terms[ti], obj, false);
+      CAPTURE(ti, static_cast<int>(obj));
+      CHECK(pruned == unpruned);
+    }
+}
+
+TEST_CASE("prune_outer_products option controls pruning (default on)",
+          "[optimize][pruning]") {
+  using namespace sequant;
+  // The requirement: pruning is user-controllable and ON by default.
+  CHECK(OptimizeOptions{}.prune_outer_products == true);
+
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  reg->retrieve_ptr(L"i")->approximate_size(10);
+  reg->retrieve_ptr(L"a")->approximate_size(100);
+  reg->retrieve_ptr(L"x")->approximate_size(4);
+  // "star" term: g bridges two mutually-disconnected t's, so the {t,t} subset
+  // is a genuinely prunable outer product (the option's code path fires).
+  auto expr = deserialize(L"g_{i1,i2}^{a1,a2} t_{a1}^{i1} t_{a2}^{i2}",
+                          {.def_perm_symm = Symmetry::Antisymm});
+  auto opts_for = [&](bool prune) {
+    OptimizeOptions o;
+    o.objective_function = ObjectiveFunction::DensePeakSize;
+    o.idx_to_extent = [](Index const& ix) -> std::size_t {
+      return ix.nonnull() ? ix.space().approximate_size() : 1;
+    };
+    o.prune_outer_products = prune;
+    return o;
+  };
+  // Pruning is loss-free, so both option values give the same factorization.
+  auto with_prune = to_latex(optimize(expr, opts_for(true)));
+  auto no_prune = to_latex(optimize(expr, opts_for(false)));
+  CHECK(with_prune == no_prune);
+  // prune_outer_products == false must reproduce the env force-disable path.
+  setenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING", "1", 1);
+  auto env_disabled = to_latex(optimize(expr, opts_for(true)));
+  unsetenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING");
+  CHECK(no_prune == env_disabled);
+}
+
+// PeakBatchedModel's relax tie-break reads the precomputed per-subset atom
+// tables (Context::fast_flops) instead of rebuilding index sets and calling
+// flops_of per bipartition. fast_flops is loss-free by construction (atom IDs
+// in FullLabelCompare order => same multiply order as inner_aware_volume). Gate
+// that construction directly: for every connected bipartition of a composite
+// (PNO/OSV) term and a plain term, with and without inner_pow engaged,
+// fast_flops(lp, rp) must equal flops_of(idx[lp], idx[rp], idx[lp|rp]) exactly.
+TEST_CASE("fast_flops equals flops_of over all bipartitions (parity)",
+          "[optimize][fast-flops-parity]") {
+  using namespace sequant;
+  namespace o = opt::detail;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  mbpt::add_df_spaces(reg);
+  mbpt::add_pao_spaces(reg);
+  mbpt::add_ao_spaces(reg);
+  for (auto&& [k, v] :
+       std::initializer_list<std::pair<std::wstring_view, size_t>>{
+           {L"i", 10}, {L"a", 40}, {L"μ̃", 50}, {L"Κ", 90}})
+    reg->retrieve_ptr(k)->approximate_size(v);
+  auto idxsz = [](Index const& ix) -> std::size_t {
+    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+  };
+  auto is_batchable = [](Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  auto batch = [](Index const&) -> std::size_t { return 30; };
+
+  std::function<double(Index const&, std::size_t)> const ip_on =
+      [](Index const&, std::size_t) -> double { return 12.0; };
+  std::function<double(Index const&, std::size_t)> const ip_off = {};
+
+  bool composite_inner_checked = false;
+  for (std::wstring const term :
+       {std::wstring(L"g{μ̃1;μ̃2;Κ1} C{a1<i1>;μ̃1} C{μ̃2;a2<i1,i2>} t{a1<i1>;i1}"),
+        std::wstring(L"g{i1;a1;Κ1} g{i2;a2;Κ1} t{a1;i1} t{a2;i2}")}) {
+    for (auto const* ip : {&ip_on, &ip_off}) {
+      auto prod = deserialize(term)->as<Product>();
+      std::vector<ExprPtr> ts;
+      for (auto&& f : prod.factors())
+        if (f->is<Tensor>()) ts.push_back(f);
+      TensorNetwork net{ts};
+      container::svector<Index> const targets;
+      o::PeakBatchedModel<decltype(idxsz)> model{idxsz, is_batchable, batch,
+                                                 /*is_volatile_leaf=*/{}, *ip};
+      auto ctx = model.build_context(net, targets);
+      REQUIRE(ctx.use_fast_flops);
+      auto const connected = o::outer_product_connectivity(net, targets);
+      std::size_t const root = (std::size_t{1} << ts.size()) - 1;
+      bool checked_bipart = false;
+      for (std::size_t n = 1; n <= root; ++n) {
+        if (std::popcount(n) < 2 || !connected[n]) continue;
+        // enumerate every proper non-empty submask lp of n (rp = n ^ lp)
+        for (std::size_t lp = (n - 1) & n; lp; lp = (lp - 1) & n) {
+          std::size_t const rp = n ^ lp;
+          if (rp == 0 || !connected[lp] || !connected[rp]) continue;
+          checked_bipart = true;
+          double const fast = ctx.fast_flops(lp, rp);
+          double const slow =
+              ctx.flops_of(ctx.idx[lp], ctx.idx[rp], ctx.idx[n]);
+          CAPTURE(term, (ip == &ip_on), n, lp, rp, fast, slow);
+          CHECK(fast == slow);  // bit-identical by construction
+          if (!ctx.f_inner[lp].empty() || !ctx.f_inner[rp].empty())
+            composite_inner_checked = true;
+        }
+      }
+      REQUIRE(checked_bipart);  // non-vacuous
+    }
+  }
+  // The composite term must actually exercise the inner (CSV/PNO) atom path.
+  REQUIRE(composite_inner_checked);
+}
+
+TEST_CASE("outer-product pruning: large connected term optimizes quickly",
+          "[optimize][pruning]") {
+  using namespace sequant;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  reg->retrieve_ptr(L"i")->approximate_size(10);
+  reg->retrieve_ptr(L"a")->approximate_size(100);
+  reg->retrieve_ptr(L"x")->approximate_size(4);
+  // A connected chain: each adjacent pair shares one summed index, so the whole
+  // term is one connected component. The pruned DP explores only connected
+  // subsets and finishes fast; the unpruned 3^n enumeration is far slower.
+  auto expr = deserialize(
+      L"g_{a0,a1}^{a2,a3} t_{a2}^{a4} t_{a3}^{a5} t_{a4}^{a6} t_{a5}^{a7} "
+      L"t_{a6}^{a8} t_{a7}^{a9} v_{a8,a9}^{a0,a1}",
+      {.def_perm_symm = Symmetry::Antisymm});
+  OptimizeOptions o;
+  o.objective_function = ObjectiveFunction::DensePeakSize;
+  o.idx_to_extent = [](Index const& ix) -> std::size_t {
+    return ix.nonnull() ? ix.space().approximate_size() : 1;
+  };
+  // Pruning ON (default): must complete (the assertion is that it returns).
+  auto out = optimize(expr, o);
+  CHECK(out);
+}
+
+TEST_CASE("outer-product pruning: multi-component product falls back unpruned",
+          "[optimize][pruning]") {
+  using namespace sequant;
+  namespace o = sequant::opt::detail;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  reg->retrieve_ptr(L"i")->approximate_size(10);
+  reg->retrieve_ptr(L"a")->approximate_size(100);
+  reg->retrieve_ptr(L"x")->approximate_size(4);
+  auto net_of = [](ExprPtr const& p) {
+    container::vector<ExprPtr> v;
+    for (auto&& f : p->as<Product>().factors())
+      if (f->is<Tensor>()) v.push_back(f);
+    return TensorNetwork{v};
+  };
+
+  // Two independent contractions sharing NO summed index: {f,g} over a1,
+  // {p,q} over a2. The full adjacency graph has two components.
+  auto prod = deserialize(L"f_{i1}^{a1} g_{a1}^{i2} p_{i3}^{a2} q_{a2}^{i4}",
+                          {.def_perm_symm = Symmetry::Antisymm});
+  auto tn = net_of(prod);
+  std::vector<Index> tgt{Index{L"i_1"}, Index{L"i_2"}, Index{L"i_3"},
+                         Index{L"i_4"}};
+  auto mask = o::outer_product_connectivity(tn, tgt);
+  for (auto v : mask) CHECK(v == 1);  // disconnected full net -> all-connected
+
+  // And optimize() on the product term must match the env-disabled result.
+  OptimizeOptions opt;
+  opt.objective_function = ObjectiveFunction::DenseFLOPs;
+  opt.idx_to_extent = [](Index const& ix) -> std::size_t {
+    return ix.nonnull() ? ix.space().approximate_size() : 1;
+  };
+  auto with = to_latex(optimize(prod, opt));
+  setenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING", "1", 1);
+  auto without = to_latex(optimize(prod, opt));
+  unsetenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING");
+  CHECK(with == without);
+}

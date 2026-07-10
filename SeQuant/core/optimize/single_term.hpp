@@ -72,6 +72,7 @@ EvalSequence single_term_opt(
   double const peak_flops_tolerance = cost.peak_flops_tolerance;
   double const accumulation_factor = cost.accumulation_factor;
   RooflineParams const& roofline = cost.roofline;
+  bool const prune_outer_products = cost.prune_outer_products;
   (void)is_volatile_leaf;
   (void)volatile_weight;
   (void)footprint_weight;
@@ -94,12 +95,17 @@ EvalSequence single_term_opt(
     (void)footprint_weight;  // peak objectives use the roofline tie-break
     // is_volatile_leaf / volatile_weight / roofline feed only the secondary
     // tie-break among equal-peak schedules (peak itself ignores them).
-    return run_single_term_opt(
-        PeakModel{idxsz, inner_pow, is_volatile_leaf, volatile_weight,
-                  roofline.machine_balance, roofline.fast_mem_elems,
-                  roofline.block_tiles, roofline.block_prefactor,
-                  peak_flops_tolerance},
-        network, tidxs);
+    PeakModel model{idxsz,
+                    inner_pow,
+                    is_volatile_leaf,
+                    volatile_weight,
+                    roofline.machine_balance,
+                    roofline.fast_mem_elems,
+                    roofline.block_tiles,
+                    roofline.block_prefactor,
+                    peak_flops_tolerance};
+    model.prune_outer_products = prune_outer_products;
+    return run_single_term_opt(model, network, tidxs);
   } else if constexpr (Metric == ObjectiveFunction::DensePeakSizeBatched) {
     SEQUANT_ASSERT(
         !subnet_cse &&
@@ -107,14 +113,21 @@ EvalSequence single_term_opt(
     (void)footprint_weight;  // peak objectives use the roofline tie-break
     // is_volatile_leaf gates batching; volatile_weight / roofline feed the
     // secondary tie-break among equal-peak schedules.
-    return run_single_term_opt(
-        PeakBatchedModel{idxsz, is_batchable_index, batch_target_size,
-                         is_volatile_leaf, inner_pow, volatile_weight,
-                         roofline.machine_balance, roofline.fast_mem_elems,
-                         roofline.block_tiles, roofline.block_prefactor,
-                         batch_persistent_only, peak_flops_tolerance,
-                         accumulation_factor},
-        network, tidxs);
+    PeakBatchedModel model{idxsz,
+                           is_batchable_index,
+                           batch_target_size,
+                           is_volatile_leaf,
+                           inner_pow,
+                           volatile_weight,
+                           roofline.machine_balance,
+                           roofline.fast_mem_elems,
+                           roofline.block_tiles,
+                           roofline.block_prefactor,
+                           batch_persistent_only,
+                           peak_flops_tolerance,
+                           accumulation_factor};
+    model.prune_outer_products = prune_outer_products;
+    return run_single_term_opt(model, network, tidxs);
   } else if constexpr (Metric == ObjectiveFunction::DenseFLOPs) {
     if (is_volatile_leaf && volatile_weight > 1.0) {
       size_t i = 0;
@@ -135,6 +148,7 @@ EvalSequence single_term_opt(
                         nr,
                         footprint_weight,
                         subnet_cse};
+    model.prune_outer_products = prune_outer_products;
     return run_single_term_opt(model, network, tidxs);
   } else {
     static_assert(Metric == ObjectiveFunction::DenseSize,
@@ -150,6 +164,7 @@ EvalSequence single_term_opt(
                         nr,
                         footprint_weight,
                         subnet_cse};
+    model.prune_outer_products = prune_outer_products;
     return run_single_term_opt(model, network, tidxs);
   }
 }

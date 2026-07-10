@@ -3,12 +3,16 @@
 
 #include "catch2_sequant.hpp"
 
+#include <SeQuant/core/binary_node.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/backends/btas/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/btas/result.hpp>
 #include <SeQuant/core/eval/eval.hpp>
+#include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <btas/btas.h>
 #include <btas/tensor_func.h>
@@ -144,6 +148,63 @@ class rand_tensor_yield {
       SEQUANT_ASSERT(false && "attempted access of non-existent tensor!");
     }
     return found->second;
+  }
+};
+
+// Like rand_tensor_yield but aux-aware: lays out tensor axes in full
+// bra-ket-aux order (const_braketaux_indices) and sizes indices by space,
+// including the batching space z. Used to evaluate expressions that carry an
+// auxiliary/batching hyperindex (Laplace-MP2 / THC style) end to end.
+template <typename Tensor_t>
+class aux_rand_tensor_yield {
+ private:
+  size_t const nocc_, nvirt_, nz_;
+  mutable std::map<std::wstring, sequant::ResultPtr> cache_;
+
+  static std::wstring key(sequant::Tensor const& t) {
+    // normalize away specific index ordinals within a space so a canonicalized
+    // leaf and the original deserialized tensor map to the same entry
+    return boost::regex_replace(
+        sequant::serialize(t.clone(), {.annot_symm = false}),
+        boost::wregex{L"([iaz])[↑↓]?_?\\d+"}, L"$1");
+  }
+
+  size_t extent(sequant::Index const& idx) const {
+    auto isr = sequant::get_default_context().index_space_registry();
+    if (idx.space() == isr->retrieve(L"i")) return nocc_;
+    if (idx.space() == isr->retrieve(L"a")) return nvirt_;
+    if (idx.space() == isr->retrieve(L"z")) return nz_;
+    SEQUANT_ASSERT(false && "aux_rand_tensor_yield: unsupported IndexSpace");
+    return 0;
+  }
+
+ public:
+  aux_rand_tensor_yield(size_t nocc, size_t nvirt, size_t nz)
+      : nocc_{nocc}, nvirt_{nvirt}, nz_{nz} {}
+
+  sequant::ResultPtr operator()(sequant::Tensor const& tnsr) const {
+    using namespace sequant;
+    auto const k = key(tnsr);
+    if (auto it = cache_.find(k); it != cache_.end()) return it->second;
+    auto rng = btas::Range{tnsr.const_braketaux_indices() |
+                           ranges::views::transform(
+                               [this](auto const& ix) { return extent(ix); }) |
+                           ranges::to_vector};
+    Tensor_t t{rng};
+    t.generate([]() { return static_cast<double>(std::rand()) / RAND_MAX; });
+    return cache_
+        .emplace(k, eval_result<ResultTensorBTAS<Tensor_t>>(std::move(t)))
+        .first->second;
+  }
+
+  sequant::ResultPtr operator()(
+      sequant::meta::can_evaluate auto const& node) const {
+    using namespace sequant;
+    if (node->result_type() == ResultType::Tensor)
+      return (*this)(node->expr()->template as<Tensor>());
+    SEQUANT_ASSERT(node->expr()->template is<Constant>());
+    return eval_result<ResultScalar<double>>(
+        node->as_constant().template value<double>());
   }
 };
 
@@ -508,4 +569,208 @@ TEST_CASE("eval_adjoint_complex_btas", "[eval_btas]") {
       CHECK(got.real() == Catch::Approx(expected.real()).margin(1e-12));
       CHECK(got.imag() == Catch::Approx(expected.imag()).margin(1e-12));
     }
+}
+
+// A high-order hyperindex is an index shared among MORE than two tensor slots.
+// When such an index is also *external* (named -- it survives into the result),
+// TensorNetworkV3::canonicalize_slots used to assert that every named-index
+// edge connects at most two vertices, so binarizing an expression carrying a
+// batching/auxiliary index across many factors threw. This reproduces the
+// Laplace-transform MP2 energy denominator, where the batching index z1 rides
+// in the aux slot of every factor and of the result E{;;z1}.
+//
+// NB This only exercises tree construction (what the reported failure did):
+// binarize<EvalExprBTAS>(deserialize<ResultExpr>(...)). Actually *evaluating*
+// the tree is a separate matter -- every node is a batched (Hadamard)
+// contraction over z1, which the BTAS backend's btas::contract (an index in
+// both operands is always summed, never batched) does not support.
+TEST_CASE("binarize_highorder_aux_hyperindex", "[eval_btas][hyperindex]") {
+  using namespace sequant;
+
+  // register the OBS AO space (μ) and the batching space (z) on top of the
+  // standard single-reference spaces
+  auto isr = mbpt::make_sr_spaces();
+  mbpt::add_ao_spaces(isr);        // μ (OBS AO)
+  mbpt::add_batching_spaces(isr);  // z (batching)
+  auto ctx_resetter =
+      set_scoped_default_context(Context{get_default_context()}.set(isr));
+
+  const std::wstring e_a_expr =
+      L"E{;;z1} = w{;;z1} * g{μ5,μ6;μ7,μ8;z1} * c{μ1;i1;z1} * ć{i1;μ5;z1} * "
+      L"d{μ7;μ3;z1} * c{μ2;i2;z1} * ć{i2;μ6;z1} * d{μ8;μ4;z1} * "
+      L"g{μ3,μ4;μ1,μ2;z1}"
+      L" - w{;;z1} * g{μ5,μ6;μ7,μ8;z1} * c{μ1;i1;z1} * ć{i1;μ5;z1} * "
+      L"d{μ7;μ3;z1} * c{μ2;i2;z1} * ć{i2;μ6;z1} * d{μ8;μ4;z1} * "
+      L"g{μ4,μ3;μ1,μ2;z1}";
+
+  auto res = deserialize<ResultExpr>(e_a_expr);
+
+  // the regression: this used to throw
+  //   SEQUANT_ASSERT(edge_it->vertex_count() == 2) in canonicalize_slots
+  REQUIRE_NOTHROW(binarize<EvalExprBTAS>(res));
+  auto node = binarize<EvalExprBTAS>(res);
+
+  const auto z1 = Index{L"z_1"};
+  auto has_aux_z1 = [&z1](Tensor const& t) {
+    return ranges::any_of(t.aux(), [&z1](Index const& ix) { return ix == z1; });
+  };
+
+  // the result carries z1 in its (only) aux slot ...
+  REQUIRE(node->is_tensor());
+  CHECK(node->as_tensor().aux_rank() == 1);
+  CHECK(has_aux_z1(node->as_tensor()));
+
+  // ... and z1 rides in the aux slot of every tensor node of the tree (leaves
+  // and contraction intermediates alike): the batching index is never
+  // contracted away.
+  std::size_t tensor_nodes = 0;
+  node.visit(
+      [&](auto const& n) {
+        if (n->is_tensor()) {
+          ++tensor_nodes;
+          CHECK(has_aux_z1(n->as_tensor()));
+        }
+      },
+      TreeTraversal::PreOrder);
+  // 9 leaves + 8 contraction intermediates per summand, plus the sum head and
+  // the (-1) scaling node -- comfortably more than a handful of tensor nodes.
+  CHECK(tensor_nodes > 10);
+}
+
+// Directly exercises ResultTensorBTAS::prod on a contraction that carries a
+// batch (Hadamard) axis -- a label shared by both operands AND the result. A
+// plain btas::contract cannot express one (it always sums an index common to
+// both operands), so prod() detects the batch axis and slices over it. Every
+// slice shape that batched_contract() must handle is covered: a genuine
+// contraction, a dot (result-remainder empty), and a scalar*tensor (one
+// operand-remainder empty).
+TEST_CASE("btas_batched_contract", "[eval_btas][hyperindex]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+
+  // arbitrary distinct annotation labels; x is the batch axis
+  const long a = 1, b = 2, k = 3, x = 9;
+  const std::size_t na = 2, nb = 4, nk = 3, nx = 5;
+
+  auto make = [](std::initializer_list<std::size_t> ext) {
+    BTensorD t{btas::Range{container::svector<std::size_t>{ext}}};
+    // deterministic, non-trivial fill: distinct value per element
+    double v = 0.0;
+    t.generate([&v]() { return (v += 1.0) / 7.0; });
+    return t;
+  };
+  auto annots = [](container::svector<long> l, container::svector<long> r,
+                   container::svector<long> c) {
+    return std::array<std::any, 3>{std::move(l), std::move(r), std::move(c)};
+  };
+  auto prod = [](BTensorD const& L, BTensorD const& R,
+                 std::array<std::any, 3> const& ann) {
+    ResultPtr lr = eval_result<ResultTensorBTAS<BTensorD>>(L);
+    ResultPtr rr = eval_result<ResultTensorBTAS<BTensorD>>(R);
+    return lr->prod(*rr, ann, DeNest::False)->get<BTensorD>();
+  };
+
+  SECTION("contraction + batch: L[a,k,x] R[k,b,x] -> C[a,b,x]") {
+    auto L = make({na, nk, nx}), R = make({nk, nb, nx});
+    auto C = prod(L, R, annots({a, k, x}, {k, b, x}, {a, b, x}));
+    REQUIRE(C.rank() == 3);
+    CHECK(C.extent(0) == na);
+    CHECK(C.extent(1) == nb);
+    CHECK(C.extent(2) == nx);
+    for (std::size_t ia = 0; ia < na; ++ia)
+      for (std::size_t ib = 0; ib < nb; ++ib)
+        for (std::size_t ix = 0; ix < nx; ++ix) {
+          double ref = 0.0;
+          for (std::size_t ik = 0; ik < nk; ++ik)
+            ref += L(ia, ik, ix) * R(ik, ib, ix);
+          CHECK(C(ia, ib, ix) == Catch::Approx(ref));
+        }
+  }
+
+  SECTION("dot + batch (empty result remainder): L[k,x] R[k,x] -> C[x]") {
+    auto L = make({nk, nx}), R = make({nk, nx});
+    auto C = prod(L, R, annots({k, x}, {k, x}, {x}));
+    REQUIRE(C.rank() == 1);
+    CHECK(C.extent(0) == nx);
+    for (std::size_t ix = 0; ix < nx; ++ix) {
+      double ref = 0.0;
+      for (std::size_t ik = 0; ik < nk; ++ik) ref += L(ik, ix) * R(ik, ix);
+      CHECK(C(ix) == Catch::Approx(ref));
+    }
+  }
+
+  SECTION("scalar*tensor + batch (empty operand remainder): L[x] R[b,x]") {
+    auto L = make({nx}), R = make({nb, nx});
+    auto C = prod(L, R, annots({x}, {b, x}, {b, x}));
+    REQUIRE(C.rank() == 2);
+    CHECK(C.extent(0) == nb);
+    CHECK(C.extent(1) == nx);
+    for (std::size_t ib = 0; ib < nb; ++ib)
+      for (std::size_t ix = 0; ix < nx; ++ix)
+        CHECK(C(ib, ix) == Catch::Approx(L(ix) * R(ib, ix)));
+  }
+
+  SECTION(
+      "result axis order differs from [batch,rest]: L[a,x] R[b,x] -> "
+      "C[x,a,b]") {
+    auto L = make({na, nx}), R = make({nb, nx});
+    auto C = prod(L, R, annots({a, x}, {b, x}, {x, a, b}));
+    REQUIRE(C.rank() == 3);
+    CHECK(C.extent(0) == nx);
+    CHECK(C.extent(1) == na);
+    CHECK(C.extent(2) == nb);
+    for (std::size_t ix = 0; ix < nx; ++ix)
+      for (std::size_t ia = 0; ia < na; ++ia)
+        for (std::size_t ib = 0; ib < nb; ++ib)
+          CHECK(C(ix, ia, ib) == Catch::Approx(L(ia, ix) * R(ib, ix)));
+  }
+}
+
+// End-to-end through binarize + evaluate: a batched-over-aux contraction whose
+// batching index z1 is shared by 3 tensors (the >2-tensor case the TNv3 fix
+// unlocks) and carried into the result. Every contraction node evaluates via
+// the batched prod() path, and the answer must match a hand-computed reference.
+//   R{;;z1} = A{;a1;z1} * B{a1;a2;z1} * C{a2;;z1}
+//   R[z] = sum_{a1,a2} A[a1,z] * B[a1,a2,z] * C[a2,z]
+TEST_CASE("eval_btas_batched_over_aux", "[eval_btas][hyperindex]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+
+  auto isr = mbpt::make_sr_spaces();
+  mbpt::add_batching_spaces(isr);  // z
+  auto ctx_resetter =
+      set_scoped_default_context(Context{get_default_context()}.set(isr));
+
+  // Nonsymm so bra<->ket orientation is never folded by canonicalization: the
+  // leaf identities (hence the yielder cache keys) stay put.
+  const io::serialization::DeserializationOptions opts{
+      .def_perm_symm = Symmetry::Nonsymm,
+      .def_braket_symm = BraKetSymmetry::Nonsymm};
+
+  std::srand(42);
+  const size_t nocc = 2, nvirt = 3, nz = 5;
+  aux_rand_tensor_yield<BTensorD> yield_{nocc, nvirt, nz};
+
+  auto res = deserialize<ResultExpr>(
+      L"R{;;z1} = A{;a1;z1} * B{a1;a2;z1} * C{a2;;z1}", opts);
+  auto node = binarize<EvalExprBTAS>(res);
+
+  auto got = evaluate(node, node->annot(), yield_)->get<BTensorD>();
+  REQUIRE(got.rank() == 1);
+  REQUIRE(got.extent(0) == nz);
+
+  auto leaf = [&](std::wstring_view s) -> BTensorD const& {
+    return yield_(deserialize<ExprPtr>(s, opts)->as<Tensor>())->get<BTensorD>();
+  };
+  auto const& A = leaf(L"A{;a1;z1}");    // [a1, z]
+  auto const& B = leaf(L"B{a1;a2;z1}");  // [a1, a2, z]
+  auto const& C = leaf(L"C{a2;;z1}");    // [a2, z]
+
+  for (size_t z = 0; z < nz; ++z) {
+    double ref = 0.0;
+    for (size_t a1 = 0; a1 < nvirt; ++a1)
+      for (size_t a2 = 0; a2 < nvirt; ++a2)
+        ref += A(a1, z) * B(a1, a2, z) * C(a2, z);
+    CHECK(got(z) == Catch::Approx(ref));
+  }
 }
