@@ -45,7 +45,7 @@ Config load_config(const json& d) {
   if (d.contains("context")) {
     const auto& ctx = d.at("context");
     c.spinor = ctx.value("spbasis", std::string("spinor")) == "spinor";
-    const auto field = ctx.value("field", std::string("complex"));
+    const auto field = ctx.value("field", std::string("real"));
     if (field != "real" && field != "complex")
       throw std::runtime_error("unknown field (want real|complex): " + field);
     c.real_field = field == "real";

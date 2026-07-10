@@ -1,5 +1,5 @@
 {
-  "context": { "spbasis": "spinor", "convention": "sr", "aux": ["df"] },
+  "context": { "spbasis": "spinor", "field": "complex", "convention": "sr", "aux": ["df"] },
   "sizes": { "i": 10, "a": 38, "Κ": 400 },
   "optimize": { "objective": "dense_flops", "reorder": true, "volatile_leaf": "R" },
   "cache": { "enabled": true, "min_repeats": 2 },

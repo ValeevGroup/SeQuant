@@ -30,7 +30,7 @@ to the driver's own directory.
 | Block | Key | Meaning | Default |
 |---|---|---|---|
 | `context` | `spbasis` | `spinor` or `spinfree` | `spinor` |
-| | `field` | `real` or `complex` | `complex` |
+| | `field` | `real` or `complex` | `real` |
 | | `convention` | registry: `min_sr`/`sr`/`mr`/`f12` | `sr` |
 | | `aux` | factorization spaces to register: `["df"]` (Κ) and/or `["thc"]` (L) | none |
 | `sizes` | `<label>` | approximate size per index space, e.g. `{"i": 10, "a": 38}` | — |

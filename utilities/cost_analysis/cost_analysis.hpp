@@ -51,8 +51,8 @@ struct ResultSpec {
 /// The parsed JSON driver.
 struct Config {
   bool spinor = true;
-  bool real_field = false;  // false -> Field::Complex (SeQuant default); the
-                            // field is a single global choice for a computation
+  bool real_field = true;  // true -> Field::Real (the utility's default); the
+                           // field is a single global choice for a computation
   std::string convention = "sr";  // standard registry: min_sr|sr|mr|f12
   std::vector<std::string>
       aux;  // extra factorization spaces to register so
