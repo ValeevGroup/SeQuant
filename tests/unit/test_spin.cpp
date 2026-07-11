@@ -2460,16 +2460,69 @@ TEST_CASE("triplet_triples_spintrace", "[spin][triplet]") {
   REQUIRE(st->is<Sum>());
   REQUIRE(st->size() > 0);
 
-  // doubles-only experiment knobs must be rejected at rank 3
+  // this toy's hash groups superpose several projector columns (the nonsymm
+  // R makes all 36 orbit slots nonzero), so the self-verifying compaction
+  // must refuse it rather than emit lossy equations
   REQUIRE_THROWS(closed_shell_EOM_triplet_spintrace(
       expr, {.method = BiorthogonalizationMethod::V2,
              .triplet_doubles_compact = true}));
+
+  // doubles-only experiment knobs must be rejected at rank 3
   REQUIRE_THROWS(closed_shell_EOM_triplet_spintrace(
       expr,
       {.method = BiorthogonalizationMethod::V2, .triplet_te_only = true}));
   REQUIRE_THROWS(closed_shell_EOM_triplet_spintrace(
       expr,
       {.method = BiorthogonalizationMethod::V2, .triplet_amp_no_swap = true}));
+}
+
+TEST_CASE("triplet_triples_reconstruct", "[spin][triplet]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  auto ctx = get_default_context();
+  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto _ = set_scoped_default_context(ctx);
+
+  // seed = one identity-op representative with an order-2 stabilizer (the
+  // paired swap of R's interchangeable columns 2,3), so its 36-slot-perm
+  // orbit has 14 distinct nonzero members -- the harder of the two group
+  // shapes of the R3 residual (the generic 28-member shape is covered by the
+  // triplet_triples_compact_probe integration run)
+  const ExprPtr seed =
+      ex<Constant>(ratio(-3, 8)) *
+      deserialize(
+          std::wstring(L"R{i_1,i_2,i_3;a_4,a_2,a_3} * g{a_4,a_5;i_4,a_1} * "
+                       L"t{i_4;a_5}"),
+          {.def_perm_symm = Symmetry::Nonsymm});
+  ExprPtr seed_sum = ex<Sum>(ExprPtrList{seed});
+
+  const container::svector<container::svector<Index>> ext_idxs{
+      {Index(L"i_1"), Index(L"a_1")},
+      {Index(L"i_2"), Index(L"a_2")},
+      {Index(L"i_3"), Index(L"a_3")}};
+
+  const ExprPtr full = triplet_triples_symbolic_reconstruct(seed_sum, ext_idxs);
+  REQUIRE(full->is<Sum>());
+  REQUIRE(full->size() == 14);
+
+  // compaction inverts the reconstruction: one kept term, equal to the seed
+  const ExprPtr compact = triplet_triples_maxcoeff_compact(full, ext_idxs);
+  REQUIRE(compact->is<Sum>());
+  REQUIRE(compact->size() == 1);
+  {
+    ExprPtr diff = compact->clone() - seed->clone();
+    canonicalize(diff);
+    simplify(diff);
+    REQUIRE(diff->size() == 0);
+  }
+
+  // and the round trip reproduces the full group
+  const ExprPtr recon = triplet_triples_symbolic_reconstruct(compact, ext_idxs);
+  ExprPtr diff = recon->clone() - full->clone();
+  canonicalize(diff);
+  simplify(diff);
+  REQUIRE(diff->size() == 0);
 }
 
 TEST_CASE("triplet_doubles_te_reconstruct", "[spin][triplet]") {

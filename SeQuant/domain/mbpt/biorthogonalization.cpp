@@ -788,6 +788,54 @@ TripletDoublesSwapLayouts triplet_doubles_swap_layouts(
           join(pair_swapped)};
 }
 
+namespace {
+
+// slot permutations of (a_1,a_2,a_3,i_1,i_2,i_3): (op order = 6 pairings x 3
+// T positions)
+// for layout generator and the symbolic triples compact/reconstruct.
+constexpr std::array<std::array<std::array<int, 6>, 2>, 18>
+    triplet_triples_slot_perms{{
+        {{{0, 1, 2, 3, 4, 5}, {0, 2, 1, 3, 5, 4}}},  // sigma=(a,b,c) t=0
+        {{{1, 0, 2, 4, 3, 5}, {1, 2, 0, 4, 5, 3}}},  // sigma=(a,b,c) t=1
+        {{{2, 0, 1, 5, 3, 4}, {2, 1, 0, 5, 4, 3}}},  // sigma=(a,b,c) t=2
+        {{{0, 2, 1, 3, 4, 5}, {0, 1, 2, 3, 5, 4}}},  // sigma=(a,c,b) t=0
+        {{{2, 0, 1, 4, 3, 5}, {2, 1, 0, 4, 5, 3}}},  // sigma=(a,c,b) t=1
+        {{{1, 0, 2, 5, 3, 4}, {1, 2, 0, 5, 4, 3}}},  // sigma=(a,c,b) t=2
+        {{{1, 0, 2, 3, 4, 5}, {1, 2, 0, 3, 5, 4}}},  // sigma=(b,a,c) t=0
+        {{{0, 1, 2, 4, 3, 5}, {0, 2, 1, 4, 5, 3}}},  // sigma=(b,a,c) t=1
+        {{{2, 1, 0, 5, 3, 4}, {2, 0, 1, 5, 4, 3}}},  // sigma=(b,a,c) t=2
+        {{{1, 2, 0, 3, 4, 5}, {1, 0, 2, 3, 5, 4}}},  // sigma=(b,c,a) t=0
+        {{{2, 1, 0, 4, 3, 5}, {2, 0, 1, 4, 5, 3}}},  // sigma=(b,c,a) t=1
+        {{{0, 1, 2, 5, 3, 4}, {0, 2, 1, 5, 4, 3}}},  // sigma=(b,c,a) t=2
+        {{{2, 0, 1, 3, 4, 5}, {2, 1, 0, 3, 5, 4}}},  // sigma=(c,a,b) t=0
+        {{{0, 2, 1, 4, 3, 5}, {0, 1, 2, 4, 5, 3}}},  // sigma=(c,a,b) t=1
+        {{{1, 2, 0, 5, 3, 4}, {1, 0, 2, 5, 4, 3}}},  // sigma=(c,a,b) t=2
+        {{{2, 1, 0, 3, 4, 5}, {2, 0, 1, 3, 5, 4}}},  // sigma=(c,b,a) t=0
+        {{{1, 2, 0, 4, 3, 5}, {1, 0, 2, 4, 5, 3}}},  // sigma=(c,b,a) t=1
+        {{{0, 2, 1, 5, 3, 4}, {0, 1, 2, 5, 4, 3}}},  // sigma=(c,b,a) t=2
+    }};
+
+// op weights x10 = the row of G * pinv(G) for the TEE matrix G
+// weights are
+// w10[m]/20 (null-space projector) and w10[m]/5 (metric NNS reconstruction).
+constexpr std::array<int, 18> triplet_triples_op_w10{
+    5, -1, -1, -1, 1, 1, -2, -2, 1, 0, 1, 0, 0, 0, 1, -2, 1, -2};
+
+// index relabeling map realizing one slot perm on the external bra/ket index
+// triples: b[n] -> b[perm[n]], k[n] -> k[perm[n+3] - 3]
+container::map<Index, Index> triplet_triples_slot_perm_map(
+    const std::array<Index, 3>& b, const std::array<Index, 3>& k,
+    const std::array<int, 6>& perm) {
+  container::map<Index, Index> m;
+  for (int n = 0; n != 3; ++n) {
+    if (perm[n] != n) m.emplace(b[n], b[perm[n]]);
+    if (perm[n + 3] != n + 3) m.emplace(k[n], k[perm[n + 3] - 3]);
+  }
+  return m;
+}
+
+}  // namespace
+
 TripletTriplesSwapLayouts triplet_triples_swap_layouts(
     std::string const& orig_layout) {
   std::vector<std::string> parts;
@@ -805,36 +853,13 @@ TripletTriplesSwapLayouts triplet_triples_swap_layouts(
   SEQUANT_ASSERT(parts.size() == 6 &&
                  "triplet_triples_swap_layouts expects a rank-6 layout");
 
-  // slot permutations of (a_1,a_2,a_3,i_1,i_2,i_3): (op order = 6 pairings x 3
-  // T positions)
-  static constexpr std::array<std::array<std::array<int, 6>, 2>, 18> perms{{
-      {{{0, 1, 2, 3, 4, 5}, {0, 2, 1, 3, 5, 4}}},  // sigma=(a,b,c) t=0
-      {{{1, 0, 2, 4, 3, 5}, {1, 2, 0, 4, 5, 3}}},  // sigma=(a,b,c) t=1
-      {{{2, 0, 1, 5, 3, 4}, {2, 1, 0, 5, 4, 3}}},  // sigma=(a,b,c) t=2
-      {{{0, 2, 1, 3, 4, 5}, {0, 1, 2, 3, 5, 4}}},  // sigma=(a,c,b) t=0
-      {{{2, 0, 1, 4, 3, 5}, {2, 1, 0, 4, 5, 3}}},  // sigma=(a,c,b) t=1
-      {{{1, 0, 2, 5, 3, 4}, {1, 2, 0, 5, 4, 3}}},  // sigma=(a,c,b) t=2
-      {{{1, 0, 2, 3, 4, 5}, {1, 2, 0, 3, 5, 4}}},  // sigma=(b,a,c) t=0
-      {{{0, 1, 2, 4, 3, 5}, {0, 2, 1, 4, 5, 3}}},  // sigma=(b,a,c) t=1
-      {{{2, 1, 0, 5, 3, 4}, {2, 0, 1, 5, 4, 3}}},  // sigma=(b,a,c) t=2
-      {{{1, 2, 0, 3, 4, 5}, {1, 0, 2, 3, 5, 4}}},  // sigma=(b,c,a) t=0
-      {{{2, 1, 0, 4, 3, 5}, {2, 0, 1, 4, 5, 3}}},  // sigma=(b,c,a) t=1
-      {{{0, 1, 2, 5, 3, 4}, {0, 2, 1, 5, 4, 3}}},  // sigma=(b,c,a) t=2
-      {{{2, 0, 1, 3, 4, 5}, {2, 1, 0, 3, 5, 4}}},  // sigma=(c,a,b) t=0
-      {{{0, 2, 1, 4, 3, 5}, {0, 1, 2, 4, 5, 3}}},  // sigma=(c,a,b) t=1
-      {{{1, 2, 0, 5, 3, 4}, {1, 0, 2, 5, 4, 3}}},  // sigma=(c,a,b) t=2
-      {{{2, 1, 0, 3, 4, 5}, {2, 0, 1, 3, 5, 4}}},  // sigma=(c,b,a) t=0
-      {{{1, 2, 0, 4, 3, 5}, {1, 0, 2, 4, 5, 3}}},  // sigma=(c,b,a) t=1
-      {{{0, 2, 1, 5, 3, 4}, {0, 1, 2, 5, 4, 3}}},  // sigma=(c,b,a) t=2
-  }};
-
   TripletTriplesSwapLayouts result;
   for (std::size_t m = 0; m != 18; ++m) {
     for (std::size_t r = 0; r != 2; ++r) {
       std::string ann;
       for (std::size_t s = 0; s != 6; ++s) {
         if (s) ann.push_back(',');
-        ann += parts[perms[m][r][s]];
+        ann += parts[triplet_triples_slot_perms[m][r][s]];
       }
       result.ops[m][r] = std::move(ann);
     }
@@ -1133,6 +1158,161 @@ ExprPtr triplet_doubles_te_symbolic_reconstruct(
     out.append(term);                                  // -2c representative
     out.append(transform_expr(term, bra_swap, half));  // c
     out.append(transform_expr(term, ket_swap, half));  // c
+  }
+
+  auto result = ex<Sum>(out);
+  simplify(result);
+  return result;
+}
+
+namespace {
+
+// standalone-canonical structure with unit scalar; the sign the
+// canonicalization produced is returned separately so callers can track
+// coefficients relative to a labeling-independent structure
+std::pair<ExprPtr, Product::scalar_type> canonical_unit_product(
+    const ExprPtr& t) {
+  auto out = t->clone();
+  out->as<Product>().scale(Product::scalar_type{1} /
+                           out->as<Product>().scalar());
+  canonicalize(out);
+  simplify(out);
+  const auto sign = out->as<Product>().scalar();
+  out->as<Product>().scale(Product::scalar_type{1} / sign);
+  return {std::move(out), sign};
+}
+
+}  // namespace
+
+ExprPtr triplet_triples_maxcoeff_compact(
+    ExprPtr expr,
+    const container::svector<container::svector<Index>>& ext_idxs) {
+  if (!expr->is<Sum>()) return expr;
+  if (ext_idxs.size() != 3) return expr;
+
+  auto work = expr->clone();
+  for (auto& term : *work) {
+    if (term->is<Product>())
+      term =
+          remove_tensor(term.as_shared_ptr<Product>(), reserved::symm_label());
+  }
+  canonicalize(work);
+  simplify(work);
+
+  // bin terms by network hash; each group is (a subset of) the 36-slot-perm
+  // orbit of any of its members
+  container::map<std::size_t, container::vector<ExprPtr>> groups;
+  for (const auto& term : *work) {
+    if (!term->is<Product>()) continue;
+    groups[product_network_hash(term)].push_back(term);
+  }
+
+  const std::array<Index, 3> b{get_bra_idx(ext_idxs.at(0)),
+                               get_bra_idx(ext_idxs.at(1)),
+                               get_bra_idx(ext_idxs.at(2))};
+  const std::array<Index, 3> k{get_ket_idx(ext_idxs.at(0)),
+                               get_ket_idx(ext_idxs.at(1)),
+                               get_ket_idx(ext_idxs.at(2))};
+
+  Sum compact;
+  for (const auto& [_, terms] : groups) {
+    // the max-|coeff| member is an identity-op representative (op weight 5
+    // dominates the w10 row; the tie between the two op-0 representatives is
+    // broken arbitrarily -- reconstruction regenerates both)
+    const ExprPtr* rep = &terms.front();
+    for (const auto& t : terms)
+      if (abs(t->as<Product>().scalar()) > abs((*rep)->as<Product>().scalar()))
+        rep = &t;
+    const auto [rep_unit, rep_sign] = canonical_unit_product(*rep);
+    const auto rep_coeff = (*rep)->as<Product>().scalar() * rep_sign;
+
+    // accumulate the reconstruction weights A[u] = sum_p w10[op(p)]/5 * s_p
+    // over the 36 slot-perm images u of the representative structure
+    container::map<std::size_t, Product::scalar_type> pred_weight;
+    for (std::size_t m = 0; m != 18; ++m) {
+      for (std::size_t r = 0; r != 2; ++r) {
+        const auto map = triplet_triples_slot_perm_map(
+            b, k, triplet_triples_slot_perms[m][r]);
+        ExprPtr t =
+            map.empty() ? rep_unit->clone() : transform_expr(rep_unit, map);
+        auto [u, s] = canonical_unit_product(t);
+        const auto w =
+            Product::scalar_type(ratio(triplet_triples_op_w10[m], 5)) * s;
+        if (auto it = pred_weight.find(u->hash_value());
+            it != pred_weight.end())
+          it->second += w;
+        else
+          pred_weight.emplace(u->hash_value(), w);
+      }
+    }
+
+    // the kept coefficient makes the uniform 36-perm reconstruction exact for
+    // the representative itself (A = 1 generic, 2 with an order-2 stabilizer)
+    const auto rep_weight = pred_weight.at(rep_unit->hash_value());
+    SEQUANT_ASSERT(rep_weight != Product::scalar_type(0));
+    const auto kept_coeff = rep_coeff / rep_weight;
+
+    // verify every member matches the single-representative prediction; a
+    // mismatch means the group superposes several projector columns (multiple
+    // raw preimages) and cannot be compacted losslessly to one term
+    std::size_t n_predicted_members = 0;
+    for (const auto& [h, w] : pred_weight)
+      if (w != Product::scalar_type(0)) ++n_predicted_members;
+    if (n_predicted_members != terms.size())
+      throw Exception(
+          "triplet_triples_maxcoeff_compact: hash group does not match the "
+          "single-representative orbit pattern; the residual cannot be "
+          "compacted losslessly");
+    for (const auto& t : terms) {
+      const auto [u, s] = canonical_unit_product(t);
+      const auto it = pred_weight.find(u->hash_value());
+      if (it == pred_weight.end() ||
+          t->as<Product>().scalar() * s != kept_coeff * it->second)
+        throw Exception(
+            "triplet_triples_maxcoeff_compact: hash group does not match the "
+            "single-representative orbit pattern; the residual cannot be "
+            "compacted losslessly");
+    }
+
+    auto kept = rep_unit->clone();
+    kept->as<Product>().scale(kept_coeff);
+    compact.append(std::move(kept));
+  }
+  return ex<Sum>(compact);
+}
+
+ExprPtr triplet_triples_symbolic_reconstruct(
+    ExprPtr compact_expr,
+    const container::svector<container::svector<Index>>& ext_idxs) {
+  if (!compact_expr->is<Sum>()) return compact_expr;
+  if (ext_idxs.size() != 3) return compact_expr;
+
+  const std::array<Index, 3> b{get_bra_idx(ext_idxs.at(0)),
+                               get_bra_idx(ext_idxs.at(1)),
+                               get_bra_idx(ext_idxs.at(2))};
+  const std::array<Index, 3> k{get_ket_idx(ext_idxs.at(0)),
+                               get_ket_idx(ext_idxs.at(1)),
+                               get_ket_idx(ext_idxs.at(2))};
+
+  // uniform 36-perm sum at the identity-normalized metric weights w10[m]/5
+  Sum out;
+  for (const auto& term : *compact_expr) {
+    if (!term->is<Product>()) {
+      out.append(term);
+      continue;
+    }
+    for (std::size_t m = 0; m != 18; ++m) {
+      if (triplet_triples_op_w10[m] == 0) continue;
+      const auto w = ratio(triplet_triples_op_w10[m], 5);
+      for (std::size_t r = 0; r != 2; ++r) {
+        const auto map = triplet_triples_slot_perm_map(
+            b, k, triplet_triples_slot_perms[m][r]);
+        if (map.empty())
+          out.append(w == 1 ? term : ex<Constant>(w) * term);
+        else
+          out.append(transform_expr(term, map, w));
+      }
+    }
   }
 
   auto result = ex<Sum>(out);

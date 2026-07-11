@@ -2484,10 +2484,6 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
       throw Exception(
           "closed_shell_EOM_triplet_spintrace: te_only/ter_only are "
           "doubles-only experiments, not implemented for triples");
-    if (options.triplet_doubles_compact)
-      throw Exception(
-          "closed_shell_EOM_triplet_spintrace: compact triplet equations are "
-          "not yet implemented for triples; use the full paper metric");
     const auto& g0 = ext_idxs.at(0);
     const auto& g1 = ext_idxs.at(1);
     const auto& g2 = ext_idxs.at(2);
@@ -2513,6 +2509,16 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
     }
     triplet = triplet_triples_paper_combined_residual(
         triplet, whole_pair_swap(g0, g1), whole_pair_swap(g0, g2), ket_swap_12);
+    // the combined residual is a Constant*Sum Product;
+    // triplet_triples_maxcoeff_compact only acts on a top-level Sum.
+    simplify(triplet);
+    if (options.triplet_doubles_compact)
+      // Keep one 36-slot-perm-orbit representative per hash group, scaled by
+      // the inverse stabilizer order, so the dropped terms can be rebuilt
+      // exactly (triplet_triples_symbolic_reconstruct, or the w10[m]/5
+      // 36-perm reconstruction of triplet_triples_nns_project on the tensor
+      // side).
+      triplet = triplet_triples_maxcoeff_compact(triplet, ext_groups);
   }
   simplify(triplet);
   std::wcout << "closed_shell_EOM_triplet_spintrace size: " << triplet->size()

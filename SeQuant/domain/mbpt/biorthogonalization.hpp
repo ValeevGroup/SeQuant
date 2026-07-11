@@ -164,6 +164,30 @@ struct TripletTriplesSwapLayouts {
     ExprPtr compact_expr,
     const container::svector<container::svector<Index>>& ext_idxs);
 
+/// @brief Lossless compaction of the closed-shell triplet R3 residual: keep one
+/// term per tensor-network hash, choosing the largest-|coefficient| member of
+/// each group. Each group is the 36-slot-perm orbit of any of its members with
+/// coefficients c * w10[op]/10 (w10 = {5,-1,-1,-1,1,1,-2,-2,1,0,1,0,0,0,1,-2,
+/// 1,-2}, the triplet_triples_nullspace_project op row), so the kept member is
+/// an identity-op representative (weight 5; the tie between the two op-0
+/// representatives is broken arbitrarily -- reconstruction regenerates both).
+/// The kept coefficient is divided by the order (1 or 2) of the term's
+/// stabilizer within the 36 slot perms so that the uniform 36-perm sum of
+/// triplet_triples_symbolic_reconstruct / triplet_triples_nns_project is
+/// exact. Only applies when @p ext_idxs.size() == 3.
+[[nodiscard]] ExprPtr triplet_triples_maxcoeff_compact(
+    ExprPtr expr,
+    const container::svector<container::svector<Index>>& ext_idxs);
+
+/// @brief Symbolic inverse of triplet_triples_maxcoeff_compact: rebuild the
+/// full residual by summing, over all 36 external slot permutations, the
+/// relabeled kept terms weighted by w10[op]/5 (identity-normalized: 4x the
+/// idempotent null-space row w10[op]/20 of triplet_triples_nullspace_project).
+/// Only applies when @p ext_idxs.size() == 3.
+[[nodiscard]] ExprPtr triplet_triples_symbolic_reconstruct(
+    ExprPtr compact_expr,
+    const container::svector<container::svector<Index>>& ext_idxs);
+
 /// @brief Performs biorthogonal transformation with factored out NNS projector
 /// @details Applies biorthogonal transformation. When factor_out_nns_projector
 /// is true (default), factors out the NNS projector by applying additional
@@ -632,18 +656,20 @@ auto triplet_doubles_nullspace_project(TA::DistArray<Args...> const& arr,
   return triplet_doubles_nullspace_project_ta(arr, orig_layout);
 }
 
-/// @brief Idempotent null-space projector for triplet R3: the rank-6 analogue
-/// of triplet_doubles_nullspace_project. Combines the 36 slot permutations of
-/// the array (two representatives per 18-op orbit member, each at half the op
-/// weight) with the op weights (1/10) * {5,-1,-1, -1,1,1, -2,-2,1, 0,1,0,
-/// 0,0,1, -2,1,-2} = the row of G * pinv(G) for the TEE Gram matrix G
-/// (tools/triplet_triples_check.py, check 5). Apply to the Davidson trial R3
-/// each iteration to keep it in the physical (non-null) subspace.
+namespace detail {
+
+/// @brief Weighted sum over the 36 slot permutations of a rank-6 array with
+/// per-representative weights w10[m] / @p per_rep_denom, w10 = {5,-1,-1,
+/// -1,1,1, -2,-2,1, 0,1,0, 0,0,1, -2,1,-2} = 10x the op row of G * pinv(G)
+/// for the TEE Gram matrix G (tools/triplet_triples_check.py, check 5). Each
+/// op weight is carried by its two representatives, so the idempotent
+/// null-space projector (op weight w10[m]/10) uses per_rep_denom = 20 and the
+/// identity-normalized metric NNS reconstruction (4x) uses per_rep_denom = 5.
 template <typename... Args>
-auto triplet_triples_nullspace_project_ta(TA::DistArray<Args...> const& arr,
-                                          std::string const& orig_layout) {
+auto triplet_triples_orbit_combine_ta(TA::DistArray<Args...> const& arr,
+                                      std::string const& orig_layout,
+                                      int per_rep_denom) {
   using numeric_type = typename TA::DistArray<Args...>::numeric_type;
-  if (arr.trange().rank() != 6) return arr;
   const auto layouts = triplet_triples_swap_layouts(orig_layout);
   static constexpr std::array<int, 18> w10{5, -1, -1, -1, 1, 1, -2, -2, 1,
                                            0, 1,  0,  0,  0, 1, -2, 1,  -2};
@@ -651,8 +677,7 @@ auto triplet_triples_nullspace_project_ta(TA::DistArray<Args...> const& arr,
   bool first = true;
   for (std::size_t m = 0; m != 18; ++m) {
     if (w10[m] == 0) continue;
-    // each op weight w10[m]/10 is split evenly over its two representatives
-    const auto w = numeric_type(w10[m]) / numeric_type(20);
+    const auto w = numeric_type(w10[m]) / numeric_type(per_rep_denom);
     for (std::size_t r = 0; r != 2; ++r) {
       if (first) {
         result(orig_layout) = w * arr(layouts.ops[m][r]);
@@ -667,10 +692,47 @@ auto triplet_triples_nullspace_project_ta(TA::DistArray<Args...> const& arr,
   return result;
 }
 
+}  // namespace detail
+
+/// @brief Idempotent null-space projector for triplet R3: the rank-6 analogue
+/// of triplet_doubles_nullspace_project. Combines the 36 slot permutations of
+/// the array (two representatives per 18-op orbit member, each at half the op
+/// weight) with the op weights (1/10) * {5,-1,-1, -1,1,1, -2,-2,1, 0,1,0,
+/// 0,0,1, -2,1,-2} = the row of G * pinv(G) for the TEE Gram matrix G
+/// (tools/triplet_triples_check.py, check 5). Apply to the Davidson trial R3
+/// each iteration to keep it in the physical (non-null) subspace.
+template <typename... Args>
+auto triplet_triples_nullspace_project_ta(TA::DistArray<Args...> const& arr,
+                                          std::string const& orig_layout) {
+  if (arr.trange().rank() != 6) return arr;
+  return detail::triplet_triples_orbit_combine_ta<Args...>(arr, orig_layout,
+                                                           20);
+}
+
 template <typename... Args>
 auto triplet_triples_nullspace_project(TA::DistArray<Args...> const& arr,
                                        std::string const& orig_layout) {
   return triplet_triples_nullspace_project_ta(arr, orig_layout);
+}
+
+/// @brief Metric NNS reconstruction for compact triplet R3 residuals: rebuilds
+/// the full residual from the compact (identity-op, stabilizer-scaled)
+/// representatives kept by triplet_triples_maxcoeff_compact via the 36 slot
+/// permutations at weights w10[m]/5 each, i.e. 4 *
+/// triplet_triples_nullspace_project. Numerical analogue of
+/// triplet_triples_symbolic_reconstruct; apply to the H*R residual when the
+/// compact equations were evaluated.
+template <typename... Args>
+auto triplet_triples_nns_project_ta(TA::DistArray<Args...> const& arr,
+                                    std::string const& orig_layout) {
+  if (arr.trange().rank() != 6) return arr;
+  return detail::triplet_triples_orbit_combine_ta<Args...>(arr, orig_layout, 5);
+}
+
+template <typename... Args>
+auto triplet_triples_nns_project(TA::DistArray<Args...> const& arr,
+                                 std::string const& orig_layout) {
+  return triplet_triples_nns_project_ta(arr, orig_layout);
 }
 
 /// @brief Bare-TE undo-compact for compact triplet R2 residuals: rebuilds the
