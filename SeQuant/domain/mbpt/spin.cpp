@@ -2314,9 +2314,38 @@ ExprPtr triplet_adapt_amplitudes(const ExprPtr& spin_labeled,
         channel->append(ex<Constant>(same_spin ? s0 : -s0) *
                         ex<Tensor>(std::move(swapped)));
         out->append(1, ExprPtr(channel), Product::Flatten::No);
+      } else if (rank == 3) {
+        SEQUANT_ASSERT(t.symmetry() == Symmetry::Nonsymm);
+        if (amp_no_swap)
+          throw Exception(
+              "triplet_adapt_amplitudes: ter_only/amp_no_swap is a "
+              "doubles-only experiment, not implemented for triples");
+        // R3 = sum over labels of r * T(c0) E(c1) E(c2) (T rides column 0).
+        // In a fixed external spin sector the spin-orbital amplitude collects
+        // all 6 column-pair permutations of R, each weighted by the spin sign
+        // of the column that lands in R's first (T-carrying) slot — the rank-3
+        // generalization of s0*R + s1*R_swap above.
+        // I might be able to use only 3 column-pairs to make the eqns more
+        // compact. Check it later.
+        constexpr std::array<std::array<int, 3>, 6> col_perms{
+            {{0, 1, 2}, {0, 2, 1}, {1, 0, 2}, {1, 2, 0}, {2, 0, 1}, {2, 1, 0}}};
+        auto channel = std::make_shared<Sum>();
+        for (const auto& p : col_perms) {
+          container::svector<Index> pbra{t.bra().at(p[0]), t.bra().at(p[1]),
+                                         t.bra().at(p[2])};
+          container::svector<Index> pket{t.ket().at(p[0]), t.ket().at(p[1]),
+                                         t.ket().at(p[2])};
+          Tensor permuted(t.label(), bra(std::move(pbra)), ket(std::move(pket)),
+                          t.aux(), Symmetry::Nonsymm, t.braket_symmetry(),
+                          ColumnSymmetry::Nonsymm);
+          channel->append(ex<Constant>(spin_line_sign(t.bra().at(p[0]))) *
+                          ex<Tensor>(std::move(permuted)));
+        }
+        out->append(1, ExprPtr(channel), Product::Flatten::No);
       } else {
         throw Exception(
-            "Triplet spin tracing EOM is implemented for singles and doubles ");
+            "Triplet spin tracing EOM is implemented for singles, doubles and "
+            "triples");
       }
     }
 
@@ -2355,6 +2384,20 @@ ExprPtr triplet_doubles_paper_combined_residual(
                      // paper has the factor.
 }
 
+// The 18 TEE ops (6 pairings x 3 T
+// positions) have rank 9. The minimal null-space-reduced
+// dual of TEE is : (1/80)[ 6 TEE - TEE_ps01 - TEE_ps02 + 2 TEE_ks12 ].
+ExprPtr triplet_triples_paper_combined_residual(
+    const ExprPtr& TEE, const container::map<Index, Index>& pair_swap_01,
+    const container::map<Index, Index>& pair_swap_02,
+    const container::map<Index, Index>& ket_swap_12) {
+  ExprPtr TEE_ps01 = transform_expr(TEE, pair_swap_01);
+  ExprPtr TEE_ps02 = transform_expr(TEE, pair_swap_02);
+  ExprPtr TEE_ks12 = transform_expr(TEE, ket_swap_12);
+  return ex<Constant>(ratio(1, 160)) * (ex<Constant>(6) * TEE - TEE_ps01 -
+                                        TEE_ps02 + ex<Constant>(2) * TEE_ks12);
+}
+
 }  // namespace
 
 ExprPtr closed_shell_EOM_triplet_spintrace(
@@ -2369,10 +2412,10 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
   }
 
   const auto n_ext = ext_idxs.size();
-  if (n_ext == 0 || n_ext > 2)
+  if (n_ext == 0 || n_ext > 3)
     throw Exception(
         "closed_shell_EOM_triplet_spintrace: the explicitly spin-coupled "
-        "triplet manifold is implemented for singles and doubles");
+        "triplet manifold is implemented for singles, doubles and triples");
 
   // spintrace_by_sector already called remove_spin_with_relabel on each sector.
   auto sectors = spintrace_by_sector(expr, ext_groups, /*triplet_R=*/true,
@@ -2408,7 +2451,7 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
         SEQUANT_ASSERT(false && "unreachable");
         abort();
     }
-  } else {  // n_ext == 2
+  } else if (n_ext == 2) {
     // paper orthonormal (1)/(2) channels (1/8) folded into one R2 residual
     const auto& g0 = ext_idxs.at(0);
     const auto& g1 = ext_idxs.at(1);
@@ -2436,6 +2479,40 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
       // te_only keeps the -2c member of each {c,c,-2c} group
       // (triplet_doubles_te_symbolic_reconstruct, or {1,-1/2,-1/2,0}).
       triplet = triplet_doubles_maxcoeff_compact(triplet, ext_groups);
+  } else {  // n_ext == 3
+    if (options.triplet_te_only || options.triplet_amp_no_swap)
+      throw Exception(
+          "closed_shell_EOM_triplet_spintrace: te_only/ter_only are "
+          "doubles-only experiments, not implemented for triples");
+    if (options.triplet_doubles_compact)
+      throw Exception(
+          "closed_shell_EOM_triplet_spintrace: compact triplet equations are "
+          "not yet implemented for triples; use the full paper metric");
+    const auto& g0 = ext_idxs.at(0);
+    const auto& g1 = ext_idxs.at(1);
+    const auto& g2 = ext_idxs.at(2);
+    SEQUANT_ASSERT(g0.size() == 2 && g1.size() == 2 && g2.size() == 2);
+    auto whole_pair_swap = [](const auto& ga, const auto& gb) {
+      container::map<Index, Index> m;
+      const Index ba = get_bra_idx(ga);
+      const Index bb = get_bra_idx(gb);
+      const Index ka = get_ket_idx(ga);
+      const Index kb = get_ket_idx(gb);
+      m.emplace(ba, bb);
+      m.emplace(bb, ba);
+      m.emplace(ka, kb);
+      m.emplace(kb, ka);
+      return m;
+    };
+    container::map<Index, Index> ket_swap_12;
+    {
+      const Index k1 = get_ket_idx(g1);
+      const Index k2 = get_ket_idx(g2);
+      ket_swap_12.emplace(k1, k2);
+      ket_swap_12.emplace(k2, k1);
+    }
+    triplet = triplet_triples_paper_combined_residual(
+        triplet, whole_pair_swap(g0, g1), whole_pair_swap(g0, g2), ket_swap_12);
   }
   simplify(triplet);
   std::wcout << "closed_shell_EOM_triplet_spintrace size: " << triplet->size()

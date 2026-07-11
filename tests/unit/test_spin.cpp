@@ -2411,6 +2411,67 @@ TEST_CASE("triplet_doubles_reconstruct", "[spin][triplet]") {
   REQUIRE(diff->size() == 0);
 }
 
+TEST_CASE("triplet_triples_swap_layouts", "[spin][triplet]") {
+  using namespace sequant::mbpt;
+
+  const auto layouts = triplet_triples_swap_layouts("a_1,a_2,a_3,i_1,i_2,i_3");
+
+  // op 0 = identity pairing, T on pair 0; its two representatives differ by
+  // the interchangeable E legs (joint swap of slots 2,3 in bra and ket)
+  REQUIRE(layouts.ops[0][0] == "a_1,a_2,a_3,i_1,i_2,i_3");
+  REQUIRE(layouts.ops[0][1] == "a_1,a_3,a_2,i_1,i_3,i_2");
+  // op 1 = identity pairing, T on pair 1 (= whole-pair swap of groups 0,1)
+  REQUIRE(layouts.ops[1][0] == "a_2,a_1,a_3,i_2,i_1,i_3");
+  REQUIRE(layouts.ops[1][1] == "a_2,a_3,a_1,i_2,i_3,i_1");
+  // op 3 = (jb)<->(kc)-swapped pairing, T on pair 0: ket-only and bra-only
+  // swaps of groups 1,2 are the two representatives of the same operator
+  REQUIRE(layouts.ops[3][0] == "a_1,a_3,a_2,i_1,i_2,i_3");
+  REQUIRE(layouts.ops[3][1] == "a_1,a_2,a_3,i_1,i_3,i_2");
+
+  // 36 layouts, all distinct (the 2:1 orbit cover uses every slot perm once)
+  std::vector<std::string> all;
+  for (const auto& op : layouts.ops)
+    for (const auto& ann : op) all.push_back(ann);
+  std::sort(all.begin(), all.end());
+  REQUIRE(std::adjacent_find(all.begin(), all.end()) == all.end());
+  REQUIRE(all.size() == 36);
+}
+
+TEST_CASE("triplet_triples_spintrace", "[spin][triplet]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  auto ctx = get_default_context();
+  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto _ = set_scoped_default_context(ctx);
+
+  // toy 3h3p EOM-like residual term: f contracted with R3, externals grouped
+  // (i_n, a_n) by the antisymmetrizer; enough to exercise the 8-sector trace,
+  // the 6-permutation rank-3 amplitude channels, and the
+  // (1/160)[6 - ps01 - ps02 + 2 ks12] residual combination end to end
+  auto expr =
+      deserialize(std::wstring(L"Â{i_1,i_2,i_3;a_1,a_2,a_3} * f{a_4;a_1} * "
+                               L"R{i_1,i_2,i_3;a_4,a_2,a_3}"),
+                  {.def_perm_symm = Symmetry::Nonsymm});
+
+  const auto st = closed_shell_EOM_triplet_spintrace(
+      expr, {.method = BiorthogonalizationMethod::V2});
+  REQUIRE(st);
+  REQUIRE(st->is<Sum>());
+  REQUIRE(st->size() > 0);
+
+  // doubles-only experiment knobs must be rejected at rank 3
+  REQUIRE_THROWS(closed_shell_EOM_triplet_spintrace(
+      expr, {.method = BiorthogonalizationMethod::V2,
+             .triplet_doubles_compact = true}));
+  REQUIRE_THROWS(closed_shell_EOM_triplet_spintrace(
+      expr,
+      {.method = BiorthogonalizationMethod::V2, .triplet_te_only = true}));
+  REQUIRE_THROWS(closed_shell_EOM_triplet_spintrace(
+      expr,
+      {.method = BiorthogonalizationMethod::V2, .triplet_amp_no_swap = true}));
+}
+
 TEST_CASE("triplet_doubles_te_reconstruct", "[spin][triplet]") {
   using namespace sequant;
   using namespace sequant::mbpt;

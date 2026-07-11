@@ -101,6 +101,21 @@ struct TripletDoublesSwapLayouts {
 [[nodiscard]] TripletDoublesSwapLayouts triplet_doubles_swap_layouts(
     std::string const& orig_layout);
 
+/// @brief Slot-permutation layouts of the triplet R3 (TEE) operator orbit.
+/// The orbit has 18 members (6 hole->virtual pairings x 3 T positions); the
+/// 36 independent (S3 virtual-slot x S3 hole-slot) permutations of a rank-6
+/// annotation cover it exactly 2:1 (the two E legs are interchangeable), so
+/// each op stores its two representative layouts. Op order and the
+/// representative table are fixed by tools/triplet_triples_check.py (check 5).
+struct TripletTriplesSwapLayouts {
+  std::array<std::array<std::string, 2>, 18> ops;
+};
+
+/// @brief Build the 18x2 orbit layouts from a rank-6 annotation
+/// (a_1,a_2,a_3,i_1,i_2,i_3).
+[[nodiscard]] TripletTriplesSwapLayouts triplet_triples_swap_layouts(
+    std::string const& orig_layout);
+
 /// @brief Hash filter for closed-shell triplet R2: keep one term per tensor-
 /// network hash, preferring the identity external-index layout (id swap) so
 /// numerical triplet_doubles_nns_project can recover the full metric residual.
@@ -615,6 +630,47 @@ template <typename... Args>
 auto triplet_doubles_nullspace_project(TA::DistArray<Args...> const& arr,
                                        std::string const& orig_layout) {
   return triplet_doubles_nullspace_project_ta(arr, orig_layout);
+}
+
+/// @brief Idempotent null-space projector for triplet R3: the rank-6 analogue
+/// of triplet_doubles_nullspace_project. Combines the 36 slot permutations of
+/// the array (two representatives per 18-op orbit member, each at half the op
+/// weight) with the op weights (1/10) * {5,-1,-1, -1,1,1, -2,-2,1, 0,1,0,
+/// 0,0,1, -2,1,-2} = the row of G * pinv(G) for the TEE Gram matrix G
+/// (tools/triplet_triples_check.py, check 5). Apply to the Davidson trial R3
+/// each iteration to keep it in the physical (non-null) subspace.
+template <typename... Args>
+auto triplet_triples_nullspace_project_ta(TA::DistArray<Args...> const& arr,
+                                          std::string const& orig_layout) {
+  using numeric_type = typename TA::DistArray<Args...>::numeric_type;
+  if (arr.trange().rank() != 6) return arr;
+  const auto layouts = triplet_triples_swap_layouts(orig_layout);
+  static constexpr std::array<int, 18> w10{5, -1, -1, -1, 1, 1, -2, -2, 1,
+                                           0, 1,  0,  0,  0, 1, -2, 1,  -2};
+  TA::DistArray<Args...> result;
+  bool first = true;
+  for (std::size_t m = 0; m != 18; ++m) {
+    if (w10[m] == 0) continue;
+    // each op weight w10[m]/10 is split evenly over its two representatives
+    const auto w = numeric_type(w10[m]) / numeric_type(20);
+    for (std::size_t r = 0; r != 2; ++r) {
+      if (first) {
+        result(orig_layout) = w * arr(layouts.ops[m][r]);
+        first = false;
+      } else {
+        result(orig_layout) += w * arr(layouts.ops[m][r]);
+      }
+    }
+  }
+  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
+  result.truncate();
+  return result;
+}
+
+template <typename... Args>
+auto triplet_triples_nullspace_project(TA::DistArray<Args...> const& arr,
+                                       std::string const& orig_layout) {
+  return triplet_triples_nullspace_project_ta(arr, orig_layout);
 }
 
 /// @brief Bare-TE undo-compact for compact triplet R2 residuals: rebuilds the

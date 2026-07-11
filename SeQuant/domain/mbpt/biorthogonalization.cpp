@@ -788,6 +788,60 @@ TripletDoublesSwapLayouts triplet_doubles_swap_layouts(
           join(pair_swapped)};
 }
 
+TripletTriplesSwapLayouts triplet_triples_swap_layouts(
+    std::string const& orig_layout) {
+  std::vector<std::string> parts;
+  parts.reserve(6);
+  std::string part;
+  for (char c : orig_layout) {
+    if (c == ',') {
+      parts.push_back(part);
+      part.clear();
+    } else if (c != ' ') {
+      part.push_back(c);
+    }
+  }
+  if (!part.empty()) parts.push_back(part);
+  SEQUANT_ASSERT(parts.size() == 6 &&
+                 "triplet_triples_swap_layouts expects a rank-6 layout");
+
+  // slot permutations of (a_1,a_2,a_3,i_1,i_2,i_3): (op order = 6 pairings x 3
+  // T positions)
+  static constexpr std::array<std::array<std::array<int, 6>, 2>, 18> perms{{
+      {{{0, 1, 2, 3, 4, 5}, {0, 2, 1, 3, 5, 4}}},  // sigma=(a,b,c) t=0
+      {{{1, 0, 2, 4, 3, 5}, {1, 2, 0, 4, 5, 3}}},  // sigma=(a,b,c) t=1
+      {{{2, 0, 1, 5, 3, 4}, {2, 1, 0, 5, 4, 3}}},  // sigma=(a,b,c) t=2
+      {{{0, 2, 1, 3, 4, 5}, {0, 1, 2, 3, 5, 4}}},  // sigma=(a,c,b) t=0
+      {{{2, 0, 1, 4, 3, 5}, {2, 1, 0, 4, 5, 3}}},  // sigma=(a,c,b) t=1
+      {{{1, 0, 2, 5, 3, 4}, {1, 2, 0, 5, 4, 3}}},  // sigma=(a,c,b) t=2
+      {{{1, 0, 2, 3, 4, 5}, {1, 2, 0, 3, 5, 4}}},  // sigma=(b,a,c) t=0
+      {{{0, 1, 2, 4, 3, 5}, {0, 2, 1, 4, 5, 3}}},  // sigma=(b,a,c) t=1
+      {{{2, 1, 0, 5, 3, 4}, {2, 0, 1, 5, 4, 3}}},  // sigma=(b,a,c) t=2
+      {{{1, 2, 0, 3, 4, 5}, {1, 0, 2, 3, 5, 4}}},  // sigma=(b,c,a) t=0
+      {{{2, 1, 0, 4, 3, 5}, {2, 0, 1, 4, 5, 3}}},  // sigma=(b,c,a) t=1
+      {{{0, 1, 2, 5, 3, 4}, {0, 2, 1, 5, 4, 3}}},  // sigma=(b,c,a) t=2
+      {{{2, 0, 1, 3, 4, 5}, {2, 1, 0, 3, 5, 4}}},  // sigma=(c,a,b) t=0
+      {{{0, 2, 1, 4, 3, 5}, {0, 1, 2, 4, 5, 3}}},  // sigma=(c,a,b) t=1
+      {{{1, 2, 0, 5, 3, 4}, {1, 0, 2, 5, 4, 3}}},  // sigma=(c,a,b) t=2
+      {{{2, 1, 0, 3, 4, 5}, {2, 0, 1, 3, 5, 4}}},  // sigma=(c,b,a) t=0
+      {{{1, 2, 0, 4, 3, 5}, {1, 0, 2, 4, 5, 3}}},  // sigma=(c,b,a) t=1
+      {{{0, 2, 1, 5, 3, 4}, {0, 1, 2, 5, 4, 3}}},  // sigma=(c,b,a) t=2
+  }};
+
+  TripletTriplesSwapLayouts result;
+  for (std::size_t m = 0; m != 18; ++m) {
+    for (std::size_t r = 0; r != 2; ++r) {
+      std::string ann;
+      for (std::size_t s = 0; s != 6; ++s) {
+        if (s) ann.push_back(',');
+        ann += parts[perms[m][r][s]];
+      }
+      result.ops[m][r] = std::move(ann);
+    }
+  }
+  return result;
+}
+
 ExprPtr triplet_doubles_hash_filter(
     ExprPtr expr,
     const container::svector<container::svector<Index>>& ext_idxs) {

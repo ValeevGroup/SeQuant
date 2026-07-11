@@ -767,13 +767,12 @@ class compute_eomcc_closedshell_triplet {
       }
 
       // ----- triplet: explicitly spin-coupled basis (Hattig/Kohn/Hald) -----
-      // the T (x) E coupled manifold is implemented through doubles only;
-      // higher-rank amplitudes/projections (N > 2) would require the triples
-      // coupling T (x) E (x) E
-      if (N > 2 || ext_groups.size() > 2) {
+      // doubles use the T (x) E coupling; triples the T (x) E (x) E coupling
+      // (18-op orbit, tools/triplet_triples_check.py)
+      if (N > 3 || ext_groups.size() > 3) {
         std::wcout << "R[" << i
                    << "] triplet: skipped (explicitly spin-coupled triplet "
-                      "manifold implemented through doubles only)\n";
+                      "manifold implemented through triples only)\n";
         cs_st_eom[i] = nullptr;
         continue;
       }
@@ -803,6 +802,61 @@ class compute_eomcc_closedshell_triplet {
         // singles: the rank-1 biorthogonal coefficient (1/2) coincides with
         // the singlet one
         T_ref = biorthogonal_transform_pre_nnsproject(V, ext_idxs);
+      } else if (ext_groups.size() == 3) {
+        // triples: P3 = (1/80)[6 V - V_ps01 - V_ps02 + 2 V_ks12] with an
+        // extra 1/2 (metric idempotency: 36 ordered labels cover the 18-op
+        // orbit 2:1) -> 1/160 (tools/triplet_triples_check.py, checks 2+6)
+        const auto& g0 = ext_idxs.at(0);
+        const auto& g1 = ext_idxs.at(1);
+        const auto& g2 = ext_idxs.at(2);
+        const std::array<Index, 3> b{get_bra_idx(g0), get_bra_idx(g1),
+                                     get_bra_idx(g2)};
+        const std::array<Index, 3> k{get_ket_idx(g0), get_ket_idx(g1),
+                                     get_ket_idx(g2)};
+        auto whole_pair_swap = [&](int m, int n) {
+          return container::map<Index, Index>{
+              {b[m], b[n]}, {b[n], b[m]}, {k[m], k[n]}, {k[n], k[m]}};
+        };
+        const container::map<Index, Index> ket_swap_12{{k[1], k[2]},
+                                                       {k[2], k[1]}};
+
+        // null-space identity: the sum over the whole 18-op orbit (as the 36
+        // independent bra x ket external permutations, a 2:1 cover) vanishes
+        // -- the rank-3 analog of V + V_ps + V_bs + V_ks = 0
+        {
+          constexpr std::array<std::array<int, 3>, 6> s3{{{0, 1, 2},
+                                                          {0, 2, 1},
+                                                          {1, 0, 2},
+                                                          {1, 2, 0},
+                                                          {2, 0, 1},
+                                                          {2, 1, 0}}};
+          auto orbit_sum = std::make_shared<Sum>();
+          for (const auto& pb : s3) {
+            for (const auto& pk : s3) {
+              container::map<Index, Index> m;
+              for (int n = 0; n != 3; ++n) {
+                if (pb[n] != n) m.emplace(b[n], b[pb[n]]);
+                if (pk[n] != n) m.emplace(k[n], k[pk[n]]);
+              }
+              orbit_sum->append(m.empty() ? V->clone() : transform_expr(V, m));
+            }
+          }
+          ExprPtr null_check = orbit_sum;
+          canonicalize(null_check);
+          simplify(null_check);
+          std::wcout << "R[" << i
+                     << "] triplet triples null-space identity (Σ 18-op "
+                        "orbit): "
+                     << term_count(null_check) << " terms (expect 0)\n";
+          runtime_assert(term_count(null_check) == 0);
+        }
+
+        ExprPtr V_ps01 = transform_expr(V, whole_pair_swap(0, 1));
+        ExprPtr V_ps02 = transform_expr(V, whole_pair_swap(0, 2));
+        ExprPtr V_ks12 = transform_expr(V, ket_swap_12);
+        T_ref =
+            ex<Constant>(ratio(1, 160)) *
+            (ex<Constant>(6) * V - V_ps01 - V_ps02 + ex<Constant>(2) * V_ks12);
       } else {
         // assemble the paper-native combined R2 residual (Eqs. 7-8, 1/8):
         //   V^{(1)} = (1/8)(V + V_{pair-swap}), V^{(2)} = (1/8)(V -
@@ -881,7 +935,10 @@ class compute_eomcc_closedshell_triplet {
                    << term_count(T_diff) << " terms (expect 0)\n";
         runtime_assert(term_count(T_diff) == 0);
 
-        if (ext_groups.size() == 2) {
+        // compact + te/ter experiment knobs are defined for the CCSD doubles
+        // study only; in an N >= 3 theory even the doubles residual contains
+        // rank-3 R amplitudes which those knobs do not support
+        if (ext_groups.size() == 2 && N <= 2) {
           auto compact = closed_shell_EOM_triplet_spintrace(
               eqvec[i], {.method = BiorthogonalizationMethod::V2,
                          .triplet_doubles_compact = true});
