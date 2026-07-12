@@ -1387,6 +1387,98 @@ template <typename F, typename IndexPredicate = accept_any_index,
     using member_t = std::pair<node_t const*, Index>;
     TreeNodeEqualityComparator<node_t> const eq;
 
+    // Classify the picked axis by AxisKind. K is a batch axis of `node`; the
+    // optimizer stamps it CONTRACTED (summed away -> block partials ACCUMULATE)
+    // or EXTERNAL (a spectator index free on the node's result -> block
+    // partials are DISJOINT slices, SCATTERED into a pre-sized result). The
+    // depth-0 heuristic fallback only ever yields a contracted index, so an
+    // axis absent from batch_axes() is Contracted -- keeping the
+    // Contracted-only path (no External entry) byte-identical to before this
+    // branch existed.
+    AxisKind picked_kind = AxisKind::Contracted;
+    for (auto const& [ix, knd] : node->batch_axes())
+      if (ix == K) {
+        picked_kind = knd;
+        break;
+      }
+
+    if (picked_kind == AxisKind::External) {
+      // SCATTER branch. K survives to node's result as a free spectator mode,
+      // so the per-block partials are disjoint slices of one result (not
+      // summands of a contraction): they are write_into_slice()d into a
+      // pre-sized result, never add_inplace()d. Inner batch axes -- of either
+      // kind, at this node or a descendant -- still nest through the same
+      // per-block reinstall the contracted path uses, so External composes with
+      // Contracted: within each external block the reinstalled evaluator slices
+      // any remaining axis (a contracted axis accumulates within the block, an
+      // inner external axis scatters into its own block-local result). K itself
+      // is not re-picked on the re-entry: le_g has sliced its carrier to this
+      // block, so the block yields a single batch on the sliced leaf and is
+      // skipped (same invariant as the contracted nesting).
+      auto const dest_mode = index_position(node, K);
+      SEQUANT_ASSERT(dest_mode &&
+                     "external batch axis is not free on the node's result");
+      auto const carrier = find_leaf_carrying(node, K);
+      SEQUANT_ASSERT(carrier && "no leaf carries the external batch axis");
+      // The unsliced carrier leaf supplies K's FULL tiling for pre-sizing.
+      ResultPtr const carrier_full = le(carrier->first);
+
+      // A single-node scratch: an external spectator axis is not a
+      // persistent-final sharing axis, so the group/replay machinery (which
+      // co-batches cross-term contracted finals) does not apply -- scatter just
+      // this node. The scratch still dedups repeats WITHIN the node's subtree.
+      std::vector<member_t> solo{{&node, K}};
+      auto bs = detail::make_batched_scratch(solo, cache);
+      for (auto const* s : bs.seeds) (void)bs.cache.store(*s, cache.access(*s));
+
+      auto const scope_guard = make_scope_guard(batches.size());
+      (void)scope_guard;
+
+      if (log::printing())
+        log::log("BatchScatter", "Begin",
+                 std::format("external axis over {} blocks", batches.size()));
+
+      ResultPtr dest;
+      for (auto const& [e_lo, e_hi] : batches) {
+        if (e_lo == e_hi) continue;
+        bs.cache.reset();
+        // Slice every leaf carrying K to this block; others pass through.
+        auto le_g = [&le, &K, e_lo = e_lo,
+                     e_hi = e_hi](auto const& leaf_node) -> ResultPtr {
+          ResultPtr r = le(leaf_node);
+          if (auto const p = index_position(leaf_node, K))
+            return r->slice_mode(*p, e_lo, e_hi);
+          return r;
+        };
+        // Reinstall on the scratch so inner axes nest WITHIN this block; le_g
+        // (already sliced to this block) is closed over so inner slices compose
+        // on top of the external one, exactly as the contracted path does.
+        bs.cache.set_custom_evaluator(make_batched_custom_evaluator(
+            std::function<ResultPtr(node_t const&)>{le_g}, target_batch_size,
+            accept, make_scope_guard, is_volatile, persistent_only, depth + 1,
+            peak));
+        ResultPtr part = evaluate(node, le_g, bs.cache);
+        // Pre-size on the first block (learns the result's non-axis extents and
+        // kind from the block partial; the external axis is widened to full).
+        if (!dest)
+          dest = part->pre_sized_zeros_over_mode(*dest_mode, *carrier_full,
+                                                 carrier->second);
+        dest->write_into_slice(*part, *dest_mode, e_lo, e_hi);
+
+        if (peak) {
+          const double cand =
+              static_cast<double>(bs.cache.working_set_hwmark());
+          double cur = peak->load(std::memory_order_relaxed);
+          while (cand > cur && !peak->compare_exchange_weak(
+                                   cur, cand, std::memory_order_relaxed)) {
+          }
+        }
+      }
+      if (log::printing()) log::log("BatchScatter", "End");
+      SEQUANT_ASSERT(dest);
+      return dest;
+    }
+
     // The replay group: the trigger plus every registered persistent key that
     // is not yet alive and batches over an axis with the identical realized
     // partition. All compatible persistent finals stream over the batch axis

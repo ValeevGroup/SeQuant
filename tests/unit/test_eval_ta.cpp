@@ -2539,6 +2539,124 @@ TEST_CASE("eval_batched_custom_evaluator nests two axes on one node",
   CHECK(state.live.empty());
 }
 
+TEST_CASE("batched_eval_external_axis_scatter", "[eval][batched-external]") {
+  // Task 5 exactness gate: a batch axis stamped EXTERNAL on a node is a
+  // spectator index that survives FREE onto the node's result (a Hadamard /
+  // batched-matmul mode present on every operand and the result, contracted at
+  // no node). The runtime must SCATTER the per-block partials into DISJOINT
+  // slices of a pre-sized result (write_into_slice), NOT accumulate them
+  // (add_inplace, correct only for a contracted axis). Because the blocks tile
+  // the axis without overlap, the scattered result equals the unbatched one
+  // EXACTLY -- a memory schedule, never an approximation.
+  //
+  // The spectator here is an AUXILIARY index x_1 rather than an occupied one
+  // only because canonicalize forbids a NON-auxiliary index shared among > 2
+  // tensor slots (no well-defined bra/ket slot type); a high-order aux
+  // hyperindex carried into the result IS supported. The runtime scatter
+  // mechanism under test is axis-agnostic -- occ vs aux matters only at the
+  // DP/cost level (covered by the [dryrun-occ-*] gates). Same rationale as
+  // "eval_forest_over_external_occ nests intra-term aux batching".
+  using sequant::evaluate;
+  using sequant::make_batched_custom_evaluator;
+  using TA::TArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+  using cache_t = sequant::CacheManager<node_t>;
+
+  auto& world = TA::get_default_world();
+  // virtual single-tiled (4); aux x multi-tiled (12 in tiles of 4 -> 3 tiles)
+  // so the external spectator axis genuinely partitions into > 1 block.
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, /*nocc=*/4,
+                                                    /*nvirt=*/4, /*naux=*/12};
+  yield_.set_max_tile(4);
+
+  // A flat, fully binary tree whose result carries aux x_1 as a pure spectator:
+  //   inner = g*h  -> {a_1, a_3, x_1}   (contracts a_2)
+  //   root  = inner*p -> {a_1, a_4, x_1} (contracts a_3)
+  // x_1 is present on g, h, p AND the result, contracted at no node; a_1, a_4
+  // are ordinary external modes. The ResultExpr LHS pins x_1 EXTERNAL (the
+  // ExprPtr binarize would instead infer it contracted); stamping x_1 External
+  // on the root and the inner node exercises the scatter branch at both levels.
+  auto const res_expr = sequant::deserialize<sequant::ResultExpr>(
+      L"R{a_1;a_4;x_1} = ((g{a_1;a_2;x_1} * h{a_2;a_3;x_1}) * p{a_3;a_4;x_1})");
+  auto node = eval_node(res_expr);  // mutable: External axis stamped below
+  std::string const target = node->annot();
+
+  auto const aux_space =
+      sequant::get_default_context().index_space_registry()->retrieve(L"x");
+  auto accept_aux = [aux_space](sequant::Index const& ix) {
+    return ix.space() == aux_space;
+  };
+
+  // The spectator axis x_1, taken from the node's free/result outer modes so
+  // the Index object matches the parsed one exactly (a plain outer mode, no
+  // protos).
+  sequant::Index axis;
+  for (auto const& ix : node->canon_indices())
+    if (accept_aux(ix) && !ix.has_proto_indices()) {
+      axis = ix;
+      break;
+    }
+  REQUIRE(axis.nonnull());
+  REQUIRE(sequant::index_position(node, axis).has_value());  // free on result
+
+  // Stamp External on the root AND the inner node (the axis appears free at
+  // both levels).
+  node->set_batch_axes({{axis, sequant::AxisKind::External}});
+  node_t* inner = nullptr;
+  auto find_inner = [&](auto&& self, node_t& n) -> void {
+    if (n.leaf()) return;
+    if (&n != &node && sequant::index_position(n, axis).has_value()) inner = &n;
+    self(self, n.left());
+    self(self, n.right());
+  };
+  find_inner(find_inner, node);
+  REQUIRE(inner != nullptr);
+  REQUIRE(sequant::index_position(*inner, axis).has_value());
+  (*inner)->set_batch_axes({{axis, sequant::AxisKind::External}});
+
+  // Reference: plain unbatched evaluation (batch_axes are ignored without a
+  // custom evaluator). Computed first so yield_'s random leaves are generated
+  // and cached, then reused by the batched run below.
+  auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
+  REQUIRE(TA::norm2(ref) > 0.0);  // guard: reference is nontrivially nonzero
+
+  // Spy scope-guard: records the block count each time the evaluator FIRES
+  // (picks an axis partitioning into > 1 block). A silently-ignored External
+  // stamp would never fire -- this is the RED/GREEN witness that the ON path
+  // actually blocked.
+  std::vector<std::size_t> guard_calls;
+  auto spy = [&guard_calls](std::size_t n) {
+    guard_calls.push_back(n);
+    return sequant::no_scope_guard{};
+  };
+
+  // Two block sizes, both strictly below x_1's extent (12): 4 -> 3 blocks,
+  // 8 -> 2 blocks. Exactness must hold for every partition.
+  for (std::size_t const target_batch_size : {std::size_t{4}, std::size_t{8}}) {
+    guard_calls.clear();
+    auto cache = cache_t::empty();
+    cache.set_custom_evaluator(make_batched_custom_evaluator(
+        yield_,
+        [target_batch_size](sequant::Index const&) -> std::size_t {
+          return target_batch_size;
+        },
+        accept_aux, spy, sequant::never_volatile{}));
+    auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
+
+    // Exactness: scattering disjoint blocks reconstructs the whole result.
+    TArrayD diff;
+    diff("i,j,k") = ref("i,j,k") - res("i,j,k");
+    REQUIRE(TA::norm2(diff) < 1e-12);
+
+    // The ON path blocked: the root fired at least once, partitioning into
+    // > 1 block (block size strictly less than x_1's extent).
+    REQUIRE_FALSE(guard_calls.empty());
+    for (auto const n : guard_calls) CHECK(n > 1);
+    std::size_t const expected_root_blocks = target_batch_size == 4 ? 3 : 2;
+    CHECK(guard_calls.front() == expected_root_blocks);
+  }
+}
+
 TEST_CASE(
     "eval_batched_custom_evaluator nested scope guards compose "
     "multiplicatively",

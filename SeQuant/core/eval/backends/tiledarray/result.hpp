@@ -484,6 +484,29 @@ class ResultTensorTA final : public Result {
     write_array_into_mode(dest, block.get<ArrayT>(), mode, tile_lo, tile_hi);
   }
 
+  [[nodiscard]] ResultPtr pre_sized_zeros_over_mode(
+      std::size_t mode, Result const& axis_src,
+      std::size_t axis_src_mode) const override {
+    SEQUANT_ASSERT(axis_src.is<this_type>());
+    auto const& self = get<ArrayT>();
+    auto const& src = axis_src.get<ArrayT>();
+    auto const rank = self.trange().rank();
+    SEQUANT_ASSERT(mode < rank);
+    SEQUANT_ASSERT(axis_src_mode < src.trange().rank());
+    // Take *this's outer trange but swap in the external axis's FULL tiling
+    // (from axis_src's mode axis_src_mode). Every other mode of a block partial
+    // is already full extent, so only the sliced axis needs widening.
+    std::vector<TA::TiledRange1> dims;
+    dims.reserve(rank);
+    for (std::size_t d = 0; d < rank; ++d) dims.push_back(self.trange().dim(d));
+    dims[mode] = src.trange().dim(axis_src_mode);
+    ArrayT dest(self.world(), TA::TiledRange(dims.begin(), dims.end()));
+    dest.fill_local(numeric_type(0));
+    dest.world().gop.fence();
+    log_ta_tensor_host_memory_use();
+    return eval_result<this_type>(std::move(dest));
+  }
+
   [[nodiscard]] ResultPtr prod(Result const& other,
                                std::array<std::any, 3> const& annot,
                                DeNest DeNestFlag) const override {
