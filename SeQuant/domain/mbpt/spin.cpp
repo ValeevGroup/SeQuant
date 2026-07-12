@@ -286,7 +286,7 @@ ExprPtr append_spin(const ExprPtr& expr,
     for (auto&& term : product) {
       if (term->is<Tensor>()) {
         spin_product->append(1, add_spin_to_tensor(term->as<Tensor>()));
-      } else if (term->is<Constant>() || term->is<Variable>()) {
+      } else if (term->is_scalar()) {
         spin_product->append(1, term);
       } else {
         throw Exception(
@@ -583,20 +583,6 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
         permute_bra ? tensor.bra().end() : tensor.ket().end());
 
     do {
-#define turn_off_colsymm_for_R
-#ifndef turn_off_colsymm_for_R
-      auto new_tensor =
-          permute_bra
-              ? Tensor(tensor.label(), bra(perm_list), ket(tensor.ket()),
-                       tensor.aux(), Symmetry::Nonsymm,
-                       tensor.braket_symmetry(), tensor.column_symmetry())
-              : Tensor(tensor.label(), bra(tensor.bra()), ket(perm_list),
-                       tensor.aux(), Symmetry::Nonsymm,
-                       tensor.braket_symmetry(), tensor.column_symmetry());
-#else
-      // auto col_symm = (tensor.label() == L"R") ? ColumnSymmetry::Nonsymm
-      // : tensor.column_symmetry();
-
       auto col_symm = tensor.column_symmetry();
       if (tensor.label() == L"R") {
         auto bra_r = tensor.bra_rank();
@@ -615,7 +601,6 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
               : Tensor(tensor.label(), bra(tensor.bra()), ket(perm_list),
                        tensor.aux(), Symmetry::Nonsymm,
                        tensor.braket_symmetry(), col_symm);
-#endif
 
       if (!ms_conserving_columns(new_tensor)) continue;
       auto prod = std::make_shared<Product>();
@@ -644,7 +629,7 @@ ExprPtr expand_antisymm(const ExprPtr& expr, bool skip_spinsymm) {
       if (term->is<Tensor>()) {
         temp.append(1, expand_antisymm(term->as<Tensor>(), skip_spinsymm),
                     Product::Flatten::No);
-      } else if (term->is<Variable>() || term->is<Constant>()) {
+      } else if (term->is_scalar()) {
         temp.append(1, term, Product::Flatten::No);
       } else {
         throw Exception(
@@ -952,7 +937,7 @@ ExprPtr expand_P_op(const ProductPtr& product) {
         new_tensor.transform_indices(map);
         new_tensor.reset_tags();
         new_product->append(1, ex<Tensor>(new_tensor));
-      } else if (term->is<Constant>() || term->is<Variable>()) {
+      } else if (term->is_scalar()) {
         new_product->append(1, term);
       } else {
         throw Exception("Invalid Expr type in expand_P_op: " +
