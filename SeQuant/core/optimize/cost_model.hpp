@@ -606,6 +606,14 @@ struct PeakBatchedModel {
   /// Prune disconnected (outer-product) subsets from the DP (see
   /// OptimizeOptions::prune_outer_products). Default true.
   bool prune_outer_products = true;
+  /// Term-level gate for \ref reconstruct_axes emitting \c AxisKind::External
+  /// entries (genuine spectator axes; see \ref is_spectator_axis), threaded
+  /// from \ref CostParams::batch_spectator_indices /
+  /// BatchPolicy::batch_spectator_indices. Default false so every OTHER
+  /// PeakBatchedModel construction (peak_cost_batched, compute_external_batch_
+  /// axis's own model, existing tests) is unaffected and emits no External
+  /// entries -- byte-identical to before this member existed.
+  bool batch_spectator_indices = false;
 
   /// One non-dominated (peak, flops) trade-off for a (subset, sliced-set \c B)
   /// cell. \c aprime is the sliced-set chosen at this node; the children are
@@ -1100,6 +1108,17 @@ struct PeakBatchedModel {
       for (std::size_t k = 0; k < ctx.m; ++k)
         if (r.aprime & (std::size_t{1} << k))
           axes.push_back({ctx.aux[k], AxisKind::Contracted});
+      // External (spectator) axes: unlike Contracted entries, these do not
+      // depend on the chosen frontier point's aprime -- a spectator axis is
+      // never contracted anywhere, so annotating it is purely informational
+      // (this node's result happens to carry it), independent of which
+      // sliced-set the DP chose to slice at this node. Gated on the
+      // term-level flag so every caller that leaves it false (the default)
+      // stays byte-identical.
+      if (batch_spectator_indices)
+        for (std::size_t k = 0; k < ctx.m; ++k)
+          if (((ctx.open_aux[n] >> k) & 1u) && is_spectator_axis(ctx, k))
+            axes.push_back({ctx.aux[k], AxisKind::External});
       node_axes.push_back(std::move(axes));  // one entry per -1, in RPN order
       s.push_back(-1);
       return s;

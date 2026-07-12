@@ -145,6 +145,7 @@ EvalSequence single_term_opt(
                            cost.peak_threshold};
     model.perf_first = (Metric == ObjectiveFunction::DenseTimeSpaceBatched);
     model.prune_outer_products = prune_outer_products;
+    model.batch_spectator_indices = cost.batch_spectator_indices;
     // charge_batch_recompute defaults to true (see PeakBatchedModel): the batch
     // recomputation cost is always reflected on the flops/exec axis.
     if (out_axes) {

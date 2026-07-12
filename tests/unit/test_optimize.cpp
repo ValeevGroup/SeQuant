@@ -2580,6 +2580,96 @@ TEST_CASE("binarize stamps per-node batch axes from optimize()",
   CHECK(aux_found);
 }
 
+// Task 3: reconstruct_axes must emit AxisKind::External entries for a genuine
+// spectator (external, never-contracted) axis at every node whose subset
+// carries it, gated by BatchPolicy::batch_spectator_indices. i_1 lives only on
+// the first tensor of a 4-tensor chain -- a genuine external spectator that is
+// never contracted anywhere, so is_spectator_axis(i_1) holds regardless of the
+// chosen factorization -- while Kappa_1 (the DF aux shared by the first two
+// tensors) is a genuine CONTRACTED axis, never a spectator. Distinguishes the
+// two kinds even though both get admitted into ctx.aux.
+TEST_CASE("reconstruct_axes_emits_external_per_node", "[optimize][batch]") {
+  using namespace sequant;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  mbpt::add_df_spaces(reg);
+  for (auto&& [k, v] :
+       std::initializer_list<std::pair<std::wstring_view, size_t>>{
+           {L"i", 8}, {L"a", 8}, {L"Κ", 400}})
+    reg->retrieve_ptr(k)->approximate_size(v);
+  auto aux_space = reg->retrieve(L"Κ");
+  auto occ_space = reg->retrieve(L"i");
+
+  auto idxsz = [](Index const& ix) -> std::size_t {
+    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+  };
+
+  // Chain network T1-T2-T3-T4: T1--(a_1,Kappa_1)--T2--(a_2)--T3--(a_4)--T4.
+  // i_1 (on T1 only) and a_5 (on T4 only) are the root-external indices.
+  auto expr =
+      deserialize(L"g{i_1;a_1;Κ_1} g{a_1;a_2;Κ_1} f{a_2;a_4} h{a_4;a_5}");
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      Expr const*,
+      container::vector<container::svector<std::pair<Index, AxisKind>>>>>();
+
+  OptimizeOptions opts;
+  opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.reorder = ReorderSum::NoReorder;
+  opts.idx_to_extent = idxsz;
+  opts.batch_policy.is_batchable_index = [aux_space](Index const& ix) {
+    return ix.space() == aux_space;
+  };
+  opts.batch_policy.batch_target_size = [](Index const&) -> std::size_t {
+    return 20;
+  };
+  // Finite but irrelevant to selection here (perf-first does not consult it as
+  // a feasibility gate); set to mirror how a real caller would configure it.
+  opts.batch_policy.peak_threshold = 1.0e6;
+  opts.batch_policy.batch_spectator_indices = true;
+  opts.term_batch_axes = axes_map;
+
+  auto optimized = optimize(expr, opts);
+  REQUIRE(optimized);
+
+  auto it = axes_map->find(optimized.get());
+  REQUIRE(it != axes_map->end());
+  auto const& node_axes = it->second;
+  REQUIRE(!node_axes.empty());
+
+  bool node_with_external = false;
+  bool node_without_external = false;
+  for (auto const& axes : node_axes) {
+    bool has_i1_external = false;
+    for (auto const& entry : axes) {
+      // Kappa (a genuine contracted DF aux, never a spectator) must never be
+      // tagged External.
+      if (entry.first.space() == aux_space)
+        CHECK(entry.second == AxisKind::Contracted);
+      if (entry.first.space() == occ_space &&
+          entry.second == AxisKind::External)
+        has_i1_external = true;
+    }
+    if (has_i1_external)
+      node_with_external = true;
+    else
+      node_without_external = true;
+  }
+  CHECK(node_with_external);
+  CHECK(node_without_external);
+
+  // With the gate off, the default optimize() path stays byte-identical: no
+  // External entries anywhere (existing [optimize] tests are its witness).
+  axes_map->clear();
+  opts.batch_policy.batch_spectator_indices = false;
+  auto optimized_off = optimize(expr, opts);
+  REQUIRE(optimized_off);
+  auto it_off = axes_map->find(optimized_off.get());
+  REQUIRE(it_off != axes_map->end());
+  for (auto const& axes : it_off->second)
+    for (auto const& entry : axes) CHECK(entry.second != AxisKind::External);
+}
+
 TEST_CASE("contractible_adjacency", "[optimize][pruning]") {
   using namespace sequant;
   namespace o = sequant::opt::detail;

@@ -141,6 +141,12 @@ struct CostParams {
   /// Prune disconnected (outer-product) subsets from the single-term DP; see
   /// OptimizeOptions::prune_outer_products. true (default) = prune.
   bool prune_outer_products = true;
+  /// Gate for external-(spectator-)index batching; see
+  /// BatchPolicy::batch_spectator_indices. false (default) => \ref
+  /// opt::detail::PeakBatchedModel::reconstruct_axes emits no
+  /// \c AxisKind::External entries, so every existing (non-spectator-aware)
+  /// caller stays byte-identical.
+  bool batch_spectator_indices = false;
 };
 
 /// A type-erased provider mapping an Index to its extent. Used by the public
