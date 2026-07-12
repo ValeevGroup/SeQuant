@@ -3,12 +3,14 @@
 
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval/fwd.hpp>
 
 #include <cstddef>
 #include <functional>
 #include <limits>
 #include <memory>
 #include <unordered_map>
+#include <utility>
 
 namespace sequant {
 
@@ -251,7 +253,8 @@ struct OptimizeOptions {
   /// every other objective leaves any pre-existing map entry for that
   /// summand untouched (it is simply never written).
   std::shared_ptr<std::unordered_map<
-      sequant::Expr const*, container::vector<container::svector<Index>>>>
+      sequant::Expr const*,
+      container::vector<container::svector<std::pair<Index, AxisKind>>>>>
       term_batch_axes = {};
 
   /// Prune disconnected (outer-product) subsets from the single-term

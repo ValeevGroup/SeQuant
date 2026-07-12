@@ -1338,8 +1338,8 @@ template <typename F, typename IndexPredicate = accept_any_index,
     auto candidate_axes = [&accept,
                            depth](auto const& n) -> container::svector<Index> {
       container::svector<Index> out;
-      for (Index const& ix : n->batch_axes())
-        if (accept(ix)) out.push_back(ix);
+      for (auto const& entry : n->batch_axes())
+        if (accept(entry.first)) out.push_back(entry.first);
       if (out.empty() && depth == 0)
         if (auto const h = batch_axis(n, accept)) out.push_back(*h);
       return out;

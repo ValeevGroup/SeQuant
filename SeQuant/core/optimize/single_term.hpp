@@ -70,7 +70,8 @@ EvalSequence single_term_opt(
     std::function<std::size_t(Index const&)> batch_target_size = {},
     std::function<double(Index const&, std::size_t)> const& inner_pow = {},
     bool batch_persistent_only = false,
-    container::vector<container::svector<Index>>* out_axes = nullptr) {
+    container::vector<container::svector<std::pair<Index, AxisKind>>>*
+        out_axes = nullptr) {
   if (out_axes) out_axes->clear();
   decltype(OptRes::indices) tidxs{};
   // Unpack the cost knobs into the names the recurrence arms below use, so the
@@ -232,7 +233,8 @@ ExprPtr single_term_opt(
     std::function<std::size_t(Index const&)> batch_target_size = {},
     std::function<double(Index const&, std::size_t)> const& inner_pow = {},
     bool batch_persistent_only = false,
-    container::vector<container::svector<Index>>* out_axes = nullptr) {
+    container::vector<container::svector<std::pair<Index, AxisKind>>>*
+        out_axes = nullptr) {
   using ranges::views::filter;
   using ranges::views::reverse;
 

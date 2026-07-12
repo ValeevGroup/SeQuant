@@ -84,15 +84,16 @@ EvalSequence run_single_term_opt(Model const& m, TensorNetwork const& network,
 ///         nt==2 shortcut (single contraction, no DP context is built) the
 ///         axes vector holds one empty entry (no batching info available).
 template <class Model, typename TIdxs>
-std::pair<EvalSequence, container::vector<container::svector<Index>>>
+std::pair<EvalSequence,
+          container::vector<container::svector<std::pair<Index, AxisKind>>>>
 run_single_term_opt_axes(Model const& m, TensorNetwork const& network,
                          TIdxs const& tidxs) {
   auto const nt = network.tensors().size();
   if (nt == 1) return {EvalSequence{0}, {}};
   if (nt == 2)
     return {EvalSequence{0, 1, -1},
-            container::vector<container::svector<Index>>{
-                container::svector<Index>{}}};
+            container::vector<container::svector<std::pair<Index, AxisKind>>>{
+                container::svector<std::pair<Index, AxisKind>>{}}};
   typename Model::Context ctx = m.build_context(network, tidxs);
   auto st = solve_single_term(m, network, tidxs, ctx);
   return m.reconstruct_axes(ctx, st);
@@ -1075,12 +1076,13 @@ struct PeakBatchedModel {
   /// each set bit of that node's \c aprime). Leaf entries contribute nothing.
   /// Does not change \ref reconstruct's own output; the two walks are kept in
   /// lock-step so the RPN order and the per-node axes line up.
-  std::pair<EvalSequence, container::vector<container::svector<Index>>>
+  std::pair<EvalSequence,
+            container::vector<container::svector<std::pair<Index, AxisKind>>>>
   reconstruct_axes(Context const& ctx,
                    container::vector<State> const& st) const {
     std::size_t const root = (std::size_t{1} << ctx.nt) - 1;
     int const best = select_root(ctx, st);  // shared helper (see below)
-    container::vector<container::svector<Index>> node_axes;
+    container::vector<container::svector<std::pair<Index, AxisKind>>> node_axes;
     std::function<EvalSequence(std::size_t, std::size_t, int)> build =
         [&](std::size_t n, std::size_t B, int idx) -> EvalSequence {
       if (std::popcount(n) == 1)
@@ -1094,9 +1096,10 @@ struct PeakBatchedModel {
       EvalSequence s = build(fs, C, fi);
       EvalSequence b = build(ss, C, si);
       s.insert(s.end(), b.begin(), b.end());
-      container::svector<Index> axes;
+      container::svector<std::pair<Index, AxisKind>> axes;
       for (std::size_t k = 0; k < ctx.m; ++k)
-        if (r.aprime & (std::size_t{1} << k)) axes.push_back(ctx.aux[k]);
+        if (r.aprime & (std::size_t{1} << k))
+          axes.push_back({ctx.aux[k], AxisKind::Contracted});
       node_axes.push_back(std::move(axes));  // one entry per -1, in RPN order
       s.push_back(-1);
       return s;

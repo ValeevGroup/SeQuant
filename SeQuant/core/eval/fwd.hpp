@@ -14,6 +14,12 @@ namespace sequant {
 /// should be "de-nested" (flattened) to a regular tensor or kept as nested.
 enum class DeNest { True, False };
 
+/// \brief Flavor of an \c EvalExpr::batch_axes entry: whether the index is
+///        contracted away somewhere in the term (\c Contracted), or is an
+///        external/spectator index that survives to the term's result
+///        (\c External). See \c EvalExpr::batch_axes.
+enum class AxisKind { Contracted, External };
+
 template <typename TreeNode, bool force_hash_collisions = false>
 class CacheManager;
 

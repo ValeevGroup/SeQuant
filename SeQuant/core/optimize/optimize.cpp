@@ -105,7 +105,7 @@ ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
   // other objective leaves it empty, so the term_batch_axes insertion at the
   // end is then a no-op-shaped empty-vector entry (harmless: Task 3.3 only
   // consumes entries for summands the batched objective actually annotated).
-  container::vector<container::svector<Index>> node_axes;
+  container::vector<container::svector<std::pair<Index, AxisKind>>> node_axes;
   auto run = [&]() -> ExprPtr {
     if (opts.objective_function == ObjectiveFunction::DenseFLOPs)
       return opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(

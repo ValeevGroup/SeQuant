@@ -14,6 +14,7 @@
 #include <cstddef>
 #include <memory>
 #include <string>
+#include <utility>
 
 namespace sequant {
 
@@ -272,19 +273,22 @@ class EvalExpr {
 
   ///
   /// \brief Batchable indices the single-term optimizer chose to slice AT
-  /// this node (its DP `aprime`). Empty unless set by \c binarize from
-  /// \c BinarizationOptions::node_batch_axes (itself populated from
-  /// \c OptimizeOptions::term_batch_axes by the optimizer). The runtime
-  /// batched evaluator slices exactly these indices at this node.
+  /// this node (its DP `aprime`), each tagged with its \c AxisKind. Empty
+  /// unless set by \c binarize from \c BinarizationOptions::node_batch_axes
+  /// (itself populated from \c OptimizeOptions::term_batch_axes by the
+  /// optimizer). The runtime batched evaluator slices exactly these indices
+  /// at this node.
   ///
-  [[nodiscard]] container::svector<Index> const& batch_axes() const noexcept {
+  [[nodiscard]] container::svector<std::pair<Index, AxisKind>> const&
+  batch_axes() const noexcept {
     return batch_axes_;
   }
 
   ///
   /// \brief Sets the batch axes for this node; see \c batch_axes.
   ///
-  void set_batch_axes(container::svector<Index> axes) noexcept {
+  void set_batch_axes(
+      container::svector<std::pair<Index, AxisKind>> axes) noexcept {
     batch_axes_ = std::move(axes);
   }
 
@@ -304,7 +308,7 @@ class EvalExpr {
   std::shared_ptr<bliss::Graph> connectivity_;
 
   /// See \c batch_axes.
-  container::svector<Index> batch_axes_{};
+  container::svector<std::pair<Index, AxisKind>> batch_axes_{};
 };
 
 struct EvalOpSetter {
@@ -369,7 +373,8 @@ struct BinarizationOptions {
   /// the corresponding entry of \c OptimizeOptions::term_batch_axes for the
   /// summand being binarized. Empty (default) => no stamping, no behavior
   /// change. See \c EvalExpr::batch_axes.
-  container::vector<container::svector<Index>> node_batch_axes = {};
+  container::vector<container::svector<std::pair<Index, AxisKind>>>
+      node_batch_axes = {};
 };
 
 namespace meta {

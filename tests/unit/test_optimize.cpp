@@ -2488,7 +2488,8 @@ TEST_CASE("binarize stamps per-node batch axes from optimize()",
       deserialize(L"g{a_1;i_1;Κ_1} g{a_2;i_2;Κ_1} f{i_1;i_3} f{i_2;i_4}");
 
   auto axes_map = std::make_shared<std::unordered_map<
-      Expr const*, container::vector<container::svector<Index>>>>();
+      Expr const*,
+      container::vector<container::svector<std::pair<Index, AxisKind>>>>>();
 
   OptimizeOptions opts;
   opts.objective_function = ObjectiveFunction::DensePeakSizeBatched;
@@ -2524,8 +2525,8 @@ TEST_CASE("binarize stamps per-node batch axes from optimize()",
   node.visit([&](auto const& n) {
     if (n->batch_axes().empty()) return;
     any_annotated = true;
-    for (auto const& ix : n->batch_axes())
-      if (ix.space() == aux) aux_found = true;
+    for (auto const& entry : n->batch_axes())
+      if (entry.first.space() == aux) aux_found = true;
   });
   // The essential assertion: the round-trip actually annotated a node. If the
   // optimizer's and binarize's post-orders had diverged, either this would be

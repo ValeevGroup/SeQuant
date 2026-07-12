@@ -671,3 +671,17 @@ TEST_CASE("eval_expr_outer_proto_position_mixed_node_guard",
     REQUIRE_THROWS_AS(outer_proto_position(node, i1), sequant::Exception);
   }
 }
+
+TEST_CASE("eval_expr_batch_axes_typed", "[EvalExpr][batch-axes]") {
+  using namespace sequant;
+  auto const tnsr =
+      parse_tensor(L"g{i_1,a_1;i_2,a_2}", {.def_perm_symm = Symmetry::Nonsymm});
+  EvalExpr node{tnsr};
+  container::svector<std::pair<Index, AxisKind>> axes{
+      {Index{L"a_1"}, AxisKind::Contracted},
+      {Index{L"i_1"}, AxisKind::External}};
+  node.set_batch_axes(axes);
+  REQUIRE(node.batch_axes().size() == 2);
+  REQUIRE(node.batch_axes()[0].second == AxisKind::Contracted);
+  REQUIRE(node.batch_axes()[1].second == AxisKind::External);
+}

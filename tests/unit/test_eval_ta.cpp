@@ -2363,7 +2363,7 @@ TEST_CASE("eval_batched_custom_evaluator nests inner axis", "[eval]") {
   // contracted aux axis keeps this robust to binarize's operand ordering.
   auto const root_axis = sequant::batch_axis(node, accept_aux);
   REQUIRE(root_axis.has_value());
-  node->set_batch_axes({*root_axis});
+  node->set_batch_axes({{*root_axis, sequant::AxisKind::Contracted}});
 
   node_t* inner = nullptr;
   std::optional<sequant::Index> inner_axis;
@@ -2382,7 +2382,7 @@ TEST_CASE("eval_batched_custom_evaluator nests inner axis", "[eval]") {
   REQUIRE(inner != nullptr);
   REQUIRE(inner_axis.has_value());
   REQUIRE(*inner_axis != *root_axis);  // the two nested axes differ
-  (*inner)->set_batch_axes({*inner_axis});
+  (*inner)->set_batch_axes({{*inner_axis, sequant::AxisKind::Contracted}});
 
   // Reference: plain (unbatched) evaluation. Computed first so yield_'s random
   // leaf arrays are generated and cached; the batched evaluator reuses them.
@@ -2465,7 +2465,11 @@ TEST_CASE("eval_batched_custom_evaluator nests two axes on one node",
     if (accept_aux(ix)) two_axes.push_back(ix);
   REQUIRE(two_axes.size() == 2);
   REQUIRE(two_axes[0] != two_axes[1]);
-  node->set_batch_axes(two_axes);
+  sequant::container::svector<std::pair<sequant::Index, sequant::AxisKind>>
+      two_axes_typed;
+  for (sequant::Index const& ix : two_axes)
+    two_axes_typed.push_back({ix, sequant::AxisKind::Contracted});
+  node->set_batch_axes(two_axes_typed);
 
   // Reference: plain (unbatched) evaluation; also generates yield_'s random
   // leaf arrays that the batched evaluator reuses.
@@ -2591,7 +2595,7 @@ TEST_CASE(
 
   auto const root_axis = sequant::batch_axis(node, accept_aux);
   REQUIRE(root_axis.has_value());
-  node->set_batch_axes({*root_axis});
+  node->set_batch_axes({{*root_axis, sequant::AxisKind::Contracted}});
 
   node_t* inner = nullptr;
   std::optional<sequant::Index> inner_axis;
@@ -2610,7 +2614,7 @@ TEST_CASE(
   REQUIRE(inner != nullptr);
   REQUIRE(inner_axis.has_value());
   REQUIRE(*inner_axis != *root_axis);
-  (*inner)->set_batch_axes({*inner_axis});
+  (*inner)->set_batch_axes({{*inner_axis, sequant::AxisKind::Contracted}});
 
   auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
 
