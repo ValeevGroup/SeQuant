@@ -1090,6 +1090,19 @@ struct PeakBatchedModel {
                    container::vector<State> const& st) const {
     std::size_t const root = (std::size_t{1} << ctx.nt) - 1;
     int const best = select_root(ctx, st);  // shared helper (see below)
+    // Term-level "should batch spectator axes" gate, reproducing the OLD
+    // compute_external_batch_axis conditions (ii) perf-first objective and
+    // (iv) unseeded root peak (bytes) exceeds peak_threshold, on top of (i)
+    // batch_spectator_indices already required below. select_root(ctx, st)
+    // above defaults to root_B=0 (unseeded) and this is the SAME model
+    // (same perf_first / peak_threshold / numeric_size) that
+    // seeded_root_peak_batched reads via select_root(ctx, st, /*root_B=*/0),
+    // so st[root][0][best].peak * numeric_size is exactly the byte-peak the
+    // old path compared to peak_threshold -- no extra seeded-model pass
+    // needed to reproduce (iv).
+    double const root_peak_bytes = st[root][0][best].peak * numeric_size;
+    bool const emit_external = batch_spectator_indices && perf_first &&
+                               (root_peak_bytes > peak_threshold);
     container::vector<container::svector<std::pair<Index, AxisKind>>> node_axes;
     std::function<EvalSequence(std::size_t, std::size_t, int)> build =
         [&](std::size_t n, std::size_t B, int idx) -> EvalSequence {
@@ -1113,9 +1126,11 @@ struct PeakBatchedModel {
       // never contracted anywhere, so annotating it is purely informational
       // (this node's result happens to carry it), independent of which
       // sliced-set the DP chose to slice at this node. Gated on the
-      // term-level flag so every caller that leaves it false (the default)
-      // stays byte-identical.
-      if (batch_spectator_indices)
+      // term-level emit_external flag (batch_spectator_indices AND
+      // perf_first AND unseeded peak over threshold) so every caller that
+      // leaves batch_spectator_indices false (the default) -- or whose term
+      // does not need batching -- stays byte-identical.
+      if (emit_external)
         for (std::size_t k = 0; k < ctx.m; ++k)
           if (((ctx.open_aux[n] >> k) & 1u) && is_spectator_axis(ctx, k))
             axes.push_back({ctx.aux[k], AxisKind::External});

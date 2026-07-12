@@ -2580,11 +2580,14 @@ TEST_CASE("binarize stamps per-node batch axes from optimize()",
   CHECK(aux_found);
 }
 
-// Task 3: reconstruct_axes must emit AxisKind::External entries for a genuine
-// spectator (external, never-contracted) axis at every node whose subset
-// carries it, gated by BatchPolicy::batch_spectator_indices. i_1 lives only on
-// the first tensor of a 4-tensor chain -- a genuine external spectator that is
-// never contracted anywhere, so is_spectator_axis(i_1) holds regardless of the
+// Task 3/4: reconstruct_axes must emit AxisKind::External entries for a
+// genuine spectator (external, never-contracted) axis at every node whose
+// subset carries it, gated by BOTH BatchPolicy::batch_spectator_indices (i)
+// AND the Task 4 term-level emit_external gate (perf-first objective (ii) +
+// unseeded root peak over peak_threshold (iv)), reproducing the OLD
+// compute_external_batch_axis trigger exactly. i_1 lives only on the first
+// tensor of a 4-tensor chain -- a genuine external spectator that is never
+// contracted anywhere, so is_spectator_axis(i_1) holds regardless of the
 // chosen factorization -- while Kappa_1 (the DF aux shared by the first two
 // tensors) is a genuine CONTRACTED axis, never a spectator. Distinguishes the
 // two kinds even though both get admitted into ctx.aux.
@@ -2623,11 +2626,39 @@ TEST_CASE("reconstruct_axes_emits_external_per_node", "[optimize][batch]") {
   opts.batch_policy.batch_target_size = [](Index const&) -> std::size_t {
     return 20;
   };
-  // Finite but irrelevant to selection here (perf-first does not consult it as
-  // a feasibility gate); set to mirror how a real caller would configure it.
-  opts.batch_policy.peak_threshold = 1.0e6;
   opts.batch_policy.batch_spectator_indices = true;
   opts.term_batch_axes = axes_map;
+
+  // Determine this term's actual perf-first root peak (bytes) directly, via
+  // the same PeakBatchedModel construction single_term.hpp's
+  // DenseTimeSpaceBatched arm uses (idxsz, is_batchable_index,
+  // batch_target_size, perf_first=true), so peak_threshold values below and
+  // above it can be chosen without hardcoding a magic number tied to the
+  // extents above. peak_threshold is NOT a factorization gate under
+  // perf_first (see PeakBatchedModel::select_root), so this value does not
+  // depend on which threshold the model below is eventually given.
+  namespace o = sequant::opt::detail;
+  container::svector<ExprPtr> tensors;
+  for (auto const& f : expr->as<Product>().factors())
+    if (f->is<Tensor>()) tensors.push_back(f);
+  TensorNetwork const net{tensors};
+  o::PeakBatchedModel<decltype(idxsz)> peek_model{
+      idxsz, opts.batch_policy.is_batchable_index,
+      opts.batch_policy.batch_target_size, /*is_volatile_leaf=*/{}};
+  peek_model.perf_first = true;
+  container::svector<Index> const tidxs{};
+  auto pctx = peek_model.build_context(net, tidxs);
+  auto pst = o::solve_single_term(peek_model, net, tidxs, pctx);
+  std::size_t const proot = (std::size_t{1} << pctx.nt) - 1;
+  int const pbest = peek_model.select_root(pctx, pst);
+  REQUIRE(pbest >= 0);
+  double const root_peak_bytes =
+      pst[proot][0][pbest].peak * peek_model.numeric_size;
+  REQUIRE(root_peak_bytes > 0.0);
+
+  // Assertion 1: peak_threshold strictly BELOW the term's actual peak =>
+  // gate (iv) holds => External entries ARE emitted.
+  opts.batch_policy.peak_threshold = root_peak_bytes / 2.0;
 
   auto optimized = optimize(expr, opts);
   REQUIRE(optimized);
@@ -2658,9 +2689,27 @@ TEST_CASE("reconstruct_axes_emits_external_per_node", "[optimize][batch]") {
   CHECK(node_with_external);
   CHECK(node_without_external);
 
-  // With the gate off, the default optimize() path stays byte-identical: no
-  // External entries anywhere (existing [optimize] tests are its witness).
+  // Assertion 2: peak_threshold = +infinity (the term never "needs" batching
+  // under any budget) with batch_spectator_indices still true => gate (iv)
+  // fails => ZERO External entries anywhere. This is exactly the OLD
+  // compute_external_batch_axis condition (iv); before the Task 4 gate,
+  // reconstruct_axes emitted External regardless of peak_threshold, so this
+  // assertion fails without the fix and passes with it.
   axes_map->clear();
+  opts.batch_policy.peak_threshold = std::numeric_limits<double>::infinity();
+  auto optimized_inf = optimize(expr, opts);
+  REQUIRE(optimized_inf);
+  auto it_inf = axes_map->find(optimized_inf.get());
+  REQUIRE(it_inf != axes_map->end());
+  for (auto const& axes : it_inf->second)
+    for (auto const& entry : axes) CHECK(entry.second != AxisKind::External);
+
+  // Assertion 3: with the spectator gate off (batch_spectator_indices=false)
+  // -- threshold restored below the actual peak so only the flag is under
+  // test -- the default optimize() path stays byte-identical: no External
+  // entries anywhere (existing [optimize] tests are its witness).
+  axes_map->clear();
+  opts.batch_policy.peak_threshold = root_peak_bytes / 2.0;
   opts.batch_policy.batch_spectator_indices = false;
   auto optimized_off = optimize(expr, opts);
   REQUIRE(optimized_off);
