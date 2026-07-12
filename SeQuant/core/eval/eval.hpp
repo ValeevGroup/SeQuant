@@ -1236,23 +1236,61 @@ template <typename TreeNode, bool FHC, typename Members>
     Members const& members, CacheManager<TreeNode, FHC> const& real) {
   using Hasher = TreeNodeHasher<TreeNode, FHC>;
   using Comp = TreeNodeEqualityComparator<TreeNode>;
+
+  // The batch's EXTERNAL axes: obtained exactly as the evaluator obtains them
+  // (partition each member root's batch_axes() by AxisKind). An External axis
+  // is a spectator that survives FREE onto a node's result, so a node carrying
+  // one is NOT batch-invariant under that axis -- its value depends on the
+  // external slice. When the caller nests an External axis OUTSIDE a Contracted
+  // one (the External axis is sliced by an outer re-entry, then this scratch
+  // batches an inner Contracted axis), a persistent intermediate that carries
+  // the External axis but not the Contracted `axis` would look seedable under
+  // `axis` alone -- yet seeding its full (unsliced-external) value would be
+  // wrong under the outer slice. Tracking the External axes in the signature
+  // (below) forbids seeding/sharing such nodes. When there is no External axis
+  // this list is empty and every External-derived test is a no-op, keeping the
+  // Contracted-only behavior byte-identical.
+  container::svector<Index> ext_axes;
+  for (auto const& [root, axis] : members) {
+    if (root->leaf()) continue;
+    for (auto const& [ix, knd] : (*root)->batch_axes())
+      if (knd == AxisKind::External &&
+          std::find(ext_axes.begin(), ext_axes.end(), ix) == ext_axes.end())
+        ext_axes.push_back(ix);
+  }
+
   struct Meta {
     std::size_t count = 0;
     std::optional<std::size_t> sig;
+    // Positions of each External axis (in ext_axes order) in this node's
+    // canonical result indices, or nullopt if the node does not carry it. This
+    // is a function of the (canonical) node alone, so it is identical across
+    // all occurrences of a canonically-equal node.
+    container::svector<std::optional<std::size_t>> ext_sig;
     bool consistent = true;
   };
   std::unordered_map<TreeNode const*, Meta, Hasher, Comp> meta;
 
-  auto visit = [&meta](auto&& self, TreeNode const& n,
-                       Index const& axis) -> void {
+  auto ext_sig_of = [&ext_axes](TreeNode const& n) {
+    container::svector<std::optional<std::size_t>> s;
+    s.reserve(ext_axes.size());
+    for (auto const& e : ext_axes) s.push_back(index_position(n, e));
+    return s;
+  };
+
+  auto visit = [&meta, &ext_sig_of](auto&& self, TreeNode const& n,
+                                    Index const& axis) -> void {
     if (n.leaf()) return;
     auto const sig = index_position(n, axis);
+    auto const esig = ext_sig_of(n);
     auto const [it, first] = meta.try_emplace(&n);
     auto& e = it->second;
-    if (first)
+    if (first) {
       e.sig = sig;
-    else if (e.sig != sig)
+      e.ext_sig = esig;
+    } else if (e.sig != sig || e.ext_sig != esig) {
       e.consistent = false;
+    }
     ++e.count;
     // Prune a re-encounter only when its signature matches the first one:
     // canonical equality maps canonical position p to position p, so an equal
@@ -1263,8 +1301,10 @@ template <typename TreeNode, bool FHC, typename Members>
     // descendant sliced differently only under this (unshared, pruned)
     // occurrence could pass the guard and serve wrong slices. The extra
     // descendant counts are real accesses: an inconsistently-sliced occurrence
-    // is evaluated per occurrence, not served from the scratch at n.
-    if (!first && e.sig == sig) return;
+    // is evaluated per occurrence, not served from the scratch at n. The
+    // External signature is invariant across occurrences (a function of the
+    // canonical node), so folding it into the match only tightens the guard.
+    if (!first && e.sig == sig && e.ext_sig == esig) return;
     self(self, n.left(), axis);
     self(self, n.right(), axis);
   };
@@ -1280,7 +1320,13 @@ template <typename TreeNode, bool FHC, typename Members>
   std::vector<TreeNode const*> seeds;
   for (auto const& [ptr, e] : meta) {
     if (!e.consistent) continue;  // ambiguous slicing: never share
-    bool const seedable = !e.sig && real.persistent(*ptr) && real.alive(*ptr);
+    // A node carrying ANY batched External axis has an external slice its
+    // seeded-full real-cache value would ignore -- so it is never seedable.
+    bool const carries_ext =
+        std::any_of(e.ext_sig.begin(), e.ext_sig.end(),
+                    [](auto const& p) { return p.has_value(); });
+    bool const seedable =
+        !e.sig && !carries_ext && real.persistent(*ptr) && real.alive(*ptr);
     if (seedable) {
       seeds.push_back(ptr);
       seed_keys.insert(*ptr);

@@ -2657,6 +2657,166 @@ TEST_CASE("batched_eval_external_axis_scatter", "[eval][batched-external]") {
   }
 }
 
+TEST_CASE("batched_scratch_no_seed_external", "[eval][batched-external]") {
+  // Task 6 (Part A) RED/GREEN witness for the SEED DECISION in
+  // make_batched_scratch. When an EXTERNAL (spectator) axis is batched, a
+  // persistent, alive intermediate that is INVARIANT under the batch's
+  // *contracted* member axis but CARRIES that batched External axis must NOT be
+  // seeded from the real cache: its full, unsliced-external value is wrong
+  // under the external slice, so it must be recomputed sliced. Before this fix
+  // the per-node signature and the `!e.sig && persistent && alive` seed rule
+  // knew only the contracted member axis, so such a node (contracted signature
+  // == absent) was wrongly seeded FULL -- the "seed full i" defect and the root
+  // of the original w8-occbatch abort. After the fix the batch's External axes
+  // enter the signature: a node carrying one is non-invariant and excluded.
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+  using sequant::evaluate;
+  using sequant::Index;
+
+  auto& world = TA::get_default_world();
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, /*nocc=*/4,
+                                                    /*nvirt=*/4, /*naux=*/12};
+  yield_.set_max_tile(4);
+
+  // P = g*h carries the aux spectator x_1 (the External axis); the volatile
+  // head t makes P a PERSISTENT final. P does not carry the contracted batch
+  // axis played by `mu` below.
+  auto const expr = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{a_2;i_1;x_1} * h{a_2;i_3}) * t{i_3;i_1}");
+  auto n = eval_node(expr);
+  REQUIRE_FALSE(n.leaf());
+  auto const& P = n.left();  // g*h, carries x_1
+  REQUIRE_FALSE(P.leaf());
+
+  // the External spectator axis carried by P (a plain aux outer mode)
+  auto const aux_space =
+      sequant::get_default_context().index_space_registry()->retrieve(L"x");
+  Index x_ext;
+  for (auto const& ix : P->canon_indices())
+    if (ix.space() == aux_space && !ix.has_proto_indices()) {
+      x_ext = ix;
+      break;
+    }
+  REQUIRE(x_ext.nonnull());
+  REQUIRE(sequant::index_position(P, x_ext).has_value());  // P carries it
+
+  // stamp x_ext External on the member root, as the optimizer would; this is
+  // the batch's External-axis set that make_batched_scratch partitions out.
+  n->set_batch_axes({{x_ext, sequant::AxisKind::External}});
+
+  // real cache: P classifies persistent (volatile head t); store a value so it
+  // is ALIVE (the state that makes a node a seed candidate).
+  auto is_volatile_t = [](node_t const& k) {
+    return k.leaf() && k->is_tensor() && k->as_tensor().label() == L"t";
+  };
+  auto real = sequant::cache_manager(std::vector{n}, is_volatile_t);
+  REQUIRE(real.persistent(P));
+  real.store(P, evaluate(P, P->annot(), yield_));
+  REQUIRE(real.alive(P));
+
+  // member axis = a contracted axis P does NOT carry (mu-analog): its per-node
+  // signature over P is 'absent', so on the contracted axis alone P looks
+  // seedable. The External axis is what must veto the seed.
+  Index const mu(L"i_9");  // absent from the tree -> null contracted signature
+  REQUIRE_FALSE(sequant::index_position(P, mu).has_value());
+  std::vector<std::pair<node_t const*, Index>> const members{{&n, mu}};
+
+  sequant::TreeNodeEqualityComparator<node_t> const eq;
+  auto seeds_P = [&](auto const& bs) {
+    return std::any_of(bs.seeds.begin(), bs.seeds.end(),
+                       [&](node_t const* s) { return eq(*s, P); });
+  };
+
+  // POST-FIX: P carries the batched External axis, so it is NOT seeded (it will
+  // be recomputed under the external slice).
+  auto const bs = sequant::detail::make_batched_scratch(members, real);
+  REQUIRE_FALSE(seeds_P(bs));
+
+  // Control: with NO External axis stamped (a purely contracted batch), the
+  // SAME invariant persistent P IS seeded -- proving the exclusion is driven by
+  // the External stamp and that the contracted-only path is byte-identical.
+  n->set_batch_axes({});
+  auto const bs2 = sequant::detail::make_batched_scratch(members, real);
+  REQUIRE(seeds_P(bs2));
+}
+
+TEST_CASE("batched_scratch_tot_presize_scatter", "[eval][batched-external]") {
+  // Task 6 (Part B): the ToT ResultTensorOfTensorTA::pre_sized_zeros_over_mode
+  // must produce a destination that the ToT scatter primitives
+  // (write_into_slice -> write_array_into_mode) reassemble EXACTLY. This is the
+  // ToT analog of the flat pre-size Task 5 added; CSV/PNO-CCSD residuals carry
+  // ToT tiles, so the external-axis scatter needs a ToT pre-size. Here we drive
+  // the exact runtime sequence: pre-size from the FIRST block partial (widening
+  // its OUTER axis mode to the carrier's FULL tiling), then write_into_slice
+  // every disjoint block. The reassembled ToT must equal the original.
+  using sequant::eval_result;
+  using sequant::ResultTensorOfTensorTA;
+  using sequant::slice_array_over_mode;
+  using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<double>>>;
+  using ResultToT = ResultTensorOfTensorTA<ToTArray>;
+  auto& world = TA::get_default_world();
+
+  // outer mode 0 (the external spectator axis): two size-3 tiles (tile-spanning
+  // split); outer mode 1: one size-2 tile. Inner tensors are 2x2 with
+  // position-dependent values so a mis-scattered block changes the norm.
+  TA::TiledRange const outer_tr{{0, 3, 6}, {0, 2}};
+  TA::Range const inner_r(std::array<std::size_t, 2>{2, 2});
+
+  auto build = [&world, inner_r](TA::TiledRange const& otr,
+                                 bool zero) -> ToTArray {
+    auto tile_fn = [inner_r, zero](TA::Range const& orng) {
+      TA::Tensor<TA::Tensor<double>> t{orng};
+      std::size_t o = 0;
+      for (auto const& coord : orng) {
+        auto& inner = t[o++];
+        inner = TA::Tensor<double>{inner_r};
+        double base = 0.0;
+        if (!zero)
+          for (auto c : coord) base = base * 37.0 + static_cast<double>(c + 1);
+        std::size_t k = 0;
+        for (auto& x : inner) x = zero ? 0.0 : base * 100.0 + (++k);
+      }
+      return t;
+    };
+    ToTArray arr{world, otr};
+    for (auto it = arr.begin(); it != arr.end(); ++it)
+      if (arr.is_local(it.index()))
+        *it = world.taskq.add(tile_fn, it.make_range());
+    world.gop.fence();
+    return arr;
+  };
+
+  ToTArray R = build(outer_tr, /*zero=*/false);
+
+  // gather the disjoint, tile-aligned blocks over outer mode 0 (the external
+  // axis), exactly as the scatter branch's per-block evaluate would produce.
+  auto const b0 = slice_array_over_mode(R, 0, 0, 1);  // outer elements [0,3)
+  auto const b1 = slice_array_over_mode(R, 0, 1, 2);  // outer elements [3,6)
+
+  // PRE-SIZE from the FIRST block partial: widen its OUTER mode 0 (sliced to
+  // [0,3)) to the carrier's full mode-0 tiling. R itself is a ToT carrier of
+  // the full external axis (axis_src.is<this_type>() branch); axis_src_mode =
+  // 0.
+  sequant::ResultPtr const first = eval_result<ResultToT>(b0);
+  sequant::ResultPtr const carrier = eval_result<ResultToT>(R);
+  auto rdest = first->pre_sized_zeros_over_mode(/*mode=*/0, *carrier,
+                                                /*axis_src_mode=*/0);
+  // the pre-sized destination spans the FULL external axis (mode 0: {0,3,6})
+  REQUIRE(rdest->get<ToTArray>().trange().dim(0).tile_extent() == 2);
+  REQUIRE(rdest->get<ToTArray>().trange().dim(1).tile_extent() == 1);
+
+  // SCATTER every block into its disjoint slice of the pre-sized destination.
+  rdest->write_into_slice(*eval_result<ResultToT>(b0), 0, 0, 3);
+  rdest->write_into_slice(*eval_result<ResultToT>(b1), 0, 3, 6);
+
+  auto const& out = rdest->get<ToTArray>();
+  ToTArray diff;
+  diff("i,j;a,b") = out("i,j;a,b") - R("i,j;a,b");
+  REQUIRE(Catch::Approx(diff("i,j;a,b").dot(diff("i,j;a,b"))) == 0.0);
+  // guard against a trivial all-zero pass (e.g. a silently no-op'd scatter).
+  REQUIRE(out("i,j;a,b").dot(out("i,j;a,b")) > 0.0);
+}
+
 TEST_CASE(
     "eval_batched_custom_evaluator nested scope guards compose "
     "multiplicatively",
