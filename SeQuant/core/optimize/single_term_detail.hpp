@@ -251,14 +251,25 @@ container::vector<double> subset_footprints(
 /// it.  The returned list assigns each index a stable bit position: index at
 /// position \c k is bit \c k of a sliced-set bitmask \c B.
 ///
-/// In addition to the top-level slots, a second pass admits the pure-occupied
-/// protoindices of composite (CSV/PNO/OSV tensor-of-tensor) legs. A composite
-/// leg carries its external occupied indices ONLY as protoindices -- they never
-/// appear as a top-level bra/ket/aux slot -- so the slot scan alone drops them.
-/// Admitting them lets the batched DP slice that external-occ spectator axis
-/// (mirrored in \ref subset_open_aux). The proto pass is guarded by index space
-/// (only pure-occupied protos are admitted) and short-circuits on non-composite
-/// indices, so PAO/aux/internal-occ recognition is unchanged.
+/// In addition to the top-level slots, two more passes admit pure-occupied
+/// indices that \p is_batchable never sees:
+///
+///  - the pure-occupied protoindices of composite (CSV/PNO/OSV
+///    tensor-of-tensor) legs. A composite leg carries its external occupied
+///    indices ONLY as protoindices -- they never appear as a top-level
+///    bra/ket/aux slot -- so the slot scan alone drops them.
+///  - an explicit pure-occupied index that is open (external) on the network
+///    root, i.e. a member of \c network.ext_indices(). Such an index is a
+///    genuine top-level slot, but \p is_batchable is typically scoped to a
+///    non-occupied space (e.g. DF/RI aux), so it would otherwise never be
+///    admitted as a batching candidate. Contracted (internal) occupied
+///    indices -- those that connect two or more tensors -- are NOT open on
+///    the root and so are never admitted by this pass.
+///
+/// Admitting either lets the batched DP slice that external-occ spectator
+/// axis (mirrored in \ref subset_open_aux). Both passes are guarded by index
+/// space (only pure-occupied indices are admitted) so PAO/aux/internal-occ
+/// recognition is unchanged.
 ///
 /// \param network  The TensorNetwork to scan.
 /// \param is_batchable  Predicate returning true for indices in a batchable
@@ -269,30 +280,37 @@ inline container::vector<Index> batchable_index_list(
     std::function<bool(Index const&)> const& is_batchable) {
   container::vector<Index> aux;
   if (!is_batchable) return aux;
-  // Registry used to recognize the pure-occupied protoindices of composite
-  // legs. Guarded by has_vacocc: occupancy is defined relative to the
-  // vacuum-occupied space, so a registry without one (or no registry) admits no
-  // protos and leaves behavior byte-identical. is_pure_occupied is NOT used
-  // directly: its space reconstruction throws for proto quantum numbers absent
-  // from the registry; instead we replicate its core type-bitset test (a space
-  // is pure-occupied iff its type is at or below the vacuum-occupied type),
-  // which needs no space retrieval.
+  // Registry used to recognize pure-occupied indices/protoindices. Guarded by
+  // has_vacocc: occupancy is defined relative to the vacuum-occupied space, so
+  // a registry without one (or no registry) admits nothing new and leaves
+  // behavior byte-identical. is_pure_occupied is NOT used directly: its space
+  // reconstruction throws for proto quantum numbers absent from the registry;
+  // instead we replicate its core type-bitset test (a space is pure-occupied
+  // iff its type is at or below the vacuum-occupied type), which needs no
+  // space retrieval.
   auto const isr = get_default_context().index_space_registry();
   auto const vacocc = isr ? isr->vacuum_occupied_space(/*nulltype_ok=*/true)
                           : IndexSpace::Type::null;
   bool const has_vacocc = vacocc != IndexSpace::Type::null;
-  auto is_occ_proto = [&](Index const& p) {
-    return has_vacocc && p.space() &&
-           p.space().type().to_int32() <= vacocc.to_int32();
+  auto is_occ_index = [&](Index const& ix) {
+    return has_vacocc && ix.space() &&
+           ix.space().type().to_int32() <= vacocc.to_int32();
   };
+  // The network's own open (root-external) indices, computed once; membership
+  // in this set is what distinguishes an explicit external occ index from a
+  // contracted (internal) one.
+  auto const& open = network.ext_indices();
   for (auto&& t : network.tensors()) {
     auto tp = std::dynamic_pointer_cast<Tensor>(t);
     for (auto&& ix : ranges::views::concat(tp->bra(), tp->ket(), tp->aux())) {
       if (is_batchable(ix) && ranges::find(aux, ix) == ranges::end(aux))
         aux.push_back(ix);
       for (auto&& p : ix.proto_indices())
-        if (is_occ_proto(p) && ranges::find(aux, p) == ranges::end(aux))
+        if (is_occ_index(p) && ranges::find(aux, p) == ranges::end(aux))
           aux.push_back(p);
+      if (is_occ_index(ix) && ranges::contains(open, ix) &&
+          ranges::find(aux, ix) == ranges::end(aux))
+        aux.push_back(ix);
     }
   }
   return aux;

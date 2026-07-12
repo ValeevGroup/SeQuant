@@ -1359,6 +1359,50 @@ std::wstring render_tree(sequant::ExprPtr const& e) {
 }
 }  // namespace
 
+// batchable_index_list today admits a pure-occupied index only when it
+// arrives as a composite protoindex (e.g. a<i1,i2>): the occ index itself
+// never sits in a top-level bra/ket/aux slot in that case. When the external
+// occ instead appears as an EXPLICIT top-level index (no PAO/CSV composite in
+// sight), the slot scan sees it but rejects it because is_batchable is scoped
+// to the virtual/aux space -- so it is dropped entirely. This reproducer:
+//   R{i_1;a_1} = f{i_1;i_2} t{i_2;a_1}
+// has i_1 external (open on the network root) and i_2 internal (contracted
+// between f and t). is_batchable admits only the virtual space "a", so today
+// batchable_index_list(net, is_batchable) == {} -- i_1 never shows up as a
+// batching candidate even though it is a legitimate spectator axis.
+TEST_CASE("batchable_index_list_admits_explicit_external_occ",
+          "[optimize][batch]") {
+  using namespace sequant;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  {
+    auto occ = reg->retrieve_ptr(L"i");
+    auto uocc = reg->retrieve_ptr(L"a");
+    REQUIRE(occ);
+    REQUIRE(uocc);
+    occ->approximate_size(10);
+    uocc->approximate_size(100);
+  }
+
+  auto is_batchable = [](Index const& ix) {
+    return ix.space().base_key() == L"a";
+  };
+
+  auto f = deserialize(L"f{i_1;i_2}", {.def_perm_symm = Symmetry::Nonsymm});
+  auto t = deserialize(L"t{i_2;a_1}", {.def_perm_symm = Symmetry::Nonsymm});
+  TensorNetwork net{std::vector<ExprPtr>{f, t}};
+
+  auto i1 = Index{L"i_1"};
+  auto i2 = Index{L"i_2"};
+
+  auto aux = opt::detail::batchable_index_list(net, is_batchable);
+  // i_1 is external (open on the network root) and pure-occupied: admitted.
+  REQUIRE(ranges::find(aux, i1) != ranges::end(aux));
+  // i_2 is contracted (internal) between f and t: never admitted, even
+  // though it is pure-occupied.
+  REQUIRE(ranges::find(aux, i2) == ranges::end(aux));
+}
+
 TEST_CASE("OSV early-contraction reproducer", "[optimize][osv]") {
   using namespace sequant;
   auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
