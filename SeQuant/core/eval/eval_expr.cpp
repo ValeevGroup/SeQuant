@@ -133,38 +133,6 @@ EvalExpr::index_vector const& EvalExpr::canon_indices() const noexcept {
   return canon_indices_;
 }
 
-std::optional<std::size_t> outer_proto_position(EvalExpr const& node,
-                                                Index const& ix) {
-  // Precondition: node has no plain (non-proto) outer mode -- every leg of
-  // canon_indices() must carry proto indices. On a MIXED node (plain outer
-  // index alongside proto outer modes) the "position among distinct protos"
-  // computed below does not correspond to the physical ToT outer-trange
-  // position that slice_mode()/write_into_slice() address, so fail loudly
-  // here instead of silently returning a wrong mode. See the \warning on the
-  // declaration in eval_expr.hpp.
-  SEQUANT_ASSERT(std::ranges::all_of(
-      node.canon_indices(),
-      [](Index const& leg) { return leg.has_proto_indices(); }));
-
-  // Enumerate the node's distinct outer protoindices in canonical order: walk
-  // canon_indices() (already canonical -- no re-canonicalization here) and, for
-  // each composite (proto-bearing) leg, append its proto_indices() that have
-  // not been seen yet, preserving the order of first appearance. That
-  // deduplicated sequence is the outer-mode order of the tensor-of-tensor
-  // array, so the match position is the `mode` argument slice_mode() addresses.
-  container::svector<Index> distinct;
-  for (auto const& leg : node.canon_indices()) {
-    if (!leg.has_proto_indices()) continue;
-    for (auto const& proto : leg.proto_indices())
-      if (std::ranges::find(distinct, proto) == distinct.end())
-        distinct.push_back(proto);
-  }
-
-  for (std::size_t p = 0; p < distinct.size(); ++p)
-    if (distinct[p] == ix) return p;
-  return std::nullopt;
-}
-
 EvalExpr::EvalExpr(Tensor const& tnsr)
     : op_type_{std::nullopt},
       result_type_{ResultType::Tensor},

@@ -2022,75 +2022,6 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
   CHECK(tbat_w_tight == flops_w);
 }
 
-// Task 4 (forest batching, G4): the public optimize_result() surfaces the
-// chosen spectator external axis + block size as a forest-level signal
-// (ExternalBatchAxis) that the runtime and downstream consumers read. In this
-// (chemistry) test the PPL residual carries its external occ (i_1,i_2) ONLY as
-// a composite protoindex on the output PNOs a<i,i> (never a contracted
-// top-level slot), so no eval node hangs it -- it is emitted per optimized term
-// instead. The perf-first DenseTimeSpaceBatched factorization forms the 4-PNO W
-// giant
-// (~40 MB here); with a budget it exceeds, optimize_result() reports the
-// spectator axis sliced to batch_target_size=10, enabled by the domain-neutral
-// BatchPolicy::batch_spectator_indices flag.
-TEST_CASE("optimize emits an external batch axis for the PPL term",
-          "[optimize][external-occ]") {
-  using namespace sequant;
-  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
-  auto reg = get_default_context().mutable_index_space_registry();
-  mbpt::add_df_spaces(reg);
-  mbpt::add_pao_spaces(reg, mbpt::Spin::any);
-  mbpt::add_ao_spaces(reg, mbpt::Spin::any);
-  for (auto&& [k, v] :
-       std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 16}, {L"a", 12}, {L"μ̃", 170}, {L"Κ", 472}})
-    reg->retrieve_ptr(k)->approximate_size(v);
-  auto aux = reg->retrieve(L"Κ");
-
-  // Same PPL residual as the form-W test above: R_ij^{a1 a2} = (a1 a3|a2 a4)
-  // t_ij^{a3 a4}, DF-factored, i_1/i_2 external occ carried only as protos.
-  auto prod = deserialize(
-      L"C{a_1<i_1,i_2>;μ̃_1} g{μ̃_1;μ̃_2;Κ_1} C{μ̃_2;a_3<i_1,i_2>} "
-      L"C{a_2<i_1,i_2>;μ̃_3} g{μ̃_3;μ̃_4;Κ_1} C{μ̃_4;a_4<i_1,i_2>} "
-      L"t{a_3<i_1,i_2>,a_4<i_1,i_2>;i_1,i_2}");
-
-  OptimizeOptions opts;
-  opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
-  opts.reorder = ReorderSum::NoReorder;
-  opts.idx_to_extent = [](Index const& ix) -> std::size_t {
-    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
-  };
-  opts.inner_pow = [](Index const&, std::size_t) -> double { return 12.0; };
-  opts.batch_policy.is_batchable_index = [aux](Index const& ix) {
-    return ix.space() == aux;
-  };
-  // All batch sizes live together on BatchPolicy: the DF aux Κ keeps its 236
-  // slice; the spectator occ axis "i" gets its own per-block extent of 10.
-  auto occ = reg->retrieve(L"i");
-  opts.batch_policy.batch_target_size = [occ](Index const& ix) -> std::size_t {
-    return ix.space() == occ ? 10 : 236;
-  };
-  opts.batch_policy.is_volatile_leaf = [](Tensor const& t) {
-    return t.label() == L"t";
-  };
-  // A budget the unseeded 4-PNO W giant (~40 MB) exceeds: 1 MB.
-  opts.batch_policy.peak_threshold = 1.0e6;
-  // Enable spectator-index batching (the domain-neutral trigger).
-  opts.batch_policy.batch_spectator_indices = true;
-
-  auto res = optimize_result(prod, opts);
-  REQUIRE(res.external_batch_axis.has_value());
-  CHECK(res.external_batch_axis->axis.space().base_key() == L"i");
-  CHECK(res.external_batch_axis->block_size == 10);
-  REQUIRE(static_cast<bool>(res.expr));
-
-  // batch_spectator_indices == false disables the signal (the default
-  // optimize() path is byte-identical; the [optimize] suite is its witness).
-  opts.batch_policy.batch_spectator_indices = false;
-  auto res_off = optimize_result(prod, opts);
-  CHECK_FALSE(res_off.external_batch_axis.has_value());
-}
-
 // Quadratic-bubble (g·t2·t2) exchange term in PNO/CSV basis: the two competing
 // factorizations of one residual contribution.
 //
@@ -2582,15 +2513,14 @@ TEST_CASE("binarize stamps per-node batch axes from optimize()",
 
 // Task 3/4: reconstruct_axes must emit AxisKind::External entries for a
 // genuine spectator (external, never-contracted) axis at every node whose
-// subset carries it, gated by BOTH BatchPolicy::batch_spectator_indices (i)
-// AND the Task 4 term-level emit_external gate (perf-first objective (ii) +
-// unseeded root peak over peak_threshold (iv)), reproducing the OLD
-// compute_external_batch_axis trigger exactly. i_1 lives only on the first
-// tensor of a 4-tensor chain -- a genuine external spectator that is never
-// contracted anywhere, so is_spectator_axis(i_1) holds regardless of the
-// chosen factorization -- while Kappa_1 (the DF aux shared by the first two
-// tensors) is a genuine CONTRACTED axis, never a spectator. Distinguishes the
-// two kinds even though both get admitted into ctx.aux.
+// subset carries it, gated by BOTH BatchPolicy::batch_spectator_indices AND
+// the term-level emit_external gate (perf-first objective selected AND the
+// selected root's unseeded byte peak exceeds peak_threshold). i_1 lives only
+// on the first tensor of a 4-tensor chain -- a genuine external spectator
+// that is never contracted anywhere, so is_spectator_axis(i_1) holds
+// regardless of the chosen factorization -- while Kappa_1 (the DF aux shared
+// by the first two tensors) is a genuine CONTRACTED axis, never a spectator.
+// Distinguishes the two kinds even though both get admitted into ctx.aux.
 TEST_CASE("reconstruct_axes_emits_external_per_node", "[optimize][batch]") {
   using namespace sequant;
   auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
@@ -2690,11 +2620,11 @@ TEST_CASE("reconstruct_axes_emits_external_per_node", "[optimize][batch]") {
   CHECK(node_without_external);
 
   // Assertion 2: peak_threshold = +infinity (the term never "needs" batching
-  // under any budget) with batch_spectator_indices still true => gate (iv)
-  // fails => ZERO External entries anywhere. This is exactly the OLD
-  // compute_external_batch_axis condition (iv); before the Task 4 gate,
-  // reconstruct_axes emitted External regardless of peak_threshold, so this
-  // assertion fails without the fix and passes with it.
+  // under any budget) with batch_spectator_indices still true => the
+  // unseeded-peak-over-threshold gate fails => ZERO External entries
+  // anywhere. Before the Task 4 gate, reconstruct_axes emitted External
+  // regardless of peak_threshold, so this assertion fails without the fix
+  // and passes with it.
   axes_map->clear();
   opts.batch_policy.peak_threshold = std::numeric_limits<double>::infinity();
   auto optimized_inf = optimize(expr, opts);

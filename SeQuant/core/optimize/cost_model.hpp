@@ -1090,16 +1090,15 @@ struct PeakBatchedModel {
                    container::vector<State> const& st) const {
     std::size_t const root = (std::size_t{1} << ctx.nt) - 1;
     int const best = select_root(ctx, st);  // shared helper (see below)
-    // Term-level "should batch spectator axes" gate, reproducing the OLD
-    // compute_external_batch_axis conditions (ii) perf-first objective and
-    // (iv) unseeded root peak (bytes) exceeds peak_threshold, on top of (i)
-    // batch_spectator_indices already required below. select_root(ctx, st)
-    // above defaults to root_B=0 (unseeded) and this is the SAME model
-    // (same perf_first / peak_threshold / numeric_size) that
-    // seeded_root_peak_batched reads via select_root(ctx, st, /*root_B=*/0),
-    // so st[root][0][best].peak * numeric_size is exactly the byte-peak the
-    // old path compared to peak_threshold -- no extra seeded-model pass
-    // needed to reproduce (iv).
+    // Term-level "should batch spectator axes" gate: emit only when the
+    // perf-first objective is selected AND the selected root's unseeded byte
+    // peak exceeds peak_threshold, on top of batch_spectator_indices already
+    // being required below. select_root(ctx, st) above defaults to root_B=0
+    // (unseeded) and this is the SAME model (same perf_first / peak_threshold
+    // / numeric_size) that seeded_root_peak_batched reads via
+    // select_root(ctx, st, /*root_B=*/0), so st[root][0][best].peak *
+    // numeric_size is exactly the byte-peak compared to peak_threshold here
+    // -- no extra seeded-model pass needed.
     double const root_peak_bytes = st[root][0][best].peak * numeric_size;
     bool const emit_external = batch_spectator_indices && perf_first &&
                                (root_peak_bytes > peak_threshold);
