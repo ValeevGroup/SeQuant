@@ -110,5 +110,6 @@ The quantities that aren't self-evident:
 Two reference tests (`ctest -R cost_analysis_`) run the tool on `examples/` and
 diff the report against a frozen `*.md.expected`:
 
-- `cost_analysis_ccsd_r2` — spin-orbital CCSD R2 (a `Sum` of terms).
+- `cost_analysis_ccsd_r2` — spin-orbital CCSD R2 (a `Sum` of terms) whose two
+  ladder terms share one `g*t` intermediate, exercising the reuse census.
 - `cost_analysis_df_r1` — a single density-fitted product (the non-`Sum` path).
