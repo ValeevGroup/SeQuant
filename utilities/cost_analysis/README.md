@@ -22,8 +22,10 @@ Built as part of SeQuant (target `cost_analysis`). It takes a single argument, a
 cost_analysis --driver examples/ccsd_r2.json
 ```
 
-Paths inside the driver (`equation_file`, `output.path`) are resolved relative
-to the driver's own directory.
+Paths inside the driver (`equation_file`, `output.path`) — and the `dump_tree`
+`<name>.tree.txt` files — are resolved/written relative to the driver's own
+directory, not the invocation directory. The final "Report written to …" line
+prints the absolute path so the output is easy to locate.
 
 ## Driver
 
@@ -45,6 +47,13 @@ to the driver's own directory.
 | | `dump_tree` | also write each result's binarized tree to `<name>.tree.txt` | `false` |
 | `equations` | `[{name, equation_file}]` | equations to analyze | — |
 
+> [!IMPORTANT]
+> Every index space that appears in an equation should be given a size. Any
+> space omitted from `sizes` falls back to its standard-registry default, so
+> the reported MB/operation figures stay well-defined but reflect that default
+> rather than your problem — size all used spaces (including any `aux` space) to
+> get meaningful numbers.
+
 Each `equation_file` holds one `<head> = <rhs>` in SeQuant serialization V1, e.g.
 
 ```
@@ -52,9 +61,8 @@ R{a1,a2;i1,i2} = g{a1,a2;i1,i2} + g{a3,a4;i1,i2} t{i3,i4;a3,a4} R{a1,a2;i3,i4}
 ```
 
 > [!NOTE]
-> CSV/PNO expressions (composite hyper-indices like `a<i,j>`) are not supported:
-> `AsyCost` is not proto-index aware, so it would size such an index as a bare
-> one and report wrong costs.
+> CSV/PNO expressions are not supported: `sequant::AsyCost` is not proto-index aware, so
+> it would size such an index as a bare one and report wrong costs.
 
 ## Workflow
 
@@ -78,11 +86,11 @@ count intermediates that would be cached / persist across iterations.
 
 ## Report
 
-One `##` section per result — a one-line summary, the **Largest intermediates**,
-**Most expensive contractions**, and **Shape census** tables, then a trailing
-**Cache** table. Memory is the tensor's element count (product of its
-index-space sizes) times the field's element width (8 B real / 16 B complex), in
-MB; operation counts stay symbolic.
+One `##` section per result — a one-line summary and the **Largest
+intermediates**, **Most expensive contractions**, and **Shape census** tables —
+followed by a single **Cache** section pooled across all results. Memory is the
+tensor's element count (product of its index-space sizes) times the field's
+element width (8 B real / 16 B complex), in MB; operation counts stay symbolic.
 
 The quantities that aren't self-evident:
 - **distinct intermediates** — structurally-unique internal contraction nodes;

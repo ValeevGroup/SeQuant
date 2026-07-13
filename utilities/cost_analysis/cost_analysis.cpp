@@ -374,7 +374,11 @@ int main(int argc, char** argv) {
     if (!out)
       throw std::runtime_error("cannot open output file: " + cfg.out.path);
     write_report(cfg, results, sim, out);
-    std::cout << "Report written to " << cfg.out.path << "\n";
+    // Print the absolute path: the working directory was switched to the
+    // driver's parent above, so a relative out.path lands there, not in the
+    // user's invocation directory.
+    std::cout << "Report written to " << std::filesystem::absolute(cfg.out.path)
+              << "\n";
     return 0;
 
   } catch (const std::exception& e) {
