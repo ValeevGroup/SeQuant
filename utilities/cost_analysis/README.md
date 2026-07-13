@@ -43,7 +43,7 @@ to the driver's own directory.
 | `output` | `path` | report filename | `cost_analysis.md` |
 | | `top_n` | rows in the largest/expensive tables | `20` |
 | | `dump_tree` | also write each result's binarized tree to `<name>.tree.txt` | `false` |
-| `results` | `[{name, equation_file}]` | equations to analyze | — |
+| `equations` | `[{name, equation_file}]` | equations to analyze | — |
 
 Each `equation_file` holds one `<head> = <rhs>` in SeQuant serialization V1, e.g.
 

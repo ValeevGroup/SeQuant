@@ -43,8 +43,8 @@ struct OutSpec {
   bool dump_tree = false;  ///< also write each result's binarized tree
 };
 
-/// One `results[]` entry: a named equation file to analyze.
-struct ResultSpec {
+/// One `equations[]` entry: a named equation file to analyze.
+struct EquationSpec {
   std::string name, equation_file;
 };
 
@@ -62,7 +62,7 @@ struct Config {
   OptSpec optimize;
   CacheSpec cache;
   OutSpec out;
-  std::vector<ResultSpec> results;
+  std::vector<EquationSpec> equations;
 };
 
 /// A binarized evaluation-tree node, keyed in the catalog by structural

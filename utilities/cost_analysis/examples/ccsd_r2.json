@@ -21,7 +21,7 @@
     "top_n": 20,
     "dump_tree": true
   },
-  "results": [
+  "equations": [
     {
       "name": "R2",
       "equation_file": "ccsd_r2.inp"

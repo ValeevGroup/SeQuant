@@ -93,11 +93,11 @@ Config load_config(const json& d) {
     c.out.dump_tree = ou.value("dump_tree", false);
   }
 
-  for (const auto& r : d.at("results")) {
-    ResultSpec rs;
+  for (const auto& r : d.at("equations")) {
+    EquationSpec rs;
     rs.name = r.at("name").get<std::string>();
     rs.equation_file = r.at("equation_file").get<std::string>();
-    c.results.push_back(std::move(rs));
+    c.equations.push_back(std::move(rs));
   }
   return c;
 }
@@ -349,7 +349,7 @@ int main(int argc, char** argv) {
     setup_context(cfg);  // registry baked before any parse
 
     std::vector<std::pair<std::string, CellResult>> results;
-    for (const auto& r : cfg.results) {
+    for (const auto& r : cfg.equations) {
       const ResultExpr res = parse_equation(read_file(r.equation_file));
       CellResult cell = process(cfg, res.expression(), res.result_as_tensor());
 
