@@ -79,17 +79,21 @@ Config load_config(const json& d) {
     const auto& ca = d.at("cache");
     c.cache.enabled = ca.value("enabled", true);
     // A negative min_repeats wraps to a huge size_t (JSON ints are signed) and
-    // silently disables caching; the other knobs degrade harmlessly, so guard
-    // only this one.
+    // silently disables caching, so reject it.
     const long mr = ca.value("min_repeats", 2L);
     if (mr < 0) throw std::runtime_error("cache.min_repeats must be >= 0");
     c.cache.min_repeats = static_cast<std::size_t>(mr);
     c.cache.max_footprint = ca.value("max_footprint", 0.0);
+    if (c.cache.max_footprint < 0.0)
+      throw std::runtime_error("cache.max_footprint must be >= 0");
   }
   if (d.contains("output")) {
     const auto& ou = d.at("output");
     c.out.path = ou.value("path", std::string("cost_analysis.md"));
-    c.out.top_n = ou.value("top_n", std::size_t{20});
+    // Read signed then guard: a negative top_n would wrap to a huge size_t.
+    const long tn = ou.value("top_n", 20L);
+    if (tn < 0) throw std::runtime_error("output.top_n must be >= 0");
+    c.out.top_n = static_cast<std::size_t>(tn);
     c.out.dump_tree = ou.value("dump_tree", false);
   }
 
