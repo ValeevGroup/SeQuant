@@ -36,7 +36,6 @@ void report_largest(const CellResult& cell, std::size_t top_n,
                        rec->label, rec->spaces, mb(rec->memory, bytes_per_elem),
                        rec->uses, full_expr(*node), rec->flops.text());
   }
-  out << "\n";
 }
 
 void report_expensive(const CellResult& cell, std::size_t top_n,
@@ -59,7 +58,6 @@ void report_expensive(const CellResult& cell, std::size_t top_n,
                        rec->spaces, rec->uses, full_expr(*node),
                        rec->flops.text());
   }
-  out << "\n";
 }
 
 void report_shape_histogram(const CellResult& cell, double bytes_per_elem,
@@ -92,7 +90,6 @@ void report_shape_histogram(const CellResult& cell, double bytes_per_elem,
   for (const auto& [shape, g] : rows)
     out << std::format("| {} | {:.4f} | {} | {} |\n", shape,
                        mb(g.mem, bytes_per_elem), g.count, g.uses);
-  out << "\n";
 }
 
 }  // namespace
@@ -109,37 +106,40 @@ void write_report(
     const std::vector<std::pair<std::string, CellResult>>& results,
     const SimResult& sim, std::ostream& out) {
   const double bytes_per_elem = cfg.real_field ? 8.0 : 16.0;
-  out << "# SeQuant cost analysis\n\n"
-      << std::format("_SeQuant: {}_\n\n", git_revision())
-      << std::format("Sizes in MB ({} bytes/element).\n\n", bytes_per_elem);
+  // Sections are separated by a leading blank line rather than a trailing one,
+  // so the report ends with a single newline (matches the committed fixtures).
+  out << "# SeQuant cost analysis\n";
+  if (!cfg.out.omit_revision)
+    out << std::format("\n_SeQuant: {}_\n", git_revision());
+  out << std::format("\nSizes in MB ({} bytes/element).\n", bytes_per_elem);
   for (const auto& [name, cell] : results) {
-    out << std::format("## {}\n\n", name);
+    out << std::format("\n## {}\n", name);
     out << std::format(
-        "Terms: {}; distinct intermediates: {}; reused: {}; largest: {:.4f} "
-        "MB; peak storage: {:.4f} MB.\n\n",
+        "\nTerms: {}; distinct intermediates: {}; reused: {}; largest: {:.4f} "
+        "MB; peak storage: {:.4f} MB.\n",
         cell.n_terms, cell.n_distinct, cell.n_reused,
         mb(cell.largest_mem, bytes_per_elem),
         mb(cell.peak_storage, bytes_per_elem));
     // Op-count only; no concrete FLOP number.
-    out << std::format("Total operations (symbolic): {}\n\n",
+    out << std::format("\nTotal operations (symbolic): {}\n",
                        cell.total_flops.text());
-    out << "### Largest intermediates\n\n";
+    out << "\n### Largest intermediates\n\n";
     report_largest(cell, cfg.out.top_n, bytes_per_elem, out);
-    out << "### Most expensive contractions\n\n";
+    out << "\n### Most expensive contractions\n\n";
     report_expensive(cell, cfg.out.top_n, out);
-    out << "### Shape census\n\n";
+    out << "\n### Shape census\n\n";
     report_shape_histogram(cell, bytes_per_elem, out);
   }
   if (cfg.cache.enabled) {
     out << std::format(
-        "## Cache (gated, volatile leaf = \"{}\", min_repeats = {})\n\n",
+        "\n## Cache (gated, volatile leaf = \"{}\", min_repeats = {})\n\n",
         cfg.optimize.volatile_leaf, cfg.cache.min_repeats);
     out << "| Metric | Value |\n|---|---|\n";
     out << std::format("| Cached | {} |\n", sim.n_cached);
     out << std::format("| Persistent | {} |\n", sim.n_persistent);
     out << std::format("| Persistent footprint (MB) | {:.4f} |\n",
                        mb(sim.persistent_footprint, bytes_per_elem));
-    out << std::format("| Total cached footprint (MB) | {:.4f} |\n\n",
+    out << std::format("| Total cached footprint (MB) | {:.4f} |\n",
                        mb(sim.cached_footprint, bytes_per_elem));
   }
 }

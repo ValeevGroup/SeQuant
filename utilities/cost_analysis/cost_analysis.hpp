@@ -41,6 +41,8 @@ struct OutSpec {
   std::string path = "cost_analysis.md";
   std::size_t top_n = 20;  ///< rows in the largest/expensive tables
   bool dump_tree = false;  ///< also write each result's binarized tree
+  bool omit_revision =
+      false;  ///< drop the git-revision line (reproducible diffs)
 };
 
 /// One `equations[]` entry: a named equation file to analyze.

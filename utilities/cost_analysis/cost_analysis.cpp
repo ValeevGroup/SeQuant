@@ -337,6 +337,9 @@ int main(int argc, char** argv) {
   std::filesystem::path driver;
   app.add_option("--driver", driver, "Path to the JSON driver file")
       ->required();
+  bool omit_revision = false;
+  app.add_flag("--omit-revision", omit_revision,
+               "Omit the git-revision line (for reproducible test diffs)");
   CLI11_PARSE(app, argc, argv);
 
   try {
@@ -349,7 +352,8 @@ int main(int argc, char** argv) {
     std::filesystem::current_path(
         std::filesystem::absolute(driver).parent_path());
 
-    const Config cfg = load_config(d);
+    Config cfg = load_config(d);
+    cfg.out.omit_revision = omit_revision;
     setup_context(cfg);  // registry baked before any parse
 
     std::vector<std::pair<std::string, CellResult>> results;

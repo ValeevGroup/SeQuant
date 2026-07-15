@@ -108,10 +108,11 @@ The quantities that aren't self-evident:
 ## Tests
 
 Reference tests (`ctest -R sequant/cost_analysis`) run the tool on `examples/`
-and diff the report against a frozen `*.md.expected` (the volatile git-revision
-line is stripped before diffing):
+with `--omit-revision` (which drops the volatile git-revision line, making the
+report byte-stable) and compare it against a frozen `*.md.expected` via
+`cmake -E compare_files`:
 
 - `.../ccsd_r2/*` — spin-orbital CCSD R2 (a `Sum` of terms) whose two ladder
-  terms share one `g*t` intermediate, exercising the reuse census; also checks
-  the `--dump_tree` output was produced.
+  terms share one `g*t` intermediate, exercising the reuse census; also diffs
+  the `--dump_tree` output against `R2.tree.txt.expected`.
 - `.../df_r1/*` — a single density-fitted product (the non-`Sum` path).

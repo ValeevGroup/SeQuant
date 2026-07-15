@@ -10,26 +10,26 @@ target_link_libraries(cost_analysis PRIVATE
 target_set_warning_flags(cost_analysis)
 
 foreach(NAME IN ITEMS "ccsd_r2" "df_r1")
+    # --omit-revision drops the volatile git-revision line so a plain
+    # compare_files suffices; the tool writes the report next to the driver.
     add_test(
         NAME "sequant/cost_analysis/${NAME}/generate"
-        COMMAND cost_analysis --driver "${CMAKE_CURRENT_LIST_DIR}/examples/${NAME}.json")
+        COMMAND cost_analysis --driver "${CMAKE_CURRENT_LIST_DIR}/examples/${NAME}.json" --omit-revision)
     set_tests_properties("sequant/cost_analysis/${NAME}/generate"
         PROPERTIES FIXTURES_SETUP "COST_ANALYSIS_${NAME}")
 
-    # Strip the volatile git-revision line before diffing; -B ignores the extra
-    # trailing blank line the live report carries but the fixture doesn't.
     add_test(
         NAME "sequant/cost_analysis/${NAME}/verify"
-        COMMAND bash -c "diff -B <(sed '/^_SeQuant:/d' '${NAME}.md') <(sed '/^_SeQuant:/d' '${NAME}.md.expected')"
+        COMMAND "${CMAKE_COMMAND}" -E compare_files "${NAME}.md" "${NAME}.md.expected"
         WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/examples")
     set_tests_properties("sequant/cost_analysis/${NAME}/verify"
         PROPERTIES FIXTURES_REQUIRED "COST_ANALYSIS_${NAME}")
 endforeach()
 
-# ccsd_r2 exercises --dump_tree; check the tree file was produced.
+# ccsd_r2 exercises --dump_tree; diff the tree dump against its fixture.
 add_test(
     NAME "sequant/cost_analysis/ccsd_r2/dump_tree"
-    COMMAND bash -c "test -f R2.tree.txt"
+    COMMAND "${CMAKE_COMMAND}" -E compare_files "R2.tree.txt" "R2.tree.txt.expected"
     WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/examples")
 set_tests_properties("sequant/cost_analysis/ccsd_r2/dump_tree"
     PROPERTIES FIXTURES_REQUIRED "COST_ANALYSIS_ccsd_r2")
