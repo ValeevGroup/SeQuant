@@ -9,16 +9,27 @@ target_link_libraries(cost_analysis PRIVATE
     SeQuant::mbpt nlohmann_json::nlohmann_json CLI11::CLI11)
 target_set_warning_flags(cost_analysis)
 
-add_test(NAME cost_analysis_ccsd_r2
-    COMMAND ${CMAKE_COMMAND}
-    -DEXE=$<TARGET_FILE:cost_analysis>
-    -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/examples
-    -DNAME=ccsd_r2 -DDUMP=R2
-    -P ${CMAKE_CURRENT_SOURCE_DIR}/run_tests.cmake)
+foreach(NAME IN ITEMS "ccsd_r2" "df_r1")
+    add_test(
+        NAME "sequant/cost_analysis/${NAME}/generate"
+        COMMAND cost_analysis --driver "${CMAKE_CURRENT_LIST_DIR}/examples/${NAME}.json")
+    set_tests_properties("sequant/cost_analysis/${NAME}/generate"
+        PROPERTIES FIXTURES_SETUP "COST_ANALYSIS_${NAME}")
 
-add_test(NAME cost_analysis_df_r1
-    COMMAND ${CMAKE_COMMAND}
-    -DEXE=$<TARGET_FILE:cost_analysis>
-    -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/examples
-    -DNAME=df_r1
-    -P ${CMAKE_CURRENT_SOURCE_DIR}/run_tests.cmake)
+    # Strip the volatile git-revision line before diffing; -B ignores the extra
+    # trailing blank line the live report carries but the fixture doesn't.
+    add_test(
+        NAME "sequant/cost_analysis/${NAME}/verify"
+        COMMAND bash -c "diff -B <(sed '/^_SeQuant:/d' '${NAME}.md') <(sed '/^_SeQuant:/d' '${NAME}.md.expected')"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/examples")
+    set_tests_properties("sequant/cost_analysis/${NAME}/verify"
+        PROPERTIES FIXTURES_REQUIRED "COST_ANALYSIS_${NAME}")
+endforeach()
+
+# ccsd_r2 exercises --dump_tree; check the tree file was produced.
+add_test(
+    NAME "sequant/cost_analysis/ccsd_r2/dump_tree"
+    COMMAND bash -c "test -f R2.tree.txt"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/examples")
+set_tests_properties("sequant/cost_analysis/ccsd_r2/dump_tree"
+    PROPERTIES FIXTURES_REQUIRED "COST_ANALYSIS_ccsd_r2")
