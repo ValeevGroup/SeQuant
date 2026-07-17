@@ -1,6 +1,8 @@
 #include "format_support.hpp"
 #include "processing.hpp"
 #include "utils.hpp"
+#include "processing_step.hpp"
+#include "processing_tree.hpp"
 
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/export/export.hpp>
@@ -37,13 +39,14 @@
 #include <iterator>
 #include <limits>
 #include <ranges>
+#include <memory>
+#include <vector>
 #include <string>
 #include <string_view>
 #include <unordered_set>
 #include <variant>
 
 using nlohmann::json;
-using namespace sequant;
 
 template <>
 struct std::hash<Tensor> {
@@ -51,6 +54,8 @@ struct std::hash<Tensor> {
     return tensor.hash_value();
   }
 };
+
+namespace sequant::util::extint {
 
 class ItfExportContext : public ItfContext {
  public:
@@ -647,6 +652,56 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta) {
   }
 }
 
+void process_steps(const json &json_steps, const IndexSpaceMeta &meta) {
+	if (!json_steps.is_array()) {
+		throw Exception("Steps object must be an array");
+	}
+
+	std::vector<std::unique_ptr<ProcessingStep>> steps;
+	std::unordered_map<std::string, std::size_t> output_assoc;
+
+	for (const json &step : json_steps) {
+		const std::size_t step_id = steps.size();
+		const std::string kind = step.at("kind").get<std::string>();
+		std::vector<std::size_t> inputs;
+
+		if (step.contains("input")) {
+			const std::string input_id = step.at("input").get<std::string>();
+			auto it = output_assoc.find(input_id);
+			if (it == output_assoc.end()) {
+				throw Exception("Attempted to use an (as of yet) unknown output '" + input_id  +"'");
+			}
+
+			inputs.emplace_back(std::distance(output_assoc.begin(), it));
+		}
+		if (step.contains("output")){
+			const std::string output_id = step.at("output").get<std::string>();
+			auto [_, inserted] = output_assoc.insert({output_id, step_id});
+			if (!inserted) {
+				throw Exception("Duplicate output ID '" + output_id + "'");
+			}
+		}
+
+		std::unique_ptr<ProcessingStep> proc_step;
+
+		if (kind == "read_input") {
+			proc_step = std::make_unsigned<ReadInputStep>();
+		} else {
+			throw Exception("Unknown processing step kind '" + kind + "'");
+		}
+
+		if (step.contains("options")) {
+			if (!proc_step->accepts_options()) {
+				throw Exception("Processing step '" + kind + "' does not take options but some where given");
+			}
+
+			proc_step->set_options(step.at("options"));
+		} else if (proc_step->requires_options()) {
+			throw Exception("Processing step '" + kind + "' requires options but none where given");
+		}
+	}
+}
+
 void process(const json &driver, IndexSpaceMeta &spaceMeta) {
   if (!driver.contains("index_spaces")) {
     throw Exception("Missing index_spaces definition");
@@ -654,11 +709,11 @@ void process(const json &driver, IndexSpaceMeta &spaceMeta) {
 
   registerIndexSpaces(driver.at("index_spaces"), spaceMeta);
 
-  if (driver.contains("code_generation")) {
-    const json &details = driver.at("code_generation");
-
-    generateCode(details, spaceMeta);
+  if (!driver.contains("steps")) {
+	  throw Exception("Missing steps specification");
   }
+
+  process_steps(driver.at("steps"), spaceMeta);
 }
 
 void generalSetup() {
@@ -666,7 +721,10 @@ void generalSetup() {
       mbpt::cardinal_tensor_labels());
 }
 
+}
+
 int main(int argc, char **argv) {
+	using namespace sequant;
   set_locale();
   Context ctx({.index_space_registry = IndexSpaceRegistry(),
                .vacuum = Vacuum::SingleProduct});
@@ -677,7 +735,7 @@ int main(int argc, char **argv) {
   // to use the new names.
   ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
   set_default_context(ctx);
-  generalSetup();
+  util::extint::generalSetup();
 
   CLI::App app(
       "Interface for reading in equations generated outside of SeQuant");
@@ -720,7 +778,7 @@ int main(int argc, char **argv) {
         json::parse(in, /*callback*/ nullptr, /*allow_exceptions*/ true,
                     /*skip_comments*/ true);
 
-    process(driver_info, spaceMeta);
+	util::extint::process(driver_info, spaceMeta);
   } catch (const std::exception &e) {
     spdlog::error("Unexpected error: {}", e.what());
     return 1;
