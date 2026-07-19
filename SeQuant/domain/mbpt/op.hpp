@@ -1167,6 +1167,12 @@ ExprPtr F(bool use_tensor = true,
 /// A general operator of rank \p K
 ExprPtr θ(std::size_t K);
 
+/// @brief Makes a rank-\p rank number (replacement) operator
+///        \f$ \{ a^{p_1 \dots p_r}_{q_1 \dots q_r} \} \f$ over the complete
+///        space.
+/// @param rank particle rank (>= 1)
+ExprPtr N(std::size_t rank);
+
 /// Makes particle-conserving excitation operator of rank \p K
 ExprPtr t(std::size_t K);
 

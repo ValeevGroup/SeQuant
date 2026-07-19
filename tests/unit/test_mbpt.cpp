@@ -659,6 +659,25 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE(to_latex(simplify(theta1.tensor_form())) ==
               L"{{\\theta^{{p_2}}_{{p_1}}}{\\tilde{a}^{{p_1}}_{{p_2}}}}");
 
+      {
+        // number operator: label "N", lowering yields a bare
+        // FNOperator with `rank` cre and `rank` ann over the complete space
+        auto N_2 = N(2)->as<op_t>();
+        REQUIRE(N_2.label() == L"N");
+
+        auto N_2_tform = N_2.tensor_form();
+        REQUIRE(N_2_tform->is<FNOperator>());
+        const auto& N_2_fnop = N_2_tform->as<FNOperator>();
+        REQUIRE(N_2_fnop.ncreators() == 2);
+        REQUIRE(N_2_fnop.nannihilators() == 2);
+
+        const auto complete_space = get_complete_space(Spin::any);
+        for (const auto& o : N_2_fnop.creators())
+          REQUIRE(o.index().space() == complete_space);
+        for (const auto& o : N_2_fnop.annihilators())
+          REQUIRE(o.index().space() == complete_space);
+      }
+
       auto R_2 = r(2)->as<op_t>();
       //    std::wcout << "R_2: " << to_latex(simplify(R_2.tensor_form())) <<
       //    std::endl;

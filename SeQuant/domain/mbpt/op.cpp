@@ -974,6 +974,29 @@ ExprPtr θ(std::size_t K) {
                   });
 }
 
+ExprPtr N(std::size_t rank) {
+  if (rank < 1) throw Exception("mbpt::op::N: rank must be >= 1");
+
+  // rank-`rank` number operator N = {a†_{p1..pr} a_{q1..qr}} over the complete
+  // space (general, particle-conserving qns).
+  return ex<op_t>([]() -> std::wstring_view { return L"N"; },
+                  [rank]() -> ExprPtr {
+                    const auto space = get_complete_space(Spin::any);
+                    container::svector<Index> cres, anns;
+                    cres.reserve(rank);
+                    anns.reserve(rank);
+                    for (std::size_t i = 0; i < rank; ++i)
+                      cres.emplace_back(space, i + 1);
+                    for (std::size_t i = 0; i < rank; ++i)
+                      anns.emplace_back(space, rank + i + 1);
+                    return ex<FNOperator>(cre(cres), ann(anns));
+                  },
+                  [rank](qnc_t& qns) {
+                    qnc_t op_qnc_t = general_type_qns(rank);
+                    qns = combine(op_qnc_t, qns);
+                  });
+}
+
 ExprPtr t(std::size_t K) {
   SEQUANT_ASSERT(K > 0);
   SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"t"));
