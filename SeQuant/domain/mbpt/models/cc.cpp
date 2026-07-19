@@ -203,6 +203,27 @@ std::vector<ExprPtr> CC::λ() const {
   return result;
 }
 
+ExprPtr CC::rdm(size_t rank) const {
+  // 1. rank-`rank` number operator N = {a†_{p1..pr} a_{q1..qr}};(see op::N).
+  // Qualified with op:: because `N` (the cluster rank) is a member.
+  auto N_op = op::N(rank);
+
+  // 2. similarity transform N̄ = e^{-σ} N e^{σ} (σ = T, or T−T⁺ for unitary).
+  const auto commutator_rank = hbar_comm_rank_.value_or(4);
+  auto Nbar = mbpt::lst(N_op, T(N, skip_singles()), commutator_rank,
+                        {.unitary = unitary()});
+
+  // 3. reference expectation value with the ansatz's left wavefunction:
+  // γ = <0|(1+Λ) N̄|0>  (traditional);  <0|N̄|0>  (unitary, no Λ).
+  auto expr = unitary() ? Nbar : simplify((1 + Λ(N, skip_singles())) * Nbar);
+  const auto connect =
+      unitary() ? mbpt::OpConnections<std::wstring>{}
+                : mbpt::OpConnections<std::wstring>{{L"N", L"t"}, {L"t", L"N"}};
+  auto gamma = this->ref_av(expr, connect);
+
+  return gamma;
+}
+
 std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
                             std::optional<size_t> nbatch) const {
   SEQUANT_ASSERT(order == 1 &&

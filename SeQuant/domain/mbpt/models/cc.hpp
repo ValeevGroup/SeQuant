@@ -183,6 +183,24 @@ class CC {
   /// @return vector of left side sigma equations, element 0 is always null
   [[nodiscard]] std::vector<ExprPtr> eom_l(nₚ np, nₕ nh) const;
 
+  /// @brief derives the @p rank -particle reduced density matrix (RDM) as the
+  /// reference expectation value of a similarity-transformed number operator.
+  /// Traditional ansatz:
+  /// \f$ \gamma^{p_1 \dots p_r}_{q_1 \dots q_r} = \langle 0| (1 +
+  /// \hat{\Lambda}) e^{-\hat{T}} \{ a^{p_1 \dots p_r}_{q_1 \dots q_r} \}
+  /// e^{\hat{T}} |0 \rangle \f$; unitary ansatz drops \f$ \hat{\Lambda} \f$ and
+  /// uses \f$ e^{-\hat{\sigma}} \dots e^{\hat{\sigma}} \f$ with \f$
+  /// \hat{\sigma} = \hat{T} - \hat{T}^\dagger \f$. The number-operator indices
+  /// are in the complete space, so they survive as the free indices of the
+  /// result; the similarity-transform truncation is
+  /// `hbar_comm_rank_.value_or(4)`. Returns the *linked* density (the number
+  /// operator is required to connect to the cluster amplitudes).
+  /// @param rank particle rank of the RDM (1 = one-particle \f$ \gamma \f$,
+  ///   2 = two-particle \f$ \Gamma \f$, ...)
+  /// @return the RDM expression (Fermi-vacuum normal-ordered / correlation
+  /// part)
+  [[nodiscard]] ExprPtr rdm(size_t rank = 1) const;
+
  private:
   size_t N;
   Ansatz ansatz_ = Ansatz::T;
