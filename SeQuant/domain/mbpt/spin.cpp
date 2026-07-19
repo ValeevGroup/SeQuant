@@ -1818,6 +1818,8 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
       // Add spin labels to internal indices, expand antisymmetric tensors
       ExprPtr spin_expr_i = append_spin(spin_expr, i);
       spin_expr_i = expand_antisymm(spin_expr_i, true);
+      // std::wcout << "after expand_antisymm: " << to_latex_align(spin_expr_i,
+      // 0, 4) << '\n';
       expand(spin_expr_i);
       detail::reset_idx_tags(spin_expr_i);
       Sum i_result{};
