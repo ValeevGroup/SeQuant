@@ -1171,9 +1171,9 @@ int main(int argc, char* argv[]) {
   std::cout << "Number of threads: " << sequant::num_threads() << "\n\n";
 
 #ifndef NDEBUG
-  constexpr size_t DEFAULT_NMAX = 3;
+  constexpr size_t DEFAULT_NMAX = 2;
 #else
-  constexpr size_t DEFAULT_NMAX = 4;
+  constexpr size_t DEFAULT_NMAX = 3;
 #endif
 
   // command line arguments:

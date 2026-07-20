@@ -14,8 +14,8 @@ if (NOT !SEQUANT_INTERNAL_SKIP_LONG_TESTS)
         # Equation-of-motion Coupled-Cluster
         "eomcc.cpp -> 2 2h2p R|2 1h2p R|2 2h1p R|2 3h1p R|2 1h3p R|2 4h2p R|3 3h3p R"
             "os_eom.cpp"
-            "singletCSeom.cpp"
-            "tripletCSeom.cpp"
+            "singletCSeom.cpp -> 2 2h2p R"
+            "tripletCSeom.cpp -> 2 2h2p R"
     )
 
     if (TARGET Eigen3::Eigen)
