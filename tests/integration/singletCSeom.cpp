@@ -11,6 +11,8 @@
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
+#include <range/v3/algorithm/transform.hpp>
+
 #include <chrono>
 
 using namespace sequant;
