@@ -274,15 +274,16 @@ struct ClosedShellCCSpintraceOptions {
   /// (spin-free) basis and thus has an exponential cost;
   /// the default is to use closed_shell_spintrace, which is more efficient
   bool naive_spintrace = false;
-  /// EOM triplet doubles only: compact R2 to one (-3c) term per tensor-network
-  /// group (135 terms for 2h2p) via triplet_doubles_maxcoeff_compact; the
-  /// dropped terms are recovered on evaluation by the {1,-1/3,-1/3,-1/3}
-  /// four swap reconstruction (numerical) or
-  /// triplet_doubles_symbolic_reconstruct (symbolic).
+  /// EOM triplet only: compact the residual to one orbit representative per
+  /// tensor-network group via triplet_maxcoeff_compact (doubles: the -3c
+  /// member of each {c,c,c,-3c} group, 135 terms for 2h2p; triples: one
+  /// stabilizer-scaled member per 36-slot-perm orbit); the dropped terms are
+  /// recovered on evaluation by triplet_nns_project (numerical) or
+  /// triplet_symbolic_reconstruct (symbolic).
   /// Combined with triplet_te_only it instead compacts the bare-TE residual,
   /// whose groups are {c, c, -2c} (405 -> 135 terms for 2h2p); the kept -2c
-  /// representative is expanded by triplet_doubles_te_nns_project
-  /// ({1,-1/2,-1/2,0}, numerical) or triplet_doubles_te_symbolic_reconstruct
+  /// representative is expanded by triplet_te_nns_project ({1,-1/2,-1/2,0},
+  /// numerical) or triplet_symbolic_reconstruct with TeNnsReconstruction
   /// (symbolic).
   bool triplet_doubles_compact = false;
   /// EOM triplet doubles experiment: build the residual from

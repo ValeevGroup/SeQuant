@@ -637,110 +637,6 @@ ExprPtr WK_biorthogonalization_filter(
 
 namespace {
 
-enum class TripletExternalSwapKind {
-  Identity,
-  BraSwap,
-  KetSwap,
-  PairSwap,
-  Other
-};
-
-std::pair<container::svector<Index>, container::svector<Index>>
-triplet_external_slot_labels(const Product& p) {
-  for (const auto& f : p) {
-    if (!f->is<Tensor>()) continue;
-    const auto& t = f->as<Tensor>();
-    if (t.label() == L"R" || t.label() == L"L") {
-      return {container::svector<Index>(t.bra().begin(), t.bra().end()),
-              container::svector<Index>(t.ket().begin(), t.ket().end())};
-    }
-  }
-  for (const auto& f : p) {
-    if (!f->is<Tensor>()) continue;
-    const auto& t = f->as<Tensor>();
-    if (t.rank() >= 2) {
-      return {container::svector<Index>(t.bra().begin(), t.bra().end()),
-              container::svector<Index>(t.ket().begin(), t.ket().end())};
-    }
-  }
-  return {};
-}
-
-TripletExternalSwapKind classify_triplet_external_swap(
-    const container::svector<container::svector<Index>>& ext_idxs,
-    const container::svector<Index>& ref_bra,
-    const container::svector<Index>& ref_ket,
-    const container::svector<Index>& bra,
-    const container::svector<Index>& ket) {
-  if (ext_idxs.size() != 2 || ref_bra.size() != 2 || ref_ket.size() != 2 ||
-      bra.size() != 2 || ket.size() != 2) {
-    return TripletExternalSwapKind::Other;
-  }
-
-  const Index b0 = get_bra_idx(ext_idxs.at(0));
-  const Index b1 = get_bra_idx(ext_idxs.at(1));
-  const Index k0 = get_ket_idx(ext_idxs.at(0));
-  const Index k1 = get_ket_idx(ext_idxs.at(1));
-
-  auto matches = [&](const container::svector<Index>& b,
-                     const container::svector<Index>& k) {
-    return b.at(0) == bra.at(0) && b.at(1) == bra.at(1) &&
-           k.at(0) == ket.at(0) && k.at(1) == ket.at(1);
-  };
-
-  if (matches(ref_bra, ref_ket)) return TripletExternalSwapKind::Identity;
-  if (matches(container::svector<Index>{b1, b0}, ref_ket))
-    return TripletExternalSwapKind::BraSwap;
-  if (matches(ref_bra, container::svector<Index>{k1, k0}))
-    return TripletExternalSwapKind::KetSwap;
-  if (matches(container::svector<Index>{b1, b0},
-              container::svector<Index>{k1, k0}))
-    return TripletExternalSwapKind::PairSwap;
-  return TripletExternalSwapKind::Other;
-}
-
-int triplet_swap_kind_priority(TripletExternalSwapKind kind) {
-  switch (kind) {
-    case TripletExternalSwapKind::Identity:
-      return 4;
-    case TripletExternalSwapKind::BraSwap:
-      return 3;
-    case TripletExternalSwapKind::KetSwap:
-      return 2;
-    case TripletExternalSwapKind::PairSwap:
-      return 1;
-    case TripletExternalSwapKind::Other:
-      return 0;
-  }
-  return 0;
-}
-
-bool prefer_triplet_hash_term(
-    const container::svector<container::svector<Index>>& ext_idxs,
-    const container::svector<Index>& ref_bra,
-    const container::svector<Index>& ref_ket, const ExprPtr& candidate,
-    const ExprPtr& incumbent) {
-  if (!candidate->is<Product>()) return false;
-  if (!incumbent->is<Product>()) return true;
-
-  const auto [cand_bra, cand_ket] =
-      triplet_external_slot_labels(candidate->as<Product>());
-  const auto [inc_bra, inc_ket] =
-      triplet_external_slot_labels(incumbent->as<Product>());
-  const auto cand_kind = classify_triplet_external_swap(
-      ext_idxs, ref_bra, ref_ket, cand_bra, cand_ket);
-  const auto inc_kind = classify_triplet_external_swap(
-      ext_idxs, ref_bra, ref_ket, inc_bra, inc_ket);
-
-  const int cand_pri = triplet_swap_kind_priority(cand_kind);
-  const int inc_pri = triplet_swap_kind_priority(inc_kind);
-  if (cand_pri != inc_pri) return cand_pri > inc_pri;
-
-  const auto cand_abs = abs(candidate->as<Product>().scalar());
-  const auto inc_abs = abs(incumbent->as<Product>().scalar());
-  return cand_abs > inc_abs;
-}
-
 std::size_t product_network_hash(const ExprPtr& term) {
   SEQUANT_ASSERT(term->is<Product>());
   auto product = term.as_shared_ptr<Product>();
@@ -749,14 +645,10 @@ std::size_t product_network_hash(const ExprPtr& term) {
       .hash_value();
 }
 
-}  // namespace
-
-TripletDoublesSwapLayouts triplet_doubles_swap_layouts(
-    std::string const& orig_layout) {
-  std::vector<std::string> parts;
-  parts.reserve(4);
+container::svector<std::string> split_annotation(std::string const& annot) {
+  container::svector<std::string> parts;
   std::string part;
-  for (char c : orig_layout) {
+  for (char c : annot) {
     if (c == ',') {
       parts.push_back(part);
       part.clear();
@@ -765,34 +657,20 @@ TripletDoublesSwapLayouts triplet_doubles_swap_layouts(
     }
   }
   if (!part.empty()) parts.push_back(part);
-  SEQUANT_ASSERT(parts.size() == 4 &&
-                 "triplet_doubles_swap_layouts expects a rank-4 layout");
-
-  auto bra_swapped = parts;
-  std::swap(bra_swapped[0], bra_swapped[1]);
-  auto ket_swapped = parts;
-  std::swap(ket_swapped[2], ket_swapped[3]);
-  auto pair_swapped = bra_swapped;
-  std::swap(pair_swapped[2], pair_swapped[3]);
-
-  auto join = [](const std::vector<std::string>& v) {
-    std::string out;
-    for (std::size_t i = 0; i < v.size(); ++i) {
-      if (i) out.push_back(',');
-      out += v[i];
-    }
-    return out;
-  };
-
-  return {orig_layout, join(bra_swapped), join(ket_swapped),
-          join(pair_swapped)};
+  return parts;
 }
 
-namespace {
+std::string join_annotation(container::svector<std::string> const& parts) {
+  std::string out;
+  for (std::size_t i = 0; i < parts.size(); ++i) {
+    if (i) out.push_back(',');
+    out += parts[i];
+  }
+  return out;
+}
 
-// slot permutations of (a_1,a_2,a_3,i_1,i_2,i_3): (op order = 6 pairings x 3
-// T positions)
-// for layout generator and the symbolic triples compact/reconstruct.
+// The n = 3 triplet weight rows derive from the 18*18 matrix of TEE operators
+// (6 ket/bra-swaps x 3 T column-swaps)
 constexpr std::array<std::array<std::array<int, 6>, 2>, 18>
     triplet_triples_slot_perms{{
         {{{0, 1, 2, 3, 4, 5}, {0, 2, 1, 3, 5, 4}}},  // sigma=(a,b,c) t=0
@@ -815,361 +693,176 @@ constexpr std::array<std::array<std::array<int, 6>, 2>, 18>
         {{{0, 2, 1, 5, 3, 4}, {0, 1, 2, 5, 4, 3}}},  // sigma=(c,b,a) t=2
     }};
 
-// op weights x10 = the row of G * pinv(G) for the TEE matrix G
-// weights are
-// w10[m]/20 (null-space projector) and w10[m]/5 (metric NNS reconstruction).
 constexpr std::array<int, 18> triplet_triples_op_w10{
     5, -1, -1, -1, 1, 1, -2, -2, 1, 0, 1, 0, 0, 0, 1, -2, 1, -2};
 
-// index relabeling map realizing one slot perm on the external bra/ket index
-// triples: b[n] -> b[perm[n]], k[n] -> k[perm[n+3] - 3]
-container::map<Index, Index> triplet_triples_slot_perm_map(
-    const std::array<Index, 3>& b, const std::array<Index, 3>& k,
-    const std::array<int, 6>& perm) {
+std::size_t triplet_slot_perm_orbit_order(std::size_t n_particles) {
+  std::size_t nf = 1;
+  for (std::size_t i = 2; i <= n_particles; ++i) nf *= i;
+  return nf * nf;
+}
+
+// flat index of a slot permutation (the row format of
+// triplet_triples_slot_perms)
+std::size_t triplet_slot_perm_index(
+    const container::svector<std::size_t>& images) {
+  SEQUANT_ASSERT(images.size() % 2 == 0);
+  const std::size_t n_particles = images.size() / 2;
+  const auto num_perms = triplet_slot_perm_orbit_order(n_particles);
+  for (std::size_t p = 0; p != num_perms; ++p) {
+    if (detail::triplet_slot_perm_ords(p, n_particles) == images) return p;
+  }
+  throw Exception(
+      "triplet_slot_perm_index: not a valid S_n x S_n slot permutation");
+}
+
+// flat index of the identity slot permutation
+std::size_t triplet_identity_perm_index(std::size_t n_particles) {
+  const auto num_perms = triplet_slot_perm_orbit_order(n_particles);
+  for (std::size_t p = 0; p != num_perms; ++p) {
+    const auto ords = detail::triplet_slot_perm_ords(p, n_particles);
+    bool is_identity = true;
+    for (std::size_t s = 0; s != ords.size(); ++s) {
+      if (ords[s] != s) {
+        is_identity = false;
+        break;
+      }
+    }
+    if (is_identity) return p;
+  }
+  SEQUANT_UNREACHABLE;
+}
+
+// the idempotent null-space projector row over the S_n x S_n slot-perm
+// orbit: {3/4, -1/4, -1/4, -1/4} for n = 2; for n = 3 the per-representative
+// weights w10[m]/20 distributed over the 36 slot perms by 18x2
+std::vector<rational> make_triplet_nullspace_weights(std::size_t n_particles) {
+  switch (n_particles) {
+    case 2: {
+      std::vector<rational> weights(triplet_slot_perm_orbit_order(2),
+                                    ratio(-1, 4));
+      weights[triplet_identity_perm_index(2)] = ratio(3, 4);
+      return weights;
+    }
+
+    case 3: {
+      std::vector<rational> weights(triplet_slot_perm_orbit_order(3), 0);
+      std::vector<bool> assigned(weights.size(), false);
+      for (std::size_t m = 0; m != 18; ++m) {
+        for (std::size_t r = 0; r != 2; ++r) {
+          container::svector<std::size_t> images(6);
+          for (std::size_t s = 0; s != 6; ++s)
+            images[s] = triplet_triples_slot_perms[m][r][s];
+          const auto p = triplet_slot_perm_index(images);
+          SEQUANT_ASSERT(!assigned[p]);
+          weights[p] = ratio(triplet_triples_op_w10[m], 20);
+          assigned[p] = true;
+        }
+      }
+      SEQUANT_ASSERT(std::all_of(assigned.begin(), assigned.end(),
+                                 [](bool b) { return b; }));
+      return weights;
+    }
+
+    default:
+      throw Exception(
+          "triplet slot-perm orbit weights only available for n_particles = "
+          "2, 3, requested rank is : " +
+          std::to_string(n_particles));
+  }
+}
+
+// (memoized) rational weight rows for the symbolic triplet primitives
+const std::vector<rational>& triplet_orbit_weights_rational(
+    std::size_t n_particles, TripletOrbitWeightKind kind) {
+  using CacheKey = std::pair<std::size_t, TripletOrbitWeightKind>;
+  // the rows are cached behind a pointer since the cache holds several keys
+  // and flat_map insertions would invalidate references into it
+  using CachedRow = std::unique_ptr<const std::vector<rational>>;
+
+  static std::mutex cache_mutex;
+  static std::condition_variable cache_cv;
+  static container::map<CacheKey, std::optional<CachedRow>> cache;
+
+  CacheKey key{n_particles, kind};
+
+  return *sequant::detail::memoize(
+      cache, cache_mutex, cache_cv, key, [&]() -> CachedRow {
+        auto make_row = [&]() -> std::vector<rational> {
+          switch (kind) {
+            case TripletOrbitWeightKind::NullspaceProjector:
+              return make_triplet_nullspace_weights(n_particles);
+
+            case TripletOrbitWeightKind::NnsReconstruction: {
+              auto weights = make_triplet_nullspace_weights(n_particles);
+              const auto identity_weight =
+                  weights.at(triplet_identity_perm_index(n_particles));
+              SEQUANT_ASSERT(identity_weight != 0);
+              for (auto& w : weights) w /= identity_weight;
+              return weights;
+            }
+
+            case TripletOrbitWeightKind::TeNnsReconstruction:
+            case TripletOrbitWeightKind::TeReconstruction: {
+              if (n_particles != 2)
+                throw Exception(
+                    "bare-TE triplet orbit weights are only defined for "
+                    "n_particles = 2");
+              const auto swap_weight =
+                  kind == TripletOrbitWeightKind::TeNnsReconstruction
+                      ? ratio(-1, 2)
+                      : ratio(1, 4);
+              std::vector<rational> weights(triplet_slot_perm_orbit_order(2),
+                                            0);
+              for (std::size_t p = 0; p != weights.size(); ++p) {
+                const auto ords = detail::triplet_slot_perm_ords(p, 2);
+                const bool bra_swapped = ords[0] != 0;
+                const bool ket_swapped = ords[2] != 2;
+                if (!bra_swapped && !ket_swapped)
+                  weights[p] = 1;
+                else if (bra_swapped != ket_swapped)
+                  weights[p] = swap_weight;
+                // the pair swap carries weight 0 in the bare-TE rows
+              }
+              return weights;
+            }
+          }
+          SEQUANT_UNREACHABLE;
+        };
+        return std::make_unique<const std::vector<rational>>(make_row());
+      });
+}
+
+// index relabeling realizing slot perm ords on the external bra/ket index
+// n-tuples: b[i] -> b[ords[i]], k[i] -> k[ords[n + i] - n]
+container::map<Index, Index> triplet_slot_perm_map(
+    const container::svector<Index>& b, const container::svector<Index>& k,
+    const container::svector<std::size_t>& ords) {
+  const std::size_t n_particles = b.size();
   container::map<Index, Index> m;
-  for (int n = 0; n != 3; ++n) {
-    if (perm[n] != n) m.emplace(b[n], b[perm[n]]);
-    if (perm[n + 3] != n + 3) m.emplace(k[n], k[perm[n + 3] - 3]);
+  for (std::size_t i = 0; i != n_particles; ++i) {
+    if (ords[i] != i) m.emplace(b[i], b[ords[i]]);
+    if (ords[n_particles + i] != n_particles + i)
+      m.emplace(k[i], k[ords[n_particles + i] - n_particles]);
   }
   return m;
 }
 
-}  // namespace
-
-TripletTriplesSwapLayouts triplet_triples_swap_layouts(
-    std::string const& orig_layout) {
-  std::vector<std::string> parts;
-  parts.reserve(6);
-  std::string part;
-  for (char c : orig_layout) {
-    if (c == ',') {
-      parts.push_back(part);
-      part.clear();
-    } else if (c != ' ') {
-      part.push_back(c);
-    }
-  }
-  if (!part.empty()) parts.push_back(part);
-  SEQUANT_ASSERT(parts.size() == 6 &&
-                 "triplet_triples_swap_layouts expects a rank-6 layout");
-
-  TripletTriplesSwapLayouts result;
-  for (std::size_t m = 0; m != 18; ++m) {
-    for (std::size_t r = 0; r != 2; ++r) {
-      std::string ann;
-      for (std::size_t s = 0; s != 6; ++s) {
-        if (s) ann.push_back(',');
-        ann += parts[triplet_triples_slot_perms[m][r][s]];
-      }
-      result.ops[m][r] = std::move(ann);
-    }
-  }
-  return result;
-}
-
-ExprPtr triplet_doubles_hash_filter(
-    ExprPtr expr,
+std::pair<container::svector<Index>, container::svector<Index>>
+triplet_external_bra_ket(
     const container::svector<container::svector<Index>>& ext_idxs) {
-  if (!expr->is<Sum>()) return expr;
-
-  auto work = expr->clone();
-  for (auto& term : *work) {
-    if (term->is<Product>())
-      term =
-          remove_tensor(term.as_shared_ptr<Product>(), reserved::symm_label());
+  container::svector<Index> b, k;
+  b.reserve(ext_idxs.size());
+  k.reserve(ext_idxs.size());
+  for (const auto& group : ext_idxs) {
+    b.push_back(get_bra_idx(group));
+    k.push_back(get_ket_idx(group));
   }
-  canonicalize(work);
-  simplify(work);
-
-  const bool prefer_id_layout = (ext_idxs.size() == 2);
-
-  // Debug: print every term grouped by network hash, with its coefficient,
-  // to see what filtering is needed.
-  {
-    container::map<std::size_t, container::vector<ExprPtr>> debug_groups;
-    for (const auto& term : *work) {
-      if (!term->is<Product>()) continue;
-      debug_groups[product_network_hash(term)].push_back(term);
-    }
-    std::wcout << L"=== triplet_doubles_hash_filter: " << debug_groups.size()
-               << L" hash group(s) ===\n";
-    std::size_t gi = 0;
-    for (const auto& [hash, terms] : debug_groups) {
-      std::wcout << L"--- group " << gi++ << L" (hash=" << hash << L", "
-                 << terms.size() << L" term(s)) ---\n";
-      for (const auto& term : terms) {
-        std::wcout /*<< L"  coeff = "
-                   << to_latex_align(ex<Constant>(term->as<Product>().scalar()))
-                   */
-            << L"   " << to_latex_align(term) << L"\n";
-      }
-    }
-    std::wcout.flush();
-  }
-
-  // every hash group has the expected triplet structure:
-  //   - exactly 4 Product terms,
-  //   - coefficients of shape {c, c, c, -3c}.
-  // filtering based on the coefficients, not external indices.
-  if (prefer_id_layout) {
-    container::map<std::size_t, container::vector<ExprPtr>> groups;
-    for (const auto& term : *work) {
-      if (!term->is<Product>()) continue;
-      groups[product_network_hash(term)].push_back(term);
-    }
-
-    std::size_t n_pass = 0;
-    std::size_t n_fail = 0;
-    std::size_t n_full_swap_coverage = 0;
-    for (const auto& [hash, terms] : groups) {
-      std::wstring reason;
-      bool coverage_ok = false;
-
-      if (terms.size() != 4) {
-        reason = L"term count != 4 (" + std::to_wstring(terms.size()) + L")";
-      } else {
-        container::svector<Index> ref_bra, ref_ket;
-        std::tie(ref_bra, ref_ket) =
-            triplet_external_slot_labels(terms.front()->as<Product>());
-
-        container::svector<TripletExternalSwapKind> kinds;
-        container::svector<Product::scalar_type> scalars;
-        kinds.reserve(4);
-        scalars.reserve(4);
-        bool all_products = true;
-        for (std::size_t i = 0; i < 4; ++i) {
-          if (!terms[i]->is<Product>()) {
-            all_products = false;
-            break;
-          }
-          const auto [b, k] =
-              triplet_external_slot_labels(terms[i]->as<Product>());
-          kinds.push_back(
-              classify_triplet_external_swap(ext_idxs, ref_bra, ref_ket, b, k));
-          scalars.push_back(terms[i]->as<Product>().scalar());
-        }
-
-        if (!all_products) {
-          reason = L"group contains a non-Product term";
-        } else {
-          // Informational: do the four terms cover all four swaps?
-          container::set<TripletExternalSwapKind> kind_set(kinds.begin(),
-                                                           kinds.end());
-          coverage_ok =
-              kind_set.size() == 4 &&
-              kind_set.find(TripletExternalSwapKind::Other) == kind_set.end();
-
-          // debugging for now
-          // coefficient multiset must be {c, c, c, -3c}. Find an
-          // odd-one-out j with scalars[j] == -3 * c and the other three == c.
-          bool shape_ok = false;
-          for (std::size_t j = 0; j < 4 && !shape_ok; ++j) {
-            const std::size_t a = (j + 1) % 4;
-            const auto c = scalars[a];
-            bool others_equal = true;
-            for (std::size_t i = 0; i < 4; ++i) {
-              if (i == j) continue;
-              if (!(scalars[i] == c)) {
-                others_equal = false;
-                break;
-              }
-            }
-            const auto neg3c = -(c + c + c);
-            if (others_equal && scalars[j] == neg3c) shape_ok = true;
-          }
-          if (!shape_ok) reason = L"coefficients not of shape {c, c, c, -3c}";
-        }
-      }
-
-      if (coverage_ok) ++n_full_swap_coverage;
-
-      if (reason.empty()) {
-        ++n_pass;
-        std::wcout << L"  PASS group hash=" << hash
-                   << (coverage_ok ? L"  (full swap coverage)"
-                                   : L"  (swap coverage incomplete)")
-                   << L"\n";
-      } else {
-        ++n_fail;
-        std::wcout << L"*** GROUP hash=" << hash << L" FAILED: " << reason
-                   << L" ***\n";
-        for (const auto& term : terms) {
-          std::wcout << L"      ";
-          if (term->is<Product>())
-            std::wcout << L"coeff = "
-                       << to_latex_align(
-                              ex<Constant>(term->as<Product>().scalar()))
-                       << L"   ";
-          std::wcout << to_latex_align(term) << L"\n";
-        }
-      }
-    }
-    std::wcout << L"=== triplet group verification: " << groups.size()
-               << L" groups, " << n_pass << L" passing, " << n_fail
-               << L" failing; " << n_full_swap_coverage
-               << L" with full four swaps coverage ===\n";
-    std::wcout.flush();
-  }
-
-  struct HashKeep {
-    ExprPtr term;
-    container::svector<Index> ref_bra;
-    container::svector<Index> ref_ket;
-  };
-  container::map<std::size_t, HashKeep> keep;
-  for (const auto& term : *work) {
-    if (!term->is<Product>()) continue;
-    const auto hash = product_network_hash(term);
-
-    auto it = keep.find(hash);
-    if (it == keep.end()) {
-      auto [rb, rk] = triplet_external_slot_labels(term->as<Product>());
-      keep.emplace(hash, HashKeep{term, std::move(rb), std::move(rk)});
-      continue;
-    }
-    if (prefer_id_layout) {
-      if (prefer_triplet_hash_term(ext_idxs, it->second.ref_bra,
-                                   it->second.ref_ket, term, it->second.term))
-        it->second.term = term;
-    } else {
-      const auto abs_coeff = abs(term->as<Product>().scalar());
-      const auto existing_abs = abs(it->second.term->as<Product>().scalar());
-      if (abs_coeff > existing_abs) it->second.term = term;
-    }
-  }
-
-  // debugging for now: print the surviving (filtered) term for each hash group.
-  {
-    std::wcout << L"=== triplet_doubles_hash_filter: kept term per group ===\n";
-    for (const auto& [hash, entry] : keep) {
-      std::wcout << L"  hash=" << hash << L"   " << to_latex_align(entry.term)
-                 << L"\n";
-    }
-    std::wcout.flush();
-  }
-
-  Sum filtered;
-  for (const auto& [_, entry] : keep) filtered.append(entry.term);
-  return ex<Sum>(filtered);
+  return {std::move(b), std::move(k)};
 }
 
-ExprPtr triplet_doubles_maxcoeff_compact(
-    ExprPtr expr,
-    const container::svector<container::svector<Index>>& ext_idxs) {
-  if (!expr->is<Sum>()) return expr;
-  if (ext_idxs.size() != 2) return expr;
-
-  auto work = expr->clone();
-  for (auto& term : *work) {
-    if (term->is<Product>())
-      term =
-          remove_tensor(term.as_shared_ptr<Product>(), reserved::symm_label());
-  }
-  canonicalize(work);
-  simplify(work);
-
-  // Keep the largest-|coefficient| term per network hash. In each {c, c, c,
-  // -3c} group this uniquely selects the -3c representative (|3c| > |c| for c
-  // != 0), which is the term triplet_doubles_symbolic_reconstruct needs.
-  container::map<std::size_t, ExprPtr> keep;
-  for (const auto& term : *work) {
-    if (!term->is<Product>()) continue;
-    const auto hash = product_network_hash(term);
-    auto it = keep.find(hash);
-    if (it == keep.end()) {
-      keep.emplace(hash, term);
-      continue;
-    }
-    if (abs(term->as<Product>().scalar()) >
-        abs(it->second->as<Product>().scalar()))
-      it->second = term;
-  }
-
-  Sum compact;
-  for (const auto& [_, term] : keep) compact.append(term);
-  return ex<Sum>(compact);
-}
-
-ExprPtr triplet_doubles_symbolic_reconstruct(
-    ExprPtr compact_expr,
-    const container::svector<container::svector<Index>>& ext_idxs) {
-  if (!compact_expr->is<Sum>()) return compact_expr;
-  if (ext_idxs.size() != 2) return compact_expr;
-
-  // permutation generators: bra-swap (b0<->b1), ket-swap (k0<->k1),
-  // pair-swap (both). b/k are the bra/ket external indices of the two groups.
-  const Index b0 = get_bra_idx(ext_idxs.at(0));
-  const Index b1 = get_bra_idx(ext_idxs.at(1));
-  const Index k0 = get_ket_idx(ext_idxs.at(0));
-  const Index k1 = get_ket_idx(ext_idxs.at(1));
-
-  const container::map<Index, Index> bra_swap{{b0, b1}, {b1, b0}};
-  const container::map<Index, Index> ket_swap{{k0, k1}, {k1, k0}};
-  const container::map<Index, Index> pair_swap{
-      {b0, b1}, {b1, b0}, {k0, k1}, {k1, k0}};
-
-  // Each kept term T carries w = -3c; its three external swaps carry
-  // c = -w/3, i.e. T scaled by -1/3 after relabeling.
-  const auto third = ratio(-1, 3);
-
-  Sum out;
-  for (const auto& term : *compact_expr) {
-    if (!term->is<Product>()) {
-      out.append(term);
-      continue;
-    }
-    out.append(term);                                    // -3c representative
-    out.append(transform_expr(term, bra_swap, third));   // c
-    out.append(transform_expr(term, ket_swap, third));   // c
-    out.append(transform_expr(term, pair_swap, third));  // c
-  }
-
-  auto result = ex<Sum>(out);
-  simplify(result);
-  return result;
-}
-
-ExprPtr triplet_doubles_te_symbolic_reconstruct(
-    ExprPtr compact_expr,
-    const container::svector<container::svector<Index>>& ext_idxs) {
-  if (!compact_expr->is<Sum>()) return compact_expr;
-  if (ext_idxs.size() != 2) return compact_expr;
-
-  // permutation generators: bra-swap (b0<->b1) and ket-swap (k0<->k1) only;
-  // the pair-swap member of each bare-TE group carries coefficient 0.
-  const Index b0 = get_bra_idx(ext_idxs.at(0));
-  const Index b1 = get_bra_idx(ext_idxs.at(1));
-  const Index k0 = get_ket_idx(ext_idxs.at(0));
-  const Index k1 = get_ket_idx(ext_idxs.at(1));
-
-  const container::map<Index, Index> bra_swap{{b0, b1}, {b1, b0}};
-  const container::map<Index, Index> ket_swap{{k0, k1}, {k1, k0}};
-
-  // Each kept term T carries w = -2c; its bra and ket external swaps carry
-  // c = -w/2, i.e. T scaled by -1/2 after relabeling.
-  const auto half = ratio(-1, 2);
-
-  Sum out;
-  for (const auto& term : *compact_expr) {
-    if (!term->is<Product>()) {
-      out.append(term);
-      continue;
-    }
-    out.append(term);                                  // -2c representative
-    out.append(transform_expr(term, bra_swap, half));  // c
-    out.append(transform_expr(term, ket_swap, half));  // c
-  }
-
-  auto result = ex<Sum>(out);
-  simplify(result);
-  return result;
-}
-
-namespace {
-
-// standalone-canonical structure with unit scalar; the sign the
-// canonicalization produced is returned separately so callers can track
-// coefficients relative to a labeling-independent structure
+// the sign the canonicalization produced is returned separately so callers
+// can track coefficients
 std::pair<ExprPtr, Product::scalar_type> canonical_unit_product(
     const ExprPtr& t) {
   auto out = t->clone();
@@ -1182,13 +875,44 @@ std::pair<ExprPtr, Product::scalar_type> canonical_unit_product(
   return {std::move(out), sign};
 }
 
+ExprPtr triplet_weighted_orbit(
+    const ExprPtr& compact_expr,
+    const container::svector<container::svector<Index>>& ext_idxs,
+    const std::vector<rational>& weights) {
+  const std::size_t n_particles = ext_idxs.size();
+  const auto [b, k] = triplet_external_bra_ket(ext_idxs);
+
+  Sum out;
+  for (const auto& term : *compact_expr) {
+    if (!term->is<Product>()) {
+      out.append(term);
+      continue;
+    }
+    for (std::size_t p = 0; p != weights.size(); ++p) {
+      const auto& w = weights[p];
+      if (w == 0) continue;
+      const auto map = triplet_slot_perm_map(
+          b, k, detail::triplet_slot_perm_ords(p, n_particles));
+      if (map.empty())
+        out.append(w == 1 ? term : ex<Constant>(w) * term);
+      else
+        out.append(transform_expr(term, map, w));
+    }
+  }
+
+  auto result = ex<Sum>(out);
+  simplify(result);
+  return result;
+}
+
 }  // namespace
 
-ExprPtr triplet_triples_maxcoeff_compact(
-    ExprPtr expr,
-    const container::svector<container::svector<Index>>& ext_idxs) {
+ExprPtr triplet_maxcoeff_compact(
+    ExprPtr expr, const container::svector<container::svector<Index>>& ext_idxs,
+    TripletOrbitWeightKind kind) {
   if (!expr->is<Sum>()) return expr;
-  if (ext_idxs.size() != 3) return expr;
+  const std::size_t n_particles = ext_idxs.size();
+  if (n_particles != 2 && n_particles != 3) return expr;
 
   auto work = expr->clone();
   for (auto& term : *work) {
@@ -1199,26 +923,18 @@ ExprPtr triplet_triples_maxcoeff_compact(
   canonicalize(work);
   simplify(work);
 
-  // bin terms by network hash; each group is (a subset of) the 36-slot-perm
-  // orbit of any of its members
+  const auto& weights = triplet_orbit_weights_rational(n_particles, kind);
+  const auto [b, k] = triplet_external_bra_ket(ext_idxs);
+
   container::map<std::size_t, container::vector<ExprPtr>> groups;
   for (const auto& term : *work) {
     if (!term->is<Product>()) continue;
     groups[product_network_hash(term)].push_back(term);
   }
 
-  const std::array<Index, 3> b{get_bra_idx(ext_idxs.at(0)),
-                               get_bra_idx(ext_idxs.at(1)),
-                               get_bra_idx(ext_idxs.at(2))};
-  const std::array<Index, 3> k{get_ket_idx(ext_idxs.at(0)),
-                               get_ket_idx(ext_idxs.at(1)),
-                               get_ket_idx(ext_idxs.at(2))};
-
   Sum compact;
   for (const auto& [_, terms] : groups) {
-    // the max-|coeff| member is an identity-op representative (op weight 5
-    // dominates the w10 row; the tie between the two op-0 representatives is
-    // broken arbitrarily -- reconstruction regenerates both)
+    // the max-|coeff| member is an identity-perm representative
     const ExprPtr* rep = &terms.front();
     for (const auto& t : terms)
       if (abs(t->as<Product>().scalar()) > abs((*rep)->as<Product>().scalar()))
@@ -1226,41 +942,30 @@ ExprPtr triplet_triples_maxcoeff_compact(
     const auto [rep_unit, rep_sign] = canonical_unit_product(*rep);
     const auto rep_coeff = (*rep)->as<Product>().scalar() * rep_sign;
 
-    // accumulate the reconstruction weights A[u] = sum_p w10[op(p)]/5 * s_p
-    // over the 36 slot-perm images u of the representative structure
     container::map<std::size_t, Product::scalar_type> pred_weight;
-    for (std::size_t m = 0; m != 18; ++m) {
-      for (std::size_t r = 0; r != 2; ++r) {
-        const auto map = triplet_triples_slot_perm_map(
-            b, k, triplet_triples_slot_perms[m][r]);
-        ExprPtr t =
-            map.empty() ? rep_unit->clone() : transform_expr(rep_unit, map);
-        auto [u, s] = canonical_unit_product(t);
-        const auto w =
-            Product::scalar_type(ratio(triplet_triples_op_w10[m], 5)) * s;
-        if (auto it = pred_weight.find(u->hash_value());
-            it != pred_weight.end())
-          it->second += w;
-        else
-          pred_weight.emplace(u->hash_value(), w);
-      }
+    for (std::size_t p = 0; p != weights.size(); ++p) {
+      const auto map = triplet_slot_perm_map(
+          b, k, detail::triplet_slot_perm_ords(p, n_particles));
+      ExprPtr t =
+          map.empty() ? rep_unit->clone() : transform_expr(rep_unit, map);
+      auto [u, s] = canonical_unit_product(t);
+      const auto w = Product::scalar_type(weights[p]) * s;
+      if (auto it = pred_weight.find(u->hash_value()); it != pred_weight.end())
+        it->second += w;
+      else
+        pred_weight.emplace(u->hash_value(), w);
     }
 
-    // the kept coefficient makes the uniform 36-perm reconstruction exact for
-    // the representative itself (A = 1 generic, 2 with an order-2 stabilizer)
     const auto rep_weight = pred_weight.at(rep_unit->hash_value());
     SEQUANT_ASSERT(rep_weight != Product::scalar_type(0));
     const auto kept_coeff = rep_coeff / rep_weight;
 
-    // verify every member matches the single-representative prediction; a
-    // mismatch means the group superposes several projector columns (multiple
-    // raw preimages) and cannot be compacted losslessly to one term
     std::size_t n_predicted_members = 0;
     for (const auto& [h, w] : pred_weight)
       if (w != Product::scalar_type(0)) ++n_predicted_members;
     if (n_predicted_members != terms.size())
       throw Exception(
-          "triplet_triples_maxcoeff_compact: hash group does not match the "
+          "triplet_maxcoeff_compact: hash group does not match the "
           "single-representative orbit pattern; the residual cannot be "
           "compacted losslessly");
     for (const auto& t : terms) {
@@ -1269,7 +974,7 @@ ExprPtr triplet_triples_maxcoeff_compact(
       if (it == pred_weight.end() ||
           t->as<Product>().scalar() * s != kept_coeff * it->second)
         throw Exception(
-            "triplet_triples_maxcoeff_compact: hash group does not match the "
+            "triplet_maxcoeff_compact: hash group does not match the "
             "single-representative orbit pattern; the residual cannot be "
             "compacted losslessly");
     }
@@ -1281,43 +986,16 @@ ExprPtr triplet_triples_maxcoeff_compact(
   return ex<Sum>(compact);
 }
 
-ExprPtr triplet_triples_symbolic_reconstruct(
+ExprPtr triplet_symbolic_reconstruct(
     ExprPtr compact_expr,
-    const container::svector<container::svector<Index>>& ext_idxs) {
+    const container::svector<container::svector<Index>>& ext_idxs,
+    TripletOrbitWeightKind kind) {
   if (!compact_expr->is<Sum>()) return compact_expr;
-  if (ext_idxs.size() != 3) return compact_expr;
-
-  const std::array<Index, 3> b{get_bra_idx(ext_idxs.at(0)),
-                               get_bra_idx(ext_idxs.at(1)),
-                               get_bra_idx(ext_idxs.at(2))};
-  const std::array<Index, 3> k{get_ket_idx(ext_idxs.at(0)),
-                               get_ket_idx(ext_idxs.at(1)),
-                               get_ket_idx(ext_idxs.at(2))};
-
-  // uniform 36-perm sum at the identity-normalized metric weights w10[m]/5
-  Sum out;
-  for (const auto& term : *compact_expr) {
-    if (!term->is<Product>()) {
-      out.append(term);
-      continue;
-    }
-    for (std::size_t m = 0; m != 18; ++m) {
-      if (triplet_triples_op_w10[m] == 0) continue;
-      const auto w = ratio(triplet_triples_op_w10[m], 5);
-      for (std::size_t r = 0; r != 2; ++r) {
-        const auto map = triplet_triples_slot_perm_map(
-            b, k, triplet_triples_slot_perms[m][r]);
-        if (map.empty())
-          out.append(w == 1 ? term : ex<Constant>(w) * term);
-        else
-          out.append(transform_expr(term, map, w));
-      }
-    }
-  }
-
-  auto result = ex<Sum>(out);
-  simplify(result);
-  return result;
+  const std::size_t n_particles = ext_idxs.size();
+  if (n_particles != 2 && n_particles != 3) return compact_expr;
+  return triplet_weighted_orbit(
+      compact_expr, ext_idxs,
+      triplet_orbit_weights_rational(n_particles, kind));
 }
 
 template <detail::index_group_range IdxGroups>
@@ -1401,6 +1079,57 @@ container::svector<size_t> compute_permuted_indices(
     permuted_indices[i] = indices[perm_obj[i]];
   }
   return permuted_indices;
+}
+
+container::svector<size_t> triplet_slot_perm_ords(size_t perm_index,
+                                                  size_t n_particles) {
+  size_t num_perms = 1;
+  for (size_t i = 2; i <= n_particles; ++i) num_perms *= i;
+  SEQUANT_ASSERT(perm_index < num_perms * num_perms);
+
+  container::svector<size_t> bra_slots(n_particles);
+  container::svector<size_t> ket_slots(n_particles);
+  for (size_t i = 0; i < n_particles; ++i) {
+    bra_slots[i] = i;
+    ket_slots[i] = n_particles + i;
+  }
+
+  container::svector<size_t> ords =
+      compute_permuted_indices(bra_slots, perm_index / num_perms, n_particles);
+  const auto permuted_ket =
+      compute_permuted_indices(ket_slots, perm_index % num_perms, n_particles);
+  ords.insert(ords.end(), permuted_ket.begin(), permuted_ket.end());
+  return ords;
+}
+
+container::svector<std::string> triplet_slot_perm_layouts(
+    std::string const& orig_layout, size_t n_particles) {
+  const auto parts = split_annotation(orig_layout);
+  SEQUANT_ASSERT(parts.size() == 2 * n_particles &&
+                 "triplet_slot_perm_layouts: annotation rank must equal "
+                 "2 * n_particles");
+
+  const auto num_perms = triplet_slot_perm_orbit_order(n_particles);
+  container::svector<std::string> layouts;
+  layouts.reserve(num_perms);
+  for (size_t p = 0; p != num_perms; ++p) {
+    const auto ords = triplet_slot_perm_ords(p, n_particles);
+    container::svector<std::string> permuted(parts.size());
+    for (size_t s = 0; s != parts.size(); ++s) permuted[s] = parts[ords[s]];
+    layouts.push_back(join_annotation(permuted));
+  }
+  return layouts;
+}
+
+std::vector<double> compute_triplet_orbit_weights(std::size_t n_particles,
+                                                  TripletOrbitWeightKind kind) {
+  const auto& weights = triplet_orbit_weights_rational(n_particles, kind);
+  std::vector<double> coeffs;
+  coeffs.reserve(weights.size());
+  for (const auto& w : weights) {
+    coeffs.push_back(static_cast<double>(w));
+  }
+  return coeffs;
 }
 
 }  // namespace detail

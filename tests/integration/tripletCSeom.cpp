@@ -943,7 +943,7 @@ class compute_eomcc_closedshell_triplet {
               eqvec[i], {.method = BiorthogonalizationMethod::V2,
                          .triplet_doubles_compact = true});
           const ExprPtr recon =
-              triplet_doubles_symbolic_reconstruct(compact, ext_groups);
+              triplet_symbolic_reconstruct(compact, ext_groups);
           runtime_assert(recon == st);
           if (recon == st) {
             std::wcout << "recon == st\n";
@@ -966,7 +966,7 @@ class compute_eomcc_closedshell_triplet {
           simplify(te_a);
           simplify(te_ab);
 
-          std::wcout << "\n----- PI conjecture (TE-only) comparison R[" << i
+          std::wcout << "\n----- EFV experiment (TE-only) comparison R[" << i
                      << "] -----\n";
           std::wcout << "  production Omega = (3TE-TE_ps)/16 : "
                      << term_count(st) << " terms, "
@@ -1084,8 +1084,8 @@ class compute_eomcc_closedshell_triplet {
           // Non-Null-Space, P_nns = 1 - 1/4 (1+Pij)(1+Pab), acting on the
           // external mu indices (Pij = bra swap, Pab = ket swap). If P_nns D =
           // 0 the two residuals agree on the physical triplet bra space => the
-          // PI conjecture holds; nonzero => the single-cross symmetrization is
-          // load-bearing.
+          // EFV experiment identity holds; nonzero => the single-cross
+          // symmetrization is load-bearing.
           auto project_nns = [&](const ExprPtr& e) -> ExprPtr {
             ExprPtr avg = e->clone() + transform_expr(e, e_swap_bra) +
                           transform_expr(e, e_swap_ket) +

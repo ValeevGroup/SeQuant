@@ -2456,16 +2456,19 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
     triplet = triplet_doubles_paper_combined_residual(triplet, pair_swap,
                                                       options.triplet_te_only);
     // the te_only combined residual is a Constant*Sum Product;
-    // triplet_doubles_maxcoeff_compact only acts on a top-level Sum.
+    // triplet_maxcoeff_compact only acts on a top-level Sum.
     simplify(triplet);
     if (options.triplet_doubles_compact)
-      // Keep the largest-|coeff| representative per hash group so the dropped
+      // Keep the verified orbit representative per hash group so the dropped
       // terms can be rebuilt exactly: paper metric keeps the -3c member of
-      // each {c,c,c,-3c} group (triplet_doubles_symbolic_reconstruct, or the
+      // each {c,c,c,-3c} group (triplet_symbolic_reconstruct, or the
       // {1,-1/3,-1/3,-1/3} four-swap reconstruction on the tensor side);
       // te_only keeps the -2c member of each {c,c,-2c} group
-      // (triplet_doubles_te_symbolic_reconstruct, or {1,-1/2,-1/2,0}).
-      triplet = triplet_doubles_maxcoeff_compact(triplet, ext_groups);
+      // (TeNnsReconstruction, {1,-1/2,-1/2,0}).
+      triplet = triplet_maxcoeff_compact(
+          triplet, ext_groups,
+          options.triplet_te_only ? TripletOrbitWeightKind::TeNnsReconstruction
+                                  : TripletOrbitWeightKind::NnsReconstruction);
   } else {  // n_ext == 3
     if (options.triplet_te_only || options.triplet_amp_no_swap)
       throw Exception(
@@ -2497,15 +2500,14 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
     triplet = triplet_triples_paper_combined_residual(
         triplet, whole_pair_swap(g0, g1), whole_pair_swap(g0, g2), ket_swap_12);
     // the combined residual is a Constant*Sum Product;
-    // triplet_triples_maxcoeff_compact only acts on a top-level Sum.
+    // triplet_maxcoeff_compact only acts on a top-level Sum.
     simplify(triplet);
     if (options.triplet_doubles_compact)
       // Keep one 36-slot-perm-orbit representative per hash group, scaled by
       // the inverse stabilizer order, so the dropped terms can be rebuilt
-      // exactly (triplet_triples_symbolic_reconstruct, or the w10[m]/5
-      // 36-perm reconstruction of triplet_triples_nns_project on the tensor
-      // side).
-      triplet = triplet_triples_maxcoeff_compact(triplet, ext_groups);
+      // exactly (triplet_symbolic_reconstruct, or the w10[m]/5 36-perm
+      // reconstruction of triplet_nns_project on the tensor side).
+      triplet = triplet_maxcoeff_compact(triplet, ext_groups);
   }
   simplify(triplet);
   std::wcout << "closed_shell_EOM_triplet_spintrace size: " << triplet->size()

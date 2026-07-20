@@ -2318,13 +2318,17 @@ SECTION("ResultExpr") {
 }
 
 TEST_CASE("triplet_doubles_compact", "[spin][triplet]") {
+  using namespace sequant;
   using namespace sequant::mbpt;
 
-  const auto layouts = triplet_doubles_swap_layouts("a_1,a_2,i_1,i_2");
-  REQUIRE(layouts.orig == "a_1,a_2,i_1,i_2");
-  REQUIRE(layouts.bra_swap == "a_2,a_1,i_1,i_2");
-  REQUIRE(layouts.ket_swap == "a_1,a_2,i_2,i_1");
-  REQUIRE(layouts.pair_swap == "a_2,a_1,i_2,i_1");
+  const auto layouts =
+      mbpt::detail::triplet_slot_perm_layouts("a_1,a_2,i_1,i_2", 2);
+  REQUIRE(layouts.size() == 4);
+  std::vector<std::string> sorted(layouts.begin(), layouts.end());
+  std::sort(sorted.begin(), sorted.end());
+  REQUIRE(sorted ==
+          std::vector<std::string>{"a_1,a_2,i_1,i_2", "a_1,a_2,i_2,i_1",
+                                   "a_2,a_1,i_1,i_2", "a_2,a_1,i_2,i_1"});
 }
 
 TEST_CASE("triplet_doubles_reconstruct", "[spin][triplet]") {
@@ -2335,7 +2339,7 @@ TEST_CASE("triplet_doubles_reconstruct", "[spin][triplet]") {
   ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
   auto _ = set_scoped_default_context(ctx);
 
-  // Build four full {c, c, c, -3c} hash groups taken from the triplet R2
+  // four full {c, c, c, -3c} hash groups taken from the triplet R2
   // residual
   auto P = [](const wchar_t* s) {
     return deserialize(std::wstring(s), {.def_perm_symm = Symmetry::Nonsymm});
@@ -2390,19 +2394,17 @@ TEST_CASE("triplet_doubles_reconstruct", "[spin][triplet]") {
       term(ratio(1, 4),
            L"R{i_2,i_3;a_1,a_3} * g{a_4,a_3;i_3,a_2} * t{i_1;a_4}");
 
-  // ext index groups: bra-type occ externals i_1,i_2; ket-type virt
-  // ext a_1,a_2 (get_bra_idx -> first, get_ket_idx -> second).
   const container::svector<container::svector<Index>> ext_idxs{
       {Index(L"i_1"), Index(L"a_1")}, {Index(L"i_2"), Index(L"a_2")}};
 
   // compaction keeps one (-3c) representative per group.
-  const ExprPtr compact = triplet_doubles_maxcoeff_compact(full, ext_idxs);
+  const ExprPtr compact = triplet_maxcoeff_compact(full, ext_idxs);
   REQUIRE(compact->is<Sum>());
   REQUIRE(compact->size() == 4);
 
   // symbolic reconstruction rebuilds the full 4 term per group.
   // then I need to add the numeric function to do this
-  const ExprPtr recon = triplet_doubles_symbolic_reconstruct(compact, ext_idxs);
+  const ExprPtr recon = triplet_symbolic_reconstruct(compact, ext_idxs);
   REQUIRE(recon->is<Sum>());
   REQUIRE(recon->size() == 16);
 
@@ -2422,29 +2424,23 @@ TEST_CASE("triplet_doubles_reconstruct", "[spin][triplet]") {
 }
 
 TEST_CASE("triplet_triples_swap_layouts", "[spin][triplet]") {
+  using namespace sequant;
   using namespace sequant::mbpt;
 
-  const auto layouts = triplet_triples_swap_layouts("a_1,a_2,a_3,i_1,i_2,i_3");
-
-  // op 0 = identity pairing, T on pair 0; its two representatives differ by
-  // the interchangeable E legs (joint swap of slots 2,3 in bra and ket)
-  REQUIRE(layouts.ops[0][0] == "a_1,a_2,a_3,i_1,i_2,i_3");
-  REQUIRE(layouts.ops[0][1] == "a_1,a_3,a_2,i_1,i_3,i_2");
-  // op 1 = identity pairing, T on pair 1 (= whole-pair swap of groups 0,1)
-  REQUIRE(layouts.ops[1][0] == "a_2,a_1,a_3,i_2,i_1,i_3");
-  REQUIRE(layouts.ops[1][1] == "a_2,a_3,a_1,i_2,i_3,i_1");
-  // op 3 = (jb)<->(kc)-swapped pairing, T on pair 0: ket-only and bra-only
-  // swaps of groups 1,2 are the two representatives of the same operator
-  REQUIRE(layouts.ops[3][0] == "a_1,a_3,a_2,i_1,i_2,i_3");
-  REQUIRE(layouts.ops[3][1] == "a_1,a_2,a_3,i_1,i_3,i_2");
-
-  // 36 layouts, all distinct (the 2:1 orbit cover uses every slot perm once)
-  std::vector<std::string> all;
-  for (const auto& op : layouts.ops)
-    for (const auto& ann : op) all.push_back(ann);
+  const auto layouts =
+      mbpt::detail::triplet_slot_perm_layouts("a_1,a_2,a_3,i_1,i_2,i_3", 3);
+  REQUIRE(layouts.size() == 36);
+  std::vector<std::string> all(layouts.begin(), layouts.end());
   std::sort(all.begin(), all.end());
   REQUIRE(std::adjacent_find(all.begin(), all.end()) == all.end());
-  REQUIRE(all.size() == 36);
+
+  auto contains = [&](const std::string& ann) {
+    return std::binary_search(all.begin(), all.end(), ann);
+  };
+  REQUIRE(contains("a_1,a_2,a_3,i_1,i_2,i_3"));  // identity
+  REQUIRE(contains("a_1,a_3,a_2,i_1,i_3,i_2"));  // E-leg pair swap
+  REQUIRE(contains("a_2,a_1,a_3,i_2,i_1,i_3"));  // whole-pair swap 0,1
+  REQUIRE(contains("a_1,a_2,a_3,i_1,i_3,i_2"));  // ket-only swap 1,2
 }
 
 TEST_CASE("triplet_triples_spintrace", "[spin][triplet]") {
@@ -2455,10 +2451,7 @@ TEST_CASE("triplet_triples_spintrace", "[spin][triplet]") {
   ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
   auto _ = set_scoped_default_context(ctx);
 
-  // toy 3h3p EOM-like residual term: f contracted with R3, externals grouped
-  // (i_n, a_n) by the antisymmetrizer; enough to exercise the 8-sector trace,
-  // the 6-permutation rank-3 amplitude channels, and the
-  // (1/160)[6 - ps01 - ps02 + 2 ks12] residual combination end to end
+  // toy 3h3p EOM-like residual term: f contracted with R3;
   auto expr =
       deserialize(std::wstring(L"Â{i_1,i_2,i_3;a_1,a_2,a_3} * f{a_4;a_1} * "
                                L"R{i_1,i_2,i_3;a_4,a_2,a_3}"),
@@ -2470,14 +2463,10 @@ TEST_CASE("triplet_triples_spintrace", "[spin][triplet]") {
   REQUIRE(st->is<Sum>());
   REQUIRE(st->size() > 0);
 
-  // this toy's hash groups superpose several projector columns (the nonsymm
-  // R makes all 36 orbit slots nonzero), so the self-verifying compaction
-  // must refuse it rather than emit lossy equations
   REQUIRE_THROWS(closed_shell_EOM_triplet_spintrace(
       expr, {.method = BiorthogonalizationMethod::V2,
              .triplet_doubles_compact = true}));
 
-  // doubles-only experiment knobs must be rejected at rank 3
   REQUIRE_THROWS(closed_shell_EOM_triplet_spintrace(
       expr,
       {.method = BiorthogonalizationMethod::V2, .triplet_te_only = true}));
@@ -2494,41 +2483,37 @@ TEST_CASE("triplet_triples_reconstruct", "[spin][triplet]") {
   ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
   auto _ = set_scoped_default_context(ctx);
 
-  // seed = one identity-op representative with an order-2 stabilizer (the
-  // paired swap of R's interchangeable columns 2,3), so its 36-slot-perm
-  // orbit has 14 distinct nonzero members -- the harder of the two group
-  // shapes of the R3 residual (the generic 28-member shape is covered by the
-  // triplet_triples_compact_probe integration run)
-  const ExprPtr seed =
+  const ExprPtr expr =
       ex<Constant>(ratio(-3, 8)) *
       deserialize(
           std::wstring(L"R{i_1,i_2,i_3;a_4,a_2,a_3} * g{a_4,a_5;i_4,a_1} * "
                        L"t{i_4;a_5}"),
           {.def_perm_symm = Symmetry::Nonsymm});
-  ExprPtr seed_sum = ex<Sum>(ExprPtrList{seed});
+  ExprPtr expr_sum = ex<Sum>(ExprPtrList{expr});
 
   const container::svector<container::svector<Index>> ext_idxs{
       {Index(L"i_1"), Index(L"a_1")},
       {Index(L"i_2"), Index(L"a_2")},
       {Index(L"i_3"), Index(L"a_3")}};
 
-  const ExprPtr full = triplet_triples_symbolic_reconstruct(seed_sum, ext_idxs);
+  const ExprPtr full = triplet_symbolic_reconstruct(expr_sum, ext_idxs);
   REQUIRE(full->is<Sum>());
   REQUIRE(full->size() == 14);
 
-  // compaction inverts the reconstruction: one kept term, equal to the seed
-  const ExprPtr compact = triplet_triples_maxcoeff_compact(full, ext_idxs);
+  // compaction inverts the reconstruction: one kept term, equal to the core
+  // expr
+  const ExprPtr compact = triplet_maxcoeff_compact(full, ext_idxs);
   REQUIRE(compact->is<Sum>());
   REQUIRE(compact->size() == 1);
   {
-    ExprPtr diff = compact->clone() - seed->clone();
+    ExprPtr diff = compact->clone() - expr->clone();
     canonicalize(diff);
     simplify(diff);
     REQUIRE(diff->size() == 0);
   }
 
   // and the round trip reproduces the full group
-  const ExprPtr recon = triplet_triples_symbolic_reconstruct(compact, ext_idxs);
+  const ExprPtr recon = triplet_symbolic_reconstruct(compact, ext_idxs);
   ExprPtr diff = recon->clone() - full->clone();
   canonicalize(diff);
   simplify(diff);
@@ -2572,19 +2557,18 @@ TEST_CASE("triplet_doubles_te_reconstruct", "[spin][triplet]") {
            L"R{i_1;a_3} * g{a_4,a_3;i_3,i_4} * t{i_4;a_2} * "
            L"t{i_2,i_3;a_1,a_4}");
 
-  // ext index groups: bra-type occ externals i_1,i_2; ket-type virt
-  // ext a_1,a_2 (get_bra_idx -> first, get_ket_idx -> second).
   const container::svector<container::svector<Index>> ext_idxs{
       {Index(L"i_1"), Index(L"a_1")}, {Index(L"i_2"), Index(L"a_2")}};
 
-  // compaction keeps the (-2c) representative per group.
-  const ExprPtr compact = triplet_doubles_maxcoeff_compact(full, ext_idxs);
+  // compaction against the bare-TE row keeps the (-2c) representative per
+  // group.
+  const ExprPtr compact = triplet_maxcoeff_compact(
+      full, ext_idxs, TripletOrbitWeightKind::TeNnsReconstruction);
   REQUIRE(compact->is<Sum>());
   REQUIRE(compact->size() == 2);
 
-  // symbolic reconstruction rebuilds the full 3 terms per group.
-  const ExprPtr recon =
-      triplet_doubles_te_symbolic_reconstruct(compact, ext_idxs);
+  const ExprPtr recon = triplet_symbolic_reconstruct(
+      compact, ext_idxs, TripletOrbitWeightKind::TeNnsReconstruction);
   REQUIRE(recon->is<Sum>());
   REQUIRE(recon->size() == 6);
 
@@ -2600,4 +2584,30 @@ TEST_CASE("triplet_doubles_te_reconstruct", "[spin][triplet]") {
   canonicalize(diff);
   simplify(diff);
   REQUIRE(diff->size() == 0);
+}
+
+TEST_CASE("triplet_generic_orbit", "[spin][triplet]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  // weight rows: the NnsReconstruction row is the identity-normalized
+  // NullspaceProjector row
+  auto require_normalized = [](std::size_t n, double identity_weight) {
+    const auto& nullspace = mbpt::detail::triplet_orbit_weights<double>(
+        n, TripletOrbitWeightKind::NullspaceProjector);
+    const auto& nns = mbpt::detail::triplet_orbit_weights<double>(
+        n, TripletOrbitWeightKind::NnsReconstruction);
+    REQUIRE(nullspace.size() == nns.size());
+    for (std::size_t p = 0; p != nns.size(); ++p) {
+      CAPTURE(n, p);
+      REQUIRE(std::abs(nns[p] - nullspace[p] / identity_weight) < 1e-14);
+    }
+  };
+  require_normalized(2, 3.0 / 4.0);  // {3/4, -1/4, -1/4, -1/4}
+  require_normalized(3, 1.0 / 4.0);  // w10[m]/20, identity op weight 5/20
+
+  // the bare-TE rows exist only for n = 2
+  REQUIRE(mbpt::detail::triplet_orbit_weights<double>(
+              3, TripletOrbitWeightKind::TeNnsReconstruction)
+              .empty());
 }

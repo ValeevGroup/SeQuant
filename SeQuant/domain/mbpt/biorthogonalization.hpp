@@ -87,106 +87,49 @@ ExprPtr WK_biorthogonalization_filter(
     ExprPtr expr,
     const container::svector<container::svector<Index>>& ext_idxs);
 
-/// @brief Four index layouts for triplet R2 metric primitives (id, bra, ket,
-/// pair swaps on external index pairs).
-struct TripletDoublesSwapLayouts {
-  std::string orig;
-  std::string bra_swap;
-  std::string ket_swap;
-  std::string pair_swap;
+/// \brief Weight rows over the S_n x S_n orbit of external slot permutations
+/// used by the closed-shell triplet primitives
+///
+/// The orbit is enumerated with flat index p = rank(sigma) * n! + rank(tau)
+/// in Myrvold-Ruskey unrank order (the order of
+/// detail::compute_permuted_indices), sigma/tau permuting the n bra/ket slots.
+enum class TripletOrbitWeightKind {
+  /// idempotent null-space projector row
+  NullspaceProjector,
+  /// identity-normalized NullspaceProjector row (metric NNS reconstruction)
+  NnsReconstruction,
+  /// bare-TE (te_only) undo-compact row {1, -1/2, -1/2, 0}; n = 2 only
+  TeNnsReconstruction,
+  /// bare-TE -> paper-metric reconstruction row {1, 1/4, 1/4, 0}; n = 2 only
+  TeReconstruction
 };
 
-/// @brief Build bra/ket/pair swap layouts from a rank-4
-/// annotation (a_1,a_2,i_1,i_2).
-[[nodiscard]] TripletDoublesSwapLayouts triplet_doubles_swap_layouts(
-    std::string const& orig_layout);
+/// \brief Lossless compaction of the closed-shell triplet residual: keeps one
+/// orbit representative per tensor-network hash group, scaled such that the
+/// orbit sum of triplet_symbolic_reconstruct with the same \p kind is exact
+///
+/// \param expr The residual; returned unchanged unless it is a Sum
+/// \param ext_idxs A vector of external index groups (must have 2 or 3 groups)
+/// \param kind The weight row that generated the residual
+/// \return The compacted expression
+/// \throw Exception if a hash group does not match the single-representative
+///        orbit pattern (the residual cannot be compacted losslessly)
+[[nodiscard]] ExprPtr triplet_maxcoeff_compact(
+    ExprPtr expr, const container::svector<container::svector<Index>>& ext_idxs,
+    TripletOrbitWeightKind kind = TripletOrbitWeightKind::NnsReconstruction);
 
-/// @brief Slot-permutation layouts of the triplet R3 (TEE) operator orbit.
-/// The orbit has 18 members (6 hole->virtual pairings x 3 T positions); the
-/// 36 independent (S3 virtual-slot x S3 hole-slot) permutations of a rank-6
-/// annotation cover it exactly 2:1 (the two E legs are interchangeable), so
-/// each op stores its two representative layouts. Op order and the
-/// representative table are fixed by tools/triplet_triples_check.py (check 5).
-struct TripletTriplesSwapLayouts {
-  std::array<std::array<std::string, 2>, 18> ops;
-};
-
-/// @brief Build the 18x2 orbit layouts from a rank-6 annotation
-/// (a_1,a_2,a_3,i_1,i_2,i_3).
-[[nodiscard]] TripletTriplesSwapLayouts triplet_triples_swap_layouts(
-    std::string const& orig_layout);
-
-/// @brief Hash filter for closed-shell triplet R2: keep one term per tensor-
-/// network hash, preferring the identity external-index layout (id swap) so
-/// numerical triplet_doubles_nns_project can recover the full metric residual.
-/// Falls back to largest |coefficient| within a group. Only applies when
-/// @p ext_idxs.size() == 2.
-[[nodiscard]] ExprPtr triplet_doubles_hash_filter(
-    ExprPtr expr,
-    const container::svector<container::svector<Index>>& ext_idxs = {});
-
-/// @brief Lossless compaction of the closed-shell triplet R2 residual: keep one
-/// term per tensor-network hash, choosing the largest-|coefficient| member of
-/// each group. Each paper-metric group has the structure {c, c, c, -3c}, so
-/// the kept term is always the -3c representative; the bare-TE (te_only)
-/// residual is served by the same logic, its groups being {c, c, -2c} with the
-/// -2c representative kept (rebuild via
-/// triplet_doubles_te_symbolic_reconstruct / triplet_doubles_te_nns_project).
-/// For paper metric this is the representative required
-/// by triplet_doubles_symbolic_reconstruct to rebuild the dropped terms; the
-/// layout-preferring triplet_doubles_hash_filter is NOT suitable for that since
-/// it may keep a +c term. Only applies when @p ext_idxs.size() == 2.
-[[nodiscard]] ExprPtr triplet_doubles_maxcoeff_compact(
-    ExprPtr expr,
-    const container::svector<container::svector<Index>>& ext_idxs);
-
-/// @brief Symbolic inverse of triplet_doubles_maxcoeff_compact: from each kept
-/// -3c representative T (coefficient w = -3c), rebuild by applying the bra-swap
-/// (i1<->i2), ket-swap (a1<->a2) and pair-swap (both) to the external indices,
-/// each scaled by -1/3 (= c/w), and keeping T itself. Reproduces the full
-/// 4-term group {w*T, c*bra(T), c*ket(T), c*pair(T)}. Requires the -3c
-/// representative (use triplet_doubles_maxcoeff_compact); reconstruction from a
-/// +c term is ambiguous. Only applies when @p ext_idxs.size() == 2.
-[[nodiscard]] ExprPtr triplet_doubles_symbolic_reconstruct(
+/// \brief Symbolic inverse of triplet_maxcoeff_compact: rebuilds the full
+/// residual as the weighted sum of the kept terms over the (n!)^2 external
+/// slot permutations
+///
+/// \param compact_expr The compact residual; returned unchanged unless a Sum
+/// \param ext_idxs A vector of external index groups (must have 2 or 3 groups)
+/// \param kind The weight row to apply
+/// \return The reconstructed expression
+[[nodiscard]] ExprPtr triplet_symbolic_reconstruct(
     ExprPtr compact_expr,
-    const container::svector<container::svector<Index>>& ext_idxs);
-
-/// @brief Symbolic inverse of triplet_doubles_maxcoeff_compact for the bare-TE
-/// (te_only) residual: from each kept -2c representative T (coefficient
-/// w = -2c), rebuild the bra-swap (i1<->i2) and ket-swap (a1<->a2) images of
-/// the external indices, each scaled by -1/2 (= c/w), and keep T itself.
-/// Reproduces the full 3-term group {w*T, c*bra(T), c*ket(T)}; the pair-swap
-/// member carries coefficient 0 in TE (this is what makes
-/// Omega = (3*TE - TE_ps)/16 come out as {c, c, c, -3c} groups). Requires the
-/// -2c representative (use triplet_doubles_maxcoeff_compact). Only applies
-/// when @p ext_idxs.size() == 2.
-[[nodiscard]] ExprPtr triplet_doubles_te_symbolic_reconstruct(
-    ExprPtr compact_expr,
-    const container::svector<container::svector<Index>>& ext_idxs);
-
-/// @brief Lossless compaction of the closed-shell triplet R3 residual: keep one
-/// term per tensor-network hash, choosing the largest-|coefficient| member of
-/// each group. Each group is the 36-slot-perm orbit of any of its members with
-/// coefficients c * w10[op]/10 (w10 = {5,-1,-1,-1,1,1,-2,-2,1,0,1,0,0,0,1,-2,
-/// 1,-2}, the triplet_triples_nullspace_project op row), so the kept member is
-/// an identity-op representative (weight 5; the tie between the two op-0
-/// representatives is broken arbitrarily -- reconstruction regenerates both).
-/// The kept coefficient is divided by the order (1 or 2) of the term's
-/// stabilizer within the 36 slot perms so that the uniform 36-perm sum of
-/// triplet_triples_symbolic_reconstruct / triplet_triples_nns_project is
-/// exact. Only applies when @p ext_idxs.size() == 3.
-[[nodiscard]] ExprPtr triplet_triples_maxcoeff_compact(
-    ExprPtr expr,
-    const container::svector<container::svector<Index>>& ext_idxs);
-
-/// @brief Symbolic inverse of triplet_triples_maxcoeff_compact: rebuild the
-/// full residual by summing, over all 36 external slot permutations, the
-/// relabeled kept terms weighted by w10[op]/5 (identity-normalized: 4x the
-/// idempotent null-space row w10[op]/20 of triplet_triples_nullspace_project).
-/// Only applies when @p ext_idxs.size() == 3.
-[[nodiscard]] ExprPtr triplet_triples_symbolic_reconstruct(
-    ExprPtr compact_expr,
-    const container::svector<container::svector<Index>>& ext_idxs);
+    const container::svector<container::svector<Index>>& ext_idxs,
+    TripletOrbitWeightKind kind = TripletOrbitWeightKind::NnsReconstruction);
 
 /// @brief Performs biorthogonal transformation with factored out NNS projector
 /// @details Applies biorthogonal transformation. When factor_out_nns_projector
@@ -234,6 +177,86 @@ namespace detail {
 container::svector<size_t> compute_permuted_indices(
     const container::svector<size_t>& indices, size_t perm_rank,
     size_t n_particles);
+
+/// \brief Provides the slot images of one member of the S_n x S_n
+/// external-slot-permutation orbit (see TripletOrbitWeightKind for the
+/// enumeration order)
+///
+/// \param perm_index The flat orbit index, in [0, (n!)^2)
+/// \param n_particles The rank of external index pairs
+///
+/// \return The 2*n_particles slot images: slot s displays slot ords[s], the
+///         first n_particles slots being the bra and the rest the ket ones
+[[nodiscard]] container::svector<size_t> triplet_slot_perm_ords(
+    size_t perm_index, size_t n_particles);
+
+/// \brief Provides the annotation layouts of the S_n x S_n
+/// external-slot-permutation orbit of a rank-2n annotation
+///
+/// \param orig_layout A comma-separated rank-2n annotation, e.g.
+///        "a_1,a_2,i_1,i_2" (bra slots first, then ket slots)
+/// \param n_particles The rank of external index pairs
+///
+/// \return The (n!)^2 permuted annotations in flat orbit order
+[[nodiscard]] container::svector<std::string> triplet_slot_perm_layouts(
+    std::string const& orig_layout, size_t n_particles);
+
+/// \brief Computes the weight row over the S_n x S_n
+/// external-slot-permutation orbit for the closed-shell triplet primitives
+///
+/// \param n_particles The rank of external index pairs (2 or 3; 2 only for
+///        the bare-TE kinds)
+/// \param kind The weight row to compute
+///
+/// \return Vector of weights in flat orbit order
+///
+/// \throw Exception for unsupported \p n_particles / \p kind combinations
+[[nodiscard]] std::vector<double> compute_triplet_orbit_weights(
+    std::size_t n_particles, TripletOrbitWeightKind kind);
+
+/// \brief Provides the numeric weight row over the S_n x S_n
+/// external-slot-permutation orbit for the closed-shell triplet primitives
+///
+/// \tparam T The numeric type (must be floating point or complex)
+/// \param n_particles The rank of external index pairs
+/// \param kind The weight row to provide
+///
+/// \return (memoized) Vector of weights in flat orbit order; empty unless
+///         \p n_particles is 2 or 3 (2 only for the bare-TE kinds)
+template <typename T>
+  requires(std::floating_point<T> || meta::is_complex_v<T>)
+[[nodiscard]] const std::vector<T>& triplet_orbit_weights(
+    std::size_t n_particles, TripletOrbitWeightKind kind) {
+  static const std::vector<T> empty_vec{};
+
+  const bool te_kind = kind == TripletOrbitWeightKind::TeNnsReconstruction ||
+                       kind == TripletOrbitWeightKind::TeReconstruction;
+  if ((n_particles != 2 && n_particles != 3) || (te_kind && n_particles != 2)) {
+    return empty_vec;
+  }
+
+  using CacheKey = std::pair<std::size_t, TripletOrbitWeightKind>;
+  // the rows are cached behind a pointer since the cache holds several keys
+  // and flat_map insertions would invalidate references into it
+  using CachedRow = std::unique_ptr<const std::vector<T>>;
+
+  static std::mutex cache_mutex;
+  static std::condition_variable cache_cv;
+  static container::map<CacheKey, std::optional<CachedRow>> cache;
+
+  CacheKey key{n_particles, kind};
+
+  return *sequant::detail::memoize(
+      cache, cache_mutex, cache_cv, key, [&]() -> CachedRow {
+        auto coeffs = compute_triplet_orbit_weights(n_particles, kind);
+        std::vector<T> weights;
+        weights.reserve(coeffs.size());
+        for (const auto& c : coeffs) {
+          weights.push_back(static_cast<T>(c));
+        }
+        return std::make_unique<const std::vector<T>>(std::move(weights));
+      });
+}
 
 /// \brief Provides one row of the NNS projector matrix,
 /// hardcoded from Mathematica to avoid numerical precision loss.
@@ -587,104 +610,30 @@ auto biorthogonal_nns_project(TAPPTensor<T, Alloc> const& arr,
 
 namespace detail {
 
-/// @brief Weighted average over the triplet-doubles permutations:
-///   out(orig) = w_self * arr(orig)
-///             + w_swap * (arr(bra_swap) + arr(ket_swap) + arr(pair_swap)).
-/// All three external swap images share a single weight by the four
-/// permutations symmetry, so the metric NNS reconstruction (w_self = 1, w_swap
-/// = -1/3) and the idempotent null-space projector (w_self = 3/4, w_swap =
-/// -1/4) are both instances of this combine; the two differ only by the overall
-/// scale 4/3.
+/// \brief Weighted sum over the S_n x S_n external-slot permutations of a
+/// rank-2n TA::DistArray:
+///   out(orig) = sum_p weights[p] * arr(layout_p),
+/// with the layouts generated by triplet_slot_perm_layouts and the weight row
+/// selected by the caller (see TripletOrbitWeightKind). Zero-weight
+/// permutations are skipped.
 template <typename... Args>
-auto triplet_doubles_orbit_combine_ta(
-    TA::DistArray<Args...> const& arr, TripletDoublesSwapLayouts const& layouts,
-    typename TA::DistArray<Args...>::numeric_type w_self,
-    typename TA::DistArray<Args...>::numeric_type w_swap) {
+auto triplet_orbit_combine_ta(
+    TA::DistArray<Args...> const& arr, std::string const& orig_layout,
+    std::size_t n_particles,
+    std::vector<typename TA::DistArray<Args...>::numeric_type> const& weights) {
+  using numeric_type = typename TA::DistArray<Args...>::numeric_type;
+  const auto layouts = triplet_slot_perm_layouts(orig_layout, n_particles);
+  SEQUANT_ASSERT(layouts.size() == weights.size());
+
   TA::DistArray<Args...> result;
-  result(layouts.orig) =
-      w_self * arr(layouts.orig) +
-      w_swap * (arr(layouts.bra_swap) + arr(layouts.ket_swap) +
-                arr(layouts.pair_swap));
-  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
-  result.truncate();
-  return result;
-}
-
-}  // namespace detail
-
-/// @brief Metric NNS reconstruction for compact triplet R2 residuals: rebuilds
-/// the full residual from its compact (-3c) representative via the all swaps
-/// with the n=2 triplet pseudo-inverse weights {1, -1/3, -1/3, -1/3}, i.e.
-/// out(orig) = arr(orig) - (1/3)(bra + ket + pair). Numerical analogue of
-/// triplet_doubles_symbolic_reconstruct; apply to the H*R residual when the
-/// compact equations were evaluated.
-template <typename... Args>
-auto triplet_doubles_nns_project_ta(TA::DistArray<Args...> const& arr,
-                                    std::string const& orig_layout) {
-  using numeric_type = typename TA::DistArray<Args...>::numeric_type;
-  if (arr.trange().rank() != 4) return arr;
-  const auto layouts = triplet_doubles_swap_layouts(orig_layout);
-  return detail::triplet_doubles_orbit_combine_ta<Args...>(
-      arr, layouts, numeric_type(1), -numeric_type(1) / numeric_type(3));
-}
-
-template <typename... Args>
-auto triplet_doubles_nns_project(TA::DistArray<Args...> const& arr,
-                                 std::string const& orig_layout) {
-  return triplet_doubles_nns_project_ta(arr, orig_layout);
-}
-
-/// @brief Idempotent null-space projector for triplet R2: removes the
-/// metric-null fully symmetric component, P = I - (1/4)Sigma, i.e. the
-/// four swaps with weights {3/4, -1/4, -1/4, -1/4}. Equals
-/// (3/4) * triplet_doubles_nns_project. Apply to the Davidson trial R2 each
-/// iteration to keep it in the physical (non-null) subspace.
-template <typename... Args>
-auto triplet_doubles_nullspace_project_ta(TA::DistArray<Args...> const& arr,
-                                          std::string const& orig_layout) {
-  using numeric_type = typename TA::DistArray<Args...>::numeric_type;
-  if (arr.trange().rank() != 4) return arr;
-  const auto layouts = triplet_doubles_swap_layouts(orig_layout);
-  return detail::triplet_doubles_orbit_combine_ta<Args...>(
-      arr, layouts, numeric_type(3) / numeric_type(4),
-      -numeric_type(1) / numeric_type(4));
-}
-
-template <typename... Args>
-auto triplet_doubles_nullspace_project(TA::DistArray<Args...> const& arr,
-                                       std::string const& orig_layout) {
-  return triplet_doubles_nullspace_project_ta(arr, orig_layout);
-}
-
-namespace detail {
-
-/// @brief Weighted sum over the 36 slot permutations of a rank-6 array with
-/// per-representative weights w10[m] / @p per_rep_denom, w10 = {5,-1,-1,
-/// -1,1,1, -2,-2,1, 0,1,0, 0,0,1, -2,1,-2} = 10x the op row of G * pinv(G)
-/// for the TEE Gram matrix G (tools/triplet_triples_check.py, check 5). Each
-/// op weight is carried by its two representatives, so the idempotent
-/// null-space projector (op weight w10[m]/10) uses per_rep_denom = 20 and the
-/// identity-normalized metric NNS reconstruction (4x) uses per_rep_denom = 5.
-template <typename... Args>
-auto triplet_triples_orbit_combine_ta(TA::DistArray<Args...> const& arr,
-                                      std::string const& orig_layout,
-                                      int per_rep_denom) {
-  using numeric_type = typename TA::DistArray<Args...>::numeric_type;
-  const auto layouts = triplet_triples_swap_layouts(orig_layout);
-  static constexpr std::array<int, 18> w10{5, -1, -1, -1, 1, 1, -2, -2, 1,
-                                           0, 1,  0,  0,  0, 1, -2, 1,  -2};
-  TA::DistArray<Args...> result;
-  bool first = true;
-  for (std::size_t m = 0; m != 18; ++m) {
-    if (w10[m] == 0) continue;
-    const auto w = numeric_type(w10[m]) / numeric_type(per_rep_denom);
-    for (std::size_t r = 0; r != 2; ++r) {
-      if (first) {
-        result(orig_layout) = w * arr(layouts.ops[m][r]);
-        first = false;
-      } else {
-        result(orig_layout) += w * arr(layouts.ops[m][r]);
-      }
+  bool result_initialized = false;
+  for (std::size_t p = 0; p != weights.size(); ++p) {
+    if (weights[p] == numeric_type(0)) continue;
+    if (result_initialized) {
+      result(orig_layout) += weights[p] * arr(layouts[p]);
+    } else {
+      result(orig_layout) = weights[p] * arr(layouts[p]);
+      result_initialized = true;
     }
   }
   TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
@@ -692,106 +641,90 @@ auto triplet_triples_orbit_combine_ta(TA::DistArray<Args...> const& arr,
   return result;
 }
 
+/// \brief Applies the \p kind weight row over the triplet slot-perm orbit of
+/// \p arr; no-op unless the array rank is 4 or 6 (n_particles = rank/2) and
+/// the row is available for that rank
+template <typename... Args>
+auto triplet_orbit_project_ta(TA::DistArray<Args...> const& arr,
+                              std::string const& orig_layout,
+                              TripletOrbitWeightKind kind) {
+  using numeric_type = typename TA::DistArray<Args...>::numeric_type;
+  const std::size_t rank = arr.trange().rank();
+  if (rank != 4 && rank != 6) return arr;
+  const auto& weights = triplet_orbit_weights<numeric_type>(rank / 2, kind);
+  if (weights.empty()) return arr;
+  return triplet_orbit_combine_ta<Args...>(arr, orig_layout, rank / 2, weights);
+}
+
 }  // namespace detail
 
-/// @brief Idempotent null-space projector for triplet R3: the rank-6 analogue
-/// of triplet_doubles_nullspace_project. Combines the 36 slot permutations of
-/// the array (two representatives per 18-op orbit member, each at half the op
-/// weight) with the op weights (1/10) * {5,-1,-1, -1,1,1, -2,-2,1, 0,1,0,
-/// 0,0,1, -2,1,-2} = the row of G * pinv(G) for the TEE Gram matrix G
-/// (tools/triplet_triples_check.py, check 5). Apply to the Davidson trial R3
-/// each iteration to keep it in the physical (non-null) subspace.
+/// \brief Idempotent null-space projector for the closed-shell triplet R:
+/// removes the metric-null component of the array. Apply to the Davidson
+/// trial vector each iteration; no-op unless the array rank is 4 or 6.
 template <typename... Args>
-auto triplet_triples_nullspace_project_ta(TA::DistArray<Args...> const& arr,
-                                          std::string const& orig_layout) {
-  if (arr.trange().rank() != 6) return arr;
-  return detail::triplet_triples_orbit_combine_ta<Args...>(arr, orig_layout,
-                                                           20);
+auto triplet_nullspace_project_ta(TA::DistArray<Args...> const& arr,
+                                  std::string const& orig_layout) {
+  return detail::triplet_orbit_project_ta(
+      arr, orig_layout, TripletOrbitWeightKind::NullspaceProjector);
 }
 
 template <typename... Args>
-auto triplet_triples_nullspace_project(TA::DistArray<Args...> const& arr,
-                                       std::string const& orig_layout) {
-  return triplet_triples_nullspace_project_ta(arr, orig_layout);
+auto triplet_nullspace_project(TA::DistArray<Args...> const& arr,
+                               std::string const& orig_layout) {
+  return triplet_nullspace_project_ta(arr, orig_layout);
 }
 
-/// @brief Metric NNS reconstruction for compact triplet R3 residuals: rebuilds
-/// the full residual from the compact (identity-op, stabilizer-scaled)
-/// representatives kept by triplet_triples_maxcoeff_compact via the 36 slot
-/// permutations at weights w10[m]/5 each, i.e. 4 *
-/// triplet_triples_nullspace_project. Numerical analogue of
-/// triplet_triples_symbolic_reconstruct; apply to the H*R residual when the
-/// compact equations were evaluated.
+/// \brief Metric NNS reconstruction for compact closed-shell triplet
+/// residuals: rebuilds the full residual from the representatives kept by
+/// triplet_maxcoeff_compact (numerical analogue of
+/// triplet_symbolic_reconstruct). Apply to the H*R residual when the compact
+/// equations were evaluated; no-op unless the array rank is 4 or 6.
 template <typename... Args>
-auto triplet_triples_nns_project_ta(TA::DistArray<Args...> const& arr,
-                                    std::string const& orig_layout) {
-  if (arr.trange().rank() != 6) return arr;
-  return detail::triplet_triples_orbit_combine_ta<Args...>(arr, orig_layout, 5);
-}
-
-template <typename... Args>
-auto triplet_triples_nns_project(TA::DistArray<Args...> const& arr,
-                                 std::string const& orig_layout) {
-  return triplet_triples_nns_project_ta(arr, orig_layout);
-}
-
-/// @brief Bare-TE undo-compact for compact triplet R2 residuals: rebuilds the
-/// full bare-TE residual from its compact (-2c) representative via
-///   out(orig) = arr(orig) - (1/2)(arr(bra_swap) + arr(ket_swap)),
-/// i.e. weights {1, -1/2, -1/2, 0} (the pair-swap member of each TE group
-/// carries coefficient 0). Numerical analogue of
-/// triplet_doubles_te_symbolic_reconstruct; apply to the H*R residual when the
-/// compact te_only equations were evaluated, BEFORE
-/// triplet_doubles_te_reconstruct. Composed with te_reconstruct
-/// ({1, 1/4, 1/4, 0}) this equals triplet_doubles_nullspace_project
-/// ({3/4, -1/4, -1/4, -1/4}).
-template <typename... Args>
-auto triplet_doubles_te_nns_project_ta(TA::DistArray<Args...> const& arr,
-                                       std::string const& orig_layout) {
-  using numeric_type = typename TA::DistArray<Args...>::numeric_type;
-  if (arr.trange().rank() != 4) return arr;
-  const auto layouts = triplet_doubles_swap_layouts(orig_layout);
-  TA::DistArray<Args...> result;
-  result(layouts.orig) =
-      arr(layouts.orig) - (numeric_type(1) / numeric_type(2)) *
-                              (arr(layouts.bra_swap) + arr(layouts.ket_swap));
-  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
-  result.truncate();
-  return result;
+auto triplet_nns_project_ta(TA::DistArray<Args...> const& arr,
+                            std::string const& orig_layout) {
+  return detail::triplet_orbit_project_ta(
+      arr, orig_layout, TripletOrbitWeightKind::NnsReconstruction);
 }
 
 template <typename... Args>
-auto triplet_doubles_te_nns_project(TA::DistArray<Args...> const& arr,
-                                    std::string const& orig_layout) {
-  return triplet_doubles_te_nns_project_ta(arr, orig_layout);
+auto triplet_nns_project(TA::DistArray<Args...> const& arr,
+                         std::string const& orig_layout) {
+  return triplet_nns_project_ta(arr, orig_layout);
 }
 
-/// @brief TE-only -> full-metric reconstruction for triplet R2 (PI conjecture
-/// experiment). The bare-TE residual te_a = TE/4 sits in the same four
-/// swaps as the production residual Omega = (3TE - TE_ps)/16, and the exact
-/// identity Omega = te_a + (1/4)(bra_swap(te_a) + ket_swap(te_a)) recovers the
-/// production residual via a partial (bra + ket, NO pair)
-/// symmetrization. Apply to the H*R residual when the te_only equations were
-/// evaluated (Knob A: TE_ps dropped, R+R_swap amplitude kept).
+/// \brief Bare-TE undo-compact for compact triplet R2 residuals
+/// (TeNnsReconstruction row). Apply to the H*R residual when the compact
+/// te_only equations were evaluated, before triplet_te_reconstruct; no-op
+/// unless the array rank is 4.
 template <typename... Args>
-auto triplet_doubles_te_reconstruct_ta(TA::DistArray<Args...> const& arr,
-                                       std::string const& orig_layout) {
-  using numeric_type = typename TA::DistArray<Args...>::numeric_type;
-  if (arr.trange().rank() != 4) return arr;
-  const auto layouts = triplet_doubles_swap_layouts(orig_layout);
-  TA::DistArray<Args...> result;
-  result(layouts.orig) =
-      arr(layouts.orig) + (numeric_type(1) / numeric_type(4)) *
-                              (arr(layouts.bra_swap) + arr(layouts.ket_swap));
-  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
-  result.truncate();
-  return result;
+auto triplet_te_nns_project_ta(TA::DistArray<Args...> const& arr,
+                               std::string const& orig_layout) {
+  return detail::triplet_orbit_project_ta(
+      arr, orig_layout, TripletOrbitWeightKind::TeNnsReconstruction);
 }
 
 template <typename... Args>
-auto triplet_doubles_te_reconstruct(TA::DistArray<Args...> const& arr,
-                                    std::string const& orig_layout) {
-  return triplet_doubles_te_reconstruct_ta(arr, orig_layout);
+auto triplet_te_nns_project(TA::DistArray<Args...> const& arr,
+                            std::string const& orig_layout) {
+  return triplet_te_nns_project_ta(arr, orig_layout);
+}
+
+/// \brief TE-only -> full-metric reconstruction for triplet R2 (EFV
+/// experiment), via the exact identity
+/// Omega = te_a + (1/4)(bra_swap(te_a) + ket_swap(te_a)). Apply to the H*R
+/// residual when the te_only equations were evaluated; no-op unless the
+/// array rank is 4.
+template <typename... Args>
+auto triplet_te_reconstruct_ta(TA::DistArray<Args...> const& arr,
+                               std::string const& orig_layout) {
+  return detail::triplet_orbit_project_ta(
+      arr, orig_layout, TripletOrbitWeightKind::TeReconstruction);
+}
+
+template <typename... Args>
+auto triplet_te_reconstruct(TA::DistArray<Args...> const& arr,
+                            std::string const& orig_layout) {
+  return triplet_te_reconstruct_ta(arr, orig_layout);
 }
 
 #endif  // defined(SEQUANT_HAS_TILEDARRAY)
@@ -800,53 +733,83 @@ auto triplet_doubles_te_reconstruct(TA::DistArray<Args...> const& arr,
 
 namespace detail {
 
-/// @brief BTAS analogue of triplet_doubles_orbit_combine_ta (no truncation).
+/// \brief BTAS analogue of triplet_orbit_combine_ta. Slots are taken
+/// positionally, the first n_particles being the bra and the rest the ket
+/// externals (no annotation support in btas::Tensor).
 template <typename... Args>
-auto triplet_doubles_orbit_combine_btas(
-    btas::Tensor<Args...> const& arr, TripletDoublesSwapLayouts const& layouts,
-    typename btas::Tensor<Args...>::value_type w_self,
-    typename btas::Tensor<Args...>::value_type w_swap) {
+auto triplet_orbit_combine_btas(
+    btas::Tensor<Args...> const& arr, std::size_t n_particles,
+    std::vector<typename btas::Tensor<Args...>::numeric_type> const& weights) {
+  using ranges::views::iota;
+  using numeric_type = typename btas::Tensor<Args...>::numeric_type;
+  const std::size_t rank = 2 * n_particles;
+
+  sequant::detail::perm_t perm =
+      iota(size_t{0}, rank) | ranges::to<sequant::detail::perm_t>;
+
   btas::Tensor<Args...> result;
-  result(layouts.orig) =
-      w_self * arr(layouts.orig) +
-      w_swap * (arr(layouts.bra_swap) + arr(layouts.ket_swap) +
-                arr(layouts.pair_swap));
+  bool result_initialized = false;
+  for (std::size_t p = 0; p != weights.size(); ++p) {
+    if (weights[p] == numeric_type(0)) continue;
+    const sequant::detail::perm_t annot = triplet_slot_perm_ords(p, rank / 2);
+
+    btas::Tensor<Args...> temp;
+    btas::permute(arr, annot, temp, perm);
+    btas::scal(weights[p], temp);
+
+    if (result_initialized) {
+      result += temp;
+    } else {
+      result = temp;
+      result_initialized = true;
+    }
+  }
   return result;
+}
+
+/// \brief BTAS analogue of triplet_orbit_project_ta; \p orig_layout is
+/// accepted for signature parity with the TA overloads but not consulted
+/// (slots are positional)
+template <typename... Args>
+auto triplet_orbit_project_btas(btas::Tensor<Args...> const& arr,
+                                [[maybe_unused]] std::string const& orig_layout,
+                                TripletOrbitWeightKind kind) {
+  using numeric_type = typename btas::Tensor<Args...>::numeric_type;
+  const std::size_t rank = arr.rank();
+  if (rank != 4 && rank != 6) return arr;
+  const auto& weights = triplet_orbit_weights<numeric_type>(rank / 2, kind);
+  if (weights.empty()) return arr;
+  return triplet_orbit_combine_btas<Args...>(arr, rank / 2, weights);
 }
 
 }  // namespace detail
 
+/// @brief BTAS analogue of the TA triplet_nns_project
 template <typename... Args>
-auto triplet_doubles_nns_project_btas(btas::Tensor<Args...> const& arr,
-                                      std::string const& orig_layout) {
-  using numeric_type = typename btas::Tensor<Args...>::value_type;
-  if (arr.rank() != 4) return arr;
-  const auto layouts = triplet_doubles_swap_layouts(orig_layout);
-  return detail::triplet_doubles_orbit_combine_btas<Args...>(
-      arr, layouts, numeric_type(1), -numeric_type(1) / numeric_type(3));
+auto triplet_nns_project_btas(btas::Tensor<Args...> const& arr,
+                              std::string const& orig_layout) {
+  return detail::triplet_orbit_project_btas(
+      arr, orig_layout, TripletOrbitWeightKind::NnsReconstruction);
 }
 
 template <typename... Args>
-auto triplet_doubles_nns_project(btas::Tensor<Args...> const& arr,
-                                 std::string const& orig_layout) {
-  return triplet_doubles_nns_project_btas(arr, orig_layout);
+auto triplet_nns_project(btas::Tensor<Args...> const& arr,
+                         std::string const& orig_layout) {
+  return triplet_nns_project_btas(arr, orig_layout);
+}
+
+/// @brief BTAS analogue of the TA triplet_nullspace_project
+template <typename... Args>
+auto triplet_nullspace_project_btas(btas::Tensor<Args...> const& arr,
+                                    std::string const& orig_layout) {
+  return detail::triplet_orbit_project_btas(
+      arr, orig_layout, TripletOrbitWeightKind::NullspaceProjector);
 }
 
 template <typename... Args>
-auto triplet_doubles_nullspace_project_btas(btas::Tensor<Args...> const& arr,
-                                            std::string const& orig_layout) {
-  using numeric_type = typename btas::Tensor<Args...>::value_type;
-  if (arr.rank() != 4) return arr;
-  const auto layouts = triplet_doubles_swap_layouts(orig_layout);
-  return detail::triplet_doubles_orbit_combine_btas<Args...>(
-      arr, layouts, numeric_type(3) / numeric_type(4),
-      -numeric_type(1) / numeric_type(4));
-}
-
-template <typename... Args>
-auto triplet_doubles_nullspace_project(btas::Tensor<Args...> const& arr,
-                                       std::string const& orig_layout) {
-  return triplet_doubles_nullspace_project_btas(arr, orig_layout);
+auto triplet_nullspace_project(btas::Tensor<Args...> const& arr,
+                               std::string const& orig_layout) {
+  return triplet_nullspace_project_btas(arr, orig_layout);
 }
 
 #endif  // defined(SEQUANT_HAS_BTAS)
