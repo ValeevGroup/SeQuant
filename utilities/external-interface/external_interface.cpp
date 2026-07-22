@@ -49,8 +49,8 @@
 using nlohmann::json;
 
 template <>
-struct std::hash<Tensor> {
-  std::size_t operator()(const Tensor &tensor) const {
+struct std::hash<sequant::Tensor> {
+  std::size_t operator()(const sequant::Tensor &tensor) const {
     return tensor.hash_value();
   }
 };
@@ -653,6 +653,7 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta) {
 }
 
 void process_steps(const json &json_steps, const IndexSpaceMeta &meta) {
+	(void) meta;
 	if (!json_steps.is_array()) {
 		throw Exception("Steps object must be an array");
 	}
@@ -685,7 +686,7 @@ void process_steps(const json &json_steps, const IndexSpaceMeta &meta) {
 		std::unique_ptr<ProcessingStep> proc_step;
 
 		if (kind == "read_input") {
-			proc_step = std::make_unsigned<ReadInputStep>();
+			proc_step = std::make_unique<ReadInputStep>();
 		} else {
 			throw Exception("Unknown processing step kind '" + kind + "'");
 		}
