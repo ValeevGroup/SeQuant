@@ -129,7 +129,7 @@ class compute_eomcc_openshell {
       for (size_t sc = 0; sc < os_st.size(); ++sc) {
         std::wcout << "open-shell spin case [" << sc << "] R[" << i
                    << "]: " << os_st[sc].size() << " terms\n";
-        if (print) std::wcout << to_latex_align(os_st[sc], 20, 3) << "\n";
+        if (print) std::wcout << to_latex_align(os_st[sc], 0, 4) << "\n";
       }
     }
   }

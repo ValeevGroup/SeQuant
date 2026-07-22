@@ -2234,14 +2234,16 @@ SECTION("Open-shell CC spintrace energy") {
                      L"+ g{i↑1,i↓2;a↑1,a↓2} t{a↑1,a↓2;i↑1,i↓2}"));
   }
   {
-    // spintracing of R to see the problem of openshell 3h3p
+    // spintracing gR3 to see the problem of openshell 3h3p
     const auto input =
         deserialize(L"1/4 g{i_1,i_2;a_1,a_2} R{a_1,a_2,a_3;i_1,i_2,i_3}",
                     {.def_perm_symm = Symmetry::Antisymm});
     REQUIRE(input->is<Product>());
+    std::wcout << " start gR3 test\n";
     auto result = open_shell_CC_spintrace(input);
     canonicalize(result[0]);
     std::wcout << "gR3[0]: " << to_latex_align(result[0], 0, 4);
+    std::wcout << " finish gR3 test\n";
   }
 }
 
