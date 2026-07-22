@@ -13,6 +13,11 @@
 
 namespace sequant::util::extint {
 
+ProcessingStep::~ProcessingStep() = default;
+
+
+std::string ReadInputStep::kind() const { return "ReadInputStep"; }
+
 bool ReadInputStep::accepts_options() const { return true; }
 
 bool ReadInputStep::requires_options() const { return true; }
@@ -43,11 +48,11 @@ void ReadInputStep::set_options(const nlohmann::json &options) {
 	}
 }
 
-std::unique_ptr<ProcessingOutput> ReadInputStep::run(const ProcessingInput &inp) {
-	if (dynamic_cast<const VoidInput *>(&inp)) {
-		throw Exception("ReadInputStep expects a VoidInput but got a different input kind");
-	}
+ProcessingOutput ReadInputStep::run(const ProcessingInput &inp) {
+	return run(convert_input<VoidInput>(inp));
+}
 
+ExpressionOutput ReadInputStep::run(const VoidInput &) {
 	std::vector<ResultExpr> expressions;
 
 	for (const std::filesystem::path &current : input_paths_) {
@@ -63,7 +68,7 @@ std::unique_ptr<ProcessingOutput> ReadInputStep::run(const ProcessingInput &inp)
 	}
 
 	// TODO: add expression
-	return std::make_unique<ExpressionOutput>(std::move(expressions));
+	return ExpressionOutput{.expressions = std::move(expressions)};
 }
 
 }
