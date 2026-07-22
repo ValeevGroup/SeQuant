@@ -2,8 +2,8 @@
 #define SEQUANT_EXTERNAL_INTERFACE_PROCESSINGSTEP_HPP
 
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 
 #include <nlohmann/json_fwd.hpp>
 
@@ -35,8 +35,8 @@ using ProcessingInput =
     std::variant<VoidInput, ExpressionInput, ExportTreeInput>;
 
 template <typename Target, typename Input>
-requires(std::is_assignable_v<std::remove_cvref_t<Input>,
-                              Target>) auto convert_input(Input &&input) {
+  requires(std::is_assignable_v<std::remove_cvref_t<Input>, Target>)
+auto convert_input(Input &&input) {
   if constexpr (std::same_as<Target, VoidInput>) {
     return VoidInput{};
   }
@@ -70,8 +70,8 @@ using ProcessingOutput =
     std::variant<VoidOutput, ExpressionOutput, ExportTreeOutput>;
 
 template <typename Target, typename Output>
-requires(std::is_assignable_v<std::remove_cvref_t<Output>,
-                              Target>) auto convert_output(Output &&input) {
+  requires(std::is_assignable_v<std::remove_cvref_t<Output>, Target>)
+auto convert_output(Output &&input) {
   if constexpr (std::same_as<Target, VoidOutput>) {
     return VoidOutput{};
   }
