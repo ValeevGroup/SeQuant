@@ -1,8 +1,8 @@
 #include "format_support.hpp"
 #include "processing.hpp"
-#include "utils.hpp"
 #include "processing_step.hpp"
 #include "processing_tree.hpp"
+#include "utils.hpp"
 
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/export/export.hpp>
@@ -38,13 +38,13 @@
 #include <fstream>
 #include <iterator>
 #include <limits>
-#include <ranges>
 #include <memory>
-#include <vector>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <unordered_set>
 #include <variant>
+#include <vector>
 
 using nlohmann::json;
 
@@ -650,54 +650,57 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta) {
 }
 
 void process_steps(const json &json_steps, const IndexSpaceMeta &meta) {
-	(void) meta;
-	if (!json_steps.is_array()) {
-		throw Exception("Steps object must be an array");
-	}
+  (void)meta;
+  if (!json_steps.is_array()) {
+    throw Exception("Steps object must be an array");
+  }
 
-	std::vector<std::unique_ptr<ProcessingStep>> steps;
-	std::unordered_map<std::string, std::size_t> output_assoc;
+  std::vector<std::unique_ptr<ProcessingStep>> steps;
+  std::unordered_map<std::string, std::size_t> output_assoc;
 
-	for (const json &step : json_steps) {
-		const std::size_t step_id = steps.size();
-		const std::string kind = step.at("kind").get<std::string>();
-		std::vector<std::size_t> inputs;
+  for (const json &step : json_steps) {
+    const std::size_t step_id = steps.size();
+    const std::string kind = step.at("kind").get<std::string>();
+    std::vector<std::size_t> inputs;
 
-		if (step.contains("input")) {
-			const std::string input_id = step.at("input").get<std::string>();
-			auto it = output_assoc.find(input_id);
-			if (it == output_assoc.end()) {
-				throw Exception("Attempted to use an (as of yet) unknown output '" + input_id  +"'");
-			}
+    if (step.contains("input")) {
+      const std::string input_id = step.at("input").get<std::string>();
+      auto it = output_assoc.find(input_id);
+      if (it == output_assoc.end()) {
+        throw Exception("Attempted to use an (as of yet) unknown output '" +
+                        input_id + "'");
+      }
 
-			inputs.emplace_back(std::distance(output_assoc.begin(), it));
-		}
-		if (step.contains("output")){
-			const std::string output_id = step.at("output").get<std::string>();
-			auto [_, inserted] = output_assoc.insert({output_id, step_id});
-			if (!inserted) {
-				throw Exception("Duplicate output ID '" + output_id + "'");
-			}
-		}
+      inputs.emplace_back(std::distance(output_assoc.begin(), it));
+    }
+    if (step.contains("output")) {
+      const std::string output_id = step.at("output").get<std::string>();
+      auto [_, inserted] = output_assoc.insert({output_id, step_id});
+      if (!inserted) {
+        throw Exception("Duplicate output ID '" + output_id + "'");
+      }
+    }
 
-		std::unique_ptr<ProcessingStep> proc_step;
+    std::unique_ptr<ProcessingStep> proc_step;
 
-		if (kind == "read_input") {
-			proc_step = std::make_unique<ReadInputStep>();
-		} else {
-			throw Exception("Unknown processing step kind '" + kind + "'");
-		}
+    if (kind == "read_input") {
+      proc_step = std::make_unique<ReadInputStep>();
+    } else {
+      throw Exception("Unknown processing step kind '" + kind + "'");
+    }
 
-		if (step.contains("options")) {
-			if (!proc_step->accepts_options()) {
-				throw Exception("Processing step '" + kind + "' does not take options but some where given");
-			}
+    if (step.contains("options")) {
+      if (!proc_step->accepts_options()) {
+        throw Exception("Processing step '" + kind +
+                        "' does not take options but some where given");
+      }
 
-			proc_step->set_options(step.at("options"));
-		} else if (proc_step->requires_options()) {
-			throw Exception("Processing step '" + kind + "' requires options but none where given");
-		}
-	}
+      proc_step->set_options(step.at("options"));
+    } else if (proc_step->requires_options()) {
+      throw Exception("Processing step '" + kind +
+                      "' requires options but none where given");
+    }
+  }
 }
 
 void process(const json &driver, IndexSpaceMeta &spaceMeta) {
@@ -708,7 +711,7 @@ void process(const json &driver, IndexSpaceMeta &spaceMeta) {
   registerIndexSpaces(driver.at("index_spaces"), spaceMeta);
 
   if (!driver.contains("steps")) {
-	  throw Exception("Missing steps specification");
+    throw Exception("Missing steps specification");
   }
 
   process_steps(driver.at("steps"), spaceMeta);
@@ -719,10 +722,10 @@ void generalSetup() {
       mbpt::cardinal_tensor_labels());
 }
 
-}
+}  // namespace sequant::util::extint
 
 int main(int argc, char **argv) {
-	using namespace sequant;
+  using namespace sequant;
   set_locale();
   Context ctx({.index_space_registry = IndexSpaceRegistry(),
                .vacuum = Vacuum::SingleProduct});
@@ -776,7 +779,7 @@ int main(int argc, char **argv) {
         json::parse(in, /*callback*/ nullptr, /*allow_exceptions*/ true,
                     /*skip_comments*/ true);
 
-	util::extint::process(driver_info, spaceMeta);
+    util::extint::process(driver_info, spaceMeta);
   } catch (const std::exception &e) {
     spdlog::error("Unexpected error: {}", e.what());
     return 1;
