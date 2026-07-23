@@ -8,7 +8,6 @@
 #include <nlohmann/json_fwd.hpp>
 
 #include <concepts>
-#include <filesystem>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -116,21 +115,6 @@ class ProcessingStep {
   virtual void set_options(const nlohmann::json &options) = 0;
 
   virtual ProcessingOutput run(const ProcessingInput &input) = 0;
-};
-
-class ReadInputStep : public ProcessingStep {
- public:
-  std::string kind() const override;
-
-  bool accepts_options() const override;
-  bool requires_options() const override;
-  void set_options(const nlohmann::json &options) override;
-
-  ProcessingOutput run(const ProcessingInput &) override;
-  ExpressionOutput run(const VoidInput &);
-
- private:
-  std::vector<std::filesystem::path> input_paths_;
 };
 
 }  // namespace sequant::util::extint
