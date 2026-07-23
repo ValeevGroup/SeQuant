@@ -10,6 +10,7 @@ add_executable(external_interface
     utils.cpp
 
     processing_step.cpp
+    read_input_step.cpp
 )
 set_target_properties(external_interface PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 

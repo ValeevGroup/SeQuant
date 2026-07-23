@@ -2,6 +2,7 @@
 #include "processing.hpp"
 #include "processing_step.hpp"
 #include "processing_tree.hpp"
+#include "read_input_step.hpp"
 #include "utils.hpp"
 
 #include <SeQuant/core/context.hpp>
