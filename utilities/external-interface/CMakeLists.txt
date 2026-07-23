@@ -9,6 +9,8 @@ add_executable(external_interface
     processing.cpp
     utils.cpp
 
+    execution_context.cpp
+    output_step.cpp
     processing_step.cpp
     read_input_step.cpp
 )

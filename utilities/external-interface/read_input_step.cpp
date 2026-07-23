@@ -13,7 +13,7 @@
 
 namespace sequant::util::extint {
 
-std::string ReadInputStep::kind() const { return "ReadInput"; }
+std::string ReadInputStep::kind() const { return "read_input"; }
 
 bool ReadInputStep::accepts_options() const { return true; }
 
@@ -21,7 +21,7 @@ bool ReadInputStep::requires_options() const { return true; }
 
 void ReadInputStep::set_options(const nlohmann::json &options) {
   if (!options.is_object()) {
-    throw Exception("ReadInputStep expects a JSON object for its options!");
+    throw Exception(kind() + " expects a JSON object for its options!");
   }
 
   for (const auto &[key, value] : options.items()) {
@@ -29,7 +29,7 @@ void ReadInputStep::set_options(const nlohmann::json &options) {
       if (value.is_array()) {
         for (const nlohmann::json &current : value) {
           if (!current.is_string()) {
-            throw Exception("Array entry for ReadInputStep option '" + key +
+            throw Exception("Array entry for " + kind() + " option '" + key +
                             "' must be strings");
           }
 
@@ -38,22 +38,24 @@ void ReadInputStep::set_options(const nlohmann::json &options) {
       } else if (value.is_string()) {
         input_paths_.emplace_back(value.get<std::filesystem::path>());
       } else {
-        throw Exception("Invalid data type for ReadInputStep option '" + key +
+        throw Exception("Invalid data type for " + kind() + " option '" + key +
                         "'");
       }
     } else {
-      throw Exception("Unknown option key for ReadInputStep: '" + key + "'");
+      throw Exception("Unknown option key for " + kind() + ": '" + key + "'");
     }
   }
 }
 
-ProcessingOutput ReadInputStep::run(const ProcessingInput &inp) {
-  return run(convert_input<VoidInput>(inp));
-}
+std::size_t ReadInputStep::run(std::string_view step_id, ExecutionContext &ctx,
+                               const std::vector<std::string_view> &inputs) {
+  if (!inputs.empty()) {
+    throw Exception(kind() + " does not take any inputs");
+  }
 
-ExpressionOutput ReadInputStep::run(const VoidInput &) {
-  std::vector<ResultExpr> expressions;
+  ExpressionData data;
 
+  std::size_t counter = 0;
   for (const std::filesystem::path &current : input_paths_) {
     if (!std::filesystem::exists(current)) {
       throw Exception("Input file '" + current.string() + "' does not exist");
@@ -63,12 +65,18 @@ ExpressionOutput ReadInputStep::run(const VoidInput &) {
     std::ifstream in(current);
     const std::string contents(std::istreambuf_iterator<char>(in), {});
 
-    expressions.emplace_back(
+    data.expressions.emplace_back(
         io::serialization::from_string<ResultExpr>(contents));
+
+    ctx.set_data(std::string(step_id) + "." + std::to_string(counter++),
+                 ExpressionData{.expressions = {data.expressions.back()}});
   }
 
-  // TODO: add expression
-  return ExpressionOutput{.expressions = std::move(expressions)};
+  std::string id = std::string(step_id) + ".*";
+  ctx.set_data(id, std::move(data));
+  ctx.add_data_alias(id, std::string(step_id));
+
+  return counter;
 }
 
 }  // namespace sequant::util::extint

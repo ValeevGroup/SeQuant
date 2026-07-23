@@ -1,18 +1,13 @@
-#ifndef SEQUANT_EXTERNAL_INTERFACE_READINPUTSTEP_HPP
-#define SEQUANT_EXTERNAL_INTERFACE_READINPUTSTEP_HPP
+#ifndef SEQUANT_EXTERNAL_INTERFACE_OUTPUTSTEP_HPP
+#define SEQUANT_EXTERNAL_INTERFACE_OUTPUTSTEP_HPP
 
 #include "processing_step.hpp"
 
 #include <nlohmann/json_fwd.hpp>
 
-#include <filesystem>
-#include <string>
-#include <string_view>
-#include <vector>
-
 namespace sequant::util::extint {
 
-class ReadInputStep : public ProcessingStep {
+class OutputStep : public ProcessingStep {
  public:
   std::string kind() const override;
 
@@ -24,9 +19,10 @@ class ReadInputStep : public ProcessingStep {
                   const std::vector<std::string_view> &inputs = {}) override;
 
  private:
-  std::vector<std::filesystem::path> input_paths_;
+  bool latex_ = false;
+  bool annot_symm_ = true;
 };
 
 }  // namespace sequant::util::extint
 
-#endif  // SEQUANT_EXTERNAL_INTERFACE_READINPUTSTEP_HPP
+#endif  // SEQUANT_EXTERNAL_INTERFACE_OUTPUTSTEP_HPP
