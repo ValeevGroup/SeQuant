@@ -55,10 +55,8 @@ void OutputStep::set_options(const nlohmann::json &options) {
 std::size_t OutputStep::run(std::string_view, ExecutionContext &ctx,
                             const std::vector<std::string_view> &inputs) {
   for (std::string_view current_input : inputs) {
-    for (const std::string &expanded :
-         ExecutionContext::expand_selectors(current_input)) {
-      const ExpressionData &data =
-          convert_data<ExpressionData>(ctx.get_data(expanded));
+    for (const ProcessingData &current_data : ctx.get_data(current_input)) {
+      const ExpressionData &data = convert_data<ExpressionData>(current_data);
 
       for (const auto &expr : data.expressions) {
         if (latex_) {

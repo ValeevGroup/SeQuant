@@ -1,9 +1,14 @@
 #include "execution_context.hpp"
 #include "processing_data.hpp"
 
+#include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/utility/conversion.hpp>
 
+#include <algorithm>
+#include <cassert>
+#include <limits>
 #include <ranges>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -11,7 +16,8 @@
 namespace sequant::util::extint {
 
 void ExecutionContext::set_data(std::string id, ProcessingData data) {
-  set_data(std::ranges::single_view{std::move(id)}, std::move(data));
+  set_data(std::ranges::single_view{std::move(id)},
+           std::ranges::single_view{std::move(data)});
 }
 
 void ExecutionContext::add_data_alias(std::string_view id, std::string alias) {
@@ -33,24 +39,50 @@ bool ExecutionContext::has_data(std::string_view id) const {
   return data_ids_.find(id) != data_ids_.end();
 }
 
-const ProcessingData &ExecutionContext::get_data(std::string_view id) const {
-  if (!is_valid_id(id, false)) {
+std::size_t ExecutionContext::dataset_size(std::string_view id) const {
+  auto it = data_ids_.find(id);
+
+  return it == data_ids_.end() ? 0 : it->second.size();
+}
+
+template <std::ranges::random_access_range DataVec,
+          std::ranges::range DataIDMap>
+std::vector<
+    std::reference_wrapper<meta::mimic_constness_t<DataVec, ProcessingData>>>
+get_data_impl(DataVec &&data, DataIDMap &&data_ids, std::string_view id) {
+  if (!ExecutionContext::is_valid_id(id, true)) {
     throw Exception("Invalid id '" + std::string(id) + "'");
   }
 
-  auto it = data_ids_.find(id);
+  using RefWrapT =
+      std::reference_wrapper<meta::mimic_constness_t<DataVec, ProcessingData>>;
 
-  if (it == data_ids_.end()) {
-    throw Exception("No data available for ID '" + std::string(id) + "'");
+  std::vector<RefWrapT> selected_data;
+
+  for (const std::string_view current : ExecutionContext::expand_id(id)) {
+    auto it = data_ids.find(current);
+
+    if (it == data_ids.end()) {
+      throw Exception("No data available for ID '" + std::string(current) +
+                      "'");
+    }
+
+    for (std::size_t idx : it->second) {
+      selected_data.emplace_back(data.at(idx));
+    }
   }
 
-  return data_.at(it->second);
+  return selected_data;
 }
 
-ProcessingData &ExecutionContext::get_data(std::string_view id) {
-  // const-cast is safe as we're calling from a non-const function (implying a
-  // non-const this)
-  return const_cast<ProcessingData &>(std::as_const(*this).get_data(id));
+std::vector<std::reference_wrapper<const ProcessingData>>
+ExecutionContext::get_data(std::string_view id) const {
+  return get_data_impl(data_, data_ids_, id);
+}
+
+std::vector<std::reference_wrapper<ProcessingData>> ExecutionContext::get_data(
+    std::string_view id) {
+  return get_data_impl(data_, data_ids_, id);
 }
 
 bool ExecutionContext::is_valid_id(std::string_view id, bool allow_selectors) {
@@ -65,18 +97,66 @@ bool ExecutionContext::is_valid_id(std::string_view id, bool allow_selectors) {
   return true;
 }
 
-std::vector<std::string> ExecutionContext::expand_selectors(
-    std::string_view id) {
-  if (!is_valid_id(id, true)) {
-    throw Exception("Invalid id '" + std::string(id) + "'");
+std::vector<std::string> expand_selector(std::string_view selector) {
+  std::vector<std::string> processed;
+
+  for (auto &&comp : selector | std::ranges::views::split(',')) {
+    std::string_view current(comp.begin(), comp.end());
+    // trim whitespace
+    while (!current.empty() && current.front() == ' ') {
+      current.remove_prefix(1);
+    }
+    while (!current.empty() && current.back() == ' ') {
+      current.remove_suffix(1);
+    }
+
+    if (current.empty()) {
+      throw Exception("Empty selector component in '[" + std::string(selector) +
+                      "']");
+    }
+
+    if (auto dash_pos = current.find('-'); dash_pos != std::string::npos) {
+      // Numeric ranges such as "1-3"
+      std::size_t from = string_to<std::size_t>(current.substr(0, dash_pos));
+      std::size_t to = string_to<std::size_t>(current.substr(dash_pos + 1));
+
+      if (from > to) {
+        std::swap(from, to);
+      }
+
+      for (std::size_t val : std::ranges::views::iota(from, to + 1)) {
+        processed.emplace_back(std::to_string(val));
+      }
+    } else {
+      processed.emplace_back(std::move(current));
+    }
   }
 
-  std::vector<std::string> expanded;
+  assert(std::none_of(processed.begin(), processed.end(),
+                      [](const auto &p) { return p.empty(); }));
 
-  if (auto begin = id.find('['); begin != std::string_view::npos) {
+  return processed;
+}
+
+std::vector<std::vector<std::string>> create_id_partitions(
+    std::string_view id) {
+  std::vector<std::vector<std::string>> partitions;
+
+  std::size_t begin = -1;
+  std::size_t prev_pos = 0;
+  do {
+    begin = id.find('[', begin + 1);
+
+    std::vector<std::string> part = {std::string(id.substr(prev_pos, begin))};
+    partitions.emplace_back(std::move(part));
+
+    if (begin == std::string_view::npos) {
+      continue;
+    }
+
     auto end = id.find(']', begin);
 
-    if (end == std::string::npos) {
+    if (end == std::string_view::npos) {
       throw Exception("Unbalanced brackets in selector '" + std::string(id) +
                       "'");
     }
@@ -85,55 +165,69 @@ std::vector<std::string> ExecutionContext::expand_selectors(
     }
 
     std::string_view selector = id.substr(begin + 1, end - begin - 1);
+    partitions.emplace_back(expand_selector(selector));
 
-    std::vector<std::string_view> parts;
-    for (const auto &current : selector | std::ranges::views::split(',')) {
-      std::string_view current_view(current.begin(), current.end());
-      // trim whitespace
-      while (!current_view.empty() && current_view.front() == ' ') {
-        current_view.remove_prefix(1);
-      }
-      while (!current_view.empty() && current_view.back() == ' ') {
-        current_view.remove_suffix(1);
-      }
+    prev_pos = end + 1;
+  } while (begin != std::string_view::npos);
 
-      if (current_view.empty()) {
-        throw Exception("Empty selector component in '" + std::string(id) +
-                        "'");
-      }
+  assert(std::none_of(partitions.begin(), partitions.end(),
+                      [](const auto &p) { return p.empty(); }));
 
-      if (auto dash_pos = current_view.find('-');
-          dash_pos != std::string::npos) {
-        // Numeric ranges such as "1-3"
-        std::size_t from =
-            string_to<std::size_t>(current_view.substr(0, dash_pos));
-        std::size_t to =
-            string_to<std::size_t>(current_view.substr(dash_pos + 1));
+  return partitions;
+}
 
-        if (from > to) {
-          std::swap(from, to);
-        }
+std::vector<std::string> ExecutionContext::expand_id(std::string_view id) {
+  if (!is_valid_id(id, true)) {
+    throw Exception("Invalid id '" + std::string(id) + "'");
+  }
 
-        for (std::size_t val : std::ranges::views::iota(from, to + 1)) {
-          parts.emplace_back(std::to_string(val));
-        }
-      } else {
-        parts.emplace_back(std::move(current_view));
+  std::vector<std::vector<std::string>> partitions = create_id_partitions(id);
+  std::vector<std::size_t> indices(partitions.size(), 0);
+
+  auto has_more = [&partitions, &indices]() {
+    for (std::size_t i = 0; i < indices.size(); ++i) {
+      assert(partitions[i].size() > 0);
+      if (indices[i] < partitions[i].size() - 1) {
+        return true;
       }
     }
 
-    std::string_view prefix = id.substr(0, begin);
-    std::string_view suffix = id.substr(end + 1);
-    for (std::string_view current : parts) {
-      expanded.emplace_back(std::string(prefix) + "." + std::string(current) +
-                            std::string(suffix));
+    return false;
+  };
 
-      if (expanded.back().find('[') != std::string::npos) {
-        throw Exception("Multiple selectors in single ID not yet supported");
+  auto increment = [&partitions, &indices]() mutable {
+    for (std::size_t i = 0; i < indices.size(); ++i) {
+      if (indices[i] < partitions[i].size() - 1) {
+        ++indices[i];
+        return;
+      }
+      indices[i] = 0;
+    }
+
+    // indicate end has been reached
+    std::fill(indices.begin(), indices.end(),
+              std::numeric_limits<std::size_t>::max());
+  };
+
+  assert(has_more());
+
+  std::vector<std::string> expanded;
+
+  while (has_more()) {
+    std::stringstream stream;
+    for (std::size_t i = 0; i < indices.size(); ++i) {
+      stream << partitions[i].at(indices[i]);
+
+      if (i + 1 < indices.size()) {
+        stream << ".";
       }
     }
-  } else {
-    expanded.emplace_back(std::string(id));
+
+    assert(!expanded.empty());
+
+    expanded.emplace_back(stream.str());
+
+    increment();
   }
 
   return expanded;

@@ -5,6 +5,8 @@
 
 #include <SeQuant/core/utility/exception.hpp>
 
+#include <algorithm>
+#include <concepts>
 #include <cstddef>
 #include <functional>
 #include <map>
@@ -21,12 +23,16 @@ class ExecutionContext {
 
   void set_data(std::string id, ProcessingData data);
 
-  template <std::ranges::range Range>
+  template <std::ranges::range IDs, std::ranges::range Data>
     requires(
-        std::is_convertible_v<std::ranges::range_value_t<Range>, std::string>)
-  void set_data(Range &&ids, ProcessingData data) {
+        std::is_convertible_v<std::ranges::range_value_t<IDs>, std::string> &&
+        std::same_as<std::ranges::range_value_t<Data>, ProcessingData>)
+  void set_data(IDs &&ids, Data &&data) {
     if (std::ranges::empty(ids)) {
       throw Exception("Attempted to add data without specifying any id");
+    }
+    if (std::ranges::empty(data)) {
+      throw Exception("Attempted to register empty dataset");
     }
 
     for (auto &&current : ids) {
@@ -38,27 +44,36 @@ class ExecutionContext {
       }
     }
 
+    std::vector<std::size_t> data_indices(std::ranges::size(data));
+    std::iota(data_indices.begin(), data_indices.end(), data_.size());
+
     for (auto &&current : ids) {
-      data_ids_.emplace(std::string(std::move(current)), data_.size());
+      data_ids_.emplace(std::string(std::move(current)), data_indices);
     }
 
-    data_.emplace_back(std::move(data));
+    for (auto &&current : data) {
+      data_.emplace_back(std::move(current));
+    }
   }
 
   void add_data_alias(std::string_view id, std::string alias);
 
   bool has_data(std::string_view id) const;
 
-  const ProcessingData &get_data(std::string_view id) const;
-  ProcessingData &get_data(std::string_view id);
+  std::size_t dataset_size(std::string_view id) const;
+
+  std::vector<std::reference_wrapper<const ProcessingData>> get_data(
+      std::string_view id) const;
+  std::vector<std::reference_wrapper<ProcessingData>> get_data(
+      std::string_view id);
 
   static bool is_valid_id(std::string_view id, bool allow_selectors);
 
-  static std::vector<std::string> expand_selectors(std::string_view id);
+  static std::vector<std::string> expand_id(std::string_view id);
 
  private:
   std::vector<ProcessingData> data_;
-  std::map<std::string, std::size_t, std::less<>> data_ids_;
+  std::map<std::string, std::vector<std::size_t>, std::less<>> data_ids_;
 };
 
 }  // namespace sequant::util::extint
