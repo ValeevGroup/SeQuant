@@ -1,0 +1,75 @@
+{
+	"index_spaces": [
+		{
+			"label": "a",
+			"size": 1000,
+			"real_valued": true,
+			"meta": {
+				"name": "External",
+				"tag": "e"
+			}
+		},
+		{
+			"label": "u",
+			"size": 5,
+			"real_valued": true,
+			"meta": {
+				"name": "Active",
+				"tag": "a"
+			}
+		},
+		{
+			"label": "i",
+			"size": 80,
+			"real_valued": true,
+			"meta": {
+				"name": "Closed",
+				"tag": "c"
+			}
+		}
+	],
+	"steps": [
+		{
+			"id": "en_inp",
+			"kind": "read_input",
+			"options": {
+				"file_path": [
+					"nevpt2/nevpt2_en0.inp",
+					"nevpt2/nevpt2_en.inp"
+				]
+			},
+			"outputs": {
+				"en0": "0",
+				"en": "1"
+			}
+		},
+		{
+			"kind": "output",
+			"inputs": "en_inp",
+			"options": {
+				"format": "serialize"
+			}
+		},
+		{
+			"kind": "output",
+			"inputs": "en_inp[0]",
+			"options": {
+				"format": "serialize"
+			}
+		},
+		{
+			"kind": "output",
+			"inputs": "en_inp.en",
+			"options": {
+				"format": "serialize"
+			}
+		},
+		{
+			"kind": "output",
+			"inputs": "en_inp[1,en0]",
+			"options": {
+				"format": "serialize"
+			}
+		}
+	]
+}

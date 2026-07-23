@@ -3,6 +3,7 @@
 
 #include <cassert>
 #include <cstddef>
+#include <memory>
 #include <vector>
 
 namespace sequant::util::extint {
@@ -32,7 +33,7 @@ class ProcessingTree {
 
  private:
   ProcessingTree *parent_ = nullptr;
-  std::vector<std::size_t> children_;
+  std::vector<std::unique_ptr<ProcessingTree>> children_;
   std::size_t step_id_;
 };
 

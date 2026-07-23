@@ -1,8 +1,8 @@
+#include "execution_context.hpp"
 #include "format_support.hpp"
 #include "output_step.hpp"
 #include "processing.hpp"
 #include "processing_step.hpp"
-#include "processing_tree.hpp"
 #include "read_input_step.hpp"
 #include "utils.hpp"
 
@@ -628,8 +628,8 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta) {
     }
 
     IndexSpaceMeta::Entry entry;
-    entry.name = current.at("name").get<std::string>();
-    entry.tag = current.at("tag").get<std::string>();
+    entry.name = current.at("meta").at("name").get<std::string>();
+    entry.tag = current.at("meta").at("tag").get<std::string>();
 
     std::wstring label = toUtf16(current.at("label").get<std::string>());
     Field field =
@@ -657,29 +657,29 @@ void process_steps(const json &json_steps, const IndexSpaceMeta &meta) {
     throw Exception("Steps object must be an array");
   }
 
-  std::vector<std::unique_ptr<ProcessingStep>> steps;
-  std::unordered_map<std::string, std::size_t> output_assoc;
+  ExecutionContext ctx;
+
+  std::size_t step_id_counter = 0;
 
   for (const json &step : json_steps) {
-    const std::size_t step_id = steps.size();
-    const std::string kind = step.at("kind").get<std::string>();
-    std::vector<std::size_t> inputs;
+    const std::string_view kind = step.at("kind").get<std::string_view>();
 
-    if (step.contains("input")) {
-      const std::string input_id = step.at("input").get<std::string>();
-      auto it = output_assoc.find(input_id);
-      if (it == output_assoc.end()) {
-        throw Exception("Attempted to use an (as of yet) unknown output '" +
-                        input_id + "'");
-      }
+    std::vector<std::string_view> inputs;
 
-      inputs.emplace_back(std::distance(output_assoc.begin(), it));
-    }
-    if (step.contains("output")) {
-      const std::string output_id = step.at("output").get<std::string>();
-      auto [_, inserted] = output_assoc.insert({output_id, step_id});
-      if (!inserted) {
-        throw Exception("Duplicate output ID '" + output_id + "'");
+    if (step.contains("inputs")) {
+      const nlohmann::json &inps = step.at("inputs");
+      if (inps.is_string()) {
+        inputs.emplace_back(inps.get<std::string_view>());
+      } else if (inps.is_array()) {
+        for (const auto &current : inps) {
+          if (!current.is_string()) {
+            throw Exception("Entries in inputs array must be strings");
+          }
+
+          inputs.emplace_back(current.get<std::string_view>());
+        }
+      } else {
+        throw Exception("inputs field must be either a string or an array");
       }
     }
 
@@ -690,20 +690,43 @@ void process_steps(const json &json_steps, const IndexSpaceMeta &meta) {
     } else if (kind == "output") {
       proc_step = std::make_unique<OutputStep>();
     } else {
-      throw Exception("Unknown processing step kind '" + kind + "'");
+      throw Exception("Unknown processing step kind '" + std::string(kind) +
+                      "'");
     }
 
     if (step.contains("options")) {
       if (!proc_step->accepts_options()) {
-        throw Exception("Processing step '" + kind +
+        throw Exception("Processing step '" + std::string(kind) +
                         "' does not take options but some where given");
       }
 
       proc_step->set_options(step.at("options"));
     } else if (proc_step->requires_options()) {
-      throw Exception("Processing step '" + kind +
+      throw Exception("Processing step '" + std::string(kind) +
                       "' requires options but none where given");
     }
+
+    std::string step_id = step.contains("id") ? step.at("id").get<std::string>()
+                                              : std::to_string(step_id_counter);
+
+    const std::size_t num_outputs = proc_step->run(step_id, ctx, inputs);
+
+    (void)num_outputs;
+    if (step.contains("outputs")) {
+      const nlohmann::json &outputs = step.at("outputs");
+      if (!outputs.is_object()) {
+        throw Exception("outputs field must be either an object");
+      }
+
+      for (const auto &[key, val] : outputs.items()) {
+        // TODO: Allow one-to-many relations to be established (aka: single
+        // alias to a group of outputs)
+        ctx.add_data_alias(step_id + "." + val.get<std::string>(),
+                           step_id + "." + key);
+      }
+    }
+
+    ++step_id_counter;
   }
 }
 
