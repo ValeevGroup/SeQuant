@@ -1,4 +1,5 @@
 #include "format_support.hpp"
+#include "output_step.hpp"
 #include "processing.hpp"
 #include "processing_step.hpp"
 #include "processing_tree.hpp"
@@ -689,6 +690,8 @@ void process_steps(const json &json_steps, const IndexSpaceMeta &meta) {
 
     if (kind == "read_input") {
       proc_step = std::make_unique<ReadInputStep>();
+    } else if (kind == "output") {
+      proc_step = std::make_unique<OutputStep>();
     } else {
       throw Exception("Unknown processing step kind '" + kind + "'");
     }
