@@ -223,12 +223,12 @@ std::vector<std::string> ExecutionContext::expand_id(std::string_view id) {
       }
     }
 
-    SEQUANT_ASSERT(!expanded.empty());
-
     expanded.emplace_back(stream.str());
 
     increment();
   }
+
+  SEQUANT_ASSERT(!expanded.empty());
 
   return expanded;
 }
