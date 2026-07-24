@@ -714,7 +714,7 @@ void process_steps(const json &json_steps, const IndexSpaceMeta &meta) {
     if (step.contains("outputs")) {
       const nlohmann::json &outputs = step.at("outputs");
       if (!outputs.is_object()) {
-        throw Exception("outputs field must be either an object");
+        throw Exception("outputs field must be an object");
       }
 
       for (const auto &[key, val] : outputs.items()) {
