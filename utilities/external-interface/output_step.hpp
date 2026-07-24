@@ -2,6 +2,7 @@
 #define SEQUANT_EXTERNAL_INTERFACE_OUTPUTSTEP_HPP
 
 #include "processing_step.hpp"
+#include "processing_step_factory.hpp"
 
 #include <nlohmann/json_fwd.hpp>
 
@@ -22,6 +23,8 @@ class OutputStep : public ProcessingStep {
   bool latex_ = false;
   bool annot_symm_ = true;
 };
+
+SEQUANT_EXTINT_REGISTER_STEP_TYPE(OutputStep, "output");
 
 }  // namespace sequant::util::extint
 

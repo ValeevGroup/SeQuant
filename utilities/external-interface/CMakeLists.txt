@@ -12,6 +12,7 @@ add_executable(external_interface
     execution_context.cpp
     output_step.cpp
     processing_step.cpp
+    processing_step_factory.cpp
     read_input_step.cpp
 )
 set_target_properties(external_interface PROPERTIES CXX_SCAN_FOR_MODULES OFF)

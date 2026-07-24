@@ -3,6 +3,7 @@
 #include "output_step.hpp"
 #include "processing.hpp"
 #include "processing_step.hpp"
+#include "processing_step_factory.hpp"
 #include "read_input_step.hpp"
 #include "utils.hpp"
 
@@ -686,16 +687,8 @@ void process_steps(const json &json_steps, const IndexSpaceMeta &meta) {
       }
     }
 
-    std::unique_ptr<ProcessingStep> proc_step;
-
-    if (kind == "read_input") {
-      proc_step = std::make_unique<ReadInputStep>();
-    } else if (kind == "output") {
-      proc_step = std::make_unique<OutputStep>();
-    } else {
-      throw Exception("Unknown processing step kind '" + std::string(kind) +
-                      "'");
-    }
+    std::unique_ptr<ProcessingStep> proc_step =
+        ProcessingStepFactory::instance().instantiate(kind);
 
     if (step.contains("options")) {
       if (!proc_step->accepts_options()) {
