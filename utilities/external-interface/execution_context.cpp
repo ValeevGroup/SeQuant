@@ -148,6 +148,7 @@ std::vector<std::vector<std::string>> create_id_partitions(
     begin = id.find('[', begin + 1);
 
     std::vector<std::string> part = {std::string(id.substr(prev_pos, begin))};
+    SEQUANT_ASSERT(!part.back().empty());
     partitions.emplace_back(std::move(part));
 
     if (begin == std::string_view::npos) {
