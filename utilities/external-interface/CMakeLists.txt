@@ -10,6 +10,7 @@ add_executable(external_interface
     utils.cpp
 
     execution_context.cpp
+    executor.cpp
     output_step.cpp
     processing_step.cpp
     processing_step_factory.cpp
