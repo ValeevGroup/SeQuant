@@ -6,6 +6,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <limits>
 #include <ranges>
 #include <sstream>
@@ -75,14 +76,92 @@ std::vector<std::reference_wrapper<ProcessingData>> ExecutionContext::get_data(
 }
 
 bool ExecutionContext::is_valid_id(std::string_view id, bool allow_selectors) {
-  // TODO: implement
-  (void)id;
-  (void)allow_selectors;
-  // Rules:
-  // - No dash outside of selectors
-  // - No newlines or tabs
-  // - square brackets may only represent selectors
-  // - No asterix outside of selector
+  auto validate_non_selector = [](std::string_view part) -> bool {
+    for (char c : part) {
+      if (!std::isalnum(c) & c != '_' && c != '.') {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  auto validate_range_component = [](std::string_view comp) -> bool {
+    for (char c : comp) {
+      if (!std::isdigit(c)) {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  auto validate_selector = [&validate_non_selector, &validate_range_component](
+                               std::string_view selector) -> bool {
+    for (auto &&comp : selector | std::ranges::views::split(',')) {
+      std::string_view part(comp.begin(), comp.end());
+
+      if (validate_non_selector(part)) {
+        continue;
+      }
+
+      auto dash_pos = part.find('-');
+      if (dash_pos == std::string_view::npos ||
+          part.find('-', dash_pos + 1) != std::string_view::npos) {
+        // Either no dash or more than one dash in single selector component
+        return false;
+      }
+
+      std::string_view prefix = part.substr(0, dash_pos);
+      std::string_view suffix = part.substr(dash_pos + 1);
+
+      if (prefix.empty() || suffix.empty()) {
+        return false;
+      }
+
+      if (!validate_range_component(prefix) ||
+          !validate_range_component(suffix)) {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  std::string_view::size_type bracket_begin = 0;
+  std::string_view::size_type prev_pos = 0;
+  do {
+    bracket_begin = id.find('[', prev_pos);
+
+    if (!validate_non_selector(id.substr(prev_pos, bracket_begin - prev_pos))) {
+      return false;
+    }
+
+    if (bracket_begin == std::string_view::npos) {
+      continue;
+    }
+
+    if (!allow_selectors) {
+      return false;
+    }
+
+    std::string_view::size_type bracket_end = id.find(']', bracket_begin);
+
+    if (bracket_end == std::string_view::npos) {
+      return false;
+    }
+    if (bracket_begin + 1 == bracket_end) {
+      return false;
+    }
+
+    if (!validate_selector(
+            id.substr(bracket_begin + 1, bracket_end - bracket_begin - 1))) {
+      return false;
+    }
+
+    prev_pos = bracket_end + 1;
+  } while (bracket_begin != std::string_view::npos && prev_pos < id.size());
+
   return true;
 }
 
