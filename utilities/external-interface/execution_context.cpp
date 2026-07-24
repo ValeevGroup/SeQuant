@@ -3,9 +3,9 @@
 
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/utility/conversion.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <algorithm>
-#include <cassert>
 #include <limits>
 #include <ranges>
 #include <sstream>
@@ -132,8 +132,8 @@ std::vector<std::string> expand_selector(std::string_view selector) {
     }
   }
 
-  assert(std::none_of(processed.begin(), processed.end(),
-                      [](const auto &p) { return p.empty(); }));
+  SEQUANT_ASSERT(std::none_of(processed.begin(), processed.end(),
+                              [](const auto &p) { return p.empty(); }));
 
   return processed;
 }
@@ -170,8 +170,8 @@ std::vector<std::vector<std::string>> create_id_partitions(
     prev_pos = end + 1;
   } while (begin != std::string_view::npos);
 
-  assert(std::none_of(partitions.begin(), partitions.end(),
-                      [](const auto &p) { return p.empty(); }));
+  SEQUANT_ASSERT(std::none_of(partitions.begin(), partitions.end(),
+                              [](const auto &p) { return p.empty(); }));
 
   return partitions;
 }
@@ -186,7 +186,7 @@ std::vector<std::string> ExecutionContext::expand_id(std::string_view id) {
 
   auto has_more = [&partitions, &indices]() {
     for (std::size_t i = 0; i < indices.size(); ++i) {
-      assert(partitions[i].size() > 0);
+      SEQUANT_ASSERT(partitions[i].size() > 0);
       if (indices[i] < partitions[i].size() - 1) {
         return true;
       }
@@ -209,7 +209,7 @@ std::vector<std::string> ExecutionContext::expand_id(std::string_view id) {
               std::numeric_limits<std::size_t>::max());
   };
 
-  assert(has_more());
+  SEQUANT_ASSERT(has_more());
 
   std::vector<std::string> expanded;
 
@@ -223,7 +223,7 @@ std::vector<std::string> ExecutionContext::expand_id(std::string_view id) {
       }
     }
 
-    assert(!expanded.empty());
+    SEQUANT_ASSERT(!expanded.empty());
 
     expanded.emplace_back(stream.str());
 
