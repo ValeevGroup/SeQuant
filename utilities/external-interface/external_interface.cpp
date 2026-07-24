@@ -712,9 +712,8 @@ void process_steps(const json &json_steps, const IndexSpaceMeta &meta) {
     std::string step_id = step.contains("id") ? step.at("id").get<std::string>()
                                               : std::to_string(step_id_counter);
 
-    const std::size_t num_outputs = proc_step->run(step_id, ctx, inputs);
+    proc_step->run(step_id, ctx, inputs);
 
-    (void)num_outputs;
     if (step.contains("outputs")) {
       const nlohmann::json &outputs = step.at("outputs");
       if (!outputs.is_object()) {
