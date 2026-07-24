@@ -4,6 +4,7 @@
 #include "processing_data.hpp"
 
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <algorithm>
 #include <concepts>
@@ -57,6 +58,34 @@ class ExecutionContext {
   }
 
   void add_data_alias(std::string_view id, std::string alias);
+
+  template <std::ranges::range IDs>
+    requires(std::is_convertible_v<std::ranges::range_value_t<IDs>,
+                                   std::string_view>)
+  void add_data_alias(IDs &&ids, std::string alias) {
+    if (data_ids_.find(alias) != data_ids_.end()) {
+      throw Exception("Alias '" + alias + "' already exists as a data ID");
+    }
+
+    std::vector<std::size_t> indices;
+
+    for (std::string_view current_id : ids) {
+      for (const std::string &expanded : expand_id(current_id)) {
+        auto it = data_ids_.find(expanded);
+
+        if (it == data_ids_.end()) {
+          throw Exception("Attempted to alias non-existent ID '" + expanded +
+                          "'");
+        }
+
+        indices.insert(indices.end(), it->second.begin(), it->second.end());
+      }
+    }
+
+    SEQUANT_ASSERT(!indices.empty());
+
+    data_ids_.emplace(std::move(alias), std::move(indices));
+  }
 
   bool has_data(std::string_view id) const;
 
