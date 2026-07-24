@@ -69,14 +69,12 @@ std::size_t ReadInputStep::run(std::string_view step_id, ExecutionContext &ctx,
                  ExpressionData{.expressions = {std::move(expr)}});
   }
 
-  std::string id = std::string(step_id) + ".*";
   ctx.add_data_alias(
       std::ranges::views::iota(std::size_t(0), counter) |
           std::ranges::views::transform([&step_id](std::size_t num) {
             return std::string(step_id) + "." + std::to_string(num);
           }),
-      id);
-  ctx.add_data_alias(id, std::string(step_id));
+      std::string(step_id));
 
   return counter;
 }
