@@ -169,7 +169,7 @@ std::vector<std::vector<std::string>> create_id_partitions(
     partitions.emplace_back(expand_selector(selector));
 
     prev_pos = end + 1;
-  } while (begin != std::string_view::npos);
+  } while (begin != std::string_view::npos && prev_pos < id.size());
 
   SEQUANT_ASSERT(std::none_of(partitions.begin(), partitions.end(),
                               [](const auto &p) { return p.empty(); }));
