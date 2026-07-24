@@ -187,12 +187,12 @@ std::vector<std::string> ExecutionContext::expand_id(std::string_view id) {
   auto has_more = [&partitions, &indices]() {
     for (std::size_t i = 0; i < indices.size(); ++i) {
       SEQUANT_ASSERT(partitions[i].size() > 0);
-      if (indices[i] < partitions[i].size() - 1) {
-        return true;
+      if (indices[i] >= partitions[i].size()) {
+        return false;
       }
     }
 
-    return false;
+    return true;
   };
 
   auto increment = [&partitions, &indices]() mutable {
