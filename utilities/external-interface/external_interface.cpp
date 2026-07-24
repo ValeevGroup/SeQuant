@@ -719,9 +719,7 @@ void process_steps(const json &json_steps, const IndexSpaceMeta &meta) {
       }
 
       for (const auto &[key, val] : outputs.items()) {
-        // TODO: Allow one-to-many relations to be established (aka: single
-        // alias to a group of outputs)
-        ctx.add_data_alias(step_id + "." + val.get<std::string>(),
+        ctx.add_data_alias(step_id + "[" + val.get<std::string>() + "]",
                            step_id + "." + key);
       }
     }
