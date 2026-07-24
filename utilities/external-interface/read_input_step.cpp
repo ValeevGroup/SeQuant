@@ -53,8 +53,6 @@ std::size_t ReadInputStep::run(std::string_view step_id, ExecutionContext &ctx,
     throw Exception(kind() + " does not take any inputs");
   }
 
-  ExpressionData data;
-
   std::size_t counter = 0;
   for (const std::filesystem::path &current : input_paths_) {
     if (!std::filesystem::exists(current)) {
@@ -65,15 +63,19 @@ std::size_t ReadInputStep::run(std::string_view step_id, ExecutionContext &ctx,
     std::ifstream in(current);
     const std::string contents(std::istreambuf_iterator<char>(in), {});
 
-    data.expressions.emplace_back(
-        io::serialization::from_string<ResultExpr>(contents));
+    ResultExpr expr = io::serialization::from_string<ResultExpr>(contents);
 
     ctx.set_data(std::string(step_id) + "." + std::to_string(counter++),
-                 ExpressionData{.expressions = {data.expressions.back()}});
+                 ExpressionData{.expressions = {std::move(expr)}});
   }
 
   std::string id = std::string(step_id) + ".*";
-  ctx.set_data(id, std::move(data));
+  ctx.add_data_alias(
+      std::ranges::views::iota(std::size_t(0), counter) |
+          std::ranges::views::transform([&step_id](std::size_t num) {
+            return std::string(step_id) + "." + std::to_string(num);
+          }),
+      id);
   ctx.add_data_alias(id, std::string(step_id));
 
   return counter;
