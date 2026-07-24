@@ -21,18 +21,7 @@ void ExecutionContext::set_data(std::string id, ProcessingData data) {
 }
 
 void ExecutionContext::add_data_alias(std::string_view id, std::string alias) {
-  auto it = data_ids_.find(id);
-
-  if (it == data_ids_.end()) {
-    throw Exception("Attempted to alias non-existent ID '" + std::string(id) +
-                    "'");
-  }
-
-  if (data_ids_.find(alias) != data_ids_.end()) {
-    throw Exception("Alias '" + alias + "' already exists as a data ID");
-  }
-
-  data_ids_.emplace(std::move(alias), it->second);
+  add_data_alias(std::ranges::single_view(std::move(id)), std::move(alias));
 }
 
 bool ExecutionContext::has_data(std::string_view id) const {
