@@ -30,46 +30,37 @@
 	],
 	"steps": [
 		{
-			"id": "en_inp",
+			"id": "input",
 			"kind": "read_input",
 			"options": {
 				"file_path": [
 					"nevpt2/nevpt2_en0.inp",
-					"nevpt2/nevpt2_en.inp"
+					"nevpt2/nevpt2_en.inp",
+
+					"nevpt2/nevpt2_res1_i1.inp",
+					"nevpt2/nevpt2_res1_s0.inp",
+					"nevpt2/nevpt2_res2_s1_singles.inp",
+					"nevpt2/nevpt2_res1_s1.inp",
+
+					"nevpt2/nevpt2_res2_p0.inp",
+					"nevpt2/nevpt2_res2_p2.inp",
+					"nevpt2/nevpt2_res2_i2.inp",
+					"nevpt2/nevpt2_res2_p1.inp",
+					"nevpt2/nevpt2_res2_s1.inp",
+					"nevpt2/nevpt2_res2_s2.inp"
 				]
 			},
 			"outputs": {
-				"en0": "0",
-				"en": "1"
+				"ecc0": "0",
+				"ecc": "1",
+				"en": "0-1",
+				"res1": "2-5",
+				"res2": "6-11"
 			}
 		},
 		{
-			"kind": "output",
-			"inputs": "en_inp",
-			"options": {
-				"format": "serialize"
-			}
-		},
-		{
-			"kind": "output",
-			"inputs": "en_inp[0]",
-			"options": {
-				"format": "serialize"
-			}
-		},
-		{
-			"kind": "output",
-			"inputs": "en_inp.en",
-			"options": {
-				"format": "serialize"
-			}
-		},
-		{
-			"kind": "output",
-			"inputs": "en_inp[1,en0]",
-			"options": {
-				"format": "serialize"
-			}
+			"kind": "validate",
+			"inputs": "input"
 		}
 	]
 }
