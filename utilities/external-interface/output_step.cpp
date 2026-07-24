@@ -1,4 +1,5 @@
 #include "output_step.hpp"
+#include "processing_step_factory.hpp"
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
@@ -11,6 +12,8 @@
 #include <string>
 
 namespace sequant::util::extint {
+
+SEQUANT_EXTINT_REGISTER_STEP_TYPE(OutputStep, "output");
 
 std::string OutputStep::kind() const { return "Output"; }
 

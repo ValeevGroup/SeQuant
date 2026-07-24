@@ -1,4 +1,5 @@
 #include "read_input_step.hpp"
+#include "processing_step_factory.hpp"
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
@@ -12,6 +13,8 @@
 #include <vector>
 
 namespace sequant::util::extint {
+
+SEQUANT_EXTINT_REGISTER_STEP_TYPE(ReadInputStep, "read_input");
 
 std::string ReadInputStep::kind() const { return "read_input"; }
 

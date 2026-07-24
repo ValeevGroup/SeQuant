@@ -2,7 +2,6 @@
 #define SEQUANT_EXTERNAL_INTERFACE_READINPUTSTEP_HPP
 
 #include "processing_step.hpp"
-#include "processing_step_factory.hpp"
 
 #include <nlohmann/json_fwd.hpp>
 
@@ -27,8 +26,6 @@ class ReadInputStep : public ProcessingStep {
  private:
   std::vector<std::filesystem::path> input_paths_;
 };
-
-SEQUANT_EXTINT_REGISTER_STEP_TYPE(ReadInputStep, "read_input");
 
 }  // namespace sequant::util::extint
 
