@@ -4,29 +4,38 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/index_space_registry.hpp>
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/wick.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
 
 #include <range/v3/algorithm/all_of.hpp>
 #include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/algorithm/none_of.hpp>
+
+#include <string>
+#include <utility>
 
 // Bernoulli expansion of the unitary-CC similarity-transformed Hamiltonian
 // H̄ = e^{−σ} H e^{σ}, σ = T − T† (anti-Hermitian). Because σ mixes excitation
 // and de-excitation the plain BCH series does not terminate; the Bernoulli
 // expansion rewrites it so that Bernoulli numbers are the expansion
 // coefficients, leaving the final truncation at a chosen commutator rank as the
-// only approximation. H is split as F (Fock, rank-preserving) + V
-// (fluctuation potential), and every operator O is split into O_N (all
-// excitation and de-excitation operators) and O_R = O − O_N.
+// only approximation. H is split as F (Fock, rank-preserving) + V (fluctuation
+// potential), and every operator O is split into O_N (all excitation and
+// de-excitation operators) and O_R = O − O_N. At a converged RHF/UHF reference
+// two cancellations hold: F survives only in H̄¹, and the higher orders carry
+// only R-subscripted inner commutators.
 //
-// This file builds that expansion in three layers: an operator-valued Wick
-// reduction, the N/R operator split (here), and the rank-by-rank assembly of
-// H̄. All equation references are to 10.1063/1.5030344 (Sec. III B); the N/R
-// split and the UCC amplitude condition V̄_N = 0 are defined above and at
-// Eq. (43).
+// All equation references are to 10.1063/1.5030344 (Sec. III B): superoperator
+// inversion Eqs. (36)-(39); Bernoulli numbers B₁=−1/2, B₂=1/12, B₃=0, B₄=−1/720
+// Eq. (40); the N/R split and the UCC amplitude condition V̄_N = 0 above and at
+// Eq. (43); the iterative recursion for V̄ Eq. (44); the rank-by-rank operators
+// H̄⁰..H̄⁴ Eqs. (45)-(50). Cancellation #1 (F enters only H̄¹) is stated just
+// below Eq. (50).
 
 namespace {
 
@@ -287,5 +296,112 @@ ExprPtr R_part(const ExprPtr& expr, std::size_t cutoff) {
 }
 
 }  // namespace detail
+
+/// Assembles H̄ order by order (see header), summing H̄⁰..H̄^rank of Eq. (45).
+/// Each H̄^k below is transcribed from its equation, verified term-by-term
+/// against the published coefficients and N/R subscripts. A subscript R/N on a
+/// commutator means "form the commutator, then keep only its R/N part before
+/// the next nesting".
+ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
+  if (rank > 4)
+    throw Exception("bernoulli::hbar: only ranks 0..4 are implemented");
+
+  using detail::N_part;
+  using detail::N_part_reduced;
+  using detail::R_part;
+  using detail::R_part_reduced;
+  using detail::wick_commutator;
+  const auto cutoff = N;
+  const auto F = op::tensor::F();
+  const auto V = op::tensor::h(2);
+  const auto T = op::tensor::T(N, skip1);
+  const auto sigma = simplify(T - adjoint(T));  // σ = T − T†
+  auto c = [&](rational num, const ExprPtr& e) {
+    return ex<Constant>(num) * e;
+  };
+
+  // Every term of H̄^k is a nested commutator [[..[V_{p0},σ]_{f0}..],σ]_{f_k}
+  // with a per-level N/R/A partition tag applied after each commutator ('A' =
+  // no filter). nest(p0, f) evaluates such a node, memoizing every prefix
+  // (key = p0 + tags applied so far): the terms share prefixes both within a
+  // rank (the 9 rank-4 terms have only 3 distinct level-1 and 6 level-2 nodes)
+  // and across ranks (each H̄^k node is a prefix of H̄^{k+1} nodes), so the memo
+  // avoids recomputing them. Reusing a memoized ExprPtr is safe: expression
+  // composition deep-copies operands (Product/Sum append clone), so
+  // wick_commutator does not mutate its arguments. Commutator outputs are
+  // already wick_reduce'd, so the reduced-input N/R filters apply.
+  container::map<std::string, ExprPtr> memo;
+  auto nest = [&](char p0, const char* f) -> ExprPtr {
+    std::string key{p0};
+    auto it = memo.find(key);
+    if (it == memo.end()) {
+      ExprPtr base = (p0 == 'N')   ? N_part(V, cutoff)
+                     : (p0 == 'R') ? R_part(V, cutoff)
+                                   : V;
+      it = memo.emplace(std::move(key), std::move(base)).first;
+    }
+    ExprPtr op = it->second;
+    for (int i = 0; f[i] != '\0'; ++i) {
+      key = it->first + f[i];
+      it = memo.find(key);
+      if (it == memo.end()) {
+        auto cx = wick_commutator(op, sigma);
+        ExprPtr filtered = (f[i] == 'R')   ? R_part_reduced(cx, cutoff)
+                           : (f[i] == 'N') ? N_part_reduced(cx, cutoff)
+                                           : cx;
+        it = memo.emplace(std::move(key), std::move(filtered)).first;
+      }
+      op = it->second;
+    }
+    return op;
+  };
+
+  // accumulate H̄ contributions via Sum::append (linear) rather than chained
+  // operator+ / operator+=, each of which deep-copies the accumulated Sum --
+  // quadratic in the (large) term count at high rank
+  auto acc = std::make_shared<Sum>();
+  acc->append(simplify(F + V));  // H̄⁰ = F + V   [Eq. (46)]
+  if (rank >= 1) {
+    // H̄¹ = [F,σ] + ½[V,σ] + ½[V_R,σ]   [Eq. (47)]. F enters H̄ ONLY here
+    // (Cancellation #1, stated just below Eq. (50)).
+    acc->append(wick_commutator(F, sigma));
+    acc->append(c({1, 2}, nest('A', "A")));
+    acc->append(c({1, 2}, nest('R', "A")));
+  }
+  if (rank >= 2) {
+    // H̄² = 1/12[[V_N,σ],σ] + ¼[[V,σ]_R,σ] + ¼[[V_R,σ]_R,σ]   [Eq. (48)]
+    acc->append(c({1, 12}, nest('N', "AA")));
+    acc->append(c({1, 4}, nest('A', "RA")));
+    acc->append(c({1, 4}, nest('R', "RA")));
+  }
+  if (rank >= 3) {
+    // H̄³ = 1/24[[[V_N,σ],σ]_R,σ] + ⅛[[[V,σ]_R,σ]_R,σ] + ⅛[[[V_R,σ]_R,σ]_R,σ]
+    //       − 1/24[[[V,σ]_R,σ],σ] − 1/24[[[V_R,σ]_R,σ],σ]   [Eq. (49)]
+    acc->append(c({1, 24}, nest('N', "ARA")));
+    acc->append(c({1, 8}, nest('A', "RRA")));
+    acc->append(c({1, 8}, nest('R', "RRA")));
+    acc->append(c({-1, 24}, nest('A', "RAA")));
+    acc->append(c({-1, 24}, nest('R', "RAA")));
+  }
+  if (rank >= 4) {
+    // H̄⁴ = Eq. (50), the nine order-4 terms produced by the recursion Eq. (44),
+    // V̄^{k+1} = σ̂F + X̂⁻¹(σ̂)e^{σ̂}V − Σ_{n≠0} B_n σ̂^n V̄_R^{k}. F is absent here
+    // (Cancellation #1). Listed in the paper's order; the outermost tag is
+    // always A. Verified term-by-term against Eq. (50): coefficients
+    // +1/16, +1/16, +1/48, −1/48, −1/48, −1/144, −1/48, −1/48, −1/720 and the
+    // N/R subscripts all match as transcribed.
+    acc->append(c({1, 16}, nest('R', "RRRA")));
+    acc->append(c({1, 16}, nest('A', "RRRA")));
+    acc->append(c({1, 48}, nest('N', "ARRA")));
+    acc->append(c({-1, 48}, nest('A', "RARA")));
+    acc->append(c({-1, 48}, nest('R', "RARA")));
+    acc->append(c({-1, 144}, nest('N', "ARAA")));
+    acc->append(c({-1, 48}, nest('A', "RRAA")));
+    acc->append(c({-1, 48}, nest('R', "RRAA")));
+    acc->append(c({-1, 720}, nest('N', "AAAA")));
+  }
+  ExprPtr result{std::move(acc)};
+  return simplify(result);
+}
 
 }  // namespace sequant::mbpt::bernoulli

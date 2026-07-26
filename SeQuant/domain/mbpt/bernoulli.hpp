@@ -6,6 +6,26 @@
 
 namespace sequant::mbpt::bernoulli {
 
+/// Tensor-level H̄ = Σ_{k=0..rank} H̄^k in the Bernoulli expansion, for
+/// σ = T−T† of rank N.
+///
+/// The Bernoulli expansion rewrites the non-terminating UCC
+/// similarity-transform series so that Bernoulli numbers appear as the
+/// expansion coefficients; the rank-by-rank operators H̄⁰..H̄⁴ are Eqs. (46)-(50)
+/// of 10.1063/1.5030344.
+///
+/// @warning Single-reference only. The N/R split relies on expanding general
+/// indices over the hole and particle spaces alone (see
+/// detail::expand_to_blocks), which is an identity only when the remaining base
+/// spaces are empty. Under a multireference registry the R part comes out wrong
+/// silently -- there is no check for this.
+///
+/// @param N cluster/excitation rank (also the N/R rank cutoff)
+/// @param rank highest Bernoulli order H̄^k to include (0..4)
+/// @param skip1 exclude singles from T
+/// @throw Exception if @p rank > 4
+ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1);
+
 namespace detail {
 
 /// Operator-valued Wick reduction: applies Wick's theorem to @p expr retaining
