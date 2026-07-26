@@ -399,6 +399,8 @@ set(SeQuant_symb_src
 set(SeQuant_mbpt_src
         SeQuant/domain/mbpt/antisymmetrizer.cpp
         SeQuant/domain/mbpt/antisymmetrizer.hpp
+        SeQuant/domain/mbpt/bernoulli.cpp
+        SeQuant/domain/mbpt/bernoulli.hpp
         SeQuant/domain/mbpt/biorthogonalization.cpp
         SeQuant/domain/mbpt/biorthogonalization.hpp
         SeQuant/domain/mbpt/context.cpp
