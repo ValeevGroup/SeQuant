@@ -3,6 +3,7 @@
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/domain/mbpt/bernoulli.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
@@ -41,7 +42,8 @@ CC::CC(size_t n, const Options& opts)
       screen_(opts.screen),
       use_topology_(opts.use_topology),
       hbar_comm_rank_(opts.hbar_comm_rank),
-      pertbar_comm_rank_(opts.pertbar_comm_rank) {
+      pertbar_comm_rank_(opts.pertbar_comm_rank),
+      hbar_expansion_(opts.hbar_expansion) {
   if (unitary())
     SEQUANT_ASSERT(hbar_comm_rank_ &&
                    "CC: hbar_comm_rank is required for unitary ansatz");
@@ -49,6 +51,14 @@ CC::CC(size_t n, const Options& opts)
     SEQUANT_ASSERT(
         skip_singles_ &&
         "CC: skip_singles must be true for orbital-optimized ansatz");
+  if (hbar_expansion_ == HbarExpansion::Bernoulli) {
+    SEQUANT_ASSERT(unitary(),
+                   "CC: Bernoulli expansion requires a unitary ansatz");
+    // without hbar_comm_rank CC::hbar() falls back to rank 4, silently
+    // selecting the most expensive (and least exercised) order
+    SEQUANT_ASSERT(hbar_comm_rank_,
+                   "CC: Bernoulli expansion requires hbar_comm_rank");
+  }
 }
 
 CC::Ansatz CC::ansatz() const { return ansatz_; }
@@ -59,6 +69,8 @@ bool CC::unitary() const {
 
 std::optional<size_t> CC::hbar_comm_rank() const { return hbar_comm_rank_; }
 
+CC::HbarExpansion CC::hbar_expansion() const { return hbar_expansion_; }
+
 bool CC::skip_singles() const { return skip_singles_; }
 
 bool CC::screen() const { return screen_; }
@@ -68,6 +80,9 @@ bool CC::use_topology() const { return use_topology_; }
 ExprPtr CC::hbar(std::optional<size_t> truncation_rank) const {
   const auto truncation = truncation_rank.value_or(hbar_comm_rank_.value_or(4));
 
+  if (hbar_expansion_ == HbarExpansion::Bernoulli)
+    return bernoulli::hbar(N, truncation, skip_singles());
+
   // for a non-unitary ansatz this is the cheaper connected-product form, which
   // is only equivalent to the commutator once the caller supplies operator
   // connectivity to ref_av (see lst_options() and the @warning on hbar())
@@ -75,6 +90,14 @@ ExprPtr CC::hbar(std::optional<size_t> truncation_rank) const {
 }
 
 ExprPtr CC::energy(std::optional<size_t> comm_rank) const {
+  // Bernoulli: the tensor-level H̄ is already fully expanded, so there is no
+  // operator connectivity left to constrain -- take the plain reference
+  // expectation value. The energy rank defaults to the amplitude rank;
+  // pass comm_rank explicitly for the qUCCSD [2|3] split (energy at H̄³).
+  if (hbar_expansion_ == HbarExpansion::Bernoulli) {
+    const auto erank = comm_rank.value_or(*hbar_comm_rank_);
+    return op::tensor::ref_av(this->hbar(erank));
+  }
   // <0|H̄|0>: reference expectation value of H̄ at the requested commutator
   // truncation. No projector ⇒ this is the energy. ref_av applies the
   // connectivity (empty for unitary, default otherwise).
@@ -86,6 +109,20 @@ ExprPtr CC::energy(std::optional<size_t> comm_rank) const {
 std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) const {
   pmax = (pmax == std::numeric_limits<size_t>::max() ? N : pmax);
   SEQUANT_ASSERT(pmax >= pmin && "pmax should be >= pmin");
+
+  // Bernoulli: project the tensor-level H̄ (built at the amplitude
+  // rank = hbar_comm_rank_) onto each manifold <p| and take the reference
+  // expectation value. As in energy(), the expanded H̄ carries no operator
+  // connectivity to constrain.
+  if (hbar_expansion_ == HbarExpansion::Bernoulli) {
+    const auto hbar = this->hbar();
+    std::vector<ExprPtr> result(pmax + 1);
+    for (std::int64_t p = pmax; p >= static_cast<std::int64_t>(pmin); --p) {
+      const auto projected = (p != 0) ? op::tensor::P(nₚ(p)) * hbar : hbar;
+      result.at(p) = op::tensor::ref_av(projected);
+    }
+    return result;
+  }
 
   // 1. construct hbar(op) in canonical form
   auto hbar = this->hbar();

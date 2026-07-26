@@ -32,6 +32,13 @@ class CC {
     oU
   };
 
+  enum class HbarExpansion {
+    /// standard Baker-Campbell-Hausdorff commutator expansion
+    BCH,
+    /// Bernoulli expansion, 10.1063/1.5030344 (unitary ansatz only)
+    Bernoulli
+  };
+
   /// Configuration options for CC class
   struct Options {
     SEQUANT_DESIGNATED_INIT_ONLY;
@@ -54,6 +61,8 @@ class CC {
     /// perturbation operator; must be specified if unitary ansatz is used in
     /// perturbed amplitude derivation
     std::optional<size_t> pertbar_comm_rank = std::nullopt;
+    /// choice of H̄ expansion; Bernoulli requires a unitary ansatz
+    HbarExpansion hbar_expansion = HbarExpansion::BCH;
   };
 
   /// @brief constructs CC engine with default options (traditional ansatz,
@@ -75,6 +84,9 @@ class CC {
   /// @return the maximum of nested commutators in H̄; returns std::nullopt if
   /// not set
   [[nodiscard]] std::optional<size_t> hbar_comm_rank() const;
+
+  /// @return the choice of H̄ expansion
+  [[nodiscard]] HbarExpansion hbar_expansion() const;
 
   /// @return true if singles amplitudes are excluded from \f$ \hat{T} \f$ and
   /// \f$ \hat{\Lambda} \f$
@@ -191,6 +203,7 @@ class CC {
   bool use_topology_ = true;
   std::optional<size_t> hbar_comm_rank_ = std::nullopt;
   std::optional<size_t> pertbar_comm_rank_ = std::nullopt;
+  HbarExpansion hbar_expansion_ = HbarExpansion::BCH;
 
   /// @return the `LSTOptions` this engine uses for every `mbpt::lst()` call
   /// @note The choice of commutator representation is really a question of
