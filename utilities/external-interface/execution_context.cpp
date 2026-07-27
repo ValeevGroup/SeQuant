@@ -74,6 +74,28 @@ get_data_impl(DataVec &&data, ID2DataIdxMap &&id2dataidx,
         }
       }
 
+      // Ensure that we order the IDs such that the generic index-IDs come after
+      // potentially manually assigned (that will have more meaningful names)
+      auto not_ends_with_num = [](std::string_view id) -> bool {
+        SEQUANT_ASSERT(!id.empty());
+        if (id.empty()) {
+          return false;
+        }
+
+        auto it = id.rfind('.');
+        if (it == std::string_view::npos) {
+          // The generic number-IDs always contain a period
+          return true;
+        }
+
+        std::string_view suffix = id.substr(it + 1);
+        return suffix.find_first_not_of("0123456789") != std::string_view::npos;
+      };
+
+      std::ranges::stable_partition(ret_data.associated_ids, not_ends_with_num);
+      std::ranges::stable_partition(ret_data.associated_group_ids,
+                                    not_ends_with_num);
+
       selected_data.emplace_back(std::move(ret_data));
     }
   }
