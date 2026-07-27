@@ -3,6 +3,8 @@
 
 #include "processing_step.hpp"
 
+#include <SeQuant/core/io/serialization/serialization.hpp>
+
 #include <nlohmann/json_fwd.hpp>
 
 #include <filesystem>
@@ -25,6 +27,7 @@ class ReadInputStep : public ProcessingStep {
 
  private:
   std::vector<std::filesystem::path> input_paths_;
+  io::serialization::DeserializationOptions options_;
 };
 
 }  // namespace sequant::util::extint
