@@ -26,22 +26,23 @@ void ValidateStep::set_options(const nlohmann::json &) {
 std::size_t ValidateStep::run(std::string_view, ExecutionContext &ctx,
                               const std::vector<std::string_view> &inputs) {
   for (std::string_view current_input : inputs) {
-    std::size_t outer_counter = 1;
-    for (const ProcessingData &current_data : ctx.get_data(current_input)) {
-      const ExpressionData &data = convert_data<ExpressionData>(current_data);
+    for (const auto &current : ctx.get_data(current_input)) {
+      const ExpressionData &data =
+          convert_data<ExpressionData>(current.data.get());
 
       std::size_t inner_counter = 1;
       for (const ResultExpr &expr : data.expressions) {
         std::string msg;
+        std::string id = current.associated_ids.empty()
+                             ? std::string(current_input)
+                             : std::string(current.associated_ids.front());
         if (!is_valid(expr, &msg)) {
-          throw Exception("Expression " + std::string(current_input) + " #" +
-                          std::to_string(outer_counter) + "." +
+          throw Exception("Expression " + id + " expr #" +
                           std::to_string(inner_counter) +
                           " is invalid: " + msg);
         }
         ++inner_counter;
       }
-      ++outer_counter;
     }
   }
 
