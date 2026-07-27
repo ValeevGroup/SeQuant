@@ -26,53 +26,69 @@ void ExecutionContext::add_data_alias(std::string_view id, std::string alias) {
 }
 
 bool ExecutionContext::has_data(std::string_view id) const {
-  return data_ids_.find(id) != data_ids_.end();
+  return id_to_data_indices_.find(id) != id_to_data_indices_.end();
 }
 
 std::size_t ExecutionContext::dataset_size(std::string_view id) const {
-  auto it = data_ids_.find(id);
+  auto it = id_to_data_indices_.find(id);
 
-  return it == data_ids_.end() ? 0 : it->second.size();
+  return it == id_to_data_indices_.end() ? 0 : it->second.size();
 }
 
 template <std::ranges::random_access_range DataVec,
-          std::ranges::range DataIDMap>
+          std::ranges::range ID2DataIdxMap, std::ranges::range DataIdx2IDMap>
 std::vector<
-    std::reference_wrapper<meta::mimic_constness_t<DataVec, ProcessingData>>>
-get_data_impl(DataVec &&data, DataIDMap &&data_ids, std::string_view id) {
+    ExecutionContext::Data<meta::mimic_constness_t<DataVec, ProcessingData>>>
+get_data_impl(DataVec &&data, ID2DataIdxMap &&id2dataidx,
+              DataIdx2IDMap &&dataidx2id, std::string_view id) {
   if (!ExecutionContext::is_valid_id(id, true)) {
     throw Exception("Invalid id '" + std::string(id) + "'");
   }
 
-  using RefWrapT =
-      std::reference_wrapper<meta::mimic_constness_t<DataVec, ProcessingData>>;
+  using RefT = meta::mimic_constness_t<DataVec, ProcessingData>;
 
-  std::vector<RefWrapT> selected_data;
+  std::vector<ExecutionContext::Data<RefT>> selected_data;
 
   for (const std::string_view current : ExecutionContext::expand_id(id)) {
-    auto it = data_ids.find(current);
+    auto it = id2dataidx.find(current);
 
-    if (it == data_ids.end()) {
+    if (it == id2dataidx.end()) {
       throw Exception("No data available for ID '" + std::string(current) +
                       "'");
     }
 
     for (std::size_t idx : it->second) {
-      selected_data.emplace_back(data.at(idx));
+      ExecutionContext::Data<RefT> ret_data{.data = data.at(idx)};
+
+      for (std::string_view alias : dataidx2id.at(idx)) {
+#if defined(__cpp_lib_associative_heterogeneous_insertion) && \
+    __cpp_lib_associative_heterogeneous_insertion >= 202311L
+        if (id2dataidx.at(alias).size() > 1) {
+#else
+        // No heterogenous lookup overload for at() until C++26
+        if (id2dataidx.at(std::string(alias)).size() > 1) {
+#endif
+          ret_data.associated_group_ids.emplace_back(std::move(alias));
+        } else {
+          ret_data.associated_ids.emplace_back(std::move(alias));
+        }
+      }
+
+      selected_data.emplace_back(std::move(ret_data));
     }
   }
 
   return selected_data;
 }
 
-std::vector<std::reference_wrapper<const ProcessingData>>
+std::vector<ExecutionContext::Data<const ProcessingData>>
 ExecutionContext::get_data(std::string_view id) const {
-  return get_data_impl(data_, data_ids_, id);
+  return get_data_impl(data_, id_to_data_indices_, data_idx_to_ids_, id);
 }
 
-std::vector<std::reference_wrapper<ProcessingData>> ExecutionContext::get_data(
+std::vector<ExecutionContext::Data<ProcessingData>> ExecutionContext::get_data(
     std::string_view id) {
-  return get_data_impl(data_, data_ids_, id);
+  return get_data_impl(data_, id_to_data_indices_, data_idx_to_ids_, id);
 }
 
 bool ExecutionContext::is_valid_id(std::string_view id, bool allow_selectors) {
