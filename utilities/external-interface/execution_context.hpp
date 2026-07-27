@@ -91,7 +91,8 @@ class ExecutionContext {
                           "'");
         }
 
-        set_id_idx_assoc(expanded, it->second);
+        SEQUANT_ASSERT(!it->second.empty());
+        set_id_idx_assoc(alias, it->second);
       }
     }
   }
