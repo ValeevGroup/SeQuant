@@ -29,8 +29,8 @@ void OutputStep::set_options(const nlohmann::json &options) {
   for (const auto &[key, value] : options.items()) {
     if (key == "format") {
       if (!value.is_string()) {
-        throw Exception(
-            "Option 'format' for OutputStep is expected to be a string");
+        throw Exception("Option 'format' for " + kind() +
+                        " is expected to be a string");
       }
 
       if (value == "latex") {
@@ -38,19 +38,19 @@ void OutputStep::set_options(const nlohmann::json &options) {
       } else if (value == "serialize") {
         latex_ = false;
       } else {
-        throw Exception("Invalid output format for OutputStep: '" +
+        throw Exception("Invalid output format for " + kind() + ": '" +
                         value.get<std::string>() + "'");
       }
     } else if (key == "annotate_symmetry") {
       if (!value.is_boolean()) {
-        throw Exception(
-            "Option 'annotate_symmetry' for OutputStep is expected to be a "
-            "boolean");
+        throw Exception("Option 'annotate_symmetry' for " + kind() +
+                        " is expected to be a "
+                        "boolean");
       }
 
       annot_symm_ = value.get<bool>();
     } else {
-      throw Exception("Unknown option key for OutputStep: '" + key + "'");
+      throw Exception("Unknown option key for " + kind() + ": '" + key + "'");
     }
   }
 }
