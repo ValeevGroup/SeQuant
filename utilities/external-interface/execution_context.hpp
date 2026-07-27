@@ -32,6 +32,7 @@ class ExecutionContext {
     std::vector<std::string_view> associated_group_ids = {};
 
     operator DataT &() { return data.get(); }
+    operator std::add_const_t<DataT> &() const { return data.get(); }
   };
 
   ExecutionContext() = default;
