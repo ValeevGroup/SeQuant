@@ -14,11 +14,12 @@ namespace sequant::mbpt::bernoulli {
 /// expansion coefficients; the rank-by-rank operators H̄⁰..H̄⁴ are Eqs. (46)-(50)
 /// of 10.1063/1.5030344.
 ///
-/// @warning Single-reference only. The N/R split relies on expanding general
-/// indices over the hole and particle spaces alone (see
-/// detail::expand_to_blocks), which is an identity only when the remaining base
-/// spaces are empty. Under a multireference registry the R part comes out wrong
-/// silently -- there is no check for this.
+/// @warning Single-reference only. The N/R split expands general indices over
+/// the hole and particle spaces alone (see detail::expand_to_blocks), dropping
+/// any other base space the registry defines. That is harmless only because the
+/// single-reference projection manifolds annihilate the dropped terms. Under a
+/// multireference registry they contribute, and both the N and the R part come
+/// out wrong silently -- there is no check for this.
 ///
 /// @param N cluster/excitation rank (also the N/R rank cutoff)
 /// @param rank highest Bernoulli order H̄^k to include (0..4)
@@ -30,9 +31,10 @@ namespace detail {
 
 /// Operator-valued Wick reduction: applies Wick's theorem to @p expr retaining
 /// PARTIAL contractions, reducing a product of normal-ordered operators to a
-/// sum of normal-ordered operators (each = coefficient tensor × one residual
-/// NormalOperator). Unlike the expectation-value path it keeps operators rather
-/// than collapsing to a scalar VEV.
+/// sum of normal-ordered operators (each = coefficient tensor × at most one
+/// residual NormalOperator; fully-contracted terms carry none). Unlike the
+/// expectation-value path it keeps operators rather than collapsing to a
+/// scalar VEV.
 ExprPtr wick_reduce(ExprPtr expr);
 
 /// Normal-ordered commutator [A, B] = wick_reduce(A·B − B·A). NOT the bare
@@ -55,8 +57,11 @@ ExprPtr expand_to_blocks(const ExprPtr& expr);
 /// @p cutoff. Applies expand_to_blocks first.
 ExprPtr N_part(const ExprPtr& expr, std::size_t cutoff);
 
-/// Block-resolved R (rank-preserving remainder) part:
-/// expand_to_blocks(expr) minus N_part(expr, cutoff).
+/// R (rank-preserving remainder) part: wick_reduce(expr) minus
+/// N_part(expr, cutoff). Unlike N_part the result is NOT block-resolved -- it
+/// stays in compact general-index form, which is exact here because
+/// expand_to_blocks is an identity, and much cheaper for the nested
+/// commutators that consume R.
 ExprPtr R_part(const ExprPtr& expr, std::size_t cutoff);
 
 }  // namespace detail

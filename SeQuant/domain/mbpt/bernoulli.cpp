@@ -33,16 +33,16 @@
 // All equation references are to 10.1063/1.5030344 (Sec. III B): superoperator
 // inversion Eqs. (36)-(39); Bernoulli numbers B₁=−1/2, B₂=1/12, B₃=0, B₄=−1/720
 // Eq. (40); the N/R split and the UCC amplitude condition V̄_N = 0 above and at
-// Eq. (43); the iterative recursion for V̄ Eq. (44); the rank-by-rank operators
-// H̄⁰..H̄⁴ Eqs. (45)-(50). Cancellation #1 (F enters only H̄¹) is stated just
-// below Eq. (50).
+// Eq. (43); the iterative recursion for V̄ Eq. (44); the assembly
+// H̄ = Σ_k H̄^k Eq. (45); the rank-by-rank operators H̄⁰..H̄⁴ Eqs. (46)-(50).
+// Cancellation #1 (F enters only H̄¹) is stated just below Eq. (50).
 
 namespace {
 
 /// Returns the single residual fermionic NormalOperator carried by @p term, or
 /// nullptr when it has none (a pure scalar / fully-contracted term). Every term
-/// produced by wick_reduce is either a bare NormalOperator or a Product with
-/// exactly one NormalOperator factor times tensor coefficients.
+/// produced by wick_reduce is either a bare NormalOperator or a Product with at
+/// most one NormalOperator factor times tensor coefficients.
 const sequant::NormalOperator<sequant::Statistics::FermiDirac>* find_nop(
     const sequant::ExprPtr& term) {
   using namespace sequant;
@@ -57,7 +57,7 @@ const sequant::NormalOperator<sequant::Statistics::FermiDirac>* find_nop(
         // silently ignored and misclassify the term.
         SEQUANT_ASSERT(!found &&
                        "find_nop: term carries >1 NormalOperator; wick_reduce "
-                       "is expected to leave exactly one residual operator");
+                       "is expected to leave at most one residual operator");
         found = &f.as<NormalOperator<Statistics::FermiDirac>>();
       }
     return found;
@@ -75,9 +75,8 @@ const sequant::NormalOperator<sequant::Statistics::FermiDirac>* find_nop(
 /// (above Eq. (43): "containing all the excitation operators and de-excitation
 /// operators in O") carries no rank cutoff, but this mirrors pdaggerq (`nt_bra
 /// > bernoulli_excitation_level -> R`), which is the convention that defines
-/// qUCCSD and the one our numbers are validated against. The choice is a real
-/// degree of freedom: at cutoff = 2 the HF rank-3 energy is +2.507 mEh, versus
-/// +2.428 mEh with no cutoff.
+/// qUCCSD. The cutoff is a real degree of freedom, not a formality: it moves
+/// the correlation energy at the sub-mEh level.
 bool is_N_term(const sequant::ExprPtr& term, std::size_t cutoff) {
   using namespace sequant;
   auto isr = get_default_context().index_space_registry();
@@ -118,16 +117,15 @@ ExprPtr wick_reduce(ExprPtr expr) {
   // operator form rather than the scalar VEV. Otherwise mirrors
   // mbpt::tensor::expectation_value_impl. See core/wick.hpp.
   FWickTheorem wick{expr};
-  // use_topology MUST be disabled explicitly -- it defaults to ON
-  // (wick.hpp: `bool use_topology_ = true`), so merely not asking for it is not
-  // enough. It counts one representative per symmetry-equivalent contraction
-  // class times a multiplicity; the weight bookkeeping is exercised by the
-  // fully-contracted (vacuum-average) path, not by this partial-contraction
-  // one. With it on, <0|H̄³|0> stays correct but 16 of the 332 coefficients of
-  // <μ|H̄³|0> are rescaled by 2, 1/2, 3, 8/3 or 2/3 -- every one of them a term
-  // with a symmetric amplitude pair. With it off, all 332 signatures match
-  // pdaggerq exactly. Cost of giving up the optimisation: the rank-3-amplitude
-  // derivation goes 6.1 s -> 7.6 s wall.
+  // use_topology must be disabled explicitly: it defaults to ON (wick.hpp:
+  // `bool use_topology_ = true`; the doc block at wick.hpp:154 claims otherwise
+  // and is stale), so not asking for it is not enough. It keeps one
+  // representative per symmetry-equivalent contraction class and multiplies by
+  // the class size, a weight bookkeeping that only holds on the
+  // fully-contracted path -- not on this partial-contraction one, where it
+  // silently rescales the terms carrying a symmetric amplitude pair. The vacuum
+  // expectation value stays correct either way, so the damage shows up only
+  // under projection. Turning it back on costs correctness, not just speed.
   wick.use_topology(false).full_contractions(false);
   auto result = wick.compute(/*count_only=*/false,
                              /*skip_input_canonicalization=*/true);
@@ -167,15 +165,14 @@ ExprPtr expand_to_blocks_reduced(const ExprPtr& expr) {
     return ranges::any_of(bases, [&](const auto& b) { return b == sp; });
   };
 
-  // Only the hole and particle base spaces are physically populated in the
-  // single-reference qUCCSD setting; the other base spaces the complete space
-  // nominally spans (e.g. the SR "o"/"g" blocks) are empty, so splitting a
-  // general index into them only multiplies the term count without changing any
-  // projected quantity. Restricting to {hole, particle} keeps the expansion
-  // 2-way (occupied/virtual) per index -- exactly what the N/R classifier needs
-  // -- instead of splitting every base space, which compounds across the nested
-  // commutators. Falls back to all base spaces if the registry defines no
-  // hole/particle split.
+  // Split each general index over the hole and particle base spaces only. A
+  // general index also spans the registry's other base spaces (under the SR
+  // convention the frozen-core "o" and inactive-virtual "g"), but terms landing
+  // in those are annihilated by the single-reference projection onto the
+  // hole/particle manifolds, so dropping them changes no projected quantity.
+  // This keeps the expansion 2-way per index instead of 4-way, which otherwise
+  // compounds across the nested commutators. Falls back to all base spaces if
+  // the registry defines no hole/particle split.
   const auto& hole_t = isr->hole_space(/*nulltype_ok=*/true);
   const auto& particle_t = isr->particle_space(/*nulltype_ok=*/true);
   auto physical = [&](const IndexSpace& b) {
@@ -287,9 +284,8 @@ ExprPtr N_part(const ExprPtr& expr, std::size_t cutoff) {
 /// minus its N part. Because expand_to_blocks is an identity
 /// (N ⊎ R = expr as operators), R = expr − N holds exactly while keeping expr
 /// in its compact (general-index) form -- only N is block-resolved. This is
-/// verified equivalent to the fully block-resolved remainder: ref_av([R,σ]) is
-/// identical either way. Keeping expr compact makes the nested commutators that
-/// consume R operate on far fewer terms.
+/// equivalent to the fully block-resolved remainder, and keeping expr compact
+/// makes the nested commutators that consume R operate on far fewer terms.
 ExprPtr R_part(const ExprPtr& expr, std::size_t cutoff) {
   auto reduced = wick_reduce(expr->clone());
   return R_part_reduced(reduced, cutoff);
@@ -298,9 +294,8 @@ ExprPtr R_part(const ExprPtr& expr, std::size_t cutoff) {
 }  // namespace detail
 
 /// Assembles H̄ order by order (see header), summing H̄⁰..H̄^rank of Eq. (45).
-/// Each H̄^k below is transcribed from its equation, verified term-by-term
-/// against the published coefficients and N/R subscripts. A subscript R/N on a
-/// commutator means "form the commutator, then keep only its R/N part before
+/// Each H̄^k below is a direct transcription of its equation. A subscript R/N on
+/// a commutator means "form the commutator, then keep only its R/N part before
 /// the next nesting".
 ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
   if (rank > 4)
@@ -325,9 +320,9 @@ ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
   // no filter). nest(p0, f) evaluates such a node, memoizing every prefix
   // (key = p0 + tags applied so far): the terms share prefixes both within a
   // rank (the 9 rank-4 terms have only 3 distinct level-1 and 6 level-2 nodes)
-  // and across ranks (each H̄^k node is a prefix of H̄^{k+1} nodes), so the memo
-  // avoids recomputing them. Reusing a memoized ExprPtr is safe: expression
-  // composition deep-copies operands (Product/Sum append clone), so
+  // and across ranks (all four ranks share the same three level-1 nodes), so
+  // the memo avoids recomputing them. Reusing a memoized ExprPtr is safe:
+  // expression composition deep-copies operands (Product/Sum append clone), so
   // wick_commutator does not mutate its arguments. Commutator outputs are
   // already wick_reduce'd, so the reduced-input N/R filters apply.
   container::map<std::string, ExprPtr> memo;
@@ -387,9 +382,7 @@ ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
     // H̄⁴ = Eq. (50), the nine order-4 terms produced by the recursion Eq. (44),
     // V̄^{k+1} = σ̂F + X̂⁻¹(σ̂)e^{σ̂}V − Σ_{n≠0} B_n σ̂^n V̄_R^{k}. F is absent here
     // (Cancellation #1). Listed in the paper's order; the outermost tag is
-    // always A. Verified term-by-term against Eq. (50): coefficients
-    // +1/16, +1/16, +1/48, −1/48, −1/48, −1/144, −1/48, −1/48, −1/720 and the
-    // N/R subscripts all match as transcribed.
+    // always A.
     acc->append(c({1, 16}, nest('R', "RRRA")));
     acc->append(c({1, 16}, nest('A', "RRRA")));
     acc->append(c({1, 48}, nest('N', "ARRA")));
