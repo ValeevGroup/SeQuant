@@ -48,7 +48,8 @@
 					"nevpt2/nevpt2_res2_p1.inp",
 					"nevpt2/nevpt2_res2_s1.inp",
 					"nevpt2/nevpt2_res2_s2.inp"
-				]
+				],
+				"default_symmetry": "antisymmetric"
 			},
 			"outputs": {
 				"ecc0": "0",

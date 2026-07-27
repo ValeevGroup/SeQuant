@@ -44,6 +44,27 @@ void ReadInputStep::set_options(const nlohmann::json &options) {
         throw Exception("Invalid data type for " + kind() + " option '" + key +
                         "'");
       }
+    } else if (key == "default_symmetry") {
+      if (!value.is_string()) {
+        throw Exception("Value for " + kind() + " option '" + key +
+                        "' must be a string");
+      }
+      if (value == "none") {
+        options_.def_perm_symm = Symmetry::Nonsymm;
+        options_.def_col_symm = ColumnSymmetry::Nonsymm;
+        options_.def_braket_symm = BraKetSymmetry::Nonsymm;
+      } else if (value == "antisymmetric") {
+        options_.def_perm_symm = Symmetry::Antisymm;
+        options_.def_col_symm = ColumnSymmetry::Symm;
+        options_.def_braket_symm = BraKetSymmetry::Nonsymm;
+      } else if (value == "symmetric") {
+        options_.def_perm_symm = Symmetry::Symm;
+        options_.def_col_symm = ColumnSymmetry::Symm;
+        options_.def_braket_symm = BraKetSymmetry::Nonsymm;
+      } else {
+        throw Exception("Invalid value for " + kind() + " option '" + key +
+                        "': '" + value.get<std::string>() + "'");
+      }
     } else {
       throw Exception("Unknown option key for " + kind() + ": '" + key + "'");
     }
@@ -66,7 +87,8 @@ std::size_t ReadInputStep::run(std::string_view step_id, ExecutionContext &ctx,
     std::ifstream in(current);
     const std::string contents(std::istreambuf_iterator<char>(in), {});
 
-    ResultExpr expr = io::serialization::from_string<ResultExpr>(contents);
+    ResultExpr expr =
+        io::serialization::from_string<ResultExpr>(contents, options_);
 
     ctx.set_data(std::string(step_id) + "." + std::to_string(counter++),
                  ExpressionData{.expressions = {std::move(expr)}});
