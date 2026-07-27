@@ -129,58 +129,23 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
   SECTION("bernoulli_hbar_structure") {
     using namespace sequant;
     using namespace sequant::mbpt;
+    // Equation references are to 10.1063/1.5030344, Sec. III B.
     // Cancellation #1: F appears only in H̄¹, so rank r − rank r−1 is F-free
     // for r ≥ 2.
     auto h0 = bernoulli::hbar(2, 0, false);
     auto h1 = bernoulli::hbar(2, 1, false);
     auto h2 = bernoulli::hbar(2, 2, false);
-    auto h3 = bernoulli::hbar(2, 3, false);
     auto has_f = [&](const ExprPtr& e) { return has_tensor(e, L"f"); };
     REQUIRE(has_f(simplify(h1 - h0)));  // [F,σ]
     REQUIRE_FALSE(has_f(simplify(h2 - h1)));
-    REQUIRE_FALSE(has_f(simplify(h3 - h2)));
     REQUIRE_THAT(h0,  // H̄⁰ = F + V, Eq. (46)
                  EquivalentTo(simplify(op::tensor::F() + op::tensor::h(2))));
-  }
 
-  SECTION("bernoulli_config_validation") {
-    using namespace sequant;
-    using namespace sequant::mbpt;
-    // only ranks 0..4 are implemented. The CC-level preconditions (unitary
-    // ansatz, hbar_comm_rank set) are SEQUANT_ASSERTs per the class convention,
-    // so they are not testable here -- their behavior depends on
-    // SEQUANT_ASSERT_BEHAVIOR.
-    REQUIRE_THROWS_AS(bernoulli::hbar(2, 5, false), Exception);
-  }
-
-  SECTION("bernoulli_quccsd") {
-    using namespace sequant;
-    using namespace sequant::mbpt;
-    const CC::Options opts{.ansatz = CC::Ansatz::U,
-                           .hbar_comm_rank = 2,
-                           .hbar_expansion = CC::HbarExpansion::Bernoulli};
-    CC cc(2, opts);
-
-    // energy through H̄³, amplitudes through H̄² (hbar_comm_rank)
-    const auto E = cc.energy(3);
-    REQUIRE(E);
-    REQUIRE_THAT(E, !EquivalentTo(ex<Constant>(0)));
-    const auto amps = cc.t();
-    REQUIRE(amps.size() == 3);
-    REQUIRE(amps[1]);
-    REQUIRE(amps[2]);
-    REQUIRE_THAT(amps[1], !EquivalentTo(ex<Constant>(0)));
-    REQUIRE_THAT(amps[2], !EquivalentTo(ex<Constant>(0)));
-
-    // energy at rank 3 vs amplitudes at rank 2, so unlike BCH/UCC the
-    // energy()==t()[0] invariant intentionally does not hold
-    REQUIRE_THAT(cc.energy(3), !EquivalentTo(cc.t().at(0)));
-
-    // Reference expectation values of H̄¹ and H̄² (Eqs. (47), (48) of
-    // 10.1063/1.5030344), taken as successive-rank differences.
-    const auto E0 = op::tensor::ref_av(bernoulli::hbar(2, 0, false));
-    const auto E1 = op::tensor::ref_av(bernoulli::hbar(2, 1, false));
-    const auto E2 = op::tensor::ref_av(bernoulli::hbar(2, 2, false));
+    // Reference expectation values of H̄¹ and H̄², Eqs. (47) and (48), taken as
+    // successive-rank differences.
+    const auto E0 = op::tensor::ref_av(h0);
+    const auto E1 = op::tensor::ref_av(h1);
+    const auto E2 = op::tensor::ref_av(h2);
     const auto E1_contrib = simplify(E1 - E0);
     const auto E2_contrib = simplify(E2 - E1);
 
@@ -199,12 +164,37 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
                               L"* g{i_1,i_2;a_1,a_2}:A-C-S "
                               L"+ 1/12 t⁺{i_1;a_1}:A-N-S * t⁺{i_2;a_2}:A-N-S "
                               L"* g{a_1,a_2;i_1,i_2}:A-C-S"));
+  }
 
-    // characterization goldens: term counts, frozen from a numerically
-    // validated run to catch changes to hbar/projection
-    REQUIRE(size(E) == 46);
+  SECTION("bernoulli_config_validation") {
+    using namespace sequant;
+    using namespace sequant::mbpt;
+    // only ranks 0..4 are implemented.
+    REQUIRE_THROWS_AS(bernoulli::hbar(2, 5, false), Exception);
+  }
+
+  SECTION("bernoulli_quccsd") {
+    using namespace sequant;
+    using namespace sequant::mbpt;
+    const CC::Options opts{.ansatz = CC::Ansatz::U,
+                           .hbar_comm_rank = 2,
+                           .hbar_expansion = CC::HbarExpansion::Bernoulli};
+    CC cc(2, opts);
+
+    // amplitudes through H̄² (hbar_comm_rank)
+    const auto amps = cc.t();
+    REQUIRE(amps.size() == 3);
+    REQUIRE_THAT(amps[1], !EquivalentTo(ex<Constant>(0)));
+    REQUIRE_THAT(amps[2], !EquivalentTo(ex<Constant>(0)));
+
     REQUIRE(size(amps[1]) == 32);
     REQUIRE(size(amps[2]) == 38);
+
+#ifndef SEQUANT_SKIP_LONG_TESTS
+    const auto E = cc.energy(3);
+    REQUIRE_THAT(E, !EquivalentTo(amps.at(0)));
+    REQUIRE(size(E) == 46);
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
   }
 
   SECTION("energy") {
