@@ -151,7 +151,7 @@ class WickTheorem {
   ///
   /// This is useful to to eliminate the topologically-equivalent contractions
   /// when fully-contracted result (i.e. the vacuum average) is sought.
-  /// By default the use of topology is not enabled.
+  /// By default the use of topology is enabled.
   /// @param ut if true, will utilize the topology to minimize work.
   WickTheorem &use_topology(bool ut) {
     use_topology_ = ut;
