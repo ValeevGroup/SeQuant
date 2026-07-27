@@ -209,7 +209,11 @@ ExprPtr CC::rdm(size_t rank) const {
   auto N_op = op::N(rank);
 
   // 2. similarity transform N̄ = e^{-σ} N e^{σ} (σ = T, or T−T⁺ for unitary).
-  const auto commutator_rank = hbar_comm_rank_.value_or(4);
+  const auto def_truncation_rank =
+      rank == 1 ? 2
+                : 4;  // for 1-RDM, we only need at max two nested commutators,
+                      // else we use 4 for TCC and user set value for UCC
+  const auto commutator_rank = hbar_comm_rank_.value_or(def_truncation_rank);
   auto Nbar = mbpt::lst(N_op, T(N, skip_singles()), commutator_rank,
                         {.unitary = unitary()});
 
