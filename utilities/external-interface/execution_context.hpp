@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <concepts>
 #include <cstddef>
+#include <deque>
 #include <functional>
 #include <map>
 #include <ranges>
@@ -20,6 +21,19 @@ namespace sequant::util::extint {
 
 class ExecutionContext {
  public:
+  template <typename DataT>
+  struct Data {
+    /// The actual data object (reference)
+    std::reference_wrapper<DataT> data;
+    /// List of IDs that this data object is assigned to
+    std::vector<std::string_view> associated_ids = {};
+    /// List of IDs that are associated with a group of data objects which the
+    /// present one is a part of
+    std::vector<std::string_view> associated_group_ids = {};
+
+    operator DataT &() { return data.get(); }
+  };
+
   ExecutionContext() = default;
 
   void set_data(std::string id, ProcessingData data);
@@ -37,7 +51,7 @@ class ExecutionContext {
     }
 
     for (auto &&current : ids) {
-      if (data_ids_.find(current) != data_ids_.end()) {
+      if (id_to_data_indices_.find(current) != id_to_data_indices_.end()) {
         throw Exception("Duplicate data ID '" + std::string(current) + "'");
       }
       if (!is_valid_id(current, false)) {
@@ -49,7 +63,7 @@ class ExecutionContext {
     std::iota(data_indices.begin(), data_indices.end(), data_.size());
 
     for (auto &&current : ids) {
-      data_ids_.emplace(std::string(std::move(current)), data_indices);
+      set_id_idx_assoc(std::move(current), data_indices);
     }
 
     for (auto &&current : data) {
@@ -63,46 +77,53 @@ class ExecutionContext {
     requires(std::is_convertible_v<std::ranges::range_value_t<IDs>,
                                    std::string_view>)
   void add_data_alias(IDs &&ids, std::string alias) {
-    if (data_ids_.find(alias) != data_ids_.end()) {
+    if (id_to_data_indices_.find(alias) != id_to_data_indices_.end()) {
       throw Exception("Alias '" + alias + "' already exists as a data ID");
     }
 
-    std::vector<std::size_t> indices;
-
     for (std::string_view current_id : ids) {
       for (const std::string &expanded : expand_id(current_id)) {
-        auto it = data_ids_.find(expanded);
+        auto it = id_to_data_indices_.find(expanded);
 
-        if (it == data_ids_.end()) {
+        if (it == id_to_data_indices_.end()) {
           throw Exception("Attempted to alias non-existent ID '" + expanded +
                           "'");
         }
 
-        indices.insert(indices.end(), it->second.begin(), it->second.end());
+        set_id_idx_assoc(expanded, it->second);
       }
     }
-
-    SEQUANT_ASSERT(!indices.empty());
-
-    data_ids_.emplace(std::move(alias), std::move(indices));
   }
 
   bool has_data(std::string_view id) const;
 
   std::size_t dataset_size(std::string_view id) const;
 
-  std::vector<std::reference_wrapper<const ProcessingData>> get_data(
-      std::string_view id) const;
-  std::vector<std::reference_wrapper<ProcessingData>> get_data(
-      std::string_view id);
+  std::vector<Data<const ProcessingData>> get_data(std::string_view id) const;
+  std::vector<Data<ProcessingData>> get_data(std::string_view id);
 
   static bool is_valid_id(std::string_view id, bool allow_selectors);
 
   static std::vector<std::string> expand_id(std::string_view id);
 
  private:
-  std::vector<ProcessingData> data_;
-  std::map<std::string, std::vector<std::size_t>, std::less<>> data_ids_;
+  std::deque<ProcessingData> data_;
+  std::map<std::string, std::vector<std::size_t>, std::less<>>
+      id_to_data_indices_;
+  std::map<std::size_t, std::deque<std::string>> data_idx_to_ids_;
+
+  template <typename Indices>
+  void set_id_idx_assoc(std::string id, Indices &&indices) {
+    if constexpr (!std::ranges::range<Indices>) {
+      set_id_idx_assoc(std::move(id),
+                       std::ranges::single_view(std::move(indices)));
+    } else {
+      for (std::size_t idx : indices) {
+        id_to_data_indices_[id].emplace_back(idx);
+        data_idx_to_ids_[idx].emplace_back(id);
+      }
+    }
+  }
 };
 
 }  // namespace sequant::util::extint
