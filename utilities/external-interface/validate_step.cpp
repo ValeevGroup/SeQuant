@@ -30,7 +30,7 @@ std::size_t ValidateStep::run(std::string_view, ExecutionContext &ctx,
       const ExpressionData &data =
           convert_data<ExpressionData>(current.data.get());
 
-      std::size_t inner_counter = 1;
+      std::size_t expr_counter = 1;
       for (const ResultExpr &expr : data.expressions) {
         std::string msg;
         std::string id = current.associated_ids.empty()
@@ -38,10 +38,9 @@ std::size_t ValidateStep::run(std::string_view, ExecutionContext &ctx,
                              : std::string(current.associated_ids.front());
         if (!is_valid(expr, &msg)) {
           throw Exception("Expression " + id + " expr #" +
-                          std::to_string(inner_counter) +
-                          " is invalid: " + msg);
+                          std::to_string(expr_counter) + " is invalid: " + msg);
         }
-        ++inner_counter;
+        ++expr_counter;
       }
     }
   }
