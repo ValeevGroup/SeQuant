@@ -16,7 +16,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
   using namespace sequant;
   using namespace sequant::mbpt;
 
-  auto has_tensor = [](const ExprPtr& e, std::wstring label) {
+  auto has_tensor = [](const ExprPtr& e, const std::wstring& label) {
     bool found = false;
     e->visit(
         [&](const ExprPtr& n) {
