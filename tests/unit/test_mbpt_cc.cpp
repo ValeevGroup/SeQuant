@@ -77,6 +77,11 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
       auto G = CC{N}.rdm(2);
       REQUIRE(G);
       REQUIRE(size(G) == 94);
+      // an explicit comm_rank truncates early: cutting Γ at the 2nd nested
+      // commutator drops the terms the default (4th, exact) picks up
+      auto G2 = CC{N}.rdm(2, 2);
+      REQUIRE(G2);
+      REQUIRE(size(G2) == 71);  // 23 terms short of the exact 94
     }
     // Unitary CCSD (σ = T − T⁺, no Λ): γ = <0| e^{-σ} {a†_p a_q} e^{σ}|0>.
     SECTION("UCC RDM") {

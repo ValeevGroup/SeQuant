@@ -192,14 +192,19 @@ class CC {
   /// uses \f$ e^{-\hat{\sigma}} \dots e^{\hat{\sigma}} \f$ with \f$
   /// \hat{\sigma} = \hat{T} - \hat{T}^\dagger \f$. The number-operator indices
   /// are in the complete space, so they survive as the free indices of the
-  /// result; the similarity-transform truncation is
-  /// `hbar_comm_rank_.value_or(4)`. Returns the *linked* density (the number
+  /// result. Returns the *linked* density (the number
   /// operator is required to connect to the cluster amplitudes).
   /// @param rank particle rank of the RDM (1 = one-particle \f$ \gamma \f$,
   ///   2 = two-particle \f$ \Gamma \f$, ...)
+  /// @param comm_rank maximum order of nested commutators in \f$ \bar{N} \f$;
+  ///   if not specified, defaults to `min(2*rank, rank + N)` for the
+  ///   traditional ansatz (where the expansion terminates exactly) and to
+  ///   `hbar_comm_rank` for the unitary ansatz (where it does not). Pass an
+  ///   explicit value to truncate earlier.
   /// @return the RDM expression (Fermi-vacuum normal-ordered / correlation
   /// part)
-  [[nodiscard]] ExprPtr rdm(size_t rank = 1) const;
+  [[nodiscard]] ExprPtr rdm(
+      size_t rank = 1, std::optional<size_t> comm_rank = std::nullopt) const;
 
  private:
   size_t N;

@@ -10,6 +10,7 @@
 #include <SeQuant/domain/mbpt/spin.hpp>
 #include <SeQuant/domain/mbpt/utils.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <new>
@@ -203,17 +204,18 @@ std::vector<ExprPtr> CC::λ() const {
   return result;
 }
 
-ExprPtr CC::rdm(size_t rank) const {
+ExprPtr CC::rdm(size_t rank, std::optional<size_t> comm_rank) const {
   // 1. rank-`rank` number operator N = {a†_{p1..pr} a_{q1..qr}};(see op::N).
   // Qualified with op:: because `N` (the cluster rank) is a member.
   auto N_op = op::N(rank);
 
   // 2. similarity transform N̄ = e^{-σ} N e^{σ} (σ = T, or T−T⁺ for unitary).
-  const auto def_truncation_rank =
-      rank == 1 ? 2
-                : 4;  // for 1-RDM, we only need at max two nested commutators,
-                      // else we use 4 for TCC and user set value for UCC
-  const auto commutator_rank = hbar_comm_rank_.value_or(def_truncation_rank);
+  // Traditional ansatz: the expansion terminates exactly, so the default is the
+  // largest number of T's that can survive <0|(1+Λ) N̄|0>:
+  // Unitary ansatz: T⁺ contracts with T, the expansion never terminates, so
+  // there is no safe default; use the engine's hbar_comm_rank.
+  const auto commutator_rank = comm_rank.value_or(
+      unitary() ? hbar_comm_rank_.value() : std::min(2 * rank, rank + N));
   auto Nbar = mbpt::lst(N_op, T(N, skip_singles()), commutator_rank,
                         {.unitary = unitary()});
 
