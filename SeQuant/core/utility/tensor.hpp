@@ -7,6 +7,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <functional>
+#include <vector>
 
 namespace sequant {
 
@@ -79,6 +80,83 @@ using TensorBlockEqualComparator =
 /// Compares tensor blocks (slots) on a less-than relationship
 using TensorBlockLessThanComparator =
     TensorBlockComparator<std::less, std::not_equal_to, false>;
+
+/// Similar to TensorBlockComparator but in case of tensors that compare equal
+/// based on their tensor blocks (slots), they are compared on if and where they
+/// have specific indices (compared the usual way, including ordinals).
+template <template <class> class Comparator, template <class> class Selector,
+          bool fallback>
+struct IndexSpecificTensorBlockComparator {
+  IndexSpecificTensorBlockComparator() = default;
+  IndexSpecificTensorBlockComparator(std::vector<Index> indices)
+      : indices_(std::move(indices)) {}
+
+  const std::vector<Index> &indices() const { return indices_; }
+  void set_indices(std::vector<Index> indices) {
+    indices_ = std::move(indices);
+  }
+
+  auto operator()(const Tensor &lhs, const Tensor &rhs) const {
+    bool equal = TensorBlockEqualComparator{}(lhs, rhs);
+    if (!equal) {
+      return TensorBlockComparator<Comparator, Selector, fallback>{}(lhs, rhs);
+    }
+
+    // Tensor blocks are equal, now check for specific indices
+    auto &&lhs_indices = lhs.indices();
+    auto &&rhs_indices = rhs.indices();
+
+    Selector<Index> idx_selector;
+
+    SEQUANT_ASSERT(lhs.num_indices() == rhs.num_indices());
+    auto lit = lhs_indices.begin();
+    auto rit = rhs_indices.begin();
+    while (lit != lhs_indices.end()) {
+      if (idx_selector(*lit, *rit)) {
+        const std::size_t lhs_pos = std::ranges::distance(
+            indices_.begin(), std::ranges::find(indices_, *lit));
+        const std::size_t rhs_pos = std::ranges::distance(
+            indices_.begin(), std::ranges::find(indices_, *rit));
+
+        Selector<std::size_t> pos_select;
+        if (pos_select(lhs_pos, rhs_pos)) {
+          Comparator<std::size_t> pos_cmp;
+          return pos_cmp(lhs_pos, rhs_pos);
+        }
+      }
+
+      ++lit;
+      ++rit;
+    }
+
+    return fallback;
+  }
+
+  bool operator()(const Expr &lhs, const Expr &rhs) const {
+    if (lhs.is<Tensor>() && rhs.is<Tensor>()) {
+      return (*this)(lhs.as<Tensor>(), rhs.as<Tensor>());
+    }
+
+    Comparator cmp;
+
+    return cmp(lhs, rhs);
+  }
+
+  bool operator()(const ExprPtr &lhs, const ExprPtr &rhs) const {
+    return (*this)(*lhs, *rhs);
+  }
+
+ private:
+  std::vector<Index> indices_;
+};
+
+/// Compares tensor blocks (slots) and specific indices for equality
+using IndexSpecificTensorBlockEqualComparator =
+    IndexSpecificTensorBlockComparator<std::equal_to, std::not_equal_to, true>;
+/// Compares tensor blocks (slots) and specific indices on a less-than
+/// relationship
+using IndexSpecificTensorBlockLessThanComparator =
+    IndexSpecificTensorBlockComparator<std::less, std::not_equal_to, false>;
 
 }  // namespace sequant
 

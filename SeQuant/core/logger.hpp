@@ -7,6 +7,8 @@
 
 #include <SeQuant/core/utility/singleton.hpp>
 
+#include <cstddef>
+#include <functional>
 #include <iostream>
 
 namespace sequant {
@@ -40,7 +42,16 @@ struct Logger : public Singleton<Logger> {
 
     /// the stream for logging; can be set to nullptr
     std::ostream* stream;
-  } eval = {0, nullptr};
+
+    /// Optional reducer for the per-op RSS reported in the eval trace: maps
+    /// this rank's local RSS (bytes) to the value to report (e.g. the sum over
+    /// all ranks = true total app memory, instead of a misleading single-rank
+    /// RSS). Injected by the tensor-algebra backend, which holds the World
+    /// needed for a collective reduction. The eval log path runs on EVERY rank
+    /// (printing() is level>0, identical across ranks), so a collective reducer
+    /// here is matched across ranks. Empty = report this rank's RSS unchanged.
+    std::function<std::size_t(std::size_t)> rss_reduce = {};
+  } eval = {0, nullptr, {}};
 
  private:
   friend class Singleton<Logger>;

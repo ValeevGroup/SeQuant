@@ -74,16 +74,16 @@ bool operator!=(Usage usage, UsageSet set) { return set != usage; }
 
 ExportContext::ExportContext(TensorStrategyMap tensorMap,
                              VariableStrategyMap variableMap)
-    : m_tensorStrategies({{GLOBAL, std::move(tensorMap)}}),
-      m_variableStrategies({{GLOBAL, std::move(variableMap)}}) {}
+    : m_tensorStrategies({{ID_GLOBAL, std::move(tensorMap)}}),
+      m_variableStrategies({{ID_GLOBAL, std::move(variableMap)}}) {}
 
 ExportContext::ExportContext(VariableStrategyMap map)
-    : m_variableStrategies({{GLOBAL, std::move(map)}}) {}
+    : m_variableStrategies({{ID_GLOBAL, std::move(map)}}) {}
 
 ExportContext::~ExportContext() = default;
 
 LoadStrategy ExportContext::loadStrategy(const Tensor &tensor) const {
-  if (auto map_iter = m_tensorStrategies.find(GLOBAL);
+  if (auto map_iter = m_tensorStrategies.find(ID_GLOBAL);
       map_iter != m_tensorStrategies.end()) {
     auto iter = map_iter->second.find(tensor);
     if (iter != map_iter->second.end()) {
@@ -105,7 +105,7 @@ LoadStrategy ExportContext::loadStrategy(const Tensor &tensor) const {
 }
 
 LoadStrategy ExportContext::loadStrategy(const Variable &variable) const {
-  if (auto map_iter = m_variableStrategies.find(GLOBAL);
+  if (auto map_iter = m_variableStrategies.find(ID_GLOBAL);
       map_iter != m_variableStrategies.end()) {
     auto iter = map_iter->second.find(variable);
     if (iter != map_iter->second.end()) {
@@ -130,7 +130,7 @@ void ExportContext::setLoadStrategy(
     const Tensor &tensor, LoadStrategy strategy,
     const std::optional<std::size_t> &expression_id) {
   std::size_t id = expression_id.value_or(
-      has_current_expression_id() ? current_expression_id() : GLOBAL);
+      has_current_expression_id() ? current_expression_id() : ID_GLOBAL);
 
   auto iter = m_tensorStrategies[id].find(tensor);
 
@@ -145,7 +145,7 @@ void ExportContext::setLoadStrategy(
     const Variable &variable, LoadStrategy strategy,
     const std::optional<std::size_t> &expression_id) {
   std::size_t id = expression_id.value_or(
-      has_current_expression_id() ? current_expression_id() : GLOBAL);
+      has_current_expression_id() ? current_expression_id() : ID_GLOBAL);
 
   auto iter = m_variableStrategies[id].find(variable);
 
@@ -157,7 +157,7 @@ void ExportContext::setLoadStrategy(
 }
 
 ZeroStrategy ExportContext::zeroStrategy(const Tensor &tensor) const {
-  if (auto map_iter = m_tensorStrategies.find(GLOBAL);
+  if (auto map_iter = m_tensorStrategies.find(ID_GLOBAL);
       map_iter != m_tensorStrategies.end()) {
     auto iter = map_iter->second.find(tensor);
     if (iter != map_iter->second.end()) {
@@ -179,7 +179,7 @@ ZeroStrategy ExportContext::zeroStrategy(const Tensor &tensor) const {
 }
 
 ZeroStrategy ExportContext::zeroStrategy(const Variable &variable) const {
-  if (auto map_iter = m_variableStrategies.find(GLOBAL);
+  if (auto map_iter = m_variableStrategies.find(ID_GLOBAL);
       map_iter != m_variableStrategies.end()) {
     auto iter = map_iter->second.find(variable);
     if (iter != map_iter->second.end()) {
@@ -204,7 +204,7 @@ void ExportContext::setZeroStrategy(
     const Tensor &tensor, ZeroStrategy strategy,
     const std::optional<std::size_t> &expression_id) {
   std::size_t id = expression_id.value_or(
-      has_current_expression_id() ? current_expression_id() : GLOBAL);
+      has_current_expression_id() ? current_expression_id() : ID_GLOBAL);
 
   auto iter = m_tensorStrategies[id].find(tensor);
 
@@ -219,7 +219,7 @@ void ExportContext::setZeroStrategy(
     const Variable &variable, ZeroStrategy strategy,
     const std::optional<std::size_t> &expression_id) {
   std::size_t id = expression_id.value_or(
-      has_current_expression_id() ? current_expression_id() : GLOBAL);
+      has_current_expression_id() ? current_expression_id() : ID_GLOBAL);
 
   auto iter = m_variableStrategies[id].find(variable);
 
@@ -262,6 +262,11 @@ void ExportContext::set_current_expression_id(std::size_t id) {
 
 void ExportContext::clear_current_expression_id() {
   m_currentExpressionID.reset();
+}
+
+std::vector<Index> ExportContext::batch_indices(
+    std::optional<std::size_t>) const {
+  return {};
 }
 
 }  // namespace sequant

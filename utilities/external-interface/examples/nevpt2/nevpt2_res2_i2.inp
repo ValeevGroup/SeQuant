@@ -1,18 +1,18 @@
 R2{u1,u2;i1,i2} =
-  + 1/4 Â{i1,i2;u1,u2} g{u1,u2;i1,i2}
-  - 1/2 Â{i1,i2;u1,u2} GAM0{u2;u3} g{u1,u3;i1,i2}
-  + 1/2 1/4 Â{i1,i2;u1,u2} GAM0{u1,u2;u3,u4} g{u3,u4;i1,i2}
-  - 1/2 Â{i1,i2;u1,u2} HAM_D{i3;i2} T2g{u1,u2;i1,i3}
-  + Â{i1,i2;u1,u2} HAM_D{i3;i2} GAM0{u2;u3} T2g{u1,u3;i1,i3}
-  + 1/2 1/2 Â{i1,i2;u1,u2} HAM_D{i3;i1} GAM0{u1,u2;u3,u4} T2g{u3,u4;i2,i3}
-  + 1/2 Â{i1,i2;u1,u2} HAM_D{u2;u3} T2g{u1,u3;i1,i2}
-  - 1/2 Â{i1,i2;u1,u2} HAM_D{u1;u3} GAM0{u2;u4} T2g{u3,u4;i1,i2}
-  - 1/2 Â{i1,i2;u1,u2} GAM0{u2;u3} HAM_D{u3;u4} T2g{u1,u4;i1,i2}
-  - 1/4 Â{i1,i2;u1,u2} GAM0{u1,u2;u3,u4} HAM_D{u3;u5} T2g{u4,u5;i1,i2}
-  + 1/2 1/4 Â{i1,i2;u1,u2} HAM_D{u1,u2;u3,u4} T2g{u3,u4;i1,i2}
-  - 1/4 Â{i1,i2;u1,u2} HAM_D{u1,u2;u3,u5} GAM0{u5;u4} T2g{u3,u4;i1,i2}
-  - 1/2 1/2 Â{i1,i2;u1,u2} GAM0{u2;u3} HAM_D{u1,u3;u4,u5} T2g{u4,u5;i1,i2}
-  + 1/2 Â{i1,i2;u1,u2} GAM0{u5;u3} HAM_D{u2,u3;u4,u5} T2g{u1,u4;i1,i2}
-  - 1/2 Â{i1,i2;u1,u2} GAM0{u2,u6;u3,u4} HAM_D{u1,u3;u5,u6} T2g{u4,u5;i1,i2}
-  + 1/4 1/4 Â{i1,i2;u1,u2} GAM0{u1,u2;u3,u4} HAM_D{u3,u4;u5,u6} T2g{u5,u6;i1,i2}
-  - 1/2 1/2 Â{i1,i2;u1,u2} GAM0{u2,u6;u3,u4} HAM_D{u3,u4;u5,u6} T2g{u1,u5;i1,i2}
+  + Â{i1,i2;u1,u2} g{u1,u2;i1,i2}:A-H-S
+  - 2 Â{i1,i2;u1,u2} Ym1{u2;u3} g{u1,u3;i1,i2}:A-H-S
+  + 1/2 Â{i1,i2;u1,u2} Ym2{u1,u2;u3,u4} g{u3,u4;i1,i2}:A-H-S
+  - 2 Â{i1,i2;u1,u2} g{i3;i2}:A-H-S T2{u1,u2;i1,i3}
+  + 4 Â{i1,i2;u1,u2} g{i3;i2}:A-H-S Ym1{u2;u3} T2{u1,u3;i1,i3}
+  + 1/2 2 Â{i1,i2;u1,u2} g{i3;i1}:A-H-S Ym2{u1,u2;u3,u4} T2{u3,u4;i2,i3}
+  + 2 Â{i1,i2;u1,u2} f{u2;u3}:A-H-S T2{u1,u3;i1,i2}
+  - 2 Â{i1,i2;u1,u2} f{u1;u3}:A-H-S Ym1{u2;u4} T2{u3,u4;i1,i2}
+  - 2 Â{i1,i2;u1,u2} Ym1{u2;u3} f{u3;u4}:A-H-S T2{u1,u4;i1,i2}
+  - Â{i1,i2;u1,u2} Ym2{u1,u2;u3,u4} f{u3;u5}:A-H-S T2{u4,u5;i1,i2}
+  + 1/2 Â{i1,i2;u1,u2} g{u1,u2;u3,u4}:A-H-S T2{u3,u4;i1,i2}
+  - Â{i1,i2;u1,u2} g{u1,u2;u3,u5}:A-H-S Ym1{u5;u4} T2{u3,u4;i1,i2}
+  - 1/2 2 Â{i1,i2;u1,u2} Ym1{u2;u3} g{u1,u3;u4,u5}:A-H-S T2{u4,u5;i1,i2}
+  + 2 Â{i1,i2;u1,u2} Ym1{u5;u3} g{u2,u3;u4,u5}:A-H-S T2{u1,u4;i1,i2}
+  - 2 Â{i1,i2;u1,u2} Ym2{u2,u6;u3,u4} g{u1,u3;u5,u6}:A-H-S T2{u4,u5;i1,i2}
+  + 1/4 Â{i1,i2;u1,u2} Ym2{u1,u2;u3,u4} g{u3,u4;u5,u6}:A-H-S T2{u5,u6;i1,i2}
+  - 1/2 2 Â{i1,i2;u1,u2} Ym2{u2,u6;u3,u4} g{u3,u4;u5,u6}:A-H-S T2{u1,u5;i1,i2}
