@@ -61,7 +61,11 @@ class CC {
     /// perturbation operator; must be specified if unitary ansatz is used in
     /// perturbed amplitude derivation
     std::optional<size_t> pertbar_comm_rank = std::nullopt;
-    /// choice of H̄ expansion; Bernoulli requires a unitary ansatz
+    /// choice of H̄ expansion; Bernoulli requires a unitary ansatz.
+    /// @note the Bernoulli H̄ is assembled at the tensor level and does not go
+    /// through CC::ref_av(), which is what forwards `screen` and
+    /// `use_topology`; it calls `op::tensor::ref_av()` with that function's own
+    /// defaults instead
     HbarExpansion hbar_expansion = HbarExpansion::BCH;
   };
 
