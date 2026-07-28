@@ -15,7 +15,9 @@
 #include <range/v3/algorithm/all_of.hpp>
 #include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/algorithm/none_of.hpp>
+#include <range/v3/range/primitives.hpp>
 
+#include <algorithm>
 #include <string>
 #include <utility>
 
@@ -327,24 +329,30 @@ ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
   // already wick_reduce'd, so the reduced-input N/R filters apply.
   container::map<std::string, ExprPtr> memo;
   auto nest = [&](char p0, const char* f) -> ExprPtr {
+    SEQUANT_ASSERT((p0 == 'A' || p0 == 'N' || p0 == 'R') &&
+                   "bernoulli::hbar: partition tag must be one of A, N, R");
+    // grow `key` in place rather than deriving it from the memo iterator:
+    // container::map is a flat_map, whose insertions invalidate iterators
     std::string key{p0};
     auto it = memo.find(key);
     if (it == memo.end()) {
       ExprPtr base = (p0 == 'N')   ? N_part(V, cutoff)
                      : (p0 == 'R') ? R_part(V, cutoff)
                                    : V;
-      it = memo.emplace(std::move(key), std::move(base)).first;
+      it = memo.emplace(key, std::move(base)).first;
     }
     ExprPtr op = it->second;
     for (int i = 0; f[i] != '\0'; ++i) {
-      key = it->first + f[i];
+      SEQUANT_ASSERT((f[i] == 'A' || f[i] == 'N' || f[i] == 'R') &&
+                     "bernoulli::hbar: partition tag must be one of A, N, R");
+      key += f[i];
       it = memo.find(key);
       if (it == memo.end()) {
         auto cx = wick_commutator(op, sigma);
         ExprPtr filtered = (f[i] == 'R')   ? R_part_reduced(cx, cutoff)
                            : (f[i] == 'N') ? N_part_reduced(cx, cutoff)
                                            : cx;
-        it = memo.emplace(std::move(key), std::move(filtered)).first;
+        it = memo.emplace(key, std::move(filtered)).first;
       }
       op = it->second;
     }
