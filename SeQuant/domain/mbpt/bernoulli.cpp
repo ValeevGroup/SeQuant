@@ -184,14 +184,15 @@ ExprPtr expand_to_blocks_reduced(const ExprPtr& expr) {
   auto expand_term = [&](const ExprPtr& term) -> ExprPtr {
     // collect the residual NormalOperator's distinct general (non-base) indices
     const auto* nop = find_nop(term);
-    if (!nop) return term;  // pure scalar/contraction: nothing to split
+    if (!nop)
+      return term->clone();  // pure scalar/contraction: nothing to split
     container::svector<Index> gens;
     for (const auto& op : nop->creann()) {
       if (!is_base_space(op.index().space()) &&
           ranges::none_of(gens, [&](const auto& g) { return g == op.index(); }))
         gens.push_back(op.index());
     }
-    if (gens.empty()) return term;
+    if (gens.empty()) return term->clone();
     // candidate base spaces per general index: base b is a sub-block of the
     // general space iff its type bits are included and its quantum numbers
     // match (stay within the same spin sector).
@@ -232,14 +233,13 @@ ExprPtr expand_to_blocks_reduced(const ExprPtr& expr) {
     return ExprPtr{sum};
   };
 
+  // transform_sum_expr maps in parallel, canonicalizes each result, and
+  // accumulates into a HashingAccumulator
   ExprPtr out;
   if (expr.is<Sum>()) {
-    auto out_sum = std::make_shared<Sum>();
-    for (const auto& t : expr.as<Sum>()) out_sum->append(expand_term(t));
-    out = out_sum->empty() ? ex<Constant>(0) : ExprPtr{out_sum};
+    out = transform_sum_expr(expr.as<Sum>().summands(), expand_term);
   } else {
-    // clone: expand_term may return its argument, which simplify would mutate
-    out = expand_term(expr)->clone();
+    out = expand_term(expr);
   }
   simplify(out);
   return out;
@@ -313,9 +313,6 @@ ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
   const auto V = op::tensor::h(2);
   const auto T = op::tensor::T(N, skip1);
   const auto sigma = simplify(T - adjoint(T));  // σ = T − T†
-  auto c = [&](rational num, const ExprPtr& e) {
-    return ex<Constant>(num) * e;
-  };
 
   // Every term of H̄^k is a nested commutator [[..[V_{p0},σ]_{f0}..],σ]_{f_k}
   // with a per-level N/R/A partition tag applied after each commutator ('A' =
@@ -359,49 +356,60 @@ ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
     return op;
   };
 
-  // accumulate H̄ contributions via Sum::append (linear) rather than chained
-  // operator+ / operator+=, each of which deep-copies the accumulated Sum --
-  // quadratic in the (large) term count at high rank
-  auto acc = std::make_shared<Sum>();
-  acc->append(simplify(F + V));  // H̄⁰ = F + V   [Eq. (46)]
+  HashingAccumulator acc;
+  auto add = [&acc](rational num, const ExprPtr& e) {
+    if (e.is<Sum>()) {
+      for (const auto& term : e.as<Sum>()) {
+        auto scaled = ex<Product>(ExprPtrList{term});
+        scaled.as<Product>().scale(num);
+        acc.append(std::move(scaled), /*flatten=*/false);
+      }
+    } else {
+      auto scaled = ex<Product>(ExprPtrList{e});
+      scaled.as<Product>().scale(num);
+      acc.append(std::move(scaled), /*flatten=*/false);
+    }
+  };
+
+  add(1, simplify(F + V));  // H̄⁰ = F + V   [Eq. (46)]
   if (rank >= 1) {
     // H̄¹ = [F,σ] + ½[V,σ] + ½[V_R,σ]   [Eq. (47)]. F enters H̄ ONLY here
     // (Cancellation #1, stated just below Eq. (50)).
-    acc->append(wick_commutator(F, sigma));
-    acc->append(c({1, 2}, nest('A', "A")));
-    acc->append(c({1, 2}, nest('R', "A")));
+    add(1, wick_commutator(F, sigma));
+    add({1, 2}, nest('A', "A"));
+    add({1, 2}, nest('R', "A"));
   }
   if (rank >= 2) {
     // H̄² = 1/12[[V_N,σ],σ] + ¼[[V,σ]_R,σ] + ¼[[V_R,σ]_R,σ]   [Eq. (48)]
-    acc->append(c({1, 12}, nest('N', "AA")));
-    acc->append(c({1, 4}, nest('A', "RA")));
-    acc->append(c({1, 4}, nest('R', "RA")));
+    add({1, 12}, nest('N', "AA"));
+    add({1, 4}, nest('A', "RA"));
+    add({1, 4}, nest('R', "RA"));
   }
   if (rank >= 3) {
     // H̄³ = 1/24[[[V_N,σ],σ]_R,σ] + ⅛[[[V,σ]_R,σ]_R,σ] + ⅛[[[V_R,σ]_R,σ]_R,σ]
     //       − 1/24[[[V,σ]_R,σ],σ] − 1/24[[[V_R,σ]_R,σ],σ]   [Eq. (49)]
-    acc->append(c({1, 24}, nest('N', "ARA")));
-    acc->append(c({1, 8}, nest('A', "RRA")));
-    acc->append(c({1, 8}, nest('R', "RRA")));
-    acc->append(c({-1, 24}, nest('A', "RAA")));
-    acc->append(c({-1, 24}, nest('R', "RAA")));
+    add({1, 24}, nest('N', "ARA"));
+    add({1, 8}, nest('A', "RRA"));
+    add({1, 8}, nest('R', "RRA"));
+    add({-1, 24}, nest('A', "RAA"));
+    add({-1, 24}, nest('R', "RAA"));
   }
   if (rank >= 4) {
     // H̄⁴ = Eq. (50), the nine order-4 terms produced by the recursion Eq. (44),
     // V̄^{k+1} = σ̂F + X̂⁻¹(σ̂)e^{σ̂}V − Σ_{n≠0} B_n σ̂^n V̄_R^{k}. F is absent here
     // (Cancellation #1). Listed in the paper's order; the outermost tag is
     // always A.
-    acc->append(c({1, 16}, nest('R', "RRRA")));
-    acc->append(c({1, 16}, nest('A', "RRRA")));
-    acc->append(c({1, 48}, nest('N', "ARRA")));
-    acc->append(c({-1, 48}, nest('A', "RARA")));
-    acc->append(c({-1, 48}, nest('R', "RARA")));
-    acc->append(c({-1, 144}, nest('N', "ARAA")));
-    acc->append(c({-1, 48}, nest('A', "RRAA")));
-    acc->append(c({-1, 48}, nest('R', "RRAA")));
-    acc->append(c({-1, 720}, nest('N', "AAAA")));
+    add({1, 16}, nest('R', "RRRA"));
+    add({1, 16}, nest('A', "RRRA"));
+    add({1, 48}, nest('N', "ARRA"));
+    add({-1, 48}, nest('A', "RARA"));
+    add({-1, 48}, nest('R', "RARA"));
+    add({-1, 144}, nest('N', "ARAA"));
+    add({-1, 48}, nest('A', "RRAA"));
+    add({-1, 48}, nest('R', "RRAA"));
+    add({-1, 720}, nest('N', "AAAA"));
   }
-  ExprPtr result{std::move(acc)};
+  auto result = acc.make_expr();
   return simplify(result);
 }
 
