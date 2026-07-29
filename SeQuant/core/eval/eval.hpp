@@ -12,6 +12,7 @@
 #include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
@@ -19,6 +20,7 @@
 
 #include <algorithm>
 #include <any>
+#include <atomic>
 #include <chrono>
 #include <deque>
 #include <iostream>
@@ -199,7 +201,7 @@ enum struct TermMode { Begin, End };
 /// One log record per eval op. Line format:
 ///
 // clang-format off
-/// Eval | <mode> | <time> | [left=L | right=R |] result=X | alloc=A | hw=H | rss=R | <label>
+/// Eval | <mode> | <time> | [left=L | right=R |] result=X | alloc=A | hw=H | rss=R | [<heap suffix> |] <label>
 // clang-format on
 ///
 /// Which fields are set depends on the op's arity:
@@ -282,21 +284,31 @@ auto eval(EvalStat const& stat, Args const&... args) {
   auto const rss_s = std::format(
       "rss={}",
       to_string(Bytes{rss_reduce ? rss_reduce(rss_local) : rss_local}));
-  if (stat.mem_left) {
-    SEQUANT_ASSERT(stat.mem_right);
-    log("Eval",                                               //
-        to_string(stat.mode),                                 //
-        stat.time,                                            //
-        std::format("left={}", to_string(*stat.mem_left)),    //
-        std::format("right={}", to_string(*stat.mem_right)),  //
-        result_s, alloc_s, hw_s, rss_s,                       //
-        args...);
-  } else {
-    log("Eval",                //
-        to_string(stat.mode),  //
-        stat.time,             //
-        result_s, alloc_s, hw_s, rss_s, args...);
-  }
+  // Optional backend-supplied suffix (already reduced across ranks); omitted
+  // entirely when the hook is unset or returns empty.
+  auto const& heap_stats = Logger::instance().eval.heap_stats;
+  auto const heap_s = heap_stats ? heap_stats() : std::string{};
+  auto emit = [&](auto const&... trailer) {
+    if (stat.mem_left) {
+      SEQUANT_ASSERT(stat.mem_right);
+      log("Eval",                                               //
+          to_string(stat.mode),                                 //
+          stat.time,                                            //
+          std::format("left={}", to_string(*stat.mem_left)),    //
+          std::format("right={}", to_string(*stat.mem_right)),  //
+          result_s, alloc_s, hw_s, rss_s,                       //
+          trailer...);
+    } else {
+      log("Eval",                //
+          to_string(stat.mode),  //
+          stat.time,             //
+          result_s, alloc_s, hw_s, rss_s, trailer...);
+    }
+  };
+  if (heap_s.empty())
+    emit(args...);
+  else
+    emit(heap_s, args...);
 }
 
 template <typename... Args>
@@ -336,6 +348,15 @@ auto cache(N const& node, CacheManager<N, F>& cm, Args const&... args) {
 
 inline auto term(TermMode mode, std::string_view term) {
   log("Term", to_string(mode), term);
+}
+
+/// Invoke the optional post-op memory-release hook
+/// (Logger::eval.release_memory) if set. Called after each freshly evaluated op
+/// regardless of trace level, so a large transient's freed pages can be
+/// returned before the next op allocates. The injected hook self-throttles;
+/// empty hook = no-op.
+inline void release_after_op() {
+  if (auto const& rel = Logger::instance().eval.release_memory; rel) rel();
 }
 
 [[nodiscard]] auto label(meta::eval_node auto const& node) {
@@ -417,7 +438,7 @@ namespace detail {
 /// summed over by this node's product. Empty for leaves, for sums, and for
 /// products with no contracted index (e.g. a pure outer/Hadamard product).
 ///
-/// Each such index `K` is a valid axis to evaluate the subtree rooted at
+/// Each such index `K` is a valid mode to evaluate the subtree rooted at
 /// `node` in batches: the node computes `R = sum_K f(K)`, so
 /// `R = sum_{blocks b} sum_{K in b} f(K)` -- evaluating per-block and summing
 /// bounds the peak memory of `K`-carrying intermediates in the subtree. A
@@ -438,7 +459,7 @@ namespace detail {
   return result;
 }
 
-/// \brief A default axis to batch the subtree at \p node over: the contracted
+/// \brief A default mode to batch the subtree at \p node over: the contracted
 /// index (see contracted_indices) that satisfies \p accept, choosing the one
 /// with the largest IndexSpace approximate size -- typically the auxiliary/RI
 /// index, whose elimination most reduces the peak intermediate.
@@ -509,9 +530,9 @@ template <typename Node>
 ///       subtree (its children are never pushed), so subtree pruning -- the
 ///       mechanism batched eval relies on -- is unaffected.
 ///
-/// \param node A node that can be evaluated using \p le as the leaf
+/// \param node A node that can be evaluated using \p leaf_evaluator as the leaf
 ///             evaluator.
-/// \param le The leaf evaluator that satisfies
+/// \param leaf_evaluator The leaf evaluator that satisfies
 ///           `meta::leaf_node_evaluator<Node, F>`.
 /// \param cache The cache for common sub-expression elimination.
 /// \return Evaluated result as ResultPtr.
@@ -520,8 +541,8 @@ template <Trace EvalTrace = Trace::Default,
           detail::CacheCheck Cache = detail::CacheCheck::Checked,
           meta::can_evaluate Node, typename F, typename N, bool FHC>
   requires meta::leaf_node_evaluator<Node, F>
-ResultPtr evaluate(Node const& node,  //
-                   F const& le,       //
+ResultPtr evaluate(Node const& node,         //
+                   F const& leaf_evaluator,  //
                    CacheManager<N, FHC>& cache) {
   // Multiply a (possibly cached) result by its node's canonicalization phase.
   // Formerly the `mult_by_phase` lambda local to the Checked wrapper.
@@ -544,6 +565,35 @@ ResultPtr evaluate(Node const& node,  //
       log::eval(stat, std::format("{} * {}", phase, nd->label()));
     }
     return post;
+  };
+
+  // Slice-on-use: slice a value fetched at the Enter stage to the current batch
+  // block for the `hops` INNERMOST enclosing batch loops that `nd` carries and
+  // that the value does not yet have baked in. `hops` == number of enclosing
+  // loops crossed to reach the value's lifetime scope (0 for a local hit / a
+  // freshly built value in this scope; d == batch_context().size() for a fresh
+  // leaf whose lifetime is top). The slice set is exactly
+  // (use scope MINUS lifetime scope) INTERSECT carried(nd): the `hops`
+  // innermost batch_context entries, filtered by index_position(nd, axis).
+  // slice_mode is non-mutating, so a cached full value is left undisturbed.
+  // Empty batch_context (the OFF path) => d == hops == 0 => the loop is empty
+  // and the value is returned unchanged, byte-identical to the pre-slice-on-use
+  // path.
+  auto slice_to_use = [&cache](ResultPtr value, auto const& nd,
+                               std::size_t hops) -> ResultPtr {
+    auto const& ctx = cache.batch_context();
+    std::size_t const d = ctx.size();
+    // hops (parent links access_at crossed) must not exceed d (batch_context
+    // entries): each realized loop pushes exactly one entry and wires at most
+    // one parent link, so hops <= d always. A violation would underflow
+    // `d - hops` and silently UNDER-slice (oversized result); assert loudly.
+    SEQUANT_ASSERT(hops <= d);
+    for (std::size_t i = d - hops; i < d; ++i) {
+      auto const& [axis, blk] = ctx[i];
+      if (auto const p = index_position(nd, axis))
+        value = value->slice_mode(*p, blk.first, blk.second);
+    }
+    return value;
   };
 
   // One entry of the explicit evaluation stack. `stage` records how far a node
@@ -595,10 +645,15 @@ ResultPtr evaluate(Node const& node,  //
         // --- Checked cache wrapper: a hit returns directly; a miss on a node
         //     that exists in the map schedules a store once computed. ---
         if (f.checked) {
-          if (auto ptr = cache.access(f.node); ptr) {
+          if (auto m = cache.access_at(f.node); m.ptr) {
             if constexpr (detail::trace(EvalTrace))
               log::cache(f.node, cache, log::label(f.node));
-            finalize(apply_phase(f.node, ptr));
+            // Slice-on-use: a value fetched `m.hops` scopes up does not have
+            // this scope's (and any intervening) batch slices baked in, so
+            // slice it to the current block for the loops the fetch crossed. A
+            // local hit (hops == 0) or the OFF path (empty batch_context) is a
+            // no-op, so this stays byte-identical to apply_phase() alone there.
+            finalize(slice_to_use(apply_phase(f.node, m.ptr), f.node, m.hops));
             break;
           }
           f.store_after = cache.exists(f.node);
@@ -624,6 +679,7 @@ ResultPtr evaluate(Node const& node,  //
                                       log::bytes(cache, intercepted).value)}},
                     log::label(f.node));
               }
+              log::release_after_op();
               finalize(finish_phase_b(f, std::move(intercepted)));
               break;
             }
@@ -632,9 +688,9 @@ ResultPtr evaluate(Node const& node,  //
 
         // --- Leaf. ---
         if (f.node.leaf()) {
-          ResultPtr result;
-          auto time =
-              detail::timed_eval_inplace([&]() { result = le(f.node); });
+          ResultPtr result;  // the FULL leaf (traced and cached full)
+          auto time = detail::timed_eval_inplace(
+              [&]() { result = leaf_evaluator(f.node); });
           if constexpr (detail::trace(EvalTrace)) {
             log::eval(log::EvalStat{.mode = log::eval_mode(f.node),
                                     .time = time,
@@ -644,7 +700,15 @@ ResultPtr evaluate(Node const& node,  //
                                         log::bytes(cache, result).value)}},
                       log::label(f.node));
           }
-          finalize(finish_phase_b(f, std::move(result)));
+          log::release_after_op();
+          // Store the FULL leaf under its canonical key (a block slice would
+          // corrupt the cache), then return it SLICED to the current block: a
+          // freshly built leaf's lifetime is top, so every enclosing carried
+          // batch loop is unbaked and must be sliced (hops == batch_context
+          // size). This reproduces the old per-block leaf slicing (le_g) on the
+          // main value path; the OFF path (empty batch_context) is a no-op.
+          ResultPtr stored = finish_phase_b(f, std::move(result));
+          finalize(slice_to_use(stored, f.node, cache.batch_context().size()));
           break;
         }
 
@@ -683,6 +747,7 @@ ResultPtr evaluate(Node const& node,  //
                             .mem_right = log::bytes(f.right)},
               log::label(f.node));
         }
+        log::release_after_op();
         finalize(finish_phase_b(f, std::move(result)));
         break;
       }
@@ -755,6 +820,7 @@ ResultPtr evaluate(Node const& node,  //
                             .mem_right = log::bytes(f.right)},
               log::label(f.node));
         }
+        log::release_after_op();
         finalize(finish_phase_b(f, std::move(result)));
         break;
       }
@@ -768,11 +834,11 @@ ResultPtr evaluate(Node const& node,  //
 /// \tparam EvalTrace If Trace::On, trace is written to the logger's stream.
 ///                   Default is to follow Trace::Default, which is itself
 ///                   equal to Trace::On or Trace::Off.
-/// \param node A node that can be evaluated using \p le as the leaf
+/// \param node A node that can be evaluated using \p leaf_evaluator as the leaf
 ///             evaluator.
 /// \param layout The layout of the final result. Only meaningful if the result
 ///               has a layout (or supports permutation) eg. a tensor.
-/// \param le The leaf evaluator that satisfies
+/// \param leaf_evaluator The leaf evaluator that satisfies
 ///           `meta::leaf_node_evaluator<Node, F>`.
 /// \param cache The cache for common sub-expression elimination.
 /// \return Evaluated result as ResultPtr.
@@ -782,7 +848,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename F,
   requires meta::leaf_node_evaluator<Node, F>  //
 ResultPtr evaluate(Node const& node,           //
                    auto const& layout,         //
-                   F const& le,                //
+                   F const& leaf_evaluator,    //
                    CacheManager<N, FHC>& cache) {
   // if the layout is not the default constructed value need to permute
   bool const perm = layout != decltype(layout){};
@@ -797,7 +863,7 @@ ResultPtr evaluate(Node const& node,           //
     ResultPtr pre, post;
   } result;
 
-  result.pre = evaluate<EvalTrace>(node, le, cache);
+  result.pre = evaluate<EvalTrace>(node, leaf_evaluator, cache);
 
   auto time = detail::timed_eval_inplace([&]() {
     result.post = perm ? result.pre->permute(
@@ -832,7 +898,8 @@ ResultPtr evaluate(Node const& node,           //
 /// \tparam EvalTrace If Trace::On, trace is written to the logger's stream.
 ///                   Default is to follow Trace::Default, which is itself
 ///                   equal to Trace::On or Trace::Off.
-/// \param nodes A range of node that can be evaluated using \p le as the
+/// \param nodes A range of node that can be evaluated using \p leaf_evaluator
+/// as the
 ///              leaf evaluator. The evaluation result of the elements of
 ///              \p nodes will be summed up.
 ///
@@ -841,7 +908,7 @@ ResultPtr evaluate(Node const& node,           //
 ///               The results of each element from \p nodes will be permuted
 ///               to this layout before being summed.
 ///
-/// \param le The leaf evaluator that satisfies
+/// \param leaf_evaluator The leaf evaluator that satisfies
 ///           `meta::leaf_node_evaluator<Node, F>`.
 /// \param cache The cache for common sub-expression elimination.
 /// \return Evaluated result as ResultPtr.
@@ -851,7 +918,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   requires meta::leaf_node_evaluator<std::ranges::range_value_t<Nodes>, F>
 ResultPtr evaluate(Nodes const& nodes,  //
                    auto const& layout,  //
-                   F const& le, CacheManager<N, FHC>& cache) {
+                   F const& leaf_evaluator, CacheManager<N, FHC>& cache) {
   ResultPtr result;
 
   // pre comes back from the permute-wrapping evaluate; it aliases the
@@ -861,11 +928,11 @@ ResultPtr evaluate(Nodes const& nodes,  //
 
   for (auto&& n : nodes) {
     if (!result) {
-      result = evaluate<EvalTrace>(n, layout, le, cache);
+      result = evaluate<EvalTrace>(n, layout, leaf_evaluator, cache);
       continue;
     }
 
-    ResultPtr pre = evaluate<EvalTrace>(n, layout, le, cache);
+    ResultPtr pre = evaluate<EvalTrace>(n, layout, leaf_evaluator, cache);
     auto time =
         detail::timed_eval_inplace([&]() { result->add_inplace(*pre); });
 
@@ -893,11 +960,12 @@ ResultPtr evaluate(Nodes const& nodes,  //
 /// \tparam EvalTrace If Trace::On, trace is written to the logger's stream.
 ///                   Default is to follow Trace::Default, which is itself
 ///                   equal to Trace::On or Trace::Off.
-/// \param nodes A range of node that can be evaluated using \p le as the
+/// \param nodes A range of node that can be evaluated using \p leaf_evaluator
+/// as the
 ///              leaf evaluator. The evaluation result of the elements of
 ///              \p nodes will be summed up.
 ///
-/// \param le The leaf evaluator that satisfies
+/// \param leaf_evaluator The leaf evaluator that satisfies
 ///           `meta::leaf_node_evaluator<Node, F>`.
 /// \param cache The cache for common sub-expression elimination.
 /// \return Evaluated result as ResultPtr.
@@ -909,13 +977,13 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
           typename F, typename N, bool FHC>
   requires meta::leaf_node_evaluator<std::ranges::range_value_t<Nodes>, F>
 ResultPtr evaluate(Nodes const& nodes,  //
-                   F const& le, CacheManager<N, FHC>& cache) {
+                   F const& leaf_evaluator, CacheManager<N, FHC>& cache) {
   using annot_type = decltype([](std::ranges::range_value_t<Nodes> const& n) {
     return n->annot();
   });
 
   static_assert(std::is_default_constructible_v<annot_type>);
-  return evaluate(nodes, annot_type{}, le, cache);
+  return evaluate(nodes, annot_type{}, leaf_evaluator, cache);
 }
 
 ///
@@ -1011,28 +1079,48 @@ ResultPtr evaluate_antisymm(Args&&... args) {
 /// peak memory of intermediates that carry that index.
 ///
 /// For each node it is consulted on, the returned evaluator chooses a batch
-/// axis \c K via `batch_axis(node, accept)` (declining if none). It asks the
-/// backend to partition \c K into contiguous, whole-tile element-range batches
-/// of at most \p target_batch_size(K) elements each -- the target is an upper
-/// bound, not a goal (Result::mode_batches); if that yields at most one batch
-/// it declines (so small / unselected indices are left to the standard scheme).
+/// mode \c K from the modes the optimizer annotated at that node
+/// (\c EvalExpr::batched_here; see the \c pick_sliceable lambda); it declines
+/// if the node carries no accepted annotation. Annotations are authoritative --
+/// there is no heuristic fallback, so a node the peak-constrained optimizer did
+/// not ask to batch is never batched. It asks the backend to
+/// partition \c K into contiguous, whole-tile element-range batches of at most
+/// \p target_batch_size(K) elements each -- the target is an upper bound, not a
+/// goal (Result::mode_batches). Mode selection is sliceability-aware: it takes
+/// the first accepted mode that actually partitions into more than one batch in
+/// the current (possibly already-outer-sliced) context, so a mode already
+/// sliced by an outer re-entry is skipped and the node advances to its next
+/// annotated mode; if no candidate is sliceable it declines (leaving small /
+/// unselected / already-fully-sliced indices to the standard scheme).
+///
+/// A node the optimizer priced with *several* annotated modes is sliced on each
+/// of them, and annotated modes may also sit at *different* nodes of one tree;
+/// either way the batching nests. The per-batch scratch cache carries a
+/// reinstalled copy of this evaluator, so when the standard-scheme replay of an
+/// outer batch reaches an annotated node -- an inner one, or the SAME node with
+/// a still-unsliced mode -- the evaluator fires again and slices the next mode
+/// WITHIN the outer batch -- `for outer-batch: for inner-batch: replay`.
+/// The reinstalled evaluator closes over the outer-sliced leaf evaluator, so
+/// inner slicing composes on top of the outer slice; nesting is exact by the
+/// same `sum_K = sum_{batches} sum_{K in batch}` identity applied per mode, and
+/// a captured depth counter backstops runaway re-entry.
 ///
 /// Otherwise it *replays the build of every compatible persistent final* in
 /// the same batch passes: the group is the trigger node plus every key of
 /// \p cache that is registered persistent, not yet alive, and batches over an
-/// axis with the identical realized partition. Per batch, each group member is
+/// mode with the identical realized partition. Per batch, each group member is
 /// evaluated by the standard scheme -- with every leaf carrying the member's
-/// batch axis sliced to the batch's element range -- on a shared *registered*
+/// batch mode sliced to the batch's element range -- on a shared *registered*
 /// scratch cache (see detail::make_batched_scratch), so sub-intermediates
 /// repeated within a member (canonically-equal siblings) or shared between
 /// members are evaluated once per batch, exactly as the real cache would share
 /// them; the per-member partials are summed across batches. This is exact
 /// because `sum_K = sum_{batches} sum_{K in batch}`, and never materializes
-/// the whole batch-axis extent of any intermediate at once. Completed members
+/// the whole batch-mode extent of any intermediate at once. Completed members
 /// are stored into \p cache (canonical-phase convention); the trigger's result
 /// is returned for evaluate() to cache as usual. Members nested inside other
 /// members evaluate in earlier passes and are then seeded (slice-free w.r.t.
-/// the outer batch axis) or re-derived sliced in the outer pass. Considering a
+/// the outer batch mode) or re-derived sliced in the outer pass. Considering a
 /// group candidate costs one leaf evaluation (the mode_batches probe); with an
 /// unregistered (empty) cache the group is just the trigger.
 ///
@@ -1051,10 +1139,10 @@ ResultPtr evaluate_antisymm(Args&&... args) {
 /// one evaluation per batch (work parity with the unbatched path, at sliced
 /// rather than full intermediate peak memory).
 ///
-/// \param le the leaf evaluator (captured).
+/// \param leaf_evaluator the leaf evaluator (captured).
 /// \param target_batch_size per-index function
 ///        `std::function<std::size_t(Index const&)>` returning the per-batch
-///        slice size (in elements) for a given (batch-axis) index -- an UPPER
+///        slice size (in elements) for a given (batch-mode) index -- an UPPER
 ///        BOUND, not a goal. Backend-neutral: a tiled backend rounds batch
 ///        boundaries to tile boundaries (down to a tile multiple), so realized
 ///        batches are uneven and each covers at most this many elements, except
@@ -1066,7 +1154,29 @@ ResultPtr evaluate_antisymm(Args&&... args) {
 ///        contractions; a backend may use it to relax block-sparse screening
 ///        (scaled by the batch count) so per-batch screening does not drop
 ///        small contributions that are significant once summed over the full
-///        batch axis. Defaults to a no-op (make_no_scope_guard).
+///        batch mode. Defaults to a no-op (make_no_scope_guard).
+///        NESTED levels: when annotated modes sit at different nodes of one
+///        tree (see the nesting note above the class), the re-entrant inner
+///        evaluator is built with this SAME factory (unchanged, along with
+///        \p accept, \p is_volatile, \p persistent_only and \p
+///        target_batch_size -- see the reinstall below), so the inner level
+///        constructs its own guard from `make_scope_guard(inner_batches)`.
+///        The outer guard is held for the outer level's entire batch loop,
+///        which includes the per-batch evaluate() calls that re-enter and
+///        construct the inner guard -- so both guards are alive
+///        simultaneously while the innermost contractions run. A backend
+///        factory that relaxes screening scaled by ITS OWN level's batch
+///        count therefore composes multiplicatively across nesting depth:
+///        net relaxation = product of batch counts over all nesting levels
+///        (outer_batches * inner_batches * ...), matching the invariant that
+///        a contribution significant over the full product of batch modes
+///        must not be screened away in any individual (outer-cell,
+///        inner-cell, ...) combination. No extra bookkeeping is needed to
+///        achieve this -- it falls out of RAII scoping plus unchanged
+///        threading of the factory through re-entry; see
+///        "nested scope guards compose multiplicatively" in test_eval_ta.cpp
+///        for a structural proof (dense TensorD has no real screening to
+///        relax, so it spies on guard construction/destruction instead).
 /// \param is_volatile predicate flagging a volatile leaf node (e.g. an
 ///        amplitude tensor); the evaluator declines to batch any node whose
 ///        subtree contains such a leaf, so only persistent (build-once)
@@ -1082,12 +1192,22 @@ struct accept_any_index {
 /// no-op guard. A backend may supply a factory whose returned RAII object
 /// relaxes block-sparse screening for the duration of the batched partial
 /// contractions, so that a result block whose norm clears the screening
-/// threshold over the *full* batch axis is not dropped in every individual
+/// threshold over the *full* batch mode is not dropped in every individual
 /// batch (which would lose its contribution to the sum). The factory is called
 /// with the batch count, so the backend can scale the relaxation accordingly
 /// (e.g. divide a Cauchy-Schwarz norm-product screening threshold by n_batches:
-/// the bound for a sub-sum over 1/n of the batch axis is ~1/n of the full
+/// the bound for a sub-sum over 1/n of the batch mode is ~1/n of the full
 /// bound). See make_batched_custom_evaluator's \p make_scope_guard parameter.
+///
+/// Nesting: the factory is reused unchanged at every re-entrant (nested) level
+/// (see \p make_scope_guard's doc on make_batched_custom_evaluator), so nested
+/// levels each construct their own guard, scaled by their own level's batch
+/// count, and the outer guard(s) remain alive while the inner one is
+/// constructed and used. A per-level relaxation therefore composes
+/// MULTIPLICATIVELY: net relaxation = product of batch counts over all alive
+/// nesting levels, which is exactly the factor needed for a contribution
+/// significant over the full product of batch modes to survive per-cell
+/// screening at every nesting depth.
 struct no_scope_guard {};
 struct make_no_scope_guard {
   no_scope_guard operator()(std::size_t /*n_batches*/) const noexcept {
@@ -1100,7 +1220,7 @@ struct make_no_scope_guard {
 /// instead supply a predicate flagging volatile (e.g. amplitude-dependent) leaf
 /// nodes; the evaluator then declines to batch any node whose subtree contains
 /// such a leaf, so only persistent (build-once) subtrees are streamed over the
-/// batch axis (a volatile subtree is rebuilt every evaluation, so batching it
+/// batch mode (a volatile subtree is rebuilt every evaluation, so batching it
 /// would pay the partition + relaxed-screening cost on every pass for no
 /// lasting memory benefit).
 struct never_volatile {
@@ -1130,7 +1250,7 @@ struct BatchedScratch {
 };
 
 /// \brief Builds the scratch CacheManager for one batched replay pass over
-/// \p members (each a subtree root paired with its batch axis).
+/// \p members (each a subtree root paired with its batch mode).
 ///
 /// Walks every member subtree with the same pruned counting walk as
 /// cache_manager() (descend on first visit of a canonical-equal node, so
@@ -1139,7 +1259,7 @@ struct BatchedScratch {
 /// descendants' signatures under an inconsistently-sliced occurrence are
 /// recorded rather than hidden by the prune) and registers every internal
 /// subnode that repeats AND has a consistent slicing signature -- the position
-/// of the containing member's batch axis in the subnode's canon_indices(), or
+/// of the containing member's batch mode in the subnode's canon_indices(), or
 /// its absence -- across all occurrences. Signature consistency is what makes
 /// a scratch hit exact across members: canonical equality maps the index at
 /// canonical position p to the index at position p, so equal signatures plus
@@ -1150,8 +1270,8 @@ struct BatchedScratch {
 /// entry, an overcount keeps an entry until the per-batch reset().
 ///
 /// Subnodes whose signature is consistently 'absent' (no leaf below carries
-/// the axis -- the axis is contracted at the member's root, so a subtree
-/// containing an axis-carrying leaf carries the axis free in its
+/// the mode -- the mode is contracted at the member's root, so a subtree
+/// containing a mode-carrying leaf carries the mode free in its
 /// canon_indices()) have batch-invariant full values; those that are alive
 /// persistent entries of \p real are returned as seeds, and the caller copies
 /// their values into the scratch before the batch loop.
@@ -1160,23 +1280,61 @@ template <typename TreeNode, bool FHC, typename Members>
     Members const& members, CacheManager<TreeNode, FHC> const& real) {
   using Hasher = TreeNodeHasher<TreeNode, FHC>;
   using Comp = TreeNodeEqualityComparator<TreeNode>;
+
+  // The batch's EXTERNAL modes: obtained exactly as the evaluator obtains them
+  // (partition each member root's batched_here() by BatchModeType). An External
+  // mode is an external that survives FREE onto a node's result, so a node
+  // carrying one is NOT batch-invariant under that mode -- its value depends on
+  // the external slice. When the caller nests an External mode OUTSIDE a
+  // Contracted one (the External mode is sliced by an outer re-entry, then this
+  // scratch batches an inner Contracted mode), a persistent intermediate that
+  // carries the External mode but not the Contracted `mode` would look seedable
+  // under `mode` alone -- yet seeding its full (unsliced-external) value would
+  // be wrong under the outer slice. Tracking the External modes in the
+  // signature (below) forbids seeding/sharing such nodes. When there is no
+  // External mode this list is empty and every External-derived test is a
+  // no-op, keeping the Contracted-only behavior byte-identical.
+  container::svector<Index> ext_axes;
+  for (auto const& [root, mode] : members) {
+    if (root->leaf()) continue;
+    for (auto const& [ix, knd] : (*root)->batched_here())
+      if (knd == BatchModeType::External &&
+          std::find(ext_axes.begin(), ext_axes.end(), ix) == ext_axes.end())
+        ext_axes.push_back(ix);
+  }
+
   struct Meta {
     std::size_t count = 0;
     std::optional<std::size_t> sig;
+    // Positions of each External mode (in ext_axes order) in this node's
+    // canonical result indices, or nullopt if the node does not carry it. This
+    // is a function of the (canonical) node alone, so it is identical across
+    // all occurrences of a canonically-equal node.
+    container::svector<std::optional<std::size_t>> ext_sig;
     bool consistent = true;
   };
   std::unordered_map<TreeNode const*, Meta, Hasher, Comp> meta;
 
-  auto visit = [&meta](auto&& self, TreeNode const& n,
-                       Index const& axis) -> void {
+  auto ext_sig_of = [&ext_axes](TreeNode const& n) {
+    container::svector<std::optional<std::size_t>> s;
+    s.reserve(ext_axes.size());
+    for (auto const& e : ext_axes) s.push_back(index_position(n, e));
+    return s;
+  };
+
+  auto visit = [&meta, &ext_sig_of](auto&& self, TreeNode const& n,
+                                    Index const& mode) -> void {
     if (n.leaf()) return;
-    auto const sig = index_position(n, axis);
+    auto const sig = index_position(n, mode);
+    auto const esig = ext_sig_of(n);
     auto const [it, first] = meta.try_emplace(&n);
     auto& e = it->second;
-    if (first)
+    if (first) {
       e.sig = sig;
-    else if (e.sig != sig)
+      e.ext_sig = esig;
+    } else if (e.sig != sig || e.ext_sig != esig) {
       e.consistent = false;
+    }
     ++e.count;
     // Prune a re-encounter only when its signature matches the first one:
     // canonical equality maps canonical position p to position p, so an equal
@@ -1187,16 +1345,18 @@ template <typename TreeNode, bool FHC, typename Members>
     // descendant sliced differently only under this (unshared, pruned)
     // occurrence could pass the guard and serve wrong slices. The extra
     // descendant counts are real accesses: an inconsistently-sliced occurrence
-    // is evaluated per occurrence, not served from the scratch at n.
-    if (!first && e.sig == sig) return;
-    self(self, n.left(), axis);
-    self(self, n.right(), axis);
+    // is evaluated per occurrence, not served from the scratch at n. The
+    // External signature is invariant across occurrences (a function of the
+    // canonical node), so folding it into the match only tightens the guard.
+    if (!first && e.sig == sig && e.ext_sig == esig) return;
+    self(self, n.left(), mode);
+    self(self, n.right(), mode);
   };
-  for (auto const& [root, axis] : members) {
+  for (auto const& [root, mode] : members) {
     // member roots themselves are accumulated by the caller, not cached here
     if (root->leaf()) continue;
-    visit(visit, root->left(), axis);
-    visit(visit, root->right(), axis);
+    visit(visit, root->left(), mode);
+    visit(visit, root->right(), mode);
   }
 
   std::unordered_map<TreeNode, std::size_t, Hasher, Comp> reg;
@@ -1204,7 +1364,13 @@ template <typename TreeNode, bool FHC, typename Members>
   std::vector<TreeNode const*> seeds;
   for (auto const& [ptr, e] : meta) {
     if (!e.consistent) continue;  // ambiguous slicing: never share
-    bool const seedable = !e.sig && real.persistent(*ptr) && real.alive(*ptr);
+    // A node carrying ANY batched External mode has an external slice its
+    // seeded-full real-cache value would ignore -- so it is never seedable.
+    bool const carries_ext =
+        std::any_of(e.ext_sig.begin(), e.ext_sig.end(),
+                    [](auto const& p) { return p.has_value(); });
+    bool const seedable =
+        !e.sig && !carries_ext && real.persistent(*ptr) && real.alive(*ptr);
     if (seedable) {
       seeds.push_back(ptr);
       seed_keys.insert(*ptr);
@@ -1216,83 +1382,465 @@ template <typename TreeNode, bool FHC, typename Members>
   auto is_persistent = [seed_keys = std::move(seed_keys)](TreeNode const& n) {
     return seed_keys.contains(n);
   };
-  return {CacheManager<TreeNode, FHC>{std::move(reg), std::move(is_persistent)},
-          std::move(seeds)};
+  CacheManager<TreeNode, FHC> scratch{std::move(reg), std::move(is_persistent)};
+  return {std::move(scratch), std::move(seeds)};
 }
 
 }  // namespace detail
+
+/// Opt-in sink for the batched evaluator's per-batch scratch high-watermarks.
+/// The batched replay runs each aux/mu~ batch in a SEPARATE scratch
+/// CacheManager whose transients never enter the outer cache, so the outer
+/// cache's working_set_hwmark() misses the batched-inner peak. When a non-null
+/// PeakSink is threaded through make_batched_custom_evaluator (and its nested
+/// re-instantiations), each scratch's high-watermark folds (max) into this one
+/// global accumulator, yielding the true batched-replay peak. A null sink
+/// (the default) leaves all existing behavior byte-identical.
+using PeakSink = std::atomic<double>*;
 
 template <typename F, typename IndexPredicate = accept_any_index,
           typename ScopeGuardFactory = make_no_scope_guard,
           typename IsVolatile = never_volatile>
 [[nodiscard]] auto make_batched_custom_evaluator(
-    F le, std::function<std::size_t(Index const&)> target_batch_size,
+    F leaf_evaluator,
+    std::function<std::size_t(Index const&)> target_batch_size,
     IndexPredicate accept = {}, ScopeGuardFactory make_scope_guard = {},
-    IsVolatile is_volatile = {}, bool persistent_only = false) {
-  return [le = std::move(le), target_batch_size = std::move(target_batch_size),
-          accept, is_volatile, persistent_only,
+    IsVolatile is_volatile = {}, bool persistent_only = false,
+    std::size_t depth = 0, PeakSink peak = nullptr) {
+  return [leaf_evaluator = std::move(leaf_evaluator),
+          target_batch_size = std::move(target_batch_size), accept, is_volatile,
+          persistent_only, depth, peak,
           make_scope_guard](auto const& node, auto& cache) -> ResultPtr {
-    auto const K = batch_axis(node, accept);
-    if (!K) {
-      return nullptr;
-    }
+    // Runaway backstop: nesting re-enters this evaluator on the per-batch
+    // scratch (see the reinstall below), incrementing depth once per nested
+    // mode. Real trees nest a handful of modes deep; a large depth signals a
+    // non-terminating re-entry (e.g. a mis-annotated mode that never shrinks).
+    SEQUANT_ASSERT(depth < 8);
+    // Slice a value to the current batch block for the `hops` innermost
+    // enclosing batch loops that `nd` carries (see the Enter-stage
+    // slice_to_use in evaluate() -- this is the same primitive, reachable from
+    // the closure-internal probes below that bypass the Enter stage). `cache`
+    // is the cache the closure fired on, so cache.batch_context() is THIS
+    // node's ENCLOSING context.
+    auto slice_to_use = [&cache](ResultPtr value, auto const& nd,
+                                 std::size_t hops) -> ResultPtr {
+      auto const& ctx = cache.batch_context();
+      std::size_t const d = ctx.size();
+      // See the assert on the evaluate() copy of this lambda: hops <= d always
+      // (one batch_context push + <=1 parent link per level); a violation would
+      // underflow `d - hops` and silently UNDER-slice.
+      SEQUANT_ASSERT(hops <= d);
+      for (std::size_t i = d - hops; i < d; ++i) {
+        auto const& [axis, blk] = ctx[i];
+        if (auto const p = index_position(nd, axis))
+          value = value->slice_mode(*p, blk.first, blk.second);
+      }
+      return value;
+    };
+    // A leaf evaluator that slices each fetched leaf to the enclosing batch
+    // blocks: the REPLACEMENT for the old per-block `le_g`, generalized from
+    // one mode to the whole enclosing nest. Used at the three closure-internal
+    // sites (pick_sliceable probe, carrier_full pre-size, hoist build) that
+    // consume leaf slicing but bypass the Enter stage; feeding the RAW
+    // leaf_evaluator there would un-slice the enclosing loops and break the
+    // "K is not re-picked" invariant (a re-entered probe would see K's FULL
+    // extent and re-batch it). The MAIN value path does NOT use this: it re-
+    // enters evaluate() with the raw leaf_evaluator and lets the Enter-stage
+    // slice_to_use slice, which reproduces le_g exactly on that path.
+    auto sliced_leaf = [&](auto const& ln) -> ResultPtr {
+      return slice_to_use(leaf_evaluator(ln), ln, cache.batch_context().size());
+    };
+    // Mode selection is SLICEABILITY-AWARE and realizes the optimizer's
+    // multi-mode nesting one mode per depth level. candidate_axes lists this
+    // node's batch modes in the optimizer's annotated order (see
+    // EvalExpr::batched_here), keeping the accepted annotations.
+    //
+    // The optimizer's annotations are AUTHORITATIVE at every depth: a node
+    // carrying no accepted annotation means "do not batch this node", and is
+    // left unbatched. There is deliberately NO heuristic fallback -- batching
+    // is only ever realized where the peak-constrained optimizer asked for it,
+    // so every realized batch loop is one the cost model priced. (Callers
+    // therefore cannot batch without a peak budget: no budget => the optimizer
+    // emits no annotations => nothing batches. See BatchPolicy::peak_threshold
+    // and, on the MPQC side, validate_batch_config.)
+    auto candidate_axes =
+        [&accept](auto const& n) -> container::svector<Index> {
+      container::svector<Index> out;
+      for (auto const& entry : n->batched_here())
+        if (accept(entry.first)) out.push_back(entry.first);
+      return out;
+    };
+    // Pick the FIRST candidate mode that is actually sliceable (partitions into
+    // > 1 batch) in THIS (possibly already-outer-sliced) context, returning it
+    // together with its realized partition. A mode already sliced by an outer
+    // re-entry yields a single batch on the sliced leaf and is skipped, so a
+    // nested re-entry on the SAME node advances to the node's next annotated
+    // mode -- realizing `for K-batch: for mu1-batch: replay` at one multi-mode
+    // node. The recursive reinstall below walks one mode per depth level (the
+    // depth < 8 backstop bounds the re-entry).
+    auto pick_sliceable = [&](auto const& n)
+        -> std::optional<std::pair<
+            Index, container::svector<std::pair<std::size_t, std::size_t>>>> {
+      for (Index const& ix : candidate_axes(n)) {
+        auto const lf = find_leaf_carrying(n, ix);
+        if (!lf) continue;
+        // sliced_leaf (not the raw evaluator): at depth > 0 the carrier leaf
+        // must be sliced to the enclosing blocks so an already-outer-sliced
+        // mode yields a SINGLE batch and is skipped -- the "K is not re-picked"
+        // invariant. At depth 0 (empty enclosing context) this is the raw leaf.
+        auto b = sliced_leaf(lf->first)->mode_batches(lf->second,
+                                                      target_batch_size(ix));
+        if (b.size() > 1) return std::make_pair(ix, std::move(b));
+      }
+      return std::nullopt;
+    };
 
     // Persistence gate (opt-in via persistent_only): when set, decline to batch
     // any subtree containing a volatile leaf -- such a subtree is rebuilt every
     // evaluation, so batching pays the partition + relaxed-screening cost each
     // pass to amortize over nothing. By default (persistent_only == false) we
-    // batch ACROSS THE BOARD: slicing the batch axis reduces the footprint of
-    // any axis-carrying intermediate regardless of volatility, and the cost
+    // batch ACROSS THE BOARD: slicing the batch mode reduces the footprint of
+    // any mode-carrying intermediate regardless of volatility, and the cost
     // model credits it accordingly, so the runtime must realize it too. (When
     // is_volatile is never_volatile the gate is moot either way.)
     if (persistent_only && subtree_any(node, is_volatile)) {
       return nullptr;
     }
 
-    auto const leaf = find_leaf_carrying(node, *K);
-    if (!leaf) {
-      return nullptr;
+    auto picked = pick_sliceable(node);
+    if (!picked) {
+      return nullptr;  // no accepted, sliceable mode (nothing to gain)
     }
-    auto const batches =
-        le(leaf->first)->mode_batches(leaf->second, target_batch_size(*K));
-
-    if (batches.size() <= 1) {
-      return nullptr;  // nothing to gain (or unbatchable)
-    }
+    Index const K = std::move(picked->first);
+    auto const batches = std::move(picked->second);
 
     using node_t = std::remove_cvref_t<decltype(node)>;
     using member_t = std::pair<node_t const*, Index>;
     TreeNodeEqualityComparator<node_t> const eq;
 
+    // Classify the picked mode by BatchModeType. K is a batch mode of `node`;
+    // the optimizer stamps it CONTRACTED (summed away -> block partials
+    // ACCUMULATE) or EXTERNAL (an external index free on the node's result ->
+    // block partials are DISJOINT slices, SCATTERED into a pre-sized result).
+    // The depth-0 heuristic fallback only ever yields a contracted index, so an
+    // mode absent from batched_here() is Contracted -- keeping the
+    // Contracted-only path (no External entry) byte-identical to before this
+    // branch existed.
+    BatchModeType picked_kind = BatchModeType::Contracted;
+    for (auto const& [ix, knd] : node->batched_here())
+      if (ix == K) {
+        picked_kind = knd;
+        break;
+      }
+
+    // Per-level placement (order-aware only). Replaces hoist_invariants. This
+    // firing realizes a batch loop over `K` at runtime `depth`. A
+    // member-subtree node INVARIANT to this loop (it does not carry `K` on its
+    // result) is built ONCE at its home level and served to every batch body
+    // through the scope chain, rather than rebuilt per batch. A node's
+    // residency (the batch modes it is variant to) is the UNION of two per-node
+    // signals:
+    //   - sliced_modes() : the EXTERNAL (occ) modes, from the cross-occurrence
+    //     lifetime-mask meet (consistent placement across occurrences -> CSE);
+    //   - contracted_modes() : the enclosing CONTRACTED (aux) modes the node
+    //     carries open, emitted per-occurrence by the cost model (the piece the
+    //     external-only mask cannot express -- a node is variant to an outer
+    //     aux loop by carrying that aux free on its result).
+    // A node is invariant to THIS loop iff `K` is NOT in its union. Its HOME
+    // level is the deepest ENCLOSING batch_context entry whose mode is in the
+    // union (the innermost enclosing loop it is variant to); -1 (the chain root
+    // / run-term cache) if it is invariant to the whole nest. The node is built
+    // once at that level (walk-up), sliced to its home blocks, and reused
+    // across this loop's batches. A node carrying `K` (K in its union) is
+    // loop-LOCAL: it is left to inline evaluation (descend), which finds any
+    // deeper-hoisted invariants through the chain -- so descending never
+    // rebuilds them.
+    //
+    // This reproduces hoist_invariants' walk-up structure exactly, with the
+    // former per-node scalar placement level replaced by the union-derived
+    // home level and the `sl < depth && !ext_loop_local` predicate replaced by
+    // `K not in union` (which subsumes ext_loop_local: an External carrier has
+    // K in sliced_modes -> in union -> loop-local -> descended, never
+    // hoisted). The order-aware GATE is the emitted `batch_order_aware()` bit
+    // (true for every node the order-aware cost model emitted, including a
+    // whole-nest invariant whose union is empty): on the OFF path every node
+    // is order-blind, so `targets` is empty, set_parent is NOT wired, and the
+    // per-batch replay runs exactly as before. The bit is a positive signal an
+    // empty union cannot provide -- it is what distinguishes an OFF-path
+    // all-full node (do not hoist) from an order-aware whole-nest invariant
+    // (hoist to the root).
+    auto place_at_this_level =
+        [&](auto& scratch_cache, auto& parent_cache,
+            std::vector<node_t const*> const& member_roots) {
+          // The ENCLOSING batch loops (strictly OUTER to this firing); this
+          // level's mode K and any INNER loop are NOT in it. A node is
+          // hoistable here iff EVERY residency (union) mode is one of these
+          // outer loops: then it is invariant to this loop AND to every inner
+          // loop, so its home is its deepest enclosing residency level and it
+          // is built once there. If a union mode is K (loop-local) or an INNER
+          // mode (its home is a deeper loop), it is not all-outer -> descend,
+          // so the deeper level handles it sliced. This is exactly
+          // hoist_invariants' `scope_level < depth`: the deepest residency
+          // being outer <=> ALL residency outer (deepest is the max), and a
+          // node carrying an inner mode is (correctly) not hoisted at this
+          // outer level -- the bug an over-eager `K not in union` predicate
+          // caused (holding an aux-carrier full over aux at the outer occ
+          // level).
+          auto const& ectx = parent_cache.batch_context();  // enclosing loops
+          auto in_ectx = [&ectx](Index const& m) -> bool {
+            for (auto const& e : ectx)
+              if (e.first == m) return true;
+            return false;
+          };
+          auto residency_all_outer = [&in_ectx](node_t const& n) -> bool {
+            for (auto const& ix : n->sliced_modes())
+              if (!in_ectx(ix)) return false;
+            for (auto const& ix : n->contracted_modes())
+              if (!in_ectx(ix)) return false;
+            return true;
+          };
+          // A node carrying an EXTERNAL batched_here() stamp absent from its
+          // sliced_modes is a MEET-DEMOTED external carrier: the
+          // cross-occurrence meet intersected that external slot to empty
+          // because occurrences bind it to DIFFERENT (proto-incompatible)
+          // blocks (the cross-pair two-PNO giants), yet the node still carries
+          // that external mode FREE in THIS occurrence -- so its per-occurrence
+          // value is a per-external-BLOCK (scattered/sliced) result. Hoisting
+          // it would build it at its home level with the demoted external mode
+          // UNSLICED (not in any enclosing block), i.e. materialize the FULL
+          // scattered giant. Never hoist such a node: descend so the batched
+          // evaluator slices its external mode per occurrence (exactly as
+          // hoist_invariants did via per-occurrence scope_level). A node with
+          // only Contracted stamps (genuinely external- invariant, e.g. a
+          // summed-K intermediate) has no such stamp and is still hoisted once;
+          // a consistently-sliced external node has the mode in sliced_modes
+          // (not demoted) and is placed/sliced at its loop.
+          auto has_demoted_external = [](node_t const& n) -> bool {
+            auto const& sm = n->sliced_modes();
+            for (auto const& [ix, knd] : n->batched_here())
+              if (knd == BatchModeType::External &&
+                  std::find(sm.begin(), sm.end(), ix) == sm.end())
+                return true;
+            return false;
+          };
+          std::vector<node_t const*> targets;
+          auto collect = [&](auto&& self, node_t const& n) -> void {
+            if (n.leaf()) return;
+            if (n->batch_order_aware() && residency_all_outer(n) &&
+                !has_demoted_external(n) && !subtree_any(n, is_volatile)) {
+              if (std::none_of(targets.begin(), targets.end(),
+                               [&](node_t const* p) { return eq(*p, n); }))
+                targets.push_back(&n);
+              return;  // built as a unit -- do not descend into it
+            }
+            self(self, n.left());
+            self(self, n.right());
+          };
+          for (node_t const* m : member_roots) {
+            if (m->leaf()) continue;
+            collect(collect, m->left());
+            collect(collect, m->right());
+          }
+          if (targets.empty()) return;
+          // Wire the scope chain only when there is something to hoist (matches
+          // hoist_invariants; keeps the OFF path unwired -> byte-identical).
+          scratch_cache.set_parent(&parent_cache);
+          auto in_union = [](node_t const& n, Index const& m) -> bool {
+            auto const& sm = n->sliced_modes();
+            if (std::find(sm.begin(), sm.end(), m) != sm.end()) return true;
+            auto const& cm = n->contracted_modes();
+            return std::find(cm.begin(), cm.end(), m) != cm.end();
+          };
+          for (node_t const* dptr : targets) {
+            node_t const& d = *dptr;
+            // Home level = deepest enclosing-context entry whose mode is in d's
+            // union; -1 => invariant to the whole nest (chain root).
+            int rl = -1;
+            for (int i = static_cast<int>(ectx.size()) - 1; i >= 0; --i)
+              if (in_union(d, ectx[i].first)) {
+                rl = i;
+                break;
+              }
+            // Locate the level-rl cache by walking UP from parent_cache (the
+            // level depth-1 cache): rl == -1 => the chain root (the real/term
+            // cache); rl >= 0 => the scratch (depth-1 - rl) hops up. Runtime
+            // nest depth aligns with the scope-chain position (each realized
+            // loop = one context entry = one scratch level).
+            auto* target = &parent_cache;
+            if (rl == -1) {
+              while (target->parent()) target = target->parent();
+            } else {
+              // Release-safe guard (SEQUANT_ASSERT elides in release): never
+              // walk the chain off its end and dereference a null parent.
+              if (rl > static_cast<int>(depth) - 1)
+                throw std::runtime_error(
+                    "hoist home level not strictly outer to this loop");
+              for (int lvl = static_cast<int>(depth) - 1; lvl > rl; --lvl) {
+                auto* const p = target->parent();
+                if (!p)
+                  throw std::runtime_error(
+                      "hoist walk-up exceeded the scope chain (a single-batch "
+                      "sliced mode may have shifted the runtime nest depth)");
+                target = p;
+              }
+            }
+            target->ensure_hoist_slot(d);
+            if (target->alive(d)) continue;  // built already in a broader scope
+            // Build the whole invariant ONCE on a FRESH cache via the variadic
+            // evaluate(n, sliced_leaf) (empty cache, NO custom evaluator, so no
+            // re-entry into this batched evaluator). `sliced_leaf` slices the
+            // enclosing loops d carries (up to its home level); the loops it
+            // does not carry pass through unsliced (built full over its deeper
+            // / invariant modes). Store under the same canonical-phase
+            // convention the batched member store uses.
+            ResultPtr built = evaluate(d, sliced_leaf);
+            if (auto const ph = d->canon_phase(); ph != 1)
+              built = built->mult_by_phase(ph);
+            (void)target->store(d, std::move(built));
+          }
+        };
+
+    // DEBUG (behavior-neutral): log the trigger's depth, picked mode + kind,
+    // and its full batched_here() annotation + result indices, to diagnose
+    // nested re-batching of a single aux mode. Emitted only when tracing is on.
+    if (log::printing()) {
+      std::string annot;
+      for (auto const& [ix, knd] : node->batched_here()) {
+        annot += toUtf8(ix.full_label());
+        annot += (knd == BatchModeType::External ? ":ext " : ":con ");
+      }
+      std::string res;
+      for (auto const& ix : node->canon_indices()) {
+        res += toUtf8(ix.full_label());
+        res += " ";
+      }
+      log::log("BatchAxes",
+               std::format(
+                   "depth={} picked={}:{} nbatches={} annot=[{}] result=[{}]",
+                   depth, toUtf8(K.full_label()),
+                   picked_kind == BatchModeType::External ? "ext" : "con",
+                   batches.size(), annot, res));
+    }
+
+    if (picked_kind == BatchModeType::External) {
+      // SCATTER branch. K survives to node's result as a free external mode,
+      // so the per-block partials are disjoint slices of one result (not
+      // summands of a contraction): they are write_into_slice()d into a
+      // pre-sized result, never add_inplace()d. Inner batch modes -- of either
+      // kind, at this node or a descendant -- still nest through the same
+      // per-block reinstall the contracted path uses, so External composes with
+      // Contracted: within each external block the reinstalled evaluator slices
+      // any remaining mode (a contracted mode accumulates within the block, an
+      // inner external mode scatters into its own block-local result). K itself
+      // is not re-picked on the re-entry: the pushed batch_context makes the
+      // re-entry's sliced_leaf slice K's carrier to this block, so the block
+      // yields a single batch on the sliced leaf and is skipped (same invariant
+      // as the contracted nesting).
+      auto const dest_mode = index_position(node, K);
+      SEQUANT_ASSERT(dest_mode &&
+                     "external batch mode is not free on the node's result");
+      auto const carrier = find_leaf_carrying(node, K);
+      SEQUANT_ASSERT(carrier && "no leaf carries the external batch mode");
+      // The carrier leaf supplies K's tiling for pre-sizing. sliced_leaf (not
+      // the raw evaluator): at depth 0 this is the FULL carrier (empty
+      // enclosing context), but at depth > 0 it must be sliced to the OUTER
+      // enclosing blocks so the scatter dest is pre-sized within the outer
+      // block, not at the full outer extent.
+      ResultPtr const carrier_full = sliced_leaf(carrier->first);
+
+      // A single-node scratch: an external mode is not a
+      // persistent-final sharing mode, so the group/replay machinery (which
+      // co-batches cross-term contracted finals) does not apply -- scatter just
+      // this node. The scratch still dedups repeats WITHIN the node's subtree.
+      std::vector<member_t> solo{{&node, K}};
+      auto bs = detail::make_batched_scratch(solo, cache);
+      for (auto const* s : bs.seeds) (void)bs.cache.store(*s, cache.access(*s));
+      place_at_this_level(bs.cache, cache, std::vector<node_t const*>{&node});
+
+      auto const scope_guard = make_scope_guard(batches.size());
+      (void)scope_guard;
+
+      if (log::printing())
+        log::log("BatchScatter", "Begin",
+                 std::format("external mode over {} blocks", batches.size()));
+
+      ResultPtr dest;
+      for (auto const& [e_lo, e_hi] : batches) {
+        if (e_lo == e_hi) continue;
+        // Per-block slice marker for trace post-processing (avoidable-recompute
+        // accounting), mirroring the contracted BatchGroup path: tags every op
+        // replayed in this external block with the enclosing scatter loop's
+        // (mode, element-range-low). Without it, the same expression scattered
+        // into disjoint external blocks would carry an identical touched-slice
+        // signature and be miscounted as a duplicate rebuild, when each block
+        // is in fact legitimate (1/nblocks of the work). Gated on printing() so
+        // it is inert unless a trace is being emitted.
+        if (log::printing())
+          log::log("BatchIter", toUtf8(std::wstring(K.full_label())), e_lo);
+        bs.cache.reset();
+        // Extend the enclosing batch context by THIS block and set it on the
+        // scratch, so the re-entry's Enter-stage slice-on-use (and its own
+        // sliced_leaf) slices every leaf carrying K to this block and composes
+        // inner slices on top -- exactly what the old per-block `le_g` did on
+        // the leaf path, plus it now also slices a cached intermediate fetched
+        // from an ancestor scope (the slice-on-use fix). The raw leaf_evaluator
+        // is threaded down; the Enter stage does the slicing.
+        auto ctx = cache.batch_context();
+        ctx.push_back({K, {e_lo, e_hi}});
+        bs.cache.set_batch_context(std::move(ctx));
+        bs.cache.set_custom_evaluator(make_batched_custom_evaluator(
+            std::function<ResultPtr(node_t const&)>{leaf_evaluator},
+            target_batch_size, accept, make_scope_guard, is_volatile,
+            persistent_only, depth + 1, peak));
+        ResultPtr part = evaluate(node, leaf_evaluator, bs.cache);
+        // Pre-size on the first block (learns the result's non-mode extents and
+        // kind from the block partial; the external mode is widened to full).
+        if (!dest)
+          dest = part->pre_sized_zeros_over_mode(*dest_mode, *carrier_full,
+                                                 carrier->second);
+        dest->write_into_slice(*part, *dest_mode, e_lo, e_hi);
+
+        if (peak) {
+          const double cand =
+              static_cast<double>(bs.cache.working_set_hwmark());
+          double cur = peak->load(std::memory_order_relaxed);
+          while (cand > cur && !peak->compare_exchange_weak(
+                                   cur, cand, std::memory_order_relaxed)) {
+          }
+        }
+      }
+      if (log::printing()) log::log("BatchScatter", "End");
+      SEQUANT_ASSERT(dest);
+      return dest;
+    }
+
     // The replay group: the trigger plus every registered persistent key that
-    // is not yet alive and batches over an axis with the identical realized
-    // partition. All compatible persistent finals stream over the batch axis
+    // is not yet alive and batches over a mode with the identical realized
+    // partition. All compatible persistent finals stream over the batch mode
     // in the same passes, so sub-intermediates shared between them (wherever
     // the scratch's slicing-signature guard admits sharing -- equal canonical
-    // positions of the batch axis plus equal element ranges imply identical
+    // positions of the batch mode plus equal element ranges imply identical
     // slices) are evaluated once per batch instead of once per consumer.
     // The cost of considering a candidate is one leaf evaluation (the
     // mode_batches probe). With an unregistered (empty) real cache the group
     // is just the trigger.
-    std::vector<member_t> group{{&node, *K}};
+    std::vector<member_t> group{{&node, K}};
     cache.for_each_key([&](node_t const& k) {
       if (!cache.persistent(k) || cache.alive(k)) return;
       if (eq(k, node)) return;  // the trigger occupies its own slot
-      auto const Kk = batch_axis(k, accept);
-      if (!Kk) return;
       if (subtree_any(k, is_volatile)) return;  // defensive: P implies NV
-      auto const lk = find_leaf_carrying(k, *Kk);
-      if (!lk) return;
-      if (le(lk->first)->mode_batches(lk->second, target_batch_size(*Kk)) !=
-          batches)
-        return;
-      group.emplace_back(&k, *Kk);
+      auto const pk = pick_sliceable(k);
+      if (!pk) return;
+      // Join iff this member's first sliceable mode realizes the identical
+      // partition as the trigger (so all members stream over the same batches).
+      if (pk->second != batches) return;
+      group.emplace_back(&k, pk->first);
     });
 
     // Layer by nesting: a member whose subtree contains another member
     // evaluates in a later layer, with the inner result by then alive in the
     // real cache -- seeded into the outer pass when slice-free w.r.t. the
-    // outer batch axis, re-derived sliced (correct, unshared) otherwise.
+    // outer batch mode, re-derived sliced (correct, unshared) otherwise.
     auto contains = [&eq](node_t const& outer, node_t const& inner) -> bool {
       auto rec = [&eq, &inner](auto&& self, node_t const& n) -> bool {
         if (eq(n, inner)) return true;
@@ -1345,7 +1893,13 @@ template <typename F, typename IndexPredicate = accept_any_index,
     // RAII scope for the batched partial contractions; a backend-supplied
     // factory may relax block-sparse screening here (scaled by the batch count)
     // so per-batch screening does not drop contributions that survive over the
-    // full batch axis.
+    // full batch mode. Held for the ENTIRE loop below, including the per-batch
+    // evaluate() calls that may re-enter this evaluator on an inner annotated
+    // node (see the reinstall's `make_scope_guard` argument): the inner
+    // level's own guard is then constructed and destroyed while this (outer)
+    // guard is still alive, so a backend that relaxes screening scaled by its
+    // own level's batch count composes multiplicatively across nesting depth
+    // (net relaxation = product of batch counts over all alive levels).
     auto const scope_guard = make_scope_guard(batches.size());
     (void)scope_guard;
 
@@ -1361,27 +1915,66 @@ template <typename F, typename IndexPredicate = accept_any_index,
       // persistent entries (registered persistent in the scratch) survive.
       auto bs = detail::make_batched_scratch(layer, cache);
       for (auto const* s : bs.seeds) (void)bs.cache.store(*s, cache.access(*s));
+      {
+        std::vector<node_t const*> roots;
+        roots.reserve(layer.size());
+        for (auto const& mk : layer) roots.push_back(mk.first);
+        place_at_this_level(bs.cache, cache, roots);
+      }
 
       std::vector<ResultPtr> acc(layer.size());
       for (auto const& [e_lo, e_hi] : batches) {
         if (e_lo == e_hi) continue;
+        // Per-slice marker for trace post-processing (avoidable-recompute
+        // accounting): tags every op replayed in this iteration with the
+        // enclosing batch loop's (mode, element-range-low). The mode label K
+        // and the range low bound uniquely identify this slice within the
+        // (single-mode-per-level) nesting. Gated on printing() so it is inert
+        // unless a trace is being emitted.
+        if (log::printing())
+          log::log("BatchIter", toUtf8(std::wstring(K.full_label())), e_lo);
         bs.cache.reset();
         for (std::size_t m = 0; m != layer.size(); ++m) {
           auto const& [mem, Km] = layer[m];
-          // leaf evaluator that slices every leaf carrying the member's batch
-          // axis to this element batch; others pass through unchanged.
-          auto le_g = [&le, &Km, e_lo = e_lo,
-                       e_hi = e_hi](auto const& leaf_node) -> ResultPtr {
-            ResultPtr r = le(leaf_node);
-            if (auto const p = index_position(leaf_node, Km))
-              return r->slice_mode(*p, e_lo, e_hi);
-            return r;
-          };
-          ResultPtr part = evaluate(*mem, le_g, bs.cache);
+          // Extend the enclosing batch context by THIS member's block and set
+          // it on the scratch, so the re-entry's Enter-stage slice-on-use (and
+          // its own sliced_leaf) slices every leaf carrying Km to this block
+          // and composes inner slices on top -- exactly what the old per-member
+          // `le_g` did on the leaf path, plus it now also slices a cached
+          // intermediate fetched from an ancestor scope (the slice-on-use fix).
+          // Rebuilt from `cache.batch_context()` (the enclosing context) each
+          // member so contexts do not accumulate across members. The raw
+          // leaf_evaluator is threaded down (type-erased into a std::function
+          // so this template's self-instantiation is finite: the leaf-evaluator
+          // type is std::function at every deeper level); the Enter stage does
+          // the slicing.
+          auto ctx = cache.batch_context();
+          ctx.push_back({Km, {e_lo, e_hi}});
+          bs.cache.set_batch_context(std::move(ctx));
+          bs.cache.set_custom_evaluator(make_batched_custom_evaluator(
+              std::function<ResultPtr(node_t const&)>{leaf_evaluator},
+              target_batch_size, accept, make_scope_guard, is_volatile,
+              persistent_only, depth + 1, peak));
+          ResultPtr part = evaluate(*mem, leaf_evaluator, bs.cache);
           if (!acc[m])
             acc[m] = std::move(part);
           else
             acc[m]->add_inplace(*part);
+        }
+        // Fold this batch's scratch high-watermark into the global sink. The
+        // next iteration calls bs.cache.reset(), which ZEROES the scratch
+        // hwmark, so the fold MUST happen here (per batch), not after the
+        // batches loop. The loop is serial (the nested evaluate() re-entry is
+        // serial too), but the sink is atomic; a relaxed fetch-max CAS keeps it
+        // correct regardless. A null sink skips the fold entirely, leaving
+        // existing (sink-less) callers byte-unchanged.
+        if (peak) {
+          const double cand =
+              static_cast<double>(bs.cache.working_set_hwmark());
+          double cur = peak->load(std::memory_order_relaxed);
+          while (cand > cur && !peak->compare_exchange_weak(
+                                   cur, cand, std::memory_order_relaxed)) {
+          }
         }
       }
 
@@ -1415,7 +2008,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
 ///
 /// Exactly equivalent to calling make_batched_custom_evaluator with:
 ///   - target_batch_size = policy.batch_target_size
-///   - accept           = policy.is_batchable_index
+///   - accept           = policy.is_batchable_index()  (derived role union)
 ///   - make_scope_guard = make_scope_guard (forwarded)
 ///   - is_volatile      = EvalNode lift of policy.is_volatile_leaf:
 ///       n.leaf() && n->is_tensor() && policy.is_volatile_leaf(n->as_tensor())
@@ -1425,9 +2018,19 @@ template <typename F, typename IndexPredicate = accept_any_index,
 /// \param yielder      The leaf evaluator (captured and forwarded).
 /// \param make_scope_guard  Optional scope-guard factory (same semantics as in
 ///        make_batched_custom_evaluator; defaults to make_no_scope_guard).
+/// \param peak      Optional PeakSink (same semantics as in
+///        make_batched_custom_evaluator); defaults to null (no folding).
+///        NOTE: \p peak is the 4th positional argument, AFTER \p
+///        make_scope_guard -- a caller who wants the sink but not a custom
+///        scope guard must still pass the scope-guard factory explicitly
+///        (e.g. `make_evaluator(policy, leaf, make_no_scope_guard{},
+///        &sink)`); passing `&sink` in the 3rd slot silently binds it to
+///        \p make_scope_guard (via template deduction) and leaves \p peak
+///        null.
 template <class F, class ScopeGuardFactory = make_no_scope_guard>
 [[nodiscard]] auto make_evaluator(BatchPolicy const& policy, F yielder,
-                                  ScopeGuardFactory make_scope_guard = {}) {
+                                  ScopeGuardFactory make_scope_guard = {},
+                                  PeakSink peak = nullptr) {
   auto is_volatile_node = [p = policy.is_volatile_leaf](auto const& n) -> bool {
     if (!n.leaf() || !n->is_tensor()) return false;
     return p && p(n->as_tensor());
@@ -1438,7 +2041,10 @@ template <class F, class ScopeGuardFactory = make_no_scope_guard>
   // time, so when either is unset, substitute predicates that decline batching
   // (accept nothing => batch_axis returns nullopt => target_batch_size is never
   // called) rather than partially-filled ones.
-  std::function<bool(Index const&)> accept = policy.is_batchable_index;
+  // Runtime accept = the DERIVED union of both batchability roles: a mode is
+  // accepted at runtime if it is batchable in EITHER the contracted or the
+  // external role (see BatchPolicy::is_batchable_index()).
+  std::function<bool(Index const&)> accept = policy.is_batchable_index();
   std::function<std::size_t(Index const&)> target = policy.batch_target_size;
   if (!accept || !target) {
     accept = [](Index const&) { return false; };
@@ -1447,7 +2053,7 @@ template <class F, class ScopeGuardFactory = make_no_scope_guard>
   return make_batched_custom_evaluator(
       std::move(yielder), std::move(target), std::move(accept),
       std::move(make_scope_guard), std::move(is_volatile_node),
-      policy.persistent_only);
+      policy.persistent_only, /*depth=*/0, peak);
 }
 
 }  // namespace sequant

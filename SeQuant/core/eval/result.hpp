@@ -333,6 +333,54 @@ class Result {
   }
 
   ///
+  /// \brief Scatter \p block into the `[block_lo, block_hi)` element slice of
+  ///        this result's mode \p mode.
+  ///
+  /// The inverse of slice_mode(): where slice_mode() GATHERS one contiguous
+  /// element block OUT of a mode, write_into_slice() SCATTERS a per-block
+  /// result INTO a pre-sized destination's `[block_lo, block_hi)` slice along
+  /// outer \p mode, leaving every other mode untouched. Used to assemble a
+  /// result that is evaluated one block at a time over a partitioned
+  /// (Hadamard/spectator) mode: partitioning the mode into disjoint blocks,
+  /// evaluating each, and write_into_slice()-ing each block into its slice
+  /// reconstructs the whole result. Unlike add_inplace() (which accumulates,
+  /// correct only for a contracted mode), the blocks are disjoint slices of
+  /// one pre-sized result. Element semantics keep this backend-neutral (no
+  /// notion of tiles); a tiled backend may require `[block_lo, block_hi)` to
+  /// fall on tile boundaries and preserves each mode's element lobound. Not a
+  /// pure virtual: only tensor-backed results need it; the default throws.
+  /// Mirrors the slice_mode() precedent.
+  ///
+  virtual void write_into_slice(Result const& /*block*/, std::size_t /*mode*/,
+                                std::size_t /*block_lo*/,
+                                std::size_t /*block_hi*/) {
+    throw detail::unimplemented_method("write_into_slice");
+  }
+
+  ///
+  /// \brief Build a zero-filled result shaped like \c *this but with mode
+  ///        \p mode carrying the FULL extent of an external (spectator) axis.
+  ///
+  /// Used to PRE-SIZE the destination of an external-axis scatter (see
+  /// make_batched_custom_evaluator's External branch): \c *this is one block
+  /// partial (the node's result with the external axis sliced to a single
+  /// block, but full on every other mode), and \p axis_src is the unsliced
+  /// axis-carrying leaf whose mode \p axis_src_mode holds the external axis at
+  /// its FULL extent/tiling. The returned result has \c *this's TiledRange with
+  /// dim \p mode replaced by \c axis_src's dim \p axis_src_mode, zero-filled,
+  /// so the per-block partials can be write_into_slice()d into their disjoint
+  /// slices. \p axis_src's tiling on \p axis_src_mode must be the tiling the
+  /// block partials slice from (guaranteed when both derive from the same
+  /// leaf). Not a pure virtual: only tensor-backed results need it; the default
+  /// throws. Mirrors the slice_mode()/write_into_slice() precedent.
+  ///
+  [[nodiscard]] virtual ResultPtr pre_sized_zeros_over_mode(
+      std::size_t /*mode*/, Result const& /*axis_src*/,
+      std::size_t /*axis_src_mode*/) const {
+    throw detail::unimplemented_method("pre_sized_zeros_over_mode");
+  }
+
+  ///
   /// \brief Add other Result object into this object.
   ///
   virtual void add_inplace(Result const&) = 0;
