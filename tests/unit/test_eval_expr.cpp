@@ -12,8 +12,10 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <algorithm>
 #include <initializer_list>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
@@ -556,4 +558,18 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
     REQUIRE_NOTHROW(result_expr(t1, t2, EvalOp::Product));
   }
+}
+
+TEST_CASE("eval_expr_batched_here_typed", "[EvalExpr][batched-here]") {
+  using namespace sequant;
+  auto const tnsr =
+      parse_tensor(L"g{i_1,a_1;i_2,a_2}", {.def_perm_symm = Symmetry::Nonsymm});
+  EvalExpr node{tnsr};
+  container::svector<std::pair<Index, BatchModeType>> modes{
+      {Index{L"a_1"}, BatchModeType::Contracted},
+      {Index{L"i_1"}, BatchModeType::External}};
+  node.set_batched_here(modes);
+  REQUIRE(node.batched_here().size() == 2);
+  REQUIRE(node.batched_here()[0].second == BatchModeType::Contracted);
+  REQUIRE(node.batched_here()[1].second == BatchModeType::External);
 }
