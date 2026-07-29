@@ -2,47 +2,91 @@
 #define SEQUANT_CORE_OPTIMIZE_OPTIONS_HPP
 
 #include <SeQuant/core/batch_policy.hpp>
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval/fwd.hpp>
 
 #include <cstddef>
 #include <functional>
+#include <limits>
+#include <memory>
+#include <unordered_map>
+#include <utility>
 
 namespace sequant {
 
 class Index;
 class Tensor;
+class Expr;
 
 /// Objective function to minimize in single-term and top-level optimize
 /// routines. The `Dense*` models assume dense tensors:
 /// - `DenseFLOPs` counts floating-point operations.
 /// - `DenseSize` counts result-tensor storage elements (summed over
 ///   intermediates) -- a gross-traffic proxy, not a peak.
-/// - `DensePeakSize` minimizes peak memory: the maximum over the evaluation
-///   schedule of the combined size of all simultaneously-live tensors
-///   (intermediates AND resident input leaves, the all-co-resident model),
-///   and it chooses the evaluation order that minimizes that peak. Unlike the
-///   order-independent `DenseFLOPs`/`DenseSize`, the contraction order is a
-///   real lever here. NOTE: `DensePeakSize` does not yet support
+/// - `DenseSpaceTime` (formerly `DensePeakSize`; that name is kept as a
+///   deprecated alias) is PEAK-FIRST, perf-second: it minimizes peak memory --
+///   the maximum over the evaluation schedule of the combined size of all
+///   simultaneously-live tensors (intermediates AND resident input leaves, the
+///   all-co-resident model) -- and breaks ties by the roofline perf cost.
+///   Unlike the order-independent `DenseFLOPs`/`DenseSize`, the contraction
+///   order is a real lever here. NOTE: does not yet support
 ///   common-subexpression elimination (`CSEOptions::subnet` must be false).
-/// - `DensePeakSizeBatched` extends `DensePeakSize` with a per-index
-///   batchability model: each index satisfying
-///   `OptimizeOptions::batch_policy.is_batchable_index` is treated as
-///   independently sliced to
-///   `min(extent, batch_policy.batch_target_size(ix))` elements per index --
+/// - `DenseSpaceTimeBatched` (formerly `DensePeakSizeBatched`) extends
+///   `DenseSpaceTime` with a per-index batchability model: each index
+///   satisfying `OptimizeOptions::batch_policy.is_batchable_index()` (the
+///   derived union of the contracted- and external-role building blocks) is
+///   treated as independently sliced to `min(extent,
+///   batch_policy.batch_target_size(ix))` elements per index --
 ///   `batch_target_size` is an upper bound, so this is a conservative
 ///   (over-)estimate of the realized whole-tile batch, which the backend rounds
 ///   *down* to a tile multiple (never above the target; see
 ///   `mode_batches_of_trange1`). The
 ///   DP minimises peak over the worst-case sliced configuration. Only consulted
 ///   by the batched oracle and DP; requires
-///   `batch_policy.is_batchable_index` and `batch_policy.batch_target_size`
-///   to be set.
+///   a batchability role predicate
+///   (`batch_policy.is_batchable_contracted_index` and/or
+///   `is_batchable_external_index`) and `batch_policy.batch_target_size` to be
+///   set. Final selection is threshold-gated by `peak_threshold`.
+/// - `DenseTimeSpace` / `DenseTimeSpaceBatched` are the PERF-FIRST, peak-second
+///   duals of `DenseSpaceTime` / `DenseSpaceTimeBatched`: they select a
+///   factorization by roofline perf first and peak second (same Pareto-frontier
+///   and roofline machinery, opposite lexicographic order). Because slicing is
+///   perf-neutral, a perf-first primary never prefers a FLOPS-catastrophic
+///   factorization merely for its sliceability. Naming:
+///   `Dense{Primary}{Secondary}`, `Space` = peak/size, `Time` = perf.
+///
+///   `peak_threshold` and these objectives: it is NOT a feasibility gate for
+///   ROOT SELECTION (`select_root` does not consult it on the perf-first
+///   branch, so it cannot force a flops-catastrophic choice; peak breaks exact
+///   ties only). It IS consulted elsewhere, and only by these objectives:
+///   `DenseTimeSpaceBatched` emits EXTERNAL batch modes iff
+///   `batch_policy.batch_spectator_indices` is set AND the selected root's
+///   modeled peak exceeds `peak_threshold` (see
+///   `PeakBatchedModel::reconstruct_batched_modes`). CONTRACTED batch modes are
+///   emitted regardless of the threshold. So under a time-first objective the
+///   threshold is an external-batching trigger, not a space constraint -- and
+///   external batching is currently available ONLY under a time-first
+///   objective.
 ///
 /// Leaves room for `Sparse*` models later.
 enum class ObjectiveFunction {
   DenseFLOPs,
   DenseSize,
-  DensePeakSize,
-  DensePeakSizeBatched
+  /// Peak-first, perf-second. (Formerly `DensePeakSize`.)
+  DenseSpaceTime,
+  /// Batched variant of `DenseSpaceTime`. (Formerly `DensePeakSizeBatched`.)
+  DenseSpaceTimeBatched,
+  /// Perf-first, peak-second: never prefers a FLOPS-catastrophic factorization
+  /// for its sliceability.
+  DenseTimeSpace,
+  /// Batched variant of `DenseTimeSpace`.
+  DenseTimeSpaceBatched,
+  /// Deprecated aliases (same underlying values as the renamed constants above,
+  /// placed AFTER them so `DenseSpaceTime` keeps `DensePeakSize`'s old value).
+  /// Kept so existing code and JSON inputs ("dense_peak_size") keep compiling;
+  /// every existing `== DensePeakSize` guard still catches `DenseSpaceTime`.
+  DensePeakSize = DenseSpaceTime,
+  DensePeakSizeBatched = DenseSpaceTimeBatched
 };
 
 /// Whether to reorder summands so terms with shared intermediates appear
@@ -95,8 +139,9 @@ struct CostParams {
   /// Per-intermediate storage-footprint penalty (DenseFLOPs/DenseSize only; see
   /// OptimizeOptions::footprint_weight). Not used by the peak objectives.
   double footprint_weight = 0.0;
-  /// Relative peak tolerance for the peak objectives' final selection; see
-  /// OptimizeOptions::peak_flops_tolerance.
+  /// Relative peak tolerance for DensePeakSize's final selection; see
+  /// OptimizeOptions::peak_flops_tolerance. Unused by DensePeakSizeBatched,
+  /// whose final selection is instead threshold-gated by \c peak_threshold.
   double peak_flops_tolerance = 0.10;
   /// Roofline parameters for the peak objectives' secondary cost; see
   /// \ref RooflineParams. machine_balance == 0 => pure-flop tie-break.
@@ -105,9 +150,53 @@ struct CostParams {
   /// DensePeakSizeBatched; see BatchPolicy::accumulation_factor. 0 (default) =
   /// no penalty.
   double accumulation_factor = 0.0;
+  /// Peak-memory budget in BYTES for the batched objectives; see
+  /// BatchPolicy::peak_threshold. Space-first (DenseSpaceTimeBatched): a hard
+  /// feasibility gate on root selection; +infinity (default) => every schedule
+  /// feasible => no batching. Time-first (DenseTimeSpaceBatched): NOT a gate on
+  /// root selection -- it only triggers EXTERNAL mode emission.
+  double peak_threshold = std::numeric_limits<double>::infinity();
   /// Prune disconnected (outer-product) subsets from the single-term DP; see
   /// OptimizeOptions::prune_outer_products. true (default) = prune.
   bool prune_outer_products = true;
+  /// Gate for external-index batching; see
+  /// BatchPolicy::batch_spectator_indices. false (default) => \ref
+  /// opt::detail::PeakBatchedModel::reconstruct_batched_modes emits no
+  /// \c BatchModeType::External entries, so every existing (non-external-aware)
+  /// caller stays byte-identical. NOTE this is necessary but not sufficient:
+  /// reconstruct_batched_modes also requires a TIME-FIRST objective
+  /// (DenseTimeSpaceBatched) and a selected-root peak above \c peak_threshold.
+  bool batch_spectator_indices = false;
+
+  /// Enable the order-aware multilevel recompute cost model (resident-scan peak
+  /// + ordered-key flops recompute). false (default) => byte-identical
+  /// set-keyed DP. Only the batched objectives consult it.
+  bool order_aware_recompute = false;
+
+  /// Spaces batchable in the CONTRACTED role, threaded from
+  /// BatchPolicy::is_batchable_contracted_index. Building block consumed by the
+  /// single-term optimizer's DP contracted-role filter (a mode of such a space
+  /// is sliced where it is summed). Declared adjacent to its external
+  /// companion. Defaults to decline every index.
+  std::function<bool(Index const&)> is_batchable_contracted_index =
+      [](Index const&) { return false; };
+  /// Spaces batchable in the EXTERNAL role, threaded from
+  /// BatchPolicy::is_batchable_external_index. Defaults to decline every index;
+  /// a caller that wants external batching sets it explicitly (there is no
+  /// fallback to the contracted-role predicate).
+  std::function<bool(Index const&)> is_batchable_external_index =
+      [](Index const&) { return false; };
+  /// Per-index per-batch slice size (an upper bound) for a batchable index;
+  /// threaded from BatchPolicy::batch_target_size. Consulted only by the
+  /// batched objectives. Empty (default) => no target => no slicing.
+  std::function<std::size_t(Index const&)> batch_target_size = {};
+  /// k-aware inner (CSV/PNO composite) extent applied by every cost counter;
+  /// threaded from OptimizeOptions::inner_pow. Empty => composites sized by the
+  /// idxsz provider (k=1). REQUIRED whenever the network has composite indices.
+  std::function<double(Index const&, std::size_t)> inner_pow = {};
+  /// When true, only persistent (volatile-leaf-free) subnetworks are batched;
+  /// threaded from BatchPolicy::persistent_only. Batched objectives only.
+  bool batch_persistent_only = false;
 };
 
 /// A type-erased provider mapping an Index to its extent. Used by the public
@@ -141,15 +230,21 @@ struct OptimizeOptions {
   /// should return the k-th power mean of the per-pair domain
   /// (\c (Sum_pairs d^k / nocc^N)^(1/k)), so that the product over the group
   /// times the outer \c nocc^N equals the true block-sparse volume
-  /// \c Sum_pairs d^k. If empty, composites fall back to \ref idx_to_extent
-  /// (k=1), which grossly under-sizes multi-composite tensors.
-  std::function<double(Index const&, std::size_t)> inner_pow = {};
+  /// \c Sum_pairs d^k. REQUIRED whenever the network has composite indices:
+  /// leaving it empty no longer silently falls back to \ref idx_to_extent
+  /// (which grossly mis-sized multi-composite tensors and inverted
+  /// factorization choices, e.g. a 4-PAO integral) -- the sizing code throws
+  /// instead. No default: pass an explicit no-op only for composite-free work.
+  std::function<double(Index const&, std::size_t)> inner_pow;
 
-  /// Batchability policy: bundles the three per-index and per-leaf predicates
-  /// that govern batched evaluation. All three fields default to empty (no
-  /// batchable indices, no volatile leaves). The three sub-fields are:
-  ///   - `is_batchable_index`: marks an Index as living in a batchable space
-  ///     (e.g. DF/RI aux; = the eval cache's accept_aux).
+  /// Batchability policy: bundles the per-index and per-leaf predicates
+  /// that govern batched evaluation. All predicate fields default to empty (no
+  /// batchable indices, no volatile leaves). The key sub-fields are:
+  ///   - `is_batchable_contracted_index` / `is_batchable_external_index`: the
+  ///     two role building blocks marking an Index as living in a batchable
+  ///     space in the contracted / external role. The derived union
+  ///     `is_batchable_index()` (= the eval cache's accept_aux) is the runtime
+  ///     accept.
   ///   - `batch_target_size`: per-index slice size (an upper bound); a sliced
   ///     batchable index ix contributes min(extent, batch_target_size(ix)), a
   ///     conservative over-estimate of the realized tile-floored batch. Only
@@ -164,9 +259,13 @@ struct OptimizeOptions {
   /// Real-valued weight on the cost of each volatile contraction (re-evaluated
   /// on every replay of the network), while persistent (volatile-independent)
   /// contractions are counted once. Conceptually the expected number of
-  /// replays. Default 1.0 (no change). Only consulted when
-  /// batch_policy.is_volatile_leaf is non-empty and objective_function ==
-  /// ObjectiveFunction::DenseFLOPs.
+  /// replays. Default 1.0 (no change). Consulted whenever
+  /// batch_policy.is_volatile_leaf is non-empty, by DenseFLOPs AND by the peak
+  /// objectives: it scales the per-contraction cost in all of them (see
+  /// AdditiveModel and PeakModel/PeakBatchedModel's `cflops`). That cost is the
+  /// PRIMARY mode for the time-first objectives (so volatile_weight materially
+  /// changes which factorization DenseTimeSpace* picks) but only the tie-break
+  /// among equal-peak schedules for the space-first ones.
   double volatile_weight = 1.0;
 
   /// Relative peak tolerance for the peak objectives' final selection: among
@@ -175,8 +274,9 @@ struct OptimizeOptions {
   /// 0 = strict peak-min (flop tie-break only on exact peak ties). The default
   /// 0.10 trades up to a 10% peak increase for a (often much larger) flop
   /// reduction -- e.g. forming a persistent 4-PNO integral instead of
-  /// recomputing a particle-ladder. Only consulted by DensePeakSize /
-  /// DensePeakSizeBatched.
+  /// recomputing a particle-ladder. Only consulted by DensePeakSize.
+  /// DensePeakSizeBatched's final selection is instead threshold-gated by
+  /// \ref BatchPolicy::peak_threshold.
   double peak_flops_tolerance = 0.10;
 
   /// Per-intermediate memory-footprint penalty added to the single-term
@@ -209,6 +309,18 @@ struct OptimizeOptions {
   /// tie-break (no behavior change). Consulted only by DensePeakSize /
   /// DensePeakSizeBatched.
   RooflineParams roofline = {};
+
+  /// Optional out-channel: when non-null, optimize() records for each
+  /// top-level summand's optimized ExprPtr its per-contraction-node
+  /// sliced-sets (RPN / post-order, left-first, matching single_term_opt's
+  /// Product construction). Consumed by binarize via BinarizationOptions to
+  /// annotate eval nodes. Default null => no behavior change. Only populated
+  /// when objective_function == ObjectiveFunction::DensePeakSizeBatched;
+  /// every other objective leaves any pre-existing map entry for that
+  /// summand untouched (it is simply never written).
+  std::shared_ptr<std::unordered_map<sequant::Expr const*,
+                                     container::vector<NodeBatchAnnotation>>>
+      term_batch_axes = {};
 
   /// Prune disconnected (outer-product) subsets from the single-term
   /// contraction DP: a subset whose induced subgraph is disconnected under the
