@@ -905,8 +905,16 @@ class IndexSpaceRegistry {
       return false;
     }
     // this introduces icky dependence on bit footprint of vacuum_occupied_space
-    if (IS.type().to_int32() <=
-        vacuum_occupied_space(IS.qns()).type().to_int32()) {
+    // Reduce qns to physical-particle (e.g. spin) attributes before the
+    // occupancy lookup: non-particle traits (LCAO/factorization bits) do not
+    // participate in occupancy. The non-throwing lookup returns a null
+    // vacuum-occupied type for a non-physical auxiliary space (e.g. a
+    // density-fitting or batching index that carries no particle/spin
+    // character), so such a space is reported not pure-occupied rather than
+    // triggering a throw.
+    auto const vacocc_type =
+        vacuum_occupied_type_or_null(physical_particle_attributes(IS.qns()));
+    if (IS.type().to_int32() <= vacocc_type.to_int32()) {
       return true;
     } else {
       return false;
@@ -938,8 +946,10 @@ class IndexSpaceRegistry {
       // Q: would be better to express as IS is a subspace of
       // vacuum_unoccupied_space? Then subspaces that are part of neither (this
       // is not supposed to happen) will not cause an issue here
+      // non-throwing lookup: a non-physical auxiliary space yields null
+      // vacuum-occupied type, so this reports it as (trivially) unoccupied
       return !IS.type().intersection(
-          vacuum_occupied_space(physical_particle_attributes(IS.qns())).type());
+          vacuum_occupied_type_or_null(physical_particle_attributes(IS.qns())));
     }
   }
 
@@ -960,7 +970,10 @@ class IndexSpaceRegistry {
 
   /// @brief some states are fermi vacuum occupied
   bool contains_occupied(const IndexSpace& IS) const {
-    return IS.type().intersection(vacuum_occupied_space(IS.qns()).type()) !=
+    // non-throwing lookup on physical-particle attributes: a non-physical
+    // auxiliary space (no particle/spin character) contains no occupied states
+    return IS.type().intersection(vacuum_occupied_type_or_null(
+               physical_particle_attributes(IS.qns()))) !=
            IndexSpace::Type::null;
   }
 
@@ -981,7 +994,11 @@ class IndexSpaceRegistry {
 
   /// @brief some states are fermi vacuum unoccupied
   bool contains_unoccupied(const IndexSpace& IS) const {
-    return IS.type().intersection(vacuum_unoccupied_space(IS.qns()).type()) !=
+    // non-throwing lookup on physical-particle attributes: a non-physical
+    // auxiliary space (no particle/spin character) contains no unoccupied
+    // states
+    return IS.type().intersection(vacuum_unoccupied_type_or_null(
+               physical_particle_attributes(IS.qns()))) !=
            IndexSpace::Type::null;
   }
 
@@ -1383,6 +1400,51 @@ class IndexSpaceRegistry {
   ///@brief true if has one and only one bit set.
   static bool has_single_bit(std::uint32_t bits) {
     return bits && !(bits & (bits - 1));
+  }
+
+  /// @brief non-throwing counterpart of `vacuum_occupied_space(qn).type()`
+  /// @param qn quantum numbers (typically already reduced to
+  ///        physical-particle attributes)
+  /// @return the vacuum-occupied TYPE registered for @p qn (per-qns override if
+  ///         present, else the default), or IndexSpace::Type::null when no
+  ///         occupied space is registered at @p qn -- e.g. a non-physical
+  ///         auxiliary space (density-fitting, batching) that carries no
+  ///         particle/spin character, hence no occupancy.
+  IndexSpace::Type vacuum_occupied_type_or_null(
+      IndexSpace::QuantumNumbers qn) const {
+    auto const& qn2type = std::get<1>(vacocc_);
+    auto const it = qn2type.find(qn);
+    IndexSpace::Type const t =
+        (it != qn2type.end()) ? it->second : std::get<0>(vacocc_);
+    if (!t) return IndexSpace::Type::null;
+    return retrieve_ptr(t, qn) ? t : IndexSpace::Type::null;
+  }
+
+  /// @brief non-throwing counterpart of `complete_space(qn).type()`
+  /// @param qn quantum numbers
+  /// @return the complete-space TYPE registered for @p qn, or
+  ///         IndexSpace::Type::null when none is registered at @p qn
+  IndexSpace::Type complete_type_or_null(IndexSpace::QuantumNumbers qn) const {
+    auto const& qn2type = std::get<1>(complete_);
+    auto const it = qn2type.find(qn);
+    IndexSpace::Type const t =
+        (it != qn2type.end()) ? it->second : std::get<0>(complete_);
+    if (!t) return IndexSpace::Type::null;
+    return retrieve_ptr(t, qn) ? t : IndexSpace::Type::null;
+  }
+
+  /// @brief non-throwing counterpart of `vacuum_unoccupied_space(qn).type()`
+  /// @param qn quantum numbers (typically already reduced to
+  ///        physical-particle attributes)
+  /// @return the vacuum-unoccupied TYPE (complete minus vacuum-occupied) for
+  ///         @p qn, or IndexSpace::Type::null when no complete space is
+  ///         registered at @p qn (non-physical auxiliary space)
+  IndexSpace::Type vacuum_unoccupied_type_or_null(
+      IndexSpace::QuantumNumbers qn) const {
+    auto const complete_t = complete_type_or_null(qn);
+    if (!complete_t) return IndexSpace::Type::null;
+    auto const vacocc_t = vacuum_occupied_type_or_null(qn);
+    return complete_t.xOr(vacocc_t).intersection(complete_t);
   }
 
   /// @brief find an IndexSpace from its attr. return nullspace if not present.

@@ -45,8 +45,13 @@ void add_fermi_spin(IndexSpaceRegistry& isr);
 /// @brief add AO spaces to registry
 
 /// @param isr the IndexSpaceRegistry to which add the AO spaces
+/// @param spin_any the quantum numbers carried by spin-agnostic physical
+///        spaces in the target convention (Spin::null for
+///        SpinConvention::Legacy, else Spin::any); AO spaces are physical, so
+///        they carry it in the spin sector alongside the LCAOQNS::ao trait bit
 /// @param vbs if true, have separate virtual basis
-void add_ao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr, bool vbs = false,
+void add_ao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr,
+                   IndexSpace::QuantumNumbers spin_any, bool vbs = false,
                    bool abs = false);
 
 /// @brief add DF spaces to registry
@@ -58,7 +63,12 @@ void add_thc_spaces(std::shared_ptr<IndexSpaceRegistry>& isr);
 /// @brief add PAO spaces to registry
 
 /// expects \p isr to have a defined particle space
-void add_pao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr);
+/// @param spin_any the quantum numbers carried by spin-agnostic physical
+///        spaces in the target convention (Spin::null for
+///        SpinConvention::Legacy, else Spin::any); PAO spaces are physical, so
+///        they carry it in the spin sector alongside the LCAOQNS::pao trait bit
+void add_pao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr,
+                    IndexSpace::QuantumNumbers spin_any);
 
 /// @brief add batching spaces to registry
 void add_batching_spaces(std::shared_ptr<IndexSpaceRegistry>& isr);
