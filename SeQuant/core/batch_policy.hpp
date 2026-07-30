@@ -69,12 +69,13 @@ struct BatchPolicy {
   /// charge recompute realistically and thus pick a different (better-batching)
   /// factorization. It does NOT control external-mode EMISSION -- that is the
   /// independent \ref node_level_placement. Consulted only by the batched
-  /// objectives (threaded via CostParams). Default false (the historical
-  /// set-keyed DP), so this decouple is behavior-neutral. Enabling it is now
-  /// SAFE (selection only): the node-level emission that used to ride along
-  /// with it is separately gated by \ref node_level_placement (default off),
-  /// which keeps the correct, cheap root-level forest seed.
-  bool order_aware_recompute = false;
+  /// objectives (threaded via CostParams). Default TRUE: the recompute-aware
+  /// model is the more realistic cost for selection. This is SAFE precisely
+  /// because it is now selection-only -- the node-level emission it used to
+  /// force is separately gated by \ref node_level_placement (default off), so
+  /// the emission stays the correct, cheap root-level forest seed. (Before the
+  /// decouple, defaulting this true forced the node-level runtime regression.)
+  bool order_aware_recompute = true;
 
   /// Emission-placement knob for external (spectator) modes, INDEPENDENT of the
   /// order-aware cost model. Only meaningful with \ref batch_spectator_indices.

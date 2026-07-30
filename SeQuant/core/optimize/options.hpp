@@ -172,11 +172,11 @@ struct CostParams {
   /// + ordered-key flops recompute). SELECTION only -- it changes which
   /// factorization the DP picks, not external-mode emission (that is the
   /// independent \ref node_level_placement). Only the batched objectives
-  /// consult it. Default false (the historical set-keyed DP; behavior-neutral).
-  /// Enabling it is safe (selection only); node-level emission is separately
-  /// gated by node_level_placement. Threaded to/from
-  /// BatchPolicy::order_aware_recompute.
-  bool order_aware_recompute = false;
+  /// consult it. Default true (the recompute-aware model is the more realistic
+  /// default for selection; safe post-decouple -- selection only). Node-level
+  /// emission is separately gated by node_level_placement (default off).
+  /// Threaded to/from BatchPolicy::order_aware_recompute.
+  bool order_aware_recompute = true;
 
   /// Emission-placement knob for external modes, independent of the cost model
   /// (see \ref BatchPolicy::node_level_placement). Only meaningful with
