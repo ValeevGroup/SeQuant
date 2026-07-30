@@ -295,8 +295,9 @@ ResultExpr& optimize(ResultExpr&& expr, OptimizeOptions opts) {
 
 namespace {
 inline OptimizeOptions compatibility_opts(bool reorder_sum) {
-  return OptimizeOptions{.reorder = reorder_sum ? ReorderSum::Reorder
-                                                : ReorderSum::NoReorder};
+  return OptimizeOptions{
+      .reorder = reorder_sum ? ReorderSum::Reorder : ReorderSum::NoReorder,
+      .inner_pow = {}};
 }
 }  // namespace
 

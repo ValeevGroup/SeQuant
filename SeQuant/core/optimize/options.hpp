@@ -193,9 +193,13 @@ struct CostParams {
   /// batched objectives. Empty (default) => no target => no slicing.
   std::function<std::size_t(Index const&)> batch_target_size = {};
   /// k-aware inner (CSV/PNO composite) extent applied by every cost counter;
-  /// threaded from OptimizeOptions::inner_pow. Empty => composites sized by the
-  /// idxsz provider (k=1). REQUIRED whenever the network has composite indices.
-  std::function<double(Index const&, std::size_t)> inner_pow = {};
+  /// threaded from OptimizeOptions::inner_pow. REQUIRED whenever the network
+  /// has composite indices: empty no longer silently falls back to the idxsz
+  /// provider (k=1) -- inner_aware_volume throws instead (that fallback grossly
+  /// mis-sized multi-composite tensors, e.g. a 4-PAO integral). No default
+  /// (matching OptimizeOptions::inner_pow and PeakBatchedModel::inner_pow);
+  /// pass an explicit no-op only for composite-free work.
+  std::function<double(Index const&, std::size_t)> inner_pow;
   /// When true, only persistent (volatile-leaf-free) subnetworks are batched;
   /// threaded from BatchPolicy::persistent_only. Batched objectives only.
   bool batch_persistent_only = false;

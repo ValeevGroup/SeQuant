@@ -449,12 +449,14 @@ TEST_CASE("optimize", "[optimize]") {
       // footprint_weight == 0 reproduces the pure-FLOPs choice ...
       auto res0 = optimize(ex<Product>(prod), OptimizeOptions{});
       auto res0_explicit =
-          optimize(ex<Product>(prod), OptimizeOptions{.footprint_weight = 0.0});
+          optimize(ex<Product>(prod),
+                   OptimizeOptions{.inner_pow = {}, .footprint_weight = 0.0});
       REQUIRE(res0 == res0_explicit);  // weight 0 is a no-op
 
       // ... a large footprint_weight changes the chosen factorization.
-      auto resF = optimize(ex<Product>(prod),
-                           OptimizeOptions{.footprint_weight = 100.});
+      auto resF =
+          optimize(ex<Product>(prod),
+                   OptimizeOptions{.inner_pow = {}, .footprint_weight = 100.});
       REQUIRE(res0 != resF);
 
       uocc->approximate_size(uocc_sz);
@@ -510,7 +512,8 @@ TEST_CASE("optimize", "[optimize]") {
            {ObjectiveFunction::DenseFLOPs, ObjectiveFunction::DenseSize}) {
         CAPTURE(static_cast<int>(objective_function));
         auto res = optimize(
-            prod, OptimizeOptions{.objective_function = objective_function});
+            prod, OptimizeOptions{.objective_function = objective_function,
+                                  .inner_pow = {}});
         REQUIRE(res->is<Product>());
         REQUIRE(res->as<Product>().factors().size() == 2);
         REQUIRE(count_tensor_leaves(res) == 3);
@@ -523,10 +526,12 @@ TEST_CASE("optimize", "[optimize]") {
           L" + g_{i3,i4}^{a3,a4} t_{a3,a4}^{i1,i2} t_{a1}^{i3} t_{a2}^{i4}");
       REQUIRE(sum->is<Sum>());
 
-      auto no_reorder =
-          optimize(sum, OptimizeOptions{.reorder = ReorderSum::NoReorder});
-      auto reorder =
-          optimize(sum, OptimizeOptions{.reorder = ReorderSum::Reorder});
+      auto no_reorder = optimize(
+          sum,
+          OptimizeOptions{.reorder = ReorderSum::NoReorder, .inner_pow = {}});
+      auto reorder = optimize(
+          sum,
+          OptimizeOptions{.reorder = ReorderSum::Reorder, .inner_pow = {}});
       REQUIRE(no_reorder->is<Sum>());
       REQUIRE(reorder->is<Sum>());
       REQUIRE(no_reorder->as<Sum>().size() == sum->as<Sum>().size());
@@ -1278,10 +1283,12 @@ TEST_CASE("optimize", "[optimize]") {
 
       auto res_cse =
           optimize(expr, OptimizeOptions{.CSE = {.subnet = true},
-                                         .idx_to_extent = idx_to_extent});
+                                         .idx_to_extent = idx_to_extent,
+                                         .inner_pow = {}});
       auto res_no_cse =
           optimize(expr, OptimizeOptions{.CSE = {.subnet = false},
-                                         .idx_to_extent = idx_to_extent});
+                                         .idx_to_extent = idx_to_extent,
+                                         .inner_pow = {}});
 
       // With CSE: balanced tree -- both children are Products.
       REQUIRE(res_cse->is<Product>());
@@ -1297,8 +1304,9 @@ TEST_CASE("optimize", "[optimize]") {
       REQUIRE(is_unbalanced);
 
       // Default OptimizeOptions => subnet_cse Disable => same as no-CSE shape.
-      auto res_default =
-          optimize(expr, OptimizeOptions{.idx_to_extent = idx_to_extent});
+      auto res_default = optimize(
+          expr,
+          OptimizeOptions{.idx_to_extent = idx_to_extent, .inner_pow = {}});
       REQUIRE(res_default->is<Product>());
       REQUIRE(res_default->as<Product>().factors().size() == 2);
       bool default_is_unbalanced =
