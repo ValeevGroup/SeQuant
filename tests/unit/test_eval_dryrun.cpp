@@ -3295,16 +3295,22 @@ TEST_CASE("dryrun water-20 occ-batching overcompute (aux-only vs occ+aux)",
 
   auto regime = df_regime(kWater20_pVDZF12);
 
-  // [0]=aux-only, [1]=occ+aux: how many External vs Contracted batch modes the
-  // optimizer actually emitted (engagement check).
-  int n_ext[2] = {0, 0};
-  int n_con[2] = {0, 0};
+  // Three configs -- [0]=aux-only, [1]=occ+aux order_aware=false (the MPQC
+  // production path: root-level forest seed), [2]=occ+aux order_aware=true
+  // (node-level placement). n_ext/n_con = how many External vs Contracted batch
+  // modes the optimizer actually emitted (engagement check).
+  int n_ext[3] = {0, 0, 0};
+  int n_con[3] = {0, 0, 0};
 
   // occ_on=false: aux-only (mu~/K contracted-role batching, occ never batched).
   // occ_on=true : + external-occ (i) batching; occ_target 16 -> ceil(80/16)=5
   //               blocks per occ mode; doubles terms nest i_1 x i_2.
-  auto analyze = [&](ExprPtr const& giant,
-                     bool occ_on) -> sequant::eval::dryrun::CostProfile {
+  // order_aware: toggles the ordered-key recompute cost model + node-level
+  //              external placement (order_aware && spectator). MPQC production
+  //              runs order_aware=false; this test compares both for occ+aux to
+  //              probe whether order_aware=true does materially more recompute.
+  auto analyze = [&](ExprPtr const& giant, bool occ_on, bool order_aware,
+                     int cfg_idx) -> sequant::eval::dryrun::CostProfile {
     sequant::BatchPolicy policy;
     policy.is_batchable_contracted_index = is_df_batchable;  // mu~, K
     policy.is_batchable_external_index =
@@ -3314,11 +3320,7 @@ TEST_CASE("dryrun water-20 occ-batching overcompute (aux-only vs occ+aux)",
         })
                : std::function<bool(Index const&)>(is_df_batchable);
     policy.batch_spectator_indices = occ_on;
-    // Node-level External placement (and the ordered-key flops-recompute cost
-    // model) engages only with order_aware_recompute. MPQC leaves this at its
-    // default (false); flip it on for occ+aux to test whether the
-    // recompute-aware model charges the per-occ-block replay.
-    policy.order_aware_recompute = occ_on;
+    policy.order_aware_recompute = order_aware;
     policy.batch_target_size = [](Index const& ix) -> std::size_t {
       auto const k = ix.space().base_key();
       if (k == L"i") return 16;   // occ_target_size
@@ -3352,9 +3354,9 @@ TEST_CASE("dryrun water-20 occ-batching overcompute (aux-only vs occ+aux)",
     for (auto const& na : node_axes)
       for (auto const& e : na.axes) {
         if (e.second == sequant::BatchModeType::External)
-          n_ext[occ_on ? 1 : 0]++;
+          n_ext[cfg_idx]++;
         else
-          n_con[occ_on ? 1 : 0]++;
+          n_con[cfg_idx]++;
       }
     BinarizationOptions bopts;
     bopts.node_batch_axes = node_axes;
@@ -3372,63 +3374,60 @@ TEST_CASE("dryrun water-20 occ-batching overcompute (aux-only vs occ+aux)",
         /*trace=*/nullptr);
   };
 
-  // model_* = the STATIC per-node DP-model walk (order-/batching-blind, so it
-  // is ~flat occ-vs-aux: ratio ~1). dryrun_* = the recompute-aware REPLAY tally
-  // (per-occ-block re-execution counted), so under heavy occ batching occ+aux
-  // >> aux-only -- the overcompute this test surfaces.
-  double aux_mflops = 0, occ_mflops = 0, aux_mexec = 0, occ_mexec = 0;
-  double aux_dflops = 0, occ_dflops = 0, aux_dexec = 0, occ_dexec = 0;
-  std::size_t aux_dops = 0, occ_dops = 0;
-  double aux_maxpeak = 0, occ_maxpeak = 0;
+  // Three configs, summed over all terms. cfg 0 = aux-only, 1 = occ+aux
+  // order_aware=false (MPQC production, root-level seed), 2 = occ+aux
+  // order_aware=true (node-level placement). model_* is order-/batching-blind
+  // (~flat); dryrun_* is the recompute-aware replay tally. The 2-vs-1 ratio is
+  // the diagnostic: does order_aware=true do materially more recompute?
+  double mflops[3] = {0, 0, 0}, mexec[3] = {0, 0, 0};
+  double dflops[3] = {0, 0, 0}, dexec[3] = {0, 0, 0};
+  std::size_t dops[3] = {0, 0, 0};
+  double maxpeak[3] = {0, 0, 0};
   std::size_t n_ok = 0;
   for (std::size_t t = 0; t < summands.size(); ++t) {
     ExprPtr giant = flatten_product(summands[t]);
     if (!giant) continue;
-    sequant::eval::dryrun::CostProfile a, o;
+    sequant::eval::dryrun::CostProfile r[3];
     try {
-      a = analyze(giant, /*occ_on=*/false);
-      o = analyze(giant, /*occ_on=*/true);
+      r[0] = analyze(giant, /*occ_on=*/false, /*order_aware=*/false, 0);
+      r[1] = analyze(giant, /*occ_on=*/true, /*order_aware=*/false, 1);
+      r[2] = analyze(giant, /*occ_on=*/true, /*order_aware=*/true, 2);
     } catch (std::exception const&) {
       continue;
     } catch (...) {
       continue;
     }
     ++n_ok;
-    aux_mflops += a.model_flops;
-    occ_mflops += o.model_flops;
-    aux_mexec += a.model_exec;
-    occ_mexec += o.model_exec;
-    aux_dflops += a.dryrun_flops;
-    occ_dflops += o.dryrun_flops;
-    aux_dexec += a.dryrun_exec;
-    occ_dexec += o.dryrun_exec;
-    aux_dops += a.dryrun_n_ops;
-    occ_dops += o.dryrun_n_ops;
-    aux_maxpeak = std::max(aux_maxpeak, a.peak_bytes / 1e9);
-    occ_maxpeak = std::max(occ_maxpeak, o.peak_bytes / 1e9);
+    for (int c = 0; c < 3; ++c) {
+      mflops[c] += r[c].model_flops;
+      mexec[c] += r[c].model_exec;
+      dflops[c] += r[c].dryrun_flops;
+      dexec[c] += r[c].dryrun_exec;
+      dops[c] += r[c].dryrun_n_ops;
+      maxpeak[c] = std::max(maxpeak[c], r[c].peak_bytes / 1e9);
+    }
   }
   auto ratio = [](double num, double den) { return den > 0 ? num / den : 0.0; };
+  wchar_t const* lab[3] = {L"aux-only        ", L"occ+aux OA=false",
+                           L"occ+aux OA=true "};
   std::wcerr << L"\n=== [water-20 overcompute] " << n_ok << L" terms ("
-             << summands.size() << L" total) ===\n"
-             << L"  model_flops:  aux-only=" << aux_mflops << L"  occ+aux="
-             << occ_mflops << L"  ratio=" << ratio(occ_mflops, aux_mflops)
-             << L"   (batching-blind: expect ~1)\n"
-             << L"  model_exec:   aux-only=" << aux_mexec << L"  occ+aux="
-             << occ_mexec << L"  ratio=" << ratio(occ_mexec, aux_mexec) << L"\n"
-             << L"  dryrun_flops: aux-only=" << aux_dflops << L"  occ+aux="
-             << occ_dflops << L"  ratio=" << ratio(occ_dflops, aux_dflops)
-             << L"   (recompute-aware: >1 iff occ batching engages)\n"
-             << L"  dryrun_exec:  aux-only=" << aux_dexec << L"  occ+aux="
-             << occ_dexec << L"  ratio=" << ratio(occ_dexec, aux_dexec) << L"\n"
-             << L"  dryrun_n_ops: aux-only=" << aux_dops << L"  occ+aux="
-             << occ_dops << L"  ratio="
-             << ratio(double(occ_dops), double(aux_dops)) << L"\n"
-             << L"  max_peak_GB:  aux-only=" << aux_maxpeak << L"  occ+aux="
-             << occ_maxpeak << L"\n"
-             << L"  emitted modes: aux-only ext=" << n_ext[0] << L" con="
-             << n_con[0] << L" | occ+aux ext=" << n_ext[1] << L" con="
-             << n_con[1] << L"\n";
-  REQUIRE(aux_mflops > 0.0);
+             << summands.size() << L" total) ===\n";
+  for (int c = 0; c < 3; ++c)
+    std::wcerr << L"  " << lab[c] << L" | model_flops=" << mflops[c]
+               << L" dryrun_flops=" << dflops[c] << L" dryrun_exec=" << dexec[c]
+               << L" dryrun_n_ops=" << dops[c] << L" max_peak_GB=" << maxpeak[c]
+               << L" | ext=" << n_ext[c] << L" con=" << n_con[c] << L"\n";
+  std::wcerr << L"  --- vs aux-only ---   occ+aux OA=false: dryrun_exec x"
+             << ratio(dexec[1], dexec[0]) << L" n_ops x"
+             << ratio(double(dops[1]), double(dops[0]))
+             << L"   |   occ+aux OA=true: dryrun_exec x"
+             << ratio(dexec[2], dexec[0]) << L" n_ops x"
+             << ratio(double(dops[2]), double(dops[0])) << L"\n";
+  std::wcerr
+      << L"  --- REGRESSION PROBE (OA=true vs OA=false) --- dryrun_exec x"
+      << ratio(dexec[2], dexec[1]) << L"  dryrun_n_ops x"
+      << ratio(double(dops[2]), double(dops[1])) << L"\n";
+  REQUIRE(mflops[0] > 0.0);
 }
 
 // P4 GO/NO-GO AUDIT (Concern #3): across ALL C60 residual terms under the
