@@ -2096,8 +2096,9 @@ TEST_CASE(
     // This case characterizes the perf-first-vs-peak-first contrast under the
     // LEGACY set-keyed model: peak-first forms the fully-sliceable 4-PAO (its
     // batched peak looks small) while perf-first refuses it on flops. Pin
-    // order_aware_recompute OFF now that BatchPolicy defaults it ON -- under
-    // the realistic (resident-scan) model the contrast COLLAPSES (the 4-PAO's
+    // order_aware_recompute OFF explicitly (also the BatchPolicy default) --
+    // under the realistic (resident-scan) model the contrast COLLAPSES (the
+    // 4-PAO's
     // batched peak is priced higher by accumulator residency, so peak-first
     // also avoids it, and perf-first's flops then exceed peak-first's because
     // the per-block recompute is charged). The legacy contrast is what

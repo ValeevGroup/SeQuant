@@ -169,11 +169,14 @@ struct CostParams {
   bool batch_spectator_indices = false;
 
   /// Enable the order-aware multilevel recompute cost model (resident-scan peak
-  /// + ordered-key flops recompute). Only the batched objectives consult it.
-  /// Defaults to true: modelling the per-batch-block replay recompute is always
-  /// the more realistic cost; set false only to recover the legacy
-  /// byte-identical set-keyed DP.
-  bool order_aware_recompute = true;
+  /// + ordered-key flops recompute) AND, with batch_spectator_indices, node-
+  /// level external placement. Only the batched objectives consult it. Default
+  /// false (legacy set-keyed DP + root-level forest seed): although the
+  /// recompute-aware cost model is more realistic for selection, enabling it
+  /// currently routes external placement through the node-level path, which is
+  /// a net runtime regression on water-20 (see the water-20 dryrun diagnostic),
+  /// so it stays off until node-level placement is fixed.
+  bool order_aware_recompute = false;
 
   /// Spaces batchable in the CONTRACTED role, threaded from
   /// BatchPolicy::is_batchable_contracted_index. Building block consumed by the

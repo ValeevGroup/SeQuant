@@ -3018,7 +3018,8 @@ TEST_CASE("reconstruct_batched_modes_emits_external_per_node",
   // This case characterizes the LEGACY emit_external regime -- root-level
   // forest seed via the `else if (emit_external)` branch, NOT node-level
   // placement (see the Assertion 1b comment below). Pin order_aware_recompute
-  // OFF now that BatchPolicy defaults it ON, so this regime is still exercised.
+  // OFF explicitly (it is also the BatchPolicy default) so this legacy regime
+  // is pinned regardless of any future default change.
   opts.batch_policy.order_aware_recompute = false;
   opts.term_batch_axes = axes_map;
 

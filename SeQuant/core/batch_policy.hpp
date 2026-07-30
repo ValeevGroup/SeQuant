@@ -65,12 +65,16 @@ struct BatchPolicy {
   bool batch_spectator_indices = false;
 
   /// Enable the order-aware multilevel recompute cost model (resident-scan peak
-  /// + ordered-key flops recompute). Consulted only by the batched objectives
-  /// (threaded via CostParams). Defaults to true: modelling the per-batch-block
-  /// replay recompute is always the more realistic cost (the set-keyed DP that
-  /// ignores it under-costs every batched schedule); set false only to recover
-  /// the legacy byte-identical set-keyed DP.
-  bool order_aware_recompute = true;
+  /// + ordered-key flops recompute) AND, together with batch_spectator_indices,
+  /// node-level external placement. Consulted only by the batched objectives
+  /// (threaded via CostParams). Default false (legacy byte-identical set-keyed
+  /// DP + root-level forest seed). NOTE: although the recompute-aware cost
+  /// model is in principle more realistic, enabling it currently switches
+  /// external placement to the node-level path, which on water-20 does ~2x the
+  /// traffic and ~12x the op-executions of the root-level seed (see the
+  /// water-20 dryrun diagnostic) -- a net runtime REGRESSION -- so it stays off
+  /// by default until node-level placement is fixed.
+  bool order_aware_recompute = false;
 
   /// If true, restrict batching to persistent (amplitude-independent) subtrees,
   /// declining to batch any subtree that contains a volatile leaf. If false
