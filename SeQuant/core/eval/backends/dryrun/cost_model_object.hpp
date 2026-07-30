@@ -8,11 +8,39 @@
 #include <SeQuant/core/optimize/options.hpp>
 #include <SeQuant/core/optimize/single_term_detail.hpp>
 
+#include <atomic>
 #include <cstddef>
 #include <functional>
 #include <utility>
 
 namespace sequant::eval::dryrun {
+
+///
+/// \brief Opt-in accumulator for the REPLAY-tallied (recompute-aware) cost.
+///
+/// The static per-node cost walk in \c cost_profile() reports order-/batching-
+/// blind DP-model quantities (\c CostProfile::model_flops etc.): each internal
+/// node is priced ONCE, so the walk never sees the per-occ-block REPLAY
+/// recompute the batched evaluator incurs at runtime. This sink is the
+/// replay-side counterpart: when a non-null \c CostSink is attached to the
+/// \c CostModel shared by every dry-run \c Result token, each ACTUAL product-op
+/// execution during the \c Trace::On replay folds its own SLICED-extent cost
+/// here (see \c CostModel::tally_op and \c DryRunOps::prod). Because a sliced,
+/// occ-DEPENDENT op executed N times does ~1/N work each pass, its sliced-cost
+/// sum is work-neutral (~= its unsliced cost); only the occ-INDEPENDENT work
+/// re-executed at full size once per block inflates -- so the totals here
+/// isolate the recompute the model walk cannot.
+///
+/// Mirrors \c sequant::eval::PeakSink (eval.hpp): an OPTIONAL sink, defaulting
+/// off, so the production runtime path (which never constructs a dry-run \c
+/// CostModel) is byte-identical. The atomics let a fold from a concurrent
+/// evaluator stay correct, though \c cost_profile() itself is single-threaded.
+///
+struct CostSink {
+  std::atomic<double> flops{0.0};
+  std::atomic<double> exec{0.0};
+  std::atomic<std::size_t> n_ops{0};
+};
 
 /// Per-index extent OVERRIDE table: narrows specific indices (by identity, so
 /// it survives reshaping across prod/sum/permute -- the same shared/
@@ -110,6 +138,33 @@ class CostModel {
 
   [[nodiscard]] SizeRegime const& regime() const noexcept { return regime_; }
 
+  ///
+  /// \brief Attach (or detach with nullptr) the optional replay cost sink.
+  ///
+  /// Const because the \c CostModel is shared as \c shared_ptr<CostModel const>
+  /// by every dry-run \c Result token; \c cost_profile() sets this on its one
+  /// shared model just before the \c Trace::On replay so each product op can
+  /// fold into it. The pointee (a \c CostSink) is external and owns the mutable
+  /// state; this only records where to fold. Off by default => no fold => the
+  /// dry-run backend is byte-identical when unused.
+  ///
+  void set_cost_sink(CostSink* sink) const noexcept { sink_ = sink; }
+
+  ///
+  /// \brief Fold one product op's SLICED-extent \p flops_count / \p exec into
+  ///        the attached sink (no-op when none is attached).
+  ///
+  /// Called at each actual product execution in the replay, so a contraction
+  /// re-executed once per occ block is tallied once per block at its sliced
+  /// size -- exactly the recompute signal (see \c CostSink).
+  ///
+  void tally_op(double flops_count, double exec) const noexcept {
+    if (!sink_) return;
+    sink_->flops.fetch_add(flops_count, std::memory_order_relaxed);
+    sink_->exec.fetch_add(exec, std::memory_order_relaxed);
+    sink_->n_ops.fetch_add(1, std::memory_order_relaxed);
+  }
+
  private:
   // Index-to-extent callable consulting `overrides` first, else the
   // regime's nominal extent. The returned std::function captures `overrides`
@@ -130,6 +185,10 @@ class CostModel {
 
   SizeRegime regime_;
   RooflineParams roofline_;
+  // Optional replay cost sink (see set_cost_sink/tally_op). Mutable so it can
+  // be (de)attached on a shared_ptr<CostModel const>; a raw non-owning pointer
+  // to caller-owned state. nullptr (default) => tally_op is a no-op.
+  mutable CostSink* sink_ = nullptr;
   // sizeof(double); see doc/dev/plans/2026-07-04-dryrun-eval-backend.md Task 2
   // note on OptimizeOptions::numeric_size (hardcoded here, matching the C60
   // trace's real-only CSV-CCk path; complex CSV-CCk is out of scope, see the

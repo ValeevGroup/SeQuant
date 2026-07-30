@@ -2239,8 +2239,9 @@ TEST_CASE(
                << L"ms  max free-mu~ on a node=" << a.max_free_mu
                << L"  largest realized free-mu~={" << a.largest_desc << L"}="
                << a.largest_realized_gb << L" GB\n               cost_profile: "
-               << L"n_ops=" << a.cp.n_ops << L" flops=" << a.cp.flops
-               << L" peak_bytes=" << (a.cp.peak_bytes / 1e9) << L" GB\n";
+               << L"n_ops=" << a.cp.model_n_ops << L" flops="
+               << a.cp.model_flops << L" peak_bytes=" << (a.cp.peak_bytes / 1e9)
+               << L" GB\n";
 
     // ---- P1 forest-batching seed: size+report the giant under an occ-slice --
     // Reuse the [dryrun-occ-sizing] giant-node locator + ext_occ extraction to
@@ -2364,8 +2365,8 @@ TEST_CASE(
                << (a.max_free_mu >= 4 ? L"YES" : L"NO") << L" (max free mu~="
                << a.max_free_mu << L")\n    DP-model largest realized free-mu~="
                << a.largest_realized_gb << L" GB {" << a.largest_desc << L"}\n"
-               << L"    cost_profile: n_ops=" << a.cp.n_ops << L" flops="
-               << a.cp.flops << L" peak_bytes=" << (a.cp.peak_bytes / 1e9)
+               << L"    cost_profile: n_ops=" << a.cp.model_n_ops << L" flops="
+               << a.cp.model_flops << L" peak_bytes=" << (a.cp.peak_bytes / 1e9)
                << L" GB\n";
   };
   std::wcerr << L"\n=== [dryrun-objective] VERDICT (C60 giant, index 38) ===\n";
@@ -2385,7 +2386,7 @@ TEST_CASE(
   // COST PROOF via the single shared cost_profile() entry point.
   // (a) perf-first is flops-primary: it must not pick a higher-flops
   //     factorization than peak-first.
-  CHECK(perf_first.cp.flops <= peak_first.cp.flops);
+  CHECK(perf_first.cp.model_flops <= peak_first.cp.model_flops);
   // (b) perf-first's modeled peak is dominated by the GENUINE 4-PNO
   //     intermediate the perf-first schedule forms -- the CC doubles W node
   //     {a_1<i,i> a_2<i,i> a_3<i,i> a_4<i,i>} with FOUR distinct PNO legs over
@@ -3227,12 +3228,12 @@ TEST_CASE(
     double const peak_first_gb = peak_first.cp.peak_bytes / 1e9;
     double const perf_first_gb = perf_first.cp.peak_bytes / 1e9;
     std::wcerr << L"perfcost term " << t << L" | peak_first flops="
-               << peak_first.cp.flops << L" peak_GB=" << peak_first_gb
-               << L" | perf_first flops=" << perf_first.cp.flops << L" peak_GB="
-               << perf_first_gb << L"\n";
+               << peak_first.cp.model_flops << L" peak_GB=" << peak_first_gb
+               << L" | perf_first flops=" << perf_first.cp.model_flops
+               << L" peak_GB=" << perf_first_gb << L"\n";
 
-    total_peak_first_flops += peak_first.cp.flops;
-    total_perf_first_flops += perf_first.cp.flops;
+    total_peak_first_flops += peak_first.cp.model_flops;
+    total_perf_first_flops += perf_first.cp.model_flops;
     if (peak_first_gb > max_peak_first_peak_gb)
       max_peak_first_peak_gb = peak_first_gb;
     if (perf_first_gb > max_perf_first_peak_gb)
@@ -3326,7 +3327,10 @@ TEST_CASE("dryrun water-20 occ-batching overcompute (aux-only vs occ+aux)",
     };
     policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
     policy.accumulation_factor = 1.0;
-    policy.peak_threshold = 100.0 * 1e9;
+    policy.peak_threshold = (std::getenv("SEQUANT_UT_W20_THR")
+                                 ? std::atof(std::getenv("SEQUANT_UT_W20_THR"))
+                                 : 100.0) *
+                            1e9;
 
     auto axes_map = std::make_shared<std::unordered_map<
         Expr const*, container::vector<NodeBatchAnnotation>>>();
@@ -3368,7 +3372,13 @@ TEST_CASE("dryrun water-20 occ-batching overcompute (aux-only vs occ+aux)",
         /*trace=*/nullptr);
   };
 
-  double aux_flops = 0, occ_flops = 0, aux_exec = 0, occ_exec = 0;
+  // model_* = the STATIC per-node DP-model walk (order-/batching-blind, so it
+  // is ~flat occ-vs-aux: ratio ~1). dryrun_* = the recompute-aware REPLAY tally
+  // (per-occ-block re-execution counted), so under heavy occ batching occ+aux
+  // >> aux-only -- the overcompute this test surfaces.
+  double aux_mflops = 0, occ_mflops = 0, aux_mexec = 0, occ_mexec = 0;
+  double aux_dflops = 0, occ_dflops = 0, aux_dexec = 0, occ_dexec = 0;
+  std::size_t aux_dops = 0, occ_dops = 0;
   double aux_maxpeak = 0, occ_maxpeak = 0;
   std::size_t n_ok = 0;
   for (std::size_t t = 0; t < summands.size(); ++t) {
@@ -3384,26 +3394,41 @@ TEST_CASE("dryrun water-20 occ-batching overcompute (aux-only vs occ+aux)",
       continue;
     }
     ++n_ok;
-    aux_flops += a.flops;
-    occ_flops += o.flops;
-    aux_exec += a.exec_cost;
-    occ_exec += o.exec_cost;
+    aux_mflops += a.model_flops;
+    occ_mflops += o.model_flops;
+    aux_mexec += a.model_exec;
+    occ_mexec += o.model_exec;
+    aux_dflops += a.dryrun_flops;
+    occ_dflops += o.dryrun_flops;
+    aux_dexec += a.dryrun_exec;
+    occ_dexec += o.dryrun_exec;
+    aux_dops += a.dryrun_n_ops;
+    occ_dops += o.dryrun_n_ops;
     aux_maxpeak = std::max(aux_maxpeak, a.peak_bytes / 1e9);
     occ_maxpeak = std::max(occ_maxpeak, o.peak_bytes / 1e9);
   }
   auto ratio = [](double num, double den) { return den > 0 ? num / den : 0.0; };
   std::wcerr << L"\n=== [water-20 overcompute] " << n_ok << L" terms ("
              << summands.size() << L" total) ===\n"
-             << L"  flops:      aux-only=" << aux_flops << L"  occ+aux="
-             << occ_flops << L"  ratio=" << ratio(occ_flops, aux_flops) << L"\n"
-             << L"  exec_cost:  aux-only=" << aux_exec << L"  occ+aux="
-             << occ_exec << L"  ratio=" << ratio(occ_exec, aux_exec) << L"\n"
-             << L"  max_peak_GB: aux-only=" << aux_maxpeak << L"  occ+aux="
+             << L"  model_flops:  aux-only=" << aux_mflops << L"  occ+aux="
+             << occ_mflops << L"  ratio=" << ratio(occ_mflops, aux_mflops)
+             << L"   (batching-blind: expect ~1)\n"
+             << L"  model_exec:   aux-only=" << aux_mexec << L"  occ+aux="
+             << occ_mexec << L"  ratio=" << ratio(occ_mexec, aux_mexec) << L"\n"
+             << L"  dryrun_flops: aux-only=" << aux_dflops << L"  occ+aux="
+             << occ_dflops << L"  ratio=" << ratio(occ_dflops, aux_dflops)
+             << L"   (recompute-aware: >1 iff occ batching engages)\n"
+             << L"  dryrun_exec:  aux-only=" << aux_dexec << L"  occ+aux="
+             << occ_dexec << L"  ratio=" << ratio(occ_dexec, aux_dexec) << L"\n"
+             << L"  dryrun_n_ops: aux-only=" << aux_dops << L"  occ+aux="
+             << occ_dops << L"  ratio="
+             << ratio(double(occ_dops), double(aux_dops)) << L"\n"
+             << L"  max_peak_GB:  aux-only=" << aux_maxpeak << L"  occ+aux="
              << occ_maxpeak << L"\n"
              << L"  emitted modes: aux-only ext=" << n_ext[0] << L" con="
              << n_con[0] << L" | occ+aux ext=" << n_ext[1] << L" con="
              << n_con[1] << L"\n";
-  REQUIRE(aux_flops > 0.0);
+  REQUIRE(aux_mflops > 0.0);
 }
 
 // P4 GO/NO-GO AUDIT (Concern #3): across ALL C60 residual terms under the
@@ -3980,13 +4005,20 @@ TEST_CASE("cost_profile returns peak/flops/exec/n_ops",
   CostProfile const cp = cost_profile(forest, policy, cfg, regime,
                                       /*trace=*/nullptr);
 
-  std::wcerr << L"\n[cost_profile] n_ops=" << cp.n_ops << L" flops=" << cp.flops
-             << L" exec_cost=" << cp.exec_cost << L" peak_bytes="
-             << (cp.peak_bytes / 1e9) << L" GB\n";
+  std::wcerr << L"\n[cost_profile] model_n_ops=" << cp.model_n_ops
+             << L" model_flops=" << cp.model_flops << L" model_exec="
+             << cp.model_exec << L" dryrun_n_ops=" << cp.dryrun_n_ops
+             << L" dryrun_flops=" << cp.dryrun_flops << L" dryrun_exec="
+             << cp.dryrun_exec << L" peak_bytes=" << (cp.peak_bytes / 1e9)
+             << L" GB\n";
 
-  CHECK(cp.n_ops > 0);
-  CHECK(cp.flops > 0.0);
-  CHECK(cp.exec_cost > 0.0);
+  CHECK(cp.model_n_ops > 0);
+  CHECK(cp.model_flops > 0.0);
+  CHECK(cp.model_exec > 0.0);
+  // The replay tallied at least one product op with positive cost.
+  CHECK(cp.dryrun_n_ops > 0);
+  CHECK(cp.dryrun_flops > 0.0);
+  CHECK(cp.dryrun_exec > 0.0);
   // The gotcha guard: printing was forced on internally, so the hwmark/sink
   // accumulated even with no trace stream.
   CHECK(cp.peak_bytes > 0.0);
@@ -4766,7 +4798,7 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
       std::wcerr << L"---- TRACE ----\n" << trace.str() << L"---- END ----\n";
 
     Meas m;
-    m.static_nodes = cp.n_ops;
+    m.static_nodes = cp.model_n_ops;
     m.peak_gb = cp.peak_bytes / 1e9;
     m.contracted_occ_stamps = n_contracted_occ_stamps;
     m.external_occ_stamps = n_external_occ_stamps;
@@ -4794,7 +4826,7 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
     // expression PLUS the slices of only the modes that occur in it -- the
     // touched-mode-slice signature. Two builds with the same key are the same
     // value recomputed (avoidable); a different touched slice is legitimate.
-    m.cp_exec = cp.exec_cost;
+    m.cp_exec = cp.model_exec;
     std::vector<std::pair<std::wstring, std::wstring>> stack;  // (mode, slice)
     std::map<std::wstring, std::size_t> total_of;              // expr -> builds
     std::map<std::wstring, std::set<std::wstring>> keys_of;    // expr -> keys
@@ -5152,7 +5184,7 @@ TEST_CASE(
     if (std::getenv("SEQUANT_UT_DRYRUN_DUMPTRACE"))
       std::wcerr << L"---- TRACE ----\n" << trace.str() << L"---- END ----\n";
 
-    m.static_nodes = cp.n_ops;
+    m.static_nodes = cp.model_n_ops;
     m.peak_gb = cp.peak_bytes / 1e9;
 
     auto field = [](std::wstring const& s, std::size_t i) -> std::wstring {

@@ -135,6 +135,12 @@ struct DryRunOps {
       double const exec = cm->exec_cost(flops, cm->memsize(idx, ov), 4096);
       write_log(Logger::instance(), "OpCost", std::format(" | {}", flops),
                 std::format(" | {}", exec), '\n');
+      // Fold this op's SLICED-extent cost into the replay cost sink, if one is
+      // attached (cost_profile()'s recompute-aware tally). merged/ov carry the
+      // runtime slicing, so a contraction re-executed once per occ block is
+      // charged once per block at its sliced size -- the same numbers already
+      // logged above, now summed. No-op (byte-identical) when unattached.
+      cm->tally_op(flops, exec);
     }
 
     if (a.this_annot.empty()) {

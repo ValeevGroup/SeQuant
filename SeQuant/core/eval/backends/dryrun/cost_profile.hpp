@@ -133,15 +133,39 @@ struct CostProfile {
   /// \c W case, where the batched-inner scratch dwarfs any persistent
   /// cross-term residency).
   double peak_bytes = 0;
-  /// Summed unweighted static contraction FLOPs over all internal nodes.
-  /// NOT CSE-aware across summands: a cross-term shared intermediate is
-  /// walked (and its FLOPs counted) once per occurrence, not once overall.
-  double flops = 0;
-  /// Summed roofline-projected execution cost over all internal nodes. Same
-  /// per-occurrence (not CSE-deduplicated) accounting caveat as \c flops.
-  double exec_cost = 0;
-  /// Number of internal (contraction) nodes across the forest.
-  std::size_t n_ops = 0;
+  /// STATIC per-node DP-MODEL FLOPs: summed unweighted static contraction FLOPs
+  /// over all internal nodes, from the order-/batching-blind static walk. NOT
+  /// CSE-aware across summands (a cross-term shared intermediate is walked, and
+  /// its FLOPs counted, once per occurrence, not once overall), and NOT
+  /// replay-aware: each node is priced exactly once, so this never reflects the
+  /// per-occ-block recompute the batched replay incurs. Compare against \c
+  /// dryrun_flops: the two are ~equal when no batching engages, and \c
+  /// dryrun_flops exceeds this by the recompute factor when it does.
+  double model_flops = 0;
+  /// STATIC per-node DP-MODEL roofline exec cost, summed over all internal
+  /// nodes. Same per-occurrence (not CSE-deduplicated), batching-blind caveat
+  /// as \c model_flops.
+  double model_exec = 0;
+  /// Number of internal (contraction) nodes across the forest (static count).
+  std::size_t model_n_ops = 0;
+  /// REPLAY-tallied (recompute-aware) FLOPs: the sum, over every ACTUAL product
+  /// op executed in the \c Trace::On replay, of that op's SLICED-extent flops
+  /// (folded via the \c CostSink attached to the shared \c CostModel; see
+  /// result.hpp \c DryRunOps::prod). A batched op re-executed once per occ
+  /// block is charged once per block at its sliced size, so occ-DEPENDENT work
+  /// stays ~work-neutral while occ-INDEPENDENT recompute (persistent
+  /// intermediates / leaf re-materializations re-run at full size per block)
+  /// inflates -- making this the metric that PREDICTS batched-replay
+  /// overcompute (e.g. occ-batching being ~Nx aux-only). Equal to \c
+  /// model_flops (up to the product-op-only tally) when no batching engages.
+  double dryrun_flops = 0;
+  /// REPLAY-tallied roofline exec cost (traffic-dominated, the better wall-time
+  /// proxy), summed per product-op execution. Same recompute semantics as \c
+  /// dryrun_flops.
+  double dryrun_exec = 0;
+  /// Number of product-op EXECUTIONS in the replay (counts re-executions per
+  /// batch block), so it grows with recompute -- unlike \c model_n_ops.
+  std::size_t dryrun_n_ops = 0;
 };
 
 /// Replays a factorized eval forest zero-data through the real eval loop --
@@ -168,13 +192,20 @@ struct CostProfile {
 /// writes \c Logger::instance().eval (including another concurrent
 /// \c cost_profile() call).
 ///
-/// \par FLOPs / exec_cost accounting
-/// \c CostProfile::flops and \c CostProfile::exec_cost are accumulated by a
-/// static walk that sums a contribution per BINARIZED internal node of the
-/// forest; they are NOT CSE-aware across summands. A shared intermediate
-/// that recurs across multiple summand trees (or multiple times within one)
-/// is counted once per occurrence, not once overall -- unlike \c peak_bytes,
-/// which is driven by the gated cache and so does reflect cross-term reuse.
+/// \par FLOPs / exec accounting (model vs dryrun)
+/// \c CostProfile::model_flops and \c CostProfile::model_exec are accumulated
+/// by a STATIC walk that sums a contribution per BINARIZED internal node of the
+/// forest; they are NOT CSE-aware across summands (a shared intermediate that
+/// recurs across summand trees, or multiple times within one, is counted once
+/// per occurrence) and NOT replay-aware (each node is priced exactly once,
+/// blind to order/batching). \c CostProfile::dryrun_flops / \c dryrun_exec /
+/// \c dryrun_n_ops are the recompute-aware counterparts, tallied from the
+/// \c Trace::On replay below: every ACTUAL product-op execution folds its
+/// SLICED-extent cost into a \c CostSink attached to the shared \c CostModel,
+/// so an op re-executed once per batch block is counted once per block. When no
+/// batching engages the two agree (up to the product-op-only dryrun tally);
+/// when it does, \c dryrun_* exceeds \c model_* by the recompute factor --
+/// which is what \c peak_bytes (max, not sum) cannot express.
 ///
 /// \param forest per-summand optimized+binarized eval forest (the real IR).
 /// \param policy the batch policy driving the replay evaluator; its
@@ -210,14 +241,15 @@ inline CostProfile cost_profile(std::vector<EvalNodeDryRun> const& forest,
   std::function<void(EvalNodeDryRun const&)> walk =
       [&](EvalNodeDryRun const& n) {
         if (n.leaf()) return;
-        profile.n_ops += 1;
+        profile.model_n_ops += 1;
         double const node_flops =
             flops_of(n.left()->canon_indices(), n.right()->canon_indices(),
                      n->canon_indices());
-        profile.flops += node_flops;
+        profile.model_flops += node_flops;
         container::svector<Index> const left(n.left()->canon_indices().begin(),
                                              n.left()->canon_indices().end());
-        profile.exec_cost += cm->exec_cost(node_flops, cm->memsize(left), 4096);
+        profile.model_exec +=
+            cm->exec_cost(node_flops, cm->memsize(left), 4096);
         walk(n.left());
         walk(n.right());
       };
@@ -263,6 +295,20 @@ inline CostProfile cost_profile(std::vector<EvalNodeDryRun> const& forest,
   logger.eval.level = 2;
   logger.eval.stream = trace ? &trace_capture : nullptr;
 
+  // Attach a replay cost sink to the shared CostModel so each product op
+  // executed in the Trace::On replay below folds its SLICED-extent cost here
+  // (DryRunOps::prod -> CostModel::tally_op). Only DryRun Results built from
+  // this same `cm` fold in, and only while the sink is attached, so this
+  // records exactly the replay recompute for THIS forest. Detached on every
+  // exit path by the guard below (the model outlives the results, but leaving a
+  // dangling sink pointer set would be a latent hazard if `cm` were reused).
+  CostSink costsink;
+  cm->set_cost_sink(&costsink);
+  struct CostSinkGuard {
+    CostModel const& cm;
+    ~CostSinkGuard() { cm.set_cost_sink(nullptr); }
+  } costsink_guard{*cm};
+
   std::atomic<double> peak{0.0};
   for (auto const& root : forest) {
     cache.set_custom_evaluator(sequant::make_evaluator(
@@ -279,6 +325,13 @@ inline CostProfile cost_profile(std::vector<EvalNodeDryRun> const& forest,
         {profile.peak_bytes, peak.load(), double(cache.working_set_hwmark())});
     cache.reset();  // drop per-term non-persistent scratch; keep persistent
   }
+
+  // Read the replay-tallied (recompute-aware) totals the sink accumulated over
+  // every product op of every summand's Trace::On replay. (costsink_guard
+  // detaches the sink from `cm` on function exit.)
+  profile.dryrun_flops = costsink.flops.load(std::memory_order_relaxed);
+  profile.dryrun_exec = costsink.exec.load(std::memory_order_relaxed);
+  profile.dryrun_n_ops = costsink.n_ops.load(std::memory_order_relaxed);
 
   // logger_eval_guard's destructor restores logger.eval.{level,stream} at
   // function exit (see above); no manual restore needed here.
