@@ -288,10 +288,14 @@ class rand_tensor_yield {
       return ixs | transform([this, &isr](auto const& ix) -> size_t {
                SEQUANT_ASSERT(ix.space() == isr->retrieve(L"i") ||
                               ix.space() == isr->retrieve(L"a") ||
-                              ix.space() == isr->retrieve(L"x"));
+                              ix.space() == isr->retrieve(L"x") ||
+                              ix.space() == isr->retrieve(L"m"));
                return ix.space() == isr->retrieve(L"i")   ? nocc_
                       : ix.space() == isr->retrieve(L"a") ? nvirt_
-                                                          : naux_;
+                      : ix.space() == isr->retrieve(L"x") ? naux_
+                                                          : nvirt_;  // m (flat
+                                                                     // PAO-like
+                                                                     // leg)
              }) |
              ranges::to<container::svector<size_t>>;
     };
@@ -2424,8 +2428,8 @@ TEST_CASE("eval_batched_custom_evaluator nests inner mode", "[eval]") {
   // extent and the x_1 contraction above would then mismatch. Every product is
   // written fully binary so binarize preserves the nesting.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(((u{i_1;i_2;x_1,x_2} * v{i_1;i_3;x_2}) * w{i_2;i_5;x_1})"
-      L" * p{i_3;i_6;x_1})");
+      L"(((u{i_1;i_2;x_1,x_2} * v{i_3;i_1;x_2}) * w{i_2;i_5;x_1})"
+      L" * p{i_6;i_3;x_1})");
   std::string const target = "i_5,i_6";
   auto node = eval_node(expr);  // mutable: batch modes are annotated below
 
@@ -2527,7 +2531,7 @@ TEST_CASE("eval_batched_custom_evaluator nests two modes on one node",
   // leaf carries x_1 and x_2, so slicing either aux mode slices both leaves.
   // Result free indices are i_5, i_6.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{i_1;i_5;x_1,x_2} * h{i_1;i_6;x_1,x_2})");
+      L"(g{i_1;i_5;x_1,x_2} * h{i_6;i_1;x_1,x_2})");
   std::string const target = "i_5,i_6";
   auto node = eval_node(expr);  // mutable: both batch modes annotated below
 
@@ -2647,8 +2651,8 @@ TEST_CASE("eval_batched_custom_evaluator hoists loop-invariant descendant",
   // - M = I2*w contracts i_2 -> {i_3;i_5;x_1}: carries x_1 (not hoistable).
   // - R = M*p contracts i_3 and x_1 -> {i_5;i_6}: the x_1 batch trigger.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(((g{i_1;i_2;x_2} * h{i_1;i_3;x_2}) * w{i_2;i_5;x_1})"
-      L" * p{i_3;i_6;x_1})");
+      L"(((g{i_1;i_2;x_2} * h{i_3;i_1;x_2}) * w{i_2;i_5;x_1})"
+      L" * p{i_6;i_3;x_1})");
   std::string const target = "i_5,i_6";
   auto node = eval_node(expr);
 
@@ -2772,8 +2776,8 @@ TEST_CASE(
   yield_.set_max_tile(4);
 
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(((((q{i_1;a_9;x_1} * r{a_9;i_2}) * s{;;x_1,x_2}) * h{i_1;i_3;x_2}) * "
-      L"w{i_2;i_5;x_1}) * p{i_3;i_6;x_1})");
+      L"(((((q{i_1;a_9;x_1} * r{a_9;i_2}) * s{;;x_1,x_2}) * h{i_3;i_1;x_2}) * "
+      L"w{i_2;i_5;x_1}) * p{i_6;i_3;x_1})");
   std::string const target = "i_5,i_6";
   auto node = eval_node(expr);
 
@@ -3336,7 +3340,7 @@ TEST_CASE("batched_scratch_no_seed_external", "[eval][batched-external]") {
   // head t makes P a PERSISTENT final. P does not carry the contracted batch
   // mode played by `mu` below.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{a_2;i_1;x_1} * h{a_2;i_3}) * t{i_3;i_1}");
+      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * t{i_1;i_3}");
   auto n = eval_node(expr);
   REQUIRE_FALSE(n.leaf());
   auto const& P = n.left();  // g*h, carries x_1
@@ -3524,7 +3528,7 @@ TEST_CASE("batched_eval_external_proto_occ_scatter",
   // g is a flat (mu~) operand carrying NO occ; the two C legs are composite
   // (a<i_1,i_2>) carrying the occ only as protos.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{m_1;m_2} * C{a1<i_1,i_2>;m_2}) * C{a2<i_1,i_2>;m_1}");
+      L"(g{m_1;m_2} * C{m_2;a1<i_1,i_2>}) * C{a2<i_1,i_2>;m_1}");
   auto node = eval_node(expr);  // mutable: External mode stamped below
   std::string const target = node->annot();
 
@@ -3796,7 +3800,7 @@ TEST_CASE("batched_eval_external_hadamard", "[eval][batched-external]") {
   yield_.set_max_tile(4);
 
   auto const res_expr = sequant::deserialize<sequant::ResultExpr>(
-      L"R{i_3;a_1,a_2} = (g{i_3;a_1} * h{i_3;a_2})");
+      L"R{;a_1,a_2;i_3} = (g{;a_1;i_3} * h{;a_2;i_3})");
   auto node = eval_node(res_expr);  // mutable: External mode stamped below
   std::string const target = node->annot();
 
@@ -3904,7 +3908,7 @@ TEST_CASE("batched_eval_external_nested_contracted",
   yield_.set_max_tile(4);
 
   auto const res_expr = sequant::deserialize<sequant::ResultExpr>(
-      L"R{i_2;i_6;x_1} = ((u{i_1;i_2;x_1,x_2} * v{i_1;i_3;x_2})"
+      L"R{i_2;i_6;x_1} = ((u{i_2;i_1;x_1,x_2} * v{i_1;i_3;x_2})"
       L" * p{i_3;i_6;x_1})");
   auto node = eval_node(res_expr);  // mutable: batch modes stamped below
   std::string const target = node->annot();
@@ -4038,8 +4042,8 @@ TEST_CASE(
   yield_.set_max_tile(4);
 
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(((u{i_1;i_2;x_1,x_2} * v{i_1;i_3;x_2}) * w{i_2;i_5;x_1})"
-      L" * p{i_3;i_6;x_1})");
+      L"(((u{i_1;i_2;x_1,x_2} * v{i_3;i_1;x_2}) * w{i_2;i_5;x_1})"
+      L" * p{i_6;i_3;x_1})");
   std::string const target = "i_5,i_6";
   auto node = eval_node(expr);
 
@@ -4534,8 +4538,13 @@ TEST_CASE("shape_spike_ToT_inner_contraction_to_flat_T", "[shape-spike]") {
     auto const& idx = it.index();
     REQUIRE_FALSE(C0.is_zero(idx));
 
-    auto const& t0 = C0.find(idx).get();  // TA::Tensor<double>
-    auto const& t1 = it->get();
+    // Copy the tiles out BY VALUE: C0.find(idx) and *it are temporary Futures
+    // whose payload get() only references, so binding `auto const&` would
+    // dangle once those temporaries die at the semicolon (ASan
+    // stack-use-after-scope on the tile's Range). A TA::Tensor copy is a cheap
+    // shallow handle that keeps its own Range alive for the loop body.
+    TA::Tensor<double> const t0 = C0.find(idx).get();
+    TA::Tensor<double> const t1 = it->get();
     REQUIRE(t0.range() == t1.range());
     for (std::size_t k = 0; k < t0.size(); ++k) {
       CHECK(t0[k] == Catch::Approx(t1[k]));

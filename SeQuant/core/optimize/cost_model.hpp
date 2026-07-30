@@ -2006,10 +2006,19 @@ SeededBatchedResult seeded_root_peak_batched(
   std::wstring const seed_label(seed_axis.full_label());
 
   auto base_batchable = base_model.is_batchable_contracted_index;
+  auto base_external = base_model.is_batchable_external_index;
   auto base_batch = base_model.batch;
   base_model.is_batchable_contracted_index = [base_batchable,
                                               seed_label](Index const& ix) {
     return (base_batchable && base_batchable(ix)) ||
+           std::wstring(ix.full_label()) == seed_label;
+  };
+  // The seed is a genuine EXTERNAL mode (open on the root, contracted nowhere),
+  // so build_context's role filter gates it through is_batchable_external_index
+  // -- admit the seed there too, mirroring the contracted-role override above.
+  base_model.is_batchable_external_index = [base_external,
+                                            seed_label](Index const& ix) {
+    return (base_external && base_external(ix)) ||
            std::wstring(ix.full_label()) == seed_label;
   };
   base_model.batch = [base_batch, seed_label, occ_block](Index const& ix) {

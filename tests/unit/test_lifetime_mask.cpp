@@ -86,14 +86,14 @@ TEST_CASE("lifetime mask cross-occurrence meet", "[lifetime_mask]") {
 
   // node_full: sliced by i in occurrence A, left full in occurrence B => the
   // meet demotes it to all-full (sliced /\ full = full).
-  auto full_A = head("F1{i_1;a_1} * F2{i_3;a_1}");
-  auto full_B = head("F1{i_1;a_1} * F2{i_3;a_1}");
+  auto full_A = head("F1{i_1;a_1} * F2{a_1;i_3}");
+  auto full_B = head("F1{i_1;a_1} * F2{a_1;i_3}");
   stamp_ext(full_A, i);  // A slices i; B carries no stamp (full)
 
   // node_pair: sliced by the same occ pair (i,j) in EVERY occurrence => the
   // meet keeps exactly {i, j}.
-  auto pair_A = head("P1{i_1;a_1} * P2{i_2;a_1}");
-  auto pair_B = head("P1{i_1;a_1} * P2{i_2;a_1}");
+  auto pair_A = head("P1{i_1;a_1} * P2{a_1;i_2}");
+  auto pair_B = head("P1{i_1;a_1} * P2{a_1;i_2}");
   stamp_ext_pair(pair_A, i, j);
   stamp_ext_pair(pair_B, i, j);
 
@@ -114,8 +114,8 @@ TEST_CASE("lifetime mask OFF path is all-full (no External stamps)",
           "[lifetime_mask]") {
   // No batched_here stamps anywhere => every occurrence set empty => every mask
   // empty => all-full (the byte-identical OFF path).
-  auto a = head("A1{i_1;a_1} * A2{i_2;a_1}");
-  auto b = head("A1{i_1;a_1} * A2{i_2;a_1}");
+  auto a = head("A1{i_1;a_1} * A2{a_1;i_2}");
+  auto b = head("A1{i_1;a_1} * A2{a_1;i_2}");
   std::vector<EvalNode<EvalExpr>> forest{a, b};
   stamp_lifetime_masks(forest);
   CHECK(forest[0]->mask_all_full());
@@ -274,8 +274,8 @@ TEST_CASE(
   // SAME condition the retired per-node scalar placement level satisfied for
   // every un-annotated node. A repeated canonical node is therefore
   // registered at run scope exactly as it was before this change.
-  auto a = head("A1{i_1;a_1} * A2{i_2;a_1}");
-  auto b = head("A1{i_1;a_1} * A2{i_2;a_1}");
+  auto a = head("A1{i_1;a_1} * A2{a_1;i_2}");
+  auto b = head("A1{i_1;a_1} * A2{a_1;i_2}");
   // No manual stamp_lifetime_masks() call: the veto-engaged
   // sequant::cache_manager() overload stamps the forest itself before its
   // veto reads the mask, matching production callers (which never stamp).

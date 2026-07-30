@@ -558,16 +558,28 @@ TEST_CASE("cache_manager_footprint_gate", "[cache_manager]") {
 TEST_CASE("cache_manager_batch_axis_veto", "[cache_manager]") {
   // R = f * g * t : the NV product (f*g) = I{a1;a3} feeds the volatile root, so
   // by default it is cached as a persistent (cross-iteration) entry. a3 is free
-  // in the frontier's own result but contracted away at the root. The veto now
-  // reads the frontier's *own* batched_here annotation, not merely whether some
-  // is_batchable_index is free on its result: only a Contracted entry that is
-  // batchable and free on the node's result means the runtime slices the
-  // frontier over it (the optimizer prices it sliced), so caching it whole
-  // would be wrong -- veto it. An External entry on the same mode marks the
-  // frontier an external -- like gC, invariant to a batch mode actually sliced
-  // elsewhere -- and must NOT veto: it stays cached and persistent so it can
-  // become a hoist target (Task 3). No annotation at all (never_batchable's
-  // default) must also leave it cached and persistent.
+  // in the frontier's own result but contracted away at the root. The veto has
+  // two disjuncts (cache_manager.hpp): (a) the frontier's *own* batched_here
+  // carries a Contracted, batchable mode free on its result -- the runtime
+  // slices the frontier over it (the optimizer prices it sliced), so caching it
+  // whole would be wrong -- veto it; (b) the cross-occurrence lifetime mask
+  // (stamp_lifetime_masks) is non-empty -- some External batch mode slices this
+  // node (in every occurrence, under the canonical meet), so its value is
+  // batch-variant -- veto it too.
+  //
+  // An External entry on a mode that is FREE on the node's OWN result is folded
+  // into that node's own sliced_modes by stamp_lifetime_masks (a node's own
+  // External stamp on its own slot IS part of its mask; see lifetime_mask.hpp),
+  // so the mask is non-empty and disjunct (b) fires: the frontier is a
+  // *consistently-sliced* external node (its value differs per external block),
+  // which eval.hpp places/slices at its external loop as a hoist target -- NOT
+  // a whole run-scope cache entry. So it must be VETOED from this run-scope
+  // cache, exactly like the Contracted case. Only a genuinely block-agnostic gC
+  // -- whose External mode is DEMOTED to empty by the cross-occurrence meet
+  // across proto-incompatible occurrences -- stays all-full and cacheable at
+  // run scope; a single-occurrence node cannot reproduce that demotion. No
+  // annotation at all (never_batchable's default) leaves the frontier all-full,
+  // hence cached and persistent.
   using sequant::BatchModeType;
 
   auto is_volatile = [](node_type const& n) {
@@ -617,9 +629,12 @@ TEST_CASE("cache_manager_batch_axis_veto", "[cache_manager]") {
     REQUIRE_FALSE(man.persistent(node.left()));
   }
 
-  // External + batchable + free on the frontier's own result (gC-like: a
-  // external index the node is invariant under, not the mode actually
-  // sliced) -> NOT vetoed: stays cached and persistent.
+  // External + batchable + free on the frontier's own result, single
+  // occurrence -> the mode survives the cross-occurrence meet and lands in the
+  // frontier's own sliced_modes, so mask_all_full() is false and disjunct (b)
+  // fires: this is a consistently-sliced external node (a hoist target sliced
+  // at its external loop, not a whole run-scope entry), so it is VETOED from
+  // the run-scope cache -- not registered in the cache map, not persistent.
   {
     auto node = make_node(L"R{a1;i1} = f{a1;a2} * g{a2;a3} * t{a3;i1}");
     auto const a3 = find_a3(node);
@@ -629,7 +644,7 @@ TEST_CASE("cache_manager_batch_axis_veto", "[cache_manager]") {
         std::array{node}, is_volatile, /*min_repeats=*/2,
         sequant::zero_footprint{}, /*max_footprint=*/0.,
         [&](sequant::Index const& ix) { return ix == *a3; });
-    REQUIRE(man.exists(node.left()));
-    REQUIRE(man.persistent(node.left()));
+    REQUIRE_FALSE(man.exists(node.left()));
+    REQUIRE_FALSE(man.persistent(node.left()));
   }
 }

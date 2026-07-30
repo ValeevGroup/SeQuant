@@ -250,11 +250,11 @@ TEST_CASE("dryrun rank-general CSV moment dispatch", "[dryrun][sizing]") {
   r.csv_moment_by_rank[3] = {1.0, 100.0, 100.0, 100.0, 100.0};
   auto ip = r.inner_pow_fn();
 
-  Index i1{L"i_1"}, i2{L"i_2"}, i3{L"i_3"};
+  Index i1{L"i_1"}, i2{L"i_2"}, i3{L"i_3"}, i4{L"i_4"};
   Index osv{L"a_1", {i1}};               // rank-1 composite
   Index pno{L"a_2", {i1, i2}};           // rank-2 composite
   Index triple{L"a_3", {i1, i2, i3}};    // rank-3 composite
-  Index quad{L"a_4", {i1, i2, i3, i1}};  // rank-4 composite (no table)
+  Index quad{L"a_4", {i1, i2, i3, i4}};  // rank-4 composite (no table)
 
   // Each rank draws from its own table.
   CHECK(ip(osv, 2) == Catch::Approx(3.0));
@@ -338,6 +338,21 @@ inline constexpr ProblemSize kC60_pVDZF12{
      53.151291880343109},
     /*osv_M=*/
     {1.0, 148.25, 155.04434849422921, 161.33527408797721, 166.85553430303926}};
+
+// Water-20 (H2O)20 / cc-pVDZ-F12, extracted from Owl job 649160:
+//   ext(i)=80 (active occ), ext(K)=1682 (DF aux; from g(i,i,K)=86.1MB),
+//   ext(mu~)=896 (PAO; from g(mu~,mu~,K)=10.8GB), and the measured heavy-tailed
+//   CSV moments (PNO M_1..M_4 per pair, OSV M_1..M_4 per orbital).
+inline constexpr ProblemSize kWater20_pVDZF12{
+    /*mu_tilde=*/896u,
+    /*aux=*/1682u,
+    /*i_occ=*/80u,
+    /*pno_M=*/
+    {1.0, 23.175775480059084, 25.865548281212597, 28.171416142614103,
+     30.03848680550367},
+    /*osv_M=*/
+    {1.0, 58.987499999999997, 59.289227520688783, 59.584437469011633,
+     59.872014818179686}};
 
 // Build a SizeRegime from a named ProblemSize.
 SizeRegime df_regime(ProblemSize const& p) {
@@ -1589,7 +1604,7 @@ TEST_CASE(
   // (a1/a2<i_1,i_2>) carrying the occ only as protos -- same shape as the TA
   // regression's W{a1<i,j>,a2<i,j>} = (g * C) * C giant.
   auto expr = deserialize<ExprPtr>(
-      "(g{a_3;a_4} * C{a1<i_1,i_2>;a_4}) * C{a2<i_1,i_2>;a_3}");
+      "(g{a_3;a_4} * C{a_4;a1<i_1,i_2>}) * C{a2<i_1,i_2>;a_3}");
   bool const parsed = static_cast<bool>(expr);
   REQUIRE(parsed);
 
@@ -2078,6 +2093,16 @@ TEST_CASE(
     };
     policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
     policy.accumulation_factor = 1.0;
+    // This case characterizes the perf-first-vs-peak-first contrast under the
+    // LEGACY set-keyed model: peak-first forms the fully-sliceable 4-PAO (its
+    // batched peak looks small) while perf-first refuses it on flops. Pin
+    // order_aware_recompute OFF now that BatchPolicy defaults it ON -- under
+    // the realistic (resident-scan) model the contrast COLLAPSES (the 4-PAO's
+    // batched peak is priced higher by accumulator residency, so peak-first
+    // also avoids it, and perf-first's flops then exceed peak-first's because
+    // the per-block recompute is charged). The legacy contrast is what
+    // motivated the perf-first objective, so it is what this case documents.
+    policy.order_aware_recompute = false;
     policy.peak_threshold =
         (std::getenv("SEQUANT_UT_DRYRUN_PEAK_THR_GB")
              ? std::atof(std::getenv("SEQUANT_UT_DRYRUN_PEAK_THR_GB"))
@@ -2488,7 +2513,15 @@ TEST_CASE(
              /*numeric_size=*/8.0,
              /*perf_first=*/true};
     m.is_batchable_contracted_index = is_df_batchable;
-    m.is_batchable_external_index = is_df_batchable;  // external role (Task-4)
+    // External role admits the DF/PAO spaces AND the occ: occ is never
+    // contracted here (a spectator on the giant), so it is batchable ONLY in
+    // the external role -- exactly the role-split the two predicates encode.
+    // is_df_batchable alone (μ̃/Κ) would drop the external occ from
+    // ctx.batchable_modes, leaving the spectator seed nothing to adopt.
+    m.is_batchable_external_index = [](Index const& ix) {
+      auto const k = ix.space().base_key();
+      return k == L"μ̃" || k == L"Κ" || k == L"i";
+    };
     m.batch_spectator_indices = spectator_on;
     return m;
   };
@@ -3060,10 +3093,15 @@ TEST_CASE(
 // per-iteration speedup ceiling, and the max modelled peak per objective
 // shows the memory spread. This is a MODELLED (flops) proxy, not a
 // wall-clock measurement -- see the note at the end of this case.
+// Hidden ([.]): a MODELLED-cost diagnostic (no correctness CHECKs, only a
+// per-objective flops/peak sweep it prints), and it runs optimize() +
+// single_term_opt on EVERY C60 residual summand -- tens of minutes in a
+// Debug/-O0 build, which times out CI. Its C60-sweep siblings in this file are
+// hidden for the same reason; run it explicitly for the decision-input report.
 TEST_CASE(
     "dryrun perf-first vs peak-first modelled cost across all C60 residual "
     "terms",
-    "[dryrun-perfcost]") {
+    "[.][dryrun-perfcost]") {
   auto ctx = get_default_context().clone();
   ctx.set_first_dummy_index_ordinal(1000000);
   auto isr = ctx.mutable_index_space_registry();
@@ -3216,6 +3254,156 @@ TEST_CASE(
   // not a pass/fail gate -- assert only basic sanity: at least one term
   // produced a positive modelled flops count under the peak-first objective.
   REQUIRE(total_peak_first_flops > 0.0);
+}
+
+// Hidden diagnostic: does the dry-run cost model PREDICT the ~3x per-iteration
+// overcompute measured on Owl for water-20 (job 649156 aux-only 154 s/iter vs
+// 649160 occ+aux 454 s/iter, same 100 GB ceiling, same perf-first objective)?
+// Nested external-occ batching (i_1 x i_2, 5x5) is NOT expected to be
+// work-neutral: shared/persistent intermediates are re-formed per occ block.
+// This sums modelled flops / exec_cost / peak over ALL CCSD-doubles-residual
+// terms for the water-20 regime, aux-only vs occ+aux, and prints the ratios.
+// A flops/exec ratio ~1 would mean the model treats occ slicing as
+// work-neutral (missing the runtime replay); ~3 would mean it charges it.
+TEST_CASE("dryrun water-20 occ-batching overcompute (aux-only vs occ+aux)",
+          "[.][dryrun-water20-overcompute]") {
+  auto ctx = get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+
+  auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                          "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = deserialize<ExprPtr>(line);
+  REQUIRE(expr);
+  REQUIRE(expr->is<Sum>());
+  auto const& summands = expr->as<Sum>().summands();
+  REQUIRE(!summands.empty());
+  auto flatten_product = [](ExprPtr const& e) -> ExprPtr {
+    if (!e->is<Product>()) return e;
+    auto const& p = e->as<Product>();
+    return ex<Product>(p.scalar(), p.factors(), Product::Flatten::Yes);
+  };
+
+  auto regime = df_regime(kWater20_pVDZF12);
+
+  // [0]=aux-only, [1]=occ+aux: how many External vs Contracted batch modes the
+  // optimizer actually emitted (engagement check).
+  int n_ext[2] = {0, 0};
+  int n_con[2] = {0, 0};
+
+  // occ_on=false: aux-only (mu~/K contracted-role batching, occ never batched).
+  // occ_on=true : + external-occ (i) batching; occ_target 16 -> ceil(80/16)=5
+  //               blocks per occ mode; doubles terms nest i_1 x i_2.
+  auto analyze = [&](ExprPtr const& giant,
+                     bool occ_on) -> sequant::eval::dryrun::CostProfile {
+    sequant::BatchPolicy policy;
+    policy.is_batchable_contracted_index = is_df_batchable;  // mu~, K
+    policy.is_batchable_external_index =
+        occ_on ? std::function<bool(Index const&)>([](Index const& ix) {
+          auto const k = ix.space().base_key();
+          return k == L"μ̃" || k == L"Κ" || k == L"i";
+        })
+               : std::function<bool(Index const&)>(is_df_batchable);
+    policy.batch_spectator_indices = occ_on;
+    // Node-level External placement (and the ordered-key flops-recompute cost
+    // model) engages only with order_aware_recompute. MPQC leaves this at its
+    // default (false); flip it on for occ+aux to test whether the
+    // recompute-aware model charges the per-occ-block replay.
+    policy.order_aware_recompute = occ_on;
+    policy.batch_target_size = [](Index const& ix) -> std::size_t {
+      auto const k = ix.space().base_key();
+      if (k == L"i") return 16;   // occ_target_size
+      if (k == L"Κ") return 256;  // aux_target_size
+      return 256;                 // mu~
+    };
+    policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+    policy.accumulation_factor = 1.0;
+    policy.peak_threshold = 100.0 * 1e9;
+
+    auto axes_map = std::make_shared<std::unordered_map<
+        Expr const*, container::vector<NodeBatchAnnotation>>>();
+    OptimizeOptions opts;
+    opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+    opts.idx_to_extent = regime.idx_to_extent();
+    opts.inner_pow = regime.inner_pow_fn();
+    opts.batch_policy = policy;
+    opts.volatile_weight = 20.0;
+    opts.roofline.machine_balance = 200.0;
+    opts.roofline.fast_mem_elems = 1000000.0;
+    opts.term_batch_axes = axes_map;
+
+    auto optimized = optimize(giant, opts);
+    REQUIRE(static_cast<bool>(optimized));
+    auto it = axes_map->find(optimized.get());
+    container::vector<NodeBatchAnnotation> node_axes;
+    if (it != axes_map->end()) node_axes = it->second;
+    for (auto const& na : node_axes)
+      for (auto const& e : na.axes) {
+        if (e.second == sequant::BatchModeType::External)
+          n_ext[occ_on ? 1 : 0]++;
+        else
+          n_con[occ_on ? 1 : 0]++;
+      }
+    BinarizationOptions bopts;
+    bopts.node_batch_axes = node_axes;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize<EvalExprDryRun>(optimized, {}, bopts);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    sequant::eval::dryrun::CacheConfig cfg;
+    cfg.max_footprint = 1e11;
+    cfg.min_repeats = 1;
+    cfg.is_volatile = [](EvalNodeDryRun const& n) {
+      return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
+    };
+    return sequant::eval::dryrun::cost_profile(
+        std::vector<EvalNodeDryRun>{node}, policy, cfg, regime,
+        /*trace=*/nullptr);
+  };
+
+  double aux_flops = 0, occ_flops = 0, aux_exec = 0, occ_exec = 0;
+  double aux_maxpeak = 0, occ_maxpeak = 0;
+  std::size_t n_ok = 0;
+  for (std::size_t t = 0; t < summands.size(); ++t) {
+    ExprPtr giant = flatten_product(summands[t]);
+    if (!giant) continue;
+    sequant::eval::dryrun::CostProfile a, o;
+    try {
+      a = analyze(giant, /*occ_on=*/false);
+      o = analyze(giant, /*occ_on=*/true);
+    } catch (std::exception const&) {
+      continue;
+    } catch (...) {
+      continue;
+    }
+    ++n_ok;
+    aux_flops += a.flops;
+    occ_flops += o.flops;
+    aux_exec += a.exec_cost;
+    occ_exec += o.exec_cost;
+    aux_maxpeak = std::max(aux_maxpeak, a.peak_bytes / 1e9);
+    occ_maxpeak = std::max(occ_maxpeak, o.peak_bytes / 1e9);
+  }
+  auto ratio = [](double num, double den) { return den > 0 ? num / den : 0.0; };
+  std::wcerr << L"\n=== [water-20 overcompute] " << n_ok << L" terms ("
+             << summands.size() << L" total) ===\n"
+             << L"  flops:      aux-only=" << aux_flops << L"  occ+aux="
+             << occ_flops << L"  ratio=" << ratio(occ_flops, aux_flops) << L"\n"
+             << L"  exec_cost:  aux-only=" << aux_exec << L"  occ+aux="
+             << occ_exec << L"  ratio=" << ratio(occ_exec, aux_exec) << L"\n"
+             << L"  max_peak_GB: aux-only=" << aux_maxpeak << L"  occ+aux="
+             << occ_maxpeak << L"\n"
+             << L"  emitted modes: aux-only ext=" << n_ext[0] << L" con="
+             << n_con[0] << L" | occ+aux ext=" << n_ext[1] << L" con="
+             << n_con[1] << L"\n";
+  REQUIRE(aux_flops > 0.0);
 }
 
 // P4 GO/NO-GO AUDIT (Concern #3): across ALL C60 residual terms under the
@@ -3939,17 +4127,22 @@ TEST_CASE("cost_profile trace stream round-trips", "[dryrun][cost_profile]") {
 }
 
 // Task 2: the FAITHFUL (gated) dry-run cache built by build_dryrun_cache must
-// VETO caching of a free-batchable giant -- a node whose result carries a free
-// mu~/K mode the runtime slices over -- exactly as the real batched eval loop
-// does, instead of materializing it whole. The SIMPLE cache_manager(nodes) the
-// ad-hoc [dryrun-objective] site uses caches such a giant; the gated
-// build must not. We prove this by contrasting three configs over the
-// SAME binarized C60 giant term (index 38):
+// keep a free-batchable giant -- a node whose result carries a free mu~/K mode
+// -- out of the run-scope cache, exactly as the real batched eval loop does,
+// instead of materializing it whole. Two independent gates cooperate, and this
+// case pins WHICH one acts (the phase-2 lifetime-mask veto made the mode veto
+// PRECISE: it drops a node only when the node is ACTUALLY batch-sliced -- a
+// Contracted mode among its RESULT indices, or a non-empty cross-occurrence
+// external mask -- NOT merely for carrying a free-batchable index, which is
+// what the OLD over-broad veto did and which emptied CSE). We contrast three
+// configs over the SAME binarized C60 giant term (index 38):
 //   ref:  no gate  (max_footprint=0, never batchable) -> giant IS cached
-//   mode: mode veto only (max_footprint=0, is_df_batchable) -> giant NOT cached
-//   task: mode veto + footprint gate (max_footprint=1e11, is_df_batchable)
-//                                                            -> giant NOT
-//                                                            cached
+//   mode: mode veto only (max_footprint=0, is_df_batchable) -> giant STILL
+//         cached: in this DF-aux schedule K is summed (never a result mode) and
+//         mu~ is contracted ABOVE the giant, so NO node is actually sliced and
+//         the precise mode veto is inert
+//   task: + footprint gate (max_footprint=1e11) -> giant NOT cached: the
+//         footprint gate is what caps the >100 GB full giant
 // A small non-batchable intermediate stays cached under all three. Residency is
 // read via CacheManager::exists() (the veto is a registration-time decision:
 // a vetoed node is never registered, so it is not, and cannot become, resident;
@@ -4095,9 +4288,18 @@ TEST_CASE("dryrun gated cache vetoes free-batchable giant", "[dryrun][cache]") {
 
   // Without any gate the giant is registered/cacheable...
   CHECK(ref_cache.exists(giant_node));
-  // ...the batchable-mode veto alone removes it...
-  CHECK_FALSE(axis_cache.exists(giant_node));
-  // ...and so does the task config.
+  // ...the batchable-MODE veto alone does NOT remove it. The phase-2 veto is
+  // precise: it drops a node only when the node is ACTUALLY batch-sliced -- a
+  // Contracted batch mode among its RESULT (canon) indices, or a non-empty
+  // cross-occurrence external lifetime mask (cache_manager.hpp) -- NOT merely
+  // for carrying a free-batchable index. This giant carries a free mu~ that is
+  // contracted ABOVE it (never sliced AT the node) and is not external-seeded
+  // in this DF-aux schedule (K is summed, so it is never a result mode), so no
+  // node here is actually sliced and the mode veto is correctly inert. This is
+  // the whole point of the phase-2 change: the OLD over-broad veto dropped
+  // anything whose result carried a batchable index, which emptied CSE.
+  CHECK(axis_cache.exists(giant_node));
+  // ...only the FOOTPRINT gate caps the >100 GB full giant.
   CHECK_FALSE(task_cache.exists(giant_node));
 
   // A small non-batchable intermediate stays cached under all three.
