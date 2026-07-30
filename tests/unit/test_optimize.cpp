@@ -3007,6 +3007,11 @@ TEST_CASE("reconstruct_batched_modes_emits_external_per_node",
     return ix.space().base_key() == L"i";
   };
   opts.batch_policy.batch_spectator_indices = true;
+  // This case characterizes the LEGACY emit_external regime -- root-level
+  // forest seed via the `else if (emit_external)` branch, NOT node-level
+  // placement (see the Assertion 1b comment below). Pin order_aware_recompute
+  // OFF now that BatchPolicy defaults it ON, so this regime is still exercised.
+  opts.batch_policy.order_aware_recompute = false;
   opts.term_batch_axes = axes_map;
 
   // Determine this term's actual perf-first root peak (bytes) directly, via

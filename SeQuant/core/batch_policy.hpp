@@ -65,10 +65,12 @@ struct BatchPolicy {
   bool batch_spectator_indices = false;
 
   /// Enable the order-aware multilevel recompute cost model (resident-scan peak
-  /// + ordered-key flops recompute). false (default) => byte-identical
-  /// set-keyed DP. Consulted only by the batched objectives (threaded via
-  /// CostParams).
-  bool order_aware_recompute = false;
+  /// + ordered-key flops recompute). Consulted only by the batched objectives
+  /// (threaded via CostParams). Defaults to true: modelling the per-batch-block
+  /// replay recompute is always the more realistic cost (the set-keyed DP that
+  /// ignores it under-costs every batched schedule); set false only to recover
+  /// the legacy byte-identical set-keyed DP.
+  bool order_aware_recompute = true;
 
   /// If true, restrict batching to persistent (amplitude-independent) subtrees,
   /// declining to batch any subtree that contains a volatile leaf. If false

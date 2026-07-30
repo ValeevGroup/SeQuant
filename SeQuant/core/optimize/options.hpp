@@ -169,9 +169,11 @@ struct CostParams {
   bool batch_spectator_indices = false;
 
   /// Enable the order-aware multilevel recompute cost model (resident-scan peak
-  /// + ordered-key flops recompute). false (default) => byte-identical
-  /// set-keyed DP. Only the batched objectives consult it.
-  bool order_aware_recompute = false;
+  /// + ordered-key flops recompute). Only the batched objectives consult it.
+  /// Defaults to true: modelling the per-batch-block replay recompute is always
+  /// the more realistic cost; set false only to recover the legacy
+  /// byte-identical set-keyed DP.
+  bool order_aware_recompute = true;
 
   /// Spaces batchable in the CONTRACTED role, threaded from
   /// BatchPolicy::is_batchable_contracted_index. Building block consumed by the
