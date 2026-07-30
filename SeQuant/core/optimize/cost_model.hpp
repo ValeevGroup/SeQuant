@@ -678,6 +678,15 @@ struct PeakBatchedModel {
   /// entries -- byte-identical to before this member existed.
   bool batch_spectator_indices = false;
 
+  /// Emission-placement knob for external modes, INDEPENDENT of \ref
+  /// order_aware_recompute (the cost model). Gates the node-level per-node
+  /// External placement in \ref reconstruct_batched_modes; with it false
+  /// (default) that pass uses the root-level forest seed (correct + cheap).
+  /// Threaded from CostParams::node_level_placement /
+  /// BatchPolicy::node_level_placement. Only meaningful with
+  /// batch_spectator_indices.
+  bool node_level_placement = false;
+
   /// One non-dominated (peak, flops) trade-off for a (subset, sliced-set \c B)
   /// cell. \c aprime is the sliced-set chosen at this node; the children are
   /// read at context \c C = B | aprime, at frontier indices \c lp_idx /
@@ -1630,8 +1639,20 @@ struct PeakBatchedModel {
     // Phase-2 replaces the OLD root-level forest seed when the order-aware
     // model is on; both flags off (the default) => byte-identical (the OLD
     // `else if` path runs exactly as before).
-    bool const node_level_placement =
-        order_aware_recompute && batch_spectator_indices;
+    // Emission placement: node-level (per-node External stamps) vs the legacy
+    // root-level forest seed. Gated by the DEDICATED \ref node_level_placement
+    // member, DECOUPLED from order_aware_recompute (the cost model): the cost
+    // model only affects which factorization is selected, never how externals
+    // are emitted. Only meaningful with spectator batching. Default off =>
+    // root-seed emission (correct + cheap) regardless of the cost model.
+    bool place_per_node = node_level_placement && batch_spectator_indices;
+    // DIAGNOSTIC override (no API surface): SEQUANT_NODE_LEVEL_PLACEMENT forces
+    // the placement without threading the flag through the caller, so an A/B
+    // run isolates emission from selection. =0 forces root seed, =1 forces
+    // node.
+    if (auto const* e = std::getenv("SEQUANT_NODE_LEVEL_PLACEMENT")) {
+      place_per_node = (std::atoi(e) != 0) && batch_spectator_indices;
+    }
     // Shared child-extraction used by the three back-pointer walks below
     // (place, stamp_carrying_descendants, and the build emit walk): given a
     // node subset `n`, its enclosing cell `B`, and the chosen frontier index
@@ -1654,7 +1675,7 @@ struct PeakBatchedModel {
           r.lp_first ? r.lp : r.rp, r.lp_first ? r.lp_idx : r.rp_idx,
           r.lp_first ? r.rp : r.lp, r.lp_first ? r.rp_idx : r.lp_idx, C};
     };
-    if (node_level_placement) {
+    if (place_per_node) {
       // Node-level external-mode placement (S3.1 phase 2). Walk the chosen
       // schedule tree; at each node whose modeled peak exceeds peak_threshold,
       // greedily slice a carried EXTERNAL mode when doing so lowers that node's
@@ -1844,7 +1865,7 @@ struct PeakBatchedModel {
       // path): the computed tensor is unchanged, only realization/recompute
       // order at co-carrying nodes differs from before this fix.
       std::size_t emit_mask_n = 0;
-      if (node_level_placement) {
+      if (place_per_node) {
         // Node-level placement (S3.3): stamp `External` at node n only for the
         // modes the phase-2 pass injected AT n.
         auto it = placed_at_node.find(n);

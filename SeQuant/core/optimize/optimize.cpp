@@ -107,6 +107,7 @@ ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
   cost.prune_outer_products = opts.prune_outer_products;
   cost.batch_spectator_indices = opts.batch_policy.batch_spectator_indices;
   cost.order_aware_recompute = opts.batch_policy.order_aware_recompute;
+  cost.node_level_placement = opts.batch_policy.node_level_placement;
   cost.is_batchable_contracted_index =
       opts.batch_policy.is_batchable_contracted_index;
   cost.is_batchable_external_index =

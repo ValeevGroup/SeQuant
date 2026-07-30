@@ -488,6 +488,7 @@ TEST_CASE("ext-place C60 giant: phase-2 external placement drops modeled peak",
     model.is_batchable_external_index = isb;
     model.order_aware_recompute = true;
     model.batch_spectator_indices = spectator;
+    model.node_level_placement = spectator;  // node-level emit (decoupled)
     model.perf_first = true;  // legacy over_budget path; node-level ignores
     model.peak_threshold = 100e9;  // 100 GB budget, bytes
     model.numeric_size = 8.0;
@@ -537,6 +538,7 @@ TEST_CASE("ext-place C60 giant: phase-2 external placement drops modeled peak",
         is_df_occ;  // external role, byte-ident.
     model.order_aware_recompute = true;
     model.batch_spectator_indices = true;
+    model.node_level_placement = true;  // node-level emit (decoupled)
     model.perf_first = true;
     model.peak_threshold = 100e9;
     model.numeric_size = 8.0;
@@ -623,6 +625,7 @@ TEST_CASE("C60 residual peak per summand under the recommended batching",
     model.is_batchable_external_index = is_batchable_external;
     model.order_aware_recompute = true;
     model.batch_spectator_indices = spectator;
+    model.node_level_placement = spectator;  // node-level emit (decoupled)
     model.perf_first = true;
     model.peak_threshold = 100e9;
     model.numeric_size = 8.0;
@@ -3296,21 +3299,26 @@ TEST_CASE("dryrun water-20 occ-batching overcompute (aux-only vs occ+aux)",
 
   auto regime = df_regime(kWater20_pVDZF12);
 
-  // Three configs -- [0]=aux-only, [1]=occ+aux order_aware=false (the MPQC
-  // production path: root-level forest seed), [2]=occ+aux order_aware=true
-  // (node-level placement). n_ext/n_con = how many External vs Contracted batch
-  // modes the optimizer actually emitted (engagement check).
+  // Three configs -- [0]=aux-only, [1]=occ+aux root-seed emission (the MPQC
+  // production path: root-level forest seed), [2]=occ+aux node-level emission.
+  // The order-aware cost model is ON for all three (default); only the emission
+  // placement differs between [1] and [2]. n_ext/n_con = how many External vs
+  // Contracted batch modes the optimizer actually emitted (engagement check).
   int n_ext[3] = {0, 0, 0};
   int n_con[3] = {0, 0, 0};
 
   // occ_on=false: aux-only (mu~/K contracted-role batching, occ never batched).
   // occ_on=true : + external-occ (i) batching; occ_target 16 -> ceil(80/16)=5
   //               blocks per occ mode; doubles terms nest i_1 x i_2.
-  // order_aware: toggles the ordered-key recompute cost model + node-level
-  //              external placement (order_aware && spectator). MPQC production
-  //              runs order_aware=false; this test compares both for occ+aux to
-  //              probe whether order_aware=true does materially more recompute.
+  // order_aware: the ordered-key recompute COST MODEL (selection only; on for
+  //              all three configs here). node_level: the EMISSION placement
+  //              (per-node stamps vs root-level forest seed), decoupled from
+  //              the cost model. MPQC production runs node_level=false (root
+  //              seed); this test compares root-seed vs node-level for occ+aux
+  //              to probe whether node-level placement does materially more
+  //              recompute.
   auto analyze = [&](ExprPtr const& giant, bool occ_on, bool order_aware,
+                     bool node_level,
                      int cfg_idx) -> sequant::eval::dryrun::CostProfile {
     sequant::BatchPolicy policy;
     policy.is_batchable_contracted_index = is_df_batchable;  // mu~, K
@@ -3322,6 +3330,7 @@ TEST_CASE("dryrun water-20 occ-batching overcompute (aux-only vs occ+aux)",
                : std::function<bool(Index const&)>(is_df_batchable);
     policy.batch_spectator_indices = occ_on;
     policy.order_aware_recompute = order_aware;
+    policy.node_level_placement = node_level;
     policy.batch_target_size = [](Index const& ix) -> std::size_t {
       auto const k = ix.space().base_key();
       if (k == L"i") return 16;   // occ_target_size
@@ -3376,10 +3385,10 @@ TEST_CASE("dryrun water-20 occ-batching overcompute (aux-only vs occ+aux)",
   };
 
   // Three configs, summed over all terms. cfg 0 = aux-only, 1 = occ+aux
-  // order_aware=false (MPQC production, root-level seed), 2 = occ+aux
-  // order_aware=true (node-level placement). model_* is order-/batching-blind
-  // (~flat); dryrun_* is the recompute-aware replay tally. The 2-vs-1 ratio is
-  // the diagnostic: does order_aware=true do materially more recompute?
+  // root-seed emission (MPQC production), 2 = occ+aux node-level emission.
+  // model_* is order-/batching-blind (~flat); dryrun_* is the recompute-aware
+  // replay tally. The 2-vs-1 ratio is the diagnostic: does node-level placement
+  // do materially more recompute (at a fixed, order-aware cost model)?
   double mflops[3] = {0, 0, 0}, mexec[3] = {0, 0, 0};
   double dflops[3] = {0, 0, 0}, dexec[3] = {0, 0, 0};
   std::size_t dops[3] = {0, 0, 0};
@@ -3390,9 +3399,15 @@ TEST_CASE("dryrun water-20 occ-batching overcompute (aux-only vs occ+aux)",
     if (!giant) continue;
     sequant::eval::dryrun::CostProfile r[3];
     try {
-      r[0] = analyze(giant, /*occ_on=*/false, /*order_aware=*/false, 0);
-      r[1] = analyze(giant, /*occ_on=*/true, /*order_aware=*/false, 1);
-      r[2] = analyze(giant, /*occ_on=*/true, /*order_aware=*/true, 2);
+      // Hold order_aware (cost model) FIXED across [1] and [2]; vary only
+      // node_level (emission) so the [2]-vs-[1] probe isolates node-level
+      // placement's recompute from the cost model (the decouple).
+      r[0] = analyze(giant, /*occ_on=*/false, /*order_aware=*/true,
+                     /*node_level=*/false, 0);
+      r[1] = analyze(giant, /*occ_on=*/true, /*order_aware=*/true,
+                     /*node_level=*/false, 1);
+      r[2] = analyze(giant, /*occ_on=*/true, /*order_aware=*/true,
+                     /*node_level=*/true, 2);
     } catch (std::exception const&) {
       continue;
     } catch (...) {
@@ -3409,8 +3424,8 @@ TEST_CASE("dryrun water-20 occ-batching overcompute (aux-only vs occ+aux)",
     }
   }
   auto ratio = [](double num, double den) { return den > 0 ? num / den : 0.0; };
-  wchar_t const* lab[3] = {L"aux-only        ", L"occ+aux OA=false",
-                           L"occ+aux OA=true "};
+  wchar_t const* lab[3] = {L"aux-only         ", L"occ+aux root-seed",
+                           L"occ+aux node-lvl "};
   std::wcerr << L"\n=== [water-20 overcompute] " << n_ok << L" terms ("
              << summands.size() << L" total) ===\n";
   for (int c = 0; c < 3; ++c)
@@ -3425,7 +3440,7 @@ TEST_CASE("dryrun water-20 occ-batching overcompute (aux-only vs occ+aux)",
              << ratio(dexec[2], dexec[0]) << L" n_ops x"
              << ratio(double(dops[2]), double(dops[0])) << L"\n";
   std::wcerr
-      << L"  --- REGRESSION PROBE (OA=true vs OA=false) --- dryrun_exec x"
+      << L"  --- REGRESSION PROBE (node-level vs root-seed) --- dryrun_exec x"
       << ratio(dexec[2], dexec[1]) << L"  dryrun_n_ops x"
       << ratio(double(dops[2]), double(dops[1])) << L"\n";
   REQUIRE(mflops[0] > 0.0);
@@ -4533,6 +4548,7 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
     // off there and their measurements are byte-identical to before.
     policy.batch_spectator_indices = batch_occ;
     policy.order_aware_recompute = batch_occ;
+    policy.node_level_placement = batch_occ;  // node-level occ emit (decoupled)
     // Role split: aux Κ is batchable in the CONTRACTED role (it is summed at
     // some node); the residual-target occ i is batchable in the EXTERNAL role
     // ONLY (a spectator carried to the result, contracted nowhere). Declaring
@@ -4661,6 +4677,7 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
           };
           m46.batch_spectator_indices = true;
           m46.order_aware_recompute = true;
+          m46.node_level_placement = true;  // node-level occ emit (decoupled)
           m46.perf_first = true;
           m46.volatile_weight = 20.0;
           m46.machine_balance = 200.0;

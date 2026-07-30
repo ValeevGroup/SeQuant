@@ -147,6 +147,7 @@ EvalSequence single_term_opt(
     model.prune_outer_products = prune_outer_products;
     model.batch_spectator_indices = cost.batch_spectator_indices;
     model.order_aware_recompute = cost.order_aware_recompute;
+    model.node_level_placement = cost.node_level_placement;
     // Building blocks: the contracted-role predicate feeds the DP's contracted
     // filter; the external-role predicate feeds the external filter. Each
     // defaults to decline (returns false); there is no cross-role fallback, so

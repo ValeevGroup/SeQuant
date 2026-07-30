@@ -8,9 +8,13 @@
 #include <SeQuant/core/eval/backends/tiledarray/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/tiledarray/result.hpp>
 #include <SeQuant/core/eval/eval.hpp>
+#include <SeQuant/core/eval/lifetime_mask.hpp>
+#include <SeQuant/core/eval/node_batch_annotation.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/optimize/optimize.hpp>
+#include <SeQuant/core/optimize/options.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -4739,4 +4743,213 @@ TEST_CASE("shape_provider_denest_to_flat", "[shape-provider]") {
     auto const res = evaluate(node, target, yield, cache)->get<FlatArray>();
     REQUIRE(equal_tarrays(res, ref, "i,j"));
   }
+}
+
+// ---------------------------------------------------------------------------
+// Node-level external placement correctness reproducer (order_aware_recompute).
+//
+// Drives the FULL optimizer -> binarize -> stamp_lifetime_masks -> batched TA
+// evaluate pipeline (unlike the eval_batched_* cases, which stamp batch modes
+// by hand), so the External BatchModeType stamps come from the optimizer's
+// node-level placement, not a fixture. Runs the SAME term twice --
+// order_aware_recompute = false (root-level "forest seed") and = true
+// (node-level placement) -- and compares each batched result against the plain
+// unbatched reference (ground truth). Hidden ([.]) diagnostic.
+// ---------------------------------------------------------------------------
+namespace {
+
+// Copy the five batch-annotation fields from a plain EvalExpr binarized tree
+// onto the structurally-identical EvalExprTA tree (to_ta_node's tensor-branch
+// reconstructor drops them). Both trees are built by the same binarize/
+// transform_node post-order, so a lockstep walk aligns node-for-node.
+void copy_batch_annotations(
+    sequant::FullBinaryNode<sequant::EvalExpr> const& from,
+    sequant::FullBinaryNode<sequant::EvalExprTA>& to) {
+  const_cast<sequant::EvalExprTA&>(*to).set_batched_here(from->batched_here());
+  const_cast<sequant::EvalExprTA&>(*to).set_sliced_modes(from->sliced_modes());
+  const_cast<sequant::EvalExprTA&>(*to).set_contracted_modes(
+      from->contracted_modes());
+  const_cast<sequant::EvalExprTA&>(*to).set_batch_order_aware(
+      from->batch_order_aware());
+  const_cast<sequant::EvalExprTA&>(*to).set_batch_effective_count(
+      from->batch_effective_count());
+  if (!from.leaf()) {
+    copy_batch_annotations(from.left(), to.left());
+    copy_batch_annotations(from.right(), to.right());
+  }
+}
+
+// Dump per-node annotations of a TA eval tree (result indices, batched_here
+// modes+kind, sliced_modes, order_aware) for eyeballing placement differences.
+void dump_annotations(sequant::FullBinaryNode<sequant::EvalExprTA> const& n,
+                      int depth = 0) {
+  using sequant::BatchModeType;
+  std::string pad(2 * depth, ' ');
+  std::string res;
+  for (auto const& ix : n->canon_indices()) {
+    res += sequant::toUtf8(ix.full_label());
+    res += ' ';
+  }
+  std::string bh;
+  for (auto const& [ix, knd] : n->batched_here()) {
+    bh += sequant::toUtf8(ix.full_label());
+    bh += (knd == BatchModeType::External ? ":ext " : ":con ");
+  }
+  std::string sm;
+  for (auto const& ix : n->sliced_modes()) {
+    sm += sequant::toUtf8(ix.full_label());
+    sm += ' ';
+  }
+  std::cerr << pad << (n.leaf() ? "LEAF " : "NODE ") << "res=[" << res
+            << "] batched=[" << bh << "] sliced=[" << sm
+            << "] oa=" << (n->batch_order_aware() ? 1 : 0) << "\n";
+  if (!n.leaf()) {
+    dump_annotations(n.left(), depth + 1);
+    dump_annotations(n.right(), depth + 1);
+  }
+}
+
+}  // namespace
+
+TEST_CASE("node_level_external_placement_correctness",
+          "[.][eval][batched-external][node-placement]") {
+  using namespace sequant;
+  using TA::TArrayD;
+  using node_t = FullBinaryNode<EvalExprTA>;
+  using cache_t = CacheManager<node_t>;
+
+  auto& world = TA::get_default_world();
+
+  auto isr = get_default_context().index_space_registry();
+  auto occ = isr->retrieve(L"i");
+  auto virt = isr->retrieve(L"a");
+  auto aux = isr->retrieve(L"x");
+
+  // Actual arrays: occ multi-tiled (40 in tiles of 4 -> 10 blocks) so the
+  // external occ mode partitions into > 1 batch, and large vs virt/aux (4) so
+  // an i_2-carrying intermediate (~i*i) is the peak and slicing i_2 lowers it,
+  // forcing node-level placement to adopt i_2 as External.
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, /*nocc=*/12,
+                                                    /*nvirt=*/4, /*naux=*/4};
+  yield_.set_max_tile(4);
+
+  // Term with an external occ spectator (i_2, free on the result and carried on
+  // internal nodes) plus a subtree invariant to it. Non-left-deep so the right
+  // branch (w*p) carries NO i_2 (invariant), the left branch (g*h) carries i_2.
+  // Flat 4-tensor product (no inner parens: those would parse as a nested
+  // Product of sub-products, which optimize() treats as < 3 factors and leaves
+  // unfactorized => no batch annotations). The optimizer factorizes it. i_2,i_6
+  // are occ externals (free on the result, carried across internal nodes);
+  // x_1,x_2 are contracted aux.
+  std::string const expr_str =
+      "g{i_2,a_1;x_1} * h{a_1,a_2;x_1} * w{a_2,a_3;x_2} * p{a_3,i_6;x_2}";
+  std::string const target = "i_2,i_6";
+
+  auto const is_occ = [occ](Index const& ix) { return ix.space() == occ; };
+  auto const is_aux = [aux](Index const& ix) { return ix.space() == aux; };
+
+  // idx_to_extent inflated so the modeled peak far exceeds peak_threshold and
+  // the external-emit gate fires on BOTH the legacy (order_aware=false) and the
+  // node-level (order_aware=true) path.
+  std::function<std::size_t(Index const&)> idxsz =
+      [occ, virt, aux](Index const& ix) -> std::size_t {
+    if (ix.space() == occ) return 12;
+    if (ix.space() == virt) return 4;
+    if (ix.space() == aux) return 4;
+    return 1;
+  };
+  std::function<std::size_t(Index const&)> bts =
+      [occ](Index const& ix) -> std::size_t {
+    return ix.space() == occ ? std::size_t{4} : std::size_t{60};
+  };
+
+  auto run = [&](bool order_aware) -> TArrayD {
+    auto const expr =
+        deserialize<ExprPtr>(std::wstring(expr_str.begin(), expr_str.end()));
+
+    auto axes_map = std::make_shared<std::unordered_map<
+        Expr const*, container::vector<NodeBatchAnnotation>>>();
+
+    OptimizeOptions opts;
+    opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+    opts.reorder = ReorderSum::NoReorder;
+    opts.idx_to_extent = idxsz;
+    opts.inner_pow = [](Index const&, std::size_t) -> double { return 1.0; };
+    opts.batch_policy.is_batchable_contracted_index = is_aux;
+    opts.batch_policy.is_batchable_external_index = is_occ;
+    opts.batch_policy.batch_target_size = bts;
+    opts.batch_policy.batch_spectator_indices = true;
+    opts.batch_policy.order_aware_recompute = order_aware;
+    // The sweep var now drives node-level EMISSION too (decoupled from the cost
+    // model): order_aware=false => root-seed, true => node-level placement.
+    // This test's point is that BOTH emissions give the correct energy.
+    opts.batch_policy.node_level_placement = order_aware;
+    opts.batch_policy.peak_threshold = 1.0e3;  // tiny budget => force external
+    opts.term_batch_axes = axes_map;
+
+    auto optimized = optimize(expr, opts);
+    REQUIRE(optimized);
+    auto it = axes_map->find(optimized.get());
+    REQUIRE(it != axes_map->end());
+    auto const& node_axes = it->second;
+    std::cerr << "[diag] node_axes.size()=" << node_axes.size() << "\n";
+    for (std::size_t j = 0; j < node_axes.size(); ++j) {
+      std::cerr << "  node_axes[" << j << "] oa=" << node_axes[j].order_aware
+                << " naxes=" << node_axes[j].axes.size() << " :";
+      for (auto const& [ix, knd] : node_axes[j].axes)
+        std::cerr << " " << toUtf8(ix.full_label())
+                  << (knd == BatchModeType::External ? ":ext" : ":con");
+      std::cerr << "\n";
+    }
+
+    BinarizationOptions bopts;
+    bopts.node_batch_axes = node_axes;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto enode = binarize(optimized, {}, bopts);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+    auto ta_node = to_ta_node(enode);
+    copy_batch_annotations(enode, ta_node);
+
+    // Populate sliced_modes from the External stamps (the real pipeline does
+    // this inside CacheManager; the manual empty cache below does not).
+    std::array<node_t, 1> forest{ta_node};
+    stamp_lifetime_masks(forest);
+    ta_node = forest[0];
+
+    std::cerr << "\n=== order_aware_recompute = "
+              << (order_aware ? "true" : "false") << " ===\n";
+    dump_annotations(ta_node);
+
+    auto accept = opts.batch_policy.is_batchable_index();
+    auto cache = cache_t::empty();
+    cache.set_custom_evaluator(make_batched_custom_evaluator(
+        yield_, bts, accept, make_no_scope_guard{}, never_volatile{}));
+    return evaluate(ta_node, target, yield_, cache)->get<TArrayD>();
+  };
+
+  // Ground truth: plain unbatched evaluation (no custom evaluator, batch
+  // stamps ignored). Also fills yield_'s random leaf cache first.
+  auto const ref_expr =
+      deserialize<ExprPtr>(std::wstring(expr_str.begin(), expr_str.end()));
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto ref_node = to_ta_node(binarize(ref_expr));
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  auto const ref = evaluate(ref_node, target, yield_)->get<TArrayD>();
+  REQUIRE(TA::norm2(ref) > 0.0);
+
+  auto const res_off = run(false);
+  auto const res_on = run(true);
+
+  TArrayD d_off, d_on;
+  d_off("i,j") = ref("i,j") - res_off("i,j");
+  d_on("i,j") = ref("i,j") - res_on("i,j");
+  double const err_off = TA::norm2(d_off);
+  double const err_on = TA::norm2(d_on);
+  std::cerr << "\n[node-placement] |ref| = " << TA::norm2(ref)
+            << "  err(order_aware=false) = " << err_off
+            << "  err(order_aware=true) = " << err_on << "\n";
+
+  CHECK(err_off < 1e-10);
+  CHECK(err_on < 1e-10);
 }

@@ -2852,6 +2852,7 @@ TEST_CASE("phase-2 places an external mode on an over-budget node",
     model.order_aware_recompute = true;
     model.perf_first = true;
     model.batch_spectator_indices = spectator;
+    model.node_level_placement = spectator;  // node-level emit (decoupled)
     // Finite budget strictly between the F-sliced (240 B) and unsliced (4872 B)
     // root peaks => the root is over budget and slicing F brings it under.
     model.peak_threshold = 1000.0;
@@ -4076,8 +4077,9 @@ TEST_CASE(
   model.is_batchable_contracted_index = is_batchable;
   model.is_batchable_external_index = is_batchable;  // external role (Task-4)
   model.charge_batch_recompute = true;
-  model.order_aware_recompute = true;    // engage node-level placement
-  model.batch_spectator_indices = true;  // (both flags required)
+  model.order_aware_recompute = true;    // order-aware cost model (selection)
+  model.batch_spectator_indices = true;  // external batching
+  model.node_level_placement = true;     // engage node-level placement (emit)
   model.peak_threshold = 1.0;            // force every node over budget
 
   auto ctx = model.build_context(net, targets);
@@ -4201,8 +4203,9 @@ TEST_CASE(
   // fallback but survives its removal (Task 4).
   model.is_batchable_external_index = is_batchable;
   model.charge_batch_recompute = true;
-  model.order_aware_recompute = true;    // engage node-level placement
-  model.batch_spectator_indices = true;  // (both flags required)
+  model.order_aware_recompute = true;    // order-aware cost model (selection)
+  model.batch_spectator_indices = true;  // external batching
+  model.node_level_placement = true;     // engage node-level placement (emit)
   model.peak_threshold = 1.0;            // force every node over budget
 
   auto ctx = model.build_context(net, targets);

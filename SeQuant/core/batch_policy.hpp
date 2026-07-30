@@ -65,16 +65,28 @@ struct BatchPolicy {
   bool batch_spectator_indices = false;
 
   /// Enable the order-aware multilevel recompute cost model (resident-scan peak
-  /// + ordered-key flops recompute) AND, together with batch_spectator_indices,
-  /// node-level external placement. Consulted only by the batched objectives
-  /// (threaded via CostParams). Default false (legacy byte-identical set-keyed
-  /// DP + root-level forest seed). NOTE: although the recompute-aware cost
-  /// model is in principle more realistic, enabling it currently switches
-  /// external placement to the node-level path, which on water-20 does ~2x the
-  /// traffic and ~12x the op-executions of the root-level seed (see the
-  /// water-20 dryrun diagnostic) -- a net runtime REGRESSION -- so it stays off
-  /// by default until node-level placement is fixed.
+  /// + ordered-key flops recompute). SELECTION knob ONLY: it makes the DP
+  /// charge recompute realistically and thus pick a different (better-batching)
+  /// factorization. It does NOT control external-mode EMISSION -- that is the
+  /// independent \ref node_level_placement. Consulted only by the batched
+  /// objectives (threaded via CostParams). Default false (the historical
+  /// set-keyed DP), so this decouple is behavior-neutral. Enabling it is now
+  /// SAFE (selection only): the node-level emission that used to ride along
+  /// with it is separately gated by \ref node_level_placement (default off),
+  /// which keeps the correct, cheap root-level forest seed.
   bool order_aware_recompute = false;
+
+  /// Emission-placement knob for external (spectator) modes, INDEPENDENT of the
+  /// order-aware cost model. Only meaningful with \ref batch_spectator_indices.
+  /// If true, the emit uses node-level placement (per-node External stamps); if
+  /// false (default) it uses the root-level forest seed (one global spectator
+  /// loop). Node-level placement is currently a net runtime REGRESSION -- ~6x
+  /// wall time and ~8x batch scopes on water-8, and it produces a wrong
+  /// residual on water-20 -- because it nests a batch scope at every carrying
+  /// node and the batched evaluator replays each. It stays OFF by default until
+  /// that is fixed; the root-seed emission is correct and cheap regardless of
+  /// order_aware_recompute.
+  bool node_level_placement = false;
 
   /// If true, restrict batching to persistent (amplitude-independent) subtrees,
   /// declining to batch any subtree that contains a volatile leaf. If false

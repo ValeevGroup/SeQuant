@@ -169,14 +169,22 @@ struct CostParams {
   bool batch_spectator_indices = false;
 
   /// Enable the order-aware multilevel recompute cost model (resident-scan peak
-  /// + ordered-key flops recompute) AND, with batch_spectator_indices, node-
-  /// level external placement. Only the batched objectives consult it. Default
-  /// false (legacy set-keyed DP + root-level forest seed): although the
-  /// recompute-aware cost model is more realistic for selection, enabling it
-  /// currently routes external placement through the node-level path, which is
-  /// a net runtime regression on water-20 (see the water-20 dryrun diagnostic),
-  /// so it stays off until node-level placement is fixed.
+  /// + ordered-key flops recompute). SELECTION only -- it changes which
+  /// factorization the DP picks, not external-mode emission (that is the
+  /// independent \ref node_level_placement). Only the batched objectives
+  /// consult it. Default false (the historical set-keyed DP; behavior-neutral).
+  /// Enabling it is safe (selection only); node-level emission is separately
+  /// gated by node_level_placement. Threaded to/from
+  /// BatchPolicy::order_aware_recompute.
   bool order_aware_recompute = false;
+
+  /// Emission-placement knob for external modes, independent of the cost model
+  /// (see \ref BatchPolicy::node_level_placement). Only meaningful with
+  /// batch_spectator_indices: true = node-level per-node placement, false
+  /// (default) = root-level forest seed. Node-level placement is a runtime
+  /// regression (nested batch scopes) and stays off until fixed. Threaded
+  /// to/from BatchPolicy::node_level_placement.
+  bool node_level_placement = false;
 
   /// Spaces batchable in the CONTRACTED role, threaded from
   /// BatchPolicy::is_batchable_contracted_index. Building block consumed by the
