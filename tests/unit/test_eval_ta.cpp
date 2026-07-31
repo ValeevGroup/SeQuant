@@ -10,8 +10,10 @@
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/lifetime_mask.hpp>
 #include <SeQuant/core/eval/node_batch_annotation.hpp>
+#include <SeQuant/core/eval/schedule_dump.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/result_expr.hpp>
+#include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/optimize/options.hpp>
@@ -4800,9 +4802,16 @@ void dump_annotations(sequant::FullBinaryNode<sequant::EvalExprTA> const& n,
     sm += sequant::toUtf8(ix.full_label());
     sm += ' ';
   }
+  std::string ident;
+  try {
+    ident = sequant::toUtf8(sequant::io::serialization::to_string(n->expr()));
+  } catch (...) {
+    ident = "?";
+  }
   std::cerr << pad << (n.leaf() ? "LEAF " : "NODE ") << "res=[" << res
             << "] batched=[" << bh << "] sliced=[" << sm
-            << "] oa=" << (n->batch_order_aware() ? 1 : 0) << "\n";
+            << "] oa=" << (n->batch_order_aware() ? 1 : 0)
+            << " | expr=" << ident << "\n";
   if (!n.leaf()) {
     dump_annotations(n.left(), depth + 1);
     dump_annotations(n.right(), depth + 1);
@@ -4920,6 +4929,10 @@ TEST_CASE("node_level_external_placement_correctness",
     std::cerr << "\n=== order_aware_recompute = "
               << (order_aware ? "true" : "false") << " ===\n";
     dump_annotations(ta_node);
+    std::cerr << "SCHEDULE_IR_JSON "
+              << sequant::eval::schedule_ir_json(ta_node,
+                                                 order_aware ? "oa" : "root")
+              << "\n";
 
     auto accept = opts.batch_policy.is_batchable_index();
     auto cache = cache_t::empty();

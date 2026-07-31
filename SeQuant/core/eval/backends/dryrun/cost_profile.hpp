@@ -116,6 +116,50 @@ auto build_dryrun_cache(NodeRange const& nodes, CacheConfig const& cfg,
                                 std::move(is_batchable_index));
 }
 
+/// One recomputed node's avoidable-recompute breakdown (see
+/// \c CostProfile::avoidable_nodes). \c label is the op signature (a
+/// `result;lhs;rhs` full-label string built in \c DryRunOps::prod). \c count is
+/// `builds - necessary`: how many of the node's actual replay builds were
+/// redundant given its TOUCHED (dependent) modes -- a node rebuilt once per
+/// block of a mode it does not touch is avoidable recompute (a missed hoist).
+/// \c exec / \c flops are that count times the per-build roofline exec / FLOPs,
+/// i.e. the wall-time-proxy and arithmetic cost of the redundancy. Only nodes
+/// with \c count > 0 are recorded.
+struct AvoidableNode {
+  std::string label;
+  double count = 0;
+  double exec = 0;
+  double flops = 0;
+};
+
+/// Roll a replay's per-node build tally (a \c CostSink populated by
+/// \c CostModel::tally_node during a \c Trace::On replay) into the avoidable-
+/// recompute breakdown: per distinct op signature, \c avoidable = builds -
+/// necessary (clamped >= 0), weighted by the per-build exec / flops, sorted by
+/// exec descending, keeping only nodes with a positive avoidable count. Shared
+/// by \c cost_profile() (whole-forest rollup) and any caller that attaches its
+/// OWN sink to a replay it drives (e.g. the schedule-dump test, which emits
+/// these per-node numbers so the visualizer consumes cost_profile's avoidable
+/// instead of recomputing it). Single-threaded caller expected: the replay has
+/// finished and the sink is quiescent, so no lock is taken.
+inline std::vector<AvoidableNode> avoidable_nodes_from_sink(
+    CostSink const& sink) {
+  std::vector<AvoidableNode> out;
+  for (auto const& [sig, nc] : sink.per_node) {
+    double const builds = static_cast<double>(nc.builds);
+    double const avoidable =
+        builds > nc.necessary ? builds - nc.necessary : 0.0;
+    if (avoidable <= 0.0) continue;
+    out.push_back({sig, avoidable, avoidable * nc.exec_per_build,
+                   avoidable * nc.flops_per_build});
+  }
+  std::sort(out.begin(), out.end(),
+            [](AvoidableNode const& a, AvoidableNode const& b) {
+              return a.exec > b.exec;
+            });
+  return out;
+}
+
 /// Summary of the modeled cost of a factorized dry-run eval forest, as produced
 /// by \c cost_profile(). All quantities are summed/maxed over every summand
 /// tree in the forest.
@@ -166,6 +210,30 @@ struct CostProfile {
   /// Number of product-op EXECUTIONS in the replay (counts re-executions per
   /// batch block), so it grows with recompute -- unlike \c model_n_ops.
   std::size_t dryrun_n_ops = 0;
+
+  /// Per-node avoidable-recompute breakdown: one entry per DISTINCT op whose
+  /// replay build count exceeded the \c necessary count implied by its TOUCHED
+  /// (dependent) modes -- a node rebuilt once per block of a mode it does not
+  /// touch (a missed hoist). Sorted by \c exec descending. Empty when no
+  /// batching engages (every node then builds exactly as its touched-mode
+  /// extent demands). See \c DryRunOps::prod (per-build tally) and the
+  /// post-replay rollup in \c cost_profile().
+  std::vector<AvoidableNode> avoidable_nodes;
+  /// Total avoidable roofline exec across all recomputed nodes (sum of
+  /// \c avoidable_nodes[i].exec) -- the wall-time-proxy counterpart of the raw
+  /// avoidable build COUNT. Compare against \c dryrun_exec for the avoidable
+  /// FRACTION (see \c avoidable_time()). Zero when no batching engages.
+  double avoidable_exec = 0;
+  /// Total avoidable build count (sum of \c avoidable_nodes[i].count): how many
+  /// product-op executions across the whole replay were redundant recompute.
+  double avoidable_ops = 0;
+
+  /// Avoidable FRACTION of replay exec: \c avoidable_exec / \c dryrun_exec (0
+  /// when no ops ran). The single-number "how much of the batched replay's work
+  /// was wasted recompute" summary.
+  [[nodiscard]] double avoidable_time() const {
+    return dryrun_exec > 0 ? avoidable_exec / dryrun_exec : 0.0;
+  }
 };
 
 /// Replays a factorized eval forest zero-data through the real eval loop --
@@ -332,6 +400,20 @@ inline CostProfile cost_profile(std::vector<EvalNodeDryRun> const& forest,
   profile.dryrun_flops = costsink.flops.load(std::memory_order_relaxed);
   profile.dryrun_exec = costsink.exec.load(std::memory_order_relaxed);
   profile.dryrun_n_ops = costsink.n_ops.load(std::memory_order_relaxed);
+
+  // Per-node avoidable-recompute rollup (shared with the schedule-dump
+  // emitter). For each DISTINCT op signature the replay built, `builds` is how
+  // many times it actually ran and `necessary` is the product of block counts
+  // of its TOUCHED (dependent) modes -- the minimum a perfect-hoisting
+  // evaluator would do; the excess is avoidable recompute (a node rebuilt once
+  // per block of a mode it does NOT touch). Because the cost model is DENSE
+  // (every touched block visited exactly once, no block sparsity), `necessary`
+  // is exact, so avoidable = builds - necessary needs no empirical correction.
+  profile.avoidable_nodes = avoidable_nodes_from_sink(costsink);
+  for (auto const& an : profile.avoidable_nodes) {
+    profile.avoidable_exec += an.exec;
+    profile.avoidable_ops += an.count;
+  }
 
   // logger_eval_guard's destructor restores logger.eval.{level,stream} at
   // function exit (see above); no manual restore needed here.

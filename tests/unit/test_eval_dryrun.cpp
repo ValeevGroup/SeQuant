@@ -42,6 +42,7 @@
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
+#include <SeQuant/core/eval/schedule_dump.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/index.hpp>
@@ -1818,6 +1819,10 @@ TEST_CASE(
   auto node = binarize<EvalExprDryRun>(optimized, {}, bopts);
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 
+  if (std::getenv("SEQUANT_SCHED_DUMP"))
+    std::cerr << "SCHEDULE_IR_JSON "
+              << sequant::eval::schedule_ir_json(node, "giant") << "\n";
+
   // Locate the giant sub-node (the free-mu~ contraction node whose modeled
   // size dwarfs everything else -- same identification criterion the
   // [dryrun-df] verdict case above used) purely to REPORT what the DP
@@ -1865,6 +1870,15 @@ TEST_CASE(
 
   std::cerr << "[dryrun-eval] replaying giant term through the batched "
                "runtime evaluator ...\n";
+  // Attach a CostSink to the shared cost model so THIS replay's per-node build
+  // tally (result.hpp DryRunOps::prod -> tally_node) accumulates the avoidable-
+  // recompute breakdown. Using the test's OWN replay -- not a separate
+  // cost_profile() call -- means the numbers match the exact run events the
+  // visualizer consumes (same cache, same slicing), and there is no second
+  // replay flooding the SCHEDULE_RUN_EVENT stream. Detached below.
+  sequant::eval::dryrun::CostSink sched_sink;
+  bool const sched_dump = std::getenv("SEQUANT_SCHED_DUMP") != nullptr;
+  if (sched_dump) cm->set_cost_sink(&sched_sink);
   auto t1 = std::chrono::steady_clock::now();
   ResultPtr result;
   bool threw = false;
@@ -1874,6 +1888,25 @@ TEST_CASE(
   } catch (std::exception const& e) {
     threw = true;
     what = e.what();
+  }
+  if (sched_dump) {
+    cm->set_cost_sink(nullptr);
+    // cost_profile's per-node avoidable, keyed by the SAME sig the IR and
+    // run-event nodes carry, so the visualizer joins each DAG node (by
+    // hash->sig) to these numbers instead of recomputing avoidable itself.
+    auto const av =
+        sequant::eval::dryrun::avoidable_nodes_from_sink(sched_sink);
+    std::ostringstream cjson;
+    cjson << "SCHEDULE_COST_JSON {\"term_id\":\"giant\",\"nodes\":[";
+    for (std::size_t i = 0; i < av.size(); ++i) {
+      if (i) cjson << ',';
+      cjson << "{\"sig\":\""
+            << sequant::eval::detail::sched_json_escape(av[i].label)
+            << "\",\"count\":" << av[i].count << ",\"exec\":" << av[i].exec
+            << ",\"flops\":" << av[i].flops << "}";
+    }
+    cjson << "]}";
+    std::cerr << cjson.str() << "\n";
   }
   auto const eval_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                            std::chrono::steady_clock::now() - t1)
@@ -4027,6 +4060,40 @@ TEST_CASE("cost_profile returns peak/flops/exec/n_ops",
              << cp.dryrun_exec << L" peak_bytes=" << (cp.peak_bytes / 1e9)
              << L" GB\n";
 
+  std::wcerr << L"[cost_profile] avoidable_ops=" << cp.avoidable_ops
+             << L" avoidable_exec=" << cp.avoidable_exec << L" avoidable_time="
+             << cp.avoidable_time() << L" avoidable_nodes="
+             << cp.avoidable_nodes.size() << L"\n";
+  for (std::size_t i = 0; i < cp.avoidable_nodes.size() && i < 8; ++i) {
+    auto const& an = cp.avoidable_nodes[i];
+    std::wcerr << L"    [" << i << L"] count=" << an.count << L" exec="
+               << an.exec << L" flops=" << an.flops << L" "
+               << sequant::toUtf16(an.label) << L"\n";
+  }
+
+  // Internal consistency of the per-node avoidable rollup:
+  //  - avoidable_exec / avoidable_ops are the exact sums of the per-node fields
+  //    (no double-counting, no dropped node);
+  //  - every listed node has a strictly positive avoidable count (the rollup
+  //    filters builds<=necessary), and the list is sorted by exec descending;
+  //  - avoidable_time() is a fraction of the tallied replay exec.
+  {
+    double sum_exec = 0.0, sum_ops = 0.0;
+    for (std::size_t i = 0; i < cp.avoidable_nodes.size(); ++i) {
+      auto const& an = cp.avoidable_nodes[i];
+      CHECK(an.count > 0.0);
+      if (i > 0) CHECK(cp.avoidable_nodes[i - 1].exec >= an.exec);
+      sum_exec += an.exec;
+      sum_ops += an.count;
+    }
+    CHECK(cp.avoidable_exec == Catch::Approx(sum_exec).epsilon(1e-9));
+    CHECK(cp.avoidable_ops == Catch::Approx(sum_ops).epsilon(1e-9));
+    CHECK(cp.avoidable_exec >= 0.0);
+    CHECK(cp.avoidable_exec <= cp.dryrun_exec * (1.0 + 1e-9));
+    CHECK(cp.avoidable_time() >= 0.0);
+    CHECK(cp.avoidable_time() <= 1.0 + 1e-9);
+  }
+
   CHECK(cp.model_n_ops > 0);
   CHECK(cp.model_flops > 0.0);
   CHECK(cp.model_exec > 0.0);
@@ -4491,14 +4558,12 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
   auto regime = df_regime(kC60_pVDZF12);
 
   struct Meas {
-    std::size_t static_nodes = 0;  // cp.n_ops: internal nodes (ideal = once)
-    std::size_t replay_ops = 0;    // Eval|Product lines actually replayed
-    std::size_t distinct = 0;      // distinct product expressions (no slice)
-    std::size_t unique_keys = 0;   // distinct (expr, touched-mode-slice) builds
-    std::size_t ops_with_cost = 0;  // ops matched to an OpCost line (coverage)
-    double total_exec = 0;          // sum of modelled exec_cost over all ops
-    double avoidable_exec = 0;      // exec_cost of the duplicate-key builds
-    double cp_exec = 0;             // cost_profile() static total (validation)
+    std::size_t static_nodes =
+        0;                        // cp.model_n_ops: internal nodes (ideal once)
+    std::size_t replay_ops = 0;   // cp.dryrun_n_ops: product-op executions
+    double avoidable_ops_ct = 0;  // cp.avoidable_ops: redundant (excess) builds
+    double total_exec = 0;        // cp.dryrun_exec: modelled exec over all ops
+    double avoidable_exec = 0;  // cp.avoidable_exec: exec of the excess builds
     double peak_gb = 0;
     // Task 5 acceptance gate (aux+occ leg). Counted over the EMITTED eval-node
     // forest's batched_here() stamps, classifying occ by space base_key L"i"
@@ -4516,19 +4581,26 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
     //     real.
     std::size_t contracted_occ_stamps = 0;
     std::size_t external_occ_stamps = 0;
-    std::wstring top_expr;  // worst avoidable offender
-    double top_ratio = 0;   // its builds / its distinct touched-slices
-    // Avoidable-recompute OP-COUNT factor: total builds over the number of
-    // DISTINCT (expression, touched-mode-slice) builds a perfect-sharing
-    // evaluator would do, minus 1. Legitimate slicing (a different slice of an
-    // mode the op's value touches) makes a distinct key and does NOT count;
-    // only the SAME value rebuilt under an enclosing batch it is invariant to
-    // does. 0 = no avoidable recomputation.
+    std::wstring
+        top_expr;  // cp.avoidable_nodes.front(): worst offender by exec
+    // Necessary builds: what a perfect-sharing evaluator would do -- total
+    // product-op executions minus the redundant (avoidable) excess.
+    // cost_profile derives it per node as the product of block counts of that
+    // node's TOUCHED (dependent) modes; this is the whole-forest sum.
+    double necessary_ops() const {
+      return double(replay_ops) - avoidable_ops_ct;
+    }
+    // Avoidable-recompute OP-COUNT factor: redundant builds over necessary
+    // builds. Legitimate slicing (a different slice of a mode the op's value
+    // touches) is not redundant and does NOT count; only the SAME value rebuilt
+    // under an enclosing batch it is invariant to does. 0 = no avoidable
+    // recomputation.
     double avoidable() const {
-      return unique_keys ? double(replay_ops) / double(unique_keys) - 1.0 : 0.0;
+      double const n = necessary_ops();
+      return n > 0 ? avoidable_ops_ct / n : 0.0;
     }
     // Avoidable-recompute TIME fraction: the share of modelled exec_cost spent
-    // on duplicate-key builds. This -- not the op-count factor -- is what a fix
+    // on redundant builds. This -- not the op-count factor -- is what a fix
     // would recover, since a cheap invariant node rebuilt 1000x and an
     // expensive one rebuilt twice weigh very differently.
     double avoidable_time() const {
@@ -4820,83 +4892,24 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
     m.contracted_occ_stamps = n_contracted_occ_stamps;
     m.external_occ_stamps = n_external_occ_stamps;
 
-    // i-th "| "-delimited field of a trace line, trailing space/CR trimmed.
-    auto field = [](std::wstring const& s, std::size_t i) -> std::wstring {
-      std::size_t start = 0;
-      for (std::size_t k = 0; k < i; ++k) {
-        auto const p = s.find(L"| ", start);
-        if (p == std::wstring::npos) return L"";
-        start = p + 2;
-      }
-      auto const end = s.find(L"| ", start);
-      std::wstring f = s.substr(
-          start, end == std::wstring::npos ? std::wstring::npos : end - start);
-      while (!f.empty() &&
-             (f.back() == L' ' || f.back() == L'\r' || f.back() == L'\n'))
-        f.pop_back();
-      return f;
-    };
-
-    // Reconstruct the enclosing batch-loop stack from the BatchGroup Begin/End
-    // + BatchIter markers (BatchGroup nesting == batch-loop nesting; each level
-    // carries the last BatchIter's (mode, slice)). Key each replayed op by its
-    // expression PLUS the slices of only the modes that occur in it -- the
-    // touched-mode-slice signature. Two builds with the same key are the same
-    // value recomputed (avoidable); a different touched slice is legitimate.
-    m.cp_exec = cp.model_exec;
-    std::vector<std::pair<std::wstring, std::wstring>> stack;  // (mode, slice)
-    std::map<std::wstring, std::size_t> total_of;              // expr -> builds
-    std::map<std::wstring, std::set<std::wstring>> keys_of;    // expr -> keys
-    std::map<std::wstring, double>
-        exec_of;  // expr -> avoidable exec (offender)
-    std::set<std::wstring> all_keys;
-
-    std::wistringstream in(trace.str());
-    std::wstring ln;
-    double last_exec = -1.0;  // exec_cost from the OpCost line preceding an op
-    while (std::getline(in, ln)) {
-      if (ln.rfind(L"BatchGroup | Begin", 0) == 0) {
-        stack.emplace_back(L"", L"");
-      } else if (ln.rfind(L"BatchGroup | End", 0) == 0) {
-        if (!stack.empty()) stack.pop_back();
-      } else if (ln.rfind(L"BatchIter", 0) == 0) {
-        if (!stack.empty()) stack.back() = {field(ln, 1), field(ln, 2)};
-      } else if (ln.rfind(L"OpCost", 0) == 0) {
-        last_exec = std::wcstod(field(ln, 2).c_str(), nullptr);
-      } else if (ln.find(L"Eval | Product") != std::wstring::npos) {
-        ++m.replay_ops;
-        double const exec = last_exec >= 0.0 ? last_exec : 0.0;
-        if (last_exec >= 0.0) ++m.ops_with_cost;
-        last_exec = -1.0;  // consume; a missing OpCost must not carry over
-        m.total_exec += exec;
-        auto const p = ln.rfind(L"| ");
-        std::wstring const expr =
-            (p == std::wstring::npos) ? ln : ln.substr(p + 2);
-        std::wstring sig;
-        for (auto const& [mode, slice] : stack)
-          if (!mode.empty() && expr.find(mode) != std::wstring::npos)
-            sig += L"|" + mode + L"=" + slice;
-        std::wstring const key = expr + L"@" + sig;
-        ++total_of[expr];
-        keys_of[expr].insert(key);
-        bool const dup = !all_keys.insert(key).second;
-        if (dup) {  // same value already built at this touched-slice
-          m.avoidable_exec += exec;
-          exec_of[expr] += exec;
-        }
-      }
-    }
-    m.distinct = total_of.size();
-    m.unique_keys = all_keys.size();
-    double worst_exec = 0;
-    for (auto const& [e, tot] : total_of) {
-      double const r = double(tot) / double(keys_of[e].size());
-      if (r > m.top_ratio) m.top_ratio = r;
-      if (exec_of[e] > worst_exec) {  // offender by avoidable TIME, not count
-        worst_exec = exec_of[e];
-        m.top_expr = e;
-      }
-    }
+    // Avoidable recomputation now comes from cost_profile()'s per-node rollup
+    // (cp.avoidable_*), NOT from re-parsing the eval trace here. The replay
+    // folds each product-op build into the shared CostSink keyed by the op's
+    // full-label signature and counts `necessary` = product of block counts of
+    // the op's TOUCHED (dependent) modes; the excess over necessary is the
+    // avoidable recompute. This is the SAME quantity the old
+    // BatchGroup/BatchIter trace-stack reconstruction estimated, but derived
+    // structurally (from the node's touched modes and the runtime slice state)
+    // rather than by string-matching mode labels against the printed expression
+    // -- so it is immune to alpha-renaming and needs no trace parse. (`trace`
+    // is still captured above only for the SEQUANT_UT_DRYRUN_DUMPTRACE debug
+    // dump.)
+    m.replay_ops = cp.dryrun_n_ops;
+    m.total_exec = cp.dryrun_exec;
+    m.avoidable_exec = cp.avoidable_exec;
+    m.avoidable_ops_ct = cp.avoidable_ops;
+    if (!cp.avoidable_nodes.empty())
+      m.top_expr = sequant::toUtf16(cp.avoidable_nodes.front().label);
     return m;
   };
 
@@ -4906,13 +4919,12 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
 
   auto report = [](wchar_t const* label, Meas const& m) {
     std::wcerr << L"[occ-veto] " << label << L": ops=" << m.replay_ops
-               << L" unique(expr,slice)=" << m.unique_keys << L" avoidable_ops="
+               << L" necessary=" << m.necessary_ops() << L" avoidable_ops="
                << m.avoidable() << L"x  AVOIDABLE_TIME="
                << (100.0 * m.avoidable_time()) << L"%  PEAK=" << m.peak_gb
-               << L"GB  (cost-coverage " << m.ops_with_cost << L"/"
-               << m.replay_ops << L", total_exec=" << m.total_exec << L" vs cp "
-               << m.cp_exec << L")\n           worst avoidable-time offender: "
-               << m.top_expr << L"\n";
+               << L"GB  (total_exec=" << m.total_exec << L")\n"
+               << L"           worst avoidable-time offender: " << m.top_expr
+               << L"\n";
   };
   std::wcerr << L"\n=== [dryrun-occ-veto] C60 residual forest, " << nterms
              << L" terms (K@256, occ@8, 100GB, perf-first) ===\n";
@@ -4950,9 +4962,12 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
   CHECK(both.external_occ_stamps > 0);
   // ==========================================================================
 
-  // Measurement guard: nearly every op must carry a cost model OpCost line, or
-  // the time fraction is unreliable.
-  CHECK(both.ops_with_cost >= both.replay_ops - both.replay_ops / 20);
+  // Measurement guard (now structural): the avoidable rollup and the OpCost
+  // trace line are folded at the SAME eval-log gate inside DryRunOps::prod, so
+  // every tallied product op is costed by construction -- cp.dryrun_n_ops
+  // counts exactly the ops that folded a cost. A positive replay op count is
+  // therefore the only thing left to guard.
+  CHECK(both.replay_ops > 0);
 
   // ASPIRATIONAL GATE -- PEAK (intentionally RED, documented). This is a MEMORY
   // problem: the C60 job it mirrors ran under a 100 GB budget and never
@@ -5017,10 +5032,19 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
   // avoidable factor overstate it, because a cheap invariant node rebuilt many
   // times weighs little.
   //
+  // NOTE ON METRIC SOURCE: the percentages quoted in this block were measured
+  // by the earlier BatchGroup/BatchIter trace-stack reconstruction. The metric
+  // is now sourced structurally from cost_profile()'s per-node avoidable rollup
+  // (cp.avoidable_*); the two estimate the same quantity, but the exact figures
+  // may shift by a few points at the edges (signature identity vs.
+  // printed-label matching). Re-baseline these numbers from a fresh nterms=55
+  // run before quoting them as targets -- and heed the HISTORY note at the top
+  // of this test.
+  //
   // Post role-split, honest numbers (annotation-only batching, no heuristic
   // fallback -- the production configuration, cf. MPQC csv_batch_policy.h;
   // nterms=55): unbatched ~1.8%, aux-only ~6.5%, aux+occ ~44.6% with
-  // unique(expr,slice) ~= 2080. The aux+occ figure came DOWN from a
+  // necessary builds ~= 2080. The aux+occ figure came DOWN from a
   // transitional ~65.0% (unique 47292): with the phantom contracted-occ
   // batching removed, the DP no longer spawns the flood of
   // contracted-occ-sliced key variants, so both the avoidable-time share and
@@ -5108,18 +5132,21 @@ TEST_CASE(
 
   struct Meas {
     std::size_t static_nodes = 0;
-    std::size_t replay_ops = 0;
-    std::size_t unique_keys = 0;
-    std::size_t ops_with_cost = 0;
+    std::size_t replay_ops = 0;         // cp.dryrun_n_ops
+    double avoidable_ops_ct = 0;        // cp.avoidable_ops (redundant builds)
     std::size_t n_scatter_begin = 0;    // BatchScatter interceptions fired
     std::size_t n_external_stamps = 0;  // node_axes entries tagged External
     std::size_t n_contracted_occ =
         0;  // node_axes entries: occ tagged Contracted
     std::size_t n_batchgroup_begin = 0;  // BatchGroup interceptions fired
-    double total_exec = 0;
-    double avoidable_exec = 0;
+    double total_exec = 0;               // cp.dryrun_exec
+    double avoidable_exec = 0;           // cp.avoidable_exec
     double peak_gb = 0;
-    std::wstring top_expr;
+    std::wstring
+        top_expr;  // cp.avoidable_nodes.front(): worst offender by exec
+    double necessary_ops() const {
+      return double(replay_ops) - avoidable_ops_ct;
+    }
     double avoidable_time() const {
       return total_exec > 0 ? avoidable_exec / total_exec : 0.0;
     }
@@ -5204,84 +5231,32 @@ TEST_CASE(
     m.static_nodes = cp.model_n_ops;
     m.peak_gb = cp.peak_bytes / 1e9;
 
-    auto field = [](std::wstring const& s, std::size_t i) -> std::wstring {
-      std::size_t start = 0;
-      for (std::size_t k = 0; k < i; ++k) {
-        auto const p = s.find(L"| ", start);
-        if (p == std::wstring::npos) return L"";
-        start = p + 2;
-      }
-      auto const end = s.find(L"| ", start);
-      std::wstring f = s.substr(
-          start, end == std::wstring::npos ? std::wstring::npos : end - start);
-      while (!f.empty() &&
-             (f.back() == L' ' || f.back() == L'\r' || f.back() == L'\n'))
-        f.pop_back();
-      return f;
-    };
+    // Avoidable recomputation comes from cost_profile()'s structural per-node
+    // rollup (cp.avoidable_*), not a trace re-parse -- the External scatter's
+    // per-block replay is correctly counted as legitimate 1/nblocks work
+    // because cost_profile's `necessary` product includes the external mode's
+    // block count whenever the op touches it (the scatter slices it), so a
+    // scattered op is NOT flagged as an avoidable duplicate. See the occ-veto
+    // witness for the same reasoning.
+    m.replay_ops = cp.dryrun_n_ops;
+    m.total_exec = cp.dryrun_exec;
+    m.avoidable_exec = cp.avoidable_exec;
+    m.avoidable_ops_ct = cp.avoidable_ops;
+    if (!cp.avoidable_nodes.empty())
+      m.top_expr = sequant::toUtf16(cp.avoidable_nodes.front().label);
 
-    // Same touched-mode-slice keying as the occ-veto witness, extended for the
-    // EXTERNAL scatter's markers. The contracted BatchGroup path emits
-    // BatchGroup|Begin/End + a per-slice BatchIter; the External scatter branch
-    // (eval.hpp) emits BatchScatter|Begin/End around the block loop and -- via
-    // the per-block marker added alongside this gate -- the SAME BatchIter
-    // (mode, e_lo) per external block. Treating BatchScatter exactly like
-    // BatchGroup (push an enclosing frame on Begin, pop on End) means an op
-    // scattered into a distinct external block gets a distinct touched-slice
-    // signature, so its per-block replay is correctly counted as legitimate
-    // 1/nblocks work, NOT an avoidable duplicate. (Ignoring BatchScatter would
-    // give every block the same signature and falsely inflate avoidable_time.)
-    std::vector<std::pair<std::wstring, std::wstring>> stack;  // (mode, slice)
-    std::set<std::wstring> all_keys;
-    std::map<std::wstring, double>
-        exec_of;  // expr -> avoidable exec (offender)
-
+    // The trace is still parsed for the two STRUCTURAL markers cost_profile
+    // does not expose: how many BatchScatter (External) and BatchGroup
+    // (Contracted) loops the runtime actually opened. These gate the "scatter
+    // genuinely fired" CHECKs below; each Begin line is one opened loop.
     std::wistringstream in(trace.str());
     std::wstring ln;
-    double last_exec = -1.0;
     while (std::getline(in, ln)) {
-      if (ln.rfind(L"BatchGroup | Begin", 0) == 0 ||
-          ln.rfind(L"BatchScatter | Begin", 0) == 0) {
-        if (ln.rfind(L"BatchScatter | Begin", 0) == 0)
-          ++m.n_scatter_begin;
-        else
-          ++m.n_batchgroup_begin;
-        stack.emplace_back(L"", L"");
-      } else if (ln.rfind(L"BatchGroup | End", 0) == 0 ||
-                 ln.rfind(L"BatchScatter | End", 0) == 0) {
-        if (!stack.empty()) stack.pop_back();
-      } else if (ln.rfind(L"BatchIter", 0) == 0) {
-        if (!stack.empty()) stack.back() = {field(ln, 1), field(ln, 2)};
-      } else if (ln.rfind(L"OpCost", 0) == 0) {
-        last_exec = std::wcstod(field(ln, 2).c_str(), nullptr);
-      } else if (ln.find(L"Eval | Product") != std::wstring::npos) {
-        ++m.replay_ops;
-        double const exec = last_exec >= 0.0 ? last_exec : 0.0;
-        if (last_exec >= 0.0) ++m.ops_with_cost;
-        last_exec = -1.0;
-        m.total_exec += exec;
-        auto const p = ln.rfind(L"| ");
-        std::wstring const expr =
-            (p == std::wstring::npos) ? ln : ln.substr(p + 2);
-        std::wstring sig;
-        for (auto const& [mode, slice] : stack)
-          if (!mode.empty() && expr.find(mode) != std::wstring::npos)
-            sig += L"|" + mode + L"=" + slice;
-        std::wstring const key = expr + L"@" + sig;
-        bool const dup = !all_keys.insert(key).second;
-        if (dup) {
-          m.avoidable_exec += exec;
-          exec_of[expr] += exec;
-        }
-      }
+      if (ln.rfind(L"BatchScatter | Begin", 0) == 0)
+        ++m.n_scatter_begin;
+      else if (ln.rfind(L"BatchGroup | Begin", 0) == 0)
+        ++m.n_batchgroup_begin;
     }
-    m.unique_keys = all_keys.size();
-    double worst_exec = 0;
-    for (auto const& [e, av] : exec_of)
-      if (av > worst_exec) {
-        worst_exec = av;
-        m.top_expr = e;
-      }
     return m;
   };
 
@@ -5291,15 +5266,13 @@ TEST_CASE(
 
   auto report = [](wchar_t const* label, Meas const& m) {
     std::wcerr << L"[extmode-avoidable] " << label << L": ops=" << m.replay_ops
-               << L" unique=" << m.unique_keys << L" AVOIDABLE_TIME="
+               << L" necessary=" << m.necessary_ops() << L" AVOIDABLE_TIME="
                << (100.0 * m.avoidable_time()) << L"%  scatter_begin="
                << m.n_scatter_begin << L" bgroup_begin=" << m.n_batchgroup_begin
                << L" ext_stamps=" << m.n_external_stamps << L" con_occ_stamps="
                << m.n_contracted_occ << L" peak=" << m.peak_gb
-               << L"GB (cost-coverage " << m.ops_with_cost << L"/"
-               << m.replay_ops
-               << L")\n           worst avoidable-time offender: " << m.top_expr
-               << L"\n";
+               << L"GB\n           worst avoidable-time offender: "
+               << m.top_expr << L"\n";
   };
   std::wcerr << L"\n=== [dryrun-extmode-avoidable] C60 residual forest, "
              << nterms << L" terms (K@256, occ@8, 100GB, perf-first) ===\n";
@@ -5309,9 +5282,10 @@ TEST_CASE(
   // The forest is identical; only the mode policy differs.
   CHECK(contracted.static_nodes == external.static_nodes);
 
-  // Measurement guard: nearly every op must carry an OpCost line.
-  CHECK(external.ops_with_cost >=
-        external.replay_ops - external.replay_ops / 20);
+  // Measurement guard (now structural): cost_profile folds each op's cost and
+  // its avoidable tally at the same eval-log gate, so every replayed op is
+  // costed by construction; a positive op count is all that remains to guard.
+  CHECK(external.replay_ops > 0);
 
   // The EXTERNAL scatter must genuinely fire (the DP stamped External on the
   // over-budget PPL giant's external occ, and the runtime took the scatter

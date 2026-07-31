@@ -7,6 +7,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <format>
 
@@ -141,6 +142,37 @@ struct DryRunOps {
       // charged once per block at its sliced size -- the same numbers already
       // logged above, now summed. No-op (byte-identical) when unattached.
       cm->tally_op(flops, exec);
+      // Per-node AVOIDABLE tally. Touched modes = every index this op involves
+      // (its output plus both operands). necessary = product of block counts
+      // (full/sliced extent) of the touched modes that are actually sliced --
+      // the builds a perfect-sharing evaluator would do. This op is invoked
+      // once per block of the ENCLOSING loops; a loop mode it does NOT touch is
+      // not in `merged`, so it does not raise `necessary`, and each rebuild
+      // under it shows up as builds > necessary = avoidable recompute.
+      {
+        container::svector<Index> touched(out);
+        for (auto const& ix : idx)
+          if (std::find(touched.begin(), touched.end(), ix) == touched.end())
+            touched.push_back(ix);
+        for (auto const& ix : rhs)
+          if (std::find(touched.begin(), touched.end(), ix) == touched.end())
+            touched.push_back(ix);
+        double necessary = 1.0;
+        for (auto const& ix : touched) {
+          auto const it = merged.find(ix);
+          if (it != merged.end() && it->second > 0) {
+            std::size_t const full = cm->regime().extent(ix);
+            if (full > it->second)
+              necessary *=
+                  static_cast<double>(full) / static_cast<double>(it->second);
+          }
+        }
+        // Same signature the runtime Build event stamps on this node (out =
+        // result, operands = the two inputs), so cost_profile's per-node
+        // avoidable joins to the DAG node by hash->sig in the visualizer.
+        std::string const sig = cost_op_signature(out, idx, rhs);
+        cm->tally_node(sig, necessary, flops, exec);
+      }
     }
 
     if (a.this_annot.empty()) {

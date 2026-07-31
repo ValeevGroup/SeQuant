@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
+#include <SeQuant/core/eval/schedule_dump.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/optimize/cost_model.hpp>
 #include <SeQuant/core/optimize/options.hpp>
@@ -11,6 +12,9 @@
 #include <atomic>
 #include <cstddef>
 #include <functional>
+#include <map>
+#include <mutex>
+#include <string>
 #include <utility>
 
 namespace sequant::eval::dryrun {
@@ -36,10 +40,27 @@ namespace sequant::eval::dryrun {
 /// CostModel) is byte-identical. The atomics let a fold from a concurrent
 /// evaluator stay correct, though \c cost_profile() itself is single-threaded.
 ///
+/// Per-node build tally for the AVOIDABLE-recompute breakdown. A node's value
+/// is determined by its TOUCHED modes (the indices it involves); rebuilding it
+/// once per block of a mode it does NOT touch is avoidable recompute (a missed
+/// hoist). `necessary` = product of block counts of the touched sliced modes
+/// (with a dense cost model every touched block is visited once, so this equals
+/// the distinct-touched-slice count); `builds` = how many times the op actually
+/// ran. avoidable_count = builds - necessary; avoidable_exec = that x per-build
+/// exec. See cost_profile()'s post-replay rollup.
+struct NodeCost {
+  std::size_t builds = 0;
+  double necessary = 1.0;
+  double exec_per_build = 0.0;
+  double flops_per_build = 0.0;
+};
+
 struct CostSink {
   std::atomic<double> flops{0.0};
   std::atomic<double> exec{0.0};
   std::atomic<std::size_t> n_ops{0};
+  std::mutex node_mtx;
+  std::map<std::string, NodeCost> per_node;  // keyed by op signature
 };
 
 /// Per-index extent OVERRIDE table: narrows specific indices (by identity, so
@@ -163,6 +184,21 @@ class CostModel {
     sink_->flops.fetch_add(flops_count, std::memory_order_relaxed);
     sink_->exec.fetch_add(exec, std::memory_order_relaxed);
     sink_->n_ops.fetch_add(1, std::memory_order_relaxed);
+  }
+
+  /// Record one build of the op identified by \p sig for the per-node avoidable
+  /// breakdown: \p necessary = product of block counts of its touched sliced
+  /// modes (the minimum builds a perfect-sharing evaluator would do). Each call
+  /// is one actual build; avoidable = builds - necessary (see \c NodeCost).
+  void tally_node(std::string const& sig, double necessary, double flops_count,
+                  double exec) const {
+    if (!sink_) return;
+    std::lock_guard<std::mutex> lk(sink_->node_mtx);
+    auto& nc = sink_->per_node[sig];
+    ++nc.builds;
+    nc.necessary = necessary;
+    nc.flops_per_build = flops_count;
+    nc.exec_per_build = exec;
   }
 
  private:
