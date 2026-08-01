@@ -118,123 +118,83 @@ auto build_dryrun_cache(NodeRange const& nodes, CacheConfig const& cfg,
                                 std::move(is_batchable_index));
 }
 
-/// One recomputed node's avoidable-recompute breakdown (see
-/// \c CostProfile::avoidable_nodes). \c label is the op signature (a
-/// `result;lhs;rhs` full-label string built in \c DryRunOps::prod). \c count is
-/// `builds - necessary`: how many of the node's actual replay builds were
-/// redundant given its TOUCHED (dependent) modes -- a node rebuilt once per
-/// block of a mode it does not touch is avoidable recompute (a missed hoist).
-/// \c exec / \c flops are the wall-time-proxy and arithmetic cost of the
-/// redundancy, summed over the node's cost-homogeneous slice-context buckets:
-/// within each bucket (fixed slice-context => fixed extents => fixed roofline
-/// cost) the avoidable exec is exactly `total_exec * (builds - necessary)/
-/// builds`, and the buckets of one DAG node are aggregated here. This is why
-/// the sink keys on the EXTENDED signature (label + touched-mode extents)
-/// rather than the label alone: a label-only bucket would mix a full-extent
-/// build with per-block sliced ones ~100x cheaper and averaging across that
-/// spread overshoots (the observed avoidable_time > 100%). Only nodes with \c
-/// count > 0 are recorded.
+/// One recomputed value's avoidable-recompute breakdown (see
+/// \c CostProfile::avoidable_nodes). \c label is the value's signature (a
+/// `result;lhs;rhs` full-label string built in \c DryRunOps::prod). \c flops is
+/// the avoidable recompute in FLOPs -- `total_flops - full_flops`, the
+/// arithmetic the batched replay repeated beyond building this value ONCE at
+/// full extent (the batching-free / unlimited-memory ideal). \c count is the
+/// equivalent number of extra full rebuilds (`total_flops/full_flops - 1`): 0
+/// when the builds tile the value once (disjoint slices), ~N-1 when the value
+/// is rebuilt full N times (an un-hoisted invariant). Only values with a
+/// positive avoidable FLOP count are recorded.
 struct AvoidableNode {
   std::string label;
   double count = 0;
-  double exec = 0;
   double flops = 0;
 };
 
-/// Roll a replay's per-node build tally (a \c CostSink populated by
+/// Roll a replay's per-value build tally (a \c CostSink populated by
 /// \c CostModel::tally_node during a \c Trace::On replay) into the avoidable-
-/// recompute breakdown: per distinct op signature, \c avoidable = builds -
-/// necessary (clamped >= 0), weighted by the per-build exec / flops, sorted by
-/// exec descending, keeping only nodes with a positive avoidable count. Shared
-/// by \c cost_profile() (whole-forest rollup) and any caller that attaches its
-/// OWN sink to a replay it drives (e.g. the schedule-dump test, which emits
-/// these per-node numbers so the visualizer consumes cost_profile's avoidable
-/// instead of recomputing it). Single-threaded caller expected: the replay has
-/// finished and the sink is quiescent, so no lock is taken.
+/// recompute breakdown: per distinct value (label), avoidable FLOPs =
+/// max(0, total_flops - full_flops), sorted by avoidable FLOPs descending,
+/// keeping only values with a positive amount. Shared by \c cost_profile()
+/// (whole-forest rollup) and any caller that attaches its OWN sink to a replay
+/// it drives (e.g. the schedule-dump test, which emits these per-value numbers
+/// so the visualizer consumes cost_profile's avoidable instead of recomputing
+/// it). Single-threaded caller expected: the replay has finished and the sink
+/// is quiescent, so no lock is taken.
 inline std::vector<AvoidableNode> avoidable_nodes_from_sink(
     CostSink const& sink) {
-  // Each sink entry is a COST-HOMOGENEOUS bucket: builds sharing a (label +
-  // slice-context) key ran at identical extents, hence identical roofline cost.
-  // So the avoidable exec of a bucket = total_exec * (builds -
-  // necessary)/builds is EXACT -- there is no cost distribution to average over
-  // (that averaging is exactly what made the label-only rollup overshoot 100%
-  // on the C60 external arm, where one label mixed a full-extent build with
-  // per-block sliced ones ~257x cheaper). Aggregate the buckets of the same DAG
-  // node (NodeCost::label) into one AvoidableNode, which is what the visualizer
-  // joins on by hash->sig.
-  std::map<std::string, AvoidableNode> by_label;
-  for (auto const& [ext, nc] : sink.per_node) {
-    double const builds = static_cast<double>(nc.builds);
-    double const avoidable =
-        builds > nc.necessary ? builds - nc.necessary : 0.0;
-    if (avoidable <= 0.0) continue;
-    double const frac = avoidable / builds;  // in [0, 1)
-    auto& an = by_label[nc.label];
-    an.label = nc.label;
-    an.count += avoidable;
-    an.exec += nc.total_exec * frac;
-    an.flops += nc.total_flops * frac;
-  }
+  // Per value (keyed by label): avoidable FLOPs = total_flops - full_flops --
+  // the arithmetic the batched replay repeated beyond building the value ONCE
+  // at full extent (the batching-free ideal). FLOPs is additive across slices,
+  // so disjoint per-block slices that tile the value sum to exactly full_flops
+  // (0 avoidable), while a value rebuilt full per block sums to N*full
+  // ((N-1)*full avoidable). The per-value max(0, .) keeps every entry -- and
+  // hence the sum
+  // -- in [0, total_flops], so avoidable_time() stays in [0, 1] by
+  // construction.
   std::vector<AvoidableNode> out;
-  out.reserve(by_label.size());
-  for (auto& [lbl, an] : by_label) out.push_back(std::move(an));
+  for (auto const& [label, nc] : sink.per_node) {
+    if (nc.full_flops <= 0.0) continue;
+    double const avoidable = nc.total_flops - nc.full_flops;
+    if (avoidable <= 0.0) continue;
+    out.push_back({label,
+                   nc.total_flops / nc.full_flops - 1.0 /*extra full rebuilds*/,
+                   avoidable});
+  }
   std::sort(out.begin(), out.end(),
             [](AvoidableNode const& a, AvoidableNode const& b) {
-              return a.exec > b.exec;
+              return a.flops > b.flops;
             });
 
-  // DIAGNOSTIC (SEQUANT_AVOIDABLE_DEBUG): dump per-BUCKET exec accounting. Each
-  // bucket now keys on (label + slice-context), so its builds should be
-  // cost-homogeneous -- the per-build exec spread ratio=max/min should be ~1,
-  // and the two aggregation formulas agree:
-  //   A = avoidable_count * exec_per_build (LAST)
-  //   B = total_exec * (builds - necessary)/builds
-  // A ~= B per bucket (and both bounded) confirms homogeneity; any bucket with
-  // ratio >> 1 would mean the slice-context key failed to separate a cost.
+  // DIAGNOSTIC (SEQUANT_AVOIDABLE_DEBUG): per-value FLOP accounting, worst
+  // first. total_flops == full_flops => builds tiled the value once (0
+  // avoidable); total_flops == N*full_flops => value rebuilt full N times.
   if (std::getenv("SEQUANT_AVOIDABLE_DEBUG")) {
-    double sumA = 0, sumB = 0, sum_total = 0;
-    for (auto const& [sig, nc] : sink.per_node) sum_total += nc.total_exec;
-    std::vector<std::string> keys;
-    for (auto const& [sig, nc] : sink.per_node) keys.push_back(sig);
-    std::sort(keys.begin(), keys.end(), [&](auto const& a, auto const& b) {
-      auto const& na = sink.per_node.at(a);
-      auto const& nb = sink.per_node.at(b);
-      double const aa =
-          (na.builds > na.necessary ? na.builds - na.necessary : 0) *
-          na.exec_per_build;
-      double const ba =
-          (nb.builds > nb.necessary ? nb.builds - nb.necessary : 0) *
-          nb.exec_per_build;
-      return aa > ba;
-    });
-    std::fprintf(stderr, "[avoidable-debug] total_exec(sum)=%.6g n_sigs=%zu\n",
-                 sum_total, sink.per_node.size());
-    std::size_t shown = 0;
-    for (auto const& sig : keys) {
-      auto const& nc = sink.per_node.at(sig);
-      double const b = static_cast<double>(nc.builds);
-      double const av = b > nc.necessary ? b - nc.necessary : 0.0;
-      double const A = av * nc.exec_per_build;
-      double const B = b > 0 ? nc.total_exec * (av / b) : 0.0;
-      sumA += A;
-      sumB += B;
-      if (av > 0 && shown < 20) {
-        std::fprintf(
-            stderr,
-            "  builds=%.0f nec=%.4g avoid=%.4g | exec last=%.4g "
-            "min=%.4g max=%.4g ratio=%.3g total=%.4g | A=%.4g B=%.4g | %s\n",
-            b, nc.necessary, av, nc.exec_per_build, nc.min_exec, nc.max_exec,
-            nc.min_exec > 0 ? nc.max_exec / nc.min_exec : 0.0, nc.total_exec, A,
-            B, sig.c_str());
-        ++shown;
-      }
+    double sum_total = 0, sum_avoid = 0;
+    for (auto const& [label, nc] : sink.per_node) {
+      sum_total += nc.total_flops;
+      if (nc.full_flops > 0.0 && nc.total_flops > nc.full_flops)
+        sum_avoid += nc.total_flops - nc.full_flops;
     }
-    std::fprintf(
-        stderr,
-        "[avoidable-debug] SUM A(count*last)=%.6g  B(total*frac)=%.6g  "
-        "total_exec=%.6g  A/total=%.3f  B/total=%.3f\n",
-        sumA, sumB, sum_total, sum_total > 0 ? sumA / sum_total : 0,
-        sum_total > 0 ? sumB / sum_total : 0);
+    std::fprintf(stderr,
+                 "[avoidable-debug] dryrun_flops=%.6g avoidable_flops=%.6g "
+                 "frac=%.4f n_values=%zu\n",
+                 sum_total, sum_avoid,
+                 sum_total > 0 ? sum_avoid / sum_total : 0,
+                 sink.per_node.size());
+    std::size_t shown = 0;
+    for (auto const& an : out) {
+      if (shown++ >= 20) break;
+      auto const& nc = sink.per_node.at(an.label);
+      std::fprintf(stderr,
+                   "  builds=%zu total_flops=%.4g full_flops=%.4g "
+                   "avoid_flops=%.4g (=%.3g full-rebuilds) | %s\n",
+                   nc.builds, nc.total_flops, nc.full_flops, an.flops, an.count,
+                   an.label.c_str());
+    }
   }
   return out;
 }
@@ -290,28 +250,32 @@ struct CostProfile {
   /// batch block), so it grows with recompute -- unlike \c model_n_ops.
   std::size_t dryrun_n_ops = 0;
 
-  /// Per-node avoidable-recompute breakdown: one entry per DISTINCT op whose
-  /// replay build count exceeded the \c necessary count implied by its TOUCHED
-  /// (dependent) modes -- a node rebuilt once per block of a mode it does not
-  /// touch (a missed hoist). Sorted by \c exec descending. Empty when no
-  /// batching engages (every node then builds exactly as its touched-mode
-  /// extent demands). See \c DryRunOps::prod (per-build tally) and the
-  /// post-replay rollup in \c cost_profile().
+  /// Per-value avoidable-recompute breakdown: one entry per DISTINCT value
+  /// whose batched replay repeated arithmetic beyond building it ONCE at full
+  /// extent
+  /// (`total_flops > full_flops`) -- the recompute a hoist would have avoided.
+  /// Sorted by avoidable FLOPs descending. Empty when batching repeats no
+  /// arithmetic (every value is built at most once-worth, e.g. disjoint slices
+  /// tiling it). See \c DryRunOps::prod (per-build tally) and the post-replay
+  /// rollup in \c cost_profile().
   std::vector<AvoidableNode> avoidable_nodes;
-  /// Total avoidable roofline exec across all recomputed nodes (sum of
-  /// \c avoidable_nodes[i].exec) -- the wall-time-proxy counterpart of the raw
-  /// avoidable build COUNT. Compare against \c dryrun_exec for the avoidable
-  /// FRACTION (see \c avoidable_time()). Zero when no batching engages.
-  double avoidable_exec = 0;
-  /// Total avoidable build count (sum of \c avoidable_nodes[i].count): how many
-  /// product-op executions across the whole replay were redundant recompute.
+  /// Total avoidable recompute in FLOPs (sum of \c avoidable_nodes[i].flops):
+  /// arithmetic the batched replay repeated beyond the build-once ideal.
+  /// Compare against \c dryrun_flops for the avoidable FRACTION (see \c
+  /// avoidable_time()). Zero when batching repeats no arithmetic.
+  double avoidable_flops = 0;
+  /// Total avoidable recompute expressed as equivalent extra full rebuilds (sum
+  /// of \c avoidable_nodes[i].count).
   double avoidable_ops = 0;
 
-  /// Avoidable FRACTION of replay exec: \c avoidable_exec / \c dryrun_exec (0
-  /// when no ops ran). The single-number "how much of the batched replay's work
-  /// was wasted recompute" summary.
+  /// Avoidable FRACTION of replay arithmetic: \c avoidable_flops / \c
+  /// dryrun_flops (0 when no ops ran), in [0, 1] by construction. The
+  /// single-number "how much of the batched replay's arithmetic was repeated
+  /// recompute vs. the unlimited-memory ideal" summary. (FLOPs, not roofline
+  /// exec: recompute is repeated WORK, and FLOPs -- being linear in extents --
+  /// makes disjoint slicing exactly free and keeps this bounded.)
   [[nodiscard]] double avoidable_time() const {
-    return dryrun_exec > 0 ? avoidable_exec / dryrun_exec : 0.0;
+    return dryrun_flops > 0 ? avoidable_flops / dryrun_flops : 0.0;
   }
 };
 
@@ -480,17 +444,13 @@ inline CostProfile cost_profile(std::vector<EvalNodeDryRun> const& forest,
   profile.dryrun_exec = costsink.exec.load(std::memory_order_relaxed);
   profile.dryrun_n_ops = costsink.n_ops.load(std::memory_order_relaxed);
 
-  // Per-node avoidable-recompute rollup (shared with the schedule-dump
-  // emitter). For each DISTINCT op signature the replay built, `builds` is how
-  // many times it actually ran and `necessary` is the product of block counts
-  // of its TOUCHED (dependent) modes -- the minimum a perfect-hoisting
-  // evaluator would do; the excess is avoidable recompute (a node rebuilt once
-  // per block of a mode it does NOT touch). Because the cost model is DENSE
-  // (every touched block visited exactly once, no block sparsity), `necessary`
-  // is exact, so avoidable = builds - necessary needs no empirical correction.
+  // Per-value avoidable-recompute rollup (shared with the schedule-dump
+  // emitter): for each DISTINCT value the replay built, avoidable FLOPs =
+  // total_flops - full_flops, the arithmetic repeated beyond building it ONCE
+  // at full extent (see avoidable_nodes_from_sink()).
   profile.avoidable_nodes = avoidable_nodes_from_sink(costsink);
   for (auto const& an : profile.avoidable_nodes) {
-    profile.avoidable_exec += an.exec;
+    profile.avoidable_flops += an.flops;
     profile.avoidable_ops += an.count;
   }
 

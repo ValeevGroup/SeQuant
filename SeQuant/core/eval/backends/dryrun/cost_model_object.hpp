@@ -40,41 +40,28 @@ namespace sequant::eval::dryrun {
 /// CostModel) is byte-identical. The atomics let a fold from a concurrent
 /// evaluator stay correct, though \c cost_profile() itself is single-threaded.
 ///
-/// Per-node build tally for the AVOIDABLE-recompute breakdown. A node's value
-/// is determined by its TOUCHED modes (the indices it involves); rebuilding it
-/// once per block of a mode it does NOT touch is avoidable recompute (a missed
-/// hoist). `necessary` = product of block counts of the touched sliced modes
-/// (with a dense cost model every touched block is visited once, so this equals
-/// the distinct-touched-slice count); `builds` = how many times the op actually
-/// ran; avoidable_count = builds - necessary.
+/// Per-node AVOIDABLE-recompute tally, keyed by the LABEL signature (result +
+/// operand indices). Avoidable recompute is measured in FLOPs against the
+/// BATCHING-FREE (unlimited-memory) ideal, where each distinct value is built
+/// ONCE at full extent and reused: \c total_flops accumulates the actual
+/// (possibly sliced) FLOPs over every build of this value; \c full_flops is the
+/// FLOPs to build it once at FULL extent (constant per label). The rollup takes
+/// avoidable = max(0, total_flops - full_flops) -- the arithmetic batching
+/// repeats beyond building the value once, which is exactly the recompute
+/// hoisting exists to avoid.
 ///
-/// A NodeCost is one COST-HOMOGENEOUS bucket: the sink keys on the EXTENDED
-/// signature (label + touched-mode slice extents), so every build here ran at
-/// the same slice-context and hence the same roofline cost. `total_exec`/
-/// `total_flops` ACCUMULATE over the bucket's builds; the rollup prices the
-/// bucket's avoidable recompute as `total_exec * (builds - necessary)/builds`,
-/// which is EXACT because the builds are homogeneous (no cost distribution to
-/// average). Keying on the label alone would instead lump a full-extent build
-/// with per-block sliced ones whose roofline cost is ~100x smaller (a 257x
-/// spread was measured); averaging across that spread is what let the old
-/// rollup exceed the whole replay's cost.
-/// `min_exec`/`max_exec`/`exec_per_build` are kept only for the
-/// SEQUANT_AVOIDABLE_DEBUG homogeneity check (ratio ~ 1 per bucket). See
-/// avoidable_nodes_from_sink().
+/// FLOPs (unlike roofline exec) is LINEAR in extents, hence ADDITIVE across
+/// slices: disjoint slices that tile the full value sum to exactly \c
+/// full_flops
+/// => 0 avoidable (tiling repeats no arithmetic), while a value rebuilt full
+/// once per block sums to N*full => (N-1)*full avoidable. That additivity is
+/// why no slice-context bucketing is needed and why the pathological >100%
+/// roofline-spread of the exec-weighted metric cannot arise.
 struct NodeCost {
-  // The sink is keyed by the EXTENDED signature (label sig + touched-mode slice
-  // extents); `label` is the plain label signature this bucket rolls up to, so
-  // avoidable_nodes_from_sink() aggregates the per-slice-context buckets back
-  // to one entry per DAG node (which is what the visualizer joins on).
-  std::string label;
-  std::size_t builds = 0;
-  double necessary = 1.0;
-  double total_exec = 0.0;       // accumulated roofline exec over all builds
-  double total_flops = 0.0;      // accumulated FLOPs over all builds
-  double exec_per_build = 0.0;   // LAST build's exec (debug dump only)
-  double flops_per_build = 0.0;  // LAST build's flops (debug dump only)
-  double min_exec = 0.0;         // per-build exec spread (debug dump only)
-  double max_exec = 0.0;
+  std::size_t builds = 0;  // how many times this value was (re)built
+  double total_flops =
+      0.0;                  // accumulated actual (sliced) FLOPs over all builds
+  double full_flops = 0.0;  // FLOPs to build this value once at FULL extent
 };
 
 struct CostSink {
@@ -82,10 +69,7 @@ struct CostSink {
   std::atomic<double> exec{0.0};
   std::atomic<std::size_t> n_ops{0};
   std::mutex node_mtx;
-  // Keyed by the EXTENDED signature (label sig + touched-mode slice extents) so
-  // each bucket is cost-homogeneous; NodeCost::label rolls buckets up to the
-  // per-DAG-node label in avoidable_nodes_from_sink().
-  std::map<std::string, NodeCost> per_node;
+  std::map<std::string, NodeCost> per_node;  // keyed by the label signature
 };
 
 /// Per-index extent OVERRIDE table: narrows specific indices (by identity, so
@@ -211,33 +195,20 @@ class CostModel {
     sink_->n_ops.fetch_add(1, std::memory_order_relaxed);
   }
 
-  /// Record one build for the per-node avoidable breakdown. \p ext_sig is the
-  /// EXTENDED key (label signature + touched-mode slice extents): builds
-  /// sharing it ran at the identical slice-context, so the bucket is
-  /// cost-homogeneous.
-  /// \p label is the plain label signature the bucket rolls up to. \p necessary
-  /// = product of block counts of the touched sliced modes (the minimum builds
-  /// a perfect-sharing evaluator would do at this slice-context). Each call is
-  /// one actual build; avoidable = builds - necessary (see \c NodeCost).
-  void tally_node(std::string const& ext_sig, std::string const& label,
-                  double necessary, double flops_count, double exec) const {
+  /// Record one build for the per-node avoidable breakdown. \p label is the
+  /// value's label signature (result + operands). \p sliced_flops is THIS
+  /// build's actual FLOPs (at whatever extent it ran); \p full_flops is the
+  /// FLOPs to build the value once at FULL extent (constant per label).
+  /// avoidable = max(0, sum(sliced_flops) - full_flops) -- the arithmetic
+  /// batching repeats beyond building the value once (see \c NodeCost).
+  void tally_node(std::string const& label, double sliced_flops,
+                  double full_flops) const {
     if (!sink_) return;
     std::lock_guard<std::mutex> lk(sink_->node_mtx);
-    auto& nc = sink_->per_node[ext_sig];
-    if (nc.builds == 0) {
-      nc.label = label;
-      nc.min_exec = exec;
-      nc.max_exec = exec;
-    } else {
-      nc.min_exec = exec < nc.min_exec ? exec : nc.min_exec;
-      nc.max_exec = exec > nc.max_exec ? exec : nc.max_exec;
-    }
+    auto& nc = sink_->per_node[label];
     ++nc.builds;
-    nc.necessary = necessary;
-    nc.flops_per_build = flops_count;
-    nc.exec_per_build = exec;
-    nc.total_exec += exec;
-    nc.total_flops += flops_count;
+    nc.total_flops += sliced_flops;
+    nc.full_flops = full_flops;
   }
 
  private:

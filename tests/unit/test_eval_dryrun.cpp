@@ -1902,8 +1902,8 @@ TEST_CASE(
       if (i) cjson << ',';
       cjson << "{\"sig\":\""
             << sequant::eval::detail::sched_json_escape(av[i].label)
-            << "\",\"count\":" << av[i].count << ",\"exec\":" << av[i].exec
-            << ",\"flops\":" << av[i].flops << "}";
+            << "\",\"count\":" << av[i].count << ",\"flops\":" << av[i].flops
+            << "}";
     }
     cjson << "]}";
     std::cerr << cjson.str() << "\n";
@@ -4061,35 +4061,34 @@ TEST_CASE("cost_profile returns peak/flops/exec/n_ops",
              << L" GB\n";
 
   std::wcerr << L"[cost_profile] avoidable_ops=" << cp.avoidable_ops
-             << L" avoidable_exec=" << cp.avoidable_exec << L" avoidable_time="
-             << cp.avoidable_time() << L" avoidable_nodes="
-             << cp.avoidable_nodes.size() << L"\n";
+             << L" avoidable_flops=" << cp.avoidable_flops
+             << L" avoidable_time=" << cp.avoidable_time()
+             << L" avoidable_nodes=" << cp.avoidable_nodes.size() << L"\n";
   for (std::size_t i = 0; i < cp.avoidable_nodes.size() && i < 8; ++i) {
     auto const& an = cp.avoidable_nodes[i];
-    std::wcerr << L"    [" << i << L"] count=" << an.count << L" exec="
-               << an.exec << L" flops=" << an.flops << L" "
-               << sequant::toUtf16(an.label) << L"\n";
+    std::wcerr << L"    [" << i << L"] count=" << an.count << L" flops="
+               << an.flops << L" " << sequant::toUtf16(an.label) << L"\n";
   }
 
-  // Internal consistency of the per-node avoidable rollup:
-  //  - avoidable_exec / avoidable_ops are the exact sums of the per-node fields
-  //    (no double-counting, no dropped node);
-  //  - every listed node has a strictly positive avoidable count (the rollup
-  //    filters builds<=necessary), and the list is sorted by exec descending;
-  //  - avoidable_time() is a fraction of the tallied replay exec.
+  // Internal consistency of the per-value avoidable rollup:
+  //  - avoidable_flops / avoidable_ops are the exact sums of the per-value
+  //    fields (no double-counting, no dropped value);
+  //  - every listed value has a positive avoidable FLOP count, and the list is
+  //    sorted by avoidable flops descending;
+  //  - avoidable_time() is a fraction (in [0,1]) of the tallied replay FLOPs.
   {
-    double sum_exec = 0.0, sum_ops = 0.0;
+    double sum_flops = 0.0, sum_ops = 0.0;
     for (std::size_t i = 0; i < cp.avoidable_nodes.size(); ++i) {
       auto const& an = cp.avoidable_nodes[i];
-      CHECK(an.count > 0.0);
-      if (i > 0) CHECK(cp.avoidable_nodes[i - 1].exec >= an.exec);
-      sum_exec += an.exec;
+      CHECK(an.flops > 0.0);
+      if (i > 0) CHECK(cp.avoidable_nodes[i - 1].flops >= an.flops);
+      sum_flops += an.flops;
       sum_ops += an.count;
     }
-    CHECK(cp.avoidable_exec == Catch::Approx(sum_exec).epsilon(1e-9));
+    CHECK(cp.avoidable_flops == Catch::Approx(sum_flops).epsilon(1e-9));
     CHECK(cp.avoidable_ops == Catch::Approx(sum_ops).epsilon(1e-9));
-    CHECK(cp.avoidable_exec >= 0.0);
-    CHECK(cp.avoidable_exec <= cp.dryrun_exec * (1.0 + 1e-9));
+    CHECK(cp.avoidable_flops >= 0.0);
+    CHECK(cp.avoidable_flops <= cp.dryrun_flops * (1.0 + 1e-9));
     CHECK(cp.avoidable_time() >= 0.0);
     CHECK(cp.avoidable_time() <= 1.0 + 1e-9);
   }
@@ -4561,9 +4560,9 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
     std::size_t static_nodes =
         0;                        // cp.model_n_ops: internal nodes (ideal once)
     std::size_t replay_ops = 0;   // cp.dryrun_n_ops: product-op executions
-    double avoidable_ops_ct = 0;  // cp.avoidable_ops: redundant (excess) builds
-    double total_exec = 0;        // cp.dryrun_exec: modelled exec over all ops
-    double avoidable_exec = 0;  // cp.avoidable_exec: exec of the excess builds
+    double avoidable_ops_ct = 0;  // cp.avoidable_ops: equivalent full rebuilds
+    double total_flops = 0;      // cp.dryrun_flops: modelled FLOPs over all ops
+    double avoidable_flops = 0;  // cp.avoidable_flops: repeated recompute FLOPs
     double peak_gb = 0;
     // Task 5 acceptance gate (aux+occ leg). Counted over the EMITTED eval-node
     // forest's batched_here() stamps, classifying occ by space base_key L"i"
@@ -4581,30 +4580,17 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
     //     real.
     std::size_t contracted_occ_stamps = 0;
     std::size_t external_occ_stamps = 0;
-    std::wstring
-        top_expr;  // cp.avoidable_nodes.front(): worst offender by exec
-    // Necessary builds: what a perfect-sharing evaluator would do -- total
-    // product-op executions minus the redundant (avoidable) excess.
-    // cost_profile derives it per node as the product of block counts of that
-    // node's TOUCHED (dependent) modes; this is the whole-forest sum.
-    double necessary_ops() const {
-      return double(replay_ops) - avoidable_ops_ct;
-    }
-    // Avoidable-recompute OP-COUNT factor: redundant builds over necessary
-    // builds. Legitimate slicing (a different slice of a mode the op's value
-    // touches) is not redundant and does NOT count; only the SAME value rebuilt
-    // under an enclosing batch it is invariant to does. 0 = no avoidable
-    // recomputation.
-    double avoidable() const {
-      double const n = necessary_ops();
-      return n > 0 ? avoidable_ops_ct / n : 0.0;
-    }
-    // Avoidable-recompute TIME fraction: the share of modelled exec_cost spent
-    // on redundant builds. This -- not the op-count factor -- is what a fix
-    // would recover, since a cheap invariant node rebuilt 1000x and an
-    // expensive one rebuilt twice weigh very differently.
+    std::wstring top_expr;  // cp.avoidable_nodes.front(): worst offender by
+                            // avoidable flops
+    // Avoidable-recompute FRACTION (of arithmetic): the share of replay FLOPs
+    // that is recompute repeated beyond building each value once at full extent
+    // (the batching-free / unlimited-memory ideal). FLOPs, not roofline exec:
+    // recompute is repeated WORK, and FLOPs is linear in extents so disjoint
+    // per-block slices that tile a value are free (0 avoidable) while a value
+    // rebuilt full per block counts (N-1 full-rebuilds). In [0,1] by
+    // construction.
     double avoidable_time() const {
-      return total_exec > 0 ? avoidable_exec / total_exec : 0.0;
+      return total_flops > 0 ? avoidable_flops / total_flops : 0.0;
     }
   };
 
@@ -4905,8 +4891,8 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
     // is still captured above only for the SEQUANT_UT_DRYRUN_DUMPTRACE debug
     // dump.)
     m.replay_ops = cp.dryrun_n_ops;
-    m.total_exec = cp.dryrun_exec;
-    m.avoidable_exec = cp.avoidable_exec;
+    m.total_flops = cp.dryrun_flops;
+    m.avoidable_flops = cp.avoidable_flops;
     m.avoidable_ops_ct = cp.avoidable_ops;
     if (!cp.avoidable_nodes.empty())
       m.top_expr = sequant::toUtf16(cp.avoidable_nodes.front().label);
@@ -4919,12 +4905,12 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
 
   auto report = [](wchar_t const* label, Meas const& m) {
     std::wcerr << L"[occ-veto] " << label << L": ops=" << m.replay_ops
-               << L" necessary=" << m.necessary_ops() << L" avoidable_ops="
-               << m.avoidable() << L"x  AVOIDABLE_TIME="
-               << (100.0 * m.avoidable_time()) << L"%  PEAK=" << m.peak_gb
-               << L"GB  (total_exec=" << m.total_exec << L")\n"
-               << L"           worst avoidable-time offender: " << m.top_expr
-               << L"\n";
+               << L" avoidable_rebuilds=" << m.avoidable_ops_ct
+               << L"  AVOIDABLE_FLOPS=" << (100.0 * m.avoidable_time())
+               << L"%  PEAK=" << m.peak_gb << L"GB  (total_flops="
+               << m.total_flops << L")\n"
+               << L"           worst avoidable-recompute offender: "
+               << m.top_expr << L"\n";
   };
   std::wcerr << L"\n=== [dryrun-occ-veto] C60 residual forest, " << nterms
              << L" terms (K@256, occ@8, 100GB, perf-first) ===\n";
@@ -4971,59 +4957,34 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
 
   // ASPIRATIONAL GATE -- PEAK (intentionally RED, documented). This is a MEMORY
   // problem: the C60 job it mirrors ran under a 100 GB budget and never
-  // completed an iteration. Post role-split, the modelled aux+occ replay peak
-  // is ~5860.9 GB (nterms=55), i.e. ~59x over budget. The two aspirational
-  // CHECKs (peak < 100, avoidable < 0.10) remain RED research targets; they are
-  // NOT forced to pass and NOT the acceptance gate. The Task 5 acceptance
-  // assertions -- Contracted-occ stamps == 0 and External-occ stamps > 0
-  // (above) -- are the ones that must be GREEN.
+  // completed an iteration. The modelled replay peak falls monotonically as
+  // batching engages (nterms=55): unbatched ~38897 GB, aux-only ~6047 GB,
+  // aux+occ ~443.6 GB -- so the aux+occ leg is ~4.4x over the 100 GB budget.
+  // The two aspirational CHECKs (peak < 100, avoidable < 0.10) remain RED
+  // research targets; they are NOT forced to pass and NOT the acceptance gate.
+  // The Task 5 acceptance assertions -- Contracted-occ stamps == 0 and
+  // External-occ stamps > 0 (above) -- are the ones that must be GREEN.
   //
-  // WHY THE PEAK ROSE, AND WHY IT IS THE HONEST NUMBER. Earlier revisions of
-  // this witness reported ~2302 GB (contracted-occ) and ~2947 GB (a
-  // transitional config where occ was still Contracted-stamped). Those figures
-  // were an ARTIFACT: the DP was slicing occ in contracted cells the runtime
-  // never realizes, so the DP's modelled szcell HID the true cost of the
-  // intermediate
-  // -- the peak it reported was below the real replay footprint. The role split
-  // removes that phantom contracted-occ batching, so the DP no longer hides the
-  // cost of the cross-pair (two-PNO-leg) giants, and the peak rises to the TRUE
-  // ~5860.9 GB. A higher-but-honest number is the correct outcome, not a
-  // regression.
+  // PROGRESSION. Earlier revisions of this witness reported ~2302/2947 GB (a
+  // phantom: the DP sliced occ in contracted cells the runtime never realizes,
+  // hiding the true footprint) and then ~5860.9 GB once the role split removed
+  // that phantom (a higher-but-honest number). The order-aware-recompute +
+  // node-level-placement decouple that landed on this branch afterward brought
+  // the aux+occ peak down again to the current ~443.6 GB. Do not quote the
+  // ~5860.9 / ~2302 / ~2947 figures as current -- they are superseded.
   //
-  // WHY EXTERNAL SLICING CANNOT CLOSE IT. The peak driver is a cross-pair
-  // intermediate carrying TWO independent PNO legs (each an a<i,j> PNO domain
-  // over a distinct occ pair). External-occ slicing removes ONE occ pair's
-  // dependence (the forest-spectator target occ), but it cannot reduce the
-  // SECOND PNO-pair leg -- that leg is contracted, not external. Reducing it
-  // would require contracted-occ batching, which this scheme DELIBERATELY does
-  // not do (that is exactly the phantom the role split removed). Closing this
-  // gate is therefore a downstream design question (contracted-occ batching or
-  // a factorization that never forms the two-PNO-leg intermediate), tracked as
-  // an out-of-scope follow-up -- not something this witness can or should
-  // force.
-  //
-  // MEASURED AFTER THE TASKS 1-3 HOIST-EXCLUSION (extscope; e3174a468 +
-  // 0711a1586, nterms=55). The order-aware plan expected the summand-46 giant
-  // -- believed cache-HOISTED at full external extent above the i1,i2 scatter
-  // loop
-  // -- to fall to the factorizer-modeled ~35 GB once the loop-local
-  // external-carrying intermediate was excluded from hoist_invariants::collect.
-  // It did NOT: the aux+occ peak is UNCHANGED at 5860.877 GB, byte-identical
-  // with and without the e3174a468 `!ext_loop_local` conjunct. Localization
-  // (SEQUANT_UT_PEAK_COMPONENTS probe, since reverted): cost_profile()'s
-  // peak_bytes = max(batched-SCRATCH high-watermark peak.load(), gated CACHE
-  // working_set_hwmark()). On this forest the CACHE hwmark is ~94 GB (already
-  // BELOW the 100 GB budget) and the SCRATCH is 5860.877 GB (~2x the 2930 GB
-  // summand-46 giant, co-resident) -- so the peak is set entirely by the
-  // scatter-SCRATCH path, which Task 3 deliberately leaves byte-unchanged (the
-  // hoist-exclusion touches only the cache, and the cache was never the driver
-  // here). The factorizer models 35.08 GB for summand 46 vs the 5860.877 GB
-  // replay: the 167x gap is a scatter-scratch replay defect (two 2930 GB giants
-  // held live at once), orthogonal to the hoist Task 3 fixed. Closing it is the
-  // same downstream scatter-scratch work as the contracted-occ leg above, NOT
-  // reachable from the hoist path. Full account:
-  // .superpowers/sdd/task-4-report.md.
-  CHECK(both.peak_gb < 100.0);  // documented-RED research target (~5860.9 GB)
+  // WHY EXTERNAL SLICING ALONE CANNOT REACH 100 GB. The peak driver is a
+  // cross-pair intermediate carrying TWO independent PNO legs (each an a<i,j>
+  // PNO domain over a distinct occ pair). External-occ slicing removes ONE occ
+  // pair's dependence (the forest-spectator target occ), but it cannot reduce
+  // the SECOND PNO-pair leg -- that leg is contracted, not external. Reducing
+  // it would require contracted-occ batching, which this scheme DELIBERATELY
+  // does not do (that is exactly the phantom the role split removed). Closing
+  // this gate is therefore a downstream design question (contracted-occ
+  // batching or a factorization that never forms the two-PNO-leg intermediate),
+  // tracked as an out-of-scope follow-up -- not something this witness can or
+  // should force.
+  CHECK(both.peak_gb < 100.0);  // documented-RED research target (~443.6 GB)
 
   // ASPIRATIONAL -- AVOIDABLE recomputation TIME: the share of modelled
   // exec_cost spent rebuilding a value already built at the same touched-mode
@@ -5032,74 +4993,55 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
   // avoidable factor overstate it, because a cheap invariant node rebuilt many
   // times weighs little.
   //
-  // NOTE ON METRIC SOURCE: the percentages quoted in this block were measured
-  // by the earlier BatchGroup/BatchIter trace-stack reconstruction. The metric
-  // is now sourced structurally from cost_profile()'s per-node avoidable rollup
-  // (cp.avoidable_*); the two estimate the same quantity, but the exact figures
-  // may shift by a few points at the edges (signature identity vs.
-  // printed-label matching). Re-baseline these numbers from a fresh nterms=55
-  // run before quoting them as targets -- and heed the HISTORY note at the top
-  // of this test.
+  // METRIC: avoidable recompute is measured in FLOPs against the batching-free
+  // (unlimited-memory) ideal -- the arithmetic the batched replay repeats
+  // beyond building each value ONCE at full extent (cp.avoidable_flops /
+  // dryrun_flops). FLOPs, not roofline exec: recompute is repeated WORK, and
+  // FLOPs is linear in extents so disjoint per-block slices that tile a value
+  // are free (0 avoidable) while a value rebuilt full per block counts. See
+  // avoidable_nodes_from_sink().
   //
-  // Post role-split, honest numbers (annotation-only batching, no heuristic
-  // fallback -- the production configuration, cf. MPQC csv_batch_policy.h;
-  // nterms=55): unbatched ~1.8%, aux-only ~6.5%, aux+occ ~44.6% with
-  // necessary builds ~= 2080. The aux+occ figure came DOWN from a
-  // transitional ~65.0% (unique 47292): with the phantom contracted-occ
-  // batching removed, the DP no longer spawns the flood of
-  // contracted-occ-sliced key variants, so both the avoidable-time share and
-  // the unique-key count fall to their honest values. (Ignore any older
-  // ~2302/2947 GB or ~76% narrative that claimed "external-occ raises the
-  // peak/avoidable" -- that was the phantom, now gone.)
+  // Honest numbers (annotation-only batching, no heuristic fallback -- the
+  // production configuration, cf. MPQC csv_batch_policy.h; nterms=55):
+  // unbatched ~1.8%, aux-only ~6.5%, aux+occ ~15.4% (~2438 equivalent full
+  // rebuilds). Heed the HISTORY note at the top of this test before quoting
+  // these; earlier ~44.6%/~76% figures were a since-fixed metric artifact.
   //
-  // aux-only is the CLEAN baseline; it is unchanged (both flags stay off on
-  // that leg). The surviving aux+occ ~44.6% is dominated by the cross-pair
-  // two-PNO- leg giants: external slicing cannot reduce the second (contracted)
-  // PNO-pair leg, so those nodes replay per external block without a matching
-  // working-set reduction. Bringing aux+occ down to the aux-only baseline needs
-  // the same downstream design work the PEAK gate does (contracted-occ batching
-  // or a factorization that never forms the two-PNO-leg intermediate) -- so
-  // this aspirational CHECK also stays RED and documented, not forced.
+  // aux-only is the CLEAN baseline (both flags stay off on that leg). The
+  // surviving aux+occ ~15.4% is the CONTRACTED-aux recompute -- the aux-batched
+  // intermediates rebuilt per external block. Bringing it down needs downstream
+  // design work (a factorization that shares the aux-contracted work across
+  // external blocks) -- so this aspirational CHECK stays RED and documented.
   CHECK(aux.avoidable_time() < 0.10);  // aux-only is clean (PASSES)
   CHECK(both.avoidable_time() <
-        0.10);  // documented-RED research target (~0.446)
+        0.10);  // documented-RED research target (~0.154)
 }
 
-// D5 avoidable-recomputation GATE: prove EXTERNAL-mode batching eliminates the
-// ~76% avoidable recomputation the CONTRACTED-occ schedule showed above.
+// D5 avoidable-recomputation WITNESS: compare EXTERNAL-mode vs CONTRACTED-mode
+// occ batching on the C60 residual forest, measuring avoidable recompute in
+// FLOPs against the batching-free (unlimited-memory) ideal.
 //
-// RETRACTED / CORRECTED (2026-07-27, comment only -- assertions/logic below
-// unchanged): the "~76% contracted-occ vs ~0 external-occ" narrative in this
-// comment block is contaminated. Both configs put occ in the SINGLE
-// is_batchable_index (contracted-role) predicate -- is_batchable_external_index
-// was never set -- so the "external-occ" arm still batched CONTRACTED occ too;
-// the identical peak across arms is the tell. Honest post-role-split re-measure
-// of the sibling [.][dryrun-occ-veto] witness (nterms=55): peak ~= 5860.9 GB,
-// avoidable_time ~= 44.6%, contracted_occ_stamps == 0, external_occ_stamps ==
-// 244. Root cause: .superpowers/sdd/contamination-role-predicate.md.
+// HYPOTHESIS RETIRED. This test was written to prove external-mode batching
+// ELIMINATES a "~76% avoidable recompute the contracted-occ schedule showed"
+// (expectation avoidable ~ 0 on the external arm). Both the ~76% and the ~0
+// were metric artifacts: the ~76% came from an exec-weighted, extent-dependent
+// avoidable metric (a roofline-nonlinearity blow-up, since fixed), and the ~0
+// came from a within-scheme metric that scored per-block slices as "necessary"
+// and so could not see the demoted giants being rebuilt at all.
 //
-// The [.][dryrun-occ-veto] witness above measures, on the C60 residual replay,
-// the exec-cost share spent rebuilding a value already built at the same
-// touched-mode slice (avoidable_time). Its CONTRACTED-occ config (occ batched
-// as a Contracted mode) showed ~76%: the PPL giant W and its g.C-class factors
-// -- carried over the external occ i,j as PNO protoindices -- were rebuilt once
-// per contracted-occ block though the block-loop is invariant to them.
-//
-// EXTERNAL mode fixes exactly this. With batch_spectator_indices ON, the DP
-// recognizes an over-budget term's genuine forest external modes (the residual
-// target occ i,j, carried on EVERY node) and stamps BatchModeType::External on
-// them (D1, work-neutral: seeded_flops == unseeded_flops). The runtime scatter
-// branch (eval.hpp) then slices EVERY leaf carrying the external occ into
-// disjoint blocks and write_into_slice()s the block partials into one pre-sized
-// result -- each block does 1/nblocks of the work, nothing rebuilt. So the
-// expectation is avoidable_time ~ 0 on the external-batched replay.
+// HONEST FINDING (FLOPs vs build-once, nterms=55): external-occ and
+// contracted-occ are essentially EQUIVALENT -- avoidable ~1.95% vs ~1.97%, peak
+// ~5999 vs ~6026 GB -- with external doing ~10x the replay ops (per-block
+// slices). External-mode batching does NOT eliminate the recompute here: the
+// ~2% both arms carry is the cross-pair two-PNO-leg giants, which neither occ
+// slicing scheme reaches (the second PNO leg is contracted, not external). The
+// live gate is the two arms agreeing within 0.02, not external driving to 0.
 //
 // Same C60 job shape as the veto (K@256, occ@8, mu~ NOT batched, 100 GB,
 // perf-first) -- the ONLY policy change is batch_spectator_indices = true, so
 // occ i,j go External instead of Contracted.
-TEST_CASE(
-    "dryrun external-mode batching zeroes the occ-veto avoidable recompute",
-    "[.][dryrun-extmode-avoidable]") {
+TEST_CASE("dryrun external-mode occ batching matches contracted-mode avoidable",
+          "[.][dryrun-extmode-avoidable]") {
   auto ctx = get_default_context().clone();
   ctx.set_first_dummy_index_ordinal(1000000);
   auto isr = ctx.mutable_index_space_registry();
@@ -5139,16 +5081,14 @@ TEST_CASE(
     std::size_t n_contracted_occ =
         0;  // node_axes entries: occ tagged Contracted
     std::size_t n_batchgroup_begin = 0;  // BatchGroup interceptions fired
-    double total_exec = 0;               // cp.dryrun_exec
-    double avoidable_exec = 0;           // cp.avoidable_exec
+    double total_flops = 0;              // cp.dryrun_flops
+    double avoidable_flops = 0;          // cp.avoidable_flops
     double peak_gb = 0;
-    std::wstring
-        top_expr;  // cp.avoidable_nodes.front(): worst offender by exec
-    double necessary_ops() const {
-      return double(replay_ops) - avoidable_ops_ct;
-    }
+    std::wstring top_expr;  // cp.avoidable_nodes.front(): worst avoidable-flops
+    // Avoidable-recompute FRACTION of arithmetic (FLOPs) vs the build-once
+    // ideal (see the occ-veto witness); in [0,1].
     double avoidable_time() const {
-      return total_exec > 0 ? avoidable_exec / total_exec : 0.0;
+      return total_flops > 0 ? avoidable_flops / total_flops : 0.0;
     }
   };
 
@@ -5239,8 +5179,8 @@ TEST_CASE(
     // scattered op is NOT flagged as an avoidable duplicate. See the occ-veto
     // witness for the same reasoning.
     m.replay_ops = cp.dryrun_n_ops;
-    m.total_exec = cp.dryrun_exec;
-    m.avoidable_exec = cp.avoidable_exec;
+    m.total_flops = cp.dryrun_flops;
+    m.avoidable_flops = cp.avoidable_flops;
     m.avoidable_ops_ct = cp.avoidable_ops;
     if (!cp.avoidable_nodes.empty())
       m.top_expr = sequant::toUtf16(cp.avoidable_nodes.front().label);
@@ -5266,12 +5206,12 @@ TEST_CASE(
 
   auto report = [](wchar_t const* label, Meas const& m) {
     std::wcerr << L"[extmode-avoidable] " << label << L": ops=" << m.replay_ops
-               << L" necessary=" << m.necessary_ops() << L" AVOIDABLE_TIME="
-               << (100.0 * m.avoidable_time()) << L"%  scatter_begin="
-               << m.n_scatter_begin << L" bgroup_begin=" << m.n_batchgroup_begin
-               << L" ext_stamps=" << m.n_external_stamps << L" con_occ_stamps="
-               << m.n_contracted_occ << L" peak=" << m.peak_gb
-               << L"GB\n           worst avoidable-time offender: "
+               << L" avoidable_rebuilds=" << m.avoidable_ops_ct
+               << L" AVOIDABLE_FLOPS=" << (100.0 * m.avoidable_time())
+               << L"%  scatter_begin=" << m.n_scatter_begin << L" bgroup_begin="
+               << m.n_batchgroup_begin << L" ext_stamps=" << m.n_external_stamps
+               << L" con_occ_stamps=" << m.n_contracted_occ << L" peak="
+               << m.peak_gb << L"GB\n           worst avoidable-time offender: "
                << m.top_expr << L"\n";
   };
   std::wcerr << L"\n=== [dryrun-extmode-avoidable] C60 residual forest, "
@@ -5293,12 +5233,11 @@ TEST_CASE(
   CHECK(external.n_external_stamps > 0);
   CHECK(external.n_scatter_begin > 0);
 
-  // PARTIAL-WIN WITNESS (deliberately NOT a ~0 gate). External-mode batching is
-  // NECESSARY but NOT SUFFICIENT on the C60 residual forest: it engages (the
-  // scatter fires above) and strictly reduces both avoidable recompute and
-  // replay work, but it neither bounds the forest peak nor drives
-  // avoidable_time to ~0. Two residual gaps remain, both deferred to a separate
-  // design pass:
+  // NEUTRAL WITNESS (deliberately NOT a ~0 gate). External-mode batching
+  // engages (the scatter fires above) and is lossless, but on the C60 residual
+  // forest it is neither necessary nor sufficient: it matches the contracted
+  // arm's ~2% avoidable recompute and ~6 TB peak while doing ~10x the replay
+  // ops. Two residual gaps remain, both deferred to a separate design pass:
   //   (1) the forest peak is set by a term that slicing the proto-occ pair
   //       (i_1,i_2) does not reach -- needs full forest-level / multi-mode
   //       co-batching (also slice i_3,i_4 and/or K_2); and
@@ -5311,30 +5250,32 @@ TEST_CASE(
   // RETRACTED WIN (2026-07-22). This gate previously asserted
   //   CHECK(external.avoidable_time() < contracted.avoidable_time() - 0.15);
   //   CHECK(external.replay_ops < contracted.replay_ops);
-  // on measurements of ~44.7% vs ~75.1%. That comparison was CONFOUNDED: its
+  // on measurements of ~44.7% vs ~75.1%. That comparison was CONFOUNDED (its
   // two arms flipped batch_spectator_indices AND suppress_heuristic_fallback
-  // together, so the contracted arm ran the legacy runtime heuristic and the
-  // external arm did not. Essentially the entire "win" was the flag, not the
-  // external mode. With the heuristic removed outright (annotations are now
-  // authoritative everywhere) the two arms differ in exactly one variable, and
-  // external-mode batching is measured to be NEUTRAL-TO-SLIGHTLY-WORSE here:
+  // together, so essentially the entire "win" was the flag, not the external
+  // mode), and those percentages were themselves a since-fixed metric artifact.
+  // With the heuristic removed and avoidable measured in FLOPs against the
+  // build-once ideal (nterms=55), the two arms are essentially EQUIVALENT:
   //
-  //   contracted-occ : avoidable_time 43.72%, replay ops 61275
-  //   external-occ   : avoidable_time 43.96%, replay ops 83573
+  //   contracted-occ : avoidable ~1.97% FLOPs, replay ops 2531, peak ~6026 GB
+  //   external-occ   : avoidable ~1.95% FLOPs, replay ops 25021, peak ~5999 GB
   //
-  // So External is NOT a fix for the avoidable recompute on this forest. It
-  // still engages losslessly (asserted above) and remains the mechanism for
-  // slicing a mode that is contracted nowhere, but the D5 claim that it
-  // eliminates the occ-veto recompute is NOT supported by measurement. Record
-  // the true relation rather than a target we have not met.
+  // So External is NOT a fix for the avoidable recompute on this forest: it has
+  // the SAME ~2% recompute and the SAME ~6 TB peak as the contracted arm, at
+  // ~10x the replay-op count (per-block slices). It engages losslessly and
+  // remains the mechanism for slicing a mode that is contracted nowhere, but
+  // the D5 claim that it eliminates the recompute is NOT supported. The two
+  // arms agreeing within 0.02 is the honest finding.
   CHECK(std::abs(external.avoidable_time() - contracted.avoidable_time()) <
         0.02);
   CHECK(external.replay_ops > contracted.replay_ops);
 
   // ENTRY CRITERION for the deferred forest-co-batching + middle-gap work:
-  // these record the residual as it stands today. When that work lands, these
-  // two will start failing -- FLIP them to (external.peak_gb < 100.0) and
-  // (external.avoidable_time() < 0.05) and this witness becomes a true gate.
-  CHECK(external.peak_gb > 100.0);          // peak NOT yet bounded (~2302 GB)
-  CHECK(external.avoidable_time() > 0.10);  // avoidable NOT yet ~0 (~44.7%)
+  // these record the residual as it stands today. When that work lands they
+  // start failing -- FLIP to (external.peak_gb < 100.0) / (avoidable < 0.01)
+  // and this witness becomes a true gate. Note the OPEN gap is the PEAK (~6
+  // TB); avoidable is already small (~2%), so it is the peak, not recompute,
+  // that external-mode batching fails to close on its own.
+  CHECK(external.peak_gb > 100.0);          // peak NOT yet bounded (~5999 GB)
+  CHECK(external.avoidable_time() > 0.01);  // ~2% recompute survives (two-PNO)
 }
