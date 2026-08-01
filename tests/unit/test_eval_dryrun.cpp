@@ -2255,9 +2255,7 @@ TEST_CASE(
     // the real eval loop with the Task-3 scratch-fold PeakSink, forces the
     // printing gate on internally, and folds the outer cached residency -- so
     // peak_bytes captures the batched-inner transient the raw outer hwmark
-    // misses. The same CacheConfig the [cost_profile] test uses;
-    // is_batchable_index is set from `policy` inside cost_profile() (advisory
-    // here).
+    // misses. The same CacheConfig the [cost_profile] test uses.
     sequant::eval::dryrun::CacheConfig cfg;
     cfg.max_footprint = 1e11;
     cfg.min_repeats = 1;
@@ -3999,8 +3997,7 @@ TEST_CASE("cost_profile returns peak/flops/exec/n_ops",
   // FAITHFUL real C60 config (identical to [dryrun-objective] / [peak]).
   auto regime = df_regime(kC60_pVDZF12);
 
-  // ONE BatchPolicy, reused for optimize() and the replay evaluator (its
-  // is_batchable_index MUST equal CacheConfig::is_batchable_index).
+  // ONE BatchPolicy, reused for optimize() and the replay evaluator.
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = is_df_batchable;
   policy.batch_target_size = [](Index const& ix) -> std::size_t {
@@ -4037,12 +4034,12 @@ TEST_CASE("cost_profile returns peak/flops/exec/n_ops",
 
   std::vector<EvalNodeDryRun> forest{node};
 
-  // CacheConfig mirroring the real batched run: footprint gate + free-batchable
-  // mode veto; is_volatile adapts policy.is_volatile_leaf onto tree nodes.
+  // CacheConfig mirroring the real batched run: footprint gate + cross-
+  // occurrence batch-variant veto; is_volatile adapts policy.is_volatile_leaf
+  // onto tree nodes.
   CacheConfig cfg;
   cfg.max_footprint = 1e11;
   cfg.min_repeats = 1;
-  cfg.is_batchable_index = policy.is_batchable_contracted_index;
   cfg.is_volatile = [](EvalNodeDryRun const& n) {
     if (!n.leaf() || !n->is_tensor()) return false;
     return n->as_tensor().label() == L"t";
@@ -4262,7 +4259,7 @@ TEST_CASE("cost_profile trace stream round-trips", "[dryrun][cost_profile]") {
 // this is a stronger/cleaner signal than working_set_hwmark, which only tracks
 // alive cached bytes and is confounded by batched-inner scratch -- see the
 // [dryrun-objective] INTERPRETATION notes).
-TEST_CASE("dryrun gated cache vetoes free-batchable giant", "[dryrun][cache]") {
+TEST_CASE("dryrun gated cache footprint-gates the giant", "[dryrun][cache]") {
   auto ctx = get_default_context().clone();
   ctx.set_first_dummy_index_ordinal(1000000);
   auto isr = ctx.mutable_index_space_registry();
@@ -4385,39 +4382,27 @@ TEST_CASE("dryrun gated cache vetoes free-batchable giant", "[dryrun][cache]") {
   ref_cfg.max_footprint = 0.;
   ref_cfg.min_repeats = 1;
   ref_cfg.is_volatile = is_vol;
-  ref_cfg.is_batchable_index = [](Index const&) { return false; };
   auto ref_cache = build_dryrun_cache(nodes, ref_cfg, regime);
 
-  // mode: batchable-mode veto ONLY (footprint gate disabled) -> giant NOT
-  // cached, isolating the veto from the footprint gate.
-  CacheConfig axis_cfg = ref_cfg;
-  axis_cfg.is_batchable_index = is_df_batchable;
-  auto axis_cache = build_dryrun_cache(nodes, axis_cfg, regime);
-
-  // task: the config the task asks for (footprint gate + mode veto).
-  CacheConfig task_cfg = axis_cfg;
+  // task: the config the task asks for (footprint gate on).
+  CacheConfig task_cfg = ref_cfg;
   task_cfg.max_footprint = 1e11;
   auto task_cache = build_dryrun_cache(nodes, task_cfg, regime);
 
-  // Without any gate the giant is registered/cacheable...
+  // Without any gate the giant is registered/cacheable... The cross-occurrence
+  // batch-variant veto does NOT remove it: this giant carries a free mu~ that
+  // is contracted ABOVE it (never sliced AT the node) and is not
+  // external-seeded in this DF-aux schedule (K is summed, so never a result
+  // mode), so its lifetime mask is empty and the veto is correctly inert. (This
+  // is why the earlier free-batchable MODE veto -- removed -- was a no-op: a
+  // contracted batch mode is summed, never free in a result, so it never
+  // fired.)
   CHECK(ref_cache.exists(giant_node));
-  // ...the batchable-MODE veto alone does NOT remove it. The phase-2 veto is
-  // precise: it drops a node only when the node is ACTUALLY batch-sliced -- a
-  // Contracted batch mode among its RESULT (canon) indices, or a non-empty
-  // cross-occurrence external lifetime mask (cache_manager.hpp) -- NOT merely
-  // for carrying a free-batchable index. This giant carries a free mu~ that is
-  // contracted ABOVE it (never sliced AT the node) and is not external-seeded
-  // in this DF-aux schedule (K is summed, so it is never a result mode), so no
-  // node here is actually sliced and the mode veto is correctly inert. This is
-  // the whole point of the phase-2 change: the OLD over-broad veto dropped
-  // anything whose result carried a batchable index, which emptied CSE.
-  CHECK(axis_cache.exists(giant_node));
   // ...only the FOOTPRINT gate caps the >100 GB full giant.
   CHECK_FALSE(task_cache.exists(giant_node));
 
-  // A small non-batchable intermediate stays cached under all three.
+  // A small non-batchable intermediate stays cached under both.
   CHECK(ref_cache.exists(small_node));
-  CHECK(axis_cache.exists(small_node));
   CHECK(task_cache.exists(small_node));
 
   // Faithful end-to-end: replay the schedule through the real eval loop against
@@ -4432,19 +4417,22 @@ TEST_CASE("dryrun gated cache vetoes free-batchable giant", "[dryrun][cache]") {
                                                // resident
   CHECK_FALSE(task_cache.alive(giant_node));
 
-  std::wcerr << L"\n=== [dryrun][cache] gated-veto verdict (C60 giant, index "
-             << giant_idx << L") ===\n  giant free-batchable node footprint = "
-             << (giant_bytes / 1e9) << L" GB\n  ref (no gate)  exists(giant) = "
-             << (ref_cache.exists(giant_node) ? L"YES" : L"no")
-             << L"\n  mode veto      exists(giant) = "
-             << (axis_cache.exists(giant_node) ? L"YES" : L"no")
-             << L"\n  task config    exists(giant) = "
-             << (task_cache.exists(giant_node) ? L"YES" : L"no")
-             << L"\n  small intermediate exists (task) = "
-             << (task_cache.exists(small_node) ? L"YES" : L"no") << L"\n";
+  std::wcerr
+      << L"\n=== [dryrun][cache] footprint-gate verdict (C60 giant, index "
+      << giant_idx << L") ===\n  giant free-batchable node footprint = "
+      << (giant_bytes / 1e9) << L" GB\n  ref (no gate)  exists(giant) = "
+      << (ref_cache.exists(giant_node) ? L"YES" : L"no")
+      << L"\n  task config    exists(giant) = "
+      << (task_cache.exists(giant_node) ? L"YES" : L"no")
+      << L"\n  small intermediate exists (task) = "
+      << (task_cache.exists(small_node) ? L"YES" : L"no") << L"\n";
 }
 
-// REPRO: the free-batchable-mode veto vs occ batching.
+// HISTORICAL REPRO: the free-batchable-mode veto vs occ batching. (That veto --
+// cache_manager's disjunct (a) + its is_batchable_index parameter -- has since
+// been REMOVED as structurally dead; only the cross-occurrence batch-variant
+// veto (lifetime mask) remains. This test now measures the occ role-split and
+// avoidable recompute, not the veto; the account below is provenance.)
 //
 // cache_manager's veto drops from the cache (and erases from `persistent`) any
 // node whose result carries an index the GLOBAL is_batchable_index predicate
@@ -4793,68 +4781,19 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
       for (auto const& root : forest) gcwalk(root);
     }
 
-    // VETO REACHABILITY (oamb-a0-note.md 11.4). cache_manager vetoes a node
-    // iff its OWN batched_here() carries a Contracted, batchable mode that is
-    // also FREE in its own result. The DP emits Contracted only for
-    // aprime subset-of contracted_here -- exactly the modes NOT free in that
-    // node's result -- so structurally the predicate should never hold. Count
-    // it on the real forest rather than argue from the invariant.
-    std::size_t n_contracted_stamps = 0, n_veto_eligible = 0;
     // Task 5 role-guarantee tallies: occ is identified by space base_key L"i",
-    // exactly as the external-role policy classifies it above.
+    // exactly as the external-role policy classifies it above. These feed the
+    // Contracted-occ == 0 / External-occ > 0 acceptance gate below.
     std::size_t n_contracted_occ_stamps = 0, n_external_occ_stamps = 0;
     for (auto const& root : forest) {
       root.visit_internal([&](auto const& n) {
-        auto const& canon = n->canon_indices();
         for (auto const& [ix, knd] : n->batched_here()) {
           bool const is_occ = ix.space().base_key() == L"i";
           if (knd == BatchModeType::Contracted && is_occ)
             ++n_contracted_occ_stamps;
           if (knd == BatchModeType::External && is_occ) ++n_external_occ_stamps;
-          if (knd != BatchModeType::Contracted) continue;
-          if (!policy.is_batchable_contracted_index(ix)) continue;
-          ++n_contracted_stamps;
-          if (std::find(canon.begin(), canon.end(), ix) != canon.end())
-            ++n_veto_eligible;
         }
       });
-    }
-    std::wcerr << L"[veto-reach] Contracted+batchable stamps = "
-               << n_contracted_stamps << L", of which FREE in the node's own "
-               << L"result (veto fires) = " << n_veto_eligible << L"\n";
-
-    // Is the ORIGINAL hazard (5c5eb1e82) live? v1 vetoed any node whose RESULT
-    // carries an accepted batchable index, on the grounds that such a node is
-    // sliced by the runtime yet would be cached whole. v2 never fires (above),
-    // so v1's protection is gone -- but that only matters if such nodes are in
-    // fact cached. Count them: nodes registered in the cache whose own result
-    // carries a batchable index. Zero would mean the hazard is not reachable on
-    // this forest and only the ANNOTATION-scoped question remains.
-    {
-      sequant::eval::dryrun::CacheConfig probe_cfg;
-      probe_cfg.max_footprint = 1e11;
-      probe_cfg.min_repeats = 1;
-      probe_cfg.is_volatile = [](EvalNodeDryRun const& n) {
-        if (!n.leaf() || !n->is_tensor()) return false;
-        return n->as_tensor().label() == L"t";
-      };
-      auto probe_cache =
-          sequant::eval::dryrun::build_dryrun_cache(forest, probe_cfg, regime);
-      std::size_t n_cached = 0, n_cached_carrying = 0;
-      for (auto const& root : forest)
-        root.visit_internal([&](auto const& n) {
-          if (!probe_cache.exists(n)) return;
-          ++n_cached;
-          for (auto const& ix : n->canon_indices())
-            if (policy.is_batchable_index()(ix)) {
-              ++n_cached_carrying;
-              break;
-            }
-        });
-      std::wcerr << L"[veto-hazard] cached internal nodes = " << n_cached
-                 << L", of which carry a BATCHABLE index free in their result "
-                 << L"(v1 would have vetoed; cached WHOLE today) = "
-                 << n_cached_carrying << L"\n";
     }
 
     sequant::eval::dryrun::CacheConfig cfg;

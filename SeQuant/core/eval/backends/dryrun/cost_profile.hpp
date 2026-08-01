@@ -29,14 +29,13 @@
 namespace sequant::eval::dryrun {
 
 /// Configuration for a faithful (gated) dry-run cache: the same footprint gate
-/// and free-batchable-axis veto the real batched eval loop applies, so a
-/// free-batchable giant (a `mu~`/`K`-carrying DF intermediate) is NOT cached
-/// whole but recomputed sliced under each consumer's batch trigger.
+/// and cross-occurrence batch-variant veto the real batched eval loop applies,
+/// so a batch-variant giant (a `mu~`/`K`-carrying DF intermediate) is NOT
+/// cached whole but recomputed sliced under each consumer's batch trigger.
 ///
 /// The element types mirror the gated \c sequant::cache_manager overload
 /// (\c cache_manager.hpp): \c is_volatile is invoked on every \c TreeNode
-/// (deduced as \c EvalNodeDryRun for the dry-run backend), \c
-/// is_batchable_index on every result \c Index.
+/// (deduced as \c EvalNodeDryRun for the dry-run backend).
 ///
 /// This struct lives here (rather than only in the test) because Task 4's
 /// \c cost_profile() entry point consumes it.
@@ -49,17 +48,6 @@ struct CacheConfig {
   /// `bool(EvalNodeDryRun const&)`: true if the node is intrinsically volatile
   /// (typically the amplitude leaves). Empty => nothing is volatile.
   std::function<bool(EvalNodeDryRun const&)> is_volatile;
-  /// `bool(Index const&)`: true for an index the runtime batched evaluator
-  /// slices over (e.g. DF aux `K` / PAO `mu~`). A node whose result carries
-  /// such a free index is vetoed from caching. Empty => nothing is batchable.
-  ///
-  /// ADVISORY when passed to \c cost_profile(): that entry point OVERWRITES
-  /// this field with \c policy.is_batchable_contracted_index (the
-  /// CONTRACTED-role building block) before building the cache. The cache veto
-  /// is contracted-stamp-only, so it is decoupled from the replay evaluator's
-  /// accept (the derived role union). Only \c build_dryrun_cache() called
-  /// directly honors this field as-is.
-  std::function<bool(Index const&)> is_batchable_index;
 };
 
 /// Builds a gated dry-run cache from an eval-node range, a \p cfg, and a
@@ -98,24 +86,19 @@ auto build_dryrun_cache(NodeRange const& nodes, CacheConfig const& cfg,
     return memsize(std::vector<Index>{}, std::vector<Index>{}, result) * 8.0;
   };
 
-  // Default the predicates so the gated factory never invokes an empty
-  // std::function (nothing volatile / nothing batchable leaves those gates
-  // inert, matching the factory's own defaults).
+  // Default the volatility predicate so the gated factory never invokes an
+  // empty std::function (nothing volatile leaves that gate inert, matching the
+  // factory's own default).
   std::function<bool(EvalNodeDryRun const&)> is_volatile =
       cfg.is_volatile ? cfg.is_volatile
                       : std::function<bool(EvalNodeDryRun const&)>(
                             [](EvalNodeDryRun const&) { return false; });
-  std::function<bool(Index const&)> is_batchable_index =
-      cfg.is_batchable_index ? cfg.is_batchable_index
-                             : std::function<bool(Index const&)>(
-                                   [](Index const&) { return false; });
 
   // Note: the gated sequant::cache_manager() overload below stamps the
   // cross-occurrence lifetime mask on `nodes` itself before its DAG walk /
   // veto (cache_manager.hpp), so this call site does not need to do so.
   return sequant::cache_manager(nodes, std::move(is_volatile), cfg.min_repeats,
-                                std::move(footprint_of), cfg.max_footprint,
-                                std::move(is_batchable_index));
+                                std::move(footprint_of), cfg.max_footprint);
 }
 
 /// One recomputed value's avoidable-recompute breakdown (see
@@ -319,14 +302,9 @@ struct CostProfile {
 /// which is what \c peak_bytes (max, not sum) cannot express.
 ///
 /// \param forest per-summand optimized+binarized eval forest (the real IR).
-/// \param policy the batch policy driving the replay evaluator; its
-///        \c is_batchable_contracted_index is COPIED over
-///        \c cfg.is_batchable_index internally (the cache veto is
-///        contracted-stamp-only), while the evaluator accept is the derived
-///        role union \c policy.is_batchable_index(). The \c cfg field is
-///        advisory here.
-/// \param cfg    gated-cache config (footprint gate, axis veto, volatile,
-///        repeats).
+/// \param policy the batch policy driving the replay evaluator; its accept is
+///        the derived role union \c policy.is_batchable_index().
+/// \param cfg    gated-cache config (footprint gate, volatile, repeats).
 /// \param regime the size regime supplying extents and CSV moment tables;
 ///        the internal \c CostModel and \c DryRunLeafEvaluator are built from
 ///        it.
@@ -367,16 +345,11 @@ inline CostProfile cost_profile(std::vector<EvalNodeDryRun> const& forest,
   for (auto const& root : forest) walk(root);
 
   // ---- peak replay through the real eval loop --------------------------
-  // Route the two consumers by intent (they are decoupled):
-  //   - the cache VETO takes the CONTRACTED-role building block: only a mode
-  //     actually sliced AT a node (BatchModeType::Contracted) vetoes caching,
-  //     so the veto must never see the union (an external-only mode is
-  //     batch-invariant and stays cacheable).
-  //   - the replay EVALUATOR's accept is the derived role union, applied inside
-  //     make_evaluator(policy) via policy.is_batchable_index().
-  CacheConfig local_cfg = cfg;
-  local_cfg.is_batchable_index = policy.is_batchable_contracted_index;
-  auto cache = build_dryrun_cache(forest, local_cfg, regime);
+  // The cache's batch-variant veto is driven by the cross-occurrence lifetime
+  // mask (stamped inside build_dryrun_cache -> cache_manager); the replay
+  // EVALUATOR's accept is the derived role union, applied inside
+  // make_evaluator(policy) via policy.is_batchable_index().
+  auto cache = build_dryrun_cache(forest, cfg, regime);
 
   auto& logger = Logger::instance();
   // RAII guard restoring the process-global Logger::eval state on EVERY exit

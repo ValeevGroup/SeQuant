@@ -523,13 +523,6 @@ struct zero_footprint {
   double operator()(auto const&) const noexcept { return 0.; }
 };
 
-/// Default batchability predicate for cache_manager: no index is batchable, so
-/// the free-batchable-mode caching veto is inert (preserves the pre-batch
-/// behavior for callers that do not pass a predicate).
-struct never_batchable {
-  bool operator()(auto const&) const noexcept { return false; }
-};
-
 /// \param nodes the evaluation forest.
 /// \param is_volatile `bool(TreeNode const&)`: true if the node is
 ///        intrinsically volatile. Only its value on leaves matters in practice
@@ -545,45 +538,22 @@ struct never_batchable {
 ///        of huge intermediates that carry a free large-space index (e.g. a
 ///        half-transformed DF integral with a free projected-AO index), at the
 ///        cost of recomputation. 0 (default) disables the gate.
-/// \param is_batchable_contracted_index `bool(Index const&)`: an index sliced
-///        in the CONTRACTED role (typically the DF/RI auxiliary). This is the
-///        contracted-role building block, NEVER the derived role union: the
-///        veto is contracted-stamp-only. A node whose
-///        own \c batched_here() carries such an index tagged \c
-///        BatchModeType::Contracted -- i.e. a mode actually sliced AT this node
-///        -- FREE in its *result* (canonical) indices is, by construction, a
-///        free-large-index intermediate the evaluator builds one batch-slice
-///        at a time and the single-term optimizer prices sliced. Caching it
-///        whole would hold an intermediate the runtime means to slice. Such
-///        nodes are NOT cached (neither NP repeat nor P frontier) --
-///        recomputed (sliced under each consumer's batch trigger) instead of
-///        materialized whole and held. A node whose \c batched_here() carries
-///        only \c BatchModeType::External entries (an external index the node
-///        is merely invariant under, not one sliced at this node -- e.g. a
-///        loop-invariant intermediate like \c gC) is NOT vetoed: it is
-///        genuinely batch-invariant and stays cacheable. This is the
-///        structural counterpart of \p max_footprint: the sliced batch mode,
-///        not a byte threshold, identifies the free-large-index
-///        intermediates. The default never_batchable accepts nothing, leaving
-///        the veto inert. Independently of \p is_batchable_contracted_index, a
-///        node whose cross-occurrence lifetime mask is non-empty (\c
-///        !EvalExpr::mask_all_full(); this builder itself calls \c
-///        stamp_lifetime_masks over \p nodes before the DAG walk below, so
-///        the mask is always current here regardless of caller -- see \c
-///        lifetime_mask.hpp) is likewise batch-variant -- some enclosing
-///        External batch mode slices it in every occurrence, so its value
-///        differs per batch of that mode -- and is refused run-scope
-///        residence even with an empty \c batched_here(); only an all-full
-///        node (empty mask, including every node on the OFF path) is
-///        admitted.
+///
+/// A node is also refused run-scope residence when it is BATCH-VARIANT: its
+/// cross-occurrence lifetime mask is non-empty (\c !EvalExpr::mask_all_full();
+/// this builder itself calls \c stamp_lifetime_masks over \p nodes before the
+/// DAG walk below, so the mask is always current here regardless of caller --
+/// see \c lifetime_mask.hpp). Such a node is sliced by some enclosing External
+/// batch mode in every occurrence, so its value differs per batch of that mode
+/// -- caching it whole at run scope would serve a wrong-batch value to a deeper
+/// consumer on cache fall-through (the F1 hazard). Only an all-full node (empty
+/// mask, including every node on the OFF path) is admitted.
 /// \see CacheManager, cache_manager
 template <bool force_hash_collisions = false,
-          typename FootprintOf = zero_footprint,
-          typename IsBatchableIndex = never_batchable>
+          typename FootprintOf = zero_footprint>
 auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
                    size_t min_repeats = 2, FootprintOf footprint_of = {},
-                   double max_footprint = 0.,
-                   IsBatchableIndex is_batchable_contracted_index = {})
+                   double max_footprint = 0.)
   requires requires(
       std::ranges::range_value_t<std::remove_cvref_t<decltype(nodes)>> const&
           n) {
@@ -592,7 +562,7 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
   }
 {
   // Stamp the cross-occurrence lifetime mask on this SAME forest before the
-  // DAG walk / veto below reads it (part (b) of the batch-variant veto reads
+  // DAG walk / veto below reads it (the batch-variant veto reads
   // EvalExpr::mask_all_full()). Doing this here -- rather than leaving it to
   // each caller -- makes "mask is current for the veto" an invariant of this
   // builder instead of a per-caller obligation: every caller of this overload
@@ -648,41 +618,26 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
   // sliced), and -- the F1 safety invariant -- a child batch scratch that
   // misses locally falls through to this cache for ANY key, so a batch-variant
   // final left here could be served full (wrong-batch) to an inner body. A node
-  // is batch-variant iff either:
-  //   (a) its own batched_here() carries a mode actually sliced AT this node
-  //       (BatchModeType::Contracted, is_batchable_contracted_index) FREE in
-  //       its result --
-  //       a free-large-index intermediate the evaluator builds one slice at a
-  //       time; or
-  //   (b) its cross-occurrence lifetime mask is non-empty (\c
-  //       !n->mask_all_full(), \c lifetime_mask.hpp) -- some External batch
-  //       mode (of this node or an enclosing ancestor, over ALL its
-  //       occurrences under the canonical meet) slices it, so its value
-  //       differs per batch of that mode even if it slices nothing itself.
+  // is batch-variant iff its cross-occurrence lifetime mask is non-empty (\c
+  // !n->mask_all_full(), \c lifetime_mask.hpp) -- some External batch mode (of
+  // this node or an enclosing ancestor, over ALL its occurrences under the
+  // canonical meet) slices it, so its value differs per batch of that mode even
+  // if it slices nothing itself.
   // A node that is invariant to every batched mode is NOT vetoed and stays
   // cacheable at run scope -- this is where a hoisted loop-invariant
   // intermediate (all-full mask; or an External-only / no batched_here entry,
   // e.g. gC) lands. OFF path (no order-aware annotations, hence no \c
   // stamp_lifetime_masks External stamps): every mask is empty (all-full,
-  // \c EvalExpr::sliced_modes_ default-constructed), so neither disjunct
-  // fires and the veto admits exactly what it did before -- byte-identical.
+  // \c EvalExpr::sliced_modes_ default-constructed), so the veto never fires
+  // and admits exactly what it did before -- byte-identical.
   std::unordered_map<TreeNode, size_t, Hasher, Comp> filtered;
   for (auto&& [n, c] : counts) {
     if (!(c >= min_repeats || persistent.contains(n))) continue;
-    auto const& canon_ix = n->canon_indices();
-    bool sliced_batch_axis = false;
-    for (auto const& [ix, kind] : n->batched_here())
-      if (kind == BatchModeType::Contracted &&
-          is_batchable_contracted_index(ix) &&
-          std::find(canon_ix.begin(), canon_ix.end(), ix) != canon_ix.end()) {
-        sliced_batch_axis = true;
-        break;
-      }
-    // (b): a node whose cross-occurrence mask is non-empty is sliced by some
-    // enclosing external mode in every occurrence => batch-variant => refused
-    // run-scope residence. all-full (empty mask; incl. the OFF path) is
-    // admitted.
-    bool const batch_variant = sliced_batch_axis || !n->mask_all_full();
+    // Batch-variant: a node whose cross-occurrence lifetime mask is non-empty
+    // is sliced by some enclosing external mode in every occurrence => its
+    // value differs per batch => refused run-scope residence. all-full (empty
+    // mask; incl. the OFF path) is admitted.
+    bool const batch_variant = !n->mask_all_full();
     if (batch_variant ||
         (max_footprint > 0. && footprint_of(n) > max_footprint)) {
       persistent.erase(n);  // keep is_persistent consistent with what is cached
