@@ -46,13 +46,35 @@ namespace sequant::eval::dryrun {
 /// hoist). `necessary` = product of block counts of the touched sliced modes
 /// (with a dense cost model every touched block is visited once, so this equals
 /// the distinct-touched-slice count); `builds` = how many times the op actually
-/// ran. avoidable_count = builds - necessary; avoidable_exec = that x per-build
-/// exec. See cost_profile()'s post-replay rollup.
+/// ran; avoidable_count = builds - necessary.
+///
+/// A NodeCost is one COST-HOMOGENEOUS bucket: the sink keys on the EXTENDED
+/// signature (label + touched-mode slice extents), so every build here ran at
+/// the same slice-context and hence the same roofline cost. `total_exec`/
+/// `total_flops` ACCUMULATE over the bucket's builds; the rollup prices the
+/// bucket's avoidable recompute as `total_exec * (builds - necessary)/builds`,
+/// which is EXACT because the builds are homogeneous (no cost distribution to
+/// average). Keying on the label alone would instead lump a full-extent build
+/// with per-block sliced ones whose roofline cost is ~100x smaller (a 257x
+/// spread was measured); averaging across that spread is what let the old
+/// rollup exceed the whole replay's cost.
+/// `min_exec`/`max_exec`/`exec_per_build` are kept only for the
+/// SEQUANT_AVOIDABLE_DEBUG homogeneity check (ratio ~ 1 per bucket). See
+/// avoidable_nodes_from_sink().
 struct NodeCost {
+  // The sink is keyed by the EXTENDED signature (label sig + touched-mode slice
+  // extents); `label` is the plain label signature this bucket rolls up to, so
+  // avoidable_nodes_from_sink() aggregates the per-slice-context buckets back
+  // to one entry per DAG node (which is what the visualizer joins on).
+  std::string label;
   std::size_t builds = 0;
   double necessary = 1.0;
-  double exec_per_build = 0.0;
-  double flops_per_build = 0.0;
+  double total_exec = 0.0;       // accumulated roofline exec over all builds
+  double total_flops = 0.0;      // accumulated FLOPs over all builds
+  double exec_per_build = 0.0;   // LAST build's exec (debug dump only)
+  double flops_per_build = 0.0;  // LAST build's flops (debug dump only)
+  double min_exec = 0.0;         // per-build exec spread (debug dump only)
+  double max_exec = 0.0;
 };
 
 struct CostSink {
@@ -60,7 +82,10 @@ struct CostSink {
   std::atomic<double> exec{0.0};
   std::atomic<std::size_t> n_ops{0};
   std::mutex node_mtx;
-  std::map<std::string, NodeCost> per_node;  // keyed by op signature
+  // Keyed by the EXTENDED signature (label sig + touched-mode slice extents) so
+  // each bucket is cost-homogeneous; NodeCost::label rolls buckets up to the
+  // per-DAG-node label in avoidable_nodes_from_sink().
+  std::map<std::string, NodeCost> per_node;
 };
 
 /// Per-index extent OVERRIDE table: narrows specific indices (by identity, so
@@ -186,19 +211,33 @@ class CostModel {
     sink_->n_ops.fetch_add(1, std::memory_order_relaxed);
   }
 
-  /// Record one build of the op identified by \p sig for the per-node avoidable
-  /// breakdown: \p necessary = product of block counts of its touched sliced
-  /// modes (the minimum builds a perfect-sharing evaluator would do). Each call
-  /// is one actual build; avoidable = builds - necessary (see \c NodeCost).
-  void tally_node(std::string const& sig, double necessary, double flops_count,
-                  double exec) const {
+  /// Record one build for the per-node avoidable breakdown. \p ext_sig is the
+  /// EXTENDED key (label signature + touched-mode slice extents): builds
+  /// sharing it ran at the identical slice-context, so the bucket is
+  /// cost-homogeneous.
+  /// \p label is the plain label signature the bucket rolls up to. \p necessary
+  /// = product of block counts of the touched sliced modes (the minimum builds
+  /// a perfect-sharing evaluator would do at this slice-context). Each call is
+  /// one actual build; avoidable = builds - necessary (see \c NodeCost).
+  void tally_node(std::string const& ext_sig, std::string const& label,
+                  double necessary, double flops_count, double exec) const {
     if (!sink_) return;
     std::lock_guard<std::mutex> lk(sink_->node_mtx);
-    auto& nc = sink_->per_node[sig];
+    auto& nc = sink_->per_node[ext_sig];
+    if (nc.builds == 0) {
+      nc.label = label;
+      nc.min_exec = exec;
+      nc.max_exec = exec;
+    } else {
+      nc.min_exec = exec < nc.min_exec ? exec : nc.min_exec;
+      nc.max_exec = exec > nc.max_exec ? exec : nc.max_exec;
+    }
     ++nc.builds;
     nc.necessary = necessary;
     nc.flops_per_build = flops_count;
     nc.exec_per_build = exec;
+    nc.total_exec += exec;
+    nc.total_flops += flops_count;
   }
 
  private:

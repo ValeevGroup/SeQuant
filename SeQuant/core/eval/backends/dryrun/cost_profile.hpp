@@ -17,6 +17,8 @@
 #include <algorithm>
 #include <atomic>
 #include <cstddef>
+#include <cstdio>
+#include <cstdlib>
 #include <functional>
 #include <memory>
 #include <ostream>
@@ -122,9 +124,16 @@ auto build_dryrun_cache(NodeRange const& nodes, CacheConfig const& cfg,
 /// `builds - necessary`: how many of the node's actual replay builds were
 /// redundant given its TOUCHED (dependent) modes -- a node rebuilt once per
 /// block of a mode it does not touch is avoidable recompute (a missed hoist).
-/// \c exec / \c flops are that count times the per-build roofline exec / FLOPs,
-/// i.e. the wall-time-proxy and arithmetic cost of the redundancy. Only nodes
-/// with \c count > 0 are recorded.
+/// \c exec / \c flops are the wall-time-proxy and arithmetic cost of the
+/// redundancy, summed over the node's cost-homogeneous slice-context buckets:
+/// within each bucket (fixed slice-context => fixed extents => fixed roofline
+/// cost) the avoidable exec is exactly `total_exec * (builds - necessary)/
+/// builds`, and the buckets of one DAG node are aggregated here. This is why
+/// the sink keys on the EXTENDED signature (label + touched-mode extents)
+/// rather than the label alone: a label-only bucket would mix a full-extent
+/// build with per-block sliced ones ~100x cheaper and averaging across that
+/// spread overshoots (the observed avoidable_time > 100%). Only nodes with \c
+/// count > 0 are recorded.
 struct AvoidableNode {
   std::string label;
   double count = 0;
@@ -144,19 +153,89 @@ struct AvoidableNode {
 /// finished and the sink is quiescent, so no lock is taken.
 inline std::vector<AvoidableNode> avoidable_nodes_from_sink(
     CostSink const& sink) {
-  std::vector<AvoidableNode> out;
-  for (auto const& [sig, nc] : sink.per_node) {
+  // Each sink entry is a COST-HOMOGENEOUS bucket: builds sharing a (label +
+  // slice-context) key ran at identical extents, hence identical roofline cost.
+  // So the avoidable exec of a bucket = total_exec * (builds -
+  // necessary)/builds is EXACT -- there is no cost distribution to average over
+  // (that averaging is exactly what made the label-only rollup overshoot 100%
+  // on the C60 external arm, where one label mixed a full-extent build with
+  // per-block sliced ones ~257x cheaper). Aggregate the buckets of the same DAG
+  // node (NodeCost::label) into one AvoidableNode, which is what the visualizer
+  // joins on by hash->sig.
+  std::map<std::string, AvoidableNode> by_label;
+  for (auto const& [ext, nc] : sink.per_node) {
     double const builds = static_cast<double>(nc.builds);
     double const avoidable =
         builds > nc.necessary ? builds - nc.necessary : 0.0;
     if (avoidable <= 0.0) continue;
-    out.push_back({sig, avoidable, avoidable * nc.exec_per_build,
-                   avoidable * nc.flops_per_build});
+    double const frac = avoidable / builds;  // in [0, 1)
+    auto& an = by_label[nc.label];
+    an.label = nc.label;
+    an.count += avoidable;
+    an.exec += nc.total_exec * frac;
+    an.flops += nc.total_flops * frac;
   }
+  std::vector<AvoidableNode> out;
+  out.reserve(by_label.size());
+  for (auto& [lbl, an] : by_label) out.push_back(std::move(an));
   std::sort(out.begin(), out.end(),
             [](AvoidableNode const& a, AvoidableNode const& b) {
               return a.exec > b.exec;
             });
+
+  // DIAGNOSTIC (SEQUANT_AVOIDABLE_DEBUG): dump per-BUCKET exec accounting. Each
+  // bucket now keys on (label + slice-context), so its builds should be
+  // cost-homogeneous -- the per-build exec spread ratio=max/min should be ~1,
+  // and the two aggregation formulas agree:
+  //   A = avoidable_count * exec_per_build (LAST)
+  //   B = total_exec * (builds - necessary)/builds
+  // A ~= B per bucket (and both bounded) confirms homogeneity; any bucket with
+  // ratio >> 1 would mean the slice-context key failed to separate a cost.
+  if (std::getenv("SEQUANT_AVOIDABLE_DEBUG")) {
+    double sumA = 0, sumB = 0, sum_total = 0;
+    for (auto const& [sig, nc] : sink.per_node) sum_total += nc.total_exec;
+    std::vector<std::string> keys;
+    for (auto const& [sig, nc] : sink.per_node) keys.push_back(sig);
+    std::sort(keys.begin(), keys.end(), [&](auto const& a, auto const& b) {
+      auto const& na = sink.per_node.at(a);
+      auto const& nb = sink.per_node.at(b);
+      double const aa =
+          (na.builds > na.necessary ? na.builds - na.necessary : 0) *
+          na.exec_per_build;
+      double const ba =
+          (nb.builds > nb.necessary ? nb.builds - nb.necessary : 0) *
+          nb.exec_per_build;
+      return aa > ba;
+    });
+    std::fprintf(stderr, "[avoidable-debug] total_exec(sum)=%.6g n_sigs=%zu\n",
+                 sum_total, sink.per_node.size());
+    std::size_t shown = 0;
+    for (auto const& sig : keys) {
+      auto const& nc = sink.per_node.at(sig);
+      double const b = static_cast<double>(nc.builds);
+      double const av = b > nc.necessary ? b - nc.necessary : 0.0;
+      double const A = av * nc.exec_per_build;
+      double const B = b > 0 ? nc.total_exec * (av / b) : 0.0;
+      sumA += A;
+      sumB += B;
+      if (av > 0 && shown < 20) {
+        std::fprintf(
+            stderr,
+            "  builds=%.0f nec=%.4g avoid=%.4g | exec last=%.4g "
+            "min=%.4g max=%.4g ratio=%.3g total=%.4g | A=%.4g B=%.4g | %s\n",
+            b, nc.necessary, av, nc.exec_per_build, nc.min_exec, nc.max_exec,
+            nc.min_exec > 0 ? nc.max_exec / nc.min_exec : 0.0, nc.total_exec, A,
+            B, sig.c_str());
+        ++shown;
+      }
+    }
+    std::fprintf(
+        stderr,
+        "[avoidable-debug] SUM A(count*last)=%.6g  B(total*frac)=%.6g  "
+        "total_exec=%.6g  A/total=%.3f  B/total=%.3f\n",
+        sumA, sumB, sum_total, sum_total > 0 ? sumA / sum_total : 0,
+        sum_total > 0 ? sumB / sum_total : 0);
+  }
   return out;
 }
 

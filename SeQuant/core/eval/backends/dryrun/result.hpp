@@ -157,21 +157,35 @@ struct DryRunOps {
         for (auto const& ix : rhs)
           if (std::find(touched.begin(), touched.end(), ix) == touched.end())
             touched.push_back(ix);
+        // Two things in one pass over the touched modes:
+        //  - necessary = product of block counts of the sliced touched modes;
+        //  - slicekey  = a serialization of the sliced touched modes' realized
+        //    EXTENTS. The sink is keyed by (label sig + slicekey) so builds at
+        //    the same slice-context land in one bucket -- and since every mode
+        //    is touched, equal slice-context => equal extents => equal roofline
+        //    cost, i.e. a COST-HOMOGENEOUS bucket. That is what makes the
+        //    avoidable-exec rollup exact: a full-extent build and its per-block
+        //    sliced rebuilds (whose roofline costs differ by ~100x) go to
+        //    DIFFERENT buckets instead of being averaged together.
         double necessary = 1.0;
+        std::string slicekey;
         for (auto const& ix : touched) {
           auto const it = merged.find(ix);
           if (it != merged.end() && it->second > 0) {
             std::size_t const full = cm->regime().extent(ix);
-            if (full > it->second)
+            if (full > it->second) {
               necessary *=
                   static_cast<double>(full) / static_cast<double>(it->second);
+              slicekey += toUtf8(ix.full_label()) + ':' +
+                          std::to_string(it->second) + ';';
+            }
           }
         }
-        // Same signature the runtime Build event stamps on this node (out =
-        // result, operands = the two inputs), so cost_profile's per-node
-        // avoidable joins to the DAG node by hash->sig in the visualizer.
+        // `sig` = the label signature the runtime Build event and IR node also
+        // carry (result + operands), so the visualizer joins by hash->sig; the
+        // sink groups the finer (sig,slicekey) buckets back up to this label.
         std::string const sig = cost_op_signature(out, idx, rhs);
-        cm->tally_node(sig, necessary, flops, exec);
+        cm->tally_node(sig + '|' + slicekey, sig, necessary, flops, exec);
       }
     }
 
