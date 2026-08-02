@@ -633,8 +633,10 @@ reference oracle for validation on small cases.
   under-count (§1). Residual: O3a the incremental sweep structure, O3b a
   replay-with-summed-co-residency oracle to validate against, O3c composite
   (proto-indexed) sizing under home-relative overrides.
-- **O4 — `W`'s computation order.** `W(cell)` depends on the partition, which the
-  pass is choosing — a fixed point / two-pass (seed at `meet`, then refine).
+- **O4 — RESOLVED (subsumed by §7b/§7d).** Not a fixed point: `W(cell)` is a
+  function of the *current* placement, which starts well-defined at the
+  `home_scope` seed (§7d) and is re-costed *incrementally* after each O2 move
+  (§7c). Seed-then-refine, not chicken-and-egg.
 - **O5 — DESIGNED (§7d).** `home_scope(value)` = deepest scope enclosing the
   loops of `(sliced_modes ∪ demoted_external_modes)`; the demotion fold (adding
   the demoted externals) is what unifies the current cache-veto-vs-
@@ -642,6 +644,10 @@ reference oracle for validation on small cases.
   meet before O2 (which only lowers homes further for peak); per-block is
   temporal (no split-index). Residual O5a-b: confirm the exact signal / edge
   cases, and the seed router construction.
-- **O6 — factorization feedback.** What to do when detection shows the peak is
-  factorization-inherent vs. re-batch-needed (§7b): report vs. hint back to the
-  DP (add batch loops / re-factorize).
+- **O6 — feedback policy (scoped).** Minimal deliverable: **detect and report**
+  -- when the greedy leaves `peak > threshold`, surface the binding point/cell
+  and which failure mode (factorization-inherent vs. re-batch-needed, §7b), so
+  the schedule fails loudly rather than silently OOMing. Follow-on: **hint back**
+  -- feed the over-budget cell's mode into the batch policy for the next
+  factorization round (re-batch) or trigger re-factorization. The detect-first
+  step is independent of and precedes the feedback loop.
