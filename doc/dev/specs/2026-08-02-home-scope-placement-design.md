@@ -285,6 +285,87 @@ that the store scope is taken **directly from the router** instead of being
 derived from `hops` (`d - hops`). So the slicer logic is unchanged; routing is
 explicit; and the `parent_` walk and `hops` are subsumed.
 
+## 7b. The greedy split pass (O2)
+
+The pass is a **spill loop** in the register-allocation sense: start at the
+recompute optimum and relax it just enough to fit the memory budget.
+
+**State.** A placement = the router `{value, use-site} -> (home-scope,
+split-index)` (§7a). **Seed** = perfect CSE: one cell per value at its `meet`
+home. This is the **recompute-minimal** placement (maximum sharing, maximum
+hoisting) and therefore the **peak-maximal** one.
+
+**Objective / readout.** Minimize recompute subject to `peak <= threshold`. The
+recompute of a placement is exactly the avoidable-recompute the cost model
+already reports: `Σ (W(cell) - 1) * build_cost`, i.e. `cost_profile()`'s
+`avoidable_flops`. So `cost_profile()` returns *both* the objective
+(`avoidable_flops`) and the constraint (`peak_bytes`) for any placement — the
+greedy needs no new measurement, only the ability to attribute the peak to the
+cells alive at the peak point.
+
+**The moves.** The peak at a program point is the sum of the footprints of the
+cells **alive** there. To reduce a cell's contribution, either shrink it or
+evict it from that point:
+
+- **Shrink — slice a carried mode.** A cell homed above a loop `m` whose mode it
+  *carries* holds `m` full; slicing `m` drops its footprint by `B_m` and, because
+  the consumers are per-`m`-block, adds ~no recompute (`W` counts carried-mode
+  slicing as free, §5). Nearly free; try first. This is the **existing**
+  external-slicing / `node_level_placement` move, here driven off the true
+  whole-forest peak rather than the per-term DP estimate.
+- **Evict — shorten the live range.** For the peak a slice cannot reach:
+  - **delay / un-hoist** a cell *invariant* to a loop it is currently held
+    across: lower its home into (or toward) that loop so it is built lazily at
+    its use instead of held idle from the loop's start. Footprint unchanged;
+    lifetime shortened, so it is no longer co-resident at the earlier iterations.
+    Recompute = rebuild once per outer block (the `∏_I` factor of §5).
+  - **split instances** of a cell whose consumers span a long range: partition
+    its use-sites into groups (a new `split-index`), each group its own short-
+    lived cell at its own `meet`. The long shared live range breaks into short
+    ones. Recompute = one extra build per new group.
+
+  Shrink subsumes delay when the cell *carries* the loop's mode (lowering into a
+  carried loop *is* slicing); the delay/un-hoist move is specifically for cells
+  *invariant* to the loop, which slicing cannot touch. Only shrink is what the
+  factorizer can already do; **evict is the new, CSE-aware capability** (it acts
+  on shared cells / cross-occurrence live ranges the per-term DP cannot see).
+
+**The loop.**
+
+```
+seed = perfect CSE (router: {value} -> (meet, 0) for all use-sites)
+while peak(placement) > threshold:
+    p     = the binding peak point (argmax live-set)
+    cands = cells alive at p
+    move  = best over cands of:  prefer any zero-cost shrink;
+                                 else max  ΔPeak / ΔRecompute  (the spill metric)
+    if no move reduces peak(p): break        # factorization-inherent (see §7)
+    apply move to the router; incrementally update the peak profile
+report (avoidable_flops, peak_bytes)          # objective + constraint
+```
+
+Focusing candidates on the **binding peak point** (the max-pressure point) is the
+register allocator's "spill from where the pressure is." `ΔRecompute` is the
+added `avoidable_flops`; `ΔPeak` is the drop in the profile's max. Apply,
+**incrementally** re-cost the affected lifetime interval (not the whole forest),
+repeat.
+
+**Termination.** `peak <= threshold` (success), or no move reduces the binding
+point — then the peak is inherent to the factorization (a single intermediate
+larger than the budget), which placement cannot repair: detect via `peak_bytes`
+and report / feed back to the DP (§7, O6).
+
+**Sub-items.**
+
+- **O2a** the incremental peak-profile update after one move (which lifetime
+  intervals change), so the loop is not `O(moves × forest)`.
+- **O2b** the exact `ΔPeak`/`ΔRecompute` estimator per move, and whether the
+  greedy needs lookahead (a shrink that enables a later cheaper evict) or a
+  single pass suffices in practice.
+- **O2c** relation to the existing DP external-slice pass: subsume it as the
+  shrink move, or run it first (DP-local shrink) then this pass (whole-forest
+  evict) — the latter is the smaller change.
+
 ## 8. Worked cases (correctness tests)
 
 Each must be a unit test.
@@ -409,9 +490,14 @@ reference oracle for validation on small cases.
   position); (ii) **audit** the `parent_` / `access_at` / `hops` /
   `batch_context` users and re-express slicing via home-vs-use scope difference;
   (iii) **standardize naming** on "home scope" (code's "lifetime scope").
-- **O2 — the greedy split move.** What "split the worst live range" does
-  concretely: partition instances vs. lower home vs. slice further, and the
-  peak-per-recompute ranking that drives it.
+- **O2 — DESIGNED (§7b).** Spill loop from the perfect-CSE seed; moves are
+  *shrink* (slice a carried mode -- the existing external-slice) and *evict*
+  (delay/un-hoist an invariant cell, or split its instances -- the new
+  CSE-aware move); candidates are cells alive at the binding peak point, ranked
+  by ΔPeak/ΔRecompute; objective+constraint are `cost_profile()`'s
+  `avoidable_flops`/`peak_bytes`. Residual: O2a incremental peak-profile update,
+  O2b the per-move ΔPeak/ΔRecompute estimator and lookahead question, O2c
+  subsume-vs-run-after the DP external-slice pass.
 - **O3 — per-placement footprint / peak profile.** How a partially-sliced cell
   (some carried modes full, some sliced) is sized, and how the profile is
   evaluated, so it matches the replay peak `cost_profile()` already reports.
