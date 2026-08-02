@@ -72,3 +72,7 @@ _codeql_detected_source_root
 .vscode
 out
 run
+
+# local developer setup
+CMakeUserPresets.json
+Notes
