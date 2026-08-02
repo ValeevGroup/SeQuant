@@ -290,6 +290,17 @@ explicit; and the `parent_` walk and `hops` are subsumed.
 The pass is a **spill loop** in the register-allocation sense: start at the
 recompute optimum and relax it just enough to fit the memory budget.
 
+**Scope — a second phase on a FIXED schedule.** O2 runs *after* the min-time
+factorizer, which is per-term and picks both the factorization *and* the
+batch-loop assignments (`batched_here` — which modes are batched at which
+nodes), targeting the **per-term** peak. O2 takes that factorization and loop
+nest as **fixed** and decides only the whole-forest **eval/placement** strategy:
+where each cell lives (home-scope) and the cell partition (router). It never
+adds, removes, or re-assigns a batch loop. The reason the second phase exists is
+that the per-term, CSE-blind factorizer only bounds the *per-term* peak;
+CSE-hoisting can blow the *whole-forest* peak, which only a whole-forest,
+post-CSE pass sees.
+
 **State.** A placement = the router `{value, use-site} -> (home-scope,
 split-index)` (§7a). **Seed** = perfect CSE: one cell per value at its `meet`
 home. This is the **recompute-minimal** placement (maximum sharing, maximum
@@ -307,12 +318,14 @@ cells alive at the peak point.
 cells **alive** there. To reduce a cell's contribution, either shrink it or
 evict it from that point:
 
-- **Shrink — slice a carried mode.** A cell homed above a loop `m` whose mode it
-  *carries* holds `m` full; slicing `m` drops its footprint by `B_m` and, because
-  the consumers are per-`m`-block, adds ~no recompute (`W` counts carried-mode
-  slicing as free, §5). Nearly free; try first. This is the **existing**
-  external-slicing / `node_level_placement` move, here driven off the true
-  whole-forest peak rather than the per-term DP estimate.
+- **Shrink — home into an existing carried loop.** A cell homed *above* a batch
+  loop `m` whose mode it *carries* holds `m` full; re-homing it *inside* that
+  (already existing) loop lets the loop slice it, dropping its footprint by `B_m`
+  at ~no recompute (`W` counts carried-mode slicing as free, §5). This is a
+  **placement** choice on the fixed nest -- it uses a loop the factorizer already
+  placed; it does NOT batch a new mode. (Deciding to batch a mode that is *not*
+  batched -- adding a loop -- is the factorizer's lever, not O2's; see the
+  boundary below.) Nearly free; try first.
 - **Evict — shorten the live range.** For the peak a slice cannot reach:
   - **delay / un-hoist** a cell *invariant* to a loop it is currently held
     across: lower its home into (or toward) that loop so it is built lazily at
@@ -324,11 +337,13 @@ evict it from that point:
     lived cell at its own `meet`. The long shared live range breaks into short
     ones. Recompute = one extra build per new group.
 
-  Shrink subsumes delay when the cell *carries* the loop's mode (lowering into a
-  carried loop *is* slicing); the delay/un-hoist move is specifically for cells
-  *invariant* to the loop, which slicing cannot touch. Only shrink is what the
-  factorizer can already do; **evict is the new, CSE-aware capability** (it acts
-  on shared cells / cross-occurrence live ranges the per-term DP cannot see).
+  Shrink applies to a loop the cell *carries* (re-home into it, the loop slices
+  it); delay/un-hoist is for a loop the cell is *invariant* to (re-home into it,
+  rebuilt per outer block, same size). Both are placement on the fixed nest --
+  **all O2 moves are CSE-aware placement the per-term factorizer cannot make**
+  (they act on shared cells / cross-occurrence live ranges it never sees). What
+  O2 does *not* touch is `batched_here` (which modes are batched) -- that is the
+  factorizer's lever, reached only via the re-batch feedback below.
 
 **The loop.**
 
@@ -339,7 +354,7 @@ while peak(placement) > threshold:
     cands = cells alive at p
     move  = best over cands of:  prefer any zero-cost shrink;
                                  else max  ΔPeak / ΔRecompute  (the spill metric)
-    if no move reduces peak(p): break        # factorization-inherent (see §7)
+    if no move reduces peak(p): break        # infeasible: see Termination below
     apply move to the router; incrementally update the peak profile
 report (avoidable_flops, peak_bytes)          # objective + constraint
 ```
@@ -350,10 +365,19 @@ added `avoidable_flops`; `ΔPeak` is the drop in the profile's max. Apply,
 **incrementally** re-cost the affected lifetime interval (not the whole forest),
 repeat.
 
-**Termination.** `peak <= threshold` (success), or no move reduces the binding
-point — then the peak is inherent to the factorization (a single intermediate
-larger than the budget), which placement cannot repair: detect via `peak_bytes`
-and report / feed back to the DP (§7, O6).
+**Termination.** `peak <= threshold` (success), or no placement move reduces the
+binding point — two distinct failure modes, both detected via `peak_bytes` and
+neither repairable *within* O2:
+
+- **factorization-inherent** — a single intermediate is larger than the budget
+  even fully placed; the factorization itself must change;
+- **re-batch-needed** — the fixed batching left placement too little room (e.g. a
+  *shared* cell would need slicing on a mode the per-term factorizer never
+  batched, because no single term saw the sharing). This is not an O2 move; it
+  feeds back to the factorizer to add batch loops (§7, O6).
+
+So the honest structure is `factorize + batch (per-term peak) -> O2 place
+(whole-forest peak, fixed batching) -> if infeasible: re-batch`.
 
 **Sub-items.**
 
