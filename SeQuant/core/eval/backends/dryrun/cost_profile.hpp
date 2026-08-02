@@ -190,14 +190,20 @@ struct CostProfile {
   /// batched-scratch high-watermark folded by the Task-3 \c PeakSink and the
   /// outer gated cache's \c working_set_hwmark().
   ///
-  /// This is computed as \c max(batched-inner scratch high-watermark,
-  /// outer cross-term cached residency), NOT their sum. When a persistent
-  /// cross-term cache entry co-resides in memory with a batched-inner
-  /// transient at the same instant, the two are actually additive, so this
-  /// value is a LOWER BOUND on the true peak in that case. It is exact
-  /// whenever one of the two terms dominates the other (e.g. the C60 4-PNO
-  /// \c W case, where the batched-inner scratch dwarfs any persistent
-  /// cross-term residency).
+  /// This is the TRUE co-resident peak, not a max-of-independent-hwmarks
+  /// lower bound: each per-op hwmark folded into a cache's
+  /// \c working_set_hwmark_ (in eval.hpp) already adds
+  /// \c CacheManager::chain_residency() of that cache's scope-chain ancestors
+  /// at the instant of the op, so a scratch cache's high-watermark is the
+  /// max over its life of (scratch residency + everything alive up its
+  /// parent chain at that instant) -- i.e. the actual co-resident sum when a
+  /// persistent cross-term cache entry is alive at the same instant as a
+  /// batched-inner transient. The outer (root) cache has no parent, so its
+  /// own hwmark is unaffected (added term is 0); the \c max() fold here (over
+  /// \c peak.load() and \c cache.working_set_hwmark()) is then correct in
+  /// both regimes -- batched (peak.load() already carries the co-resident
+  /// scratch peak) and unbatched (peak.load() == 0, the outer hwmark alone is
+  /// the true peak).
   double peak_bytes = 0;
   /// STATIC per-node DP-MODEL FLOPs: summed unweighted static contraction FLOPs
   /// over all internal nodes, from the order-/batching-blind static walk. NOT
@@ -298,8 +304,9 @@ struct CostProfile {
 /// SLICED-extent cost into a \c CostSink attached to the shared \c CostModel,
 /// so an op re-executed once per batch block is counted once per block. When no
 /// batching engages the two agree (up to the product-op-only dryrun tally);
-/// when it does, \c dryrun_* exceeds \c model_* by the recompute factor --
-/// which is what \c peak_bytes (max, not sum) cannot express.
+/// when it does, \c dryrun_* exceeds \c model_* by the recompute factor -- a
+/// TIME (arithmetic) cost that \c peak_bytes, a SPACE (co-resident working
+/// set) measure, does not express.
 ///
 /// \param forest per-summand optimized+binarized eval forest (the real IR).
 /// \param policy the batch policy driving the replay evaluator; its accept is

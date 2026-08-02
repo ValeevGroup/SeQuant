@@ -576,6 +576,7 @@ ResultPtr evaluate(Node const& node,         //
     if constexpr (detail::trace(EvalTrace)) {
       size_t hwmark = log::bytes(cache, post).value;
       if (!cache.alive(nd)) hwmark += log::bytes(res).value;
+      hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
       auto stat = log::EvalStat{.mode = log::EvalMode::MultByPhase,
                                 .time = time,
                                 .mem_result = log::bytes(post),
@@ -734,13 +735,16 @@ ResultPtr evaluate(Node const& node,         //
                 [&]() { intercepted = custom_eval(f.node, cache); });
             if (intercepted) {
               if constexpr (detail::trace(EvalTrace)) {
+                size_t hwmark = log::bytes(cache, intercepted).value;
+                hwmark +=
+                    cache.parent() ? cache.parent()->chain_residency() : 0;
                 log::eval(
-                    log::EvalStat{.mode = log::eval_mode(f.node),
-                                  .time = time,
-                                  .mem_result = log::bytes(intercepted),
-                                  .mem_alloc = log::bytes(intercepted),
-                                  .mem_hwmark = {cache.note_working_set(
-                                      log::bytes(cache, intercepted).value)}},
+                    log::EvalStat{
+                        .mode = log::eval_mode(f.node),
+                        .time = time,
+                        .mem_result = log::bytes(intercepted),
+                        .mem_alloc = log::bytes(intercepted),
+                        .mem_hwmark = {cache.note_working_set(hwmark)}},
                     log::label(f.node));
               }
               log::release_after_op();
@@ -756,13 +760,15 @@ ResultPtr evaluate(Node const& node,         //
           auto time = detail::timed_eval_inplace(
               [&]() { result = leaf_evaluator(f.node); });
           if constexpr (detail::trace(EvalTrace)) {
-            log::eval(log::EvalStat{.mode = log::eval_mode(f.node),
-                                    .time = time,
-                                    .mem_result = log::bytes(result),
-                                    .mem_alloc = log::bytes(result),
-                                    .mem_hwmark = {cache.note_working_set(
-                                        log::bytes(cache, result).value)}},
-                      log::label(f.node));
+            size_t hwmark = log::bytes(cache, result).value;
+            hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
+            log::eval(
+                log::EvalStat{.mode = log::eval_mode(f.node),
+                              .time = time,
+                              .mem_result = log::bytes(result),
+                              .mem_alloc = log::bytes(result),
+                              .mem_hwmark = {cache.note_working_set(hwmark)}},
+                log::label(f.node));
           }
           log::release_after_op();
           // Store the FULL leaf under its canonical key (a block slice would
@@ -801,6 +807,7 @@ ResultPtr evaluate(Node const& node,         //
           size_t hwmark = log::bytes(cache, result).value;
           if (!cache.alive(f.node.left()) || f.node.left()->canon_phase() != 1)
             hwmark += log::bytes(f.left).value;
+          hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
           log::eval(
               log::EvalStat{.mode = log::eval_mode(f.node),
                             .time = time,
@@ -874,6 +881,7 @@ ResultPtr evaluate(Node const& node,         //
           if (f.right && (!cache.alive(f.node.right()) ||
                           f.node.right()->canon_phase() != 1))
             hwmark += log::bytes(f.right).value;
+          hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
           log::eval(
               log::EvalStat{.mode = log::eval_mode(f.node),
                             .time = time,
@@ -946,6 +954,7 @@ ResultPtr evaluate(Node const& node,           //
       size_t hwmark = log::bytes(cache, result.post).value;
       if (!cache.alive(node) || node->canon_phase() != 1)
         hwmark += log::bytes(result.pre).value;
+      hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
       auto stat = log::EvalStat{.mode = log::EvalMode::Permute,
                                 .time = time,
                                 .mem_result = log::bytes(result.post),
@@ -1008,6 +1017,7 @@ ResultPtr evaluate(Nodes const& nodes,  //
       size_t hwmark = log::bytes(cache, result).value;
       if (!cache.alive(n) || n->canon_phase() != 1 || !layout_is_default)
         hwmark += log::bytes(pre).value;
+      hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
       auto stat = log::EvalStat{.mode = log::EvalMode::SumInplace,
                                 .time = time,
                                 .mem_result = log::bytes(result),

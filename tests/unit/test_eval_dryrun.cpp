@@ -3952,6 +3952,154 @@ TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
   CHECK(global_peak > outer_hwmark * 2.0);
 }
 
+// Phase 1 Task 2 regression guard: cost_profile()'s peak_bytes must be the
+// TRUE co-resident sum across the cache scope chain, not
+// max(scratch_hwmark, outer_hwmark). eval.hpp's 7 note_working_set() call
+// sites now add cache.parent()->chain_residency() (CacheManager, Task 1) to
+// the per-op hwmark, so a scratch cache chained (CacheManager::set_parent)
+// to an outer cache holding a PERSISTENT, ALIVE cross-term entry folds that
+// outer residency into its own working_set_hwmark(). Before this fix, a
+// scratch's hwmark reflected ONLY its own local footprint: running the SAME
+// batched op with vs without an alive co-resident outer entry produced the
+// IDENTICAL hwmark, silently under-reporting the true additive co-resident
+// peak.
+//
+// This test isolates exactly that difference by running the SAME batched
+// forest through two structurally-identical scratch caches, one chained to
+// an outer cache holding a known-size persistent entry, one not (parent() ==
+// nullptr, mirroring the un-hoisted / real-cache-absent case). Because the
+// persistent entry's key (tensor label "h") never occurs in the batched
+// forest (labels "g"/"C"), chaining cannot change any COMPUTED value --
+// access_at() never finds a spurious hit -- so any difference between the
+// two runs' working_set_hwmark() is entirely the added chain_residency()
+// term. Proven to fail without the eval.hpp fix (see the report's Step 5
+// both-states proof: reverting the fix makes hwmark_chained ==
+// hwmark_isolated, failing both CHECKs below).
+TEST_CASE("dryrun peak is co-resident sum", "[dryrun][cost_profile]") {
+  auto ctx = get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+
+  using sequant::make_batched_custom_evaluator;
+  using sequant::make_no_scope_guard;
+  using sequant::never_volatile;
+  using node_t = EvalNodeDryRun;
+
+  auto r = backend_test_regime();  // i (occ) extent 10, a (virt) extent 20
+  auto cm = std::make_shared<CostModel const>(r);
+  DryRunLeafEvaluator yield{cm};
+
+  // Same small batched-forest shape as the D3.1 test above (external-mode
+  // scatter over the occ index carried only as a PNO proto-index).
+  auto expr = deserialize<ExprPtr>(
+      "(g{a_3;a_4} * C{a_4;a1<i_1,i_2>}) * C{a2<i_1,i_2>;a_3}");
+  REQUIRE(static_cast<bool>(expr));
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto node = binarize<EvalExprDryRun>(expr);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+  auto const occ = get_default_context().index_space_registry()->retrieve(L"i");
+  auto accept_occ = [occ](Index const& ix) {
+    return ix.space() == occ && !ix.has_proto_indices();
+  };
+  Index mode;
+  for (auto const& ix : node->canon_indices())
+    if (accept_occ(ix)) {
+      mode = ix;
+      break;
+    }
+  REQUIRE(mode.nonnull());
+  node->set_batched_here({{mode, BatchModeType::External}});
+
+  // A LEAF with a distinct tensor label ("h"), unrelated to anything in the
+  // batched tree above, registered directly (not via the batched forest) as
+  // a PERSISTENT entry in a standalone outer CacheManager -- our synthetic
+  // stand-in for a persistent cross-term cache entry alive at run scope.
+  auto persistent_expr = deserialize<ExprPtr>("h{i_7;a_9}");
+  REQUIRE(static_cast<bool>(persistent_expr));
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto persistent_node = binarize<EvalExprDryRun>(persistent_expr);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(persistent_node.leaf());
+
+  using hasher_t = sequant::TreeNodeHasher<node_t>;
+  using comp_t = sequant::TreeNodeEqualityComparator<node_t>;
+  std::unordered_map<node_t, size_t, hasher_t, comp_t> outer_reg;
+  outer_reg.emplace(persistent_node, std::numeric_limits<size_t>::max());
+  auto always_persistent = [](node_t const&) { return true; };
+  sequant::CacheManager<node_t> outer(std::move(outer_reg), always_persistent);
+
+  ResultPtr persistent_val = yield(persistent_node);
+  REQUIRE(persistent_val);
+  (void)outer.store(persistent_node, persistent_val);
+  REQUIRE(outer.alive(persistent_node));
+  size_t const R = outer.current_residency();
+  REQUIRE(R > 0);
+  REQUIRE(R == persistent_val->size_in_bytes());
+
+  auto target_batch_size = [](Index const&) -> std::size_t { return 4; };
+
+  // Force printing() on (see the "printing gate" note on cost_profile()):
+  // note_working_set()'s per-op hwmark is fed by the CACHE-AWARE bytes()
+  // overload, which short-circuits to 0 unless the eval trace is being
+  // printed. Restored on every exit path below.
+  auto& logger = Logger::instance();
+  auto const prev_level = logger.eval.level;
+  auto* const prev_stream = logger.eval.stream;
+  std::ostringstream trace_os;
+  logger.eval.level = 2;
+  logger.eval.stream = &trace_os;
+
+  // Run A: ISOLATED -- scratch has NO parent, so chain_residency() is never
+  // consulted (parent() == nullptr short-circuits the added term to 0 at
+  // every one of the 7 fixed sites).
+  auto scratch_isolated = sequant::CacheManager<node_t>::empty();
+  scratch_isolated.set_custom_evaluator(
+      make_batched_custom_evaluator(yield, target_batch_size, accept_occ,
+                                    make_no_scope_guard{}, never_volatile{}));
+  ResultPtr result_isolated;
+  try {
+    result_isolated = sequant::evaluate(node, yield, scratch_isolated);
+  } catch (std::exception const&) {
+  }
+  size_t const hwmark_isolated = scratch_isolated.working_set_hwmark();
+
+  // Run B: CHAINED -- an otherwise-identical fresh scratch, parented to
+  // `outer` exactly the way place_at_this_level() (eval.hpp) wires an
+  // order-aware hoisted invariant's scratch to its enclosing real/term
+  // cache.
+  auto scratch_chained = sequant::CacheManager<node_t>::empty();
+  scratch_chained.set_parent(&outer);
+  scratch_chained.set_custom_evaluator(
+      make_batched_custom_evaluator(yield, target_batch_size, accept_occ,
+                                    make_no_scope_guard{}, never_volatile{}));
+  ResultPtr result_chained;
+  try {
+    result_chained = sequant::evaluate(node, yield, scratch_chained);
+  } catch (std::exception const&) {
+  }
+  size_t const hwmark_chained = scratch_chained.working_set_hwmark();
+
+  logger.eval.level = prev_level;
+  logger.eval.stream = prev_stream;
+
+  REQUIRE(result_isolated);
+  REQUIRE(result_chained);
+  REQUIRE(hwmark_isolated > 0);
+
+  // The two runs compute IDENTICAL data: chaining a cache whose only entry's
+  // key never occurs in the batched forest cannot change any computed value.
+  CHECK(result_chained->size_in_bytes() == result_isolated->size_in_bytes());
+
+  // THE regression guard: with the fix, the chained run's hwmark is the
+  // isolated local footprint PLUS the outer's live co-resident residency --
+  // an exact sum, not a max.
+  CHECK(hwmark_chained == hwmark_isolated + R);
+  // Equivalently, and matching the brief's robust form: strictly greater
+  // than what max(scratch, outer) alone would yield.
+  CHECK(hwmark_chained > std::max(hwmark_isolated, R));
+}
+
 // Task 4: cost_profile() is the single reusable entry point that ties the
 // static cost walk (flops/exec_cost/n_ops) to the gated-cache peak replay
 // (Task 2 build_dryrun_cache + Task 3 PeakSink scratch-fold) behind one API
