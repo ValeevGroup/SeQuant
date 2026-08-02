@@ -197,6 +197,37 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
   }
 
+  SECTION("bernoulli_quccsd_eom") {
+    using namespace sequant;
+    using namespace sequant::mbpt;
+    const CC cc(2, {.ansatz = CC::Ansatz::U,
+                    .hbar_comm_rank = 2,
+                    .hbar_expansion = CC::HbarExpansion::Bernoulli});
+    // qUCCSD block ranks, 10.1063/5.0062090 Table I: leading block at the
+    // double commutator, coupling blocks at the single, highest manifold bare.
+    const std::vector<std::size_t> quccsd = {2, 1, 1, 0};
+
+    const auto ee = cc.eom_r(nₚ(2), nₕ(2), quccsd);
+    REQUIRE(ee.size() == 3);
+    REQUIRE(!ee[0]);
+    REQUIRE(size(ee[1]) == 121);
+    REQUIRE(size(ee[2]) == 21);
+
+    // the same ranks drive IP: manifolds are indexed by ascending rank, so
+    // {1h, 2h1p} takes the place of {S, D}
+    const auto ip = cc.eom_r(nₚ(1), nₕ(2), quccsd);
+    REQUIRE(ip.size() == 2);
+    REQUIRE(size(ip[0]) == 32);
+    REQUIRE(size(ip[1]) == 11);
+
+    // block_ranks must be a K x K matrix over the manifolds ...
+    REQUIRE_THROWS_AS(cc.eom_r(nₚ(2), nₕ(2), {2, 1, 0}), Exception);
+    // ... the ansatz must be unitary ...
+    REQUIRE_THROWS_AS(CC(2).eom_r(nₚ(2), nₕ(2), quccsd), Exception);
+    // ... and the Bernoulli H̄ has no uniform path to fall back on
+    REQUIRE_THROWS_AS(cc.eom_r(nₚ(2), nₕ(2)), Exception);
+  }
+
   SECTION("energy") {
     // CC::energy() must equal the p==0 element of CC::t() for both ansätze.
     const auto N = 2;
