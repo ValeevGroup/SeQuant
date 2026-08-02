@@ -164,6 +164,16 @@ class CacheManager {
 
     [[nodiscard]] bool alive() const noexcept { return data_p ? true : false; }
 
+    /// \return true iff this entry currently holds the SAME buffer (pointer
+    ///         identity) as @p other. A sliced/permuted/phase-shifted read of
+    ///         this entry is a DISTINCT buffer, so it compares unequal. Used by
+    ///         the peak trace to detect an operand that aliases a cached buffer
+    ///         (whose bytes are then already counted, and must not be added
+    ///         again).
+    [[nodiscard]] bool holds(ResultPtr const& other) const noexcept {
+      return data_p && data_p.get() == other.get();
+    }
+
    private:
     [[nodiscard]] int decay() noexcept {
       return life_c > 0 ? static_cast<int>(--life_c) : 0;
@@ -319,6 +329,22 @@ class CacheManager {
   /// instant.
   [[nodiscard]] size_t chain_residency() const noexcept {
     return current_residency() + (parent_ ? parent_->chain_residency() : 0);
+  }
+
+  /// \return true iff some ALIVE entry on this cache or any ancestor along the
+  ///         scope chain physically holds @p value (pointer identity).
+  ///         Read-only: unlike access_at() it decays no lifetime. The peak
+  ///         trace uses it to skip an operand whose bytes are already counted
+  ///         -- locally in \c bytes(cache,...) or up-chain in \c
+  ///         chain_residency()
+  ///         -- because the operand aliases that resident buffer. A sliced (or
+  ///         permuted, or phase-shifted) read of a resident value is a DISTINCT
+  ///         buffer with a different pointer, so it is correctly NOT skipped.
+  [[nodiscard]] bool chain_holds(ResultPtr const& value) const noexcept {
+    if (!value) return false;
+    for (auto const& [k, e] : cache_map_)
+      if (e.holds(value)) return true;
+    return parent_ ? parent_->chain_holds(value) : false;
   }
 
   ///

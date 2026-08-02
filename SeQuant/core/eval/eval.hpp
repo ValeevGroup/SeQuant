@@ -232,8 +232,13 @@ enum struct TermMode { Begin, End };
 ///   bytes(cache) + bytes(result) + bytes of each operand not aliased
 ///                                  to a cache entry
 ///
-/// (aliasing is evaluated at each call site using cache.alive, canon_phase,
-/// and the requested layout). It is reported as a running max so it is
+/// (aliasing is decided at each call site by CacheManager::chain_holds --
+/// pointer identity against every alive entry on the scope chain -- so an
+/// operand read full from a cache at ANY scope is counted once via the cache
+/// residency, while a sliced/permuted/phase-shifted read is a distinct buffer
+/// and is added). bytes(cache) here is this cache's own residency; the
+/// ancestors' residency is added separately as CacheManager::chain_residency().
+/// It is reported as a running max so it is
 /// monotonically non-decreasing within one evaluation — the peak memory the
 /// engine reaches — rather than the instantaneous per-op working set, which
 /// oscillates as the cache fills and drains. The max is held by the
@@ -805,8 +810,7 @@ ResultPtr evaluate(Node const& node,         //
         if constexpr (detail::trace(EvalTrace)) {
           // `right` is null here (see log::bytes() null tolerance).
           size_t hwmark = log::bytes(cache, result).value;
-          if (!cache.alive(f.node.left()) || f.node.left()->canon_phase() != 1)
-            hwmark += log::bytes(f.left).value;
+          if (!cache.chain_holds(f.left)) hwmark += log::bytes(f.left).value;
           hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
           log::eval(
               log::EvalStat{.mode = log::eval_mode(f.node),
@@ -871,15 +875,15 @@ ResultPtr evaluate(Node const& node,         //
         SEQUANT_ASSERT(result);
 
         if constexpr (detail::trace(EvalTrace)) {
-          // A cached child is *distinct* from the local left/right when its
-          // canon_phase != 1, because apply_phase allocates a fresh buffer
-          // while the cache still holds the pre-phase data. So only skip the
-          // local's bytes when the cache aliases the same buffer (phase == 1).
+          // Skip an operand's bytes only when it aliases a cache buffer that is
+          // already counted (locally in bytes(cache,...) or up-chain in
+          // chain_residency()). chain_holds() tests pointer identity against
+          // every alive entry on the scope chain: a cached child fetched full
+          // aliases and is skipped; an apply_phase / sliced / permuted child is
+          // a distinct buffer and is added.
           size_t hwmark = log::bytes(cache, result).value;
-          if (!cache.alive(f.node.left()) || f.node.left()->canon_phase() != 1)
-            hwmark += log::bytes(f.left).value;
-          if (f.right && (!cache.alive(f.node.right()) ||
-                          f.node.right()->canon_phase() != 1))
+          if (!cache.chain_holds(f.left)) hwmark += log::bytes(f.left).value;
+          if (f.right && !cache.chain_holds(f.right))
             hwmark += log::bytes(f.right).value;
           hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
           log::eval(
@@ -948,11 +952,12 @@ ResultPtr evaluate(Node const& node,           //
   // logging
   if constexpr (detail::trace(EvalTrace)) {
     if (perm) {
-      // result.pre aliases the cache only when the inner evaluate returned
-      // the cached buffer unchanged — i.e. the node is cached AND no
-      // mult_by_phase fresh allocation happened (phase == 1).
+      // result.pre aliases a cache buffer only when the inner evaluate returned
+      // it unchanged (node cached at some scope, no mult_by_phase fresh alloc);
+      // chain_holds() tests that by pointer identity across the scope chain. A
+      // permuted/phase-shifted pre is a distinct buffer and is added.
       size_t hwmark = log::bytes(cache, result.post).value;
-      if (!cache.alive(node) || node->canon_phase() != 1)
+      if (!cache.chain_holds(result.pre))
         hwmark += log::bytes(result.pre).value;
       hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
       auto stat = log::EvalStat{.mode = log::EvalMode::Permute,
@@ -994,11 +999,6 @@ ResultPtr evaluate(Nodes const& nodes,  //
                    F const& leaf_evaluator, CacheManager<N, FHC>& cache) {
   ResultPtr result;
 
-  // pre comes back from the permute-wrapping evaluate; it aliases the
-  // cache only when the inner evaluate returned the cached buffer
-  // unchanged — i.e. node cached, phase == 1, AND no permute happened.
-  bool const layout_is_default = (layout == decltype(layout){});
-
   for (auto&& n : nodes) {
     if (!result) {
       result = evaluate<EvalTrace>(n, layout, leaf_evaluator, cache);
@@ -1011,12 +1011,14 @@ ResultPtr evaluate(Nodes const& nodes,  //
 
     // logging
     if constexpr (detail::trace(EvalTrace)) {
-      // SumInplace allocates nothing: it writes into the accumulator.
-      // hwmark counts the cache plus both operands live at this moment;
-      // skip pre's bytes only when pre is the cached buffer itself.
+      // SumInplace allocates nothing: it writes into the accumulator. hwmark
+      // counts the cache plus both operands live at this moment; skip pre's
+      // bytes only when pre aliases a chain-resident cache buffer (fetched
+      // full). pre comes back from the permute-wrapping evaluate, so a
+      // permuted/phase-shifted read is a distinct buffer with its own pointer
+      // and is added; chain_holds() decides by pointer identity.
       size_t hwmark = log::bytes(cache, result).value;
-      if (!cache.alive(n) || n->canon_phase() != 1 || !layout_is_default)
-        hwmark += log::bytes(pre).value;
+      if (!cache.chain_holds(pre)) hwmark += log::bytes(pre).value;
       hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
       auto stat = log::EvalStat{.mode = log::EvalMode::SumInplace,
                                 .time = time,

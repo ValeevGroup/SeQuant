@@ -205,20 +205,18 @@ struct CostProfile {
   /// scratch peak) and unbatched (peak.load() == 0, the outer hwmark alone is
   /// the peak).
   ///
-  /// It is NOT exact. Two known deviations remain; both keep it a SAFE
-  /// (conservative, never-under) estimate for a memory budget:
-  ///   - OVER-count: an operand resident in an ANCESTOR cache and read full
-  ///     (unsliced, so it aliases the parent buffer) is charged both by this
-  ///     op's \c !cache.alive(operand) bytes AND again via the ancestor
-  ///     \c chain_residency(), because \c CacheManager::alive() is local-only.
-  ///     A hoisted invariant read full inside a loop it does not carry is thus
-  ///     double-counted. Fixing this needs a chain-aware alive() that skips a
-  ///     buffer already counted up-chain; tracked as a Phase-3 O3b prerequisite
-  ///     so the static peak sweep and this replay agree.
-  ///   - UNDER-count: the external-scatter accumulator (\c dest in eval.hpp) is
-  ///     a plain local, not a cache entry, so it is invisible to
-  ///     \c chain_residency() even though it co-resides with every inner
-  ///     block's working set. Pre-existing, outside this field's scope.
+  /// Each live buffer is counted exactly once: the per-op operand guards skip
+  /// an operand whose buffer any cache on the scope chain already holds
+  /// (\c CacheManager::chain_holds(), pointer identity), so a value read full
+  /// from an ANCESTOR cache is counted only via \c chain_residency() and not
+  /// again as an operand, while a sliced/permuted/phase-shifted read (a
+  /// distinct buffer) is correctly added.
+  ///
+  /// One known deviation remains -- an UNDER-count that keeps this a lower
+  /// bound in exactly one place: the external-scatter accumulator (\c dest in
+  /// eval.hpp) is a plain local, not a cache entry, so it is invisible to
+  /// \c chain_residency() even though it co-resides with every inner block's
+  /// working set. Pre-existing, outside this field's scope.
   double peak_bytes = 0;
   /// STATIC per-node DP-MODEL FLOPs: summed unweighted static contraction FLOPs
   /// over all internal nodes, from the order-/batching-blind static walk. NOT

@@ -683,3 +683,55 @@ TEST_CASE("cache_manager residency", "[cache_manager]") {
   REQUIRE(man.access(k1));
   REQUIRE(man.chain_residency() == 0);
 }
+
+// chain_holds(): the peak trace's de-alias check. It reports, by POINTER
+// IDENTITY across the whole scope chain, whether a buffer is already held by
+// some cache -- so the per-op hwmark counts that buffer once (via the cache
+// residency) instead of also adding it as an operand. A DISTINCT buffer, which
+// is what a sliced / permuted / phase-shifted read of a cached value produces,
+// is not held and must be counted. This is the I1 fix: alive() alone is
+// local-only and would miss an ancestor-resident operand read full.
+TEST_CASE("cache_manager chain_holds pointer identity", "[cache_manager]") {
+  using hasher_t = sequant::TreeNodeHasher<node_type>;
+  using comp_t = sequant::TreeNodeEqualityComparator<node_type>;
+  auto eval_result = [](int x) {
+    return sequant::eval_result<sequant::ResultScalar<int>>(x);
+  };
+
+  auto const X = make_node(L"R{a1;i1} = f{a1;i1}");  // buffer lives at parent
+  auto const Y = make_node(L"R{a1;i1} = g{a1;i1}");  // buffer lives at child
+
+  std::unordered_map<node_type, size_t, hasher_t, comp_t> parent_counts;
+  parent_counts.emplace(X, 2);  // store()'s implicit access -> life 1, alive
+  auto parent = manager_type(std::move(parent_counts));
+
+  std::unordered_map<node_type, size_t, hasher_t, comp_t> child_counts;
+  child_counts.emplace(Y, 2);
+  auto child = manager_type(std::move(child_counts));
+  child.set_parent(&parent);
+
+  auto vX = eval_result(42);     // the buffer the parent will hold
+  auto vY = eval_result(7);      // the buffer the child will hold
+  auto other = eval_result(99);  // a distinct buffer held by nobody
+  (void)parent.store(X, vX);
+  (void)child.store(Y, vY);
+
+  // Held up the chain (parent) and locally (child): pointer identity hits, so
+  // an operand aliasing either is skipped (already in chain_residency()).
+  REQUIRE(child.chain_holds(vX));
+  REQUIRE(child.chain_holds(vY));
+  // A distinct buffer is NOT held -- the sliced/permuted-read case that must be
+  // counted, not skipped. (Same integer VALUE, different buffer.)
+  REQUIRE_FALSE(child.chain_holds(other));
+  REQUIRE_FALSE(child.chain_holds(eval_result(42)));
+  // The chain only looks UP: the parent does not see the child's entry.
+  REQUIRE_FALSE(parent.chain_holds(vY));
+  // Null is never held.
+  REQUIRE_FALSE(child.chain_holds(nullptr));
+
+  // Once the parent's entry is drained, its buffer is no longer held anywhere
+  // on the chain.
+  REQUIRE(parent.access(X) != nullptr);  // life 1 -> 0, released
+  REQUIRE_FALSE(parent.alive(X));
+  REQUIRE_FALSE(child.chain_holds(vX));
+}
