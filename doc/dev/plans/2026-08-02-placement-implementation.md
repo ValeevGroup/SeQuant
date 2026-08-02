@@ -132,26 +132,33 @@ hwmarks.
   git commit -m "eval: add CacheManager current/chain residency accessors"
   ```
 
-- [ ] **Step 6: Thread the chain sum into the hwmark.** In `eval.hpp`, at each
-  `note_working_set(hwmark)` site (576-585 and the others found in Step 0),
-  replace the local `hwmark` with the scope-chain total so the recorded peak is
-  the co-resident sum. Concretely, where today `hwmark = log::bytes(cache,
-  post).value` (this cache's working set), add the ancestors:
+- [ ] **Step 6: Thread the chain sum into the per-op hwmark ONLY.** The fix is
+  local to the `note_working_set` call sites; **leave both folds unchanged** (see
+  Step 7 for why). In `eval.hpp`, at *every* `cache.note_working_set(hwmark)` site
+  (576-585 and the others found in Step 0), add the ancestors' live residency to
+  the local `hwmark` before the call, so the value recorded into that cache's
+  `working_set_hwmark_` is the instant co-resident total:
   `hwmark += (cache.parent() ? cache.parent()->chain_residency() : 0);`
-  before the `note_working_set(hwmark)` call. (The local `log::bytes(cache,post)`
-  already covers this cache; `chain_residency()` on the parent adds the outer
-  live residency at the same instant.) In the scatter branch (1867-1874), fold
-  `bs.cache.chain_residency()` instead of `bs.cache.working_set_hwmark()` into
-  the PeakSink so the scratch peak already includes its ancestors.
+  For the OUTER cache (no parent) this adds 0 -> its hwmark is unchanged. For a
+  SCRATCH cache (parent = outer) this adds the outer's current residency at that
+  instant -> the scratch's `working_set_hwmark_` becomes
+  `max over the scratch's life of (scratch_now + outer_now)` = the true
+  co-resident peak. Do NOT touch the scatter-branch fold at 1867-1874: it folds
+  `bs.cache.working_set_hwmark()` (the scratch's MAX over its life) into the
+  PeakSink, and that max is now already chain-inclusive from these per-op calls;
+  folding `chain_residency()` (an end-of-scatter instant) there instead would
+  miss intermediate peaks -- keep `working_set_hwmark()`.
 
-- [ ] **Step 7: Simplify the `cost_profile()` fold.** In `cost_profile.hpp`,
-  since the per-op hwmark now already sums the chain, drop the separate
-  `cache.working_set_hwmark()` term from
-  `profile.peak_bytes = std::max({profile.peak_bytes, peak.load(),
-  double(cache.working_set_hwmark())})`, leaving
-  `std::max(profile.peak_bytes, peak.load())` — `peak` (the PeakSink) now carries
-  the summed instant maximum. Update the `peak_bytes` doc comment (lines ~189-201)
-  to say it is the true co-resident peak, not a `max`-based lower bound.
+- [ ] **Step 7: Leave the `cost_profile()` fold as-is (verify only).** Do NOT
+  change `profile.peak_bytes = std::max({profile.peak_bytes, peak.load(),
+  double(cache.working_set_hwmark())})`. It is already correct once Step 6 lands:
+  `peak.load()` (the PeakSink) now carries the scratch co-resident peak, and the
+  `cache.working_set_hwmark()` term is the outer-alone peak, still needed for the
+  no-batching case (where `peak.load()` is 0 because no scatter fires). The `max`
+  of the two is the true peak in both regimes -- dropping the outer term would
+  under-report the unbatched case. Only UPDATE the `peak_bytes` doc comment
+  (lines ~189-201): it is now the true co-resident peak (the per-op hwmark sums
+  the live scope chain), not the old `max`-of-independent-hwmarks lower bound.
 
 - [ ] **Step 8: Write the failing co-resident test.** In `test_eval_dryrun.cpp`,
   adapt the `[dryrun][cost_profile]` fixture (or the `[dryrun][peak]` one) into a
