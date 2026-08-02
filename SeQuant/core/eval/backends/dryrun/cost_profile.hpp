@@ -190,20 +190,35 @@ struct CostProfile {
   /// batched-scratch high-watermark folded by the Task-3 \c PeakSink and the
   /// outer gated cache's \c working_set_hwmark().
   ///
-  /// This is the TRUE co-resident peak, not a max-of-independent-hwmarks
-  /// lower bound: each per-op hwmark folded into a cache's
-  /// \c working_set_hwmark_ (in eval.hpp) already adds
-  /// \c CacheManager::chain_residency() of that cache's scope-chain ancestors
-  /// at the instant of the op, so a scratch cache's high-watermark is the
-  /// max over its life of (scratch residency + everything alive up its
-  /// parent chain at that instant) -- i.e. the actual co-resident sum when a
-  /// persistent cross-term cache entry is alive at the same instant as a
-  /// batched-inner transient. The outer (root) cache has no parent, so its
-  /// own hwmark is unaffected (added term is 0); the \c max() fold here (over
-  /// \c peak.load() and \c cache.working_set_hwmark()) is then correct in
+  /// This ACCOUNTS FOR co-resident residency across the scope chain, rather
+  /// than being the max-of-independent-hwmarks lower bound it was before: each
+  /// per-op hwmark folded into a cache's \c working_set_hwmark_ (in eval.hpp)
+  /// already adds \c CacheManager::chain_residency() of that cache's
+  /// scope-chain ancestors at the instant of the op, so a scratch cache's
+  /// high-watermark is the max over its life of (scratch residency +
+  /// everything alive up its parent chain at that instant) -- the co-resident
+  /// sum when a persistent cross-term cache entry is alive at the same instant
+  /// as a batched-inner transient. The outer (root) cache has no parent, so
+  /// its own hwmark is unaffected (added term is 0); the \c max() fold here
+  /// (over \c peak.load() and \c cache.working_set_hwmark()) is then correct in
   /// both regimes -- batched (peak.load() already carries the co-resident
   /// scratch peak) and unbatched (peak.load() == 0, the outer hwmark alone is
-  /// the true peak).
+  /// the peak).
+  ///
+  /// It is NOT exact. Two known deviations remain; both keep it a SAFE
+  /// (conservative, never-under) estimate for a memory budget:
+  ///   - OVER-count: an operand resident in an ANCESTOR cache and read full
+  ///     (unsliced, so it aliases the parent buffer) is charged both by this
+  ///     op's \c !cache.alive(operand) bytes AND again via the ancestor
+  ///     \c chain_residency(), because \c CacheManager::alive() is local-only.
+  ///     A hoisted invariant read full inside a loop it does not carry is thus
+  ///     double-counted. Fixing this needs a chain-aware alive() that skips a
+  ///     buffer already counted up-chain; tracked as a Phase-3 O3b prerequisite
+  ///     so the static peak sweep and this replay agree.
+  ///   - UNDER-count: the external-scatter accumulator (\c dest in eval.hpp) is
+  ///     a plain local, not a cache entry, so it is invisible to
+  ///     \c chain_residency() even though it co-resides with every inner
+  ///     block's working set. Pre-existing, outside this field's scope.
   double peak_bytes = 0;
   /// STATIC per-node DP-MODEL FLOPs: summed unweighted static contraction FLOPs
   /// over all internal nodes, from the order-/batching-blind static walk. NOT

@@ -650,8 +650,8 @@ TEST_CASE("cache_manager residency", "[cache_manager]") {
   //    current_residency() == entry_size_in_bytes(k0) + entry_size_in_bytes(k1)
   auto val0 = eval_result(42);
   auto val1 = eval_result(99);
-  man.store(k0, val0);
-  man.store(k1, val1);
+  (void)man.store(k0, val0);
+  (void)man.store(k1, val1);
 
   size_t expected_size =
       man.entry_size_in_bytes(k0) + man.entry_size_in_bytes(k1);
@@ -673,8 +673,8 @@ TEST_CASE("cache_manager residency", "[cache_manager]") {
   man.reset();
   auto val0_2 = eval_result(111);
   auto val1_2 = eval_result(222);
-  man.store(k0, val0_2);
-  man.store(k1, val1_2);
+  (void)man.store(k0, val0_2);
+  (void)man.store(k1, val1_2);
 
   REQUIRE(man.chain_residency() == man.current_residency());
 
