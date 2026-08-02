@@ -305,6 +305,22 @@ class CacheManager {
     return working_set_hwmark_;
   }
 
+  /// Sum over ALIVE entries of this cache's own residency (bytes). Unlike
+  /// working_set_hwmark() (a high-water MAX over time), this is the CURRENT
+  /// live residency at the instant of the call.
+  [[nodiscard]] size_t current_residency() const noexcept {
+    size_t s = 0;
+    for (auto const& [k, e] : cache_map_)
+      if (e.alive()) s += e.size_in_bytes();
+    return s;
+  }
+  /// current_residency() of this cache plus every ancestor along the scope
+  /// chain (parent_): the total live residency visible at this scope at one
+  /// instant.
+  [[nodiscard]] size_t chain_residency() const noexcept {
+    return current_residency() + (parent_ ? parent_->chain_residency() : 0);
+  }
+
   ///
   /// @brief Access cached data.
   ///

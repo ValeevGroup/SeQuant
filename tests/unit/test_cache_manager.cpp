@@ -625,3 +625,61 @@ TEST_CASE("cache_manager_batch_axis_veto", "[cache_manager]") {
     REQUIRE_FALSE(man.persistent(node.left()));
   }
 }
+
+TEST_CASE("cache_manager residency", "[cache_manager]") {
+  using hasher_t = sequant::TreeNodeHasher<node_type>;
+  using comp_t = sequant::TreeNodeEqualityComparator<node_type>;
+
+  auto eval_result = [](int x) {
+    return sequant::eval_result<sequant::ResultScalar<int>>(x);
+  };
+
+  auto const k0 = make_node(L"R{a1;i1} = f{a1;i1}");
+  auto const k1 = make_node(L"R{a1;i1} = g{a1;i1}");
+
+  // Build a manager with two keys
+  std::unordered_map<node_type, size_t, hasher_t, comp_t> key_count_pairs;
+  key_count_pairs.emplace(k0, 2);
+  key_count_pairs.emplace(k1, 2);
+  auto man = manager_type(std::move(key_count_pairs));
+
+  // 1. Before any store(), current_residency() == 0
+  REQUIRE(man.current_residency() == 0);
+
+  // 2. After storing data into two alive keys k0, k1,
+  //    current_residency() == entry_size_in_bytes(k0) + entry_size_in_bytes(k1)
+  auto val0 = eval_result(42);
+  auto val1 = eval_result(99);
+  man.store(k0, val0);
+  man.store(k1, val1);
+
+  size_t expected_size =
+      man.entry_size_in_bytes(k0) + man.entry_size_in_bytes(k1);
+  REQUIRE(man.current_residency() == expected_size);
+
+  // 3. current_residency() drops to 0 once both entries are drained
+  //    (their life reaches 0 and data is released).
+  // store() itself performs one implicit access, so one access remains.
+  REQUIRE(man.access(k0));
+  REQUIRE(man.access(k1));
+  // Both should now be drained
+  REQUIRE_FALSE(man.alive(k0));
+  REQUIRE_FALSE(man.alive(k1));
+  REQUIRE(man.current_residency() == 0);
+
+  // 4. For a standalone manager (no parent),
+  //    chain_residency() == current_residency()
+  // First, populate the cache again
+  man.reset();
+  auto val0_2 = eval_result(111);
+  auto val1_2 = eval_result(222);
+  man.store(k0, val0_2);
+  man.store(k1, val1_2);
+
+  REQUIRE(man.chain_residency() == man.current_residency());
+
+  // Drain and confirm chain_residency() also drops to 0
+  REQUIRE(man.access(k0));
+  REQUIRE(man.access(k1));
+  REQUIRE(man.chain_residency() == 0);
+}
