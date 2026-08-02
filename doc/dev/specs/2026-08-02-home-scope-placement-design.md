@@ -115,6 +115,22 @@ scope is *re-instantiated per iteration* of the loops above it (the scratch
 rebuilds each pass), but that is the **same static cell** — one materialization
 decision, many temporal realizations.
 
+**Realization: `(home-scope, split-index)` selects a store, not a key.** The
+`home-scope` and `split-index` coordinates are *not* folded into the cache's
+key. Instead there is **one value-keyed store per `(home-scope, split-index)`**
+(see §7a), so the cache map stays keyed by the value (`TreeNode`) exactly as
+today, and a cell is identified by *which store* it lives in. `home-scope`
+already corresponds to a store (the run-scope cache vs. a per-loop scratch);
+`split-index` adds a second store at the *same* scope only where a peak split
+occurs. Perfect CSE is byte-identical because it uses one store per scope with
+`split-index ≡ 0`.
+
+**Terminology.** *Home scope* = the scope where a cell is built and lives; every
+read is at-or-below it. It is the same thing the code calls the *lifetime scope*
+and one might call the *store scope* — this note standardizes on **home scope**
+(and flags in code that "lifetime scope" is the synonym). *Use scope* is the
+consumer's scope. The pair **home-scope vs. use-scope** is the read's two ends.
+
 The three split reasons (why a value gets more than one cell):
 
 - **temporal** — free from the scope hierarchy: a cell homed in a scratch is
@@ -233,6 +249,42 @@ detect it via the replay peak and report it back (or feed a hint to
 re-factorization); you cannot repair a factorization choice from the placement
 pass.
 
+## 7a. Runtime realization: cell stores + an explicit router
+
+The placement decision is made concrete by two pieces, decoupling *placement*
+(the router) from *mechanism* (dumb stores):
+
+- **Cell stores.** One value-keyed store per `(home-scope, split-index)` — the
+  existing per-scope `CacheManager`, keyed by `TreeNode` unchanged; a peak split
+  adds a second store at the same scope. Scope *lifecycle* still nests along the
+  loop nest (a scratch store is created per outer-iteration and reset), so a
+  cell's lifetime is its store's.
+- **Router (new).** An explicit map `{value, use-site} -> (home-scope,
+  split-index)` — the placement pass's output, and the materialization decision
+  of §3 made first-class. The default entry is `{value} -> (home, 0)` covering
+  *all* use-sites; peak splits are per-use-site *overrides*, so the finer
+  `use-site` granularity costs nothing where nothing is split. The `use-site` is
+  the consumer's own position in the eval traversal (occurrence-id), finer than
+  the tree-id because a value can occur more than once within one tree.
+
+This **replaces the implicit `parent_` fall-through search**. Today a read walks
+the scope chain (`access_at`, counting `hops`) to find a value stored at an
+outer scope. With the router the read is direct:
+
+```
+read N at use-site U in use-scope:
+  (home-scope, split) = router[{N, U}]
+  full_or_partial      = store(home-scope, split).access(N)
+  result               = slice full_or_partial by  (use-scope - home-scope) INTERSECT carried(N)
+```
+
+The slice is **the existing Enter-stage formula** (`eval.hpp:595`, "(use scope
+MINUS lifetime scope) INTERSECT carried"): only the loops between home and use
+*that N carries* need narrowing; the rest leave N full. The single change is
+that the store scope is taken **directly from the router** instead of being
+derived from `hops` (`d - hops`). So the slicer logic is unchanged; routing is
+explicit; and the `parent_` walk and `hops` are subsumed.
+
 ## 8. Worked cases (correctness tests)
 
 Each must be a unit test.
@@ -274,13 +326,14 @@ for peak. Confirms both the cross-depth `W` and the peak-driven split.
 
 Changes required:
 
-1. **Group-scoped cache keys.** The cache map keys by value hash; give it a
-   `(hash, home-scope, split-index)` key so two cells of one value do not
-   collapse. This is the implementation friction point (O1): the hasher/
-   comparator (`TreeNodeHasher`/`TreeNodeEqualityComparator`) and the map must
-   admit the extra coordinates without breaking the perfect-CSE default
-   (`split-index ≡ 0`, `home-scope ≡ meet` reproduces today's keying byte-for-
-   byte).
+1. **Cell stores + router, not a wider cache key** (O1, resolved — see §7a). The
+   cache stays `TreeNode`-keyed; a cell is a value-keyed store per
+   `(home-scope, split-index)`, and an explicit router `{value, use-site} ->
+   (home-scope, split-index)` (the placement pass's output) replaces the
+   implicit `parent_` fall-through search. Reads route via the map then slice by
+   `(use-scope - home-scope) INTERSECT carried(N)` — the existing Enter-stage
+   slicer, fed the home scope directly instead of via `hops`. The default
+   `{value} -> (home, 0)` for every use-site is byte-identical to today.
 2. **Batching-aware `W`.** Replace the integer edge count with the rational
    `W(cell)` (§5), computed in the static walk (needs `home` and the loop nest,
    both static).
@@ -348,9 +401,14 @@ reference oracle for validation on small cases.
 
 ## 11. Open items
 
-- **O1 — group-scoped keying.** How `(hash, home-scope, split-index)` threads
-  through `cache_manager`'s hasher/comparator and the scratch hierarchy without
-  regressing the perfect-CSE path. The part with real teeth.
+- **O1 — RESOLVED (§7a).** Not a wider cache key: value-keyed stores per
+  `(home-scope, split-index)` + an explicit `{value, use-site} -> (home-scope,
+  split-index)` router; reads route then reuse the existing `(use - home)
+  INTERSECT carried` slicer. Residual sub-items: (i) a cheap **use-site /
+  occurrence id** for the router key (likely the eval-tree node pointer /
+  position); (ii) **audit** the `parent_` / `access_at` / `hops` /
+  `batch_context` users and re-express slicing via home-vs-use scope difference;
+  (iii) **standardize naming** on "home scope" (code's "lifetime scope").
 - **O2 — the greedy split move.** What "split the worst live range" does
   concretely: partition instances vs. lower home vs. slice further, and the
   peak-per-recompute ranking that drives it.
