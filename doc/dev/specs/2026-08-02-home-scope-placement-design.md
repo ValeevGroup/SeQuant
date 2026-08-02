@@ -447,6 +447,52 @@ the replay-with-summed-co-residency oracle to validate the sweep against; O3c
 composite (proto-indexed) sizing under home-relative overrides (reuse
 `memsize_counter`'s moment path).
 
+## 7d. Home scope and the demotion fold (O5)
+
+`home_scope` is the seed of everything (the perfect-CSE placement O2 starts
+from), and it must be *correct* before any peak move — it is a structural, not a
+budget, decision. Definition:
+
+```
+home_scope(value) = deepest scope enclosing the loops of  ( sliced_modes  ∪  demoted_external_modes )
+```
+
+- **`sliced_modes`** — the cross-occurrence *meet* (`stamp_lifetime_masks`): the
+  modes on which the value is *consistently* sliced across all its occurrences.
+  Homing inside their loops is the highest (max-reuse) legal placement — the
+  perfect-CSE upper bound.
+- **`demoted_external_modes`** — External `batched_here` stamps the meet
+  *demoted* out of `sliced_modes` (the `has_demoted_external` condition):
+  occurrences bind such a mode to *incompatible* blocks, so the value's
+  per-occurrence value is block-specific and **cannot be shared as one full value
+  above that loop**. Home must therefore also be *inside* those loops.
+
+**The fold is adding `demoted_external_modes` to the meet set** — and it is
+exactly what removes the split-authority bug (§1). Without it, a demoted value
+has an all-full meet mask, so the cache veto reads "run-scope cacheable" while
+the runtime's `has_demoted_external` refuses to hoist it — two answers. With it,
+`home_scope` is inside the external loop, the cache never gets a run-scope cell,
+the runtime slices it, and **both sides read the one `home_scope`.**
+
+**Realization is temporal, not a split-index.** A demoted value homed at the
+external loop is *one* static cell, re-instantiated per block by the loop (the
+free temporal split of §4); each occurrence's read lands on its own block via the
+router + the `(use - home) INTERSECT carried` slice (§7a). No `split-index` — that
+coordinate is reserved for O2's *peak*-driven same-scope splits. Demotion is
+structural.
+
+**Order.** `home_scope` (with the fold) is computed from the meet *before* O2:
+it fixes the perfect-CSE seed's homes correctly (structural correctness); O2 then
+only lowers homes *further* for peak (§7b). Consistency with `W`: a demoted value
+is sliced per block on its external mode (its loop encloses the home), so `W`
+counts that mode as free tiling (§5) — the demotion adds no avoidable recompute,
+as it should.
+
+**Sub-items.** O5a confirm `has_demoted_external` is the exact demoted-external
+signal and the edge cases (a value with *both* consistently-sliced and demoted
+modes; nested/independent external loops); O5b the seed router construction
+(meet home + demotion fold) as the input to O2.
+
 ## 8. Worked cases (correctness tests)
 
 Each must be a unit test.
@@ -589,7 +635,13 @@ reference oracle for validation on small cases.
   (proto-indexed) sizing under home-relative overrides.
 - **O4 — `W`'s computation order.** `W(cell)` depends on the partition, which the
   pass is choosing — a fixed point / two-pass (seed at `meet`, then refine).
-- **O5 — canonical `home_scope`(cell)** as `meet` of the cell's instances (upper
-  bound), refined downward by the peak constraint, with the demotion fold.
+- **O5 — DESIGNED (§7d).** `home_scope(value)` = deepest scope enclosing the
+  loops of `(sliced_modes ∪ demoted_external_modes)`; the demotion fold (adding
+  the demoted externals) is what unifies the current cache-veto-vs-
+  `has_demoted_external` split into one authority. Structural, computed from the
+  meet before O2 (which only lowers homes further for peak); per-block is
+  temporal (no split-index). Residual O5a-b: confirm the exact signal / edge
+  cases, and the seed router construction.
 - **O6 — factorization feedback.** What to do when detection shows the peak is
-  factorization-inherent (report vs. hint back to the DP).
+  factorization-inherent vs. re-batch-needed (§7b): report vs. hint back to the
+  DP (add batch loops / re-factorize).
