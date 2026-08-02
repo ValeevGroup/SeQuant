@@ -390,6 +390,63 @@ So the honest structure is `factorize + batch (per-term peak) -> O2 place
   shrink move, or run it first (DP-local shrink) then this pass (whole-forest
   evict) — the latter is the smaller change.
 
+## 7c. Sizing cells and the peak profile (O3)
+
+O2's `ΔPeak` needs two things: the footprint of a cell at a placement, and the
+peak of a whole placement, attributable to the cells that set it.
+
+**Cell footprint is home-relative.** A cell homed at scope `S` holds each index
+it carries at the extent seen *at* `S`. For a carried mode `m` batched at the
+(fixed) loop `L(m)`:
+
+```
+extent_at_S(m) = block_extent(m)   if L(m) ENCLOSES S   (cell built inside the loop -> sliced)
+                 full_extent(m)     otherwise            (cell built above L(m) or m unbatched -> full)
+footprint(cell) = product over carried modes m of  extent_at_S(m)
+```
+
+This is exactly the existing moment-aware `memsize` (CSV/composite moments) with
+home-relative extent overrides — a cell held *full* above a loop it carries (the
+demoted-giant option) is sized full; re-homing it inside that loop (the shrink
+move, §7b) sizes it by `block_extent` — so O2's `ΔPeak` for shrink is just the
+footprint delta. Non-carried modes do not contribute.
+
+**The peak profile is max weighted-interval overlap.** Linearize the *static*
+schedule tree in execution order (one representative iteration per loop; same-loop
+different-iteration cells are never co-resident, and the single-iteration
+linearization captures that, while a cell homed above a loop spans that loop's
+whole subtree). Each cell is an interval `[first-use, last-use]` in that order
+(from the router's use-sites + the schedule order) weighted by its `footprint`. A
+cell contributes its footprint to *every* point in its live range (it is stored
+at its home granularity; deeper consumers slice on access, they do not shrink the
+stored cell). Then
+
+```
+peak = max over static points p of  Σ footprint(cell) over cells live at p
+```
+
+a sweep line over weighted intervals — and the argmax point is exactly the
+**binding peak point** O2 spills from, with its live set the spill candidates.
+
+**This corrects today's under-count.** `cost_profile()`'s `peak_bytes` is
+`max(batched-scratch hwmark, cache working_set_hwmark)` — a `max`, so it
+under-counts when a persistent cross-term cell co-resides with a batched-inner
+transient (§1 flagged it a lower bound). The sweep **sums** all live cells at a
+point, so it is the *true* peak; O3 both models the peak for O2 and fixes the
+measurement. The replay remains the ground-truth oracle: the sweep must equal a
+replay that sums (not `max`es) co-resident residency — that equality is O3's
+validation.
+
+**Incrementality (feeds O2a).** The profile is weighted-interval overlap, so an
+O2 move changes one cell's interval endpoints (a home change moves its live
+range) and its weight (a footprint change), and the sweep updates over just the
+affected span — not the whole forest.
+
+**Sub-items.** O3a the sweep/interval structure and its incremental update; O3b
+the replay-with-summed-co-residency oracle to validate the sweep against; O3c
+composite (proto-indexed) sizing under home-relative overrides (reuse
+`memsize_counter`'s moment path).
+
 ## 8. Worked cases (correctness tests)
 
 Each must be a unit test.
@@ -522,9 +579,14 @@ reference oracle for validation on small cases.
   `avoidable_flops`/`peak_bytes`. Residual: O2a incremental peak-profile update,
   O2b the per-move ΔPeak/ΔRecompute estimator and lookahead question, O2c
   subsume-vs-run-after the DP external-slice pass.
-- **O3 — per-placement footprint / peak profile.** How a partially-sliced cell
-  (some carried modes full, some sliced) is sized, and how the profile is
-  evaluated, so it matches the replay peak `cost_profile()` already reports.
+- **O3 — DESIGNED (§7c).** Cell footprint = home-relative `memsize` (a carried
+  mode is sliced iff its fixed loop encloses the home, else full). Peak profile =
+  max weighted-interval overlap (each cell an `[first-use, last-use]` interval
+  weighted by footprint; sweep line), whose argmax is O2's binding peak point.
+  This *sums* co-resident live cells, correcting today's `max(scratch, cache)`
+  under-count (§1). Residual: O3a the incremental sweep structure, O3b a
+  replay-with-summed-co-residency oracle to validate against, O3c composite
+  (proto-indexed) sizing under home-relative overrides.
 - **O4 — `W`'s computation order.** `W(cell)` depends on the partition, which the
   pass is choosing — a fixed point / two-pass (seed at `meet`, then refine).
 - **O5 — canonical `home_scope`(cell)** as `meet` of the cell's instances (upper
