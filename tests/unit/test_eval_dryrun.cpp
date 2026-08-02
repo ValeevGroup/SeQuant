@@ -5046,7 +5046,7 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
   // problem: the C60 job it mirrors ran under a 100 GB budget and never
   // completed an iteration. The modelled replay peak falls monotonically as
   // batching engages (nterms=55): unbatched ~38897 GB, aux-only ~6047 GB,
-  // aux+occ ~443.6 GB -- so the aux+occ leg is ~4.4x over the 100 GB budget.
+  // aux+occ ~886.1 GB -- so the aux+occ leg is ~8.9x over the 100 GB budget.
   // The two aspirational CHECKs (peak < 100, avoidable < 0.10) remain RED
   // research targets; they are NOT forced to pass and NOT the acceptance gate.
   // The Task 5 acceptance assertions -- Contracted-occ stamps == 0 and
@@ -5057,8 +5057,16 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
   // hiding the true footprint) and then ~5860.9 GB once the role split removed
   // that phantom (a higher-but-honest number). The order-aware-recompute +
   // node-level-placement decouple that landed on this branch afterward brought
-  // the aux+occ peak down again to the current ~443.6 GB. Do not quote the
-  // ~5860.9 / ~2302 / ~2947 figures as current -- they are superseded.
+  // the aux+occ peak down again to ~443.6 GB. Phase 1 Task 2 (peak_bytes = the
+  // TRUE co-resident sum across the cache scope chain, via
+  // CacheManager::chain_residency() threaded into eval.hpp's per-op hwmark,
+  // rather than the old max(scratch_hwmark, outer_hwmark) lower bound) then
+  // moved it to the current ~886.1 GB: a nested occ+aux batched scratch chain
+  // co-resides with a persistent cross-term cache entry that the old max-based
+  // measurement missed. unbatched/aux-only are unaffected by this fix (they do
+  // not engage the nested scratch-chain-with-alive-parent-residency case this
+  // witness's aux+occ leg does). Do not quote the ~5860.9 / ~2302 / ~2947 /
+  // ~443.6 figures as current -- they are superseded.
   //
   // WHY EXTERNAL SLICING ALONE CANNOT REACH 100 GB. The peak driver is a
   // cross-pair intermediate carrying TWO independent PNO legs (each an a<i,j>
@@ -5071,7 +5079,7 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
   // batching or a factorization that never forms the two-PNO-leg intermediate),
   // tracked as an out-of-scope follow-up -- not something this witness can or
   // should force.
-  CHECK(both.peak_gb < 100.0);  // documented-RED research target (~443.6 GB)
+  CHECK(both.peak_gb < 100.0);  // documented-RED research target (~886.1 GB)
 
   // ASPIRATIONAL -- AVOIDABLE recomputation TIME: the share of modelled
   // exec_cost spent rebuilding a value already built at the same touched-mode
@@ -5346,6 +5354,14 @@ TEST_CASE("dryrun external-mode occ batching matches contracted-mode avoidable",
   //
   //   contracted-occ : avoidable ~1.97% FLOPs, replay ops 2531, peak ~6026 GB
   //   external-occ   : avoidable ~1.95% FLOPs, replay ops 25021, peak ~5999 GB
+  //
+  // Re-verified unchanged after Phase 1 Task 2 (peak_bytes = the TRUE
+  // co-resident sum across the cache scope chain via
+  // CacheManager::chain_residency(), not the old max(scratch_hwmark,
+  // outer_hwmark) lower bound): both peaks measured within noise of the figures
+  // above (6026.03 / 5999.69 GB). Unlike the occ-veto witness's aux+occ leg,
+  // this forest does not exercise the nested batched-scratch-chained-to-an-
+  // alive-persistent-parent case the fix corrects, so its peak is unaffected.
   //
   // So External is NOT a fix for the avoidable recompute on this forest: it has
   // the SAME ~2% recompute and the SAME ~6 TB peak as the contracted arm, at
