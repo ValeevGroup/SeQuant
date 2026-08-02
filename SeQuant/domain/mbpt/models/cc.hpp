@@ -187,11 +187,41 @@ class CC {
       size_t rank = 1, size_t order = 1,
       std::optional<size_t> nbatch = std::nullopt) const;
 
+  // clang-format off
   /// @brief derives right-side sigma equations for EOM-CC
   /// @param np number of particle creators in R operator
   /// @param nh number of hole creators in R operator
-  /// @return vector of right side sigma equations, element 0 is always null
-  [[nodiscard]] std::vector<ExprPtr> eom_r(nₚ np, nₕ nh) const;
+  /// @param block_ranks optional per-block H̄ commutator truncation ranks: a
+  ///   different H̄ in each block of the secular matrix instead of one uniform
+  ///   H̄ everywhere. For singles+doubles the matrix and its ranks are
+  ///     | H_SS  H_SD |    qUCCSD:  | 2  1 |
+  ///     | H_DS  H_DD |             | 1  0 |
+  ///   read row by row, i.e. `{2,1,1,0}`: H_SS through the double commutator
+  ///   [[V,σ],σ], H_SD and H_DS through the single [V,σ], H_DD the bare f+v.
+  ///   `K` manifolds give a row-major `K`×`K` matrix ordered by ASCENDING
+  ///   manifold rank, so one set of numbers serves EE, IP and EA (read S as
+  ///   1h/1p and D as 2h1p/1h2p: qUCCSD, IP-qUCCSD and EA-qUCCSD are all
+  ///   `{2,1,1,0}`). Empty (the default) selects the uniform H̄ at
+  ///   `hbar_comm_rank`, which the Bernoulli expansion does not support.
+  /// @pre if non-empty, requires a unitary ansatz; a non-unitary H̄ is exact and
+  ///   has nothing to truncate.
+  /// @throw Exception if `block_ranks` is neither empty nor `K`×`K`, if it is
+  ///   non-empty under a non-unitary ansatz, or if it is empty under the
+  ///   Bernoulli expansion
+  /// @note each block is the sandwich \f$ \langle i|\bar{H}|j \rangle \f$
+  ///   (Eq. 7 of 10.1063/5.0062090) plus an explicit \f$ -E \f$ shift on the
+  ///   diagonal, taken at the block's own truncation rank; the returned object
+  ///   is \f$ (\bar{H}-E)\hat{R} \f$.
+  /// @note under the Bernoulli expansion each block's H̄ has its N part (the
+  ///   ground-state amplitude residual) removed. See `eom_r_blocked` in cc.cpp
+  ///   for why. The removed terms vanish at converged amplitudes when a block
+  ///   rank equals `hbar_comm_rank`, so this changes those blocks' equations
+  ///   but not the numbers they evaluate to.
+  /// @return vector of right side sigma equations; element 0 is null iff
+  ///   `np == nh`
+  // clang-format on
+  [[nodiscard]] std::vector<ExprPtr> eom_r(
+      nₚ np, nₕ nh, const std::vector<std::size_t>& block_ranks = {}) const;
 
   /// @brief derives left-side sigma equations for EOM-CC
   /// @param np number of particle annihilators in L operator
