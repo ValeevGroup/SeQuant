@@ -24,9 +24,9 @@
 // Bernoulli expansion of the unitary-CC similarity-transformed Hamiltonian
 // H̄ = e^{−σ} H e^{σ}, σ = T − T† (anti-Hermitian). Because σ mixes excitation
 // and de-excitation the plain BCH series does not terminate; the Bernoulli
-// expansion rewrites it so that Bernoulli numbers are the expansion
-// coefficients, leaving the final truncation at a chosen commutator rank as the
-// only approximation. H is split as F (Fock, rank-preserving) + V (fluctuation
+// expansion rewrites it with Bernoulli numbers as the expansion coefficients,
+// which leaves the truncation at a chosen commutator rank as the only
+// approximation. H is split as F (Fock, rank-preserving) + V (fluctuation
 // potential), and every operator O is split into O_N (all excitation and
 // de-excitation operators) and O_R = O − O_N. At a converged RHF/UHF reference
 // two cancellations hold: F survives only in H̄¹, and the higher orders carry
@@ -50,6 +50,7 @@ const sequant::NormalOperator<sequant::Statistics::FermiDirac>* find_nop(
   using namespace sequant;
   if (term.is<NormalOperator<Statistics::FermiDirac>>())
     return &term.as<NormalOperator<Statistics::FermiDirac>>();
+
   if (term.is<Product>()) {
     const NormalOperator<Statistics::FermiDirac>* found = nullptr;
     for (const auto& f : term.as<Product>().factors())
@@ -62,6 +63,7 @@ const sequant::NormalOperator<sequant::Statistics::FermiDirac>* find_nop(
                        "is expected to leave at most one residual operator");
         found = &f.as<NormalOperator<Statistics::FermiDirac>>();
       }
+
     return found;
   }
   return nullptr;
@@ -70,23 +72,25 @@ const sequant::NormalOperator<sequant::Statistics::FermiDirac>* find_nop(
 /// Classifies one block-resolved term as N or R (Cancellation #2). A term is N
 /// iff its single residual NormalOperator is a pure excitation (all creators
 /// pure-unoccupied AND all annihilators pure-occupied) or a pure de-excitation
-/// (the mirror), with rank ≤ @p cutoff. A term with no residual NormalOperator
-/// is rank-preserving, hence R.
+/// (all creators pure-occupied AND all annihilators pure-unoccupied), with rank
+/// ≤ @p cutoff. A term with no residual NormalOperator is rank-preserving,
+/// hence R.
 ///
-/// Rank > @p cutoff falls to R rather than being dropped. The paper's O_N
-/// (above Eq. (43): "containing all the excitation operators and de-excitation
-/// operators in O") carries no rank cutoff, but this mirrors pdaggerq (`nt_bra
-/// > bernoulli_excitation_level -> R`), which is the convention that defines
-/// qUCCSD. The cutoff is a real degree of freedom, not a formality: it moves
-/// the correlation energy at the sub-mEh level.
+/// Rank > @p cutoff falls to R rather than being dropped. An ]_R filter drops a
+/// term only because the amplitude condition V̄_N = 0 (Eq. (43)) makes it zero,
+/// and for σ truncated at rank N that condition covers rank ≤ N only. Eq. (43)
+/// states O_N with no rank limit because there σ carries every rank.
 bool is_N_term(const sequant::ExprPtr& term, std::size_t cutoff) {
   using namespace sequant;
   auto isr = get_default_context().index_space_registry();
+
   const auto* nop = find_nop(term);
   if (!nop) return false;  // no residual operator => rank-preserving => R
+
   const auto ncre = ranges::distance(nop->creators());
   const auto nann = ranges::distance(nop->annihilators());
   if (static_cast<std::size_t>(std::max(ncre, nann)) > cutoff) return false;
+
   auto all_unocc = [&](auto&& ops) {
     return ranges::all_of(ops, [&](const auto& o) {
       return isr->is_pure_unoccupied(o.index().space());
@@ -97,10 +101,12 @@ bool is_N_term(const sequant::ExprPtr& term, std::size_t cutoff) {
       return isr->is_pure_occupied(o.index().space());
     });
   };
+
   const bool pure_exc =
       all_unocc(nop->creators()) && all_occ(nop->annihilators());
   const bool pure_deexc =
       all_occ(nop->creators()) && all_unocc(nop->annihilators());
+
   return pure_exc || pure_deexc;
 }
 
@@ -110,24 +116,15 @@ namespace sequant::mbpt::bernoulli {
 
 namespace detail {
 
-/// Operator-valued Wick reduction (see header): reduces a product of
-/// normal-ordered operators to a sum of normal-ordered operators, retaining
-/// partial contractions so the result is an operator, not a scalar VEV.
 ExprPtr wick_reduce(ExprPtr expr) {
   simplify(expr);
-  // full_contractions(false) is the whole point: it yields the normal-ordered
-  // operator form rather than the scalar VEV. Otherwise mirrors
-  // mbpt::tensor::expectation_value_impl. See core/wick.hpp.
   FWickTheorem wick{expr};
-  // use_topology must be disabled explicitly: it defaults to ON (wick.hpp:
-  // `bool use_topology_ = true`; the doc block at wick.hpp:154 claims otherwise
-  // and is stale), so not asking for it is not enough. It keeps one
-  // representative per symmetry-equivalent contraction class and multiplies by
-  // the class size, a weight bookkeeping that only holds on the
-  // fully-contracted path -- not on this partial-contraction one, where it
-  // silently rescales the terms carrying a symmetric amplitude pair. The vacuum
-  // expectation value stays correct either way, so the damage shows up only
-  // under projection. Turning it back on costs correctness, not just speed.
+  // use_topology defaults to ON, so it must be turned off explicitly. It keeps
+  // one representative per symmetry-equivalent contraction class and multiplies
+  // by the class size, weight bookkeeping that holds only on the
+  // fully-contracted path. On this partial-contraction path it silently
+  // rescales the terms carrying a symmetric amplitude pair, and the damage
+  // shows up only under projection.
   wick.use_topology(false).full_contractions(false);
   auto result = wick.compute(/*count_only=*/false,
                              /*skip_input_canonicalization=*/true);
@@ -135,16 +132,12 @@ ExprPtr wick_reduce(ExprPtr expr) {
   return result;
 }
 
-/// Normal-ordered commutator [A, B] = wick_reduce(A·B − B·A) (see header).
 ExprPtr wick_commutator(const ExprPtr& A, const ExprPtr& B) {
-  // Disjoin B's (bound) indices from A's before forming the product: A and B
-  // are independently constructed operator expressions whose summed indices are
-  // local to each. If they happen to share labels (e.g. a block-resolved R/N
-  // part, which carries definite a/i/o/g indices, commuted with sigma, which
-  // also uses a/i), the naive product A*B would identify two independent
-  // summations, corrupting the contraction. Reindexing B to globally-fresh
-  // temporaries makes the two index sets disjoint; canonicalization restores
-  // tidy labels afterward.
+  // A and B are built independently, so their summed indices are local to each.
+  // If both use the same labels (a block-resolved R/N part and sigma both carry
+  // a/i), the product A*B fuses two independent summations. That corrupts the
+  // contraction. Reindex B to fresh temporaries. Canonicalization restores tidy
+  // labels.
   container::map<Index, Index> repl;
   for (const auto& idx : get_used_indices(B))
     repl.emplace(idx, Index::make_tmp_index(idx.space()));
@@ -154,9 +147,8 @@ ExprPtr wick_commutator(const ExprPtr& A, const ExprPtr& B) {
 
 namespace {
 
-/// Core of expand_to_blocks for input already in wick_reduce'd form (a
-/// simplified sum of coefficient × single-NormalOperator terms). Skipping the
-/// reduction is an identity: wick_reduce is idempotent (terms with a single
+/// Core of expand_to_blocks for input already in wick_reduce'd form. Skipping
+/// the reduction is an identity: wick_reduce is idempotent (terms with a single
 /// residual NormalOperator admit no further contractions). @p expr is not
 /// mutated.
 ExprPtr expand_to_blocks_reduced(const ExprPtr& expr) {
@@ -284,10 +276,10 @@ ExprPtr N_part(const ExprPtr& expr, std::size_t cutoff) {
 
 /// R part of @p expr at truncation @p cutoff (see header): the reduced operator
 /// minus its N part. Because expand_to_blocks is an identity
-/// (N ⊎ R = expr as operators), R = expr − N holds exactly while keeping expr
-/// in its compact (general-index) form -- only N is block-resolved. This is
-/// equivalent to the fully block-resolved remainder, and keeping expr compact
-/// makes the nested commutators that consume R operate on far fewer terms.
+/// (N ⊎ R = expr as operators), R = expr − N holds exactly while expr stays in
+/// its compact (general-index) form. Only N is block-resolved. The result
+/// equals the fully block-resolved remainder, and the compact expr makes the
+/// nested commutators that consume R operate on far fewer terms.
 ExprPtr R_part(const ExprPtr& expr, std::size_t cutoff) {
   auto reduced = wick_reduce(expr->clone());
   return R_part_reduced(reduced, cutoff);
@@ -301,13 +293,9 @@ ExprPtr R_part(const ExprPtr& expr, std::size_t cutoff) {
 /// the next nesting".
 ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
   if (rank > 4)
-    throw Exception("bernoulli::hbar: only ranks 0..4 are implemented");
+    throw Exception("bernoulli::hbar: only ranks [0,4] are implemented");
 
-  using detail::N_part;
-  using detail::N_part_reduced;
-  using detail::R_part;
-  using detail::R_part_reduced;
-  using detail::wick_commutator;
+  using namespace detail;
   const auto cutoff = N;
   const auto F = op::tensor::F();
   const auto V = op::tensor::h(2);

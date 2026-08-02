@@ -19,7 +19,7 @@ namespace sequant::mbpt::bernoulli {
 /// any other base space the registry defines. That is harmless only because the
 /// single-reference projection manifolds annihilate the dropped terms. Under a
 /// multireference registry they contribute, and both the N and the R part come
-/// out wrong silently -- there is no check for this.
+/// out wrong. Nothing checks for this.
 ///
 /// @param N cluster/excitation rank (also the N/R rank cutoff)
 /// @param rank highest Bernoulli order H̄^k to include (0..4)
@@ -29,12 +29,11 @@ ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1);
 
 namespace detail {
 
-/// Operator-valued Wick reduction: applies Wick's theorem to @p expr retaining
-/// PARTIAL contractions, reducing a product of normal-ordered operators to a
-/// sum of normal-ordered operators (each = coefficient tensor × at most one
-/// residual NormalOperator; fully-contracted terms carry none). Unlike the
-/// expectation-value path it keeps operators rather than collapsing to a
-/// scalar VEV.
+/// Applies Wick's theorem to @p expr retaining PARTIAL contractions,
+/// reducing a product of normal-ordered operators to a sum of normal-ordered
+/// operators (each = coefficient tensor × at most one residual NormalOperator;
+/// fully-contracted terms carry none). Unlike the expectation-value path it
+/// keeps operators rather than collapsing to a scalar VEV.
 ExprPtr wick_reduce(ExprPtr expr);
 
 /// Normal-ordered commutator [A, B] = wick_reduce(A·B − B·A). NOT the bare
@@ -51,17 +50,16 @@ ExprPtr wick_commutator(const ExprPtr& A, const ExprPtr& B);
 /// N/R classifier can act on it. Idempotent on block-resolved input.
 ExprPtr expand_to_blocks(const ExprPtr& expr);
 
-/// Block-resolved N part (O_N of 10.1063/1.5030344, defined above Eq. (43)):
-/// the terms whose single residual
-/// NormalOperator is a pure excitation or pure de-excitation of rank ≤
+/// Block-resolved N part (O_N of 10.1063/1.5030344): the terms whose single
+/// residual NormalOperator is a pure excitation or pure de-excitation of rank ≤
 /// @p cutoff. Applies expand_to_blocks first.
 ExprPtr N_part(const ExprPtr& expr, std::size_t cutoff);
 
 /// R (rank-preserving remainder) part: wick_reduce(expr) minus
-/// N_part(expr, cutoff). Unlike N_part the result is NOT block-resolved -- it
-/// stays in compact general-index form, which is exact here because
-/// expand_to_blocks is an identity, and much cheaper for the nested
-/// commutators that consume R.
+/// N_part(expr, cutoff). Unlike N_part the result is NOT block-resolved. It
+/// stays in compact general-index form. That is exact here, because
+/// expand_to_blocks is an identity, and much cheaper for the nested commutators
+/// that consume R.
 ExprPtr R_part(const ExprPtr& expr, std::size_t cutoff);
 
 }  // namespace detail
