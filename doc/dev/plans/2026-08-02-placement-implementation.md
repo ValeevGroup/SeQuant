@@ -515,3 +515,274 @@ The `named_indices` set is defined as `ctx-modes INTERSECT node-slot-modes`, and
 - Rational `W(cell)` reuse measure (change #2); the O2 whole-forest greedy split pass (change #3).
 - `split_index > 0` same-scope stores and the path-based read-time occurrence-id (root index + L/R path) that separates two occurrences sharing one occurrence-key in one scope -- Phase 4.
 - Memoization of `occurrence_key` and Phase-3 override targeting of demoted (non-hoisted) nodes.
+
+---
+
+## Phase 3a -- `home_scope` seed PREDICTOR (non-regressing, scope decision (A))
+
+### Goal
+Build the static `home_scope` seed predictor: a per-node UNIFIED residency = the
+cross-occurrence MEET of ALL batched modes (any `BatchModeType`, not External-only)
+that live on a node's own result slots. Expose it as `home_scope(node)` returning
+that residency mode-set. Do this as a NEW static computation that does NOT touch
+runtime `place_at_this_level` / `stamp_lifetime_masks` / `sliced_modes_`, so runtime
+placement stays today's heuristic (NO regression). Reconcile the CAT-2
+`occurrence_key`/`ext_modes_of` inconsistency and fix its stale comment.
+
+### Architecture
+`stamp_lifetime_masks` (`SeQuant/core/eval/lifetime_mask.hpp`) is a top-down forest
+walk that accumulates ancestor+self batched modes (`ext_modes_of`, External-only),
+filters each node's accumulator to the modes that live on that node's own canonical
+slots (`slot_modes_of`), and stores the cross-occurrence set-intersection (meet) into
+`EvalExpr::sliced_modes_`. Phase 3a parameterizes that walk by a mode-selector and a
+result-setter, adds a second entry point `stamp_seed_residency` that runs the SAME
+walk with an all-batched-modes selector writing a NEW `EvalExpr::seed_residency_`
+field, and leaves the External-only `sliced_modes_` path byte-unchanged. The seed
+predictor produces the residency mode-set only; runtime depth resolution against a
+batch context is the existing rl-walk, reused later by 3b/O2 (out of scope here).
+
+### Tech stack
+C++20 header-heavy templates (`meta::eval_node` / `meta::eval_node_range` concepts),
+Catch2 unit tests (`tests/unit/`), CMake + Ninja. Proto-aware `Index` (composite
+indices expand to `proto_indices()`).
+
+### Global Constraints (binding)
+- No en-dashes (U+2013) anywhere in source or comments.
+- Format touched files with `/opt/homebrew/opt/llvm/bin/clang-format --style=file -i`.
+- No `Co-Authored-By` trailers in commits.
+- RELEASE build in `cmake-build-release`; cap ninja at `-j6`.
+- NON-REGRESSING: runtime `sliced_modes_` / `place_at_this_level` output stays
+  BYTE-UNCHANGED. Existing `[lifetime_mask]`, `[eval]`, `[cache_manager]`, `[dryrun]`,
+  and the `[.][dryrun-occ-veto]` / `[.][dryrun-extmode-avoidable]` witness figures
+  stay green.
+- READ-ONLY seed: do NOT delete `contracted_modes` / `has_demoted_external`; do NOT
+  switch the runtime selector. Those are the Phase-4 cutover.
+
+### File Structure
+- MODIFY `SeQuant/core/eval/lifetime_mask.hpp`
+  - `detail::proto_expand_into` / `detail::slot_modes_of` free helpers (hoisted from
+    the two in-file lambdas), reused by `occurrence_key.hpp`.
+  - `detail::stamp_residency_impl(forest, modes_of, setter)` -- the parameterized walk.
+  - `stamp_lifetime_masks` becomes a thin wrapper (`ext_modes_of` selector +
+    `set_sliced_modes`) -- output byte-identical.
+  - NEW `stamp_seed_residency` (`all_batched_modes_of` selector + `set_seed_residency`).
+  - NEW `home_scope(node)` free accessor.
+- MODIFY `SeQuant/core/eval/eval_expr.hpp`
+  - NEW `seed_residency()` / `set_seed_residency()` accessors (next to `sliced_modes`).
+  - NEW member `container::svector<Index> seed_residency_{};` (next to `sliced_modes_`).
+- MODIFY `SeQuant/core/eval/occurrence_key.hpp`
+  - `in_scope_batched_on_node` reuses `detail::proto_expand_into` / `slot_modes_of`;
+    stale "mirrors `ext_modes_of` exactly" comment fixed to reference the unified
+    all-batched-modes selector.
+- MODIFY `tests/unit/test_lifetime_mask.cpp`
+  - Seed-residency against-definition tests, External-only equivalence cross-check,
+    Contracted-generalization test, and the byte-unchanged-runtime guardrail.
+- MODIFY `tests/unit/test_occurrence_key.cpp`
+  - A pin that `in_scope_batched_on_node` is kind-agnostic (a Contracted ambient mode
+    on a node's slot is included), locking the reconciliation.
+
+---
+
+### T1 -- Parameterize the walk; add `stamp_seed_residency` + `seed_residency_`
+
+#### Files
+- MODIFY `SeQuant/core/eval/eval_expr.hpp`
+  - accessors after `set_sliced_modes` (currently ~310-312)
+  - member after `sliced_modes_` (currently line 396)
+- MODIFY `SeQuant/core/eval/lifetime_mask.hpp`
+  - refactor `stamp_lifetime_masks` body (currently 58-134); `ext_modes_of` 73-83,
+    `slot_modes_of` 92-101, walk 107-125, stamp loop 128-134.
+
+#### Interfaces
+Consumes:
+- `EvalExpr::batched_here() -> container::svector<std::pair<Index,BatchModeType>> const&`
+  (eval_expr.hpp:283)
+- `EvalExpr::canon_indices() -> index_vector const&` (eval_expr.hpp:248)
+- `enum class BatchModeType { Contracted, External }` (fwd.hpp:21)
+- `detail::lifetime_mask_intersect_in_place(svector<Index>&, svector<Index> const&)`
+  (lifetime_mask.hpp:20)
+
+Produces:
+- `void EvalExpr::set_seed_residency(container::svector<Index>) noexcept`
+- `container::svector<Index> const& EvalExpr::seed_residency() const noexcept`
+- `template <meta::eval_node_range R> void sequant::stamp_seed_residency(R const&) noexcept`
+- (internal) `template <meta::eval_node_range R, typename ModeSelector, typename Setter>
+  void detail::stamp_residency_impl(R const&, ModeSelector&&, Setter&&) noexcept`
+
+#### TDD steps
+1. Failing test in `test_lifetime_mask.cpp`: a forest with only External stamps, run
+   `stamp_seed_residency`, assert `seed_residency()` equals what `stamp_lifetime_masks`
+   produces for `sliced_modes()` on the identical forest (External-only => the two
+   selectors coincide). Also assert `seed_residency()` is non-empty for a
+   sliced-everywhere node. Compile fails: no `stamp_seed_residency` / `seed_residency`.
+2. `eval_expr.hpp`: add member and accessors, mirroring `sliced_modes_`:
+   ```cpp
+   [[nodiscard]] container::svector<Index> const& seed_residency() const noexcept {
+     return seed_residency_;
+   }
+   void set_seed_residency(container::svector<Index> m) noexcept {
+     seed_residency_ = std::move(m);
+   }
+   ...
+   /// See \c seed_residency.
+   container::svector<Index> seed_residency_{};
+   ```
+   Doc `seed_residency` as: the cross-occurrence meet of ALL batched modes (any
+   `BatchModeType`) on this node's own result slots; the perfect-CSE `home_scope`
+   seed; set by `stamp_seed_residency`; empty by default (OFF path); distinct from
+   the External-only runtime `sliced_modes`.
+3. `lifetime_mask.hpp`: hoist `proto_expand_into` + `slot_modes_of` to `detail` free
+   functions; extract `stamp_residency_impl(forest, modes_of, setter)` carrying the
+   existing walk verbatim (only `ext_modes_of` -> `modes_of`, and the const_cast set
+   -> `setter`). Then:
+   ```cpp
+   template <meta::eval_node_range R>
+   void stamp_lifetime_masks(R const& forest) noexcept {
+     using Node = std::ranges::range_value_t<R>;
+     using Data = typename Node::value_type;
+     auto ext_modes_of = [](Node const& n) {
+       container::svector<Index> v;
+       for (auto const& [ix, kind] : n->batched_here())
+         if (kind == BatchModeType::External) detail::proto_expand_into(v, ix);
+       return v;
+     };
+     detail::stamp_residency_impl(
+         forest, ext_modes_of,
+         [](Node const* n, container::svector<Index> m) {
+           const_cast<Data&>(**n).set_sliced_modes(std::move(m));
+         });
+   }
+
+   template <meta::eval_node_range R>
+   void stamp_seed_residency(R const& forest) noexcept {
+     using Node = std::ranges::range_value_t<R>;
+     using Data = typename Node::value_type;
+     auto all_batched_modes_of = [](Node const& n) {
+       container::svector<Index> v;
+       for (auto const& [ix, kind] : n->batched_here())
+         detail::proto_expand_into(v, ix);  // every kind, not just External
+       return v;
+     };
+     detail::stamp_residency_impl(
+         forest, all_batched_modes_of,
+         [](Node const* n, container::svector<Index> m) {
+           const_cast<Data&>(**n).set_seed_residency(std::move(m));
+         });
+   }
+   ```
+4. Run `[lifetime_mask]`; the new test plus all existing meet/off-path/proto/per-slot/
+   veto cases pass (proving the `stamp_lifetime_masks` refactor is behavior-preserving).
+5. clang-format touched files; commit "eval: parameterized residency walk + seed_residency".
+
+---
+
+### T2 -- `home_scope` accessor + CAT-2 `in_scope_batched_on_node` reconciliation
+
+#### Files
+- MODIFY `SeQuant/core/eval/lifetime_mask.hpp` (add `home_scope` free fn)
+- MODIFY `SeQuant/core/eval/occurrence_key.hpp` (share helpers; fix comment) --
+  `in_scope_batched_on_node` 41-67, stale comment 26-28, `#include` block 4-10.
+- MODIFY `tests/unit/test_occurrence_key.cpp` (kind-agnostic pin)
+
+#### Interfaces
+Consumes:
+- `detail::proto_expand_into` / `detail::slot_modes_of` (from T1)
+- `EvalExpr::seed_residency()` (from T1)
+
+Produces:
+- `template <meta::eval_node Node>
+   container::svector<Index> const& home_scope(Node const& n)` -> `n->seed_residency()`
+- reconciled `in_scope_batched_on_node` (unchanged signature/return
+  `TensorNetwork::NamedIndexSet`) built on the shared helpers.
+
+#### TDD steps
+1. Failing pin in `test_occurrence_key.cpp`: a node with a Contracted-kind mode
+   sitting on its own slot; call `in_scope_batched_on_node(node, ctx)` with that mode
+   in `ctx`; assert it IS returned (kind-agnostic). This ALREADY passes for the
+   current impl (it never inspected kind) -- it locks the reconciled semantics against
+   regression and documents the fixed comment's claim. Add a `home_scope` smoke test
+   in `test_lifetime_mask.cpp`: after `stamp_seed_residency`, `home_scope(node)` ==
+   `node->seed_residency()`. Compile fails: no `home_scope`.
+2. `lifetime_mask.hpp`: add
+   ```cpp
+   /// The perfect-CSE seed home residency of \p n: the unified all-batched-modes
+   /// meet on its own result slots (see \c stamp_seed_residency). Phase 3a returns
+   /// the residency mode-set; runtime depth resolution against a batch context is
+   /// the existing rl-walk, reused by 3b/O2.
+   template <meta::eval_node Node>
+   container::svector<Index> const& home_scope(Node const& n) noexcept {
+     return n->seed_residency();
+   }
+   ```
+3. `occurrence_key.hpp`: `#include <SeQuant/core/eval/lifetime_mask.hpp>`; rewrite the
+   two inline proto-expansion loops (46-51 ctx side, 55-60 slot side) to
+   `detail::proto_expand_into` / `detail::slot_modes_of`; keep the `NamedIndexSet`
+   intersection (62-66). Fix the comment (26-28): it must state this filters ALL
+   in-scope batched modes (any `BatchModeType`) to `node`'s own slots, matching the
+   unified `all_batched_modes_of` selector / `slot_modes_of` in `lifetime_mask.hpp`
+   -- NOT the External-only `ext_modes_of` (which it never mirrored: `ctx_modes` is
+   already kind-agnostic).
+4. Run `[occurrence_key]` + `[lifetime_mask]`; green.
+5. clang-format; commit "eval: home_scope accessor + reconcile in_scope_batched_on_node".
+
+---
+
+### T3 -- Validation: against-definition, cross-check, byte-unchanged guardrail
+
+#### Files
+- MODIFY `tests/unit/test_lifetime_mask.cpp` (reuses `head` / `leaf` / `inode` /
+  `stamp_ext` / `stamp_ext_pair` helpers, lines 30-80; add a `stamp_con` /
+  `stamp_con_pair` shim for `BatchModeType::Contracted`).
+
+#### Interfaces
+Consumes: `stamp_lifetime_masks`, `stamp_seed_residency`, `home_scope`,
+`EvalExpr::{sliced_modes,seed_residency,mask_all_full}`.
+Produces: `[lifetime_mask][seed]` test cases.
+
+#### TDD steps
+1. AGAINST-DEFINITION (constructed): reuse the meet / per-slot / proto forests from the
+   existing `[lifetime_mask]` cases but drive `stamp_seed_residency`; assert
+   `seed_residency` equals the hand-computed deepest all-batched-modes meet on result
+   slots (e.g. pair-sliced-everywhere -> `{i,j}`; full-in-one-occ -> empty;
+   loop-invariant sibling -> empty).
+2. EXTERNAL-ONLY EQUIVALENCE CROSS-CHECK: on any External-only forest,
+   `stamp_seed_residency` and `stamp_lifetime_masks` must agree node-for-node
+   (`seed_residency() == sliced_modes()`), because every batched mode is External so
+   the two selectors coincide. This is the "sanity cross-check vs today's sliced_modes
+   where they agree" (with `contracted_modes` empty, `sliced ∪ contracted == sliced`).
+3. CONTRACTED GENERALIZATION: a forest with a Contracted mode `c` on a node's own
+   result slot in EVERY occurrence. Assert `seed_residency()` CONTAINS `c` while
+   `sliced_modes()` (External-only) does NOT -- proving the dropped-filter
+   generalization. (Use `stamp_con_pair` shim mirroring `stamp_ext_pair`.)
+4. BYTE-UNCHANGED RUNTIME GUARDRAIL (the one real risk): on a mixed
+   External+Contracted forest, call `stamp_lifetime_masks`, snapshot every node's
+   `sliced_modes()`, THEN call `stamp_seed_residency`, and assert every node's
+   `sliced_modes()` is byte-identical to its snapshot (seed writes only
+   `seed_residency_`). Also assert the reverse order leaves `sliced_modes()` equal to
+   a fresh `stamp_lifetime_masks`-only run.
+5. Run `[lifetime_mask]`; then the full `[eval] [cache_manager] [dryrun]` suites in
+   `cmake-build-release` (`ninja -j6`) plus the `[.][dryrun-occ-veto]` /
+   `[.][dryrun-extmode-avoidable]` witnesses -- all figures unchanged.
+6. clang-format; commit "test: seed_residency against-definition + byte-unchanged guardrail".
+
+---
+
+### The one real risk
+The unified all-modes meet must NOT perturb runtime `sliced_modes_`. Mitigation is
+structural + proven: `stamp_seed_residency` writes ONLY `seed_residency_`, and
+`stamp_lifetime_masks` is refactored to a thin wrapper over the SAME
+`stamp_residency_impl` with the UNCHANGED `ext_modes_of` selector and `set_sliced_modes`
+setter -- so its output is behavior-preserving by construction. T3 step 4 turns that
+into an executable guarantee (snapshot sliced_modes, run the seed pass, assert
+byte-identical), and the existing `[cache_manager]` batch-variant veto (which reads
+`mask_all_full()`, cache_manager.hpp:672) plus the witness figures stay green.
+
+### Deferred to Phase 4 cutover (OUT OF SCOPE here)
+- CAT-1 DELETE: `contracted_modes` end-to-end (field/accessors eval_expr.hpp:314-334,
+  396-399; `NodeBatchAnnotation`; cost-model emission; `in_union` union) and the
+  `has_demoted_external` veto (eval.hpp).
+- CAT-2 unify: switch the RUNTIME selector to all-batched-modes (drop the `External`
+  filter in `ext_modes_of`) -- a one-line change once T1 has parameterized the walk;
+  collapses `sliced ∪ contracted` back to `sliced`.
+- Wiring `home_scope` into the static peak profile (3b) and O2's `ΔPeak`, behind the
+  seed+O2 coupling flag so the peak-maximal seed never ships regressed standalone.
