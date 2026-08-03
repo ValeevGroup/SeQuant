@@ -127,9 +127,82 @@ loop") are both candidate O2 moves, chosen by `ΔPeak/ΔRecompute`, not hard-cod
 ## 7. Open items
 
 - **O-a: static meet-home computation** validated against its definition (the deepest
-  `sliced ∪ contracted` enclosing loop) across the witness forests.
+  `sliced_modes` enclosing loop, with `sliced_modes` = the unified all-batched-modes meet)
+  across the witness forests.
 - **O-b: the seed+O2 coupling / flag** so the perfect-CSE seed never ships as a regressed
   standalone; today's heuristic stays the default until O2 is feasible.
 - Retired by the analysis above: residency-from-key (refuted); the `index_color`
   occurrence-key change (not needed for the seed); `has_demoted_external` (an O2 move, not
   a seed rule).
+
+## 8. Audit: placement/residency hacks and where they go (2026-08-04)
+
+A read-only sweep of the placement/residency/batching code (`eval.hpp` `place_at_this_level`,
+`lifetime_mask.hpp`, `eval_expr.{hpp,cpp}`, `cost_model.hpp`, `node_batch_annotation.hpp`,
+`cache_manager.hpp`, `schedule_dump.hpp`) inventoried the ad-hoc heuristics the clean model
+retires. **Key structural finding: the entire `contracted_modes` mechanism exists solely
+because `ext_modes_of` (`lifetime_mask.hpp:73-83`) is hardwired to `BatchModeType::External`.
+Dropping that one filter clause collapses `sliced ∪ contracted` in `place_at_this_level` back
+to `sliced` alone, making the CAT-1b removal a wholesale DELETE, not a rewrite.**
+
+### CAT-1 -- confirmed DELETE (Phase 3a)
+- `has_demoted_external` veto: `eval.hpp:1720-1743` (lambda+comment), `:1748` (collect-gate
+  conjunct), `:1784` (comment); tests `test_eval_ta.cpp:3019,3033,3050,3053,3118,3124,3175`
+  (expectations invert under the hoisting seed).
+- `contracted_modes` end-to-end: `eval_expr.hpp:314-334` (get/set/doc), `:398-399` (member);
+  `node_batch_annotation.hpp:25,33,44-46`; `cost_model.hpp:1885-1911` (doc+emission);
+  `eval_expr.cpp:604` (threading); `eval.hpp:1663-1666,1716-1718,1766-1770` (`residency_all_outer`
+  contracted loop + `in_union` union half + doc); `schedule_dump.hpp:133-134`; tests
+  `test_eval_ta.cpp:2743-2760,2837-2845,2883,4772-4773`, `test_eval_dryrun.cpp:4320`.
+
+### CAT-2 -- External-only assumptions to GENERALIZE (Phase 3a)
+- `lifetime_mask.hpp:73-83` -- `ext_modes_of`'s `BatchModeType::External` filter. THE
+  load-bearing line; drop it so `sliced_modes` = meet of ALL batched modes. HIGH.
+- `lifetime_mask.hpp:31-52,86-101` -- surrounding docs assume External (`slot_modes_of` code
+  already generalizes). HIGH.
+- `occurrence_key.hpp:17-67` -- `in_scope_batched_on_node` is already kind-agnostic but claims
+  to "mirror `ext_modes_of` exactly"; today they DISAGREE -- a latent Phase-2-key
+  inconsistency to reconcile. MED.
+- `cost_model.hpp:1841-1882` -- External-before-Contracted emission order has a real
+  scatter-widening effect; flag, do not blind-delete. LOW-that-it's-pure-hack.
+
+### CAT-3 -- seed-baked spill/peak heuristics -> MOVE to O2 (Phase 4, not delete)
+- `eval.hpp:1747,1616-1626` -- `is_volatile`/`persistent_only` "never hoist a volatile
+  subtree" = hard recompute trade. MED-HIGH.
+- `cache_manager.hpp:653-654,734` -- `min_repeats` (batching-blind use-count) -> rational `W`. HIGH.
+- `cache_manager.hpp:633-644,741` -- `max_footprint` cache-refusal = peak-vs-recompute baked in. MED-HIGH.
+- `cost_model.hpp:1912-1920`, `eval_expr.hpp:344-353` -- `effective_count`/`batch_effective_count`
+  = integer stand-in for `W`. MED-HIGH.
+- `cost_model.hpp:688,1868-1876` + `optimize.cpp:110` -- `node_level_placement` (placement
+  decided inside the factorizer). MED.
+- `cost_model.hpp:636,1892-1897` + `optimize.cpp:109` -- `order_aware_recompute` master gate. MED.
+
+### CAT-4 -- other smells
+- `eval.hpp:1747` (+`eval_expr.hpp:355-368`, `node_batch_annotation.hpp:49-56`,
+  `schedule_dump.hpp:118`) -- `batch_order_aware` gate; its own comment admits it's an OFF-path
+  discriminator workaround.
+- `cache_manager.hpp:641-649,713-744` -- the batch-variant veto (negative-half placement); to be
+  subsumed by the router, not deleted in isolation. MED.
+- `eval.hpp:1782-1795` -- router override replaces the LEVEL only; today two placement
+  authorities coexist (router seam + `place_at_this_level` heuristics). MED.
+- `eval.hpp:1536,1598` -- `depth < 8` magic recursion backstop, unexplained.
+- `eval.hpp:1639-1652` -- "absent from `batched_here()` == Contracted, byte-identical" rationale;
+  evaporates under uniform-mode residency.
+
+### CAT-5 -- genuine, KEEP (do not over-delete)
+- `eval.hpp:1857+` -- External SCATTER (`write_into_slice`, disjoint) vs Contracted ACCUMULATE
+  (`add_inplace`): the real runtime meaning of `BatchModeType` (`fwd.hpp:21`) -- irrelevant only
+  to *residency*, not removed.
+- `eval.hpp:1713-1719` -- `residency_all_outer` as the "home = deepest residency loop" walk
+  (structural, not a peak trade); only its `contracted_modes`/veto conjuncts go, input
+  generalizes via CAT-2.
+- `eval_expr.hpp:340-342` + `lifetime_mask.hpp` -- `sliced_modes`/`mask_all_full`/
+  `stamp_lifetime_masks`: the meet the whole model is built on.
+- `single_term_detail.hpp:296-316`, `cost_model.hpp:643-667` -- `is_batchable_{contracted,
+  external}_index` (batching candidacy; spec 9.4 untouched).
+- `cost_model.hpp:581-594` -- `accumulation_factor` (arithmetic cost), `peak_threshold` (O2's
+  constraint).
+
+**Scope for the plan:** Phase 3a = CAT-1 delete + CAT-2 generalize (+ reconcile the CAT-2
+occurrence-key inconsistency). CAT-3 = the heuristics O2 subsumes (Phase 4, moved not deleted).
+CAT-4 router-seam duplication resolves as the seam matures. CAT-5 stays.
