@@ -107,6 +107,46 @@ Custom operators can be registered to extend SeQuant's vocabulary. Once register
 
 The registry is stored in the :class:`mbpt::Context <sequant::mbpt::Context>`. See the unit test cases for further manipulations with :class:`mbpt::Context <sequant::mbpt::Context>` and :class:`mbpt::OpRegistry <sequant::mbpt::OpRegistry>`.
 
+.. _mbpt-lst:
+
+Lie Similarity Transformation
+-----------------------------
+
+.. code-block:: cpp
+
+   ExprPtr lst(ExprPtr A, ExprPtr B, size_t r, LSTOptions options = {});
+
+Returns Lie similarity transformation, :math:`\bar{A} = e^{-\hat{B}} \hat{A} e^{\hat{B}}`, as a series of nested commutators, :math:`[\hat{A},\hat{B}]`, :math:`[[\hat{A},\hat{B}],\hat{B}]`, etc., up to order ``r``.
+
+The method ``lst`` is declared in ``<SeQuant/domain/mbpt/utils.hpp>``. The :class:`CC <sequant::mbpt::CC>` class uses it to construct the similarity-transformed Hamiltonian, but it is a standalone utility and can be used on any expression built from ``mbpt::Operator``.
+
+The behavior of ``lst`` is controlled by :class:`LSTOptions <sequant::mbpt::LSTOptions>`:
+
+.. code-block:: cpp
+
+   struct LSTOptions {
+     bool unitary = false;
+     bool use_connected_form = false;
+     bool skip_clone = false;
+   };
+
+- ``unitary``: if true, :math:`\hat{B}` is replaced by :math:`\hat{B} - \hat{B}^\dagger`, i.e. the method returns :math:`e^{-(\hat{B} - \hat{B}^\dagger)} \hat{A} e^{\hat{B} - \hat{B}^\dagger}`. Use this for unitary ansätze.
+
+- ``use_connected_form``: selects how each commutator is written, see below.
+
+- ``skip_clone``: if true, ``A`` is transformed in place instead of being cloned first. Set it only if nothing else holds a reference to ``A``.
+
+Commutators or connected products
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Each commutator can be written in two ways, and ``use_connected_form`` selects between them:
+
+- ``false`` (the default) writes it explicitly, :math:`[\hat{A},\hat{B}] = \hat{A}\hat{B} - \hat{B}\hat{A}`.
+
+- ``true`` writes it as a connected product, :math:`(\hat{A}\hat{B})_c`. This gives fewer terms, but only reproduces the commutator once the same operators are connected downstream when taking the expectation value, using ``OpConnections``.
+
+Both forms give the same equations, given the right connectivity. They differ in *where* the disconnected terms are removed: the commutator removes them algebraically, the connected product relies on the connectivity you supply to ``vac_av``/``ref_av`` (which connect the Hamiltonian with the cluster operator by default, see below).
+
 Examples
 --------
 

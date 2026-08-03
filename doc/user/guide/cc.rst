@@ -46,17 +46,6 @@ The :class:`CC <sequant::mbpt::CC>` class supports several CC ansätze through t
 Key Methods
 ----------
 
-Lie Similarity Transformation
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. code-block:: cpp
-
-   ExprPtr lst(ExprPtr A, ExprPtr B, size_t r);
-
-Returns Lie similarity transformation, :math:`\bar{A} = e^{-\hat{B}} \hat{A} e^{\hat{B}}`, as a series of nested commutators, :math:`[\hat{A},\hat{B}]`, :math:`[[\hat{A},\hat{B}],\hat{B}]`, etc., up to order ``r``.
-
-The method ``lst`` is used internally by the CC class to construct the similarity-transformed Hamiltonian. It is, however, provided as a standalone utility and can be used independently by including the header ``<SeQuant/domain/mbpt/utils.hpp>``.
-
 Ground State Amplitudes
 ^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -140,7 +129,7 @@ Advanced Usage
 Truncating the Commutator Expansion
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-For traditional CC with two-body Hamiltonians, the commutator expansion is truncated at the a 4th-order. However, for unitary CC or other Hamiltonians, you may need to explicitly set the commutator rank:
+The similarity-transformed Hamiltonian is built by ``mbpt::lst``, see :ref:`mbpt-lst`. For traditional CC with two-body Hamiltonians, the commutator expansion is truncated at 4th order. However, for unitary CC or other Hamiltonians, you may need to explicitly set the commutator rank:
 
 .. literalinclude:: /examples/user/cc.cpp
    :language: cpp
