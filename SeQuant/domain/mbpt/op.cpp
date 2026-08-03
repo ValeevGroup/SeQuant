@@ -976,6 +976,7 @@ ExprPtr θ(std::size_t K) {
 
 ExprPtr N(std::size_t rank) {
   if (rank < 1) throw Exception("mbpt::op::N: rank must be >= 1");
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"N"));
 
   // rank-`rank` number operator N = {a†_{p1..pr} a_{q1..qr}} over the complete
   // space (general, particle-conserving qns).

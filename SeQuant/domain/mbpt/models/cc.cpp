@@ -220,6 +220,10 @@ ExprPtr CC::rdm(size_t rank, std::optional<size_t> comm_rank) const {
   // largest number of T's that can survive <0|(1+Λ) N̄|0>:
   // Unitary ansatz: T⁺ contracts with T, the expansion never terminates, so
   // there is no safe default; use the engine's hbar_comm_rank.
+  if (unitary())
+    SEQUANT_ASSERT(hbar_comm_rank_ &&
+                   "hbar_comm_rank must be specified for unitary ansatz in "
+                   "CC::rdm");
   const auto commutator_rank = comm_rank.value_or(
       unitary() ? hbar_comm_rank_.value() : std::min(2 * rank, rank + N));
   auto Nbar = mbpt::lst(N_op, T(N, skip_singles()), commutator_rank,
