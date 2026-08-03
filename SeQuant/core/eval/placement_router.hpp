@@ -32,9 +32,10 @@ struct HomeTarget {
 ///        where the value is placed/read, in place of the default
 ///        (\c place_at_this_level's rl+1 walk, \c eval.hpp).
 ///
-/// \details Phase 2 builds this container and the \c CacheManager plumbing it
-/// needs (\c cache_manager.hpp), but does not yet wire it into the eval
-/// read/store paths -- \c route() is not consulted anywhere yet.
+/// \details The eval Enter-stage read and the \c place_at_this_level store both
+/// consult \c route() (see \c eval.hpp); an absent override (the default, and
+/// the only state in Phase 2 -- overrides are populated in Phase 3/4) leaves
+/// both sides deriving home exactly as before, so an empty router is inert.
 ///
 /// \tparam TreeNode the evaluation tree node type (same as the owning \c
 ///         CacheManager's key type).
@@ -60,7 +61,7 @@ class PlacementRouter {
   /// \return \c 1 + (deepest index \c i in \p ctx whose mode is in \p
   ///         home.residency), or \c 0 if none (invariant to the whole nest,
   ///         i.e. the chain root). Static mirror of \c place_at_this_level's
-  ///         \c rl+1 walk (\c eval.hpp:1730-1739).
+  ///         \c rl+1 walk (in \c eval.hpp).
   [[nodiscard]] std::size_t home_depth(HomeTarget const& home,
                                        BatchContext const& ctx) const {
     for (int i = static_cast<int>(ctx.size()) - 1; i >= 0; --i)
