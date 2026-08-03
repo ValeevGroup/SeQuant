@@ -169,6 +169,17 @@ set_target_properties(unit_tests-sequant-eval-dryrun-obj PROPERTIES CXX_SCAN_FOR
 target_link_libraries(unit_tests-sequant-eval-dryrun-obj
     PUBLIC SeQuant::eval SeQuant::optimize SeQuant::bliss SeQuant::mbpt
     PRIVATE Catch2::Catch2 dtl::dtl)
+# test_placement_router.cpp defines SEQUANT_ROUTER_SHADOW before its first
+# (transitive) inclusion of eval.hpp to compile in the dev-only shadow-assert
+# landing (see eval.hpp's Enter-stage read seam). That #define must precede
+# eval.hpp's FIRST expansion in the translation unit it ends up in (header
+# guards make a later #define a no-op); under a Unity build, test_eval_dryrun.
+# cpp -- which is listed (and thus unified) ahead of it -- already includes
+# eval.hpp (via cost_profile.hpp) without the macro, so unifying the two would
+# silently disable the shadow-assert code this file means to exercise. Give it
+# its own TU instead.
+set_source_files_properties("test_placement_router.cpp"
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 target_compile_definitions(unit_tests-sequant-eval-dryrun-obj PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 

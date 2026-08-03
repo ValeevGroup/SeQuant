@@ -10,6 +10,7 @@
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/lifetime_mask.hpp>
+#include <SeQuant/core/eval/placement_router.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/optimize/single_term_detail.hpp>
@@ -330,12 +331,17 @@ struct CostProfile {
 ///        it.
 /// \param trace  optional per-op trace sink (nullptr = no trace). When
 ///        non-null, the eval loop's narrow trace is transcoded (UTF-8) into it.
+/// \param router optional placement router (see \c placement_router.hpp),
+///        attached to the replay cache right after it is built. Every current
+///        caller omits this (nullptr, the default), which leaves the router
+///        seam in \c evaluate() inert -- byte-identical to before this
+///        parameter existed. Phase 2 wires a router only from test call sites.
 /// \return the accumulated \c CostProfile.
-inline CostProfile cost_profile(std::vector<EvalNodeDryRun> const& forest,
-                                BatchPolicy const& policy,
-                                CacheConfig const& cfg,
-                                SizeRegime const& regime,
-                                std::wostream* trace = nullptr) {
+inline CostProfile cost_profile(
+    std::vector<EvalNodeDryRun> const& forest, BatchPolicy const& policy,
+    CacheConfig const& cfg, SizeRegime const& regime,
+    std::wostream* trace = nullptr,
+    PlacementRouter<EvalNodeDryRun> const* router = nullptr) {
   CostProfile profile;
 
   auto cm = std::make_shared<CostModel const>(regime);
@@ -370,6 +376,9 @@ inline CostProfile cost_profile(std::vector<EvalNodeDryRun> const& forest,
   // EVALUATOR's accept is the derived role union, applied inside
   // make_evaluator(policy) via policy.is_batchable_index().
   auto cache = build_dryrun_cache(forest, cfg, regime);
+  // Null (default) => every existing caller's replay is unaffected, since
+  // set_placement_router(nullptr) is exactly the cache's own default.
+  cache.set_placement_router(router);
 
   auto& logger = Logger::instance();
   // RAII guard restoring the process-global Logger::eval state on EVERY exit

@@ -42,6 +42,7 @@
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
+#include <SeQuant/core/eval/placement_router.hpp>
 #include <SeQuant/core/eval/schedule_dump.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
@@ -4274,6 +4275,37 @@ TEST_CASE("cost_profile returns peak/flops/exec/n_ops",
       std::max(peak2.load(), double(cache.working_set_hwmark()));
   CHECK(expected_peak > 0.0);
   CHECK(cp.peak_bytes == Catch::Approx(expected_peak).epsilon(1e-9));
+
+  // Phase 2 Task 3 byte-identity guardrail: cost_profile()'s new (trailing,
+  // defaulted) router parameter must be provably inert. An explicit nullptr
+  // is indistinguishable from omitting the argument (both are the function's
+  // own default), and an explicit but EMPTY PlacementRouter must behave
+  // identically too (the `router && !router->empty()` short-circuit in
+  // evaluate()'s Enter-stage read seam and place_at_this_level's store seam
+  // never fires for either). Every field this test already checked above must
+  // reproduce bit-for-bit -- not just within tolerance.
+  {
+    sequant::eval::PlacementRouter<EvalNodeDryRun> const empty_router;
+    CHECK(empty_router.empty());
+
+    CostProfile const cp_null_router = cost_profile(
+        forest, policy, cfg, regime, /*trace=*/nullptr, /*router=*/nullptr);
+    CostProfile const cp_empty_router = cost_profile(
+        forest, policy, cfg, regime, /*trace=*/nullptr, &empty_router);
+
+    for (CostProfile const* other : {&cp_null_router, &cp_empty_router}) {
+      CHECK(other->model_n_ops == cp.model_n_ops);
+      CHECK(other->model_flops == cp.model_flops);
+      CHECK(other->model_exec == cp.model_exec);
+      CHECK(other->dryrun_n_ops == cp.dryrun_n_ops);
+      CHECK(other->dryrun_flops == cp.dryrun_flops);
+      CHECK(other->dryrun_exec == cp.dryrun_exec);
+      CHECK(other->peak_bytes == cp.peak_bytes);
+      CHECK(other->avoidable_flops == cp.avoidable_flops);
+      CHECK(other->avoidable_ops == cp.avoidable_ops);
+      CHECK(other->avoidable_nodes.size() == cp.avoidable_nodes.size());
+    }
+  }
 }
 
 // Task 5 (Minor b): cover the UTF-8 -> wide bridge cost_profile() uses to fill

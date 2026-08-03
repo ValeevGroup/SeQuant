@@ -7,6 +7,8 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
+#include <SeQuant/core/eval/occurrence_key.hpp>
+#include <SeQuant/core/eval/placement_router.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/eval/schedule_dump.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -715,6 +717,46 @@ ResultPtr evaluate(Node const& node,         //
         // --- Checked cache wrapper: a hit returns directly; a miss on a node
         //     that exists in the map schedules a store once computed. ---
         if (f.checked) {
+          // --- Router consult: an override seam ahead of the default
+          //     access_at() below (see placement_router.hpp). The
+          //     `router && !router->empty()` short-circuit is FIRST so an
+          //     empty/null router (the Phase 2 default, and every production
+          //     eval) never computes an occurrence_key -- zero hot-path cost
+          //     and byte-identical behavior (the `routed` flag stays false,
+          //     and the default path immediately below is untouched). ---
+          bool routed = false;
+          if (auto const* router = cache.placement_router();
+              router && !router->empty()) {
+            auto const& ctx = cache.batch_context();
+            container::svector<Index> ctx_modes;
+            for (auto const& e : ctx) ctx_modes.push_back(e.first);
+            auto const key = eval::occurrence_key(f.node, ctx_modes);
+            if (auto const* home = router->route(key)) {
+              std::size_t const use_depth = ctx.size();
+              std::size_t const hd = router->home_depth(*home, ctx);
+              SEQUANT_ASSERT(hd <= use_depth);
+              std::size_t const hops = use_depth - hd;
+              if (ResultPtr ptr = cache.access_at_hops(f.node, hops); ptr) {
+                if constexpr (detail::trace(EvalTrace))
+                  log::cache(f.node, cache, log::label(f.node));
+#ifdef SEQUANT_ROUTER_SHADOW
+                // Dev-only correctness check (default OFF): for a NO-OP
+                // override (residency == the value's ACTUAL current home),
+                // the router-directed fetch must reproduce access_at()
+                // pointer-for-pointer. Not safe to enable in production: this
+                // extra access_at() call decays a non-persistent entry's
+                // lifetime a second time.
+                {
+                  auto const shadow = cache.access_at(f.node);
+                  SEQUANT_ASSERT(shadow.ptr.get() == ptr.get());
+                }
+#endif
+                finalize(slice_to_use(apply_phase(f.node, ptr), f.node, hops));
+                routed = true;
+              }
+            }
+          }
+          if (routed) break;
           if (auto m = cache.access_at(f.node); m.ptr) {
             if constexpr (detail::trace(EvalTrace))
               log::cache(f.node, cache, log::label(f.node));
@@ -1737,6 +1779,20 @@ template <typename F, typename IndexPredicate = accept_any_index,
                 rl = i;
                 break;
               }
+            // Router override (see placement_router.hpp): a registered
+            // occurrence override replaces the LEVEL only -- the collect/hoist
+            // decision above (residency_all_outer/has_demoted_external) is
+            // untouched. Empty/null router (Phase 2 default) => branch never
+            // taken => rl is exactly the value computed above =>
+            // byte-identical.
+            if (auto const* router = parent_cache.placement_router();
+                router && !router->empty()) {
+              container::svector<Index> ectx_modes;
+              for (auto const& e : ectx) ectx_modes.push_back(e.first);
+              auto const key = eval::occurrence_key(d, ectx_modes);
+              if (auto const* home = router->route(key))
+                rl = static_cast<int>(router->home_depth(*home, ectx)) - 1;
+            }
             // Locate the level-rl cache by walking UP from parent_cache (the
             // level depth-1 cache): rl == -1 => the chain root (the real/term
             // cache); rl >= 0 => the scratch (depth-1 - rl) hops up. Runtime
