@@ -449,6 +449,60 @@ TEST_CASE("cache manager access_at surfaces the lifetime scope hop distance",
   REQUIRE(inner.access(X) != nullptr);
 }
 
+// access_at_hops() mirrors access_at() but fetches at an EXACT hop count
+// (walk hops parent links, then ONE local entry::access()) instead of
+// searching the whole chain -- what a router-directed read (Phase 2 T3) uses
+// once it already knows the target scope (e.g. from a HomeTarget's
+// home_depth). Same outer -> mid -> inner chain, X stored only in outer.
+TEST_CASE("cache manager access_at_hops fetches at an exact hop count",
+          "[cache_manager]") {
+  using hasher_t = sequant::TreeNodeHasher<node_type>;
+  using comp_t = sequant::TreeNodeEqualityComparator<node_type>;
+  auto eval_result = [](int x) {
+    return sequant::eval_result<sequant::ResultScalar<int>>(x);
+  };
+
+  auto const X = make_node(L"R{a1;i1} = f{a1;i1}");
+  // Y is registered (so it exists in outer's map) but never stored -- a
+  // scope that does not currently hold it.
+  auto const Y = make_node(L"R{a1,a2;i1,i2} = g{a1,a2;i1,i2}");
+
+  std::unordered_map<node_type, size_t, hasher_t, comp_t> outer_counts;
+  outer_counts.emplace(X, 10);
+  outer_counts.emplace(Y, 10);
+  auto outer = manager_type(std::move(outer_counts));
+  auto mid = manager_type::empty();
+  mid.set_parent(&outer);
+  auto inner = manager_type::empty();
+  inner.set_parent(&mid);
+
+  (void)outer.store(X, eval_result(42));  // store()'s internal access(): -1
+  REQUIRE(outer.life(X) == 9);
+
+  // inner -> outer is 2 hops (inner -> mid -> outer).
+  auto const via_hops = inner.access_at_hops(X, 2);
+  REQUIRE(via_hops != nullptr);
+  CHECK(via_hops->get<int>() == 42);
+  // Exactly one further decay -- the same single lifetime step access_at()
+  // takes.
+  CHECK(outer.life(X) == 8);
+
+  auto const via_access_at = inner.access_at(X).ptr;
+  REQUIRE(via_access_at != nullptr);
+  CHECK(via_access_at->get<int>() == 42);
+  CHECK(outer.life(X) == 7);
+
+  // Both accessor paths resolve to the SAME buffer (pointer identity).
+  CHECK(via_hops.get() == via_access_at.get());
+
+  // A hop count naming a scope that does not currently hold the value (Y was
+  // registered but never stored) returns null.
+  CHECK(inner.access_at_hops(Y, 2) == nullptr);
+
+  // A hop count past the chain end (walked off the root) returns null.
+  CHECK(inner.access_at_hops(X, 5) == nullptr);
+}
+
 TEST_CASE("cache_manager_persistent", "[cache_manager]") {
   using hasher_t = sequant::TreeNodeHasher<node_type>;
   using comp_t = sequant::TreeNodeEqualityComparator<node_type>;

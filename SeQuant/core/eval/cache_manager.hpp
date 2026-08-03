@@ -25,6 +25,18 @@
 #include <unordered_map>
 #include <unordered_set>
 
+namespace sequant::eval {
+
+// Forward declaration only (not a full include of placement_router.hpp):
+// PlacementRouter's BatchContext alias needs CacheManager's full definition,
+// so placement_router.hpp includes this header; CacheManager only needs a
+// non-owning pointer to the (incomplete) PlacementRouter type, so the
+// forward declaration here avoids the include cycle.
+template <typename TreeNode>
+class PlacementRouter;
+
+}  // namespace sequant::eval
+
 namespace sequant {
 
 ///
@@ -214,6 +226,12 @@ class CacheManager {
   /// per-loop-iteration structural, re-set each block by the evaluator).
   BatchContext batch_context_{};
 
+  /// Non-owning placement router (see \c placement_router.hpp). Null
+  /// (default) => no override wired; \c placement_router() falls through to
+  /// \c parent_ (only the root cache is wired in practice). The pointee must
+  /// outlive this cache.
+  eval::PlacementRouter<TreeNode> const* placement_router_ = nullptr;
+
  public:
   /// Sets the custom evaluator (see custom_evaluator_type). Pass an empty
   /// std::function to clear it.
@@ -256,6 +274,22 @@ class CacheManager {
   ///         standalone / chain-root cache. Used by the batched evaluator to
   ///         walk up to a target ancestor level when hoisting an invariant.
   [[nodiscard]] CacheManager* parent() const noexcept { return parent_; }
+
+  /// Sets the local placement router (see placement_router_). Pass nullptr
+  /// to detach. Non-owning; the pointee must outlive this cache.
+  void set_placement_router(eval::PlacementRouter<TreeNode> const* r) noexcept {
+    placement_router_ = r;
+  }
+
+  /// \return the local router if set, else the one inherited from parent_
+  ///         (only the root cache is wired in practice); nullptr if none is
+  ///         wired anywhere along the chain. Non-owning.
+  [[nodiscard]] eval::PlacementRouter<TreeNode> const* placement_router()
+      const noexcept {
+    return placement_router_ ? placement_router_
+           : parent_         ? parent_->placement_router()
+                             : nullptr;
+  }
 
   /// Ensure a scope-hoist slot exists for @p key so a loop-invariant
   /// intermediate can be stored here (store() is a no-op for an unregistered
@@ -374,6 +408,29 @@ class CacheManager {
   /// @return ResultPtr to Result. Thin forwarder to access_at() that drops the
   ///         hop distance, for the non-batched callers that do not slice.
   ResultPtr access(key_type const& key) noexcept { return access_at(key).ptr; }
+
+  /// Fetch @p key from EXACTLY @p hops scopes up the chain (walk @p hops
+  /// parent links, then one LOCAL entry::access() there), rather than
+  /// searching the chain like access_at() does. Used by a router-directed
+  /// read that already knows the target scope (e.g. from a HomeTarget's
+  /// home_depth) and wants to enforce that home rather than fall through to
+  /// whatever scope happens to hold the value.
+  ///
+  /// @param key The key that identifies the cached data.
+  /// @param hops The exact number of parent links to walk before accessing.
+  /// @return the fetched pointer, decaying that scope's entry the same single
+  ///         lifetime step as access_at() (entry::access()); nullptr if the
+  ///         walk runs off the root before @p hops links, or if the target
+  ///         scope does not currently hold @p key.
+  [[nodiscard]] ResultPtr access_at_hops(key_type const& key,
+                                         std::size_t hops) noexcept {
+    CacheManager* c = this;
+    for (std::size_t i = 0; i < hops && c; ++i) c = c->parent_;
+    if (!c) return nullptr;
+    if (auto found = c->cache_map_.find(key); found != c->cache_map_.end())
+      return found->second.access();
+    return nullptr;
+  }
 
   ///
   /// @param key The key to identify the cached data.
