@@ -145,7 +145,7 @@ Each commutator can be written in two ways, and ``use_connected_form`` selects b
 
 - ``true`` writes it as a connected product, :math:`(\hat{A}\hat{B})_c`. This gives fewer terms, but only reproduces the commutator once the same operators are connected downstream when taking the expectation value, using ``OpConnections``.
 
-Both forms give the same equations, given the right connectivity. They differ in *where* the disconnected terms are removed: the commutator removes them algebraically, the connected product relies on the connectivity you supply to ``vac_av``/``ref_av`` (which connect the Hamiltonian with the cluster operator by default, see below).
+Both forms give the same equations, given the right connectivity. They differ in *where* the disconnected terms are removed: the commutator removes them algebraically, the connected product relies on the connectivity you supply to ``vac_av``/``ref_av`` (which connect the Hamiltonian with the cluster operator by default).
 
 Examples
 --------
