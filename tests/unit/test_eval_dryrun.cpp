@@ -4308,6 +4308,156 @@ TEST_CASE("cost_profile returns peak/flops/exec/n_ops",
   }
 }
 
+// Phase 2 Task 4: the router seam is FUNCTIONAL, not just provably inert. The
+// byte-identity guardrail above (Task 3) only proves an EMPTY/null router
+// never fires; this test proves an injected override genuinely RELOCATES a
+// value's home and that the relocation moves the modeled peak.
+//
+// A small hand-built two-level nested batch forest: root batches K1 (outer,
+// space "a"), and root's left child M batches K2 (inner, nested under K1,
+// space "i"). M's own left child D0 = X{i_80} * Y{i_81} is hand-stamped
+// order-aware with an EMPTY residency (batch_order_aware=true, sliced_modes
+// and contracted_modes both left empty) -- a genuine whole-nest invariant, so
+// place_at_this_level's own (unrouted) walk hoists it to the run-scope root
+// exactly once, and re-discovers it already alive there on every subsequent
+// K1 iteration (no rebuild, one co-resident copy).
+//
+// The override registers D0's occurrence key with HomeTarget{residency =
+// {K1}}. Because occurrence_key filters the ambient batch modes down to only
+// those that live on D0's OWN slots (see occurrence_key.hpp) -- and D0 does
+// not carry K1 as an index at all -- the SAME key applies at both the
+// depth-0 (root's own, ectx = []) and depth-1 (M's own, ectx = [K1]) hoist
+// passes, yet resolves DIFFERENTLY at each: at depth-0, K1 is not yet in
+// scope, so home_depth() still resolves to 0 (root), a no-op matching the
+// natural placement; at depth-1, K1 IS in scope, so home_depth() resolves one
+// level in from root (the K1 loop's own scratch) instead of the natural whole
+// -nest root. D0 is then rebuilt and stored a SECOND time into that scratch,
+// while remaining alive, untouched, in the root cache from the depth-0 pass
+// -- a real second co-resident copy, not a relabeling of the same one. This
+// is exactly the case the brief's fallback anticipates: the override does not
+// cleanly relocate D0 from A to B (that requires a residency spanning every
+// depth at which D0 is independently discovered as hoistable, which an
+// empty-union invariant is at every depth by construction); it demonstrates
+// the seam is live by moving where D0 is ALSO built and held, raising the
+// peak co-resident footprint in a directly attributable, mechanically
+// explained way.
+TEST_CASE(
+    "placement router override relocates a hoisted invariant's home and "
+    "moves the modeled peak (Phase 2 T4)",
+    "[dryrun][cost_profile]") {
+  using sequant::eval::HomeTarget;
+  using sequant::eval::occurrence_key;
+  using sequant::eval::PlacementRouter;
+  using sequant::eval::dryrun::CacheConfig;
+  using sequant::eval::dryrun::cost_profile;
+  using sequant::eval::dryrun::CostProfile;
+
+  auto ctx = get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+
+  auto const r = backend_test_regime();  // i extent 10, a extent 20
+
+  Index const K1{L"a_90"};  // outer batch axis (space a)
+  Index const K2{L"i_82"};  // inner batch axis (space i), nested under K1
+  Index const i80{L"i_80"};
+  Index const i81{L"i_81"};
+
+  auto mk_leaf = [](std::wstring const& label, Index const& ix) {
+    return ex<Tensor>(label, bra(container::svector<Index>{ix}), ket{},
+                      Symmetry::Nonsymm, std::nullopt, ColumnSymmetry::Nonsymm);
+  };
+  auto const X = mk_leaf(L"X", i80);
+  auto const Y = mk_leaf(L"Y", i81);
+  auto const Z = mk_leaf(L"Z", K2);
+  auto const W = mk_leaf(L"W", K1);
+
+  // Explicit Flatten::No nesting at every level: this ExprPtr shape must
+  // survive into binarize() unchanged (root = M * W; M = D0 * Z;
+  // D0 = X * Y), since Product's default Flatten::Yes would otherwise
+  // collapse the nested nesting into one flat 4-factor product before
+  // binarize() ever sees it.
+  auto const D0_expr = ex<Product>(1, ExprPtrList{X, Y}, Product::Flatten::No);
+  auto const M_expr =
+      ex<Product>(1, ExprPtrList{D0_expr, Z}, Product::Flatten::No);
+  auto const root_expr =
+      ex<Product>(1, ExprPtrList{M_expr, W}, Product::Flatten::No);
+
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto node = binarize<EvalExprDryRun>(root_expr);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+  auto& M = node.left();
+  auto& D0 = M.left();
+  REQUIRE_FALSE(node.leaf());
+  REQUIRE_FALSE(M.leaf());
+  REQUIRE_FALSE(D0.leaf());
+
+  // Hand-stamp the two-level batch structure (no optimizer involved): root
+  // batches K1 (Contracted), M batches K2 (Contracted, nested one level
+  // under K1). D0 is an order-aware hoist candidate with an EMPTY residency
+  // (a genuine whole-nest invariant).
+  node->set_batched_here({{K1, BatchModeType::Contracted}});
+  M->set_batched_here({{K2, BatchModeType::Contracted}});
+  D0->set_batch_order_aware(true);
+
+  std::vector<EvalNodeDryRun> const forest{node};
+
+  BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](Index const&) { return true; };
+  policy.batch_target_size = [](Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"a" ? std::size_t{10} : std::size_t{5};
+  };
+
+  CacheConfig cfg;
+  // D0/M/root each occur exactly once in this single-tree forest. min_repeats
+  // = 2 keeps every one of them OUT of the count-based CSE pre-registration,
+  // so place_at_this_level's ensure_hoist_slot() is the FIRST to register
+  // D0's cache entry (unbounded life), not a bounded life=1 CSE registration
+  // that ensure_hoist_slot's try_emplace would then leave untouched (which
+  // would drain D0's entry on the very first store and break every
+  // subsequent fetch within the same summand).
+  cfg.min_repeats = 2;
+
+  // ---- baseline: null router -----------------------------------------
+  CostProfile const baseline =
+      cost_profile(forest, policy, cfg, r, /*trace=*/nullptr);
+  CHECK(baseline.peak_bytes > 0.0);
+  CHECK(std::isfinite(baseline.peak_bytes));
+  CHECK(std::isfinite(baseline.dryrun_flops));
+  CHECK(baseline.dryrun_flops >= 0.0);
+
+  // ---- relocated: one override on D0 ----------------------------------
+  PlacementRouter<EvalNodeDryRun> router;
+  auto const key = occurrence_key(D0, container::svector<Index>{K1});
+  router.set_override(key, HomeTarget{container::svector<Index>{K1}});
+  REQUIRE_FALSE(router.empty());
+
+  CostProfile const relocated =
+      cost_profile(forest, policy, cfg, r, /*trace=*/nullptr, &router);
+  CHECK(relocated.peak_bytes > 0.0);
+  CHECK(std::isfinite(relocated.peak_bytes));
+  CHECK(std::isfinite(relocated.dryrun_flops));
+  CHECK(relocated.dryrun_flops >= 0.0);
+
+  std::wcerr << L"[router-relocation] baseline.peak_bytes="
+             << baseline.peak_bytes << L" relocated.peak_bytes="
+             << relocated.peak_bytes << L"\n";
+
+  // The override relocates ONE of D0's homes (M's / K2-loop's own hoist
+  // pass) from the root cache to the K1 loop's own scratch, while root's OWN
+  // (untouched, depth-0) copy stays alive throughout -- a genuine SECOND
+  // co-resident copy of D0, raising the peak co-resident footprint relative
+  // to the single-copy baseline.
+  CHECK(relocated.peak_bytes > baseline.peak_bytes);
+
+  // Structural sanity: relocating a placement changes co-resident SPACE
+  // accounting only, not the static or replay-tallied arithmetic -- the same
+  // forest is evaluated either way, just cached at a different depth.
+  CHECK(relocated.model_flops == baseline.model_flops);
+  CHECK(relocated.model_n_ops == baseline.model_n_ops);
+}
+
 // Task 5 (Minor b): cover the UTF-8 -> wide bridge cost_profile() uses to fill
 // a caller's wide trace stream. The eval loop writes a NARROW (UTF-8) trace
 // whose per-op label field carries multi-byte index labels (mu~ = U+03BC

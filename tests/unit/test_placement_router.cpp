@@ -15,9 +15,11 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
 #include <SeQuant/core/eval/backends/dryrun/eval_expr.hpp>
+#include <SeQuant/core/eval/backends/dryrun/result.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
+#include <SeQuant/core/eval/eval_node_compare.hpp>
 #include <SeQuant/core/eval/occurrence_key.hpp>
 #include <SeQuant/core/eval/placement_router.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -30,6 +32,7 @@
 #include <cstddef>
 #include <memory>
 #include <optional>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -41,10 +44,13 @@ using sequant::ColumnSymmetry;
 using sequant::ex;
 using sequant::ExprPtr;
 using sequant::Index;
+using sequant::index_position;
 using sequant::ket;
 using sequant::ResultPtr;
 using sequant::Symmetry;
 using sequant::Tensor;
+using sequant::TreeNodeEqualityComparator;
+using sequant::TreeNodeHasher;
 using sequant::container::svector;
 using sequant::eval::HomeTarget;
 using sequant::eval::occurrence_key;
@@ -53,6 +59,7 @@ using sequant::eval::dryrun::CostModel;
 using sequant::eval::dryrun::DryRunLeafEvaluator;
 using sequant::eval::dryrun::EvalExprDryRun;
 using sequant::eval::dryrun::EvalNodeDryRun;
+using sequant::eval::dryrun::ResultDryRun;
 using sequant::eval::dryrun::SizeRegime;
 
 using router_type = PlacementRouter<EvalNodeDryRun>;
@@ -124,6 +131,137 @@ TEST_CASE("placement_router: set_override/route/empty", "[placement_router]") {
 
   // A different occurrence (distinct tensor label) stays unrouted.
   CHECK(router.route(key2) == nullptr);
+}
+
+// Phase 2 T4: the PRIMARY deterministic proof that an override genuinely
+// RELOCATES a value's read home -- not merely that the router container is
+// wired inertly (T2/T3 above). A 3-level cache chain outer -> mid -> inner,
+// with matching batch_context stacks [], [{J,..}], [{J,..},{K,..}]; X is
+// stored at BOTH outer and mid (two independently-built, pointer-distinct
+// DryRun buffers), so both a default (nearest = mid) and a relocated (chain
+// root = outer) read are satisfiable and separately attributable.
+//
+// Exercises the router + access_at_hops() + slice_to_use primitives
+// directly (see cache_manager.hpp / eval.hpp): no full evaluate() call is
+// needed for this unit -- slice_to_use is mirrored locally below (it is a
+// lambda local to evaluate(), not an exported free function; the mirror is
+// the exact same three-line index_position + slice_mode loop documented on
+// both copies in eval.hpp).
+TEST_CASE(
+    "placement_router: an override relocates a value's read home across a "
+    "3-level cache chain",
+    "[placement_router]") {
+  using Cache = CacheManager<EvalNodeDryRun, false>;
+
+  // Outermost-first: mid is nested under a realized J-loop; inner is nested
+  // one loop deeper, under K. X carries both J and K as free (bra) indices,
+  // so slice_to_use has something to slice.
+  Index const J{L"i_1"}, K{L"i_2"};
+  auto const t =
+      ex<Tensor>(L"X", bra(svector<Index>{J, K}), ket{}, Symmetry::Nonsymm,
+                 std::nullopt, ColumnSymmetry::Nonsymm);
+  auto const X = router_test_leaf_node(t);
+
+  SizeRegime regime;
+  regime.space_extent = {{L"i", 10}};
+  auto cm = std::make_shared<CostModel const>(regime);
+  DryRunLeafEvaluator const leaf{cm};
+
+  using hasher_t = TreeNodeHasher<EvalNodeDryRun>;
+  using comp_t = TreeNodeEqualityComparator<EvalNodeDryRun>;
+  std::unordered_map<EvalNodeDryRun, std::size_t, hasher_t, comp_t>
+      outer_counts;
+  outer_counts.emplace(X, 10);
+  Cache outer{std::move(outer_counts)};
+
+  std::unordered_map<EvalNodeDryRun, std::size_t, hasher_t, comp_t> mid_counts;
+  mid_counts.emplace(X, 10);
+  Cache mid{std::move(mid_counts)};
+  mid.set_parent(&outer);
+
+  Cache inner = Cache::empty();
+  inner.set_parent(&mid);
+
+  Cache::BatchContext const mid_ctx{{J, {0, 10}}};
+  Cache::BatchContext const inner_ctx{{J, {0, 10}}, {K, {0, 10}}};
+  mid.set_batch_context(mid_ctx);
+  inner.set_batch_context(inner_ctx);
+
+  // Store X at BOTH outer and mid: two independently-built (pointer-distinct)
+  // buffers, so a default and a relocated read fetch DIFFERENT objects.
+  ResultPtr const outer_val = outer.store(X, leaf(X));
+  ResultPtr const mid_val = mid.store(X, leaf(X));
+  REQUIRE(outer_val);
+  REQUIRE(mid_val);
+  CHECK(outer_val.get() != mid_val.get());
+
+  // Local mirror of eval.hpp's Enter-stage slice_to_use lambda: slices the
+  // `hops` INNERMOST enclosing batch loops of `ctx` that `nd` carries.
+  auto slice_to_use = [](ResultPtr value, EvalNodeDryRun const& nd,
+                         Cache::BatchContext const& ctx,
+                         std::size_t hops) -> ResultPtr {
+    std::size_t const d = ctx.size();
+    REQUIRE(hops <= d);
+    for (std::size_t i = d - hops; i < d; ++i) {
+      auto const& [axis, blk] = ctx[i];
+      if (auto const p = index_position(nd, axis))
+        value = value->slice_mode(*p, blk.first, blk.second);
+    }
+    return value;
+  };
+
+  // DEFAULT (no override): inner's access_at(X) resolves to the NEAREST
+  // holder, mid, at hops == 1.
+  auto const default_hit = inner.access_at(X);
+  REQUIRE(default_hit.ptr);
+  CHECK(default_hit.ptr.get() == mid_val.get());
+  CHECK(default_hit.hops == 1);
+
+  // 1 loop sliced (K -- the one loop the fetch crossed, filtered by
+  // index_position(X, axis)): X's K-mode gets an extent override, J's does
+  // not (mid already baked J's block in when it built X).
+  auto const default_sliced =
+      slice_to_use(default_hit.ptr, X, inner_ctx, default_hit.hops);
+  REQUIRE(default_sliced);
+  {
+    auto const& drr = default_sliced->as<ResultDryRun>();
+    CHECK(drr.overrides().size() == 1);
+    CHECK(drr.overrides().count(K) == 1);
+    CHECK(drr.overrides().count(J) == 0);
+  }
+
+  // RELOCATED: register an override with EMPTY residency for X's occurrence
+  // (computed against inner's ambient batch modes) -- home_depth() then
+  // resolves to 0 (invariant to the whole nest), i.e. the chain root.
+  router_type router;
+  svector<Index> const inner_ctx_modes{J, K};
+  auto const key = occurrence_key(X, inner_ctx_modes);
+  router.set_override(key, HomeTarget{});
+  CHECK_FALSE(router.empty());
+
+  std::size_t const hd = router.home_depth(HomeTarget{}, inner_ctx);
+  CHECK(hd == 0);
+  std::size_t const use_depth = inner_ctx.size();
+  std::size_t const hops = use_depth - hd;
+  CHECK(hops == 2);
+
+  // access_at_hops(X, 2) fetches the OUTER buffer -- pointer-distinct from
+  // mid's -- exactly the relocation the override drives.
+  auto const relocated_ptr = inner.access_at_hops(X, hops);
+  REQUIRE(relocated_ptr);
+  CHECK(relocated_ptr.get() == outer_val.get());
+  CHECK(relocated_ptr.get() != mid_val.get());
+
+  // 2 loops sliced now (J AND K, both crossed by the deeper fetch), each
+  // filtered by index_position(X, axis).
+  auto const relocated_sliced = slice_to_use(relocated_ptr, X, inner_ctx, hops);
+  REQUIRE(relocated_sliced);
+  {
+    auto const& drr = relocated_sliced->as<ResultDryRun>();
+    CHECK(drr.overrides().size() == 2);
+    CHECK(drr.overrides().count(J) == 1);
+    CHECK(drr.overrides().count(K) == 1);
+  }
 }
 
 // Phase 2 T3 shadow-assert fixture. Injects a NO-OP override -- the
