@@ -113,15 +113,21 @@ loop") are both candidate O2 moves, chosen by `ΔPeak/ΔRecompute`, not hard-cod
 
 ## 6. Roadmap (revised)
 
-- **Phase 3a -- pure perfect-CSE `home_scope` seed** from the meet. First: unify
-  `sliced_modes` to the meet of ALL batched modes on the result slots and DELETE
-  `contracted_modes` (Section 2). Then `home_scope = deepest loop over sliced_modes`, no
-  veto, no fold. Static predictor; validated against its definition (the meet home).
+- **Phase 3a -- the `home_scope` seed PREDICTOR (non-regressing; scope decision (A)).** Build
+  the unified-meet `home_scope(value)` as a NEW static computation -- the cross-occurrence meet
+  of ALL batched modes on the node's result slots (Section 2), then `home_scope = deepest loop
+  over that residency`, no veto, no fold -- consumed by 3b and O2. It does NOT touch runtime
+  `place_at_this_level` / `stamp_lifetime_masks`, so runtime placement stays today's heuristic
+  (NO regression) and `contracted_modes` / the veto stay in place for now. Deliverables: the
+  predictor, its validation against its definition (the deepest all-batched-modes-meet loop),
+  and reconciling the CAT-2 `occurrence_key`/`ext_modes_of` inconsistency. The CAT-1 deletions +
+  the `stamp_lifetime_masks` unification are the **CUTOVER**, deferred to Phase 4.
 - **Phase 3b -- static peak profile** (spec 7c / O3a): weighted-interval sweep over the
-  seed + schedule, validated to equal the Phase-1 replay oracle (with co-resident summing).
-- **Phase 4 -- O2 greedy** (spec 7b): owns demotion/spill (shrink/un-hoist/split by
-  `ΔPeak/ΔRecompute`); lands COUPLED with the seed behind a flag, replacing the current
-  heuristic (incl. the removed veto) when enabled.
+  seed predictor + schedule, validated to equal the Phase-1 replay oracle (co-resident summing).
+- **Phase 4 -- O2 greedy + CUTOVER** (spec 7b): owns demotion/spill (shrink/un-hoist/split by
+  `ΔPeak/ΔRecompute`); lands COUPLED behind a flag. The cutover to the perfect-CSE seed --
+  unify `stamp_lifetime_masks` (drop the `External` filter), DELETE `contracted_modes` +
+  `has_demoted_external` (CAT-1) -- happens HERE, replacing today's heuristic when the flag is on.
 - **Phase 5 -- feedback** (spec 7b / O6).
 
 ## 7. Open items
