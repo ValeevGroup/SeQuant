@@ -1,98 +1,115 @@
-# Meet-based `home_scope` for Phase 3, and why the occurrence-key cannot subsume demotion
+# Perfect-CSE `home_scope` seed, O2-owned demotion, and why the meet (not the occurrence-key) computes the seed home
 
-Status: design, agreed via brainstorming 2026-08-03. Supersedes an earlier
-same-day draft that proposed subsuming `demoted_external` into the occurrence-key
-(retracted -- see Section 1). Amends `doc/dev/specs/2026-08-02-home-scope-placement-design.md`
-(Section 7d and the roadmap). Depends on Phase 1 (peak oracle) and Phase 2 (router as a
-read+store override seam), both complete on `evaleev/feature/multimode-batched-eval`
-(`...0bae1273e`).
+Status: design, agreed via brainstorming 2026-08-03. Supersedes two earlier same-day
+drafts (one proposing to subsume `demoted_external` into the occurrence-key -- retracted;
+one proposing to *retain* the `has_demoted_external` veto in a byte-identical seed --
+also corrected here). Amends `doc/dev/specs/2026-08-02-home-scope-placement-design.md`
+(Sections 7b, 7d, and the roadmap). Depends on Phase 1 (peak oracle) and Phase 2 (router
+as a read+store override seam), both complete on
+`evaleev/feature/multimode-batched-eval` (`...0bae1273e`).
 
-## 1. Negative result: the occurrence-key cannot replace the meet
+## 1. The model, and the correction
 
-We explored eliminating the `has_demoted_external` compensation in `place_at_this_level`
-(eval.hpp:1678-1701) by (i) a mixed-tier occurrence-key coloring that separates demoted
-occurrences, and (ii) deriving residency from the occurrence-key-class instead of the
-cross-occurrence meet (`stamp_lifetime_masks`). Result: **the idea is refuted; the meet is
-load-bearing and `has_demoted_external` stays.**
+Placement is **perfect-CSE seed + O2 spill pass** (register allocation): the seed hoists
+every value to its maximal shared home (max sharing => peak-MAXIMAL), and O2 relaxes that
+just enough to fit the peak budget by evicting/splitting the cells alive at the binding
+peak point.
 
-What the probes established (all reverted, nothing committed):
+The correction this note records: today's `place_at_this_level` bakes an **ad-hoc spill
+decision into the seed** -- `has_demoted_external` (eval.hpp:1678-1706) un-hoists any value
+whose meet-dropped external mode would otherwise materialize a full "scattered giant." That
+is precisely an O2 decision (an over-budget cell at a binding peak point), pre-empted by a
+hard-coded "don't hoist." Since we are building the O2 pass to make exactly this
+peak-vs-recompute trade cost-based, the veto is redundant with it and strictly worse (it
+always un-hoists to local; O2 would weigh un-hoist vs split vs shrink).
 
-- **Demotion is a RUNTIME-block incompatibility.** A demoted external carrier is the same
-  canonical value in occurrences binding the external occ slot to different proto-
-  incompatible PNO pairs (`a<i1,i2>` vs `a<i3,i4>`, the cross-pair giants); the meet
-  intersects the occ modes by Index identity to empty, firing the guard. The occurrences
-  differ only by concrete labels of one space.
-- **A mixed-tier coloring CAN separate demoted occurrences** (batched externals colored by
-  a shared forest-global ordinal via a `distinct`/`index_color` hook), and does so without
-  breaking the symmetric-domain collapse. Recorded for reference -- it may matter for
-  Phase-4 router-override granularity -- but it is NOT used in Phase 3.
-- **Residency-from-key is refuted.** The occurrence-key partitions occurrences by their
-  EXACT batched-slot pattern: it can SEPARATE but has no operation that INTERSECTS.
-  Partial-overlap occurrences of one value -- `A[i1,i2]` (slices `{i1,i2}`) and `A[i1,_]`
-  (slices `{i1}`) -- must share ONE cell at their intersection home `A[i1,_]`, each slicing
-  further on use; that home is a cross-occurrence set-INTERSECTION only the meet computes.
-  Probe (faithful: one canonical node, `TreeNodeEqualityComparator` YES so one meet
-  bucket): the key gives `{P=A[i1,i2], Q=A[i1,_]}` DIFFERENT keys under BOTH the shipping
-  and the mixed-tier coloring -- the split is structural (named-set cardinality 2 vs 1,
-  non-isomorphic graphs), not a coloring artifact -- while the meet gives them `{i1}`
-  (non-empty). Deriving residency from the key-class would drop that shared cell,
-  regressing legitimate CSE into avoidable recompute.
+There is **no external/contracted asymmetry** to preserve. A contracted batched mode
+hoisted above its loop is a big full copy too (`A[c,_]` and `A[_,c]` -- two occurrences
+carrying a contracted `c` in different slots -- perfect-CSE hoists `A` above the `c`-loop,
+full on `c`; O2 weighs that copy exactly like an external giant). "External vs contracted"
+is a property at the loop node, irrelevant to how a hoisted copy below it is sized/spilled.
+So `has_demoted_external` is a hack, and it is **removed**; the seed has zero
+external/contracted special-casing.
 
-**Why the meet is exactly right.** Demotion is the meet-EMPTY case (`A[i1,i2]` vs
-`A[i3,_]`, meet `{}`). The meet handles BOTH regimes with one operation: partial overlap
--> non-empty intersection -> a real shared home; disjoint -> empty -> full home ->
-`has_demoted_external` declines to hoist the scattered giant. The occurrence-key can do
-neither, so it cannot subsume the meet or the demotion veto.
+## 2. The seed: pure perfect-CSE `home_scope` from the meet
 
-**Corollary.** The occurrence-key coloring fix is NOT needed for Phase 3 -- `home_scope`
-comes from the meet, not the key. It is at most a Phase-4 question (whether the O2 pass
-ever needs the router to override demoted occurrences individually). Deferred.
+`home_scope(value)` = deepest enclosing scope over its residency
 
-## 2. Phase 3 = meet-based `home_scope` (the direction)
+```
+residency = sliced_modes (cross-occurrence meet, stamp_lifetime_masks)  UNION  contracted_modes
+home_scope = deepest enclosing batch loop whose mode is in residency, else chain root
+```
 
-`home_scope(occurrence)` is a STATIC replica of `place_at_this_level`'s runtime decision,
-computed without running eval:
-- **is it hoisted?** `residency_all_outer(n) && !has_demoted_external(n) &&
-  batch_order_aware(n) && !subtree_any(n, is_volatile)` (eval.hpp:1671-1706);
-- **at what level?** `rl + 1`, where `rl` is the deepest enclosing `batch_context` index
-  whose mode is in the residency union `sliced_modes() UNION contracted_modes()` (from the
-  meet; `in_union`/`rl` walk, eval.hpp:1724-1739); `rl == -1` => chain root;
-- **else** (not hoisted, incl. `has_demoted_external`): local / at-use.
+with **NO veto and NO demotion fold**. For a demoted value (an external mode dropped by the
+meet) this homes the value ABOVE that loop -- full on that mode, i.e. the giant -- BY
+DESIGN. The seed is peak-maximal; O2 (Section 4) makes it feasible.
 
-Section-7d reconciliation (settled): this is the LIVE rule -- residency `sliced UNION
-contracted`, `has_demoted_external -> local`. Spec 7d's demotion-FOLD (`home = deepest over
-sliced UNION demoted_external`, i.e. home the carrier INSIDE its external loop but above
-invariant inner loops) is a strictly BETTER placement and a **Phase-4 O2** quality move
-(reachable as a relocation override), NOT the Phase-3 seed.
+The **meet is load-bearing** here and cannot be replaced by the occurrence-key (Section 3):
+it is the cross-occurrence set-INTERSECTION that produces the shared home; the key can
+separate but not intersect.
 
-`home_scope` is a static PREDICTOR consumed by the peak sweep (Phase 3b) and Phase-4
-`ΔPeak`; it does NOT populate the runtime router (the seed stays derived / empty-router,
-per the Phase-2 override-seam model). So Phase 3a adds a function plus its validation and
-changes no runtime placement -- byte-identical.
+`home_scope` is a STATIC predictor (computed without running eval) consumed by the peak
+profile (Phase 3b) and O2's `ΔPeak` (Phase 4). Spec 7d's demotion-FOLD ("home the carrier
+inside its external loop, above invariant inner loops") is NOT a seed rule -- it is one
+candidate O2 move (Section 4).
 
-**Validation (per-value -- the reason we split B, not A).** The static
-`home_scope(occurrence)` must resolve to the SAME scope the runtime actually stores/finds
-it at: emit `place_at_this_level`'s chosen store scope in the eval trace and assert
-equality per hoisted value (the T3 shadow-assert idea generalized). Per-cell home equality
-is tighter than an aggregate peak match, and O2 (Phase 4) consumes per-cell homes. Plus the
-integrated store->read relocation test where the relocated value CARRIES a batched mode --
-the non-empty-named-set round trip the Phase-2 whole-branch review flagged as a Phase-3
-prerequisite.
+## 3. Negative result: the occurrence-key cannot replace the meet
 
-## 3. Roadmap (revised)
+We explored deriving residency from the occurrence-key-class instead of the meet (to also
+drop `stamp_lifetime_masks`). Refuted. The occurrence-key partitions occurrences by their
+EXACT batched-slot pattern -- it can SEPARATE but has no operation that INTERSECTS.
+Partial-overlap occurrences of one value -- `A[i1,i2]` (slices `{i1,i2}`) and `A[i1,_]`
+(slices `{i1}`) -- must share ONE cell at their intersection home `A[i1,_]`, each slicing
+further on use; that home is a set-intersection only the meet computes. Probe (faithful:
+one canonical node, single meet bucket): the key gives `{A[i1,i2], A[i1,_]}` DIFFERENT
+keys under both the shipping and a mixed-tier coloring -- the split is structural
+(named-set cardinality 2 vs 1), not a coloring artifact -- while the meet gives `{i1}`.
+Deriving residency from the key-class would drop that shared cell, regressing legitimate
+CSE into avoidable recompute. So the meet stays.
 
-- **Phase 3a -- static meet-based `home_scope` predictor** + per-value validation against
-  the runtime store scope + the integrated batched-mode relocation test.
-- **Phase 3b -- static peak profile** (spec 7c / O3a): the weighted-interval sweep over the
-  `home_scope` predictor + schedule, validated to equal the Phase-1 replay oracle.
-- **Phase 4 -- O2 greedy** (spec 7b), including 7d's demotion-fold as an O2 relocation move.
+Corollary: the mixed-tier occurrence-key coloring (which does structurally separate the
+demoted cross-pair occurrences) is NOT needed for the seed. It is at most a Phase-4
+question -- whether O2 ever needs the router to override such occurrences individually --
+and is deferred.
+
+## 4. O2 owns demotion (and all spill)
+
+A demoted giant is just an over-budget cell alive at a binding peak point. O2's moves --
+shrink (re-home into an existing carried loop), un-hoist (lower the home toward a loop it
+is invariant to), split (partition use-sites into shorter-lived cells) -- handle it
+cost-based. The current veto ("home local") and 7d's fold ("home inside the external
+loop") are both candidate O2 moves, chosen by `ΔPeak/ΔRecompute`, not hard-coded.
+
+## 5. Consequences
+
+- **Not byte-identical.** The seed differs from today's heuristic on demoted values (the
+  seed hoists them; the heuristic vetoes to local). So "validate `home_scope` == runtime
+  store scope" is wrong for demoted values. Validate the seed against its DEFINITION (the
+  meet home); validate the whole placement (seed + O2) against the peak oracle + result
+  correctness.
+- **The seed alone is peak-maximal -- worse than today until O2 lands.** So the seed
+  (Phase 3) and O2 (Phase 4) are a COUPLED unit: keep today's heuristic placement as the
+  default/fallback until O2 is ready (gate the perfect-CSE-seed + O2 path behind a flag),
+  rather than shipping a regressed seed standalone.
+- **Removes `has_demoted_external`** (and the meet-veto coupling in `place_at_this_level`).
+
+## 6. Roadmap (revised)
+
+- **Phase 3a -- pure perfect-CSE `home_scope` seed** from the meet (`sliced ∪ contracted`,
+  no veto, no fold). Static predictor; validated against its definition (the meet home).
+- **Phase 3b -- static peak profile** (spec 7c / O3a): weighted-interval sweep over the
+  seed + schedule, validated to equal the Phase-1 replay oracle (with co-resident summing).
+- **Phase 4 -- O2 greedy** (spec 7b): owns demotion/spill (shrink/un-hoist/split by
+  `ΔPeak/ΔRecompute`); lands COUPLED with the seed behind a flag, replacing the current
+  heuristic (incl. the removed veto) when enabled.
 - **Phase 5 -- feedback** (spec 7b / O6).
 
-## 4. Open items to validate in implementation
+## 7. Open items
 
-- **O-a: the per-value home oracle.** Emit `place_at_this_level`'s chosen store scope per
-  hoisted value so the static `home_scope` predictor can be asserted equal to it. Confirm
-  the static computation reproduces every non-demoted home exactly and the demoted/local
-  homes too.
-- Retired by the negative result: the residency-from-key derivation (refuted) and the
-  `index_color` occurrence-key change (not needed for Phase 3; possible Phase-4 item).
+- **O-a: static meet-home computation** validated against its definition (the deepest
+  `sliced ∪ contracted` enclosing loop) across the witness forests.
+- **O-b: the seed+O2 coupling / flag** so the perfect-CSE seed never ships as a regressed
+  standalone; today's heuristic stays the default until O2 is feasible.
+- Retired by the analysis above: residency-from-key (refuted); the `index_color`
+  occurrence-key change (not needed for the seed); `has_demoted_external` (an O2 move, not
+  a seed rule).
