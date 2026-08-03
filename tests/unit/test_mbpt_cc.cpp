@@ -67,6 +67,15 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     }
   }  // SECTION("energy")
 
+  SECTION("with_hbar_comm_rank") {
+    const auto N = 2;
+    const CC::Options opts{.ansatz = CC::Ansatz::U, .hbar_comm_rank = 2};
+    auto bch2 = CC(N, opts);
+    auto bch3 = bch2.with_hbar_comm_rank(3);
+    REQUIRE(bch2.hbar_comm_rank() == 2);
+    REQUIRE(bch3.hbar_comm_rank() == 3);
+  }  // SECTION("with_hbar_comm_rank")
+
   SECTION("rdm") {
     constexpr auto N = 2;
     // Traditional CCSD: γ = <0|(1+Λ) e^{-T} {a†_p.. a_q..} e^{T}|0>.

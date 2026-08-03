@@ -60,6 +60,12 @@ bool CC::unitary() const {
 
 std::optional<size_t> CC::hbar_comm_rank() const { return hbar_comm_rank_; }
 
+CC CC::with_hbar_comm_rank(size_t rank) const {
+  CC result(*this);
+  result.hbar_comm_rank_ = rank;
+  return result;
+}
+
 bool CC::skip_singles() const { return skip_singles_; }
 
 bool CC::screen() const { return screen_; }
