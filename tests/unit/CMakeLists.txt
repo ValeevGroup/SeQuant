@@ -159,7 +159,10 @@ endif()
 ##########################
 # OBJECT library: DryRun backend tests
 ##########################
-set(eval_dryrun_test_sources "test_eval_dryrun.cpp")
+set(eval_dryrun_test_sources
+    "test_eval_dryrun.cpp"
+    "test_occurrence_key.cpp"
+)
 add_library(unit_tests-sequant-eval-dryrun-obj OBJECT ${eval_dryrun_test_sources})
 set_target_properties(unit_tests-sequant-eval-dryrun-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 target_link_libraries(unit_tests-sequant-eval-dryrun-obj
