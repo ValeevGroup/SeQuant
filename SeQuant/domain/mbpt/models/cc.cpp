@@ -67,8 +67,11 @@ bool CC::use_topology() const { return use_topology_; }
 
 ExprPtr CC::hbar(std::optional<size_t> truncation_rank) const {
   const auto truncation = truncation_rank.value_or(hbar_comm_rank_.value_or(4));
+
+  // the non-unitary path supplies operator connectivity downstream (see
+  // energy(), t(), etc.), so the cheaper connected-product form is used there
   return mbpt::lst(H(), T(N, skip_singles()), truncation,
-                   {.unitary = unitary()});
+                   {.unitary = unitary(), .use_connected_form = !unitary()});
 }
 
 ExprPtr CC::energy(std::optional<size_t> comm_rank) const {
@@ -154,8 +157,9 @@ std::vector<ExprPtr> CC::λ() const {
 
   // element 0: λ pseudoenergy, computed as the CC energy with T → Λ⁺.
   {
-    const auto hbar_λ =
-        mbpt::lst(H(), adjoint(Λ(N, skip_singles())), commutator_rank);
+    const auto hbar_λ = mbpt::lst(
+        H(), adjoint(Λ(N, skip_singles())), commutator_rank,
+        {.use_connected_form = true});  // ref_av connects h/f/g with λ⁺
     result.at(0) = this->ref_av(
         hbar_λ, {{L"h", L"λ⁺"}, {L"f", L"λ⁺"}, {L"f̃", L"λ⁺"}, {L"g", L"λ⁺"}});
   }
@@ -219,9 +223,9 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
   // for two-body perturbation operator; unless specified otherwise
   const auto h1_truncate_default = rank == 1 ? 2 : 4;
   const auto h1_truncate_at = pertbar_comm_rank_.value_or(h1_truncate_default);
-  const auto h1_bar =
-      mbpt::lst(Hʼ(rank, {.order = order, .nbatch = nbatch}),
-                T(N, skip_singles()), h1_truncate_at, {.unitary = unitary()});
+  const auto h1_bar = mbpt::lst(
+      Hʼ(rank, {.order = order, .nbatch = nbatch}), T(N, skip_singles()),
+      h1_truncate_at, {.unitary = unitary(), .use_connected_form = !unitary()});
 
   // construct [hbar, Tʼ(1)]
   const auto hbar_truncate_at = hbar_comm_rank_.value_or(
@@ -283,8 +287,9 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
   // for two-body perturbation operator; unless specified otherwise
   const auto h1_truncate_at = (rank == 1) ? pertbar_comm_rank_.value_or(2)
                                           : pertbar_comm_rank_.value_or(4);
-  const auto h1_bar = mbpt::lst(Hʼ(rank, {.order = order, .nbatch = nbatch}),
-                                T(N, skip_singles()), h1_truncate_at);
+  const auto h1_bar = mbpt::lst(
+      Hʼ(rank, {.order = order, .nbatch = nbatch}), T(N, skip_singles()),
+      h1_truncate_at, {.use_connected_form = true});  // λʼ is non-unitary
 
   // construct [hbar, T(1)]
   const auto hbar_pert =

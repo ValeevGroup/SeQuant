@@ -17,10 +17,11 @@ namespace sequant::mbpt {
 struct LSTOptions {
   /// If true, uses unitary generator
   bool unitary = false;
-  /// If true, uses explicit commutators [A,B] = AB - BA; otherwise uses
-  /// connected products (AB)_c
-  /// If not explicitly set, LST will set this to the value of unitary
-  std::optional<bool> use_commutators = std::nullopt;
+  /// If true, uses connected products [A,B] = (AB)_c; otherwise uses explicit
+  /// commutators [A,B] = AB - BA. The connected-product form is only
+  /// equivalent if the caller supplies operator connectivity downstream, hence
+  /// the default is the explicit form.
+  bool use_connected_form = false;
   /// If true, will not clone the input expression
   bool skip_clone = false;
 };
@@ -36,9 +37,8 @@ struct LSTOptions {
 /// @sa LSTOptions
 /// Notes:
 /// - If \p options.unitary is true, the ansatz uses B - B^+ instead of B.
-/// - If \p options.use_commutators is false, commutators are computed via connected products: [A,B] = (AB)_c
-/// - If \p options.use_commutators is true, commutators are computed explicitly: [A,B] = AB - BA
-/// - If \p options.use_commutators is not set, it defaults to the value of \p options.unitary. i.e., unless explicitly specified, unitary ansatz will always use commutators.
+/// - By default commutators are computed explicitly: [A,B] = AB - BA
+/// - If \p options.use_connected_form is true, commutators are computed via connected products: [A,B] = (AB)_c ; this is only valid if the caller connects the operators (e.g. by passing OpConnections to vac_av/ref_av), so set it only if you do.
 /// @pre This function expects \p A and \p B to be composed of mbpt::Operators
 // clang-format on
 ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank,

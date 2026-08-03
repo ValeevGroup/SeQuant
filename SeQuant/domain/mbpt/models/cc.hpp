@@ -90,6 +90,11 @@ class CC {
   /// the expansion; if not specified, will use the value of member
   /// `hbar_comm_rank`. If that is also not specified, will use 4 as the default
   /// value. If provided, will override all defaults.
+  /// @note For a non-unitary ansatz each commutator is represented as a
+  /// connected product, \f$ (\hat{A}\hat{B})_c \f$, equivalent to \f$
+  /// [\hat{A},\hat{B}] \f$ only once operator connectivity is supplied
+  /// downstream. A unitary ansatz uses explicit commutators and needs no
+  /// connectivity.
   [[nodiscard]] ExprPtr hbar(
       std::optional<size_t> truncation_rank = std::nullopt) const;
 
