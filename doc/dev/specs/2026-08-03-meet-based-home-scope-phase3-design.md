@@ -166,16 +166,22 @@ to `sliced` alone, making the CAT-1b removal a wholesale DELETE, not a rewrite.*
 - `cost_model.hpp:1841-1882` -- External-before-Contracted emission order has a real
   scatter-widening effect; flag, do not blind-delete. LOW-that-it's-pure-hack.
 
-### CAT-3 -- seed-baked spill/peak heuristics -> MOVE to O2 (Phase 4, not delete)
-- `eval.hpp:1747,1616-1626` -- `is_volatile`/`persistent_only` "never hoist a volatile
-  subtree" = hard recompute trade. MED-HIGH.
-- `cache_manager.hpp:653-654,734` -- `min_repeats` (batching-blind use-count) -> rational `W`. HIGH.
-- `cache_manager.hpp:633-644,741` -- `max_footprint` cache-refusal = peak-vs-recompute baked in. MED-HIGH.
-- `cost_model.hpp:1912-1920`, `eval_expr.hpp:344-353` -- `effective_count`/`batch_effective_count`
-  = integer stand-in for `W`. MED-HIGH.
-- `cost_model.hpp:688,1868-1876` + `optimize.cpp:110` -- `node_level_placement` (placement
-  decided inside the factorizer). MED.
-- `cost_model.hpp:636,1892-1897` + `optimize.cpp:109` -- `order_aware_recompute` master gate. MED.
+### CAT-3 -- genuinely O2-adjacent (code-verified 2026-08-04; the audit's first pass over-reached)
+Re-reading the code shrank this list to two -- most CAT-3 candidates turned out to be seed cache
+semantics (moved to CAT-5) or compile-time factorizer knobs (CAT-3b):
+- `cost_model.hpp:1912-1920`, `eval_expr.hpp:344-353` -- `effective_count`/`batch_effective_count`,
+  the integer reuse count = O2's rational `W` recompute measure. Genuinely -> `W`.
+- `cache_manager.hpp:633-644` -- `max_footprint` "refuse to cache anything bigger than X."
+  Default `0` => INERT (perfect CSE). Only its NON-default use is a seed-baked peak trade (the
+  crudest spill, at cache-construction) that O2's evict-where-peak-binding supersedes.
+
+### CAT-3b -- compile-time factorizer/cost-model knobs O2 RETIRES by taking over placement (not "moved")
+- `cost_model.hpp:688,1868-1876` + `optimize.cpp:110` -- `node_level_placement`: the DP deciding
+  per-node placement INSIDE `optimize()`. O2 (a post-factorizer placement pass) subsumes that
+  FUNCTION, so the knob becomes moot -- not code relocated into O2.
+- `cost_model.hpp:636,848-1040,1892-1897` + `optimize.cpp:109` -- `order_aware_recompute`: the DP's
+  ordered-cell recompute-accounting mode; its placement-recompute part is superseded by `W`.
+  Compile-time; not consulted at runtime.
 
 ### CAT-4 -- other smells
 - `eval.hpp:1747` (+`eval_expr.hpp:355-368`, `node_batch_annotation.hpp:49-56`,
@@ -190,6 +196,15 @@ to `sliced` alone, making the CAT-1b removal a wholesale DELETE, not a rewrite.*
   evaporates under uniform-mode residency.
 
 ### CAT-5 -- genuine, KEEP (do not over-delete)
+- `cache_manager.hpp:129-164` (+ `is_volatile` gate `eval.hpp:1616-1626`) -- `is_volatile` is the
+  P/NP cache-PERSISTENCE classifier (a volatile amplitude intermediate is rebuilt every CC
+  iteration => must be NP; persisting it across iterations is a stale-data CORRECTNESS bug). Not a
+  peak trade. The `persistent_only` batching gate is opt-in, default OFF, about not-wasting-batching
+  effort. KEEP.
+- `cache_manager.hpp:555-589` -- `min_repeats` is the CSE-cacheability threshold at cache
+  construction; default `2` = perfect CSE ("cache everything reused"). Part of the seed's
+  *what-is-CSE-able*, NOT a spill knob and NOT replaced by `W`. KEEP (only a user `>2` throttle is a
+  peak knob O2 supersedes).
 - `eval.hpp:1857+` -- External SCATTER (`write_into_slice`, disjoint) vs Contracted ACCUMULATE
   (`add_inplace`): the real runtime meaning of `BatchModeType` (`fwd.hpp:21`) -- irrelevant only
   to *residency*, not removed.
@@ -204,5 +219,8 @@ to `sliced` alone, making the CAT-1b removal a wholesale DELETE, not a rewrite.*
   constraint).
 
 **Scope for the plan:** Phase 3a = CAT-1 delete + CAT-2 generalize (+ reconcile the CAT-2
-occurrence-key inconsistency). CAT-3 = the heuristics O2 subsumes (Phase 4, moved not deleted).
-CAT-4 router-seam duplication resolves as the seam matures. CAT-5 stays.
+occurrence-key inconsistency). CAT-3 (small: `effective_count`->`W`, `max_footprint`'s non-default
+use) + CAT-3b (compile-time factorizer knobs `node_level_placement`/`order_aware`) are Phase-4/O2
+scope -- O2 supersedes their function; only `effective_count` is literally replaced. CAT-4
+router-seam duplication resolves as the seam matures. CAT-5 (incl. `is_volatile`, `min_repeats`)
+stays -- these are cache semantics / CSE-cacheability, not spill heuristics.
