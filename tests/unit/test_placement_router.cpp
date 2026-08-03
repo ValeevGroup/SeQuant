@@ -239,7 +239,13 @@ TEST_CASE(
   router.set_override(key, HomeTarget{});
   CHECK_FALSE(router.empty());
 
-  std::size_t const hd = router.home_depth(HomeTarget{}, inner_ctx);
+  // Route through the production seam -- route(key) must return the
+  // registered override; feeding a literal HomeTarget{} here (instead of the
+  // routed pointer) would let this assertion pass even if set_override()
+  // above were deleted, defeating the point of this test.
+  auto const* routed = router.route(key);
+  REQUIRE(routed != nullptr);
+  std::size_t const hd = router.home_depth(*routed, inner_ctx);
   CHECK(hd == 0);
   std::size_t const use_depth = inner_ctx.size();
   std::size_t const hops = use_depth - hd;

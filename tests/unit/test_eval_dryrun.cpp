@@ -4411,13 +4411,13 @@ TEST_CASE(
 
   CacheConfig cfg;
   // D0/M/root each occur exactly once in this single-tree forest. min_repeats
-  // = 2 keeps every one of them OUT of the count-based CSE pre-registration,
-  // so place_at_this_level's ensure_hoist_slot() is the FIRST to register
-  // D0's cache entry (unbounded life), not a bounded life=1 CSE registration
-  // that ensure_hoist_slot's try_emplace would then leave untouched (which
-  // would drain D0's entry on the very first store and break every
-  // subsequent fetch within the same summand).
-  cfg.min_repeats = 2;
+  // = 2 (already CacheConfig's default; restated here for clarity) keeps
+  // every one of them OUT of the count-based CSE pre-registration, so
+  // place_at_this_level's ensure_hoist_slot() is the FIRST to register D0's
+  // cache entry (unbounded life), not a bounded life=1 CSE registration that
+  // ensure_hoist_slot's try_emplace would then leave untouched (which would
+  // drain D0's entry on the very first store and break every subsequent
+  // fetch within the same summand).
 
   // ---- baseline: null router -----------------------------------------
   CostProfile const baseline =
