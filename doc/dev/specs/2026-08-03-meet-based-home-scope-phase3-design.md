@@ -36,13 +36,31 @@ external/contracted special-casing.
 `home_scope(value)` = deepest enclosing scope over its residency
 
 ```
-residency = sliced_modes (cross-occurrence meet, stamp_lifetime_masks)  UNION  contracted_modes
+residency  = sliced_modes
+sliced_modes = cross-occurrence MEET (stamp_lifetime_masks) of ALL batched modes
+               (any BatchModeType) that live on the node's own result slots
 home_scope = deepest enclosing batch loop whose mode is in residency, else chain root
 ```
 
-with **NO veto and NO demotion fold**. For a demoted value (an external mode dropped by the
-meet) this homes the value ABOVE that loop -- full on that mode, i.e. the giant -- BY
-DESIGN. The seed is peak-maximal; O2 (Section 4) makes it feasible.
+with **NO veto and NO demotion fold**. For a demoted value (a mode dropped by the meet)
+this homes the value ABOVE that loop -- full on that mode, i.e. the giant -- BY DESIGN. The
+seed is peak-maximal; O2 (Section 4) makes it feasible.
+
+**Unify `sliced_modes`; remove `contracted_modes`.** Today residency is `sliced_modes UNION
+contracted_modes`, an artifact: `sliced_modes` is built External-only (`stamp_lifetime_masks`
+walks `ext_modes_of`, which filters `batched_here()` to `BatchModeType::External`), so it
+"structurally cannot express a node variant to an aux loop it carries free," and
+`contracted_modes` was bolted on to patch that gap -- emitted *per-occurrence* by the cost
+model (`cost_model.hpp:1898-1911`), never meet'd. There is no principled reason a node inside
+an aux loop differs from one inside an occ loop; both make it variant to that loop's index.
+The fix: drop the `External` filter so `stamp_lifetime_masks` meets ALL batched modes on the
+result slots, and delete `contracted_modes` (field, accessors, cost-model emission,
+`NodeBatchAnnotation::contracted_modes`, and the `in_union` union). This also *corrects* a
+latent bug -- the per-occurrence `contracted_modes` under-meets aux modes that differ across
+occurrences (`A[c,_]` vs `A[_,c]`); routing them through the same meet fixes it. A node that
+*sums* `m` (m not on its result slots) still homes outside the `m`-loop correctly: the walk
+passes `m` DOWN to the operands (which carry it and get it in their `sliced_modes`) while the
+node's own contribution is `acc INTERSECT its slots`, excluding `m`.
 
 The **meet is load-bearing** here and cannot be replaced by the occurrence-key (Section 3):
 it is the cross-occurrence set-INTERSECTION that produces the shared home; the key can
@@ -95,8 +113,10 @@ loop") are both candidate O2 moves, chosen by `ΔPeak/ΔRecompute`, not hard-cod
 
 ## 6. Roadmap (revised)
 
-- **Phase 3a -- pure perfect-CSE `home_scope` seed** from the meet (`sliced ∪ contracted`,
-  no veto, no fold). Static predictor; validated against its definition (the meet home).
+- **Phase 3a -- pure perfect-CSE `home_scope` seed** from the meet. First: unify
+  `sliced_modes` to the meet of ALL batched modes on the result slots and DELETE
+  `contracted_modes` (Section 2). Then `home_scope = deepest loop over sliced_modes`, no
+  veto, no fold. Static predictor; validated against its definition (the meet home).
 - **Phase 3b -- static peak profile** (spec 7c / O3a): weighted-interval sweep over the
   seed + schedule, validated to equal the Phase-1 replay oracle (with co-resident summing).
 - **Phase 4 -- O2 greedy** (spec 7b): owns demotion/spill (shrink/un-hoist/split by
