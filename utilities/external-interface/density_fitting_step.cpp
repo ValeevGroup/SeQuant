@@ -1,5 +1,6 @@
 #include "density_fitting_step.hpp"
 #include "processing_data.hpp"
+#include "processing_step_factory.hpp"
 
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -10,6 +11,8 @@
 #include <nlohmann/json.hpp>
 
 namespace sequant::util::extint {
+
+SEQUANT_EXTINT_REGISTER_STEP_TYPE(DensityFittingStep, "density_fitting");
 
 std::string DensityFittingStep::kind() const { return "density_fitting"; }
 
