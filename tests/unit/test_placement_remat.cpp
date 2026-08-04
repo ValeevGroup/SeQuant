@@ -387,3 +387,124 @@ TEST_CASE(
 
   CHECK(res.status == RematStatus::FactorizationInherent);
 }
+
+// Phase 4a T3: END-TO-END validation on a REALISTIC linearized forest (built
+// via the inode_remat/leaf_remat/stamp_ext_remat/stamp_ext_pair_remat
+// helpers, not hand-built ValueCells) plus the runtime-witness
+// non-regression proof (see the design doc's section 5). T1/T2 above pinned
+// the working-cell projection and the greedy loop's four outcomes on
+// hand-built cells or on a SMALL forest; this closes Phase 4a by driving the
+// SAME remat_cells -> rematerialize_to_budget pipeline over a forest whose
+// (demoted) giant dominates the WHOLE forest's peak, so the SHRINK move is
+// exercised end to end rather than in isolation.
+namespace {
+
+// A cost model where the demoted mode (o) is a THOUSAND elements and every
+// other space is pinned AT the block extent (2): any OTHER cell's shrink
+// candidate (if it has one -- see below) has a ZERO byte delta, since its
+// full extent already equals its block extent, so only the mode that is
+// actually huge (o) can ever move the peak. This isolates the giant
+// end-to-end without hand-built cells or a bespoke non-uniform block_of.
+CostModel giant_regime_cm() {
+  SizeRegime r;
+  r.space_extent = {{L"o", 1000}, {L"i", 2}, {L"x", 2}, {L"a", 2}};
+  return CostModel{r};
+}
+
+// Same topology as the partial-demotion CSE forest above (a shared value G
+// carries {o_1,i_1}; occurrence 1 sits under a single i_1 loop, occurrence 2
+// under BOTH an outer o_1 loop and an inner i_1 loop -- the cross-occurrence
+// MEET home is {i_1}, so o_1 stays OUT of the home and is G's SHRINK
+// candidate), but G's own two leaf children (A, B) carry ONLY a/x-space
+// slots -- disjoint from {o_1,i_1} -- so they inherit the enclosing o_1/i_1
+// context (like every descendant of P1/P2) WITHOUT it ever intersecting
+// their own carried indices, i.e. they have NO shrink candidates. Combined
+// with giant_regime_cm's huge o-space extent, G is the forest's unique
+// giant: every other cell's footprint is a constant 32 bytes (2*2*8)
+// regardless of any move, while G's is 16000 bytes (2*1000*8) FULL-o,
+// dropping to 32 bytes (2*2*8) once o_1 is shrunk into its home -- a ~500x
+// swing that dwarfs the rest of the forest at every point in the timeline.
+std::vector<EvalNode<EvalExpr>> build_demoted_giant_forest_remat() {
+  auto make_G = [] {
+    return inode_remat("G{o_1;i_1}", leaf_remat("A{a_5;x_2}"),
+                       leaf_remat("B{x_2;a_6}"));
+  };
+  auto P1 = inode_remat("P1{i_1;a_1}", make_G(), leaf_remat("W1{i_1;a_1}"));
+  stamp_ext_remat(P1, Index{L"i_1"});  // occurrence 1: i_1 loop only
+  auto P2 = inode_remat("P2{a_1;a_3}", make_G(), leaf_remat("W2{a_1;a_3}"));
+  stamp_ext_pair_remat(
+      P2, Index{L"o_1"},
+      Index{L"i_1"});  // occurrence 2: o_1 (outer), i_1 (inner)
+  return {P1, P2};
+}
+
+}  // namespace
+
+TEST_CASE(
+    "END-TO-END: remat lowers a realistic linearized forest's peak via "
+    "SHRINK (demoted giant dominates the whole forest)",
+    "[placement_remat]") {
+  CostModel const cm = giant_regime_cm();
+  std::vector<EvalNode<EvalExpr>> const forest =
+      build_demoted_giant_forest_remat();
+
+  RematInput const in = remat_cells(forest, cm, unit_block_of);
+  double const seed_peak =
+      peak_profile_sweep(
+          to_schedule(in.cells, cm, unit_block_of, in.num_points))
+          .peak_bytes;
+
+  // G is the unique cell with a non-trivial home_depth (same reasoning as
+  // the shrink_candidates test at the top of this file): P1/P2 are forest
+  // roots with empty ancestor context, and leaves are never given a seed
+  // residency, so only G sits under a parent's batch loop.
+  std::size_t giant_id = in.cells.size();
+  for (auto const& c : in.cells)
+    if (c.home_depth != -1) giant_id = c.value_id;
+  REQUIRE(giant_id < in.cells.size());
+  CHECK(in.cells[giant_id].home_modes == svector<Index>{Index{L"i_1"}});
+  CHECK(shrink_candidates(in.cells[giant_id]) == svector<Index>{Index{L"o_1"}});
+
+  // block-sized-giant-peak (160, every cell block-sized) <= T < seed_peak
+  // (16128, G held FULL at its o_1 occurrence): forces exactly the SHRINK
+  // this test is pinning.
+  double const T = 200.0;
+  RematResult const res =
+      rematerialize_to_budget(in.cells, cm, unit_block_of, in.num_points, T);
+
+  CHECK(res.status == RematStatus::Feasible);
+  CHECK(res.profile.peak_bytes <= T);
+  CHECK(res.profile.peak_bytes < seed_peak);  // it actually dropped
+  auto const& hm = res.cells[giant_id].home_modes;
+  CHECK(std::find(hm.begin(), hm.end(), Index{L"o_1"}) !=
+        hm.end());  // the giant was shrunk
+}
+
+TEST_CASE(
+    "END-TO-END: rematerialize_to_budget at threshold = +infinity is a "
+    "strict no-op on the realistic (demoted-giant) forest",
+    "[placement_remat]") {
+  // T2 pinned the INF no-op on the SMALL partial-demotion forest; this pins
+  // it on the LARGER end-to-end forest above (same construction, so the
+  // no-op holds even though the seed placement now has a much bigger peak
+  // to leave alone).
+  CostModel const cm = giant_regime_cm();
+  std::vector<EvalNode<EvalExpr>> const forest =
+      build_demoted_giant_forest_remat();
+
+  RematInput const in = remat_cells(forest, cm, unit_block_of);
+  double const seed_peak =
+      peak_profile_sweep(
+          to_schedule(in.cells, cm, unit_block_of, in.num_points))
+          .peak_bytes;
+
+  RematResult const res =
+      rematerialize_to_budget(in.cells, cm, unit_block_of, in.num_points,
+                              std::numeric_limits<double>::infinity());
+
+  CHECK(res.status == RematStatus::Feasible);
+  CHECK(res.profile.peak_bytes == seed_peak);
+  REQUIRE(res.cells.size() == in.cells.size());
+  for (std::size_t i = 0; i < in.cells.size(); ++i)
+    CHECK(res.cells[i].home_modes == in.cells[i].home_modes);  // unchanged
+}
