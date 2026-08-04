@@ -11,6 +11,8 @@
 
 namespace sequant::util::extint {
 
+std::string DensityFittingStep::kind() const { return "density_fitting"; }
+
 bool DensityFittingStep::accepts_options() const { return true; }
 
 bool DensityFittingStep::requires_options() const { return true; }
