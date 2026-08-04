@@ -271,6 +271,31 @@ math: 3b builds the override table from the home-relative rule (block for modes 
 loop encloses the home, full otherwise) and calls the existing `memsize`. Non-carried
 modes do not contribute.
 
+**Review-fix clarification (Phase 3b, `cell_footprint`).** "Encloses the home" means the
+mode is IN the meet `home_modes` (the canonical, cross-occurrence meet returned by
+`home_scope`) -- NOT that it appears below `home_depth` in some ONE occurrence's `ectx`.
+An occurrence-local `ectx`-and-depth scan is NOT occurrence-independent: two occurrences
+of the same value can nest the SAME meet mode at DIFFERENT depths (e.g. one occurrence
+under a single loop, another under two nested loops), and a depth-range scan then sweeps
+in extra, non-meet modes that merely sit at a shallower level in whichever occurrence
+happens to seed the cell. `cell_footprint`'s footprint therefore depends only on
+`home_modes` INTERSECT `carried`, never on `ectx`/`home_depth`, and is
+occurrence-independent by construction.
+
+One further wrinkle the same review-fix pass exposed: `home_scope`'s meet (via
+`stamp_seed_residency`) folds a node's OWN realized loop into that SAME node's own
+residency whenever the loop's mode is also one of the node's own carried slots (its walk
+accumulates "the node AND all its ancestors" before filtering to the node's own slots).
+For a node that is itself a loop's full accumulated RESULT (9.1's "the node itself does
+NOT see its own loop" -- its own realized loop slices its OPERANDS on the way down, never
+its own value), that self-contributed mode must NOT be treated as enclosing the node's
+own home, or the loop-realizing node is wrongly block-sized instead of held FULL. The
+exclusion is computed as a cross-occurrence UNION (per canonical value, over every
+occurrence's own `batched_here()` modes) so it stays occurrence-independent for the same
+reason the meet itself does; a mode subtracted this way is never blocked even if some
+other occurrence's ancestor also happens to carry it (a conservative, safe-toward-FULL
+choice, consistent with peak-profile's job of never UNDER-sizing).
+
 ### 9.3 Depth resolution is the rl-walk against `home_scope`
 
 `home_scope(node)` returns the residency MODE-SET (the 3a carry-forward), not a depth.

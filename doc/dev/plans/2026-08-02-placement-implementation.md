@@ -859,8 +859,11 @@ Consumes:
 
 Produces:
 - `std::size_t detail::cell_footprint(container::svector<Index> const& carried,
-   container::svector<Index> const& home_modes, BatchCtx const& ectx,
+   container::svector<Index> const& home_modes,
    dryrun::CostModel const& cm, /* block extents */ ExtentFn const& block_of)`
+  (review fix, Phase 3b: NO `ectx` param -- the footprint depends only on the
+  cross-occurrence meet `home_modes` intersected with `carried`, so it is
+  occurrence-independent by construction; see the T1 step-4 body below).
 - `int detail::home_depth_of(container::svector<Index> const& home_modes,
    BatchCtx const& ectx)` -- deepest `ectx` level whose mode is in `home_modes`, else -1.
 
@@ -888,10 +891,13 @@ Produces:
    ABOVE `p`'s loop). Drive `CostModel` with a hand-built `SizeRegime` giving those
    extents (mirror the `SizeRegime` setup already used in `test_eval_dryrun.cpp` /
    `[dryrun][cost_profile]` tests -- read one for the exact constructor call).
-4. Write `cell_footprint`: build `ExtentOverrides` = `{ m -> block_of(m) : m in carried,
-   L(m) encloses home }` (i.e. `m` appears in `ectx` at a level `<= home_depth_of(home_modes,
-   ectx)`), then `return cm.memsize(carried, overrides);`. Non-carried / above-home modes
-   get no override (full).
+4. Write `cell_footprint` (review fix, Phase 3b): build `ExtentOverrides` = `{ m ->
+   block_of(m) : m in home_modes }` (block iff `m` is IN the meet `home_modes` -- no
+   `ectx`/depth scan), then `return cm.memsize(carried, overrides);`. Modes not in
+   `home_modes` get no override (full). NOTE: at the `linearize` call site, the
+   `home_modes` actually passed in is the meet MINUS any mode a value ever realizes as
+   its OWN loop (see T2 step 4) -- a value's own loop slices its operands, never its own
+   result, so that self-contributed meet member must not be block-sized here.
 5. Run `[peak_profile]`; both pass. Keep `[dryrun]` green (only a new header added).
 6. clang-format; commit "eval: peak-profile footprint sizer + home-depth resolver (Phase 3b T1)".
 
@@ -970,10 +976,18 @@ Produces:
      PARENT of any node in the group (structural use-sites; NOT the empty router). A value
      homed above a loop needs no separate subtree-extension rule: its last consumer inside
      the loop already sets `last_use` past the loop body.
-   - `home_depth = home_depth_of(home_scope(node), ectx-at-node)`,
-   - `footprint = cell_footprint(carried, home_scope(node), ectx-at-node, cm, block_of)`
-     (carried = the node's `canon_indices()`; any occurrence's `home_scope`/`ectx` -- the
-     meet residency is identical across occurrences of a hoisted value).
+   - `home_depth = home_depth_of(home_scope(node), ectx-at-node)` (informational; still
+     `ectx`-based and thus not itself occurrence-invariant -- only the footprint below is).
+   - `footprint = cell_footprint(carried, home_modes, cm, block_of)` (review fix, Phase
+     3b: NO `ectx` arg). `carried` = the node's `canon_indices()`. `home_modes` = `
+     home_scope(node)` MINUS the cross-occurrence UNION of every occurrence's OWN
+     realized-here modes (`batched_here()`, proto-expanded) for that same canonical
+     value: `home_scope` folds a node's own loop into its own meet whenever that loop's
+     mode is also one of the node's own carried slots, but a value's own loop slices its
+     OPERANDS on the way down, never its own (loop-result) value, so that self-
+     contribution must be excluded before block-sizing. Both the meet and the exclusion
+     union are computed over ALL occurrences, so the resulting `home_modes` -- and hence
+     the footprint -- is identical regardless of forest order.
 5. Run `[peak_profile]`; all green. `[eval]`/`[dryrun]` green.
 6. clang-format; commit "eval: peak-profile linearize + interval sweep -> PeakProfile (Phase 3b T2)".
 

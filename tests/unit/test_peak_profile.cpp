@@ -81,6 +81,14 @@ void stamp_ext(EvalNode<EvalExpr>& n, Index ix) {
   n->set_batched_here({{std::move(ix), BatchModeType::External}});
 }
 
+// Stamp TWO External batch loop modes at a node, outer first: realizes a
+// two-level nest (ix_outer at level 0, ix_inner at level 1) in ONE node
+// rather than needing a separate ancestor per level.
+void stamp_ext_pair(EvalNode<EvalExpr>& n, Index ix_outer, Index ix_inner) {
+  n->set_batched_here({{std::move(ix_outer), BatchModeType::External},
+                       {std::move(ix_inner), BatchModeType::External}});
+}
+
 }  // namespace
 
 TEST_CASE("home_depth_of resolves the deepest enclosing loop in home_modes",
@@ -120,17 +128,15 @@ TEST_CASE("cell_footprint sizes enclosing-home modes at BLOCK, others FULL",
   Index const q{L"a_1"};  // unbatched: no enclosing loop, no override
   svector<Index> const carried{p, q};
 
-  // p's own loop is the sole enclosing context; block(p) narrows it to 2.
-  BatchContext const ectx{{p, {0, 2}}};
   auto const block_of = [](Index const& ix) -> std::size_t {
     return ix == Index{L"i_1"} ? 2 : 10;
   };
 
-  // Cell homed AT p (home_modes = {p}) -> d = 0 -> p's loop (level 0 <= d)
-  // encloses the home -> p sized at BLOCK (2), q sized at FULL (10).
+  // Cell homed AT p (home_modes = {p}) -> p is in the meet -> p sized at
+  // BLOCK (2), q (not in the meet) sized at FULL (10).
   {
     svector<Index> const home_modes{p};
-    auto const got = cell_footprint(carried, home_modes, ectx, cm, block_of);
+    auto const got = cell_footprint(carried, home_modes, cm, block_of);
     ExtentOverrides ov;
     ov[p] = 2;
     CHECK(got == cm.memsize(carried, ov));
@@ -139,11 +145,11 @@ TEST_CASE("cell_footprint sizes enclosing-home modes at BLOCK, others FULL",
     CHECK(got == 160);
   }
 
-  // Same cell homed ABOVE p's loop (home_modes = {}) -> d = -1 -> no level
-  // encloses the home -> both modes sized FULL.
+  // Same cell homed ABOVE p's loop (home_modes = {}) -> neither mode is in
+  // the meet -> both modes sized FULL.
   {
     svector<Index> const home_modes{};
-    auto const got = cell_footprint(carried, home_modes, ectx, cm, block_of);
+    auto const got = cell_footprint(carried, home_modes, cm, block_of);
     CHECK(got == cm.memsize(carried));
     // 10 (full p) * 10 (full q) * 8 bytes/elem.
     CHECK(got == 800);
@@ -279,20 +285,32 @@ TEST_CASE(
   std::vector<EvalNode<EvalExpr>> forest{R};
   auto const sched = linearize(forest, cm, block_of);
 
-  // Locate C's and R's cells by their carried-slot footprints. C carries
-  // {i_1,a_3}: homed AT the i_1 loop (depth 0) => i_1 sized BLOCK(2), a_3
-  // FULL(10) => 2*10*8 = 160, and home_depth == 0. R carries {i_1,a_5}: it is
-  // the loop RESULT (ectx empty at R) => i_1 FULL(10), a_5 FULL(10) =>
-  // 10*10*8 = 800, and home_depth == -1.
+  // Locate C's cell by its carried-slot footprint: C carries {i_1,a_3},
+  // homed AT the i_1 loop (depth 0) => i_1 sized BLOCK(2), a_3 FULL(10) =>
+  // 2*10*8 = 160, and home_depth == 0. That combination is unique to C (the
+  // two leaves and D all size FULL/-1 like R would if mis-sized), so a plain
+  // (footprint, home_depth) match is unambiguous here.
+  //
+  // R must be found a DIFFERENT way: R carries {i_1,a_5} and, like the two
+  // leaves and D, sizes FULL/home_depth==-1 -- so a bare (800, -1) match is
+  // AMBIGUOUS (leaves C1, C2, and D also size 800/-1). Disambiguate using
+  // first_use: R is the tree ROOT, so it is visited LAST in the post-order
+  // walk and is the only cell whose first_use is the final static point.
   Cell const* c_cell = nullptr;
   Cell const* r_cell = nullptr;
   for (auto const& c : sched.cells) {
     if (c.footprint == 160 && c.home_depth == 0) c_cell = &c;
-    if (c.footprint == 800 && c.home_depth == -1) r_cell = &c;
+    if (c.home_depth == -1 && c.first_use == sched.num_points - 1) r_cell = &c;
   }
   REQUIRE(c_cell != nullptr);  // loop-carried value sized at BLOCK
   REQUIRE(r_cell != nullptr);  // loop result sized at FULL
   CHECK(c_cell->footprint == 160);
+  // R's OWN i_1 loop slices its OPERANDS (C, via child_ectx), never R's own
+  // result -- R is the loop's full accumulated output. home_scope(R) DOES
+  // include i_1 (stamp_seed_residency folds a node's own batched_here into
+  // its own meet), but cell_footprint's home_modes excludes any mode a value
+  // realizes as its OWN loop (see linearize's own_modes_union), so i_1 stays
+  // FULL for R => 10*10*8 = 800, NOT block-narrowed.
   CHECK(r_cell->footprint == 800);
 }
 
@@ -411,6 +429,83 @@ TEST_CASE(
 
   // THE Step-B equality on the demoted forest.
   CHECK(peak_profile_replay(s) == peak_profile_sweep(s).peak_bytes);
+}
+
+TEST_CASE(
+    "linearize sizes a PARTIALLY-demoted value's footprint "
+    "occurrence-independently (meet, not per-occurrence ectx)",
+    "[peak_profile]") {
+  // The Phase 3b review-fix pin: a shared value V carries TWO slots
+  // {o_1,i_1}. Occurrence 1 sits under a single i_1 loop; occurrence 2 sits
+  // under BOTH an outer o_1 loop and an inner i_1 loop (stamp_ext_pair on a
+  // single node realizes both levels at once). The cross-occurrence MEET is
+  // {i_1} INTERSECT {o_1,i_1} = {i_1} -- o_1 is batched in only ONE
+  // occurrence, so it is NOT in the meet and must size FULL in EITHER forest
+  // order.
+  //
+  // The buggy predecessor block-sized any carried mode present in an
+  // occurrence's OWN ectx at a level <= home_depth_of(meet, ectx) -- not just
+  // modes literally IN the meet. Occurrence 2's ectx is [o_1,i_1] with
+  // home_depth_of({i_1}, [o_1,i_1]) == 1 (i_1 is the deepest match), so the
+  // buggy scan swept levels 0..1 and wrongly block-sized o_1 too (it just
+  // happens to sit at level 0, "enclosing" by the flawed level-range proxy).
+  // Occurrence 1's ectx is only [i_1] (home_depth 0), so the buggy scan only
+  // ever touches i_1 there -- by ACCIDENT giving the right answer. Since
+  // linearize's cell keeps whichever occurrence's footprint it computes
+  // FIRST, the buggy footprint depended on forest order: 160 (correct) if
+  // occurrence 1 is visited first, 32 (wrong -- o_1 wrongly block-sized too)
+  // if occurrence 2 is visited first. The fix reads overrides off home_modes
+  // (the meet) alone, so the footprint no longer depends on forest order.
+  auto make_V = [] {
+    return inode("V{o_1;i_1}", leaf("V1{o_1;x_1}"), leaf("V2{x_1;i_1}"));
+  };
+
+  SizeRegime r;
+  r.space_extent = {{L"o", 10}, {L"i", 10}, {L"x", 10}, {L"a", 10}};
+  CostModel const cm{r};
+  auto const block_of = [](Index const&) -> std::size_t { return 2; };
+  // Correct, occurrence-independent footprint: i_1 BLOCK (in the meet), o_1
+  // FULL (not in the meet) => 2 (block i_1) * 10 (full o_1) * 8 bytes/elem.
+  std::size_t const expected = 160;
+
+  auto build_and_find_v = [&](bool occ2_first) -> std::size_t {
+    auto P1 = inode("P1{i_1;a_1}", make_V(), leaf("W1{i_1;a_1}"));
+    stamp_ext(P1, Index{L"i_1"});  // occurrence 1: i_1 loop only
+    auto P2 = inode("P2{a_1;a_3}", make_V(), leaf("W2{a_1;a_3}"));
+    stamp_ext_pair(P2, Index{L"o_1"},
+                   Index{L"i_1"});  // occurrence 2: o_1 (outer), i_1 (inner)
+
+    std::vector<EvalNode<EvalExpr>> forest =
+        occ2_first ? std::vector<EvalNode<EvalExpr>>{P2, P1}
+                   : std::vector<EvalNode<EvalExpr>>{P1, P2};
+    auto const s = linearize(forest, cm, block_of);
+
+    // V is the unique cell with a NON-trivial home_depth in this forest: P1
+    // and P2 own no carried slot in their own loop's mode(s) (their loops
+    // slice V and the leaves' modes, not their own result), and every leaf
+    // stays unstamped (home_scope defaults empty), so all of those size
+    // home_depth == -1 in EITHER order. V's home_depth is occurrence-
+    // dependent (0 in the occ-1-first order, 1 in the occ-2-first order --
+    // home_depth is informational only, per linearize's doc comment), so
+    // match on "!= -1" rather than a fixed depth to stay order-agnostic.
+    Cell const* v = nullptr;
+    for (auto const& c : s.cells)
+      if (c.home_depth != -1) v = &c;
+    REQUIRE(v != nullptr);
+    return v->footprint;
+  };
+
+  // Order A: occurrence 1 (single i_1 loop) visited FIRST.
+  std::size_t const footprint_occ1_first = build_and_find_v(false);
+  // Order B: occurrence 2 (o_1-then-i_1 loop) visited FIRST -- this is the
+  // order that would have exposed the bug under the OLD ectx-based code.
+  std::size_t const footprint_occ2_first = build_and_find_v(true);
+
+  CHECK(footprint_occ1_first == expected);
+  CHECK(footprint_occ2_first == expected);
+  // THE occurrence-independence pin: same footprint regardless of which
+  // occurrence the forest walk records first.
+  CHECK(footprint_occ1_first == footprint_occ2_first);
 }
 
 // ---- Step C: the Phase-1 anchor (non-demoted forest) ----------------

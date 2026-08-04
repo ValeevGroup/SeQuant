@@ -80,16 +80,12 @@ using BatchContext =
 template <typename BlockOfFn>
 [[nodiscard]] inline std::size_t cell_footprint(
     container::svector<Index> const& carried,
-    container::svector<Index> const& home_modes, BatchContext const& ectx,
-    dryrun::CostModel const& cm, BlockOfFn const& block_of) {
-  int const d = home_depth_of(home_modes, ectx);
+    container::svector<Index> const& home_modes, dryrun::CostModel const& cm,
+    BlockOfFn const& block_of) {
   dryrun::ExtentOverrides ov;
-  for (int i = 0; i <= d; ++i) {  // loops at level <= d ENCLOSE the home
-    Index const& m = ectx[i].first;
-    if (std::find(carried.begin(), carried.end(), m) != carried.end())
-      ov[m] = block_of(m);  // sliced inside an enclosing loop
-  }
-  return cm.memsize(carried, ov);  // non-overridden carried modes size FULL
+  // block iff in the meet-home
+  for (auto const& m : home_modes) ov[m] = block_of(m);
+  return cm.memsize(carried, ov);  // non-meet carried modes size FULL
 }
 
 }  // namespace detail
@@ -232,6 +228,10 @@ Schedule linearize(R const& forest, dryrun::CostModel const& cm,
     container::svector<Index> home;     // home_scope (proto-expanded)
     container::svector<Index> carried;  // canon_indices
     detail::BatchContext ectx;  // ENCLOSING context (excludes own loops)
+    container::svector<Index> own_modes;  // THIS occurrence's OWN realized
+                                          // loop modes (proto-expanded) --
+                                          // see the own_modes_union note
+                                          // below.
   };
 
   container::svector<NodeRec> recs;
@@ -242,11 +242,14 @@ Schedule linearize(R const& forest, dryrun::CostModel const& cm,
     // Children see this node's own realized loops on top of the enclosing
     // context; the node itself does NOT (it is recorded with `ectx`).
     detail::BatchContext child_ectx = ectx;
+    container::svector<Index> own_modes;
     for (auto const& [ix, kind] : n->batched_here()) {
       container::svector<Index> expanded;
       sequant::detail::proto_expand_into(expanded, ix);
-      for (auto const& m : expanded)
+      for (auto const& m : expanded) {
         child_ectx.push_back({m, {std::size_t{0}, block_of(m)}});
+        own_modes.push_back(m);
+      }
     }
 
     container::svector<std::size_t> child_recs;
@@ -263,6 +266,7 @@ Schedule linearize(R const& forest, dryrun::CostModel const& cm,
     r.home = home_scope(n);  // proto-expanded seed residency (empty on leaves)
     r.carried.assign(n->canon_indices().begin(), n->canon_indices().end());
     r.ectx = std::move(ectx);
+    r.own_modes = std::move(own_modes);
     std::size_t const idx = recs.size();
     recs.push_back(std::move(r));
     for (auto ci : child_recs) recs[ci].consumer_point = point;
@@ -270,6 +274,25 @@ Schedule linearize(R const& forest, dryrun::CostModel const& cm,
   };
 
   for (auto const& tree : forest) visit(visit, tree, detail::BatchContext{});
+
+  // Cross-occurrence union, per canonical value (hash), of the modes that
+  // value EVER realizes as its OWN loop (\c batched_here() at the value's own
+  // node, not an ancestor's). \c home_scope already folds a node's own
+  // batched-here contribution into its meet (stamp_seed_residency: "the node
+  // AND all its ancestors"), which is right for OTHER consumers of that
+  // meet, but wrong for THIS cell's own footprint: a mode a value realizes as
+  // its OWN loop slices that value's OPERANDS on the way down, never the
+  // value's own result -- the node is the loop's full accumulated output
+  // (see the post-order walk's doc comment above: "the node itself does
+  // NOT" see its own loop). Subtracting this union keeps the exclusion
+  // occurrence-independent by the same reasoning as the meet itself (built
+  // from ALL occurrences, not just the one that seeds the cell).
+  std::unordered_map<std::size_t, container::svector<Index>> own_modes_union;
+  for (auto const& r : recs) {
+    auto& acc = own_modes_union[r.hash];
+    for (auto const& m : r.own_modes)
+      if (std::find(acc.begin(), acc.end(), m) == acc.end()) acc.push_back(m);
+  }
 
   // Group occurrences by value identity (hash_value): one Cell per group.
   Schedule out;
@@ -283,8 +306,13 @@ Schedule linearize(R const& forest, dryrun::CostModel const& cm,
       c.first_use = r.point;
       c.last_use = r.consumer_point;
       c.home_depth = detail::home_depth_of(r.home, r.ectx);
-      c.footprint =
-          detail::cell_footprint(r.carried, r.home, r.ectx, cm, block_of);
+      auto const& self_modes = own_modes_union[r.hash];
+      container::svector<Index> home_modes;
+      for (auto const& m : r.home)
+        if (std::find(self_modes.begin(), self_modes.end(), m) ==
+            self_modes.end())
+          home_modes.push_back(m);
+      c.footprint = detail::cell_footprint(r.carried, home_modes, cm, block_of);
       hash_to_cell.emplace(r.hash, c.value_id);
       out.cells.push_back(std::move(c));
     } else {
