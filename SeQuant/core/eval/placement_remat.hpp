@@ -246,9 +246,9 @@ RematResult rematerialize_to_budget(container::svector<ValueCell> cells,
 ///
 /// \param seed_cells the seed placement (e.g. \c remat_cells(forest).cells);
 ///        \c home_modes is each value's seed \c home_scope.
-/// \param remat_cells the post-spill placement (\c
+/// \param final_cells the post-spill placement (\c
 ///        rematerialize_to_budget(...).cells); \c home_modes is the final home.
-/// \param forest the eval forest \p seed_cells / \p remat_cells were built
+/// \param forest the eval forest \p seed_cells / \p final_cells were built
 /// from.
 /// \return a \c PlacementRouter with one override per (moved value, occurrence
 ///         key). Empty iff nothing moved.
@@ -256,7 +256,7 @@ RematResult rematerialize_to_budget(container::svector<ValueCell> cells,
 template <meta::eval_node_range R>
 [[nodiscard]] PlacementRouter<std::ranges::range_value_t<R>> remat_to_router(
     container::svector<ValueCell> const& seed_cells,
-    container::svector<ValueCell> const& remat_cells, R const& forest) {
+    container::svector<ValueCell> const& final_cells, R const& forest) {
   using Node = std::ranges::range_value_t<R>;
 
   // Seed home_modes by value_id (robust to any reordering between seed and
@@ -264,7 +264,7 @@ template <meta::eval_node_range R>
   std::unordered_map<std::size_t, container::svector<Index> const*> seed_home;
   for (auto const& c : seed_cells) seed_home.emplace(c.value_id, &c.home_modes);
   std::unordered_map<std::size_t, container::svector<Index>> moved;
-  for (auto const& c : remat_cells) {
+  for (auto const& c : final_cells) {
     auto const sh = seed_home.find(c.value_id);
     if (sh != seed_home.end() && c.home_modes != *sh->second)
       moved.emplace(c.hash, c.home_modes);

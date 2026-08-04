@@ -553,6 +553,23 @@ TEST_CASE(
   CHECK(g_home->residency == giant_home);
   CHECK(g_home->split_index == 0);
 
+  // G's SECOND occurrence (under P2, ambient context {o_1,i_1}) also routes to
+  // the SAME HomeTarget (one value -> one meet home). NOTE: on THIS fixture the
+  // two occurrence keys are actually IDENTICAL -- occurrence_key is built from
+  // G's SUBTREE LEAVES (A{a_5;x_2}, B{x_2;a_6}), which carry a/x-space indices,
+  // NOT the batched o_1/i_1 (those are G's own RESULT slots, absent from the
+  // leaves), so the batched-slot coloring has nothing to distinguish. The
+  // genuine TWO-DISTINCT-KEYS partial-overlap case (design 10.1) needs a
+  // fixture whose value SUBTREE carries the batched modes -- deferred; here we
+  // pin that the second occurrence's key still resolves to the shared home.
+  auto const& G2 = forest[1].left();
+  auto const g_key2 =
+      occurrence_key(G2, svector<Index>{Index{L"o_1"}, Index{L"i_1"}});
+  CHECK(sequant::eval::RouterKeyEqual{}(g_key, g_key2));  // same key here
+  HomeTarget const* g_home2 = router.route(g_key2);
+  REQUIRE(g_home2 != nullptr);
+  CHECK(g_home2->residency == giant_home);  // same home as the first occurrence
+
   // An UNMOVED cell (W1 = P1's right leaf) has NO override.
   auto const& W1 = forest[0].right();
   auto const w_key = occurrence_key(W1, svector<Index>{Index{L"i_1"}});
