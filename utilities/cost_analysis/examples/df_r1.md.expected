@@ -4,7 +4,7 @@ Sizes in MB (16 bytes/element).
 
 ## R1
 
-Terms: 1; distinct intermediates: 1; reused: 0; largest: 2.3193 MB; peak storage: 6.8420 MB.
+Terms: 1; distinct intermediates: 1; reused: 0; largest: 2.3193 MB; peak storage: 7.0801 MB.
 
 Total operations (symbolic): 2*i^2a^2Κ + 2*iaΚ^2
 

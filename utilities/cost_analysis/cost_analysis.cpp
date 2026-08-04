@@ -213,6 +213,28 @@ AsyCost result_memory(const EvalExpr& ev) {
   return AsyCost{std::move(exponents)};
 }
 
+// Like SeQuant's eval_node.hpp min_storage(), but maxes numerically (by
+// .ops(), i.e. actual size at this driver's configured index-space sizes)
+// instead of via AsyCost::operator<, which orders by symbolic polynomial
+// degree. A lower-degree node (e.g. O^4) can be numerically larger than a
+// higher-degree one (e.g. O*V*aux) at the sizes this tool is run with, so the
+// symbolic max used by the library helper can pick the wrong peak.
+AsyCost numeric_peak_storage(const TreeNode& tree) {
+  AsyCost result = AsyCost::zero();
+  tree.visit([&](const TreeNode& n) {
+    AsyCost cost = AsyCost::zero();
+    if (n.leaf()) {
+      if (n->is_tensor()) cost = result_memory(*n);
+    } else {
+      if (n.left()->is_tensor()) cost = cost + result_memory(*n.left());
+      if (n.right()->is_tensor()) cost = cost + result_memory(*n.right());
+      if (n->is_tensor()) cost = cost + result_memory(*n);
+    }
+    if (result.ops() < cost.ops()) result = cost;
+  });
+  return result;
+}
+
 OptimizeOptions make_opts(const Config& cfg) {
   OptimizeOptions o;
   o.objective_function = objective_of(cfg.optimize.objective);
@@ -271,8 +293,8 @@ CellResult process(const Config& cfg, const ExprPtr& rhs, const Tensor& head) {
     scan(tree);
     // Peak working set = heaviest single-contraction over the schedule; report
     // the max across the term-by-term summand trees. Total FLOPs = their sum.
-    const AsyCost ps = min_storage(tree);
-    if (res.peak_storage < ps) res.peak_storage = ps;
+    const AsyCost ps = numeric_peak_storage(tree);
+    if (res.peak_storage.ops() < ps.ops()) res.peak_storage = ps;
     res.total_flops = res.total_flops + asy_cost(tree);
     res.trees.push_back(std::move(tree));
   };
@@ -289,7 +311,7 @@ CellResult process(const Config& cfg, const ExprPtr& rhs, const Tensor& head) {
   for (const auto& [_, rec] : res.catalog) {
     if (rec.memory == AsyCost::zero()) continue;
     ++res.n_distinct;
-    if (res.largest_mem < rec.memory) res.largest_mem = rec.memory;
+    if (res.largest_mem.ops() < rec.memory.ops()) res.largest_mem = rec.memory;
     if (rec.uses >= 2) ++res.n_reused;
   }
   return res;
