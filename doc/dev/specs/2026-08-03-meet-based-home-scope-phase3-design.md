@@ -230,3 +230,113 @@ use) + CAT-3b (compile-time factorizer knobs `node_level_placement`/`order_aware
 scope -- O2 supersedes their function; only `effective_count` is literally replaced. CAT-4
 router-seam duplication resolves as the seam matures. CAT-5 (incl. `is_volatile`, `min_repeats`)
 stays -- these are cache semantics / CSE-cacheability, not spill heuristics.
+
+## 9. Phase 3b: the static peak profile (O3a), detailed design (2026-08-04)
+
+Phase 3b builds the STATIC peak-profile analysis that consumes the Phase-3a
+`home_scope` seed and produces what O2 (Phase 4) needs to make spill decisions. Same
+posture as 3a scope (A): a NEW, purely additive static computation with ZERO
+production callers -- built and validated by tests, wired into O2 in Phase 4. Runtime
+stays byte-identical: `place_at_this_level`, `stamp_lifetime_masks`, and the Phase-1
+runtime `cost_profile` path are untouched.
+
+### 9.1 What it computes (the cell model)
+
+A SEED cell is `(value, home_scope)` -- perfect CSE, one cell per distinct value at its
+meet home. There are no splits yet (`split_index` is trivially 0; O2 introduces splits
+in Phase 4), so the seed placement is fully determined by `home_scope(value)` from 3a.
+The analysis emits, for the whole forest under the seed placement:
+
+```
+struct PeakProfile {
+  double peak_bytes;                     // max co-resident footprint sum
+  PointId binding_point;                 // the argmax static point O2 spills from
+  container::svector<CellId> live_at_binding;  // the spill candidates (cells live there)
+};
+```
+
+The scalar `peak_bytes` is the measurement; `binding_point` + `live_at_binding` are the
+structure O2 acts on (the argmax point IS the binding peak point, its live set ARE the
+spill candidates -- spec 7c).
+
+### 9.2 Footprint is home-relative (O3c reuses existing machinery)
+
+Per 7c, a cell homed at scope `S` sizes each carried mode `m` at `block_extent(m)` if
+`m`'s loop `L(m)` ENCLOSES `S` (built inside the loop -> sliced), else `full_extent(m)`.
+This is EXACTLY the existing per-index extent-override table in
+`backends/dryrun/cost_model_object.hpp` (the "narrow specific indices to their REALIZED
+sliced size vs the full regime extent" table) fed into `opt::detail::memsize_counter`,
+which already does the extent-product / COMPOSITE-MOMENT (proto) math. So O3c is not new
+math: 3b builds the override table from the home-relative rule (block for modes whose
+loop encloses the home, full otherwise) and calls the existing `memsize`. Non-carried
+modes do not contribute.
+
+### 9.3 Depth resolution is the rl-walk against `home_scope`
+
+`home_scope(node)` returns the residency MODE-SET (the 3a carry-forward), not a depth.
+3b resolves it to a home DEPTH exactly as the runtime store does today
+(`eval.hpp:1776-1782`): walk the enclosing-loop `BatchContext` (`ectx`,
+`cache_manager.hpp:95`) from innermost out, and the home depth is the deepest level
+whose mode is IN `home_scope(node)` -- the same walk `place_at_this_level` runs, but
+keyed on the unified seed residency instead of `sliced ∪ contracted` (`in_union`).
+`rl == -1` (no enclosing loop carries a residency mode) means the chain root.
+
+### 9.4 Linearization and liveness intervals
+
+Linearize the static schedule tree in execution order -- one representative iteration
+per loop (same-loop different-iteration cells are never co-resident; the single-iteration
+linearization captures that, while a cell homed ABOVE a loop spans that loop's whole
+subtree). Each static point gets an index. A cell's interval is `[first-use, last-use]`
+= the min/max static-point over its production point and its router use-sites (Phase-2
+`PlacementRouter` + occurrence key give the use-site set), extended so a cell homed above
+a loop covers that loop's subtree span. A cell contributes its full home-granularity
+footprint to EVERY point in its live range (deeper consumers slice on access; they do
+not shrink the stored cell).
+
+### 9.5 The sweep
+
+```
+peak = max over static points p of  Σ footprint(cell) over cells live at p
+```
+
+An event-based sweep line over the weighted intervals; the argmax point and its live set
+populate `binding_point` / `live_at_binding`.
+
+### 9.6 Validation (two complementary checks; the resolved fork)
+
+The seed placement DIFFERS from today's heuristic on demoted values (Section 5: the seed
+hoists, the heuristic vetoes to local), so "sweep == the Phase-1 `peak_bytes` figure" is
+NOT valid in general. Validation therefore has two parts:
+
+- **O3b replay oracle (algorithm cross-check, ALL forests).** A deliberately DIFFERENT
+  algorithm -- an explicit per-static-point live-set replay that sums footprints, rather
+  than the interval-event sweep -- over the SAME seed placement, footprint sizing, and
+  linearization. Assert `sweep.peak_bytes == replay.peak_bytes` EXACTLY on every witness
+  and constructed forest, DEMOTED cases included. This validates the sweep's interval
+  logic. Honest scope: the oracle SHARES the footprint (9.2) and linearization (9.4) code
+  with the sweep, so their agreement checks the sweep ALGORITHM, not the shared sizing --
+  that is what the anchor below is for.
+- **Phase-1 anchor (sizing/co-residency cross-check, NON-DEMOTED forests).** On forests
+  where the seed placement coincides with today's heuristic (no demotion -- e.g. the
+  External-only witnesses), assert `sweep.peak_bytes == cost_profile().peak_bytes`. This
+  ties 3b's absolute footprint sizing and co-residency semantics to the independently
+  MEASURED Phase-1 runtime figures (the 525.9-GB-class witnesses), covering exactly what
+  the shared-code oracle cannot.
+
+### 9.7 Files and non-regression
+
+- NEW `SeQuant/core/eval/peak_profile.hpp` -- `PeakProfile`, the footprint sizer
+  (home-relative override table + `memsize`), the rl-walk depth resolver keyed on
+  `home_scope`, the linearizer, the interval-event sweep, and the per-point replay
+  oracle. Consumes `home_scope` (`lifetime_mask.hpp`), the router
+  (`placement_router.hpp` / `occurrence_key.hpp`), `batched_here` /
+  `BatchContext` (`eval_expr.hpp` / `cache_manager.hpp`), and `memsize_counter` +
+  the override table (`backends/dryrun/cost_model_object.hpp`).
+- NEW `tests/unit/test_peak_profile.cpp` -- footprint against-definition,
+  depth-resolution, interval, sweep, oracle-equality, and the Phase-1 anchor.
+- ZERO production callers; runtime untouched. Non-regression is structural (the seed
+  and the runtime peak measurement remain independent) and confirmed by the unchanged
+  `[eval]` / `[cache_manager]` / `[dryrun]` suites + witness figures.
+
+The CUTOVER (wiring `home_scope` + `PeakProfile` into runtime placement, coupled with
+O2, behind the flag) remains Phase 4.
