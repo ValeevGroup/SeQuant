@@ -544,6 +544,22 @@ TEST_CASE("serialization", "[serialization]") {
           REQUIRE_NOTHROW(deserialize<ExprPtr>(L"Â{i1,i2;a1,a2}"));
         }
       }
+
+      SECTION("(anti)symmetrization operators are always column symmetric") {
+        // ... including under a Context whose column default is the library
+        // default Nonsymm: the deserializer must force Symm rather than pass
+        // the (contradicting) Context default to the Tensor ctor
+        auto ctx = get_default_context();
+        ctx.set(ColumnSymmetry::Nonsymm);
+        auto resetter = set_scoped_default_context(ctx);
+        for (const auto& input :
+             {L"Ŝ{i1,i2;a1,a2}", L"Â{i1,i2;a1,a2}", L"Ŝ{i1,i2;a1,a2}:N-N-N",
+              L"Â{i1,i2;a1,a2}:A-N-N"}) {
+          ExprPtr expr;
+          REQUIRE_NOTHROW(expr = deserialize<ExprPtr>(input));
+          REQUIRE(expr->as<Tensor>().column_symmetry() == ColumnSymmetry::Symm);
+        }
+      }
     }
   }
 

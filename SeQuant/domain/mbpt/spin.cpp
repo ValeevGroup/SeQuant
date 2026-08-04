@@ -631,14 +631,12 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
   SEQUANT_ASSERT(A_tensor.rank() > 1);
 
   auto S = Tensor{};
+  // the symmetrizer Ŝ symmetrizes the {bra,ket} particle columns: it is
+  // column-symmetric with Nonsymm bra/ket permutational symmetry (see
+  // sequant::symmetrizer_symmetries / make_symmetrizer)
   if (A_is_nconserving) {
-    // the symmetrizer Ŝ symmetrizes the {bra,ket} particle columns: it is
-    // column-symmetric (with Nonsymm bra/ket permutational symmetry). The
-    // programmatic Tensor default is column-Nonsymm, so request Symm explicitly
-    // (matching the deserializer, which forces Symm for the reserved Ŝ).
     S = Tensor(reserved::symm_label(), A_tensor.bra(), A_tensor.ket(),
-               A_tensor.aux(), Symmetry::Nonsymm, std::nullopt,
-               ColumnSymmetry::Symm);
+               A_tensor.aux(), symmetrizer_symmetries);
   } else {  // A is N-nonconserving
     auto n = std::min(A_tensor.bra_rank(), A_tensor.ket_rank());
     container::svector<Index> bra_list(A_tensor.bra().begin(),
@@ -646,8 +644,8 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
     container::svector<Index> ket_list(A_tensor.ket().begin(),
                                        A_tensor.ket().begin() + n);
     S = Tensor(reserved::symm_label(), bra(std::move(bra_list)),
-               ket(std::move(ket_list)), A_tensor.aux(), Symmetry::Nonsymm,
-               std::nullopt, ColumnSymmetry::Symm);
+               ket(std::move(ket_list)), A_tensor.aux(),
+               symmetrizer_symmetries);
   }
   const auto nf = rational{1, factorial(S.ket_rank())};
 

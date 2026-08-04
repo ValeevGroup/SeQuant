@@ -333,7 +333,12 @@ struct Transformer {
         tensor.name == reserved::symm_label();
     if (tensor.name == reserved::antisymm_label()) {
       perm_symm = Symmetry::Antisymm;
-    } else if (tensor.name == reserved::symm_label()) {
+    }
+    if (is_reserved_symmetrizer) {
+      // both act on indistinguishable particles, hence are column-symmetric
+      // (for Â this also follows from its Antisymm perm symmetry). Force it
+      // rather than passing the Context's column default through, which the
+      // Tensor ctor would reject as a contradicting *explicit* request.
       column_symm = ColumnSymmetry::Symm;
     }
     // (Anti)symmetrization operators are always braket-Nonsymm. When no braket

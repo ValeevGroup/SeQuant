@@ -25,8 +25,8 @@
 #include <string_view>
 #include <type_traits>
 
-// the particle-symmetric default symmetry pack `ps` (column = Symm) is defined
-// in catch2_sequant.hpp and shared across the MBPT test TUs
+// the `particle_symmetric` symmetry pack (column = Symm) is defined in
+// catch2_sequant.hpp and shared across the MBPT test TUs
 
 TEST_CASE("tensor", "[elements]") {
   using namespace sequant;
@@ -117,12 +117,14 @@ TEST_CASE("tensor", "[elements]") {
     SECTION("null indices") {
       // null indices ok in asymmetric bra or ket
       REQUIRE_NOTHROW(Tensor(L"N", bra{L"i_2", L"", L"i_3"},
-                             ket{L"", L"i_1", L""}, aux{}, ps));
+                             ket{L"", L"i_1", L""}, aux{}, particle_symmetric));
       REQUIRE_NOTHROW(Tensor(L"N", bra{L"", L"i_1", L""},
-                             ket{L"i_2", L"", L"i_3"}, aux{}, ps));
+                             ket{L"i_2", L"", L"i_3"}, aux{},
+                             particle_symmetric));
 
-      REQUIRE_NOTHROW(Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, ps));
-      Tensor t(L"N", bra{L""}, ket{L"i_1"}, aux{}, ps);
+      REQUIRE_NOTHROW(
+          Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, particle_symmetric));
+      Tensor t(L"N", bra{L""}, ket{L"i_1"}, aux{}, particle_symmetric);
       REQUIRE(t.bra_rank() == 0);
       REQUIRE(t.ket_rank() == 1);
       REQUIRE(t.bra_net_rank() == 0);
@@ -132,25 +134,29 @@ TEST_CASE("tensor", "[elements]") {
 
       // in fact slots of asymmetric particle-symmetric tensors are kept in
       // canonical order
-      REQUIRE(Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, ps) ==
-              Tensor(L"N", bra{}, ket{L"i_1"}, aux{}, ps));
+      REQUIRE(Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, particle_symmetric) ==
+              Tensor(L"N", bra{}, ket{L"i_1"}, aux{}, particle_symmetric));
       REQUIRE(Tensor(L"N", bra{L"i_2", L"", L"i_3"}, ket{L"", L"i_1", L""},
-                     aux{}, ps) == Tensor(L"N", bra{L"i_2", L"i_3"},
-                                          ket{L"", L"", L"i_1"}, aux{}, ps));
+                     aux{}, particle_symmetric) ==
+              Tensor(L"N", bra{L"i_2", L"i_3"}, ket{L"", L"", L"i_1"}, aux{},
+                     particle_symmetric));
       REQUIRE(Tensor(L"N", bra{L"", L"i_1", L""}, ket{L"i_2", L"", L"i_3"},
-                     aux{}, ps) == Tensor(L"N", bra{L"i_1", L"", L""},
-                                          ket{L"", L"i_2", L"i_3"}, aux{}, ps));
-      REQUIRE(Tensor(L"N", bra{L"", L"i_1", L"", L"i_4"},
-                     ket{L"i_2", L"", L"i_3", L"i_5"}, aux{}, ps) ==
-              Tensor(L"N", bra{L"i_4", L"i_1", L"", L""},
-                     ket{L"i_5", L"", L"i_2", L"i_3"}, aux{}, ps));
+                     aux{}, particle_symmetric) ==
+              Tensor(L"N", bra{L"i_1", L"", L""}, ket{L"", L"i_2", L"i_3"},
+                     aux{}, particle_symmetric));
+      REQUIRE(
+          Tensor(L"N", bra{L"", L"i_1", L"", L"i_4"},
+                 ket{L"i_2", L"", L"i_3", L"i_5"}, aux{}, particle_symmetric) ==
+          Tensor(L"N", bra{L"i_4", L"i_1", L"", L""},
+                 ket{L"i_5", L"", L"i_2", L"i_3"}, aux{}, particle_symmetric));
       // in fact unnecessary null indices are dropped in canonicalization
-      REQUIRE(Tensor(L"N", bra{L"", L"i_1", L"", L"i_4"},
-                     ket{L"i_2", L"", L"i_3", L"i_5"}, aux{}, ps) ==
-              Tensor(L"N", bra{L"i_4", L"i_1"},
-                     ket{L"i_5", L"", L"i_2", L"i_3"}, aux{}, ps));
+      REQUIRE(
+          Tensor(L"N", bra{L"", L"i_1", L"", L"i_4"},
+                 ket{L"i_2", L"", L"i_3", L"i_5"}, aux{}, particle_symmetric) ==
+          Tensor(L"N", bra{L"i_4", L"i_1"}, ket{L"i_5", L"", L"i_2", L"i_3"},
+                 aux{}, particle_symmetric));
       Tensor t5(L"N", bra{L"", L"i_1", L"", L"i_4"},
-                ket{L"i_2", L"", L"i_3", L"i_5"}, aux{}, ps);
+                ket{L"i_2", L"", L"i_3", L"i_5"}, aux{}, particle_symmetric);
       REQUIRE(t5.bra_rank() == 2);
       REQUIRE(t5.bra_net_rank() == 2);
       REQUIRE(t5.bra()[0] == L"i_4");
@@ -345,7 +351,7 @@ TEST_CASE("tensor", "[elements]") {
     auto t2 = Tensor(L"F", bra{L"i_1"}, ket{L"i_2"}, aux{L"i_3"});
     auto t3 = Tensor(L"F", bra{L"i_1"}, ket{L"i_2"}, aux{L"i_3", L"i_4"});
     auto t4 = Tensor(L"F", bra{Index(L"i_1", {L"i_5", L"i_6"}), Index{}},
-                     ket{L"", L"i_2"}, aux{L"i_3", L"i_4"}, ps);
+                     ket{L"", L"i_2"}, aux{L"i_3", L"i_4"}, particle_symmetric);
     auto h1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"}) *
               ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}));
 
@@ -595,5 +601,69 @@ TEST_CASE("tensor_hermiticity", "[elements]") {
     REQUIRE(t.braket_symmetry() == BraKetSymmetry::Nonsymm);
     REQUIRE(t.hermiticity() == Hermiticity::NonHermitian);
     REQUIRE(t.column_symmetry() == ColumnSymmetry::Symm);
+  }
+}
+
+TEST_CASE("(anti)symmetrizer factories", "[elements]") {
+  using namespace sequant;
+
+  SECTION("defining symmetries") {
+    const auto S = make_symmetrizer(bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
+    REQUIRE(S->as<Tensor>().label() == reserved::symm_label());
+    REQUIRE(S->as<Tensor>().symmetry() == Symmetry::Nonsymm);
+    REQUIRE(S->as<Tensor>().braket_symmetry() == BraKetSymmetry::Nonsymm);
+    REQUIRE(S->as<Tensor>().column_symmetry() == ColumnSymmetry::Symm);
+
+    const auto A =
+        make_antisymmetrizer(bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
+    REQUIRE(A->as<Tensor>().label() == reserved::antisymm_label());
+    REQUIRE(A->as<Tensor>().symmetry() == Symmetry::Antisymm);
+    REQUIRE(A->as<Tensor>().braket_symmetry() == BraKetSymmetry::Nonsymm);
+    REQUIRE(A->as<Tensor>().column_symmetry() == ColumnSymmetry::Symm);
+
+    // the factories agree with what the deserializer produces
+    REQUIRE(*S == *deserialize<ExprPtr>(L"Ŝ{i_1,i_2;a_1,a_2}"));
+    REQUIRE(*A == *deserialize<ExprPtr>(L"Â{i_1,i_2;a_1,a_2}"));
+
+    // ... and with the aux-index overloads
+    REQUIRE_NOTHROW(make_symmetrizer(bra{L"i_1"}, ket{L"a_1"}, aux{L"x_1"}));
+    REQUIRE_NOTHROW(
+        make_antisymmetrizer(bra{L"i_1"}, ket{L"a_1"}, aux{L"x_1"}));
+  }
+
+  SECTION("ctor rejects contradicting symmetries") {
+    // braket symmetry, like column symmetry below, is a defining property of a
+    // reserved (anti)symmetrizer, not a free parameter
+    REQUIRE_THROWS_AS(
+        Tensor(reserved::symm_label(), bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+               TensorSymmetries{.braket = BraKetSymmetry::Symm}),
+        Exception);
+    REQUIRE_THROWS_AS(
+        Tensor(reserved::symm_label(), bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+               TensorSymmetries{.column = ColumnSymmetry::Nonsymm}),
+        Exception);
+    // ... but for Â a Nonsymm column request is *promoted* rather than
+    // rejected: Antisymm bra/ket permutational symmetry implies column
+    // symmetry for any tensor, reserved or not, and that promotion runs first
+    REQUIRE(Tensor(reserved::antisymm_label(), bra{L"i_1", L"i_2"},
+                   ket{L"a_1", L"a_2"},
+                   TensorSymmetries{.perm = Symmetry::Antisymm,
+                                    .column = ColumnSymmetry::Nonsymm})
+                .column_symmetry() == ColumnSymmetry::Symm);
+    REQUIRE_THROWS_AS(
+        Tensor(reserved::antisymm_label(), bra{L"i_1", L"i_2"},
+               ket{L"a_1", L"a_2"},
+               TensorSymmetries{.perm = Symmetry::Nonsymm,
+                                .column = ColumnSymmetry::Nonsymm}),
+        Exception);
+
+    // an *unspecified* column symmetry is silently supplied, so that the
+    // library's Context-independent column default (Nonsymm) does not produce
+    // a symmetrizer that differs from the deserialized one
+    const auto S = Tensor(reserved::symm_label(), bra{L"i_1", L"i_2"},
+                          ket{L"a_1", L"a_2"});
+    REQUIRE(S.column_symmetry() == ColumnSymmetry::Symm);
+    REQUIRE(S == make_symmetrizer(bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"})
+                     ->as<Tensor>());
   }
 }
