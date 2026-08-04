@@ -30,6 +30,10 @@ bool ExecutionContext::has_data(std::string_view id) const {
 }
 
 std::size_t ExecutionContext::dataset_size(std::string_view id) const {
+  if (!is_valid_id(id, false)) {
+    throw Exception("Invalid ID '" + std::string(id) + "'");
+  }
+
   auto it = id_to_data_indices_.find(id);
 
   return it == id_to_data_indices_.end() ? 0 : it->second.size();
