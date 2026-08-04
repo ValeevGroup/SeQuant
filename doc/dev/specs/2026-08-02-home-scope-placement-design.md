@@ -579,9 +579,20 @@ scheduling** problem:
   Baumgartner, Sadayappan et al., **"Space-Time Trade-Off Optimization for a
   Class of Electronic Structure Calculations"** (PLDI 2002) does the
   memory-vs-recompute tradeoff with loop fusion *for electronic-structure tensor
-  contractions*; and "Memory-Constrained Data Locality Optimization for Tensor
-  Contractions" (LCPC 2003). This is the literature to mine first -- same domain,
-  same tiling/memory tradeoff.
+  contractions* (state exactly our objective: minimize recompute s.t. memory
+  `<= M`, their Fig. 11 = our §7 objective/constraint picture, their `M` = our
+  `peak_threshold`); and "Memory-Constrained Data Locality Optimization for
+  Tensor Contractions" (LCPC 2003). This is the literature to mine first --
+  same domain, same tiling/memory tradeoff. Two specifics of theirs to note:
+  (a) their two-step method (§5-6) is a **bottom-up dynamic program over the
+  expression tree maintaining a Pareto set of `(memory, recompute)` solutions
+  with dominance pruning**, then a tiling/block-size search; (b) their **tiling
+  / partial expansion (§6, Fig. 4) IS partial (sliced) rematerialization** --
+  hold a `B`-block, recompute the slice -- so sliced remat is NOT novel to us
+  (see the corrected "genuinely ours" list below). Their loop *fusion* (which
+  eliminates an intermediate's dimension) maps to our **un-hoist**; their
+  *tiling* (which slices it) maps to our **shrink** -- worth keeping the
+  vocabulary distinct so "fusion" is not conflated with either.
 - **Pebble games.** The space/space-time lower bounds and hardness (Sethi 1975;
   Hopcroft-Paul-Valiant) -- why the exact problem is NP-hard and heuristics are
   the norm.
@@ -594,18 +605,57 @@ tiling/memory part.
 What is **genuinely ours** (not directly in those works) is the *combination*:
 
 - **cross-term / cross-occurrence CSE partition** (choosing cells) -- the
-  checkpointing/AD work assumes a fixed DAG with no sharing-partition choice;
-- **partial (sliced) rematerialization** -- textbook rematerialization is
-  all-or-nothing (store the whole value or rebuild the whole value); batching
-  lets a cell hold `1/B` and rebuild a *slice*, a granularity the general
-  formulations lack;
-- **placement across a batch loop nest** driven by the SeQuant cost model.
+  checkpointing/AD work assumes a fixed DAG with no sharing-partition choice, and
+  Cociorva optimizes a *single* operation-minimal expression tree (fixed
+  intermediates, no copy-count choice). Choosing how many copies of a shared
+  value to keep, via the meet (spec `2026-08-03` §2-3), has no counterpart in
+  either.
+- **partial (sliced) rematerialization *across a CSE forest*.** Sliced remat
+  itself is NOT novel -- textbook RA/AD remat is all-or-nothing, but **Cociorva's
+  tiling (§6, Fig. 4) already holds a `B`-block and rebuilds a slice** (cite them
+  for the sliced-remat idea). What is new is doing it over a *whole-forest,
+  cross-occurrence CSE'd* set of cells rather than a single expression tree.
+  (This corrects an earlier overclaim that the *granularity* was novel; only the
+  CSE-forest scope is.)
+- **CSE as the enabler of well-posed cross-nest placement.** In a single
+  expression tree (Cociorva) every index has one global labeling, so matching a
+  loop in one nest to a loop in another is direct. In our *forest* each term is
+  alpha-renamed with its own index context, so cross-nest loop correspondence is
+  not defined a priori -- whole-forest placement is strictly *harder* than the
+  single-tree problem. The shared (CSE) intermediate is the anchor that resolves
+  it: a common value's slots pin which index of nest A aligns with which of nest
+  B. So CSE is not merely a reuse opportunity but the *mechanism that makes
+  whole-forest placement well-defined* -- which is exactly why the meet is
+  load-bearing (and why the occurrence-key cannot replace it, spec `2026-08-03`
+  §3).
+- **the perfect-CSE-seed-then-relax (register-allocation) structure** + the
+  `ΔPeak/ΔRecompute` spill metric -- a different heuristic lens than their DP
+  (RA appears only in their Related Work, not their method).
+- **placement across a batch loop nest** driven by the batching-aware `W` and the
+  home-relative peak-profile sweep.
+
+**Layering vs. their algorithm (not "their DP vs our greedy").** We *already* run
+a pruned DP per term -- the min-time factorizer's `optimize()` is a matrix-chain
+generalization that also decides per-node placement -- which corresponds to their
+Step-1 DP. What has no analog in their single-tree formulation is the layer *on
+top*: a whole-forest, **post-CSE** greedy seed-and-remat, one placement per
+threshold. Open direction: extend their §5 `(memory, recompute)` **Pareto-
+dominance pruning to that forest layer** (a Pareto *set* / one curve, not one
+point per threshold) -- the strongest algorithmic borrow, and the natural
+successor to the deferred O2b lookahead; the Checkmate ILP stays a small-case
+oracle. Honest note on our two infeasibilities: `factorization-inherent` maps
+onto their "fully-fused solution still exceeds `M`" case, but `re-batch-needed`
+has **no analog** -- it exists only because we froze batching into a separate
+phase (Phases 3-4); their integrated search never separates it out. Phase 5's
+staged place -> detect -> re-batch/re-factor feedback (spec `2026-08-04` §4, §8)
+is our route back toward their *joint* fusion+tiling search.
 
 So: build on the established formulations; the contribution is the
-tensor+batching+CSE cost model feeding a known memory-bounded-scheduling engine,
-not a bespoke solver. Caveat: the exact ILP/DP are NP-hard / expensive for large
-DAGs, so production ships a heuristic (greedy live-range spill), with the ILP a
-reference oracle for validation on small cases.
+tensor+batching+CSE cost model + the CSE-forest scope feeding a known
+memory-bounded-scheduling engine, not a bespoke solver. Caveat: the exact ILP/DP
+are NP-hard / expensive for large DAGs, so production ships a heuristic (greedy
+live-range spill), with the ILP a reference oracle for validation on small
+cases.
 
 ## 11. Open items
 
