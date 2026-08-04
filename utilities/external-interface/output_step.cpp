@@ -55,21 +55,16 @@ void OutputStep::set_options(const nlohmann::json &options) {
   }
 }
 
-std::size_t OutputStep::run(std::string_view, ExecutionContext &ctx,
-                            const std::vector<std::string_view> &inputs) {
-  for (std::string_view current_input : inputs) {
-    for (const ProcessingData &current_data : ctx.get_data(current_input)) {
-      const ExpressionData &data = convert_data<ExpressionData>(current_data);
-
-      for (const auto &expr : data.expressions) {
-        if (latex_) {
-          std::wcout << io::latex::to_string(expr) << std::endl;
-        } else {
-          std::wcout << io::serialization::to_string(
-                            expr, {.annot_symm = annot_symm_})
-                     << std::endl;
-        }
-      }
+std::size_t OutputStep::process(std::string_view, std::size_t,
+                                ExecutionContext &,
+                                const ExpressionData &data) {
+  for (const auto &expr : data.expressions) {
+    if (latex_) {
+      std::wcout << io::latex::to_string(expr) << std::endl;
+    } else {
+      std::wcout << io::serialization::to_string(expr,
+                                                 {.annot_symm = annot_symm_})
+                 << std::endl;
     }
   }
 

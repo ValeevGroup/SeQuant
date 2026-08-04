@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EXTERNAL_INTERFACE_VALIDATESTEP_HPP
 #define SEQUANT_EXTERNAL_INTERFACE_VALIDATESTEP_HPP
 
+#include "processing_data.hpp"
 #include "processing_step.hpp"
 
 #include <nlohmann/json_fwd.hpp>
@@ -11,7 +12,7 @@
 
 namespace sequant::util::extint {
 
-class ValidateStep : public ProcessingStep {
+class ValidateStep : public OneToManyProcessingStep<ExpressionData> {
  public:
   std::string kind() const override;
 
@@ -19,8 +20,9 @@ class ValidateStep : public ProcessingStep {
   bool requires_options() const override;
   void set_options(const nlohmann::json &options) override;
 
-  std::size_t run(std::string_view step_id, ExecutionContext &ctx,
-                  const std::vector<std::string_view> &inputs = {}) override;
+  std::size_t process(std::string_view id_prefix, std::size_t id_start,
+                      ExecutionContext &ctx,
+                      const ExpressionData &data) override;
 };
 
 }  // namespace sequant::util::extint

@@ -71,13 +71,11 @@ void ReadInputStep::set_options(const nlohmann::json &options) {
   }
 }
 
-std::size_t ReadInputStep::run(std::string_view step_id, ExecutionContext &ctx,
-                               const std::vector<std::string_view> &inputs) {
-  if (!inputs.empty()) {
-    throw Exception(kind() + " does not take any inputs");
-  }
-
+std::size_t ReadInputStep::process(std::string_view id_prefix,
+                                   std::size_t id_start,
+                                   ExecutionContext &ctx) {
   std::size_t counter = 0;
+
   for (const std::filesystem::path &current : input_paths_) {
     if (!std::filesystem::exists(current)) {
       throw Exception("Input file '" + current.string() + "' does not exist");
@@ -90,16 +88,9 @@ std::size_t ReadInputStep::run(std::string_view step_id, ExecutionContext &ctx,
     ResultExpr expr =
         io::serialization::from_string<ResultExpr>(contents, options_);
 
-    ctx.set_data(step_id, id_start + counter++,
+    ctx.set_data(id_prefix, id_start + counter++,
                  ExpressionData{.expressions = {std::move(expr)}});
   }
-
-  ctx.add_data_alias(
-      std::ranges::views::iota(std::size_t(0), counter) |
-          std::ranges::views::transform([&step_id](std::size_t num) {
-            return std::string(step_id) + "." + std::to_string(num);
-          }),
-      std::string(step_id));
 
   return counter;
 }

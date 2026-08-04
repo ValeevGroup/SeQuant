@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EXTERNAL_INTERFACE_READINPUTSTEP_HPP
 #define SEQUANT_EXTERNAL_INTERFACE_READINPUTSTEP_HPP
 
+#include "processing_data.hpp"
 #include "processing_step.hpp"
 
 #include <SeQuant/core/io/serialization/serialization.hpp>
@@ -14,7 +15,7 @@
 
 namespace sequant::util::extint {
 
-class ReadInputStep : public ProcessingStep {
+class ReadInputStep : public OneToManyProcessingStep<void> {
  public:
   std::string kind() const override;
 
@@ -22,8 +23,9 @@ class ReadInputStep : public ProcessingStep {
   bool requires_options() const override;
   void set_options(const nlohmann::json &options) override;
 
-  std::size_t run(std::string_view step_id, ExecutionContext &ctx,
-                  const std::vector<std::string_view> &inputs = {}) override;
+ protected:
+  std::size_t process(std::string_view id_prefix, std::size_t id_start,
+                      ExecutionContext &ctx) override;
 
  private:
   std::vector<std::filesystem::path> input_paths_;

@@ -52,55 +52,41 @@ void DensityFittingStep::set_options(const nlohmann::json &options) {
       throw Exception("Unknown option key for " + kind() + ": '" + key + "'");
     }
   }
+
+  if (aux_space_ == IndexSpace::null) {
+    throw Exception(kind() + " requires the auxiliary_space option to be set");
+  }
 }
 
-std::size_t DensityFittingStep::run(
-    std::string_view, ExecutionContext &ctx,
-    const std::vector<std::string_view> &inputs) {
-  std::size_t new_outputs = 0;
+std::size_t DensityFittingStep::process(std::string_view id_prefix,
+                                        std::size_t id_start,
+                                        ExecutionContext &ctx,
+                                        const ExpressionData &data) {
+  bool had_effect = false;
+  std::vector<ResultExpr> modified;
+  for (const ResultExpr &expr : data.expressions) {
+    ExprPtr result =
+        mbpt::density_fit(expr.expression(), aux_space_,
+                          toUtf16(two_elec_int_label_), toUtf16(df_label_));
 
-  // TODO: This loop-structure should be abstracted away into a (helper) class
-  // so the actual steps only have to implement processing of a single data
-  // object (or all at once, if that's what they need)
-  for (std::string_view current_input : inputs) {
-    for (const auto &current : ctx.get_data(current_input)) {
-      const ExpressionData &data =
-          convert_data<ExpressionData>(current.data.get());
-
-      bool had_effect = false;
-      std::vector<ResultExpr> modified;
-      for (const ResultExpr &expr : data.expressions) {
-        ExprPtr result =
-            mbpt::density_fit(expr.expression(), aux_space_,
-                              toUtf16(two_elec_int_label_), toUtf16(df_label_));
-
-        had_effect |= result != expr.expression();
-        if (expr.produces_tensor()) {
-          modified.emplace_back(
-              ResultExpr(expr.result_as_tensor(), std::move(result)));
-        } else {
-          modified.emplace_back(
-              ResultExpr(expr.result_as_variable(), std::move(result)));
-        }
-      }
-
-      // TODO: Need proper output group handling. For this, we have to track the
-      // relations of every output object to every (input) IDs (also IDs the
-      // input objects are associated with but which weren't explicitly provided
-      // in the inputs field). Then we can determine which of the input IDs
-      // should be created as corresponding output IDs and associated with which
-      // objects. This can probably also be implemented in a helper base class
-      // so we don't have to do this in every step implementation.
-      if (had_effect) {
-        ctx.set_data(std::string(current.associated_ids.front()),
-                     ExpressionData{.expressions = std::move(modified)});
-      } else {
-        // TODO: Create alias
-      }
+    had_effect |= result != expr.expression();
+    if (expr.produces_tensor()) {
+      modified.emplace_back(
+          ResultExpr(expr.result_as_tensor(), std::move(result)));
+    } else {
+      modified.emplace_back(
+          ResultExpr(expr.result_as_variable(), std::move(result)));
     }
   }
 
-  return new_outputs;
+  if (had_effect) {
+    ctx.set_data(id_prefix, id_start,
+                 ExpressionData{.expressions = std::move(modified)});
+    return 1;
+  } else {
+    // TODO: Create alias?
+    return 0;
+  }
 }
 
 }  // namespace sequant::util::extint
