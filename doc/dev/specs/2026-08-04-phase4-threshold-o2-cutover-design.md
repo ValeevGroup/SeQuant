@@ -171,3 +171,67 @@ mean "peak-maximal." Document the chosen default and its rationale in the cutove
   to drive the factorizer to add batch loops; reconcile the static `PeakProfile` estimate
   against measured runtime peak; tune the default threshold and move ordering on real
   workloads.
+
+## 9. Phase 4b decomposition, and 4b-1 (the unified meet) detailed design (2026-08-04)
+
+Section 2's Phase 4b (the cutover) is too large and too risky for one change, so it is
+decomposed into three slices, ordered safest-first:
+
+- **4b-1 -- the unified meet (this section):** drop the `External` filter so `sliced_modes`
+  is the all-batched-modes meet; DELETE `contracted_modes` end-to-end; retire the now-
+  duplicate `seed_residency`. KEEP the veto (`has_demoted_external`). Correctness-gated
+  (CCk energies unchanged); no remat wiring. This is the first phase whose placement is NOT
+  byte-identical to today's.
+- **4b-2 -- hash threading + router emission (additive):** thread the value hash /
+  occurrence-key through `linearize_rich` -> `ValueCell` (currently computed in
+  `hash_to_cell` and discarded), and add `remat_to_router(placement) -> PlacementRouter`
+  overrides. Produces overrides; not yet driving runtime.
+- **4b-3 -- the coupled behavior change (its own design pass):** wire a dry-run remat
+  pre-pass -> populate the router -> `place_at_this_level` consults it -> DELETE
+  `has_demoted_external`; set the default-threshold policy (Section 5). The runtime-
+  integration architecture (how the dry-run remat placement reaches real eval via the
+  occurrence-keyed router) is designed when 4b-3 is reached, informed by 4b-1/4b-2.
+
+### 9.1 4b-1: what changes
+
+1. **Drop the `External` filter** in `stamp_lifetime_masks` (`lifetime_mask.hpp:148-153`):
+   its `ext_modes_of` selector becomes the all-batched-modes selector (identical to
+   `stamp_seed_residency`'s `all_batched_modes_of`). `sliced_modes` is now the cross-
+   occurrence meet of ALL batched modes on a node's result slots.
+2. **Delete `contracted_modes` end-to-end** (the CAT-1 list with file:line in
+   `2026-08-03-meet-based-home-scope-phase3-design.md` section 8): field/accessors
+   (`eval_expr.hpp`), `NodeBatchAnnotation`, the cost-model emission (`cost_model.hpp`),
+   the `in_union` union-half + `residency_all_outer` contracted conjunct + doc
+   (`eval.hpp`), `schedule_dump.hpp`, and tests. `residency_all_outer` stays as the
+   structural "home = deepest residency loop" walk, now over `sliced_modes` alone. Because
+   the unified `sliced_modes` already contains every batched mode on the slots, the old
+   `sliced UNION contracted` is subsumed -- deleting `contracted_modes` is net-corrective
+   (it also fixes the latent per-occurrence aux under-meet, e.g. `A[c,_]` vs `A[_,c]`).
+3. **Retire the duplicate `seed_residency`:** delete `stamp_seed_residency` +
+   `EvalExpr::seed_residency_` (+ accessors); point `home_scope` at `sliced_modes()`;
+   `peak_profile.hpp`'s `linearize_rich` calls `stamp_lifetime_masks` instead of
+   `stamp_seed_residency`; the 3a/4a tests that read `seed_residency` move to
+   `sliced_modes`. After step 1, `sliced_modes == ` the old `seed_residency` exactly, so
+   this retirement is BYTE-IDENTICAL for `peak_profile`/remat -- a behavior-neutral de-dup.
+
+### 9.2 4b-1: what stays
+
+`has_demoted_external` (the veto) -- giants are still un-hoisted to local, so 4b-1 does NOT
+peak-regress and stays correctness-preserving (the veto's deletion is 4b-3, coupled with
+remat). `residency_all_outer` (input generalized to the unified `sliced_modes`). The remat
+pass (4a) is unchanged except that `home_scope` now reads the runtime field.
+
+### 9.3 4b-1: the T1/T2 split and validation
+
+- **T1 -- the correctness change (CCk-gated):** the filter drop + `contracted_modes`
+  deletion (steps 1-2). Placement changes. Gate: CCk energies UNCHANGED -- SeQuant's
+  `[eval]`/`[eval_ta]` correctness suites green (real contraction results), and the
+  cross-repo MPQC CCk validation suite (user-run) is the final energy gate. The dry-run
+  witnesses (`[.][dryrun-occ-veto]` / `[.][dryrun-extmode-avoidable]`) MAY move -- this is
+  the first non-byte-identical phase -- and are RE-BASELINED with justification (unified
+  meet corrects the aux under-meet + drops the External/contracted asymmetry), not treated
+  as a regression.
+- **T2 -- the behavior-neutral de-dup:** retire `seed_residency` (step 3). Because
+  `sliced_modes == seed_residency` after T1, `[peak_profile]`/`[placement_remat]`/
+  `[lifetime_mask]` figures are UNCHANGED across T2 -- the de-dup is provably inert, which
+  is its acceptance gate.
