@@ -118,9 +118,10 @@ The quantities that aren't self-evident:
 
 ## Tests
 
-Reference tests (`ctest -R sequant/cost_analysis`) run the tool on `examples/`
+Reference tests (`ctest -R sequant/cost_analysis`) copy `examples/` into the
+build tree (so the source directory is never written to) and run the tool there
 with `--omit-revision` (which drops the volatile git-revision line, making the
-report byte-stable) and compare it against a frozen `*.md.expected` via
+report byte-stable), then compare it against a frozen `*.md.expected` via
 `cmake -E compare_files`:
 
 - `.../ccsd_r2/*` — spin-orbital CCSD R2 (a `Sum` of terms) whose two ladder

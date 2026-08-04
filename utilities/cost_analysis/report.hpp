@@ -16,7 +16,7 @@ std::string full_expr(const TreeNode& n);
 /// out.
 void write_report(
     const Config& cfg,
-    const std::vector<std::pair<std::string, CellResult>>& results,
+    const std::vector<std::pair<std::string, EquationResult>>& results,
     const SimResult& sim, std::ostream& out);
 
 #endif  // SEQUANT_UTILITIES_COST_ANALYSIS_REPORT_HPP

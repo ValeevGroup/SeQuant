@@ -81,7 +81,7 @@ struct Record {
 };
 
 /// Cost analysis of one result equation.
-struct CellResult {
+struct EquationResult {
   std::size_t n_terms = 0, n_distinct = 0, n_reused = 0;
   sequant::AsyCost largest_mem, peak_storage, total_flops;
   std::unordered_map<TreeNode, Record, Hasher, Comparator> catalog;

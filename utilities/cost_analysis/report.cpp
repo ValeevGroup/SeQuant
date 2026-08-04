@@ -15,7 +15,7 @@ double mb(const AsyCost& c, double bytes_per_elem) {
   return c.ops() * bytes_per_elem / (1024.0 * 1024.0);
 }
 
-void report_largest(const CellResult& cell, std::size_t top_n,
+void report_largest(const EquationResult& cell, std::size_t top_n,
                     double bytes_per_elem, std::ostream& out) {
   std::vector<std::pair<const TreeNode*, const Record*>> rows;
   for (const auto& [node, rec] : cell.catalog)
@@ -38,7 +38,7 @@ void report_largest(const CellResult& cell, std::size_t top_n,
   }
 }
 
-void report_expensive(const CellResult& cell, std::size_t top_n,
+void report_expensive(const EquationResult& cell, std::size_t top_n,
                       std::ostream& out) {
   std::vector<std::pair<const TreeNode*, const Record*>> rows;
   for (const auto& [node, rec] : cell.catalog)
@@ -59,7 +59,7 @@ void report_expensive(const CellResult& cell, std::size_t top_n,
   }
 }
 
-void report_shape_histogram(const CellResult& cell, double bytes_per_elem,
+void report_shape_histogram(const EquationResult& cell, double bytes_per_elem,
                             std::ostream& out) {
   struct Agg {
     std::size_t count = 0, uses = 0;
@@ -105,7 +105,7 @@ std::string full_expr(const TreeNode& n) {
 
 void write_report(
     const Config& cfg,
-    const std::vector<std::pair<std::string, CellResult>>& results,
+    const std::vector<std::pair<std::string, EquationResult>>& results,
     const SimResult& sim, std::ostream& out) {
   const double bytes_per_elem = cfg.real_field ? 8.0 : 16.0;
   // Sections are separated by a leading blank line rather than a trailing one,

@@ -51,21 +51,20 @@ Config load_config(const json& d) {
     c.spinor = spbasis == "spinor";
     const auto field = ctx.value("field", std::string("real"));
     if (field != "real" && field != "complex")
-      throw std::runtime_error("unknown field (want real|complex): " + field);
+      throw Exception("unknown field (want real|complex): " + field);
     c.real_field = field == "real";
     c.convention = ctx.value("convention", std::string("sr"));
     for (const auto& a : ctx.value("aux", json::array())) {
       const auto s = a.get<std::string>();
       if (s != "df" && s != "thc")
-        throw std::runtime_error("unknown aux (want df|thc): " + s);
+        throw Exception("unknown aux (want df|thc): " + s);
       c.aux.push_back(s);
     }
   }
 
   for (const auto& [label, size] : d.at("sizes").items()) {
     const auto sz = size.get<long long>();
-    if (sz <= 0)
-      throw std::runtime_error("index-space size must be > 0: " + label);
+    if (sz <= 0) throw Exception("index-space size must be > 0: " + label);
     c.sizes[label] = static_cast<std::size_t>(sz);
   }
 
@@ -89,18 +88,18 @@ Config load_config(const json& d) {
     // A negative min_repeats wraps to a huge size_t (JSON ints are signed) and
     // silently disables caching, so reject it.
     const long mr = ca.value("min_repeats", 2L);
-    if (mr < 0) throw std::runtime_error("cache.min_repeats must be >= 0");
+    if (mr < 0) throw Exception("cache.min_repeats must be >= 0");
     c.cache.min_repeats = static_cast<std::size_t>(mr);
     c.cache.max_footprint = ca.value("max_footprint", 0.0);
     if (c.cache.max_footprint < 0.0)
-      throw std::runtime_error("cache.max_footprint must be >= 0");
+      throw Exception("cache.max_footprint must be >= 0");
   }
   if (d.contains("output")) {
     const auto& ou = d.at("output");
     c.out.path = ou.value("path", std::string("cost_analysis.md"));
     // Read signed then guard: a negative top_n would wrap to a huge size_t.
     const long tn = ou.value("top_n", 20L);
-    if (tn < 0) throw std::runtime_error("output.top_n must be >= 0");
+    if (tn < 0) throw Exception("output.top_n must be >= 0");
     c.out.top_n = static_cast<std::size_t>(tn);
     c.out.dump_tree = ou.value("dump_tree", false);
   }
@@ -119,8 +118,7 @@ std::shared_ptr<IndexSpaceRegistry> make_registry(const std::string& conv) {
   if (conv == "sr") return make_sr_spaces();
   if (conv == "mr") return make_mr_spaces();
   if (conv == "f12") return make_F12_sr_spaces();
-  throw std::runtime_error("unknown convention (want min_sr|sr|mr|f12): " +
-                           conv);
+  throw Exception("unknown convention (want min_sr|sr|mr|f12): " + conv);
 }
 
 // Start from one of SeQuant's standard registries, apply the config's field
@@ -151,7 +149,7 @@ void setup_context(const Config& cfg) {
 
   for (const auto& [label, size] : cfg.sizes) {
     IndexSpace* sp = isr->retrieve_ptr(toUtf16(label));
-    if (!sp) throw std::runtime_error("unknown index space: " + label);
+    if (!sp) throw Exception("unknown index space: " + label);
     sp->approximate_size(size);
   }
 
@@ -179,7 +177,7 @@ ObjectiveFunction objective_of(const std::string& s) {
   if (s == "dense_size") return ObjectiveFunction::DenseSize;
   if (s == "dense_peak_size") return ObjectiveFunction::DensePeakSize;
   if (s == "dense_flops") return ObjectiveFunction::DenseFLOPs;
-  throw std::runtime_error(
+  throw Exception(
       "unknown objective (want dense_size|dense_peak_size|dense_flops): " + s);
 }
 
@@ -258,8 +256,9 @@ OptimizeOptions make_opts(const Config& cfg) {
   return o;
 }
 
-CellResult process(const Config& cfg, const ExprPtr& rhs, const Tensor& head) {
-  CellResult res;
+EquationResult process(const Config& cfg, const ExprPtr& rhs,
+                       const Tensor& head) {
+  EquationResult res;
 
   ExprPtr input = rhs->clone();
   auto popped = pop_tensor(input, reserved::symm_label());
@@ -326,7 +325,7 @@ bool is_leaf_labeled(const TreeNode& n, const std::wstring& label) {
 
 SimResult simulate_cache(
     const Config& cfg,
-    const std::vector<std::pair<std::string, CellResult>>& results) {
+    const std::vector<std::pair<std::string, EquationResult>>& results) {
   std::vector<TreeNode> forest;
   for (const auto& [name, cell] : results)
     for (const auto& tree : cell.trees) forest.push_back(tree);
@@ -353,7 +352,7 @@ SimResult simulate_cache(
 
 std::string read_file(const std::filesystem::path& p) {
   std::ifstream in(p);
-  if (!in) throw std::runtime_error("cannot open equation file: " + p.string());
+  if (!in) throw Exception("cannot open equation file: " + p.string());
   return std::string(std::istreambuf_iterator<char>(in), {});
 }
 
@@ -387,20 +386,19 @@ int main(int argc, char** argv) {
     cfg.out.omit_revision = omit_revision;
     setup_context(cfg);  // registry baked before any parse
 
-    std::vector<std::pair<std::string, CellResult>> results;
+    std::vector<std::pair<std::string, EquationResult>> results;
     for (const auto& r : cfg.equations) {
       const ResultExpr res = parse_equation(read_file(r.equation_file));
-      CellResult cell = process(cfg, res.expression(), res.result_as_tensor());
+      EquationResult cell =
+          process(cfg, res.expression(), res.result_as_tensor());
 
       if (cfg.out.dump_tree) {
         const std::string dump_path = r.name + ".tree.txt";
         std::ofstream to(dump_path);
-        if (!to)
-          throw std::runtime_error("cannot open dump file: " + dump_path);
+        if (!to) throw Exception("cannot open dump file: " + dump_path);
         for (const auto& tree : cell.trees) to << full_expr(tree) << "\n";
         to.close();
-        if (!to)
-          throw std::runtime_error("failed writing dump file: " + dump_path);
+        if (!to) throw Exception("failed writing dump file: " + dump_path);
       }
       results.emplace_back(r.name, std::move(cell));
     }
@@ -409,12 +407,10 @@ int main(int argc, char** argv) {
         cfg.cache.enabled ? simulate_cache(cfg, results) : SimResult{};
 
     std::ofstream out(cfg.out.path);
-    if (!out)
-      throw std::runtime_error("cannot open output file: " + cfg.out.path);
+    if (!out) throw Exception("cannot open output file: " + cfg.out.path);
     write_report(cfg, results, sim, out);
     out.close();
-    if (!out)
-      throw std::runtime_error("failed writing output file: " + cfg.out.path);
+    if (!out) throw Exception("failed writing output file: " + cfg.out.path);
     // Print the absolute path: the working directory was switched to the
     // driver's parent above, so a relative out.path lands there, not in the
     // user's invocation directory.
