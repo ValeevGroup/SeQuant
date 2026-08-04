@@ -41,6 +41,7 @@ target_compile_definitions(unit_tests-sequant-symb-obj PRIVATE
 set(eval_test_sources
     "test_eval_expr.cpp"
     "test_eval_node.cpp"
+    "test_lifetime_mask.cpp"
 )
 add_library(unit_tests-sequant-eval-obj OBJECT ${eval_test_sources})
 set_target_properties(unit_tests-sequant-eval-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
@@ -156,6 +157,33 @@ if (SEQUANT_HAS_TAPP)
 endif()
 
 ##########################
+# OBJECT library: DryRun backend tests
+##########################
+set(eval_dryrun_test_sources
+    "test_eval_dryrun.cpp"
+    "test_occurrence_key.cpp"
+    "test_placement_router.cpp"
+)
+add_library(unit_tests-sequant-eval-dryrun-obj OBJECT ${eval_dryrun_test_sources})
+set_target_properties(unit_tests-sequant-eval-dryrun-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
+target_link_libraries(unit_tests-sequant-eval-dryrun-obj
+    PUBLIC SeQuant::eval SeQuant::optimize SeQuant::bliss SeQuant::mbpt
+    PRIVATE Catch2::Catch2 dtl::dtl)
+# test_placement_router.cpp defines SEQUANT_ROUTER_SHADOW before its first
+# (transitive) inclusion of eval.hpp to compile in the dev-only shadow-assert
+# landing (see eval.hpp's Enter-stage read seam). That #define must precede
+# eval.hpp's FIRST expansion in the translation unit it ends up in (header
+# guards make a later #define a no-op); under a Unity build, test_eval_dryrun.
+# cpp -- which is listed (and thus unified) ahead of it -- already includes
+# eval.hpp (via cost_profile.hpp) without the macro, so unifying the two would
+# silently disable the shadow-assert code this file means to exercise. Give it
+# its own TU instead.
+set_source_files_properties("test_placement_router.cpp"
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+target_compile_definitions(unit_tests-sequant-eval-dryrun-obj PRIVATE
+    SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+
+##########################
 # Single executable combining all OBJECT libraries
 # NB linking OBJECT libraries (since CMake 3.21) both includes their object
 # files AND propagates their PUBLIC/INTERFACE usage requirements, so the
@@ -171,6 +199,7 @@ target_link_libraries(unit_tests-sequant PRIVATE
     unit_tests-sequant-optimize-obj
     unit_tests-sequant-export-obj
     unit_tests-sequant-mbpt-obj
+    unit_tests-sequant-eval-dryrun-obj
     Catch2::Catch2
     dtl::dtl)
 if (SEQUANT_HAS_TILEDARRAY)

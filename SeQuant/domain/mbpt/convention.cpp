@@ -71,30 +71,44 @@ void add_fermi_spin(IndexSpaceRegistry& isr) {
   isr = std::move(result);
 }
 
-void add_ao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr, bool vbs,
-                   bool abs) {
+void add_ao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr,
+                   IndexSpace::QuantumNumbers spin_any, bool vbs, bool abs) {
   // matches the MPQC layout, see spindex.h
   // this will not work for MR
+  // AO spaces are physical (spin-specific AOs can support particle states of a
+  // given spin), so they carry the convention's spin-agnostic quantum numbers
+  // (spin_any) in the physical (spin) sector alongside the LCAOQNS::ao trait
+  // bit; leaving the spin bits empty would make physical_particle_attributes()
+  // report no spin and break occupancy lookups (e.g. is_pure_occupied) that key
+  // on spin. spin_any matches how make_*_spaces sets the base spaces' spin.
+  auto const ao_qns = spin_any | LCAOQNS::ao;
   auto obs_lcao = isr->retrieve(vbs ? L"m" : L"p");
-  isr->add(IndexSpace{L"μ", obs_lcao.type(), LCAOQNS::ao});  // OBS AO
+  isr->add(IndexSpace{L"μ", obs_lcao.type(), ao_qns});  // OBS AO
   if (vbs) {
     auto vbs_lcao = isr->retrieve(L"e");
-    isr->add(IndexSpace{L"Α", vbs_lcao.type(), LCAOQNS::ao})  // VBS AO
-        .add_union(L"Γ", {L"μ", L"Α"});  // VBS+ = OBS + VBS
+    isr->add(IndexSpace{L"Α", vbs_lcao.type(), ao_qns})  // VBS AO
+        .add_union(L"Γ", {L"μ", L"Α"});                  // VBS+ = OBS + VBS
   }
   if (abs) {
     auto abs_lcao = isr->retrieve(L"α'");
-    isr->add(IndexSpace{L"σ", abs_lcao.type(),
-                        LCAOQNS::ao})  // ABS AO in F12 methods
+    isr->add(
+           IndexSpace{L"σ", abs_lcao.type(), ao_qns})  // ABS AO in F12 methods
         .add_union(L"ρ", {L"μ", L"σ"});
     if (vbs)                               // ABS+ = OBS + ABS
       isr->add_union(L"Ρ", {L"Γ", L"σ"});  // VABS+ = VBS+ + ABS
   }
 }
 
-void add_pao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr) {
+void add_pao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr,
+                    IndexSpace::QuantumNumbers spin_any) {
   auto uocc_space = isr->particle_space(/* nulltype_ok = */ false);
-  isr->add(IndexSpace{L"μ̃", uocc_space, LCAOQNS::pao})  // OBS PAO
+  // PAO states are physical (spin-independent, but still particle states), so
+  // they carry the convention's spin-agnostic quantum numbers (spin_any) in the
+  // physical (spin) sector alongside the LCAOQNS::pao trait bit; leaving the
+  // spin bits empty would make physical_particle_attributes() report no spin
+  // and break occupancy lookups (e.g. is_pure_occupied) that key on spin.
+  // spin_any matches how make_*_spaces sets the base spaces' spin.
+  isr->add(IndexSpace{L"μ̃", uocc_space, spin_any | LCAOQNS::pao})  // OBS PAO
       ;
 }
 

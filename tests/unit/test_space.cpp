@@ -209,7 +209,7 @@ TEST_CASE("index_space", "[elements]") {
 
   SECTION("AO spaces") {
     auto isr = sequant::mbpt::make_min_sr_spaces();
-    REQUIRE_NOTHROW(mbpt::add_ao_spaces(isr));
+    REQUIRE_NOTHROW(mbpt::add_ao_spaces(isr, mbpt::Spin::any));
 
     // OBS AO space ...
     REQUIRE_NOTHROW(isr->retrieve(L"μ"));
@@ -229,7 +229,7 @@ TEST_CASE("index_space", "[elements]") {
 
   SECTION("PAO spaces") {
     auto isr = sequant::mbpt::make_min_sr_spaces();
-    REQUIRE_NOTHROW(mbpt::add_pao_spaces(isr));
+    REQUIRE_NOTHROW(mbpt::add_pao_spaces(isr, mbpt::Spin::any));
 
     // OBS PAO space ...
     REQUIRE_NOTHROW(isr->retrieve(L"μ̃"));

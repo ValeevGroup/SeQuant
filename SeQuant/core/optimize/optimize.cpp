@@ -1,14 +1,18 @@
 #include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/index_space_registry.hpp>
+#include <SeQuant/core/optimize/cost_model.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/optimize/single_term.hpp>
 #include <SeQuant/core/optimize/sum.hpp>
 #include <SeQuant/core/runtime.hpp>
+#include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
@@ -18,10 +22,12 @@
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/iota.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdlib>
 #include <functional>
 #include <iostream>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -87,38 +93,59 @@ void log_chosen_factorization(ExprPtr const& result,
 /// Optimize a Product that contains only Tensor and scalar factors.
 ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
   bool const subnet_cse = opts.CSE.subnet;
-  CostParams const cost{opts.batch_policy.is_volatile_leaf,
-                        opts.volatile_weight,
-                        opts.footprint_weight,
-                        opts.peak_flops_tolerance,
-                        opts.roofline,
-                        opts.batch_policy.accumulation_factor,
-                        opts.prune_outer_products};
+  // Build the cost knobs field-by-field from OptimizeOptions / its BatchPolicy.
+  // Batching config (both role predicates, batch_target_size, inner_pow,
+  // batch_persistent_only) now travels on CostParams rather than as loose args.
+  CostParams cost;
+  cost.is_volatile_leaf = opts.batch_policy.is_volatile_leaf;
+  cost.volatile_weight = opts.volatile_weight;
+  cost.footprint_weight = opts.footprint_weight;
+  cost.peak_flops_tolerance = opts.peak_flops_tolerance;
+  cost.roofline = opts.roofline;
+  cost.accumulation_factor = opts.batch_policy.accumulation_factor;
+  cost.peak_threshold = opts.batch_policy.peak_threshold;
+  cost.prune_outer_products = opts.prune_outer_products;
+  cost.batch_spectator_indices = opts.batch_policy.batch_spectator_indices;
+  cost.order_aware_recompute = opts.batch_policy.order_aware_recompute;
+  cost.node_level_placement = opts.batch_policy.node_level_placement;
+  cost.is_batchable_contracted_index =
+      opts.batch_policy.is_batchable_contracted_index;
+  cost.is_batchable_external_index =
+      opts.batch_policy.is_batchable_external_index;
+  cost.batch_target_size = opts.batch_policy.batch_target_size;
+  cost.inner_pow = opts.inner_pow;
+  cost.batch_persistent_only = opts.batch_policy.persistent_only;
+  // Filled only by the DensePeakSizeBatched arm below (via out_axes); every
+  // other objective leaves it empty, so the term_batch_axes insertion at the
+  // end is then a no-op-shaped empty-vector entry (harmless: Task 3.3 only
+  // consumes entries for summands the batched objective actually annotated).
+  container::vector<NodeBatchAnnotation> node_axes;
   auto run = [&]() -> ExprPtr {
     if (opts.objective_function == ObjectiveFunction::DenseFLOPs)
       return opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
-          prod, opts.idx_to_extent, subnet_cse, cost,
-          opts.batch_policy.is_batchable_index,
-          opts.batch_policy.batch_target_size, opts.inner_pow);
+          prod, opts.idx_to_extent, subnet_cse, cost);
     if (opts.objective_function == ObjectiveFunction::DenseSize)
       return opt::single_term_opt<ObjectiveFunction::DenseSize>(
+          prod, opts.idx_to_extent, subnet_cse, cost);
+    if (opts.objective_function == ObjectiveFunction::DenseSpaceTime)
+      return opt::single_term_opt<ObjectiveFunction::DenseSpaceTime>(
+          prod, opts.idx_to_extent, subnet_cse, cost);
+    if (opts.objective_function == ObjectiveFunction::DenseTimeSpace)
+      return opt::single_term_opt<ObjectiveFunction::DenseTimeSpace>(
+          prod, opts.idx_to_extent, subnet_cse, cost);
+    if (opts.objective_function == ObjectiveFunction::DenseSpaceTimeBatched)
+      return opt::single_term_opt<ObjectiveFunction::DenseSpaceTimeBatched>(
           prod, opts.idx_to_extent, subnet_cse, cost,
-          opts.batch_policy.is_batchable_index,
-          opts.batch_policy.batch_target_size, opts.inner_pow);
-    if (opts.objective_function == ObjectiveFunction::DensePeakSize)
-      return opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
-          prod, opts.idx_to_extent, subnet_cse, cost,
-          opts.batch_policy.is_batchable_index,
-          opts.batch_policy.batch_target_size, opts.inner_pow);
+          opts.term_batch_axes ? &node_axes : nullptr);
     SEQUANT_ASSERT(opts.objective_function ==
-                   ObjectiveFunction::DensePeakSizeBatched);
-    return opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
+                   ObjectiveFunction::DenseTimeSpaceBatched);
+    return opt::single_term_opt<ObjectiveFunction::DenseTimeSpaceBatched>(
         prod, opts.idx_to_extent, subnet_cse, cost,
-        opts.batch_policy.is_batchable_index,
-        opts.batch_policy.batch_target_size, opts.inner_pow,
-        opts.batch_policy.persistent_only);
+        opts.term_batch_axes ? &node_axes : nullptr);
   };
   ExprPtr result = run();
+  if (opts.term_batch_axes)
+    (*opts.term_batch_axes)[result.get()] = std::move(node_axes);
   if (std::getenv("SEQUANT_FACTORIZER_DEBUG"))
     log_chosen_factorization(result, opts);
   return result;
@@ -248,6 +275,14 @@ ExprPtr optimize(ExprPtr const& expr, OptimizeOptions opts) {
                        /*parallel_outer=*/true);
 }
 
+OptimizeResult optimize_result(ExprPtr const& expr, OptimizeOptions opts) {
+  if (!opts.idx_to_extent) opts.idx_to_extent = default_idx_to_size();
+  OptimizeResult res;
+  res.expr = optimize_impl(expr, opts, opts.reorder == ReorderSum::Reorder,
+                           /*parallel_outer=*/true);
+  return res;
+}
+
 ResultExpr& optimize(ResultExpr& expr, OptimizeOptions opts) {
   expr.expression() = optimize(expr.expression(), std::move(opts));
   return expr;
@@ -261,8 +296,9 @@ ResultExpr& optimize(ResultExpr&& expr, OptimizeOptions opts) {
 
 namespace {
 inline OptimizeOptions compatibility_opts(bool reorder_sum) {
-  return OptimizeOptions{.reorder = reorder_sum ? ReorderSum::Reorder
-                                                : ReorderSum::NoReorder};
+  return OptimizeOptions{
+      .reorder = reorder_sum ? ReorderSum::Reorder : ReorderSum::NoReorder,
+      .inner_pow = {}};
 }
 }  // namespace
 

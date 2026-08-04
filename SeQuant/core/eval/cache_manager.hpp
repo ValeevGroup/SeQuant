@@ -6,6 +6,7 @@
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/eval/eval_node_compare.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
+#include <SeQuant/core/eval/lifetime_mask.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/expr.hpp>
 
@@ -18,10 +19,23 @@
 #include <any>
 #include <array>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
+
+namespace sequant::eval {
+
+// Forward declaration only (not a full include of placement_router.hpp):
+// PlacementRouter's BatchContext alias needs CacheManager's full definition,
+// so placement_router.hpp includes this header; CacheManager only needs a
+// non-owning pointer to the (incomplete) PlacementRouter type, so the
+// forward declaration here avoids the include cycle.
+template <typename TreeNode>
+class PlacementRouter;
+
+}  // namespace sequant::eval
 
 namespace sequant {
 
@@ -69,6 +83,25 @@ class CacheManager {
   using shaped_product_hook_type = std::function<ResultPtr(
       std::any const& node, Result const& left, Result const& right,
       std::array<std::any, 3> const& annot)>;
+
+  /// The batch context: an ordered stack (outermost-first) of the enclosing
+  /// realized batch loops, one entry per loop, `{axis K, {block_lo, block_hi}}`
+  /// (element range). Set on the per-block scratch by the batched evaluator
+  /// before it re-enters evaluate(); read by the Enter-stage slice-on-use so a
+  /// cached intermediate fetched from an ancestor scope is sliced to the modes
+  /// of the loops the fetch crossed (see eval.hpp). Empty (default) => no
+  /// enclosing batch loop, so slice-on-use is inert and behavior is
+  /// byte-identical to the pre-slice-on-use path.
+  using BatchContext =
+      container::svector<std::pair<Index, std::pair<std::size_t, std::size_t>>>;
+
+  /// Result of access_at(): the fetched pointer plus the hop distance (number
+  /// of parent links crossed) to the scope that held it. hops == 0 means a
+  /// local hit; a null ptr carries hops == 0.
+  struct AccessResult {
+    ResultPtr ptr;
+    std::size_t hops;
+  };
 
  private:
   using hasher_type = TreeNodeHasher<TreeNode, force_hash_collisions>;
@@ -143,6 +176,16 @@ class CacheManager {
 
     [[nodiscard]] bool alive() const noexcept { return data_p ? true : false; }
 
+    /// \return true iff this entry currently holds the SAME buffer (pointer
+    ///         identity) as @p other. A sliced/permuted/phase-shifted read of
+    ///         this entry is a DISTINCT buffer, so it compares unequal. Used by
+    ///         the peak trace to detect an operand that aliases a cached buffer
+    ///         (whose bytes are then already counted, and must not be added
+    ///         again).
+    [[nodiscard]] bool holds(ResultPtr const& other) const noexcept {
+      return data_p && data_p.get() == other.get();
+    }
+
    private:
     [[nodiscard]] int decay() noexcept {
       return life_c > 0 ? static_cast<int>(--life_c) : 0;
@@ -157,6 +200,14 @@ class CacheManager {
 
   std::unordered_map<TreeNode, entry, hasher_type, comparator_type> cache_map_;
 
+  /// Parent cache for the scope chain (loop-nest visibility). A batch scratch
+  /// sets this to the cache one level up; access() delegates on a local miss
+  /// so a loop-invariant node stored once at an ancestor level is found by
+  /// every inner body without copy-down. Null (default) => standalone cache,
+  /// byte-identical to pre-scope-chain behavior. Non-owning; the parent must
+  /// outlive this cache.
+  CacheManager* parent_ = nullptr;
+
   /// Running high-water mark (bytes) of the eval engine's live working set,
   /// updated by note_working_set() and cleared by reset(). Held here rather
   /// than in the recursive evaluate() so it persists across the whole
@@ -168,6 +219,18 @@ class CacheManager {
   custom_evaluator_type custom_evaluator_{};
 
   shaped_product_hook_type shaped_product_hook_{};
+
+  /// Enclosing realized batch loops for slice-on-use (see BatchContext). Empty
+  /// (default) => no enclosing batch loop; the batched evaluator sets it on the
+  /// per-block scratch before each re-entry. Not cleared by reset() (it is
+  /// per-loop-iteration structural, re-set each block by the evaluator).
+  BatchContext batch_context_{};
+
+  /// Non-owning placement router (see \c placement_router.hpp). Null
+  /// (default) => no override wired; \c placement_router() falls through to
+  /// \c parent_ (only the root cache is wired in practice). The pointee must
+  /// outlive this cache.
+  eval::PlacementRouter<TreeNode> const* placement_router_ = nullptr;
 
  public:
   /// Sets the custom evaluator (see custom_evaluator_type). Pass an empty
@@ -191,6 +254,57 @@ class CacheManager {
   [[nodiscard]] shaped_product_hook_type const& shaped_product_hook()
       const noexcept {
     return shaped_product_hook_;
+  }
+
+  /// Sets the batch context (see batch_context_). Pass an empty context to
+  /// clear it.
+  void set_batch_context(BatchContext c) noexcept {
+    batch_context_ = std::move(c);
+  }
+
+  /// \return the batch context (empty if none is set).
+  [[nodiscard]] BatchContext const& batch_context() const noexcept {
+    return batch_context_;
+  }
+
+  /// Sets the scope-chain parent (see parent_). Pass nullptr to detach.
+  void set_parent(CacheManager* p) noexcept { parent_ = p; }
+
+  /// \return the scope-chain parent (see parent_), or nullptr if this is a
+  ///         standalone / chain-root cache. Used by the batched evaluator to
+  ///         walk up to a target ancestor level when hoisting an invariant.
+  [[nodiscard]] CacheManager* parent() const noexcept { return parent_; }
+
+  /// Sets the local placement router (see placement_router_). Pass nullptr
+  /// to detach. Non-owning; the pointee must outlive this cache.
+  void set_placement_router(eval::PlacementRouter<TreeNode> const* r) noexcept {
+    placement_router_ = r;
+  }
+
+  /// \return the local router if set, else the one inherited from parent_
+  ///         (only the root cache is wired in practice); nullptr if none is
+  ///         wired anywhere along the chain. Non-owning.
+  [[nodiscard]] eval::PlacementRouter<TreeNode> const* placement_router()
+      const noexcept {
+    return placement_router_ ? placement_router_
+           : parent_         ? parent_->placement_router()
+                             : nullptr;
+  }
+
+  /// Ensure a scope-hoist slot exists for @p key so a loop-invariant
+  /// intermediate can be stored here (store() is a no-op for an unregistered
+  /// key). The slot is NON-persistent with an effectively unbounded life, so it
+  /// is never drained by access() and lives until the next reset() -- per-batch
+  /// for a batch scratch (rebuilt for the next batch of the loop it is scoped
+  /// to), per-term for the real cache (rebuilt for the next term). Idempotent:
+  /// an existing entry (with any stored data) is left untouched. The unbounded
+  /// life -- rather than the emitted effective_count -- is deliberate: a
+  /// whole-nest invariant's escaped-outer set is empty, so its emitted
+  /// effective_count is 1, which as a life would drain the entry on first use;
+  /// reset() is the correct lifetime boundary for a hoisted invariant.
+  void ensure_hoist_slot(key_type const& key) {
+    cache_map_.try_emplace(
+        key, entry{std::numeric_limits<size_t>::max(), /*persistent=*/false});
   }
 
   /// Default persistence classifier: every entry is non-persistent (NP).
@@ -235,13 +349,85 @@ class CacheManager {
     return working_set_hwmark_;
   }
 
+  /// Sum over ALIVE entries of this cache's own residency (bytes). Unlike
+  /// working_set_hwmark() (a high-water MAX over time), this is the CURRENT
+  /// live residency at the instant of the call.
+  [[nodiscard]] size_t current_residency() const noexcept {
+    size_t s = 0;
+    for (auto const& [k, e] : cache_map_)
+      if (e.alive()) s += e.size_in_bytes();
+    return s;
+  }
+  /// current_residency() of this cache plus every ancestor along the scope
+  /// chain (parent_): the total live residency visible at this scope at one
+  /// instant.
+  [[nodiscard]] size_t chain_residency() const noexcept {
+    return current_residency() + (parent_ ? parent_->chain_residency() : 0);
+  }
+
+  /// \return true iff some ALIVE entry on this cache or any ancestor along the
+  ///         scope chain physically holds @p value (pointer identity).
+  ///         Read-only: unlike access_at() it decays no lifetime. The peak
+  ///         trace uses it to skip an operand whose bytes are already counted
+  ///         -- locally in \c bytes(cache,...) or up-chain in \c
+  ///         chain_residency()
+  ///         -- because the operand aliases that resident buffer. A sliced (or
+  ///         permuted, or phase-shifted) read of a resident value is a DISTINCT
+  ///         buffer with a different pointer, so it is correctly NOT skipped.
+  [[nodiscard]] bool chain_holds(ResultPtr const& value) const noexcept {
+    if (!value) return false;
+    for (auto const& [k, e] : cache_map_)
+      if (e.holds(value)) return true;
+    return parent_ ? parent_->chain_holds(value) : false;
+  }
+
   ///
   /// @brief Access cached data.
   ///
   /// @param key The key that identifies the cached data.
-  /// @return ResultPtr to Result
-  ResultPtr access(key_type const& key) noexcept {
+  /// @return the fetched pointer plus the hop distance (number of parent links
+  ///         crossed) to the scope that held it; {nullptr, 0} on a total miss.
+  ///
+  /// A local entry only "hits" if it is currently holding data; a key
+  /// registered locally but never (yet) stored here -- e.g. a hoisted
+  /// loop-invariant node whose value lives only at an ancestor level -- is a
+  /// local miss just like an unregistered key, and must fall through the
+  /// same way. Standalone (parent_ == nullptr) behavior is unchanged: a total
+  /// miss returns {nullptr, 0}. The hop distance surfaces the value's lifetime
+  /// scope so the caller (Enter-stage slice-on-use) can slice it to exactly the
+  /// batch loops the fetch crossed.
+  [[nodiscard]] AccessResult access_at(key_type const& key) noexcept {
     if (auto found = cache_map_.find(key); found != cache_map_.end())
+      if (auto data = found->second.access(); data) return {data, 0};
+    if (!parent_) return {nullptr, 0};
+    auto up = parent_->access_at(key);
+    return {up.ptr, up.hops + 1};  // count the link we just crossed
+  }
+
+  /// @param key The key that identifies the cached data.
+  /// @return ResultPtr to Result. Thin forwarder to access_at() that drops the
+  ///         hop distance, for the non-batched callers that do not slice.
+  ResultPtr access(key_type const& key) noexcept { return access_at(key).ptr; }
+
+  /// Fetch @p key from EXACTLY @p hops scopes up the chain (walk @p hops
+  /// parent links, then one LOCAL entry::access() there), rather than
+  /// searching the chain like access_at() does. Used by a router-directed
+  /// read that already knows the target scope (e.g. from a HomeTarget's
+  /// home_depth) and wants to enforce that home rather than fall through to
+  /// whatever scope happens to hold the value.
+  ///
+  /// @param key The key that identifies the cached data.
+  /// @param hops The exact number of parent links to walk before accessing.
+  /// @return the fetched pointer, decaying that scope's entry the same single
+  ///         lifetime step as access_at() (entry::access()); nullptr if the
+  ///         walk runs off the root before @p hops links, or if the target
+  ///         scope does not currently hold @p key.
+  [[nodiscard]] ResultPtr access_at_hops(key_type const& key,
+                                         std::size_t hops) noexcept {
+    CacheManager* c = this;
+    for (std::size_t i = 0; i < hops && c; ++i) c = c->parent_;
+    if (!c) return nullptr;
+    if (auto found = c->cache_map_.find(key); found != c->cache_map_.end())
       return found->second.access();
     return nullptr;
   }
@@ -436,13 +622,6 @@ struct zero_footprint {
   double operator()(auto const&) const noexcept { return 0.; }
 };
 
-/// Default batchability predicate for cache_manager: no index is batchable, so
-/// the free-batchable-axis caching veto is inert (preserves the pre-batch
-/// behavior for callers that do not pass a predicate).
-struct never_batchable {
-  bool operator()(auto const&) const noexcept { return false; }
-};
-
 /// \param nodes the evaluation forest.
 /// \param is_volatile `bool(TreeNode const&)`: true if the node is
 ///        intrinsically volatile. Only its value on leaves matters in practice
@@ -458,26 +637,22 @@ struct never_batchable {
 ///        of huge intermediates that carry a free large-space index (e.g. a
 ///        half-transformed DF integral with a free projected-AO index), at the
 ///        cost of recomputation. 0 (default) disables the gate.
-/// \param is_batchable_index `bool(Index const&)`: an index the runtime batched
-///        evaluator slices over (typically the DF/RI auxiliary). A node whose
-///        *result* (canonical) indices contain such an index carries a
-///        batchable axis FREE: the evaluator slices it per batch and the
-///        single-term optimizer prices it sliced, so caching it whole would
-///        hold an intermediate both other components mean to slice. Such nodes
-///        are NOT cached (neither NP repeat nor P frontier) -- recomputed
-///        (sliced under each consumer's batch trigger) instead of materialized
-///        whole and held. This is the structural counterpart of \p
-///        max_footprint: the batch axis, not a byte threshold, identifies the
-///        free-large-index intermediates. The default never_batchable accepts
-///        nothing, leaving the veto inert.
+///
+/// A node is also refused run-scope residence when it is BATCH-VARIANT: its
+/// cross-occurrence lifetime mask is non-empty (\c !EvalExpr::mask_all_full();
+/// this builder itself calls \c stamp_lifetime_masks over \p nodes before the
+/// DAG walk below, so the mask is always current here regardless of caller --
+/// see \c lifetime_mask.hpp). Such a node is sliced by some enclosing External
+/// batch mode in every occurrence, so its value differs per batch of that mode
+/// -- caching it whole at run scope would serve a wrong-batch value to a deeper
+/// consumer on cache fall-through (the F1 hazard). Only an all-full node (empty
+/// mask, including every node on the OFF path) is admitted.
 /// \see CacheManager, cache_manager
 template <bool force_hash_collisions = false,
-          typename FootprintOf = zero_footprint,
-          typename IsBatchableIndex = never_batchable>
+          typename FootprintOf = zero_footprint>
 auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
                    size_t min_repeats = 2, FootprintOf footprint_of = {},
-                   double max_footprint = 0.,
-                   IsBatchableIndex is_batchable_index = {})
+                   double max_footprint = 0.)
   requires requires(
       std::ranges::range_value_t<std::remove_cvref_t<decltype(nodes)>> const&
           n) {
@@ -485,6 +660,17 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
     { footprint_of(n) } -> std::convertible_to<double>;
   }
 {
+  // Stamp the cross-occurrence lifetime mask on this SAME forest before the
+  // DAG walk / veto below reads it (the batch-variant veto reads
+  // EvalExpr::mask_all_full()). Doing this here -- rather than leaving it to
+  // each caller -- makes "mask is current for the veto" an invariant of this
+  // builder instead of a per-caller obligation: every caller of this overload
+  // (SeQuant's build_dryrun_cache, mpqc's build_cache_manager) is covered
+  // uniformly. Unconditional and idempotent; a no-op when the forest carries
+  // no External batched_here() stamps (every mask stays empty/all-full), so
+  // this never changes behavior on the OFF path.
+  sequant::stamp_lifetime_masks(nodes);
+
   using TreeNode =
       std::ranges::range_value_t<std::remove_cvref_t<decltype(nodes)>>;
   using Hasher = TreeNodeHasher<TreeNode, force_hash_collisions>;
@@ -523,23 +709,35 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
   // Footprint gate: a node whose result is larger than max_footprint is never
   // cached (so it is recomputed by each consumer rather than materialized whole
   // and held), bounding the footprint of huge free-large-index intermediates.
-  // Free-batchable-axis veto: a node whose result carries an index the runtime
-  // slices over (is_batchable_index) is, by construction, a free-large-index
-  // intermediate the evaluator builds one batch-slice at a time and the
-  // optimizer prices sliced. Caching it -- as an NP repeat or an NV/V-frontier
-  // P node -- would materialize and hold it whole, contradicting both. Veto its
-  // caching (the structural form of the max_footprint gate) so each consumer
-  // recomputes it sliced under its own batch trigger.
+  // Batch-variant veto ("a batched node cannot be run-scope"): this builder
+  // populates the outermost / persistent (run-scope) cache, so it must refuse
+  // any node that is batch-VARIANT -- one whose cached value would depend on
+  // which batch is live. Such a node is refused for two reasons: caching it
+  // whole contradicts the runtime slicing it (and the optimizer pricing it
+  // sliced), and -- the F1 safety invariant -- a child batch scratch that
+  // misses locally falls through to this cache for ANY key, so a batch-variant
+  // final left here could be served full (wrong-batch) to an inner body. A node
+  // is batch-variant iff its cross-occurrence lifetime mask is non-empty (\c
+  // !n->mask_all_full(), \c lifetime_mask.hpp) -- some External batch mode (of
+  // this node or an enclosing ancestor, over ALL its occurrences under the
+  // canonical meet) slices it, so its value differs per batch of that mode even
+  // if it slices nothing itself.
+  // A node that is invariant to every batched mode is NOT vetoed and stays
+  // cacheable at run scope -- this is where a hoisted loop-invariant
+  // intermediate (all-full mask; or an External-only / no batched_here entry,
+  // e.g. gC) lands. OFF path (no order-aware annotations, hence no \c
+  // stamp_lifetime_masks External stamps): every mask is empty (all-full,
+  // \c EvalExpr::sliced_modes_ default-constructed), so the veto never fires
+  // and admits exactly what it did before -- byte-identical.
   std::unordered_map<TreeNode, size_t, Hasher, Comp> filtered;
   for (auto&& [n, c] : counts) {
     if (!(c >= min_repeats || persistent.contains(n))) continue;
-    bool free_batchable_axis = false;
-    for (auto const& ix : n->canon_indices())
-      if (is_batchable_index(ix)) {
-        free_batchable_axis = true;
-        break;
-      }
-    if (free_batchable_axis ||
+    // Batch-variant: a node whose cross-occurrence lifetime mask is non-empty
+    // is sliced by some enclosing external mode in every occurrence => its
+    // value differs per batch => refused run-scope residence. all-full (empty
+    // mask; incl. the OFF path) is admitted.
+    bool const batch_variant = !n->mask_all_full();
+    if (batch_variant ||
         (max_footprint > 0. && footprint_of(n) > max_footprint)) {
       persistent.erase(n);  // keep is_persistent consistent with what is cached
       continue;

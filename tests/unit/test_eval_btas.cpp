@@ -590,8 +590,8 @@ TEST_CASE("binarize_highorder_aux_hyperindex", "[eval_btas][hyperindex]") {
   // register the OBS AO space (μ) and the batching space (z) on top of the
   // standard single-reference spaces
   auto isr = mbpt::make_sr_spaces();
-  mbpt::add_ao_spaces(isr);        // μ (OBS AO)
-  mbpt::add_batching_spaces(isr);  // z (batching)
+  mbpt::add_ao_spaces(isr, mbpt::Spin::any);  // μ (OBS AO)
+  mbpt::add_batching_spaces(isr);             // z (batching)
   auto ctx_resetter =
       set_scoped_default_context(Context{get_default_context()}.set(isr));
 
