@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EXTERNAL_INTERFACE_DENSITYFITTINGSTEP_HPP
 #define SEQUANT_EXTERNAL_INTERFACE_DENSITYFITTINGSTEP_HPP
 
+#include "processing_data.hpp"
 #include "processing_step.hpp"
 
 #include <SeQuant/core/space.hpp>
@@ -9,11 +10,10 @@
 
 #include <string>
 #include <string_view>
-#include <vector>
 
 namespace sequant::util::extint {
 
-class DensityFittingStep : public ProcessingStep {
+class DensityFittingStep : public OneToManyProcessingStep<ExpressionData> {
  public:
   std::string kind() const override;
 
@@ -21,8 +21,10 @@ class DensityFittingStep : public ProcessingStep {
   bool requires_options() const override;
   void set_options(const nlohmann::json &options) override;
 
-  std::size_t run(std::string_view step_id, ExecutionContext &ctx,
-                  const std::vector<std::string_view> &inputs = {}) override;
+ protected:
+  std::size_t process(std::string_view id_prefix, std::size_t id_start,
+                      ExecutionContext &ctx,
+                      const ExpressionData &data) override;
 
  private:
   IndexSpace aux_space_ = IndexSpace::null;

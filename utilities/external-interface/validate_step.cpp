@@ -7,7 +7,6 @@
 
 #include <string>
 #include <string_view>
-#include <vector>
 
 namespace sequant::util::extint {
 
@@ -23,26 +22,17 @@ void ValidateStep::set_options(const nlohmann::json &) {
   throw Exception("validate doesn't take any options");
 }
 
-std::size_t ValidateStep::run(std::string_view, ExecutionContext &ctx,
-                              const std::vector<std::string_view> &inputs) {
-  for (std::string_view current_input : inputs) {
-    for (const auto &current : ctx.get_data(current_input)) {
-      const ExpressionData &data =
-          convert_data<ExpressionData>(current.data.get());
-
-      std::size_t expr_counter = 1;
-      for (const ResultExpr &expr : data.expressions) {
-        std::string msg;
-        std::string id = current.associated_ids.empty()
-                             ? std::string(current_input)
-                             : std::string(current.associated_ids.front());
-        if (!is_valid(expr, &msg)) {
-          throw Exception("Expression " + id + " expr #" +
-                          std::to_string(expr_counter) + " is invalid: " + msg);
-        }
-        ++expr_counter;
-      }
+std::size_t ValidateStep::process(std::string_view, std::size_t,
+                                  ExecutionContext &,
+                                  const ExpressionData &data) {
+  std::size_t expr_counter = 1;
+  for (const ResultExpr &expr : data.expressions) {
+    std::string msg;
+    if (!is_valid(expr, &msg)) {
+      throw Exception("Expression #" + std::to_string(expr_counter) +
+                      " is invalid: " + msg);
     }
+    ++expr_counter;
   }
 
   return 0;
