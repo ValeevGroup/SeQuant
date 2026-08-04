@@ -312,6 +312,26 @@ class EvalExpr {
   }
 
   ///
+  /// \brief The cross-occurrence meet of ALL batched modes (any \c
+  /// BatchModeType, not just \c External) on this node's own result slots --
+  /// the perfect-CSE \c home_scope seed residency. Set by \c
+  /// stamp_seed_residency; empty by default (OFF path). DISTINCT from the
+  /// External-only runtime \c sliced_modes: this is a static predictor input,
+  /// not a placement decision, and does not affect runtime behavior.
+  ///
+  [[nodiscard]] container::svector<Index> const& seed_residency()
+      const noexcept {
+    return seed_residency_;
+  }
+
+  ///
+  /// \brief Sets the seed residency; see \c seed_residency.
+  ///
+  void set_seed_residency(container::svector<Index> m) noexcept {
+    seed_residency_ = std::move(m);
+  }
+
+  ///
   /// \brief The enclosing CONTRACTED (aux) batch modes this node carries open
   /// on its result -- the contracted-residency signal per-level placement
   /// unions with \c sliced_modes to decide hoist placement. Emitted
@@ -394,6 +414,9 @@ class EvalExpr {
 
   /// See \c sliced_modes.
   container::svector<Index> sliced_modes_{};
+
+  /// See \c seed_residency.
+  container::svector<Index> seed_residency_{};
 
   /// See \c contracted_modes.
   container::svector<Index> contracted_modes_{};

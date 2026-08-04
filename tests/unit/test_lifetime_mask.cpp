@@ -22,6 +22,7 @@ using sequant::EvalNode;
 using sequant::ExprPtr;
 using sequant::Index;
 using sequant::stamp_lifetime_masks;
+using sequant::stamp_seed_residency;
 
 // A canonical eval-tree head from a two-factor product string. Two independent
 // binarizations of the SAME string are structurally-equal canonical nodes (same
@@ -264,6 +265,64 @@ TEST_CASE("lifetime mask gates the run-scope veto", "[lifetime_mask][veto]") {
   // sliced_A/full_A above are independent of forest[0]/forest[2]).
   CHECK_FALSE(forest[0]->mask_all_full());
   CHECK(forest[2]->mask_all_full());
+}
+
+TEST_CASE(
+    "stamp_seed_residency coincides with stamp_lifetime_masks when only "
+    "External stamps are present",
+    "[lifetime_mask][seed]") {
+  Index const i{L"i_1"}, j{L"i_2"}, k{L"i_4"};
+
+  // node_full: sliced by i in occurrence A, left full in occurrence B => the
+  // meet demotes it to all-full under EITHER selector (with only External
+  // stamps present, the External-only and all-batched-modes selectors
+  // coincide).
+  auto full_A = head("F1{i_1;a_1} * F2{a_1;i_3}");
+  auto full_B = head("F1{i_1;a_1} * F2{a_1;i_3}");
+  stamp_ext(full_A, i);
+
+  // node_pair: sliced by the same occ pair (i,j) in EVERY occurrence => the
+  // meet keeps exactly {i, j} under either selector.
+  auto pair_A = head("P1{i_1;a_1} * P2{a_1;i_2}");
+  auto pair_B = head("P1{i_1;a_1} * P2{a_1;i_2}");
+  stamp_ext_pair(pair_A, i, j);
+  stamp_ext_pair(pair_B, i, j);
+
+  // Scatter tree: root sliced by k; child A carries k on its own result,
+  // sibling B is invariant to it (per-slot filter exercise, same as the
+  // dedicated per-slot-filter test above, but here checked under BOTH
+  // selectors at once).
+  auto A = inode("A{i_4;a_3}", leaf("A1{i_4;a_1}"), leaf("A2{a_1;a_3}"));
+  auto B = inode("B{a_3;a_5}", leaf("B1{a_3;a_4}"), leaf("B2{a_4;a_5}"));
+  auto R = inode("R{i_4;a_5}", std::move(A), std::move(B));
+  stamp_ext(R, k);
+
+  std::vector<EvalNode<EvalExpr>> forest{full_A, full_B, pair_A, pair_B, R};
+
+  stamp_lifetime_masks(forest);
+  stamp_seed_residency(forest);
+
+  // Node-for-node equivalence: with only External stamps present, the
+  // all-batched-modes selector (stamp_seed_residency) and the External-only
+  // selector (stamp_lifetime_masks) walk the identical meet, so
+  // seed_residency() == sliced_modes() everywhere the walk visits, including
+  // descendants not directly listed in `forest`.
+  auto check_same = [](EvalNode<EvalExpr> const& n) {
+    CHECK(as_set(n->seed_residency()) == as_set(n->sliced_modes()));
+  };
+  for (auto const& n : forest) {
+    check_same(n);
+    if (!n.leaf()) {
+      check_same(n.left());
+      check_same(n.right());
+    }
+  }
+
+  // Sliced-everywhere node: seed_residency is non-empty and matches the
+  // known meet.
+  CHECK_FALSE(forest[2]->seed_residency().empty());
+  CHECK(as_set(forest[2]->seed_residency()) == index_set({i, j}));
+  CHECK(as_set(forest[3]->seed_residency()) == index_set({i, j}));
 }
 
 TEST_CASE(
