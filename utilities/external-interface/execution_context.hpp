@@ -37,33 +37,39 @@ class ExecutionContext {
 
   ExecutionContext() = default;
 
-  void set_data(std::string id, ProcessingData data);
+  void set_data(std::string_view prefix, std::size_t counter,
+                ProcessingData data);
 
-  template <std::ranges::range IDs, std::ranges::range Data>
-    requires(
-        std::is_convertible_v<std::ranges::range_value_t<IDs>, std::string> &&
-        std::same_as<std::ranges::range_value_t<Data>, ProcessingData>)
-  void set_data(IDs &&ids, Data &&data) {
-    if (std::ranges::empty(ids)) {
-      throw Exception("Attempted to add data without specifying any id");
+  template <std::ranges::range CounterValues, std::ranges::range Data>
+    requires(std::integral<std::ranges::range_value_t<CounterValues>> &&
+             std::same_as<std::ranges::range_value_t<Data>, ProcessingData>)
+  void set_data(std::string_view prefix, CounterValues &&counters,
+                Data &&data) {
+    if (std::ranges::empty(counters)) {
+      throw Exception("Attempted to add data without specifying any counter");
     }
     if (std::ranges::empty(data)) {
       throw Exception("Attempted to register empty dataset");
     }
 
-    for (auto &&current : ids) {
-      if (id_to_data_indices_.find(current) != id_to_data_indices_.end()) {
-        throw Exception("Duplicate data ID '" + std::string(current) + "'");
+    std::vector<std::string> ids;
+    ids.reserve(std::ranges::size(counters));
+
+    for (auto &&current : counters) {
+      ids.emplace_back(std::string(prefix) + "." + std::to_string(current));
+
+      if (id_to_data_indices_.find(ids.back()) != id_to_data_indices_.end()) {
+        throw Exception("Duplicate data ID '" + ids.back() + "'");
       }
-      if (!is_valid_id(current, false)) {
-        throw Exception("Invalid id '" + std::string(current) + "'");
+      if (!is_valid_id(ids.back(), false)) {
+        throw Exception("Invalid id '" + ids.back() + "'");
       }
     }
 
     std::vector<std::size_t> data_indices(std::ranges::size(data));
     std::iota(data_indices.begin(), data_indices.end(), data_.size());
 
-    for (auto &&current : ids) {
+    for (std::string &current : ids) {
       set_id_idx_assoc(std::move(current), data_indices);
     }
 
