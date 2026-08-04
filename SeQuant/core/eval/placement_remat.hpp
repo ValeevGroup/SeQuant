@@ -4,13 +4,17 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
+#include <SeQuant/core/eval/occurrence_key.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
+#include <SeQuant/core/eval/placement_router.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <algorithm>
 #include <cstddef>
 #include <optional>
+#include <ranges>
+#include <unordered_map>
 #include <utility>
 
 namespace sequant::eval {
@@ -221,6 +225,78 @@ RematResult rematerialize_to_budget(container::svector<ValueCell> cells,
 
     apply_shrink(cells[best->first], best->second);  // full re-sweep next iter
   }
+}
+
+///
+/// \brief Emit \c PlacementRouter overrides for the MOVED cells of a remat
+/// result (Phase 4b-2). Additive: produces a populated router; nothing is
+/// wired into runtime (that is Phase 4b-3).
+///
+/// \details A remat cell is one-per-VALUE (its \c ValueCell::hash, the CSE
+/// identity). The router is keyed by the batched-slot-AWARE OCCURRENCE KEY
+/// (\c occurrence_key). So a single MOVED value emits one override per DISTINCT
+/// occurrence key of that value, all pointing to the SAME \c HomeTarget (its
+/// meet home). Only MOVED cells (final \c home_modes != seed \c home_modes) are
+/// emitted: an unmoved cell's seed home equals the runtime's default
+/// derivation, so an override would be redundant (Phase-2 empty-router-is-inert
+/// seam). The value HASH links a \c RematResult cell back to its forest nodes;
+/// the (expensive, bliss) occurrence keys are computed LAZILY here, for
+/// moved-cell occurrences only -- \c compute_dag_boulevard / \c peak_profile
+/// pay no per-node bliss cost.
+///
+/// \param seed_cells the seed placement (e.g. \c remat_cells(forest).cells);
+///        \c home_modes is each value's seed \c home_scope.
+/// \param remat_cells the post-spill placement (\c
+///        rematerialize_to_budget(...).cells); \c home_modes is the final home.
+/// \param forest the eval forest \p seed_cells / \p remat_cells were built
+/// from.
+/// \return a \c PlacementRouter with one override per (moved value, occurrence
+///         key). Empty iff nothing moved.
+///
+template <meta::eval_node_range R>
+[[nodiscard]] PlacementRouter<std::ranges::range_value_t<R>> remat_to_router(
+    container::svector<ValueCell> const& seed_cells,
+    container::svector<ValueCell> const& remat_cells, R const& forest) {
+  using Node = std::ranges::range_value_t<R>;
+
+  // Seed home_modes by value_id (robust to any reordering between seed and
+  // result), then the MOVED map: value hash -> final home_modes.
+  std::unordered_map<std::size_t, container::svector<Index> const*> seed_home;
+  for (auto const& c : seed_cells) seed_home.emplace(c.value_id, &c.home_modes);
+  std::unordered_map<std::size_t, container::svector<Index>> moved;
+  for (auto const& c : remat_cells) {
+    auto const sh = seed_home.find(c.value_id);
+    if (sh != seed_home.end() && c.home_modes != *sh->second)
+      moved.emplace(c.hash, c.home_modes);
+  }
+
+  PlacementRouter<Node> router;
+  if (moved.empty()) return router;  // nothing moved => inert seed seam
+
+  // Re-walk the forest (same ectx accumulation as compute_dag_boulevard). For
+  // each node whose value is moved, emit an override keyed by its occurrence
+  // key at the ambient (enclosing) batch context.
+  auto visit = [&](auto&& self, Node const& n,
+                   container::svector<Index> ctx_modes) -> void {
+    if (auto const it = moved.find(n->hash_value()); it != moved.end()) {
+      auto key = occurrence_key(n, ctx_modes);
+      router.set_override(std::move(key), HomeTarget{it->second, 0});
+    }
+    if (n.leaf()) return;
+    // Children see this node's OWN realized loops on top of ctx_modes; the node
+    // itself is keyed with the enclosing ctx_modes (excludes its own loops).
+    container::svector<Index> child_ctx = ctx_modes;
+    for (auto const& [ix, kind] : n->batched_here()) {
+      container::svector<Index> expanded;
+      sequant::detail::proto_expand_into(expanded, ix);
+      for (auto const& m : expanded) child_ctx.push_back(m);
+    }
+    self(self, n.left(), child_ctx);
+    self(self, n.right(), child_ctx);
+  };
+  for (auto const& tree : forest)
+    visit(visit, tree, container::svector<Index>{});
+  return router;
 }
 
 }  // namespace sequant::eval

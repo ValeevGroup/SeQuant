@@ -47,9 +47,13 @@ using sequant::Index;
 using sequant::container::svector;
 using sequant::eval::Cell;
 using sequant::eval::compute_dag_path;
+using sequant::eval::HomeTarget;
+using sequant::eval::occurrence_key;
 using sequant::eval::peak_profile_sweep;
 using sequant::eval::PeakProfile;
+using sequant::eval::PlacementRouter;
 using sequant::eval::remat_cells;
+using sequant::eval::remat_to_router;
 using sequant::eval::rematerialize_to_budget;
 using sequant::eval::RematInput;
 using sequant::eval::RematResult;
@@ -508,4 +512,66 @@ TEST_CASE(
   REQUIRE(res.cells.size() == in.cells.size());
   for (std::size_t i = 0; i < in.cells.size(); ++i)
     CHECK(res.cells[i].home_modes == in.cells[i].home_modes);  // unchanged
+}
+
+// ---------------------------------------------------------------------
+// Phase 4b-2: remat_to_router -- emit PlacementRouter overrides for the MOVED
+// cells of a remat result, keyed by occurrence key.
+// ---------------------------------------------------------------------
+
+TEST_CASE(
+    "remat_to_router emits an override for the moved giant keyed by its "
+    "occurrence key, and nothing for unmoved cells (Phase 4b-2)",
+    "[placement_remat]") {
+  CostModel const cm = giant_regime_cm();
+  std::vector<EvalNode<EvalExpr>> const forest =
+      build_demoted_giant_forest_remat();
+
+  RematInput const in = remat_cells(forest, cm, unit_block_of);
+  RematResult const res = rematerialize_to_budget(in.cells, cm, unit_block_of,
+                                                  in.num_points, /*T=*/200.0);
+  REQUIRE(res.status == RematStatus::Feasible);
+
+  auto const router = remat_to_router(in.cells, res.cells, forest);
+  CHECK_FALSE(router.empty());  // the giant moved -> at least one override
+
+  // The giant cell's final (shrunk) home_modes.
+  std::size_t giant_id = in.cells.size();
+  for (auto const& c : in.cells)
+    if (c.home_depth != -1) giant_id = c.value_id;
+  REQUIRE(giant_id < in.cells.size());
+  auto const& giant_home = res.cells[giant_id].home_modes;
+
+  // G is P1's left child; under P1 (stamped i_1) its ambient (enclosing) batch
+  // context is {i_1}. Its occurrence key must route to a HomeTarget whose
+  // residency == the shrunk home_modes (i_1 kept + o_1 added by the shrink),
+  // split_index 0.
+  auto const& G = forest[0].left();
+  auto const g_key = occurrence_key(G, svector<Index>{Index{L"i_1"}});
+  HomeTarget const* g_home = router.route(g_key);
+  REQUIRE(g_home != nullptr);
+  CHECK(g_home->residency == giant_home);
+  CHECK(g_home->split_index == 0);
+
+  // An UNMOVED cell (W1 = P1's right leaf) has NO override.
+  auto const& W1 = forest[0].right();
+  auto const w_key = occurrence_key(W1, svector<Index>{Index{L"i_1"}});
+  CHECK(router.route(w_key) == nullptr);
+}
+
+TEST_CASE(
+    "remat_to_router returns an EMPTY router when nothing moved (inf "
+    "threshold) -- the Phase-2 inert seed seam",
+    "[placement_remat]") {
+  CostModel const cm = giant_regime_cm();
+  std::vector<EvalNode<EvalExpr>> const forest =
+      build_demoted_giant_forest_remat();
+
+  RematInput const in = remat_cells(forest, cm, unit_block_of);
+  RematResult const res =
+      rematerialize_to_budget(in.cells, cm, unit_block_of, in.num_points,
+                              std::numeric_limits<double>::infinity());
+
+  auto const router = remat_to_router(in.cells, res.cells, forest);
+  CHECK(router.empty());
 }
