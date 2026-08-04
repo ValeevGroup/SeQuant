@@ -128,15 +128,25 @@ feeding Phase 5:
   factorizer never batched (no single term saw the sharing). Feeds back to add batch loops
   (Phase 5 / spec O6). O2 reports it; it does not add loops.
 
-## 5. The default-threshold policy (cutover risk)
+## 5. The default-threshold policy (RETRACTED -- keep `inf`)
 
-Deleting the veto means an UNTUNED run (no explicit `peak_threshold`) would get
-`threshold = inf` => seed-alone => peak-maximal => a DEFAULT REGRESSION into the
-C60-OOM class the veto used to prevent. So 4b MUST define a default so O2 spills by
-default: `peak_threshold` defaults to a finite budget (e.g. a fraction of addressable
-memory, or the existing DP/perf-first default if one exists) rather than infinity. The
-exact default is a 4b decision; the REQUIREMENT is that "no explicit threshold" does NOT
-mean "peak-maximal." Document the chosen default and its rationale in the cutover commit.
+An earlier draft claimed deleting the veto forces a finite default `peak_threshold`
+(else an untuned run regresses to a veto-less peak-maximal seed). **Retracted (2026-08-04,
+Phase 4b-3 brainstorm).** The premise was wrong: a finite `peak_threshold` IS the
+"batching is active" gate (`sequant_engine.cpp`), and `validate_batch_config` REQUIRES a
+finite budget for any enabled axis (no heuristic fallback). So `threshold = inf` does not
+mean "batching with peak-maximal placement" -- it means NO BATCHING. And
+`has_demoted_external` only ever fires on the batched path (a demoted External mode exists
+only when a value is sliced in some occurrences but not the meet, which requires batching).
+Therefore:
+- `inf` (default) => no batching => no demoted giants => the veto is INERT; deleting it
+  changes nothing.
+- finite => batching on => the remat pre-pass (Section 11) populates the router => giants
+  spilled.
+The default STAYS `inf`; batching requires an explicit finite budget (already validated),
+so the user consciously opts in. No memory-fraction default -- we cannot assume the backend
+arrays live in memory (TA tiles may be disk-backed / out-of-core), so a memory budget is
+not a safe default. Deleting the veto is safe under BOTH regimes.
 
 ## 6. Consequences
 
@@ -295,3 +305,86 @@ is satisfied by the router's own design).
   Phase-2 inert seed seam.
 - Additive: `[peak_profile]` / existing `[placement_remat]` figures UNCHANGED (the `hash`
   field and the new emitter do not perturb the sizing / sweep).
+
+## 11. Phase 4b-3: the runtime cutover (dry-run remat pre-pass -> router -> place_at_this_level; delete the veto), detailed design (2026-08-04)
+
+4b-3 is the behavior-changing cutover: it wires the remat placement into the runtime and
+DELETES the demotion veto. One coupled phase (SeQuant + MPQC land together), gated by MPQC
+CCk energy correctness. `peak_threshold` stays `inf` by default (Section 5).
+
+### 11.1 Architecture -- remat runs on the REAL enodes
+
+The remat pass is BACKEND-AGNOSTIC: `compute_dag_boulevard` reads `hash_value` /
+`canon_indices` / `batched_here` / `leaf` / `left` / `right`, `occurrence_key` reads the
+SeQuant `Tensor` (`as_tensor().clone()`), and `cell_footprint` sizes via a `dryrun::CostModel`
+independent of the node backend. So remat runs DIRECTLY on the real `EvalExprTA` `enodes`
+`build_cache_manager` already receives (`cck.ipp:1443`) with a dry-run `SizeRegime` -- no
+separate dry-run forest copy. Because the pre-pass and the runtime key on the SAME nodes,
+the occurrence keys match by construction (Section 11.4).
+
+### 11.2 The pre-pass, in `build_cache_manager` (MPQC)
+
+When `peak_threshold` is FINITE (batching active):
+1. Build a dry-run `SizeRegime` / `dryrun::CostModel` from `ctx.idx_to_extent` (+ inner_pow
+   for composites) -- reuse the construction the existing dry-run cost-profile path uses
+   (`sequant.cpp`). `block_of` = the per-mode batch block extent (from the batch target
+   sizes on `ctx.batch_policy`).
+2. `auto in = remat_cells(enodes, cm, block_of);`
+   `auto res = rematerialize_to_budget(in.cells, cm, block_of, in.num_points, peak_threshold);`
+   `auto router = remat_to_router(in.cells, res.cells, enodes);`
+3. OWN the router for the eval's lifetime (the cache holds a NON-owning
+   `PlacementRouter const*`); `cache.set_placement_router(&router)`.
+   Ownership: `build_cache_manager` returns the cache; the router must outlive it. Return a
+   small struct `{ CacheManager, PlacementRouter }` (or store the router where the cache's
+   lifetime is bounded) so the non-owning pointer never dangles. Exact ownership shape is a
+   plan decision; the INVARIANT is router-outlives-cache.
+   `inf` threshold => skip the pre-pass => router stays empty (the Phase-2 inert seam) =>
+   raw seed placement (no batching anyway).
+
+Reuse note: the existing dry-run `cost_profile` machinery already assembles the
+`SizeRegime` + `CacheConfig` from `ctx` (`sequant.cpp:440+`); factor the shared regime
+construction so the pre-pass and `eval:dry_run` cost prediction do not drift.
+
+### 11.3 SeQuant: delete `has_demoted_external`; place_at_this_level = router-or-seed
+
+DELETE the veto (`eval.hpp:1733` lambda, `:1745` collect-gate conjunct, `:1780` doc). With
+it gone, `place_at_this_level` homes each value at:
+- its ROUTER override if present (a moved cell -- the remat-chosen home), else
+- the DEFAULT derivation: the deepest enclosing loop over `sliced_modes` (the seed home) --
+  `residency_all_outer` + the `rl` walk, already in place from Phases 2-4b-1.
+The veto's job (keep the scattered giant from materializing full) is now done by remat: it
+SHRANK the giant and emitted the lower home as a router override. The affected
+`test_eval_ta.cpp` veto cases are re-baselined to the router-or-seed placement (their
+expectations no longer assert a vetoed-local home). CAT-1 for the veto is complete here;
+`contracted_modes` was already deleted in 4b-1.
+
+### 11.4 The load-bearing correctness invariant
+
+The pre-pass's `occurrence_key(node, ctx_modes)` and the runtime store seam's
+`occurrence_key(d, ectx_modes)` (`eval.hpp`, Phase-2 store) MUST be IDENTICAL for each
+use-site: same node, same enclosing-batch modes, same proto-expansion, so the runtime
+lookup finds the pre-pass's override. `remat_to_router`'s re-walk assembles `ctx_modes` the
+same way `compute_dag_boulevard` does (enclosing batched_here, proto-expanded); the runtime
+assembles `ectx_modes` from the live `batch_context`. These must agree. Validate with a
+SeQuant unit test that a router built by `remat_to_router` on a forest, then consulted by
+the runtime store seam over the same forest, routes each moved value to its remat home.
+
+### 11.5 Validation (CCk-gated)
+
+- **Correctness FIRST (the gate):** MPQC CCk + CSV-CCk energies UNCHANGED across the batched
+  validation suite (np1+np2), incl. the batched variants -- placement changed, results must
+  not. This is the cross-repo, user-run gate before merge.
+- `threshold = inf`: byte-identical to today (no pre-pass, empty router, no batching).
+- Finite threshold: the batched-path peak DROPS toward the documented-RED witness targets
+  (the C60 occ-veto class), energies still exact; `BatchGroup` events still fire (batching
+  engaged).
+- The SeQuant unit suites (`[eval]`/`[eval_ta]`/`[placement_remat]`/`[dryrun]`) stay green;
+  the deleted-veto `test_eval_ta.cpp` cases re-baselined with justification.
+
+### 11.6 Risk / rollback
+
+Behavior-changing and cross-repo. If a CCk energy moves, it is a real regression (the
+router-driven placement must be result-preserving) -- STOP, do not re-baseline energies.
+Rollback is clean: the router seam is inert when empty, so reverting the MPQC pre-pass wiring
+(leaving the router empty) restores the seed placement; the veto deletion is independently
+safe (Section 5) since without the pre-pass and with `inf` default there is no batching.
