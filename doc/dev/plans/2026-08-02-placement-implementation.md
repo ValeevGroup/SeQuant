@@ -786,3 +786,250 @@ byte-identical), and the existing `[cache_manager]` batch-variant veto (which re
   collapses `sliced ∪ contracted` back to `sliced`.
 - Wiring `home_scope` into the static peak profile (3b) and O2's `ΔPeak`, behind the
   seed+O2 coupling flag so the peak-maximal seed never ships regressed standalone.
+
+## Phase 3b -- static peak profile (O3a; non-regressing, scope decision (A))
+
+### Goal
+Build the STATIC peak-profile analysis consuming the Phase-3a `home_scope` seed:
+per-cell home-relative footprint x `[first-use, last-use]` liveness interval, swept to
+`peak_bytes` plus the binding peak point and its live set (the spill candidates O2 needs
+in Phase 4). A NEW additive analysis with ZERO production callers, validated by tests.
+Runtime stays byte-identical: `place_at_this_level`, `stamp_lifetime_masks`, and the
+Phase-1 runtime `cost_profile` path are untouched. See design doc section 9.
+
+### Architecture
+A seed cell is `(value, home_scope)` -- perfect CSE, one cell per value at its meet home,
+`split_index == 0` (splits are Phase 4). Footprint reuses the EXISTING moment-aware sizer
+`dryrun::CostModel::memsize(idxset, ExtentOverrides)` (`cost_model_object.hpp:120`,
+`ExtentOverrides = container::map<Index,std::size_t>` at :84) with a home-relative override
+table (block-extent for carried modes whose loop encloses the home, full otherwise). Home
+DEPTH is the rl-walk over the enclosing-loop `BatchContext` keyed on `home_scope(node)`,
+mirroring `eval.hpp:1776-1782` but using the unified seed residency instead of
+`sliced ∪ contracted`. Liveness intervals come from the linearized static schedule
+(one representative iteration per loop) + the Phase-2 router use-sites. An event-based
+sweep gives the peak; a deliberately-different per-point live-set replay is the oracle.
+
+### Tech stack
+C++20 header (`meta::eval_node` / `meta::eval_node_range` concepts), the dry-run backend
+(`backends/dryrun/`), Catch2 (`tests/unit/`), CMake + Ninja. Proto-aware `Index`.
+
+### Global Constraints (binding)
+- No en-dashes (U+2013) anywhere in source or comments.
+- Format touched files with `/opt/homebrew/opt/llvm/bin/clang-format --style=file -i`.
+- No `Co-Authored-By` trailers in commits.
+- RELEASE build in `cmake-build-release`; cap ninja at `-j6`.
+- NON-REGRESSING: ZERO production callers; runtime `place_at_this_level` /
+  `stamp_lifetime_masks` / the runtime `cost_profile` path stay BYTE-UNCHANGED. Existing
+  `[eval]`, `[cache_manager]`, `[dryrun]`, `[lifetime_mask]`, `[occurrence_key]`,
+  `[placement_router]` suites + the `[.][dryrun-occ-veto]` / `[.][dryrun-extmode-avoidable]`
+  witness figures stay green.
+- READ-ONLY vs 3a/Phase-4: do NOT delete `contracted_modes` / `has_demoted_external`, do
+  NOT switch the runtime selector, do NOT wire `home_scope`/`PeakProfile` into runtime.
+
+### File Structure
+- NEW `SeQuant/core/eval/peak_profile.hpp`
+  - `struct PeakProfile { double peak_bytes; std::size_t binding_point;
+    container::svector<std::size_t> live_at_binding; };` (cells + points identified by
+    stable index into the linearization).
+  - `detail::cell_footprint(...)` -- home-relative `ExtentOverrides` + `CostModel::memsize`.
+  - `detail::home_depth_of(home_scope_modes, ectx)` -- the rl-walk keyed on `home_scope`.
+  - `detail::linearize(forest) -> Schedule` -- static point order + per-cell
+    `[first_use,last_use]` from router use-sites.
+  - `peak_profile_sweep(Schedule) -> PeakProfile` -- the interval-event sweep.
+  - `peak_profile_replay(Schedule) -> double` -- the per-point live-set oracle.
+- NEW `tests/unit/test_peak_profile.cpp` (add to `tests/unit/CMakeLists.txt`).
+
+---
+
+### T1 -- footprint sizer + home-depth resolver
+
+#### Files
+- CREATE `SeQuant/core/eval/peak_profile.hpp` (the two sizing primitives + their `detail`).
+- CREATE `tests/unit/test_peak_profile.cpp`; add it to `tests/unit/CMakeLists.txt`.
+
+#### Interfaces
+Consumes:
+- `dryrun::CostModel::memsize(container::svector<Index> const&, ExtentOverrides const&) const`
+  (`backends/dryrun/cost_model_object.hpp:120`); `using ExtentOverrides =
+  container::map<Index,std::size_t>` (:84); `dryrun::SizeRegime` ctor of `CostModel` (:104).
+- `home_scope(node) -> container::svector<Index> const&` (Phase 3a, `lifetime_mask.hpp`).
+- `EvalExpr::batched_here() -> svector<pair<Index,BatchModeType>> const&` (eval_expr.hpp:283).
+- `CacheManager::BatchContext` (`cache_manager.hpp:95`) -- the `ectx` shape
+  (`svector<pair<Index, ...>>`; index is `.first`); mirror the rl-walk `eval.hpp:1776-1782`.
+
+Produces:
+- `std::size_t detail::cell_footprint(container::svector<Index> const& carried,
+   container::svector<Index> const& home_modes, BatchCtx const& ectx,
+   dryrun::CostModel const& cm, /* block extents */ ExtentFn const& block_of)`
+- `int detail::home_depth_of(container::svector<Index> const& home_modes,
+   BatchCtx const& ectx)` -- deepest `ectx` level whose mode is in `home_modes`, else -1.
+
+#### TDD steps
+1. Failing test (`[peak_profile]`) for `home_depth_of`: build an `ectx` of loops
+   `[a, b, c]` (innermost last) and assert:
+   - `home_modes = {c}` -> depth `2`; `{a}` -> `0`; `{}` -> `-1`;
+   - `{b, x}` (x not in ectx) -> `1` (deepest PRESENT residency mode);
+   - proving it matches the `in_union`/rl walk keyed on `home_modes`. Compile fails: no header.
+2. Write `home_depth_of` (transcribe `eval.hpp:1776-1782`, predicate = `m in home_modes`):
+   ```cpp
+   inline int home_depth_of(container::svector<Index> const& home_modes,
+                            BatchCtx const& ectx) noexcept {
+     for (int i = static_cast<int>(ectx.size()) - 1; i >= 0; --i)
+       if (std::find(home_modes.begin(), home_modes.end(), ectx[i].first) !=
+           home_modes.end())
+         return i;
+     return -1;
+   }
+   ```
+3. Failing test for `cell_footprint`: a cell carrying modes `{p, q}` homed at scope with
+   `ectx = [p]` (so `p`'s loop ENCLOSES the home -> `p` sized BLOCK, `q` unbatched -> FULL).
+   With `full_extent(p)=full_extent(q)=10`, `block_extent(p)=2`, assert
+   `cell_footprint == memsize({p,q}, {p->2})` == `2*10` (vs the full `10*10` when homed
+   ABOVE `p`'s loop). Drive `CostModel` with a hand-built `SizeRegime` giving those
+   extents (mirror the `SizeRegime` setup already used in `test_eval_dryrun.cpp` /
+   `[dryrun][cost_profile]` tests -- read one for the exact constructor call).
+4. Write `cell_footprint`: build `ExtentOverrides` = `{ m -> block_of(m) : m in carried,
+   L(m) encloses home }` (i.e. `m` appears in `ectx` at a level `<= home_depth_of(home_modes,
+   ectx)`), then `return cm.memsize(carried, overrides);`. Non-carried / above-home modes
+   get no override (full).
+5. Run `[peak_profile]`; both pass. Keep `[dryrun]` green (only a new header added).
+6. clang-format; commit "eval: peak-profile footprint sizer + home-depth resolver (Phase 3b T1)".
+
+---
+
+### T2 -- linearization, liveness intervals, and the sweep -> `PeakProfile`
+
+#### Files
+- MODIFY `SeQuant/core/eval/peak_profile.hpp` (add `Schedule`, `linearize`,
+  `PeakProfile`, `peak_profile_sweep`).
+- MODIFY `tests/unit/test_peak_profile.cpp`.
+
+#### Interfaces
+Consumes (from T1): `cell_footprint`, `home_depth_of`. Consumes the Phase-2 router
+use-sites: `PlacementRouter` / `eval::occurrence_key` (`placement_router.hpp`,
+`occurrence_key.hpp`) -- the set of eval-tree nodes that READ a value.
+Produces:
+- `struct Cell { std::size_t value_id; int home_depth; std::size_t footprint;
+   std::size_t first_use, last_use; };`
+- `struct Schedule { container::svector<Cell> cells; std::size_t num_points; };`
+- `template <meta::eval_node_range R> Schedule linearize(R const& forest,
+   dryrun::CostModel const&, /* block extents */ ExtentFn const&);`
+- `struct PeakProfile { double peak_bytes; std::size_t binding_point;
+   container::svector<std::size_t> live_at_binding; };`
+- `PeakProfile peak_profile_sweep(Schedule const&);`
+
+#### TDD steps
+1. Failing test for `peak_profile_sweep` on a HAND-BUILT `Schedule` (bypass `linearize`;
+   construct `Cell`s directly so the sweep is tested in isolation): three cells
+   `A=[0,3] fp=100`, `B=[1,2] fp=40`, `C=[2,4] fp=10`; overlaps: point 2 has `{A,B,C}` =
+   150 (max). Assert `peak_bytes==150`, `binding_point==2`, `live_at_binding=={A,B,C ids}`.
+   Add a tie-break case (two points equal peak -> lowest point index wins) to pin
+   determinism. Compile fails: no `peak_profile_sweep`.
+2. Write `peak_profile_sweep`: emit `(+fp at first_use)` / `(-fp at last_use+1)` events,
+   sort by point (deterministic), running-sum; track argmax `(peak, point)` with lowest-point
+   tie-break; then a second pass (or retained live-set) collects `live_at_binding` = cells
+   with `first_use <= binding_point <= last_use`.
+   ```cpp
+   inline PeakProfile peak_profile_sweep(Schedule const& s) {
+     // events[p] = net footprint delta entering point p
+     container::svector<double> delta(s.num_points + 1, 0.0);
+     for (auto const& c : s.cells) {
+       delta[c.first_use] += double(c.footprint);
+       delta[c.last_use + 1] -= double(c.footprint);
+     }
+     double run = 0, peak = 0; std::size_t arg = 0;
+     for (std::size_t p = 0; p < s.num_points; ++p) {
+       run += delta[p];
+       if (run > peak) { peak = run; arg = p; }  // strict => lowest-point tie-break
+     }
+     PeakProfile out{peak, arg, {}};
+     for (std::size_t i = 0; i < s.cells.size(); ++i)
+       if (s.cells[i].first_use <= arg && arg <= s.cells[i].last_use)
+         out.live_at_binding.push_back(i);
+     return out;
+   }
+   ```
+3. Failing test for `linearize` on a SMALL constructed forest (reuse the eval-forest
+   builders from `test_eval_dryrun.cpp` / `test_lifetime_mask.cpp`): a value shared by two
+   consumers at different schedule points -> ONE cell whose `[first_use,last_use]` spans
+   from its production to the LATER consumer; a value homed above a loop -> interval covers
+   the loop subtree span. Assert the produced `Cell`s' intervals and footprints.
+4. Write `linearize`: run `stamp_seed_residency(forest)`; DFS the forest in execution order
+   assigning each node a static point index (`num_points`). Maintain, during the DFS, the
+   accumulated ancestor-loop stack as the per-node `ectx` -- push each node's
+   `batched_here()` loops on descent, pop on ascent -- since statically the enclosing
+   `BatchContext` of a node IS its ordered ancestor loops (the runtime `parent_cache
+   .batch_context()`). For each DISTINCT value (by the Phase-2 occurrence identity /
+   structural hash) create ONE `Cell` with
+   `home_depth = home_depth_of(home_scope(node), ectx-at-node)`,
+   `footprint = cell_footprint(carried, home_scope(node), ectx-at-node, cm, block_of)`, and
+   `[first_use,last_use]` = min/max static point over its production point + its router
+   use-sites (extend `last_use` to the end of the home loop's subtree when homed above it).
+5. Run `[peak_profile]`; all green. `[eval]`/`[dryrun]` green.
+6. clang-format; commit "eval: peak-profile linearize + interval sweep -> PeakProfile (Phase 3b T2)".
+
+---
+
+### T3 -- the replay oracle + validation (oracle equality all forests; Phase-1 anchor)
+
+#### Files
+- MODIFY `SeQuant/core/eval/peak_profile.hpp` (add `peak_profile_replay`).
+- MODIFY `tests/unit/test_peak_profile.cpp`.
+
+#### Interfaces
+Consumes: `Schedule`, `peak_profile_sweep` (T2); `dryrun::cost_profile(...) ->
+CostProfile{ .peak_bytes }` (`backends/dryrun/cost_profile.hpp:189,221`) for the anchor.
+Produces: `double peak_profile_replay(Schedule const&);` (per-point live-set sum).
+
+#### TDD steps
+1. Failing test: on the SAME hand-built `Schedule` from T2 step 1, assert
+   `peak_profile_replay(s) == peak_profile_sweep(s).peak_bytes` (== 150). Compile fails.
+2. Write `peak_profile_replay` -- a DELIBERATELY DIFFERENT algorithm (explicit per-point
+   live-set sum, NOT interval events), so agreement is a real cross-check:
+   ```cpp
+   inline double peak_profile_replay(Schedule const& s) {
+     double peak = 0;
+     for (std::size_t p = 0; p < s.num_points; ++p) {
+       double sum = 0;
+       for (auto const& c : s.cells)
+         if (c.first_use <= p && p <= c.last_use) sum += double(c.footprint);
+       peak = std::max(peak, sum);
+     }
+     return peak;
+   }
+   ```
+3. ORACLE EQUALITY (all forests): drive `linearize` on several constructed forests
+   INCLUDING a demoted case (a value carried FULL above a loop it slices in another
+   occurrence -> meet-empty `home_scope` -> homed at root, spanning the whole subtree) and
+   assert `peak_profile_replay(sched) == peak_profile_sweep(sched).peak_bytes` EXACTLY for
+   each. This is O3b; it must hold on demoted forests too.
+4. PHASE-1 ANCHOR (non-demoted only): on an External-only / no-demotion forest where the
+   seed placement coincides with today's heuristic, build the same `dryrun` evaluation the
+   `[dryrun][cost_profile]` tests use, call `cost_profile(...)`, and assert
+   `peak_profile_sweep(linearize(forest,...)).peak_bytes == profile.peak_bytes`. Document in
+   the test WHY this is gated to non-demoted forests (design doc section 9.6: the seed and
+   the heuristic diverge on demoted values, so the anchor is only valid where they agree).
+   If no existing small non-demoted `cost_profile` fixture matches, reuse the smallest
+   `[dryrun][cost_profile]` forest that has no demotion and assert equality there.
+5. Run `[peak_profile]` + `[dryrun]`; then the `[.][dryrun-occ-veto]` /
+   `[.][dryrun-extmode-avoidable]` witnesses -- their figures UNCHANGED (3b adds no runtime
+   path; this confirms non-regression).
+6. clang-format; commit "test: peak-profile replay oracle + Phase-1 anchor (Phase 3b T3)".
+
+---
+
+### The one real risk
+The anchor (T3 step 4) equates a STATIC sweep over the SEED placement with the Phase-1
+RUNTIME `peak_bytes` measured under today's HEURISTIC placement. That equality holds ONLY
+where the two placements coincide (no demotion). Mitigation: gate the anchor to a
+provably non-demoted forest (External-only, `home_scope` == today's `sliced_modes`), and
+lean on the O3b oracle (T3 step 3) -- which shares the seed placement with the sweep -- for
+the demoted cases. If the anchor forest turns out to have any demotion, the sweep and
+`cost_profile` will legitimately differ and the test must NOT be "fixed" by loosening the
+sizing; pick a smaller non-demoted forest instead.
+
+### Deferred to Phase 4 (OUT OF SCOPE here)
+- Wiring `PeakProfile` into runtime placement + O2's `ΔPeak` (shrink/un-hoist/split by
+  `ΔPeak/ΔRecompute`), coupled with the perfect-CSE seed behind the flag.
+- Incremental sweep updates (O3a incremental) -- O2 needs re-cost over one changed cell's
+  span; the static full sweep here is the baseline it will make incremental.
