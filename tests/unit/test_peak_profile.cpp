@@ -480,14 +480,16 @@ TEST_CASE(
                    : std::vector<EvalNode<EvalExpr>>{P1, P2};
     auto const s = linearize(forest, cm, block_of);
 
-    // V is the unique cell with a NON-trivial home_depth in this forest: P1
-    // and P2 own no carried slot in their own loop's mode(s) (their loops
-    // slice V and the leaves' modes, not their own result), and every leaf
-    // stays unstamped (home_scope defaults empty), so all of those size
-    // home_depth == -1 in EITHER order. V's home_depth is occurrence-
-    // dependent (0 in the occ-1-first order, 1 in the occ-2-first order --
-    // home_depth is informational only, per linearize's doc comment), so
-    // match on "!= -1" rather than a fixed depth to stay order-agnostic.
+    // V is the unique cell with a NON-trivial home_depth in this forest,
+    // because home_depth needs BOTH a non-empty home_scope AND a non-empty
+    // enclosing ectx: P1 and P2 are forest ROOTS (empty ectx -> home_depth
+    // == -1 regardless of their own home_scope), and every leaf stays
+    // unstamped (home_scope defaults empty -> -1). Only V sits under a parent
+    // loop, so its ectx carries i_1 (in home_scope(V)) and its home_depth is
+    // != -1. That depth is itself occurrence-dependent (0 in the occ-1-first
+    // order, 1 in the occ-2-first order -- home_depth is informational only,
+    // per linearize's doc comment), so match on "!= -1" rather than a fixed
+    // depth to stay order-agnostic.
     Cell const* v = nullptr;
     for (auto const& c : s.cells)
       if (c.home_depth != -1) v = &c;
