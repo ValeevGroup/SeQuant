@@ -23,6 +23,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstddef>
+#include <set>
 #include <string_view>
 #include <vector>
 
@@ -38,11 +39,14 @@ using sequant::ExprPtr;
 using sequant::Index;
 using sequant::container::svector;
 using sequant::eval::Cell;
+using sequant::eval::compute_dag_boulevard;
 using sequant::eval::compute_dag_path;
 using sequant::eval::peak_profile_replay;
 using sequant::eval::peak_profile_sweep;
 using sequant::eval::PeakProfile;
+using sequant::eval::RichSchedule;
 using sequant::eval::Schedule;
+using sequant::eval::ValueCell;
 using sequant::eval::detail::BatchContext;
 using sequant::eval::detail::cell_footprint;
 using sequant::eval::detail::home_depth_of;
@@ -257,6 +261,54 @@ TEST_CASE(
   CHECK(v->first_use == 0);
   CHECK(v->last_use == 5);
   CHECK(v->last_use == sched.num_points - 1);
+}
+
+TEST_CASE("compute_dag_boulevard threads the value hash onto each ValueCell",
+          "[peak_profile]") {
+  // The rich cell must carry the value's hash_value() -- the CSE identity that
+  // links a cell back to its forest nodes (remat_to_router uses it, Phase
+  // 4b-2). Same CSE forest as above: the shared V folds into ONE cell whose
+  // hash must equal the shared node's hash_value().
+  auto make_V = [] { return leaf("V{i_1;i_2}"); };
+  auto const v_node = make_V();
+  std::size_t const v_hash = v_node->hash_value();
+
+  auto P1 = inode("P{i_1;a_3}", make_V(), leaf("W{a_1;a_3}"));
+  auto P2 = inode("P{i_1;a_3}", make_V(), leaf("W{a_1;a_3}"));
+
+  SizeRegime r;
+  r.space_extent = {{L"i", 5}, {L"a", 10}};
+  CostModel const cm{r};
+  auto const block_of = [](Index const&) -> std::size_t { return 1; };
+  std::vector<EvalNode<EvalExpr>> forest{P1, P2};
+
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+  REQUIRE(rich.cells.size() == 3);  // V, W, P fold pairwise
+
+  // EXACTLY one cell carries V's hash, and it IS the V value (carried
+  // {i_1,i_2}).
+  std::size_t v_cells = 0;
+  ValueCell const* v = nullptr;
+  for (auto const& c : rich.cells)
+    if (c.hash == v_hash) {
+      ++v_cells;
+      v = &c;
+    }
+  REQUIRE(v_cells == 1);
+  REQUIRE(v != nullptr);
+  std::set<Index> const carried_set(v->carried.begin(), v->carried.end());
+  std::set<Index> const v_slots(v_node->canon_indices().begin(),
+                                v_node->canon_indices().end());
+  CHECK(carried_set == v_slots);
+
+  // Every cell's hash is a real value hash present in the forest (no cell has a
+  // zero/garbage hash), and the three cells' hashes are pairwise distinct.
+  std::set<std::size_t> hashes;
+  for (auto const& c : rich.cells) {
+    CHECK(c.hash != 0);
+    hashes.insert(c.hash);
+  }
+  CHECK(hashes.size() == 3);
 }
 
 TEST_CASE(

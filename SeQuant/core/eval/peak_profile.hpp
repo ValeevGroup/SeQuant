@@ -197,6 +197,12 @@ inline double peak_profile_replay(Schedule const& s) {
 struct ValueCell {
   std::size_t value_id;  //!< stable index of the value group (== its slot in
                          //!< \c RichSchedule::cells)
+  std::size_t hash;      //!< the value's \c EvalExpr::hash_value() -- the CSE
+                         //!< identity that folds occurrences into this cell.
+                         //!< Batched-slot-BLIND; DISTINCT from the
+                         //!< batched-slot-aware occurrence key the router uses
+                         //!< (see remat_to_router). Links a cell back to its
+                         //!< forest nodes.
   int home_depth;        //!< \c home_depth_of(home_scope, ectx) at the
                          //!< FIRST occurrence -- informational, as \c
                          //!< Cell::home_depth
@@ -362,6 +368,7 @@ RichSchedule compute_dag_boulevard(R const& forest,
     if (it == hash_to_cell.end()) {
       ValueCell c;
       c.value_id = out.cells.size();
+      c.hash = r.hash;  // the value's hash_value() (== the hash_to_cell key)
       c.first_use = r.point;
       c.last_use = r.consumer_point;
       c.home_depth = detail::home_depth_of(r.home, r.ectx);
