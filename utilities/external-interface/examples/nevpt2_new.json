@@ -26,6 +26,15 @@
 				"name": "Closed",
 				"tag": "c"
 			}
+		},
+		{
+			"label": "F",
+			"size": 100,
+			"real_valued": true,
+			"meta": {
+				"name": "Auxiliary",
+				"tag": "F"
+			}
 		}
 	],
 	"steps": [
@@ -62,6 +71,18 @@
 		{
 			"kind": "validate",
 			"inputs": "input"
+		},
+		{
+			"id": "DF",
+			"kind": "density_fitting",
+			"inputs": "input",
+			"options": {
+				"auxiliary_space": "F"
+			}
+		},
+		{
+			"kind": "output",
+			"inputs": "DF.en"
 		}
 	]
 }
