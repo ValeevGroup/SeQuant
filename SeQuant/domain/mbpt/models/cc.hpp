@@ -94,14 +94,19 @@ class CC {
   /// @note For a non-unitary ansatz each commutator is represented as a
   /// connected product, \f$ (\hat{A}\hat{B})_c \f$, equivalent to \f$
   /// [\hat{A},\hat{B}] \f$ only once operator connectivity is supplied
-  /// downstream. A unitary ansatz uses explicit commutators and needs no
-  /// connectivity. @see lst_options
+  /// downstream; this engine always supplies it, by handing `ref_av`
+  /// `default_op_connections()` or a superset thereof. A unitary ansatz uses
+  /// explicit commutators instead, and is handed empty connectivity.
   /// @warning Because of the above, the expression returned for a non-unitary
   /// ansatz is NOT self-contained: evaluating it with empty connectivity, e.g.
   /// `op::ref_av(P(nₚ(2)) * cc.hbar(), {.connect = {}})`, silently retains the
   /// disconnected terms that the commutator would have cancelled. Pass
-  /// `default_op_connections()` (the default of `op::ref_av`/`op::vac_av`), or
-  /// build H̄ yourself with `mbpt::lst(..., {})` if you need the explicit form.
+  /// `default_op_connections()` (which `op::ref_av`/`op::vac_av` use when the
+  /// options argument is omitted -- note that passing `{}` instead gives empty
+  /// connections), or build H̄ yourself with `mbpt::lst(..., {})` if you need
+  /// the explicit form. For a unitary ansatz the reverse holds: H̄ is already
+  /// self-contained, so connectivity must be left empty. See the "Using H̄
+  /// outside the CC class" section of the user guide.
   [[nodiscard]] ExprPtr hbar(
       std::optional<size_t> truncation_rank = std::nullopt) const;
 

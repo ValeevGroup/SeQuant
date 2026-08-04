@@ -149,6 +149,10 @@ Both forms give the same equations, given the right connectivity. They differ in
 
 Mind which overload you reach: the operator-level ``op::vac_av``/``op::ref_av`` default to ``default_op_connections()``, which connects the Hamiltonian (``h``, ``f``, ``f̃``, ``g``) with the cluster operator ``t``. Their tensor-level counterparts, ``op::tensor::vac_av``/``op::tensor::ref_av``, default to *empty* connections. Pairing ``use_connected_form = true`` with empty connectivity silently keeps the disconnected terms the commutator would have cancelled, so the result is wrong rather than merely more verbose.
 
+Mind also that omitting the options argument is not the same as passing ``{}``: ``default_op_connections()`` is the default of the *parameter*, whereas ``EVOptions::connect`` is itself empty by default, so ``op::ref_av(expr)`` connects the operators and ``op::ref_av(expr, {})`` does not.
+
+The same trade-off shows up in :func:`CC::hbar() <sequant::mbpt::CC::hbar>`, which returns the connected form for a non-unitary ansatz; see :ref:`cc-hbar-connectivity`.
+
 Examples
 --------
 

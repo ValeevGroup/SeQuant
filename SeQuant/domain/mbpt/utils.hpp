@@ -16,11 +16,12 @@ namespace sequant::mbpt {
 
 /// Options for Lie Similarity Transformation. @see lst
 struct LSTOptions {
-  /// Present only to force designated initialization, e.g.
-  /// `LSTOptions{.unitary = true}` rather than `LSTOptions{true, false}`.
-  /// Renaming/reordering the fields below would otherwise silently reinterpret
-  /// any positional-init caller instead of failing to compile.
-  [[no_unique_address]] sequant::detail::designated_only designated_only_ = {};
+  /// makes positional init (`LSTOptions{true, false}`) ill-formed, so every
+  /// call site must name what it sets (`LSTOptions{.unitary = true}`); without
+  /// it, reordering the fields below -- or flipping the meaning of one while
+  /// keeping its position, as `use_connected_form` did to `use_commutators` --
+  /// silently reinterprets positional callers instead of failing to compile
+  SEQUANT_DESIGNATED_INIT_ONLY;
   /// If true, uses unitary generator
   bool unitary = false;
   /// If true, uses connected products [A,B] = (AB)_c; otherwise uses explicit

@@ -140,7 +140,7 @@ The similarity-transformed Hamiltonian is built by ``mbpt::lst``, see :ref:`mbpt
 .. _cc-hbar-connectivity:
 
 Using :math:`\bar{H}` outside the CC class
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 :func:`CC::hbar() <sequant::mbpt::CC::hbar>` is public, but for a non-unitary ansatz the expression it returns is **not** self-contained: each commutator is written as a connected product (see :ref:`mbpt-lst`), which only equals the commutator once you connect the operators when taking the expectation value. The class always does this for you — every non-unitary path passes ``default_op_connections()`` (or a superset) to ``ref_av``. A caller who does not will silently retain the disconnected terms:
 
@@ -160,7 +160,16 @@ Using :math:`\bar{H}` outside the CC class
    // no connectivity
    auto hbar = lst(op::H(), op::T(2), 4);
 
-A unitary ansatz is unaffected: it already uses explicit commutators and the class passes empty connectivity.
+Note that ``op::ref_av(expr)`` and ``op::ref_av(expr, {})`` are *not* the same call: the connectivity defaults to ``default_op_connections()`` only when the argument is omitted entirely, since ``EVOptions::connect`` is itself empty by default.
+
+The two ``ref_av`` calls above swap roles for a unitary ansatz, so it is not simply "unaffected". There :func:`CC::hbar() <sequant::mbpt::CC::hbar>` already returns explicit commutators, and imposing connectivity on top of them would drop terms that must survive; a caller must therefore pass empty connections explicitly, as the class does internally:
+
+.. code-block:: cpp
+
+   CC ucc{2, {.ansatz = CC::Ansatz::U, .hbar_comm_rank = 3}};
+
+   // correct for a unitary ansatz: hbar is already self-contained
+   auto ueqs = op::ref_av(op::P(nₚ(2)) * ucc.hbar(), {.connect = {}});
 
 .. _cc-spin-tracing:
 
