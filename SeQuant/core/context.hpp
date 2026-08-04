@@ -58,6 +58,18 @@ class Context {
     constexpr static auto braket_typesetting = BraKetTypesetting::ContraSub;
     constexpr static auto braket_slot_typesetting =
         BraKetSlotTypesetting::TensorPackage;
+    // default symmetries used when *deserializing* a tensor whose symmetry is
+    // under-specified in the input; the library defaults are the *safest* (most
+    // general) possible, and applications can fine-tune them via Context for
+    // ergonomics (e.g. mbpt assumes particle-symmetric tensors). These do NOT
+    // affect the programmatic Tensor ctors, whose defaults are fixed and
+    // independent of the ambient Context. Note that there is no braket-symmetry
+    // default: braket symmetry is a *derived* property of a tensor (from its
+    // #Hermiticity and #base_field), so #hermiticity is the knob instead (cf.
+    // removal of Context::braket_symmetry).
+    constexpr static auto symmetry = Symmetry::Nonsymm;
+    constexpr static auto hermiticity = Hermiticity::NonHermitian;
+    constexpr static auto column_symmetry = ColumnSymmetry::Nonsymm;
   };
 
   /// helper for the named-parameter constructor of Context
@@ -86,6 +98,14 @@ class Context {
       /// the BraKetSlotTypesetting object
       BraKetSlotTypesetting braket_slot_typesetting =
         Defaults::braket_slot_typesetting;
+      /// the default bra/ket permutational Symmetry for deserialized tensors
+      Symmetry symmetry = Defaults::symmetry;
+      /// the default Hermiticity for deserialized tensors; the braket symmetry
+      /// of a deserialized tensor is *derived* from this and its #base_field
+      Hermiticity hermiticity = Defaults::hermiticity;
+      /// the default ColumnSymmetry (particle-permutation symmetry) for
+      /// deserialized tensors
+      ColumnSymmetry column_symmetry = Defaults::column_symmetry;
   };
   static Options make_default_options() { return {}; }
 
@@ -155,6 +175,15 @@ class Context {
   /// \return BraKetSlotTypesetting of this context; see BraKetSlotTypesetting
   /// for the meaning of the possible values
   BraKetSlotTypesetting braket_slot_typesetting() const;
+  /// \return the default bra/ket permutational Symmetry for deserialized tensors
+  Symmetry symmetry() const;
+  /// \return the default Hermiticity for deserialized tensors; the braket
+  /// symmetry of a deserialized tensor is *derived* from this and its
+  /// #base_field
+  Hermiticity hermiticity() const;
+  /// \return the default ColumnSymmetry (particle-permutation symmetry) for
+  /// deserialized tensors
+  ColumnSymmetry column_symmetry() const;
 
   /// Sets the Vacuum for this context, convenient for chaining
   /// \param vacuum Vacuum
@@ -195,6 +224,16 @@ class Context {
   /// \param braket_slot_typeset BraKetSlotTypesetting
   /// \return ref to `*this`, for chaining
   Context& set(BraKetSlotTypesetting braket_slot_typeset);
+  /// Sets the default bra/ket permutational Symmetry for deserialized tensors
+  /// \return ref to `*this`, for chaining
+  Context& set(Symmetry symmetry);
+  /// Sets the default Hermiticity for deserialized tensors (the braket symmetry
+  /// of a deserialized tensor is derived from this and its base field)
+  /// \return ref to `*this`, for chaining
+  Context& set(Hermiticity hermiticity);
+  /// Sets the default ColumnSymmetry for deserialized tensors
+  /// \return ref to `*this`, for chaining
+  Context& set(ColumnSymmetry column_symmetry);
 
  private:
   std::shared_ptr<IndexSpaceRegistry> idx_space_reg_ = nullptr;
@@ -207,6 +246,9 @@ class Context {
   BraKetTypesetting braket_typesetting_ = Defaults::braket_typesetting;
   BraKetSlotTypesetting braket_slot_typesetting_ =
       Defaults::braket_slot_typesetting;
+  Symmetry symmetry_ = Defaults::symmetry;
+  Hermiticity hermiticity_ = Defaults::hermiticity;
+  ColumnSymmetry column_symmetry_ = Defaults::column_symmetry;
 };
 
 /// Context object equality comparison

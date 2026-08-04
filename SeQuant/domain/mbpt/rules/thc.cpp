@@ -15,6 +15,14 @@
 
 namespace sequant::mbpt {
 
+// THC/DF factor and central tensors live in the particle-indistinguishable
+// MBPT domain, so they are particle- (column-) symmetric; programmatic Tensor
+// construction is Context-independent (see Tensor::Defaults), so spell that
+// default out here and feed it at every factor construction site.
+namespace {
+constexpr TensorSymmetries particle_symmetric{.column = ColumnSymmetry::Symm};
+}  // namespace
+
 ExprPtr tensor_hypercontract_impl(Tensor const& tnsr, Index const& aux_idx_1,
                                   Index const& aux_idx_2,
                                   std::wstring_view factor_label,
@@ -24,20 +32,21 @@ ExprPtr tensor_hypercontract_impl(Tensor const& tnsr, Index const& aux_idx_1,
                  && tnsr.aux_rank() == 0);
 
   auto t1 = ex<Tensor>(factor_label, bra({ranges::front(tnsr.bra())}), ket(),
-                       aux({aux_idx_1}));
+                       aux({aux_idx_1}), particle_symmetric);
   auto t2 = ex<Tensor>(factor_label, bra(), ket({ranges::front(tnsr.ket())}),
-                       aux({aux_idx_1}));
+                       aux({aux_idx_1}), particle_symmetric);
   auto t3 = ex<Tensor>(factor_label, bra({ranges::back(tnsr.bra())}), ket(),
-                       aux({aux_idx_2}));
+                       aux({aux_idx_2}), particle_symmetric);
   auto t4 = ex<Tensor>(factor_label, bra(), ket({ranges::back(tnsr.ket())}),
-                       aux({aux_idx_2}));
-  auto z = ex<Tensor>(aux_label, bra(), ket(), aux({aux_idx_1, aux_idx_2}));
+                       aux({aux_idx_2}), particle_symmetric);
+  auto z = ex<Tensor>(aux_label, bra(), ket(), aux({aux_idx_1, aux_idx_2}),
+                      particle_symmetric);
 
   if (tnsr.symmetry() == Symmetry::Antisymm) {
     auto t1a = ex<Tensor>(factor_label, bra({ranges::back(tnsr.bra())}), ket(),
-                          aux({aux_idx_1}));
+                          aux({aux_idx_1}), particle_symmetric);
     auto t3a = ex<Tensor>(factor_label, bra({ranges::front(tnsr.bra())}), ket(),
-                          aux({aux_idx_2}));
+                          aux({aux_idx_2}), particle_symmetric);
 
     return (t1 * t2 * z * t3 * t4) - (t1a * t2 * z * t3a * t4);
   }

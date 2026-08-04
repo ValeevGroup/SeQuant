@@ -324,8 +324,8 @@ ExprPtr remove_spin(const ExprPtr& expr) {
       }
     }
     return ex<Tensor>(tensor.label(), bra(std::move(b)), ket(std::move(k)),
-                      tensor.aux(), tensor.symmetry(),
-                      tensor.braket_symmetry());
+                      tensor.aux(), tensor.symmetry(), tensor.braket_symmetry(),
+                      tensor.column_symmetry());
   };
 
   auto remove_spin_from_product =
@@ -631,9 +631,12 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
   SEQUANT_ASSERT(A_tensor.rank() > 1);
 
   auto S = Tensor{};
+  // the symmetrizer Ŝ symmetrizes the {bra,ket} particle columns: it is
+  // column-symmetric with Nonsymm bra/ket permutational symmetry (see
+  // sequant::symmetrizer_symmetries / make_symmetrizer)
   if (A_is_nconserving) {
     S = Tensor(reserved::symm_label(), A_tensor.bra(), A_tensor.ket(),
-               A_tensor.aux(), Symmetry::Nonsymm);
+               A_tensor.aux(), symmetrizer_symmetries);
   } else {  // A is N-nonconserving
     auto n = std::min(A_tensor.bra_rank(), A_tensor.ket_rank());
     container::svector<Index> bra_list(A_tensor.bra().begin(),
@@ -641,7 +644,8 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
     container::svector<Index> ket_list(A_tensor.ket().begin(),
                                        A_tensor.ket().begin() + n);
     S = Tensor(reserved::symm_label(), bra(std::move(bra_list)),
-               ket(std::move(ket_list)), A_tensor.aux(), Symmetry::Nonsymm);
+               ket(std::move(ket_list)), A_tensor.aux(),
+               symmetrizer_symmetries);
   }
   const auto nf = rational{1, factorial(S.ket_rank())};
 
@@ -1231,7 +1235,10 @@ ExprPtr merge_tensors(const Tensor& O1, const Tensor& O2) {
   auto b = ranges::views::concat(O1.bra(), O2.bra());
   auto k = ranges::views::concat(O1.ket(), O2.ket());
   auto a = ranges::views::concat(O1.aux(), O2.aux());
-  return ex<Tensor>(Tensor(O1.label(), bra(b), ket(k), aux(a), O1.symmetry()));
+  // preserve all of O1's symmetry attributes (incl. column symmetry, which the
+  // programmatic Tensor default would otherwise reset to Nonsymm)
+  return ex<Tensor>(Tensor(O1.label(), bra(b), ket(k), aux(a), O1.symmetry(),
+                           O1.braket_symmetry(), O1.column_symmetry()));
 }
 
 std::vector<ExprPtr> open_shell_A_op(const Tensor& A) {

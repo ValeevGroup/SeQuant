@@ -38,7 +38,9 @@ int main(int argc, char* argv[]) {
        .vacuum = Vacuum::SingleProduct,
        .canonicalization_options =
            CanonicalizeOptions::default_options().copy_and_set(
-               CanonicalizationMethod::Complete)});
+               CanonicalizationMethod::Complete),
+       // mbpt works with particle-symmetric tensors
+       .column_symmetry = ColumnSymmetry::Symm});
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
   mbpt::set_default_mbpt_context(

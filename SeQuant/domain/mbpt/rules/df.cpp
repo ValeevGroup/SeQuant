@@ -31,20 +31,24 @@ ExprPtr density_fit_impl(Tensor const& tnsr, Index const& aux_idx,
   // when the Tensor is built.
   auto t1 = ex<Tensor>(factor_label, bra({ranges::front(tnsr.bra())}),
                        ket({ranges::front(tnsr.ket())}), aux({aux_idx}),
-                       Symmetry::Nonsymm, Hermiticity::Hermitian);
+                       Symmetry::Nonsymm, Hermiticity::Hermitian,
+                       ColumnSymmetry::Symm);
 
   auto t2 = ex<Tensor>(factor_label, bra({ranges::back(tnsr.bra())}),
                        ket({ranges::back(tnsr.ket())}), aux({aux_idx}),
-                       Symmetry::Nonsymm, Hermiticity::Hermitian);
+                       Symmetry::Nonsymm, Hermiticity::Hermitian,
+                       ColumnSymmetry::Symm);
 
   if (tnsr.symmetry() == Symmetry::Antisymm) {
     auto t3 = ex<Tensor>(factor_label, bra({ranges::back(tnsr.bra())}),
                          ket({ranges::front(tnsr.ket())}), aux({aux_idx}),
-                         Symmetry::Nonsymm, Hermiticity::Hermitian);
+                         Symmetry::Nonsymm, Hermiticity::Hermitian,
+                         ColumnSymmetry::Symm);
 
     auto t4 = ex<Tensor>(factor_label, bra({ranges::front(tnsr.bra())}),
                          ket({ranges::back(tnsr.ket())}), aux({aux_idx}),
-                         Symmetry::Nonsymm, Hermiticity::Hermitian);
+                         Symmetry::Nonsymm, Hermiticity::Hermitian,
+                         ColumnSymmetry::Symm);
     return t1 * t2 - t3 * t4;
   }
 

@@ -4,6 +4,7 @@
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
@@ -246,8 +247,13 @@ AST parse(const StartRule &start, std::wstring_view input,
 
 transform::DefaultSymmetries to_default_symms(
     const DeserializationOptions &options) {
-  transform::DefaultSymmetries symms{Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
-                                     ColumnSymmetry::Nonsymm};
+  // unspecified symmetries default to the active Context's tensor-symmetry
+  // defaults; braket symmetry is seeded as the Context's Hermiticity, which is
+  // resolved against each tensor's base_field downstream (matching the
+  // programmatic Tensor ctor). Per-call DeserializationOptions still override.
+  const Context &ctx = get_default_context();
+  transform::DefaultSymmetries symms{ctx.symmetry(), ctx.hermiticity(),
+                                     ctx.column_symmetry()};
 
   if (options.def_perm_symm.has_value()) {
     std::get<0>(symms) = options.def_perm_symm.value();
