@@ -20,6 +20,7 @@
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/runtime.hpp>  // set_locale
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/string.hpp>     // toUtf16
 #include <SeQuant/domain/mbpt/convention.hpp>  // make_min_sr_spaces
@@ -44,7 +45,10 @@ Config load_config(const json& d) {
 
   if (d.contains("context")) {
     const auto& ctx = d.at("context");
-    c.spinor = ctx.value("spbasis", std::string("spinor")) == "spinor";
+    const auto spbasis = ctx.value("spbasis", std::string("spinor"));
+    if (spbasis != "spinor" && spbasis != "spinfree")
+      throw Exception("unknown spbasis (want spinor|spinfree): " + spbasis);
+    c.spinor = spbasis == "spinor";
     const auto field = ctx.value("field", std::string("real"));
     if (field != "real" && field != "complex")
       throw std::runtime_error("unknown field (want real|complex): " + field);
@@ -72,6 +76,10 @@ Config load_config(const json& d) {
     c.optimize.cse_subnet = o.value("cse_subnet", false);
     c.optimize.volatile_leaf = o.value("volatile_leaf", std::string("R"));
     c.optimize.volatile_weight = o.value("volatile_weight", 10.0);
+    // A volatile-contraction weight is conceptually a replay count, so it must
+    // be positive
+    if (c.optimize.volatile_weight <= 0.0)
+      throw Exception("optimize.volatile_weight must be > 0");
     c.optimize.machine_balance = o.value("machine_balance", 0.0);
     c.optimize.fast_mem_elems = o.value("fast_mem_elems", 0.0);
   }
