@@ -699,8 +699,7 @@ ExprPtr F(bool use_tensor, const IndexSpace& reference_occupied) {
               ketidxs.push_back(m2);
               return ex<Tensor>(L"g", bra(std::move(braidxs)),
                                 ket(std::move(ketidxs)), Symmetry::Antisymm) *
-                     ex<Tensor>(kronecker_label(), bra{m2}, ket{m1},
-                                Symmetry::Nonsymm);
+                     make_kronecker(m2, m1);
             } else {  // opsymm == Symmetry::Nonsymm
               auto braidx_J = braidxs;
               braidx_J.push_back(m1);
@@ -720,8 +719,7 @@ ExprPtr F(bool use_tensor, const IndexSpace& reference_occupied) {
                       ex<Tensor>(L"g", bra(std::move(braidx_K)),
                                  ket(std::move(ketidxs_K)), Symmetry::Nonsymm,
                                  std::nullopt, ColumnSymmetry::Symm)) *
-                     ex<Tensor>(kronecker_label(), bra{m2}, ket{m1},
-                                Symmetry::Nonsymm);
+                     make_kronecker(m2, m1);
             }
           });
     };
