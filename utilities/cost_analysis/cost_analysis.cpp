@@ -397,6 +397,9 @@ int main(int argc, char** argv) {
         if (!to)
           throw std::runtime_error("cannot open dump file: " + dump_path);
         for (const auto& tree : cell.trees) to << full_expr(tree) << "\n";
+        to.close();
+        if (!to)
+          throw std::runtime_error("failed writing dump file: " + dump_path);
       }
       results.emplace_back(r.name, std::move(cell));
     }
@@ -408,6 +411,9 @@ int main(int argc, char** argv) {
     if (!out)
       throw std::runtime_error("cannot open output file: " + cfg.out.path);
     write_report(cfg, results, sim, out);
+    out.close();
+    if (!out)
+      throw std::runtime_error("failed writing output file: " + cfg.out.path);
     // Print the absolute path: the working directory was switched to the
     // driver's parent above, so a relative out.path lands there, not in the
     // user's invocation directory.
