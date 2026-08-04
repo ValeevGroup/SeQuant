@@ -235,3 +235,63 @@ pass (4a) is unchanged except that `home_scope` now reads the runtime field.
   `sliced_modes == seed_residency` after T1, `[peak_profile]`/`[placement_remat]`/
   `[lifetime_mask]` figures are UNCHANGED across T2 -- the de-dup is provably inert, which
   is its acceptance gate.
+
+## 10. Phase 4b-2: hash threading + `remat_to_router` (additive), detailed design (2026-08-04)
+
+4b-2 makes the remat placement emittable as `PlacementRouter` overrides, without wiring
+anything into runtime (that is 4b-3). Additive; zero production callers of the new emitter.
+
+### 10.1 Value hash vs occurrence key (the load-bearing distinction)
+
+- **Value hash** = `EvalExpr::hash_value()`: the CSE / value identity ("same computed
+  result"), batched-slot-BLIND (colors indices by space). This is what folds occurrences
+  into ONE remat cell.
+- **Occurrence key** = `occurrence_key(node, ctx_modes)` -> `SlotCanonicalizationMetadata`
+  (hashed via `SubNetHash`, compared via bliss): the batched-slot-AWARE identity -- the
+  Phase-2 `canonicalize_slots` coloring that colors in-scope batched indices DISTINCTLY, so
+  `A[i1,i2]` and `A[i1,_]` get DIFFERENT keys. A strictly FINER identity than the value hash;
+  effectively "the hash of an occurrence."
+
+The `PlacementRouter` is keyed by the occurrence KEY (per Phase 2). A remat cell is
+one-per-VALUE (hash). So a single moved cell emits MULTIPLE overrides -- one per DISTINCT
+occurrence key of that value -- all pointing to the SAME `HomeTarget` (the meet home). This
+is exactly the partial-overlap case of the Phase-3 negative result (spec `2026-08-03` §3):
+`A[i1,i2]` / `A[i1,_]` are two keys sharing the meet home `{i1}`.
+
+### 10.2 The change
+
+1. **`ValueCell` gains `std::size_t hash`** -- `compute_dag_boulevard` already computes it in
+   `hash_to_cell` and discards it; just store it. One field, additive; `peak_profile` /
+   remat ignore it (byte-identical to them). This is the link from a `RematResult` cell back
+   to its forest nodes. We thread the value HASH (cheap, batched-slot-blind), NOT the
+   occurrence keys (expensive, computed lazily below).
+
+2. **`remat_to_router(seed_cells, remat_cells, forest) -> PlacementRouter`** (new, in
+   `placement_remat.hpp`):
+   - Diff `seed_cells` (home = seed `home_scope`) vs `remat_cells` (home = post-spill) by
+     `value_id` -> the MOVED set: `{hash -> final home_modes : home_modes != seed home_modes}`.
+     Moved-cells-only (unmoved cells' seed home == the runtime's default derivation, so an
+     override would be redundant; matches Phase-2's empty-router-is-inert seam).
+   - Re-walk the forest (post-order + the same ectx accumulation as `compute_dag_path`); for
+     each node whose `hash_value()` is in the MOVED set, compute `occurrence_key(node,
+     ectx_modes)` and `router.set_override(key, HomeTarget{final_home_modes, 0})`. The bliss
+     canonicalization runs ONLY for moved-cell occurrences -- `compute_dag_boulevard` /
+     `peak_profile` are untouched (no per-node bliss cost added to the shared static analysis).
+   - Return the populated router.
+
+The runtime depth resolution is free: `HomeTarget` stores the `residency` MODE-SET
+(`placement_router.hpp`), and `home_depth(HomeTarget, ectx)` does the rl-walk per live batch
+context -- so nothing occurrence-relative is baked into the override (the 3a/3b carry-forward
+is satisfied by the router's own design).
+
+### 10.3 Validation
+
+- `remat_to_router` on a constructed forest with a KNOWN moved cell (a shrunk demoted giant)
+  emits exactly the expected `set_override`s: one per distinct occurrence key of the moved
+  value, each -> `HomeTarget` with the shrunk `home_modes`; unmoved cells emit NONE.
+- A value with two DISTINCT-occurrence-key occurrences sharing one (moved) home emits TWO
+  overrides -> the SAME `HomeTarget` (the partial-overlap / meet-home case).
+- `threshold = inf` (no moves) -> the returned router is EMPTY (nothing moved), i.e. the
+  Phase-2 inert seed seam.
+- Additive: `[peak_profile]` / existing `[placement_remat]` figures UNCHANGED (the `hash`
+  field and the new emitter do not perturb the sizing / sweep).
