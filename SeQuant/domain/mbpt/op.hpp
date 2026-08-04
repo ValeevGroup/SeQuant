@@ -21,6 +21,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/aggregate.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/strong.hpp>
 
@@ -95,6 +96,7 @@ inline IndexSpace make_space(const IndexSpace::Type& type) {
 ///
 /// Used with `mbpt::OpMaker` and `mbpt::Operator` classes
 struct OpParams {
+  SEQUANT_DESIGNATED_INIT_ONLY;
   std::size_t order = 0;  ///< perturbation order, limited to range [0,9]
   std::optional<size_t> nbatch = std::nullopt;  ///< number of batching indices
   container::svector<std::size_t> batch_ordinals{};
@@ -525,6 +527,7 @@ using OpConnections = std::vector<std::pair<T, T>>;
 /// parameters in here which are only meaningful at the operator level.
 template <typename T>
 struct EVOptions {
+  SEQUANT_DESIGNATED_INIT_ONLY;
   /// List of pairs of operator labels to be connected; connections are defined
   /// left-to-right, i.e., pair `{opL,opR}` declares that `opL` and `opR` are to
   /// be connected when `opR` precedes `opL`, i.e. `opL` is to the left of `opR`

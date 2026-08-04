@@ -5,6 +5,7 @@
 #include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/utility/aggregate.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 
 #include <optional>
@@ -38,6 +39,7 @@ enum class SerializationSyntax {
 };
 
 struct DeserializationOptions {
+  SEQUANT_DESIGNATED_INIT_ONLY;
   /// The Symmetry (within bra and ket) to use, if none is specified in the
   /// input explicitly. The Context is queried in case this is not provided
   /// explicitly.
@@ -54,6 +56,7 @@ struct DeserializationOptions {
 };
 
 struct SerializationOptions {
+  SEQUANT_DESIGNATED_INIT_ONLY;
   /// Whether to explicitly annotate tensor symmetries
   bool annot_symm = true;
   /// The syntax version of the produced output

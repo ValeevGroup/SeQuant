@@ -5,6 +5,7 @@
 #ifndef SEQUANT_CORE_UTILITY_AGGREGATE_HPP
 #define SEQUANT_CORE_UTILITY_AGGREGATE_HPP
 
+#include <compare>
 #include <type_traits>
 
 namespace sequant::detail {
@@ -24,6 +25,17 @@ class designated_init_only {
   constexpr designated_init_only& operator=(
       const designated_init_only&) noexcept = default;
   static constexpr designated_init_only make() noexcept { return {}; }
+
+  /// all tags compare equal, so that a guarded aggregate can still default its
+  /// comparison operators
+  friend constexpr bool operator==(designated_init_only,
+                                   designated_init_only) noexcept {
+    return true;
+  }
+  friend constexpr std::strong_ordering operator<=>(
+      designated_init_only, designated_init_only) noexcept {
+    return std::strong_ordering::equal;
+  }
 
  private:
   constexpr designated_init_only() noexcept = default;

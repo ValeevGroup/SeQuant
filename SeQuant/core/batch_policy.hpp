@@ -1,6 +1,8 @@
 #ifndef SEQUANT_CORE_BATCH_POLICY_HPP
 #define SEQUANT_CORE_BATCH_POLICY_HPP
 
+#include <SeQuant/core/utility/aggregate.hpp>
+
 #include <cstddef>
 #include <functional>
 
@@ -12,6 +14,7 @@ class Tensor;
 /// One batchability policy shared by the single-term optimizer and the runtime
 /// batched evaluator (make_evaluator, Task A3). All predicates default empty.
 struct BatchPolicy {
+  SEQUANT_DESIGNATED_INIT_ONLY;
   std::function<bool(Index const&)> is_batchable_index = {};
   /// Per-index per-batch slice size (in elements) for a batchable index -- an
   /// UPPER BOUND, not a goal. Both the single-term optimizer and the runtime
