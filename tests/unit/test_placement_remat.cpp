@@ -555,13 +555,16 @@ TEST_CASE(
 
   // G's SECOND occurrence (under P2, ambient context {o_1,i_1}) also routes to
   // the SAME HomeTarget (one value -> one meet home). NOTE: on THIS fixture the
-  // two occurrence keys are actually IDENTICAL -- occurrence_key is built from
-  // G's SUBTREE LEAVES (A{a_5;x_2}, B{x_2;a_6}), which carry a/x-space indices,
-  // NOT the batched o_1/i_1 (those are G's own RESULT slots, absent from the
-  // leaves), so the batched-slot coloring has nothing to distinguish. The
-  // genuine TWO-DISTINCT-KEYS partial-overlap case (design 10.1) needs a
-  // fixture whose value SUBTREE carries the batched modes -- deferred; here we
-  // pin that the second occurrence's key still resolves to the shared home.
+  // two occurrence keys are IDENTICAL -- but only because the fixture is
+  // SYNTHETIC: G's declared result slots {o_1;i_1} are INCONSISTENT with its
+  // A{a_5;x_2}*B{x_2;a_6} subtree (which really contracts to {a_5;a_6}), a
+  // shortcut that is fine for the mask/footprint machinery (it reads only
+  // canon_indices + batched_here) but hides o_1/i_1 from occurrence_key, which
+  // is built from the SUBTREE LEAVES. In a REAL eval tree an intermediate's
+  // batched result modes are genuine subtree indices, so the two occurrences
+  // would get DISTINCT keys -- that CONSISTENT case is the next test; here we
+  // just pin that the second occurrence's key still resolves to the shared
+  // home.
   auto const& G2 = forest[1].left();
   auto const g_key2 =
       occurrence_key(G2, svector<Index>{Index{L"o_1"}, Index{L"i_1"}});
@@ -591,4 +594,65 @@ TEST_CASE(
 
   auto const router = remat_to_router(in.cells, res.cells, forest);
   CHECK(router.empty());
+}
+
+TEST_CASE(
+    "remat_to_router: a moved value with TWO DISTINCT occurrence keys emits "
+    "two overrides -> the SAME home (partial-overlap / meet-home case)",
+    "[placement_remat]") {
+  // A CONSISTENT fixture (unlike build_demoted_giant_forest_remat): V's batched
+  // result modes i_1,i_2 are GENUINE subtree indices -- V{i_1;i_2} =
+  // A{i_1;x_1} * B{x_1;i_2}, contracting x_1 -- so occurrence_key (built from
+  // V's leaves) SEES them. V is sliced on {i_1,i_2} under P1 but only {i_1}
+  // under P2, so the cross-occurrence MEET home is {i_1} and i_2 is demoted
+  // (V's shrink candidate). The two occurrences therefore have DISTINCT
+  // occurrence keys ({i_1,i_2} vs {i_1}); once i_2 is shrunk into V's home,
+  // remat_to_router emits BOTH keys -- each -> the SAME HomeTarget.
+  auto make_V = [] {
+    return inode_remat("V{i_1;i_2}", leaf_remat("A{i_1;x_1}"),
+                       leaf_remat("B{x_1;i_2}"));
+  };
+  auto P1 = inode_remat("P1{i_1;i_2}", make_V(), leaf_remat("W1{i_1;i_2}"));
+  stamp_ext_pair_remat(P1, Index{L"i_1"},
+                       Index{L"i_2"});  // occ1: slices {i_1,i_2}
+  auto P2 = inode_remat("P2{i_1;a_1}", make_V(), leaf_remat("W2{i_1;a_1}"));
+  stamp_ext_remat(P2, Index{L"i_1"});  // occ2: slices {i_1} only
+  std::vector<EvalNode<EvalExpr>> const forest{P1, P2};
+
+  SizeRegime r;
+  r.space_extent = {{L"i", 10}, {L"x", 10}, {L"a", 10}};
+  CostModel const cm{r};
+  auto const block_of = [](Index const&) -> std::size_t { return 2; };
+
+  RematInput const in = remat_cells(forest, cm, block_of);
+
+  // Precondition: V is the unique cell whose meet home is {i_1}, with i_2 as
+  // its (demoted) shrink candidate.
+  std::size_t v_id = in.cells.size();
+  for (auto const& c : in.cells)
+    if (c.home_modes == svector<Index>{Index{L"i_1"}}) v_id = c.value_id;
+  REQUIRE(v_id < in.cells.size());
+  CHECK(shrink_candidates(in.cells[v_id]) == svector<Index>{Index{L"i_2"}});
+
+  // Simulate the shrink of i_2 into V's home (final home = {i_1,i_2}); V moved.
+  auto final_cells = in.cells;
+  final_cells[v_id].home_modes.push_back(Index{L"i_2"});
+  svector<Index> const v_home = final_cells[v_id].home_modes;  // {i_1,i_2}
+
+  auto const router = remat_to_router(in.cells, final_cells, forest);
+
+  // The two occurrences' keys are GENUINELY DISTINCT (the batched modes appear
+  // in V's leaves here), yet BOTH route to the SAME home {i_1,i_2}.
+  auto const& V1 = forest[0].left();
+  auto const& V2 = forest[1].left();
+  auto const k1 =
+      occurrence_key(V1, svector<Index>{Index{L"i_1"}, Index{L"i_2"}});
+  auto const k2 = occurrence_key(V2, svector<Index>{Index{L"i_1"}});
+  CHECK_FALSE(sequant::eval::RouterKeyEqual{}(k1, k2));  // genuinely distinct
+  HomeTarget const* h1 = router.route(k1);
+  HomeTarget const* h2 = router.route(k2);
+  REQUIRE(h1 != nullptr);
+  REQUIRE(h2 != nullptr);
+  CHECK(h1->residency == v_home);
+  CHECK(h2->residency == v_home);  // one value -> one home, two keys
 }
