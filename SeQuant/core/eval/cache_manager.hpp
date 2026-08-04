@@ -232,6 +232,15 @@ class CacheManager {
   /// outlive this cache.
   eval::PlacementRouter<TreeNode> const* placement_router_ = nullptr;
 
+  /// Optional OWNING backing for \c placement_router_. A router built by a
+  /// pre-pass (e.g. the remat placement pass) is a local at the build site; a
+  /// CacheManager returned BY VALUE from such a builder must carry the router
+  /// alive with it. \c adopt_placement_router stores it here (shared, so
+  /// CacheManager stays copyable) and points \c placement_router_ at it. The
+  /// forward-declared \c PlacementRouter is fine in a \c shared_ptr member (its
+  /// deleter is type-erased at construction, where the type is complete).
+  std::shared_ptr<eval::PlacementRouter<TreeNode> const> owned_router_{};
+
  public:
   /// Sets the custom evaluator (see custom_evaluator_type). Pass an empty
   /// std::function to clear it.
@@ -279,6 +288,16 @@ class CacheManager {
   /// to detach. Non-owning; the pointee must outlive this cache.
   void set_placement_router(eval::PlacementRouter<TreeNode> const* r) noexcept {
     placement_router_ = r;
+  }
+
+  /// Takes OWNERSHIP of a placement router (see owned_router_) and wires it as
+  /// the local router. Use this when the router is a build-site local and the
+  /// CacheManager is returned by value: the shared_ptr keeps the router alive
+  /// for the cache's whole lifetime. Pass an empty shared_ptr to detach both.
+  void adopt_placement_router(
+      std::shared_ptr<eval::PlacementRouter<TreeNode> const> r) noexcept {
+    owned_router_ = std::move(r);
+    placement_router_ = owned_router_.get();
   }
 
   /// \return the local router if set, else the one inherited from parent_
