@@ -283,15 +283,22 @@ keyed on the unified seed residency instead of `sliced ∪ contracted` (`in_unio
 
 ### 9.4 Linearization and liveness intervals
 
-Linearize the static schedule tree in execution order -- one representative iteration
-per loop (same-loop different-iteration cells are never co-resident; the single-iteration
-linearization captures that, while a cell homed ABOVE a loop spans that loop's whole
-subtree). Each static point gets an index. A cell's interval is `[first-use, last-use]`
-= the min/max static-point over its production point and its router use-sites (Phase-2
-`PlacementRouter` + occurrence key give the use-site set), extended so a cell homed above
-a loop covers that loop's subtree span. A cell contributes its full home-granularity
-footprint to EVERY point in its live range (deeper consumers slice on access; they do
-not shrink the stored cell).
+Linearize the static schedule tree in POST-ORDER execution order (a node is computed
+after its children) -- one representative iteration per loop (same-loop
+different-iteration cells are never co-resident; the single-iteration linearization
+captures that, while a cell homed ABOVE a loop stays live across that loop's whole
+subtree because its last consumer sits inside the loop). Each node gets a static point
+index. Cells are one-per-distinct-VALUE (perfect CSE), grouped by the value hash the
+`CacheManager` keys on. **Use-sites are STRUCTURAL, not from the router:** the Phase-2
+`PlacementRouter` is the seed's EMPTY override seam, so a value's consumers are its
+parent nodes in the hash-merged forest, read from the tree structure. A cell's interval
+is `[first-use, last-use]` = `[production point, last-consumer point]` -- the min static
+point over the value's occurrences (its single production under perfect CSE) to the max
+static point over all nodes that consume it (the parents of any occurrence). A cell
+homed above a loop needs no separate "extend to subtree end" rule: its last consumer
+inside the loop already sets `last-use` past the loop body. A cell contributes its full
+home-granularity footprint to EVERY point in its live range (deeper consumers slice on
+access; they do not shrink the stored cell).
 
 ### 9.5 The sweep
 

@@ -905,9 +905,11 @@ Produces:
 - MODIFY `tests/unit/test_peak_profile.cpp`.
 
 #### Interfaces
-Consumes (from T1): `cell_footprint`, `home_depth_of`. Consumes the Phase-2 router
-use-sites: `PlacementRouter` / `eval::occurrence_key` (`placement_router.hpp`,
-`occurrence_key.hpp`) -- the set of eval-tree nodes that READ a value.
+Consumes (from T1): `cell_footprint`, `home_depth_of`. Use-sites are STRUCTURAL (NOT the
+router -- the Phase-2 `PlacementRouter` is the seed's EMPTY override seam): a value's
+consumers are its PARENT nodes in the hash-merged forest, read from the tree. Cells are
+grouped by the value hash the `CacheManager` keys on (`EvalExpr::hash_value()` /
+`cache_manager.hpp` key).
 Produces:
 - `struct Cell { std::size_t value_id; int home_depth; std::size_t footprint;
    std::size_t first_use, last_use; };`
@@ -954,17 +956,24 @@ Produces:
    consumers at different schedule points -> ONE cell whose `[first_use,last_use]` spans
    from its production to the LATER consumer; a value homed above a loop -> interval covers
    the loop subtree span. Assert the produced `Cell`s' intervals and footprints.
-4. Write `linearize`: run `stamp_seed_residency(forest)`; DFS the forest in execution order
-   assigning each node a static point index (`num_points`). Maintain, during the DFS, the
-   accumulated ancestor-loop stack as the per-node `ectx` -- push each node's
-   `batched_here()` loops on descent, pop on ascent -- since statically the enclosing
-   `BatchContext` of a node IS its ordered ancestor loops (the runtime `parent_cache
-   .batch_context()`). For each DISTINCT value (by the Phase-2 occurrence identity /
-   structural hash) create ONE `Cell` with
-   `home_depth = home_depth_of(home_scope(node), ectx-at-node)`,
-   `footprint = cell_footprint(carried, home_scope(node), ectx-at-node, cm, block_of)`, and
-   `[first_use,last_use]` = min/max static point over its production point + its router
-   use-sites (extend `last_use` to the end of the home loop's subtree when homed above it).
+4. Write `linearize`: run `stamp_seed_residency(forest)`; POST-ORDER DFS the forest
+   (children before parent) assigning each node a static point index (`num_points`).
+   Maintain, during the DFS, the accumulated ancestor-loop stack as the per-node `ectx` --
+   push each node's `batched_here()` loops on descent, pop on ascent -- since statically the
+   enclosing `BatchContext` of a node IS its ordered ancestor loops (the runtime
+   `parent_cache.batch_context()`). Group nodes by their VALUE hash
+   (`EvalExpr::hash_value()` -- the same key `CacheManager` uses for CSE); each group is ONE
+   `Cell`:
+   - `first_use` = min static point over the group's nodes (its single production under
+     perfect CSE);
+   - `last_use` = max static point over every node that CONSUMES the value -- i.e. the
+     PARENT of any node in the group (structural use-sites; NOT the empty router). A value
+     homed above a loop needs no separate subtree-extension rule: its last consumer inside
+     the loop already sets `last_use` past the loop body.
+   - `home_depth = home_depth_of(home_scope(node), ectx-at-node)`,
+   - `footprint = cell_footprint(carried, home_scope(node), ectx-at-node, cm, block_of)`
+     (carried = the node's `canon_indices()`; any occurrence's `home_scope`/`ectx` -- the
+     meet residency is identical across occurrences of a hoisted value).
 5. Run `[peak_profile]`; all green. `[eval]`/`[dryrun]` green.
 6. clang-format; commit "eval: peak-profile linearize + interval sweep -> PeakProfile (Phase 3b T2)".
 
