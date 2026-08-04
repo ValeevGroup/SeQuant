@@ -16,8 +16,9 @@
 
 namespace sequant::util::extint {
 
-void ExecutionContext::set_data(std::string id, ProcessingData data) {
-  set_data(std::ranges::single_view{std::move(id)},
+void ExecutionContext::set_data(std::string_view prefix, std::size_t counter,
+                                ProcessingData data) {
+  set_data(prefix, std::ranges::single_view{counter},
            std::ranges::single_view{std::move(data)});
 }
 

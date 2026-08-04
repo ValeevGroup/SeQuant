@@ -90,7 +90,7 @@ std::size_t ReadInputStep::run(std::string_view step_id, ExecutionContext &ctx,
     ResultExpr expr =
         io::serialization::from_string<ResultExpr>(contents, options_);
 
-    ctx.set_data(std::string(step_id) + "." + std::to_string(counter++),
+    ctx.set_data(step_id, id_start + counter++,
                  ExpressionData{.expressions = {std::move(expr)}});
   }
 
