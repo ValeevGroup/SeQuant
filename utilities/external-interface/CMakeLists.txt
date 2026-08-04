@@ -9,6 +9,8 @@ add_executable(external_interface
     processing.cpp
     utils.cpp
 
+    density_fitting_step.cpp
+    density_fitting_step.hpp
     execution_context.cpp
     executor.cpp
     output_step.cpp
