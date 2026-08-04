@@ -44,7 +44,7 @@ The :class:`CC <sequant::mbpt::CC>` class supports several CC ansätze through t
 - ``Ansatz::oU``: Orbital-optimized unitary ansatz, combines both unitary and orbital optimized ansätze.
 
 Key Methods
-----------
+-----------
 
 Ground State Amplitudes
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -124,7 +124,7 @@ Response and Perturbation Equations
    :dedent: 2
 
 Advanced Usage
--------------
+--------------
 
 Truncating the Commutator Expansion
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -136,6 +136,31 @@ The similarity-transformed Hamiltonian is built by ``mbpt::lst``, see :ref:`mbpt
    :start-after: start-snippet-4
    :end-before: end-snippet-4
    :dedent: 2
+
+.. _cc-hbar-connectivity:
+
+Using :math:`\bar{H}` outside the CC class
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+:func:`CC::hbar() <sequant::mbpt::CC::hbar>` is public, but for a non-unitary ansatz the expression it returns is **not** self-contained: each commutator is written as a connected product (see :ref:`mbpt-lst`), which only equals the commutator once you connect the operators when taking the expectation value. The class always does this for you — every non-unitary path passes ``default_op_connections()`` (or a superset) to ``ref_av``. A caller who does not will silently retain the disconnected terms:
+
+.. code-block:: cpp
+
+   using namespace sequant::mbpt;
+
+   CC cc{2};
+
+   // correct: op::ref_av defaults to default_op_connections()
+   auto eqs = op::ref_av(op::P(nₚ(2)) * cc.hbar());
+
+   // WRONG: empty connectivity keeps terms the commutator would have cancelled
+   auto bad = op::ref_av(op::P(nₚ(2)) * cc.hbar(), {.connect = {}});
+
+   // also correct: ask lst for the explicit commutator form, which needs
+   // no connectivity
+   auto hbar = lst(op::H(), op::T(2), 4);
+
+A unitary ansatz is unaffected: it already uses explicit commutators and the class passes empty connectivity.
 
 .. _cc-spin-tracing:
 

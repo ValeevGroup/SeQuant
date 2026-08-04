@@ -145,7 +145,9 @@ Each commutator can be written in two ways, and ``use_connected_form`` selects b
 
 - ``true`` writes it as a connected product, :math:`(\hat{A}\hat{B})_c`. This gives fewer terms, but only reproduces the commutator once the same operators are connected downstream when taking the expectation value, using ``OpConnections``.
 
-Both forms give the same equations, given the right connectivity. They differ in *where* the disconnected terms are removed: the commutator removes them algebraically, the connected product relies on the connectivity you supply to ``vac_av``/``ref_av`` (which connect the Hamiltonian with the cluster operator by default).
+Both forms give the same equations, given the right connectivity. They differ in *where* the disconnected terms are removed: the commutator removes them algebraically, the connected product relies on the connectivity you supply to ``vac_av``/``ref_av``.
+
+Mind which overload you reach: the operator-level ``op::vac_av``/``op::ref_av`` default to ``default_op_connections()``, which connects the Hamiltonian (``h``, ``f``, ``f̃``, ``g``) with the cluster operator ``t``. Their tensor-level counterparts, ``op::tensor::vac_av``/``op::tensor::ref_av``, default to *empty* connections. Pairing ``use_connected_form = true`` with empty connectivity silently keeps the disconnected terms the commutator would have cancelled, so the result is wrong rather than merely more verbose.
 
 Examples
 --------
