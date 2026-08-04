@@ -94,6 +94,71 @@ EvalNode<EvalExpr> inode(std::string_view result, EvalNode<EvalExpr> l,
   return EvalNode<EvalExpr>{eval_tensor(result), std::move(l), std::move(r)};
 }
 
+// DFS-collect every internal (non-leaf) node reachable from a forest (the
+// roots plus all their descendants), so a pass's per-node output can be
+// snapshotted/compared without deep-copying the trees. Order is irrelevant
+// to callers below; they only need a stable correspondence between two
+// collections of the SAME (unmutated-in-shape) forest.
+void collect_internal(EvalNode<EvalExpr> const& n,
+                      std::vector<EvalNode<EvalExpr> const*>& out) {
+  if (n.leaf()) return;
+  out.push_back(&n);
+  collect_internal(n.left(), out);
+  collect_internal(n.right(), out);
+}
+
+std::vector<EvalNode<EvalExpr> const*> collect_forest_internal(
+    std::vector<EvalNode<EvalExpr>> const& forest) {
+  std::vector<EvalNode<EvalExpr> const*> out;
+  for (auto const& t : forest) collect_internal(t, out);
+  return out;
+}
+
+// A MIXED forest built fresh on every call (all-new deserialized ExprPtr
+// instances, so two calls yield independent, unstamped trees): some
+// canonical nodes carry External stamps only (one demoted across
+// occurrences), some carry a Contracted pair kept in every occurrence, one
+// carries BOTH an External and a Contracted mode on its own slots in every
+// occurrence, and a scatter tree exercises the loop-invariant-sibling
+// per-slot filter under an External ancestor.
+std::vector<EvalNode<EvalExpr>> make_mixed_forest() {
+  Index const i{L"i_1"}, j{L"i_2"}, k{L"i_4"};
+
+  // External-only, demoted across occurrences (A slices, B is full).
+  auto ext_A = head("F1{i_1;a_1} * F2{a_1;i_3}");
+  auto ext_B = head("F1{i_1;a_1} * F2{a_1;i_3}");
+  stamp_ext(ext_A, i);
+
+  // Contracted-only pair, kept in every occurrence.
+  auto con_A = head("U1{i_1;a_1} * U2{a_1;i_2}");
+  auto con_B = head("U1{i_1;a_1} * U2{a_1;i_2}");
+  stamp_con_pair(con_A, i, j);
+  stamp_con_pair(con_B, i, j);
+
+  // Mixed node: carries BOTH an External mode and a Contracted mode on its
+  // own result slots, in every occurrence.
+  auto mixed_A = head("W1{i_1;a_1} * W2{a_1;i_2}");
+  auto mixed_B = head("W1{i_1;a_1} * W2{a_1;i_2}");
+  auto stamp_mixed = [&](EvalNode<EvalExpr>& n) {
+    n->set_batched_here(
+        {{i, BatchModeType::External}, {j, BatchModeType::Contracted}});
+  };
+  stamp_mixed(mixed_A);
+  stamp_mixed(mixed_B);
+
+  // Scatter tree: root sliced by k (External); left child carries k on its
+  // own result, right child is invariant to it.
+  auto scatter_left =
+      inode("A{i_4;a_3}", leaf("A1{i_4;a_1}"), leaf("A2{a_1;a_3}"));
+  auto scatter_right =
+      inode("B{a_3;a_5}", leaf("B1{a_3;a_4}"), leaf("B2{a_4;a_5}"));
+  auto scatter_root =
+      inode("R{i_4;a_5}", std::move(scatter_left), std::move(scatter_right));
+  stamp_ext(scatter_root, k);
+
+  return {ext_A, ext_B, con_A, con_B, mixed_A, mixed_B, scatter_root};
+}
+
 }  // namespace
 
 TEST_CASE("lifetime mask cross-occurrence meet", "[lifetime_mask]") {
@@ -432,4 +497,192 @@ TEST_CASE("home_scope is an identity accessor over seed_residency",
     CHECK(as_set(home_scope(n)) == as_set(n->seed_residency()));
   }
   CHECK(as_set(home_scope(forest[0])) == index_set({i, j}));
+}
+
+// ---------------------------------------------------------------------
+// T3: byte-unchanged-runtime guardrail.
+// ---------------------------------------------------------------------
+//
+// stamp_seed_residency writes ONLY EvalExpr::seed_residency_; it must never
+// perturb sliced_modes_ (the field the RUNTIME path -- stamp_lifetime_masks /
+// place_at_this_level -- reads). These two tests turn that "purely additive"
+// claim (lifetime_mask.hpp's doc comment) into an executable guarantee on a
+// forest that mixes External-only, Contracted-only, and mixed-kind nodes.
+
+TEST_CASE(
+    "stamp_seed_residency never perturbs stamp_lifetime_masks' sliced_modes "
+    "(byte-unchanged runtime guardrail)",
+    "[lifetime_mask][seed]") {
+  auto forest = make_mixed_forest();
+
+  stamp_lifetime_masks(forest);
+
+  // Snapshot every visited node's sliced_modes (all roots plus every
+  // internal descendant), by value, before the seed pass runs.
+  auto nodes = collect_forest_internal(forest);
+  REQUIRE(!nodes.empty());
+  std::vector<sequant::container::svector<Index>> before;
+  before.reserve(nodes.size());
+  for (auto const* n : nodes) before.push_back((*n)->sliced_modes());
+
+  stamp_seed_residency(forest);
+
+  // sliced_modes() must be byte-identical (same size, same elements, same
+  // order) to its pre-seed-pass snapshot: the seed pass touches a disjoint
+  // field.
+  for (std::size_t k = 0; k < nodes.size(); ++k)
+    CHECK((*nodes[k])->sliced_modes() == before[k]);
+}
+
+TEST_CASE(
+    "stamp_lifetime_masks and stamp_seed_residency are order-independent "
+    "(neither pass clobbers the other's field)",
+    "[lifetime_mask][seed]") {
+  // Control: stamp_lifetime_masks alone, on its own fresh forest.
+  auto control = make_mixed_forest();
+  stamp_lifetime_masks(control);
+  auto control_nodes = collect_forest_internal(control);
+  std::vector<sequant::container::svector<Index>> control_masks;
+  control_masks.reserve(control_nodes.size());
+  for (auto const* n : control_nodes)
+    control_masks.push_back((*n)->sliced_modes());
+
+  // Reversed order: stamp_seed_residency FIRST, then stamp_lifetime_masks,
+  // on an independently constructed (but structurally identical) forest.
+  auto reversed = make_mixed_forest();
+  stamp_seed_residency(reversed);
+  stamp_lifetime_masks(reversed);
+  auto reversed_nodes = collect_forest_internal(reversed);
+
+  REQUIRE(reversed_nodes.size() == control_nodes.size());
+  for (std::size_t k = 0; k < control_nodes.size(); ++k)
+    CHECK((*reversed_nodes[k])->sliced_modes() == control_masks[k]);
+}
+
+// ---------------------------------------------------------------------
+// T3: against-definition tests for stamp_seed_residency, richer than T1's
+// single equivalence case -- each drives the all-batched-modes meet on a
+// hand-built forest and checks seed_residency() against the hand-computed
+// DEEPEST meet on the node's own result slots.
+// ---------------------------------------------------------------------
+
+TEST_CASE(
+    "stamp_seed_residency keeps a mode sliced (any batch kind) in EVERY "
+    "occurrence",
+    "[lifetime_mask][seed]") {
+  Index const i{L"i_1"};
+
+  // Occurrence A slices i as External; occurrence B slices the SAME index i
+  // as Contracted. The kind differs, but the mode is batched (some kind) on
+  // this node's own slot in EVERY occurrence => the all-batched-modes meet
+  // keeps it regardless of kind.
+  auto n_A = head("K1{i_1;a_1} * K2{a_1;i_3}");
+  auto n_B = head("K1{i_1;a_1} * K2{a_1;i_3}");
+  stamp_ext(n_A, i);
+  stamp_con(n_B, i);
+
+  std::vector<EvalNode<EvalExpr>> forest{n_A, n_B};
+  stamp_seed_residency(forest);
+
+  CHECK(as_set(forest[0]->seed_residency()) == index_set({i}));
+  CHECK(as_set(forest[1]->seed_residency()) == index_set({i}));
+}
+
+TEST_CASE(
+    "stamp_seed_residency drops a mode carried full (unbatched) in ONE "
+    "occurrence",
+    "[lifetime_mask][seed]") {
+  Index const i{L"i_1"};
+
+  // Occurrence A is Contracted-sliced by i on its own slot; occurrence B
+  // carries i on the SAME slot but is NOT batched there at all (full) =>
+  // the cross-occurrence intersection empties: the mode does not survive in
+  // every occurrence, so it is dropped from the meet entirely.
+  auto n_A = head("D1{i_1;a_1} * D2{a_1;i_3}");
+  auto n_B = head("D1{i_1;a_1} * D2{a_1;i_3}");
+  stamp_con(n_A, i);
+  // n_B left unstamped (full).
+
+  std::vector<EvalNode<EvalExpr>> forest{n_A, n_B};
+  stamp_seed_residency(forest);
+
+  CHECK(forest[0]->seed_residency().empty());
+  CHECK(forest[1]->seed_residency().empty());
+}
+
+TEST_CASE(
+    "stamp_seed_residency leaves a loop-invariant sibling unstamped (empty)",
+    "[lifetime_mask][seed]") {
+  Index const i1{L"i_1"};
+
+  // Same scatter shape as the dedicated per-slot-filter test above, but
+  // driven through stamp_seed_residency, with a Contracted (not External)
+  // ancestor stamp, to also exercise the all-modes selector on this shape:
+  // the left child carries i1 on its own result, the right child does not
+  // (invariant to the i1 loop) and must stay unstamped even though both
+  // live under the same batched ancestor.
+  auto A = inode("A{i_1;a_3}", leaf("A1{i_1;a_1}"), leaf("A2{a_1;a_3}"));
+  auto B = inode("B{a_3;a_5}", leaf("B1{a_3;a_4}"), leaf("B2{a_4;a_5}"));
+  auto R = inode("R{i_1;a_5}", std::move(A), std::move(B));
+  stamp_con(R, i1);
+
+  std::vector<EvalNode<EvalExpr>> forest{R};
+  stamp_seed_residency(forest);
+
+  auto const& root = forest[0];
+  auto const& a = root.left();
+  auto const& b = root.right();
+
+  CHECK(as_set(root->seed_residency()) == index_set({i1}));
+  CHECK(as_set(a->seed_residency()) == index_set({i1}));
+  CHECK(b->seed_residency().empty());
+}
+
+TEST_CASE(
+    "stamp_seed_residency contains BOTH an External and a Contracted mode "
+    "on a mixed node",
+    "[lifetime_mask][seed]") {
+  Index const i{L"i_1"}, j{L"i_2"};
+
+  // Every occurrence stamps i as External AND j as Contracted on the SAME
+  // node's own result slots => the meet keeps both, proving the union of
+  // kinds (not just one selector's contribution winning).
+  auto n_A = head("W1{i_1;a_1} * W2{a_1;i_2}");
+  auto n_B = head("W1{i_1;a_1} * W2{a_1;i_2}");
+  auto stamp_mixed = [&](EvalNode<EvalExpr>& n) {
+    n->set_batched_here(
+        {{i, BatchModeType::External}, {j, BatchModeType::Contracted}});
+  };
+  stamp_mixed(n_A);
+  stamp_mixed(n_B);
+
+  std::vector<EvalNode<EvalExpr>> forest{n_A, n_B};
+  stamp_seed_residency(forest);
+
+  CHECK(as_set(forest[0]->seed_residency()) == index_set({i, j}));
+  CHECK(as_set(forest[1]->seed_residency()) == index_set({i, j}));
+}
+
+TEST_CASE("stamp_seed_residency expands a batched composite index proto-aware",
+          "[lifetime_mask][seed][proto]") {
+  Index const i{L"i_1"}, j{L"i_2"};
+  Index const a_pno{L"a_5", {i, j}};  // PNO composite tied to the occ pair
+
+  // Mirrors the dedicated [lifetime_mask][proto] case above, but driven
+  // through stamp_seed_residency and tagged Contracted (not External) to
+  // also discriminate against the External-only selector. Both occurrences
+  // slice the SAME composite index a<i_1,i_2>; the meet contributes its
+  // proto pair {i_1, i_2}, not the composite label itself.
+  auto n_A = head("L1{a_3<i_1,i_2>;i_3} * M1{i_3;a_4}");
+  auto n_B = head("L1{a_3<i_1,i_2>;i_3} * M1{i_3;a_4}");
+  n_A->set_batched_here({{a_pno, BatchModeType::Contracted}});
+  n_B->set_batched_here({{a_pno, BatchModeType::Contracted}});
+
+  std::vector<EvalNode<EvalExpr>> forest{n_A, n_B};
+  stamp_seed_residency(forest);
+
+  CHECK_FALSE(forest[0]->seed_residency().empty());
+  CHECK(as_set(forest[0]->seed_residency()) == index_set({i, j}));
+  // the composite index itself is NOT a sliced mode.
+  CHECK(as_set(forest[0]->seed_residency()).count(a_pno) == 0);
 }
