@@ -5244,9 +5244,10 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
   // problem: the C60 job it mirrors ran under a 100 GB budget and never
   // completed an iteration. The modelled replay peak falls monotonically as
   // batching engages (nterms=55): unbatched ~38897 GB, aux-only ~6047 GB,
-  // aux+occ ~525.9 GB -- so the aux+occ leg is ~5.3x over the 100 GB budget.
-  // The two aspirational CHECKs (peak < 100, avoidable < 0.10) remain RED
-  // research targets; they are NOT forced to pass and NOT the acceptance gate.
+  // aux+occ ~1198.5 GB -- so the aux+occ leg is ~12x over the 100 GB budget.
+  // The peak CHECK (peak < 100) remains a RED research target; it is NOT
+  // forced to pass and NOT the acceptance gate. (The avoidable CHECK now
+  // PASSES post-veto -- see the AVOIDABLE note below.)
   // The Task 5 acceptance assertions -- Contracted-occ stamps == 0 and
   // External-occ stamps > 0 (above) -- are the ones that must be GREEN.
   //
@@ -5264,11 +5265,16 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
   // an operand read full from an ancestor cache (its bytes were charged both as
   // an operand and again via chain_residency, because alive() was local-only).
   // The I1 fix (chain_holds pointer-identity operand de-aliasing) removed that
-  // double-count, bringing the honest co-resident figure to the current
-  // ~525.9 GB. unbatched/aux-only are unaffected throughout (they do not engage
-  // the nested scratch-chain-with-alive-parent-residency case this witness's
-  // aux+occ leg does). Do not quote the ~5860.9 / ~2302 / ~2947 / ~443.6 /
-  // ~886.1 figures as current -- they are superseded.
+  // double-count, bringing the honest co-resident figure to ~525.9 GB.
+  // Phase 4b-3 (has_demoted_external veto DELETED): with the veto gone the
+  // dry-run cost model, like the runtime, now HOISTS a meet-demoted external
+  // giant to its seed home (built once, held FULL) instead of descending it
+  // (rebuilt sliced per external block). Holding the giant full raises the
+  // aux+occ co-resident peak to the current ~1198.5 GB (and, symmetrically,
+  // lowers the avoidable-recompute FLOPs -- see below). unbatched/aux-only are
+  // unaffected throughout (neither engages the demoted-external hoist this
+  // witness's aux+occ leg does). Do not quote the ~5860.9 / ~2302 / ~2947 /
+  // ~443.6 / ~886.1 / ~525.9 figures as current -- they are superseded.
   //
   // WHY EXTERNAL SLICING ALONE CANNOT REACH 100 GB. The peak driver is a
   // cross-pair intermediate carrying TWO independent PNO legs (each an a<i,j>
@@ -5281,7 +5287,7 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
   // batching or a factorization that never forms the two-PNO-leg intermediate),
   // tracked as an out-of-scope follow-up -- not something this witness can or
   // should force.
-  CHECK(both.peak_gb < 100.0);  // documented-RED research target (~525.9 GB)
+  CHECK(both.peak_gb < 100.0);  // documented-RED research target (~1198.5 GB)
 
   // ASPIRATIONAL -- AVOIDABLE recomputation TIME: the share of modelled
   // exec_cost spent rebuilding a value already built at the same touched-mode
@@ -5300,18 +5306,21 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
   //
   // Honest numbers (annotation-only batching, no heuristic fallback -- the
   // production configuration, cf. MPQC csv_batch_policy.h; nterms=55):
-  // unbatched ~1.8%, aux-only ~6.5%, aux+occ ~15.4% (~2438 equivalent full
-  // rebuilds). Heed the HISTORY note at the top of this test before quoting
-  // these; earlier ~44.6%/~76% figures were a since-fixed metric artifact.
+  // unbatched ~1.8%, aux-only ~6.5%, aux+occ ~7.4%. Heed the HISTORY note at
+  // the top of this test before quoting these; earlier ~44.6%/~76%/~15.4%
+  // figures were a since-fixed metric artifact or pre-veto placement.
   //
-  // aux-only is the CLEAN baseline (both flags stay off on that leg). The
-  // surviving aux+occ ~15.4% is the CONTRACTED-aux recompute -- the aux-batched
-  // intermediates rebuilt per external block. Bringing it down needs downstream
-  // design work (a factorization that shares the aux-contracted work across
-  // external blocks) -- so this aspirational CHECK stays RED and documented.
-  CHECK(aux.avoidable_time() < 0.10);  // aux-only is clean (PASSES)
-  CHECK(both.avoidable_time() <
-        0.10);  // documented-RED research target (~0.154)
+  // Phase 4b-3 (has_demoted_external veto DELETED): the aux+occ avoidable
+  // recompute dropped from ~15.4% to ~7.4% because the demoted external giants
+  // that the veto forced to be rebuilt sliced per external block are now
+  // HOISTED (built once at their seed home), so the repeated-work FLOPs the
+  // avoidable metric counts fall. This aspirational CHECK, RED under the veto
+  // (~0.154), now PASSES (~0.074) -- the trade is the higher peak noted above.
+  // aux-only is the CLEAN baseline (both flags stay off on that leg) and was
+  // already passing. Note these are NOT-TRUSTED diagnostics (see the TRUST
+  // BOUNDARY at the top of the file), not physical targets.
+  CHECK(aux.avoidable_time() < 0.10);   // aux-only is clean (PASSES)
+  CHECK(both.avoidable_time() < 0.10);  // now PASSES post-veto (~0.074)
 }
 
 // D5 avoidable-recomputation WITNESS: compare EXTERNAL-mode vs CONTRACTED-mode
@@ -5326,13 +5335,19 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
 // came from a within-scheme metric that scored per-block slices as "necessary"
 // and so could not see the demoted giants being rebuilt at all.
 //
-// HONEST FINDING (FLOPs vs build-once, nterms=55): external-occ and
-// contracted-occ are essentially EQUIVALENT -- avoidable ~1.95% vs ~1.97%, peak
-// ~5999 vs ~6026 GB -- with external doing ~10x the replay ops (per-block
-// slices). External-mode batching does NOT eliminate the recompute here: the
-// ~2% both arms carry is the cross-pair two-PNO-leg giants, which neither occ
-// slicing scheme reaches (the second PNO leg is contracted, not external). The
-// live gate is the two arms agreeing within 0.02, not external driving to 0.
+// HONEST FINDING (FLOPs vs build-once, nterms=55). Phase 4b-3
+// (has_demoted_external veto DELETED) split the two arms apart. Under the veto
+// they were essentially EQUIVALENT (avoidable ~1.95% vs ~1.97%, peak ~5999 vs
+// ~6026 GB). Deleting the veto changes only the EXTERNAL arm: its meet-demoted
+// external giants, previously rebuilt sliced per external block, now HOIST
+// (built once, held FULL). So the external arm's modelled avoidable recompute
+// COLLAPSES to ~0.006% while its peak RISES to ~8930 GB; the contracted arm is
+// untouched (it carries NO external stamps, so the veto never applied to it) at
+// ~1.97% / ~6026 GB. External-mode batching still does not close the peak (the
+// cross-pair two-PNO-leg giants it now holds full are the driver), but on
+// recompute it is now strictly BELOW the contracted arm -- it trades recompute
+// for peak. These are NOT-TRUSTED diagnostics (see the trust boundary in the
+// occ-veto witness above), not physical targets.
 //
 // Same C60 job shape as the veto (K@256, occ@8, mu~ NOT batched, 100 GB,
 // perf-first) -- the ONLY policy change is batch_spectator_indices = true, so
@@ -5552,37 +5567,34 @@ TEST_CASE("dryrun external-mode occ batching matches contracted-mode avoidable",
   // together, so essentially the entire "win" was the flag, not the external
   // mode), and those percentages were themselves a since-fixed metric artifact.
   // With the heuristic removed and avoidable measured in FLOPs against the
-  // build-once ideal (nterms=55), the two arms are essentially EQUIVALENT:
+  // build-once ideal (nterms=55), and post Phase 4b-3 (has_demoted_external
+  // veto DELETED), the two arms have split apart:
   //
   //   contracted-occ : avoidable ~1.97% FLOPs, replay ops 2531, peak ~6026 GB
-  //   external-occ   : avoidable ~1.95% FLOPs, replay ops 25021, peak ~5999 GB
+  //   external-occ   : avoidable ~0.006% FLOPs, replay ops 16614, peak ~8930 GB
   //
-  // Re-verified unchanged after Phase 1 Task 2 (peak_bytes = the co-resident
-  // sum across the cache scope chain via CacheManager::chain_residency(), not
-  // the old max(scratch_hwmark, outer_hwmark) lower bound) AND after the I1
-  // de-alias fix (chain_holds pointer identity): both peaks measured within
-  // noise of the figures above (6026.03 / 5999.69 GB). Unlike the occ-veto
-  // witness's aux+occ leg, this forest does not exercise the nested batched-
-  // scratch-chained-to-an-alive-persistent-parent case those fixes touch (it
-  // neither adds ancestor residency nor double-counts an ancestor operand), so
-  // its peak is unaffected.
+  // Under the veto they were within noise (contracted ~1.97%/~6026 GB vs
+  // external ~1.95%/~5999 GB). Deleting the veto changes only the EXTERNAL arm:
+  // its meet-demoted external giants now HOIST (built once, held full) instead
+  // of being rebuilt sliced per external block, so its modelled avoidable
+  // recompute collapses to ~0.006% while its peak rises to ~8930 GB. The
+  // contracted arm carries NO external stamps, so the veto never applied to it
+  // and it is unchanged.
   //
-  // So External is NOT a fix for the avoidable recompute on this forest: it has
-  // the SAME ~2% recompute and the SAME ~6 TB peak as the contracted arm, at
-  // ~10x the replay-op count (per-block slices). It engages losslessly and
-  // remains the mechanism for slicing a mode that is contracted nowhere, but
-  // the D5 claim that it eliminates the recompute is NOT supported. The two
-  // arms agreeing within 0.02 is the honest finding.
-  CHECK(std::abs(external.avoidable_time() - contracted.avoidable_time()) <
-        0.02);
+  // So on RECOMPUTE, External is now strictly BELOW the contracted arm (it
+  // hoists the demoted giants the veto used to descend); on PEAK it is WORSE
+  // (it holds those giants full). It engages losslessly and remains the
+  // mechanism for slicing a mode that is contracted nowhere. The honest finding
+  // post-veto: external trades recompute for peak.
+  CHECK(external.avoidable_time() < contracted.avoidable_time());  // ~0 vs ~2%
   CHECK(external.replay_ops > contracted.replay_ops);
 
   // ENTRY CRITERION for the deferred forest-co-batching + middle-gap work:
-  // these record the residual as it stands today. When that work lands they
-  // start failing -- FLIP to (external.peak_gb < 100.0) / (avoidable < 0.01)
-  // and this witness becomes a true gate. Note the OPEN gap is the PEAK (~6
-  // TB); avoidable is already small (~2%), so it is the peak, not recompute,
-  // that external-mode batching fails to close on its own.
-  CHECK(external.peak_gb > 100.0);          // peak NOT yet bounded (~5999 GB)
-  CHECK(external.avoidable_time() > 0.01);  // ~2% recompute survives (two-PNO)
+  // these record the residual as it stands today. The PEAK gate is still open
+  // (~8930 GB, above 100) -- flip to (external.peak_gb < 100.0) when the
+  // co-batching work lands. Phase 4b-3 already closed the avoidable gate for
+  // the external arm (the demoted giants now hoist once), so avoidable is now
+  // BELOW 0.01 rather than above it.
+  CHECK(external.peak_gb > 100.0);          // peak NOT yet bounded (~8930 GB)
+  CHECK(external.avoidable_time() < 0.01);  // recompute now near-zero post-veto
 }

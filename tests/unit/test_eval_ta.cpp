@@ -3012,32 +3012,32 @@ TEST_CASE("batched_eval_external_axis_scatter", "[eval][batched-external]") {
 }
 
 TEST_CASE(
-    "batched external-carrying loop-local intermediate is not hoisted full",
+    "batched external-carrying intermediate hoists to its seed home; the "
+    "result stays exact via slice-on-use (Phase 4b-3: no demotion veto)",
     "[eval][batched-external]") {
-  // Task 3 review Finding 1 witness (real RED/GREEN, not vacuous). In an
-  // external SCATTER over a mode e, a DESCENDANT intermediate M that itself
-  // CARRIES e (free onto its own result) is loop-LOCAL: its value depends on
-  // e, so it must be rebuilt SLICED once per e-block, never hoisted and built
-  // ONCE at the FULL e extent. `place_at_this_level`'s `has_demoted_external`
-  // exclusion is what makes this so: a node carrying an External
-  // `batched_here()` stamp absent from its `sliced_modes()` (a meet-demoted
-  // carrier -- the cross-pair giants in the C60 story) is NEVER hoisted, even
-  // though its residency union is otherwise empty and order-aware. Without
-  // that exclusion this network would build M whole via evaluate(M, le) with
-  // an UNSLICED le -- realizing M at full e (the 167x peak in the summand-46
-  // investigation: I(...;a1<i1,i2>) Cache|Access'd at 8.7 GB full BEFORE
-  // BatchScatter|Begin).
+  // Phase 4b-3 T1 re-baseline. This test used to pin the `has_demoted_external`
+  // demotion veto: in an external SCATTER over a mode e, a DESCENDANT
+  // intermediate M that itself CARRIES e free onto its result (an External
+  // `batched_here()` stamp absent from `sliced_modes()` -- a meet-demoted
+  // carrier, the cross-pair giants in the C60 story) was NEVER hoisted, so it
+  // was rebuilt SLICED once per e-block (h requested nblocks times). The veto
+  // is now DELETED: placement is purely router-override-or-seed, so with an
+  // EMPTY router (no MPQC pre-pass here) M is HOISTED to its seed home. Its
+  // residency (`sliced_modes`) is empty, so the seed home is the chain root:
+  // M is built exactly ONCE (h requested once), not nblocks times.
   //
-  // The PREVIOUS version of this test set a per-node scalar placement level
-  // (retired; the runtime no longer reads it) but never `batch_order_aware`,
-  // so `place_at_this_level`'s `collect` short-circuited on
-  // `n->batch_order_aware()` (false by default) before ever reaching
-  // `has_demoted_external` -- the test would still pass with the exclusion
-  // deleted. This version drives the actual signals the runtime reads
-  // (`batch_order_aware` + the sliced/contracted union) and adds a SIBLING
-  // node with the SAME order-aware gate but NO External stamp, to show the
-  // exclusion is selective (fires only for the demoted carrier), not just
-  // "hoisting never happens in this test":
+  // Crucially this changes PLACEMENT only, never the RESULT: M is cached FULL
+  // at the root, and when R consumes it inside the e-scatter the batched
+  // Enter-stage slice-on-use slices the ancestor-scope value to the current
+  // e-block (the `[eval][slice-on-use]` witness below), so the scatter still
+  // reassembles the whole result exactly (assertion 1, unchanged). The move
+  // that trimmed a demoted giant's peak is now the remat router's job (T2);
+  // here, with no router, the seed placement is what the runtime uses.
+  //
+  // The sibling INV (order-aware, NO External stamp) was already hoisted under
+  // the veto and still is: both siblings now hoist, so h_evals and v_evals are
+  // both 1. The test remains a real witness -- it proves the demoted carrier
+  // now hoists (was nblocks, now 1) AND that the numerical result is untouched.
   //
   // Network:
   //   R{a_1;a_4;x_1} = ((g{a_1;a_2;x_1} * h{a_2;a_3;x_1})
@@ -3048,12 +3048,9 @@ TEST_CASE(
   //    the earlier version of this test used, so R's own shape is unchanged).
   //  - R = M*INV contracts a_3 -> {a_1;a_4;x_1}: the x_1 scatter trigger.
   // M is stamped External on x_1 + order_aware(true), with sliced_modes left
-  // empty (default) -- an External batched_here() stamp absent from
-  // sliced_modes is exactly the meet-demoted-carrier case has_demoted_external
-  // detects, so M is excluded and descends (rebuilt sliced per e-block). INV
-  // is stamped order_aware(true) only -- no batched_here entries at all, so
-  // has_demoted_external(INV) is false and INV is collected + hoisted to the
-  // term/root cache (built once, regardless of e-blocks).
+  // empty (default). INV is stamped order_aware(true) only -- no batched_here
+  // entries at all. Both are collected + hoisted to the term/root cache (built
+  // once, regardless of e-blocks).
   using sequant::evaluate;
   using sequant::make_batched_custom_evaluator;
   using TA::TArrayD;
@@ -3117,15 +3114,15 @@ TEST_CASE(
       sequant::index_position(*inv, mode).has_value());  // INV does not
 
   // M: External stamp, order-aware, EMPTY sliced_modes (default) -- a
-  // meet-demoted external carrier. has_demoted_external(M) is true ->
-  // excluded from hoisting -> descends, rebuilt sliced per e-block.
+  // meet-demoted external carrier. With the veto deleted, M is collected +
+  // hoisted to its seed home (the chain root, since its residency is empty),
+  // built exactly once; slice-on-use slices the hoisted-full M per e-block.
   (*m)->set_batched_here({{mode, sequant::BatchModeType::External}});
   (*m)->set_batch_order_aware(true);
 
-  // INV: order-aware, no batched_here entries at all (no External stamp), so
-  // has_demoted_external(INV) is false -> collected + hoisted to the
-  // term/root cache, built exactly once regardless of how many e-blocks M is
-  // rebuilt across.
+  // INV: order-aware, no batched_here entries at all (no External stamp) ->
+  // collected + hoisted to the term/root cache, built exactly once (as before
+  // -- INV was never demoted).
   (*inv)->set_batch_order_aware(true);
 
   // Reference: plain unbatched evaluation (fills yield_'s leaf cache too).
@@ -3171,16 +3168,15 @@ TEST_CASE(
     diff("i,j,k") = ref("i,j,k") - res("i,j,k");
     REQUIRE(TA::norm2(diff) < 1e-12);
 
-    // 2. M (the meet-demoted external carrier) is never realized at full-e
-    //    extent: it is rebuilt SLICED once per e-block (h requested nblocks
-    //    times, each at block-e extent), not hoisted and built ONCE at full e
-    //    (h requested once -- the RED behavior has_demoted_external prevents).
-    CHECK(h_evals == static_cast<int>(nblocks));
+    // 2. M (the meet-demoted external carrier) is now HOISTED to its seed
+    //    home and built exactly ONCE (h requested once), regardless of
+    //    nblocks -- the veto that used to force nblocks sliced rebuilds is
+    //    deleted. The result is still exact (assertion 1) because slice-on-use
+    //    slices the hoisted-full M to each e-block at the consumer.
+    CHECK(h_evals == 1);
 
-    // 3. INV (no External stamp -- the exclusion's control case) IS hoisted
-    //    once to the term/root cache, regardless of nblocks: this is what
-    //    makes assertion 2 a real witness of a SELECTIVE exclusion rather
-    //    than "nothing in this test ever hoists".
+    // 3. INV (no External stamp) is hoisted once to the term/root cache too,
+    //    regardless of nblocks -- unchanged by the veto deletion.
     CHECK(v_evals == 1);
   }
 }

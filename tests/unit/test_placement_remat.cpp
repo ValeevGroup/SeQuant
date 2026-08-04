@@ -656,3 +656,101 @@ TEST_CASE(
   CHECK(h1->residency == v_home);
   CHECK(h2->residency == v_home);  // one value -> one home, two keys
 }
+
+// ---------------------------------------------------------------------
+// Phase 4b-3 T1: the router-vs-store-seam CONSISTENCY invariant. After the
+// has_demoted_external veto is deleted, place_at_this_level is purely
+// router-override-or-seed, so the whole cutover rests on the router (built by
+// the MPQC pre-pass via remat_to_router) resolving a moved value's home
+// EXACTLY the way place_at_this_level's runtime store seam does. This test
+// pins that identity end to end.
+// ---------------------------------------------------------------------
+
+TEST_CASE(
+    "INVARIANT: the remat router resolves a moved value's home exactly the "
+    "way place_at_this_level's runtime store seam does (Phase 4b-3 T1)",
+    "[placement_remat]") {
+  // Design section 11.4: the router-override branch of place_at_this_level
+  // (eval.hpp) derives home as
+  //   key = eval::occurrence_key(d, ectx_modes);
+  //   if (auto const* home = router->route(key))
+  //     rl = router->home_depth(*home, ectx) - 1;
+  // where ectx is the LIVE BatchContext and ectx_modes are its modes. This
+  // test replicates that seam verbatim against a router the pre-pass built and
+  // proves the two derive the SAME home. If they ever diverge the cutover
+  // would silently misplace a moved value; this fails the moment they do.
+  //
+  // Reuse the CONSISTENT distinct-key fixture (V's batched result modes are
+  // genuine subtree indices, so occurrence_key sees them): V{i_1;i_2} =
+  // A{i_1;x_1} * B{x_1;i_2}, sliced {i_1,i_2} under P1 but only {i_1} under
+  // P2, so the cross-occurrence meet home is {i_1} and i_2 is V's (demoted)
+  // shrink candidate. A finite threshold shrinks i_2 into V's home -> V moves
+  // -> the router emits one override per DISTINCT occurrence, all -> the same
+  // shrunk home {i_1,i_2}.
+  auto make_V = [] {
+    return inode_remat("V{i_1;i_2}", leaf_remat("A{i_1;x_1}"),
+                       leaf_remat("B{x_1;i_2}"));
+  };
+  auto P1 = inode_remat("P1{i_1;i_2}", make_V(), leaf_remat("W1{i_1;i_2}"));
+  stamp_ext_pair_remat(P1, Index{L"i_1"}, Index{L"i_2"});  // occ1: {i_1,i_2}
+  auto P2 = inode_remat("P2{i_1;a_1}", make_V(), leaf_remat("W2{i_1;a_1}"));
+  stamp_ext_remat(P2, Index{L"i_1"});  // occ2: {i_1} only
+  std::vector<EvalNode<EvalExpr>> const forest{P1, P2};
+
+  SizeRegime r;
+  r.space_extent = {{L"i", 10}, {L"x", 10}, {L"a", 10}};
+  CostModel const cm{r};
+  auto const block_of = [](Index const&) -> std::size_t { return 2; };
+
+  // Build the router the way the pre-pass will (design section 11.4):
+  // remat_cells (the seed) -> the shrink move (i_2 folded into V's home) ->
+  // remat_to_router. The shrink is applied directly to V's cell (as the
+  // companion distinct-key test does): on THIS consistent fixture V is not the
+  // global binding cell, so rematerialize_to_budget reports RebatchNeeded and
+  // never performs the move itself; the pre-pass consistency this test pins is
+  // in remat_to_router + the store seam, not in the greedy loop's choice.
+  RematInput const in = remat_cells(forest, cm, block_of);
+  std::size_t v_id = in.cells.size();
+  for (auto const& c : in.cells)
+    if (c.home_modes == svector<Index>{Index{L"i_1"}}) v_id = c.value_id;
+  REQUIRE(v_id < in.cells.size());
+  CHECK(shrink_candidates(in.cells[v_id]) == svector<Index>{Index{L"i_2"}});
+  auto final_cells = in.cells;
+  final_cells[v_id].home_modes.push_back(
+      Index{L"i_2"});  // shrink i_2 into home
+  auto const router = remat_to_router(in.cells, final_cells, forest);
+  REQUIRE_FALSE(router.empty());  // V moved -> at least one override
+
+  using BatchContext =
+      sequant::eval::PlacementRouter<EvalNode<EvalExpr>>::BatchContext;
+
+  // --- Occurrence 1: V under P1, live loops {i_1 (outer), i_2 (inner)} ---
+  // Replicate the runtime store seam: build the live BatchContext, derive its
+  // modes, key the node, route, and resolve the home depth.
+  BatchContext const ectx1{{Index{L"i_1"}, {0, 2}}, {Index{L"i_2"}, {0, 2}}};
+  svector<Index> const ectx1_modes{Index{L"i_1"}, Index{L"i_2"}};
+  auto const key1 = occurrence_key(forest[0].left(), ectx1_modes);  // V/P1
+  HomeTarget const* home1 = router.route(key1);
+  REQUIRE(home1 != nullptr);
+  CHECK(home1->residency == svector<Index>{Index{L"i_1"}, Index{L"i_2"}});
+  // V's post-shrink home is {i_1,i_2}: i_2 sits at level 1 of ectx1, so the
+  // deepest residency match is level 1 => home_depth 2; the store seam sets
+  // rl = home_depth - 1 = 1 (V homed at the inner i_2 loop, built once there).
+  CHECK(router.home_depth(*home1, ectx1) == 2);
+
+  // --- Occurrence 2: V under P2, only the i_1 loop is live ---
+  BatchContext const ectx2{{Index{L"i_1"}, {0, 2}}};
+  svector<Index> const ectx2_modes{Index{L"i_1"}};
+  auto const key2 = occurrence_key(forest[1].left(), ectx2_modes);  // V/P2
+  HomeTarget const* home2 = router.route(key2);
+  REQUIRE(home2 != nullptr);
+  // Same value -> same home {i_1,i_2}; under P2 only i_1 is a live loop, so
+  // the deepest residency match is level 0 => home_depth 1 (rl = 0).
+  CHECK(router.home_depth(*home2, ectx2) == 1);
+
+  // The two occurrence keys are genuinely DISTINCT ({i_1,i_2} vs {i_1}) yet
+  // both route to the SAME home -- the meet-home guarantee the runtime relies
+  // on, resolved through the identical store-seam call sequence.
+  CHECK_FALSE(sequant::eval::RouterKeyEqual{}(key1, key2));
+  CHECK(home1->residency == home2->residency);
+}

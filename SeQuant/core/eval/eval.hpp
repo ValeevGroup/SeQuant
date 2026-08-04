@@ -1714,35 +1714,25 @@ template <typename F, typename IndexPredicate = accept_any_index,
               if (!in_ectx(ix)) return false;
             return true;
           };
-          // A node carrying an EXTERNAL batched_here() stamp absent from its
-          // sliced_modes is a MEET-DEMOTED external carrier: the
-          // cross-occurrence meet intersected that external slot to empty
-          // because occurrences bind it to DIFFERENT (proto-incompatible)
-          // blocks (the cross-pair two-PNO giants), yet the node still carries
-          // that external mode FREE in THIS occurrence -- so its per-occurrence
-          // value is a per-external-BLOCK (scattered/sliced) result. Hoisting
-          // it would build it at its home level with the demoted external mode
-          // UNSLICED (not in any enclosing block), i.e. materialize the FULL
-          // scattered giant. Never hoist such a node: descend so the batched
-          // evaluator slices its external mode per occurrence (exactly as
-          // hoist_invariants did via per-occurrence scope_level). A node with
-          // only Contracted stamps (genuinely external- invariant, e.g. a
-          // summed-K intermediate) has no such stamp and is still hoisted once;
-          // a consistently-sliced external node has the mode in sliced_modes
-          // (not demoted) and is placed/sliced at its loop.
-          auto has_demoted_external = [](node_t const& n) -> bool {
-            auto const& sm = n->sliced_modes();
-            for (auto const& [ix, knd] : n->batched_here())
-              if (knd == BatchModeType::External &&
-                  std::find(sm.begin(), sm.end(), ix) == sm.end())
-                return true;
-            return false;
-          };
+          // Phase 4b-3 runtime cutover: the demotion veto that used to force a
+          // MEET-DEMOTED external carrier (a node carrying an EXTERNAL
+          // batched_here() stamp absent from its sliced_modes) to DESCEND is
+          // gone. Placement is now purely router-override-or-seed: an
+          // order-aware, residency-all-outer node is hoisted to its seed home
+          // (FULL on any demoted mode) UNLESS the remat router (populated by
+          // the MPQC pre-pass) overrides its home lower. The remat pass shrinks
+          // such a giant and re-homes it via the router; with an empty router
+          // (all SeQuant unit tests, no pre-pass) and the inf default there is
+          // no batching, so the veto was inert anyway (design section 5). A
+          // value cached at its seed home is the SAME value the descended path
+          // produced -- the batched Enter-stage slice-on-use slices it to the
+          // block when a nested external loop consumes it -- so this changes
+          // PLACEMENT only, never the result.
           std::vector<node_t const*> targets;
           auto collect = [&](auto&& self, node_t const& n) -> void {
             if (n.leaf()) return;
             if (n->batch_order_aware() && residency_all_outer(n) &&
-                !has_demoted_external(n) && !subtree_any(n, is_volatile)) {
+                !subtree_any(n, is_volatile)) {
               if (std::none_of(targets.begin(), targets.end(),
                                [&](node_t const* p) { return eq(*p, n); }))
                 targets.push_back(&n);
@@ -1777,7 +1767,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
               }
             // Router override (see placement_router.hpp): a registered
             // occurrence override replaces the LEVEL only -- the collect/hoist
-            // decision above (residency_all_outer/has_demoted_external) is
+            // decision above (residency_all_outer alone, post Phase 4b-3) is
             // untouched. Empty/null router (Phase 2 default) => branch never
             // taken => rl is exactly the value computed above =>
             // byte-identical.
