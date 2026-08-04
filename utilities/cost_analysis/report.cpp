@@ -43,8 +43,7 @@ void report_expensive(const CellResult& cell, std::size_t top_n,
   std::vector<std::pair<const TreeNode*, const Record*>> rows;
   for (const auto& [node, rec] : cell.catalog)
     if (rec.flops != AsyCost::zero()) rows.emplace_back(&node, &rec);
-  // Most operations first, tie-broken on the construction string for
-  // determinism. The op count only orders rows
+  // Most FLOPs first, tie-broken on the construction string for determinism.
   std::ranges::sort(rows, [](const auto& a, const auto& b) {
     const double fa = a.second->flops.ops(), fb = b.second->flops.ops();
     if (fa != fb) return fb < fa;
@@ -72,9 +71,12 @@ void report_shape_histogram(const CellResult& cell, double bytes_per_elem,
     auto& g = by_shape[rec.spaces];
     ++g.count;
     g.uses += rec.uses;
-    // Representative size of the shape = its largest instance. A single O/V/X
-    // signature can group differing sizes only when multiple aux spaces (Κ, L)
-    // are registered; taking the max keeps this deterministic either way.
+    // Representative size of the shape = its largest instance. 'X' is meant
+    // for aux spaces (Κ, L), but space_signature() also puts any other
+    // non-hole/non-particle space there (e.g. frozen-core), so a single O/V/X
+    // signature can group instances of different sizes even with a single aux
+    // space (or none) registered; taking the max keeps this deterministic, at
+    // the cost of a coarser (not exact) census size.
     if (mb(g.mem, bytes_per_elem) < mb(rec.memory, bytes_per_elem))
       g.mem = rec.memory;
   }

@@ -123,8 +123,9 @@ std::shared_ptr<IndexSpaceRegistry> make_registry(const std::string& conv) {
                            conv);
 }
 
-// Start from one of SeQuant's standard registries then override each named
-// space's approximate size and field from the config.
+// Start from one of SeQuant's standard registries, apply the config's field
+// to every registered space, then override each named space's approximate
+// size from the config.
 void setup_context(const Config& cfg) {
   auto isr = make_registry(cfg.convention);
   // Register auxiliary factorization spaces (Κ for df, L for thc) so

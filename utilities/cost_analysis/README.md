@@ -38,7 +38,7 @@ prints the absolute path so the output is easy to locate.
 | `sizes` | `<label>` | approximate size per index space, e.g. `{"i": 10, "a": 38}` | — |
 | `optimize` | `objective` | `dense_flops` / `dense_size` / `dense_peak_size` | `dense_flops` |
 | | `volatile_leaf` | amplitude label being solved (e.g. `t`, `R`); empty disables volatile weighting | `R` |
-| | `reorder`, `cse_subnet`, `volatile_weight`, `machine_balance`, `fast_mem_elems` | forwarded to `sequant::OptimizeOptions` | see `OptSpec` |
+| | `reorder`, `cse_subnet`, `volatile_weight`, `machine_balance`, `fast_mem_elems` | forwarded to `sequant::OptimizeOptions`\* | see `OptSpec` |
 | `cache` | `enabled` | run the cache-reuse simulation | `true` |
 | | `min_repeats` | reuse threshold to cache an intermediate | `2` |
 | | `max_footprint` | cache budget, in **elements** (not MB); `0` = unlimited | `0` |
@@ -46,6 +46,14 @@ prints the absolute path so the output is easy to locate.
 | | `top_n` | rows in the largest/expensive tables | `20` |
 | | `dump_tree` | also write each result's binarized tree to `<name>.tree.txt` | `false` |
 | `equations` | `[{name, equation_file}]` | equations to analyze | — |
+
+\* `machine_balance`/`fast_mem_elems` (the roofline tie-break) are only forwarded
+when `volatile_leaf` is non-empty *and* `cache.enabled` is `true`, since the
+roofline term models per-replay rebuild traffic, which is only meaningful when
+persistent intermediates are actually cached; `volatile_weight` is likewise
+pinned to `1.0` whenever `cache.enabled` is `false`. Toggling `cache.enabled`
+can therefore change the optimizer's chosen contraction order, not just
+whether the report's Cache section appears.
 
 > [!IMPORTANT]
 > Every index space that appears in an equation should be given a size. Any
@@ -96,13 +104,16 @@ The quantities that aren't self-evident:
 - **distinct intermediates** — structurally-unique internal contraction nodes;
   equal intermediates across terms collapse to one, scalars excluded.
 - **peak storage** — the transient working set of the *heaviest single
-  contraction* (its two operands plus result, via `min_storage`), maxed over the
-  terms. **Not** the cache footprint — the **Cache** table covers that.
+  contraction* (its two operands plus result), maxed numerically (at the
+  driver's sizes, not by symbolic polynomial degree) over the terms. **Not**
+  the cache footprint — the **Cache** table covers that.
 - **Shape census `Size`** — the largest instance of each O/V/X signature.
 - **Cache** — a simulation over the volatile-gated `cache_manager` (as MPQC
-  builds it), pooled across all results. **Cached** / **Persistent** count
-  intermediates reused ≥ `min_repeats` (volatile-leaf gated) / those that persist
-  across iterations; **footprints** are their summed element counts in MB — a
+  builds it), pooled across all results. **Cached** counts every intermediate
+  the simulation keeps: NP nodes reused ≥ `min_repeats`, plus all persistent
+  (volatile-leaf-gated) nodes regardless of repeat count. **Persistent** is the
+  subset of Cached that's kept alive across the whole schedule, not a disjoint
+  category. **Footprints** are their summed element counts in MB — a
   cache-content total, distinct from the per-result transient **peak storage**.
 
 ## Tests
