@@ -1656,35 +1656,34 @@ template <typename F, typename IndexPredicate = accept_any_index,
     // member-subtree node INVARIANT to this loop (it does not carry `K` on its
     // result) is built ONCE at its home level and served to every batch body
     // through the scope chain, rather than rebuilt per batch. A node's
-    // residency (the batch modes it is variant to) is the UNION of two per-node
-    // signals:
-    //   - sliced_modes() : the EXTERNAL (occ) modes, from the cross-occurrence
-    //     lifetime-mask meet (consistent placement across occurrences -> CSE);
-    //   - contracted_modes() : the enclosing CONTRACTED (aux) modes the node
-    //     carries open, emitted per-occurrence by the cost model (the piece the
-    //     external-only mask cannot express -- a node is variant to an outer
-    //     aux loop by carrying that aux free on its result).
-    // A node is invariant to THIS loop iff `K` is NOT in its union. Its HOME
-    // level is the deepest ENCLOSING batch_context entry whose mode is in the
-    // union (the innermost enclosing loop it is variant to); -1 (the chain root
-    // / run-term cache) if it is invariant to the whole nest. The node is built
-    // once at that level (walk-up), sliced to its home blocks, and reused
-    // across this loop's batches. A node carrying `K` (K in its union) is
-    // loop-LOCAL: it is left to inline evaluation (descend), which finds any
-    // deeper-hoisted invariants through the chain -- so descending never
-    // rebuilds them.
+    // residency (the batch modes it is variant to) is its \c sliced_modes():
+    // the cross-occurrence lifetime-mask meet of ALL batched modes -- External
+    // (occ) AND Contracted (aux) alike -- that live on the node's own result
+    // slots (consistent placement across occurrences -> CSE). A node variant to
+    // an outer aux loop carries that aux free on a result slot, so the aux mode
+    // survives the meet into sliced_modes; the former per-occurrence
+    // contracted_modes bolt-on is thus subsumed and gone.
+    // A node is invariant to THIS loop iff `K` is NOT in its residency. Its
+    // HOME level is the deepest ENCLOSING batch_context entry whose mode is in
+    // the residency (the innermost enclosing loop it is variant to); -1 (the
+    // chain root / run-term cache) if it is invariant to the whole nest. The
+    // node is built once at that level (walk-up), sliced to its home blocks,
+    // and reused across this loop's batches. A node carrying `K` (K in its
+    // residency) is loop-LOCAL: it is left to inline evaluation (descend),
+    // which finds any deeper-hoisted invariants through the chain -- so
+    // descending never rebuilds them.
     //
     // This reproduces hoist_invariants' walk-up structure exactly, with the
-    // former per-node scalar placement level replaced by the union-derived
+    // former per-node scalar placement level replaced by the residency-derived
     // home level and the `sl < depth && !ext_loop_local` predicate replaced by
-    // `K not in union` (which subsumes ext_loop_local: an External carrier has
-    // K in sliced_modes -> in union -> loop-local -> descended, never
-    // hoisted). The order-aware GATE is the emitted `batch_order_aware()` bit
-    // (true for every node the order-aware cost model emitted, including a
-    // whole-nest invariant whose union is empty): on the OFF path every node
-    // is order-blind, so `targets` is empty, set_parent is NOT wired, and the
+    // `K not in sliced_modes` (which subsumes ext_loop_local: an External
+    // carrier has K in sliced_modes -> loop-local -> descended, never hoisted).
+    // The order-aware GATE is the emitted `batch_order_aware()` bit (true for
+    // every node the order-aware cost model emitted, including a whole-nest
+    // invariant whose residency is empty): on the OFF path every node is
+    // order-blind, so `targets` is empty, set_parent is NOT wired, and the
     // per-batch replay runs exactly as before. The bit is a positive signal an
-    // empty union cannot provide -- it is what distinguishes an OFF-path
+    // empty residency cannot provide -- it is what distinguishes an OFF-path
     // all-full node (do not hoist) from an order-aware whole-nest invariant
     // (hoist to the root).
     auto place_at_this_level =
@@ -1692,16 +1691,16 @@ template <typename F, typename IndexPredicate = accept_any_index,
             std::vector<node_t const*> const& member_roots) {
           // The ENCLOSING batch loops (strictly OUTER to this firing); this
           // level's mode K and any INNER loop are NOT in it. A node is
-          // hoistable here iff EVERY residency (union) mode is one of these
-          // outer loops: then it is invariant to this loop AND to every inner
-          // loop, so its home is its deepest enclosing residency level and it
-          // is built once there. If a union mode is K (loop-local) or an INNER
-          // mode (its home is a deeper loop), it is not all-outer -> descend,
-          // so the deeper level handles it sliced. This is exactly
+          // hoistable here iff EVERY residency (sliced_modes) mode is one of
+          // these outer loops: then it is invariant to this loop AND to every
+          // inner loop, so its home is its deepest enclosing residency level
+          // and it is built once there. If a residency mode is K (loop-local)
+          // or an INNER mode (its home is a deeper loop), it is not all-outer
+          // -> descend, so the deeper level handles it sliced. This is exactly
           // hoist_invariants' `scope_level < depth`: the deepest residency
           // being outer <=> ALL residency outer (deepest is the max), and a
           // node carrying an inner mode is (correctly) not hoisted at this
-          // outer level -- the bug an over-eager `K not in union` predicate
+          // outer level -- the bug an over-eager `K not in residency` predicate
           // caused (holding an aux-carrier full over aux at the outer occ
           // level).
           auto const& ectx = parent_cache.batch_context();  // enclosing loops
@@ -1712,8 +1711,6 @@ template <typename F, typename IndexPredicate = accept_any_index,
           };
           auto residency_all_outer = [&in_ectx](node_t const& n) -> bool {
             for (auto const& ix : n->sliced_modes())
-              if (!in_ectx(ix)) return false;
-            for (auto const& ix : n->contracted_modes())
               if (!in_ectx(ix)) return false;
             return true;
           };
@@ -1763,19 +1760,18 @@ template <typename F, typename IndexPredicate = accept_any_index,
           // Wire the scope chain only when there is something to hoist (matches
           // hoist_invariants; keeps the OFF path unwired -> byte-identical).
           scratch_cache.set_parent(&parent_cache);
-          auto in_union = [](node_t const& n, Index const& m) -> bool {
+          auto in_residency = [](node_t const& n, Index const& m) -> bool {
             auto const& sm = n->sliced_modes();
-            if (std::find(sm.begin(), sm.end(), m) != sm.end()) return true;
-            auto const& cm = n->contracted_modes();
-            return std::find(cm.begin(), cm.end(), m) != cm.end();
+            return std::find(sm.begin(), sm.end(), m) != sm.end();
           };
           for (node_t const* dptr : targets) {
             node_t const& d = *dptr;
             // Home level = deepest enclosing-context entry whose mode is in d's
-            // union; -1 => invariant to the whole nest (chain root).
+            // residency (sliced_modes); -1 => invariant to the whole nest
+            // (chain root).
             int rl = -1;
             for (int i = static_cast<int>(ectx.size()) - 1; i >= 0; --i)
-              if (in_union(d, ectx[i].first)) {
+              if (in_residency(d, ectx[i].first)) {
                 rl = i;
                 break;
               }

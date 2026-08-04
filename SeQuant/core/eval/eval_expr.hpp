@@ -332,28 +332,6 @@ class EvalExpr {
   }
 
   ///
-  /// \brief The enclosing CONTRACTED (aux) batch modes this node carries open
-  /// on its result -- the contracted-residency signal per-level placement
-  /// unions with \c sliced_modes to decide hoist placement. Emitted
-  /// per-occurrence by the order-aware batched cost model (the piece the
-  /// external-only \c sliced_modes mask structurally cannot express: a node is
-  /// variant to an outer aux loop by carrying that aux free on its result, not
-  /// by a result-slot classification). Empty by default (OFF path) and empty
-  /// for a node invariant to every enclosing contracted loop.
-  ///
-  [[nodiscard]] container::svector<Index> const& contracted_modes()
-      const noexcept {
-    return contracted_modes_;
-  }
-
-  ///
-  /// \brief Sets the contracted-residency signal; see \c contracted_modes.
-  ///
-  void set_contracted_modes(container::svector<Index> m) noexcept {
-    contracted_modes_ = std::move(m);
-  }
-
-  ///
   /// \brief Whether this node's sliced-mode mask is empty (all modes full /
   /// block-agnostic). Equivalent to \c sliced_modes().empty().
   ///
@@ -417,9 +395,6 @@ class EvalExpr {
 
   /// See \c seed_residency.
   container::svector<Index> seed_residency_{};
-
-  /// See \c contracted_modes.
-  container::svector<Index> contracted_modes_{};
 
   /// See \c batch_order_aware.
   bool batch_order_aware_ = false;

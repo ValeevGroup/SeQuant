@@ -113,18 +113,25 @@ void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
 }  // namespace detail
 
 /// Stamp each canonical eval node's cross-occurrence sliced-mode mask
-/// (\c EvalExpr::sliced_modes). A mode slices a canonical node iff it slices
+/// (\c EvalExpr::sliced_modes) -- the runtime residency \c place_at_this_level
+/// consumes to home each value. A mode slices a canonical node iff it slices
 /// EVERY occurrence of that node in \p forest (a *meet* / set-intersection over
-/// occurrences). A node's occurrence-local sliced set is the union of the
-/// External \c batched_here() stamps of the node and all its ancestors,
-/// expanded proto-aware: a batched composite index contributes its
-/// \c proto_indices() (a PNO/composite index is domain-tied to its occ pair, so
-/// slicing the pair slices it too). That union is then filtered to the modes
-/// that slice one of the node's OWN canonical slots (\c canon_indices(),
-/// proto-expanded on the slot side): a mode belongs in the mask only if it
-/// lives on this node's result. A node invariant to an outer external loop --
-/// it does not carry that loop's mode on any slot -- is thus left all-full even
-/// under a batched ancestor, so it stays eligible for loop-invariant reuse.
+/// occurrences). A node's occurrence-local sliced set is the union of ALL
+/// \c batched_here() stamps -- any \c BatchModeType, External or Contracted --
+/// of the node and all its ancestors, expanded proto-aware: a batched composite
+/// index contributes its \c proto_indices() (a PNO/composite index is
+/// domain-tied to its occ pair, so slicing the pair slices it too). That union
+/// is then filtered to the modes that slice one of the node's OWN canonical
+/// slots (\c canon_indices(), proto-expanded on the slot side): a mode belongs
+/// in the mask only if it lives on this node's result. A node invariant to an
+/// outer batched loop -- it does not carry that loop's mode on any slot -- is
+/// thus left all-full even under a batched ancestor, so it stays eligible for
+/// loop-invariant reuse.
+///
+/// This all-batched-modes meet subsumes the former per-occurrence
+/// \c contracted_modes bolt-on: a node variant to an outer contracted (aux)
+/// loop carries that aux free on a result slot, so the aux mode survives the
+/// meet and lands in \c sliced_modes directly.
 ///
 /// Occurrences are grouped by canonical identity (\c hash_value plus structural
 /// \c TreeNodeEqualityComparator equivalence). The meet is a set-intersection
@@ -134,26 +141,30 @@ void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
 /// while a block-agnostic node (e.g. \c s*C) whose occurrences bind disjoint
 /// concrete modes intersects to empty (all-full).
 ///
-/// Idempotent; a no-op on the OFF path: with no External \c batched_here()
-/// stamps every occurrence set is empty, so every meet is empty and every mask
-/// is all-full (\c EvalExpr::sliced_modes_ is default-empty), leaving runtime
-/// behavior unchanged. Nothing consumes the mask yet; this pass is purely
-/// additive.
+/// Idempotent; a no-op on the OFF path: with no \c batched_here() stamps every
+/// occurrence set is empty, so every meet is empty and every mask is all-full
+/// (\c EvalExpr::sliced_modes_ is default-empty), leaving runtime behavior
+/// unchanged.
 template <meta::eval_node_range R>
 void stamp_lifetime_masks(R const& forest) noexcept {
   using Node = std::ranges::range_value_t<R>;
   using Data = typename Node::value_type;
 
-  // Occurrence-local External batch modes AT a node, proto-expanded.
-  auto ext_modes_of = [](Node const& n) {
+  // Occurrence-local batch modes AT a node, proto-expanded, EVERY kind (not
+  // just External) -- identical selector to stamp_seed_residency's
+  // all_batched_modes_of. The resulting sliced_modes IS the runtime residency
+  // (the all-batched-modes meet on the node's own result slots) that
+  // place_at_this_level consumes.
+  auto all_batched_modes_of = [](Node const& n) {
     container::svector<Index> v;
     for (auto const& [ix, kind] : n->batched_here())
-      if (kind == BatchModeType::External) detail::proto_expand_into(v, ix);
+      detail::proto_expand_into(v, ix);
     return v;
   };
 
   detail::stamp_residency_impl(
-      forest, ext_modes_of, [](Node const* n, container::svector<Index> m) {
+      forest, all_batched_modes_of,
+      [](Node const* n, container::svector<Index> m) {
         const_cast<Data&>(**n).set_sliced_modes(std::move(m));
       });
 }
@@ -164,13 +175,14 @@ void stamp_lifetime_masks(R const& forest) noexcept {
 /// per-slot-filter semantics) of ALL batched modes -- any \c BatchModeType,
 /// not just \c External -- on the node's own result slots. This is the
 /// perfect-CSE \c home_scope seed residency used by the (Phase 3) static
-/// predictor; it is a superset selector of \c stamp_lifetime_masks (dropping
-/// the \c External-only filter on the batch-mode side), sharing the identical
-/// walk, meet, and per-slot filter via \c detail::stamp_residency_impl.
+/// predictor; it uses the SAME all-batched-modes selector as \c
+/// stamp_lifetime_masks, sharing the identical walk, meet, and per-slot filter
+/// via \c detail::stamp_residency_impl -- the two differ only in which field
+/// they stamp (\c seed_residency_ vs \c sliced_modes_).
 ///
-/// Purely additive: writes only \c EvalExpr::seed_residency_, never \c
-/// sliced_modes_, so it does not affect the runtime External-only masking
-/// path (\c stamp_lifetime_masks / \c place_at_this_level) in any way.
+/// Writes only \c EvalExpr::seed_residency_, never \c sliced_modes_, so it does
+/// not affect the runtime residency masking path (\c stamp_lifetime_masks /
+/// \c place_at_this_level) in any way.
 ///
 template <meta::eval_node_range R>
 void stamp_seed_residency(R const& forest) noexcept {

@@ -601,7 +601,6 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       if (node_counter < opts.node_batch_axes.size()) {
         auto const& ann = opts.node_batch_axes[node_counter];
         result.set_batched_here(ann.axes);
-        result.set_contracted_modes(ann.contracted_modes);
         result.set_batch_order_aware(ann.order_aware);
         result.set_batch_effective_count(ann.effective_count);
       }

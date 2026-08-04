@@ -1882,33 +1882,21 @@ struct PeakBatchedModel {
           modes.push_back({ctx.batchable_modes[k], BatchModeType::Contracted});
       NodeBatchAnnotation ann;
       ann.axes = std::move(modes);
-      // Order-aware placement/lifetime bridge (A4): emit this node's residency
-      // (contracted_modes) and effective use count for a later runtime hoist
+      // Order-aware placement/lifetime bridge (A4): emit this node's
+      // order-aware gate and effective use count for a later runtime hoist
       // pass. Populated ONLY on the ordered (order_aware_recompute) path;
-      // otherwise the defaults (effective_count == 1, contracted_modes empty)
-      // keep the OFF path byte-identical. `B` is the node's ordered enclosing
-      // cell, so all the needed pieces (open_modes, escaped_outer, nbatches)
-      // are in hand at this frame -- no second structure or pass.
+      // otherwise the default (effective_count == 1) keeps the OFF path
+      // byte-identical. `B` is the node's ordered enclosing cell, so all the
+      // needed pieces (open_modes, escaped_outer, nbatches) are in hand at this
+      // frame -- no second structure or pass. The node's runtime residency (its
+      // enclosing-contracted AND external modes alike) is no longer emitted
+      // here: it is the all-batched-modes cross-occurrence meet stamped onto
+      // EvalExpr::sliced_modes by stamp_lifetime_masks.
       if (order_aware_recompute) {
         // Order-aware gate for per-level placement: this node WAS emitted by
         // the order-aware model, so it participates in hoist placement even
-        // when its residency union is empty (a whole-nest invariant -> root
-        // scope).
+        // when its residency is empty (a whole-nest invariant -> root scope).
         ann.order_aware = true;
-        // contracted_modes = the enclosing CONTRACTED batchable modes this node
-        // carries open (variant to). The external-only lifetime mask
-        // (EvalExpr::sliced_modes) cannot express this; per-level placement
-        // unions the two to reproduce the combined-nest residency. Emitted
-        // per-occurrence (a function of open_modes[n], hence consistent across
-        // canonically-equal occurrences), realized loops only (nbatches > 1),
-        // contracted modes only (excludes external via ctx.external_mask).
-        // Empty on the OFF path (this whole block is gated on
-        // order_aware_recompute) and empty for a whole-nest-invariant node.
-        ann.contracted_modes.clear();
-        for (std::size_t k = 0; k < ctx.m; ++k)
-          if (((ctx.open_modes[n] >> k) & 1u) &&
-              !((ctx.external_mask >> k) & 1u) && ctx.nbatches[k] > 1.0)
-            ann.contracted_modes.push_back(ctx.batchable_modes[k]);
         // effective_count = rf = prod of nbatches[k] over the escaped-outer set
         // (enclosing loops the node does NOT carry). With no CSE on this path
         // the back-pointer object is a strict tree (single consumer), so this

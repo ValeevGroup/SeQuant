@@ -4254,25 +4254,38 @@ TEST_CASE("cost_profile returns peak/flops/exec/n_ops",
   // [peak] test: replay the same forest through the same gated cache + the same
   // make_evaluator(&peak2) sink, force printing on identically, and fold the
   // outer hwmark. cost_profile's peak_bytes must equal max(sink, outer hwmark).
+  // NB (Phase 4b-1): this replay MUST mirror cost_profile's own loop exactly --
+  // per root, refresh the custom evaluator, fold peak+hwmark, then
+  // cache.reset() before the next root. Once sliced_modes is the unified
+  // all-batched-modes meet, the cross-occurrence batch-variant veto refuses
+  // more nodes run-scope residence, so the co-resident/working-set fold is now
+  // sensitive to the per-term reset. A single-shot replay (no reset loop) no
+  // longer reproduces cost_profile's fold and over-counts a footprint-gated
+  // intermediate held across terms; the reset loop matches cost_profile
+  // bit-for-bit (verified: both 111.97 GB for this forest).
   auto cm = std::make_shared<CostModel const>(regime);
   DryRunLeafEvaluator leaf{cm};
   auto cache = build_dryrun_cache(forest, cfg, regime);
   std::atomic<double> peak2{0.0};
-  cache.set_custom_evaluator(sequant::make_evaluator(
-      policy, leaf, sequant::make_no_scope_guard{}, &peak2));
   auto& logger = Logger::instance();
   auto const prev_level = logger.eval.level;
   auto* const prev_stream = logger.eval.stream;
   logger.eval.level = 2;
   logger.eval.stream = nullptr;
-  try {
-    (void)sequant::evaluate<Trace::On>(node, leaf, cache);
-  } catch (std::exception const&) {
+  double expected_peak = 0.0;
+  for (auto const& root : forest) {
+    cache.set_custom_evaluator(sequant::make_evaluator(
+        policy, leaf, sequant::make_no_scope_guard{}, &peak2));
+    try {
+      (void)sequant::evaluate<Trace::On>(root, leaf, cache);
+    } catch (std::exception const&) {
+    }
+    expected_peak = std::max(
+        {expected_peak, peak2.load(), double(cache.working_set_hwmark())});
+    cache.reset();
   }
   logger.eval.level = prev_level;
   logger.eval.stream = prev_stream;
-  double const expected_peak =
-      std::max(peak2.load(), double(cache.working_set_hwmark()));
   CHECK(expected_peak > 0.0);
   CHECK(cp.peak_bytes == Catch::Approx(expected_peak).epsilon(1e-9));
 
@@ -4317,7 +4330,7 @@ TEST_CASE("cost_profile returns peak/flops/exec/n_ops",
 // space "a"), and root's left child M batches K2 (inner, nested under K1,
 // space "i"). M's own left child D0 = X{i_80} * Y{i_81} is hand-stamped
 // order-aware with an EMPTY residency (batch_order_aware=true, sliced_modes
-// and contracted_modes both left empty) -- a genuine whole-nest invariant, so
+// left empty) -- a genuine whole-nest invariant, so
 // place_at_this_level's own (unrouted) walk hoists it to the run-scope root
 // exactly once, and re-discovers it already alive there on every subsequent
 // K1 iteration (no rebuild, one co-resident copy).
@@ -4719,16 +4732,19 @@ TEST_CASE("dryrun gated cache footprint-gates the giant", "[dryrun][cache]") {
   task_cfg.max_footprint = 1e11;
   auto task_cache = build_dryrun_cache(nodes, task_cfg, regime);
 
-  // Without any gate the giant is registered/cacheable... The cross-occurrence
-  // batch-variant veto does NOT remove it: this giant carries a free mu~ that
-  // is contracted ABOVE it (never sliced AT the node) and is not
-  // external-seeded in this DF-aux schedule (K is summed, so never a result
-  // mode), so its lifetime mask is empty and the veto is correctly inert. (This
-  // is why the earlier free-batchable MODE veto -- removed -- was a no-op: a
-  // contracted batch mode is summed, never free in a result, so it never
-  // fired.)
-  CHECK(ref_cache.exists(giant_node));
-  // ...only the FOOTPRINT gate caps the >100 GB full giant.
+  // Phase 4b-1: with sliced_modes unified to the all-batched-modes
+  // cross-occurrence meet, this giant's lifetime mask is now NON-empty -- it
+  // carries a free batchable (aux) mode on its own result slots that is batched
+  // above it, so its per-occurrence value differs per batch of that mode. The
+  // cross-occurrence batch-variant veto therefore CORRECTLY removes it from run
+  // scope even with NO footprint gate (the F1 hazard). This is the latent
+  // under-veto the former External-only mask left open: a contracted (aux)
+  // batch mode free on an intermediate's result is genuinely batch-variant, and
+  // the unified meet now expresses it. (Before, the External-only mask saw no
+  // External stamp on this DF-aux schedule, left the mask empty, and the giant
+  // was admitted -- capped only by the footprint gate.)
+  CHECK_FALSE(ref_cache.exists(giant_node));
+  // The FOOTPRINT gate independently caps the >100 GB full giant too.
   CHECK_FALSE(task_cache.exists(giant_node));
 
   // A small non-batchable intermediate stays cached under both.

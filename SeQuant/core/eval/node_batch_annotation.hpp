@@ -22,28 +22,21 @@ namespace sequant {
 ///
 /// One instance per contraction node, in the optimizer's left-first post-order.
 /// Beyond \c axes, this is the annotation bridge to a runtime batched
-/// evaluator that hoists loop-invariant intermediates: \c contracted_modes
-/// (this node's enclosing-contracted residency) and \c order_aware (the gate)
-/// feed per-level placement together with \c EvalExpr::sliced_modes; \c
+/// evaluator that hoists loop-invariant intermediates: \c order_aware (the
+/// gate) feeds per-level placement together with the runtime residency
+/// \c EvalExpr::sliced_modes (the all-batched-modes cross-occurrence meet,
+/// which now carries the enclosing-contracted residency directly); \c
 /// effective_count is the node's effective use count -- how many times its
 /// value is (re)referenced across the enclosing batch loops it does NOT
 /// carry, the product of per-mode batch counts over its escaped-outer set.
 ///
-/// The defaults (\c order_aware == false, \c effective_count == 1,
-/// \c contracted_modes empty) are the order-blind / OFF-path values, so an
-/// unannotated node rides along inert and leaves \c order_aware_recompute ==
-/// false byte-identical.
+/// The defaults (\c order_aware == false, \c effective_count == 1) are the
+/// order-blind / OFF-path values, so an unannotated node rides along inert and
+/// leaves \c order_aware_recompute == false byte-identical.
 struct NodeBatchAnnotation {
   /// Batchable indices sliced AT this node, each tagged with its
   /// \c BatchModeType (see \c EvalExpr::batched_here).
   container::svector<std::pair<Index, BatchModeType>> axes{};
-  /// The enclosing CONTRACTED (aux) batch modes this node carries open on its
-  /// result -- the contracted-residency signal per-level placement unions with
-  /// the external lifetime mask (\c EvalExpr::sliced_modes) to decide hoist
-  /// placement. Emitted only on the order-aware path; empty by default (OFF
-  /// path, byte-identical) and empty for a node invariant to every enclosing
-  /// contracted loop. See \c EvalExpr::contracted_modes.
-  container::svector<Index> contracted_modes{};
   /// Effective use count; see the class doc.
   std::size_t effective_count = 1;
   /// True iff the order-aware cost model emitted this node (set for EVERY node

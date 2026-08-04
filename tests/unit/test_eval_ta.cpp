@@ -2693,11 +2693,11 @@ TEST_CASE("eval_batched_custom_evaluator hoists loop-invariant descendant",
   REQUIRE(i2_axis.has_value());
   REQUIRE(*i2_axis != *root_axis);  // I2 contracts a DIFFERENT aux mode
   // Annotate I2: batched over x_2, order-aware (emitted), and EMPTY residency
-  // (no external sliced_modes, no contracted_modes carried) -- it is invariant
-  // to the whole enclosing nest, so per-level placement hoists it above every
-  // batch loop to the real/term (root) cache and builds it once. This drives
-  // the post-hoist_invariants residency signals (batch_order_aware + the
-  // sliced/contracted union), not a per-node scalar placement level.
+  // (empty sliced_modes) -- it is invariant to the whole enclosing nest, so
+  // per-level placement hoists it above every batch loop to the real/term
+  // (root) cache and builds it once. This drives the post-hoist_invariants
+  // residency signals (batch_order_aware + sliced_modes), not a per-node scalar
+  // placement level.
   (*i2)->set_batched_here({{*i2_axis, sequant::BatchModeType::Contracted}});
   (*i2)->set_batch_order_aware(true);
 
@@ -2739,15 +2739,16 @@ TEST_CASE(
     "eval_batched_custom_evaluator hoists to an intermediate contracted-mode "
     "level",
     "[eval]") {
-  // Task 3 review Finding 2 witness: the two-signal residency union is
-  // sliced_modes() (external) UNION contracted_modes() (enclosing CONTRACTED
-  // modes the node carries open). The pre-existing hoist test only exercises
-  // the EMPTY-union case (whole-nest invariant -> root). This test exercises
-  // the NON-EMPTY case: a node P carries an OUTER contracted mode (x_1) but
-  // not the INNER one (x_2) its containing trigger batches over, so
-  // contracted_modes(P) == {x_1} and its home level is the OUTER (x_1)
-  // scratch, not the term/root cache and not T's own inner (x_2) scratch. P
-  // must therefore be built ONCE PER OUTER (x_1) BLOCK and reused across
+  // Task 3 review Finding 2 witness: the runtime residency is sliced_modes(),
+  // the all-batched-modes cross-occurrence meet -- which carries a node's
+  // enclosing CONTRACTED (aux) modes directly, since a node variant to an outer
+  // aux loop carries that aux free on a result slot. The pre-existing hoist
+  // test only exercises the EMPTY-residency case (whole-nest invariant ->
+  // root). This test exercises the NON-EMPTY case: a node P carries an OUTER
+  // contracted mode (x_1) but not the INNER one (x_2) its containing trigger
+  // batches over, so sliced_modes(P) == {x_1} and its home level is the OUTER
+  // (x_1) scratch, not the term/root cache and not T's own inner (x_2) scratch.
+  // P must therefore be built ONCE PER OUTER (x_1) BLOCK and reused across
   // every inner (x_2) batch within that block: rebuilt when x_1 advances,
   // untouched while only x_2 advances.
   //
@@ -2757,7 +2758,7 @@ TEST_CASE(
   // what deserialize+binarize produce for this expression):
   //   D2 = q{i_1;a_9;x_1} * r{a_9;i_2}         -> {i_1;i_2;x_1}: carries the
   //        OUTER mode x_1, does NOT carry the INNER mode x_2 -- the witness
-  //        node (non-empty contracted_modes = {x_1}).
+  //        node (non-empty sliced_modes = {x_1}).
   //   Q  = D2 * s{;;x_1,x_2}                    -> {i_1;i_2;x_2}: a drop-in
   //        structural replacement for a plain 3-index leaf (same free-index
   //        role as `g` in the "hoists loop-invariant descendant" test), so Q
@@ -2834,15 +2835,16 @@ TEST_CASE(
   REQUIRE(d2.left()->as_tensor().label() == L"q");
   REQUIRE(d2.right()->as_tensor().label() == L"r");
 
-  // Annotate D2: order-aware, with NON-EMPTY contracted_modes = {x_1} (the
-  // signal under test) and no External batched_here stamp (so it is not
-  // demoted). Its union is {x_1} only -- present at T's firing (ectx =
-  // [x_1]) but NOT at root's own (ectx = []) -- so it is correctly skipped
-  // at the outer pre-loop placement call and collected at T's own (inner)
-  // placement call, homed at the OUTER (x_1) scratch level, not the
-  // term/root cache and not T's own (x_2) scratch.
+  // Annotate D2: order-aware, with NON-EMPTY sliced_modes = {x_1} (the signal
+  // under test -- the all-batched-modes meet carries the enclosing aux mode
+  // x_1 that D2 holds free on its result) and no External batched_here stamp
+  // (so it is not demoted). Its residency is {x_1} only -- present at T's
+  // firing (ectx = [x_1]) but NOT at root's own (ectx = []) -- so it is
+  // correctly skipped at the outer pre-loop placement call and collected at
+  // T's own (inner) placement call, homed at the OUTER (x_1) scratch level,
+  // not the term/root cache and not T's own (x_2) scratch.
   d2->set_batch_order_aware(true);
-  d2->set_contracted_modes({*root_axis});
+  d2->set_sliced_modes({*root_axis});
 
   // Reference: plain (unbatched) evaluation; also fills yield_'s leaf cache.
   auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
@@ -2880,8 +2882,8 @@ TEST_CASE(
   // here, since the fetch-time slice-on-use safety net keeps VALUES correct
   // either way -- this is a footprint/avoidable-work gate, not an exactness
   // one, matching the C60 story where a misplaced node is a peak/time bug,
-  // not a wrong-answer bug: with d2->set_contracted_modes({*root_axis})
-  // commented out, D2's union is wrongly empty, it is misclassified as a
+  // not a wrong-answer bug: with d2->set_sliced_modes({*root_axis})
+  // commented out, D2's residency is wrongly empty, it is misclassified as a
   // whole-nest invariant and hoisted to the term/root cache instead --
   // r_evals == 1, i.e. held at the FULL x_1 extent for the entire run
   // instead of resliced per block; with batch_order_aware(true) also removed
@@ -4760,7 +4762,7 @@ TEST_CASE("shape_provider_denest_to_flat", "[shape-provider]") {
 // ---------------------------------------------------------------------------
 namespace {
 
-// Copy the five batch-annotation fields from a plain EvalExpr binarized tree
+// Copy the batch-annotation fields from a plain EvalExpr binarized tree
 // onto the structurally-identical EvalExprTA tree (to_ta_node's tensor-branch
 // reconstructor drops them). Both trees are built by the same binarize/
 // transform_node post-order, so a lockstep walk aligns node-for-node.
@@ -4769,8 +4771,6 @@ void copy_batch_annotations(
     sequant::FullBinaryNode<sequant::EvalExprTA>& to) {
   const_cast<sequant::EvalExprTA&>(*to).set_batched_here(from->batched_here());
   const_cast<sequant::EvalExprTA&>(*to).set_sliced_modes(from->sliced_modes());
-  const_cast<sequant::EvalExprTA&>(*to).set_contracted_modes(
-      from->contracted_modes());
   const_cast<sequant::EvalExprTA&>(*to).set_batch_order_aware(
       from->batch_order_aware());
   const_cast<sequant::EvalExprTA&>(*to).set_batch_effective_count(

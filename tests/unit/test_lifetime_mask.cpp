@@ -381,11 +381,10 @@ TEST_CASE(
   stamp_lifetime_masks(forest);
   stamp_seed_residency(forest);
 
-  // Node-for-node equivalence: with only External stamps present, the
-  // all-batched-modes selector (stamp_seed_residency) and the External-only
-  // selector (stamp_lifetime_masks) walk the identical meet, so
-  // seed_residency() == sliced_modes() everywhere the walk visits, including
-  // descendants not directly listed in `forest`.
+  // Node-for-node equivalence: stamp_seed_residency and stamp_lifetime_masks
+  // now share the identical all-batched-modes selector, so seed_residency() ==
+  // sliced_modes() everywhere the walk visits, including descendants not
+  // directly listed in `forest`.
   auto check_same = [](EvalNode<EvalExpr> const& n) {
     CHECK(as_set(n->seed_residency()) == as_set(n->sliced_modes()));
   };
@@ -405,7 +404,7 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "stamp_seed_residency genuinely drops the External-only filter "
+    "both residency stamps keep Contracted modes (no External-only filter) "
     "(Contracted-mode discriminator)",
     "[lifetime_mask][seed]") {
   Index const i{L"i_1"}, j{L"i_2"};
@@ -442,15 +441,18 @@ TEST_CASE(
   CHECK(as_set(forest[2]->seed_residency()) == index_set({i, j}));
   CHECK(as_set(forest[3]->seed_residency()) == index_set({i, j}));
 
-  // stamp_lifetime_masks (the External-only selector) sees no External
-  // stamps at all here, so it must drop the Contracted mode(s) entirely --
-  // every node meets to all-full under it.
-  CHECK(forest[0]->mask_all_full());
-  CHECK(forest[1]->mask_all_full());
-  CHECK(forest[2]->mask_all_full());
-  CHECK(forest[3]->mask_all_full());
-  CHECK(forest[0]->sliced_modes().empty());
-  CHECK(forest[2]->sliced_modes().empty());
+  // Phase 4b-1: stamp_lifetime_masks now uses the SAME all-batched-modes
+  // selector (the External-only filter is deleted), so it keeps the Contracted
+  // mode(s) too -- sliced_modes() matches seed_residency() node-for-node. This
+  // is the runtime residency place_at_this_level consumes: a Contracted-mode
+  // carrier is now homed by its aux residency directly, with no separate
+  // contracted_modes bolt-on.
+  CHECK(as_set(forest[0]->sliced_modes()) == index_set({i}));
+  CHECK(as_set(forest[1]->sliced_modes()) == index_set({i}));
+  CHECK(as_set(forest[2]->sliced_modes()) == index_set({i, j}));
+  CHECK(as_set(forest[3]->sliced_modes()) == index_set({i, j}));
+  CHECK_FALSE(forest[0]->mask_all_full());
+  CHECK_FALSE(forest[2]->mask_all_full());
 }
 
 TEST_CASE(

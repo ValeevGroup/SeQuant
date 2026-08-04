@@ -130,8 +130,6 @@ void schedule_ir_json_node(Node const& n, std::ostream& os) {
   }
   os << "],\"sliced_modes\":";
   sched_json_index_array(n->sliced_modes(), os);
-  os << ",\"contracted_modes\":";
-  sched_json_index_array(n->contracted_modes(), os);
   // sig = the avoidable-recompute join key (result + sorted operand pair). Only
   // internal (binary contraction) nodes have one; it matches the runtime Build
   // event's sig and cost_profile's per-node label, so the renderer maps this
