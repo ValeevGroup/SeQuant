@@ -57,6 +57,19 @@ void stamp_ext_pair(EvalNode<EvalExpr>& n, Index i, Index j) {
                        {std::move(j), BatchModeType::External}});
 }
 
+// Stamp a single Contracted mode at a node (mirrors stamp_ext, but tagged
+// BatchModeType::Contracted instead of External).
+void stamp_con(EvalNode<EvalExpr>& n, Index ix) {
+  n->set_batched_here({{std::move(ix), BatchModeType::Contracted}});
+}
+
+// Stamp a Contracted occ pair (i,j) at a node (mirrors stamp_ext_pair, but
+// tagged BatchModeType::Contracted instead of External).
+void stamp_con_pair(EvalNode<EvalExpr>& n, Index i, Index j) {
+  n->set_batched_here({{std::move(i), BatchModeType::Contracted},
+                       {std::move(j), BatchModeType::Contracted}});
+}
+
 // Build an EvalExpr from a single-tensor spec (e.g. "R{i_1;a_5}"); its
 // canon_indices are exactly the tensor's bra+ket slots.
 EvalExpr eval_tensor(std::string_view tensor) {
@@ -323,6 +336,55 @@ TEST_CASE(
   CHECK_FALSE(forest[2]->seed_residency().empty());
   CHECK(as_set(forest[2]->seed_residency()) == index_set({i, j}));
   CHECK(as_set(forest[3]->seed_residency()) == index_set({i, j}));
+}
+
+TEST_CASE(
+    "stamp_seed_residency genuinely drops the External-only filter "
+    "(Contracted-mode discriminator)",
+    "[lifetime_mask][seed]") {
+  Index const i{L"i_1"}, j{L"i_2"};
+
+  // node_con: sliced by a Contracted (NOT External) mode i on its own result
+  // slot in EVERY occurrence. If stamp_seed_residency had accidentally kept
+  // the External-only filter, its seed_residency() would be empty here (no
+  // External stamps exist anywhere in this forest) -- so this case fails iff
+  // that filter is present, unlike the all-External forest above where the
+  // two selectors coincide regardless.
+  auto con_A = head("Q1{i_1;a_1} * Q2{a_1;i_3}");
+  auto con_B = head("Q1{i_1;a_1} * Q2{a_1;i_3}");
+  stamp_con(con_A, i);
+  stamp_con(con_B, i);
+
+  // node_con_pair: same discriminator, but a Contracted occ PAIR kept in
+  // every occurrence, exercising the multi-mode meet under the all-modes
+  // selector.
+  auto conpair_A = head("U1{i_1;a_1} * U2{a_1;i_2}");
+  auto conpair_B = head("U1{i_1;a_1} * U2{a_1;i_2}");
+  stamp_con_pair(conpair_A, i, j);
+  stamp_con_pair(conpair_B, i, j);
+
+  std::vector<EvalNode<EvalExpr>> forest{con_A, con_B, conpair_A, conpair_B};
+
+  stamp_lifetime_masks(forest);
+  stamp_seed_residency(forest);
+
+  // stamp_seed_residency (all-batched-modes selector) keeps the Contracted
+  // mode(s): the meet over every occurrence is non-empty and matches the
+  // stamped set.
+  CHECK(as_set(forest[0]->seed_residency()) == index_set({i}));
+  CHECK(as_set(forest[1]->seed_residency()) == index_set({i}));
+  CHECK(as_set(forest[2]->seed_residency()) == index_set({i, j}));
+  CHECK(as_set(forest[3]->seed_residency()) == index_set({i, j}));
+
+  // stamp_lifetime_masks (the External-only selector) sees no External
+  // stamps at all here, so it must drop the Contracted mode(s) entirely --
+  // every node meets to all-full under it.
+  CHECK(forest[0]->mask_all_full());
+  CHECK(forest[1]->mask_all_full());
+  CHECK(forest[2]->mask_all_full());
+  CHECK(forest[3]->mask_all_full());
+  CHECK(forest[0]->sliced_modes().empty());
+  CHECK(forest[2]->sliced_modes().empty());
 }
 
 TEST_CASE(

@@ -62,8 +62,8 @@ container::svector<Index> slot_modes_of(Node const& n) {
 /// is identical between the two entry points; only the selector and the
 /// setter differ.
 template <meta::eval_node_range R, typename ModesOf, typename Setter>
-void stamp_residency_impl(R const& forest, ModesOf&& modes_of,
-                          Setter&& setter) noexcept {
+void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
+                          Setter const& setter) noexcept {
   using Node = std::ranges::range_value_t<R>;
 
   // Running per-canonical intersection, keyed by a live pointer INTO the
