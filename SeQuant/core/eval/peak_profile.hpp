@@ -167,6 +167,30 @@ inline PeakProfile peak_profile_sweep(Schedule const& s) {
 }
 
 ///
+/// \brief Independent REPLAY ORACLE for \c peak_profile_sweep: the peak live
+/// footprint of \p s computed by an explicit per-static-point live-set sum.
+///
+/// \details Deliberately a DIFFERENT algorithm from \c peak_profile_sweep's
+/// +delta/-delta interval-event difference array: for every static point it
+/// re-scans all cells and sums the footprints of those whose inclusive
+/// `[first_use, last_use]` range covers the point, taking the running max.
+/// Because it shares nothing with the sweep's interval bookkeeping, exact
+/// agreement between the two on a given \c Schedule is a real cross-check of
+/// the sweep's interval logic (validation step 9.6). O(points * cells); used
+/// only in tests / analysis, never on the runtime path.
+///
+inline double peak_profile_replay(Schedule const& s) {
+  double peak = 0;
+  for (std::size_t p = 0; p < s.num_points; ++p) {
+    double sum = 0;
+    for (auto const& c : s.cells)
+      if (c.first_use <= p && p <= c.last_use) sum += double(c.footprint);
+    peak = std::max(peak, sum);
+  }
+  return peak;
+}
+
+///
 /// \brief Linearize an eval \p forest into a \c Schedule of value cells over a
 /// single post-order static-point timeline, ready for \c peak_profile_sweep.
 ///
