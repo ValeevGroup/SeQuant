@@ -2,7 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build O2, the whole-forest greedy spill pass, as a STANDALONE static function `O2(forest, threshold) -> placement` that lowers the modeled peak by shrinking demoted giants -- validated on its own against the Phase-3b `PeakProfile`, with ZERO runtime wiring.
+**Naming:** the pass called **O2** here (the parent spec's ordinal) is named **`remat`** (rematerialization -- https://en.wikipedia.org/wiki/Rematerialization) in the code (`placement_remat.hpp`: `remat_cells`, `rematerialize_to_budget`, `RematResult`/`RematStatus`), because it reduces peak by REBUILDING values in smaller/shorter-lived pieces, not by spilling to storage. "O2" and "remat" are used interchangeably below.
+
+**Goal:** Build the remat (spec "O2") pass, the whole-forest greedy placement-relaxation pass, as a STANDALONE static function `rematerialize_to_budget(cells, threshold) -> placement` that lowers the modeled peak by shrinking demoted giants -- validated on its own against the Phase-3b `PeakProfile`, with ZERO runtime wiring.
 
 **Architecture:** O2 consumes the Phase-3b analysis (`peak_profile.hpp`: `home_scope` seed, `cell_footprint`, `peak_profile_sweep`). A cell is one value at a home mode-set. The seed homes each value at its meet `home_scope` (peak-maximal). O2 repeatedly, at the binding peak point, applies the cheapest peak-reducing move -- in this phase, only SHRINK: add a demoted carried batch-mode to a cell's home, block-sizing it at ZERO recompute -- until `peak <= threshold` or no shrink reduces the binding point (infeasible). Un-hoist/split (the evict moves) are DEFERRED (design section 3a: shrink first). Output = the final placement (per-value home mode-set) + its `PeakProfile`. Router-override emission + the runtime cutover are Phase 4b.
 

@@ -8,6 +8,14 @@ Phase 2 (router read+store seam), Phase 3a (`home_scope` seed predictor), Phase 
 O2 greedy + CUTOVER ... lands COUPLED behind a flag": there is NO flag; `peak_threshold`
 is the sole control (see Section 1).
 
+**Naming.** The pass this document calls **O2** (the parent spec's ordinal for the
+whole-forest greedy placement-relaxation pass) is named **`remat`**
+(rematerialization -- https://en.wikipedia.org/wiki/Rematerialization) in the code
+(`SeQuant/core/eval/placement_remat.hpp`), because its mechanism is rematerialization,
+not register-spilling: it reduces peak by REBUILDING values in smaller/shorter-lived
+pieces (trading recompute for peak), never by moving them to slower storage. "O2" and
+"remat" are used interchangeably below; O2 is the spec ordinal, `remat` the code name.
+
 ## 1. End-state model: threshold-driven O2, no flag
 
 After Phase 4 the runtime has ONE placement model:
