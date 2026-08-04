@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
+#include <SeQuant/core/eval/lifetime_mask.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
@@ -23,9 +24,13 @@ namespace sequant::eval {
 /// itself. An expanded mode is included in the result iff it also appears
 /// among \p node's own canonical slots (\c node->canon_indices()),
 /// proto-expanded the same way on the slot side -- i.e. iff the mode actually
-/// lives on \p node's result. This mirrors \c slot_modes_of /
-/// \c ext_modes_of in \c lifetime_mask.hpp exactly (same proto-expansion on
-/// both the ambient-mode side and the node-slot side).
+/// lives on \p node's result. This filters ALL in-scope batched modes (any
+/// \c BatchModeType the caller's \p ctx_modes happens to carry -- the
+/// function never inspects the kind) to \p node's own slots, matching the
+/// unified all-batched-modes selector (\c stamp_seed_residency) / \c
+/// slot_modes_of in \c lifetime_mask.hpp -- NOT the External-only \c
+/// ext_modes_of. It reuses that file's \c detail::proto_expand_into (ambient
+/// side) and \c detail::slot_modes_of (slot side).
 ///
 /// Site-invariant: the result is identical whether computed at a read site
 /// (a consumer's \c cache.batch_context()) or a store site (the producer's
@@ -41,23 +46,16 @@ namespace sequant::eval {
 template <meta::eval_node Node>
 TensorNetwork::NamedIndexSet in_scope_batched_on_node(
     Node const& node, container::svector<Index> const& ctx_modes) {
-  // proto-expand the ambient batch-loop modes
+  // proto-expand the ambient batch-loop modes. Fully qualified: this file's
+  // enclosing namespace is sequant::eval, which (via schedule_dump.hpp, in
+  // some inclusion orders) can ALSO have its own sequant::eval::detail --
+  // an unqualified `detail::` here would silently resolve to the wrong one.
   container::svector<Index> ctx_expanded;
-  for (auto const& m : ctx_modes) {
-    if (m.has_proto_indices())
-      for (auto const& p : m.proto_indices()) ctx_expanded.push_back(p);
-    else
-      ctx_expanded.push_back(m);
-  }
+  for (auto const& m : ctx_modes)
+    sequant::detail::proto_expand_into(ctx_expanded, m);
 
   // proto-expand node's own canonical slots
-  container::svector<Index> slots;
-  for (auto const& s : node->canon_indices()) {
-    if (s.has_proto_indices())
-      for (auto const& p : s.proto_indices()) slots.push_back(p);
-    else
-      slots.push_back(s);
-  }
+  auto const slots = sequant::detail::slot_modes_of(node);
 
   TensorNetwork::NamedIndexSet named;
   for (auto const& ix : ctx_expanded)

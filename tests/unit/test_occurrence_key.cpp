@@ -13,6 +13,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/backends/dryrun/eval_expr.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
+#include <SeQuant/core/eval/fwd.hpp>
 #include <SeQuant/core/eval/occurrence_key.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
@@ -26,6 +27,7 @@
 namespace {
 
 using sequant::aux;
+using sequant::BatchModeType;
 using sequant::bra;
 using sequant::ColumnSymmetry;
 using sequant::ex;
@@ -34,6 +36,7 @@ using sequant::Index;
 using sequant::ket;
 using sequant::Symmetry;
 using sequant::Tensor;
+using sequant::eval::in_scope_batched_on_node;
 using sequant::eval::occurrence_key;
 using sequant::eval::RouterKeyEqual;
 using sequant::eval::RouterKeyHash;
@@ -157,4 +160,34 @@ TEST_CASE("occurrence_key: read-site and store-site keys agree",
 
   CHECK(RouterKeyEqual{}(k_store, k_read));
   CHECK(RouterKeyHash{}(k_store) == RouterKeyHash{}(k_read));
+}
+
+TEST_CASE(
+    "in_scope_batched_on_node is kind-agnostic: a Contracted-origin mode on "
+    "the node's own slot is in scope",
+    "[occurrence_key]") {
+  // in_scope_batched_on_node never inspects BatchModeType -- it filters
+  // whatever Index list the caller passes as ctx_modes to the subset that
+  // lives on node's own slots. This pins that a Contracted-tagged mode (not
+  // just an External one) passes through when it sits on the node's own
+  // slot, locking the reconciled kind-agnostic semantics documented in the
+  // (fixed) header comment: this filters ALL in-scope batched modes to a
+  // node's own slots, matching the unified all_batched_modes_of selector /
+  // slot_modes_of in lifetime_mask.hpp -- not the External-only ext_modes_of.
+  Index i1{L"i_1"}, i2{L"i_2"};
+  auto t = ex<Tensor>(L"A", bra(container::svector<Index>{i1, i2}), ket{},
+                      Symmetry::Nonsymm, std::nullopt, ColumnSymmetry::Nonsymm);
+
+  auto n = leaf_node(t);
+  // Stamp a Contracted (not External) mode on i1, which sits on n's own slot.
+  n->set_batched_here(container::svector<std::pair<Index, BatchModeType>>{
+      {i1, BatchModeType::Contracted}});
+
+  // Build ctx_modes the way an all-batched-modes caller would (any
+  // BatchModeType, mirroring stamp_seed_residency's selector).
+  container::svector<Index> ctx;
+  for (auto const& [ix, kind] : n->batched_here()) ctx.push_back(ix);
+
+  auto named = in_scope_batched_on_node(n, ctx);
+  CHECK(named.find(i1) != named.end());
 }

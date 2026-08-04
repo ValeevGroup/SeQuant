@@ -193,6 +193,16 @@ void stamp_seed_residency(R const& forest) noexcept {
       });
 }
 
+/// \brief The perfect-CSE seed home residency of \p n: the unified
+/// all-batched-modes meet on its own result slots (see \c
+/// stamp_seed_residency). Phase 3a returns the residency mode-set; runtime
+/// depth resolution against a batch context is the existing rl-walk, reused
+/// by 3b/O2.
+template <meta::eval_node Node>
+container::svector<Index> const& home_scope(Node const& n) noexcept {
+  return n->seed_residency();
+}
+
 }  // namespace sequant
 
 #endif  // SEQUANT_EVAL_LIFETIME_MASK_HPP

@@ -20,6 +20,7 @@ using sequant::BatchModeType;
 using sequant::EvalExpr;
 using sequant::EvalNode;
 using sequant::ExprPtr;
+using sequant::home_scope;
 using sequant::Index;
 using sequant::stamp_lifetime_masks;
 using sequant::stamp_seed_residency;
@@ -408,4 +409,27 @@ TEST_CASE(
   // The builder's internal stamp leaves the OFF-path mask all-full, so the
   // veto admits exactly what it did before this change (byte-identical).
   CHECK(forest[0]->mask_all_full());
+}
+
+TEST_CASE("home_scope is an identity accessor over seed_residency",
+          "[lifetime_mask][seed]") {
+  // home_scope is a thin accessor: after stamp_seed_residency, home_scope(n)
+  // must return exactly n->seed_residency() for every stamped node -- this
+  // pins that identity so a future change to the accessor (or to what it
+  // forwards to) is caught here first.
+  Index const i{L"i_1"}, j{L"i_2"};
+
+  auto pair_A = head("P1{i_1;a_1} * P2{a_1;i_2}");
+  auto pair_B = head("P1{i_1;a_1} * P2{a_1;i_2}");
+  stamp_con_pair(pair_A, i, j);
+  stamp_con_pair(pair_B, i, j);
+
+  std::vector<EvalNode<EvalExpr>> forest{pair_A, pair_B};
+  stamp_seed_residency(forest);
+
+  CHECK_FALSE(home_scope(forest[0]).empty());
+  for (auto const& n : forest) {
+    CHECK(as_set(home_scope(n)) == as_set(n->seed_residency()));
+  }
+  CHECK(as_set(home_scope(forest[0])) == index_set({i, j}));
 }
