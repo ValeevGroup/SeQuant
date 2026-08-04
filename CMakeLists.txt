@@ -367,6 +367,7 @@ set(SeQuant_symb_src
         SeQuant/core/tensor_network/v2.hpp
         SeQuant/core/tensor_network/v3.cpp
         SeQuant/core/tensor_network/v3.hpp
+        SeQuant/core/utility/aggregate.hpp
         SeQuant/core/utility/atomic.hpp
         SeQuant/core/utility/context.hpp
         SeQuant/core/utility/debug.hpp

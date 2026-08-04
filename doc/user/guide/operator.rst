@@ -107,6 +107,62 @@ Custom operators can be registered to extend SeQuant's vocabulary. Once register
 
 The registry is stored in the :class:`mbpt::Context <sequant::mbpt::Context>`. See the unit test cases for further manipulations with :class:`mbpt::Context <sequant::mbpt::Context>` and :class:`mbpt::OpRegistry <sequant::mbpt::OpRegistry>`.
 
+.. _mbpt-lst:
+
+Lie Similarity Transformation
+-----------------------------
+
+.. code-block:: cpp
+
+   ExprPtr lst(ExprPtr A, ExprPtr B, size_t r, LSTOptions options = {});
+
+Returns Lie similarity transformation, :math:`\bar{A} = e^{-\hat{B}} \hat{A} e^{\hat{B}}`, as a series of nested commutators, :math:`[\hat{A},\hat{B}]`, :math:`[[\hat{A},\hat{B}],\hat{B}]`, etc., up to order ``r``.
+
+The method ``lst`` is declared in ``<SeQuant/domain/mbpt/utils.hpp>``. The :class:`CC <sequant::mbpt::CC>` class uses it to construct the similarity-transformed Hamiltonian, but it is a standalone utility and can be used on any expression built from ``mbpt::Operator``.
+
+The behavior of ``lst`` is controlled by :class:`LSTOptions <sequant::mbpt::LSTOptions>`:
+
+.. code-block:: cpp
+
+   struct LSTOptions {
+     SEQUANT_DESIGNATED_INIT_ONLY;  // see below
+     bool unitary = false;
+     bool use_connected_form = false;
+     bool skip_clone = false;
+   };
+
+``LSTOptions`` must be written with C++20 designated initializers --
+``LSTOptions{.unitary = true}``, or ``{}`` for all defaults. Positional
+initialization, ``LSTOptions{true, false}``, is rejected at compile time by the
+``SEQUANT_DESIGNATED_INIT_ONLY`` member. This is deliberate: fields have been
+reordered and repurposed before (``use_connected_form`` took the position of
+the older ``use_commutators`` and inverted its meaning), and a positional call
+site would have kept compiling with its meaning silently changed. Naming the
+fields makes any such change a compile error instead.
+
+- ``unitary``: if true, :math:`\hat{B}` is replaced by :math:`\hat{B} - \hat{B}^\dagger`, i.e. the method returns :math:`e^{-(\hat{B} - \hat{B}^\dagger)} \hat{A} e^{\hat{B} - \hat{B}^\dagger}`. Use this for unitary ansätze.
+
+- ``use_connected_form``: selects how each commutator is written, see below.
+
+- ``skip_clone``: if true, ``A`` is transformed in place instead of being cloned first. Set it only if nothing else holds a reference to ``A``.
+
+Commutators or connected products
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Each commutator can be written in two ways, and ``use_connected_form`` selects between them:
+
+- ``false`` (the default) writes it explicitly, :math:`[\hat{A},\hat{B}] = \hat{A}\hat{B} - \hat{B}\hat{A}`.
+
+- ``true`` writes it as a connected product, :math:`(\hat{A}\hat{B})_c`. This gives fewer terms, but only reproduces the commutator once the same operators are connected downstream when taking the expectation value, using ``OpConnections``.
+
+Both forms give the same equations, given the right connectivity. They differ in *where* the disconnected terms are removed: the commutator removes them algebraically, the connected product relies on the connectivity you supply to ``vac_av``/``ref_av``.
+
+Mind which overload you reach: the operator-level ``op::vac_av``/``op::ref_av`` default to ``default_op_connections()``, which connects the Hamiltonian (``h``, ``f``, ``f̃``, ``g``) with the cluster operator ``t``. Their tensor-level counterparts, ``op::tensor::vac_av``/``op::tensor::ref_av``, default to *empty* connections. Pairing ``use_connected_form = true`` with empty connectivity silently keeps the disconnected terms the commutator would have cancelled, so the result is wrong rather than merely more verbose.
+
+Mind also that omitting the options argument is not the same as passing ``{}``: ``default_op_connections()`` is the default of the *parameter*, whereas ``EVOptions::connect`` is itself empty by default, so ``op::ref_av(expr)`` connects the operators and ``op::ref_av(expr, {})`` does not.
+
+The same trade-off shows up in :func:`CC::hbar() <sequant::mbpt::CC::hbar>`, which returns the connected form for a non-unitary ansatz; see :ref:`cc-hbar-connectivity`.
+
 Examples
 --------
 

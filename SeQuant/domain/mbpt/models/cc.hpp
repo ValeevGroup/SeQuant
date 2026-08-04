@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
+#include <SeQuant/domain/mbpt/utils.hpp>
 #include <SeQuant/domain/mbpt/vac_av.hpp>
 
 #include <cstddef>
@@ -90,6 +91,22 @@ class CC {
   /// the expansion; if not specified, will use the value of member
   /// `hbar_comm_rank`. If that is also not specified, will use 4 as the default
   /// value. If provided, will override all defaults.
+  /// @note For a non-unitary ansatz each commutator is represented as a
+  /// connected product, \f$ (\hat{A}\hat{B})_c \f$, equivalent to \f$
+  /// [\hat{A},\hat{B}] \f$ only once operator connectivity is supplied
+  /// downstream; this engine always supplies it, by handing `ref_av`
+  /// `default_op_connections()` or a superset thereof. A unitary ansatz uses
+  /// explicit commutators instead, and is handed empty connectivity.
+  /// @warning Because of the above, the expression returned for a non-unitary
+  /// ansatz is NOT self-contained: evaluating it with empty connectivity, e.g.
+  /// `op::ref_av(P(nₚ(2)) * cc.hbar(), {.connect = {}})`, silently retains the
+  /// disconnected terms that the commutator would have cancelled. Pass
+  /// `default_op_connections()` (which `op::ref_av`/`op::vac_av` use when the
+  /// options argument is omitted -- note that passing `{}` instead gives empty
+  /// connections), or build H̄ yourself with `mbpt::lst(..., {})` if you need
+  /// the explicit form. For a unitary ansatz the reverse holds: H̄ is already
+  /// self-contained, so connectivity must be left empty. See the "Using H̄
+  /// outside the CC class" section of the user guide.
   [[nodiscard]] ExprPtr hbar(
       std::optional<size_t> truncation_rank = std::nullopt) const;
 
@@ -172,6 +189,18 @@ class CC {
   bool use_topology_ = true;
   std::optional<size_t> hbar_comm_rank_ = std::nullopt;
   std::optional<size_t> pertbar_comm_rank_ = std::nullopt;
+
+  /// @return the `LSTOptions` this engine uses for every `mbpt::lst()` call
+  /// @note The choice of commutator representation is really a question of
+  /// whether the caller supplies operator connectivity downstream; for this
+  /// engine the two coincide. Every non-unitary path hands `ref_av` a
+  /// connectivity map (`default_op_connections()`, or the λ⁺/perturbed
+  /// supersets thereof), which is what makes the cheaper connected-product
+  /// form equivalent to the explicit commutator. The unitary paths hand
+  /// `ref_av` empty connectivity and so must use explicit commutators.
+  [[nodiscard]] LSTOptions lst_options() const {
+    return {.unitary = unitary(), .use_connected_form = !unitary()};
+  }
 
   /// @brief computes reference expectation value of an expression. Dispatches
   /// to `mbpt::op::ref_av()`

@@ -571,7 +571,8 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE(to_latex(vev2_op) == to_latex(vev2_t));
 
       // Test screen_vac_av
-      auto hbar = mbpt::lst(H(), t(2), 4);  // CCD Hbar
+      // CCD Hbar in connected-product form
+      auto hbar = mbpt::lst(H(), t(2), 4, {.use_connected_form = true});
       auto screened_hbar = screen_vac_av(hbar);
       auto expected = h(2) * t(2);
       REQUIRE(simplify(screened_hbar - expected) == ex<Constant>(0));
@@ -599,7 +600,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
       // non-unitary, rank 3
       auto expr1 =
-          lst(H(), t(2), 3, {.unitary = false, .use_commutators = false});
+          lst(H(), t(2), 3, {.unitary = false, .use_connected_form = true});
       auto expected1 =
           H() *
           (ex<Constant>(1) + t(2) + ex<Constant>(rational{1, 2}) * t(2) * t(2) +
@@ -607,7 +608,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE(simplify(expr1 - expected1) == ex<Constant>(0));
 
       auto expr2 =
-          lst(H(), t(2), 3, {.unitary = false, .use_commutators = true});
+          lst(H(), t(2), 3, {.unitary = false, .use_connected_form = false});
       auto expected2 =
           H() + commutator(H(), t(2)) +
           ex<Constant>(rational{1, 2}) *
@@ -616,10 +617,15 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
               commutator(commutator(commutator(H(), t(2)), t(2)), t(2));
       REQUIRE(simplify(expr2 - expected2) == ex<Constant>(0));
 
+      // the default LSTOptions must produce the explicit commutator form, i.e.
+      // lst() must never assume the caller supplies operator connectivity
+      REQUIRE(simplify(lst(H(), t(2), 3) - expected2) == ex<Constant>(0));
+      REQUIRE(simplify(lst(H(), t(2), 3, {}) - expected2) == ex<Constant>(0));
+
       // unitary, rank 2
       using sequant::adjoint;
       auto expr3 =
-          lst(H(), t(2), 2, {.unitary = true, .use_commutators = false});
+          lst(H(), t(2), 2, {.unitary = true, .use_connected_form = true});
       auto expected3 =
           H() + H() * t(2) + adjoint(t(2)) * H() + adjoint(t(2)) * H() * t(2) +
           H() * ex<Constant>(rational{1, 2}) * t(2) * t(2) +
@@ -627,13 +633,18 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE(simplify(expr3 - expected3) == ex<Constant>(0));
 
       auto expr4 =
-          lst(H(), t(2), 2, {.unitary = true, .use_commutators = true});
+          lst(H(), t(2), 2, {.unitary = true, .use_connected_form = false});
       auto generator = commutator(H(), t(2)) - commutator(H(), adjoint(t(2)));
       auto expected4 =
           H() + generator +
           ex<Constant>(rational{1, 2}) * (commutator(generator, t(2)) -
                                           commutator(generator, adjoint(t(2))));
       REQUIRE(simplify(expr4 - expected4) == ex<Constant>(0));
+
+      // `unitary` must no longer select the commutator representation: it only
+      // swaps B for B - B^+, leaving use_connected_form at its default
+      REQUIRE(simplify(lst(H(), t(2), 2, {.unitary = true}) - expected4) ==
+              ex<Constant>(0));
     }  // SECTION("lst")
 
     SECTION("predefined") {
@@ -1240,10 +1251,11 @@ SECTION("manuscript-examples") {
   /// When order > 0, returns sim. transformed perturbation operator or given
   /// order.
   auto H̅ = [](size_t order = 0) {
-    auto hbar0 = lst(op::H(), T(2), 4);
+    auto hbar0 = lst(op::H(), T(2), 4, {.use_connected_form = true});
     if (order == 0) return hbar0;
     // only one-body perturbation operator
-    auto hbar_pt = lst(op::Hʼ(/*rank*/ 1, {.order = order}), T(2), 2);
+    auto hbar_pt = lst(op::Hʼ(/*rank*/ 1, {.order = order}), T(2), 2,
+                       {.use_connected_form = true});
     return hbar_pt;
   };
 
@@ -1272,7 +1284,7 @@ SECTION("manuscript-examples") {
   SECTION("CC LR Function") {
     const int N = 2;  // CC rank
 
-    auto θ̅ = lst(θ(1), T(N), 2);
+    auto θ̅ = lst(θ(1), T(N), 2, {.use_connected_form = true});
     auto expr = (1 + Λ(N)) * θ̅ * Tʼ(N) + Λʼ(N) * θ̅;
     auto result = ref_av(expr, {.connect = {{L"θ", L"t"}, {L"θ", L"t¹"}}});
     // number of terms is verified against MPQC4 implementation

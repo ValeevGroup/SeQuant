@@ -44,18 +44,7 @@ The :class:`CC <sequant::mbpt::CC>` class supports several CC ansätze through t
 - ``Ansatz::oU``: Orbital-optimized unitary ansatz, combines both unitary and orbital optimized ansätze.
 
 Key Methods
-----------
-
-Lie Similarity Transformation
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. code-block:: cpp
-
-   ExprPtr lst(ExprPtr A, ExprPtr B, size_t r);
-
-Returns Lie similarity transformation, :math:`\bar{A} = e^{-\hat{B}} \hat{A} e^{\hat{B}}`, as a series of nested commutators, :math:`[\hat{A},\hat{B}]`, :math:`[[\hat{A},\hat{B}],\hat{B}]`, etc., up to order ``r``.
-
-The method ``lst`` is used internally by the CC class to construct the similarity-transformed Hamiltonian. It is, however, provided as a standalone utility and can be used independently by including the header ``<SeQuant/domain/mbpt/utils.hpp>``.
+-----------
 
 Ground State Amplitudes
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -135,18 +124,52 @@ Response and Perturbation Equations
    :dedent: 2
 
 Advanced Usage
--------------
+--------------
 
 Truncating the Commutator Expansion
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-For traditional CC with two-body Hamiltonians, the commutator expansion is truncated at the a 4th-order. However, for unitary CC or other Hamiltonians, you may need to explicitly set the commutator rank:
+The similarity-transformed Hamiltonian is built by ``mbpt::lst``, see :ref:`mbpt-lst`. For traditional CC with two-body Hamiltonians, the commutator expansion is truncated at 4th order. However, for unitary CC or other Hamiltonians, you may need to explicitly set the commutator rank:
 
 .. literalinclude:: /examples/user/cc.cpp
    :language: cpp
    :start-after: start-snippet-4
    :end-before: end-snippet-4
    :dedent: 2
+
+.. _cc-hbar-connectivity:
+
+Using :math:`\bar{H}` outside the CC class
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+:func:`CC::hbar() <sequant::mbpt::CC::hbar>` is public, but for a non-unitary ansatz the expression it returns is **not** self-contained: each commutator is written as a connected product (see :ref:`mbpt-lst`), which only equals the commutator once you connect the operators when taking the expectation value. The class always does this for you — every non-unitary path passes ``default_op_connections()`` (or a superset) to ``ref_av``. A caller who does not will silently retain the disconnected terms:
+
+.. code-block:: cpp
+
+   using namespace sequant::mbpt;
+
+   CC cc{2};
+
+   // correct: op::ref_av defaults to default_op_connections()
+   auto eqs = op::ref_av(op::P(nₚ(2)) * cc.hbar());
+
+   // WRONG: empty connectivity keeps terms the commutator would have cancelled
+   auto bad = op::ref_av(op::P(nₚ(2)) * cc.hbar(), {.connect = {}});
+
+   // also correct: ask lst for the explicit commutator form, which needs
+   // no connectivity
+   auto hbar = lst(op::H(), op::T(2), 4);
+
+Note that ``op::ref_av(expr)`` and ``op::ref_av(expr, {})`` are *not* the same call: the connectivity defaults to ``default_op_connections()`` only when the argument is omitted entirely, since ``EVOptions::connect`` is itself empty by default.
+
+The two ``ref_av`` calls above swap roles for a unitary ansatz, so it is not simply "unaffected". There :func:`CC::hbar() <sequant::mbpt::CC::hbar>` already returns explicit commutators, and imposing connectivity on top of them would drop terms that must survive; a caller must therefore pass empty connections explicitly, as the class does internally:
+
+.. code-block:: cpp
+
+   CC ucc{2, {.ansatz = CC::Ansatz::U, .hbar_comm_rank = 3}};
+
+   // correct for a unitary ansatz: hbar is already self-contained
+   auto ueqs = op::ref_av(op::P(nₚ(2)) * ucc.hbar(), {.connect = {}});
 
 .. _cc-spin-tracing:
 
