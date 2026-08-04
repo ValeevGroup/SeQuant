@@ -18,6 +18,11 @@ class designated_init_only {
  public:
   constexpr designated_init_only(const designated_init_only&) noexcept =
       default;
+  /// declaring the copy constructor deprecates the *implicit* copy assignment
+  /// (-Wdeprecated-copy, an error under this project's -Werror), so declare it
+  /// too -- a guarded aggregate must stay copy-assignable
+  constexpr designated_init_only& operator=(
+      const designated_init_only&) noexcept = default;
   static constexpr designated_init_only make() noexcept { return {}; }
 
  private:
@@ -71,6 +76,13 @@ static_assert(std::is_aggregate_v<designated_init_only_probe>);
 static_assert(std::is_trivially_copyable_v<designated_init_only_probe>);
 static_assert(sizeof(designated_init_only_probe) == 2 * sizeof(bool),
               "[[no_unique_address]] must elide the tag member");
+/// odr-uses the copy assignment, which is what diagnoses -Wdeprecated-copy;
+/// a trait check alone would not, since it never defines the operator
+static_assert([] {
+  designated_init_only_probe p{};
+  p = designated_init_only_probe{.a = true};
+  return p.a;
+}());
 
 }  // namespace sequant::detail
 
