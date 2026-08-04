@@ -8,6 +8,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/runtime.hpp>
+#include <SeQuant/core/utility/aggregate.hpp>
 
 #include <SeQuant/domain/mbpt/op.hpp>
 
@@ -15,6 +16,11 @@ namespace sequant::mbpt {
 
 /// Options for Lie Similarity Transformation. @see lst
 struct LSTOptions {
+  /// Present only to force designated initialization, e.g.
+  /// `LSTOptions{.unitary = true}` rather than `LSTOptions{true, false}`.
+  /// Renaming/reordering the fields below would otherwise silently reinterpret
+  /// any positional-init caller instead of failing to compile.
+  [[no_unique_address]] sequant::detail::designated_only designated_only_ = {};
   /// If true, uses unitary generator
   bool unitary = false;
   /// If true, uses connected products [A,B] = (AB)_c; otherwise uses explicit
