@@ -50,8 +50,10 @@ void Executor::execute(const nlohmann::json &steps) {
                       "' requires options but none where given");
     }
 
-    std::string step_id = step.contains("id") ? step.at("id").get<std::string>()
-                                              : std::to_string(step_id_counter);
+    std::string step_id = step.contains("id")
+                              ? step.at("id").get<std::string>()
+                              : "step" + std::to_string(step_id_counter) + "." +
+                                    proc_step->kind();
 
     const std::size_t produced_outputs =
         proc_step->run(step_id, context_, inputs);
