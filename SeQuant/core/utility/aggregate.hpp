@@ -74,8 +74,15 @@ struct designated_init_only_probe {
 };
 static_assert(std::is_aggregate_v<designated_init_only_probe>);
 static_assert(std::is_trivially_copyable_v<designated_init_only_probe>);
+// [[no_unique_address]] elision is permitted, not required, and MSVC ignores
+// the standard spelling outright (it has [[msvc::no_unique_address]], since
+// honoring this one would change its ABI). A toolchain that does not elide
+// still gets a working guard -- the tag merely costs a byte -- so check the
+// size only where elision is guaranteed rather than failing the build over it.
+#if !defined(_MSC_VER) || defined(__clang__)
 static_assert(sizeof(designated_init_only_probe) == 2 * sizeof(bool),
               "[[no_unique_address]] must elide the tag member");
+#endif
 /// odr-uses the copy assignment, which is what diagnoses -Wdeprecated-copy;
 /// a trait check alone would not, since it never defines the operator
 static_assert([] {

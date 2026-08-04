@@ -125,10 +125,20 @@ The behavior of ``lst`` is controlled by :class:`LSTOptions <sequant::mbpt::LSTO
 .. code-block:: cpp
 
    struct LSTOptions {
+     SEQUANT_DESIGNATED_INIT_ONLY;  // see below
      bool unitary = false;
      bool use_connected_form = false;
      bool skip_clone = false;
    };
+
+``LSTOptions`` must be written with C++20 designated initializers --
+``LSTOptions{.unitary = true}``, or ``{}`` for all defaults. Positional
+initialization, ``LSTOptions{true, false}``, is rejected at compile time by the
+``SEQUANT_DESIGNATED_INIT_ONLY`` member. This is deliberate: fields have been
+reordered and repurposed before (``use_connected_form`` took the position of
+the older ``use_commutators`` and inverted its meaning), and a positional call
+site would have kept compiling with its meaning silently changed. Naming the
+fields makes any such change a compile error instead.
 
 - ``unitary``: if true, :math:`\hat{B}` is replaced by :math:`\hat{B} - \hat{B}^\dagger`, i.e. the method returns :math:`e^{-(\hat{B} - \hat{B}^\dagger)} \hat{A} e^{\hat{B} - \hat{B}^\dagger}`. Use this for unitary ansätze.
 
