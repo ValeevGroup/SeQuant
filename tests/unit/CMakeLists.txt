@@ -163,7 +163,7 @@ set(eval_dryrun_test_sources
     "test_eval_dryrun.cpp"
     "test_occurrence_key.cpp"
     "test_peak_profile.cpp"
-    "test_placement_o2.cpp"
+    "test_placement_remat.cpp"
     "test_placement_router.cpp"
 )
 add_library(unit_tests-sequant-eval-dryrun-obj OBJECT ${eval_dryrun_test_sources})

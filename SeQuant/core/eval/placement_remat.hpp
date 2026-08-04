@@ -1,0 +1,228 @@
+#ifndef SEQUANT_EVAL_PLACEMENT_REMAT_HPP
+#define SEQUANT_EVAL_PLACEMENT_REMAT_HPP
+
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
+#include <SeQuant/core/eval/eval_expr.hpp>
+#include <SeQuant/core/eval/peak_profile.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/utility/macros.hpp>
+
+#include <algorithm>
+#include <cstddef>
+#include <optional>
+#include <utility>
+
+namespace sequant::eval {
+
+///
+/// \brief The rematerialization placement pass (spec item "O2" of design doc
+/// `doc/dev/specs/2026-08-04-phase4-threshold-o2-cutover-design.md`): a
+/// whole-forest greedy pass that relaxes the peak-maximal perfect-CSE seed to
+/// fit a peak budget by REMATERIALIZING values -- rebuilding them in smaller
+/// (sliced) or shorter-lived pieces rather than holding them full -- trading
+/// recompute for peak. In register-allocation terms it is rematerialization
+/// (https://en.wikipedia.org/wiki/Rematerialization), not spilling: no value is
+/// moved to slower storage; pressure drops because a value is recomputed nearer
+/// its use. STANDALONE in Phase 4a (zero production
+/// callers). It works on the rich per-value \c ValueCell (from \c
+/// linearize_rich); \c home_modes is the field a remat move mutates (a SHRINK
+/// adds a demoted carried batch mode, block-sizing it -- the zero-cost remat
+/// case). This header lands the flat input/projection (\c RematInput, \c
+/// to_schedule), the candidate query (\c shrink_candidates), the SHRINK move,
+/// and the greedy loop (\c rematerialize_to_budget).
+///
+
+///
+/// \brief The flat input to the remat pass: every \c ValueCell of a linearized
+/// forest, plus the timeline length needed to re-sweep it.
+///
+struct RematInput {
+  container::svector<ValueCell> cells;
+  std::size_t num_points = 0;
+};
+
+///
+/// \brief Seed the remat pass's working cells from an eval \p forest: the
+/// \c ValueCell records of \c linearize_rich, plus \c num_points.
+///
+/// \p block_of is any `Index -> std::size_t` callable giving the block
+/// (sliced) element count for a mode; forwarded to \c linearize_rich.
+///
+template <meta::eval_node_range R>
+RematInput remat_cells(R const& forest, dryrun::CostModel const& cm,
+                       auto const& block_of) {
+  RichSchedule rich = linearize_rich(forest, cm, block_of);
+  RematInput out;
+  out.cells.assign(std::make_move_iterator(rich.cells.begin()),
+                   std::make_move_iterator(rich.cells.end()));
+  out.num_points = rich.num_points;
+  return out;
+}
+
+///
+/// \brief Project the remat pass's working \p cells back to a flat \c Schedule,
+/// ready for \c peak_profile_sweep.
+///
+/// \details Per cell: `Cell{value_id, home_depth, cell_footprint(carried,
+/// home_modes, cm, block_of), first_use, last_use}` -- the same projection
+/// \c linearize applies to a \c RichSchedule, just over the remat pass's
+/// (possibly SHRINK-mutated) \c home_modes instead of the as-seeded ones.
+///
+/// \p block_of is any `Index -> std::size_t` callable giving the block
+/// (sliced) element count for a mode; forwarded to \c detail::cell_footprint.
+///
+inline Schedule to_schedule(container::svector<ValueCell> const& cells,
+                            dryrun::CostModel const& cm, auto const& block_of,
+                            std::size_t num_points) {
+  Schedule out;
+  out.num_points = num_points;
+  out.cells.reserve(cells.size());
+  for (auto const& c : cells) {
+    Cell fc;
+    fc.value_id = c.value_id;
+    fc.home_depth = c.home_depth;
+    fc.footprint =
+        detail::cell_footprint(c.carried, c.home_modes, cm, block_of);
+    fc.first_use = c.first_use;
+    fc.last_use = c.last_use;
+    out.cells.push_back(fc);
+  }
+  return out;
+}
+
+///
+/// \brief The demoted carried batch modes of \p c: modes that EVER enclose
+/// \p c (\c enclosing_modes), are among \p c's own carried indices (\c
+/// carried), but are NOT (yet) part of its home (\c home_modes).
+///
+/// \details `(enclosing_modes INTERSECT carried) MINUS home_modes`. Each
+/// returned mode is a SHRINK candidate: adding it to \c c.home_modes (T2)
+/// block-sizes it in \c c's footprint instead of leaving it FULL.
+///
+inline container::svector<Index> shrink_candidates(ValueCell const& c) {
+  container::svector<Index> out;
+  for (auto const& m : c.enclosing_modes) {
+    bool const in_carried =
+        std::find(c.carried.begin(), c.carried.end(), m) != c.carried.end();
+    bool const in_home = std::find(c.home_modes.begin(), c.home_modes.end(),
+                                   m) != c.home_modes.end();
+    if (in_carried && !in_home) out.push_back(m);
+  }
+  return out;
+}
+
+///
+/// \brief Apply a SHRINK move to \p c: add candidate mode \p m to its home,
+/// so \c to_schedule then BLOCK-sizes \p m instead of leaving it FULL.
+///
+/// \details The demoted-giant lever (design section 3a): a cell homed ABOVE a
+/// batch loop it carries holds that mode full; adding the mode to \c home_modes
+/// re-homes the cell INSIDE the loop, dropping its footprint by the block
+/// factor at ZERO recompute (result-mode slicing is free per the \c W model).
+/// The liveness interval is unchanged. \p m MUST be a current shrink candidate
+/// of \p c (asserted).
+///
+inline void apply_shrink(ValueCell& c, Index const& m) {
+  auto const cands = shrink_candidates(c);
+  SEQUANT_ASSERT(std::find(cands.begin(), cands.end(), m) != cands.end());
+  c.home_modes.push_back(m);
+}
+
+///
+/// \brief Why \c rematerialize_to_budget stopped.
+///
+/// \details \c Feasible: `peak <= threshold`. The two infeasibilities (design
+/// section 4) are NOT repairable within the remat pass and feed Phase 5: \c
+/// RebatchNeeded (every cell live at the binding point has no shrink candidate
+/// -- a giant needing a batch loop the per-term factorizer never added) and \c
+/// FactorizationInherent (a live cell had a candidate, but no single shrink
+/// reduced the binding peak -- the factorization itself must change).
+///
+enum class RematStatus { Feasible, FactorizationInherent, RebatchNeeded };
+
+///
+/// \brief The result of \c rematerialize_to_budget: the final (possibly shrunk)
+/// cells, the resulting \c PeakProfile, and why it stopped.
+///
+struct RematResult {
+  container::svector<ValueCell> cells;
+  PeakProfile profile;
+  RematStatus status;
+};
+
+namespace detail {
+
+/// Classify an infeasible \c rematerialize_to_budget stop (design section 4):
+/// \c RebatchNeeded if EVERY cell live at the binding point has an EMPTY \c
+/// shrink_candidates; else \c FactorizationInherent (some live cell had a
+/// candidate, but no shrink lowered the binding peak).
+inline RematStatus classify_infeasible(
+    container::svector<ValueCell> const& cells, PeakProfile const& pp) {
+  for (auto ci : pp.live_at_binding)
+    if (!shrink_candidates(cells[ci]).empty())
+      return RematStatus::FactorizationInherent;
+  return RematStatus::RebatchNeeded;
+}
+
+}  // namespace detail
+
+///
+/// \brief the remat pass's greedy loop: shrink demoted giants until the modeled
+/// peak fits \p threshold, or report an infeasibility (design sections 2-4).
+///
+/// \details At each step it sweeps the current placement (\c to_schedule +
+/// \c peak_profile_sweep); if `peak <= threshold` it is \c Feasible. Otherwise
+/// it considers every SHRINK of every cell live at the binding peak point and
+/// applies the one with the largest \c DeltaPeak (all shrinks are
+/// zero-recompute this phase, so the metric is pure \c DeltaPeak); if no shrink
+/// reduces the peak it stops infeasible. Termination: each accepted shrink
+/// strictly appends a mode to some cell's \c home_modes from that cell's finite
+/// (and strictly shrinking) \c shrink_candidates set, so the move supply is
+/// finite. Un-hoist / split (the evict moves) are DEFERRED (design section 3a).
+///
+/// \p threshold a byte budget; `+infinity` makes remat a no-op (the raw
+/// perfect-CSE seed).
+///
+template <typename BlockOfFn>
+RematResult rematerialize_to_budget(container::svector<ValueCell> cells,
+                                    dryrun::CostModel const& cm,
+                                    BlockOfFn const& block_of,
+                                    std::size_t num_points, double threshold) {
+  for (;;) {
+    Schedule const s = to_schedule(cells, cm, block_of, num_points);
+    PeakProfile pp = peak_profile_sweep(s);
+    if (pp.peak_bytes <= threshold)
+      return {std::move(cells), std::move(pp), RematStatus::Feasible};
+
+    // Among the cells live at the binding peak point, pick the shrink with the
+    // largest DeltaPeak (re-sweeping a trial placement per candidate).
+    double best_drop = 0;
+    std::optional<std::pair<std::size_t, Index>> best;
+    for (auto ci : pp.live_at_binding) {
+      for (auto const& m : shrink_candidates(cells[ci])) {
+        auto trial = cells;
+        apply_shrink(trial[ci], m);
+        double const p2 =
+            peak_profile_sweep(to_schedule(trial, cm, block_of, num_points))
+                .peak_bytes;
+        double const drop = pp.peak_bytes - p2;
+        if (drop > best_drop) {
+          best_drop = drop;
+          best = std::pair<std::size_t, Index>{ci, m};
+        }
+      }
+    }
+
+    if (!best) {  // no placement move reduces the binding point: infeasible
+      RematStatus const status = detail::classify_infeasible(cells, pp);
+      return {std::move(cells), std::move(pp), status};
+    }
+
+    apply_shrink(cells[best->first], best->second);  // full re-sweep next iter
+  }
+}
+
+}  // namespace sequant::eval
+
+#endif  // SEQUANT_EVAL_PLACEMENT_REMAT_HPP
