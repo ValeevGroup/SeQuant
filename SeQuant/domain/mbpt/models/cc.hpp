@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
+#include <SeQuant/domain/mbpt/utils.hpp>
 #include <SeQuant/domain/mbpt/vac_av.hpp>
 
 #include <cstddef>
@@ -94,7 +95,13 @@ class CC {
   /// connected product, \f$ (\hat{A}\hat{B})_c \f$, equivalent to \f$
   /// [\hat{A},\hat{B}] \f$ only once operator connectivity is supplied
   /// downstream. A unitary ansatz uses explicit commutators and needs no
-  /// connectivity.
+  /// connectivity. @see lst_options
+  /// @warning Because of the above, the expression returned for a non-unitary
+  /// ansatz is NOT self-contained: evaluating it with empty connectivity, e.g.
+  /// `op::ref_av(P(nₚ(2)) * cc.hbar(), {.connect = {}})`, silently retains the
+  /// disconnected terms that the commutator would have cancelled. Pass
+  /// `default_op_connections()` (the default of `op::ref_av`/`op::vac_av`), or
+  /// build H̄ yourself with `mbpt::lst(..., {})` if you need the explicit form.
   [[nodiscard]] ExprPtr hbar(
       std::optional<size_t> truncation_rank = std::nullopt) const;
 
@@ -177,6 +184,18 @@ class CC {
   bool use_topology_ = true;
   std::optional<size_t> hbar_comm_rank_ = std::nullopt;
   std::optional<size_t> pertbar_comm_rank_ = std::nullopt;
+
+  /// @return the `LSTOptions` this engine uses for every `mbpt::lst()` call
+  /// @note The choice of commutator representation is really a question of
+  /// whether the caller supplies operator connectivity downstream; for this
+  /// engine the two coincide. Every non-unitary path hands `ref_av` a
+  /// connectivity map (`default_op_connections()`, or the λ⁺/perturbed
+  /// supersets thereof), which is what makes the cheaper connected-product
+  /// form equivalent to the explicit commutator. The unitary paths hand
+  /// `ref_av` empty connectivity and so must use explicit commutators.
+  [[nodiscard]] LSTOptions lst_options() const {
+    return {.unitary = unitary(), .use_connected_form = !unitary()};
+  }
 
   /// @brief computes reference expectation value of an expression. Dispatches
   /// to `mbpt::op::ref_av()`
