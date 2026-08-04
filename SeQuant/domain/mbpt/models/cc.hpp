@@ -197,21 +197,25 @@ class CC {
   ///     | H_SS  H_SD |    qUCCSD:  | 2  1 |
   ///     | H_DS  H_DD |             | 1  0 |
   ///   read row by row, i.e. `{2,1,1,0}`: H_SS through the double commutator
-  ///   [[V,σ],σ], H_SD and H_DS through the single [V,σ], H_DD the bare f+v.
+  ///   [[V,σ],σ], H_SD and H_DS through the single [V,σ], H_DD the bare f+v
+  ///   (10.1063/5.0062090 Sec. II C, Eqs. (29), (41), (44), (48)).
   ///   `K` manifolds give a row-major `K`×`K` matrix ordered by ASCENDING
   ///   manifold rank, so one set of numbers serves EE, IP and EA (read S as
   ///   1h/1p and D as 2h1p/1h2p: qUCCSD, IP-qUCCSD and EA-qUCCSD are all
-  ///   `{2,1,1,0}`). Empty (the default) selects the uniform H̄ at
-  ///   `hbar_comm_rank`, which the Bernoulli expansion does not support.
+  ///   `{2,1,1,0}`, 10.1021/acs.jctc.5c01991 Table 1). Empty (the default)
+  ///   selects the uniform H̄ at `hbar_comm_rank`, which the Bernoulli
+  ///   expansion does not support.
   /// @pre if non-empty, requires a unitary ansatz; a non-unitary H̄ is exact and
   ///   has nothing to truncate.
   /// @throw Exception if `block_ranks` is neither empty nor `K`×`K`, if it is
   ///   non-empty under a non-unitary ansatz, or if it is empty under the
   ///   Bernoulli expansion
   /// @note each block is the sandwich \f$ \langle i|\bar{H}|j \rangle \f$
-  ///   (Eq. 7 of 10.1063/5.0062090) plus an explicit \f$ -E \f$ shift on the
-  ///   diagonal, taken at the block's own truncation rank; the returned object
-  ///   is \f$ (\bar{H}-E)\hat{R} \f$.
+  ///   (Eq. (7) of 10.1063/5.0062090) plus an explicit \f$ -E \f$ shift on the
+  ///   diagonal, taken at the block's own truncation rank. Eq. (10) there
+  ///   instead splits \f$ \bar{H} = E_{gr} + {} \f$ a normal-ordered remainder
+  ///   and forms the blocks from the remainder. The returned object is
+  ///   \f$ (\bar{H}-E)\hat{R} \f$.
   /// @note under the Bernoulli expansion each block's H̄ has its N part (the
   ///   ground-state amplitude residual) removed. See `eom_r_blocked` in cc.cpp
   ///   for why. The removed terms vanish at converged amplitudes when a block

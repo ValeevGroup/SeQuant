@@ -203,8 +203,8 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     const CC cc(2, {.ansatz = CC::Ansatz::U,
                     .hbar_comm_rank = 2,
                     .hbar_expansion = CC::HbarExpansion::Bernoulli});
-    // qUCCSD block ranks, 10.1063/5.0062090 Table I: leading block at the
-    // double commutator, coupling blocks at the single, highest manifold bare.
+    // qUCCSD block ranks, 10.1063/5.0062090 Sec. II C: SS at the double
+    // commutator (Eq. 29), SD/DS at the single (Eqs. 41, 44), DD bare (Eq. 48).
     const std::vector<std::size_t> quccsd = {2, 1, 1, 0};
 
     const auto ee = cc.eom_r(nₚ(2), nₕ(2), quccsd);

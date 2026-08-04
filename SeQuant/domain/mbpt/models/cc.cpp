@@ -93,12 +93,10 @@ ExprPtr CC::hbar(std::optional<size_t> truncation_rank) const {
 }
 
 ExprPtr CC::energy(std::optional<size_t> comm_rank) const {
-  // Bernoulli: the tensor-level H̄ is already fully expanded, so there is no
-  // operator connectivity left to constrain. Take the plain reference
-  // expectation value. The energy rank defaults to the amplitude rank;
-  // pass comm_rank explicitly for the qUCCSD [2|3] split (energy at H̄³).
+  // Bernoulli: the hbar expansion is at tensor level, call the tensor level
+  // ref_av directly. No connectivity or screening.
   if (hbar_expansion_ == HbarExpansion::Bernoulli) {
-    const auto erank = comm_rank.value_or(*hbar_comm_rank_);
+    const auto erank = comm_rank.value_or(hbar_comm_rank_.value());
     return op::tensor::ref_av(this->hbar(erank));
   }
   // <0|H̄|0>: reference expectation value of H̄ at the requested commutator
@@ -113,10 +111,8 @@ std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) const {
   pmax = (pmax == std::numeric_limits<size_t>::max() ? N : pmax);
   SEQUANT_ASSERT(pmax >= pmin && "pmax should be >= pmin");
 
-  // Bernoulli: project the tensor-level H̄ (built at the amplitude
-  // rank = hbar_comm_rank_) onto each manifold <p| and take the reference
-  // expectation value. As in energy(), the expanded H̄ carries no operator
-  // connectivity to constrain.
+  // Bernoulli: the hbar expansion is at tensor level, project and call the
+  // tensor level ref_av directly.
   if (hbar_expansion_ == HbarExpansion::Bernoulli) {
     const auto hbar = this->hbar();
     std::vector<ExprPtr> result(pmax + 1);
@@ -375,23 +371,17 @@ namespace {
 // EOM eigenvector operators R and L use SquareRoot normalization
 constexpr Normalization eom_norm = Normalization::SquareRoot;
 
-// Per-block-truncated EOM sigma equations (qUCCSD and its IP/EA analogues:
-// 10.1063/5.0062090 Table I, 10.1021/acs.jctc.5c01991 Table 1).
+// Per-block-truncated EOM sigma equations. For the qUCCSD ranks see
+// 10.1063/5.0062090 Sec. II C, Eqs. (29)-(48); for the IP/EA analogues,
+// 10.1021/acs.jctc.5c01991 Table 1.
 //
-// Each block is the sandwich <i|H̄|j>, plus an explicit -E shift on the
-// diagonal. The commutator form <i|[H̄,r_j]|0> would add -<i|r_j H̄^(k)|0>. That
-// term is manifold j's amplitude residual. It vanishes only when the block rank
-// k equals the rank the amplitudes were converged against. At the qUCCSD ranks
-// it does not, and it hits DS but not SD, so M_ij != adjoint(M_ji).
-//
-// The shift is <0|H̄^(k_ii)|0>, at the block's own rank. Block truncation cuts
-// the single operator H̄-E. Its order-m piece is H̄^m - <0|H̄^m|0>. On the qUCCSD
-// DD block this leaves the doubles diagonal bare (Eq. 48 of 10.1063/5.0062090).
+// Each block is the sandwich <i|H̄|j> of Eq. (7). Eq. (10) writes H̄ as
+// E_gr + a normal-ordered remainder and builds the blocks from the remainder
+// alone, so here the diagonal carries an explicit -<0|H̄|0> instead.
 std::vector<ExprPtr> eom_r_blocked(const CC& cc, nₚ np, nₕ nh,
                                    const std::vector<size_t>& block_ranks,
                                    size_t N) {
-  if (!cc.unitary())
-    throw Exception("CC::eom_r: block_ranks requires a unitary ansatz");
+  if (!cc.unitary()) throw Exception("eom_r_blocked requires a unitary ansatz");
 
   std::vector<std::pair<std::int64_t, std::int64_t>> manifolds;
   for (std::int64_t rp = np, rh = nh; rp >= 0 && rh >= 0; --rp, --rh) {
@@ -399,7 +389,8 @@ std::vector<ExprPtr> eom_r_blocked(const CC& cc, nₚ np, nₕ nh,
     manifolds.emplace_back(rp, rh);
     if (rp == 0 || rh == 0) break;
   }
-  std::reverse(manifolds.begin(), manifolds.end());
+
+  std::ranges::reverse(manifolds);
   const auto K = manifolds.size();
   if (block_ranks.size() != K * K)
     throw Exception(
@@ -410,28 +401,17 @@ std::vector<ExprPtr> eom_r_blocked(const CC& cc, nₚ np, nₕ nh,
   // below must match it. Empty connectivity, as everywhere on the unitary path.
   const bool tensor_level = cc.hbar_expansion() == CC::HbarExpansion::Bernoulli;
 
-  // One H̄ per distinct truncation order, with its N part removed. The N part
-  // holds the pure excitation / de-excitation intermediates H̄_ai, H̄_ab,ij of
-  // rank ≤ N, which are the ground-state amplitude residual. The amplitude
-  // equations zero them (⟨μ|H̄|Φ₀⟩ = 0, Liu & Cheng 2021 Eq. (6)), so the
-  // paper's off-diagonal working equations (Eqs. 41-47) carry none. That holds
-  // at the amplitude rank only. The off-diagonal blocks are built one rank
-  // lower, where ⟨μ|H̄^(k)|0⟩ ≠ 0. Keeping the N part there feeds a spurious
-  // off-shell residual into the S↔D coupling.
-  //
-  // Removing it from every block is exact and simpler. An N operator of rank r
-  // shifts the manifold rank by r, so it cannot reach a diagonal block. It also
-  // has no reference expectation value, so the -⟨0|H̄|0⟩ shift below stays the
-  // same. When every block rank equals the amplitude rank the removed terms are
-  // the converged residual, i.e. the step changes the equations but not the
-  // numbers.
+  // One H̄ per distinct truncation order, reduced to its R part. The N part is
+  // the ground-state amplitude residual <Φl|H̄|Φ0>, which Eq. (6) zeroes at
+  // the amplitude rank only, so a block truncated below it would keep the
+  // residual. Dropping it everywhere is exact: an N operator of rank r shifts
+  // the manifold rank by r, so it never reaches a diagonal block, and it has
+  // no reference expectation value, so the shift below is unchanged.
   container::map<size_t, ExprPtr> hbars;
   for (const auto k : block_ranks) {
     auto [it, fresh] = hbars.try_emplace(k);
     if (!fresh) continue;  // deriving H̄ twice for one rank is not cheap
     it->second = cc.hbar(k);
-    // BCH H̄ is operator-level and has no N/R split. Block truncation under
-    // BCH is unpublished, so nothing validates a correction here.
     if (tensor_level) it->second = bernoulli::detail::R_part(it->second, N);
   }
   auto bra_of = [tensor_level](std::int64_t p, std::int64_t h) {
@@ -481,6 +461,7 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh,
                    "hbar_comm_rank must be specified for unitary ansatz "
                    "in CC::eom_r");
 
+  // if block ranks are specified, dispatch and early return
   if (!block_ranks.empty()) return eom_r_blocked(*this, np, nh, block_ranks, N);
 
   // the uniform path below commutes H̄ with an operator-level R, which the
