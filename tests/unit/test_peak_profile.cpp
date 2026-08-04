@@ -38,7 +38,7 @@ using sequant::ExprPtr;
 using sequant::Index;
 using sequant::container::svector;
 using sequant::eval::Cell;
-using sequant::eval::linearize;
+using sequant::eval::compute_dag_path;
 using sequant::eval::peak_profile_replay;
 using sequant::eval::peak_profile_sweep;
 using sequant::eval::PeakProfile;
@@ -158,7 +158,7 @@ TEST_CASE("cell_footprint sizes enclosing-home modes at BLOCK, others FULL",
 
 // ---------------------------------------------------------------------
 // T2: the interval-event sweep over a hand-built Schedule (bypasses
-// linearize entirely; Cells are constructed directly).
+// compute_dag_path entirely; Cells are constructed directly).
 // ---------------------------------------------------------------------
 
 TEST_CASE("peak_profile_sweep finds the peak, its point, and the live set",
@@ -204,18 +204,19 @@ TEST_CASE("peak_profile_sweep breaks a peak tie toward the LOWER point",
 }
 
 // ---------------------------------------------------------------------
-// T2: linearize -- the real forest walk (CSE grouping by hash_value +
+// T2: compute_dag_path -- the real forest walk (CSE grouping by hash_value +
 // post-order interval assignment + home-relative footprint).
 // ---------------------------------------------------------------------
 
 TEST_CASE(
-    "linearize groups a CSE value into ONE cell spanning to its LAST consumer",
+    "compute_dag_path groups a CSE value into ONE cell spanning to its LAST "
+    "consumer",
     "[peak_profile]") {
   // A shared value V (a common sub-value) is consumed by TWO parents P1, P2,
   // one per tree. The two structurally-identical copies of V carry the SAME
-  // hash_value(), so linearize must fold them into exactly ONE cell whose
-  // first_use is V's (earliest) production point and whose last_use is the
-  // LATER of the two parents' points.
+  // hash_value(), so compute_dag_path must fold them into exactly ONE cell
+  // whose first_use is V's (earliest) production point and whose last_use is
+  // the LATER of the two parents' points.
   //
   // Sizes are chosen so every distinct value has a DISTINCT footprint, making
   // the shared value's cell unambiguous: with full(i)=5, full(a)=10,
@@ -232,7 +233,7 @@ TEST_CASE(
   auto const block_of = [](Index const&) -> std::size_t { return 1; };
 
   std::vector<EvalNode<EvalExpr>> forest{P1, P2};
-  auto const sched = linearize(forest, cm, block_of);
+  auto const sched = compute_dag_path(forest, cm, block_of);
 
   // Post-order per tree: V(0),W(1),P(2) and V(3),W(4),P(5) => 6 points. The
   // pairwise-identical V, W, and P values each fold => exactly 3 cells.
@@ -259,11 +260,12 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "linearize sizes a loop-carried value at BLOCK and its loop result at FULL",
+    "compute_dag_path sizes a loop-carried value at BLOCK and its loop result "
+    "at FULL",
     "[peak_profile]") {
   // R = (C * D) with an External i_1 loop realized AT R. R's own result slot
   // carries i_1, and so does its left child C. stamp_lifetime_masks (invoked
-  // inside linearize) therefore stamps BOTH with home_scope = {i_1}.
+  // inside compute_dag_path) therefore stamps BOTH with home_scope = {i_1}.
   //
   // During the post-order walk R's i_1 loop is pushed onto the enclosing
   // context for its CHILDREN (so C sees ectx=[i_1] and is sized per-block) but
@@ -283,7 +285,7 @@ TEST_CASE(
   };
 
   std::vector<EvalNode<EvalExpr>> forest{R};
-  auto const sched = linearize(forest, cm, block_of);
+  auto const sched = compute_dag_path(forest, cm, block_of);
 
   // Locate C's cell by its carried-slot footprint: C carries {i_1,a_3},
   // homed AT the i_1 loop (depth 0) => i_1 sized BLOCK(2), a_3 FULL(10) =>
@@ -309,8 +311,8 @@ TEST_CASE(
   // result -- R is the loop's full accumulated output. home_scope(R) DOES
   // include i_1 (stamp_lifetime_masks folds a node's own batched_here into
   // its own meet), but cell_footprint's home_modes excludes any mode a value
-  // realizes as its OWN loop (see linearize's own_modes_union), so i_1 stays
-  // FULL for R => 10*10*8 = 800, NOT block-narrowed.
+  // realizes as its OWN loop (see compute_dag_path's own_modes_union), so i_1
+  // stays FULL for R => 10*10*8 = 800, NOT block-narrowed.
   CHECK(r_cell->footprint == 800);
 }
 
@@ -369,7 +371,7 @@ TEST_CASE(
   {
     auto R = inode("R{i_1;a_5}", leaf("A{i_1;a_3}"), leaf("B{a_3;a_5}"));
     std::vector<EvalNode<EvalExpr>> forest{R};
-    auto const s = linearize(forest, cm, block_of);
+    auto const s = compute_dag_path(forest, cm, block_of);
     CHECK(peak_profile_replay(s) == peak_profile_sweep(s).peak_bytes);
   }
 
@@ -381,7 +383,7 @@ TEST_CASE(
     auto P1 = inode("P{i_1;a_3}", make_V(), leaf("W{a_1;a_3}"));
     auto P2 = inode("P{i_1;a_3}", make_V(), leaf("W{a_1;a_3}"));
     std::vector<EvalNode<EvalExpr>> forest{P1, P2};
-    auto const s = linearize(forest, cm, block_of);
+    auto const s = compute_dag_path(forest, cm, block_of);
     CHECK(peak_profile_replay(s) == peak_profile_sweep(s).peak_bytes);
   }
 }
@@ -416,7 +418,7 @@ TEST_CASE(
   };
 
   std::vector<EvalNode<EvalExpr>> forest{P, Q};
-  auto const s = linearize(forest, cm, block_of);
+  auto const s = compute_dag_path(forest, cm, block_of);
 
   // V (carried {i_1,i_2}) must be the demoted cell: home_depth == -1 and sized
   // FULL (10*10*8 = 800), NOT block-narrowed to i_1=2 despite tree 1's loop.
@@ -432,7 +434,7 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "linearize sizes a PARTIALLY-demoted value's footprint "
+    "compute_dag_path sizes a PARTIALLY-demoted value's footprint "
     "occurrence-independently (meet, not per-occurrence ectx)",
     "[peak_profile]") {
   // The Phase 3b review-fix pin: a shared value V carries TWO slots
@@ -451,7 +453,7 @@ TEST_CASE(
   // happens to sit at level 0, "enclosing" by the flawed level-range proxy).
   // Occurrence 1's ectx is only [i_1] (home_depth 0), so the buggy scan only
   // ever touches i_1 there -- by ACCIDENT giving the right answer. Since
-  // linearize's cell keeps whichever occurrence's footprint it computes
+  // compute_dag_path's cell keeps whichever occurrence's footprint it computes
   // FIRST, the buggy footprint depended on forest order: 160 (correct) if
   // occurrence 1 is visited first, 32 (wrong -- o_1 wrongly block-sized too)
   // if occurrence 2 is visited first. The fix reads overrides off home_modes
@@ -478,7 +480,7 @@ TEST_CASE(
     std::vector<EvalNode<EvalExpr>> forest =
         occ2_first ? std::vector<EvalNode<EvalExpr>>{P2, P1}
                    : std::vector<EvalNode<EvalExpr>>{P1, P2};
-    auto const s = linearize(forest, cm, block_of);
+    auto const s = compute_dag_path(forest, cm, block_of);
 
     // V is the unique cell with a NON-trivial home_depth in this forest,
     // because home_depth needs BOTH a non-empty home_scope AND a non-empty
@@ -488,8 +490,8 @@ TEST_CASE(
     // loop, so its ectx carries i_1 (in home_scope(V)) and its home_depth is
     // != -1. That depth is itself occurrence-dependent (0 in the occ-1-first
     // order, 1 in the occ-2-first order -- home_depth is informational only,
-    // per linearize's doc comment), so match on "!= -1" rather than a fixed
-    // depth to stay order-agnostic.
+    // per compute_dag_path's doc comment), so match on "!= -1" rather than a
+    // fixed depth to stay order-agnostic.
     Cell const* v = nullptr;
     for (auto const& c : s.cells)
       if (c.home_depth != -1) v = &c;
@@ -514,8 +516,8 @@ TEST_CASE(
 
 // A small order-of-magnitude regime (occ i=10, virt a=20), matching
 // backend_test_regime() in test_eval_dryrun.cpp: same extents => the static
-// linearize footprints and the runtime cost_profile sizes are drawn from the
-// identical memsize model.
+// compute_dag_path footprints and the runtime cost_profile sizes are drawn from
+// the identical memsize model.
 namespace {
 SizeRegime anchor_regime() {
   SizeRegime r;
@@ -563,10 +565,10 @@ TEST_CASE(
   CostProfile const cp = cost_profile(forest, policy, cfg, regime,
                                       /*trace=*/nullptr);
 
-  // ---- static measurement: linearize + sweep, SAME regime ----
+  // ---- static measurement: compute_dag_path + sweep, SAME regime ----
   CostModel const cm{regime};
   auto const block_of = [](Index const&) -> std::size_t { return 1; };
-  auto const sched = linearize(forest, cm, block_of);
+  auto const sched = compute_dag_path(forest, cm, block_of);
   auto const sweep = peak_profile_sweep(sched);
 
   // Both static algorithms agree (Step B holds here too).

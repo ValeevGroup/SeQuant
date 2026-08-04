@@ -1,15 +1,15 @@
 // Phase 4a T1: tests for O2's standalone working representation
 // (SeQuant/core/eval/placement_remat.hpp) plus the peak_profile.hpp refactor
-// that exposes it (linearize_rich / ValueCell / RichSchedule).
+// that exposes it (compute_dag_boulevard / ValueCell / RichSchedule).
 //
 // Two things are pinned here:
 //   - shrink_candidates finds the demoted carried mode of a partially-homed
 //     value (reusing test_peak_profile.cpp's PARTIAL-DEMOTION forest), and
 //     to_schedule's projected footprint matches the Phase-3b value.
-//   - GUARDRAIL: linearize's flat Schedule (built via the NEW
-//     linearize_rich + thin projection) is BYTE-IDENTICAL, cell for cell, to
-//     what remat_cells + to_schedule (the O2 round trip over the SAME rich
-//     record) produce -- proof the rich split changed nothing observable.
+//   - GUARDRAIL: compute_dag_path's flat Schedule (built via the NEW
+//     compute_dag_boulevard + thin projection) is BYTE-IDENTICAL, cell for
+//     cell, to what remat_cells + to_schedule (the O2 round trip over the SAME
+//     rich record) produce -- proof the rich split changed nothing observable.
 //
 // Zero production callers of the O2 symbols; this task is standalone.
 
@@ -46,7 +46,7 @@ using sequant::ExprPtr;
 using sequant::Index;
 using sequant::container::svector;
 using sequant::eval::Cell;
-using sequant::eval::linearize;
+using sequant::eval::compute_dag_path;
 using sequant::eval::peak_profile_sweep;
 using sequant::eval::PeakProfile;
 using sequant::eval::remat_cells;
@@ -120,10 +120,10 @@ void require_schedules_identical(Schedule const& a, Schedule const& b) {
   }
 }
 
-// The O2 round trip over the SAME forest: remat_cells (linearize_rich mapped to
-// ValueCell) immediately projected back via to_schedule, with NO shrink move
-// applied. Used only to prove the rich split is faithful (guardrail) -- no
-// production caller does this.
+// The O2 round trip over the SAME forest: remat_cells (compute_dag_boulevard
+// mapped to ValueCell) immediately projected back via to_schedule, with NO
+// shrink move applied. Used only to prove the rich split is faithful
+// (guardrail) -- no production caller does this.
 template <typename Forest, typename BlockOfFn>
 Schedule remat_round_trip(Forest const& forest, CostModel const& cm,
                           BlockOfFn const& block_of) {
@@ -131,7 +131,7 @@ Schedule remat_round_trip(Forest const& forest, CostModel const& cm,
   return to_schedule(in.cells, cm, block_of, in.num_points);
 }
 
-// Build an ValueCell directly (bypassing linearize) so
+// Build an ValueCell directly (bypassing compute_dag_path) so
 // rematerialize_to_budget's greedy logic can be tested in isolation with
 // precise control over footprints and co-residency. home_depth is set to 0 when
 // a home is given, else -1 (only informational; rematerialize_to_budget does
@@ -203,7 +203,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "GUARDRAIL: linearize's flat Schedule == remat_cells + to_schedule's "
+    "GUARDRAIL: compute_dag_path's flat Schedule == remat_cells + "
+    "to_schedule's "
     "round trip, cell for cell",
     "[placement_remat]") {
   SizeRegime r;
@@ -221,7 +222,7 @@ TEST_CASE(
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     std::vector<EvalNodeDryRun> const forest{node};
 
-    Schedule const legacy = linearize(forest, cm, block_of);
+    Schedule const legacy = compute_dag_path(forest, cm, block_of);
     Schedule const via_o2 = remat_round_trip(forest, cm, block_of);
     require_schedules_identical(legacy, via_o2);
 
@@ -242,7 +243,7 @@ TEST_CASE(
     stamp_ext_pair_remat(P2, Index{L"o_1"}, Index{L"i_1"});
     std::vector<EvalNode<EvalExpr>> const forest{P1, P2};
 
-    Schedule const legacy = linearize(forest, cm, block_of);
+    Schedule const legacy = compute_dag_path(forest, cm, block_of);
     Schedule const via_o2 = remat_round_trip(forest, cm, block_of);
     require_schedules_identical(legacy, via_o2);
 
@@ -263,7 +264,7 @@ TEST_CASE(
     stamp_ext_pair_remat(P2, Index{L"o_1"}, Index{L"i_1"});
     std::vector<EvalNode<EvalExpr>> const forest{P2, P1};
 
-    Schedule const legacy = linearize(forest, cm, block_of);
+    Schedule const legacy = compute_dag_path(forest, cm, block_of);
     Schedule const via_o2 = remat_round_trip(forest, cm, block_of);
     require_schedules_identical(legacy, via_o2);
 

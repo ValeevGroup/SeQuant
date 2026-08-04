@@ -26,9 +26,9 @@ namespace sequant::eval {
 /// moved to slower storage; pressure drops because a value is recomputed nearer
 /// its use. STANDALONE in Phase 4a (zero production
 /// callers). It works on the rich per-value \c ValueCell (from \c
-/// linearize_rich); \c home_modes is the field a remat move mutates (a SHRINK
-/// adds a demoted carried batch mode, block-sizing it -- the zero-cost remat
-/// case). This header lands the flat input/projection (\c RematInput, \c
+/// compute_dag_boulevard); \c home_modes is the field a remat move mutates (a
+/// SHRINK adds a demoted carried batch mode, block-sizing it -- the zero-cost
+/// remat case). This header lands the flat input/projection (\c RematInput, \c
 /// to_schedule), the candidate query (\c shrink_candidates), the SHRINK move,
 /// and the greedy loop (\c rematerialize_to_budget).
 ///
@@ -44,15 +44,15 @@ struct RematInput {
 
 ///
 /// \brief Seed the remat pass's working cells from an eval \p forest: the
-/// \c ValueCell records of \c linearize_rich, plus \c num_points.
+/// \c ValueCell records of \c compute_dag_boulevard, plus \c num_points.
 ///
 /// \p block_of is any `Index -> std::size_t` callable giving the block
-/// (sliced) element count for a mode; forwarded to \c linearize_rich.
+/// (sliced) element count for a mode; forwarded to \c compute_dag_boulevard.
 ///
 template <meta::eval_node_range R>
 RematInput remat_cells(R const& forest, dryrun::CostModel const& cm,
                        auto const& block_of) {
-  RichSchedule rich = linearize_rich(forest, cm, block_of);
+  RichSchedule rich = compute_dag_boulevard(forest, cm, block_of);
   RematInput out;
   out.cells.assign(std::make_move_iterator(rich.cells.begin()),
                    std::make_move_iterator(rich.cells.end()));
@@ -66,7 +66,7 @@ RematInput remat_cells(R const& forest, dryrun::CostModel const& cm,
 ///
 /// \details Per cell: `Cell{value_id, home_depth, cell_footprint(carried,
 /// home_modes, cm, block_of), first_use, last_use}` -- the same projection
-/// \c linearize applies to a \c RichSchedule, just over the remat pass's
+/// \c compute_dag_path applies to a \c RichSchedule, just over the remat pass's
 /// (possibly SHRINK-mutated) \c home_modes instead of the as-seeded ones.
 ///
 /// \p block_of is any `Index -> std::size_t` callable giving the block

@@ -19,7 +19,7 @@ namespace sequant::eval {
 /// `doc/dev/specs/2026-08-03-meet-based-home-scope-phase3-design.md`) that
 /// consumes the Phase-3a `home_scope` seed. Phase 3b T1 landed the two sizing
 /// primitives (`detail::home_depth_of`, `detail::cell_footprint`); T2 adds the
-/// forest linearization (`linearize`) and the interval-event sweep
+/// forest linearization (`compute_dag_path`) and the interval-event sweep
 /// (`peak_profile_sweep`) that turns an eval forest into a `PeakProfile`. Still
 /// ZERO production callers -- runtime untouched; O2 (a later task) consumes the
 /// `PeakProfile`.
@@ -219,7 +219,7 @@ struct ValueCell {
 ///
 /// \brief A whole forest linearized to a flat list of RICH value cells over a
 /// single monotone static-point timeline. The \c Schedule consumed by \c
-/// peak_profile_sweep is a pure PROJECTION of this (see \c linearize).
+/// peak_profile_sweep is a pure PROJECTION of this (see \c compute_dag_path).
 ///
 struct RichSchedule {
   container::svector<ValueCell> cells;
@@ -254,13 +254,13 @@ struct RichSchedule {
 /// \p block_of is any `Index -> std::size_t` callable giving the block
 /// (sliced) element count for a mode; only used while walking (to size the
 /// enclosing-batch-context entries pushed on descent) -- \p cm is accepted
-/// for signature symmetry with \c linearize / \c detail::cell_footprint but
-/// not otherwise used here (no footprint is computed at this stage).
+/// for signature symmetry with \c compute_dag_path / \c detail::cell_footprint
+/// but not otherwise used here (no footprint is computed at this stage).
 ///
 template <meta::eval_node_range R, typename BlockOfFn>
-RichSchedule linearize_rich(R const& forest,
-                            [[maybe_unused]] dryrun::CostModel const& cm,
-                            BlockOfFn const& block_of) {
+RichSchedule compute_dag_boulevard(R const& forest,
+                                   [[maybe_unused]] dryrun::CostModel const& cm,
+                                   BlockOfFn const& block_of) {
   using Node = std::ranges::range_value_t<R>;
 
   // Populate home_scope (EvalExpr::sliced_modes) on every internal node.
@@ -390,21 +390,21 @@ RichSchedule linearize_rich(R const& forest,
 /// \brief Linearize an eval \p forest into a \c Schedule of value cells over a
 /// single post-order static-point timeline, ready for \c peak_profile_sweep.
 ///
-/// \details A thin PROJECTION of \c linearize_rich: runs the one post-order
-/// walk there, then collapses each \c ValueCell's \c carried / \c home_modes
-/// down to a single \c Cell::footprint via \c detail::cell_footprint. The
-/// returned \c Schedule is BYTE-IDENTICAL to what the (pre-Phase-4a)
-/// inline-walk version of \c linearize produced -- \c enclosing_modes is the
-/// only new information \c linearize_rich computes, and it does not reach
-/// this projection.
+/// \details A thin PROJECTION of \c compute_dag_boulevard: runs the one
+/// post-order walk there, then collapses each \c ValueCell's \c carried / \c
+/// home_modes down to a single \c Cell::footprint via \c
+/// detail::cell_footprint. The returned \c Schedule is BYTE-IDENTICAL to what
+/// the (pre-Phase-4a) inline-walk version of \c compute_dag_path produced -- \c
+/// enclosing_modes is the only new information \c compute_dag_boulevard
+/// computes, and it does not reach this projection.
 ///
 /// \p block_of is any `Index -> std::size_t` callable giving the block
 /// (sliced) element count for a mode; forwarded to \c detail::cell_footprint.
 ///
 template <meta::eval_node_range R, typename BlockOfFn>
-Schedule linearize(R const& forest, dryrun::CostModel const& cm,
-                   BlockOfFn const& block_of) {
-  RichSchedule const rich = linearize_rich(forest, cm, block_of);
+Schedule compute_dag_path(R const& forest, dryrun::CostModel const& cm,
+                          BlockOfFn const& block_of) {
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
 
   Schedule out;
   out.num_points = rich.num_points;
