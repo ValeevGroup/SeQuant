@@ -262,7 +262,7 @@ TEST_CASE(
     "linearize sizes a loop-carried value at BLOCK and its loop result at FULL",
     "[peak_profile]") {
   // R = (C * D) with an External i_1 loop realized AT R. R's own result slot
-  // carries i_1, and so does its left child C. stamp_seed_residency (invoked
+  // carries i_1, and so does its left child C. stamp_lifetime_masks (invoked
   // inside linearize) therefore stamps BOTH with home_scope = {i_1}.
   //
   // During the post-order walk R's i_1 loop is pushed onto the enclosing
@@ -307,7 +307,7 @@ TEST_CASE(
   CHECK(c_cell->footprint == 160);
   // R's OWN i_1 loop slices its OPERANDS (C, via child_ectx), never R's own
   // result -- R is the loop's full accumulated output. home_scope(R) DOES
-  // include i_1 (stamp_seed_residency folds a node's own batched_here into
+  // include i_1 (stamp_lifetime_masks folds a node's own batched_here into
   // its own meet), but cell_footprint's home_modes excludes any mode a value
   // realizes as its OWN loop (see linearize's own_modes_union), so i_1 stays
   // FULL for R => 10*10*8 = 800, NOT block-narrowed.
@@ -391,7 +391,7 @@ TEST_CASE(
     "[peak_profile]") {
   // The core O3b demoted case: an internal value V occurs TWICE.
   //   - In tree 1, V sits under a parent P that realizes an External i_1 loop.
-  //     stamp_seed_residency accumulates i_1 down to V, and i_1 is one of V's
+  //     stamp_lifetime_masks accumulates i_1 down to V, and i_1 is one of V's
   //     own slots, so V's occurrence-1 residency contribution is {i_1}.
   //   - In tree 2, the structurally-identical V sits under a parent Q with NO
   //     batch loop, so its occurrence-2 contribution is {} (empty).

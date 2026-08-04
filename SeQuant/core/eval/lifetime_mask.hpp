@@ -53,11 +53,10 @@ container::svector<Index> slot_modes_of(Node const& n) {
   return v;
 }
 
-/// Shared cross-occurrence meet walk underlying both \c stamp_lifetime_masks
-/// and \c stamp_seed_residency. \p modes_of extracts a node's
-/// occurrence-local batch modes (already proto-expanded); \p setter stamps
-/// the resulting per-canonical-node meet onto the node (e.g. \c
-/// set_sliced_modes / \c set_seed_residency). Everything else -- the meet
+/// Shared cross-occurrence meet walk underlying \c stamp_lifetime_masks.
+/// \p modes_of extracts a node's occurrence-local batch modes (already
+/// proto-expanded); \p setter stamps the resulting per-canonical-node meet
+/// onto the node (e.g. \c set_sliced_modes). Everything else -- the meet
 /// map, the top-down accumulation, the per-slot filter, the two-pass order --
 /// is identical between the two entry points; only the selector and the
 /// setter differ.
@@ -151,10 +150,9 @@ void stamp_lifetime_masks(R const& forest) noexcept {
   using Data = typename Node::value_type;
 
   // Occurrence-local batch modes AT a node, proto-expanded, EVERY kind (not
-  // just External) -- identical selector to stamp_seed_residency's
-  // all_batched_modes_of. The resulting sliced_modes IS the runtime residency
-  // (the all-batched-modes meet on the node's own result slots) that
-  // place_at_this_level consumes.
+  // just External). The resulting sliced_modes IS the runtime residency (the
+  // all-batched-modes meet on the node's own result slots) that
+  // place_at_this_level consumes, and the value \c home_scope returns.
   auto all_batched_modes_of = [](Node const& n) {
     container::svector<Index> v;
     for (auto const& [ix, kind] : n->batched_here())
@@ -169,50 +167,16 @@ void stamp_lifetime_masks(R const& forest) noexcept {
       });
 }
 
-///
-/// \brief Stamp each canonical eval node's \c EvalExpr::seed_residency: the
-/// cross-occurrence meet (see \c stamp_lifetime_masks for the full meet /
-/// per-slot-filter semantics) of ALL batched modes -- any \c BatchModeType,
-/// not just \c External -- on the node's own result slots. This is the
-/// perfect-CSE \c home_scope seed residency used by the (Phase 3) static
-/// predictor; it uses the SAME all-batched-modes selector as \c
-/// stamp_lifetime_masks, sharing the identical walk, meet, and per-slot filter
-/// via \c detail::stamp_residency_impl -- the two differ only in which field
-/// they stamp (\c seed_residency_ vs \c sliced_modes_).
-///
-/// Writes only \c EvalExpr::seed_residency_, never \c sliced_modes_, so it does
-/// not affect the runtime residency masking path (\c stamp_lifetime_masks /
-/// \c place_at_this_level) in any way.
-///
-template <meta::eval_node_range R>
-void stamp_seed_residency(R const& forest) noexcept {
-  using Node = std::ranges::range_value_t<R>;
-  using Data = typename Node::value_type;
-
-  // Occurrence-local batch modes AT a node, proto-expanded, EVERY kind (not
-  // just External).
-  auto all_batched_modes_of = [](Node const& n) {
-    container::svector<Index> v;
-    for (auto const& [ix, kind] : n->batched_here())
-      detail::proto_expand_into(v, ix);
-    return v;
-  };
-
-  detail::stamp_residency_impl(
-      forest, all_batched_modes_of,
-      [](Node const* n, container::svector<Index> m) {
-        const_cast<Data&>(**n).set_seed_residency(std::move(m));
-      });
-}
-
 /// \brief The perfect-CSE seed home residency of \p n: the unified
-/// all-batched-modes meet on its own result slots (see \c
-/// stamp_seed_residency). Phase 3a returns the residency mode-set; runtime
-/// depth resolution against a batch context is the existing rl-walk, reused
-/// by 3b/O2.
+/// all-batched-modes cross-occurrence meet on its own result slots -- i.e. the
+/// runtime \c EvalExpr::sliced_modes (stamped by \c stamp_lifetime_masks). The
+/// former separate \c seed_residency field was retired once the runtime mask
+/// dropped its External-only filter and the two became identical. Returns the
+/// residency mode-set; runtime depth resolution against a batch context is the
+/// existing rl-walk, reused by the peak profile / remat.
 template <meta::eval_node Node>
 container::svector<Index> const& home_scope(Node const& n) noexcept {
-  return n->seed_residency();
+  return n->sliced_modes();
 }
 
 }  // namespace sequant

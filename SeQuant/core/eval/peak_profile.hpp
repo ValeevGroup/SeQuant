@@ -230,8 +230,9 @@ struct RichSchedule {
 /// \brief Linearize an eval \p forest into a \c RichSchedule of RICH value
 /// cells over a single post-order static-point timeline.
 ///
-/// \details Stamps the Phase-3a seed residency first (so \c home_scope is
-/// populated), then walks every tree in post-order (children before parent),
+/// \details Stamps the lifetime masks first (so \c home_scope, which reads
+/// \c sliced_modes, is populated), then walks every tree in post-order
+/// (children before parent),
 /// assigning each visited node -- leaves included -- a monotone static point.
 /// On descent each node's \c batched_here() loops (proto-expanded, matching
 /// \c home_scope's proto expansion) are pushed onto an enclosing-batch-context
@@ -262,8 +263,8 @@ RichSchedule linearize_rich(R const& forest,
                             BlockOfFn const& block_of) {
   using Node = std::ranges::range_value_t<R>;
 
-  // Populate home_scope (EvalExpr::seed_residency) on every internal node.
-  stamp_seed_residency(forest);
+  // Populate home_scope (EvalExpr::sliced_modes) on every internal node.
+  stamp_lifetime_masks(forest);
 
   // Per-occurrence record captured during the post-order walk. consumer_point
   // is the parent's point (its structural consumer); a root keeps its own
@@ -310,7 +311,7 @@ RichSchedule linearize_rich(R const& forest,
     r.hash = n->hash_value();
     r.point = point;
     r.consumer_point = point;  // root default; overwritten by parent below
-    r.home = home_scope(n);  // proto-expanded seed residency (empty on leaves)
+    r.home = home_scope(n);    // proto-expanded sliced_modes (empty on leaves)
     r.carried.assign(n->canon_indices().begin(), n->canon_indices().end());
     r.ectx = std::move(ectx);
     r.own_modes = std::move(own_modes);
@@ -325,7 +326,7 @@ RichSchedule linearize_rich(R const& forest,
   // Cross-occurrence union, per canonical value (hash), of the modes that
   // value EVER realizes as its OWN loop (\c batched_here() at the value's own
   // node, not an ancestor's). \c home_scope already folds a node's own
-  // batched-here contribution into its meet (stamp_seed_residency: "the node
+  // batched-here contribution into its meet (stamp_lifetime_masks: "the node
   // AND all its ancestors"), which is right for OTHER consumers of that
   // meet, but wrong for THIS cell's own footprint: a mode a value realizes as
   // its OWN loop slices that value's OPERANDS on the way down, never the

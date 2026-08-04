@@ -27,10 +27,10 @@ namespace sequant::eval {
 /// lives on \p node's result. This filters ALL in-scope batched modes (any
 /// \c BatchModeType the caller's \p ctx_modes happens to carry -- the
 /// function never inspects the kind) to \p node's own slots, matching the
-/// unified all-batched-modes selector (\c stamp_seed_residency) / \c
-/// slot_modes_of in \c lifetime_mask.hpp -- NOT the External-only \c
-/// ext_modes_of. It reuses that file's \c detail::proto_expand_into (ambient
-/// side) and \c detail::slot_modes_of (slot side).
+/// unified all-batched-modes selector of \c stamp_lifetime_masks / \c
+/// slot_modes_of in \c lifetime_mask.hpp. It reuses that file's \c
+/// detail::proto_expand_into (ambient side) and \c detail::slot_modes_of
+/// (slot side).
 ///
 /// Site-invariant: the result is identical whether computed at a read site
 /// (a consumer's \c cache.batch_context()) or a store site (the producer's

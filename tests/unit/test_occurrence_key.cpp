@@ -184,7 +184,7 @@ TEST_CASE(
       {i1, BatchModeType::Contracted}});
 
   // Build ctx_modes the way an all-batched-modes caller would (any
-  // BatchModeType, mirroring stamp_seed_residency's selector).
+  // BatchModeType, mirroring stamp_lifetime_masks's selector).
   container::svector<Index> ctx;
   for (auto const& [ix, kind] : n->batched_here()) ctx.push_back(ix);
 
