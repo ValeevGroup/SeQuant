@@ -4,6 +4,7 @@
 
 #include <SeQuant/domain/mbpt/fwd.hpp>
 
+#include <SeQuant/core/utility/aggregate.hpp>
 #include <SeQuant/core/utility/context.hpp>
 #include <SeQuant/domain/mbpt/op_registry.hpp>
 
@@ -34,6 +35,7 @@ class Context {
   };
 
   struct Options {
+    SEQUANT_DESIGNATED_INIT_ONLY;
     /// whether to use cluster-specific virtuals
     CSV csv = Defaults::csv;
     /// shared pointer to operator registry

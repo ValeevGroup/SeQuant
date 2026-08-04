@@ -2,6 +2,7 @@
 #define SEQUANT_DOMAIN_MBPT_MODELS_CC_HPP
 
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/utility/aggregate.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/utils.hpp>
 #include <SeQuant/domain/mbpt/vac_av.hpp>
@@ -33,6 +34,7 @@ class CC {
 
   /// Configuration options for CC class
   struct Options {
+    SEQUANT_DESIGNATED_INIT_ONLY;
     /// type of CC ansatz. see CC::Ansatz
     Ansatz ansatz = Ansatz::T;
     /// if true, singles amplitudes are excluded from \f$ \hat{T} \f$ and \f$

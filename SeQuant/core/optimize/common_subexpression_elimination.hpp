@@ -7,6 +7,7 @@
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/eval/eval_node_compare.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/utility/aggregate.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
@@ -227,6 +228,7 @@ class SubexpressionReplacer {
 
 template <typename TreeNode>
 struct CSEOptions {
+  SEQUANT_DESIGNATED_INIT_ONLY;
   // TODO: provide predicate that computes the FLOPs required to compute the CSE
   // and compares that with the expected speed for reading the CSE from disk.
   // Use typical FLOPs/s and I/O rates from e.g. https://ssd.userbenchmark.com/

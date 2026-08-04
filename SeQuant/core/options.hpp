@@ -6,6 +6,7 @@
 #define SEQUANT_CORE_OPTIONS_HPP
 
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/utility/aggregate.hpp>
 
 #include <optional>
 #include <string>
@@ -42,6 +43,7 @@ std::wstring to_wstring(CanonicalizationMethod m);
 
 /// @brief options that control behavior of `canonicalize()`
 struct CanonicalizeOptions {
+  SEQUANT_DESIGNATED_INIT_ONLY;
   enum class IgnoreNamedIndexLabel : bool { Yes = true, No = false };
 
   /// TN canonicalization method

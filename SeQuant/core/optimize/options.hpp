@@ -2,6 +2,7 @@
 #define SEQUANT_CORE_OPTIMIZE_OPTIONS_HPP
 
 #include <SeQuant/core/batch_policy.hpp>
+#include <SeQuant/core/utility/aggregate.hpp>
 
 #include <cstddef>
 #include <functional>
@@ -54,6 +55,7 @@ enum class ReorderSum { Reorder, NoReorder };
 /// an evaluation order, trading extra search time for potentially lower op
 /// counts. (Room to grow, e.g. a maximum subnet size to consider.)
 struct CSEOptions {
+  SEQUANT_DESIGNATED_INIT_ONLY;
   bool subnet = false;
 };
 
@@ -68,6 +70,7 @@ struct CSEOptions {
 /// is inert in the dense case. \c machine_balance == 0 (default) recovers the
 /// pure-flop tie-break. See doc/dev/specs/2026-06-23-roofline-tiebreak-cost.md.
 struct RooflineParams {
+  SEQUANT_DESIGNATED_INIT_ONLY;
   /// Machine balance beta = 8*F/B in FLOPs per element of traffic. 0 = off.
   double machine_balance = 0.0;
   /// Capacity M of the binding fast memory level, in elements (e.g. LLC/8).
@@ -86,6 +89,7 @@ struct RooflineParams {
 /// weighting, and \c roofline.machine_balance == 0 keeps the pure-flop
 /// tie-break.
 struct CostParams {
+  SEQUANT_DESIGNATED_INIT_ONLY;
   /// Marks a LEAF tensor as volatile (amplitude-dependent), so the contraction
   /// forming any subset that contains it is replayed every iteration. Empty =>
   /// nothing volatile (replay weighting off).
@@ -120,6 +124,7 @@ using index_to_extent_t = std::function<std::size_t(Index const&)>;
 
 /// Options that control behavior of \ref sequant::optimize.
 struct OptimizeOptions {
+  SEQUANT_DESIGNATED_INIT_ONLY;
   /// Objective function to minimize.
   ObjectiveFunction objective_function = ObjectiveFunction::DenseFLOPs;
 
