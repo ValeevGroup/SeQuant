@@ -82,7 +82,7 @@ class ExecutionContext {
       throw Exception("Alias '" + alias + "' already exists as a data ID");
     }
 
-    for (std::string_view current_id : ids) {
+    for (const auto &current_id : ids) {
       for (const std::string &expanded : expand_id(current_id)) {
         auto it = id_to_data_indices_.find(expanded);
 
