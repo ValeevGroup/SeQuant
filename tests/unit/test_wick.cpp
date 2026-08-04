@@ -35,8 +35,8 @@
 
 namespace sequant {
 
-// the particle-symmetric default symmetry pack `ps` (column = Symm) is defined
-// in catch2_sequant.hpp and shared across the MBPT test TUs
+// the particle-symmetric default symmetry pack `particle_symmetric` (column =
+// Symm) is defined in catch2_sequant.hpp and shared across the MBPT test TUs
 
 struct WickAccessor {};
 
@@ -1018,8 +1018,10 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
 
         // multiply tensor factors and expand
         auto wick_result_2 =
-            ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"}, ps) *
-            ex<Tensor>(L"t", bra{L"a_4", L"a_5"}, ket{L"i_4", L"i_5"}, ps) *
+            ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
+                       particle_symmetric) *
+            ex<Tensor>(L"t", bra{L"a_4", L"a_5"}, ket{L"i_4", L"i_5"},
+                       particle_symmetric) *
             wick_result;
         expand(wick_result_2);
         REQUIRE(wick_result_2->size() == 4);  // still 4 terms

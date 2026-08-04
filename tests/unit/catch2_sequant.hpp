@@ -31,7 +31,8 @@ namespace sequant {
 /// Defined `inline` in this shared header (rather than once per TU) so that
 /// unity/jumbo test builds see a single definition instead of colliding
 /// anonymous-namespace copies.
-inline constexpr TensorSymmetries ps{.column = ColumnSymmetry::Symm};
+inline constexpr TensorSymmetries particle_symmetric{.column =
+                                                         ColumnSymmetry::Symm};
 }  // namespace sequant
 
 namespace Catch {
