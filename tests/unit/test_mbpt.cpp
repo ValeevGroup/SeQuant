@@ -617,6 +617,11 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
               commutator(commutator(commutator(H(), t(2)), t(2)), t(2));
       REQUIRE(simplify(expr2 - expected2) == ex<Constant>(0));
 
+      // the default LSTOptions must produce the explicit commutator form, i.e.
+      // lst() must never assume the caller supplies operator connectivity
+      REQUIRE(simplify(lst(H(), t(2), 3) - expected2) == ex<Constant>(0));
+      REQUIRE(simplify(lst(H(), t(2), 3, {}) - expected2) == ex<Constant>(0));
+
       // unitary, rank 2
       using sequant::adjoint;
       auto expr3 =
@@ -635,6 +640,11 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
           ex<Constant>(rational{1, 2}) * (commutator(generator, t(2)) -
                                           commutator(generator, adjoint(t(2))));
       REQUIRE(simplify(expr4 - expected4) == ex<Constant>(0));
+
+      // `unitary` must no longer select the commutator representation: it only
+      // swaps B for B - B^+, leaving use_connected_form at its default
+      REQUIRE(simplify(lst(H(), t(2), 2, {.unitary = true}) - expected4) ==
+              ex<Constant>(0));
     }  // SECTION("lst")
 
     SECTION("predefined") {
