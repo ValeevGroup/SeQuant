@@ -187,8 +187,48 @@ inline double peak_profile_replay(Schedule const& s) {
 }
 
 ///
-/// \brief Linearize an eval \p forest into a \c Schedule of value cells over a
-/// single post-order static-point timeline, ready for \c peak_profile_sweep.
+/// \brief One value group in a RICH linearized schedule (Phase 4a O2 working
+/// representation): the same per-value fold as \c Cell, but keeping the
+/// pieces \c Cell already collapses into \c footprint -- \c carried and
+/// \c home_modes separately -- plus the one genuinely NEW field, \c
+/// enclosing_modes, so a later spill pass (O2) has enough to consider
+/// demoting a carried mode INTO the home.
+///
+struct ValueCell {
+  std::size_t value_id;  //!< stable index of the value group (== its slot in
+                         //!< \c RichSchedule::cells)
+  int home_depth;        //!< \c home_depth_of(home_scope, ectx) at the
+                         //!< FIRST occurrence -- informational, as \c
+                         //!< Cell::home_depth
+  container::svector<Index> carried;     //!< canon_indices (same across
+                                         //!< occurrences)
+  container::svector<Index> home_modes;  //!< the Phase-3b footprint home:
+                                         //!< \c r.home MINUS
+                                         //!< own_modes_union[hash], read off
+                                         //!< the FIRST occurrence
+  container::svector<Index>
+      enclosing_modes;    //!< NEW: union, over ALL occurrences, of every
+                          //!< loop mode that EVER encloses this value (\c
+                          //!< ectx[i].first for each level of each
+                          //!< occurrence's ectx)
+  std::size_t first_use;  //!< earliest static point the value is live at
+  std::size_t last_use;   //!< latest static point the value is live at (its
+                          //!< last consumer), inclusive
+};
+
+///
+/// \brief A whole forest linearized to a flat list of RICH value cells over a
+/// single monotone static-point timeline. The \c Schedule consumed by \c
+/// peak_profile_sweep is a pure PROJECTION of this (see \c linearize).
+///
+struct RichSchedule {
+  container::svector<ValueCell> cells;
+  std::size_t num_points = 0;  //!< one past the last static point
+};
+
+///
+/// \brief Linearize an eval \p forest into a \c RichSchedule of RICH value
+/// cells over a single post-order static-point timeline.
 ///
 /// \details Stamps the Phase-3a seed residency first (so \c home_scope is
 /// populated), then walks every tree in post-order (children before parent),
@@ -200,19 +240,26 @@ inline double peak_profile_replay(Schedule const& s) {
 /// (loop-result) value.
 ///
 /// Nodes are then grouped by \c hash_value() -- the same value identity \c
-/// CacheManager uses -- into one \c Cell per distinct value. Under perfect CSE
-/// the group's \c first_use is its single (earliest) production point and its
-/// \c last_use is the latest structural consumer (the max parent point over
-/// the group; a root with no parent contributes its own point). The home depth
-/// and footprint are read off any occurrence (the seed-residency meet is
-/// identical across occurrences of a hoisted value).
+/// CacheManager uses -- into one \c ValueCell per distinct value. Under
+/// perfect CSE the group's \c first_use is its single (earliest) production
+/// point and its \c last_use is the latest structural consumer (the max
+/// parent point over the group; a root with no parent contributes its own
+/// point). \c home_depth, \c carried, and \c home_modes are read off the
+/// FIRST occurrence (the seed-residency meet is identical across occurrences
+/// of a hoisted value); \c enclosing_modes accumulates across EVERY
+/// occurrence, since a demoted mode may only enclose the value at SOME of
+/// its occurrences.
 ///
 /// \p block_of is any `Index -> std::size_t` callable giving the block
-/// (sliced) element count for a mode; forwarded to \c detail::cell_footprint.
+/// (sliced) element count for a mode; only used while walking (to size the
+/// enclosing-batch-context entries pushed on descent) -- \p cm is accepted
+/// for signature symmetry with \c linearize / \c detail::cell_footprint but
+/// not otherwise used here (no footprint is computed at this stage).
 ///
 template <meta::eval_node_range R, typename BlockOfFn>
-Schedule linearize(R const& forest, dryrun::CostModel const& cm,
-                   BlockOfFn const& block_of) {
+RichSchedule linearize_rich(R const& forest,
+                            [[maybe_unused]] dryrun::CostModel const& cm,
+                            BlockOfFn const& block_of) {
   using Node = std::ranges::range_value_t<R>;
 
   // Populate home_scope (EvalExpr::seed_residency) on every internal node.
@@ -294,14 +341,25 @@ Schedule linearize(R const& forest, dryrun::CostModel const& cm,
       if (std::find(acc.begin(), acc.end(), m) == acc.end()) acc.push_back(m);
   }
 
-  // Group occurrences by value identity (hash_value): one Cell per group.
-  Schedule out;
+  // Group occurrences by value identity (hash_value): one ValueCell per
+  // group.
+  RichSchedule out;
   out.num_points = counter;
   std::unordered_map<std::size_t, std::size_t> hash_to_cell;
   for (auto const& r : recs) {
+    // Fold this occurrence's ectx into the running enclosing_modes union
+    // (every occurrence contributes, unlike home_modes/carried which are
+    // read off the FIRST occurrence only).
+    auto fold_enclosing = [&](container::svector<Index>& enclosing_modes) {
+      for (auto const& e : r.ectx)
+        if (std::find(enclosing_modes.begin(), enclosing_modes.end(),
+                      e.first) == enclosing_modes.end())
+          enclosing_modes.push_back(e.first);
+    };
+
     auto const it = hash_to_cell.find(r.hash);
     if (it == hash_to_cell.end()) {
-      Cell c;
+      ValueCell c;
       c.value_id = out.cells.size();
       c.first_use = r.point;
       c.last_use = r.consumer_point;
@@ -312,14 +370,53 @@ Schedule linearize(R const& forest, dryrun::CostModel const& cm,
         if (std::find(self_modes.begin(), self_modes.end(), m) ==
             self_modes.end())
           home_modes.push_back(m);
-      c.footprint = detail::cell_footprint(r.carried, home_modes, cm, block_of);
+      c.carried = r.carried;
+      c.home_modes = std::move(home_modes);
+      fold_enclosing(c.enclosing_modes);
       hash_to_cell.emplace(r.hash, c.value_id);
       out.cells.push_back(std::move(c));
     } else {
-      Cell& c = out.cells[it->second];
+      ValueCell& c = out.cells[it->second];
       c.first_use = std::min(c.first_use, r.point);
       c.last_use = std::max(c.last_use, r.consumer_point);
+      fold_enclosing(c.enclosing_modes);
     }
+  }
+  return out;
+}
+
+///
+/// \brief Linearize an eval \p forest into a \c Schedule of value cells over a
+/// single post-order static-point timeline, ready for \c peak_profile_sweep.
+///
+/// \details A thin PROJECTION of \c linearize_rich: runs the one post-order
+/// walk there, then collapses each \c ValueCell's \c carried / \c home_modes
+/// down to a single \c Cell::footprint via \c detail::cell_footprint. The
+/// returned \c Schedule is BYTE-IDENTICAL to what the (pre-Phase-4a)
+/// inline-walk version of \c linearize produced -- \c enclosing_modes is the
+/// only new information \c linearize_rich computes, and it does not reach
+/// this projection.
+///
+/// \p block_of is any `Index -> std::size_t` callable giving the block
+/// (sliced) element count for a mode; forwarded to \c detail::cell_footprint.
+///
+template <meta::eval_node_range R, typename BlockOfFn>
+Schedule linearize(R const& forest, dryrun::CostModel const& cm,
+                   BlockOfFn const& block_of) {
+  RichSchedule const rich = linearize_rich(forest, cm, block_of);
+
+  Schedule out;
+  out.num_points = rich.num_points;
+  out.cells.reserve(rich.cells.size());
+  for (auto const& vc : rich.cells) {
+    Cell c;
+    c.value_id = vc.value_id;
+    c.home_depth = vc.home_depth;
+    c.footprint =
+        detail::cell_footprint(vc.carried, vc.home_modes, cm, block_of);
+    c.first_use = vc.first_use;
+    c.last_use = vc.last_use;
+    out.cells.push_back(c);
   }
   return out;
 }
