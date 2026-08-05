@@ -22,22 +22,22 @@
 #include <utility>
 
 // Bernoulli expansion of the unitary-CC similarity-transformed Hamiltonian
-// H̄ = e^{−σ} H e^{σ}, σ = T − T† (anti-Hermitian). Because σ mixes excitation
-// and de-excitation the plain BCH series does not terminate; the Bernoulli
-// expansion rewrites it with Bernoulli numbers as the expansion coefficients,
-// which leaves the truncation at a chosen commutator rank as the only
-// approximation. H is split as F (Fock, rank-preserving) + V (fluctuation
-// potential), and every operator O is split into O_N (all excitation and
-// de-excitation operators) and O_R = O − O_N. At a converged RHF/UHF reference
-// two cancellations hold: F survives only in H̄¹, and the higher orders carry
-// only R-subscripted inner commutators.
+// H̄ = e^{−σ} H e^{σ}, σ = T − T† (anti-Hermitian). For UCC the plain BCH
+// series does not terminate, because σ mixes excitation and de-excitation.
+// This file implements the Bernoulli-number resummation of 10.1063/1.5030344
+// that fixes that. H splits as F (Fock) + V (fluctuation potential); every
+// operator O splits into O_N (its pure excitation/de-excitation part) and
+// O_R = O − O_N.
 //
-// All equation references are to 10.1063/1.5030344 (Sec. III B): superoperator
-// inversion Eqs. (36)-(39); Bernoulli numbers B₁=−1/2, B₂=1/12, B₃=0, B₄=−1/720
-// Eq. (40); the N/R split and the UCC amplitude condition V̄_N = 0 above and at
-// Eq. (43); the iterative recursion for V̄ Eq. (44); the assembly
-// H̄ = Σ_k H̄^k Eq. (45); the rank-by-rank operators H̄⁰..H̄⁴ Eqs. (46)-(50).
-// Cancellation #1 (F enters only H̄¹) is stated just below Eq. (50).
+// Equation numbers below are all from 10.1063/1.5030344, Sec. III B:
+// superoperator inversion Eqs. (36)-(39); Bernoulli numbers B₁=−1/2, B₂=1/12,
+// B₃=0, B₄=−1/720, Eq. (40); the N/R split and the UCC amplitude condition
+// V̄_N = 0, above and at Eq. (43); the H̄ recursion, Eq. (44); the sum
+// H̄ = Σ_k H̄^k, Eq. (45); H̄⁰..H̄⁴, Eqs. (46)-(50).
+//
+// The F-cancellation: at a canonical (converged) HF reference, F has no
+// occupied-virtual block (Eq. (32)), so F enters H̄ only through H̄¹ (stated
+// just below Eq. (50)). Every H̄^k built below relies on this.
 
 namespace {
 
@@ -69,17 +69,18 @@ const sequant::NormalOperator<sequant::Statistics::FermiDirac>* find_nop(
   return nullptr;
 }
 
-/// Classifies one block-resolved term as N or R (Cancellation #2). A term is N
-/// iff its single residual NormalOperator is a pure excitation (all creators
-/// pure-unoccupied AND all annihilators pure-occupied) or a pure de-excitation
-/// (all creators pure-occupied AND all annihilators pure-unoccupied), with rank
-/// ≤ @p cutoff. A term with no residual NormalOperator is rank-preserving,
+/// Classifies one block-resolved term as N or R, per the O_N/O_R split above
+/// Eq. (43) of 10.1063/1.5030344. A term is N iff its single residual
+/// NormalOperator is a pure excitation (all creators pure-unoccupied AND all
+/// annihilators pure-occupied) or a pure de-excitation (the reverse), with
+/// rank ≤ @p cutoff. A term with no residual NormalOperator is rank-preserving,
 /// hence R.
 ///
-/// Rank > @p cutoff falls to R rather than being dropped. An ]_R filter drops a
-/// term only because the amplitude condition V̄_N = 0 (Eq. (43)) makes it zero,
-/// and for σ truncated at rank N that condition covers rank ≤ N only. Eq. (43)
-/// states O_N with no rank limit because there σ carries every rank.
+/// Rank > @p cutoff falls to R rather than being dropped. The R filter drops a
+/// term only because the amplitude condition V̄_N = 0 (Eq. (43)) makes it
+/// zero, and that condition holds for rank ≤ N only, since σ here is
+/// truncated at rank N. Eq. (43) itself states O_N with no rank limit,
+/// because there σ carries every rank.
 bool is_N_term(const sequant::ExprPtr& term, std::size_t cutoff) {
   using namespace sequant;
   auto isr = get_default_context().index_space_registry();
@@ -362,7 +363,7 @@ ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
   add(1, simplify(F + V));  // H̄⁰ = F + V   [Eq. (46)]
   if (rank >= 1) {
     // H̄¹ = [F,σ] + ½[V,σ] + ½[V_R,σ]   [Eq. (47)]. F enters H̄ ONLY here
-    // (Cancellation #1, stated just below Eq. (50)).
+    // (the F-cancellation, stated just below Eq. (50)).
     add(1, wick_commutator(F, sigma));
     add({1, 2}, nest('A', "A"));
     add({1, 2}, nest('R', "A"));
@@ -385,7 +386,7 @@ ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
   if (rank >= 4) {
     // H̄⁴ = Eq. (50), the nine order-4 terms produced by the recursion Eq. (44),
     // V̄^{k+1} = σ̂F + X̂⁻¹(σ̂)e^{σ̂}V − Σ_{n≠0} B_n σ̂^n V̄_R^{k}. F is absent here
-    // (Cancellation #1). Listed in the paper's order; the outermost tag is
+    // (the F-cancellation). Listed in the paper's order; the outermost tag is
     // always A.
     add({1, 16}, nest('R', "RRRA"));
     add({1, 16}, nest('A', "RRRA"));

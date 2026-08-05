@@ -197,7 +197,9 @@ class CC {
   ///     | H_SS  H_SD |    qUCCSD:  | 2  1 |
   ///     | H_DS  H_DD |             | 1  0 |
   ///   read row by row, i.e. `{2,1,1,0}`: H_SS through the double commutator
-  ///   [[V,σ],σ], H_SD and H_DS through the single [V,σ], H_DD the bare f+v
+  ///   [[V,σ],σ], H_SD and H_DS through the single [V,σ], H_DD the bare
+  ///   Hamiltonian integrals (no commutators): f (Eqs. (30),(34)) plus
+  ///   \f$ \langle ij\|kl\rangle,\ \langle ab\|cd\rangle \f$ (Eq. (48))
   ///   (10.1063/5.0062090 Sec. II C, Eqs. (29), (41), (44), (48)).
   ///   `K` manifolds give a row-major `K`×`K` matrix ordered by ASCENDING
   ///   manifold rank, so one set of numbers serves EE, IP and EA (read S as

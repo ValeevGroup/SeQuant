@@ -55,11 +55,10 @@ ExprPtr expand_to_blocks(const ExprPtr& expr);
 /// @p cutoff. Applies expand_to_blocks first.
 ExprPtr N_part(const ExprPtr& expr, std::size_t cutoff);
 
-/// R (rank-preserving remainder) part: wick_reduce(expr) minus
-/// N_part(expr, cutoff). Unlike N_part the result is NOT block-resolved. It
-/// stays in compact general-index form. That is exact here, because
-/// expand_to_blocks is an identity, and much cheaper for the nested commutators
-/// that consume R.
+/// R part (O_R of 10.1063/1.5030344: expr minus its N part). Unlike N_part
+/// the result is NOT block-resolved; it stays in compact general-index form.
+/// This is exact because expand_to_blocks is an identity, and it is much
+/// cheaper for the nested commutators that consume R.
 ExprPtr R_part(const ExprPtr& expr, std::size_t cutoff);
 
 }  // namespace detail

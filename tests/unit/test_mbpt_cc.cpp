@@ -130,8 +130,8 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     using namespace sequant;
     using namespace sequant::mbpt;
     // Equation references are to 10.1063/1.5030344, Sec. III B.
-    // Cancellation #1: F appears only in H̄¹, so rank r − rank r−1 is F-free
-    // for r ≥ 2.
+    // The F-cancellation: F appears only in H̄¹, so rank r − rank r−1 is
+    // F-free for r ≥ 2.
     auto h0 = bernoulli::hbar(2, 0, false);
     auto h1 = bernoulli::hbar(2, 1, false);
     auto h2 = bernoulli::hbar(2, 2, false);
@@ -214,7 +214,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     REQUIRE(size(ee[2]) == 21);
 
     // the same ranks drive IP: manifolds are indexed by ascending rank, so
-    // {1h, 2h1p} takes the place of {S, D}
+    // {1h, 2h1p} takes the place of {S, D} (10.1021/acs.jctc.5c01991 Table 1)
     const auto ip = cc.eom_r(nₚ(1), nₕ(2), quccsd);
     REQUIRE(ip.size() == 2);
     REQUIRE(size(ip[0]) == 32);

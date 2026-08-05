@@ -402,11 +402,12 @@ std::vector<ExprPtr> eom_r_blocked(const CC& cc, nₚ np, nₕ nh,
   const bool tensor_level = cc.hbar_expansion() == CC::HbarExpansion::Bernoulli;
 
   // One H̄ per distinct truncation order, reduced to its R part. The N part is
-  // the ground-state amplitude residual <Φl|H̄|Φ0>, which Eq. (6) zeroes at
-  // the amplitude rank only, so a block truncated below it would keep the
-  // residual. Dropping it everywhere is exact: an N operator of rank r shifts
-  // the manifold rank by r, so it never reaches a diagonal block, and it has
-  // no reference expectation value, so the shift below is unchanged.
+  // the ground-state amplitude residual <Φl|H̄|Φ0>, which Eq. (6) zeroes only
+  // at the amplitude rank. A block truncated below that rank would keep the
+  // residual, so drop N everywhere instead. This is exact: an N operator of
+  // rank r shifts the manifold rank by r, so it never lands on a diagonal
+  // block, and it has no reference expectation value, so the −E shift below
+  // is unchanged either way.
   container::map<size_t, ExprPtr> hbars;
   for (const auto k : block_ranks) {
     auto [it, fresh] = hbars.try_emplace(k);
