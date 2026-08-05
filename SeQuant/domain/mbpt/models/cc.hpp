@@ -188,20 +188,25 @@ class CC {
   /// @return vector of left side sigma equations, element 0 is always null
   [[nodiscard]] std::vector<ExprPtr> eom_l(nₚ np, nₕ nh) const;
 
-  /// @brief derives the @p rank -particle reduced density matrix (RDM) as the
-  /// reference expectation value of a similarity-transformed number operator.
+  /// @brief derives the reduced density matrix (RDM) of particle rank @p rank
+  /// as the reference expectation value of a similarity-transformed
+  /// replacement operator, whose free-index ordinals are fixed by op::ã.
   /// Traditional ansatz:
-  /// \f$ \gamma^{p_1 \dots p_r}_{q_1 \dots q_r} = \langle 0| (1 +
-  /// \hat{\Lambda}) e^{-\hat{T}} \{ a^{p_1 \dots p_r}_{q_1 \dots q_r} \}
-  /// e^{\hat{T}} |0 \rangle \f$; unitary ansatz drops \f$ \hat{\Lambda} \f$ and
-  /// uses \f$ e^{-\hat{\sigma}} \dots e^{\hat{\sigma}} \f$ with \f$
-  /// \hat{\sigma} = \hat{T} - \hat{T}^\dagger \f$. The number-operator indices
-  /// are in the complete space, so they survive as the free indices of the
-  /// result. Returns the *linked* density (the number
-  /// operator is required to connect to the cluster amplitudes).
+  /// \f$ \gamma^{p_1 \dots p_r}_{p_{r+1} \dots p_{2r}} = \langle 0| (1 +
+  /// \hat{\Lambda}) e^{-\hat{T}} \{ \tilde{a}^{p_1 \dots p_r}_{p_{r+1} \dots
+  /// p_{2r}} \} e^{\hat{T}} |0 \rangle \f$; unitary ansatz drops \f$
+  /// \hat{\Lambda} \f$ and uses \f$ e^{-\hat{\sigma}} \dots e^{\hat{\sigma}}
+  /// \f$ with \f$ \hat{\sigma} = \hat{T} - \hat{T}^\dagger \f$.
+  /// @note The reference contribution is not included; the caller adds the
+  ///   \f$ \delta \f$ term.
+  /// @note For @p rank >= 2 the result is not manifestly antisymmetric: the
+  ///   replacement operator carries no antisymmetrizer.
+  /// @note For the traditional ansatz this is the *linked* density; the
+  ///   unitary ansatz uses no connectivity.
   /// @param rank particle rank of the RDM (1 = one-particle \f$ \gamma \f$,
   ///   2 = two-particle \f$ \Gamma \f$, ...)
-  /// @param comm_rank maximum order of nested commutators in \f$ \bar{N} \f$;
+  /// @param comm_rank maximum order of nested commutators in the
+  ///   similarity transform of the replacement operator;
   ///   if not specified, defaults to `min(2*rank, rank + N)` for the
   ///   traditional ansatz (where the expansion terminates exactly) and to
   ///   `hbar_comm_rank` for the unitary ansatz (where it does not). Pass an

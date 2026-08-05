@@ -44,12 +44,12 @@ CC::CC(size_t n, const Options& opts)
       hbar_comm_rank_(opts.hbar_comm_rank),
       pertbar_comm_rank_(opts.pertbar_comm_rank) {
   if (unitary())
-    SEQUANT_ASSERT(hbar_comm_rank_ &&
+    SEQUANT_ASSERT(hbar_comm_rank_,
                    "CC: hbar_comm_rank is required for unitary ansatz");
   if (ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU)
-    SEQUANT_ASSERT(
-        skip_singles_ &&
-        "CC: skip_singles must be true for orbital-optimized ansatz");
+    SEQUANT_ASSERT(skip_singles_,
+                   "CC: skip_singles must be true for orbital-optimized "
+                   "ansatz");
 }
 
 CC::Ansatz CC::ansatz() const { return ansatz_; }
@@ -217,13 +217,12 @@ ExprPtr CC::rdm(size_t rank, std::optional<size_t> comm_rank) const {
 
   // 2. similarity transform e^{-σ} ã e^{σ} (σ = T for traditional and σ = T−T⁺
   // for unitary). Traditional ansatz: the expansion terminates exactly, so the
-  // default is the largest number of T's that can survive the VEV below:
+  // default is the largest number of T's that can survive the VEV below: each T
+  // must consume at least one of ã's 2r legs (k <= 2r), and T's 2k
+  // quasi-creators must be absorbed by ã's 2r plus Λ's 2N legs (k <= r + N).
   // Unitary ansatz: T⁺ contracts with T, the expansion never terminates, so
-  // there is no safe default; use the engine's hbar_comm_rank.
-  if (unitary())
-    SEQUANT_ASSERT(hbar_comm_rank_ &&
-                   "hbar_comm_rank must be specified for unitary ansatz in "
-                   "CC::rdm");
+  // there is no safe default; use the engine's hbar_comm_rank (the ctor
+  // guarantees it is set).
   const auto commutator_rank = comm_rank.value_or(
       unitary() ? hbar_comm_rank_.value() : std::min(2 * rank, rank + N));
   auto bar = mbpt::lst(replacer, T(N, skip_singles()), commutator_rank,
@@ -248,13 +247,9 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
   SEQUANT_ASSERT(rank == 1 &&
                  "sequant::mbpt::CC::tʼ(): only one-body perturbation "
                  "operator is supported now");
-  if (unitary()) {
-    SEQUANT_ASSERT(hbar_comm_rank_ &&
-                   "hbar_comm_rank must be specified for unitary ansatz");
-    SEQUANT_ASSERT(pertbar_comm_rank_ &&
-                   "pertbar_comm_rank must be specified for unitary "
-                   "ansatz");
-  }
+  if (unitary())
+    SEQUANT_ASSERT(pertbar_comm_rank_,
+                   "pertbar_comm_rank must be specified for unitary ansatz");
 
   // construct h1_bar
   // truncate h1_bar at rank 2 for one-body perturbation operator and at rank 4
@@ -379,10 +374,6 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) const {
     SEQUANT_ASSERT(
         get_default_context().spbasis() != SPBasis::Spinfree &&
         "spin-free basis does not yet support non particle-conserving cases");
-  if (unitary())
-    SEQUANT_ASSERT(hbar_comm_rank_ &&
-                   "hbar_comm_rank must be specified for unitary ansatz "
-                   "in CC::eom_r");
 
   // construct hbar
   const auto hbar = this->hbar();
