@@ -22,6 +22,7 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <ostream>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -34,6 +35,18 @@ namespace sequant::eval {
 // forward declaration here avoids the include cycle.
 template <typename TreeNode>
 class PlacementRouter;
+
+/// \brief Destination for the structured schedule dump (SCHEDULE_RUN_EVENT
+/// records) emitted by `evaluate()`. A caller sets one on the (root) cache to
+/// capture one evaluation's batched schedule to \c os; \c fired is a fire-once
+/// latch the caller raises after the first capture so a later re-entry (e.g. a
+/// subsequent CC iteration) does not re-dump. Null sink / null \c os => no dump
+/// (the default, byte-identical to before this seam). Non-owning: \c os must
+/// outlive the cache.
+struct ScheduleSink {
+  std::ostream* os = nullptr;
+  bool fired = false;
+};
 
 }  // namespace sequant::eval
 
@@ -241,6 +254,12 @@ class CacheManager {
   /// deleter is type-erased at construction, where the type is complete).
   std::shared_ptr<eval::PlacementRouter<TreeNode> const> owned_router_{};
 
+  /// Non-owning schedule-dump sink (see \c eval::ScheduleSink). Null (default)
+  /// => `evaluate()` emits no SCHEDULE_RUN_EVENT records; falls through to
+  /// \c parent_ (only the root cache is wired in practice). The pointee must
+  /// outlive this cache.
+  eval::ScheduleSink* schedule_sink_ = nullptr;
+
  public:
   /// Sets the custom evaluator (see custom_evaluator_type). Pass an empty
   /// std::function to clear it.
@@ -308,6 +327,19 @@ class CacheManager {
     return placement_router_ ? placement_router_
            : parent_         ? parent_->placement_router()
                              : nullptr;
+  }
+
+  /// Sets the schedule-dump sink (see schedule_sink_). Pass nullptr to detach.
+  /// Non-owning; the pointee (and its \c os) must outlive this cache.
+  void set_schedule_sink(eval::ScheduleSink* s) noexcept { schedule_sink_ = s; }
+
+  /// \return the local schedule sink if set, else the one inherited from
+  ///         \c parent_ (only the root cache is wired in practice); nullptr if
+  ///         none is wired anywhere along the chain. Non-owning.
+  [[nodiscard]] eval::ScheduleSink* schedule_sink() const noexcept {
+    return schedule_sink_ ? schedule_sink_
+           : parent_      ? parent_->schedule_sink()
+                          : nullptr;
   }
 
   /// Ensure a scope-hoist slot exists for @p key so a loop-invariant
