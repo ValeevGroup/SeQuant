@@ -341,7 +341,8 @@ inline CostProfile cost_profile(
     std::vector<EvalNodeDryRun> const& forest, BatchPolicy const& policy,
     CacheConfig const& cfg, SizeRegime const& regime,
     std::wostream* trace = nullptr,
-    PlacementRouter<EvalNodeDryRun> const* router = nullptr) {
+    PlacementRouter<EvalNodeDryRun> const* router = nullptr,
+    sequant::eval::ScheduleSink* schedule_sink = nullptr) {
   CostProfile profile;
 
   auto cm = std::make_shared<CostModel const>(regime);
@@ -379,6 +380,11 @@ inline CostProfile cost_profile(
   // Null (default) => every existing caller's replay is unaffected, since
   // set_placement_router(nullptr) is exactly the cache's own default.
   cache.set_placement_router(router);
+  // Route this replay's SCHEDULE_RUN_EVENT records to the caller's sink (if
+  // any). Null (default) => no dump, byte-identical. The wet-run sets an
+  // equivalent sink on its own eval cache, so the two batched schedules can be
+  // captured and diffed for structural equivalence.
+  cache.set_schedule_sink(schedule_sink);
 
   auto& logger = Logger::instance();
   // RAII guard restoring the process-global Logger::eval state on EVERY exit
