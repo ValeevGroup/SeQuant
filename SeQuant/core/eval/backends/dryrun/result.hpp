@@ -286,23 +286,33 @@ struct DryRunOps {
       return out;
     }
     // CALLER-SUPPLIED PARTITION: if the mode's space has a recorded batch
-    // partition (SizeRegime::space_slice_extents) AND the mode is at full
-    // extent (the slice extents sum to `extent`, i.e. this is the batch axis,
-    // not a spectator already narrowed by `ov`), use it directly -- accumulate
-    // the slice extents into contiguous [lo,hi) ranges. `target_batch_size` is
-    // ignored here: the caller already applied it when it built the partition
-    // (e.g. via batch_slice_extents_from_tiles for a tiled backend). The
-    // dry-run backend stays model-agnostic -- it just reads the slice extents.
+    // partition (SizeRegime::space_slice_extents), the wet backend slices this
+    // axis along whole TILES (mode_batches_of_trange1 reads the operand's real
+    // TiledRange1), so a batch boundary always falls on a tile edge and a
+    // (sub)range spanning N whole tiles yields N batches -- NOT extent/target
+    // uniform blocks. The partition slices ARE those target-grouped tile edges
+    // (batch_slice_extents_from_tiles applied the target once, at harvest), so
+    // we emit the PREFIX of partition slices that sums to `extent`:
+    //   - outer call (ov absent, extent == full axis) => all slices, the full
+    //     partition (e.g. aux 672 -> [168,168,168,168], 4 batches);
+    //   - nested call (ov narrowed the axis to one outer batch, extent < full)
+    //     => the prefix reaching that extent, so a single-tile sub-range (168)
+    //     is ONE atomic batch, matching the wet backend, instead of being
+    //     re-sliced into ceil(168/64)=3 uniform blocks (which then cascade).
+    // `target_batch_size` is not re-applied here: the partition already encodes
+    // it. If `extent` does not land on a partition boundary (not tile-aligned),
+    // fall through to uniform blocks. The dry-run stays model-agnostic -- it
+    // only reads slice extents; the caller decided the tiling.
     auto const& slices = cm->regime().slice_extents(ix);
-    std::size_t const slice_sum =
-        std::accumulate(slices.begin(), slices.end(), std::size_t{0});
-    if (!slices.empty() && slice_sum == extent) {
+    if (!slices.empty()) {
       std::size_t lo = 0;
       for (std::size_t const s : slices) {
+        if (lo >= extent) break;
         out.push_back({lo, lo + s});
         lo += s;
       }
-      return out;
+      if (lo == extent) return out;  // extent tile-aligned to the partition
+      out.clear();                   // not aligned -> uniform fallback below
     }
     // Fallback: uniform target_batch_size blocks (no partition recorded).
     for (std::size_t lo = 0; lo < extent; lo += target_batch_size)
