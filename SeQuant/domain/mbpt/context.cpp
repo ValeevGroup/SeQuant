@@ -117,7 +117,7 @@ std::shared_ptr<OpRegistry> make_minimal_registry() {
       .add(L"g", OpClass::Gen)    /// 2-body Coulomb
       .add(L"f", OpClass::Gen)    /// Fock operator
       .add(L"θ", OpClass::Gen)    /// general fock space operator
-      .add(L"N", OpClass::Gen)    /// number (replacement) operator
+      .add(L"ã", OpClass::Gen)    /// replacement operator
       .add(L"t", OpClass::Ex)     /// cluster operator
       .add(L"λ", OpClass::Deex)   /// deexcitation cluster operator
       .add(L"R", OpClass::Ex)     /// right-hand eigenstate
@@ -136,7 +136,7 @@ std::shared_ptr<OpRegistry> make_legacy_registry() {
       .add(L"f̃", OpClass::Gen)
       .add(L"g", OpClass::Gen)
       .add(L"θ", OpClass::Gen)
-      .add(L"N", OpClass::Gen)  /// number (replacement) operator
+      .add(L"ã", OpClass::Gen)  /// replacement operator
       .add(L"t", OpClass::Ex)
       .add(L"λ", OpClass::Deex)
       .add(L"R", OpClass::Ex)

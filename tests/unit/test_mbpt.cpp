@@ -660,21 +660,21 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
               L"{{\\theta^{{p_2}}_{{p_1}}}{\\tilde{a}^{{p_1}}_{{p_2}}}}");
 
       {
-        // number operator: label "N", lowering yields a bare
+        // replacement operator: label "ã", lowering yields a bare
         // FNOperator with `rank` cre and `rank` ann over the complete space
-        auto N_2 = N(2)->as<op_t>();
-        REQUIRE(N_2.label() == L"N");
+        auto ã_2 = ã(2)->as<op_t>();
+        REQUIRE(ã_2.label() == L"ã");
 
-        auto N_2_tform = N_2.tensor_form();
-        REQUIRE(N_2_tform->is<FNOperator>());
-        const auto& N_2_fnop = N_2_tform->as<FNOperator>();
-        REQUIRE(N_2_fnop.ncreators() == 2);
-        REQUIRE(N_2_fnop.nannihilators() == 2);
+        auto ã_2_tform = ã_2.tensor_form();
+        REQUIRE(ã_2_tform->is<FNOperator>());
+        const auto& ã_2_fnop = ã_2_tform->as<FNOperator>();
+        REQUIRE(ã_2_fnop.ncreators() == 2);
+        REQUIRE(ã_2_fnop.nannihilators() == 2);
 
         const auto complete_space = get_complete_space(Spin::any);
-        for (const auto& o : N_2_fnop.creators())
+        for (const auto& o : ã_2_fnop.creators())
           REQUIRE(o.index().space() == complete_space);
-        for (const auto& o : N_2_fnop.annihilators())
+        for (const auto& o : ã_2_fnop.annihilators())
           REQUIRE(o.index().space() == complete_space);
       }
 

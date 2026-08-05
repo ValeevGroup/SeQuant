@@ -211,13 +211,13 @@ std::vector<ExprPtr> CC::λ() const {
 }
 
 ExprPtr CC::rdm(size_t rank, std::optional<size_t> comm_rank) const {
-  // 1. rank-`rank` number operator N = {a†_{p1..pr} a_{q1..qr}};(see op::N).
-  // Qualified with op:: because `N` (the cluster rank) is a member.
-  auto N_op = op::N(rank);
+  // 1. replacement operator {ã^{p_1..p_r}_{p_{r+1}..p_{2r}}} (see op::ã); its
+  // indices are free, so they become the free indices of γ.
+  auto replacer = op::ã(rank);
 
-  // 2. similarity transform N̄ = e^{-σ} N e^{σ} (σ = T, or T−T⁺ for unitary).
-  // Traditional ansatz: the expansion terminates exactly, so the default is the
-  // largest number of T's that can survive <0|(1+Λ) N̄|0>:
+  // 2. similarity transform e^{-σ} ã e^{σ} (σ = T for traditional and σ = T−T⁺
+  // for unitary). Traditional ansatz: the expansion terminates exactly, so the
+  // default is the largest number of T's that can survive the VEV below:
   // Unitary ansatz: T⁺ contracts with T, the expansion never terminates, so
   // there is no safe default; use the engine's hbar_comm_rank.
   if (unitary())
@@ -226,15 +226,15 @@ ExprPtr CC::rdm(size_t rank, std::optional<size_t> comm_rank) const {
                    "CC::rdm");
   const auto commutator_rank = comm_rank.value_or(
       unitary() ? hbar_comm_rank_.value() : std::min(2 * rank, rank + N));
-  auto Nbar = mbpt::lst(N_op, T(N, skip_singles()), commutator_rank,
-                        {.unitary = unitary()});
+  auto bar = mbpt::lst(replacer, T(N, skip_singles()), commutator_rank,
+                       {.unitary = unitary()});
 
   // 3. reference expectation value with the ansatz's left wavefunction:
-  // γ = <0|(1+Λ) N̄|0>  (traditional);  <0|N̄|0>  (unitary, no Λ).
-  auto expr = unitary() ? Nbar : simplify((1 + Λ(N, skip_singles())) * Nbar);
+  // γ = <0|(1+Λ) e^{-σ} ã e^{σ}|0>; the unitary ansatz drops Λ.
+  auto expr = unitary() ? bar : simplify((1 + Λ(N, skip_singles())) * bar);
   const auto connect =
       unitary() ? mbpt::OpConnections<std::wstring>{}
-                : mbpt::OpConnections<std::wstring>{{L"N", L"t"}, {L"t", L"N"}};
+                : mbpt::OpConnections<std::wstring>{{L"ã", L"t"}, {L"t", L"ã"}};
   auto gamma = this->ref_av(expr, connect);
 
   return gamma;
