@@ -222,11 +222,13 @@ ExprPtr CC::rdm(size_t rank, std::optional<size_t> comm_rank) const {
   // quasi-creators must be absorbed by ã's 2r plus Λ's 2N legs (k <= r + N).
   // Unitary ansatz: T⁺ contracts with T, the expansion never terminates, so
   // there is no safe default; use the engine's hbar_comm_rank (the ctor
-  // guarantees it is set).
+  // guarantees it is set). The traditional branch takes lst_options()'s
+  // connected-product form; the {ã,t} connectivity handed to ref_av below is
+  // what makes it equivalent to the explicit commutator.
   const auto commutator_rank = comm_rank.value_or(
       unitary() ? hbar_comm_rank_.value() : std::min(2 * rank, rank + N));
-  auto bar = mbpt::lst(replacer, T(N, skip_singles()), commutator_rank,
-                       {.unitary = unitary()});
+  auto bar =
+      mbpt::lst(replacer, T(N, skip_singles()), commutator_rank, lst_options());
 
   // 3. reference expectation value with the ansatz's left wavefunction:
   // γ = <0|(1+Λ) e^{-σ} ã e^{σ}|0>; the unitary ansatz drops Λ.
