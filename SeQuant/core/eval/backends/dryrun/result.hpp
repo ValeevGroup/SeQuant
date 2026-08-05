@@ -16,6 +16,7 @@
 #include <array>
 #include <cstddef>
 #include <memory>
+#include <numeric>
 #include <utility>
 
 namespace sequant::eval::dryrun {
@@ -284,6 +285,26 @@ struct DryRunOps {
       out.push_back({0, extent});
       return out;
     }
+    // CALLER-SUPPLIED PARTITION: if the mode's space has a recorded batch
+    // partition (SizeRegime::space_slice_extents) AND the mode is at full
+    // extent (the slice extents sum to `extent`, i.e. this is the batch axis,
+    // not a spectator already narrowed by `ov`), use it directly -- accumulate
+    // the slice extents into contiguous [lo,hi) ranges. `target_batch_size` is
+    // ignored here: the caller already applied it when it built the partition
+    // (e.g. via batch_slice_extents_from_tiles for a tiled backend). The
+    // dry-run backend stays model-agnostic -- it just reads the slice extents.
+    auto const& slices = cm->regime().slice_extents(ix);
+    std::size_t const slice_sum =
+        std::accumulate(slices.begin(), slices.end(), std::size_t{0});
+    if (!slices.empty() && slice_sum == extent) {
+      std::size_t lo = 0;
+      for (std::size_t const s : slices) {
+        out.push_back({lo, lo + s});
+        lo += s;
+      }
+      return out;
+    }
+    // Fallback: uniform target_batch_size blocks (no partition recorded).
     for (std::size_t lo = 0; lo < extent; lo += target_batch_size)
       out.push_back({lo, std::min(extent, lo + target_batch_size)});
     return out;

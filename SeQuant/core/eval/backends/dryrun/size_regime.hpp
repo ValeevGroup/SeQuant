@@ -1,8 +1,10 @@
 #ifndef SEQUANT_CORE_EVAL_BACKENDS_DRYRUN_SIZE_REGIME_HPP
 #define SEQUANT_CORE_EVAL_BACKENDS_DRYRUN_SIZE_REGIME_HPP
 
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/index.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -17,6 +19,22 @@ namespace sequant::eval::dryrun {
 /// power means over occupied pairs (PNO) or singles (OSV).
 struct SizeRegime {
   std::map<std::wstring, std::size_t> space_extent;
+
+  /// OPTIONAL per-space BATCH PARTITION: the element extent of each realized
+  /// batch slice along the space's batch axis, keyed by space base_key, in
+  /// order. Empty (default) => the dry-run batches a mode into UNIFORM
+  /// target_batch_size blocks (backend-model-agnostic fallback). When present
+  /// for a batch axis, ResultDryRun::mode_batches uses THIS partition directly
+  /// (accumulated to [lo,hi) ranges), so the dry-run's batch COUNT -- hence its
+  /// recompute -- matches whatever the wet backend realizes, even when a tile
+  /// is coarser than target_batch_size.
+  ///
+  /// The dry-run backend deliberately does NOT know how these were derived: the
+  /// CALLER converts its backend's structure into slice extents and supplies
+  /// them here, so a new backend model is supported without touching dry-run
+  /// eval internals. For a TILE-based wet backend, \c batch_slice_extents_from_
+  /// tiles is the ready-made converter. The extents must sum to space_extent.
+  std::map<std::wstring, container::svector<std::size_t>> space_slice_extents;
 
   // csv_pno_moment[k] / csv_osv_moment[k] hold the k-th POWER MEAN
   // M_k = (mean_over_pairs d^k)^(1/k) of the per-pair PNO / per-orbital OSV
@@ -43,6 +61,17 @@ struct SizeRegime {
   ///         than silently defaulting to 1).
   [[nodiscard]] std::size_t extent(Index const& ix) const {
     return space_extent.at(std::wstring{ix.space().base_key()});
+  }
+
+  /// \return \p ix's space batch-slice-extent sequence, or an empty span if the
+  ///         space has no partition recorded (=> the caller falls back to
+  ///         uniform target_batch_size blocks). Never throws.
+  [[nodiscard]] container::svector<std::size_t> const& slice_extents(
+      Index const& ix) const {
+    static const container::svector<std::size_t> empty;
+    auto const it =
+        space_slice_extents.find(std::wstring{ix.space().base_key()});
+    return it != space_slice_extents.end() ? it->second : empty;
   }
 
   /// \return the k-th power-mean moment for a proto-indexed CSV/PNO composite
@@ -73,6 +102,34 @@ struct SizeRegime {
     return [this](Index const& ix, std::size_t k) { return inner_pow(ix, k); };
   }
 };
+
+/// Convert a TILE-extent sequence into a BATCH-slice-extent sequence
+/// (SizeRegime::space_slice_extents) by the SAME whole-tile grouping the wet
+/// batched evaluator uses (mode_batches_of_trange1, tiledarray/result.hpp):
+/// accumulate consecutive tiles into a slice until appending the next would
+/// push the slice over \p target_batch_size, then start a new slice; a lone
+/// tile larger than the target still forms its own slice. Slice boundaries fall
+/// on tile edges. This is a convenience converter for a TILE-based caller; the
+/// dry-run backend never calls it -- it only READS the resulting slice extents,
+/// so any other backend model can populate space_slice_extents differently
+/// without touching dry-run internals.
+[[nodiscard]] inline container::svector<std::size_t>
+batch_slice_extents_from_tiles(
+    container::svector<std::size_t> const& tile_extents,
+    std::size_t target_batch_size) {
+  container::svector<std::size_t> slices;
+  std::size_t const target = std::max<std::size_t>(target_batch_size, 1);
+  std::size_t acc = 0;
+  for (std::size_t const tsz : tile_extents) {
+    if (acc > 0 && acc + tsz > target) {
+      slices.push_back(acc);
+      acc = 0;
+    }
+    acc += tsz;
+  }
+  if (acc > 0) slices.push_back(acc);
+  return slices;
+}
 
 }  // namespace sequant::eval::dryrun
 
