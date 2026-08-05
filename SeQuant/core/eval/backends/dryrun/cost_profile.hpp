@@ -62,9 +62,11 @@ struct CacheConfig {
 ///
 /// Unlike the SIMPLE \c cache_manager(nodes) factory the ad-hoc dry-run test
 /// sites use, this routes through the GATED overload so free-batchable-axis
-/// giants are vetoed (matching the real run). Call \c CacheManager::reset() on
-/// the returned cache between summands to drop per-term non-persistent scratch
-/// while keeping persistent (cross-term) entries.
+/// giants are vetoed (matching the real run). The returned cache is used across
+/// the WHOLE forest without a per-summand reset (matching a real solve's
+/// whole-iteration cache scope; \c cost_profile relies on the lifetime mask to
+/// release each value after its last cross-term use, so cross-summand-shared
+/// values are reused, not rebuilt).
 ///
 /// \param nodes the evaluation forest (a range of \c EvalNodeDryRun).
 /// \param cfg   footprint/repeat/volatility/batchability configuration.
@@ -442,7 +444,15 @@ inline CostProfile cost_profile(
     // summands via std::max, so its running load() is the global scratch peak.
     profile.peak_bytes = std::max(
         {profile.peak_bytes, peak.load(), double(cache.working_set_hwmark())});
-    cache.reset();  // drop per-term non-persistent scratch; keep persistent
+    // NO per-term reset. A real solve's cache spans the whole iteration (all
+    // summands + equations) and reuses cross-summand values, evicting only by
+    // the lifetime mask stamped over the whole forest. Resetting between terms
+    // would instead drop non-persistent scratch after each summand, REBUILDING
+    // a cross-summand-shared value in every summand -- over-counting recompute
+    // (and mis-estimating peak) vs any real run. So the replay keeps the shared
+    // cache across the whole forest; the lifetime mask releases each value
+    // after its last cross-term use. (This makes the dry-run schedule match the
+    // wet run's; see doc/dev/specs/2026-08-05-...schedule-equivalence.)
   }
 
   // Read the replay-tallied (recompute-aware) totals the sink accumulated over
