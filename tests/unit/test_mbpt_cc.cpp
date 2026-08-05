@@ -4,6 +4,7 @@
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 
@@ -74,30 +75,87 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     auto bch3 = bch2.with_hbar_comm_rank(3);
     REQUIRE(bch2.hbar_comm_rank() == 2);
     REQUIRE(bch3.hbar_comm_rank() == 3);
+    // rank 0 is a valid truncation (H̄ = H); only CC::λ rejects it, since it
+    // derives at rank - 1
+    REQUIRE(bch2.with_hbar_comm_rank(0).hbar_comm_rank() == 0);
+    if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
+      // the ctor is the only check
+      REQUIRE_THROWS_AS(CC(N, {.ansatz = CC::Ansatz::U}), Exception);
+      REQUIRE_THROWS_AS(CC(N, {.hbar_comm_rank = 0}).λ(), Exception);
+    }
   }  // SECTION("with_hbar_comm_rank")
 
   SECTION("rdm") {
     constexpr auto N = 2;
-    // Traditional CCSD: γ = <0|(1+Λ) e^{-T} {a†_p.. a_q..} e^{T}|0>.
+    // Traditional CCSD: γ = <0|(1+Λ) e^{-T} {ã^{p_1..}_{p_{r+1}..}} e^{T}|0>.
     SECTION("TCC RDM") {
-      auto g = CC{N}.rdm(1);
-      REQUIRE(g);
-      REQUIRE(size(g) == 10);
-      auto G = CC{N}.rdm(2);
-      REQUIRE(G);
+      const auto cc = CC{N};
+      const auto g = cc.rdm(1);
+      const auto G = cc.rdm(2);
+      REQUIRE_THAT(
+          g,
+          EquivalentTo(
+              L"t{a_1;i_1}:A-N-S * δ{i_1;p_1}:N-C-S * δ{p_2;a_1}:N-C-S "
+              L"+ λ{i_1;a_1}:A-N-S * δ{a_1;p_1}:N-C-S * δ{p_2;i_1}:N-C-S "
+              L"- 1/2 t{a_1,a_2;i_1,i_2}:A-N-S * δ{i_2;p_1}:N-C-S * "
+              L"δ{p_2;i_3}:N-C-S * λ{i_1,i_3;a_1,a_2}:A-N-S "
+              L"- 1 t{a_1;i_1}:A-N-S * t{a_2;i_2}:A-N-S * λ{i_1;a_2}:A-N-S * "
+              L"δ{p_2;a_1}:N-C-S * δ{i_2;p_1}:N-C-S "
+              L"+ 1/2 t{a_1,a_3;i_1,i_2}:A-N-S * δ{a_2;p_1}:N-C-S * "
+              L"δ{p_2;a_3}:N-C-S * λ{i_1,i_2;a_1,a_2}:A-N-S "
+              L"- 1 t{a_1;i_1}:A-N-S * λ{i_2;a_1}:A-N-S * δ{i_1;p_1}:N-C-S * "
+              L"δ{p_2;i_2}:N-C-S "
+              L"- 1/2 t{a_3;i_3}:A-N-S * t{a_1,a_2;i_1,i_2}:A-N-S * "
+              L"δ{i_2;p_1}:N-C-S * δ{p_2;a_3}:N-C-S * λ{i_1,i_3;a_1,a_2}:A-N-S "
+              L"- 1/2 t{a_2;i_3}:A-N-S * t{a_1,a_3;i_1,i_2}:A-N-S * "
+              L"δ{i_3;p_1}:N-C-S * δ{p_2;a_3}:N-C-S * λ{i_1,i_2;a_1,a_2}:A-N-S "
+              L"+ t{a_1;i_1}:A-N-S * λ{i_1;a_2}:A-N-S * δ{p_2;a_1}:N-C-S * "
+              L"δ{a_2;p_1}:N-C-S "
+              L"+ t{a_1,a_2;i_1,i_2}:A-N-S * λ{i_2;a_2}:A-N-S * "
+              L"δ{i_1;p_1}:N-C-S * δ{p_2;a_1}:N-C-S"));
       REQUIRE(size(G) == 94);
+      // 94 terms is not worth spelling out, so check number of terms and
+      // external indices
+      const auto ext = get_unique_indices(G);
+      REQUIRE(std::ranges::is_permutation(
+          ext.ket, container::svector<Index>{L"p_1", L"p_2"}));
+      REQUIRE(std::ranges::is_permutation(
+          ext.bra, container::svector<Index>{L"p_3", L"p_4"}));
+      REQUIRE(ext.aux.empty());
       // an explicit comm_rank truncates early: cutting Γ at the 2nd nested
       // commutator drops the terms the default (4th, exact) picks up
-      auto G2 = CC{N}.rdm(2, 2);
-      REQUIRE(G2);
-      REQUIRE(size(G2) == 71);  // 23 terms short of the exact 94
+      REQUIRE(size(cc.rdm(2, 2)) == 71);  // 23 terms short of the exact 94
     }
-    // Unitary CCSD (σ = T − T⁺, no Λ): γ = <0| e^{-σ} {a†_p a_q} e^{σ}|0>.
+    // raising comm_rank past the default must not add terms; the defaults
+    // here are 2 and 4, so these probe three and two orders beyond
+    SECTION("TCC RDM default comm_rank") {
+      const auto cc = CC{N};
+      REQUIRE_THAT(cc.rdm(1), EquivalentTo(cc.rdm(1, 5)));
+      REQUIRE_THAT(cc.rdm(2), EquivalentTo(cc.rdm(2, 6)));
+    }
+    // Unitary CCSD (σ = T − T⁺, no Λ): γ = <0| e^{-σ} {ã^{p_1}_{p_2}} e^{σ}|0>.
     SECTION("UCC RDM") {
-      const CC::Options opts{.ansatz = CC::Ansatz::U, .hbar_comm_rank = 2};
-      auto g = CC(N, opts).rdm(1);
-      REQUIRE(g);
-      REQUIRE(size(g) == 8);
+      const auto cc = CC(N, {.ansatz = CC::Ansatz::U, .hbar_comm_rank = 2});
+      const auto g = cc.rdm(1);
+      const auto G = cc.rdm(2);
+      REQUIRE_THAT(
+          g,
+          EquivalentTo(
+              L"t{a_1;i_1}:A-N-S * δ{i_1;p_1}:N-C-S * δ{p_2;a_1}:N-C-S "
+              L"+ δ{a_1;p_1}:N-C-S * δ{p_2;i_1}:N-C-S * t⁺{i_1;a_1}:A-N-S "
+              L"+ t{a_2;i_1}:A-N-S * δ{a_1;p_1}:N-C-S * δ{p_2;a_2}:N-C-S * "
+              L"t⁺{i_1;a_1}:A-N-S "
+              L"- 1/2 t{a_1,a_2;i_1,i_2}:A-N-S * δ{i_1;p_1}:N-C-S * "
+              L"δ{p_2;a_2}:N-C-S * t⁺{i_2;a_1}:A-N-S "
+              L"- 1 t{a_1;i_1}:A-N-S * δ{i_1;p_1}:N-C-S * δ{p_2;i_2}:N-C-S * "
+              L"t⁺{i_2;a_1}:A-N-S "
+              L"+ 1/2 t{a_1,a_3;i_1,i_2}:A-N-S * δ{a_2;p_1}:N-C-S * "
+              L"δ{p_2;a_3}:N-C-S * t⁺{i_1,i_2;a_1,a_2}:A-N-S "
+              L"- 1/2 t{a_1,a_2;i_1,i_2}:A-N-S * δ{i_2;p_1}:N-C-S * "
+              L"δ{p_2;i_3}:N-C-S * t⁺{i_1,i_3;a_1,a_2}:A-N-S "
+              L"- 1/2 t{a_2;i_1}:A-N-S * δ{a_1;p_1}:N-C-S * δ{p_2;i_2}:N-C-S * "
+              L"t⁺{i_1,i_2;a_1,a_2}:A-N-S"));
+      REQUIRE(size(G) == 24);
     }
   }  // SECTION("rdm")
 

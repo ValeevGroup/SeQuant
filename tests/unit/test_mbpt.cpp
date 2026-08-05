@@ -676,6 +676,18 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
           REQUIRE(o.index().space() == complete_space);
         for (const auto& o : ã_2_fnop.annihilators())
           REQUIRE(o.index().space() == complete_space);
+
+        // callers depend on this exact free-index mapping
+        REQUIRE(to_latex(ã_2_tform) ==
+                L"{\\tilde{a}^{{p_1}{p_2}}_{{p_3}{p_4}}}");
+
+        // regression: to_latex on the operator form throws if the label is
+        // missing from the registry
+        REQUIRE(to_latex(ã(1)) == L"{\\hat{\\tilde{a}}}");
+
+        // rank 0 is an assert, not a throw
+        if (sequant::assert_behavior() == sequant::AssertBehavior::Throw)
+          REQUIRE_THROWS_AS(ã(0), Exception);
       }
 
       auto R_2 = r(2)->as<op_t>();
