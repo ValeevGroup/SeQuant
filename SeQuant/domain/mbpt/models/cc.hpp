@@ -125,6 +125,9 @@ class CC {
   /// the explicit form. For a unitary ansatz the reverse holds: H̄ is already
   /// self-contained, so connectivity must be left empty. See the "Using H̄
   /// outside the CC class" section of the user guide.
+  /// @note Under `HbarExpansion::Bernoulli` the result is tensor-level, so it
+  /// takes `op::tensor` projectors and `op::tensor::ref_av`, not their `op`
+  /// counterparts, and it is unscreened: `screen` has no effect there.
   [[nodiscard]] ExprPtr hbar(
       std::optional<size_t> truncation_rank = std::nullopt) const;
 

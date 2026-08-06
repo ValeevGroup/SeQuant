@@ -21,6 +21,10 @@ namespace sequant::mbpt::bernoulli {
 /// multireference registry they contribute, and both the N and the R part come
 /// out wrong. Nothing checks for this.
 ///
+/// The result is a tensor-level expression: coefficient tensors times
+/// normal-ordered operators, not `mbpt::op` operators. Nothing is screened out
+/// of it, so the caller projects every term.
+///
 /// @param N cluster/excitation rank (also the N/R rank cutoff)
 /// @param rank highest Bernoulli order H̄^k to include (0..4)
 /// @param skip1 exclude singles from T
