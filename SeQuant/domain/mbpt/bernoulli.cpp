@@ -201,6 +201,9 @@ ExprPtr expand_to_blocks_reduced(const ExprPtr& expr) {
           if (physical(b)) c.push_back(b);
         }
       choices.push_back(c.empty() ? c_all : c);
+      SEQUANT_ASSERT(!choices.back().empty(),
+                     "bernoulli: general index spans no base space with "
+                     "matching quantum numbers");
     }
     // cartesian product of assignments => sum of transformed terms;
     // accumulate via Sum::append (linear) rather than operator+, which
