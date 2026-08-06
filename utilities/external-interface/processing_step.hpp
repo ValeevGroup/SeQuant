@@ -88,6 +88,13 @@ class OneToManyProcessingStep
                             e.what());
           }
 
+          if (new_outputs == 0 && alias_unchanged_inputs()) {
+            new_outputs = 1;
+            ctx.add_data_alias(
+                current.associated_ids.front(),
+                std::string(step_id) + "." + std::to_string(total_outputs));
+          }
+
           if (new_outputs > 0) {
             std::string created_outputs =
                 std::string(step_id) + "[" + std::to_string(total_outputs) +
@@ -141,8 +148,6 @@ class OneToManyProcessingStep
       }
     }
 
-    // TODO: (optionally) create alias if processing didn't change data object
-
     ctx.add_data_alias(
         std::ranges::views::iota(std::size_t(0), total_outputs) |
             std::ranges::views::transform([&step_id](std::size_t num) {
@@ -152,6 +157,9 @@ class OneToManyProcessingStep
 
     return total_outputs;
   }
+
+ protected:
+  virtual bool alias_unchanged_inputs() const { return false; }
 };
 
 }  // namespace sequant::util::extint
