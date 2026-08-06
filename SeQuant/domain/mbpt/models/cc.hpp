@@ -209,8 +209,7 @@ class CC {
   ///   expansion does not support.
   /// @pre if non-empty, requires a unitary ansatz; a non-unitary H̄ is exact and
   ///   has nothing to truncate.
-  /// @throw Exception if `block_ranks` is neither empty nor `K`×`K`, if it is
-  ///   non-empty under a non-unitary ansatz, or if it is empty under the
+  /// @pre `block_ranks` is either empty or `K`×`K`, and is non-empty under the
   ///   Bernoulli expansion
   /// @note each block is the sandwich \f$ \langle i|\bar{H}|j \rangle \f$
   ///   (Eq. (7) of 10.1063/5.0062090) plus an explicit \f$ -E \f$ shift on the

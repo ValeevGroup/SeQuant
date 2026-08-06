@@ -3,7 +3,6 @@
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/runtime.hpp>
-#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/bernoulli.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
@@ -381,7 +380,7 @@ constexpr Normalization eom_norm = Normalization::SquareRoot;
 std::vector<ExprPtr> eom_r_blocked(const CC& cc, nₚ np, nₕ nh,
                                    const std::vector<size_t>& block_ranks,
                                    size_t N) {
-  if (!cc.unitary()) throw Exception("eom_r_blocked requires a unitary ansatz");
+  SEQUANT_ASSERT(cc.unitary(), "eom_r_blocked requires a unitary ansatz");
 
   std::vector<std::pair<std::int64_t, std::int64_t>> manifolds;
   for (std::int64_t rp = np, rh = nh; rp >= 0 && rh >= 0; --rp, --rh) {
@@ -392,10 +391,9 @@ std::vector<ExprPtr> eom_r_blocked(const CC& cc, nₚ np, nₕ nh,
 
   std::ranges::reverse(manifolds);
   const auto K = manifolds.size();
-  if (block_ranks.size() != K * K)
-    throw Exception(
-        "CC::eom_r: block_ranks must be a K x K row-major matrix, "
-        "K = number of projection manifolds");
+  SEQUANT_ASSERT(block_ranks.size() == K * K,
+                 "CC::eom_r: block_ranks must be a K x K row-major matrix, "
+                 "K = number of projection manifolds");
 
   // Bernoulli H̄ is tensor-level, BCH H̄ operator-level; the bra/ket/vev trio
   // below must match it. Empty connectivity, as everywhere on the unitary path.
@@ -467,9 +465,9 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh,
 
   // the uniform path below commutes H̄ with an operator-level R, which the
   // tensor-level Bernoulli H̄ cannot take part in
-  if (hbar_expansion_ == HbarExpansion::Bernoulli)
-    throw Exception(
-        "CC::eom_r: the Bernoulli expansion requires non-empty block_ranks");
+  SEQUANT_ASSERT(
+      hbar_expansion_ != HbarExpansion::Bernoulli,
+      "CC::eom_r: the Bernoulli expansion requires non-empty block_ranks");
 
   // construct hbar
   const auto hbar = this->hbar();
