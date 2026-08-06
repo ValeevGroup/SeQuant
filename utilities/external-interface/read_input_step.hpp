@@ -1,7 +1,7 @@
 #ifndef SEQUANT_EXTERNAL_INTERFACE_READINPUTSTEP_HPP
 #define SEQUANT_EXTERNAL_INTERFACE_READINPUTSTEP_HPP
 
-#include "processing_data.hpp"
+#include "execution_context.hpp"
 #include "processing_step.hpp"
 
 #include <SeQuant/core/io/serialization/serialization.hpp>

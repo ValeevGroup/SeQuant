@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EXTERNAL_INTERFACE_VALIDATESTEP_HPP
 #define SEQUANT_EXTERNAL_INTERFACE_VALIDATESTEP_HPP
 
+#include "execution_context.hpp"
 #include "processing_data.hpp"
 #include "processing_step.hpp"
 
@@ -8,7 +9,6 @@
 
 #include <string>
 #include <string_view>
-#include <vector>
 
 namespace sequant::util::extint {
 
