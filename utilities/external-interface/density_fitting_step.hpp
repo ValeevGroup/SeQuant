@@ -26,6 +26,8 @@ class DensityFittingStep : public OneToManyProcessingStep<ExpressionData> {
                       ExecutionContext &ctx,
                       const ExpressionData &data) override;
 
+  bool alias_unchanged_inputs() const override;
+
  private:
   IndexSpace aux_space_ = IndexSpace::null;
   std::string two_elec_int_label_ = "g";

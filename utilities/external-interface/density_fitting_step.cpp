@@ -83,10 +83,11 @@ std::size_t DensityFittingStep::process(std::string_view id_prefix,
     ctx.set_data(id_prefix, id_start,
                  ExpressionData{.expressions = std::move(modified)});
     return 1;
-  } else {
-    // TODO: Create alias?
-    return 0;
   }
+
+  return 0;
 }
+
+bool DensityFittingStep::alias_unchanged_inputs() const { return true; }
 
 }  // namespace sequant::util::extint
