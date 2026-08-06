@@ -117,7 +117,8 @@ namespace sequant::mbpt::bernoulli {
 
 namespace detail {
 
-ExprPtr wick_reduce(ExprPtr expr) {
+ExprPtr wick_reduce(const ExprPtr& expr_in) {
+  auto expr = expr_in->clone();
   simplify(expr);
   FWickTheorem wick{expr};
   // use_topology defaults to ON, so it must be turned off explicitly. It keeps
@@ -266,7 +267,7 @@ ExprPtr R_part_reduced(const ExprPtr& reduced, std::size_t cutoff) {
 /// header): after expansion every residual index is definite, so the N/R
 /// classifier can act on it.
 ExprPtr expand_to_blocks(const ExprPtr& expr_in) {
-  return expand_to_blocks_reduced(wick_reduce(expr_in->clone()));
+  return expand_to_blocks_reduced(wick_reduce(expr_in));
 }
 
 /// N part of @p expr at truncation @p cutoff (see header): block-resolve, then
@@ -282,7 +283,7 @@ ExprPtr N_part(const ExprPtr& expr, std::size_t cutoff) {
 /// equals the fully block-resolved remainder, and the compact expr makes the
 /// nested commutators that consume R operate on far fewer terms.
 ExprPtr R_part(const ExprPtr& expr, std::size_t cutoff) {
-  auto reduced = wick_reduce(expr->clone());
+  auto reduced = wick_reduce(expr);
   return R_part_reduced(reduced, cutoff);
 }
 

@@ -38,7 +38,8 @@ namespace detail {
 /// operators (each = coefficient tensor × at most one residual NormalOperator;
 /// fully-contracted terms carry none). Unlike the expectation-value path it
 /// keeps operators rather than collapsing to a scalar VEV.
-ExprPtr wick_reduce(ExprPtr expr);
+/// @note @p expr is left untouched; the reduction runs on a clone.
+ExprPtr wick_reduce(const ExprPtr& expr);
 
 /// Normal-ordered commutator [A, B] = wick_reduce(A·B − B·A). NOT the bare
 /// algebraic commutator: the operator product is Wick-reduced, so contractions
