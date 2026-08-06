@@ -753,7 +753,7 @@ ExprPtr Λ(std::size_t K, bool skip1) {
   SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"λ"));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
-    result = k > 1 ? result + tensor::λ(k) : tensor::λ(k);
+    result += tensor::λ(k);
   }
   return result;
 }
@@ -1035,7 +1035,7 @@ ExprPtr Λ(std::size_t K, bool skip1) {
   SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"λ"));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
-    result = k > 1 ? result + λ(k) : λ(k);
+    result += λ(k);
   }
   return result;
 }

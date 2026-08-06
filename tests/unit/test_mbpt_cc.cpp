@@ -157,6 +157,22 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
               L"t⁺{i_1,i_2;a_1,a_2}:A-N-S"));
       REQUIRE(size(G) == 24);
     }
+    // regression: op::Λ used to add to a null ExprPtr when singles are skipped
+    SECTION("TCC RDM skip_singles") {
+      const auto ccd = CC(N, {.skip_singles = true});
+      // the doubles-only subset of the CCSD γ pinned above
+      REQUIRE_THAT(
+          ccd.rdm(1),
+          EquivalentTo(L"- 1/2 t{a_1,a_2;i_1,i_2}:A-N-S * δ{i_2;p_1}:N-C-S * "
+                       L"δ{p_2;i_3}:N-C-S * λ{i_1,i_3;a_1,a_2}:A-N-S "
+                       L"+ 1/2 t{a_1,a_3;i_1,i_2}:A-N-S * δ{a_2;p_1}:N-C-S * "
+                       L"δ{p_2;a_3}:N-C-S * λ{i_1,i_2;a_1,a_2}:A-N-S"));
+      // Ansatz::oT forces skip_singles, so it reaches the same path
+      REQUIRE_THAT(
+          ccd.rdm(1),
+          EquivalentTo(
+              CC(N, {.ansatz = CC::Ansatz::oT, .skip_singles = true}).rdm(1)));
+    }
   }  // SECTION("rdm")
 
   SECTION("eom_cc"){SECTION("EOM-CCSD"){const auto N = 2;
