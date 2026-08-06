@@ -402,12 +402,14 @@ std::vector<ExprPtr> eom_r_blocked(const CC& cc, nₚ np, nₕ nh,
   // One H̄ per distinct truncation order, reduced to its R part. The N part is
   // the ground-state amplitude residual <Φl|H̄|Φ0>, which Eq. (6) zeroes only
   // at the amplitude rank. A block truncated below that rank would keep the
-  // residual, so drop N everywhere instead. This is exact: an N operator of
-  // rank r shifts the manifold rank by r, so it never lands on a diagonal
-  // block, and it has no reference expectation value, so the −E shift below
-  // is unchanged either way.
+  // residual, so drop N everywhere instead. The diagonal is untouched: an N
+  // operator of rank r shifts the manifold rank by r, so it never lands on a
+  // diagonal block, and it has no reference expectation value, so the −E shift
+  // below is unchanged either way. Off the diagonal the equations do change,
+  // though not what they evaluate to at converged amplitudes. Bernoulli only:
+  // the operator-level BCH H̄ has no N/R split to take.
   container::map<size_t, ExprPtr> hbars;
-  for (const auto k : block_ranks) {
+  for (const auto k : ranks) {
     auto [it, fresh] = hbars.try_emplace(k);
     if (!fresh) continue;  // deriving H̄ twice for one rank is not cheap
     it->second = cc.hbar(k);

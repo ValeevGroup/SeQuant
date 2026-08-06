@@ -25,6 +25,10 @@ namespace sequant::mbpt::bernoulli {
 /// normal-ordered operators, not `mbpt::op` operators. Nothing is screened out
 /// of it, so the caller projects every term.
 ///
+/// @pre an HF reference: F is taken to have no occupied-virtual block, which
+/// is what keeps F out of H̄² and higher. The f_ov terms of H̄⁰ and H̄¹ are
+/// carried symbolically and vanish only on substitution.
+///
 /// @param N cluster/excitation rank (also the N/R rank cutoff)
 /// @param rank highest Bernoulli order H̄^k to include (0..4)
 /// @param skip1 exclude singles from T
@@ -49,10 +53,11 @@ ExprPtr wick_reduce(const ExprPtr& expr);
 ExprPtr wick_commutator(const ExprPtr& A, const ExprPtr& B);
 
 /// Rewrites every general (non-base) index of the residual NormalOperator as
-/// the sum over the hole/particle base spaces it spans (occupied/virtual), an
-/// identity in the single-reference setting where the other base spaces are
-/// empty. After expansion every residual index is definite so the
-/// N/R classifier can act on it. Idempotent on block-resolved input.
+/// the sum over the hole/particle base spaces it spans (occupied/virtual). The
+/// registry's other base spaces are dropped, which changes no projected
+/// quantity: the single-reference manifolds annihilate the dropped terms (see
+/// the @warning on hbar). After expansion every residual index is definite so
+/// the N/R classifier can act on it. Idempotent on block-resolved input.
 ExprPtr expand_to_blocks(const ExprPtr& expr);
 
 /// Block-resolved N part (O_N of 10.1063/1.5030344): the terms whose single
@@ -61,9 +66,8 @@ ExprPtr expand_to_blocks(const ExprPtr& expr);
 ExprPtr N_part(const ExprPtr& expr, std::size_t cutoff);
 
 /// R part (O_R of 10.1063/1.5030344: expr minus its N part). Unlike N_part
-/// the result is NOT block-resolved; it stays in compact general-index form.
-/// This is exact because expand_to_blocks is an identity, and it is much
-/// cheaper for the nested commutators that consume R.
+/// the result is NOT block-resolved; it stays in compact general-index form,
+/// which is much cheaper for the nested commutators that consume R.
 ExprPtr R_part(const ExprPtr& expr, std::size_t cutoff);
 
 }  // namespace detail

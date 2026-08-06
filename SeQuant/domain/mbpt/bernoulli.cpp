@@ -31,13 +31,15 @@
 //
 // Equation numbers below are all from 10.1063/1.5030344, Sec. III B:
 // superoperator inversion Eqs. (36)-(39); Bernoulli numbers B₁=−1/2, B₂=1/12,
-// B₃=0, B₄=−1/720, Eq. (40); the N/R split and the UCC amplitude condition
-// V̄_N = 0, above and at Eq. (43); the H̄ recursion, Eq. (44); the sum
+// B₃=0, B₄=−1/720, Eq. (40) -- these are Bₙ/n! in the textbook normalization,
+// so they will not match a table of Bₙ; the N/R split and the UCC amplitude
+// condition V̄_N = 0, above and at Eq. (43); the H̄ recursion, Eq. (44); the sum
 // H̄ = Σ_k H̄^k, Eq. (45); H̄⁰..H̄⁴, Eqs. (46)-(50).
 //
-// The F-cancellation: at a canonical (converged) HF reference, F has no
-// occupied-virtual block (Eq. (32)), so F enters H̄ only through H̄¹ (stated
-// just below Eq. (50)). Every H̄^k built below relies on this.
+// The F-cancellation: at an HF reference F has no occupied-virtual block
+// (Brillouin, Eq. (32)), so H̄² and higher contain no F (stated just below
+// Eq. (50)). H̄⁰ and H̄¹ do, and they are built from the full one-body operator,
+// so their f_ov terms survive symbolically and vanish only on substitution.
 
 namespace {
 
