@@ -197,8 +197,8 @@ class CC {
   /// p_{2r}} \} e^{\hat{T}} |0 \rangle \f$; unitary ansatz drops \f$
   /// \hat{\Lambda} \f$ and uses \f$ e^{-\hat{\sigma}} \dots e^{\hat{\sigma}}
   /// \f$ with \f$ \hat{\sigma} = \hat{T} - \hat{T}^\dagger \f$.
-  /// @note The reference contribution is not included; the caller adds the
-  ///   \f$ \delta \f$ term.
+  /// @note Only the correlation contribution is returned: op::ã is
+  ///   normal-ordered, so the reference contractions are absent.
   /// @note For @p rank >= 2 the result is not manifestly antisymmetric: the
   ///   replacement operator carries no antisymmetrizer.
   /// @note For the traditional ansatz this is the *linked* density; the
