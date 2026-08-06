@@ -23,7 +23,7 @@ bool OutputStep::requires_options() const { return false; }
 
 void OutputStep::set_options(const nlohmann::json &options) {
   if (!options.is_object()) {
-    throw Exception("OutputStep expects a JSON object for its options!");
+    throw Exception(kind() + " expects a JSON object for its options!");
   }
 
   for (const auto &[key, value] : options.items()) {
