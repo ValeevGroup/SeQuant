@@ -12,7 +12,7 @@
 
 namespace sequant::util::extint {
 
-class ValidateStep : public OneToManyProcessingStep<ExpressionData> {
+class ValidateStep : public OneByOneProcessingStep<ExpressionData> {
  public:
   std::string kind() const override;
 

@@ -13,7 +13,7 @@
 
 namespace sequant::util::extint {
 
-class DensityFittingStep : public OneToManyProcessingStep<ExpressionData> {
+class DensityFittingStep : public OneByOneProcessingStep<ExpressionData> {
  public:
   std::string kind() const override;
 
