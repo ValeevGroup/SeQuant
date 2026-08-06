@@ -134,6 +134,7 @@ struct DryRunOps {
         if (std::find(rhs.begin(), rhs.end(), ix) != rhs.end())
           contracted.push_back(ix);
       double const flops = cm->flops(out, contracted, merged);
+      sequant::eval::detail::last_op_flops() = flops;  // for the Build event
       double const exec = cm->exec_cost(flops, cm->memsize(idx, ov), 4096);
       write_log(Logger::instance(), "OpCost", std::format(" | {}", flops),
                 std::format(" | {}", exec), '\n');
@@ -143,19 +144,16 @@ struct DryRunOps {
       // charged once per block at its sliced size -- the same numbers already
       // logged above, now summed. No-op (byte-identical) when unattached.
       cm->tally_op(flops, exec);
-      // Per-node AVOIDABLE-recompute tally, keyed by the LABEL signature (the
-      // same one the runtime Build event and IR node carry, so the visualizer
-      // joins by hash->sig). Avoidable is measured in FLOPs against the
-      // batching-free ideal of building each value ONCE at full extent:
-      //  - `flops`      is THIS build's actual (sliced) FLOPs, accumulated;
-      //  - `full_flops` is the FLOPs to build the value once at FULL extent (no
-      //    overrides). FLOPs is linear in extents, so disjoint per-block slices
-      //    that tile the full value sum to exactly full_flops (0 avoidable),
-      //    while a value rebuilt full per block sums to N*full ((N-1)*full
-      //    avoidable). No slice-context is needed in the key.
-      double const full_flops = cm->flops(out, contracted, {});
-      std::string const sig = cost_op_signature(out, idx, rhs);
-      cm->tally_node(sig, flops, full_flops);
+      // last_op_flops (set above) is THIS build's ACTUAL realized-extent cost.
+      // The eval loop's build choke point reads it and records it against the
+      // node's IDENTITY, at the (value, SLICE) granularity, in the (root)
+      // cache's recompute tally -- so avoidable recompute is the actual FLOPs a
+      // slice was rebuilt beyond once, with no ill-defined "full extent"
+      // denominator (slicing is non-uniform). prod cannot form the node
+      // identity here (it has no node, and the include cycle
+      // dryrun/eval_expr.hpp -> cost_model_object.hpp keeps the node type out
+      // of the CostSink), so the rollup is done there. See
+      // CacheManager::tally_build / recompute_tally().
     }
 
     if (a.this_annot.empty()) {

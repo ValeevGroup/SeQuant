@@ -1871,15 +1871,14 @@ TEST_CASE(
 
   std::cerr << "[dryrun-eval] replaying giant term through the batched "
                "runtime evaluator ...\n";
-  // Attach a CostSink to the shared cost model so THIS replay's per-node build
-  // tally (result.hpp DryRunOps::prod -> tally_node) accumulates the avoidable-
-  // recompute breakdown. Using the test's OWN replay -- not a separate
-  // cost_profile() call -- means the numbers match the exact run events the
-  // visualizer consumes (same cache, same slicing), and there is no second
-  // replay flooding the SCHEDULE_RUN_EVENT stream. Detached below.
-  sequant::eval::dryrun::CostSink sched_sink;
+  // Enable THIS replay's per-DISTINCT-value build tally on its own cache
+  // (CacheManager::tally_build, keyed by the exact cache identity) so the
+  // avoidable-recompute breakdown is accumulated. Using the test's OWN replay
+  // -- not a separate cost_profile() call -- means the numbers match the exact
+  // run events the visualizer consumes (same cache, same slicing), and there is
+  // no second replay flooding the SCHEDULE_RUN_EVENT stream.
   bool const sched_dump = std::getenv("SEQUANT_SCHED_DUMP") != nullptr;
-  if (sched_dump) cm->set_cost_sink(&sched_sink);
+  if (sched_dump) cache.set_recompute_tally_enabled(true);
   auto t1 = std::chrono::steady_clock::now();
   ResultPtr result;
   bool threw = false;
@@ -1891,12 +1890,11 @@ TEST_CASE(
     what = e.what();
   }
   if (sched_dump) {
-    cm->set_cost_sink(nullptr);
-    // cost_profile's per-node avoidable, keyed by the SAME sig the IR and
-    // run-event nodes carry, so the visualizer joins each DAG node (by
-    // hash->sig) to these numbers instead of recomputing avoidable itself.
-    auto const av =
-        sequant::eval::dryrun::avoidable_nodes_from_sink(sched_sink);
+    // cost_profile's per-node avoidable, keyed by the node's topological hash
+    // (the SAME join key the IR and run-event nodes carry) so the visualizer
+    // joins each DAG node to these numbers instead of recomputing avoidable.
+    auto const av = sequant::eval::dryrun::avoidable_nodes_from_tally(
+        cache.recompute_tally());
     std::ostringstream cjson;
     cjson << "SCHEDULE_COST_JSON {\"term_id\":\"giant\",\"nodes\":[";
     for (std::size_t i = 0; i < av.size(); ++i) {
@@ -5300,19 +5298,23 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
   // avoidable factor overstate it, because a cheap invariant node rebuilt many
   // times weighs little.
   //
-  // METRIC: avoidable recompute is measured in FLOPs against the batching-free
-  // (unlimited-memory) ideal -- the arithmetic the batched replay repeats
-  // beyond building each value ONCE at full extent (cp.avoidable_flops /
-  // dryrun_flops). FLOPs, not roofline exec: recompute is repeated WORK, and
-  // FLOPs is linear in extents so disjoint per-block slices that tile a value
-  // are free (0 avoidable) while a value rebuilt full per block counts. See
-  // avoidable_nodes_from_sink().
+  // METRIC: avoidable recompute is measured in ACTUAL replay FLOPs, deduped at
+  // the (value, SLICE) granularity (cp.avoidable_flops / dryrun_flops). Each
+  // value's builds are bucketed by SLICE -- the live batch context projected
+  // onto the modes that value carries; a value built over DISTINCT slices is
+  // tiling (0 avoidable, even non-uniform), the SAME slice rebuilt is recompute
+  // (its extra builds' actual FLOPs). FLOPs, not roofline exec: recompute is
+  // repeated WORK. See CacheManager::BuildTally / avoidable_nodes_from_tally().
   //
   // Honest numbers (annotation-only batching, no heuristic fallback -- the
   // production configuration, cf. MPQC csv_batch_policy.h; nterms=55):
-  // unbatched ~1.8%, aux-only ~6.5%, aux+occ ~7.4%. Heed the HISTORY note at
-  // the top of this test before quoting these; earlier ~44.6%/~76%/~15.4%
-  // figures were a since-fixed metric artifact or pre-veto placement.
+  // unbatched ~19.6% (footprint-gated giants rebuilt per consumer, real
+  // recompute the gate accepts to bound peak), aux-only ~5.3%, aux+occ ~6.3%.
+  // These are LARGER than the earlier ~1.8%/~6.5%/~7.4% figures only because
+  // those used the OLD label-signature rollup, which OVER-SPLIT per-block/per-
+  // consumer rebuilds of one value and so could not see same-slice recompute;
+  // the slice-level rollup measures it. Heed the HISTORY note at the top of
+  // this test before quoting any of these.
   //
   // Phase 4b-3 (has_demoted_external veto DELETED): the aux+occ avoidable
   // recompute dropped from ~15.4% to ~7.4% because the demoted external giants
@@ -5323,8 +5325,8 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
   // aux-only is the CLEAN baseline (both flags stay off on that leg) and was
   // already passing. Note these are NOT-TRUSTED diagnostics (see the TRUST
   // BOUNDARY at the top of the file), not physical targets.
-  CHECK(aux.avoidable_time() < 0.10);   // aux-only is clean (PASSES)
-  CHECK(both.avoidable_time() < 0.10);  // now PASSES post-veto (~0.074)
+  CHECK(aux.avoidable_time() < 0.10);   // aux-only is clean (~0.053, PASSES)
+  CHECK(both.avoidable_time() < 0.10);  // ~0.063 (slice-level), PASSES
 }
 
 // D5 avoidable-recomputation WITNESS: compare EXTERNAL-mode vs CONTRACTED-mode
@@ -5597,11 +5599,31 @@ TEST_CASE("dryrun external-mode occ batching matches contracted-mode avoidable",
   // ~0). Do not quote the ~1.97% / ~6026 / ~8930 / ~2531 / ~16614 figures as
   // current.
   //
-  // So on RECOMPUTE the two arms MATCH (both near-zero, within noise); the
+  // So on RECOMPUTE the two arms MATCH (both small, within noise); the
   // witness's name ("external-mode occ batching matches contracted-mode
-  // avoidable") is now literally true.
-  CHECK(external.avoidable_time() < 0.01);    // near-zero (~0.025%)
-  CHECK(contracted.avoidable_time() < 0.01);  // near-zero (~0.005%)
+  // avoidable") holds.
+  //
+  // METRIC CORRECTION (2026-08-06, slice-level recompute). The ~0.005%/~0.025%
+  // figures above were themselves a MEASUREMENT ARTIFACT of the old avoidable
+  // rollup, which keyed per-value builds by a dummy-/slice-dependent LABEL
+  // signature (cost_op_signature). That key OVER-SPLIT: per-block builds of one
+  // value landed in separate buckets, so cross-block recompute -- an
+  // intermediate rebuilt every block of a loop it does not carry (the
+  // MIDDLE-GAP node in (2) above), or a footprint-gated value rebuilt per
+  // consumer -- was structurally INVISIBLE and reported as ~0. The rollup now
+  // keys by the exact cache node identity (TreeNodeHasher +
+  // TreeNodeEqualityComparator) and dedups at the (value, SLICE) granularity
+  // using ACTUAL replay FLOPs (see CacheManager::BuildTally /
+  // avoidable_nodes_from_tally): a value tiled over DISTINCT slices is not
+  // recompute, the SAME slice rebuilt is. Unbatched avoidable is then exactly
+  // 0; the batched arms measure the REAL recompute the label key hid --
+  // contracted ~2.0%, external ~2.6% (the middle-gap node plus gated CSE-miss
+  // rebuilds, confirmed identically by an independent max- denominator
+  // cross-check). Both arms are still SMALL and MATCH (external slightly
+  // higher), so the witness's thesis is unchanged; only the magnitude moved off
+  // the artifact. The PEAK distinction below is unaffected.
+  CHECK(external.avoidable_time() < 0.05);    // real recompute, small (~2.6%)
+  CHECK(contracted.avoidable_time() < 0.05);  // real recompute, small (~2.0%)
   CHECK(external.replay_ops > contracted.replay_ops);
 
   // ENTRY CRITERION for the deferred forest-co-batching + middle-gap work: the

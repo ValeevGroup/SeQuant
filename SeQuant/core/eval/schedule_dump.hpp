@@ -30,6 +30,16 @@ namespace sequant::eval {
 
 namespace detail {
 
+/// DIAGNOSTIC: the flops the LAST product op computed (cm->flops), stashed by
+/// DryRunOps::prod and read by the Build-event emitter in eval.hpp so each
+/// per-build event can carry the SAME cost the replay tallied -- letting a
+/// caller sum per DISTINCT node (by hash) with the replay's own flop method,
+/// no second flop path. Thread-local; single-threaded dry-run replay.
+inline double& last_op_flops() noexcept {
+  static thread_local double f = 0.0;
+  return f;
+}
+
 inline std::string sched_json_escape(std::string const& s) {
   std::string o;
   o.reserve(s.size() + 8);
@@ -64,33 +74,12 @@ void sched_json_index_array(Range const& r, std::ostream& os) {
 
 }  // namespace detail
 
-/// Canonical per-op signature for the avoidable-recompute JOIN: the result
-/// index labels, then the two operands' label lists in a sorted
-/// (order-independent) pair, so a binary contraction gets the SAME key
-/// whichever operand binarize placed left. `full_label` (proto indices
-/// included) keeps composite (proto-carrying) indices distinct. ONE definition,
-/// two producers: the dry-run cost tally (\c DryRunOps::prod) keys its per-node
-/// avoidable by it, and the runtime Build event (\c eval.hpp) plus the IR node
-/// record below stamp each node with it -- so the visualizer maps a DAG node
-/// (by hash) to cost_profile's per-node avoidable without reconstructing the
-/// signature in the renderer, and without a second, drifting definition.
-template <typename OutRange, typename LhsRange, typename RhsRange>
-std::string cost_op_signature(OutRange const& out, LhsRange const& lhs,
-                              RhsRange const& rhs) {
-  auto join = [](auto const& r) {
-    std::string s;
-    for (auto const& ix : r) s += sequant::toUtf8(ix.full_label()) + ',';
-    return s;
-  };
-  std::string const l = join(lhs);
-  std::string const r = join(rhs);
-  std::string sig = join(out);
-  sig += '<';
-  sig += (l <= r ? l : r);
-  sig += '*';
-  sig += (l <= r ? r : l);
-  return sig;
-}
+// NOTE: the former `cost_op_signature` (a full-label string keying the
+// avoidable-recompute rollup) was REMOVED: a signature is dummy-label- and
+// batch-slice-dependent, so per-block and alpha-renamed builds of one value
+// split across keys and the rollup mis-attributed them. Nodes are now joined to
+// cost_profile's per-node recompute by their TOPOLOGICAL hash (\c
+// EvalExpr::hash_value), the same identity the CacheManager dedups on.
 
 /// Emit one node of the IR schedule record. \p n is a FullBinaryNode whose
 /// value type exposes the batch-annotation accessors (EvalExpr / EvalExprTA).
@@ -130,17 +119,9 @@ void schedule_ir_json_node(Node const& n, std::ostream& os) {
   }
   os << "],\"sliced_modes\":";
   sched_json_index_array(n->sliced_modes(), os);
-  // sig = the avoidable-recompute join key (result + sorted operand pair). Only
-  // internal (binary contraction) nodes have one; it matches the runtime Build
-  // event's sig and cost_profile's per-node label, so the renderer maps this
-  // node to cost_profile's avoidable count/exec by hash->sig.
-  if (!n.leaf()) {
-    os << ",\"sig\":\""
-       << sched_json_escape(cost_op_signature(n->canon_indices(),
-                                              n.left()->canon_indices(),
-                                              n.right()->canon_indices()))
-       << "\"";
-  }
+  // Nodes are joined to cost_profile's per-node recompute by their topological
+  // hash (emitted above), not by a signature: a signature is dummy-label- and
+  // batch-slice-dependent and mis-folds per-block / alpha-renamed builds.
   os << ",\"children\":[";
   if (!n.leaf()) {
     schedule_ir_json_node(n.left(), os);

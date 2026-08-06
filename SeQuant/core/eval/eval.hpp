@@ -674,12 +674,10 @@ ResultPtr evaluate_impl(Node const& node,         //
       // nodes only; leaves (Fetch) are not tallied. Lets the visualizer join
       // this hash to cost_profile's per-node avoidable without reconstructing
       // the signature in the renderer.
-      if (!f.node.leaf())
-        os << ",\"sig\":\""
-           << eval::detail::sched_json_escape(eval::cost_op_signature(
-                  f.node->canon_indices(), f.node.left()->canon_indices(),
-                  f.node.right()->canon_indices()))
-           << "\"";
+      // Per-build flops (cm->flops) keyed to this node by hash above; the
+      // recompute rollup and the visualizer join on the topological hash, not
+      // a dummy-/slice-dependent signature.
+      if (!f.node.leaf()) os << ",\"flops\":" << eval::detail::last_op_flops();
       os << ",\"ctx\":[";
       bool first = true;
       for (auto const& [ix, blk] : cache.batch_context()) {
@@ -913,10 +911,45 @@ ResultPtr evaluate_impl(Node const& node,         //
             });
           }
           if (!result) {
+            // Sentinel so the recompute tally below fires ONLY when a DryRun
+            // prod actually computed fresh flops for THIS node. DryRunOps::prod
+            // early-returns without setting last_op_flops for a scalar*tensor
+            // product (and it is never set at all by the wet TA backend); a
+            // stale value from a previous op must not be attributed here (it
+            // would fold garbage into the identity-keyed tally). prod sets
+            // last_op_flops >= 0 only on the real contraction path.
+            eval::detail::last_op_flops() = -1.0;
             time = detail::timed_eval_inplace([&]() {
               result = f.left->prod(*f.right, ann,
                                     de_nest ? DeNest::True : DeNest::False);
             });
+            // Record this product build against f.node's IDENTITY (keyed by the
+            // exact cache identity: hash-bin + Bliss, so 64-bit hash collisions
+            // are NOT folded) in the (root) cache's recompute tally. Deduped at
+            // the (value, SLICE) granularity using ACTUAL replay FLOPs (DryRun
+            // prod just stashed this build's realized cost in last_op_flops): a
+            // value built over DISTINCT slices is tiling (not recompute); the
+            // same value rebuilt at the SAME slice -- including a node
+            // invariant to an enclosing loop, rebuilt every block -- is
+            // recompute. The slice signature is the live batch context
+            // PROJECTED onto the modes f.node carries (find_leaf_carrying), so
+            // an invariant's projection is identical (empty for that loop)
+            // every block and its rebuilds fold. A no-op unless the dry-run
+            // replay enabled the tally on the root cache (the wet TA path
+            // leaves it disabled), so this is byte-identical off the costing
+            // path.
+            if (eval::detail::last_op_flops() >= 0.0) {
+              std::string slice_sig;
+              for (auto const& [ix, blk] : cache.batch_context())
+                if (find_leaf_carrying(f.node, ix).has_value()) {
+                  slice_sig += toUtf8(ix.full_label());
+                  slice_sig += ':';
+                  slice_sig += std::to_string(blk.first);
+                  slice_sig += ';';
+                }
+              cache.tally_build(f.node, slice_sig,
+                                eval::detail::last_op_flops());
+            }
           }
         }
 

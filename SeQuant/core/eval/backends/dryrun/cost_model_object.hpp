@@ -12,8 +12,6 @@
 #include <atomic>
 #include <cstddef>
 #include <functional>
-#include <map>
-#include <mutex>
 #include <string>
 #include <utility>
 
@@ -57,19 +55,19 @@ namespace sequant::eval::dryrun {
 /// once per block sums to N*full => (N-1)*full avoidable. That additivity is
 /// why no slice-context bucketing is needed and why the pathological >100%
 /// roofline-spread of the exec-weighted metric cannot arise.
-struct NodeCost {
-  std::size_t builds = 0;  // how many times this value was (re)built
-  double total_flops =
-      0.0;                  // accumulated actual (sliced) FLOPs over all builds
-  double full_flops = 0.0;  // FLOPs to build this value once at FULL extent
-};
-
+///
+/// NOTE: the per-DISTINCT-value avoidable rollup does NOT live here. It is kept
+/// by \c CacheManager::recompute_tally(), keyed by the exact cache node
+/// identity (TreeNodeHasher + TreeNodeEqualityComparator) so 64-bit hash
+/// collisions are not folded; a string-keyed sink here could not reproduce that
+/// identity (the node type is kept out of this header by the
+/// dryrun/eval_expr.hpp -> cost_model_object.hpp include cycle). This sink
+/// carries only the whole-forest scalar totals (flops/exec/n_ops via \c
+/// tally_op).
 struct CostSink {
   std::atomic<double> flops{0.0};
   std::atomic<double> exec{0.0};
   std::atomic<std::size_t> n_ops{0};
-  std::mutex node_mtx;
-  std::map<std::string, NodeCost> per_node;  // keyed by the label signature
 };
 
 /// Per-index extent OVERRIDE table: narrows specific indices (by identity, so
@@ -193,22 +191,6 @@ class CostModel {
     sink_->flops.fetch_add(flops_count, std::memory_order_relaxed);
     sink_->exec.fetch_add(exec, std::memory_order_relaxed);
     sink_->n_ops.fetch_add(1, std::memory_order_relaxed);
-  }
-
-  /// Record one build for the per-node avoidable breakdown. \p label is the
-  /// value's label signature (result + operands). \p sliced_flops is THIS
-  /// build's actual FLOPs (at whatever extent it ran); \p full_flops is the
-  /// FLOPs to build the value once at FULL extent (constant per label).
-  /// avoidable = max(0, sum(sliced_flops) - full_flops) -- the arithmetic
-  /// batching repeats beyond building the value once (see \c NodeCost).
-  void tally_node(std::string const& label, double sliced_flops,
-                  double full_flops) const {
-    if (!sink_) return;
-    std::lock_guard<std::mutex> lk(sink_->node_mtx);
-    auto& nc = sink_->per_node[label];
-    ++nc.builds;
-    nc.total_flops += sliced_flops;
-    nc.full_flops = full_flops;
   }
 
  private:

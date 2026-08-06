@@ -25,6 +25,7 @@
 #include <ostream>
 #include <sstream>
 #include <string>
+#include <tuple>
 #include <vector>
 
 namespace sequant::eval::dryrun {
@@ -120,35 +121,50 @@ struct AvoidableNode {
   double flops = 0;
 };
 
-/// Roll a replay's per-value build tally (a \c CostSink populated by
-/// \c CostModel::tally_node during a \c Trace::On replay) into the avoidable-
-/// recompute breakdown: per distinct value (label), avoidable FLOPs =
+/// Roll a replay's per-DISTINCT-value build tally (a \c CacheManager's
+/// \c recompute_tally(), populated by \c CacheManager::tally_build from the
+/// eval loop's product-build site during a \c Trace::On replay) into the
+/// avoidable-recompute breakdown: per distinct value, avoidable FLOPs =
 /// max(0, total_flops - full_flops), sorted by avoidable FLOPs descending,
-/// keeping only values with a positive amount. Shared by \c cost_profile()
-/// (whole-forest rollup) and any caller that attaches its OWN sink to a replay
-/// it drives (e.g. the schedule-dump test, which emits these per-value numbers
-/// so the visualizer consumes cost_profile's avoidable instead of recomputing
-/// it). Single-threaded caller expected: the replay has finished and the sink
-/// is quiescent, so no lock is taken.
-inline std::vector<AvoidableNode> avoidable_nodes_from_sink(
-    CostSink const& sink) {
-  // Per value (keyed by label): avoidable FLOPs = total_flops - full_flops --
-  // the arithmetic the batched replay repeated beyond building the value ONCE
-  // at full extent (the batching-free ideal). FLOPs is additive across slices,
-  // so disjoint per-block slices that tile the value sum to exactly full_flops
-  // (0 avoidable), while a value rebuilt full per block sums to N*full
-  // ((N-1)*full avoidable). The per-value max(0, .) keeps every entry -- and
-  // hence the sum
-  // -- in [0, total_flops], so avoidable_time() stays in [0, 1] by
-  // construction.
+/// keeping only values with a positive amount. The tally is keyed by the EXACT
+/// cache identity (TreeNodeHasher + TreeNodeEqualityComparator = topological
+/// hash bin + Bliss connectivity 3-way cmp + recursive child compare), so two
+/// topologically-distinct nodes sharing a 64-bit hash are NOT folded (a
+/// hash-string key folds them, inventing avoidable recompute; a space/arity
+/// structural key can't separate same-shape different-connectivity nodes
+/// either), and per-block / alpha-renamed builds of ONE value ARE folded.
+/// Shared by \c cost_profile() (whole-forest rollup) and any caller that drives
+/// its own tally-enabled replay (e.g. the schedule-dump test). \c label is the
+/// value's topological hash as a string (the join key the IR and run-event
+/// nodes carry). Single-threaded caller expected: the replay has finished.
+template <typename TallyMap>
+inline std::vector<AvoidableNode> avoidable_nodes_from_tally(
+    TallyMap const& tally) {
+  // Per DISTINCT value, rolled up over its SLICES (see BuildTally): for each
+  // slice, total += builds*cost and build_once += cost, so avoidable (the
+  // arithmetic the replay repeated beyond building each distinct slice once) is
+  // sum over slices of (builds-1)*cost. A value tiled over DISTINCT slices has
+  // builds==1 per slice => 0 avoidable (tiling, even non-uniform); a value
+  // rebuilt at the SAME slice (e.g. an invariant rebuilt every block of a loop
+  // it does not carry) has builds>1 there => that slice's (builds-1)*cost is
+  // avoidable. No full-extent denominator is used; every number is actual
+  // replay FLOPs.
+  auto roll = [](auto const& t) {
+    double total = 0, once = 0, extra_builds = 0;
+    for (auto const& [sig, bc] : t.slices) {
+      total += bc.first * bc.second;
+      once += bc.second;
+      extra_builds += static_cast<double>(bc.first - 1);
+    }
+    return std::tuple{total, once, extra_builds};
+  };
   std::vector<AvoidableNode> out;
-  for (auto const& [label, nc] : sink.per_node) {
-    if (nc.full_flops <= 0.0) continue;
-    double const avoidable = nc.total_flops - nc.full_flops;
+  for (auto const& [node, t] : tally) {
+    auto const [total, once, extra_builds] = roll(t);
+    double const avoidable = total - once;
     if (avoidable <= 0.0) continue;
-    out.push_back({label,
-                   nc.total_flops / nc.full_flops - 1.0 /*extra full rebuilds*/,
-                   avoidable});
+    out.push_back(
+        {std::to_string(node->hash_value()), extra_builds, avoidable});
   }
   std::sort(out.begin(), out.end(),
             [](AvoidableNode const& a, AvoidableNode const& b) {
@@ -156,30 +172,45 @@ inline std::vector<AvoidableNode> avoidable_nodes_from_sink(
             });
 
   // DIAGNOSTIC (SEQUANT_AVOIDABLE_DEBUG): per-value FLOP accounting, worst
-  // first. total_flops == full_flops => builds tiled the value once (0
-  // avoidable); total_flops == N*full_flops => value rebuilt full N times.
+  // first. total == build_once => every slice built once (tiling, 0 avoidable);
+  // total >> build_once => some slice rebuilt (invariant recompute).
   if (std::getenv("SEQUANT_AVOIDABLE_DEBUG")) {
     double sum_total = 0, sum_avoid = 0;
-    for (auto const& [label, nc] : sink.per_node) {
-      sum_total += nc.total_flops;
-      if (nc.full_flops > 0.0 && nc.total_flops > nc.full_flops)
-        sum_avoid += nc.total_flops - nc.full_flops;
+    for (auto const& [node, t] : tally) {
+      auto const [total, once, extra] = roll(t);
+      (void)extra;
+      sum_total += total;
+      if (total > once) sum_avoid += total - once;
     }
     std::fprintf(stderr,
                  "[avoidable-debug] dryrun_flops=%.6g avoidable_flops=%.6g "
                  "frac=%.4f n_values=%zu\n",
                  sum_total, sum_avoid,
-                 sum_total > 0 ? sum_avoid / sum_total : 0,
-                 sink.per_node.size());
+                 sum_total > 0 ? sum_avoid / sum_total : 0, tally.size());
+    // Worst offenders by avoidable flops: builds = total builds over slices,
+    // slices = distinct slices, so builds>>slices is genuine same-slice
+    // recompute (an invariant rebuilt every block), builds==slices is pure
+    // tiling.
+    std::vector<std::tuple<double, std::size_t, std::size_t, double, double>>
+        ranked;  // {avoid, builds, slices, total, once}
+    for (auto const& [node, t] : tally) {
+      auto const [total, once, extra] = roll(t);
+      (void)extra;
+      if (total <= once) continue;
+      std::size_t builds = 0;
+      for (auto const& [sig, bc] : t.slices) builds += bc.first;
+      ranked.emplace_back(total - once, builds, t.slices.size(), total, once);
+    }
+    std::sort(ranked.begin(), ranked.end(), [](auto const& a, auto const& b) {
+      return std::get<0>(a) > std::get<0>(b);
+    });
     std::size_t shown = 0;
-    for (auto const& an : out) {
+    for (auto const& [av, builds, nslices, total, once] : ranked) {
       if (shown++ >= 20) break;
-      auto const& nc = sink.per_node.at(an.label);
       std::fprintf(stderr,
-                   "  builds=%zu total_flops=%.4g full_flops=%.4g "
-                   "avoid_flops=%.4g (=%.3g full-rebuilds) | %s\n",
-                   nc.builds, nc.total_flops, nc.full_flops, an.flops, an.count,
-                   an.label.c_str());
+                   "  builds=%zu slices=%zu total=%.4g build_once=%.4g "
+                   "avoid=%.4g\n",
+                   builds, nslices, total, once, av);
     }
   }
   return out;
@@ -264,6 +295,11 @@ struct CostProfile {
   /// tiling it). See \c DryRunOps::prod (per-build tally) and the post-replay
   /// rollup in \c cost_profile().
   std::vector<AvoidableNode> avoidable_nodes;
+  /// DIAGNOSTIC: per-value (label signature) build-once FLOPs from the replay,
+  /// so a caller can join per node (by the SAME signature the schedule Build
+  /// event carries) against an independent per-node model and localize any
+  /// per-node flops disagreement. Populated from the CostSink's per_node map.
+  std::map<std::string, double> sig_full_flops;
   /// Total avoidable recompute in FLOPs (sum of \c avoidable_nodes[i].flops):
   /// arithmetic the batched replay repeated beyond the build-once ideal.
   /// Compare against \c dryrun_flops for the avoidable FRACTION (see \c
@@ -379,6 +415,12 @@ inline CostProfile cost_profile(
   // EVALUATOR's accept is the derived role union, applied inside
   // make_evaluator(policy) via policy.is_batchable_index().
   auto cache = build_dryrun_cache(forest, cfg, regime);
+  // Enable the per-DISTINCT-value recompute tally on the (root) cache: the eval
+  // loop's product-build site records each build against the node's identity
+  // here (CacheManager::tally_build), keyed by the exact cache identity, for
+  // the avoidable rollup below. Off by default so the wet eval path never
+  // populates it; only this costing replay opts in.
+  cache.set_recompute_tally_enabled(true);
   // Null (default) => every existing caller's replay is unaffected, since
   // set_placement_router(nullptr) is exactly the cache's own default.
   cache.set_placement_router(router);
@@ -463,13 +505,30 @@ inline CostProfile cost_profile(
   profile.dryrun_n_ops = costsink.n_ops.load(std::memory_order_relaxed);
 
   // Per-value avoidable-recompute rollup (shared with the schedule-dump
-  // emitter): for each DISTINCT value the replay built, avoidable FLOPs =
-  // total_flops - full_flops, the arithmetic repeated beyond building it ONCE
-  // at full extent (see avoidable_nodes_from_sink()).
-  profile.avoidable_nodes = avoidable_nodes_from_sink(costsink);
+  // emitter): for each DISTINCT value the replay built, avoidable FLOPs = the
+  // actual replay FLOPs of every slice rebuilt beyond once (see
+  // avoidable_nodes_from_tally() and CacheManager::BuildTally).
+  auto const& tally = cache.recompute_tally();
+  profile.avoidable_nodes = avoidable_nodes_from_tally(tally);
   for (auto const& an : profile.avoidable_nodes) {
     profile.avoidable_flops += an.flops;
     profile.avoidable_ops += an.count;
+  }
+  // DIAGNOSTIC: per-DISTINCT-value build-once flops (sum over its DISTINCT
+  // slices of one build's cost), for external per-node join and the build-once
+  // identity check (sum == dryrun_flops - avoidable_flops). Keyed by a unique
+  // running index prefixed to the node hash so two nodes that share a 64-bit
+  // hash (the case this whole tally keying exists to separate) still get
+  // distinct map entries and the sum stays exact.
+  {
+    std::size_t idx = 0;
+    for (auto const& [node, t] : tally) {
+      double once = 0.0;
+      for (auto const& [sig, bc] : t.slices) once += bc.second;
+      profile.sig_full_flops.emplace(
+          std::to_string(idx++) + ":" + std::to_string(node->hash_value()),
+          once);
+    }
   }
 
   // logger_eval_guard's destructor restores logger.eval.{level,stream} at

@@ -116,6 +116,32 @@ class CacheManager {
     std::size_t hops;
   };
 
+  /// DIAGNOSTIC (dry-run costing): per-DISTINCT-value build tally for the
+  /// avoidable-recompute rollup, keyed by the SAME node identity the cache
+  /// dedups on (TreeNodeHasher + TreeNodeEqualityComparator = topological hash
+  /// bin + Bliss connectivity 3-way cmp + recursive child compare), so two
+  /// topologically-distinct nodes sharing a 64-bit hash are NOT folded and
+  /// per-block / alpha-renamed builds of ONE value ARE folded.
+  ///
+  /// Recompute is measured with ACTUAL replay FLOPs, deduped at the (value,
+  /// SLICE) granularity -- NOT against a build-once "full extent" denominator,
+  /// which is ill-defined when slicing is non-uniform. \c slices maps a SLICE
+  /// signature -- the enclosing batch context PROJECTED onto the modes THIS
+  /// value actually carries (empty for a value invariant to every live loop) --
+  /// to that slice's {build count, one build's actual cost}. Then:
+  ///   total     = sum over slices of builds*cost   (== the replay's dryrun
+  ///   sum) build-once = sum over slices of cost         (each DISTINCT slice
+  ///   once) avoidable = sum over slices of (builds-1)*cost.
+  /// A value tiled over DISTINCT slices (different blocks) has builds==1 per
+  /// slice -> 0 avoidable (tiling is not recompute, even if the blocks are
+  /// unequal). A value rebuilt at the SAME slice -- e.g. a node invariant to an
+  /// enclosing loop, whose projected signature is identical every block -- has
+  /// builds>1 at one slice -> (builds-1)*cost avoidable. Costs need not be
+  /// uniform across slices; each slice carries its own realized cost.
+  struct BuildTally {
+    std::unordered_map<std::string, std::pair<std::size_t, double>> slices;
+  };
+
  private:
   using hasher_type = TreeNodeHasher<TreeNode, force_hash_collisions>;
   using comparator_type = TreeNodeEqualityComparator<TreeNode>;
@@ -212,6 +238,24 @@ class CacheManager {
   }
 
   std::unordered_map<TreeNode, entry, hasher_type, comparator_type> cache_map_;
+
+  /// DIAGNOSTIC: per-DISTINCT-value build tally (see BuildTally), keyed by the
+  /// same node identity as cache_map_. Populated by tally_build() from the eval
+  /// loop's build choke point (eval.hpp finish_phase_b) for EVERY product
+  /// build, whether that value is a cache entry, a footprint-gated recompute,
+  /// or a per-batch rebuild -- so the rollup is complete. Held only on the
+  /// scope- chain ROOT (tally_build routes there); scratch caches never
+  /// populate it, and reset() does NOT clear it (the tally spans the whole
+  /// forest replay).
+  std::unordered_map<TreeNode, BuildTally, hasher_type, comparator_type>
+      recompute_tally_;
+
+  /// Gate for tally_build(): false (default) => tally_build is a no-op, so the
+  /// wet (TA) eval path never populates recompute_tally_ and stays byte-
+  /// identical. The dry-run costing replay (cost_profile) sets this true on the
+  /// root cache before the replay. Held on the root only (tally_build routes
+  /// there and checks it there).
+  bool recompute_tally_enabled_ = false;
 
   /// Parent cache for the scope chain (loop-nest visibility). A batch scratch
   /// sets this to the cache one level up; access() delegates on a local miss
@@ -398,6 +442,43 @@ class CacheManager {
   /// Current running high-water mark (bytes) of the live working set.
   [[nodiscard]] size_t working_set_hwmark() const noexcept {
     return working_set_hwmark_;
+  }
+
+  /// DIAGNOSTIC: record one product build of @p key at slice @p slice_sig
+  /// costing @p flops (this build's actual, realized-extent cost). @p slice_sig
+  /// is the enclosing batch context projected onto the modes @p key carries
+  /// (empty when the value is invariant to every live loop), so repeats of ONE
+  /// slice fold (recompute) while distinct slices stay separate (tiling).
+  /// Routes to the scope-chain ROOT so every build -- from any per-batch
+  /// scratch -- accumulates in ONE map keyed by node identity (see
+  /// recompute_tally_). Called only in the dry-run costing replay.
+  void tally_build(key_type const& key, std::string const& slice_sig,
+                   double flops) noexcept {
+    if (parent_) {
+      parent_->tally_build(key, slice_sig, flops);
+      return;
+    }
+    if (!recompute_tally_enabled_) return;  // wet path: no-op
+    auto& slice = recompute_tally_[key].slices[slice_sig];
+    slice.first += 1;      // one more build of this exact (value, slice)
+    slice.second = flops;  // this slice's actual cost (same for repeats)
+  }
+
+  /// Enable/disable the per-node recompute tally (see
+  /// recompute_tally_enabled_). Set on the root cache by the dry-run costing
+  /// replay; left false everywhere else so tally_build() is a no-op on the wet
+  /// eval path.
+  void set_recompute_tally_enabled(bool on) noexcept {
+    recompute_tally_enabled_ = on;
+  }
+
+  /// \return the per-DISTINCT-value build tally accumulated by tally_build()
+  ///         on this (root) cache (see recompute_tally_). Read after the replay
+  ///         to roll up avoidable recompute per node identity.
+  [[nodiscard]] std::unordered_map<TreeNode, BuildTally, hasher_type,
+                                   comparator_type> const&
+  recompute_tally() const noexcept {
+    return recompute_tally_;
   }
 
   /// Sum over ALIVE entries of this cache's own residency (bytes). Unlike
