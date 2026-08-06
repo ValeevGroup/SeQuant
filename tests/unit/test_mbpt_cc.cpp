@@ -190,6 +190,32 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     REQUIRE(size(amps[1]) == 32);
     REQUIRE(size(amps[2]) == 38);
 
+    // one projected equation pinned in full: term counts are blind to the
+    // coefficients, which is where a mis-weighted Wick reduction shows up.
+    // Doubles at H̄¹, the smallest such equation.
+    const auto R2_h1 = CC(2, {.ansatz = CC::Ansatz::U,
+                              .hbar_comm_rank = 1,
+                              .hbar_expansion = CC::HbarExpansion::Bernoulli})
+                           .t()
+                           .at(2);
+    REQUIRE_THAT(
+        R2_h1, EquivalentTo(
+                   L"1/2 Â{i_1,i_2;a_1,a_2}:A-C-S * g{a_1,a_2;a_3,a_4}:A-C-S "
+                   L"* t{a_3,a_4;i_1,i_2}:A-N-S "
+                   L"+ Â{i_1,i_2;a_1,a_2}:A-C-S * g{a_1,a_2;i_1,i_2}:A-C-S "
+                   L"+ 1/2 Â{i_1,i_2;a_1,a_2}:A-C-S * g{i_3,i_4;i_1,i_2}:A-C-S "
+                   L"* t{a_1,a_2;i_3,i_4}:A-N-S "
+                   L"+ 2 Â{i_1,i_2;a_1,a_2}:A-C-S * f{i_3;i_1}:A-C-S "
+                   L"* t{a_1,a_2;i_2,i_3}:A-N-S "
+                   L"- 2 Â{i_1,i_2;a_1,a_2}:A-C-S * f{a_1;a_3}:A-C-S "
+                   L"* t{a_2,a_3;i_1,i_2}:A-N-S "
+                   L"+ 2 Â{i_1,i_2;a_1,a_2}:A-C-S * g{a_1,a_2;i_1,a_3}:A-C-S "
+                   L"* t{a_3;i_2}:A-N-S "
+                   L"+ 2 Â{i_1,i_2;a_1,a_2}:A-C-S * g{i_3,a_1;i_1,i_2}:A-C-S "
+                   L"* t{a_2;i_3}:A-N-S "
+                   L"- 4 Â{i_1,i_2;a_1,a_2}:A-C-S * g{i_3,a_1;i_1,a_3}:A-C-S "
+                   L"* t{a_2,a_3;i_2,i_3}:A-N-S"));
+
 #ifndef SEQUANT_SKIP_LONG_TESTS
     const auto E = cc.energy(3);
     REQUIRE_THAT(E, !EquivalentTo(amps.at(0)));
@@ -220,12 +246,21 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     REQUIRE(size(ip[0]) == 32);
     REQUIRE(size(ip[1]) == 11);
 
-    // block_ranks must be a K x K matrix over the manifolds ...
-    REQUIRE_THROWS_AS(cc.eom_r(nₚ(2), nₕ(2), {2, 1, 0}), Exception);
-    // ... the ansatz must be unitary ...
-    REQUIRE_THROWS_AS(CC(2).eom_r(nₚ(2), nₕ(2), quccsd), Exception);
-    // ... and the Bernoulli H̄ has no uniform path to fall back on
-    REQUIRE_THROWS_AS(cc.eom_r(nₚ(2), nₕ(2)), Exception);
+    // one manifold means one block, whose sandwich minus shift is the
+    // commutator the uniform path builds; that path shares no code with
+    // eom_r_blocked, so this pins the block construction against it
+    const CC bch(2, {.ansatz = CC::Ansatz::U, .hbar_comm_rank = 2});
+    REQUIRE_THAT(bch.eom_r(nₚ(1), nₕ(1), {2}).at(1),
+                 EquivalentTo(bch.eom_r(nₚ(1), nₕ(1)).at(1)));
+
+    if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
+      // block_ranks must be a K x K matrix over the manifolds ...
+      REQUIRE_THROWS_AS(cc.eom_r(nₚ(2), nₕ(2), {2, 1, 0}), Exception);
+      // ... the ansatz must be unitary ...
+      REQUIRE_THROWS_AS(CC(2).eom_r(nₚ(2), nₕ(2), quccsd), Exception);
+      // ... and the Bernoulli H̄ has no uniform path to fall back on
+      REQUIRE_THROWS_AS(cc.eom_r(nₚ(2), nₕ(2)), Exception);
+    }
   }
 
   SECTION("energy") {
