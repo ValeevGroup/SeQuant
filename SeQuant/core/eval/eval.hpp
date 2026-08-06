@@ -562,13 +562,19 @@ template <typename Node>
 /// \param cache The cache for common sub-expression elimination.
 /// \return Evaluated result as ResultPtr.
 ///
+// The recursive evaluation engine. NOT the top-level entry: the batched
+// evaluator re-enters THIS (evaluate_impl), never `evaluate`, so `evaluate`
+// reads as the single outermost call and the whole batched recursion is
+// contained in evaluate_impl. External callers use the thin `evaluate`
+// overloads (below); internal re-entries (the scatter/contraction per-block
+// re-evaluations and the hoisted-invariant builds) call evaluate_impl directly.
 template <Trace EvalTrace = Trace::Default,
           detail::CacheCheck Cache = detail::CacheCheck::Checked,
           meta::can_evaluate Node, typename F, typename N, bool FHC>
   requires meta::leaf_node_evaluator<Node, F>
-ResultPtr evaluate(Node const& node,         //
-                   F const& leaf_evaluator,  //
-                   CacheManager<N, FHC>& cache) {
+ResultPtr evaluate_impl(Node const& node,         //
+                        F const& leaf_evaluator,  //
+                        CacheManager<N, FHC>& cache) {
   // Multiply a (possibly cached) result by its node's canonicalization phase.
   // Formerly the `mult_by_phase` lambda local to the Checked wrapper.
   auto apply_phase = [&cache](auto const& nd, ResultPtr res) -> ResultPtr {
@@ -948,6 +954,19 @@ ResultPtr evaluate(Node const& node,         //
   return ret;
 }
 
+/// Top-level single-node evaluation entry: a thin redirect to the recursive
+/// engine \c evaluate_impl. Kept distinct so that `evaluate` denotes the
+/// outermost call while all internal recursion (including the batched
+/// evaluator's per-block re-entries) is spelled \c evaluate_impl.
+template <Trace EvalTrace = Trace::Default,
+          detail::CacheCheck Cache = detail::CacheCheck::Checked,
+          meta::can_evaluate Node, typename F, typename N, bool FHC>
+  requires meta::leaf_node_evaluator<Node, F>
+ResultPtr evaluate(Node const& node, F const& leaf_evaluator,
+                   CacheManager<N, FHC>& cache) {
+  return evaluate_impl<EvalTrace, Cache>(node, leaf_evaluator, cache);
+}
+
 ///
 /// \tparam EvalTrace If Trace::On, trace is written to the logger's stream.
 ///                   Default is to follow Trace::Default, which is itself
@@ -981,7 +1000,7 @@ ResultPtr evaluate(Node const& node,           //
     ResultPtr pre, post;
   } result;
 
-  result.pre = evaluate<EvalTrace>(node, leaf_evaluator, cache);
+  result.pre = evaluate_impl<EvalTrace>(node, leaf_evaluator, cache);
 
   auto time = detail::timed_eval_inplace([&]() {
     result.post = perm ? result.pre->permute(
@@ -1120,6 +1139,19 @@ ResultPtr evaluate(Args&&... args) {
       detail::arg0(std::forward<Args>(args)...)))>;
   auto cache = CacheManager<Node>::empty();
   return evaluate<EvalTrace>(std::forward<Args>(args)..., cache);
+}
+
+/// Empty-cache overload of the recursive engine (see \c evaluate_impl): builds
+/// on a fresh CacheManager. Used by the batched evaluator's hoisted-invariant
+/// build so that re-entry stays spelled evaluate_impl rather than the top-level
+/// evaluate.
+template <Trace EvalTrace = Trace::Default, typename... Args>
+  requires(!detail::last_type_is_cache_manager<Args...>)
+ResultPtr evaluate_impl(Args&&... args) {
+  using Node = std::remove_cvref_t<decltype(detail::node0(
+      detail::arg0(std::forward<Args>(args)...)))>;
+  auto cache = CacheManager<Node>::empty();
+  return evaluate_impl<EvalTrace>(std::forward<Args>(args)..., cache);
 }
 
 ///
@@ -1811,7 +1843,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
             // does not carry pass through unsliced (built full over its deeper
             // / invariant modes). Store under the same canonical-phase
             // convention the batched member store uses.
-            ResultPtr built = evaluate(d, sliced_leaf);
+            ResultPtr built = evaluate_impl(d, sliced_leaf);
             if (auto const ph = d->canon_phase(); ph != 1)
               built = built->mult_by_phase(ph);
             (void)target->store(d, std::move(built));
@@ -1910,7 +1942,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
             std::function<ResultPtr(node_t const&)>{leaf_evaluator},
             target_batch_size, accept, make_scope_guard, is_volatile,
             persistent_only, depth + 1, peak));
-        ResultPtr part = evaluate(node, leaf_evaluator, bs.cache);
+        ResultPtr part = evaluate_impl(node, leaf_evaluator, bs.cache);
         // Pre-size on the first block (learns the result's non-mode extents and
         // kind from the block partial; the external mode is widened to full).
         if (!dest)
@@ -2097,7 +2129,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
               std::function<ResultPtr(node_t const&)>{leaf_evaluator},
               target_batch_size, accept, make_scope_guard, is_volatile,
               persistent_only, depth + 1, peak));
-          ResultPtr part = evaluate(*mem, leaf_evaluator, bs.cache);
+          ResultPtr part = evaluate_impl(*mem, leaf_evaluator, bs.cache);
           if (!acc[m])
             acc[m] = std::move(part);
           else
