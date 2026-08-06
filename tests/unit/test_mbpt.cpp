@@ -63,24 +63,24 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
     SECTION("add-operators") {
       OpRegistry registry;
-      registry.add(L"T", OpClass::ex);
-      registry.add(L"L", OpClass::deex);
-      registry.add(L"F", OpClass::gen);
+      registry.add(L"T", OpClass::Ex);
+      registry.add(L"L", OpClass::Deex);
+      registry.add(L"F", OpClass::Gen);
 
       REQUIRE(registry.contains(L"T"));
       REQUIRE(registry.contains(L"L"));
       REQUIRE(registry.contains(L"F"));
       REQUIRE(registry.ops().size() == 3);
 
-      REQUIRE(registry.to_class(L"T") == OpClass::ex);
-      REQUIRE(registry.to_class(L"L") == OpClass::deex);
-      REQUIRE(registry.to_class(L"F") == OpClass::gen);
+      REQUIRE(registry.to_class(L"T") == OpClass::Ex);
+      REQUIRE(registry.to_class(L"L") == OpClass::Deex);
+      REQUIRE(registry.to_class(L"F") == OpClass::Gen);
     }
 
     SECTION("remove-operators") {
       OpRegistry registry;
-      registry.add(L"T", OpClass::ex);
-      registry.add(L"L", OpClass::deex);
+      registry.add(L"T", OpClass::Ex);
+      registry.add(L"L", OpClass::Deex);
 
       REQUIRE(registry.contains(L"T"));
       registry.remove(L"T");
@@ -90,8 +90,8 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
     SECTION("clone-registry") {
       OpRegistry registry;
-      registry.add(L"T", OpClass::ex);
-      registry.add(L"L", OpClass::deex);
+      registry.add(L"T", OpClass::Ex);
+      registry.add(L"L", OpClass::Deex);
 
       auto cloned = registry.clone();
       REQUIRE(cloned.contains(L"T"));
@@ -101,8 +101,8 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
     SECTION("purge-registry") {
       OpRegistry registry;
-      registry.add(L"T", OpClass::ex);
-      registry.add(L"L", OpClass::deex);
+      registry.add(L"T", OpClass::Ex);
+      registry.add(L"L", OpClass::Deex);
 
       REQUIRE_FALSE(registry.ops().empty());
       registry.purge();
@@ -114,16 +114,16 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
         OpRegistry registry;
         // should not be able to add reserved labels
         REQUIRE_THROWS(
-            registry.add(sequant::reserved::antisymm_label(), OpClass::gen));
+            registry.add(sequant::reserved::antisymm_label(), OpClass::Gen));
         REQUIRE_THROWS(
-            registry.add(sequant::reserved::symm_label(), OpClass::gen));
+            registry.add(sequant::reserved::symm_label(), OpClass::Gen));
       }
 
       SECTION("duplicate-operators") {
         OpRegistry registry;
-        registry.add(L"T", OpClass::ex);
+        registry.add(L"T", OpClass::Ex);
         // should not be able to add duplicate
-        REQUIRE_THROWS(registry.add(L"T", OpClass::deex));
+        REQUIRE_THROWS(registry.add(L"T", OpClass::Deex));
       }
     }
   }  // SECTION("registry")
@@ -167,7 +167,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
     SECTION("clone-context") {
       auto reg = std::make_shared<OpRegistry>();
-      reg->add(L"T", OpClass::ex);
+      reg->add(L"T", OpClass::Ex);
 
       auto ctx = Context({.csv = CSV::Yes, .op_registry_ptr = reg});
       auto cloned = ctx.clone();
@@ -1367,11 +1367,11 @@ SECTION("manuscript-examples") {
     // amplitudes pinned Hermitian so the reference equations below (generated
     // under the legacy conjugate-symmetric assumption) stay valid under the
     // hermiticity model (see scoped_hermitian_amplitudes)
-    registry.add(L"f", OpClass::gen)
-        .add(L"g", OpClass::gen)
-        .add(L"t", OpClass::ex, Hermiticity::Hermitian)
-        .add(L"x", OpClass::ex, Hermiticity::Hermitian)
-        .add(L"y", OpClass::ex, Hermiticity::Hermitian);
+    registry.add(L"f", OpClass::Gen)
+        .add(L"g", OpClass::Gen)
+        .add(L"t", OpClass::Ex, Hermiticity::Hermitian)
+        .add(L"x", OpClass::Ex, Hermiticity::Hermitian)
+        .add(L"y", OpClass::Ex, Hermiticity::Hermitian);
 
     // set MBPT context
     auto ctx_resetter = set_scoped_default_mbpt_context(

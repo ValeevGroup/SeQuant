@@ -85,11 +85,11 @@ int main() {
   // Create a custom operator registry with a new operator
   auto custom_registry = std::make_shared<OpRegistry>();
 
-  custom_registry->add(L"f", OpClass::gen)
-      .add(L"g", OpClass::gen)
-      .add(L"t", OpClass::ex)
-      .add(L"λ", OpClass::deex)
-      .add(L"X", OpClass::ex);  // Custom excitation operator
+  custom_registry->add(L"f", OpClass::Gen)
+      .add(L"g", OpClass::Gen)
+      .add(L"t", OpClass::Ex)
+      .add(L"λ", OpClass::Deex)
+      .add(L"X", OpClass::Ex);  // Custom excitation operator
 
   // Use the custom registry to set the default MBPT context
   set_default_mbpt_context({.op_registry_ptr = custom_registry});
