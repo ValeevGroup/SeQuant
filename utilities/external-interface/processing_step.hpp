@@ -35,14 +35,14 @@ class ProcessingStep {
 namespace detail {
 
 template <typename DataType>
-class OTMProcessFunctionMember {
+class OBOProcessFunctionMember {
  protected:
   virtual std::size_t process(std::string_view id_prefix, std::size_t id_start,
                               ExecutionContext &ctx, const DataType &data) = 0;
 };
 
 template <>
-class OTMProcessFunctionMember<void> {
+class OBOProcessFunctionMember<void> {
  protected:
   virtual std::size_t process(std::string_view id_prefix, std::size_t id_start,
                               ExecutionContext &ctx) = 0;
@@ -51,9 +51,9 @@ class OTMProcessFunctionMember<void> {
 }  // namespace detail
 
 template <typename DataType>
-class OneToManyProcessingStep
+class OneByOneProcessingStep
     : public ProcessingStep,
-      public detail::OTMProcessFunctionMember<DataType> {
+      public detail::OBOProcessFunctionMember<DataType> {
  public:
   std::size_t run(std::string_view step_id, ExecutionContext &ctx,
                   const std::vector<std::string_view> &inputs = {}) override {

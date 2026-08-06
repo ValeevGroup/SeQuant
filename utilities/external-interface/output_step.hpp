@@ -8,7 +8,7 @@
 
 namespace sequant::util::extint {
 
-class OutputStep : public OneToManyProcessingStep<ExpressionData> {
+class OutputStep : public OneByOneProcessingStep<ExpressionData> {
  public:
   std::string kind() const override;
 

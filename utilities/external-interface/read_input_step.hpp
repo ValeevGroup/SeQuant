@@ -15,7 +15,7 @@
 
 namespace sequant::util::extint {
 
-class ReadInputStep : public OneToManyProcessingStep<void> {
+class ReadInputStep : public OneByOneProcessingStep<void> {
  public:
   std::string kind() const override;
 
