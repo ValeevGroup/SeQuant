@@ -85,9 +85,9 @@ The :class:`mbpt::OpRegistry <sequant::mbpt::OpRegistry>` maintains a mapping fr
 
 Each operator must be registered with one of three classes:
 
-- :cpp:enumerator:`OpClass::ex <sequant::mbpt::OpClass::ex>`: Excitation operators (e.g., cluster excitation operator)
-- :cpp:enumerator:`OpClass::deex <sequant::mbpt::OpClass::deex>`: De-excitation operators (e.g., cluster de-excitation operator)
-- :cpp:enumerator:`OpClass::gen <sequant::mbpt::OpClass::gen>`: General operators (e.g., Hamiltonian-like operators)
+- :cpp:enumerator:`OpClass::Ex <sequant::mbpt::OpClass::Ex>`: Excitation operators (e.g., cluster excitation operator)
+- :cpp:enumerator:`OpClass::Deex <sequant::mbpt::OpClass::Deex>`: De-excitation operators (e.g., cluster de-excitation operator)
+- :cpp:enumerator:`OpClass::Gen <sequant::mbpt::OpClass::Gen>`: General operators (e.g., Hamiltonian-like operators)
 
 .. note:: Some operator labels are reserved for SeQuant's internal MBPT and core functionalities and cannot be registered. See ``SeQuant/core/reserved.hpp`` for more details.
 

@@ -357,7 +357,7 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   // - θ needs to be treated differently because it can have variable number of
   // quantum numbers
   auto skip_rank_info = [opclass](const auto& label) {
-    return opclass == OpClass::gen && label != reserved::antisymm_label() &&
+    return opclass == OpClass::Gen && label != reserved::antisymm_label() &&
            label != reserved::symm_label() && label != L"θ";
   };
 
@@ -493,15 +493,15 @@ OpMaker<S>::OpMaker(const std::wstring& label, ncre nc, nann na) {
   auto registry = get_default_mbpt_context().op_registry();
 
   switch (registry->to_class(label_)) {
-    case OpClass::ex:
+    case OpClass::Ex:
       cre_spaces_ = IndexSpaceContainer(nc, get_particle_space(Spin::any));
       ann_spaces_ = IndexSpaceContainer(na, get_hole_space(Spin::any));
       break;
-    case OpClass::deex:
+    case OpClass::Deex:
       cre_spaces_ = IndexSpaceContainer(nc, get_hole_space(Spin::any));
       ann_spaces_ = IndexSpaceContainer(na, get_particle_space(Spin::any));
       break;
-    case OpClass::gen:
+    case OpClass::Gen:
       cre_spaces_ = IndexSpaceContainer(nc, get_complete_space(Spin::any));
       ann_spaces_ = IndexSpaceContainer(na, get_complete_space(Spin::any));
       break;
@@ -578,14 +578,14 @@ ExprPtr OpMaker<S>::operator()(
   const auto op_herm = op_hermiticity(label_);
 
   if (!dep && csv) {
-    if (opclass == OpClass::ex) {
+    if (opclass == OpClass::Ex) {
       if constexpr (assert_enabled()) {
         for (auto&& s : cre_spaces_) {
           SEQUANT_ASSERT(isr->contains_unoccupied(s));
         }
       }
       dep = UseDepIdx::Bra;
-    } else if (opclass == OpClass::deex) {
+    } else if (opclass == OpClass::Deex) {
       if constexpr (assert_enabled()) {
         for (auto&& s : ann_spaces_) {
           SEQUANT_ASSERT(isr->contains_unoccupied(s));
