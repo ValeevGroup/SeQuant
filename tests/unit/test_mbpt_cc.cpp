@@ -256,11 +256,13 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
       // block_ranks must be a K x K matrix over the manifolds ...
       REQUIRE_THROWS_AS(cc.eom_r(nₚ(2), nₕ(2), {2, 1, 0}), Exception);
-      // ... the ansatz must be unitary ...
+      // ... and the ansatz must be unitary
       REQUIRE_THROWS_AS(CC(2).eom_r(nₚ(2), nₕ(2), quccsd), Exception);
-      // ... and the Bernoulli H̄ has no uniform path to fall back on
-      REQUIRE_THROWS_AS(cc.eom_r(nₚ(2), nₕ(2)), Exception);
     }
+
+    // no matrix means uniform truncation at hbar_comm_rank
+    REQUIRE_THAT(cc.eom_r(nₚ(2), nₕ(2)).at(1),
+                 EquivalentTo(cc.eom_r(nₚ(2), nₕ(2), {2, 2, 2, 2}).at(1)));
   }
 
   SECTION("energy") {

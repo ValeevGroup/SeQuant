@@ -393,7 +393,12 @@ std::vector<ExprPtr> eom_r_blocked(const CC& cc, nₚ np, nₕ nh,
 
   std::ranges::reverse(manifolds);
   const auto K = manifolds.size();
-  SEQUANT_ASSERT(block_ranks.size() == K * K,
+  // empty means uniform truncation at hbar_comm_rank in every block
+  const std::vector<size_t> ranks =
+      block_ranks.empty()
+          ? std::vector<size_t>(K * K, cc.hbar_comm_rank().value())
+          : block_ranks;
+  SEQUANT_ASSERT(ranks.size() == K * K,
                  "CC::eom_r: block_ranks must be a K x K row-major matrix, "
                  "K = number of projection manifolds");
 
@@ -439,7 +444,7 @@ std::vector<ExprPtr> eom_r_blocked(const CC& cc, nₚ np, nₕ nh,
     auto acc = std::make_shared<Sum>();
     for (size_t j = 0; j < K; ++j) {
       const auto [kp, kh] = manifolds[j];
-      const auto& hbar_ij = hbars.at(block_ranks[i * K + j]);
+      const auto& hbar_ij = hbars.at(ranks.at(i * K + j));
       const auto ket = ket_of(kp, kh);
       acc->append(vev(bra * hbar_ij * ket));
       // -<0|H̄^(k_ii)|0>, written as <i|r_i H̄|0> so Wick keeps E's summed
@@ -464,14 +469,11 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh,
                    "hbar_comm_rank must be specified for unitary ansatz "
                    "in CC::eom_r");
 
-  // if block ranks are specified, dispatch and early return
-  if (!block_ranks.empty()) return eom_r_blocked(*this, np, nh, block_ranks, N);
-
-  // the uniform path below commutes H̄ with an operator-level R, which the
-  // tensor-level Bernoulli H̄ cannot take part in
-  SEQUANT_ASSERT(
-      hbar_expansion_ != HbarExpansion::Bernoulli,
-      "CC::eom_r: the Bernoulli expansion requires non-empty block_ranks");
+  // Bernoulli always takes the blocked path: the uniform one below commutes H̄
+  // with an operator-level R, which a tensor-level H̄ cannot take part in. An
+  // empty matrix there means uniform truncation at hbar_comm_rank.
+  if (!block_ranks.empty() || hbar_expansion_ == HbarExpansion::Bernoulli)
+    return eom_r_blocked(*this, np, nh, block_ranks, N);
 
   // construct hbar
   const auto hbar = this->hbar();

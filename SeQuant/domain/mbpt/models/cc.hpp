@@ -208,12 +208,10 @@ class CC {
   ///   manifold rank, so one set of numbers serves EE, IP and EA (read S as
   ///   1h/1p and D as 2h1p/1h2p: qUCCSD, IP-qUCCSD and EA-qUCCSD are all
   ///   `{2,1,1,0}`, 10.1021/acs.jctc.5c01991 Table 1). Empty (the default)
-  ///   selects the uniform H̄ at `hbar_comm_rank`, which the Bernoulli
-  ///   expansion does not support.
+  ///   selects the uniform H̄ at `hbar_comm_rank` everywhere.
   /// @pre if non-empty, requires a unitary ansatz; a non-unitary H̄ is exact and
   ///   has nothing to truncate.
-  /// @pre `block_ranks` is either empty or `K`×`K`, and is non-empty under the
-  ///   Bernoulli expansion
+  /// @pre `block_ranks` is either empty or `K`×`K`
   /// @note each block is the sandwich \f$ \langle i|\bar{H}|j \rangle \f$
   ///   (Eq. (7) of 10.1063/5.0062090) plus an explicit \f$ -E \f$ shift on the
   ///   diagonal, taken at the block's own truncation rank. Eq. (10) there
