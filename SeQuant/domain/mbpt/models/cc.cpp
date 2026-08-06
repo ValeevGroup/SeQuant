@@ -56,8 +56,6 @@ CC::CC(size_t n, const Options& opts)
   if (hbar_expansion_ == HbarExpansion::Bernoulli) {
     SEQUANT_ASSERT(unitary(),
                    "CC: Bernoulli expansion requires a unitary ansatz");
-    // without hbar_comm_rank CC::hbar() falls back to rank 4, silently
-    // selecting the most expensive (and least exercised) order
     SEQUANT_ASSERT(hbar_comm_rank_,
                    "CC: Bernoulli expansion requires hbar_comm_rank");
   }
@@ -406,15 +404,14 @@ std::vector<ExprPtr> eom_r_blocked(const CC& cc, nₚ np, nₕ nh,
   // below must match it. Empty connectivity, as everywhere on the unitary path.
   const bool tensor_level = cc.hbar_expansion() == CC::HbarExpansion::Bernoulli;
 
-  // One H̄ per distinct truncation order, reduced to its R part. The N part is
+  // One H̄ per distinct truncation order, reduced to its R part (Bernoulli
+  // only: the operator-level BCH H̄ has no N/R split to take). The N part is
   // the ground-state amplitude residual <Φl|H̄|Φ0>, which Eq. (6) zeroes only
-  // at the amplitude rank. A block truncated below that rank would keep the
-  // residual, so drop N everywhere instead. The diagonal is untouched: an N
-  // operator of rank r shifts the manifold rank by r, so it never lands on a
-  // diagonal block, and it has no reference expectation value, so the −E shift
-  // below is unchanged either way. Off the diagonal the equations do change,
-  // though not what they evaluate to at converged amplitudes. Bernoulli only:
-  // the operator-level BCH H̄ has no N/R split to take.
+  // at the amplitude rank, so a block truncated below that rank would keep it.
+  // The diagonal is untouched either way: an N operator of rank r shifts the
+  // manifold rank by r, so it never lands on a diagonal block, and it has no
+  // reference expectation value. Off the diagonal the equations do change,
+  // though not what they evaluate to at converged amplitudes.
   container::map<size_t, ExprPtr> hbars;
   for (const auto k : ranks) {
     auto [it, fresh] = hbars.try_emplace(k);

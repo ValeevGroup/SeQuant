@@ -67,7 +67,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     using namespace sequant::mbpt;
     // [V, T2] is antisymmetric: [A,B] == -[B,A] after Wick reduction
     const auto V = op::tensor::h(2);
-    const auto T2 = op::tensor::t(2);  // rank-2 excitation, tensor form
+    const auto T2 = op::tensor::t(2);
     const auto ab = bernoulli::detail::wick_commutator(V, T2);
     const auto ba = bernoulli::detail::wick_commutator(T2, V);
     REQUIRE_THAT(ab, EquivalentTo(simplify(ex<Constant>(-1) * ba)));
@@ -109,7 +109,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
   SECTION("bernoulli_N_R_split") {
     using namespace sequant;
     using namespace sequant::mbpt;
-    const auto V = op::tensor::h(2);  // fluctuation potential g (general)
+    const auto V = op::tensor::h(2);  // general g
     const auto Vn = bernoulli::detail::N_part(V, 2);
     const auto Vr = bernoulli::detail::R_part(V, 2);
     // N ⊎ R reconstructs V. R stays in compact general-index form, so check the

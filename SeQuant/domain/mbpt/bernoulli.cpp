@@ -31,9 +31,9 @@
 //
 // Equation numbers below are all from 10.1063/1.5030344, Sec. III B:
 // superoperator inversion Eqs. (36)-(39); Bernoulli numbers B₁=−1/2, B₂=1/12,
-// B₃=0, B₄=−1/720, Eq. (40) -- these are Bₙ/n! in the textbook normalization,
-// so they will not match a table of Bₙ; the N/R split and the UCC amplitude
-// condition V̄_N = 0, above and at Eq. (43); the H̄ recursion, Eq. (44); the sum
+// B₃=0, B₄=−1/720, Eq. (40), i.e. Bₙ/n! in the textbook normalization; the N/R
+// split and the UCC amplitude condition V̄_N = 0, above and at Eq. (43); the H̄
+// recursion, Eq. (44); the sum
 // H̄ = Σ_k H̄^k, Eq. (45); H̄⁰..H̄⁴, Eqs. (46)-(50).
 //
 // The F-cancellation: at an HF reference F has no occupied-virtual block
@@ -88,7 +88,7 @@ bool is_N_term(const sequant::ExprPtr& term, std::size_t cutoff) {
   auto isr = get_default_context().index_space_registry();
 
   const auto* nop = find_nop(term);
-  if (!nop) return false;  // no residual operator => rank-preserving => R
+  if (!nop) return false;
 
   const auto ncre = ranges::distance(nop->creators());
   const auto nann = ranges::distance(nop->annihilators());
@@ -127,8 +127,7 @@ ExprPtr wick_reduce(const ExprPtr& expr_in) {
   // one representative per symmetry-equivalent contraction class and multiplies
   // by the class size, weight bookkeeping that holds only on the
   // fully-contracted path. On this partial-contraction path it silently
-  // rescales the terms carrying a symmetric amplitude pair, and the damage
-  // shows up only under projection.
+  // rescales the terms carrying a symmetric amplitude pair.
   wick.use_topology(false).full_contractions(false);
   auto result = wick.compute(/*count_only=*/false,
                              /*skip_input_canonicalization=*/true);
@@ -137,11 +136,9 @@ ExprPtr wick_reduce(const ExprPtr& expr_in) {
 }
 
 ExprPtr wick_commutator(const ExprPtr& A, const ExprPtr& B) {
-  // A and B are built independently, so their summed indices are local to each.
-  // If both use the same labels (a block-resolved R/N part and sigma both carry
-  // a/i), the product A*B fuses two independent summations. That corrupts the
-  // contraction. Reindex B to fresh temporaries. Canonicalization restores tidy
-  // labels.
+  // A and B are built independently, so shared labels (both a block-resolved
+  // part and sigma carry a/i) would fuse two independent summations in A*B.
+  // Reindex B to fresh temporaries; canonicalization restores tidy labels.
   container::map<Index, Index> repl;
   for (const auto& idx : get_used_indices(B))
     repl.emplace(idx, Index::make_tmp_index(idx.space()));
@@ -213,12 +210,9 @@ ExprPtr expand_to_blocks_reduced(const ExprPtr& expr) {
     for (;;) {
       container::map<Index, Index> repl;
       for (std::size_t k = 0; k < gens.size(); ++k)
-        // fresh ordinal (not gens[k].ordinal()): reusing the general index's
-        // ordinal would collide with any pre-existing definite index of the
-        // same base space and ordinal already in the term (e.g. an a/i index
-        // from an amplitude in a commutator result), producing a duplicate
-        // index. A globally-unique temporary is disjoint by construction;
-        // canonicalization restores tidy labels.
+        // fresh ordinal (not gens[k].ordinal()): reusing it would collide with
+        // a definite index of the same base space already in the term, e.g.
+        // one an amplitude brought in. Canonicalization restores tidy labels.
         repl.emplace(gens[k], Index::make_tmp_index(choices[k][idx[k]]));
       sum->append(transform_expr(term, repl));
       // increment mixed-radix counter over the assignments
@@ -232,8 +226,6 @@ ExprPtr expand_to_blocks_reduced(const ExprPtr& expr) {
     return ExprPtr{sum};
   };
 
-  // transform_sum_expr maps in parallel, canonicalizes each result, and
-  // accumulates into a HashingAccumulator
   ExprPtr out;
   if (expr.is<Sum>()) {
     out = transform_sum_expr(expr.as<Sum>().summands(), expand_term);
@@ -307,18 +299,15 @@ ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
   const auto F = op::tensor::F();
   const auto V = op::tensor::h(2);
   const auto T = op::tensor::T(N, skip1);
-  const auto sigma = simplify(T - adjoint(T));  // σ = T − T†
+  const auto sigma = simplify(T - adjoint(T));
 
   // Every term of H̄^k is a nested commutator [[..[V_{p0},σ]_{f0}..],σ]_{f_k}
   // with a per-level N/R/A partition tag applied after each commutator ('A' =
   // no filter). nest(p0, f) evaluates such a node, memoizing every prefix
-  // (key = p0 + tags applied so far): the terms share prefixes both within a
-  // rank (the 9 rank-4 terms have only 3 distinct level-1 and 6 level-2 nodes)
-  // and across ranks (all four ranks share the same three level-1 nodes), so
-  // the memo avoids recomputing them. Reusing a memoized ExprPtr is safe:
-  // expression composition deep-copies operands (Product/Sum append clone), so
-  // wick_commutator does not mutate its arguments. Commutator outputs are
-  // already wick_reduce'd, so the reduced-input N/R filters apply.
+  // (key = p0 + tags applied so far): prefixes repeat both within a rank and
+  // across ranks. Reuse is safe because expression composition deep-copies its
+  // operands. Commutator outputs are already wick_reduce'd, so the
+  // reduced-input N/R filters apply.
   container::map<std::string, ExprPtr> memo;
   auto nest = [&](char p0, const char* f) -> ExprPtr {
     SEQUANT_ASSERT((p0 == 'A' || p0 == 'N' || p0 == 'R') &&
