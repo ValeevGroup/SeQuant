@@ -44,6 +44,7 @@
 #include <iterator>
 #include <memory>
 #include <numeric>
+#include <optional>
 #include <ranges>
 #include <string_view>
 #include <unordered_map>
@@ -636,21 +637,25 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
     return remove_tensor(product, reserved::antisymm_label());
   }
 
-  auto S = Tensor{};
+  std::optional<Tensor> S;
   if (A_is_nconserving) {
+    SEQUANT_ASSERT(A_tensor.rank() > 1);
     S = Tensor(reserved::symm_label(), A_tensor.bra(), A_tensor.ket(),
                A_tensor.aux(), Symmetry::Nonsymm);
-  } else {  // A is N-nonconserving
+  } else {
     auto n = std::min(A_tensor.bra_rank(), A_tensor.ket_rank());
-    container::svector<Index> bra_list(A_tensor.bra().begin(),
-                                       A_tensor.bra().begin() + n);
-    container::svector<Index> ket_list(A_tensor.ket().begin(),
-                                       A_tensor.ket().begin() + n);
-    S = Tensor(reserved::symm_label(), bra(std::move(bra_list)),
-               ket(std::move(ket_list)), A_tensor.aux(), Symmetry::Nonsymm);
+
+    if (n > 0) {
+      container::svector<Index> bra_list(A_tensor.bra().begin(),
+                                         A_tensor.bra().begin() + n);
+      container::svector<Index> ket_list(A_tensor.ket().begin(),
+                                         A_tensor.ket().begin() + n);
+      S = Tensor(reserved::symm_label(), bra(std::move(bra_list)),
+                 ket(std::move(ket_list)), A_tensor.aux(), Symmetry::Nonsymm);
+    }
   }
 
-  const auto nf = rational{1, factorial(S.ket_rank())};
+  const auto nf = S ? rational{1, factorial(S->ket_rank())} : 1;
 
   // Generate replacement maps from a list of Index type (could be a bra or a
   // ket)
@@ -704,8 +709,10 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
 
   for (auto&& map : maps) {
     Product new_product{};
-    new_product.scale(product->scalar() * nf);
-    new_product.append(get_phase(map), ex<Tensor>(S));
+    new_product.scale(product->scalar() * nf * get_phase(map));
+    if (S) {
+      new_product.append(ex<Tensor>(S.value()));
+    }
 
     auto temp_product = remove_tensor(product, reserved::antisymm_label());
     for (auto&& term : *temp_product) {
