@@ -5,6 +5,7 @@
 #include <SeQuant/domain/mbpt/rules/csv.hpp>
 
 #include <SeQuant/domain/mbpt/space_qns.hpp>
+#include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
@@ -54,9 +55,18 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexSpace& csv_basis,
     SEQUANT_ASSERT(bra_has_proto_indices || ket_has_proto_indices);
 
     if (bra_has_proto_indices && ket_has_proto_indices) {
-      auto dummy_idx = ordinal_compare(bra_idx, ket_idx)   //
-                           ? bra_idx.drop_proto_indices()  //
-                           : ket_idx.drop_proto_indices();
+      // The contracted index of the C†C overlap expansion must be a FRESH index
+      // in the (Kramers-labeled) CSV basis. drop_proto_indices() keeps the base
+      // ordinal (e.g. a↑_1), so two overlaps that share a base virtual collide
+      // on the same dummy -- that index then appears >2 times across the term
+      // and the eval-time tensor network is rejected as invalid. Take the
+      // spin-labeled base space from drop_proto_indices() (which correctly
+      // preserves the ↑/↓ Kramers label) but mint a unique tmp index in it.
+      const auto dummy_space = (ordinal_compare(bra_idx, ket_idx)  //
+                                    ? bra_idx.drop_proto_indices()
+                                    : ket_idx.drop_proto_indices())
+                                   .space();
+      auto dummy_idx = Index::make_tmp_index(dummy_space);
 
       return ex<Product>(
           1,
@@ -75,12 +85,52 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexSpace& csv_basis,
   Product result;
   container::svector<Index> rbra, rket;
 
+  // Preserve the Kramers spincase (↑/↓) of the CSV-projected index on the fresh
+  // CSV-basis index. The relativistic (Kramers-traced) residual carries α/β
+  // labels on its virtuals; make_tmp_index(csv_basis) alone would drop them, so
+  // the downstream Kramers reconstruction / leaf yielder could not tell which
+  // Kramers block (↑ vs ↓) the CSV coefficient belongs to. Spin-free indices
+  // are left untouched (non-relativistic path).
+  auto make_csv_index = [&csv_basis](const Index& src) -> Index {
+    const auto qns = src.space().qns();
+    if ((bitset_t(qns) & mask_v<Spin>) != 0) {
+      const auto s = to_spin(qns);
+      // Make the fresh CSV index directly in the spin-labeled csv_basis space.
+      // NB: make_spinalpha(make_tmp_index(csv_basis)) would rebuild the index
+      // via make_index_with_spincase, which feeds the tmp-range ordinal back
+      // through the non-tmp Index ctor and throws ("ordinal must be less than
+      // min_tmp_index"). Derive the spin-labeled space from a throwaway non-tmp
+      // probe, then make a fresh tmp index in that space.
+      const Index probe(csv_basis, 1);
+      if (s == Spin::alpha)
+        return Index::make_tmp_index(make_spinalpha(probe).space());
+      if (s == Spin::beta)
+        return Index::make_tmp_index(make_spinbeta(probe).space());
+    }
+    return Index::make_tmp_index(csv_basis);
+  };
+
+  // The CSV coefficient's bra<->ket exchange is a complex conjugation (C_μ^{a}
+  // vs C^μ_{a}), so mark it BraKetSymmetry::Conjugate rather than letting the
+  // ctor derive it from the (over a complex/Kramers field, unreliable)
+  // CSV-basis index field. This lets eval-time exploit_conjugate fold the two
+  // orientations onto one cached value and serve conj(C) via an Adjoint
+  // (elementwise conj) on retrieval; without it a conj(C) leaf is silently
+  // served as bare C, biasing a complex (Kramers) result with a spurious
+  // imaginary part. No-op over a real field (conjugation is the identity and
+  // exploit_conjugate is off); Conjugate is a no-swap symmetry to the
+  // canonicalizer, like the previous default.
+  auto csv_coeff = [&](Index a, Index b) {
+    return ex<Tensor>(coeff_tensor_label, bra({std::move(a)}),
+                      ket({std::move(b)}), aux({}), Symmetry::Nonsymm,
+                      BraKetSymmetry::Conjugate, ColumnSymmetry::Nonsymm);
+  };
+
   rbra.reserve(tnsr.bra_rank());
   for (auto&& idx : tnsr.bra()) {
     if (idx.has_proto_indices()) {
-      Index xidx = Index::make_tmp_index(csv_basis);
-      result.append(
-          1, ex<Tensor>(coeff_tensor_label, bra({idx}), ket({xidx}), aux({})));
+      Index xidx = make_csv_index(idx);
+      result.append(1, csv_coeff(idx, xidx));
       rbra.emplace_back(std::move(xidx));
     } else
       rbra.emplace_back(idx);
@@ -89,9 +139,8 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexSpace& csv_basis,
   rket.reserve(tnsr.ket_rank());
   for (auto&& idx : tnsr.ket()) {
     if (idx.has_proto_indices()) {
-      Index xidx = Index::make_tmp_index(csv_basis);
-      result.append(
-          1, ex<Tensor>(coeff_tensor_label, bra({xidx}), ket({idx}), aux({})));
+      Index xidx = make_csv_index(idx);
+      result.append(1, csv_coeff(xidx, idx));
       rket.emplace_back(std::move(xidx));
     } else
       rket.emplace_back(idx);
