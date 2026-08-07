@@ -1660,7 +1660,7 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
   return expr_vec;
 }
 
-template <detail::index_group_range IdxGroups>
+template <bool check_ext_indices, detail::index_group_range IdxGroups>
 ExprPtr spintrace_impl(const ExprPtr& expression, IdxGroups&& ext_index_groups,
                        bool spinfree_index_spaces) {
   // Escape immediately if expression is a constant
@@ -1668,7 +1668,7 @@ ExprPtr spintrace_impl(const ExprPtr& expression, IdxGroups&& ext_index_groups,
     return expression;
   }
 
-  if constexpr (assert_enabled()) {
+  if constexpr (check_ext_indices && assert_enabled()) {
     // Verify that the number of external indices matches the number of indices
     // in ext_index_groups, UNLESS user overrode external definitions in default
     // context
@@ -1876,32 +1876,40 @@ ExprPtr spintrace(const ExprPtr& expression,
                   const container::svector<container::svector<SlottedIndex>>&
                       ext_index_groups,
                   bool spinfree_index_spaces) {
-  return spintrace_impl(expression, as_view_of_index_groups(ext_index_groups),
-                        spinfree_index_spaces);
+  return spintrace_impl<true>(expression,
+                              as_view_of_index_groups(ext_index_groups),
+                              spinfree_index_spaces);
 }
 
 ExprPtr spintrace(const ExprPtr& expression, EmptyInitializerList,
                   bool spinfree_index_spaces) {
-  return spintrace_impl(expression,
-                        container::svector<container::svector<Index>>{},
-                        spinfree_index_spaces);
+  return spintrace_impl<true>(expression,
+                              container::svector<container::svector<Index>>{},
+                              spinfree_index_spaces);
 }
 
 ExprPtr spintrace(
     const ExprPtr& expression,
     const container::svector<container::svector<Index>>& ext_index_groups,
     bool spinfree_index_spaces) {
-  return spintrace_impl(expression, ext_index_groups, spinfree_index_spaces);
+  return spintrace_impl<true>(expression, ext_index_groups,
+                              spinfree_index_spaces);
+}
+
+ExprPtr resultexpr_spintrace_delegate(
+    const ExprPtr& expression,
+    const container::svector<container::svector<SlottedIndex>>&
+        ext_index_groups,
+    bool spinfree_index_spaces) {
+  return spintrace_impl<false>(expression,
+                               as_view_of_index_groups(ext_index_groups),
+                               spinfree_index_spaces);
 }
 
 container::svector<ResultExpr> spintrace(const ResultExpr& expr,
                                          bool spinfree_index_spaces) {
-  using TraceFunction = ExprPtr (*)(
-      const ExprPtr&,
-      const container::svector<container::svector<SlottedIndex>>&, bool);
-
   return detail::wrap_trace<container::svector<ResultExpr>>(
-      expr, static_cast<TraceFunction>(&spintrace), spinfree_index_spaces);
+      expr, &resultexpr_spintrace_delegate, spinfree_index_spaces);
 }
 
 }  // namespace sequant::mbpt
