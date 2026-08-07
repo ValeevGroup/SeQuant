@@ -958,7 +958,8 @@ ExprPtr closed_shell_spintrace_impl(const ExprPtr& expression,
   // full_expansion: it fully expands the antisymmetrizer directly (can be used
   // for v2 eqs, however it is not an optimized way).
   auto partially_or_fully_expand = [&full_expansion](const ExprPtr& expr) {
-    auto temp = expr;
+    ExprPtr temp = expr;
+
     if (has_tensor(temp, reserved::antisymm_label())) {
       if (full_expansion) {
         temp = expand_A_op(temp);
@@ -966,6 +967,7 @@ ExprPtr closed_shell_spintrace_impl(const ExprPtr& expression,
         temp = symmetrize_expr(temp);
       }
     }
+
     temp = expand_antisymm(temp);
     rapid_simplify(temp);
     return temp;
