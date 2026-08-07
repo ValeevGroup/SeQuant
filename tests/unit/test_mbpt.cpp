@@ -1364,14 +1364,11 @@ SECTION("manuscript-examples") {
     const auto& ann_space = get_hole_space(Spin::any);
 
     OpRegistry registry;
-    // amplitudes pinned Hermitian so the reference equations below (generated
-    // under the legacy conjugate-symmetric assumption) stay valid under the
-    // hermiticity model (see scoped_hermitian_amplitudes)
-    registry.add(L"f", OpClass::Gen)
-        .add(L"g", OpClass::Gen)
-        .add(L"t", OpClass::Ex, Hermiticity::Hermitian)
-        .add(L"x", OpClass::Ex, Hermiticity::Hermitian)
-        .add(L"y", OpClass::Ex, Hermiticity::Hermitian);
+    registry.add(L"f", OpClass::Gen, Hermiticity::Hermitian)
+        .add(L"g", OpClass::Gen, Hermiticity::Hermitian)
+        .add(L"t", OpClass::Ex, Hermiticity::NonHermitian)
+        .add(L"x", OpClass::Ex, Hermiticity::NonHermitian)
+        .add(L"y", OpClass::Ex, Hermiticity::NonHermitian);
 
     // set MBPT context
     auto ctx_resetter = set_scoped_default_mbpt_context(
@@ -1388,9 +1385,9 @@ SECTION("manuscript-examples") {
     REQUIRE_THAT(
         simplify(expr),
         EquivalentTo(
-            L"1/8 f{p1;p2}:A-C-S x{a1,a2;i1,i2}:A-C-S y{a3,a4;i3}:A-C-S "
+            L"1/8 f{p1;p2}:A-C-S x{a1,a2;i1,i2}:A-N-S y{a3,a4;i3}:A-N-S "
             L"ã{p2;p1} ã{i1,i2;a1,a2} ã{i3;a3,a4} + 1/32 g{p3,p4;p1,p2}:A-C-S "
-            L"x{a1,a2;i1,i2}:A-C-S y{a3,a4;i3}:A-C-S ã{p1,p2;p3,p4} "
+            L"x{a1,a2;i1,i2}:A-N-S y{a3,a4;i3}:A-N-S ã{p1,p2;p3,p4} "
             L"ã{i1,i2;a1,a2} ã{i3;a3,a4}"));
   }
 }  // SECTION("manuscript-examples")
