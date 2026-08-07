@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 namespace sequant::eval {
@@ -45,7 +46,9 @@ class PlacementRouter {
   using BatchContext = typename CacheManager<TreeNode, false>::BatchContext;
   using Key = TensorNetwork::SlotCanonicalizationMetadata;
 
-  [[nodiscard]] bool empty() const noexcept { return overrides_.empty(); }
+  [[nodiscard]] bool empty() const noexcept {
+    return overrides_.empty() && moved_hashes_.empty();
+  }
 
   void set_override(Key key, HomeTarget home) {
     overrides_.insert_or_assign(std::move(key), std::move(home));
@@ -56,6 +59,22 @@ class PlacementRouter {
   [[nodiscard]] HomeTarget const* route(Key const& key) const {
     auto it = overrides_.find(key);
     return it == overrides_.end() ? nullptr : &it->second;
+  }
+
+  /// Record that a VALUE (by its \c EvalExpr::hash_value canonical identity) is
+  /// moved by remat -- i.e. it has an override at ONE OR MORE of its occurrence
+  /// keys. Complements \c route() (keyed by the CONTEXT-DEPENDENT occurrence
+  /// key): the hoist consults this to learn, from an OUTER scope whose
+  /// occurrence-key query would miss, that a value is destined for a DEEPER
+  /// home and so must NOT be built full here (see place_at_this_level in
+  /// eval.hpp). Populated by \c remat_to_router alongside the per-occurrence
+  /// overrides.
+  void mark_moved(std::size_t value_hash) { moved_hashes_.insert(value_hash); }
+
+  /// \return true iff \p value_hash was marked moved (see \c mark_moved). A
+  ///         context-invariant "is this value demoted anywhere?" query.
+  [[nodiscard]] bool moved(std::size_t value_hash) const {
+    return moved_hashes_.find(value_hash) != moved_hashes_.end();
   }
 
   /// \return \c 1 + (deepest index \c i in \p ctx whose mode is in \p
@@ -72,6 +91,7 @@ class PlacementRouter {
 
  private:
   std::unordered_map<Key, HomeTarget, RouterKeyHash, RouterKeyEqual> overrides_;
+  std::unordered_set<std::size_t> moved_hashes_;
 };
 
 }  // namespace sequant::eval

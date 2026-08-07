@@ -133,6 +133,33 @@ TEST_CASE("placement_router: set_override/route/empty", "[placement_router]") {
   CHECK(router.route(key2) == nullptr);
 }
 
+TEST_CASE(
+    "placement_router: mark_moved/moved is a context-invariant value flag",
+    "[placement_router]") {
+  Index i1{L"i_1"}, i2{L"i_2"};
+  auto t1 =
+      ex<Tensor>(L"A", bra(svector<Index>{i1, i2}), ket{}, Symmetry::Nonsymm,
+                 std::nullopt, ColumnSymmetry::Nonsymm);
+  auto n1 = router_test_leaf_node(t1);
+  auto const h = n1->hash_value();
+
+  router_type router;
+  CHECK(router.empty());
+  CHECK_FALSE(router.moved(h));  // unmarked value is not moved
+
+  router.mark_moved(h);
+  CHECK(router.moved(h));       // marked by value hash
+  CHECK_FALSE(router.empty());  // a router carrying moved info is not inert
+  CHECK_FALSE(router.moved(h + 1));  // a different value stays unmarked
+
+  // moved() is independent of the per-occurrence overrides: it answers "is this
+  // value demoted anywhere?" by hash, so an OUTER-scope hoist whose
+  // context-dependent occurrence-key query would miss can still learn the value
+  // is destined for a deeper home (see place_at_this_level in eval.hpp). No
+  // set_override was called, so route() still misses.
+  CHECK(router.route(occurrence_key(n1, svector<Index>{i1})) == nullptr);
+}
+
 // Phase 2 T4: the PRIMARY deterministic proof that an override genuinely
 // RELOCATES a value's read home -- not merely that the router container is
 // wired inertly (T2/T3 above). A 3-level cache chain outer -> mid -> inner,

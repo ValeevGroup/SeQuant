@@ -1841,8 +1841,21 @@ template <typename F, typename IndexPredicate = accept_any_index,
               container::svector<Index> ectx_modes;
               for (auto const& e : ectx) ectx_modes.push_back(e.first);
               auto const key = eval::occurrence_key(d, ectx_modes);
-              if (auto const* home = router->route(key))
+              auto const* home = router->route(key);
+              if (home) {
                 rl = static_cast<int>(router->home_depth(*home, ectx)) - 1;
+              } else if (router->moved(d->hash_value())) {
+                // d is remat-demoted to a DEEPER context than this hoist is
+                // inside: its per-occurrence override is keyed at that context
+                // and so route() MISSED here. Do NOT build it full at this
+                // (outer) home -- defer to the deeper hoist where route() hits
+                // and it is built per-block. occurrence_key is context-
+                // dependent, so the outer query cannot see the deeper override;
+                // the context-invariant moved() flag is what lets us skip.
+                // Without this, the eager outer full build wins and the
+                // alive()-skip below blocks the intended per-block rebuild.
+                continue;
+              }
             }
             // Locate the level-rl cache by walking UP from parent_cache (the
             // level depth-1 cache): rl == -1 => the chain root (the real/term

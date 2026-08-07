@@ -272,6 +272,10 @@ template <meta::eval_node_range R>
 
   PlacementRouter<Node> router;
   if (moved.empty()) return router;  // nothing moved => inert seed seam
+  // Context-invariant "this value is demoted" set, so an OUTER-scope hoist
+  // (whose occurrence-key query would miss) still learns not to build a moved
+  // value full at the root (see place_at_this_level in eval.hpp).
+  for (auto const& [h, hm] : moved) router.mark_moved(h);
 
   // Re-walk the forest (same ectx accumulation as compute_dag_boulevard). For
   // each node whose value is moved, emit an override keyed by its occurrence
