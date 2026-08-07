@@ -628,8 +628,6 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
   if (A_is_nconserving && A_tensor.bra_rank() == 1)
     return remove_tensor(product, reserved::antisymm_label());
 
-  SEQUANT_ASSERT(A_tensor.rank() > 1);
-
   auto S = Tensor{};
   if (A_is_nconserving) {
     S = Tensor(reserved::symm_label(), A_tensor.bra(), A_tensor.ket(),
