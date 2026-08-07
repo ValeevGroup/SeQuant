@@ -4,6 +4,9 @@
 
 #include <nlohmann/json.hpp>
 
+#include <string>
+#include <string_view>
+
 namespace sequant::util::extint {
 
 void Executor::execute(const nlohmann::json &steps) {
@@ -54,6 +57,10 @@ void Executor::execute(const nlohmann::json &steps) {
                               ? step.at("id").get<std::string>()
                               : "step" + std::to_string(step_id_counter) + "." +
                                     proc_step->kind();
+
+    if (num_outputs_.find(step_id) != num_outputs_.end()) {
+      throw Exception("Duplicate step ID '" + step_id + "'");
+    }
 
     const std::size_t produced_outputs =
         proc_step->run(step_id, context_, inputs);
