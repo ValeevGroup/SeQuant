@@ -957,24 +957,19 @@ ExprPtr closed_shell_spintrace_impl(const ExprPtr& expression,
   // non-symmetric.
   // full_expansion: it fully expands the antisymmetrizer directly (can be used
   // for v2 eqs, however it is not an optimized way).
-  auto partially_or_fully_expand = [&full_expansion](const ExprPtr& expr) {
-    ExprPtr temp = expr;
+  ExprPtr expr = expression;
+  expand(expr);
 
-    if (has_tensor(temp, reserved::antisymm_label())) {
-      if (full_expansion) {
-        temp = expand_A_op(temp);
-      } else {
-        temp = symmetrize_expr(temp);
-      }
+  if (has_tensor(expr, reserved::antisymm_label())) {
+    if (full_expansion) {
+      expr = expand_A_op(expr);
+    } else {
+      expr = symmetrize_expr(expr);
     }
+  }
 
-    temp = expand_antisymm(temp);
-    rapid_simplify(temp);
-    return temp;
-  };
-  ExprPtr expr = partially_or_fully_expand(expression);
+  expr = expand_antisymm(expr);
 
-  expand(expr);    // This call is REQUIRED
   simplify(expr);  // full simplify to combine terms before count_cycles
 
   // Lambda for spin-tracing a product term
