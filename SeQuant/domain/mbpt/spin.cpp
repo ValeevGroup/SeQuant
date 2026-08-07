@@ -724,6 +724,8 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
     result->append(ex<Product>(new_product));
   }
 
+  detail::reset_idx_tags(result);
+
   return result;
 }
 
@@ -970,9 +972,7 @@ ExprPtr closed_shell_spintrace_impl(const ExprPtr& expression,
   };
   ExprPtr expr = partially_or_fully_expand(expression);
 
-  // Index tags are cleaned prior to calling the fast canonicalizer
-  detail::reset_idx_tags(expr);  // This call is REQUIRED
-  expand(expr);                  // This call is REQUIRED
+  expand(expr);    // This call is REQUIRED
   simplify(expr);  // full simplify to combine terms before count_cycles
 
   // Lambda for spin-tracing a product term
