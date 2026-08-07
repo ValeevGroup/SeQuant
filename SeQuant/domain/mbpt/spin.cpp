@@ -1843,6 +1843,8 @@ ExprPtr spintrace_impl(const ExprPtr& expression, IdxGroups&& ext_index_groups,
 
   // Expand antisymmetrizer operator (A) if present in the expression
   ExprPtr expr = expression;
+  expand(expr);
+
   if (has_tensor(expr, reserved::antisymm_label())) expr = expand_A_op(expr);
 
   if (expr->is<Tensor>()) expr = ex<Constant>(1) * expr;
