@@ -44,6 +44,7 @@
 #include <iterator>
 #include <memory>
 #include <numeric>
+#include <ranges>
 #include <string_view>
 #include <unordered_map>
 #include <utility>
@@ -619,14 +620,21 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
     return factor->is<Tensor>() &&
            factor->as<Tensor>().label() == reserved::antisymm_label();
   });
-  if (it == ranges::end(factors)) return product;
-  const auto& A_tensor = (*it)->as<Tensor>();
+
+  if (it == ranges::end(factors)) {
+    return product;
+  }
+
+  const Tensor& A_tensor = (*it)->as<Tensor>();
   SEQUANT_ASSERT(A_tensor.label() == reserved::antisymm_label());
 
   auto A_is_nconserving = A_tensor.bra_rank() == A_tensor.ket_rank();
 
-  if (A_is_nconserving && A_tensor.bra_rank() == 1)
+  SEQUANT_ASSERT(A_tensor.aux_rank() == 0);
+
+  if (A_is_nconserving && A_tensor.rank() == 1) {
     return remove_tensor(product, reserved::antisymm_label());
+  }
 
   auto S = Tensor{};
   if (A_is_nconserving) {
@@ -641,6 +649,7 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
     S = Tensor(reserved::symm_label(), bra(std::move(bra_list)),
                ket(std::move(ket_list)), A_tensor.aux(), Symmetry::Nonsymm);
   }
+
   const auto nf = rational{1, factorial(S.ket_rank())};
 
   // Generate replacement maps from a list of Index type (could be a bra or a
@@ -648,20 +657,22 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
   // Uses a permuted list of int to generate permutations
   // TODO factor out for reuse
   auto maps_from_list = [](const container::svector<Index>& list) {
-    container::svector<int> int_list(list.size());
+    container::svector<std::size_t> int_list(list.size());
     std::iota(int_list.begin(), int_list.end(), 0);
     container::svector<container::map<Index, Index>> result;
     do {
       container::map<Index, Index> map;
       auto list_ptr = list.begin();
-      for (auto&& i : int_list) {
+      for (std::size_t i : int_list) {
         map.emplace(*list_ptr, list[i]);
         list_ptr++;
       }
       result.push_back(map);
-    } while (std::next_permutation(int_list.begin(), int_list.end()));
+    } while (std::ranges::next_permutation(int_list).found);
+
     SEQUANT_ASSERT(result.size() ==
                    boost::numeric_cast<size_t>(factorial(list.size())));
+
     return result;
   };
 
@@ -669,7 +680,9 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
   // TODO factor out for reuse
   auto get_phase = [](const container::map<Index, Index>& map) {
     container::svector<Index> idx_list;
-    for (const auto& [key, val] : map) idx_list.push_back(val);
+    auto indices = map | std::ranges::views::values;
+    idx_list.insert(idx_list.end(), indices.begin(), indices.end());
+
     reset_ts_swap_counter<Index>();
     bubble_sort(std::begin(idx_list), std::end(idx_list));
     return ts_swap_counter_is_even<Index>() ? 1 : -1;
@@ -681,15 +694,19 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
     maps = maps_from_list(A_tensor.bra());
   } else {
     SEQUANT_ASSERT(A_tensor.bra_rank() != A_tensor.ket_rank());
+
     maps = A_tensor.bra_rank() > A_tensor.ket_rank()
                ? maps_from_list(A_tensor.bra())
                : maps_from_list(A_tensor.ket());
   }
+
   SEQUANT_ASSERT(!maps.empty());
+
   for (auto&& map : maps) {
     Product new_product{};
     new_product.scale(product->scalar() * nf);
     new_product.append(get_phase(map), ex<Tensor>(S));
+
     auto temp_product = remove_tensor(product, reserved::antisymm_label());
     for (auto&& term : *temp_product) {
       if (term->is<Tensor>()) {
@@ -703,8 +720,10 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
                         term->type_name());
       }
     }
+
     result->append(ex<Product>(new_product));
-  }  // map
+  }
+
   return result;
 }
 
