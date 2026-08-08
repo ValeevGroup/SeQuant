@@ -343,7 +343,14 @@ struct ExprWithHash {
 void all_indices(IndexSet& result, ExprPtr const& expr) {
   if (!expr) return;
   if (expr->is<Tensor>())
-    for (auto&& ix : expr->as<Tensor>().const_indices()) result.emplace(ix);
+    for (auto&& ix : expr->as<Tensor>().const_indices()) {
+      // proto indices are carriers too: an index whose only downstream
+      // occurrences sit inside composite (CSV/PNO) slots is an outer mode of
+      // those factors' ToT representation, so it must protect upstream
+      // occurrences from premature contraction
+      for (auto&& p : ix.proto_indices()) result.emplace(p);
+      result.emplace(ix);
+    }
   else if (expr->is<Sum>() && !expr->empty())
     all_indices(result, expr->front());
   else if (expr->is<Product>())
@@ -540,12 +547,12 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       collect_tensor_factors(left, subfacs);
       collect_tensor_factors(right, subfacs);
       auto ts = subfacs | transform([](auto&& t) { return t.expr; });
-      IndexGroups<IndexVec> const target_indices = [prod = ex<Product>(ts),
+      auto const counts = get_used_indices_with_counts(ex<Product>(ts));
+      IndexGroups<IndexVec> const target_indices = [&counts,
                                                     &uncontracted_idxs]() {
         // route each surviving hyperindex to its correct slot
         // (bra, ket, or aux) based on which slot it occupies in
         // the factor tensors .. if appears in multiple slots put into aux
-        auto counts = get_used_indices_with_counts(prod);
         IndexGroups<IndexVec> result;
         for (auto&& [k, v] : counts) {
           if (v.nonproto() == 0) continue;
@@ -560,8 +567,22 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       }();
 
       auto tn = TensorNetwork(ts);
-      auto named_indices = tn.ext_indices();
-      for (auto&& ix : uncontracted_idxs) named_indices.emplace(ix);
+      // The canonical (named) indices of this node must be exactly the
+      // indices that survive the contraction -- the same occurrence-count
+      // rule that built target_indices above -- plus their protoindices (a
+      // named composite's identity depends on its protos). TN's own
+      // ext_indices() classifies by slot connectivity alone, so it calls a
+      // bare slot external even when its remaining occurrences are protos of
+      // a composite contracted at this very node (a CSV Sigma_i C·t-style
+      // reduction sums it here); using it would make the canonical face (and
+      // the TA annotation derived from it) disagree with the node's own
+      // result tensor.
+      TensorNetwork::NamedIndexSet named_indices;
+      for (auto const& ix : ranges::views::concat(
+               target_indices.bra, target_indices.ket, target_indices.aux)) {
+        for (auto const& p : ix.proto_indices()) named_indices.emplace(p);
+        named_indices.emplace(ix);
+      }
 
       auto canon = tn.canonicalize_slots(
           TensorCanonicalizer::cardinal_tensor_labels(), &named_indices);
