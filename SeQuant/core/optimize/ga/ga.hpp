@@ -8,10 +8,12 @@
 // crossover and an NNI hill-climb polish.
 
 #include <SeQuant/core/optimize/ga/fitness.hpp>
+#include <SeQuant/core/utility/aggregate.hpp>
 
 namespace sequant::opt::ga {
 
 struct GAOptions {
+  SEQUANT_DESIGNATED_INIT_ONLY;
   std::size_t population = 160;
   std::size_t generations = 150;
   std::size_t reproduction = 2;  ///< children per slot per generation
@@ -21,6 +23,11 @@ struct GAOptions {
   std::size_t restarts = 2;
   std::size_t hill_climb_sweeps = 40;
   std::uint64_t seed = 0;
+  /// Decoded-tree memo capacity per evaluation workspace, in entries.
+  std::size_t memo_capacity = TreeMemo::default_capacity;
+  /// Print the search's per-phase wall time (hill_climb / breed / eval /
+  /// select) to stderr.
+  bool report_phases = false;
 };
 
 /// Per-term optimal binarizations (an exact subset DP over the key table's

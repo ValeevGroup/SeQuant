@@ -13,8 +13,8 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <deque>
 #include <memory>
 #include <optional>
@@ -152,10 +152,10 @@ class TreeMemo {
  public:
   /// Entries kept before the memo is cleared wholesale; measured, not guessed
   /// (reuse is temporal, so a bounded window costs no hit rate and keeps the
-  /// memo off the peak-RSS budget). Override with SEQUANT_GA_MEMO_CAP.
+  /// memo off the peak-RSS budget). Override with `GAOptions::memo_capacity`.
   static constexpr std::size_t default_capacity = 1u << 15;
 
-  TreeMemo() : TreeMemo(env_capacity()) {}
+  TreeMemo() : TreeMemo(default_capacity) {}
   explicit TreeMemo(std::size_t max_entries)
       : cap_(max_entries ? max_entries : 1), tab_(1024) {}
 
@@ -198,14 +198,6 @@ class TreeMemo {
   static std::size_t fam_len(int n) { return std::size_t(2 * n - 1); }
   static std::size_t ch_len(int n) { return std::size_t(n - 1); }
   static std::size_t key_len(int n) { return std::size_t(n - 1); }
-
-  static std::size_t env_capacity() {
-    if (char const* s = std::getenv("SEQUANT_GA_MEMO_CAP")) {
-      const long v = std::atol(s);
-      if (v > 0) return static_cast<std::size_t>(v);
-    }
-    return default_capacity;
-  }
 
   /// FNV-1a-ish over (n, genes); equality still compares everything.
   static std::uint64_t hash_of(int const* code, int n) {
@@ -422,7 +414,9 @@ class Fibres {
 /// makes the parallel evaluation in ga.cpp correctness-neutral by
 /// construction. `Fitness` owns one `mutable` instance for its serial API.
 struct EvalScratch {
-  explicit EvalScratch(KeyTable const& kt) : n_keys(kt.n_keys) {
+  explicit EvalScratch(KeyTable const& kt,
+                       std::size_t memo_capacity = TreeMemo::default_capacity)
+      : trees(memo_capacity), n_keys(kt.n_keys) {
     // Unconditional (asserts are compiled out of the shipping build): this is
     // the only guard on the uint32 truncation Fibres/KeyStamps depend on.
     if (n_keys > std::size_t{0xffffffffu})
@@ -501,7 +495,8 @@ struct Schedule {
 class Fitness {
  public:
   Fitness(KeyTable const& kt, CostModel cost = CostModel::native(),
-          ProducerResolution resolution = ProducerResolution::Greedy);
+          ProducerResolution resolution = ProducerResolution::Greedy,
+          std::size_t memo_capacity = TreeMemo::default_capacity);
 
   /// The cost of \p genome. Bit-for-bit `explain(genome).total` without ever
   /// materializing the `Schedule`. The two paths stay in lockstep by
@@ -518,7 +513,9 @@ class Fitness {
   Schedule explain(Genome const& genome, EvalScratch& scratch) const;
 
   /// A fresh workspace sized for this table; one per concurrent evaluation.
-  EvalScratch make_scratch() const { return EvalScratch(*kt_); }
+  EvalScratch make_scratch() const {
+    return EvalScratch(*kt_, memo_capacity_);
+  }
   /// The workspace behind the serial public API above.
   EvalScratch& scratch() const { return scratch_; }
 
@@ -595,6 +592,8 @@ class Fitness {
   struct BetaKeyHash;
   struct Caches;
   std::shared_ptr<Caches> caches_;
+  /// Memo capacity handed to every workspace this object makes.
+  std::size_t memo_capacity_ = TreeMemo::default_capacity;
   /// Serial workspace. Declared last: its constructor reads `*kt_`.
   mutable EvalScratch scratch_;
 };

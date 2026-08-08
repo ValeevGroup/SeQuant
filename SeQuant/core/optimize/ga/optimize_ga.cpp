@@ -20,7 +20,7 @@ GAResult optimize_ga(container::svector<TargetInput> const& targets,
     cm.volatile_weight = opts.volatile_weight;
   GAResult out;
   auto kt = build_key_table(targets, ixex, opts.batch_policy.is_volatile_leaf);
-  Fitness fitness(kt, cm, resolution);
+  Fitness fitness(kt, cm, resolution, ga_opts.memo_capacity);
   auto [flops, genome] = run_ga(fitness, seed_genome(kt), ga_opts);
   Schedule schedule = fitness.explain(genome);
   out.flops = flops;

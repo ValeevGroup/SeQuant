@@ -8,7 +8,6 @@
 #include <bit>
 #include <chrono>
 #include <cstdio>
-#include <cstdlib>
 #include <deque>
 #include <limits>
 #include <mutex>
@@ -187,16 +186,12 @@ class Lease {
 };
 
 /// Optional `hill_climb` / `ga_once` wall-clock split, printed by `run_ga`
-/// when SEQUANT_GA_PHASE_STATS is set.
+/// when `GAOptions::report_phases` is set.
 struct PhaseStats {
   double hill_climb = 0, ga_once = 0;
   /// ga_once's own three phases: serial breeding (the Amdahl floor), parallel
   /// evaluation, serial sort/select.
   double breed = 0, eval = 0, select = 0;
-  static bool enabled() {
-    static const bool on = std::getenv("SEQUANT_GA_PHASE_STATS") != nullptr;
-    return on;
-  }
 };
 double now_s() {
   return std::chrono::duration<double>(
@@ -450,7 +445,7 @@ std::pair<double, Genome> run_ga(Fitness const& F, Genome seed,
   // Restarts stay sequential: they nest badly with the per-generation parallel
   // phase, and each one's rng stream is `opts.seed + 977 * s`.
   PhaseStats stats;
-  const bool timed = PhaseStats::enabled();
+  const bool timed = opts.report_phases;
   double t0 = timed ? now_s() : 0.;
   hill_climb(F, seed, opts.hill_climb_sweeps);
   if (timed) stats.hill_climb += now_s() - t0;

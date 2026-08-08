@@ -172,13 +172,14 @@ struct Fitness::Caches {
 };
 
 Fitness::Fitness(KeyTable const& kt, CostModel cost,
-                 ProducerResolution resolution)
+                 ProducerResolution resolution, std::size_t memo_capacity)
     : kt_(&kt),
       cost_(cost),
       resolution_(resolution),
       layout_(GenomeLayout::of(kt)),
       caches_(std::make_shared<Caches>()),
-      scratch_(kt) {
+      memo_capacity_(memo_capacity),
+      scratch_(kt, memo_capacity) {
   // Per-term leaf data: pure functions of the KeyTable, hoisted out of the
   // evaluation loop.
   leaf_ambient_.reserve(kt.terms.size());
