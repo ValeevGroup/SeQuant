@@ -160,6 +160,37 @@ TEST_CASE("cell_footprint sizes enclosing-home modes at BLOCK, others FULL",
   }
 }
 
+TEST_CASE(
+    "cell_footprint prices a home that slices a divergent mode as a 2x split",
+    "[peak_profile]") {
+  // A value whose home slices a RELABELED (divergent) mode cannot share one
+  // sliced copy across occurrences -- the runtime SPLITS it into two
+  // co-resident per-occurrence copies (see ValueCell::divergent_modes /
+  // place_at_this_level), so the modeled footprint is 2x the single-slice
+  // footprint.
+  SizeRegime r;
+  r.space_extent = {{L"i", 10}, {L"a", 10}};
+  CostModel const cm{r};
+  Index const p{L"i_1"}, q{L"a_1"};
+  svector<Index> const carried{p, q};
+  auto const block_of = [](Index const& ix) -> std::size_t {
+    return ix == Index{L"i_1"} ? 2 : 10;
+  };
+  svector<Index> const home_modes{p};
+
+  auto const shared = cell_footprint(carried, home_modes, cm, block_of, {});
+  auto const split =
+      cell_footprint(carried, home_modes, cm, block_of, svector<Index>{p});
+  CHECK(shared == 160);  // one sliced copy: block(p)=2 * full(q)=10 * 8
+  CHECK(split ==
+        2 * shared);  // p sliced AND divergent -> two co-resident copies
+
+  // A divergent mode that is NOT sliced (not in the home) does not double.
+  auto const not_sliced =
+      cell_footprint(carried, home_modes, cm, block_of, svector<Index>{q});
+  CHECK(not_sliced == shared);
+}
+
 // ---------------------------------------------------------------------
 // T2: the interval-event sweep over a hand-built Schedule (bypasses
 // compute_dag_path entirely; Cells are constructed directly).

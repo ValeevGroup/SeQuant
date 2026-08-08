@@ -77,15 +77,32 @@ using BatchContext =
 /// \p block_of is any `Index -> std::size_t` callable giving the block
 /// (sliced) element count for a mode.
 ///
+/// \p divergent_modes are the value's RELABELED modes (carried by some
+/// occurrences but not all -- see \c ValueCell::divergent_modes). Slicing one
+/// of them cannot be shared across occurrences (they bind different physical
+/// labels to that canonical slot), so the runtime SPLITS the value into
+/// per-occurrence copies (see \c place_at_this_level). When the home slices a
+/// divergent mode, the co-resident footprint is therefore that of TWO sliced
+/// copies, not one -- priced here as 2x. (A pairwise model: the dominant
+/// divergent-CSE case is two legs of one contraction, e.g. the g.C legs.)
 template <typename BlockOfFn>
 [[nodiscard]] inline std::size_t cell_footprint(
     container::svector<Index> const& carried,
     container::svector<Index> const& home_modes, dryrun::CostModel const& cm,
-    BlockOfFn const& block_of) {
+    BlockOfFn const& block_of,
+    container::svector<Index> const& divergent_modes = {}) {
   dryrun::ExtentOverrides ov;
   // block iff in the meet-home
   for (auto const& m : home_modes) ov[m] = block_of(m);
-  return cm.memsize(carried, ov);  // non-meet carried modes size FULL
+  std::size_t base = cm.memsize(carried, ov);  // non-meet carried modes FULL
+  bool split = false;
+  for (auto const& m : home_modes)
+    if (std::find(divergent_modes.begin(), divergent_modes.end(), m) !=
+        divergent_modes.end()) {
+      split = true;
+      break;
+    }
+  return split ? 2 * base : base;  // split -> two co-resident sliced copies
 }
 
 }  // namespace detail
@@ -213,10 +230,16 @@ struct ValueCell {
                                          //!< own_modes_union[hash], read off
                                          //!< the FIRST occurrence
   container::svector<Index>
-      enclosing_modes;    //!< NEW: union, over ALL occurrences, of every
-                          //!< loop mode that EVER encloses this value (\c
-                          //!< ectx[i].first for each level of each
-                          //!< occurrence's ectx)
+      enclosing_modes;  //!< NEW: union, over ALL occurrences, of every
+                        //!< loop mode that EVER encloses this value (\c
+                        //!< ectx[i].first for each level of each
+                        //!< occurrence's ectx)
+  container::svector<Index>
+      divergent_modes;    //!< RELABELED modes: carried by SOME occurrences but
+                          //!< not all (union MINUS intersection of the
+                          //!< occurrences' canon_indices). Slicing one cannot
+                          //!< be shared -- the runtime SPLITS the value, so
+                          //!< cell_footprint prices a divergent-mode home 2x.
   std::size_t first_use;  //!< earliest static point the value is live at
   std::size_t last_use;   //!< latest static point the value is live at (its
                           //!< last consumer), inclusive
@@ -348,6 +371,32 @@ RichSchedule compute_dag_boulevard(R const& forest,
       if (std::find(acc.begin(), acc.end(), m) == acc.end()) acc.push_back(m);
   }
 
+  // Per-value RELABELED modes: carried by SOME occurrences but not all -- the
+  // UNION minus the INTERSECTION of the occurrences' canon_indices (r.carried).
+  // A mode in the intersection appears (at the same canonical slot) in every
+  // occurrence, so slicing it is shareable; one present only in the union binds
+  // a different physical label in some occurrence, so slicing it forces a SPLIT
+  // (see ValueCell::divergent_modes / cell_footprint's 2x pricing).
+  std::unordered_map<std::size_t, container::svector<Index>> carried_union,
+      carried_isect;
+  std::unordered_map<std::size_t, bool> carried_seeded;
+  for (auto const& r : recs) {
+    auto& u = carried_union[r.hash];
+    for (auto const& m : r.carried)
+      if (std::find(u.begin(), u.end(), m) == u.end()) u.push_back(m);
+    auto& is = carried_isect[r.hash];
+    if (!carried_seeded[r.hash]) {
+      carried_seeded[r.hash] = true;
+      is.assign(r.carried.begin(), r.carried.end());
+    } else {
+      container::svector<Index> keep;
+      for (auto const& m : is)
+        if (std::find(r.carried.begin(), r.carried.end(), m) != r.carried.end())
+          keep.push_back(m);
+      is = std::move(keep);
+    }
+  }
+
   // Group occurrences by value identity (hash_value): one ValueCell per
   // group.
   RichSchedule out;
@@ -380,6 +429,13 @@ RichSchedule compute_dag_boulevard(R const& forest,
           home_modes.push_back(m);
       c.carried = r.carried;
       c.home_modes = std::move(home_modes);
+      {
+        auto const& u = carried_union[r.hash];
+        auto const& is = carried_isect[r.hash];
+        for (auto const& m : u)
+          if (std::find(is.begin(), is.end(), m) == is.end())
+            c.divergent_modes.push_back(m);
+      }
       fold_enclosing(c.enclosing_modes);
       hash_to_cell.emplace(r.hash, c.value_id);
       out.cells.push_back(std::move(c));
@@ -420,8 +476,8 @@ Schedule compute_dag_path(R const& forest, dryrun::CostModel const& cm,
     Cell c;
     c.value_id = vc.value_id;
     c.home_depth = vc.home_depth;
-    c.footprint =
-        detail::cell_footprint(vc.carried, vc.home_modes, cm, block_of);
+    c.footprint = detail::cell_footprint(vc.carried, vc.home_modes, cm,
+                                         block_of, vc.divergent_modes);
     c.first_use = vc.first_use;
     c.last_use = vc.last_use;
     out.cells.push_back(c);

@@ -87,8 +87,8 @@ inline Schedule to_schedule(container::svector<ValueCell> const& cells,
     Cell fc;
     fc.value_id = c.value_id;
     fc.home_depth = c.home_depth;
-    fc.footprint =
-        detail::cell_footprint(c.carried, c.home_modes, cm, block_of);
+    fc.footprint = detail::cell_footprint(c.carried, c.home_modes, cm, block_of,
+                                          c.divergent_modes);
     fc.first_use = c.first_use;
     fc.last_use = c.last_use;
     out.cells.push_back(fc);
