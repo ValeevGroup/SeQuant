@@ -451,6 +451,18 @@ set(SeQuant_optimize_src
         SeQuant/core/optimize/extract_subtrees.hpp
         SeQuant/core/optimize/fusion.cpp
         SeQuant/core/optimize/fusion.hpp
+        SeQuant/core/optimize/ga/cost.hpp
+        SeQuant/core/optimize/ga/emit.cpp
+        SeQuant/core/optimize/ga/emit.hpp
+        SeQuant/core/optimize/ga/fitness.cpp
+        SeQuant/core/optimize/ga/fitness.hpp
+        SeQuant/core/optimize/ga/ga.cpp
+        SeQuant/core/optimize/ga/ga.hpp
+        SeQuant/core/optimize/ga/genome.hpp
+        SeQuant/core/optimize/ga/key_table.cpp
+        SeQuant/core/optimize/ga/key_table.hpp
+        SeQuant/core/optimize/ga/optimize_ga.cpp
+        SeQuant/core/optimize/ga/optimize_ga.hpp
         SeQuant/core/optimize/options.hpp
         SeQuant/core/optimize/optimize.cpp
         SeQuant/core/optimize/optimize.hpp
