@@ -32,6 +32,16 @@ struct GAResult {
   /// volatile-leaf predicate this is the REPLAY-WEIGHTED total,
   /// `persistent_flops + volatile_weight * volatile_flops`.
   double flops = 0;
+  /// Flops of the SEED schedule -- the per-term optimum, scored by the same
+  /// objective on the same DAG. `flops / seed_flops` is the search's actual
+  /// symbolic advantage over the per-term strategy; without it the winning
+  /// number is unanchored.
+  double seed_flops = 0;
+  /// Flops after the pre-search hill-climb of the seed.
+  double hill_climbed_flops = 0;
+  /// Best flops of each restart, in restart order; their spread says whether
+  /// the restart count is buying basin coverage or just burning time.
+  container::svector<double> restart_flops;
 };
 
 /// Search over the given targets. \p opts supplies idx_to_extent (defaults
@@ -53,6 +63,16 @@ namespace sequant {
 struct GAOptimized {
   container::vector<ResultExpr> targets;
   container::vector<ResultExpr> definitions;
+  /// The objective value of the winning schedule (see opt::ga::GAResult).
+  double flops = 0;
+  /// The objective value of the seed schedule: the per-term optimum scored by
+  /// the same objective on the same DAG, i.e. what the per-term strategy
+  /// would have cost. The GA's advantage is `seed_flops / flops`.
+  double seed_flops = 0;
+  /// The objective value after the pre-search hill-climb of the seed.
+  double hill_climbed_flops = 0;
+  /// Best objective value of each restart, in restart order.
+  container::vector<double> restart_flops;
 };
 
 /// Joint GA optimization of several targets; each ResultExpr's expression must

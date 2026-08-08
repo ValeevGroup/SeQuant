@@ -42,10 +42,30 @@ Genome seed_genome(KeyTable const& kt);
 double hill_climb(Fitness const& fitness, Genome& genome,
                   std::size_t max_sweeps = 40);
 
+/// What the search saw on the way to its winner, for reporting. Every figure
+/// is in the `Fitness` objective's own units, i.e. directly comparable with
+/// the cost `run_ga` returns. Filled only when a trace is requested, since
+/// `seed_cost` costs one extra fitness evaluation.
+struct SearchTrace {
+  /// Cost of the SEED genome, evaluated before any move is made: the per-term
+  /// optimum's cost under this objective. This is the per-term-equivalent
+  /// baseline -- the number the GA's winner has to be compared against for
+  /// its advantage to mean anything.
+  double seed_cost = 0;
+  /// Cost after the pre-search hill-climb polish of the seed.
+  double hill_climbed_cost = 0;
+  /// Best cost reached by each restart, in restart order. Its spread is the
+  /// only visible evidence that the search landscape is multi-basin (and that
+  /// a given restart count is or is not enough).
+  container::svector<double> restart_costs;
+};
+
 /// Seed -> hill-climb -> `restarts` annealed GA runs -> polish.
-/// Returns the best (cost, genome) found.
+/// Returns the best (cost, genome) found. \p trace, when non-null, receives
+/// the seed / per-restart costs.
 std::pair<double, Genome> run_ga(Fitness const& fitness, Genome seed,
-                                 GAOptions const& opts = {});
+                                 GAOptions const& opts = {},
+                                 SearchTrace* trace = nullptr);
 
 }  // namespace sequant::opt::ga
 

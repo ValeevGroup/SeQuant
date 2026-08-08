@@ -441,20 +441,27 @@ double hill_climb(Fitness const& F, Genome& genome, std::size_t max_sweeps) {
 }
 
 std::pair<double, Genome> run_ga(Fitness const& F, Genome seed,
-                                 GAOptions const& opts) {
+                                 GAOptions const& opts, SearchTrace* trace) {
   // Restarts stay sequential: they nest badly with the per-generation parallel
   // phase, and each one's rng stream is `opts.seed + 977 * s`.
   PhaseStats stats;
   const bool timed = opts.report_phases;
+  // The seed's own cost is the per-term-equivalent baseline, and it is only
+  // observable HERE: hill_climb rewrites `seed` in place, so after the next
+  // line the genome that entered is gone. Costs one fitness evaluation, hence
+  // only on request.
+  if (trace) trace->seed_cost = F(seed);
   double t0 = timed ? now_s() : 0.;
   hill_climb(F, seed, opts.hill_climb_sweeps);
   if (timed) stats.hill_climb += now_s() - t0;
   Scored best{F(seed), seed};
+  if (trace) trace->hill_climbed_cost = best.first;
   for (std::size_t s = 0; s < opts.restarts; ++s) {
     if (timed) t0 = now_s();
     auto b = ga_once(F, seed, opts, opts.seed + 977 * s,
                      timed ? &stats : nullptr);
     if (timed) stats.ga_once += now_s() - t0;
+    if (trace) trace->restart_costs.push_back(b.first);
     if (b.first < best.first) best = std::move(b);
   }
   if (timed) t0 = now_s();

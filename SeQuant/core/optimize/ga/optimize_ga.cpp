@@ -21,9 +21,13 @@ GAResult optimize_ga(container::svector<TargetInput> const& targets,
   GAResult out;
   auto kt = build_key_table(targets, ixex, opts.batch_policy.is_volatile_leaf);
   Fitness fitness(kt, cm, resolution, ga_opts.memo_capacity);
-  auto [flops, genome] = run_ga(fitness, seed_genome(kt), ga_opts);
+  SearchTrace trace;
+  auto [flops, genome] = run_ga(fitness, seed_genome(kt), ga_opts, &trace);
   Schedule schedule = fitness.explain(genome);
   out.flops = flops;
+  out.seed_flops = trace.seed_cost;
+  out.hill_climbed_flops = trace.hill_climbed_cost;
+  out.restart_flops = std::move(trace.restart_costs);
   auto emission = emit_named(fitness, schedule);
   out.exprs = std::move(emission.targets);
   out.definitions = std::move(emission.definitions);
@@ -60,6 +64,11 @@ GAOptimized optimize_ga(container::vector<ResultExpr> exprs,
   out.targets = std::move(exprs);
   out.definitions.assign(result.definitions.begin(),
                          result.definitions.end());
+  out.flops = result.flops;
+  out.seed_flops = result.seed_flops;
+  out.hill_climbed_flops = result.hill_climbed_flops;
+  out.restart_flops.assign(result.restart_flops.begin(),
+                           result.restart_flops.end());
   return out;
 }
 
