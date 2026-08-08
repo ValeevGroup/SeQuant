@@ -25,11 +25,9 @@ struct GAOptions {
 
 /// Per-term optimal binarizations (an exact subset DP over the key table's
 /// per-subset index masks -- see `seed_tree` in ga.cpp) plus flat L2 trees;
-/// the mandatory starting point of the search.
-///
-/// Deliberately volatility-BLIND: the seed is the per-term flop optimum under
-/// the unweighted cost, whatever weighting the `Fitness` the search then runs
-/// on applies. That is the behavior the reference numbers were taken with.
+/// the mandatory starting point of the search. Deliberately volatility-BLIND:
+/// the per-term flop optimum under the unweighted cost, whatever weighting the
+/// `Fitness` applies. That is the behavior the reference numbers assume.
 Genome seed_genome(KeyTable const& kt);
 
 /// Deterministic full-neighbourhood NNI descent on both layers; returns the

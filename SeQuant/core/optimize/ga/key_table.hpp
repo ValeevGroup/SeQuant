@@ -2,13 +2,11 @@
 #define SEQUANT_CORE_OPTIMIZE_GA_KEY_TABLE_HPP
 
 // Cross-term setup tables for the genetic optimizer: for every term and every
-// subset S of its tensors, the face F(S) (the open indices, computed with the
+// subset S of its tensors, the face F(S) (the open indices, under the
 // prototype's eff/carrier closure so composite proto-indices participate), a
-// GLOBAL canonical-subnet key id (canonicalize_slots colors named indices by
-// kind only, so the key identifies the array irrespective of index labels),
-// and per-subset index bitmasks for nanosecond merge costing (cost.hpp).
-// Two clusters -- same term or not -- share a key id iff they evaluate to
-// the same array.
+// GLOBAL canonical-subnet key id, and per-subset index bitmasks for merge
+// costing (cost.hpp). Named indices are colored by kind only, so two clusters
+// -- same term or not -- share a key id iff they evaluate to the same array.
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
@@ -21,8 +19,7 @@
 
 namespace sequant::opt::ga {
 
-/// Set of per-term index bits (bit k = TermTable::index_list[k]); 64 bits
-/// covers the widest CCSD R2 terms (slots plus proto-indices) with headroom.
+/// Set of per-term index bits (bit k = TermTable::index_list[k]).
 using IndexMask = std::uint64_t;
 
 using FaceSet = TensorNetwork::NamedIndexSet;
@@ -46,16 +43,9 @@ struct TermTable {
   ///
   /// **Slot position IS the array axis** (`named_leaf` in emit.cpp gives the
   /// emitted intermediate all-auxiliary nonsymmetric slots precisely so that
-  /// nothing downstream may legally reorder them), so this list is an ordered
+  /// nothing downstream may legally reorder them), so this is an ordered
   /// sequence, never a set: permuting it would relabel every axis of every
   /// shared intermediate while leaving every flop count identical.
-  ///
-  /// Interning to bits (T-A7) replaced a `container::svector<Index>` per
-  /// subset. At C4H10/cc-pVDZ that is 1.5 M `uint8_t` instead of 1.5 M 168-byte
-  /// `Index` -- and, because `svector`'s inline storage is per element type,
-  /// 6 MB of vector headers instead of 220 MB. `canon_face_indices` rebuilds
-  /// the `Index` form for the two consumers that need it (emission, and
-  /// `Fitness::correspondences`' public form).
   container::vector<container::svector<std::uint8_t, 16>> canon_face_bits;
   /// Per subset: bits of the non-composite face indices (incl. proto-indices
   /// of composite face members -- mirrors tot_indices.outer).
@@ -63,11 +53,10 @@ struct TermTable {
   /// Per subset: bits of the composite (CSV/PNO) face indices.
   container::vector<IndexMask> inner_mask;
   /// Bit v set iff tensors[v] is a volatile (amplitude-dependent) leaf, per the
-  /// CostParams::is_volatile_leaf predicate handed to build_key_table. A
-  /// cluster S is volatile iff `S & volatile_mask` is non-zero, which is why no
-  /// propagation pass is needed: containing an amplitude leaf is inherited by
-  /// every superset. Zero when no predicate is supplied, which makes replay
-  /// weighting inert (see CostModel::volatile_weight).
+  /// CostParams::is_volatile_leaf predicate. A cluster S is volatile iff
+  /// `S & volatile_mask` is non-zero -- volatility is inherited by every
+  /// superset, so no propagation pass is needed. Zero (hence replay weighting
+  /// inert) when no predicate is supplied.
   NodeMask volatile_mask = 0;
   /// Distinct indices of this term (slots and their proto-indices); defines
   /// the bit positions of the masks above.
@@ -78,11 +67,9 @@ struct TermTable {
   /// correspond in an L2 face bijection only if their kinds match.
   container::svector<int> kind;
 
-  // --- derived bit tables (T-A6) --------------------------------------------
-  // The L2 pass (Fitness::find_beta and the ambient bookkeeping) used to do all
-  // of its work on real `Index` objects -- grouping faces by kind, sorting
-  // them, and keying a `std::map` on them -- although every question it asks is
-  // a bit question about THIS term. These three tables are what let it be one.
+  // --- derived bit tables ---------------------------------------------------
+  // Every question the L2 pass asks about a face is a bit question about THIS
+  // term; these three tables are what let it be asked that way.
 
   /// Per index bit: the position of `index_list[bit]` in the `std::sort`-by-
   /// `Index` order of `index_list`.
@@ -95,35 +82,30 @@ struct TermTable {
   /// indices were first seen while walking the term's tensors and has nothing
   /// to do with `Index::operator<`, so ordering by bit would keep every cost
   /// identical while silently changing the emitted schedule. Ordering by
-  /// `index_rank` reproduces `std::sort` on `Index` exactly; that is asserted
-  /// here at build time where SEQUANT_ASSERT is live and -- because the release
-  /// build compiles asserts out -- pinned unconditionally by the "ga index bit
-  /// tables" [ga] test case, which recomputes the sort independently.
+  /// `index_rank` reproduces `std::sort` on `Index` exactly; because the
+  /// release build compiles asserts out, that is pinned unconditionally by the
+  /// "ga index bit tables" [ga] test, which recomputes the sort independently.
   container::svector<std::uint8_t> index_rank;
   /// Per index bit: bits of that index's proto-indices (0 if not composite).
-  /// Every proto-index of a slot is itself in `index_list` (build_term
-  /// registers protos first), so (Sigma1)'s proto relation is a mask compare.
+  /// Every proto-index of a slot is itself in `index_list`, so (Sigma1)'s
+  /// proto relation is a mask compare.
   container::svector<IndexMask> proto_mask;
   /// Per kind id (padded to the KeyTable's final kind count): bits of this
-  /// term's indices of that kind. `face_mask(S) & kind_mask[k]` is the face's
-  /// k-block.
+  /// term's indices of that kind.
   container::svector<IndexMask> kind_mask;
 
   std::size_t n() const { return tensors.size(); }
   NodeMask full() const { return (NodeMask{1} << n()) - 1; }
   int bit_of(Index const& ix) const;
-  /// Bits of F(S). Since T-A7 this is the ONLY stored form of the face: the
-  /// two masks are disjoint by construction (composite vs not) and together
-  /// they name exactly the indices the dropped `container::vector<FaceSet>
-  /// face` used to hold, which is what `face_set` reconstructs.
+  /// Bits of F(S) -- the only stored form of the face. The two masks are
+  /// disjoint by construction (composite vs not).
   IndexMask face_mask(NodeMask S) const {
     return outer_mask[S] | inner_mask[S];
   }
   double face_size(NodeMask S) const;
 
   /// F(S) as a real `Index` set, materialized on demand. Setup and emission
-  /// only -- the evaluation path asks bit questions of `face_mask`. Ascending
-  /// bit order is irrelevant to the result: `FaceSet` is an ordered set.
+  /// only -- the evaluation path asks bit questions of `face_mask`.
   FaceSet face_set(NodeMask S) const;
   /// The canonical face of S as `Index` objects, **in slot order** (slot i is
   /// `index_list[canon_face_bits[S][i]]`). See `canon_face_bits`.
@@ -140,8 +122,8 @@ struct KeyTable {
   container::svector<TargetBlock> targets;
   /// Whether build_key_table was given a volatile-leaf predicate. False leaves
   /// every replay weight inert: L1 through the empty volatile_masks, L2 through
-  /// this flag (L2 work is replayed whenever volatility is modelled at all --
-  /// see Fitness::cost_of_value -- so it cannot key off a mask).
+  /// this flag (L2 work is replayed whenever volatility is modelled at all, so
+  /// it cannot key off a mask).
   bool volatility_aware = false;
   std::size_t n_keys = 0;
   container::map<std::pair<IndexSpace, std::size_t>, int> kind_ids;
@@ -152,18 +134,15 @@ struct KeyTable {
 
 /// One target's input: its label and its summands, each a Product of Tensors
 /// (with an optional scalar prefactor) plus that summand's external (result)
-/// indices. Summands of a ResultExpr all share the result's indices, but
-/// hand-assembled universes may name them per term.
+/// indices, which hand-assembled universes may name per term.
 struct TargetInput {
   std::wstring label;
   container::svector<ExprPtr> summands;
   container::svector<FaceSet> ext;
 };
 
-/// \param is_volatile_leaf marks a leaf tensor as amplitude-dependent (see
-///        CostParams::is_volatile_leaf); fills TermTable::volatile_mask so the
-///        cost model can replay-weight volatile work. Empty (default) => no
-///        tensor is volatile and the cost stays volatility-blind.
+/// \param is_volatile_leaf marks a leaf tensor as amplitude-dependent; fills
+///        TermTable::volatile_mask. Empty (default) => volatility-blind cost.
 KeyTable build_key_table(
     container::svector<TargetInput> const& targets,
     std::function<std::size_t(Index const&)> const& idx_to_extent,

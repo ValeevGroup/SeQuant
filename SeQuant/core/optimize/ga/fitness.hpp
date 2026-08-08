@@ -3,10 +3,9 @@
 
 // Genome evaluation: decode the L1 forests and L2 summation trees, run the
 // always-extract distributive pass (factor a shared multiplicand out of two
-// summands whenever the arrays match and an index bijection satisfying the
-// prototype's (Sigma1)(Sigma2)(Sigma3) conditions exists), then resolve one
-// producer per demanded array key and sum the DAG's merge flops, each key
-// counted once. Faithful port of proto_csv_flat.Flat / proto_csv_opt.
+// summands whenever the arrays match and a (Sigma1)(Sigma2)(Sigma3) index
+// bijection exists), then resolve one producer per demanded array key and sum
+// the DAG's merge flops, each key counted once. Ported from proto_csv_opt.
 
 #include <SeQuant/core/optimize/ga/cost.hpp>
 #include <SeQuant/core/optimize/ga/genome.hpp>
@@ -47,18 +46,13 @@ struct Cluster {
   friend auto operator<=>(Cluster const&, Cluster const&) = default;
 };
 
-/// Ambient axis tag: which target axis (or which enclosing-face index) an
-/// open index of an L2 value corresponds to. Two summands may be added or
-/// share a factored multiplicand only if their faces agree tag-by-tag.
-///
-/// One uint64 rather than a `std::variant<int, Index>` (T-A6). Two forms, told
-/// apart by `ambient_eta_flag`:
-///   * eta slot -- `ambient_eta_flag | (kind*4096 + rank)`: which axis of the
-///     TARGET this index is (leaf ambients only);
-///   * face index -- `(term << 8) | bit`: which index of the enclosing face it
-///     was identified with by the parent extraction's beta.
-/// Tags are only ever compared for equality, and the top byte is left free so
-/// a (bit, tag) pair packs into one word in `Fitness::BetaKey`.
+/// Ambient axis tag: which target axis (or enclosing-face index) an open index
+/// of an L2 value corresponds to; two summands may be added or share a factored
+/// multiplicand only if their faces agree tag-by-tag. Two forms, told apart by
+/// `ambient_eta_flag`: an eta slot `ambient_eta_flag | (kind*4096 + rank)`
+/// naming a TARGET axis (leaf ambients only), or a face index
+/// `(term << 8) | bit`. Tags are only compared for equality; the top byte stays
+/// free so a (bit, tag) pair packs into one word in `Fitness::BetaKey`.
 using AmbientTag = std::uint64_t;
 inline constexpr AmbientTag ambient_eta_flag = AmbientTag{1} << 55;
 /// \p slot is the `kind*4096 + rank` eta slot of a target axis.
@@ -71,18 +65,9 @@ inline constexpr AmbientTag face_tag(int d, unsigned bit) {
 }
 
 /// The ambient identification of one L2 value's face: for each index BIT of
-/// term `d`, the axis that index corresponds to.
-///
-/// Was `container::map<Index, AmbientTag>` (T-A6). Both the keys and the
-/// `Index`-form tags were per-term index bits all along, and every consumer
-/// either looks one up, compares two maps for equality, or -- at emission only
-/// -- needs the real `Index` back, which is `kt.terms[d].index_list[bit]`.
-///
-/// Entries are kept sorted ascending by bit, i.e. in a CANONICAL order: that
-/// is what lets `Fitness::BetaKey` compare two ambients as a flat word buffer.
-/// (The old map was sorted by `Index` instead; the order is not otherwise
-/// observable -- every consumer either searches by key or searches for a tag,
-/// and tags are unique within a map.)
+/// term `d`, the axis that index corresponds to. Entries are kept sorted
+/// ascending by bit, i.e. in a CANONICAL order -- that is what lets
+/// `Fitness::BetaKey` compare two ambients as a flat word buffer.
 struct AmbientMap {
   int d = 0;  ///< the term whose index bits are the keys
   container::svector<std::pair<std::uint8_t, AmbientTag>> e;
@@ -126,22 +111,11 @@ struct Val {
   NodeMask V;   ///< Fx only: the extracted shared cluster
   ValPtr inner; ///< Fx only: combined residual value
   Summand s1, s2;  ///< Sum only (ambients retained for emission)
-  // (T-A6 dropped a `beta` member here: the face bijection was stored on every
-  // Fx node and read by nobody -- emission renames the second residual through
-  // the ambient tags the beta INDUCES, which live on the residuals' own
-  // `Summand::ambient`, never through the beta itself.)
 };
 
-/// The cost path's L2 value (T-A5): `Val` stripped to exactly what the L2 cost
-/// recursion and `find_beta` read.
-///
-/// `Fitness::operator()` builds the SAME value tree `explain` builds, node for
-/// node and in the same order, but out of these: no `shared_ptr` (children are
-/// indices into the per-evaluation arena `EvalScratch::vals`), no
-/// `Constant::scalar_type` coefficient (a `Complex<cpp_rational>` -- 3 % of the
-/// search profile just to construct, and neither `cost_of_value` nor
-/// `find_beta` ever reads it), no retained `beta`, and no `Summand` operands on
-/// a Sum. What is left is a 24-byte POD.
+/// The cost path's L2 value: `Val` stripped to what the L2 cost recursion and
+/// `find_beta` read. `Fitness::operator()` builds the SAME value tree
+/// `explain` builds, node for node and in the same order, out of these.
 struct CostVal {
   Val::Kind kind;
   int d;       ///< owning term of the face
@@ -151,15 +125,9 @@ struct CostVal {
   int b;       ///< Sum: s2.val -- index into EvalScratch::vals
 };
 
-// `ChildTable` and `build_children` moved to genome.hpp (the NNI slot walk is
-// driven by the table now); the definitions are unchanged and everything here
-// consumes them through that header.
-
 /// The decoded per-genome state: one laminar family per term and the internal
-/// clusters' children. The key fibres that used to live here are now
-/// `EvalScratch::fib` (T-A4): they are pure per-evaluation scratch, consumed
-/// only by `resolve`, and as a `container::map` they were the single most
-/// expensive structure in the eval.
+/// clusters' children. The key fibres are per-evaluation scratch and live in
+/// `EvalScratch::fib`.
 struct ForestState {
   struct Term {
     Laminar fam;
@@ -175,42 +143,16 @@ struct ForestState {
 };
 
 /// Memo for `decode_tree` keyed on the FULL code slice plus its leaf count.
-///
-/// Why it pays: `cross` hands every block of a child genome intact from a
-/// parent, `nni_kick` perturbs only k blocks and `hill_climb` changes exactly
-/// one -- so of the 83 blocks an evaluation decodes (81 L1 terms + 2 L2
-/// targets on the C4H10/DZ job) all but a handful were decoded before.
-///
-/// Why the key is the whole slice: `decode_tree(code, n)` is injective on
-/// codes, so two distinct slices are two distinct trees. A hash-only or
-/// truncated key would let one collision silently substitute a different tree
-/// and shift the objective by an amount no test would attribute to the memo.
-/// The 64-bit hash is only a probe accelerator; every candidate slot is
-/// confirmed by comparing `n` and all n-1 genes.
-///
-/// Storage is three flat arenas (keys / families / children tables) addressed
-/// by offsets, because every length is a function of `n`: the code has n-1
-/// genes, the family 2n-1 masks, the children table n-1 entries. That keeps
-/// one entry to a single contiguous run instead of three small_vectors, makes
-/// copy-out a memcpy, and makes the cap enforceable by a single counter.
-/// The children table is filled lazily: L2 blocks and the `nni_moves` decodes
-/// in ga.cpp never ask for it, and a seeded entry (below) does not have it.
+/// The key must be the whole slice: a hash-only or truncated key would let a
+/// collision silently substitute a different tree and shift the objective, so
+/// the 64-bit hash is only a probe accelerator and every candidate slot is
+/// confirmed gene by gene. Storage is three flat arenas addressed by offsets;
+/// the children table is filled lazily.
 class TreeMemo {
  public:
-  /// Entries kept before the memo is cleared wholesale. Reuse is temporal (a
-  /// generation re-decodes its own blocks), so a bounded window costs almost
-  /// no hit rate, and the cap is what keeps the memo off the peak-RSS budget
-  /// -- which matters twice over once Group C gives every thread a scratch.
-  /// Measured on C4H10/DZ (10.79 M lookups; bench peak RSS 1.636 GB without
-  /// the memo), fingerprint identical at every setting:
-  ///
-  ///     cap        run_ga   peak RSS   hit rate   memo bytes   entries
-  ///     unbounded  36.92 s   1.731 GB   100.00%      71.5 MB    64899
-  ///     1<<15      36.95 s   1.681 GB    99.99%      35.8 MB    (2 clears)
-  ///     8192       37.55 s   1.644 GB    99.94%       9.5 MB   (14 clears)
-  ///
-  /// so 1<<15 buys the whole speedup for 40 % less memory than unbounded.
-  /// Override with SEQUANT_GA_MEMO_CAP (entries).
+  /// Entries kept before the memo is cleared wholesale; measured, not guessed
+  /// (reuse is temporal, so a bounded window costs no hit rate and keeps the
+  /// memo off the peak-RSS budget). Override with SEQUANT_GA_MEMO_CAP.
   static constexpr std::size_t default_capacity = 1u << 15;
 
   TreeMemo() : TreeMemo(env_capacity()) {}
@@ -226,11 +168,9 @@ class TreeMemo {
     lookup(code, n, fam, &ch);
   }
 
-  /// Record a family whose code the caller already holds -- `nni_kick` and
-  /// `hill_climb` call `encode_tree(mv, n)` with `mv` in hand, so the entry is
-  /// free. Requires decode_tree(code, n) == fam, i.e. `code` came from
-  /// `encode_tree(fam, n)` (pinned exhaustively by the [ga] codec test).
-  /// A no-op if the code is already known.
+  /// Record a family whose code the caller already holds. REQUIRES
+  /// decode_tree(code, n) == fam, i.e. `code` came from `encode_tree(fam, n)`;
+  /// a bogus pair would poison every later decode. No-op if already known.
   void seed(int const* code, int n, Laminar const& fam) {
     if (n < 2) return;  // see lookup(): nothing to remember
     const std::uint64_t h = hash_of(code, n);
@@ -245,8 +185,7 @@ class TreeMemo {
 
  private:
   static constexpr std::uint32_t no_children = ~std::uint32_t{0};
-  /// Arena offsets are 32-bit (the Slot is then 24 B); keep every reachable
-  /// offset strictly below the `no_children` sentinel.
+  /// Arena offsets are 32-bit; keep them below the `no_children` sentinel.
   static constexpr std::size_t arena_max = (std::size_t{1} << 32) - 1024;
   struct Slot {
     std::uint64_t h = 0;
@@ -268,8 +207,7 @@ class TreeMemo {
     return default_capacity;
   }
 
-  /// FNV-1a-ish over (n, genes); `n` is mixed in so trees of different leaf
-  /// counts do not share probe chains. Equality still compares everything.
+  /// FNV-1a-ish over (n, genes); equality still compares everything.
   static std::uint64_t hash_of(int const* code, int n) {
     std::uint64_t h = 0x9e3779b97f4a7c15ull ^
                       (static_cast<std::uint64_t>(n) * 0xff51afd7ed558ccdull);
@@ -371,10 +309,8 @@ class TreeMemo {
     tab_.swap(next);
   }
 
-  /// Wholesale eviction: an LRU would need a second index and the reuse here
-  /// is temporal anyway (a generation's blocks are re-decoded within that
-  /// generation), so dropping the window is both cheaper and simpler. Arena
-  /// capacity is retained so the refill does not re-grow.
+  /// Wholesale eviction (reuse is temporal, so no LRU index is worth its
+  /// cost). Arena capacity is retained so the refill does not re-grow.
   void clear() {
     std::fill(tab_.begin(), tab_.end(), Slot{});
     keys_.clear();
@@ -394,24 +330,17 @@ class TreeMemo {
 };
 
 /// A set of key ids with O(1) membership AND O(1) clear: dense stamps over
-/// `[0, n_keys)` compared against a running epoch, so clearing is one
-/// increment instead of touching 43k entries.
-///
-/// It replaces the `container::set<std::size_t>` working sets of `resolve`,
-/// whose only use is the first-insertion gate. `insert` returns exactly what
-/// `flat_set::insert(k).second` returned, so the gated walks keep their shape;
-/// what is gone is the ordered storage (an O(k) memmove per insert) that the
-/// gate never needed. Where an ORDER was also consumed -- `seen` in
-/// `pick_out` -- the caller collects the ids and sorts them (see `resolve`).
+/// `[0, n_keys)` against a running epoch. Used for `resolve`'s first-insertion
+/// gates; it is UNORDERED, so wherever `resolve` also consumes an order the
+/// caller collects the ids and sorts them explicitly.
 class KeyStamps {
  public:
-  /// Sizes the set for `n` key ids and leaves it empty.
   void resize(std::size_t n) {
     s_.assign(n, 0);
     cur_ = 1;  // stamps are 0, so nothing is a member yet
   }
-  /// Empties the set. O(1) except once every 2^32 clears, when the stamps are
-  /// rewound (the epoch must never alias a stale stamp).
+  /// Empties the set. The epoch must never alias a stale stamp, hence the
+  /// rewind once every 2^32 clears.
   void clear() {
     if (++cur_ == 0) {
       std::fill(s_.begin(), s_.end(), 0);
@@ -419,7 +348,7 @@ class KeyStamps {
     }
   }
   bool contains(std::size_t k) const { return s_[k] == cur_; }
-  /// == `flat_set::insert(k).second`: true iff `k` was not already present.
+  /// True iff `k` was not already present.
   bool insert(std::size_t k) {
     if (s_[k] == cur_) return false;
     s_[k] = cur_;
@@ -432,24 +361,12 @@ class KeyStamps {
 };
 
 /// The key fibres of one decoded forest: every internal cluster of every term,
-/// grouped by the key id of the array it produces. Replaces
-/// `container::map<std::size_t, container::svector<Cluster>>`, which took one
-/// O(k) memmove per insert over the ~240-580 keys a genome touches.
+/// grouped by the key id of the array it produces, filled in two passes over
+/// the same cluster sequence (count, then place).
 ///
-/// Filled in two passes over the same cluster sequence -- count, then place --
-/// so the clusters of one key land contiguously in a flat arena and `keys()`
-/// is a short list of only the keys actually touched. Both dense arrays are
-/// `n_keys` uint32s; the arena holds one `Cluster` per internal cluster
-/// (~570 on C4H10/DZ), and neither is reallocated after the first evaluation.
-///
-/// **Walk order is load bearing** -- it is the floating-point summation order
-/// of `resolve` -- and is reproduced exactly:
-///   * `keys()` is sorted ascending, which is what iterating the `flat_map`
-///     gave; `resolve` walks it to build `pick` and to enumerate `multi`.
-///   * Within a key, clusters keep their PUSH order (term `d` ascending, then
-///     `ForestState::Term::ch` order), because `place()` revisits the clusters
-///     in exactly the order `count()` saw them and appends each at its key's
-///     running cursor.
+/// **Walk order is load bearing: it IS the floating-point summation order of
+/// `resolve`.** `keys()` is ascending, and within a key clusters keep their
+/// PUSH order (term `d` ascending, then `ForestState::Term::ch` order).
 class Fibres {
  public:
   void resize(std::size_t n) {
@@ -457,8 +374,7 @@ class Fibres {
     off_.assign(n, 0);
   }
 
-  /// Pass 0: drop the previous evaluation's fibres. Only the keys that were
-  /// touched are reset -- that is what keeps this O(fibres), not O(n_keys).
+  /// Pass 0: drop the previous evaluation's fibres (touched keys only).
   void begin() {
     for (std::uint32_t k : keys_) size_[k] = 0;
     keys_.clear();
@@ -485,7 +401,7 @@ class Fibres {
     for (std::uint32_t k : keys_) off_[k] -= size_[k];
   }
 
-  /// Touched key ids, ascending (== the old flat_map's iteration order).
+  /// Touched key ids, ascending.
   std::vector<std::uint32_t> const& keys() const { return keys_; }
   std::size_t size(std::size_t k) const { return size_[k]; }
   /// The fibre of `k`, in push order.
@@ -498,32 +414,17 @@ class Fibres {
   std::vector<Cluster> cl_;          ///< fibres, concatenated in key order
 };
 
-/// Per-evaluation workspace.
+/// Per-evaluation workspace: the decoded-tree memo and `resolve`'s dense
+/// per-key working sets, which is why the constructor takes the table.
 ///
-/// Everything an evaluation needs beyond the immutable `KeyTable` lives here:
-/// the decoded-tree memo (T-A3) and the dense per-key working sets of
-/// `resolve` (T-A4: `fib`, `uses`, `walked`, `seen`, `pick`), which is why the
-/// constructor takes the table -- those arrays are sized `n_keys`.
-///
-/// Two properties make this the seam the threading work (Group C) builds on:
-///   * it is *pure scratch*. Nothing in it can change the number an evaluation
-///     produces: the memo caches `decode_tree`, a pure function of (code, n),
-///     and T-A4's arrays are cleared-by-epoch per call. So N scratches give N
-///     bit-identical answers, and a per-thread scratch is correctness-neutral
-///     by construction rather than by review.
-///   * it is threaded by reference from the public entry points downwards, so
-///     going thread-local is a call-site change (`make_scratch()` per worker),
-///     never a signature change.
-/// `Fitness` owns one `mutable` instance for its serial public API; that is
-/// the ONLY shared-mutable state added here, and it disappears the moment a
-/// caller passes its own.
+/// **It is pure scratch**: nothing in it can change the number an evaluation
+/// produces, so N workspaces give N bit-identical answers -- which is what
+/// makes the parallel evaluation in ga.cpp correctness-neutral by
+/// construction. `Fitness` owns one `mutable` instance for its serial API.
 struct EvalScratch {
   explicit EvalScratch(KeyTable const& kt) : n_keys(kt.n_keys) {
-    // Key lists are held as uint32 (43k keys on C4H10/DZ; the subset tables
-    // themselves would be astronomically larger long before this binds). Runs
-    // once per scratch, so it is unconditional rather than an `assert`: it is
-    // the only guard on the truncation `Fibres`/`KeyStamps` depend on, and the
-    // shipping build compiles asserts out.
+    // Unconditional (asserts are compiled out of the shipping build): this is
+    // the only guard on the uint32 truncation Fibres/KeyStamps depend on.
     if (n_keys > std::size_t{0xffffffffu})
       throw std::length_error(
           "ga: key count exceeds the uint32 key-id representation");
@@ -543,10 +444,9 @@ struct EvalScratch {
   TreeMemo trees;
   std::size_t n_keys = 0;
 
-  /// `resolve`'s working sets, dense over `[0, n_keys)`. Each is logically
-  /// empty at the start of the call that uses it and is emptied by bumping an
-  /// epoch, never by touching n_keys entries. Payload arrays (`uses`, `pick`)
-  /// are only meaningful where the paired `KeyStamps` says so.
+  /// `resolve`'s working sets, dense over `[0, n_keys)` and emptied by bumping
+  /// an epoch. Payload arrays (`uses`, `pick`) are only meaningful where the
+  /// paired `KeyStamps` says so.
   Fibres fib;                       ///< produced by decode_forest
   std::vector<std::int32_t> uses;   ///< consumer count per key (dag_cost pass 1)
   KeyStamps uses_set;
@@ -558,25 +458,18 @@ struct EvalScratch {
   std::vector<std::size_t> seeds;  ///< resolve: demanded keys, sorted unique
   std::vector<std::size_t> stack;  ///< dag_cost: the LIFO walk stack
 
-  /// The cost path's L2 workspace (T-A5). All of it is rewound, never freed,
-  /// per evaluation, so the steady state allocates nothing at all for L2.
+  /// The cost path's L2 workspace: rewound, never freed, per evaluation.
   std::vector<CostVal> vals;  ///< arena: the whole L2 value forest of one eval
-  /// Ambient maps the cost recursion builds for the extracted residuals. A
-  /// `std::deque` because a `CostSummand` holds a pointer into it that must
-  /// survive the pool growing underneath a deeper recursion level -- and
-  /// because, unlike a vector of `unique_ptr`, it leaves `EvalScratch`
-  /// copyable. Entries are reused across evaluations (`flat_map::clear()`
-  /// keeps its buffer), which is what takes the residual ambients off the
-  /// allocator entirely.
+  /// Ambient maps for the extracted residuals. A `std::deque` because a
+  /// `CostSummand` holds a pointer into it that must survive the pool growing.
   std::deque<AmbientMap> amb_pool;
   std::size_t amb_used = 0;              ///< high-water mark within `amb_pool`
   std::vector<int> l2_roots;             ///< one `vals` index per target
   container::svector<Cluster> l2_demanded;  ///< clusters demanded by L2
   Laminar l2_fam;                        ///< the decoded L2 tree of one target
 
-  /// Rewinds the L2 arena and the ambient pool. Called once per evaluation --
-  /// NOT per target: a target's root `CostSummand` still points into the pool
-  /// while the next target is built.
+  /// Rewinds the L2 arena and the ambient pool. Once per EVALUATION, not per
+  /// target: a target's root still points into the pool while the next is built.
   void begin_l2() {
     vals.clear();
     amb_used = 0;
@@ -588,7 +481,6 @@ struct EvalScratch {
     m.clear();
     return m;
   }
-  /// Appends a value to the arena and returns its index.
   int new_val(Val::Kind kind, int d, NodeMask S, NodeMask V, int a = -1,
               int b = -1) {
     vals.push_back(CostVal{kind, d, S, V, a, b});
@@ -611,28 +503,23 @@ class Fitness {
   Fitness(KeyTable const& kt, CostModel cost = CostModel::native(),
           ProducerResolution resolution = ProducerResolution::Greedy);
 
-  /// The cost of \p genome. Bit-for-bit `explain(genome).total`, but it never
-  /// materializes the `Schedule`: the L2 pass runs on `CostVal`s in the
-  /// scratch arena and `resolve` is asked for the number only (T-A5). The two
-  /// paths are kept in lockstep by construction -- `build_node_cost` mirrors
-  /// `build_node` node for node, so the `find_beta` call sequence and the L2
-  /// recursion order are identical -- and by the exact-equality tripwire in
-  /// the `[ga]` "cost path agrees with explain" test case, which must be
-  /// extended, never relaxed, by any future change to either path.
+  /// The cost of \p genome. Bit-for-bit `explain(genome).total` without ever
+  /// materializing the `Schedule`. The two paths stay in lockstep by
+  /// construction (`build_node_cost` mirrors `build_node` node for node) and by
+  /// the exact-equality tripwire in the `[ga]` "cost path agrees with explain"
+  /// test, which must be extended, never relaxed.
   double operator()(Genome const& genome) const;
   Schedule explain(Genome const& genome) const;
 
   /// Same evaluations against a caller-owned workspace. Identical results --
-  /// the scratch is pure scratch (see EvalScratch) -- so a thread that owns
-  /// one needs no synchronization for anything reachable from here except the
-  /// `Caches` below (T-C2).
+  /// the scratch is pure scratch -- so a thread that owns one needs no
+  /// synchronization for anything reachable from here except the `Caches`.
   double operator()(Genome const& genome, EvalScratch& scratch) const;
   Schedule explain(Genome const& genome, EvalScratch& scratch) const;
 
-  /// A fresh workspace sized for this table; Group C gives each worker one.
+  /// A fresh workspace sized for this table; one per concurrent evaluation.
   EvalScratch make_scratch() const { return EvalScratch(*kt_); }
-  /// The workspace behind the serial public API above (also used by the search
-  /// in ga.cpp to decode blocks and to seed the memo).
+  /// The workspace behind the serial public API above.
   EvalScratch& scratch() const { return scratch_; }
 
   GenomeLayout const& layout() const { return layout_; }
@@ -641,11 +528,8 @@ class Fitness {
 
   /// All valid axis correspondences F(c1) -> F(c2) between two key-equal
   /// clusters (the prototype's sigma set): position-wise alignment of the
-  /// canonical face orders, composed with the automorphisms of the cut.
-  ///
-  /// The evaluation path uses the bit form (`correspondences_bits`); this is
-  /// the `Index` form emission and the sigma-soundness tests want, materialized
-  /// from it on demand and cached separately.
+  /// canonical face orders composed with the automorphisms of the cut. The
+  /// `Index` form of `correspondences_bits`.
   container::svector<container::svector<std::pair<Index, Index>>> const&
   correspondences(Cluster c1, Cluster c2) const;
 
@@ -657,10 +541,8 @@ class Fitness {
 
  private:
   /// The cost path's `Summand`: a value (index into `EvalScratch::vals`) plus
-  /// the ambient identification `find_beta` needs. The map is BORROWED -- it
-  /// is either a precomputed per-term leaf map or one of the scratch's pooled
-  /// residual maps -- because every one of them is written once and then only
-  /// read, so the copy `Summand` makes buys nothing but `Index` copies.
+  /// the ambient `find_beta` needs. The map is BORROWED -- a per-term leaf map
+  /// or a pooled residual map, each written once and thereafter only read.
   struct CostSummand {
     int val;
     AmbientMap const* amb;
@@ -674,11 +556,10 @@ class Fitness {
   /// only the representation differs. Edit the two together.
   CostSummand build_node_cost(ForestState const& st, EvalScratch& scratch,
                               CostSummand s1, CostSummand s2) const;
-  /// The first (Sigma1)(Sigma2)(Sigma3)-valid bijection F(x1) -> F(x2) in the
-  /// enumeration order pinned by `TermTable::index_rank`, as bit pairs owned by
-  /// the beta cache; null if there is none. Memoized on (x1, v1, x2, v2, a1,
-  /// a2) -- the cache is node-based, so the returned pointer outlives any
-  /// number of later insertions.
+  /// The FIRST (Sigma1)(Sigma2)(Sigma3)-valid bijection F(x1) -> F(x2) in the
+  /// enumeration order pinned by `TermTable::index_rank`; null if there is
+  /// none. Memoized on (x1, v1, x2, v2, a1, a2) in a node-based cache, so the
+  /// returned pointer outlives any number of later insertions.
   BitPairs const* find_beta(Cluster x1, Cluster v1, AmbientMap const& a1,
                             Cluster x2, Cluster v2, AmbientMap const& a2) const;
   /// `correspondences` in the bit form the evaluation path uses.
@@ -687,16 +568,13 @@ class Fitness {
   container::svector<container::svector<int>> const& face_perms(
       Cluster c) const;
   /// Accumulates \p val's L2 cost and the clusters it demands. All L2 work is
-  /// charged at the replay weight: emission leaves Fx/Sum structure inside the
-  /// target expression (only keyed L1 clusters become named definitions), and
-  /// targets are rebuilt every replay.
+  /// charged at the replay weight: only keyed L1 clusters become named
+  /// definitions, so Fx/Sum structure is rebuilt on every replay.
   void cost_of_value(ValPtr const& val, double& l2,
                      container::svector<Cluster>& demanded) const;
-  /// The cost-path twin of `cost_of_value`, over the `CostVal` arena. Run as a
-  /// SECOND pass over the finished value forest, exactly as `explain` runs
-  /// `cost_of_value` after building all roots -- accumulating during
-  /// construction would both reorder the floating-point sum and over-count,
-  /// since a successful extraction discards its operands' `Cl` values.
+  /// The cost-path twin of `cost_of_value`, over the `CostVal` arena. Must run
+  /// as a SECOND pass over the finished forest, as `explain` does: accumulating
+  /// during construction would reorder the sum and over-count.
   void cost_of_cost_val(EvalScratch const& scratch, int val, double& l2,
                         container::svector<Cluster>& demanded) const;
   double resolve(ForestState const& st, EvalScratch& scratch,
@@ -707,13 +585,9 @@ class Fitness {
   CostModel cost_;
   ProducerResolution resolution_;
   GenomeLayout layout_;
-  /// Per-term leaf data, precomputed once (T-A5). `leaf_summand` rebuilt both
-  /// of these for every target leaf of every evaluation -- a `std::sort` of the
-  /// externals, a rank map, one `kind_of` per external, one `make_shared<Val>`
-  /// -- although they are pure functions of the KeyTable. The `Val` is now
-  /// SHARED by every use of term `d`'s leaf: `ValPtr` is `shared_ptr<Val
-  /// const>` so it cannot be mutated, and neither the evaluation nor emission
-  /// keys off a `Val`'s address.
+  /// Per-term leaf data, precomputed once: pure functions of the KeyTable. The
+  /// `Val` is SHARED by every use of term `d`'s leaf -- sound because `ValPtr`
+  /// is `shared_ptr<Val const>` and nothing keys off a `Val`'s address.
   container::svector<AmbientMap> leaf_ambient_;
   container::svector<ValPtr> leaf_val_;
   // caches (semantically const; keyed on data that outlives them)

@@ -24,9 +24,8 @@ ExprPtr apply_map(ExprPtr const& e, IndexMap const& m) {
   if (e->is<Tensor>()) {
     ExprPtr t = e->as<Tensor>().clone();
     t->as<Tensor>().transform_indices(m);
-    // Index::transform tags replaced indices to guard against double
-    // substitution; clear them so downstream canonicalization sees a clean
-    // slate
+    // Index::transform tags replaced indices against double substitution;
+    // clear them so downstream canonicalization sees a clean slate
     t->as<Tensor>().reset_tags();
     return t;
   }
@@ -165,25 +164,21 @@ struct Emitter {
     auto it = sch.pick.find(k);
     if (it != sch.pick.end() && shared(k)) {
       // shared array: define once under a canonical-face head, reference by
-      // name here; this site's slots are ITS canonical face order, which
-      // zips axis-wise with the definition head's (the same canonical
-      // correspondence render_cl's producer substitution used to rewire by)
+      // name here; this site's slots are ITS canonical face order, which zips
+      // axis-wise with the definition head's
       std::wstring const label = define(k, it->second);
       return named_leaf(label, kt().terms[d].canon_face_indices(S));
     }
     if (it != sch.pick.end() && it->second != Cluster{d, S}) {
-      // single-use array built by an isomorphic cluster elsewhere: inline
-      // the producer's subtree with the face renamed through the canonical
-      // correspondence (fresh internal labels)
+      // single-use array built by an isomorphic cluster elsewhere: inline the
+      // producer's subtree, face renamed through the canonical correspondence
       Cluster const p = it->second;
       auto const& sigmas = F.correspondences(p, Cluster{d, S});
       SEQUANT_ASSERT(!sigmas.empty());
       IndexMap m;
       for (auto const& [from, to] : sigmas.front())
         if (!(from == to)) m.emplace(from, to);
-      // F(p) is stored as bits since T-A7; materialize the set here (emission
-      // only, once per inlined producer) so the membership test is the same
-      // ordered-set lookup it always was
+      // materialized once per inlined producer, for the membership test
       auto const pface = kt().terms[p.d].face_set(p.S);
       return rewire(render_cl(p.d, p.S), std::move(m), [&](Index const& ix) {
         return pface.find(ix) != pface.end();
@@ -197,14 +192,10 @@ struct Emitter {
                                Product::Flatten::No});
   }
 
-  // rename e (a rendered value of face `face_of_e` with ambient `amb`) so
-  // that its face indices match `target_face` under the tag identification
-  // `target_amb`, and all its internal indices are fresh.
-  //
-  // Since T-A6 an `AmbientMap` is keyed by index BIT of its own term, so this
-  // is where the real `Index` objects come back: `index_list[bit]` of
-  // `amb.d` / `target_amb.d`. Tags are unique within a map, so the `find_if`
-  // below is the same lookup it always was.
+  // rename e (a rendered value with ambient `amb`) so that its face indices
+  // match `target_amb`'s under the tag identification, and all its internal
+  // indices are fresh. An `AmbientMap` is keyed by index bit, so this is where
+  // the real `Index` objects come back; tags are unique within a map.
   ExprPtr align(ExprPtr const& e, AmbientMap const& amb,
                 AmbientMap const& target_amb) const {
     auto const& src = kt().terms[amb.d].index_list;
@@ -256,9 +247,8 @@ struct Emitter {
   ExprPtr target(std::size_t t) {
     Summand const& root = sch.roots[t];
     ExprPtr e = scaled(root.coeff, render(root));
-    // externals: rename to the target's first term's names. That eta map is
-    // exactly the leaf ambient of that term, which the Fitness already holds
-    // (it used to be rebuilt here, byte for byte, from `ref.ext`).
+    // externals: rename to the target's first term's names -- that eta map is
+    // exactly that term's leaf ambient, which the Fitness already holds
     const int ref = static_cast<int>(kt().targets[t].terms.front());
     return align(e, root.ambient, F.leaf_ambient(ref));
   }
@@ -281,12 +271,11 @@ ExprPtr substitute(ExprPtr const& e,
     auto const& use_slots = t.aux();
     SEQUANT_ASSERT(use_slots.size() == def.slots.size());
     // positional face map (definition names -> this use's names). Slot pairs
-    // first, IDENTITY PAIRS INCLUDED -- they are the authoritative
+    // first, IDENTITY PAIRS INCLUDED: they are the authoritative
     // correspondence and must claim their def index so the proto zip below
-    // can never rebind it. Protos of composite slots are zipped in only as
-    // gap fillers: normally every proto is a slot in its own right, and a
-    // composite's STORED proto order may be normalized (sorted), so its
-    // positional zip is not trustworthy where a slot pair exists.
+    // can never rebind it. Protos are zipped in only as gap fillers, since a
+    // composite's stored proto order may be normalized and its positional zip
+    // is therefore not trustworthy where a slot pair exists.
     IndexMap m;
     TensorNetwork::NamedIndexSet dface;
     for (std::size_t k = 0; k < def.slots.size(); ++k) {

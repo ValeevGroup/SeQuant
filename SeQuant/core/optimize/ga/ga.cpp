@@ -27,38 +27,16 @@ struct SeedScratch {
   container::svector<NodeMask> stack;
 };
 
-/// The exact single-term contraction-order DP, run directly on the KeyTable's
-/// per-subset index masks (T-B1).
-///
-/// This replaces a per-term call to
-/// `opt::detail::single_term_opt<DenseFLOPs>(TensorNetwork{T.tensors}, ...)`,
-/// which rebuilt an `Index` set per candidate merge and cost 20.6 s on the
-/// 81-term C4H10/cc-pVDZ universe; `merge_volume` reads the masks
-/// `build_key_table` already computed, and the whole universe now seeds in
-/// ~0.1 s. It is the SAME recurrence, and the reproduction is exact -- see the
-/// four points below, each pinned to the code it mirrors:
-///
-///  1. **cost.** `AdditiveModel::relax` (cost_model.hpp:124-160) charges
-///     `w * flops_counter(F(a), F(b), F(a|b)) + fp + cost[a] + cost[b]`.
-///     Seeding passes default `CostParams`, so `volatile_mask` is 0 (w == 1)
-///     and `footprint_weight` is 0 (fp == 0) -- the seed is deliberately
-///     volatility-BLIND even when the Fitness cost is volatility-aware, and
-///     that is preserved here. `merge_volume` + the `v == 1. -> 0.` scalar rule
-///     is `flops_counter` (single_term_detail.hpp:112-129) exactly.
-///  2. **subset order.** Ascending `S`, matching `solve_single_term`'s `n` loop
-///     (cost_model.hpp:23-42).
-///  3. **bipartition order.** `bits::bipartitions(S)` (algorithm.hpp:179-215)
-///     is the first half of the ordered bipartitions, i.e. the pairs
-///     `(a, S^a)` with `a` running over the submasks of `S` in ASCENDING
-///     numeric order while `S^a` descends -- so the half is exactly `a < S^a`,
-///     and the driver drops the `a == 0` pair. `(a - S) & S` is the ascending
-///     submask successor; `a > S^a` ends the half.
-///  4. **tie-break.** `relax` accepts on `new_cost <= acc.ops`
-///     (cost_model.hpp:161), so the LAST equal-cost bipartition wins.
-///
-/// `AdditiveModel::reconstruct`'s child ordering (cost_model.hpp:192-213) has
-/// no analogue here and needs none: the laminar family -- and hence
-/// `encode_tree`'s output -- is determined by the SET of chosen splits.
+/// The exact single-term contraction-order DP, on the KeyTable's per-subset
+/// index masks. Same recurrence as `opt::detail::single_term_opt<DenseFLOPs>`,
+/// and four things must stay exact because they decide which tree comes out:
+/// the cost (`merge_volume` + the `v == 1. -> 0.` scalar rule is
+/// `flops_counter`, under default `CostParams`, so the seed is deliberately
+/// volatility-BLIND even when the Fitness cost is not); the ascending subset
+/// order; the bipartition order (the `a < S^a` half, `a` ascending, `(a-S)&S`
+/// being the submask successor); and the `<=` TIE-BREAK, so the LAST
+/// equal-cost bipartition wins. Child ordering needs no analogue: the laminar
+/// family is determined by the SET of chosen splits.
 TreeCode seed_tree(TermTable const& T, SeedScratch& scr) {
   const int n = static_cast<int>(T.n());
   if (n < 3) return TreeCode(n - 1, 0);  // 1 or 2 leaves: the only tree
@@ -114,21 +92,18 @@ struct Rng {
 };
 
 // One planned NNI kick: which layer, which block, which move index. The move
-// FAMILY is deliberately absent -- since `nni_move_count` became a function of
-// the leaf count alone, the rng draw a kick consumes no longer needs the
-// kicked block decoded, so a kick can be DRAWN serially and APPLIED later, on
-// another thread, against whatever code the block holds by then (kicks to one
-// block compose in recorded order; see ga_once).
+// FAMILY is deliberately absent, so a kick can be drawn serially and applied
+// later on another thread against whatever code the block holds by then;
+// kicks to one block compose in recorded order (see ga_once).
 struct KickPlan {
   std::uint32_t blk;  ///< term id (l1) or target id (!l1)
   std::uint32_t mv;   ///< move index in [0, nni_move_count(n))
   bool l1;
 };
 
-// Apply one planned kick to `x`, using (and warming) the caller's memo.
-// This is the old `nni_kick` body minus every rng draw: decode the block
-// (memo, with its cached ChildTable), build ONLY the drawn neighbour (T-A2c),
-// encode it, seed the memo with the fresh code, splice it in.
+// Apply one planned kick to `x`, using (and warming) the caller's memo:
+// decode the block, build ONLY the drawn neighbour, encode it, seed the memo,
+// splice it in. Consumes no rng draw.
 void apply_kick(Fitness const& F, Genome& x, KickPlan const& kk,
                 EvalScratch& sc, Laminar& fam, ChildTable& ch) {
   auto const& kt = F.table();
@@ -148,9 +123,8 @@ void apply_kick(Fitness const& F, Genome& x, KickPlan const& kk,
 }
 
 // whole-block crossover with the coins already drawn: each term's L1 tree and
-// each target's L2 tree comes intact from one parent. `coin` has one entry
-// per block, g blocks first -- the order the old `cross` drew its
-// `rng.uniform() < .5` per block.
+// each target's L2 tree comes intact from one parent. `coin` has one entry per
+// block, g blocks first -- the order the coins were drawn in.
 Genome cross_apply(Fitness const& F, Genome const& a, Genome const& b,
                    std::uint8_t const* coin) {
   auto const& lay = F.layout();
@@ -166,39 +140,13 @@ Genome cross_apply(Fitness const& F, Genome const& a, Genome const& b,
 
 using Scored = std::pair<double, Genome>;
 
-/// The evaluation workspaces the parallel phase of `ga_once` hands out, one
-/// per concurrent evaluation (T-C3).
-///
-/// `sequant::for_each` exposes no thread id, so the obvious `thread_local`
-/// cannot be indexed by one -- and, less obviously, it would also be the wrong
-/// LIFETIME: `for_each` creates a fresh set of `std::thread`s on every call
-/// and joins them, so a `thread_local` scratch is destroyed and rebuilt once
-/// per generation. That is ~2100 constructions of a ~1.9 MB dense workspace
-/// over a default search, and it throws away the decoded-tree memo (T-A3)
-/// every generation -- precisely the structure whose whole value is that it
-/// accumulates. Both variants were built and measured on C4H10/DZ at 8
-/// threads, fingerprint identical either way:
-///
-///     phase 2 (evaluation)   thread_local 0.90 s   this pool 0.73 s
-///     ga_once total          thread_local 3.43 s   this pool 3.25 s
-///     bench peak RSS         thread_local 0.564    this pool 0.562-0.579 GB
-///
-/// i.e. the pool buys 19 % of the phase it governs, for a memory difference
-/// that is inside the run-to-run spread of the peak (the pool holds
-/// num_threads() workspaces per restart: 1.89 MB dense + ~7-10 MB of memo
-/// each, freed between restarts). The memo cap never binds at either setting
-/// -- 8.5k entries against the 32768 default, 0 clears -- so there is nothing
-/// to buy back by lowering SEQUANT_GA_MEMO_CAP here.
-///
-/// A lease is taken per EVALUATION rather than per thread, so no thread
-/// identity is needed at all: two uncontended mutex operations against a
-/// ~46 us evaluation. WHICH scratch a given evaluation gets is therefore
-/// nondeterministic -- and irrelevant, because `EvalScratch` is pure scratch
-/// (see its docs): nothing in it can change the number an evaluation
-/// produces, so N workspaces give N bit-identical answers.
-///
-/// `std::deque` because a lease holds a reference into it while another
-/// evaluation may cause it to grow.
+/// The evaluation workspaces the parallel phase hands out, one per concurrent
+/// evaluation. A pool rather than `thread_local` because `sequant::for_each`
+/// rebuilds its threads per call, which would destroy the decoded-tree memo.
+/// A lease is taken per EVALUATION, so no thread identity is needed; WHICH
+/// workspace an evaluation gets is nondeterministic and irrelevant, since
+/// `EvalScratch` is pure scratch. `std::deque` because a lease holds a
+/// reference into it while another evaluation may make it grow.
 class ScratchPool {
  public:
   explicit ScratchPool(Fitness const& F) : F_(&F) {}
@@ -239,14 +187,11 @@ class Lease {
 };
 
 /// Optional `hill_climb` / `ga_once` wall-clock split, printed by `run_ga`
-/// when SEQUANT_GA_PHASE_STATS is set. `run_ga` is the sum of the two and only
-/// `ga_once` is parallel (T-C3), so the split is what any judgement about the
-/// speedup has to be made against.
+/// when SEQUANT_GA_PHASE_STATS is set.
 struct PhaseStats {
   double hill_climb = 0, ga_once = 0;
-  /// ga_once's own three phases: serial breeding, parallel evaluation, serial
-  /// sort/select. `breed` is the Amdahl floor of T-C3 and the number T-C4 and
-  /// anything after it has to be sized against.
+  /// ga_once's own three phases: serial breeding (the Amdahl floor), parallel
+  /// evaluation, serial sort/select.
   double breed = 0, eval = 0, select = 0;
   static bool enabled() {
     static const bool on = std::getenv("SEQUANT_GA_PHASE_STATS") != nullptr;
@@ -259,46 +204,25 @@ double now_s() {
       .count();
 }
 
-// --- T-C3: one generation is plan / apply+evaluate / assemble ---------------
-//
-// The whole search consumes ONE std::mt19937_64, and every decision after a
-// draw depends on every draw before it, so the only restructuring that is
-// allowed here is one that leaves the draw SEQUENCE untouched. The fused loop
-// this evolved from did, per child: two `rng.below` (parents), `cross` (one
-// `rng.uniform` per L1 and per L2 block), one `rng.exponential`, then per
-// kick: one `rng.uniform` (layer), one `rng.below` (block), and -- iff the
-// block has n >= 3 leaves -- one `rng.below(nni_move_count)` for the move.
-//
-// Since `nni_move_count` became a closed form of the leaf count, EVERY value
-// in that sequence is now a function of earlier draws and the immutable
-// layout alone -- nothing needs a genome decoded, or even materialized. So
-// phase 1 makes exactly those calls in exactly that order and merely RECORDS
-// the outcomes (parent indices, crossover coins, kick plans); building the
-// children moved into the parallel phase, where each task materializes its
-// own kid -- cross_apply, then its kicks in recorded order on its leased
-// workspace -- and scores it. The kid a task builds is byte-identical to the
-// one the serial loop built: cross_apply consumes the same coins, kicks to
-// one block compose in the same order, and every function involved is a pure
-// function of (genome bytes, plan) -- the memo is a cache of the pure
-// decode_tree/build_children pair, so WHOSE memo answers is unobservable.
-//
-// The n < 3 guard mirrors the old kick_block exactly: such a kick consumed
-// its layer/block draws but neither drew a move nor changed anything, so it
-// is drawn here and simply not recorded. (n >= 3 implies the move count
-// 2(n-2) >= 2 > 0, so the old `n_moves == 0` early-out cannot fire there.)
-//
-// Phase 3 rebuilds `all` in the ORIGINAL child order -- kids ascending, then
-// the incumbent population -- because `std::sort` is not stable: the pre-sort
-// order decides which of two equal-cost genomes survives. `std::shuffle` is
-// untouched and consumes the same number of draws, since that depends only on
-// the element count.
+// One generation is plan / apply+evaluate / assemble, and it is EXACT: the
+// whole search consumes one std::mt19937_64, so the DRAW SEQUENCE is the
+// invariant. Phase 1 (serial) makes exactly the calls the fused serial loop
+// made, in that order -- per child two `rng.below` (parents), one
+// `rng.uniform` per block (coins), one `rng.exponential`, then per kick one
+// `rng.uniform` (layer), one `rng.below` (block) and, iff n >= 3, one
+// `rng.below(nni_move_count)` -- and only RECORDS the outcomes; an n < 3 kick
+// still consumes its draws and is simply not recorded. Phase 2 (parallel)
+// materializes each kid from its plan, which is byte-identical to building it
+// serially because everything involved is a pure function of (genome bytes,
+// plan), so WHOSE memo answers is unobservable. Phase 3 rebuilds `all` in the
+// ORIGINAL child order because `std::sort` is not stable: the pre-sort order
+// decides which of two equal-cost genomes survives.
 Scored ga_once(Fitness const& F, Genome const& g0, GAOptions const& opts,
                std::uint64_t seed, PhaseStats* stats) {
   Rng rng(seed);
   auto const& kt = F.table();
   auto const& lay = F.layout();
-  // member pointer, not a reference: `stats` may be null and the argument
-  // would then be a dereference of it at the call site
+  // member pointer, not a reference: `stats` may be null
   auto tick = [&](double PhaseStats::*into, double t0) {
     if (stats) stats->*into += now_s() - t0;
   };
@@ -346,9 +270,8 @@ Scored ga_once(Fitness const& F, Genome const& g0, GAOptions const& opts,
   container::svector<double> scores;
   container::svector<Scored> pop;
   // phase 2: materialize child i from its plan and score it, in parallel.
-  // Shared with sibling tasks: the `Fitness` (sharded Caches, read-only
-  // KeyTable), the read-only plan arrays and `pop`/`base`, and the pre-sized
-  // output slots `kids[i]`/`scores[i]` each task writes and no one else reads.
+  // Everything shared is read-only except the pre-sized output slots
+  // `kids[i]`/`scores[i]`, which each task writes and no one else reads.
   auto materialize_and_evaluate = [&](Genome const* base) {
     const std::size_t nk = kick_span.size();
     kids.resize(nk);
@@ -445,62 +368,16 @@ Genome seed_genome(KeyTable const& kt) {
   return out;
 }
 
-// --- T-C4: one block's NNI neighbourhood is evaluated concurrently ----------
-//
-// Why the parallel argmin is EXACT, i.e. reproduces the sequential loop this
-// replaces bit for bit.
-//
-//  1. *The candidates are mutually independent.* `nni_moves` is computed ONCE,
-//     from the block as it stands when `try_block` is entered, so every
-//     candidate is a family in that one list. The old loop spliced candidate i
-//     into the slice, called `F(genome)`, and -- when it did not improve --
-//     restored the slice before candidate i+1. It never touched any OTHER
-//     block. So the i-th evaluation was always
-//     `F(entry genome with this slice replaced by cand_i)`, whatever happened
-//     for j < i: the incumbent `block` the loop restores to is itself one of
-//     the cand_j, so the value that comes back for cand_i does not depend on
-//     it. That is exactly what each task computes here, against the shared,
-//     unmutated `genome`.
-//  2. *The reduction is an argmin.* `block` was reassigned only under
-//     `c < best`, and `best` only ever decreases, so the loop selected the
-//     minimum over the whole move list -- and left `code` holding it, because
-//     an improving candidate is the one splice that is not rolled back.
-//  3. *Ties are first-wins.* The comparison is strict `<`, so among equal
-//     minimal costs the LOWEST move index is kept. The serial scan below runs
-//     `i` ascending with the identical `if (c < best)` rule and therefore
-//     makes the identical choice -- this, not the evaluation, is where a
-//     parallel version could silently change the answer, which is why the
-//     scan is a separate serial pass over a pre-sized array rather than a
-//     reduction inside the parallel region. Task completion order is
-//     irrelevant: no task reads `best`.
-//  4. *`best` still threads through the blocks.* It is the running best of the
-//     whole hill climb, updated in the serial scan, and blocks and sweeps stay
-//     sequential -- accepting block d's move changes the genome block d+1 is
-//     evaluated against.
-//
-// The evaluations run on leased pool workspaces (T-C3), never on
-// `F.scratch()`. The one behavioural detail that has to move with them is the
-// memo seeding: the old loop handed `encode_tree`'s output straight to
-// `F.scratch().trees` so the very next `F(genome)` decode of the block was a
-// hit. Each task now seeds the workspace IT is about to evaluate on, which is
-// the same trade in the same place; the accepted block is additionally seeded
-// into `F.scratch()`, whose only remaining job here is the one `decode` per
-// block per sweep. Measured on C4H10/DZ: the serial workspace's memo goes from
-// 2.80 M lookups at 99.98 % to 0.71 M at 99.90 % (the 2.08 M that left are
-// exactly hill_climb's evaluations), and the workspaces they landed on run at
-// 99.85-100.00 % with ~110 misses each. No scratch loses its memo, and the
-// total miss count over all of them (~1.5 k at 8 threads against 692 before)
-// is 0.05 % of the lookups either way.
-//
-// No serial threshold is applied, because the batch sizes never get small
-// enough to need one. `sequant::for_each` costs ~65 us per call at 8 threads
-// on this machine (measured: 79 us at batch 1, 64 us at batch 106, i.e. it is
-// spawn/join latency, not per-task work) against a ~36 us evaluation, so a
-// block breaks even at 2.1 candidates and every block that reaches this code
-// has at least 2 (n >= 3, and an NNI move list is empty or has >= 2 entries).
-// The L1 blocks -- mean 14 candidates -- are where the win is thin, not
-// negative: ~4x predicted, and the measured whole-`hill_climb` speedup is
-// dominated by them since they are 88 % of the evaluations.
+// One block's NNI neighbourhood is evaluated concurrently, and the parallel
+// argmin is EXACT -- it reproduces the sequential scan bit for bit. The
+// candidates are mutually independent (`nni_moves` is computed once from the
+// block as it stands on entry, and each evaluation is the entry genome with
+// this slice replaced by one candidate). The reduction is an argmin whose TIES
+// ARE FIRST-WINS on strict `<`, which is why the scan is a separate SERIAL
+// pass over a pre-sized array and not a reduction inside the parallel region:
+// task completion order must not decide between equal-cost moves. Blocks and
+// sweeps stay sequential, since accepting block d's move changes the genome
+// block d+1 is evaluated against.
 double hill_climb(Fitness const& F, Genome& genome, std::size_t max_sweeps) {
   auto const& kt = F.table();
   auto const& lay = F.layout();
@@ -509,7 +386,7 @@ double hill_climb(Fitness const& F, Genome& genome, std::size_t max_sweeps) {
   ScratchPool pool(F);
   Laminar fam;
   ChildTable ch;
-  // reused across blocks and sweeps: the neighbour list, move i's code (at
+  // reused across blocks and sweeps: neighbour list, move i's code (at
   // cands[i*(n-1) .. (i+1)*(n-1))) and move i's cost
   container::svector<Laminar> moves;
   std::vector<int> cands;
@@ -525,9 +402,8 @@ double hill_climb(Fitness const& F, Genome& genome, std::size_t max_sweeps) {
     memo.decode(code.data() + lo, n, fam, ch);
     moves = nni_moves(fam, ch);
 
-    // ---- parallel: every candidate against the same entry genome. `genome`
-    // is only read here; the two outputs are pre-sized and every task writes
-    // its own disjoint slot and reads no one else's.
+    // ---- parallel: every candidate against the same entry genome, which is
+    // only read here; each task writes its own disjoint output slots.
     cands.resize(moves.size() * static_cast<std::size_t>(w));
     costs.assign(moves.size(), 0.);
     auto ids = ranges::views::iota(std::size_t{0}, moves.size());
@@ -543,7 +419,7 @@ double hill_climb(Fitness const& F, Genome& genome, std::size_t max_sweeps) {
       costs[i] = F(x, *scratch);
     });
 
-    // ---- serial: today's rule, in ascending move order (first wins)
+    // ---- serial argmin in ascending move order: ties go to the first
     std::size_t win = moves.size();
     for (std::size_t i = 0; i < moves.size(); ++i)
       if (costs[i] < best) {
@@ -571,10 +447,8 @@ double hill_climb(Fitness const& F, Genome& genome, std::size_t max_sweeps) {
 
 std::pair<double, Genome> run_ga(Fitness const& F, Genome seed,
                                  GAOptions const& opts) {
-  // The restarts stay sequential: they nest badly with T-C3's per-generation
-  // parallel phase, and each one's rng stream is a function of the one before
-  // it only through `opts.seed + 977 * s`, so there is nothing to gain here
-  // that the generation loop does not already give.
+  // Restarts stay sequential: they nest badly with the per-generation parallel
+  // phase, and each one's rng stream is `opts.seed + 977 * s`.
   PhaseStats stats;
   const bool timed = PhaseStats::enabled();
   double t0 = timed ? now_s() : 0.;

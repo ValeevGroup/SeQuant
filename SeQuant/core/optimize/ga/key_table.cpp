@@ -49,12 +49,9 @@ int KeyTable::kind_of(Index const& ix) const {
 namespace {
 
 // Index -> bit position, for the setup-only interning of a canonical face.
-// Scans F(S) first (a handful of bits) and falls back to the term's whole
-// index universe, which is <= 64 entries; either way this runs once per subset
-// per slot at build time and never during an evaluation. Throws rather than
-// returning a sentinel: SEQUANT_ASSERT is compiled out in the release build the
-// optimizer actually runs in, and a bogus slot id would be a silent axis
-// permutation of every shared intermediate.
+// Throws rather than returning a sentinel: asserts are compiled out of the
+// release build the optimizer runs in, and a bogus slot id would be a silent
+// axis permutation of every shared intermediate.
 std::uint8_t intern(TermTable const& T, NodeMask S, Index const& ix) {
   for (IndexMask m = T.face_mask(S); m; m &= m - 1) {
     const int b = std::countr_zero(m);
@@ -68,74 +65,32 @@ std::uint8_t intern(TermTable const& T, NodeMask S, Index const& ix) {
   return static_cast<std::uint8_t>(it - T.index_list.begin());
 }
 
-// --- T-C1: how the canonicalize sweep is parallelized -----------------------
+// The canonicalize sweep runs in two passes, and WHICH pass is parallel is
+// load-bearing: `meta_to_id` hands out key ids in FIRST-ENCOUNTER order, and
+// those ids order `Fitness::resolve`'s ascending-key walk, hence its
+// floating-point summation order, hence possibly which schedule wins. Any
+// scheme that lets threads insert into `meta_to_id` renumbers the table.
+// So pass 1 (parallel) only canonicalizes subsets into its own pre-sized slots
+// -- touching no shared mutable state, on per-task clones, since Expr and
+// Index carry unsynchronized mutable caches -- and pass 2 (serial) walks S
+// ascending assigning ids one `try_emplace` at a time. That is a
+// permutation-free replay of the serial insertion sequence, so every
+// `T.key[S]` is bit-identical at any thread count.
 //
-// The sweep below is ~3.4 s of the setup at C4H10/cc-pVDZ and is
-// canonicalization-bound (bliss + Index::FullLabelCompare), so the only way to
-// move it is to run it on more than one core. But the key ids it produces are
-// dense ids handed out in FIRST-ENCOUNTER order by `meta_to_id`, and those ids
-// order `Fitness::resolve`'s ascending-key walk, hence the floating-point
-// summation order, hence -- at cc-pVDZ, where two schedules sit within noise of
-// each other -- possibly the winner. Any scheme that lets threads insert into
-// `meta_to_id` renumbers the table, however the merge is ordered (per-thread
-// maps merged in bliss-certificate order included: certificate order is not
-// first-encounter order).
-//
-// So the sweep is split into two passes:
-//
-//   pass 1 (parallel) computes, for a contiguous block of subsets S, the
-//          canonicalization metadata and the interned canonical face order.
-//          Each task writes ONLY its own `metas[S - lo]` and its own
-//          `T.canon_face_bits[S]`, both pre-sized; every `Index`/`Expr` it
-//          canonicalizes is a per-task clone (`canonicalize_slots` populates
-//          the unsynchronized `mutable` caches on Expr/Index -- see the
-//          thread-safety invariants at optimize.cpp:202-217). Nothing in this
-//          pass reads or writes `meta_to_id`, `kt`, or any other shared
-//          mutable state; the shared `T.index_list` is only compared against
-//          (`Index::operator==`/`FullLabelCompare` touch immutable members
-//          only) and copied out of.
-//   pass 2 (serial) walks S ascending and does the id assignment, one
-//          `try_emplace` at a time, in exactly the order the old single loop
-//          did it.
-//
-// Pass 2 is therefore a permutation-free replay of the old insertion sequence,
-// so `meta_to_id`'s contents -- and every `T.key[S]` read out of it -- are
-// bit-identical at any thread count. That is the whole argument; it does not
-// depend on how pass 1 is scheduled, which is why pass 1 may also chunk, run
-// serially for small terms, or be load-balanced dynamically.
-//
-// One metadatum is a canonicalized bliss graph plus a copy of the face index
-// set (~10 kB here), and the widest term has 2^n - 1 = 16383 subsets, so
-// holding a whole term's metas would add ~0.17 GB to a 0.52 GB peak. The two
-// passes are interleaved in chunks of this many subsets instead; since pass 2
-// still walks S strictly ascending across chunk boundaries, chunking cannot
-// move an id. 256 is measured, not guessed: at C4H10/cc-pVDZ, 8 threads,
-// 64 / 256 / 512 / 1024 give 1.05 / 0.79 / 0.78 / 0.77 s at 0.537 / 0.541 /
-// 0.546 / 0.559 GB peak -- 64 is spawn-bound, above 256 only memory moves.
+// The passes interleave in chunks so a whole term's metas are never held at
+// once; pass 2 still walks S ascending ACROSS chunk boundaries, so chunking
+// cannot move an id. The chunk size is measured, not guessed.
 constexpr std::size_t canon_chunk_subsets = 256;
-// `sequant::for_each` creates num_threads()-1 std::threads per call, so below
-// this many subsets in a chunk the spawn costs more than the work it hands out.
+// below this many subsets in a chunk the thread spawn costs more than the work
 constexpr std::size_t canon_min_parallel_subsets = 32;
 
-// `opt::detail::SubNetIdMap` with the graph hash precomputed. It is the same
-// map with the same key identity -- only WHEN the hash is computed moves.
-//
-// `SubNetHash` is `meta.graph->get_hash64()`, which is not memoized and is not
-// cheap: it re-runs `remove_duplicate_edges()` + `sort_edges()` over the whole
-// graph and then hashes every edge (those three are the top of the T-A7 profile
-// of this phase). Left in the hasher it runs inside pass 2, i.e. serially, and
-// Amdahl's law then caps the whole task at ~2x. Computed once per subset in
-// pass 1 -- where the graph is the task's private property -- it is free.
-//
-// Ids are unaffected, and not merely "in practice":
-//   * equality is byte-for-byte the old relation, `ConstGraphCmp::cmp == 0`;
-//   * the hash VALUE is byte-for-byte the old one, so keys bucket identically;
-//   * ids are still `map.size() - 1` handed out on insertion, and pass 2 still
-//     inserts in ascending-S order.
-// Consistency of the hash with the equality is unchanged too (and was already
-// load-bearing): `Graph::cmp` const-compares vertex count, colors, degrees and
-// edge lists, and `get_hash64` hashes exactly that data, on graphs both of
-// which `get_hash64` has already normalized.
+// `opt::detail::SubNetIdMap` with the graph hash precomputed in pass 1, where
+// the graph is a task's private property (`get_hash64` is neither memoized nor
+// cheap, and in the hasher it would run serially inside pass 2). Key identity
+// is untouched: equality is `ConstGraphCmp::cmp == 0` and ids are still
+// `map.size() - 1` on insertion in ascending-S order. The hash's consistency
+// with the equality is load-bearing: `cmp` compares vertex count, colors,
+// degrees and edge lists, and `get_hash64` hashes exactly that data.
 struct HashedMeta {
   TensorNetwork::SlotCanonicalizationMetadata meta;
   /// meta.graph->get_hash64(); also normalizes the graph, which `cmp`'s const
@@ -216,11 +171,10 @@ TermTable build_term(KeyTable& kt, ExprPtr const& summand, FaceSet const& ext,
   }
   SEQUANT_ASSERT(T.index_list.size() <= 8 * sizeof(IndexMask));
 
-  // Derived bit tables (T-A6). `index_rank` is derived from an ACTUAL
-  // `std::sort` over the real `Index` objects -- never from bit order, label
-  // order or anything else that merely tends to agree with it -- because the L2
-  // pass's bijection enumeration order is exactly that sort order. See
-  // TermTable::index_rank.
+  // `index_rank` MUST come from an actual `std::sort` over the real `Index`
+  // objects -- never from bit order, label order or anything else that merely
+  // tends to agree with it -- because the L2 pass's bijection enumeration
+  // order is exactly that sort order. See TermTable::index_rank.
   {
     const std::size_t ni = T.index_list.size();
     container::svector<std::uint8_t> ord(ni);
@@ -231,8 +185,8 @@ TermTable build_term(KeyTable& kt, ExprPtr const& summand, FaceSet const& ext,
     T.index_rank.assign(ni, 0);
     for (std::size_t r = 0; r < ni; ++r)
       T.index_rank[ord[r]] = static_cast<std::uint8_t>(r);
-    // the inverse permutation really is the inverse: reading `index_list`
-    // through it is ascending `Index` order
+    // reading `index_list` through the inverse permutation is ascending
+    // `Index` order
     for (std::size_t r = 1; r < ni; ++r)
       SEQUANT_ASSERT(T.index_list[ord[r - 1]] < T.index_list[ord[r]] &&
                      T.index_rank[ord[r]] == r);
@@ -257,9 +211,8 @@ TermTable build_term(KeyTable& kt, ExprPtr const& summand, FaceSet const& ext,
     for (IndexMask m = eff[v]; m; m &= m - 1)
       carr[std::countr_zero(m)] |= NodeMask{1} << v;
 
-  // F(S), stored ONLY as the (disjoint) composite / non-composite bit pair --
-  // `face_mask` recombines them and `face_set` materializes the `Index` form
-  // for the two callers that still need one.
+  // F(S), stored ONLY as the (disjoint) composite / non-composite bit pair;
+  // `face_mask` recombines them, `face_set` materializes the `Index` form.
   const std::size_t n_subsets = std::size_t{1} << n;
   T.outer_mask.resize(n_subsets, 0);
   T.inner_mask.resize(n_subsets, 0);
@@ -277,19 +230,15 @@ TermTable build_term(KeyTable& kt, ExprPtr const& summand, FaceSet const& ext,
     }
   }
 
-  // Global canonical-subnet key for every nonempty subset. The subset network
-  // is built from clones (canonicalize_slots mutates lazily-cached state; see
-  // the thread-safety notes in optimize.cpp). Named indices are colored by
-  // kind only, so the key is label-blind array identity.
-  //
-  // Two passes per chunk of subsets -- parallel canonicalize, serial id assign.
-  // See the comment on canon_chunk_subsets above for why the id assignment may
-  // not be the thing that is parallelized.
+  // Global canonical-subnet key for every nonempty subset, built from clones
+  // (canonicalize_slots mutates lazily-cached state). Named indices are colored
+  // by kind only, so the key is label-blind array identity. See
+  // canon_chunk_subsets for why the id assignment may not be parallelized.
   T.key.resize(n_subsets, no_key);
   T.canon_face_bits.resize(n_subsets);
 
-  // read-only inside the parallel region (a static, and configuring it is the
-  // caller's business -- same contract as optimize.cpp's parallel branch)
+  // read-only inside the parallel region (configuring it is the caller's
+  // business -- same contract as optimize.cpp's parallel branch)
   auto const& cardinal = TensorCanonicalizer::cardinal_tensor_labels();
   const std::size_t chunk =
       std::min<std::size_t>(n_subsets - 1, canon_chunk_subsets);
@@ -306,16 +255,14 @@ TermTable build_term(KeyTable& kt, ExprPtr const& summand, FaceSet const& ext,
         if (S & (std::size_t{1} << v))
           ts.emplace_back(T.tensors[v]->as<Tensor>().clone());
       auto tn = TensorNetwork{ts};
-      // F(S) lives exactly as long as this call: canonicalize_slots takes its
-      // own copy (SlotCanonicalizationMetadata::named_indices) and
-      // `named_indices_canonical` points into THAT copy, so the canonical
-      // order is read back below and interned to bits before `fs` dies.
+      // `fs` must outlive the read-back below: canonicalize_slots copies it
+      // and `named_indices_canonical` points into that copy.
       const FaceSet fs = T.face_set(static_cast<NodeMask>(S));
       auto meta = tn.canonicalize_slots(cardinal, &fs);
       auto& cfb = T.canon_face_bits[S];
       cfb.reserve(meta.named_indices_canonical.size());
       // push_back in the metadata's own order -- this loop, and nothing else,
-      // is what makes canon_face_bits an axis order rather than an index set
+      // is what makes canon_face_bits an axis ORDER rather than an index set
       for (auto const& it : meta.named_indices_canonical)
         cfb.push_back(intern(T, static_cast<NodeMask>(S), *it));
       auto& slot = metas[S - lo];
@@ -367,11 +314,8 @@ KeyTable build_key_table(
     kt.targets.push_back(std::move(blk));
   }
   kt.n_keys = meta_to_id.size();
-  // Kind ids are handed out across the whole table, so a term built early does
-  // not yet know the final count; pad every per-term kind mask now so
-  // `T.kind_mask[k]` is addressable for any k a face bijection can ask about
-  // (find_beta groups term A's face by kind and then asks term B for the same
-  // kind).
+  // Kind ids are handed out across the whole table, so pad every per-term kind
+  // mask now: `T.kind_mask[k]` must be addressable for any k find_beta asks.
   for (auto& T : kt.terms) T.kind_mask.resize(kt.kind_ids.size(), 0);
   return kt;
 }

@@ -4,32 +4,26 @@
 // Emission: turn a winning Schedule into evaluable expressions.
 //
 // Shared intermediates are SYNTACTIC, not structural: every keyed array the
-// schedule uses at more than one site becomes a NAMED tensor (label
-// "IGA<n>", slots = the producing cluster's canonical face order). Its
-// definition -- ResultExpr{IGA<n>{face...}, producer subtree} -- is emitted
-// exactly once, in dependency order, and every use site (including the
+// schedule uses at more than one site becomes a NAMED tensor (label "IGA<n>",
+// slots = the producing cluster's canonical face order). Its definition is
+// emitted exactly once, in dependency order, and every use site (including the
 // producer's own) is a leaf tensor IGA<n>{...} whose slots are the use
 // cluster's canonical face order. Since key-equal clusters correspond
 // axis-wise by zipping their canonical faces (Fitness::correspondences,
 // identity automorphism), slot position k of every use leaf denotes the same
-// array axis as slot position k of the definition head: the runtime resolves
-// a use leaf purely POSITIONALLY from the stored definition value and never
-// has to re-derive a correspondence between differently-labeled trees.
+// array axis as slot position k of the definition head: the runtime resolves a
+// use leaf purely POSITIONALLY and never has to re-derive a correspondence
+// between differently-labeled trees.
 //
-// Rationale: the label-blind structural matching of the runtime eval cache
-// (TreeNodeHasher/-EqualityComparator) is only sound when structural identity
-// implies value identity -- which per-term canonical naming guarantees, but
-// fresh-labeled unrolled producer subtrees do not. Named intermediates make
-// the sharing explicit in the expression itself, so the runtime only ever
-// matches identical named tensors.
+// Rationale: the label-blind structural matching of the runtime eval cache is
+// only sound when structural identity implies value identity -- which per-term
+// canonical naming guarantees, but fresh-labeled unrolled producer subtrees do
+// not. Named intermediates make the sharing explicit in the expression itself.
 //
-// Keys used at a single site are still inlined as before (rendered as the
-// picked producer's subtree with the face renamed through the canonical
-// correspondence); factored sums are emitted as (X1' + X2') * V with the
-// second residual renamed through the ambient maps recorded at extraction
-// time. Substituting the definitions back into the targets
-// (inline_definitions) reproduces the old fully-unrolled emission, and
-// expanding that reproduces the original summands exactly.
+// Keys used at a single site are still inlined (the picked producer's subtree
+// with the face renamed through the canonical correspondence); factored sums
+// are emitted as (X1' + X2') * V. inline_definitions substitutes the
+// definitions back, reproducing the fully-unrolled emission exactly.
 
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/optimize/ga/fitness.hpp>
@@ -56,10 +50,8 @@ struct Emission {
   /// first term; shared arrays appear as named leaf tensors (IGA<n>).
   container::svector<ExprPtr> targets;
   /// Definitions of the named intermediates, in dependency (topological)
-  /// order: a definition's body references only physical tensors and
-  /// earlier-defined intermediates. The head tensor's aux slots are the
-  /// producing cluster's canonical face order -- the positional layout every
-  /// use leaf's slots correspond to.
+  /// order. The head tensor's aux slots are the producing cluster's canonical
+  /// face order -- the positional layout every use leaf's slots correspond to.
   container::svector<ResultExpr> definitions;
 };
 
@@ -67,9 +59,8 @@ struct Emission {
 Emission emit_named(Fitness const& fitness, Schedule const& schedule);
 
 /// Substitute every named intermediate of \p em back into the targets
-/// (definition bodies inlined recursively; the face renamed positionally,
-/// internal indices freshened). Reconstructs the old fully-unrolled
-/// producer-substituted emission; used for equivalence verification.
+/// (bodies inlined recursively, the face renamed positionally, internal
+/// indices freshened). The fully-unrolled form; used to verify equivalence.
 container::svector<ExprPtr> inline_definitions(Emission const& em);
 
 /// Fully-inlined per-target expressions:

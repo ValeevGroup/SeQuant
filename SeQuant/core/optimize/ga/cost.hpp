@@ -2,19 +2,18 @@
 #define SEQUANT_CORE_OPTIMIZE_GA_COST_HPP
 
 // Mask-based fast path for the per-merge flop count, reproducing
-// opt::detail::flops_counter (with empty inner_pow, i.e. flat composite
-// extents) exactly: the extent product over the deduplicated union of the
-// indices of lhs, rhs, and result -- including, via outer_mask, the
-// proto-indices of any composite present. Verified against flops_counter in
-// the unit tests; keep the two in lockstep.
+// opt::detail::flops_counter (with empty inner_pow) exactly: the extent
+// product over the deduplicated union of the indices of lhs, rhs and result,
+// including the proto-indices of any composite. Verified against
+// flops_counter in the unit tests; keep the two in lockstep.
 
 #include <SeQuant/core/optimize/ga/key_table.hpp>
 
 namespace sequant::opt::ga {
 
-/// Extent product over the union of the open indices of subsets \p a, \p b,
-/// and \p a|b of term \p T. Equals flops_counter(...)(F(a), F(b), F(a|b))
-/// except for the scalar-contraction rule, applied by the caller's CostModel.
+/// Extent product over the union of the open indices of subsets \p a, \p b and
+/// \p a|b of \p T. == flops_counter(F(a), F(b), F(a|b)) except for the
+/// scalar-contraction rule, which the caller's CostModel applies.
 inline double merge_volume(TermTable const& T, NodeMask a, NodeMask b) {
   const NodeMask ab = a | b;
   IndexMask m = T.outer_mask[a] | T.outer_mask[b] | T.outer_mask[ab] |
@@ -24,41 +23,29 @@ inline double merge_volume(TermTable const& T, NodeMask a, NodeMask b) {
   return v;
 }
 
-/// Cost conventions of the two supported accounting modes.
-///   - Native (default): SeQuant's flops_counter convention -- a merge costs
-///     its extent-product (1 flop per output element and contraction step),
-///     scalar contractions are free; an L2 addition costs the face size.
-///   - Python-parity: the prototype's convention -- a merge costs 2x the
-///     extent-product (multiply + add), no scalar-contraction rule; an L2
-///     addition costs the face size. Used only to validate the port against
-///     the prototype's reference numbers.
-///
-/// Both are pure FLOP models: nothing here prices storage. What \ref
-/// volatile_weight adds is not a second metric but a REPLAY COUNT on the flops
-/// already counted -- the objective stays a flop-optimal DAG search, it just
-/// stops pretending every merge is paid the same number of times.
+/// Cost conventions of the two accounting modes. Native (default) is
+/// SeQuant's flops_counter convention: a merge costs its extent-product,
+/// scalar contractions are free, an L2 addition costs the face size.
+/// Python-parity is the prototype's -- 2x the extent-product, no
+/// scalar-contraction rule -- and exists only to validate against the
+/// prototype's reference numbers. Both are pure FLOP models; nothing here
+/// prices storage, and \ref volatile_weight is a REPLAY COUNT on the flops
+/// already counted, not a second metric.
 struct CostModel {
   double merge_factor = 1.0;
   bool zero_scalar_merges = true;
-  /// Replay weight on volatile (amplitude-dependent) work -- conceptually the
-  /// expected number of times the schedule is replayed; mirrors
-  /// CostParams::volatile_weight, which single-term optimization already
-  /// applies. In an iterative solver the DAG is evaluated once per iteration,
-  /// but only the part depending on the amplitudes is REBUILT each time: an
-  /// amplitude-free array is produced once and reused, so the honest objective
-  /// is `persistent_flops + N * volatile_flops`. Weighting each key by N iff
-  /// its cluster contains a volatile leaf yields exactly that, because
-  /// Fitness::resolve already visits every key once. 1.0 (the default) is the
-  /// neutral, volatility-blind cost this optimizer used before, so an empty
-  /// volatile-leaf predicate leaves every number unchanged.
+  /// Replay weight on volatile (amplitude-dependent) work: only that part of
+  /// the DAG is rebuilt per solver iteration, so the honest objective is
+  /// `persistent_flops + N * volatile_flops`. Mirrors
+  /// CostParams::volatile_weight; 1.0 is the volatility-blind cost.
   double volatile_weight = 1.0;
 
   static CostModel native() { return {1.0, true}; }
   static CostModel python_parity() { return {2.0, false}; }
 
   /// Whether cluster \p S has to be rebuilt on every replay: true iff it
-  /// contains an amplitude leaf. Monotone in S -- any superset of a volatile
-  /// cluster is volatile -- so no propagation pass is needed for L1 clusters.
+  /// contains an amplitude leaf. Monotone in S, so no propagation pass is
+  /// needed for L1 clusters.
   static bool is_volatile(TermTable const& T, NodeMask S) {
     return (S & T.volatile_mask) != 0;
   }
