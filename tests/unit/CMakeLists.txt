@@ -165,6 +165,7 @@ set(eval_dryrun_test_sources
     "test_peak_profile.cpp"
     "test_placement_remat.cpp"
     "test_placement_router.cpp"
+    "test_slicing_signature.cpp"
 )
 add_library(unit_tests-sequant-eval-dryrun-obj OBJECT ${eval_dryrun_test_sources})
 set_target_properties(unit_tests-sequant-eval-dryrun-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)

@@ -11,6 +11,7 @@
 #include <SeQuant/core/eval/placement_router.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/eval/schedule_dump.hpp>
+#include <SeQuant/core/eval/slicing_signature.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/logger.hpp>
@@ -512,15 +513,9 @@ template <typename IndexPredicate>
   return batch_axis(node, [](Index const&) { return true; });
 }
 
-/// \return the position of index \p ix in \p node's canonical result indices
-///         (i.e. the corresponding tensor mode), or nullopt if absent.
-[[nodiscard]] inline std::optional<std::size_t> index_position(
-    meta::eval_node auto const& node, Index const& ix) {
-  auto const& idxs = node->canon_indices();
-  for (std::size_t p = 0; p < idxs.size(); ++p)
-    if (idxs[p] == ix) return p;
-  return std::nullopt;
-}
+// index_position() moved to SeQuant/core/eval/slicing_signature.hpp (shared
+// with the hoist-path split and router-read guard); still available here via
+// that include.
 
 /// \return the first leaf in the subtree rooted at \p node whose canonical
 ///         indices contain \p ix, paired with the position of \p ix there; or
@@ -1498,11 +1493,11 @@ template <typename TreeNode, bool FHC, typename Members>
   };
   std::unordered_map<TreeNode const*, Meta, Hasher, Comp> meta;
 
+  // The external-mode signature (positions of each ext axis on n's result, or
+  // absent) is exactly slicing_signature(n, ext_axes); the batch-mode `sig`
+  // below is the single-mode case, index_position(n, mode).
   auto ext_sig_of = [&ext_axes](TreeNode const& n) {
-    container::svector<std::optional<std::size_t>> s;
-    s.reserve(ext_axes.size());
-    for (auto const& e : ext_axes) s.push_back(index_position(n, e));
-    return s;
+    return slicing_signature(n, ext_axes);
   };
 
   auto visit = [&meta, &ext_sig_of](auto&& self, TreeNode const& n,
