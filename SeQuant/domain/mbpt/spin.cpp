@@ -1879,6 +1879,9 @@ ExprPtr spintrace_impl(const ExprPtr& expression, IdxGroups&& ext_index_groups,
   SEQUANT_ASSERT(result);
 
   detail::reset_idx_tags(result);
+
+  simplify(result);
+
   return result;
 }
 
