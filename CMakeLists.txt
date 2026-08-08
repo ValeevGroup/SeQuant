@@ -441,6 +441,8 @@ set(SeQuant_eval_src
         SeQuant/core/eval/eval_node_compare.hpp
         SeQuant/core/eval/result.cpp
         SeQuant/core/eval/result.hpp
+        SeQuant/core/eval/flops.cpp
+        SeQuant/core/eval/flops.hpp
         SeQuant/core/eval/fwd.hpp
 )
 
@@ -503,6 +505,7 @@ set(SeQuant_eval_ta_src
         SeQuant/core/eval/backends/tiledarray/eval_expr.hpp
         SeQuant/core/eval/backends/tiledarray/result.hpp
         SeQuant/core/eval/backends/tiledarray/result.cpp
+        SeQuant/core/eval/backends/tiledarray/flops.hpp
 )
 
 # BTAS backend sources (header-only)

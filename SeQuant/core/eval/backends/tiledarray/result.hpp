@@ -3,6 +3,8 @@
 
 #ifdef SEQUANT_HAS_TILEDARRAY
 
+#include <SeQuant/core/eval/backends/tiledarray/flops.hpp>
+#include <SeQuant/core/eval/flops.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/utility/exception.hpp>
@@ -428,6 +430,8 @@ class ResultTensorTA final : public Result {
     result(a.this_annot) =
         get<ArrayT>()(a.lannot) + other.get<ArrayT>()(a.rannot);
     decltype(result)::wait_for_lazy_cleanup(result.world());
+    if (eval::FlopCounter::enabled())
+      detail::count_elementwise(eval::FlopCategory::Addition, result);
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
@@ -474,6 +478,8 @@ class ResultTensorTA final : public Result {
       result(a.this_annot) = scalar * result(a.lannot);
 
       decltype(result)::wait_for_lazy_cleanup(result.world());
+      if (eval::FlopCounter::enabled())
+        detail::count_elementwise(eval::FlopCategory::Scale, result);
       log_ta_tensor_host_memory_use();
       return eval_result<this_type>(std::move(result));
     }
@@ -488,6 +494,11 @@ class ResultTensorTA final : public Result {
 
       detail::log_ta(a.lannot, " * ", a.rannot, " = ", d, "\n");
 
+      if (eval::FlopCounter::enabled()) {
+        double const v = detail::real_element_count(get<ArrayT>());
+        eval::FlopCounter::record(eval::FlopCategory::Reduction, 2 * v, 1);
+        eval::FlopCounter::record_kernels(1, 1, 1, v);
+      }
       log_ta_tensor_host_memory_use();
       return eval_result<ResultScalar<numeric_type>>(d);
     }
@@ -508,6 +519,10 @@ class ResultTensorTA final : public Result {
     result = TA::einsum(get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot),
                         a.this_annot);
     decltype(result)::wait_for_lazy_cleanup(result.world());
+    if (eval::FlopCounter::enabled())
+      detail::count_product_by_extent(get<ArrayT>(), other.get<ArrayT>(),
+                                      result, a.lannot, a.rannot,
+                                      a.this_annot);
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
@@ -515,6 +530,8 @@ class ResultTensorTA final : public Result {
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
     auto pre = get<ArrayT>();
     TA::scale(pre, numeric_type(factor));
+    if (eval::FlopCounter::enabled())
+      detail::count_elementwise(eval::FlopCategory::Scale, pre);
     return eval_result<this_type>(std::move(pre));
   }
 
@@ -528,6 +545,8 @@ class ResultTensorTA final : public Result {
     ArrayT result;
     result(post_annot) = get<ArrayT>()(pre_annot);
     ArrayT::wait_for_lazy_cleanup(result.world());
+    if (eval::FlopCounter::enabled())
+      detail::count_elementwise(eval::FlopCategory::Permute, result);
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
@@ -551,6 +570,8 @@ class ResultTensorTA final : public Result {
       result(post_annot) = get<ArrayT>()(pre_annot);
     }
     ArrayT::wait_for_lazy_cleanup(result.world());
+    if (eval::FlopCounter::enabled())
+      detail::count_elementwise(eval::FlopCategory::Permute, result);
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
@@ -568,6 +589,8 @@ class ResultTensorTA final : public Result {
 
     t(ann) += o(ann);
     ArrayT::wait_for_lazy_cleanup(t.world());
+    if (eval::FlopCounter::enabled())
+      detail::count_elementwise(eval::FlopCategory::Addition, t);
     log_ta_tensor_host_memory_use();
   }
 
@@ -650,6 +673,15 @@ class ResultTensorOfTensorTA final : public Result {
     ArrayT result;
     result(a.this_annot) = l(a.lannot) + r(a.rannot);
     decltype(result)::wait_for_lazy_cleanup(result.world());
+    if (eval::FlopCounter::enabled()) {
+      detail::count_elementwise(eval::FlopCategory::Addition, result);
+      // the defensive deep copies above are real data movement paid by this
+      // add; attribute them to the permute/copy bucket
+      if (permute_l)
+        detail::count_elementwise(eval::FlopCategory::Permute, l_copy);
+      if (permute_r)
+        detail::count_elementwise(eval::FlopCategory::Permute, r_copy);
+    }
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
@@ -696,6 +728,8 @@ class ResultTensorOfTensorTA final : public Result {
       result(a.this_annot) = scalar * result(a.lannot);
 
       decltype(result)::wait_for_lazy_cleanup(result.world());
+      if (eval::FlopCounter::enabled())
+        detail::count_elementwise(eval::FlopCategory::Scale, result);
       log_ta_tensor_host_memory_use();
       return eval_result<this_type>(std::move(result));
     } else if (a.this_annot.empty()) {
@@ -708,6 +742,11 @@ class ResultTensorOfTensorTA final : public Result {
 
       detail::log_ta(a.lannot, " * ", a.rannot, " = ", d, "\n");
 
+      if (eval::FlopCounter::enabled()) {
+        double const v = detail::real_element_count(get<ArrayT>());
+        eval::FlopCounter::record(eval::FlopCategory::Reduction, 2 * v, 1);
+        eval::FlopCounter::record_kernels(1, 1, 1, v);
+      }
       log_ta_tensor_host_memory_use();
       return eval_result<ResultScalar<numeric_type>>(d);
     }
@@ -720,6 +759,10 @@ class ResultTensorOfTensorTA final : public Result {
           TA::einsum(get<ArrayT>()(a.lannot),
                      other.get<compatible_regular_distarray_type>()(a.rannot),
                      a.this_annot);
+      if (eval::FlopCounter::enabled())
+        detail::count_product_by_extent(
+            get<ArrayT>(), other.get<compatible_regular_distarray_type>(),
+            result, a.lannot, a.rannot, a.this_annot);
       log_ta_tensor_host_memory_use();
       return eval_result<this_type>(std::move(result));
 
@@ -727,6 +770,9 @@ class ResultTensorOfTensorTA final : public Result {
       // ToT * ToT -> T
       auto result = TA::einsum<TA::DeNest::True>(
           get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot), a.this_annot);
+      if (eval::FlopCounter::enabled())
+        detail::count_product_denest(get<ArrayT>(), a.lannot, a.rannot,
+                                     a.this_annot);
       log_ta_tensor_host_memory_use();
       return eval_result<that_type>(std::move(result));
 
@@ -734,6 +780,9 @@ class ResultTensorOfTensorTA final : public Result {
       // ToT * ToT -> ToT
       auto result = TA::einsum(get<ArrayT>()(a.lannot),
                                other.get<ArrayT>()(a.rannot), a.this_annot);
+      if (eval::FlopCounter::enabled())
+        detail::count_product_tot(get<ArrayT>(), result, a.lannot, a.rannot,
+                                  a.this_annot);
       log_ta_tensor_host_memory_use();
       return eval_result<this_type>(std::move(result));
     } else {
@@ -744,6 +793,8 @@ class ResultTensorOfTensorTA final : public Result {
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
     auto pre = get<ArrayT>();
     TA::scale(pre, numeric_type(factor));
+    if (eval::FlopCounter::enabled())
+      detail::count_elementwise(eval::FlopCategory::Scale, pre);
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(pre));
   }
@@ -758,6 +809,8 @@ class ResultTensorOfTensorTA final : public Result {
     ArrayT result;
     result(post_annot) = get<ArrayT>()(pre_annot);
     ArrayT::wait_for_lazy_cleanup(result.world());
+    if (eval::FlopCounter::enabled())
+      detail::count_elementwise(eval::FlopCategory::Permute, result);
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
@@ -780,6 +833,8 @@ class ResultTensorOfTensorTA final : public Result {
       result(post_annot) = get<ArrayT>()(pre_annot);
     }
     ArrayT::wait_for_lazy_cleanup(result.world());
+    if (eval::FlopCounter::enabled())
+      detail::count_elementwise(eval::FlopCategory::Permute, result);
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
@@ -805,6 +860,8 @@ class ResultTensorOfTensorTA final : public Result {
 
     t(ann) += o(ann);
     ArrayT::wait_for_lazy_cleanup(t.world());
+    if (eval::FlopCounter::enabled())
+      detail::count_elementwise(eval::FlopCategory::Addition, t);
     log_ta_tensor_host_memory_use();
   }
 
