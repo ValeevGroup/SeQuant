@@ -732,7 +732,7 @@ ResultPtr evaluate_impl(Node const& node,         //
             auto const key = eval::occurrence_key(f.node, ctx_modes);
             if (auto const* home = router->route(key)) {
               std::size_t const use_depth = ctx.size();
-              std::size_t const hd = router->home_depth(*home, ctx);
+              std::size_t const hd = router->home_depth(*home, f.node, ctx);
               SEQUANT_ASSERT(hd <= use_depth);
               std::size_t const hops = use_depth - hd;
               if (ResultPtr ptr = cache.access_at_hops(f.node, hops); ptr) {
@@ -1838,7 +1838,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
               auto const key = eval::occurrence_key(d, ectx_modes);
               auto const* home = router->route(key);
               if (home) {
-                rl = static_cast<int>(router->home_depth(*home, ectx)) - 1;
+                rl = static_cast<int>(router->home_depth(*home, d, ectx)) - 1;
               } else if (router->moved(d->hash_value())) {
                 // d is remat-demoted to a DEEPER context than this hoist is
                 // inside: its per-occurrence override is keyed at that context

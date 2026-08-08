@@ -7,6 +7,7 @@
 #include <SeQuant/core/eval/occurrence_key.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
 #include <SeQuant/core/eval/placement_router.hpp>
+#include <SeQuant/core/eval/slicing_signature.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
@@ -263,11 +264,28 @@ template <meta::eval_node_range R>
   // result), then the MOVED map: value hash -> final home_modes.
   std::unordered_map<std::size_t, container::svector<Index> const*> seed_home;
   for (auto const& c : seed_cells) seed_home.emplace(c.value_id, &c.home_modes);
-  std::unordered_map<std::size_t, container::svector<Index>> moved;
+  // MOVED map: value hash -> the DAG-global HomeTarget applied at EVERY
+  // occurrence key of that value. Its positions are computed ONCE from the
+  // CELL's canonical `carried` frame (stable across occurrences), NOT per
+  // occurrence: a home mode is one occurrence's physical label and need not
+  // appear in another occurrence's canon_indices (the g.C legs' i_3 vs i_4). A
+  // home mode that lies on `carried` becomes a slot position (resolved to each
+  // occurrence's own physical index at use); one that does not (the value is
+  // invariant to it) becomes a free_mode, matched by Index directly.
+  std::unordered_map<std::size_t, HomeTarget> moved;
   for (auto const& c : final_cells) {
     auto const sh = seed_home.find(c.value_id);
-    if (sh != seed_home.end() && c.home_modes != *sh->second)
-      moved.emplace(c.hash, c.home_modes);
+    if (sh == seed_home.end() || c.home_modes == *sh->second) continue;
+    HomeTarget ht;
+    for (auto const& m : c.home_modes) {
+      auto const it = std::find(c.carried.begin(), c.carried.end(), m);
+      if (it != c.carried.end())
+        ht.slot_positions.push_back(
+            static_cast<std::size_t>(it - c.carried.begin()));
+      else
+        ht.free_modes.push_back(m);
+    }
+    moved.emplace(c.hash, std::move(ht));
   }
 
   PlacementRouter<Node> router;
@@ -275,16 +293,16 @@ template <meta::eval_node_range R>
   // Context-invariant "this value is demoted" set, so an OUTER-scope hoist
   // (whose occurrence-key query would miss) still learns not to build a moved
   // value full at the root (see place_at_this_level in eval.hpp).
-  for (auto const& [h, hm] : moved) router.mark_moved(h);
+  for (auto const& [h, ht] : moved) router.mark_moved(h);
 
   // Re-walk the forest (same ectx accumulation as compute_dag_boulevard). For
-  // each node whose value is moved, emit an override keyed by its occurrence
-  // key at the ambient (enclosing) batch context.
+  // each node whose value is moved, emit the precomputed overlay keyed by its
+  // occurrence key at the ambient (enclosing) batch context.
   auto visit = [&](auto&& self, Node const& n,
                    container::svector<Index> ctx_modes) -> void {
     if (auto const it = moved.find(n->hash_value()); it != moved.end()) {
       auto key = occurrence_key(n, ctx_modes);
-      router.set_override(std::move(key), HomeTarget{it->second, 0});
+      router.set_override(std::move(key), it->second);
     }
     if (n.leaf()) return;
     // Children see this node's OWN realized loops on top of ctx_modes; the node

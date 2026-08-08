@@ -4441,7 +4441,9 @@ TEST_CASE(
   // ---- relocated: one override on D0 ----------------------------------
   PlacementRouter<EvalNodeDryRun> router;
   auto const key = occurrence_key(D0, container::svector<Index>{K1});
-  router.set_override(key, HomeTarget{container::svector<Index>{K1}});
+  // D0 is a whole-nest invariant (carries {i_80,i_81}, not K1), so relocating
+  // it into K1's loop is a FREE-mode home (matched by Index, not a slot).
+  router.set_override(key, HomeTarget{{}, container::svector<Index>{K1}});
   REQUIRE_FALSE(router.empty());
 
   CostProfile const relocated =

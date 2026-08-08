@@ -80,24 +80,35 @@ EvalNodeDryRun router_test_leaf_node(ExprPtr const& t) {
 
 TEST_CASE("placement_router: home_depth resolves the deepest matching scope",
           "[placement_router]") {
-  // Outermost-first: [J, K, L] at ctx indices [0, 1, 2].
-  Index J{L"i_1"}, K{L"i_2"}, Lx{L"i_3"}, M{L"i_9"};  // M absent from ctx
+  // Outermost-first: [J, K, Lx] at ctx indices [0, 1, 2]; M absent from ctx.
+  Index J{L"i_1"}, K{L"i_2"}, Lx{L"i_3"}, M{L"i_9"};
+
+  // A node whose canonical result slots carry J, K, Lx, M. home_depth resolves
+  // a HomeTarget's canonical slot POSITIONS to this node's physical indices
+  // (canon_indices()[p]) before matching them against ctx.
+  auto t = ex<Tensor>(L"B", bra(svector<Index>{J, K, Lx, M}), ket{},
+                      Symmetry::Nonsymm, std::nullopt, ColumnSymmetry::Nonsymm);
+  auto node = router_test_leaf_node(t);
+  auto pos = [&](Index const& ix) { return *index_position(node, ix); };
 
   ctx_type ctx{{J, {0, 1}}, {K, {0, 1}}, {Lx, {0, 1}}};
 
   router_type router;
 
-  // K sits at ctx index 1 -> home_depth = 1 + 1 = 2.
-  CHECK(router.home_depth(HomeTarget{svector<Index>{K}}, ctx) == 2);
+  // K's slot sits at ctx index 1 -> home_depth = 1 + 1 = 2.
+  CHECK(router.home_depth(HomeTarget{svector<std::size_t>{pos(K)}}, node,
+                          ctx) == 2);
 
-  // Empty residency => invariant to the whole nest => chain root => 0.
-  CHECK(router.home_depth(HomeTarget{}, ctx) == 0);
+  // Empty slot_positions => invariant to the whole nest => chain root => 0.
+  CHECK(router.home_depth(HomeTarget{}, node, ctx) == 0);
 
-  // A residency mode absent from ctx => 0.
-  CHECK(router.home_depth(HomeTarget{svector<Index>{M}}, ctx) == 0);
+  // A slot whose physical index is absent from ctx (M) => 0.
+  CHECK(router.home_depth(HomeTarget{svector<std::size_t>{pos(M)}}, node,
+                          ctx) == 0);
 
-  // Residency naming more than one ctx mode resolves to the DEEPEST match.
-  CHECK(router.home_depth(HomeTarget{svector<Index>{J, Lx}}, ctx) == 3);
+  // Two slots resolve to the DEEPEST matching ctx level (Lx at index 2).
+  CHECK(router.home_depth(HomeTarget{svector<std::size_t>{pos(J), pos(Lx)}},
+                          node, ctx) == 3);
 }
 
 TEST_CASE("placement_router: set_override/route/empty", "[placement_router]") {
@@ -120,13 +131,13 @@ TEST_CASE("placement_router: set_override/route/empty", "[placement_router]") {
   CHECK(router.empty());
   CHECK(router.route(key1) == nullptr);
 
-  HomeTarget home{svector<Index>{i1}};
+  HomeTarget home{svector<std::size_t>{0}};
   router.set_override(key1, home);
 
   CHECK_FALSE(router.empty());
   auto const* routed = router.route(key1);
   REQUIRE(routed != nullptr);
-  CHECK(routed->residency == home.residency);
+  CHECK(routed->slot_positions == home.slot_positions);
   CHECK(routed->split_index == 0);
 
   // A different occurrence (distinct tensor label) stays unrouted.
@@ -272,7 +283,7 @@ TEST_CASE(
   // above were deleted, defeating the point of this test.
   auto const* routed = router.route(key);
   REQUIRE(routed != nullptr);
-  std::size_t const hd = router.home_depth(*routed, inner_ctx);
+  std::size_t const hd = router.home_depth(*routed, X, inner_ctx);
   CHECK(hd == 0);
   std::size_t const use_depth = inner_ctx.size();
   std::size_t const hops = use_depth - hd;

@@ -16,14 +16,26 @@ namespace sequant::eval {
 
 /// \brief Override home descriptor.
 ///
-/// \details \c residency is the enclosing batch-loop modes the value should
-/// be variant to at its overridden home; it resolves to a depth via the
-/// \c home_depth() rl+1 walk against the live batch_context (empty =>
-/// invariant to the whole nest, i.e. the chain root). \c split_index is
-/// ALWAYS 0 in Phase 2 (Phase 4 introduces peak splits; it is carried here so
-/// that landing splits later does not need a key refactor).
+/// \details A home has two parts, resolved to a depth by \c home_depth against
+/// the live batch context:
+/// - \c slot_positions -- CANONICAL result-slot positions (indices into
+///   \c canon_indices()) of the value's home modes that lie ON its own slots.
+///   DAG-GLOBAL: identical for every occurrence, and resolved PER USE by
+///   mapping each position to THAT occurrence's physical index (\c
+///   canon_indices()[p]), so one overlay places two occurrences whose batched
+///   slot binds different labels (the g.C legs, i_3 vs i_4) at DIFFERENT
+///   depths. This is the case real remat produces (\c shrink_candidates is
+///   enclosing INTERSECT carried).
+/// - \c free_modes -- home modes NOT on the value's own slots (the value is
+///   invariant to them but homed within their loop). These cannot be a slot
+///   position, so they are matched by Index identity directly. Empty for real
+///   remat moves; used when a value is relocated into a loop it does not carry.
+/// Both empty => invariant to the whole nest (the chain root). \c split_index
+/// discriminates two cells of one value at the SAME resolved depth
+/// (register-allocation split; 0 unless remat splits).
 struct HomeTarget {
-  container::svector<Index> residency;
+  container::svector<std::size_t> slot_positions;
+  container::svector<Index> free_modes;
   std::size_t split_index = 0;
 };
 
@@ -77,15 +89,25 @@ class PlacementRouter {
     return moved_hashes_.find(value_hash) != moved_hashes_.end();
   }
 
-  /// \return \c 1 + (deepest index \c i in \p ctx whose mode is in \p
-  ///         home.residency), or \c 0 if none (invariant to the whole nest,
-  ///         i.e. the chain root). Static mirror of \c place_at_this_level's
-  ///         \c rl+1 walk (in \c eval.hpp).
+  /// \return \c 1 + (deepest index \c i in \p ctx whose mode equals \p node's
+  ///         \c canon_indices()[p] for some home slot position \c p), or \c 0
+  ///         if none (invariant to the whole nest, i.e. the chain root).
+  ///         Resolves the DAG-global \c home.slot_positions to THIS
+  ///         occurrence's physical indices via \p node, so two occurrences of
+  ///         one value (sharing one overlay) whose batched slot binds different
+  ///         labels resolve to DIFFERENT depths. Static mirror of \c
+  ///         place_at_this_level's \c rl+1 walk (in \c eval.hpp).
   [[nodiscard]] std::size_t home_depth(HomeTarget const& home,
+                                       TreeNode const& node,
                                        BatchContext const& ctx) const {
-    for (int i = static_cast<int>(ctx.size()) - 1; i >= 0; --i)
-      for (auto const& ix : home.residency)
-        if (ctx[i].first == ix) return static_cast<std::size_t>(i) + 1;
+    auto const& canon = node->canon_indices();
+    for (int i = static_cast<int>(ctx.size()) - 1; i >= 0; --i) {
+      for (auto const& p : home.slot_positions)
+        if (p < canon.size() && ctx[i].first == canon[p])
+          return static_cast<std::size_t>(i) + 1;
+      for (auto const& m : home.free_modes)
+        if (ctx[i].first == m) return static_cast<std::size_t>(i) + 1;
+    }
     return 0;
   }
 

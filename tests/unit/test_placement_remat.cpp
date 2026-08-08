@@ -67,6 +67,18 @@ using sequant::eval::dryrun::EvalExprDryRun;
 using sequant::eval::dryrun::EvalNodeDryRun;
 using sequant::eval::dryrun::SizeRegime;
 
+// The canonical slot positions a moved HomeTarget carries for \p modes on
+// \p node -- mirrors remat_to_router's index_position mapping (absent modes are
+// skipped). Suffixed to avoid a Unity-build anonymous-namespace name clash.
+template <typename Node>
+svector<std::size_t> expected_slot_positions_o2(Node const& node,
+                                                svector<Index> const& modes) {
+  svector<std::size_t> pos;
+  for (auto const& m : modes)
+    if (auto const p = sequant::index_position(node, m)) pos.push_back(*p);
+  return pos;
+}
+
 // Build an EvalExpr from a single-tensor spec (e.g. "R{i_1;a_5}"); its
 // canon_indices are exactly the tensor's bra+ket slots. Mirrors the helper in
 // test_peak_profile.cpp / test_lifetime_mask.cpp. Suffixed `_o2` (rather than
@@ -550,7 +562,7 @@ TEST_CASE(
   auto const g_key = occurrence_key(G, svector<Index>{Index{L"i_1"}});
   HomeTarget const* g_home = router.route(g_key);
   REQUIRE(g_home != nullptr);
-  CHECK(g_home->residency == giant_home);
+  CHECK(g_home->slot_positions == expected_slot_positions_o2(G, giant_home));
   CHECK(g_home->split_index == 0);
 
   // G's SECOND occurrence (under P2, ambient context {o_1,i_1}) also routes to
@@ -571,7 +583,7 @@ TEST_CASE(
   CHECK(sequant::eval::RouterKeyEqual{}(g_key, g_key2));  // same key here
   HomeTarget const* g_home2 = router.route(g_key2);
   REQUIRE(g_home2 != nullptr);
-  CHECK(g_home2->residency == giant_home);  // same home as the first occurrence
+  CHECK(g_home2->slot_positions == expected_slot_positions_o2(G, giant_home));
 
   // An UNMOVED cell (W1 = P1's right leaf) has NO override.
   auto const& W1 = forest[0].right();
@@ -653,8 +665,8 @@ TEST_CASE(
   HomeTarget const* h2 = router.route(k2);
   REQUIRE(h1 != nullptr);
   REQUIRE(h2 != nullptr);
-  CHECK(h1->residency == v_home);
-  CHECK(h2->residency == v_home);  // one value -> one home, two keys
+  CHECK(h1->slot_positions == expected_slot_positions_o2(V1, v_home));
+  CHECK(h2->slot_positions == expected_slot_positions_o2(V1, v_home));
 }
 
 // ---------------------------------------------------------------------
@@ -732,11 +744,13 @@ TEST_CASE(
   auto const key1 = occurrence_key(forest[0].left(), ectx1_modes);  // V/P1
   HomeTarget const* home1 = router.route(key1);
   REQUIRE(home1 != nullptr);
-  CHECK(home1->residency == svector<Index>{Index{L"i_1"}, Index{L"i_2"}});
+  CHECK(home1->slot_positions ==
+        expected_slot_positions_o2(
+            forest[0].left(), svector<Index>{Index{L"i_1"}, Index{L"i_2"}}));
   // V's post-shrink home is {i_1,i_2}: i_2 sits at level 1 of ectx1, so the
   // deepest residency match is level 1 => home_depth 2; the store seam sets
   // rl = home_depth - 1 = 1 (V homed at the inner i_2 loop, built once there).
-  CHECK(router.home_depth(*home1, ectx1) == 2);
+  CHECK(router.home_depth(*home1, forest[0].left(), ectx1) == 2);
 
   // --- Occurrence 2: V under P2, only the i_1 loop is live ---
   BatchContext const ectx2{{Index{L"i_1"}, {0, 2}}};
@@ -746,11 +760,11 @@ TEST_CASE(
   REQUIRE(home2 != nullptr);
   // Same value -> same home {i_1,i_2}; under P2 only i_1 is a live loop, so
   // the deepest residency match is level 0 => home_depth 1 (rl = 0).
-  CHECK(router.home_depth(*home2, ectx2) == 1);
+  CHECK(router.home_depth(*home2, forest[1].left(), ectx2) == 1);
 
   // The two occurrence keys are genuinely DISTINCT ({i_1,i_2} vs {i_1}) yet
   // both route to the SAME home -- the meet-home guarantee the runtime relies
   // on, resolved through the identical store-seam call sequence.
   CHECK_FALSE(sequant::eval::RouterKeyEqual{}(key1, key2));
-  CHECK(home1->residency == home2->residency);
+  CHECK(home1->slot_positions == home2->slot_positions);
 }
