@@ -268,6 +268,16 @@ TEST_CASE("spin", "[spin]") {
                    EquivalentTo("-1/2 g{p1,p2;p4,p3} + g{p1,p2;p3,p4}"));
     }
     {
+      // Ensure auxiliary indices are ignored
+      const ExprPtr expr = deserialize("1/4 g{p1,p2;p3,p4;p5} d{;;p5}",
+                                       {.def_perm_symm = Symmetry::Antisymm});
+      auto result = spintrace(expr, IdxGroupList{{"p1", "p3"}, {"p2", "p4"}});
+      REQUIRE_THAT(
+          result,
+          EquivalentTo(
+              "-1/2 g{p1,p2;p4,p3;p5} d{;;p5} + g{p1,p2;p3,p4;p5} d{;;p5}"));
+    }
+    {
       // Note the provided external index pairings which is different from the
       // way this tensor is written down Also, the prefactor of -1 is important
       // as this forces the code to take a path where it traces a product which
