@@ -734,6 +734,26 @@ ResultPtr evaluate_impl(Node const& node,         //
               std::size_t const use_depth = ctx.size();
               std::size_t const hd = router->home_depth(*home, f.node, ctx);
               SEQUANT_ASSERT(hd <= use_depth);
+              // Defense-in-depth (design sec.4): the router-directed fetch keys
+              // by CANONICAL hash at the resolved scope, so serving is only
+              // sound if the resolution is CONSISTENT with THIS occurrence -- a
+              // mis-keyed overlay must never hand it an entry sliced for a
+              // DIFFERENT occurrence. When hd resolves to a live loop, that
+              // loop's mode must be one the overlay names for f.node: its
+              // canon_indices() at an overlay slot position, or a declared
+              // free_mode. The hoist split (place_at_this_level) already keeps
+              // signature-inconsistent occurrences at DIFFERENT scopes, so this
+              // holds on every correct schedule; the assert is a live tripwire
+              // for a future home_depth/overlay bug (elided in release).
+              SEQUANT_ASSERT(hd == 0 || [&] {
+                Index const& hm = ctx[hd - 1].first;
+                auto const& canon = f.node->canon_indices();
+                for (auto const& sp : home->slot_positions)
+                  if (sp < canon.size() && canon[sp] == hm) return true;
+                for (auto const& fm : home->free_modes)
+                  if (fm == hm) return true;
+                return false;
+              }());
               std::size_t const hops = use_depth - hd;
               if (ResultPtr ptr = cache.access_at_hops(f.node, hops); ptr) {
                 if constexpr (detail::trace(EvalTrace))
