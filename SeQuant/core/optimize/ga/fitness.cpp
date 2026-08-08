@@ -10,8 +10,6 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
-#include <cstdio>
-#include <cstdlib>
 #include <cstring>
 #include <map>
 #include <mutex>
@@ -22,21 +20,6 @@ namespace sequant::opt::ga {
 
 // `lex_less` (the child/fibre ordering) now lives in genome.hpp, next to the
 // codec, because the decode memo in fitness.hpp needs it too.
-
-EvalScratch::~EvalScratch() {
-  static const bool report = std::getenv("SEQUANT_GA_MEMO_STATS") != nullptr;
-  if (!report) return;
-  const std::size_t h = trees.hits(), m = trees.misses();
-  if (h + m == 0) return;
-  std::fprintf(stderr,
-               "[ga memo] lookups=%zu hits=%zu (%.2f%%) misses=%zu "
-               "entries=%zu clears=%zu bytes=%.1f MB | dense=%.2f MB "
-               "(n_keys=%zu)\n",
-               h + m, h, 100.0 * static_cast<double>(h) / double(h + m), m,
-               trees.entries(), trees.clears(),
-               static_cast<double>(trees.bytes()) / (1024.0 * 1024.0),
-               static_cast<double>(dense_bytes()) / (1024.0 * 1024.0), n_keys);
-}
 
 GenomeLayout GenomeLayout::of(KeyTable const& kt) {
   GenomeLayout out;

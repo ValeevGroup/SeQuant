@@ -237,14 +237,7 @@ class TreeMemo {
 
   std::size_t hits() const { return hits_; }
   std::size_t misses() const { return misses_; }
-  std::size_t entries() const { return n_entries_; }
   std::size_t clears() const { return clears_; }
-  /// Resident bytes of the arenas + open-addressing table (capacity, not size).
-  std::size_t bytes() const {
-    return tab_.capacity() * sizeof(Slot) + keys_.capacity() * sizeof(int) +
-           fams_.capacity() * sizeof(NodeMask) +
-           chs_.capacity() * sizeof(std::array<NodeMask, 3>);
-  }
 
  private:
   static constexpr std::uint32_t no_children = ~std::uint32_t{0};
@@ -428,7 +421,6 @@ class KeyStamps {
     s_[k] = cur_;
     return true;
   }
-  std::size_t bytes() const { return s_.capacity() * sizeof(std::uint32_t); }
 
  private:
   std::vector<std::uint32_t> s_;
@@ -495,12 +487,6 @@ class Fibres {
   /// The fibre of `k`, in push order.
   Cluster const* data(std::size_t k) const { return cl_.data() + off_[k]; }
 
-  std::size_t bytes() const {
-    return (size_.capacity() + off_.capacity()) * sizeof(std::uint32_t) +
-           keys_.capacity() * sizeof(std::uint32_t) +
-           cl_.capacity() * sizeof(Cluster);
-  }
-
  private:
   std::vector<std::uint32_t> size_;  ///< per key: fibre length (0 = untouched)
   std::vector<std::uint32_t> off_;   ///< per key: arena start (cursor in pass 2)
@@ -544,9 +530,6 @@ struct EvalScratch {
   EvalScratch& operator=(EvalScratch&&) = default;
   EvalScratch(EvalScratch const&) = default;
   EvalScratch& operator=(EvalScratch const&) = default;
-  /// Prints the memo hit rate / dense footprint when SEQUANT_GA_MEMO_STATS is
-  /// set.
-  ~EvalScratch();
 
   TreeMemo trees;
   std::size_t n_keys = 0;
@@ -601,23 +584,6 @@ struct EvalScratch {
               int b = -1) {
     vals.push_back(CostVal{kind, d, S, V, a, b});
     return static_cast<int>(vals.size()) - 1;
-  }
-
-  /// Resident bytes of the dense arrays (capacity), excluding the tree memo.
-  std::size_t dense_bytes() const {
-    std::size_t amb = 0;
-    for (auto const& m : amb_pool)
-      amb += sizeof(AmbientMap) +
-             m.e.capacity() * sizeof(decltype(m.e)::value_type);
-    return fib.bytes() + uses.capacity() * sizeof(std::int32_t) +
-           uses_set.bytes() + walked.bytes() + seen.bytes() +
-           seen_list.capacity() * sizeof(std::uint32_t) +
-           pick.capacity() * sizeof(Cluster) + pick_set.bytes() +
-           (seeds.capacity() + stack.capacity()) * sizeof(std::size_t) +
-           vals.capacity() * sizeof(CostVal) + amb +
-           l2_roots.capacity() * sizeof(int) +
-           l2_demanded.capacity() * sizeof(Cluster) +
-           l2_fam.capacity() * sizeof(NodeMask);
   }
 };
 
