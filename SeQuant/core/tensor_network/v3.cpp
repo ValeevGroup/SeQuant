@@ -794,25 +794,41 @@ TensorNetworkV3::canonicalize_slots(
           // index on a named index) connects exactly 2 slots
           slot_type = IndexSlotType::IndexBundle;
         } else {
-          // a high-order hyperindex: a named index shared among more than 2
-          // tensor slots (e.g. an auxiliary/batching index common to many
-          // factors, as in Laplace-transform MP2 or tensor hypercontraction).
-          // Supported only for auxiliary indices, which carry no vector-space
-          // (bra/ket) character; classify by the aux slot it occupies. A
-          // non-auxiliary high-order hyperindex has no well-defined slot type,
-          // so hard-error (in every build config, not just assertion-enabled
-          // ones) rather than silently mis-canonicalize it.
-          bool all_aux = true;
-          for (std::size_t v = 0; v != edge_it->vertex_count(); ++v)
-            if (edge_it->vertex(v).getOrigin() != Origin::Aux) {
-              all_aux = false;
-              break;
+          // A high-order hyperindex: named index in >2 tensor slots (CSV, THC,
+          // Laplace-MP2). Sound because slot_type only orders named-index
+          // buckets; discrimination is done by the bliss graph, which wires the
+          // index vertex to every one of its slots. Admit the bra/ket shapes
+          // create_graph() accepts for anonymous edges; TensorAux is the slot
+          // binarize() routes such an index to.
+          std::size_t nbra = 0, nket = 0;
+          BraKetSymmetry symm = BraKetSymmetry::Nonsymm;
+          for (std::size_t v = 0; v != edge_it->vertex_count(); ++v) {
+            const Vertex &vertex = edge_it->vertex(v);
+            switch (vertex.getOrigin()) {
+              case Origin::Bra:
+                ++nbra;
+                break;
+              case Origin::Ket:
+                ++nket;
+                break;
+              case Origin::Aux:
+                break;
+              case Origin::Proto:
+                SEQUANT_UNREACHABLE;
             }
-          if (!all_aux)
+            if (symm != BraKetSymmetry::Symm)
+              symm = braket_symmetry(*tensors_.at(vertex.getTerminalIndex()));
+          }
+          // if braket symmetry == Symm bra and ket are indistinguishable, so
+          // only the total count is bounded. As in create_graph(), this is a
+          // strictness guard, not a correctness one, hence opt-out-able.
+          if (get_default_context().assert_strict_braket_symmetry() &&
+              !(symm == BraKetSymmetry::Symm ? (nbra + nket <= 2)
+                                             : (nbra <= 1 && nket <= 1)))
             throw Exception(
                 "TensorNetworkV3::canonicalize_slots: high-order (shared among "
-                ">2 tensor slots) non-auxiliary hyperindices are not "
-                "supported");
+                ">2 tensor slots) hyperindices must occupy at most one bra and "
+                "one ket slot");
           slot_type = IndexSlotType::TensorAux;
         }
       } else

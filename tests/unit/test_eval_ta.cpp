@@ -1118,7 +1118,53 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
         }();
         REQUIRE(equal_tarrays(evalR, manR, "x1"));
       }
-    }  // multiple bra or ket indices
+
+      {  // high-order hyperedges spanning >2 *ket* slots. Like the
+         // 3-slot cases above these need AssertStrictBraKetSymmetry::No.
+        auto ctx_resetter = sequant::set_scoped_default_context(
+            sequant::Context{sequant::get_default_context()}.set(
+                sequant::AssertStrictBraKetSymmetry::No));
+
+        {  // plain 4-factor Hadamard chain: i1 is shared by 4 ket slots and is
+           // summed over. Nothing GA- or CSV-specific about it.
+           //   R[a,b,c,d] = sum_i A[a,i] B[b,i] C[c,i] D[d,i]
+          auto res = deserialize<sequant::ResultExpr>(
+              L"R{a1,a2,a3,a4;;} = A{a1;i1} B{a2;i1} C{a3;i1} D{a4;i1}");
+          auto evalR =
+              evaluate(eval_node(res), std::string("a_1,a_2,a_3,a_4"), yield_)
+                  ->get<TA::TArrayD>();
+          auto manR = [&]() {
+            auto A = yield(L"A{a1;i1}");
+            auto B = yield(L"B{a2;i1}");
+            auto C = yield(L"C{a3;i1}");
+            auto D = yield(L"D{a4;i1}");
+            auto AB = TA::einsum("ai,bi->abi", A, B);
+            auto ABC = TA::einsum("abi,ci->abci", AB, C);
+            return TA::einsum("abci,di->abcd", ABC, D);
+          }();
+          REQUIRE(equal_tarrays(evalR, manR, "a1,a2,a3,a4"));
+        }
+
+        {  // the same hyperedge, but *named*: i1 sits in 3 ket slots AND
+           // survives into the result (aux slot). This is the named >2-slot
+           // hyperindex that canonicalize_slots used to reject outright.
+           //   R[a,b,c,i] = A[a,i] B[b,i] C[c,i]
+          auto res = deserialize<sequant::ResultExpr>(
+              L"R{a1,a2,a3;;i1} = A{a1;i1} B{a2;i1} C{a3;i1}");
+          auto evalR =
+              evaluate(eval_node(res), std::string("a_1,a_2,a_3,i_1"), yield_)
+                  ->get<TA::TArrayD>();
+          auto manR = [&]() {
+            auto A = yield(L"A{a1;i1}");
+            auto B = yield(L"B{a2;i1}");
+            auto C = yield(L"C{a3;i1}");
+            auto AB = TA::einsum("ai,bi->abi", A, B);
+            return TA::einsum("abi,ci->abci", AB, C);
+          }();
+          REQUIRE(equal_tarrays(evalR, manR, "a1,a2,a3,i1"));
+        }
+      }
+    }  // non-covariant indices
   }
 
   SECTION("complex") {
