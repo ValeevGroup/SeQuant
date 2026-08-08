@@ -4471,6 +4471,84 @@ TEST_CASE(
   CHECK(relocated.model_n_ops == baseline.model_n_ops);
 }
 
+TEST_CASE("hoist splits a divergently-sliced CSE value under a router",
+          "[dryrun][cost_profile]") {
+  using sequant::eval::HomeTarget;
+  using sequant::eval::occurrence_key;
+  using sequant::eval::PlacementRouter;
+  using sequant::eval::dryrun::CacheConfig;
+  using sequant::eval::dryrun::cost_profile;
+  using sequant::eval::dryrun::CostProfile;
+
+  auto ctx0 = get_default_context().clone();
+  ctx0.set_first_dummy_index_ordinal(1000000);
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
+
+  auto const r = backend_test_regime();  // i extent 10, a extent 20
+
+  Index const i3{L"i_3"}, i4{L"i_4"}, K{L"a_50"};
+  auto mk = [](std::wstring const& label, Index const& ix) {
+    return ex<Tensor>(label, bra(container::svector<Index>{ix}), ket{},
+                      Symmetry::Nonsymm, std::nullopt, ColumnSymmetry::Nonsymm);
+  };
+  // legA = X(i_3)*P(a), legB = X(i_4)*P(a): canonically EQUAL (X(occ)*P(a)),
+  // binding a DIFFERENT occ (i_3 vs i_4) -- the g.C legs' shape. R contracts
+  // them; R batches i_3 (outer) then i_4 (inner).
+  auto const legA_expr = ex<Product>(1, ExprPtrList{mk(L"X", i3), mk(L"P", K)},
+                                     Product::Flatten::No);
+  auto const legB_expr = ex<Product>(1, ExprPtrList{mk(L"X", i4), mk(L"P", K)},
+                                     Product::Flatten::No);
+  auto const R_expr =
+      ex<Product>(1, ExprPtrList{legA_expr, legB_expr}, Product::Flatten::No);
+
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto node = binarize<EvalExprDryRun>(R_expr);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  auto& legA = node.left();
+  auto& legB = node.right();
+  REQUIRE_FALSE(legA.leaf());
+  REQUIRE_FALSE(legB.leaf());
+  REQUIRE(legA->hash_value() == legB->hash_value());  // CSE-folded
+
+  node->set_batched_here(
+      {{i3, BatchModeType::External}, {i4, BatchModeType::External}});
+  legA->set_batch_order_aware(true);
+  legB->set_batch_order_aware(true);
+
+  std::vector<EvalNodeDryRun> const forest{node};
+
+  BatchPolicy policy;
+  policy.is_batchable_external_index = [](Index const&) { return true; };
+  policy.batch_target_size = [](Index const&) -> std::size_t { return 5; };
+
+  CacheConfig cfg;
+
+  // Baseline: empty router -> legA/legB DEDUP into ONE hoist target, built once
+  // (full at root) and shared.
+  CostProfile const baseline = cost_profile(forest, policy, cfg, r);
+
+  // Router: one DAG-global override (legA/legB share an occurrence key) homing
+  // the value at its occ slot. home_depth resolves that slot to i_3 for legA
+  // and i_4 for legB, so the hoist SPLITS them into two per-occurrence builds.
+  PlacementRouter<EvalNodeDryRun> router;
+  auto const p = *sequant::index_position(legA, i3);  // occ slot position
+  auto const key = occurrence_key(legA, container::svector<Index>{i3, i4});
+  router.set_override(key, HomeTarget{container::svector<std::size_t>{p}});
+  router.mark_moved(legA->hash_value());
+  REQUIRE_FALSE(router.empty());
+
+  CostProfile const split =
+      cost_profile(forest, policy, cfg, r, /*trace=*/nullptr, &router);
+  CHECK(split.peak_bytes > 0.0);
+  CHECK(std::isfinite(split.peak_bytes));
+
+  // The split builds the divergent value TWICE (one per occurrence, each at its
+  // own occ depth) vs the baseline's single shared build -> strictly more
+  // replay flops. (The static arithmetic -- model_flops -- is unchanged.)
+  CHECK(split.dryrun_flops > baseline.dryrun_flops);
+  CHECK(split.model_flops == baseline.model_flops);
+}
+
 // Task 5 (Minor b): cover the UTF-8 -> wide bridge cost_profile() uses to fill
 // a caller's wide trace stream. The eval loop writes a NARROW (UTF-8) trace
 // whose per-op label field carries multi-byte index labels (mu~ = U+03BC

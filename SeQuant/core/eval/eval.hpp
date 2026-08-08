@@ -1788,13 +1788,33 @@ template <typename F, typename IndexPredicate = accept_any_index,
           // produced -- the batched Enter-stage slice-on-use slices it to the
           // block when a nested external loop consumes it -- so this changes
           // PLACEMENT only, never the result.
+          // Split gate (CSE-aware hoist): under a LIVE router, two canonically-
+          // equal occurrences may SHARE one hoist materialization only if they
+          // are slicing-signature CONSISTENT over the enclosing batch modes.
+          // When inconsistent they bind different physical labels to the sliced
+          // slot (the g.C legs, i_3 vs i_4) and must be built PER OCCURRENCE at
+          // their own router-resolved depths -- otherwise one leg reads the
+          // other's slice (see slicing_signature.hpp and the design spec
+          // doc/dev/specs/2026-08-07-remat-cse-aware-split-design.md). With no
+          // router the meet homes a divergent value FULL at the root, where
+          // sharing is safe, so the split is gated on a live router to keep
+          // every no-router path byte-identical.
+          container::svector<Index> ectx_modes_sig;
+          for (auto const& e : ectx) ectx_modes_sig.push_back(e.first);
+          bool const split_aware = parent_cache.placement_router() &&
+                                   !parent_cache.placement_router()->empty();
           std::vector<node_t const*> targets;
           auto collect = [&](auto&& self, node_t const& n) -> void {
             if (n.leaf()) return;
             if (n->batch_order_aware() && residency_all_outer(n) &&
                 !subtree_any(n, is_volatile)) {
-              if (std::none_of(targets.begin(), targets.end(),
-                               [&](node_t const* p) { return eq(*p, n); }))
+              auto shares = [&](node_t const* p) {
+                if (!eq(*p, n)) return false;
+                if (!split_aware) return true;  // no router: dedup as before
+                return slicing_signature(*p, ectx_modes_sig) ==
+                       slicing_signature(n, ectx_modes_sig);
+              };
+              if (std::none_of(targets.begin(), targets.end(), shares))
                 targets.push_back(&n);
               return;  // built as a unit -- do not descend into it
             }
