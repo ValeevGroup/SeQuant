@@ -2,6 +2,8 @@
 
 #include <SeQuant/core/tensor_network.hpp>
 
+#include <stdexcept>
+
 namespace sequant::opt::ga {
 
 namespace {
@@ -106,7 +108,6 @@ struct Emitter {
     if (it != sch.pick.end() && ++use_count[k] > 1)
       return;  // the producer's body is walked once
     auto const* cc = sch.forest.terms[p.d].children_of(p.S);
-    SEQUANT_ASSERT(cc);
     count_cl(p.d, cc[0]);
     count_cl(p.d, cc[1]);
   }
@@ -148,7 +149,6 @@ struct Emitter {
                                std::to_wstring(name_counter++);
     names.emplace(k, label);
     auto const* cc = sch.forest.terms[p.d].children_of(p.S);
-    SEQUANT_ASSERT(cc);
     ExprPtr body = ex<Product>(
         Product{1, ExprPtrList{render_cl(p.d, cc[0]), render_cl(p.d, cc[1])},
                 Product::Flatten::No});
@@ -176,7 +176,10 @@ struct Emitter {
       // producer's subtree, face renamed through the canonical correspondence
       Cluster const p = it->second;
       auto const& sigmas = F.correspondences(p, Cluster{d, S});
-      SEQUANT_ASSERT(!sigmas.empty());
+      if (sigmas.empty())
+        throw std::logic_error(
+            "ga::emit: no face correspondence between a keyed cluster and its "
+            "producer -- key/isomorphism inconsistency");
       IndexMap m;
       for (auto const& [from, to] : sigmas.front())
         if (!(from == to)) m.emplace(from, to);
@@ -187,7 +190,6 @@ struct Emitter {
       });
     }
     auto const* cc = sch.forest.terms[d].children_of(S);
-    SEQUANT_ASSERT(cc);
     return ex<Product>(Product{1,
                                ExprPtrList{render_cl(d, cc[0]),
                                            render_cl(d, cc[1])},
@@ -211,7 +213,10 @@ struct Emitter {
       auto it =
           std::find_if(target_amb.e.begin(), target_amb.e.end(),
                        [tag](auto const& kv) { return kv.second == tag; });
-      SEQUANT_ASSERT(it != target_amb.e.end());
+      if (it == target_amb.e.end())
+        throw std::logic_error(
+            "ga::emit: align target ambient is missing a source ambient tag -- "
+            "the two summands do not share an external identification");
       Index const& x2 = amb_face[i];
       Index const& y = dst[it->first];
       if (!(x2 == y)) m.emplace(x2, y);
@@ -271,7 +276,13 @@ ExprPtr substitute(ExprPtr const& e,
     if (it == defmap.end()) return e;
     auto const& def = it->second;
     auto const& use_slots = t.aux();
-    SEQUANT_ASSERT(use_slots.size() == def.slots.size());
+    // Not an assert: the zip below indexes both containers by the definition's
+    // slot count, so a shorter use leaf would be read out of bounds in the
+    // release build and silently substitute a wrong body.
+    if (use_slots.size() != def.slots.size())
+      throw std::logic_error(
+          "ga::emit: a use of a named intermediate has a different slot count "
+          "than its definition");
     // positional face map (definition names -> this use's names). Slot pairs
     // first, IDENTITY PAIRS INCLUDED: they are the authoritative
     // correspondence and must claim their def index so the proto zip below
@@ -289,7 +300,10 @@ ExprPtr substitute(ExprPtr const& e,
     for (std::size_t k = 0; k < def.slots.size(); ++k) {
       auto const& ds = def.slots[k];
       auto const& us = use_slots[k];
-      SEQUANT_ASSERT(ds.proto_indices().size() == us.proto_indices().size());
+      if (ds.proto_indices().size() != us.proto_indices().size())
+        throw std::logic_error(
+            "ga::emit: a use slot and its definition slot have different proto "
+            "index counts");
       for (std::size_t j = 0; j < ds.proto_indices().size(); ++j) {
         auto const& dp = ds.proto_indices()[j];
         auto const& up = us.proto_indices()[j];

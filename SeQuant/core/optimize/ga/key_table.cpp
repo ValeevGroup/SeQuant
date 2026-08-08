@@ -307,6 +307,10 @@ KeyTable build_key_table(
     TargetBlock blk;
     // the L2 tree over this target's summands uses the same mask codec as
     // the per-term trees (fitness.cpp builds its root as (1 << n) - 1)
+    if (tgt.summands.empty())
+      throw std::invalid_argument(
+          "ga::build_key_table: target has no summands; the L2 root mask would "
+          "be 0, and the fitness/explain walks over it do not terminate");
     if (tgt.summands.size() >= 8 * sizeof(NodeMask))
       throw std::invalid_argument(
           "ga::build_key_table: target has " +
