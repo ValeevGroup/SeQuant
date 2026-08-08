@@ -77,6 +77,37 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE(registry.to_class(L"F") == OpClass::Gen);
     }
 
+    SECTION("add-operators-with-hermiticity") {
+      using sequant::Hermiticity;
+
+      OpRegistry registry;
+      // no explicit Hermiticity => default_hermiticity(class)
+      registry.add(L"T", OpClass::Ex);
+      registry.add(L"F", OpClass::Gen);
+      REQUIRE(registry.hermiticity(L"T") == Hermiticity::NonHermitian);
+      REQUIRE(registry.hermiticity(L"F") == Hermiticity::Hermitian);
+
+      // explicit Hermiticity overrides the class default
+      registry.add(L"Z", OpClass::Ex, Hermiticity::Hermitian);
+      registry.add(L"G", OpClass::Gen, Hermiticity::NonHermitian);
+      REQUIRE(registry.to_class(L"Z") == OpClass::Ex);
+      REQUIRE(registry.to_class(L"G") == OpClass::Gen);
+      REQUIRE(registry.hermiticity(L"Z") == Hermiticity::Hermitian);
+      REQUIRE(registry.hermiticity(L"G") == Hermiticity::NonHermitian);
+
+      // set_hermiticity overrides after the fact, in both directions
+      registry.set_hermiticity(L"T", Hermiticity::Hermitian);
+      registry.set_hermiticity(L"Z", Hermiticity::NonHermitian);
+      REQUIRE(registry.hermiticity(L"T") == Hermiticity::Hermitian);
+      REQUIRE(registry.hermiticity(L"Z") == Hermiticity::NonHermitian);
+
+      // overrides survive cloning
+      auto cloned = registry.clone();
+      REQUIRE(cloned.hermiticity(L"Z") == Hermiticity::NonHermitian);
+      REQUIRE(cloned.hermiticity(L"G") == Hermiticity::NonHermitian);
+      REQUIRE(cloned.hermiticity(L"F") == Hermiticity::Hermitian);
+    }
+
     SECTION("remove-operators") {
       OpRegistry registry;
       registry.add(L"T", OpClass::Ex);
