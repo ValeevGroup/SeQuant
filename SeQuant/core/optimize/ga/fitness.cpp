@@ -9,11 +9,11 @@
 
 #include <algorithm>
 #include <array>
-#include <cassert>
 #include <cstring>
 #include <map>
 #include <mutex>
 #include <numeric>
+#include <stdexcept>
 #include <unordered_map>
 
 namespace sequant::opt::ga {
@@ -43,7 +43,11 @@ GenomeLayout GenomeLayout::of(KeyTable const& kt) {
 NodeMask const* ForestState::Term::children_of(NodeMask S) const {
   for (auto const& e : ch)
     if (e[0] == S) return &e[1];
-  return nullptr;
+  // Every caller dereferences the result immediately, so a miss would be a wild
+  // null read in the shipping build (SEQUANT_ASSERT is compiled out there). It
+  // can only happen if the schedule and the forest disagree; throw instead.
+  throw std::logic_error(
+      "ga: children_of miss -- schedule/forest inconsistency");
 }
 
 // The beta cache key, flattened into a word buffer (T-A6). It used to hold four
@@ -768,7 +772,11 @@ double Fitness::resolve(ForestState const& st, EvalScratch& sc,
       ++uses[k];
   };
   auto producer_of = [&](std::size_t k) {
-    assert(pick_set.contains(k));  // every walked key has a fibre, hence a pick
+    // every walked key has a fibre, hence a pick; a miss would silently read a
+    // stale Cluster out of the dense `pick` array (an O(1) stamp test, so this
+    // is unconditional -- `assert` is compiled out of the shipping build)
+    if (!pick_set.contains(k))
+      throw std::logic_error("ga: resolve walked a key with no producer");
     return pick[k];
   };
   // Leaves the pass-2 keys in `seen_list`, in visit order (the caller sorts).

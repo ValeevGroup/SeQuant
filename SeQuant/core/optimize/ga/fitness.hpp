@@ -14,12 +14,12 @@
 
 #include <algorithm>
 #include <array>
-#include <cassert>
 #include <cstdint>
 #include <cstdlib>
 #include <deque>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -165,6 +165,10 @@ struct ForestState {
     Laminar fam;
     /// per internal cluster: (S, c1, c2) with c1 < c2 lexicographically
     ChildTable ch;
+    /// The stored (c1, c2) pair of internal cluster \p S, in STORED lex order
+    /// (`tree_children` returns the same pair canon-larger first; the two
+    /// orders are not interchangeable -- each caller's order feeds emission).
+    /// Throws `std::logic_error` if \p S is not an internal cluster.
     NodeMask const* children_of(NodeMask S) const;
   };
   container::svector<Term> terms;
@@ -516,8 +520,13 @@ class Fibres {
 struct EvalScratch {
   explicit EvalScratch(KeyTable const& kt) : n_keys(kt.n_keys) {
     // Key lists are held as uint32 (43k keys on C4H10/DZ; the subset tables
-    // themselves would be astronomically larger long before this binds).
-    assert(n_keys <= std::size_t{0xffffffffu});
+    // themselves would be astronomically larger long before this binds). Runs
+    // once per scratch, so it is unconditional rather than an `assert`: it is
+    // the only guard on the truncation `Fibres`/`KeyStamps` depend on, and the
+    // shipping build compiles asserts out.
+    if (n_keys > std::size_t{0xffffffffu})
+      throw std::length_error(
+          "ga: key count exceeds the uint32 key-id representation");
     fib.resize(n_keys);
     uses.assign(n_keys, 0);
     uses_set.resize(n_keys);
