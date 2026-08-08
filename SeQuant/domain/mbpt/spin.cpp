@@ -1872,10 +1872,11 @@ ExprPtr spintrace_impl(const ExprPtr& expression, IdxGroups&& ext_index_groups,
         result_sum->append(term);
       result = result_sum;
     }
-    return result;
   } else {
     throw Exception("Invalid Expr type in spintrace: " + expr->type_name());
   }
+
+  SEQUANT_ASSERT(result);
 
   detail::reset_idx_tags(result);
   return result;
