@@ -385,8 +385,7 @@ inline Laminar nni_neighbour(Laminar const& fam, NodeMask A, NodeMask W) {
 /// pinned together against the pre-T-A2b reference enumeration exhaustively
 /// for n <= 7 in the "ga genome codec" test.
 template <typename Fn>
-inline void nni_each_slot(Laminar const& fam, ChildTable const& ch, Fn&& fn) {
-  (void)fam;  // the members the walk needs are all in the table
+inline void nni_each_slot(ChildTable const& ch, Fn&& fn) {
   for (auto const& e : ch) {
     const NodeMask b1 = canon_less(e[1], e[2]) ? e[2] : e[1];
     const NodeMask b2 = b1 == e[1] ? e[2] : e[1];
@@ -396,14 +395,6 @@ inline void nni_each_slot(Laminar const& fam, ChildTable const& ch, Fn&& fn) {
       if (!fn(A, A3)) return;
     }
   }
-}
-
-/// The fam-only form: builds the table and runs the same walk.
-template <typename Fn>
-inline void nni_each_slot(Laminar const& fam, Fn&& fn) {
-  ChildTable ch;
-  build_children(fam, ch);
-  nni_each_slot(fam, ch, std::forward<Fn>(fn));
 }
 
 /// Number of NNI neighbours of `fam`, without building any of them.
@@ -445,7 +436,7 @@ inline Laminar nni_move_at(Laminar const& fam, ChildTable const& ch,
                            std::size_t k) {
   Laminar out;
   std::size_t s = 0;
-  nni_each_slot(fam, ch, [&](NodeMask A, NodeMask A3) {
+  nni_each_slot(ch, [&](NodeMask A, NodeMask A3) {
     if (s++ != k / 2) return true;
     const auto [A1, A2] = tree_children(ch, A);
     out = nni_neighbour(fam, A, ((k & 1) ? A1 : A2) | A3);
@@ -467,7 +458,7 @@ inline Laminar nni_move_at(Laminar const& fam, std::size_t k) {
 inline container::svector<Laminar> nni_moves(Laminar const& fam,
                                              ChildTable const& ch) {
   container::svector<Laminar> out;
-  nni_each_slot(fam, ch, [&](NodeMask A, NodeMask A3) {
+  nni_each_slot(ch, [&](NodeMask A, NodeMask A3) {
     const auto [A1, A2] = tree_children(ch, A);
     for (NodeMask keep : {A2, A1})  // swap the other child out
       out.push_back(nni_neighbour(fam, A, keep | A3));

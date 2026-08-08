@@ -149,75 +149,11 @@ container::svector<ga::TargetInput> universe(
   return targets;
 }
 
-// -------------------------------------------------- expression flop coster --
-// Costs any nested Sum/Product-of-Tensors expression under the same
-// convention as ga::CostModel::native(): every binary product costs the flat
-// extent product over the union of the operand faces (with composite
-// proto-indices included -- the result face is a subset of that union),
-// scalar contractions are free, and every pairwise addition costs the face
-// size. Free indices propagate bottom-up: an index on both operands of a
-// product is contracted there unless external, so identical dummy names in
-// independent branches (e.g. across fold partners in the staged pipeline's
-// output) never interact. Used to compare the GA's emitted trees and the
-// staged optimize() output apples-to-apples.
-struct ExprCoster {
-  std::function<std::size_t(Index const&)> extent;
-  ga::FaceSet ext;
-  double flops = 0;
-
-  double volume(ga::FaceSet const& face) {
-    container::set<Index> closure;
-    for (auto const& ix : face) {
-      closure.emplace(ix);
-      for (auto const& p : ix.proto_indices()) closure.emplace(p);
-    }
-    double v = 1;
-    for (auto const& ix : closure) v *= static_cast<double>(extent(ix));
-    return v;
-  }
-
-  // returns the free indices of the subtree, accumulating flops
-  ga::FaceSet walk(ExprPtr const& e) {
-    if (e->is<Tensor>()) {
-      ga::FaceSet f;
-      for (auto const& ix : e->as<Tensor>().const_indices()) f.emplace(ix);
-      return f;
-    }
-    if (e->is<Product>()) {
-      auto const& p = e->as<Product>();
-      ga::FaceSet f = walk(p.factors().front());
-      for (std::size_t i = 1; i < p.factors().size(); ++i) {
-        ga::FaceSet r = walk(p.factors()[i]);
-        ga::FaceSet uni = f;
-        for (auto const& ix : r) uni.emplace(ix);
-        const double v = volume(uni);
-        flops += v == 1 ? 0 : v;
-        ga::FaceSet next;
-        for (auto const& ix : uni)
-          if (!(f.contains(ix) && r.contains(ix)) || ext.contains(ix))
-            next.emplace(ix);
-        f = std::move(next);
-      }
-      return f;
-    }
-    if (e->is<Sum>()) {
-      auto const& s = e->as<Sum>();
-      ga::FaceSet f = walk(s.summands().front());
-      // all summands share the face; count their pairwise additions
-      flops += static_cast<double>(s.summands().size() - 1) * volume(f);
-      for (std::size_t i = 1; i < s.summands().size(); ++i)
-        walk(s.summands()[i]);
-      return f;
-    }
-    return {};  // Constant / Variable
-  }
-};
-
 // ------------------------------------------- cache-aware runtime coster ----
 // Costs a binarized forest the way evaluate() + CacheManager do: every
 // structurally repeated internal node (TreeNodeHasher/-EqualityComparator
 // identity -- exactly what the runtime cache is keyed on) is computed once
-// and is a cache hit thereafter. Same flop convention as ExprCoster /
+// and is a cache hit thereafter. Same flop convention as
 // CostModel::native(). Producer-substituted emission makes subtree identity
 // coincide with the schedule's array identity, so the unique contraction
 // nodes must reproduce Schedule::l1 exactly; sum-carrying structures are not

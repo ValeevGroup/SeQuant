@@ -524,7 +524,6 @@ double hill_climb(Fitness const& F, Genome& genome, std::size_t max_sweeps) {
     const int w = slice.second - slice.first;  // == n - 1 genes per block
     memo.decode(code.data() + lo, n, fam, ch);
     moves = nni_moves(fam, ch);
-    if (moves.empty()) return false;
 
     // ---- parallel: every candidate against the same entry genome. `genome`
     // is only read here; the two outputs are pre-sized and every task writes

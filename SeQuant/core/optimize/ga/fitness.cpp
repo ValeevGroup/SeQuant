@@ -38,15 +38,6 @@ EvalScratch::~EvalScratch() {
                static_cast<double>(dense_bytes()) / (1024.0 * 1024.0), n_keys);
 }
 
-bool operator==(Val const& a, Val const& b) {
-  if (a.kind != b.kind || a.d != b.d || a.S != b.S || a.V != b.V) return false;
-  auto eq = [](ValPtr const& x, ValPtr const& y) {
-    return x == y || (x && y && *x == *y);
-  };
-  return eq(a.inner, b.inner) && eq(a.s1.val, b.s1.val) &&
-         eq(a.s2.val, b.s2.val);
-}
-
 GenomeLayout GenomeLayout::of(KeyTable const& kt) {
   GenomeLayout out;
   int p = 0;
@@ -995,9 +986,9 @@ Schedule Fitness::explain(Genome const& genome, EvalScratch& sc) const {
     sch.roots.push_back(rec(
         rec, tgt.terms.empty() ? 0 : (NodeMask{1} << tgt.terms.size()) - 1));
   }
-  for (auto const& root : sch.roots)
-    cost_of_value(root.val, sch.l2, sch.demanded);
-  sch.l1 = resolve(sch.forest, sc, sch.demanded, &sch.pick);
+  container::svector<Cluster> demanded;
+  for (auto const& root : sch.roots) cost_of_value(root.val, sch.l2, demanded);
+  sch.l1 = resolve(sch.forest, sc, demanded, &sch.pick);
   sch.total = sch.l1 + sch.l2;
   return sch;
 }

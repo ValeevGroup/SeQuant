@@ -165,13 +165,11 @@ int register_kind(KeyTable& kt, Index const& ix) {
 // eff(v) = slots of tensor v plus the proto-indices of its composite slots;
 // F(S) = indices of union_{v in S} eff(v) that are external or carried by a
 // tensor outside S.
-TermTable build_term(KeyTable& kt, std::size_t target, ExprPtr const& summand,
-                     FaceSet const& ext,
+TermTable build_term(KeyTable& kt, ExprPtr const& summand, FaceSet const& ext,
                      std::function<std::size_t(Index const&)> const& ixex,
                      std::function<bool(Tensor const&)> const& is_volatile_leaf,
                      MetaIdMap& meta_to_id) {
   TermTable T;
-  T.target = target;
   T.ext = ext;
   if (summand->is<Tensor>()) {
     T.tensors.push_back(summand);
@@ -348,14 +346,11 @@ KeyTable build_key_table(
     std::function<std::size_t(Index const&)> const& idx_to_extent,
     std::function<bool(Tensor const&)> const& is_volatile_leaf) {
   KeyTable kt;
-  kt.idx_to_extent = idx_to_extent;
   kt.volatility_aware = static_cast<bool>(is_volatile_leaf);
   MetaIdMap meta_to_id;
-  for (std::size_t t = 0; t < targets.size(); ++t) {
-    auto const& tgt = targets[t];
+  for (auto const& tgt : targets) {
     SEQUANT_ASSERT(tgt.summands.size() == tgt.ext.size());
     TargetBlock blk;
-    blk.label = tgt.label;
     // the L2 tree over this target's summands uses the same mask codec as
     // the per-term trees (fitness.cpp builds its root as (1 << n) - 1)
     if (tgt.summands.size() >= 8 * sizeof(NodeMask))
@@ -365,7 +360,7 @@ KeyTable build_key_table(
           std::to_string(8 * sizeof(NodeMask)));
     for (std::size_t s = 0; s < tgt.summands.size(); ++s) {
       blk.terms.push_back(kt.terms.size());
-      kt.terms.push_back(build_term(kt, t, tgt.summands[s], tgt.ext[s],
+      kt.terms.push_back(build_term(kt, tgt.summands[s], tgt.ext[s],
                                     idx_to_extent, is_volatile_leaf,
                                     meta_to_id));
     }

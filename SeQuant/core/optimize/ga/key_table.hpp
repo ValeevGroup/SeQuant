@@ -31,8 +31,6 @@ inline constexpr std::size_t no_key = std::numeric_limits<std::size_t>::max();
 
 /// Everything the optimizer needs to know about one summand (term).
 struct TermTable {
-  /// Target this term contributes to.
-  std::size_t target = 0;
   /// Scalar prefactor of the input summand.
   Constant::scalar_type scalar = 1;
   /// The data-node tensors, in input factor order; bit k of a NodeMask is
@@ -132,9 +130,8 @@ struct TermTable {
   container::svector<Index> canon_face_indices(NodeMask S) const;
 };
 
-/// One optimization target (one ResultExpr): its name and its terms.
+/// One optimization target (one ResultExpr): its terms.
 struct TargetBlock {
-  std::wstring label;
   container::svector<std::size_t> terms;  ///< indices into KeyTable::terms
 };
 
@@ -148,12 +145,6 @@ struct KeyTable {
   bool volatility_aware = false;
   std::size_t n_keys = 0;
   container::map<std::pair<IndexSpace, std::size_t>, int> kind_ids;
-  /// The extent provider the table was built with, kept for callers that need
-  /// to size something the table does not already carry. The optimizer itself
-  /// no longer calls it: every extent it needs is in `TermTable::extent`, and
-  /// since T-B1 seeding costs merges through those masks rather than through
-  /// `Index` sets.
-  std::function<std::size_t(Index const&)> idx_to_extent;
 
   /// Kind id of an index (registered during build).
   int kind_of(Index const& ix) const;

@@ -130,8 +130,6 @@ struct Val {
   // Fx node and read by nobody -- emission renames the second residual through
   // the ambient tags the beta INDUCES, which live on the residuals' own
   // `Summand::ambient`, never through the beta itself.)
-
-  friend bool operator==(Val const& a, Val const& b);
 };
 
 /// The cost path's L2 value (T-A5): `Val` stripped to exactly what the L2 cost
@@ -581,7 +579,7 @@ struct EvalScratch {
   std::deque<AmbientMap> amb_pool;
   std::size_t amb_used = 0;              ///< high-water mark within `amb_pool`
   std::vector<int> l2_roots;             ///< one `vals` index per target
-  container::svector<Cluster> l2_demanded;  ///< == `Schedule::demanded`
+  container::svector<Cluster> l2_demanded;  ///< clusters demanded by L2
   Laminar l2_fam;                        ///< the decoded L2 tree of one target
 
   /// Rewinds the L2 arena and the ambient pool. Called once per evaluation --
@@ -630,7 +628,6 @@ struct Schedule {
   double total = 0, l1 = 0, l2 = 0;
   container::svector<Summand> roots;  ///< one per target
   container::map<std::size_t, Cluster> pick;  ///< key -> producing cluster
-  container::svector<Cluster> demanded;       ///< clusters demanded by L2
   ForestState forest;
 };
 
@@ -740,9 +737,8 @@ class Fitness {
   /// externals, a rank map, one `kind_of` per external, one `make_shared<Val>`
   /// -- although they are pure functions of the KeyTable. The `Val` is now
   /// SHARED by every use of term `d`'s leaf: `ValPtr` is `shared_ptr<Val
-  /// const>` so it cannot be mutated, `operator==(Val,Val)` already treats
-  /// pointer equality as a fast path for deep equality, and neither the
-  /// evaluation nor emission keys off a `Val`'s address.
+  /// const>` so it cannot be mutated, and neither the evaluation nor emission
+  /// keys off a `Val`'s address.
   container::svector<AmbientMap> leaf_ambient_;
   container::svector<ValPtr> leaf_val_;
   // caches (semantically const; keyed on data that outlives them)
