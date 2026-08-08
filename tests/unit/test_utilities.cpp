@@ -397,6 +397,45 @@ TEST_CASE("utilities", "[utilities]") {
       REQUIRE_THAT(get_used_indices(expr),
                    Catch::Matchers::UnorderedRangeEquals(indices));
     }
+
+    SECTION("restricted") {
+      const ExprPtr expr = deserialize("A{a1;a2;a3} B{i1<i2>;i3} C{i3}");
+
+      std::vector<Index> expected = {"a1", Index("i1", {"i2"}), "i3"};
+      std::vector<Index> actual =
+          get_used_indices<std::vector<Index>, SlotType::Bra>(expr);
+      REQUIRE_THAT(actual, Catch::Matchers::UnorderedRangeEquals(expected));
+
+      expected = {"a2", "i3"};
+      actual = get_used_indices<std::vector<Index>, SlotType::Ket>(expr);
+      REQUIRE_THAT(actual, Catch::Matchers::UnorderedRangeEquals(expected));
+
+      expected = {"a3"};
+      actual = get_used_indices<std::vector<Index>, SlotType::Aux>(expr);
+      REQUIRE_THAT(actual, Catch::Matchers::UnorderedRangeEquals(expected));
+
+      expected = {"i2"};
+      actual = get_used_indices<std::vector<Index>, SlotType::Proto>(expr);
+      REQUIRE_THAT(actual, Catch::Matchers::UnorderedRangeEquals(expected));
+
+      expected = {"i2", "a3"};
+      actual =
+          get_used_indices<std::vector<Index>, SlotType::Proto | SlotType::Aux>(
+              expr);
+      REQUIRE_THAT(actual, Catch::Matchers::UnorderedRangeEquals(expected));
+
+      expected = {"i2", "a3", "a2", "i3"};
+      actual =
+          get_used_indices<std::vector<Index>, SlotType::Proto | SlotType::Aux |
+                                                   SlotType::Ket>(expr);
+      REQUIRE_THAT(actual, Catch::Matchers::UnorderedRangeEquals(expected));
+
+      expected = {"i2", "a3", "a2", "i3", "a1", Index("i1", {"i2"})};
+      actual = get_used_indices<std::vector<Index>,
+                                SlotType::Proto | SlotType::Aux |
+                                    SlotType::Ket | SlotType::Bra>(expr);
+      REQUIRE_THAT(actual, Catch::Matchers::UnorderedRangeEquals(expected));
+    }
   }
 
   SECTION("replace") {
