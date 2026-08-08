@@ -142,6 +142,10 @@ struct KeyTable {
 /// (with an optional scalar prefactor) plus that summand's external (result)
 /// indices, which hand-assembled universes may name per term.
 struct TargetInput {
+  /// Caller-side name for this target. The optimizer never reads it: it does
+  /// not name, order or key anything, and in particular does NOT name the
+  /// emitted result -- emission takes result heads from the caller separately.
+  /// Purely a debugging label; set it or leave it empty.
   std::wstring label;
   container::svector<ExprPtr> summands;
   container::svector<FaceSet> ext;

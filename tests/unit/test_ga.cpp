@@ -20,7 +20,6 @@
 #include <SeQuant/core/optimize/ga/genome.hpp>
 #include <SeQuant/core/optimize/ga/key_table.hpp>
 #include <SeQuant/core/optimize/ga/optimize_ga.hpp>
-#include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
@@ -30,13 +29,11 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <bit>
-#include <chrono>
 #include <cstdio>
 #include <fstream>
 #include <functional>
 #include <random>
 #include <set>
-#include <sstream>
 #include <unordered_map>
 
 namespace {
@@ -246,9 +243,10 @@ std::size_t python_extent(Index const& ix) {
 }
 
 /// The C4H10 / cc-pVDZ extents the GATE-B benchmark and the mpqc4 job use
-/// (occ 17 / PAO 106 / aux 364 / CSV 21). Verbatim from
-/// `GA_scratch/dag_batching/bench_ga.cpp`, so the 81-term universe below is
-/// the one the fingerprint is taken on.
+/// (occ 17 / PAO 106 / aux 364 / CSV 21) -- the same numbers the out-of-tree
+/// GATE-B driver feeds the optimizer, so the 81-term universe below is the one
+/// the fingerprint is taken on. These four extents ARE the provenance; nothing
+/// outside this file is needed to reproduce or re-derive them.
 std::size_t dz_extent(Index const& ix) {
   if (ix.proto_indices().size() >= 1) return 21;
   auto const& base = ix.space().base_key();

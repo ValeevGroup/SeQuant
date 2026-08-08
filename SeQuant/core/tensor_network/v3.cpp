@@ -828,7 +828,8 @@ TensorNetworkV3::canonicalize_slots(
             throw Exception(
                 "TensorNetworkV3::canonicalize_slots: high-order (shared among "
                 ">2 tensor slots) hyperindices must occupy at most one bra and "
-                "one ket slot");
+                "one ket slot (at most two slots in total under symmetric "
+                "bra-ket, where the two are indistinguishable)");
           slot_type = IndexSlotType::TensorAux;
         }
       } else

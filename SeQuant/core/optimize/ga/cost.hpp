@@ -4,8 +4,17 @@
 // Mask-based fast path for the per-merge flop count, reproducing
 // opt::detail::flops_counter (with empty inner_pow) exactly: the extent
 // product over the deduplicated union of the indices of lhs, rhs and result,
-// including the proto-indices of any composite. Verified against
-// flops_counter in the unit tests; keep the two in lockstep.
+// including the proto-indices of any composite.
+//
+// No unit test calls flops_counter on the same merge, so the agreement is a
+// contract, not a checked one -- if you change either, re-derive the other by
+// hand. What the [ga] tests DO pin, indirectly: the python-parity fixtures in
+// tests/unit/ga_reference.hpp (exact total costs of whole schedules under the
+// prototype convention, which is this formula x2) and `RuntimeCoster` in
+// tests/unit/test_ga.cpp (an independent extent-product-over-index-closure
+// walk of the EMITTED forest, reconciled against the schedule's own totals).
+// Both would break on a change to the index closure here; neither would catch
+// a divergence from flops_counter that they happen to share.
 
 #include <SeQuant/core/optimize/ga/key_table.hpp>
 
