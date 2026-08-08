@@ -629,9 +629,26 @@ class ResultTensorOfTensorTA final : public Result {
 
     detail::log_ta(a.lannot, " + ", a.rannot, " = ", a.this_annot, "\n");
 
+    // TiledArray's tensor-of-tensor add applies a non-identity OPERAND
+    // permutation to the operand array in place, not to a temporary: after
+    // `C(c) = A(a) + B(b)` with `b != c`, B itself holds permuted data. `sum`
+    // is const and its operands are routinely buffers the caller retains and
+    // re-reads -- a cached common subexpression, or a named GA intermediate
+    // served to several use sites -- so an operand that has to be permuted is
+    // handed a private deep copy to be rewritten instead. Without it the add
+    // silently rewrites a live buffer and every later reader of it sees
+    // permuted data, i.e. a wrong number with no diagnostic. Only an operand
+    // that actually needs permuting is copied, so the common
+    // identical-annotation add is untouched.
+    const bool permute_l = a.lannot != a.this_annot;
+    const bool permute_r = a.rannot != a.this_annot;
+    ArrayT const l_copy = permute_l ? TA::clone(get<ArrayT>()) : ArrayT{};
+    ArrayT const r_copy = permute_r ? TA::clone(other.get<ArrayT>()) : ArrayT{};
+    ArrayT const& l = permute_l ? l_copy : get<ArrayT>();
+    ArrayT const& r = permute_r ? r_copy : other.get<ArrayT>();
+
     ArrayT result;
-    result(a.this_annot) =
-        get<ArrayT>()(a.lannot) + other.get<ArrayT>()(a.rannot);
+    result(a.this_annot) = l(a.lannot) + r(a.rannot);
     decltype(result)::wait_for_lazy_cleanup(result.world());
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
