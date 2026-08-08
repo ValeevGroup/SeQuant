@@ -18,6 +18,8 @@ add_executable(external_interface
     output_step.cpp
     processing_step.cpp
     processing_step_factory.cpp
+    simplify_step.cpp
+    simplify_step.hpp
     spintracing_step.cpp
     spintracing_step.hpp
     read_input_step.cpp
