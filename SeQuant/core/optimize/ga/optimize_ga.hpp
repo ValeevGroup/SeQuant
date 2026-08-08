@@ -35,20 +35,11 @@ struct GAResult {
   /// evaluated (once per set of leaf values) before any tree that references
   /// its name
   container::svector<ResultExpr> definitions;
-  /// the winning genome and its decoded schedule
-  Genome genome;
-  Schedule schedule;
   /// total flops of the schedule (shared arrays counted once). When a
   /// volatile-leaf predicate is supplied this is the REPLAY-WEIGHTED total,
   /// `persistent_flops + volatile_weight * volatile_flops` -- still a pure flop
   /// count, just with amplitude-dependent work charged once per replay.
   double flops = 0;
-  /// total flops with no cross-term sharing (each use counted); what the
-  /// emitted forest would cost with every definition inlined at every use.
-  /// Weighted on the same convention as \ref flops, except that its L2
-  /// volatility is read off the cluster mask rather than propagated through the
-  /// Val tree -- it is a diagnostic, not the objective.
-  double flops_no_sharing = 0;
 };
 
 /// Search over the given targets. \p opts supplies idx_to_extent (defaults

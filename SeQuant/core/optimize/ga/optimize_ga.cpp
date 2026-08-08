@@ -4,44 +4,6 @@
 
 namespace sequant::opt::ga {
 
-namespace {
-
-// cost of one cluster's emitted subtree, every occurrence counted: emission
-// renders each keyed array as its picked producer's route, so the walk
-// follows pick at every internal node
-double cl_tree_cost(KeyTable const& kt, Schedule const& sch,
-                    CostModel const& cm, int d, NodeMask S) {
-  if (std::popcount(S) == 1) return 0;
-  if (auto it = sch.pick.find(kt.terms[d].key[S]); it != sch.pick.end()) {
-    d = it->second.d;
-    S = it->second.S;
-  }
-  auto const* cc = sch.forest.terms[d].children_of(S);
-  return cm.merge(kt.terms[d], cc[0], cc[1]) +
-         cl_tree_cost(kt, sch, cm, d, cc[0]) +
-         cl_tree_cost(kt, sch, cm, d, cc[1]);
-}
-
-double no_sharing_cost(KeyTable const& kt, CostModel const& cm,
-                       Schedule const& sch, ValPtr const& val) {
-  Val const& v = *val;
-  switch (v.kind) {
-    case Val::Cl:
-      return cl_tree_cost(kt, sch, cm, v.d, v.S);
-    case Val::Fx:
-      return no_sharing_cost(kt, cm, sch, v.inner) +
-             cl_tree_cost(kt, sch, cm, v.d, v.V) +
-             cm.merge(kt.terms[v.d], v.S, v.V);
-    case Val::Sum:
-      return no_sharing_cost(kt, cm, sch, v.s1.val) +
-             no_sharing_cost(kt, cm, sch, v.s2.val) +
-             cm.addition(kt.terms[v.d], v.S);
-  }
-  SEQUANT_UNREACHABLE_TOKEN;
-}
-
-}  // namespace
-
 GAResult optimize_ga(container::svector<TargetInput> const& targets,
                      OptimizeOptions const& opts, GAOptions const& ga_opts,
                      CostModel const& cost, ProducerResolution resolution) {
@@ -60,12 +22,9 @@ GAResult optimize_ga(container::svector<TargetInput> const& targets,
   auto kt = build_key_table(targets, ixex, opts.batch_policy.is_volatile_leaf);
   Fitness fitness(kt, cm, resolution);
   auto [flops, genome] = run_ga(fitness, seed_genome(kt), ga_opts);
-  out.schedule = fitness.explain(genome);
-  out.genome = std::move(genome);
+  Schedule schedule = fitness.explain(genome);
   out.flops = flops;
-  for (auto const& root : out.schedule.roots)
-    out.flops_no_sharing += no_sharing_cost(kt, cm, out.schedule, root.val);
-  auto emission = emit_named(fitness, out.schedule);
+  auto emission = emit_named(fitness, schedule);
   out.exprs = std::move(emission.targets);
   out.definitions = std::move(emission.definitions);
   return out;
