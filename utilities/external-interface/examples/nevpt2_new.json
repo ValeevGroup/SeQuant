@@ -81,8 +81,16 @@
 			}
 		},
 		{
+			"id": "traced",
+			"kind": "spintracing",
+			"inputs": "DF",
+			"options": {
+				"algorithm": "closed_shell"
+			}
+		},
+		{
 			"kind": "output",
-			"inputs": "DF.en"
+			"inputs": "traced.en"
 		}
 	]
 }
