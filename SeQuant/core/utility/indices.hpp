@@ -719,8 +719,11 @@ decltype(auto) get_ket_idx(Group&& group) {
 /// (based on slot type) or assert that they already are in canonical order,
 /// if group is const.
 decltype(auto) as_index_group_view(SlottedIndexGroup auto&& group) {
-  static_assert(static_cast<int>(SlotType::Bra) == 0);
-  static_assert(static_cast<int>(SlotType::Ket) == 1);
+  static_assert(SlotType::Bra < SlotType::Ket);
+  static_assert(SlotType::Bra < SlotType::Aux);
+  static_assert(SlotType::Bra < SlotType::Proto);
+  static_assert(SlotType::Ket < SlotType::Aux);
+  static_assert(SlotType::Ket < SlotType::Proto);
 
   // We have to ensure a unique order of indices if we're getting rid of the
   // SlotType tag
