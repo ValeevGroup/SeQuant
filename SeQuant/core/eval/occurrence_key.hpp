@@ -72,13 +72,22 @@ TensorNetwork::NamedIndexSet in_scope_batched_on_node(
 /// are the SAME occurrence when they read the same value with the same
 /// batched-slot structure, up to the value's symmetries. This is computed by
 /// treating \p node's leaf tensors as a \c TensorNetwork and canonicalizing
-/// its slots (\c TensorNetwork::canonicalize_slots): the in-scope batched
-/// indices are passed as \c named_indices, so they are colored by space +
-/// label (cannot be renamed, their labels/positions are meaningful) while
-/// every other index is colored by space alone (freely renamed,
-/// interchangeable). Symmetry of the resulting key is thus INTRINSIC to the
-/// canonicalized colored graph -- no separately-deduced symmetry annotation
-/// is needed. This mirrors \c build_subnet_metadata
+/// its slots (\c TensorNetwork::canonicalize_slots, which colors with
+/// \c distinct_named_indices=false): the in-scope batched indices are passed as
+/// \c named_indices, so they are colored by space and by their named-ness --
+/// distinct from non-batched (anonymous) indices of the same space, and from
+/// batched indices of a different space -- but NOT by their specific label
+/// (named indices of one space are interchangeable within that class), while
+/// every other index is colored by space alone. \c RouterKeyEqual compares only
+/// the canonical colored graph, so the key is DAG-GLOBAL: two occurrences of
+/// one value whose batched slot binds different physical labels (the g.C legs,
+/// i_3 vs i_4) map to the SAME key -- one overlay serves both, and the specific
+/// binding is resolved later in home-scope computation (see the design spec
+/// doc/dev/specs/2026-08-07-remat-cse-aware-split-design.md, and the
+/// "same batched slot, different batched label" test in test_occurrence_key).
+/// Symmetry of the resulting key is thus INTRINSIC to the canonicalized colored
+/// graph -- no separately-deduced symmetry annotation is needed. This mirrors
+/// \c build_subnet_metadata
 /// (\c single_term_detail.hpp) exactly, applied to a node's own leaves rather
 /// than a DP subset.
 ///

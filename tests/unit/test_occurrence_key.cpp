@@ -119,6 +119,29 @@ TEST_CASE(
   CHECK(RouterKeyHash{}(k1) == RouterKeyHash{}(k2));
 }
 
+TEST_CASE(
+    "occurrence_key: same batched slot, different batched label -> same key",
+    "[occurrence_key]") {
+  // The DAG-globality question (design spec 2026-08-07 sec.0): two structurally
+  // identical values whose batched second (occ) slot is bound to i_3 vs i_4 --
+  // the g.C legs. The occurrence key must be label-AGNOSTIC on the batched slot
+  // so one DAG-global overlay serves both occurrences; the specific i_3/i_4
+  // binding is resolved later, in home-scope computation.
+  Index i1{L"i_1"}, i3{L"i_3"}, i4{L"i_4"};
+  auto make = [](Index const& a, Index const& b) {
+    return ex<Tensor>(L"B", bra(container::svector<Index>{a, b}), ket{},
+                      Symmetry::Nonsymm, std::nullopt, ColumnSymmetry::Nonsymm);
+  };
+  auto nA = leaf_node(make(i1, i3));
+  auto nB = leaf_node(make(i1, i4));
+  auto kA =
+      occurrence_key(nA, container::svector<Index>{i3});  // batched slot 1
+  auto kB =
+      occurrence_key(nB, container::svector<Index>{i4});  // batched slot 1
+  CHECK(RouterKeyEqual{}(kA, kB));
+  CHECK(RouterKeyHash{}(kA) == RouterKeyHash{}(kB));
+}
+
 TEST_CASE("occurrence_key: distinct batched axes stay distinct",
           "[occurrence_key]") {
   // Same tensor, batched {i1} vs batched {i2}: Nonsymm bra AND Nonsymm
