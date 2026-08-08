@@ -8,10 +8,11 @@
 // costing (cost.hpp). Named indices are colored by kind only, so two clusters
 // -- same term or not -- share a key id iff they evaluate to the same array.
 
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
+#include <SeQuant/core/index.hpp>
 #include <SeQuant/core/optimize/ga/genome.hpp>
-#include <SeQuant/core/tensor_network.hpp>
 
 #include <cstdint>
 #include <functional>
@@ -22,7 +23,12 @@ namespace sequant::opt::ga {
 /// Set of per-term index bits (bit k = TermTable::index_list[k]).
 using IndexMask = std::uint64_t;
 
-using FaceSet = TensorNetwork::NamedIndexSet;
+/// Faces are handed straight to `TensorNetwork` as its named-index set, so this
+/// MUST stay the same type as `TensorNetwork::NamedIndexSet` -- a look-alike
+/// with a different comparator would silently reorder canonicalization. Spelled
+/// out rather than aliased so that this header does not have to include
+/// tensor_network.hpp; key_table.cpp static_asserts the two agree.
+using FaceSet = container::set<Index, Index::FullLabelCompare>;
 
 inline constexpr std::size_t no_key = std::numeric_limits<std::size_t>::max();
 

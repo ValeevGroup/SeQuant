@@ -1,5 +1,7 @@
 #include <SeQuant/core/optimize/ga/emit.hpp>
 
+#include <SeQuant/core/tensor_network.hpp>
+
 namespace sequant::opt::ga {
 
 namespace {

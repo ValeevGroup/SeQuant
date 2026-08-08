@@ -459,6 +459,7 @@ set(SeQuant_optimize_src
         SeQuant/core/optimize/ga/ga.cpp
         SeQuant/core/optimize/ga/ga.hpp
         SeQuant/core/optimize/ga/genome.hpp
+        SeQuant/core/optimize/ga/intermediate_label.hpp
         SeQuant/core/optimize/ga/key_table.cpp
         SeQuant/core/optimize/ga/key_table.hpp
         SeQuant/core/optimize/ga/optimize_ga.cpp

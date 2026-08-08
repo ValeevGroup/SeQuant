@@ -23,6 +23,7 @@
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 

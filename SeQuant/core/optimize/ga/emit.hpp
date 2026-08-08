@@ -27,23 +27,12 @@
 
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/optimize/ga/fitness.hpp>
-
-#include <string_view>
+// re-exported: named_intermediate_prefix / is_named_intermediate. Consumers
+// that need ONLY the predicate should include that header instead -- it is
+// standalone, this one is not.
+#include <SeQuant/core/optimize/ga/intermediate_label.hpp>
 
 namespace sequant::opt::ga {
-
-/// Label prefix of named GA intermediates ("IGA1", "IGA2", ...).
-inline constexpr std::wstring_view named_intermediate_prefix = L"IGA";
-
-/// Whether \p label names a GA intermediate (i.e. starts with
-/// named_intermediate_prefix followed by digits).
-inline bool is_named_intermediate(std::wstring_view label) {
-  auto const& p = named_intermediate_prefix;
-  if (label.size() <= p.size() || label.substr(0, p.size()) != p) return false;
-  for (auto c : label.substr(p.size()))
-    if (c < L'0' || c > L'9') return false;
-  return true;
-}
 
 struct Emission {
   /// One factorized expression per target, externals named like the target's

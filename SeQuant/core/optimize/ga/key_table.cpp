@@ -3,12 +3,19 @@
 #include <SeQuant/core/bliss.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/tensor_network.hpp>
 
 #include <algorithm>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 
 namespace sequant::opt::ga {
+
+/// key_table.hpp spells `FaceSet` out rather than aliasing
+/// `TensorNetwork::NamedIndexSet`, to stay free of tensor_network.hpp; this is
+/// what keeps that spelling honest.
+static_assert(std::is_same_v<FaceSet, TensorNetwork::NamedIndexSet>);
 
 int TermTable::bit_of(Index const& ix) const {
   auto it = std::find(index_list.begin(), index_list.end(), ix);
