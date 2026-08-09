@@ -77,20 +77,26 @@ using BatchContext =
 /// \p block_of is any `Index -> std::size_t` callable giving the block
 /// (sliced) element count for a mode.
 ///
-/// \p divergent_modes are the value's RELABELED modes (carried by some
-/// occurrences but not all -- see \c ValueCell::divergent_modes). Slicing one
-/// of them cannot be shared across occurrences (they bind different physical
-/// labels to that canonical slot), so the runtime SPLITS the value into
-/// per-occurrence copies (see \c place_at_this_level). When the home slices a
-/// divergent mode, the co-resident footprint is therefore that of TWO sliced
-/// copies, not one -- priced here as 2x. (A pairwise model: the dominant
-/// divergent-CSE case is two legs of one contraction, e.g. the g.C legs.)
+/// \p divergent_modes is now INFORMATIONAL only. It once triggered a flat 2x
+/// pricing fudge here (the placeholder `46b495eba` shipped): a home that sliced
+/// a RELABELED mode was priced as TWO co-resident copies. That flat 2x captured
+/// neither of the split's two real costs (peak co-residency and the replication
+/// recompute) and silently dropped the dominant, mis-priced recompute term. It
+/// is DELETED: a divergent value that remat homes at a sub-scope is UN-FOLDED
+/// into two real, non-divergent \c ValueCell s (see \c apply_split in
+/// placement_remat.hpp), each priced ONCE here at its own home; peak
+/// co-residency is priced structurally by \c peak_profile_sweep over the two
+/// cells' liveness intervals (which keys on \c value_id, so two cells of one
+/// hash need no sweep change), and the replication recompute is a SEPARATE,
+/// report-only term (\c apply_split's return / \c
+/// RematResult::modeled_recompute). The parameter is retained for signature
+/// compatibility with existing callers.
 template <typename BlockOfFn>
 [[nodiscard]] inline std::size_t cell_footprint(
     container::svector<Index> const& carried,
     container::svector<Index> const& home_modes, dryrun::CostModel const& cm,
     BlockOfFn const& block_of,
-    container::svector<Index> const& divergent_modes = {}) {
+    [[maybe_unused]] container::svector<Index> const& divergent_modes = {}) {
   dryrun::ExtentOverrides ov;
   // block iff in the meet-home. Overrides are POSITIONAL against `carried`:
   // map each home mode to its position there. memsize() re-expands the position
@@ -102,15 +108,7 @@ template <typename BlockOfFn>
     if (it != carried.end())
       ov[static_cast<std::size_t>(it - carried.begin())] = block_of(m);
   }
-  std::size_t base = cm.memsize(carried, ov);  // non-meet carried modes FULL
-  bool split = false;
-  for (auto const& m : home_modes)
-    if (std::find(divergent_modes.begin(), divergent_modes.end(), m) !=
-        divergent_modes.end()) {
-      split = true;
-      break;
-    }
-  return split ? 2 * base : base;  // split -> two co-resident sliced copies
+  return cm.memsize(carried, ov);  // non-meet carried modes FULL
 }
 
 }  // namespace detail
@@ -212,6 +210,29 @@ inline double peak_profile_replay(Schedule const& s) {
 }
 
 ///
+/// \brief One USE-SITE of a value, kept alongside the folded \c ValueCell so a
+/// CSE-aware remat SPLIT (see \c apply_split) can partition the value's
+/// occurrences by their PHYSICAL binding of a relabeled mode and re-derive each
+/// split cell's subset-local \c carried / \c home / liveness / enclosing nest.
+///
+/// \details These are the per-\c NodeRec fields \c compute_dag_boulevard
+/// computes during its post-order walk and once DISCARDED at grouping (keeping
+/// only the first occurrence's home/carried + the union/min/max). They are now
+/// retained: (a) two occurrences that bind a relabeled mode to different
+/// physical labels (the g.C legs' \c i_3 vs \c i_4) are told apart by their \c
+/// carried; (b) each split cell's replication factor is a product over the
+/// levels it is homed-within-but-does-not-carry, read from its subset-local \c
+/// ectx (enclosing loops) minus \c carried.
+///
+struct OccurrenceRec {
+  std::size_t point;           //!< this occurrence's production static point
+  std::size_t consumer_point;  //!< its structural consumer (parent) point
+  container::svector<Index> carried;  //!< this occurrence's canon_indices
+  container::svector<Index> home;     //!< proto-expanded home_scope
+  detail::BatchContext ectx;  //!< ENCLOSING loops (excludes this node's own)
+};
+
+///
 /// \brief One value group in a RICH linearized schedule (Phase 4a O2 working
 /// representation): the same per-value fold as \c Cell, but keeping the
 /// pieces \c Cell already collapses into \c footprint -- \c carried and
@@ -246,11 +267,18 @@ struct ValueCell {
       divergent_modes;    //!< RELABELED modes: carried by SOME occurrences but
                           //!< not all (union MINUS intersection of the
                           //!< occurrences' canon_indices). Slicing one cannot
-                          //!< be shared -- the runtime SPLITS the value, so
-                          //!< cell_footprint prices a divergent-mode home 2x.
+                          //!< be shared -- remat SPLITS the value into two
+                          //!< non-divergent cells (see \c apply_split); the
+                          //!< split cells then carry an EMPTY divergent_modes.
   std::size_t first_use;  //!< earliest static point the value is live at
   std::size_t last_use;   //!< latest static point the value is live at (its
                           //!< last consumer), inclusive
+  container::svector<OccurrenceRec>
+      occurrences;  //!< every use-site of this value (retained so a remat
+                    //!< SPLIT can partition them by physical binding and
+                    //!< re-derive each split cell's subset-local records).
+                    //!< A split cell (one occurrence subset) keeps only its
+                    //!< subset here.
 };
 
 ///
@@ -421,6 +449,17 @@ RichSchedule compute_dag_boulevard(R const& forest,
           enclosing_modes.push_back(e.first);
     };
 
+    // The per-occurrence record retained on the cell for a CSE-aware split.
+    auto make_occ = [&]() -> OccurrenceRec {
+      OccurrenceRec o;
+      o.point = r.point;
+      o.consumer_point = r.consumer_point;
+      o.carried = r.carried;
+      o.home = r.home;
+      o.ectx = r.ectx;
+      return o;
+    };
+
     auto const it = hash_to_cell.find(r.hash);
     if (it == hash_to_cell.end()) {
       ValueCell c;
@@ -445,6 +484,7 @@ RichSchedule compute_dag_boulevard(R const& forest,
             c.divergent_modes.push_back(m);
       }
       fold_enclosing(c.enclosing_modes);
+      c.occurrences.push_back(make_occ());
       hash_to_cell.emplace(r.hash, c.value_id);
       out.cells.push_back(std::move(c));
     } else {
@@ -452,6 +492,7 @@ RichSchedule compute_dag_boulevard(R const& forest,
       c.first_use = std::min(c.first_use, r.point);
       c.last_use = std::max(c.last_use, r.consumer_point);
       fold_enclosing(c.enclosing_modes);
+      c.occurrences.push_back(make_occ());
     }
   }
   return out;

@@ -161,13 +161,16 @@ TEST_CASE("cell_footprint sizes enclosing-home modes at BLOCK, others FULL",
 }
 
 TEST_CASE(
-    "cell_footprint prices a home that slices a divergent mode as a 2x split",
+    "cell_footprint no longer doubles a divergent-mode home (the 2x fudge is "
+    "gone; divergent_modes is informational)",
     "[peak_profile]") {
-  // A value whose home slices a RELABELED (divergent) mode cannot share one
-  // sliced copy across occurrences -- the runtime SPLITS it into two
-  // co-resident per-occurrence copies (see ValueCell::divergent_modes /
-  // place_at_this_level), so the modeled footprint is 2x the single-slice
-  // footprint.
+  // The flat 2x pricing fudge (placeholder 46b495eba) is DELETED: a divergent
+  // value that remat homes at a sub-scope is UN-FOLDED into two real,
+  // non-divergent ValueCells (apply_split, placement_remat.hpp), each priced
+  // ONCE here at its own home; peak co-residency is priced structurally by
+  // peak_profile_sweep over the two cells' liveness intervals, and the
+  // replication recompute is a separate report-only term. So cell_footprint
+  // IGNORES divergent_modes -- passing it never changes the size.
   SizeRegime r;
   r.space_extent = {{L"i", 10}, {L"a", 10}};
   CostModel const cm{r};
@@ -179,16 +182,13 @@ TEST_CASE(
   svector<Index> const home_modes{p};
 
   auto const shared = cell_footprint(carried, home_modes, cm, block_of, {});
-  auto const split =
-      cell_footprint(carried, home_modes, cm, block_of, svector<Index>{p});
   CHECK(shared == 160);  // one sliced copy: block(p)=2 * full(q)=10 * 8
-  CHECK(split ==
-        2 * shared);  // p sliced AND divergent -> two co-resident copies
-
-  // A divergent mode that is NOT sliced (not in the home) does not double.
-  auto const not_sliced =
-      cell_footprint(carried, home_modes, cm, block_of, svector<Index>{q});
-  CHECK(not_sliced == shared);
+  // A divergent mode that IS sliced (in the home) no longer doubles.
+  CHECK(cell_footprint(carried, home_modes, cm, block_of, svector<Index>{p}) ==
+        shared);
+  // A divergent mode that is NOT sliced (not in the home) also does not change.
+  CHECK(cell_footprint(carried, home_modes, cm, block_of, svector<Index>{q}) ==
+        shared);
 }
 
 // ---------------------------------------------------------------------

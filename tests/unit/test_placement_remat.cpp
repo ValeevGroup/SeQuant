@@ -46,10 +46,12 @@ using sequant::EvalNode;
 using sequant::ExprPtr;
 using sequant::Index;
 using sequant::container::svector;
+using sequant::eval::apply_split;
 using sequant::eval::Cell;
 using sequant::eval::compute_dag_path;
 using sequant::eval::HomeTarget;
 using sequant::eval::occurrence_key;
+using sequant::eval::OccurrenceRec;
 using sequant::eval::peak_profile_sweep;
 using sequant::eval::PeakProfile;
 using sequant::eval::PlacementRouter;
@@ -61,6 +63,7 @@ using sequant::eval::RematResult;
 using sequant::eval::RematStatus;
 using sequant::eval::Schedule;
 using sequant::eval::shrink_candidates;
+using sequant::eval::split_candidates;
 using sequant::eval::to_schedule;
 using sequant::eval::ValueCell;
 using sequant::eval::dryrun::CostModel;
@@ -178,7 +181,106 @@ ValueCell mk_cell(std::size_t id, std::vector<Index> carried,
   return c;
 }
 
+// A single occurrence record for a hand-built divergent ValueCell.
+OccurrenceRec mk_occ(std::size_t point, std::size_t consumer_point,
+                     std::vector<Index> carried, std::vector<Index> enclosing) {
+  OccurrenceRec o;
+  o.point = point;
+  o.consumer_point = consumer_point;
+  o.carried.assign(carried.begin(), carried.end());
+  // home stays empty (the divergent seed's cross-occurrence meet is empty).
+  for (auto const& m : enclosing) o.ectx.push_back({m, {std::size_t{0}, 5}});
+  return o;
+}
+
+// Build a DIVERGENT CSE ValueCell whose two occurrences bind a RELABELED mode
+// to i_3 (outer occurrence, carried at slot 1) and i_4 (inner occurrence). The
+// value's structural hash is the same across both (they are CSE-folded); only
+// the physical label at the relabeled slot differs. Leg A is enclosed by i_3
+// only (and carries it); leg B is enclosed by BOTH i_3 and i_4 but carries only
+// i_4 -- so leg B is invariant to i_3 (homed within it, does not carry it) and
+// must be rebuilt per i_3 block: the replication factor the split prices.
+ValueCell mk_divergent_cell(std::size_t hash) {
+  ValueCell c;
+  c.value_id = 0;
+  c.hash = hash;
+  c.carried = svector<Index>{Index{L"x_1"}, Index{L"i_3"}};  // first-occ order
+  c.home_modes = {};  // divergent meet is empty
+  c.enclosing_modes = svector<Index>{Index{L"i_3"}, Index{L"i_4"}};
+  c.divergent_modes = svector<Index>{Index{L"i_3"}, Index{L"i_4"}};
+  c.first_use = 0;
+  c.last_use = 2;
+  c.home_depth = -1;
+  // occ A (leg carrying i_3): enclosed by i_3 only.
+  c.occurrences.push_back(mk_occ(/*point=*/0, /*consumer=*/2,
+                                 {Index{L"x_1"}, Index{L"i_3"}},
+                                 {Index{L"i_3"}}));
+  // occ B (leg carrying i_4): enclosed by i_3 (outer) and i_4 (inner).
+  c.occurrences.push_back(mk_occ(/*point=*/1, /*consumer=*/2,
+                                 {Index{L"x_1"}, Index{L"i_4"}},
+                                 {Index{L"i_3"}, Index{L"i_4"}}));
+  return c;
+}
+
 }  // namespace
+
+TEST_CASE(
+    "remat splits along a relabeled mode, prices replication not 2x "
+    "(Task 5)",
+    "[placement_remat]") {
+  // i-space extent 10, block SIZE 5 -> the i_3 loop has block COUNT
+  // ceil(10/5) = 2 = N3, the replication factor of the inner cell. cell A homes
+  // {i_3} (carries i_3) -> replication 1; cell B homes {i_4} but is invariant
+  // to the enclosing i_3 loop it does not carry -> replication = i_3's block
+  // COUNT (2), NOT its block size (5). Both cells' single build is identical
+  // (i_3/i_4 same space, same block), so the split recomputes (1 + 2) = 3x that
+  // build. The three models are distinguishable here: flat-2x fudge -> 2x; a
+  // wrong block-SIZE replication -> (1 + 5) = 6x; correct block-COUNT -> 3x. So
+  // asserting == 3x (and != 2x) pins the correct model against both.
+  SizeRegime r;
+  r.space_extent = {{L"i", 10}, {L"x", 10}};
+  CostModel const cm{r};
+  auto const block_of = [](Index const& ix) -> std::size_t {
+    return ix.space() == Index{L"i_1"}.space() ? 5 : 2;
+  };
+  std::size_t const N3 = 2;  // block COUNT = ceil(extent 10 / block size 5)
+
+  ValueCell const cell = mk_divergent_cell(/*hash=*/42);
+  Index const i3{L"i_3"}, i4{L"i_4"};
+
+  // The relabeled mode is offered ONLY as a split, never as an in-place shrink.
+  auto const shrinks = shrink_candidates(cell);
+  CHECK(std::find(shrinks.begin(), shrinks.end(), i3) == shrinks.end());
+  CHECK(std::find(shrinks.begin(), shrinks.end(), i4) == shrinks.end());
+  auto const splits = split_candidates(cell);
+  CHECK(std::find(splits.begin(), splits.end(), i3) != splits.end());
+  CHECK(std::find(splits.begin(), splits.end(), i4) != splits.end());
+
+  // apply_split un-folds the one cell into TWO same-hash cells at DISTINCT
+  // homes ({i_3} and {i_4}), each non-divergent, and prices the replication.
+  sequant::container::svector<ValueCell> cells;
+  cells.push_back(cell);
+  std::size_t const recompute = apply_split(cells, /*ci=*/0, i3, cm, block_of);
+
+  std::size_t n_hash42 = 0;
+  svector<svector<Index>> homes;
+  for (auto const& c : cells)
+    if (c.hash == 42) {
+      ++n_hash42;
+      homes.push_back(c.home_modes);
+      CHECK(c.divergent_modes.empty());  // each split cell is single-binding
+    }
+  CHECK(n_hash42 == 2);
+  REQUIRE(homes.size() == 2);
+  CHECK(homes[0] != homes[1]);  // distinct homes: {i_3} vs {i_4}
+
+  // The priced recompute is (1 + N3) x a single build, NOT 2x.
+  std::size_t const full_build = sequant::eval::detail::cell_footprint(
+      svector<Index>{Index{L"x_1"}, i3}, svector<Index>{i3}, cm, block_of);
+  CHECK(full_build == 5 * 10 * 8);  // block(i_3)=5 * full(x_1)=10 * 8 bytes
+  CHECK(recompute == (1 + N3) * full_build);
+  CHECK(recompute != 2 * full_build);  // the old flat-2x fudge is gone
+}
 
 TEST_CASE(
     "shrink_candidates finds the demoted carried mode of a "
