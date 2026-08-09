@@ -2232,26 +2232,25 @@ container::svector<ResultExpr> spintrace(const ResultExpr& expr,
 
 namespace {
 
-bool is_eom_amplitude(const Tensor& t) {
-  return t.label() == L"R" || t.label() == L"L";
-}
-
-// sign of the M_S = 0 triplet coupling for a spin-labeled line: T_{pq} =
-// E_{pq}(alpha) - E_{pq}(beta)
-int spin_line_sign(const Index& idx) {
-  const auto s = mbpt::to_spin(idx.space().qns());
-  SEQUANT_ASSERT(s == mbpt::Spin::alpha || s == mbpt::Spin::beta);
-  return s == mbpt::Spin::alpha ? 1 : -1;
-}
-
 ExprPtr triplet_adapt_amplitudes(const ExprPtr& spin_labeled,
                                  bool amp_no_swap = false) {
   auto adapt_product = [amp_no_swap](const Product& p) -> ExprPtr {
+    // sign of the M_S = 0 triplet coupling for a spin-labeled line:
+    // T_{pq} = a_{pq}(alpha) - a_{pq}(beta)
+    auto spin_line_sign = [](const Index& idx) {
+      const auto s = mbpt::to_spin(idx.space().qns());
+      SEQUANT_ASSERT(s == mbpt::Spin::alpha || s == mbpt::Spin::beta);
+      return s == mbpt::Spin::alpha ? 1 : -1;
+    };
+
     auto out = std::make_shared<Product>();
     out->scale(p.scalar());
 
     for (const auto& f : p) {
-      if (!f->is<Tensor>() || !is_eom_amplitude(f->as<Tensor>())) {
+      if (!f->is<Tensor>() || f->as<Tensor>().label() != L"R") {
+        SEQUANT_ASSERT(
+            (!f->is<Tensor>() || f->as<Tensor>().label() != L"L") &&
+            "triplet spin adaptation supports right eigenvectors (R) only");
         out->append(1, f, Product::Flatten::No);
         continue;
       }
