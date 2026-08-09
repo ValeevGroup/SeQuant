@@ -71,7 +71,7 @@ bool is_valid(const ResultExpr &expr, std::string *msg = nullptr);
 ///
 /// @param expression The expression to modify
 /// @param label The label of the tensor that shall be removed
-/// @returns The removed tensor, if any occurrance has been found
+/// @returns The removed tensor, if any occurrence has been found
 std::optional<ExprPtr> pop_tensor(ExprPtr &expression, std::wstring_view label);
 
 /// Replaces a given target expression by a given replacement
