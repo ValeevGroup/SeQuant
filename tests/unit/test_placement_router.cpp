@@ -264,8 +264,12 @@ TEST_CASE(
   {
     auto const& drr = default_sliced->as<ResultDryRun>();
     CHECK(drr.overrides().size() == 1);
-    CHECK(drr.overrides().count(K) == 1);
-    CHECK(drr.overrides().count(J) == 0);
+    // Overrides are positional now: K's mode carries the slice, J's does not.
+    auto const posK = index_position(X, K);
+    auto const posJ = index_position(X, J);
+    REQUIRE(posK);
+    CHECK(drr.overrides().count(*posK) == 1);
+    if (posJ) CHECK(drr.overrides().count(*posJ) == 0);
   }
 
   // RELOCATED: register an override with EMPTY residency for X's occurrence
@@ -303,8 +307,12 @@ TEST_CASE(
   {
     auto const& drr = relocated_sliced->as<ResultDryRun>();
     CHECK(drr.overrides().size() == 2);
-    CHECK(drr.overrides().count(J) == 1);
-    CHECK(drr.overrides().count(K) == 1);
+    auto const posJ = index_position(X, J);
+    auto const posK = index_position(X, K);
+    REQUIRE(posJ);
+    REQUIRE(posK);
+    CHECK(drr.overrides().count(*posJ) == 1);
+    CHECK(drr.overrides().count(*posK) == 1);
   }
 }
 

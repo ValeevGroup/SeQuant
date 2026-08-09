@@ -72,7 +72,38 @@ namespace detail {
 [[nodiscard]] inline ExtentOverrides merge_overrides(ExtentOverrides const& a,
                                                      ExtentOverrides const& b) {
   ExtentOverrides out = a;
-  for (auto const& [ix, n] : b) out[ix] = n;
+  for (auto const& [pos, n] : b) out[pos] = n;
+  return out;
+}
+
+// Remap positional overrides from one annotation's mode positions to another's
+// by matching labels: position p (labeled `from[p]`) -> the position of that
+// same label in `to`. A position whose label is absent from `to` (e.g. an index
+// this op contracts away) is dropped -- it has no mode in the result. This is
+// how a sliced mode's width survives prod/sum/permute now that the value itself
+// carries no labels: the op's annotation is the only place labels live, so two
+// positional maps from different operands can only be combined after both are
+// projected onto a COMMON annotation (the result's).
+[[nodiscard]] inline ExtentOverrides remap_overrides_by_annot(
+    ExtentOverrides const& ov, annot_t const& from, annot_t const& to) {
+  ExtentOverrides out;
+  for (auto const& [pos, w] : ov) {
+    if (pos >= from.size()) continue;
+    auto const it = std::find(to.begin(), to.end(), from[pos]);
+    if (it != to.end())
+      out.emplace(static_cast<std::size_t>(it - to.begin()), w);
+  }
+  return out;
+}
+
+// Project a value's positional overrides into LABEL space via its annotation:
+// position p -> (annot[p] -> width). For the flops call, whose out/contracted
+// index sets ARE annotation labels (see CostModel::flops).
+[[nodiscard]] inline container::map<Index, std::size_t> extents_by_label(
+    ExtentOverrides const& ov, annot_t const& annot) {
+  container::map<Index, std::size_t> out;
+  for (auto const& [pos, w] : ov)
+    if (pos < annot.size()) out.emplace(annot[pos], w);
   return out;
 }
 
@@ -101,7 +132,12 @@ struct DryRunOps {
                                      Result const& other,
                                      std::array<std::any, 3> const& annot) {
     auto const a = Annot<annot_t>{annot};
-    auto merged = merge_overrides(ov, overrides_of(other));
+    // Both summands share the result's index set (possibly reordered); project
+    // each operand's positional slice widths onto the result annotation by
+    // label before merging (position k is a different mode in each operand).
+    auto merged = merge_overrides(
+        remap_overrides_by_annot(ov, a.lannot, a.this_annot),
+        remap_overrides_by_annot(overrides_of(other), a.rannot, a.this_annot));
     return make_dryrun_result(
         container::svector<Index>(a.this_annot.begin(), a.this_annot.end()), cm,
         std::move(merged));
@@ -116,7 +152,15 @@ struct DryRunOps {
       return make_dryrun_result(idx, cm, ov);
     }
     auto const a = Annot<annot_t>{annot};
-    auto merged = merge_overrides(ov, overrides_of(other));
+    auto const other_ov = overrides_of(other);
+    // RESULT overrides: each operand's positional slice widths are positional
+    // against ITS OWN annotation (== its canon index order); project both onto
+    // the result's annotation by label (dropping any contracted-away mode),
+    // then merge. Merging the two raw positional maps directly would be wrong
+    // -- position k means a different mode in each operand.
+    auto merged = merge_overrides(
+        remap_overrides_by_annot(ov, a.lannot, a.this_annot),
+        remap_overrides_by_annot(other_ov, a.rannot, a.this_annot));
 
     // Emit the cost model's OWN flops / roofline exec_cost for THIS op into the
     // eval trace (gated on the eval log level), interleaved right before the
@@ -145,7 +189,14 @@ struct DryRunOps {
       for (auto const& ix : a.lannot)
         if (std::find(a.rannot.begin(), a.rannot.end(), ix) != a.rannot.end())
           contracted.push_back(ix);
-      double const flops = cm->flops(out, contracted, merged);
+      // Slice widths in LABEL space for the flops call: project each operand's
+      // positional overrides through its annotation. A batched label shared by
+      // both operands (e.g. a contracted, batched aux index) carries the same
+      // width from either side, so the first insertion wins harmlessly.
+      auto label_extents = extents_by_label(ov, a.lannot);
+      for (auto const& [lbl, w] : extents_by_label(other_ov, a.rannot))
+        label_extents.emplace(lbl, w);
+      double const flops = cm->flops(out, contracted, label_extents);
       sequant::eval::detail::last_op_flops() = flops;  // for the Build event
       double const exec = cm->exec_cost(flops, cm->memsize(idx, ov), 4096);
       write_log(Logger::instance(), "OpCost", std::format(" | {}", flops),
@@ -180,12 +231,16 @@ struct DryRunOps {
   }
 
   [[nodiscard]] static ResultPtr permute(
-      container::svector<Index> const& /*idx*/, ExtentOverrides const& ov,
+      container::svector<Index> const& idx, ExtentOverrides const& ov,
       std::shared_ptr<CostModel const> const& cm,
       std::array<std::any, 2> const& ann) {
     auto const post = std::any_cast<annot_t>(ann[1]);
+    // Reordering modes moves each mode's position, so the positional overrides
+    // must move with them: `ov` is positional against `idx` (the pre-permute
+    // canon order); project it onto `post` by label.
     return make_dryrun_result(
-        container::svector<Index>(post.begin(), post.end()), cm, ov);
+        container::svector<Index>(post.begin(), post.end()), cm,
+        remap_overrides_by_annot(ov, idx, post));
   }
 
   [[nodiscard]] static ResultPtr slice_mode(
@@ -194,7 +249,7 @@ struct DryRunOps {
       std::size_t elem_lo, std::size_t elem_hi) {
     SEQUANT_ASSERT(mode < idx.size());
     auto merged = ov;
-    merged[idx[mode]] = elem_hi - elem_lo;
+    merged[mode] = elem_hi - elem_lo;  // positional: mode `mode`, any label
     return make_dryrun_result(idx, cm, std::move(merged));
   }
 
@@ -211,10 +266,18 @@ struct DryRunOps {
     SEQUANT_ASSERT(block_lo < block_hi);
     Index const& mix = idx[mode];
     // Tile/width consistency: the block's own modelled extent on the shared
-    // mode index must equal the slice width it is being written into.
+    // mode index must equal the slice width it is being written into. The
+    // block's overrides are positional against ITS OWN index list, so locate
+    // the shared index there (its mode need not equal the dest's `mode`).
     auto const bov = overrides_of(block);
+    auto const bidx = indices_of(block);
     std::size_t const block_extent = [&] {
-      if (auto it = bov.find(mix); it != bov.end()) return it->second;
+      auto const it = std::find(bidx.begin(), bidx.end(), mix);
+      if (it != bidx.end()) {
+        auto const bpos = static_cast<std::size_t>(it - bidx.begin());
+        if (auto ov_it = bov.find(bpos); ov_it != bov.end())
+          return ov_it->second;
+      }
       return cm->regime().extent(mix);
     }();
     SEQUANT_ASSERT(block_extent == block_hi - block_lo);
@@ -240,7 +303,7 @@ struct DryRunOps {
     // realized extent of the batch mode so size_in_bytes() tracks the
     // reconstructed footprint.
     auto const& lohi = cov.at(mode);
-    ov[mix] = lohi.second - lohi.first;
+    ov[mode] = lohi.second - lohi.first;  // positional: dest mode `mode`
   }
 
   /// Build a zero-data destination shaped like \p idx but with mode \p mode's
@@ -270,11 +333,13 @@ struct DryRunOps {
     Index const& axis_ix = src_idx[axis_src_mode];
     auto const src_ov = overrides_of(axis_src);
     std::size_t const full_extent = [&] {
-      if (auto it = src_ov.find(axis_ix); it != src_ov.end()) return it->second;
+      // src_ov is positional against axis_src's own index list (src_idx).
+      if (auto it = src_ov.find(axis_src_mode); it != src_ov.end())
+        return it->second;
       return cm->regime().extent(axis_ix);
     }();
     auto merged = ov;
-    merged[idx[mode]] = full_extent;
+    merged[mode] = full_extent;  // positional: dest mode `mode`
     return make_dryrun_result(idx, cm, std::move(merged));
   }
 
@@ -283,9 +348,9 @@ struct DryRunOps {
                std::shared_ptr<CostModel const> const& cm, std::size_t mode,
                std::size_t target_batch_size) {
     SEQUANT_ASSERT(mode < idx.size());
-    Index const& ix = idx[mode];
+    Index const& ix = idx[mode];  // for the regime extent / slice partition
     std::size_t extent;
-    if (auto it = ov.find(ix); it != ov.end())
+    if (auto it = ov.find(mode); it != ov.end())  // positional override
       extent = it->second;
     else
       extent = cm->regime().extent(ix);

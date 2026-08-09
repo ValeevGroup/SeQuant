@@ -92,8 +92,16 @@ template <typename BlockOfFn>
     BlockOfFn const& block_of,
     container::svector<Index> const& divergent_modes = {}) {
   dryrun::ExtentOverrides ov;
-  // block iff in the meet-home
-  for (auto const& m : home_modes) ov[m] = block_of(m);
+  // block iff in the meet-home. Overrides are POSITIONAL against `carried`:
+  // map each home mode to its position there. memsize() re-expands the position
+  // to that Index and applies the block extent wherever the Index recurs
+  // (including as a composite's outer proto), so composite slicing is
+  // preserved.
+  for (auto const& m : home_modes) {
+    auto const it = std::find(carried.begin(), carried.end(), m);
+    if (it != carried.end())
+      ov[static_cast<std::size_t>(it - carried.begin())] = block_of(m);
+  }
   std::size_t base = cm.memsize(carried, ov);  // non-meet carried modes FULL
   bool split = false;
   for (auto const& m : home_modes)

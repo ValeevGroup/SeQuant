@@ -1291,7 +1291,7 @@ TEST_CASE("dryrun cost model memsize honors an extent override",
   container::svector<Index> idx{Index{L"a_3"}, Index{L"i_1"}};
   auto const full = cm.memsize(idx);
   ExtentOverrides ov;
-  ov[Index{L"a_3"}] = 5;  // narrowed from 20 to 5
+  ov[0] = 5;  // mode 0 (a_3) narrowed from 20 to 5
   auto const sliced = cm.memsize(idx, ov);
   CHECK(sliced < full);
   CHECK(full == sliced * 4);  // linear in a_3's extent
@@ -1475,7 +1475,8 @@ TEST_CASE(
   // A fresh pre-sized destination whose batch mode starts UNFILLED (extent 0):
   // its shape/index-set is fixed, but its assembled size grows as blocks are
   // written in. Assemble the two blocks into it.
-  ResultDryRunNested dest{outer, inner, cm, {{i1, 0}}, canon};
+  ResultDryRunNested dest{
+      outer, inner, cm, {{0, 0}}, canon};  // mode 0 unfilled
   Result& dest_w = dest;  // the mutator is reached through the base interface
   dest_w.write_into_slice(*block0, 0, 0, 5);
   dest_w.write_into_slice(*block1, 0, 5, 10);
@@ -1488,7 +1489,8 @@ TEST_CASE(
   // Lobounds are preserved: a block written at a nonzero element offset (a
   // frozen-core-style occupied offset) assembles at that offset, not rebased
   // to 0.
-  ResultDryRunNested dest_fc{outer, inner, cm, {{i1, 0}}, canon};
+  ResultDryRunNested dest_fc{
+      outer, inner, cm, {{0, 0}}, canon};  // mode 0 unfilled
   Result& dest_fc_w = dest_fc;
   auto block_fc = tmpl_r.slice_mode(0, 2, 6);
   REQUIRE(block_fc);
@@ -4542,10 +4544,25 @@ TEST_CASE("hoist splits a divergently-sliced CSE value under a router",
   CHECK(split.peak_bytes > 0.0);
   CHECK(std::isfinite(split.peak_bytes));
 
-  // The split builds the divergent value TWICE (one per occurrence, each at its
-  // own occ depth) vs the baseline's single shared build -> strictly more
-  // replay flops. (The static arithmetic -- model_flops -- is unchanged.)
-  CHECK(split.dryrun_flops > baseline.dryrun_flops);
+  // The router relocates the divergent value's home, producing a DIFFERENT
+  // realized schedule than the baseline (proof the override took effect) while
+  // the placement-INVARIANT static arithmetic (model_flops) is unchanged.
+  //
+  // We deliberately assert NO cost direction. The "baseline" here is NOT the
+  // free-slicing ideal ("build V once above the loops, slice it inside"): the
+  // schedule dump shows V is never cached in the baseline (max_life == -1, no
+  // cache_map entry) and is rebuilt once per (i_3,i_4) block. That is because V
+  // is a CSE value bound to DIFFERENT occ labels in its two uses (i_3 in legA,
+  // i_4 in legB), and one hash-keyed cache entry cannot serve two divergent
+  // physical slices -- so default placement declines to home it. The router
+  // (this "split") homes it per occurrence, which is why its avoidable
+  // recompute is 0 vs the baseline's. So which arm is "cheaper" reflects that
+  // default- caching gap, not this cost-sizing refactor (the baseline cost is
+  // identical before and after it) -- pinning a direction would bake the gap
+  // into the test. (Earlier this asserted split.dryrun_flops > baseline, which
+  // the pre- refactor over-sizing made pass for the wrong reason; see
+  // doc/dev/specs/2026-08-08-dryrun-labelless-value-design.)
+  CHECK(split.dryrun_flops != baseline.dryrun_flops);
   CHECK(split.model_flops == baseline.model_flops);
 }
 

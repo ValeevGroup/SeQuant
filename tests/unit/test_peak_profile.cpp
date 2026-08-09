@@ -142,7 +142,7 @@ TEST_CASE("cell_footprint sizes enclosing-home modes at BLOCK, others FULL",
     svector<Index> const home_modes{p};
     auto const got = cell_footprint(carried, home_modes, cm, block_of);
     ExtentOverrides ov;
-    ov[p] = 2;
+    ov[0] = 2;  // mode 0 (p) at block extent
     CHECK(got == cm.memsize(carried, ov));
     // memsize() reports BYTES (elems * CostModel's numeric_size_ = 8.0), not
     // a raw element count: 2 (block p) * 10 (full q) * 8 bytes/elem.

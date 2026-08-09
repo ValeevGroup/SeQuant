@@ -72,14 +72,18 @@ struct CostSink {
 
 /// Per-index extent OVERRIDE table: narrows specific indices (by identity, so
 /// it survives reshaping across prod/sum/permute -- the same shared/
-/// contracted Index object may occupy different tensor modes at different
-/// nodes) to a runtime-realized element count. Populated by
+/// tensor MODE POSITION (0-based, in the value's canon index order) to a
+/// runtime-realized element count. Positional -- NOT keyed by Index -- because
+/// a DAG value has no intrinsic labels: only an op binds labels to it, so the
+/// only stable handle on a mode across ops is its position. Populated by
 /// Result::slice_mode()/mode_batches() call sites (see result.hpp); empty =>
 /// no override, the regime's nominal extent applies. This table -- not a
 /// second cost model -- is what lets a zero-data DryRun Result report the
 /// REALIZED (possibly runtime-sliced) size rather than always the full
 /// regime extent, which is exactly the signal Task 6's replay witnesses.
-using ExtentOverrides = container::map<Index, std::size_t>;
+/// Consumers that operate in LABEL space (flops, keyed by the op's annotation)
+/// resolve positions to labels through that annotation first.
+using ExtentOverrides = container::map<std::size_t, std::size_t>;
 
 ///
 /// \brief Bundles the optimizer's own cost closures (memsize/flops/roofline)
@@ -118,7 +122,14 @@ class CostModel {
   [[nodiscard]] std::size_t memsize(
       container::svector<Index> const& idxset,
       ExtentOverrides const& overrides = {}) const {
-    auto const ext = make_extent_fn(overrides);
+    // Resolve the POSITIONAL overrides against THIS index list: override at
+    // mode position `pos` applies to `idxset[pos]`, whatever its label. Build a
+    // per-call Index->extent map so make_extent_fn's atom lookup finds it (the
+    // counter revisits idxset[pos] by identity, incl. as a composite proto).
+    // Named local: make_extent_fn captures it by reference, so it must outlive
+    // `ext` (a temporary here would dangle).
+    auto const resolved = resolve_overrides(idxset, overrides);
+    auto const ext = make_extent_fn(resolved);
     auto const mc =
         sequant::opt::detail::memsize_counter(ext, regime_.inner_pow_fn());
     double const elems =
@@ -137,10 +148,17 @@ class CostModel {
   /// contraction, since by construction `contracted` holds precisely the
   /// indices present in both operands but absent from the result.
   ///
-  [[nodiscard]] double flops(container::svector<Index> const& out,
-                             container::svector<Index> const& contracted,
-                             ExtentOverrides const& overrides = {}) const {
-    auto const ext = make_extent_fn(overrides);
+  /// \p label_extents maps an ANNOTATION label (an Index appearing in \p out or
+  /// \p contracted) to its runtime-realized (sliced) extent. Unlike the value's
+  /// positional \c ExtentOverrides, this is keyed by Index because \p out /
+  /// \p contracted ARE labels -- the op's annotation is the sole source of
+  /// labels. \c DryRunOps::prod builds it from each operand's positional
+  /// overrides via that operand's annotation (see \c extents_by_label).
+  [[nodiscard]] double flops(
+      container::svector<Index> const& out,
+      container::svector<Index> const& contracted,
+      container::map<Index, std::size_t> const& label_extents = {}) const {
+    auto const ext = make_extent_fn(label_extents);
     auto const fc =
         sequant::opt::detail::flops_counter(ext, regime_.inner_pow_fn());
     return fc(out, contracted, container::svector<Index>{});
@@ -203,12 +221,27 @@ class CostModel {
   // the class body (a deduced `auto` return type would require the
   // definition to precede every use, even within the same class).
   [[nodiscard]] std::function<std::size_t(Index const&)> make_extent_fn(
-      ExtentOverrides const& overrides) const {
+      container::map<Index, std::size_t> const& overrides) const {
     return [this, &overrides](Index const& ix) -> std::size_t {
       if (auto it = overrides.find(ix); it != overrides.end())
         return it->second;
       return regime_.extent(ix);
     };
+  }
+
+  // Resolve a value's POSITIONAL overrides against its own index list: override
+  // at mode position `pos` binds to `idxset[pos]`. Yields an Index-keyed map so
+  // make_extent_fn's per-atom lookup finds the sliced extent wherever that
+  // Index recurs in idxset (including as a composite's outer proto), exactly as
+  // the pre-positional Index-keyed table did -- but now the key is derived from
+  // THIS list, not carried from a producer's labels.
+  [[nodiscard]] static container::map<Index, std::size_t> resolve_overrides(
+      container::svector<Index> const& idxset,
+      ExtentOverrides const& overrides) {
+    container::map<Index, std::size_t> out;
+    for (auto const& [pos, w] : overrides)
+      if (pos < idxset.size()) out.emplace(idxset[pos], w);
+    return out;
   }
 
   SizeRegime regime_;
