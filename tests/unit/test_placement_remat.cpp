@@ -29,6 +29,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <limits>
 #include <string_view>
@@ -67,16 +68,27 @@ using sequant::eval::dryrun::EvalExprDryRun;
 using sequant::eval::dryrun::EvalNodeDryRun;
 using sequant::eval::dryrun::SizeRegime;
 
-// The canonical slot positions a moved HomeTarget carries for \p modes on
-// \p node -- mirrors remat_to_router's index_position mapping (absent modes are
-// skipped). Suffixed to avoid a Unity-build anonymous-namespace name clash.
-template <typename Node>
-svector<std::size_t> expected_slot_positions_o2(Node const& node,
-                                                svector<Index> const& modes) {
-  svector<std::size_t> pos;
-  for (auto const& m : modes)
-    if (auto const p = sequant::index_position(node, m)) pos.push_back(*p);
-  return pos;
+// The DAG-scope a moved HomeTarget carries for a cell's \p home_modes --
+// mirrors remat_to_router's construction: each home mode's SPACE, ordered by
+// the mode's position in the cell's enclosing NEST (\p enclosing_modes, absent
+// modes sort last). Suffixed to avoid a Unity-build anonymous-namespace clash.
+svector<sequant::IndexSpace> expected_dag_scope_o2(
+    svector<Index> const& home_modes, svector<Index> const& enclosing_modes) {
+  auto const nest_pos = [&](Index const& m) -> std::size_t {
+    auto const it =
+        std::find(enclosing_modes.begin(), enclosing_modes.end(), m);
+    return it == enclosing_modes.end()
+               ? enclosing_modes.size()
+               : static_cast<std::size_t>(it - enclosing_modes.begin());
+  };
+  svector<Index> ordered(home_modes.begin(), home_modes.end());
+  std::stable_sort(ordered.begin(), ordered.end(),
+                   [&](Index const& a, Index const& b) {
+                     return nest_pos(a) < nest_pos(b);
+                   });
+  svector<sequant::IndexSpace> out;
+  for (auto const& m : ordered) out.push_back(m.space());
+  return out;
 }
 
 // Build an EvalExpr from a single-tensor spec (e.g. "R{i_1;a_5}"); its
@@ -556,14 +568,14 @@ TEST_CASE(
 
   // G is P1's left child; under P1 (stamped i_1) its ambient (enclosing) batch
   // context is {i_1}. Its occurrence key must route to a HomeTarget whose
-  // residency == the shrunk home_modes (i_1 kept + o_1 added by the shrink),
-  // split_index 0.
+  // DAG-scope == the spaces of the shrunk home_modes (i_1 kept + o_1 added by
+  // the shrink), ordered by nest.
+  auto const& giant_encl = res.cells[giant_id].enclosing_modes;
   auto const& G = forest[0].left();
   auto const g_key = occurrence_key(G, svector<Index>{Index{L"i_1"}});
   HomeTarget const* g_home = router.route(g_key);
   REQUIRE(g_home != nullptr);
-  CHECK(g_home->slot_positions == expected_slot_positions_o2(G, giant_home));
-  CHECK(g_home->split_index == 0);
+  CHECK(g_home->dag_scope == expected_dag_scope_o2(giant_home, giant_encl));
 
   // G's SECOND occurrence (under P2, ambient context {o_1,i_1}) also routes to
   // the SAME HomeTarget (one value -> one meet home). NOTE: on THIS fixture the
@@ -583,7 +595,7 @@ TEST_CASE(
   CHECK(sequant::eval::RouterKeyEqual{}(g_key, g_key2));  // same key here
   HomeTarget const* g_home2 = router.route(g_key2);
   REQUIRE(g_home2 != nullptr);
-  CHECK(g_home2->slot_positions == expected_slot_positions_o2(G, giant_home));
+  CHECK(g_home2->dag_scope == expected_dag_scope_o2(giant_home, giant_encl));
 
   // An UNMOVED cell (W1 = P1's right leaf) has NO override.
   auto const& W1 = forest[0].right();
@@ -665,8 +677,9 @@ TEST_CASE(
   HomeTarget const* h2 = router.route(k2);
   REQUIRE(h1 != nullptr);
   REQUIRE(h2 != nullptr);
-  CHECK(h1->slot_positions == expected_slot_positions_o2(V1, v_home));
-  CHECK(h2->slot_positions == expected_slot_positions_o2(V1, v_home));
+  auto const& v_encl = final_cells[v_id].enclosing_modes;
+  CHECK(h1->dag_scope == expected_dag_scope_o2(v_home, v_encl));
+  CHECK(h2->dag_scope == expected_dag_scope_o2(v_home, v_encl));
 }
 
 // ---------------------------------------------------------------------
@@ -744,13 +757,14 @@ TEST_CASE(
   auto const key1 = occurrence_key(forest[0].left(), ectx1_modes);  // V/P1
   HomeTarget const* home1 = router.route(key1);
   REQUIRE(home1 != nullptr);
-  CHECK(home1->slot_positions ==
-        expected_slot_positions_o2(
-            forest[0].left(), svector<Index>{Index{L"i_1"}, Index{L"i_2"}}));
+  auto const& v_encl = final_cells[v_id].enclosing_modes;
+  CHECK(home1->dag_scope ==
+        expected_dag_scope_o2(svector<Index>{Index{L"i_1"}, Index{L"i_2"}},
+                              v_encl));
   // V's post-shrink home is {i_1,i_2}: i_2 sits at level 1 of ectx1, so the
   // deepest residency match is level 1 => home_depth 2; the store seam sets
   // rl = home_depth - 1 = 1 (V homed at the inner i_2 loop, built once there).
-  CHECK(router.home_depth(*home1, forest[0].left(), ectx1) == 2);
+  CHECK(router.home_depth(*home1, ectx1, key1) == 2);
 
   // --- Occurrence 2: V under P2, only the i_1 loop is live ---
   BatchContext const ectx2{{Index{L"i_1"}, {0, 2}}};
@@ -760,11 +774,11 @@ TEST_CASE(
   REQUIRE(home2 != nullptr);
   // Same value -> same home {i_1,i_2}; under P2 only i_1 is a live loop, so
   // the deepest residency match is level 0 => home_depth 1 (rl = 0).
-  CHECK(router.home_depth(*home2, forest[1].left(), ectx2) == 1);
+  CHECK(router.home_depth(*home2, ectx2, key2) == 1);
 
   // The two occurrence keys are genuinely DISTINCT ({i_1,i_2} vs {i_1}) yet
   // both route to the SAME home -- the meet-home guarantee the runtime relies
   // on, resolved through the identical store-seam call sequence.
   CHECK_FALSE(sequant::eval::RouterKeyEqual{}(key1, key2));
-  CHECK(home1->slot_positions == home2->slot_positions);
+  CHECK(home1->dag_scope == home2->dag_scope);
 }

@@ -265,26 +265,35 @@ template <meta::eval_node_range R>
   std::unordered_map<std::size_t, container::svector<Index> const*> seed_home;
   for (auto const& c : seed_cells) seed_home.emplace(c.value_id, &c.home_modes);
   // MOVED map: value hash -> the DAG-global HomeTarget applied at EVERY
-  // occurrence key of that value. Its positions are computed ONCE from the
-  // CELL's canonical `carried` frame (stable across occurrences), NOT per
-  // occurrence: a home mode is one occurrence's physical label and need not
-  // appear in another occurrence's canon_indices (the g.C legs' i_3 vs i_4). A
-  // home mode that lies on `carried` becomes a slot position (resolved to each
-  // occurrence's own physical index at use); one that does not (the value is
-  // invariant to it) becomes a free_mode, matched by Index directly.
+  // occurrence key of that value. Its DAG-scope is computed ONCE, label-free,
+  // from the CELL's `home_modes`: each home mode contributes its SPACE, ordered
+  // by the mode's position in the enclosing NEST (`enclosing_modes`, folded
+  // outer->inner across every occurrence). It is a nest prefix, not a
+  // value-relative coordinate: a home mode need not appear on another
+  // occurrence's own slots (the g.C legs' i_3 vs i_4), and a home mode the
+  // value is invariant to (homed WITHIN but does not carry) is just another
+  // DAG-scope space -- no free-mode special case. home_depth resolves each
+  // space to THIS occurrence's physical index of that space per use.
   std::unordered_map<std::size_t, HomeTarget> moved;
   for (auto const& c : final_cells) {
     auto const sh = seed_home.find(c.value_id);
     if (sh == seed_home.end() || c.home_modes == *sh->second) continue;
+    // Order the home modes by nest depth (their index in enclosing_modes;
+    // modes absent from it sort last, keeping their home_modes order).
+    auto const nest_pos = [&](Index const& m) -> std::size_t {
+      auto const it =
+          std::find(c.enclosing_modes.begin(), c.enclosing_modes.end(), m);
+      return it == c.enclosing_modes.end()
+                 ? c.enclosing_modes.size()
+                 : static_cast<std::size_t>(it - c.enclosing_modes.begin());
+    };
+    container::svector<Index> ordered(c.home_modes.begin(), c.home_modes.end());
+    std::stable_sort(ordered.begin(), ordered.end(),
+                     [&](Index const& a, Index const& b) {
+                       return nest_pos(a) < nest_pos(b);
+                     });
     HomeTarget ht;
-    for (auto const& m : c.home_modes) {
-      auto const it = std::find(c.carried.begin(), c.carried.end(), m);
-      if (it != c.carried.end())
-        ht.slot_positions.push_back(
-            static_cast<std::size_t>(it - c.carried.begin()));
-      else
-        ht.free_modes.push_back(m);
-    }
+    for (auto const& m : ordered) ht.dag_scope.push_back(m.space());
     moved.emplace(c.hash, std::move(ht));
   }
 

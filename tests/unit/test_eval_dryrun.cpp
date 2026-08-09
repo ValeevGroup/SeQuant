@@ -4335,28 +4335,27 @@ TEST_CASE("cost_profile returns peak/flops/exec/n_ops",
 // exactly once, and re-discovers it already alive there on every subsequent
 // K1 iteration (no rebuild, one co-resident copy).
 //
-// The override registers D0's occurrence key with HomeTarget{residency =
-// {K1}}. Because occurrence_key filters the ambient batch modes down to only
-// those that live on D0's OWN slots (see occurrence_key.hpp) -- and D0 does
-// not carry K1 as an index at all -- the SAME key applies at both the
-// depth-0 (root's own, ectx = []) and depth-1 (M's own, ectx = [K1]) hoist
-// passes, yet resolves DIFFERENTLY at each: at depth-0, K1 is not yet in
-// scope, so home_depth() still resolves to 0 (root), a no-op matching the
-// natural placement; at depth-1, K1 IS in scope, so home_depth() resolves one
-// level in from root (the K1 loop's own scratch) instead of the natural whole
-// -nest root. D0 is then rebuilt and stored a SECOND time into that scratch,
-// while remaining alive, untouched, in the root cache from the depth-0 pass
-// -- a real second co-resident copy, not a relabeling of the same one. This
-// is exactly the case the brief's fallback anticipates: the override does not
-// cleanly relocate D0 from A to B (that requires a residency spanning every
-// depth at which D0 is independently discovered as hoistable, which an
-// empty-union invariant is at every depth by construction); it demonstrates
-// the seam is live by moving where D0 is ALSO built and held, raising the
-// peak co-resident footprint in a directly attributable, mechanically
-// explained way.
+// The override registers D0's occurrence key with a HomeTarget whose DAG-scope
+// names K1's SPACE. Under the DAG-scope home model (see placement_router.hpp),
+// home_depth resolves a scope space to THIS occurrence's physical batched index
+// of that space -- and D0 carries no batch mode at all (its slots are
+// {i_80,i_81}; K1/K2 are not on them), so no scope space ever resolves to a
+// live loop and home_depth is 0 (the chain root) at EVERY depth. The override
+// therefore fires (route() hits, the seam is live) but resolves to a NO-OP:
+// D0's natural whole-nest-invariant home is already the root, so the modeled
+// peak is UNCHANGED.
+//
+// This is a deliberate consequence of the redesign: the old value-relative
+// coordinate could relocate a whole-nest invariant INTO a loop it does not
+// carry via a raw-Index "free mode" (matched against ectx by identity, not
+// DAG-globally); the DAG-scope home removes that, because a value that binds no
+// physical loop cannot be homed deeper than root. Functional relocation is now
+// tested through a value that DOES bind the batched slot -- the g.C split test
+// "hoist splits a divergently-sliced CSE value under a router" below, and the
+// 3-level chain test in test_placement_router.cpp.
 TEST_CASE(
-    "placement router override relocates a hoisted invariant's home and "
-    "moves the modeled peak (Phase 2 T4)",
+    "placement router override on a whole-nest invariant resolves to root "
+    "(no-op) under the DAG-scope home model (Phase 2 T4)",
     "[dryrun][cost_profile]") {
   using sequant::eval::HomeTarget;
   using sequant::eval::occurrence_key;
@@ -4440,37 +4439,36 @@ TEST_CASE(
   CHECK(std::isfinite(baseline.dryrun_flops));
   CHECK(baseline.dryrun_flops >= 0.0);
 
-  // ---- relocated: one override on D0 ----------------------------------
+  // ---- routed: one override on D0, DAG-scope naming K1's space ---------
   PlacementRouter<EvalNodeDryRun> router;
   auto const key = occurrence_key(D0, container::svector<Index>{K1});
-  // D0 is a whole-nest invariant (carries {i_80,i_81}, not K1), so relocating
-  // it into K1's loop is a FREE-mode home (matched by Index, not a slot).
-  router.set_override(key, HomeTarget{{}, container::svector<Index>{K1}});
+  // D0 is a whole-nest invariant (carries {i_80,i_81}, not K1), so a DAG-scope
+  // naming K1's space binds no physical loop on D0 -- home_depth resolves to 0
+  // (root) at every depth. The override fires but is a no-op.
+  router.set_override(
+      key, HomeTarget{container::svector<sequant::IndexSpace>{K1.space()}});
   REQUIRE_FALSE(router.empty());
 
-  CostProfile const relocated =
+  CostProfile const routed =
       cost_profile(forest, policy, cfg, r, /*trace=*/nullptr, &router);
-  CHECK(relocated.peak_bytes > 0.0);
-  CHECK(std::isfinite(relocated.peak_bytes));
-  CHECK(std::isfinite(relocated.dryrun_flops));
-  CHECK(relocated.dryrun_flops >= 0.0);
+  CHECK(routed.peak_bytes > 0.0);
+  CHECK(std::isfinite(routed.peak_bytes));
+  CHECK(std::isfinite(routed.dryrun_flops));
+  CHECK(routed.dryrun_flops >= 0.0);
 
   std::wcerr << L"[router-relocation] baseline.peak_bytes="
-             << baseline.peak_bytes << L" relocated.peak_bytes="
-             << relocated.peak_bytes << L"\n";
+             << baseline.peak_bytes << L" routed.peak_bytes="
+             << routed.peak_bytes << L"\n";
 
-  // The override relocates ONE of D0's homes (M's / K2-loop's own hoist
-  // pass) from the root cache to the K1 loop's own scratch, while root's OWN
-  // (untouched, depth-0) copy stays alive throughout -- a genuine SECOND
-  // co-resident copy of D0, raising the peak co-resident footprint relative
-  // to the single-copy baseline.
-  CHECK(relocated.peak_bytes > baseline.peak_bytes);
+  // The override resolves to root (home_depth 0) at every depth -- exactly D0's
+  // natural whole-nest-invariant home -- so the schedule, and thus the modeled
+  // peak, is UNCHANGED. (A whole-nest invariant can no longer be relocated
+  // deeper: the DAG-scope home removed the raw-Index free-mode path.)
+  CHECK(routed.peak_bytes == baseline.peak_bytes);
 
-  // Structural sanity: relocating a placement changes co-resident SPACE
-  // accounting only, not the static or replay-tallied arithmetic -- the same
-  // forest is evaluated either way, just cached at a different depth.
-  CHECK(relocated.model_flops == baseline.model_flops);
-  CHECK(relocated.model_n_ops == baseline.model_n_ops);
+  // Structural sanity: the same forest is evaluated either way.
+  CHECK(routed.model_flops == baseline.model_flops);
+  CHECK(routed.model_n_ops == baseline.model_n_ops);
 }
 
 TEST_CASE("hoist splits a divergently-sliced CSE value under a router",
@@ -4530,12 +4528,12 @@ TEST_CASE("hoist splits a divergently-sliced CSE value under a router",
   CostProfile const baseline = cost_profile(forest, policy, cfg, r);
 
   // Router: one DAG-global override (legA/legB share an occurrence key) homing
-  // the value at its occ slot. home_depth resolves that slot to i_3 for legA
+  // the value at the occ SPACE. home_depth resolves that space to i_3 for legA
   // and i_4 for legB, so the hoist SPLITS them into two per-occurrence builds.
   PlacementRouter<EvalNodeDryRun> router;
-  auto const p = *sequant::index_position(legA, i3);  // occ slot position
   auto const key = occurrence_key(legA, container::svector<Index>{i3, i4});
-  router.set_override(key, HomeTarget{container::svector<std::size_t>{p}});
+  router.set_override(
+      key, HomeTarget{container::svector<sequant::IndexSpace>{i3.space()}});
   router.mark_moved(legA->hash_value());
   REQUIRE_FALSE(router.empty());
 

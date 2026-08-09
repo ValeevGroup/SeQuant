@@ -16,27 +16,39 @@ namespace sequant::eval {
 
 /// \brief Override home descriptor.
 ///
-/// \details A home has two parts, resolved to a depth by \c home_depth against
-/// the live batch context:
-/// - \c slot_positions -- CANONICAL result-slot positions (indices into
-///   \c canon_indices()) of the value's home modes that lie ON its own slots.
-///   DAG-GLOBAL: identical for every occurrence, and resolved PER USE by
-///   mapping each position to THAT occurrence's physical index (\c
-///   canon_indices()[p]), so one overlay places two occurrences whose batched
-///   slot binds different labels (the g.C legs, i_3 vs i_4) at DIFFERENT
-///   depths. This is the case real remat produces (\c shrink_candidates is
-///   enclosing INTERSECT carried).
-/// - \c free_modes -- home modes NOT on the value's own slots (the value is
-///   invariant to them but homed within their loop). These cannot be a slot
-///   position, so they are matched by Index identity directly. Empty for real
-///   remat moves; used when a value is relocated into a loop it does not carry.
-/// Both empty => invariant to the whole nest (the chain root). \c split_index
-/// discriminates two cells of one value at the SAME resolved depth
-/// (register-allocation split; 0 unless remat splits).
+/// \details A home is a label-free DAG-SCOPE: an ordered sequence of SPACES
+/// describing a batch-loop NEST PREFIX (e.g. \c [occ, occ, aux]), independent
+/// of any value or tree. It names a level by its POSITION in the sequence, so a
+/// space repeated ALONG the nest (the g.C \c i_3-outer / \c i_4-inner chain) is
+/// disambiguated by position without a separate instance index. A DAG-scope is
+/// DAG-GLOBAL: identical for every occurrence of the value. It is resolved PER
+/// USE by \c home_depth, which maps each scope space to THAT occurrence's
+/// physical batched index (of the same space) via the occurrence key, so one
+/// overlay places two occurrences whose batched slot binds different labels at
+/// DIFFERENT depths -- realizing the split with a single overlay.
+///
+/// Every \c dag_scope entry is a space the value CARRIES: \c home_depth
+/// resolves it to a physical loop via \c key.get_indices() (the occurrence's
+/// own batched slots), and \c remat_to_router only ever emits carried-mode
+/// spaces (a cell's \c home_modes are a subset of its \c carried). A level the
+/// value is homed WITHIN but does NOT carry (the value is invariant to that
+/// loop but rebuilt inside it -- leg B's \c i_3) is therefore NOT a \c
+/// dag_scope entry: it has no per-occurrence physical anchor, so it cannot be
+/// resolved here. It is instead derived from the enclosing NEST (levels below
+/// the home that the cell does not carry) where it is priced as recompute --
+/// the replication factor (see the design spec, Design section 3). This is why
+/// the old \c free_modes special case is gone rather than folded in: a
+/// homed-within level is a nest fact, not a home coordinate. An empty \c
+/// dag_scope => invariant to the whole nest (the chain root). Split cells of
+/// one value differ in \c dag_scope; the DAG-scope alone identifies the home,
+/// so no separate split index is needed.
+///
+/// caveat: the space-sequence is a unique coordinate only when no nest level
+/// has same-space SIBLINGS (see the design spec section "DAG-scopes form a
+/// tree", Coordinate caveat). Our construction only ever produces same-space
+/// NESTING, never un-collapsed same-space siblings, so the sequence suffices.
 struct HomeTarget {
-  container::svector<std::size_t> slot_positions;
-  container::svector<Index> free_modes;
-  std::size_t split_index = 0;
+  container::svector<IndexSpace> dag_scope;
 };
 
 /// \brief A read+store override seam keyed on an occurrence (see
@@ -89,26 +101,40 @@ class PlacementRouter {
     return moved_hashes_.find(value_hash) != moved_hashes_.end();
   }
 
-  /// \return \c 1 + (deepest index \c i in \p ctx whose mode equals \p node's
-  ///         \c canon_indices()[p] for some home slot position \c p), or \c 0
-  ///         if none (invariant to the whole nest, i.e. the chain root).
-  ///         Resolves the DAG-global \c home.slot_positions to THIS
-  ///         occurrence's physical indices via \p node, so two occurrences of
-  ///         one value (sharing one overlay) whose batched slot binds different
-  ///         labels resolve to DIFFERENT depths. Static mirror of \c
+  /// \return \c 1 + (the DEEPEST index \c i in \p ctx that this occurrence
+  ///         binds to some space of \p home's DAG-scope), or \c 0 if none
+  ///         (invariant to the whole nest, i.e. the chain root). Resolves the
+  ///         DAG-global \c home.dag_scope to THIS occurrence's physical loop
+  ///         via \p key (its batched-slot canonicalization): each scope space
+  ///         \c S is matched to the occurrence's in-scope batched physical
+  ///         index(es) of space \c S (\c key.get_indices()), each of which is
+  ///         mapped to its live-loop depth in \p ctx; the deepest such depth
+  ///         wins. So two occurrences of one value (sharing one overlay) whose
+  ///         batched slot binds different labels (the g.C legs, \c i_3 vs
+  ///         \c i_4) resolve to DIFFERENT depths. Static mirror of \c
   ///         place_at_this_level's \c rl+1 walk (in \c eval.hpp).
+  ///
+  /// \note Taking the DEEPEST matched depth is insensitive to same-space
+  ///       ORDINAL ordering within \c ctx (which \c i_3 vs \c i_4 sits outer),
+  ///       and correct even when a space appears \c k times in \c dag_scope: at
+  ///       most \c k physical indices of that space participate, and the
+  ///       deepest is what the nest prefix resolves to. caveat: this collapses
+  ///       to one depth if ONE occurrence bound MULTIPLE same-space batched
+  ///       indices that a nest with same-space SIBLINGS would need to keep
+  ///       distinct -- out of scope here (see the design spec "DAG-scopes form
+  ///       a tree").
   [[nodiscard]] std::size_t home_depth(HomeTarget const& home,
-                                       TreeNode const& node,
-                                       BatchContext const& ctx) const {
-    auto const& canon = node->canon_indices();
-    for (int i = static_cast<int>(ctx.size()) - 1; i >= 0; --i) {
-      for (auto const& p : home.slot_positions)
-        if (p < canon.size() && ctx[i].first == canon[p])
-          return static_cast<std::size_t>(i) + 1;
-      for (auto const& m : home.free_modes)
-        if (ctx[i].first == m) return static_cast<std::size_t>(i) + 1;
-    }
-    return 0;
+                                       BatchContext const& ctx,
+                                       Key const& key) const {
+    auto const phys = key.template get_indices<container::svector<Index>>();
+    std::size_t deepest = 0;  // 0 => no match (invariant to the whole nest)
+    for (auto const& space : home.dag_scope)
+      for (auto const& ix : phys) {
+        if (!(ix.space() == space)) continue;
+        for (std::size_t i = 0; i < ctx.size(); ++i)
+          if (ctx[i].first == ix && i + 1 > deepest) deepest = i + 1;
+      }
+    return deepest;
   }
 
  private:

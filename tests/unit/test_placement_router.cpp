@@ -80,35 +80,77 @@ EvalNodeDryRun router_test_leaf_node(ExprPtr const& t) {
 
 TEST_CASE("placement_router: home_depth resolves the deepest matching scope",
           "[placement_router]") {
-  // Outermost-first: [J, K, Lx] at ctx indices [0, 1, 2]; M absent from ctx.
-  Index J{L"i_1"}, K{L"i_2"}, Lx{L"i_3"}, M{L"i_9"};
+  using sequant::IndexSpace;
+  // Outermost-first: J (occ) at ctx index 0, V (virt) at ctx index 1. A is a
+  // third, unrelated space absent from the nest.
+  Index J{L"i_1"}, V{L"a_1"};
 
-  // A node whose canonical result slots carry J, K, Lx, M. home_depth resolves
-  // a HomeTarget's canonical slot POSITIONS to this node's physical indices
-  // (canon_indices()[p]) before matching them against ctx.
-  auto t = ex<Tensor>(L"B", bra(svector<Index>{J, K, Lx, M}), ket{},
-                      Symmetry::Nonsymm, std::nullopt, ColumnSymmetry::Nonsymm);
+  // A node whose canonical result slots carry BOTH batched modes, so both are
+  // in scope on the occurrence key. home_depth resolves a HomeTarget's
+  // DAG-scope (a sequence of SPACES) to THIS occurrence's physical index of
+  // each space, then to that index's live-loop depth.
+  auto t = ex<Tensor>(L"B", bra(svector<Index>{J, V}), ket{}, Symmetry::Nonsymm,
+                      std::nullopt, ColumnSymmetry::Nonsymm);
   auto node = router_test_leaf_node(t);
-  auto pos = [&](Index const& ix) { return *index_position(node, ix); };
+  auto const key = occurrence_key(node, svector<Index>{J, V});
 
-  ctx_type ctx{{J, {0, 1}}, {K, {0, 1}}, {Lx, {0, 1}}};
+  ctx_type ctx{{J, {0, 1}}, {V, {0, 1}}};
 
   router_type router;
 
-  // K's slot sits at ctx index 1 -> home_depth = 1 + 1 = 2.
-  CHECK(router.home_depth(HomeTarget{svector<std::size_t>{pos(K)}}, node,
-                          ctx) == 2);
+  // The occ space resolves to J at ctx index 0 -> home_depth = 1.
+  CHECK(router.home_depth(HomeTarget{svector<IndexSpace>{J.space()}}, ctx,
+                          key) == 1);
 
-  // Empty slot_positions => invariant to the whole nest => chain root => 0.
-  CHECK(router.home_depth(HomeTarget{}, node, ctx) == 0);
+  // The virt space resolves to V at ctx index 1 -> home_depth = 2.
+  CHECK(router.home_depth(HomeTarget{svector<IndexSpace>{V.space()}}, ctx,
+                          key) == 2);
 
-  // A slot whose physical index is absent from ctx (M) => 0.
-  CHECK(router.home_depth(HomeTarget{svector<std::size_t>{pos(M)}}, node,
-                          ctx) == 0);
+  // Empty dag_scope => invariant to the whole nest => chain root => 0.
+  CHECK(router.home_depth(HomeTarget{}, ctx, key) == 0);
 
-  // Two slots resolve to the DEEPEST matching ctx level (Lx at index 2).
-  CHECK(router.home_depth(HomeTarget{svector<std::size_t>{pos(J), pos(Lx)}},
-                          node, ctx) == 3);
+  // A space with no in-scope batched index (p, absent here) => 0.
+  CHECK(router.home_depth(
+            HomeTarget{svector<IndexSpace>{Index{L"p_1"}.space()}}, ctx, key) ==
+        0);
+
+  // Two spaces resolve to the DEEPEST matching ctx level (virt at index 1).
+  CHECK(router.home_depth(HomeTarget{svector<IndexSpace>{J.space(), V.space()}},
+                          ctx, key) == 2);
+}
+
+TEST_CASE(
+    "placement_router: home_depth resolves one DAG-scope to per-use physical "
+    "depth",
+    "[placement_router]") {
+  using sequant::IndexSpace;
+  // Two occurrences A and B of ONE value, differing only in the physical label
+  // bound to a batched occ slot: A binds i_3, B binds i_4. Both nodes carry the
+  // occ mode on their own slots so it lands on the occurrence key.
+  Index const i3{L"i_3"}, i4{L"i_4"};
+  auto const tA =
+      ex<Tensor>(L"V", bra(svector<Index>{i3}), ket{}, Symmetry::Nonsymm,
+                 std::nullopt, ColumnSymmetry::Nonsymm);
+  auto const tB =
+      ex<Tensor>(L"V", bra(svector<Index>{i4}), ket{}, Symmetry::Nonsymm,
+                 std::nullopt, ColumnSymmetry::Nonsymm);
+  auto const A = router_test_leaf_node(tA);
+  auto const B = router_test_leaf_node(tB);
+
+  // Nested batch context: i_3 outer (index 0), i_4 inner (index 1). A is in
+  // scope only for i_3; B only for i_4.
+  ctx_type ctx{{i3, {0, 1}}, {i4, {0, 1}}};
+  auto const key_A = occurrence_key(A, svector<Index>{i3});
+  auto const key_B = occurrence_key(B, svector<Index>{i4});
+
+  // ONE overlay, DAG-scope = { occ }: resolves per use to each occurrence's own
+  // physical binding -> A's i_3 (depth 1), B's i_4 (depth 2).
+  HomeTarget h;
+  h.dag_scope = svector<IndexSpace>{i3.space()};
+
+  router_type router;
+  CHECK(router.home_depth(h, ctx, key_A) == 1);
+  CHECK(router.home_depth(h, ctx, key_B) == 2);
 }
 
 TEST_CASE("placement_router: set_override/route/empty", "[placement_router]") {
@@ -131,14 +173,13 @@ TEST_CASE("placement_router: set_override/route/empty", "[placement_router]") {
   CHECK(router.empty());
   CHECK(router.route(key1) == nullptr);
 
-  HomeTarget home{svector<std::size_t>{0}};
+  HomeTarget home{sequant::container::svector<sequant::IndexSpace>{i1.space()}};
   router.set_override(key1, home);
 
   CHECK_FALSE(router.empty());
   auto const* routed = router.route(key1);
   REQUIRE(routed != nullptr);
-  CHECK(routed->slot_positions == home.slot_positions);
-  CHECK(routed->split_index == 0);
+  CHECK(routed->dag_scope == home.dag_scope);
 
   // A different occurrence (distinct tensor label) stays unrouted.
   CHECK(router.route(key2) == nullptr);
@@ -287,7 +328,7 @@ TEST_CASE(
   // above were deleted, defeating the point of this test.
   auto const* routed = router.route(key);
   REQUIRE(routed != nullptr);
-  std::size_t const hd = router.home_depth(*routed, X, inner_ctx);
+  std::size_t const hd = router.home_depth(*routed, inner_ctx, key);
   CHECK(hd == 0);
   std::size_t const use_depth = inner_ctx.size();
   std::size_t const hops = use_depth - hd;

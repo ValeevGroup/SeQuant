@@ -732,26 +732,27 @@ ResultPtr evaluate_impl(Node const& node,         //
             auto const key = eval::occurrence_key(f.node, ctx_modes);
             if (auto const* home = router->route(key)) {
               std::size_t const use_depth = ctx.size();
-              std::size_t const hd = router->home_depth(*home, f.node, ctx);
+              std::size_t const hd = router->home_depth(*home, ctx, key);
               SEQUANT_ASSERT(hd <= use_depth);
               // Defense-in-depth (design sec.4): the router-directed fetch keys
               // by CANONICAL hash at the resolved scope, so serving is only
               // sound if the resolution is CONSISTENT with THIS occurrence -- a
               // mis-keyed overlay must never hand it an entry sliced for a
               // DIFFERENT occurrence. When hd resolves to a live loop, that
-              // loop's mode must be one the overlay names for f.node: its
-              // canon_indices() at an overlay slot position, or a declared
-              // free_mode. The hoist split (place_at_this_level) already keeps
-              // signature-inconsistent occurrences at DIFFERENT scopes, so this
-              // holds on every correct schedule; the assert is a live tripwire
-              // for a future home_depth/overlay bug (elided in release).
+              // loop's mode must be one of THIS occurrence's in-scope batched
+              // physical indices (key.get_indices()) whose space the overlay's
+              // DAG-scope names. The hoist split (place_at_this_level) already
+              // keeps signature-inconsistent occurrences at DIFFERENT scopes,
+              // so this holds on every correct schedule; the assert is a live
+              // tripwire for a future home_depth/overlay bug (elided in
+              // release).
               SEQUANT_ASSERT(hd == 0 || [&] {
                 Index const& hm = ctx[hd - 1].first;
-                auto const& canon = f.node->canon_indices();
-                for (auto const& sp : home->slot_positions)
-                  if (sp < canon.size() && canon[sp] == hm) return true;
-                for (auto const& fm : home->free_modes)
-                  if (fm == hm) return true;
+                auto const phys = key.get_indices<container::svector<Index>>();
+                if (std::find(phys.begin(), phys.end(), hm) == phys.end())
+                  return false;
+                for (auto const& space : home->dag_scope)
+                  if (hm.space() == space) return true;
                 return false;
               }());
               std::size_t const hops = use_depth - hd;
@@ -1878,7 +1879,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
               auto const key = eval::occurrence_key(d, ectx_modes);
               auto const* home = router->route(key);
               if (home) {
-                rl = static_cast<int>(router->home_depth(*home, d, ectx)) - 1;
+                rl = static_cast<int>(router->home_depth(*home, ectx, key)) - 1;
               } else if (router->moved(d->hash_value())) {
                 // d is remat-demoted to a DEEPER context than this hoist is
                 // inside: its per-occurrence override is keyed at that context
