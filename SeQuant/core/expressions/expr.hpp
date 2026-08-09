@@ -4,6 +4,7 @@
 #include <SeQuant/core/expressions/expr_iterator.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/options.hpp>
+#include <SeQuant/core/tree_index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <boost/core/demangle.hpp>
@@ -380,6 +381,10 @@ class Expr : public std::enable_shared_from_this<Expr> {
 
   ExprPtr &operator[](std::size_t idx);
   const ExprPtr &operator[](std::size_t idx) const;
+
+  /// @return The subexpression identified by the given index
+  Expr &operator[](const TreeIndex &idx);
+  const Expr &operator[](const TreeIndex &idx) const;
 
   ExprPtr &at(std::size_t idx);
   const ExprPtr &at(std::size_t idx) const;
