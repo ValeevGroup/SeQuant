@@ -192,9 +192,10 @@ physical loop via the use site's occurrence key.
 
 **Interfaces:**
 - Produces:
-  - `HomeTarget { container::svector<SpaceTag> dag_scope; std::size_t split_index = 0; }`
+  - `HomeTarget { container::svector<SpaceTag> dag_scope; }`
     where `SpaceTag` is the batch-loop space identifier (e.g. the `IndexSpace`
-    base key / a small enum). `dag_scope` is an ordered nest prefix.
+    base key / a small enum). `dag_scope` is an ordered nest prefix, and it
+    alone identifies the home (split cells of one value differ in `dag_scope`).
   - `home_depth(HomeTarget const& home, BatchContext const& ctx, Key const& key) -> std::size_t`
     -- resolve `home.dag_scope` against `ctx` by mapping each DAG-scope position
     (a space) to the physical loop the occurrence binds there (via `key`'s slot
@@ -249,13 +250,14 @@ instead (the split), reusing the Task 1 helper.
 - Modify: `SeQuant/core/eval/eval.hpp` (`place_at_this_level`, 1796-1896: the
   `collect` dedup 1801-1802, `ensure_hoist_slot`/`alive` 1883-1884, build/store
   1892-1895)
-- Modify: `SeQuant/core/eval/cache_manager.hpp` if a per-occurrence hoist slot
-  needs a discriminator beyond the canonical key (the `split_index` coordinate)
 - Test: `tests/unit/test_eval.cpp` (or the batched-eval test file) -- a numeric
   correctness test
 
 **Interfaces:**
-- Consumes: `signatures_consistent` (Task 1), `HomeTarget::split_index` (Task 3).
+- Consumes: `signatures_consistent` (Task 1), the per-use DAG-scope resolution
+  (Task 3). No cache re-keying: divergent occurrences resolve to DISTINCT
+  scope-chain depths (distinct `cache_map_`s), so the canonical hash key already
+  holds both materializations -- see spec Non-goals.
 
 - [ ] **Step 1: Write the failing correctness test.** Build a minimal batched
   forest whose value has two occurrences slicing a relabeled mode (the g.C
@@ -277,8 +279,10 @@ TEST_CASE("hoist splits a divergently-sliced CSE value", "[eval][split]") {
 - [ ] **Step 3: Implement the split.** In `collect`, when a candidate occurrence
   is signature-inconsistent (`!signatures_consistent(...)`) with an existing
   target at the home scope, do not fold it via `eq`; register a distinct hoist
-  slot for it (carrying its own `split_index`), and in the build loop skip the
-  `alive(d)` early-out for that occurrence so it is built per occurrence. Keep the
+  target for it, built at its OWN router-resolved depth (a distinct scope-chain
+  level, hence a distinct `cache_map_` entry -- no extra discriminator), and in
+  the build loop skip the `alive(d)` early-out for that occurrence so it is built
+  per occurrence. Keep the
   consistent case exactly as today.
 
 - [ ] **Step 4: Run tests.** `[eval][split]` passes; the full batched-eval smoke
@@ -293,67 +297,117 @@ git commit -m "eval: split divergently-sliced CSE occurrences in the hoist path"
 
 ---
 
-### Task 5: remat emits one DAG-global overlay and prices the split
+### Task 5: remat prices the split as two cells with a replication factor
 
-Make `remat_to_router` emit a single DAG-scope overlay per moved value, and make
-`shrink_candidates`/`apply_shrink` CSE-aware so a relabeled mode is offered only
-as a split (priced with recompute), not an in-place shrink.
+Un-fold a divergent value into two real cells and price each cell's recompute by
+its **replication factor** (the product of the block counts of every enclosing
+loop it is homed-within but does not carry), replacing the flat 2x fudge that
+`46b495eba` shipped as a placeholder. Make `shrink_candidates`/`apply_shrink`
+CSE-aware (relabeled -> split-only), and make `remat_to_router` moved-detection
+hash-aware so split cells (new `value_id`s, one shared hash) are still emitted as
+one overlay.
+
+> **HARD DEPENDENCY on Task 3.** The replication factor is a product over the
+> levels a cell is *homed-within but does not carry* (leg B's `i_3`) -- exactly the
+> levels a value-relative coordinate (`slot_positions`) cannot name, because they
+> are not in that occurrence's `canon_indices`. This task **cannot be priced
+> correctly until Task 3's DAG-scope home lands**; do Task 3 first. See spec
+> Design section 3 ("remat prices the split") and "Scope must be a DAG-level
+> coordinate".
 
 **Files:**
-- Modify: `SeQuant/core/eval/placement_remat.hpp` (`shrink_candidates`,
-  `apply_shrink`, `remat_to_router`)
-- Modify: `SeQuant/core/eval/peak_profile.hpp` (`ValueCell` + `compute_dag_boulevard`
-  grouping 356-391: retain per-occurrence `canon_indices` needed to classify
-  shared-label vs relabeled)
+- Modify: `SeQuant/core/eval/peak_profile.hpp` -- `ValueCell` (retain per-
+  occurrence records `{carried, ectx, point, consumer_point, home}`, not just the
+  first + union/min/max); `compute_dag_boulevard` grouping (stop collapsing them);
+  `cell_footprint` (**delete** the `divergent ? 2*base : base` branch -- the sweep
+  prices peak co-residency by liveness overlap once there are two real cells).
+- Modify: `SeQuant/core/eval/placement_remat.hpp` -- `shrink_candidates`/
+  `apply_shrink` (CSE-aware; `apply_shrink` grows the cell container instead of
+  mutating one cell); `rematerialize_to_budget` (one->two growth in trial +
+  commit, fresh `value_id`s, objective weighs DeltaPeak vs split recompute, restate
+  termination); `remat_to_router` (hash-aware moved-detection).
 - Test: `tests/unit/test_placement_remat.cpp`
 
 **Interfaces:**
-- Consumes: `slicing_signature` (Task 1), `HomeTarget`/DAG-scope (Task 3).
-- Produces: `remat_to_router(...)` yielding one overlay per value keyed by its
-  DAG-global occurrence key, with a DAG-scope `HomeTarget`; split cells priced in
-  the returned `RematResult`.
+- Consumes: `slicing_signature` (Task 1); the DAG-scope `HomeTarget` and its
+  per-use resolution (Task 3) -- **required**, see the dependency note above.
+- Produces: an `apply_split` (replacing/extending `apply_shrink`) that replaces one
+  divergent `ValueCell` with two same-hash cells; a recompute-priced `RematResult`;
+  a hash-aware `remat_to_router` still emitting one overlay per value.
 
-- [ ] **Step 1: Write the failing pricing test.** A `ValueCell` whose occurrences
-  slice a relabeled mode: assert `shrink_candidates` classifies that mode as
-  split-only (not an in-place shrink), that applying the split yields two cells
-  of one hash with distinct DAG-scope homes, and that the modeled peak/flops
-  count the recompute.
+- [ ] **Step 1: Write the failing pricing test.** A `ValueCell` whose two
+  occurrences bind a relabeled mode to `i_3` (outer, N3 blocks) and `i_4` (inner):
+  assert `shrink_candidates` classifies that mode split-only; that applying the
+  split yields two same-hash cells at distinct DAG-scope homes; and that the priced
+  recompute matches the **replication factor**, not 2x -- cell A (homes `i_3`,
+  carries it) costs 1x full build, cell B (homes `i_4`, invariant to `i_3`) costs
+  **N3 x** full build, so total is `(1 + N3) x`, equal to 2x only at N3 = 1.
 
 ```cpp
-TEST_CASE("remat splits along a relabeled mode, prices recompute", "[placement_remat]") {
+TEST_CASE("remat splits along a relabeled mode, prices replication not 2x", "[placement_remat]") {
   auto cands = sequant::eval::shrink_candidates(cell);
-  REQUIRE(is_split_only(cands, relabeled_mode));      // not offered as in-place shrink
-  auto res = sequant::eval::apply_shrink(cell, relabeled_mode);
-  REQUIRE(res.cells_of_hash(cell.hash).size() == 2);  // two cells, one value
-  REQUIRE(res.modeled_flops > cell_flops_before);     // recompute priced
+  REQUIRE(is_split_only(cands, relabeled_mode));       // not an in-place shrink
+  auto res = sequant::eval::apply_split(cells, ci, relabeled_mode);
+  REQUIRE(res.cells_of_hash(cell.hash).size() == 2);   // two cells, one value
+  // N3 = outer (i_3) block count; the inner cell is rebuilt per i_3 block:
+  REQUIRE(res.modeled_recompute == Approx((1 + N3) * full_build));  // NOT 2 * full_build
 }
 ```
 
-- [ ] **Step 2: Run it to confirm it fails.**
+- [ ] **Step 2: Run it to confirm it fails** (today: one cell, priced 2x).
 
-- [ ] **Step 3: Retain per-occurrence `canon_indices` on the cell.** In
-  `compute_dag_boulevard`, stop discarding each occurrence's `r.canon_indices`
-  at grouping; store a per-occurrence record on `ValueCell` sufficient to classify
-  a mode as shared-label (identical across occurrences) vs relabeled (differs) via
-  `slicing_signature`.
+- [ ] **Step 3: Retain per-occurrence records on the cell.** In
+  `compute_dag_boulevard`, stop collapsing each occurrence's
+  `{carried (canon_indices), ectx, point, consumer_point, home}` at grouping; keep
+  a per-occurrence list on `ValueCell` sufficient to (a) classify a mode
+  shared-label vs relabeled via `slicing_signature`, and (b) compute subset-local
+  liveness and home for each split cell.
 
-- [ ] **Step 4: Make `shrink_candidates`/`apply_shrink` CSE-aware.** Classify each
-  candidate: shared-label -> in-place shrink (today's behavior); relabeled ->
-  split (un-fold into per-occurrence cells, each homed at its own DAG-scope, with
-  recompute priced for any home-prefix level a cell does not carry).
+- [ ] **Step 4: Make `shrink_candidates`/`apply_shrink` CSE-aware + split.**
+  Classify each candidate: shared-label (in `carried_isect`) -> in-place shrink
+  (today's behavior). Relabeled (in `divergent_modes`) -> **split-only**: replace
+  the one `ValueCell` in the working vector with **two same-hash cells**, one per
+  occurrence subset, each with its subset-local `carried`/`home_modes`/liveness,
+  `divergent_modes = {}`, and a fresh `value_id`, with the relabeled mode folded
+  into each subset's home under its own physical label. `apply_shrink`'s signature
+  changes from mutate-one-cell to grow-the-container.
 
-- [ ] **Step 5: Emit one DAG-global overlay per value in `remat_to_router`,** with
-  a DAG-scope `HomeTarget` (Task 3), keyed by the value's DAG-global occurrence
-  key (Task 2). No per-occurrence overlay.
+- [ ] **Step 5: Price recompute by replication factor; delete the 2x.** Remove the
+  `divergent ? 2*base : base` branch from `cell_footprint`. Add, to the cost each
+  split cell contributes, a recompute term = `build_cost(cell) x PROD over every
+  enclosing loop the cell is homed-within-but-does-not-carry of (that loop's block
+  count)`. "Homed-within-but-not-carry" is read from the cell's DAG-scope home
+  (Task 3) minus its `carried` set; the enclosing loops come from `enclosing_modes`
+  / the nest. Peak co-residency is left to `peak_profile_sweep` (two liveness
+  intervals). Confirm on the canonical fixture that the term is `(1 + N3) x`.
 
-- [ ] **Step 6: Run tests.** `[placement_remat]` passes; the existing remat tests
+- [ ] **Step 6: Teach `rematerialize_to_budget` the one->two move.** A split erases
+  one cell and appends two, so trial (`auto trial = cells; ...`) and commit must
+  use `apply_split` and mint fresh `value_id`s. The split breaks the "all shrinks
+  are zero-recompute, so the metric is pure `DeltaPeak`" invariant, so **record
+  each split's recompute** (the replication factor) for the forecast. Keeping the
+  selection objective **peak-only** is the current, correct default -- do NOT add
+  recompute to the objective in this task; making recompute a *secondary* objective
+  (prefer, among peak-feasible placements, the lowest-recompute one) is a separate,
+  deliberate decision (see spec section 3, "Does this recompute term change the
+  schedule?"). Restate termination: each split strictly reduces the forest's
+  divergent-mode count (bounded); shrinks still grow `home_modes` toward `carried`
+  (bounded).
+
+- [ ] **Step 7: Make `remat_to_router` moved-detection hash-aware,** and still emit
+  **one DAG-global overlay per value hash** (Task 2 key, Task 3 DAG-scope). Split
+  cells carry fresh `value_id`s absent from the seed-home map, so `value_id`-keyed
+  moved-detection would drop them -- key moved-detection by hash instead. Both split
+  cells resolve to the *same* DAG-scope home, so assert they agree and emit once.
+
+- [ ] **Step 8: Run tests.** `[placement_remat]` passes; the existing remat tests
   stay green (unmoved cells unchanged).
 
-- [ ] **Step 7: Commit.**
+- [ ] **Step 9: Commit.**
 
 ```bash
 git add SeQuant/core/eval/placement_remat.hpp SeQuant/core/eval/peak_profile.hpp tests/unit/test_placement_remat.cpp
-git commit -m "remat: split along relabeled modes; one DAG-scope overlay per value"
+git commit -m "remat: split along relabeled modes, priced by replication factor"
 ```
 
 ---
@@ -464,7 +518,14 @@ MAD_NUM_THREADS=1 MPQC_SCHED_SIZE_OVERRIDE=c60 MPQC_SCHED_PEAK_THR_GB=500 \
   task; defense-in-depth (Testing 6) -> Task 6.
 - **Ordering:** Tasks 1-3 are behavior-neutral infrastructure (no-op under empty
   router); Task 4 is the correctness fix; Task 5 makes remat drive/price it;
-  Task 6 is belt-and-suspenders; Task 7 validates end-to-end.
+  Task 6 is belt-and-suspenders; Task 7 validates end-to-end. **Task 5 has a HARD
+  dependency on Task 3:** the split's recompute is a replication factor over the
+  levels a cell is homed-within-but-does-not-carry, which only the Task 3 DAG-scope
+  home can name -- Task 5 cannot be priced on Task 3's interim `slot_positions`.
+- **Note on the current tree:** Task 3 shipped as `slot_positions`/`free_modes`
+  (works intra-tree via a raw-Index `free_modes` patch) and Task 5 shipped only the
+  2x pricing fudge (`46b495eba`) -- both are placeholders to be replaced by the
+  DAG-scope home and the replication-factor split model described here.
 - **Two API-read-first steps** (Task 2 Step 1: `canonicalize_slots` coloring;
   Task 3 Step 1: `SlotCanonicalizationMetadata` slot mapping) are load-bearing --
   the exact call shape must be read from `tensor_network.*` before coding, and

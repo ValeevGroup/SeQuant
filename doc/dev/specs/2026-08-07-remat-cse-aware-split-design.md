@@ -38,7 +38,9 @@ document are marked _(new)_.
   specific term's tree. One value has many occurrences (what CSE folds together).
 - **Cell** — a *chosen physical copy* of a value serving a **subset of its
   occurrences**: one build, one live range, one cache entry — a partition-cell of
-  the value's occurrences. `cell = (value, home-scope, split-index)`.
+  the value's occurrences. `cell = (value, home-scope)`: the two identify a cell
+  on their own, because split cells of one value land at *distinct* home-scopes
+  (the DAG-scope of each occurrence subset), so no separate split-index is needed.
 - **Split** — un-folding a value into more than one cell (a *partial un-CSE*),
   each serving a disjoint occurrence subset, when one shared copy cannot serve
   all. The central mechanism of this document.
@@ -55,8 +57,10 @@ document are marked _(new)_.
 - **DAG-scope** _(new)_ — a schedule-global batch-loop **nest position**: an
   **ordered sequence of spaces** (a nest prefix), e.g. `[occ, occ, aux]`,
   independent of any value or tree. A level is named by its **position** in the
-  sequence, which disambiguates repeated spaces on its own — no separate
-  instance index is needed. The label-free replacement for a tree-local home.
+  sequence, which disambiguates a space repeated *along the path* (`occ→occ`
+  nesting) — so no separate instance index is needed **given our construction has
+  no same-space siblings** (see "DAG-scopes form a tree" for that assumption and
+  when it would break). The label-free replacement for a tree-local home.
 - **Shared-label vs relabeled mode** _(new)_ — a mode whose physical label is
   identical across *all* a value's occurrences (sliceable *while folded*) vs one
   whose label differs across occurrences (sliceable *only by splitting*).
@@ -172,6 +176,26 @@ a **node** in this tree; a value's consumers are cells at **descendant** scopes
 the peak/co-residency model, and (eventually) execution all operate on: not the
 contraction tree, but the nest tree the batching induces.
 
+> **Coordinate caveat: the space-sequence names a node only when no level has
+> same-space siblings.** A node of this tree is a *path* from the root, so the
+> space-sequence (the edge labels along that path) is a unique coordinate **only
+> if no node has two children of the same space**. Position disambiguates a space
+> repeated *along one path* (`occ→occ` nesting — `i_1` at position 0, `i_2` at
+> position 1) but **not** same-space *siblings*: if `i_1` opened two sibling occ
+> loops `i_2` and `i_3`, both children key to `{occ, occ}` and the prefix names two
+> distinct scopes. **Our construction cannot produce that**, and that is why the
+> space-sequence suffices (and why no instance index is needed): the DAG is a
+> CSE-fusion of independent trees, and the router resolves each `(space, position)`
+> scope to an occurrence's *own* physical index per use, so tree-A's `{i_1, i_2}`
+> and tree-B's `{i_1, i_3}` deliberately **collapse to one** `{occ, occ}` scope
+> (that unification is the DAG-globality). We only ever get same-space *nesting*
+> (the g·C `i_3`-outer/`i_4`-inner chain), never un-collapsed same-space siblings.
+> A **future** executor that kept same-space-same-position loops distinct (loop
+> fission, or a nest that genuinely branches) would violate this and require a
+> path/instance disambiguator on the coordinate — the very "instance index" this
+> design otherwise argues away. Note it before relying on space-sequence
+> uniqueness in any new nest-forming pass.
+
 ### Share vs split = greatest-common-prefix + fusibility
 
 A shared node's home is the **greatest common prefix (GCP)** of all its
@@ -266,15 +290,69 @@ occurrence key so it can translate a DAG-scope position → physical loop, repla
 raw `Index`-identity match of a canonical residency against the physical `ctx`
 (`placement_router.hpp`).
 
-**3. remat prices the split.** `shrink_candidates`/`apply_shrink` become
-CSE-aware: a candidate mode is classified shared-label (slice in place) vs
-relabeled (offer only as a *split*, which un-folds the value and prices the
-extra materialization + recompute for any home-prefix level the split cell does
-not carry). The cell model retains per-occurrence `canon_indices` (already
-computed per `NodeRec` in `compute_dag_boulevard`, discarded at grouping today)
-so the shared-vs-relabeled classification is available. Consumer-clustering
-(GCP per cluster) is the general form; the minimal realization is per-occurrence
-split along relabeled modes.
+**3. remat prices the split — as two real cells with a *replication factor*, not
+a 2× fudge.** `shrink_candidates`/`apply_shrink` become CSE-aware: a candidate
+mode is classified shared-label (slice in place, the existing behavior) vs
+relabeled (offered only as a *split*). Applying a split **un-folds the one
+`ValueCell` into two cells of the same hash**, each serving one occurrence subset,
+each with its own home-scope, carried set, and liveness interval (subset-local
+`first_use`/`last_use`); each split cell is non-divergent. This requires retaining
+the per-occurrence records (`carried`/`ectx`/`point`/`consumer_point`/`home`,
+computed per `NodeRec` in `compute_dag_boulevard`, discarded at grouping today) so
+the split can partition occurrences by physical binding.
+
+The cost of a split cell has **two** components, and the current 2× in
+`cell_footprint` captures neither correctly — it is a peak-only fudge that
+silently drops the dominant term:
+
+- **Peak (memory).** The two split cells' footprints are co-resident only where
+  their liveness intervals overlap; the interval sweep prices this structurally
+  (double-counted on overlap, not on disjoint occurrences). Deleting the flat 2×
+  and letting the sweep decide is correct *for peak*.
+- **Recompute (the dominant, mis-priced term).** A split cell homed at a nest
+  prefix is **rebuilt once for every iteration of each enclosing loop it is homed
+  *within* but does not *carry*** (invariant → replicated → recompute, per "The
+  model"). So its recompute cost is
+  `build_cost × ∏ (block count of each enclosing-but-not-carried loop level)`,
+  **not** a constant 2×. Canonical case (`i_3` outer, `i_4` inner; V bound to
+  `i_3` in leg A, `i_4` in leg B): cell A homes at `i_3`, carries it → **1× full
+  V**; cell B homes at `i_4`, carries `i_4` but is **invariant to `i_3`** → it
+  materializes a full V **every `i_3`-block** → **N₃ × full V**. The split costs
+  `(1 + N₃) × full V`, which equals the 2× fudge only at N₃ = 1 and diverges
+  above it.
+
+**Does this recompute term change the schedule? Not by itself — it is a
+prediction.** remat operates over a **fixed DAG** and only chooses placement; no
+pricing can alter what is computed or the numerics. The split itself is forced by
+*correctness* (a divergent value homed at a sub-scope must un-fold, §1), not by its
+price, so a mis-priced replication factor never yields an incorrect schedule. And
+remat's placement is gated by **peak** (`cell_footprint`, the hard budget
+constraint), which is a *memory* quantity — the replication factor is *flops* and
+does not enter peak. `rematerialize_to_budget`'s selection objective today is
+**pure `DeltaPeak`** (its doc comment: "all shrinks are zero-recompute this phase,
+so the metric is pure `DeltaPeak`"), so the recompute term is **report-only**: it
+sharpens the dry-run's cost *forecast* (does C60 fit, at what recompute?) without
+moving a single home. The one thing it *breaks* is that invariant — a split is no
+longer zero-recompute. **Whether to then make recompute a *secondary* objective**
+(prefer, among peak-feasible placements, the one that recomputes least — so remat
+never picks an expensive split when a free shared-label shrink would fit) **is a
+separate, deliberate decision, not implied by pricing the term.** Until it is made,
+price the replication factor for the forecast and keep the objective peak-driven.
+
+**Hard dependency on §2.** This pricing is **impossible on a value-relative home
+coordinate** (`slot_positions`) and *requires* the DAG-scope home of §2. The
+replication factor is a product over the levels a cell is *homed-within but does
+not carry* — exactly the levels (leg B's `i_3`) that a value's own slot positions
+**cannot name** (`i_3 ∉ B's canon_indices`; see "Scope must be a DAG-level
+coordinate"). A DAG-scope home (an ordered nest prefix) does name them, so §3 is a
+downstream consumer of §2: **§2 must land before §3 can be priced correctly.**
+
+Consumer-clustering (GCP per cluster) is the general form; the minimal realization
+is per-occurrence split along relabeled modes. `remat_to_router` still emits **one
+DAG-global overlay per value hash** (§2): both split cells share the hash and
+resolve to the *same* DAG-scope, so moved-detection must become hash-aware (split
+cells carry fresh `value_id`s absent from the seed map) while still emitting one
+overlay.
 
 **4. Defense-in-depth on the router read.** Have the router-directed read verify
 the fetched entry's slicing signature matches the occurrence's before using it,
