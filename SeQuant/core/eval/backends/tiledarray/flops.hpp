@@ -119,6 +119,13 @@ inline void count_elementwise(eval::FlopCategory cat, ArrayT const& result) {
 /// indices are all flat/outer: `2 * (real result elements) * K`, with K the
 /// product of the contracted modes' real extents. A product with no contracted
 /// index is a Hadamard product, one multiply per element.
+///
+/// LIMITATION, and the only one left in this file: the result side is exact
+/// (only local, non-zero tiles are counted, at their real volumes), but K is
+/// the operand's full dimension. If an operand is block-sparse ALONG A
+/// CONTRACTED MODE, the skipped blocks are still charged. This is an upper
+/// bound on those products, never an under-count. The tensor-of-tensor walks
+/// below have no such gap: they read K off a real inner tensor.
 template <typename LeftT, typename RightT, typename ResultT>
 inline void count_product_by_extent(LeftT const& l, RightT const& r,
                                     ResultT const& c,
