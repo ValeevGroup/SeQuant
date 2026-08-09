@@ -137,6 +137,38 @@ class PlacementRouter {
     return deepest;
   }
 
+  /// \return true iff a router-directed fetch resolved to depth \p hd for
+  ///         occurrence \p key is CONSISTENT with that occurrence: \p hd == 0
+  ///         (the chain root -- nothing sliced) OR the live loop at \p hd
+  ///         (\c ctx[hd-1]) is one of THIS occurrence's own in-scope batched
+  ///         physical indices (\c key.get_indices()) whose space \p home's
+  ///         DAG-scope names.
+  ///
+  /// \details The RELEASE-SAFE defense-in-depth criterion the Enter-stage
+  /// router read gates on (design spec sec.4). By construction \c home_depth
+  /// only ever returns such an \p hd, so on every correct schedule this HOLDS
+  /// and the read proceeds byte-identically. It is not a no-op assert: if a
+  /// FUTURE \c home_depth / overlay regression resolved an occurrence to a
+  /// scope it does not bind (e.g. collapsing two divergently-relabeled
+  /// occurrences onto ONE shared cache entry -- the exact hole the DAG-scope
+  /// per-use resolution closes), this returns false and the read REFUSES the
+  /// share, recomputing this occurrence's own value instead of serving a
+  /// wrong-slice entry -- in RELEASE as well as debug. Pass the \p hd that \c
+  /// home_depth returned and the SAME \p ctx / \p key.
+  [[nodiscard]] bool home_resolution_consistent(HomeTarget const& home,
+                                                BatchContext const& ctx,
+                                                std::size_t hd,
+                                                Key const& key) const {
+    if (hd == 0) return true;
+    if (hd > ctx.size()) return false;
+    Index const& hm = ctx[hd - 1].first;
+    auto const phys = key.template get_indices<container::svector<Index>>();
+    if (std::find(phys.begin(), phys.end(), hm) == phys.end()) return false;
+    for (auto const& space : home.dag_scope)
+      if (hm.space() == space) return true;
+    return false;
+  }
+
  private:
   std::unordered_map<Key, HomeTarget, RouterKeyHash, RouterKeyEqual> overrides_;
   std::unordered_set<std::size_t> moved_hashes_;

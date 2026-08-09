@@ -151,6 +151,22 @@ TEST_CASE(
   router_type router;
   CHECK(router.home_depth(h, ctx, key_A) == 1);
   CHECK(router.home_depth(h, ctx, key_B) == 2);
+
+  // LIVE release-safe guard (Task 6 / design sec.4): the depth home_depth
+  // returns is CONSISTENT with the occurrence that produced it -- A resolves to
+  // depth 1 (its i_3 loop), B to depth 2 (its i_4 loop).
+  CHECK(router.home_resolution_consistent(h, ctx, 1, key_A));
+  CHECK(router.home_resolution_consistent(h, ctx, 2, key_B));
+  // The chain root (hd == 0) is always consistent (nothing sliced).
+  CHECK(router.home_resolution_consistent(h, ctx, 0, key_A));
+  // INCONSISTENT: a (hypothetical, mis-resolved) hd=2 for occurrence A points
+  // at the i_4 loop, which A does NOT bind (A's key carries only i_3). The
+  // guard refuses -- this is the case the Enter-stage read recomputes instead
+  // of serving A a wrong-slice entry. Symmetrically hd=1 for B points at i_3.
+  CHECK_FALSE(router.home_resolution_consistent(h, ctx, 2, key_A));
+  CHECK_FALSE(router.home_resolution_consistent(h, ctx, 1, key_B));
+  // Out-of-range depth is refused, not indexed.
+  CHECK_FALSE(router.home_resolution_consistent(h, ctx, 3, key_A));
 }
 
 TEST_CASE("placement_router: set_override/route/empty", "[placement_router]") {

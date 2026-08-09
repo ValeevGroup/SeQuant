@@ -734,46 +734,43 @@ ResultPtr evaluate_impl(Node const& node,         //
               std::size_t const use_depth = ctx.size();
               std::size_t const hd = router->home_depth(*home, ctx, key);
               SEQUANT_ASSERT(hd <= use_depth);
-              // Defense-in-depth (design sec.4): the router-directed fetch keys
-              // by CANONICAL hash at the resolved scope, so serving is only
-              // sound if the resolution is CONSISTENT with THIS occurrence -- a
-              // mis-keyed overlay must never hand it an entry sliced for a
-              // DIFFERENT occurrence. When hd resolves to a live loop, that
-              // loop's mode must be one of THIS occurrence's in-scope batched
-              // physical indices (key.get_indices()) whose space the overlay's
-              // DAG-scope names. The hoist split (place_at_this_level) already
-              // keeps signature-inconsistent occurrences at DIFFERENT scopes,
-              // so this holds on every correct schedule; the assert is a live
-              // tripwire for a future home_depth/overlay bug (elided in
-              // release).
-              SEQUANT_ASSERT(hd == 0 || [&] {
-                Index const& hm = ctx[hd - 1].first;
-                auto const phys =
-                    key.template get_indices<container::svector<Index>>();
-                if (std::find(phys.begin(), phys.end(), hm) == phys.end())
-                  return false;
-                for (auto const& space : home->dag_scope)
-                  if (hm.space() == space) return true;
-                return false;
-              }());
-              std::size_t const hops = use_depth - hd;
-              if (ResultPtr ptr = cache.access_at_hops(f.node, hops); ptr) {
-                if constexpr (detail::trace(EvalTrace))
-                  log::cache(f.node, cache, log::label(f.node));
+              // LIVE defense-in-depth guard (design sec.4, RELEASE-safe): the
+              // router-directed fetch keys by CANONICAL hash at the resolved
+              // scope, so serving is only sound if the resolution is CONSISTENT
+              // with THIS occurrence (home_resolution_consistent -- the live
+              // loop at hd is one of this occurrence's own batched indices
+              // whose space the overlay names). By construction home_depth
+              // returns only such an hd, so on every correct schedule this
+              // holds and the fetch proceeds byte-identically. If a future
+              // overlay/home_depth regression resolved an occurrence to a scope
+              // it does not bind (collapsing two divergently-relabeled
+              // occurrences onto ONE entry -- the hole the DAG-scope resolution
+              // closes), the share is REFUSED here: `routed` stays false and
+              // the default access_at path below serves this occurrence its OWN
+              // value (recompute), never a wrong-slice entry -- in release, not
+              // only under an assert. The hoist split keeps consistent
+              // occurrences shareable.
+              if (router->home_resolution_consistent(*home, ctx, hd, key)) {
+                std::size_t const hops = use_depth - hd;
+                if (ResultPtr ptr = cache.access_at_hops(f.node, hops); ptr) {
+                  if constexpr (detail::trace(EvalTrace))
+                    log::cache(f.node, cache, log::label(f.node));
 #ifdef SEQUANT_ROUTER_SHADOW
-                // Dev-only correctness check (default OFF): for a NO-OP
-                // override (residency == the value's ACTUAL current home),
-                // the router-directed fetch must reproduce access_at()
-                // pointer-for-pointer. Not safe to enable in production: this
-                // extra access_at() call decays a non-persistent entry's
-                // lifetime a second time.
-                {
-                  auto const shadow = cache.access_at(f.node);
-                  SEQUANT_ASSERT(shadow.ptr.get() == ptr.get());
-                }
+                  // Dev-only correctness check (default OFF): for a NO-OP
+                  // override (residency == the value's ACTUAL current home),
+                  // the router-directed fetch must reproduce access_at()
+                  // pointer-for-pointer. Not safe to enable in production: this
+                  // extra access_at() call decays a non-persistent entry's
+                  // lifetime a second time.
+                  {
+                    auto const shadow = cache.access_at(f.node);
+                    SEQUANT_ASSERT(shadow.ptr.get() == ptr.get());
+                  }
 #endif
-                finalize(slice_to_use(apply_phase(f.node, ptr), f.node, hops));
-                routed = true;
+                  finalize(
+                      slice_to_use(apply_phase(f.node, ptr), f.node, hops));
+                  routed = true;
+                }
               }
             }
           }
