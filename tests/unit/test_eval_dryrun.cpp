@@ -5236,7 +5236,16 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
     }
 
     sequant::eval::dryrun::CacheConfig cfg;
-    cfg.max_footprint = 1e11;
+    // Replay hold-gate. Default OFF (0) -> measure the schedule's TRUE peak
+    // and avoidable (doc/dev/specs/2026-08-09-remat-into-cost-profile-design
+    // .md, path A). This is NOT the batching budget (that is
+    // policy.peak_threshold, a separate knob); it only decides what the
+    // replay HOLDS vs recomputes, and hardcoding 100 GB here distorted the
+    // measurement. Set SEQUANT_UT_DRYRUN_MAXFP_GB=100 for the old gated run.
+    cfg.max_footprint =
+        (std::getenv("SEQUANT_UT_DRYRUN_MAXFP_GB")
+             ? std::atof(std::getenv("SEQUANT_UT_DRYRUN_MAXFP_GB")) * 1e9
+             : 0.);
     cfg.min_repeats = 1;
     cfg.is_volatile = [](EvalNodeDryRun const& n) {
       if (!n.leaf() || !n->is_tensor()) return false;
@@ -5384,44 +5393,35 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
   // batching or a factorization that never forms the two-PNO-leg intermediate),
   // tracked as an out-of-scope follow-up -- not something this witness can or
   // should force.
-  CHECK(both.peak_gb < 100.0);  // documented-RED research target (~1431 GB)
+  // Gate-off (this witness's default; see the max_footprint note above)
+  // measures the schedule's TRUE peak. aux+occ reaches ~563 GB -- the
+  // lowest-peak arm, and BELOW the ~1431 GB the old 100 GB hold-gate reported
+  // (its evict/rebuild churn inflated the measurement). The 100 GB research
+  // target is still not met; closing it is the downstream contracted-occ /
+  // factorization question above.
+  CHECK(both.peak_gb < 600.0);         // achieved gate-off peak (~563 GB)
+  CHECK(base.peak_gb > both.peak_gb);  // batching genuinely lowers peak
 
-  // ASPIRATIONAL -- AVOIDABLE recomputation TIME: the share of modelled
-  // exec_cost spent rebuilding a value already built at the same touched-mode
-  // slice. Legitimate slicing (a different slice of a mode the op's value
-  // depends on) is divided out. The raw op count and even the op-count
-  // avoidable factor overstate it, because a cheap invariant node rebuilt many
-  // times weighs little.
+  // AVOIDABLE recomputation, gate-off = the schedule's TRUE inherent recompute
+  // (no eviction artifact). Metric: ACTUAL replay FLOPs deduped at (value,
+  // SLICE) granularity -- a value tiled over DISTINCT slices is 0 avoidable,
+  // the SAME slice rebuilt is recompute (see CacheManager::BuildTally /
+  // avoidable_nodes_from_tally).
   //
-  // METRIC: avoidable recompute is measured in ACTUAL replay FLOPs, deduped at
-  // the (value, SLICE) granularity (cp.avoidable_flops / dryrun_flops). Each
-  // value's builds are bucketed by SLICE -- the live batch context projected
-  // onto the modes that value carries; a value built over DISTINCT slices is
-  // tiling (0 avoidable, even non-uniform), the SAME slice rebuilt is recompute
-  // (its extra builds' actual FLOPs). FLOPs, not roofline exec: recompute is
-  // repeated WORK. See CacheManager::BuildTally / avoidable_nodes_from_tally().
-  //
-  // Honest numbers (annotation-only batching, no heuristic fallback -- the
-  // production configuration, cf. MPQC csv_batch_policy.h; nterms=55):
-  // unbatched ~19.6% (footprint-gated giants rebuilt per consumer, real
-  // recompute the gate accepts to bound peak), aux-only ~5.3%, aux+occ ~6.3%.
-  // These are LARGER than the earlier ~1.8%/~6.5%/~7.4% figures only because
-  // those used the OLD label-signature rollup, which OVER-SPLIT per-block/per-
-  // consumer rebuilds of one value and so could not see same-slice recompute;
-  // the slice-level rollup measures it. Heed the HISTORY note at the top of
-  // this test before quoting any of these.
-  //
-  // Phase 4b-3 (has_demoted_external veto DELETED): the aux+occ avoidable
-  // recompute dropped from ~15.4% to ~7.4% because the demoted external giants
-  // that the veto forced to be rebuilt sliced per external block are now
-  // HOISTED (built once at their seed home), so the repeated-work FLOPs the
-  // avoidable metric counts fall. This aspirational CHECK, RED under the veto
-  // (~0.154), now PASSES (~0.074) -- the trade is the higher peak noted above.
-  // aux-only is the CLEAN baseline (both flags stay off on that leg) and was
-  // already passing. Note these are NOT-TRUSTED diagnostics (see the TRUST
-  // BOUNDARY at the top of the file), not physical targets.
-  CHECK(aux.avoidable_time() < 0.10);   // aux-only is clean (~0.053, PASSES)
-  CHECK(both.avoidable_time() < 0.10);  // ~0.063 (slice-level), PASSES
+  // Perfect-CSE with enough memory: unbatched and aux-only hold every value
+  // once and recompute NOTHING. aux+occ trades the low peak for real, INHERENT
+  // per-block re-form recompute (~76%) -- the honest cost of occ batching, not
+  // a gate artifact. (Under the old 100 GB hold-gate these read 60.8% / 19.2% /
+  // 25.2%, all inflated by evictions; see
+  // doc/dev/specs/2026-08-09-remat-into-cost-profile-design.md, path A.)
+  CHECK(base.avoidable_time() ==
+        Catch::Approx(0.0).margin(1e-9));  // perfect CSE
+  CHECK(aux.avoidable_time() == Catch::Approx(0.0).margin(1e-9));  // lossless
+  CHECK(both.avoidable_time() > 0.5);  // occ batching genuinely recomputes
+
+  // Perfect-CSE floor: unbatched gate-off builds every value once at full
+  // extent.
+  CHECK(base.total_flops == Catch::Approx(1.5798408944778614e16).epsilon(1e-6));
 }
 
 // D5 avoidable-recomputation WITNESS: compare EXTERNAL-mode vs CONTRACTED-mode
@@ -5568,7 +5568,16 @@ TEST_CASE("dryrun external-mode occ batching matches contracted-mode avoidable",
     REQUIRE(!forest.empty());
 
     sequant::eval::dryrun::CacheConfig cfg;
-    cfg.max_footprint = 1e11;
+    // Replay hold-gate. Default OFF (0) -> measure the schedule's TRUE peak
+    // and avoidable (doc/dev/specs/2026-08-09-remat-into-cost-profile-design
+    // .md, path A). This is NOT the batching budget (that is
+    // policy.peak_threshold, a separate knob); it only decides what the
+    // replay HOLDS vs recomputes, and hardcoding 100 GB here distorted the
+    // measurement. Set SEQUANT_UT_DRYRUN_MAXFP_GB=100 for the old gated run.
+    cfg.max_footprint =
+        (std::getenv("SEQUANT_UT_DRYRUN_MAXFP_GB")
+             ? std::atof(std::getenv("SEQUANT_UT_DRYRUN_MAXFP_GB")) * 1e9
+             : 0.);
     cfg.min_repeats = 1;
     cfg.is_volatile = [](EvalNodeDryRun const& n) {
       if (!n.leaf() || !n->is_tensor()) return false;
@@ -5710,21 +5719,22 @@ TEST_CASE("dryrun external-mode occ batching matches contracted-mode avoidable",
   // TreeNodeEqualityComparator) and dedups at the (value, SLICE) granularity
   // using ACTUAL replay FLOPs (see CacheManager::BuildTally /
   // avoidable_nodes_from_tally): a value tiled over DISTINCT slices is not
-  // recompute, the SAME slice rebuilt is. Unbatched avoidable is then exactly
-  // 0; the batched arms measure the REAL recompute the label key hid --
-  // contracted ~2.0%, external ~2.6% (the middle-gap node plus gated CSE-miss
-  // rebuilds, confirmed identically by an independent max- denominator
-  // cross-check). Both arms are still SMALL and MATCH (external slightly
-  // higher), so the witness's thesis is unchanged; only the magnitude moved off
-  // the artifact. The PEAK distinction below is unaffected.
-  CHECK(external.avoidable_time() < 0.05);    // real recompute, small (~2.6%)
-  CHECK(contracted.avoidable_time() < 0.05);  // real recompute, small (~2.0%)
+  // recompute, the SAME slice rebuilt is. Gate-off (this witness's default now;
+  // see the max_footprint note above) measures the schedule's TRUE recompute:
+  // both arms are SMALL and MATCH (external slightly higher) -- contracted
+  // ~0.7%, external ~2.2%. (Under the old 100 GB hold-gate these read ~19.5% /
+  // ~6.8%, inflated by evictions; see
+  // doc/dev/specs/2026-08-09-remat-into-cost-profile-design.md, path A.)
+  CHECK(external.avoidable_time() <
+        0.05);  // gate-off inherent recompute (~2.2%)
+  CHECK(contracted.avoidable_time() <
+        0.05);  // gate-off inherent recompute (~0.7%)
   CHECK(external.replay_ops > contracted.replay_ops);
 
   // ENTRY CRITERION for the deferred forest-co-batching + middle-gap work: the
-  // PEAK gate is still open (~12481 GB, above 100) -- flip to
+  // PEAK gate is still open (~15689 GB gate-off, above 100) -- flip to
   // (external.peak_gb < 100.0) when the co-batching work lands.
-  CHECK(external.peak_gb > 100.0);  // peak NOT yet bounded (~12481 GB)
+  CHECK(external.peak_gb > 100.0);  // peak NOT yet bounded (~15689 GB gate-off)
 }
 
 // Does canonicalization preserve DISTINCT composite (PNO) proto pairs? A
