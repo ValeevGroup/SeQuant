@@ -5534,6 +5534,79 @@ TEST_CASE("dryrun remat modelled-vs-replayed peak equivalence probe (C60)",
   auto const& block_of = policy.batch_target_size;
   auto const in = sequant::eval::remat_cells(forest, *cm, block_of);
 
+  // TASK 1b FIX HYPOTHESIS (probe-only, no shipped-code change yet). The seed
+  // footprint blocks only home_modes (the meet of enclosing batch loops across
+  // occurrences); a value used across occurrences with DIFFERENT enclosing occ
+  // (the 4-occ composites) has an EMPTY meet -> home={} -> sized FULL, the 30x
+  // overcount. But the batched-scratch replay slices a value on EVERY batch
+  // loop that ever encloses it (enclosing_modes), and contracted modes are
+  // summed away so they are not `carried` -- so blocking `carried &
+  // enclosing_modes` slices exactly the external-carried batch modes, matching
+  // the replay. Sweep the seed cells a SECOND way (enclosing-blocked) and
+  // compare its modelled peak to the realized 563 GB floor: convergence
+  // confirms the fix direction.
+  {
+    auto seed_home =
+        sequant::eval::to_schedule(in.cells, *cm, block_of, in.num_points);
+    double const peak_home =
+        sequant::eval::peak_profile_sweep(seed_home).peak_bytes / 1e9;
+    sequant::eval::Schedule seed_enc;
+    seed_enc.num_points = in.num_points;
+    seed_enc.cells.reserve(in.cells.size());
+    for (auto const& vc : in.cells) {
+      sequant::eval::Cell c;
+      c.value_id = vc.value_id;
+      c.home_depth = vc.home_depth;
+      // block carried & enclosing_modes (replay-faithful) instead of home_modes
+      c.footprint = sequant::eval::detail::cell_footprint(
+          vc.carried, vc.enclosing_modes, *cm, block_of);
+      c.first_use = vc.first_use;
+      c.last_use = vc.last_use;
+      seed_enc.cells.push_back(c);
+    }
+    double const peak_enc =
+        sequant::eval::peak_profile_sweep(seed_enc).peak_bytes / 1e9;
+    std::wcerr << L"\n[remat-fix] seed modelled peak: home-blocked (current) = "
+               << peak_home
+               << L" GB  vs  enclosing-blocked (replay-faithful) = " << peak_enc
+               << L" GB  (realized replay floor ~563 GB)\n";
+  }
+
+  // TASK 1b DIAGNOSTIC (SEQUANT_UT_REMAT_BINDING_DUMP): apportion the modelled-
+  // vs-realized gap. Dump WHAT peak_profile_sweep believes is co-resident at
+  // the binding instant of the SEED placement -- the cells in live_at_binding,
+  // top by footprint, with carried/home modes. If the sum is dominated by a few
+  // FULL-extent giants that carry a BATCHABLE mode the replay slices per block
+  // (but cell_footprint sizes full because that mode is not a HOME mode), the
+  // overcount is a model bug (co-residency blind to batched-scratch slicing),
+  // and it also inflates the home-scope peak oracle that shares this model.
+  if (std::getenv("SEQUANT_UT_REMAT_BINDING_DUMP")) {
+    auto modestr = [](container::svector<Index> const& ms) -> std::wstring {
+      std::wstring s;
+      for (auto const& ix : ms) s += std::wstring(ix.full_label()) + L" ";
+      return s;
+    };
+    auto const s =
+        sequant::eval::to_schedule(in.cells, *cm, block_of, in.num_points);
+    auto const pp = sequant::eval::peak_profile_sweep(s);
+    std::vector<std::pair<std::size_t, std::size_t>>
+        byfoot;  // (bytes, cell idx)
+    for (auto ci : pp.live_at_binding)
+      byfoot.emplace_back(s.cells[ci].footprint, ci);
+    std::sort(byfoot.begin(), byfoot.end(), std::greater<>());
+    std::wcerr << L"\n[remat-binding] SEED peak_profile_sweep = "
+               << pp.peak_bytes / 1e9 << L" GB, " << byfoot.size()
+               << L" cells co-resident at binding. Top by footprint:\n";
+    std::size_t shown = 0;
+    for (auto const& [bytes, ci] : byfoot) {
+      if (shown++ >= 20) break;
+      auto const& vc = in.cells[ci];
+      std::wcerr << L"  " << (bytes / 1e9) << L" GB  carried={"
+                 << modestr(vc.carried) << L"} home={" << modestr(vc.home_modes)
+                 << L"}\n";
+    }
+  }
+
   auto status_str = [](sequant::eval::RematStatus s) -> wchar_t const* {
     switch (s) {
       case sequant::eval::RematStatus::Feasible:

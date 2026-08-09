@@ -18,6 +18,8 @@
 #include <algorithm>
 #include <any>
 #include <array>
+#include <cstdio>
+#include <cstdlib>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -436,6 +438,36 @@ class CacheManager {
   /// per-op eval trace; monotonically non-decreasing until reset().
   size_t note_working_set(size_t current_bytes) noexcept {
     working_set_hwmark_ = std::max(working_set_hwmark_, current_bytes);
+    // DIAGNOSTIC (SEQUANT_UT_PEAK_COMPOSE): on each new GLOBAL max working set,
+    // print what composes it -- the co-resident cache chain vs the single
+    // transient result/scratch being formed (current_bytes - chain_residency),
+    // plus the largest single alive entry. Answers whether the realized peak is
+    // cache-co-residency-bound or transient-working-set-bound. Env-gated, off
+    // by default; harmless (a fprintf on monotone maxima only).
+    static bool const compose =
+        std::getenv("SEQUANT_UT_PEAK_COMPOSE") != nullptr;
+    if (compose) {
+      static size_t g_max = 0;
+      if (current_bytes > g_max) {
+        g_max = current_bytes;
+        size_t const chain = chain_residency();
+        size_t const transient =
+            current_bytes > chain ? current_bytes - chain : 0;
+        size_t max_entry = 0, n_alive = 0;
+        for (CacheManager const* c = this; c; c = c->parent_)
+          for (auto const& [k, e] : c->cache_map_)
+            if (e.alive()) {
+              ++n_alive;
+              max_entry = std::max(max_entry, e.size_in_bytes());
+            }
+        std::fprintf(stderr,
+                     "[peak-compose] max=%.1f GB = cache_chain %.1f + "
+                     "transient(result) %.1f | n_alive_chain=%zu "
+                     "max_single_alive=%.1f GB\n",
+                     current_bytes / 1e9, chain / 1e9, transient / 1e9, n_alive,
+                     max_entry / 1e9);
+      }
+    }
     return working_set_hwmark_;
   }
 

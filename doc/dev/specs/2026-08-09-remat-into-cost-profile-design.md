@@ -258,3 +258,123 @@ the DP-governed true peak, gate off) plus documenting that the C60 realized peak
 is DP-batching-governed. Whether to pursue Task 1b (reconcile the model, keep
 remat as a conservative-but-non-binding proxy) or treat placement enforcement as
 out of scope for C60 is the open decision.
+
+### Task 1b DIAGNOSTIC -- root cause of the overcount (2026-08-09)
+
+`SEQUANT_UT_REMAT_BINDING_DUMP=1` on `[.][dryrun-remat-equiv]` dumps the SEED
+`peak_profile_sweep` binding-instant composition. Result: SEED modelled peak =
+**17667 GB** (52 cells co-resident) vs replay **563 GB** -- a 30x gap. The sum is
+dominated by full-extent giants whose `home` is EMPTY:
+
+| footprint | carried | home |
+|---|---|---|
+| 4 x 2930 GB | `i1 i2 i3 i4 a<i1,i2> a<i3,i4>` (4-occ + 2-PNO-pair) | `{}` |
+| 2231 GB | `i1 i2 μ̃ Κ a<i1,i2>` | `{Κ}` |
+| 2 x 1046 GB | `i i i μ̃ a<i,i>` | `{}` |
+
+**Root cause (reading a CONFIRMED, subsumes b).** `cell_footprint`
+(`peak_profile.hpp:106-111`) applies `block_of` ONLY to `home_modes` that are in
+`carried`; every other carried mode is sized FULL by `cm.memsize`. The occ modes
+`i1..i4` on those 2930 GB composites are *batchable external* (the DP slices them
+at block 8 via the batched-scratch replay), but they are NOT home modes, so the
+model sizes them at full occ extent. The batched-scratch replay processes ONE
+occ-block x ONE aux-block at a time (the batch-group replay), so it never
+co-resides the full extent -- its peak is the largest single-block working set
+(563 GB). The model prices full-extent co-residency; the replay prices per-block
+working sets. That is the entire 30x. "Placement looks inert" is a symptom: remat
+shrinking adds home/slice modes (17667 -> 1976 -> 612) but cannot price down the
+`home={}` giants, so B=500 falsely reports `RebatchNeeded`.
+
+**Locus + reach.** The fix locus is `cell_footprint`: it must size EVERY carried
+mode that the DP batches (per the forest's `batched_here()` stamps / the batch
+policy), not only home modes, at block extent -- because the batched-scratch
+replay slices all batch loops, not just the home one. This SAME model backs the
+home-scope peak oracle (Phase 1, `project_home_scope_placement`), so the oracle
+overcounts co-residency the same ~30x. The non-uniform-tiling caveat still caps
+tightness after the fix (uniform block 8/256 vs non-uniform real tiles), so even
+reconciled the model is a conservative proxy, not a byte-exact bound.
+
+**Decision surface.** (1) Fix `cell_footprint` to be batch-mode-aware -- corrects
+the peak oracle's ~30x overcount (value beyond path B); path B's model then
+tracks the replay far better but is still uniform-block-approximate. (2) Shelve
+placement ENFORCEMENT for C60 (path A is the realized-peak tool; the DP's
+`peak_threshold` is the lever) but land the `cell_footprint` fix for the oracle.
+(3) Shelve both. The `cell_footprint` fix stands on its own merit (the oracle
+bug) independent of whether path B ships.
+
+### Task 1b -- SUPERSEDED intermediate: "block enclosing_modes is THE fix"
+
+An intermediate conclusion (committed `53146ff45`) held that the oracle's 30x
+overcount was a bug fixed by blocking `enclosing_modes` instead of `home_modes`,
+and that placement is peak-inert. Both the "bug" framing and the "inert" framing
+are RETRACTED -- they were measuring the current runtime and mistaking it for a
+law. The correct account is below (two execution models). `enclosing_modes` is
+not a bug fix; it is the FOREST-model footprint (see below), one endpoint of a
+placement spectrum, and it is not wrong -- it just models a different runtime.
+
+### Task 1b RESOLVED -- two execution models on one placement spectrum (2026-08-09)
+
+**Replay-side trace** (`SEQUANT_UT_PEAK_COMPOSE`, cache_manager `note_working_set`
+diagnostic) dumps the composition at the 563 GB replay peak instant:
+
+```
+563.4 GB = cache_chain 119.9 GB  +  transient(result) 443.6 GB
+           n_alive_chain=13         max_single_alive=24.4 GB
+```
+
+The peak is 79% ONE transient contraction result (443.6 GB); co-resident cache is
+only 120 GB (largest single entry 24.4 GB -- NO 2930 GB giant is ever resident).
+
+**The key (E.V.).** The current batched runtime is RECURSIVE FOREST DESCENT:
+evaluate each tree fully, one at a time. Cross-tree CSE survives only at the TOP
+scope; a value shared by two trees BELOW the top scope is re-formed per tree
+(never co-resident). The OPTIMAL runtime is WHOLE-SCOPE DESCENT (proper batched
+DAG traversal): descend the fused forest scope by scope, doing all trees' work at
+each scope, so cross-tree sub-scope CSE is exploited and shared values are held
+co-resident. The static peak oracle (`peak_profile_sweep`, one CSE-folded cell
+per value spanning its whole-DAG liveness) models WHOLE-SCOPE descent; the replay
+(`cost_profile`) IS recursive forest descent. They are two EXECUTION MODELS, not
+two estimates of one peak -- which is why they never matched.
+
+**One placement spectrum.** The knob separating them is where each value is homed,
+which the peak sweep already takes as input:
+
+| placement | footprint rule | peak | recompute | runtime |
+|---|---|---|---|---|
+| meet-home (full sharing) | home-blocked | 17667 GB | minimal | DAG, shared |
+| ... remat lowers ... | ... | ... | ... | (spectrum) |
+| max-deep (per-tree re-form) | enclosing-blocked | 633 GB | maximal (~76%) | FOREST (current) |
+
+The current forest runtime is PINNED at the deep/enclosing endpoint: no placement
+freedom, max recompute (the ~76% avoidable = the cross-tree sub-scope CSE it
+throws away; same root cause as the known per-group-replay ~5x slowdown), min
+co-resident peak. That is why the replay lands at 563 ≈ the 633 enclosing floor
+and why placement looked "inert" -- you cannot move off an endpoint. The 443 GB
+transient IS a cell (the biggest contraction's result, enclosing-sliced), so the
+sweep captures it as the largest sliced cell; 633 ≈ 443 + co-residents is the
+forest peak, not a coincidence. The DAG runtime can sit ANYWHERE on the line, and
+remat/path B chooses the point that fits budget B at least recompute -- there,
+placement is a real lever.
+
+**Modeling both (the actionable design).** Add an `ExecutionModel` parameter to
+the peak oracle selecting the footprint rule:
+- `Forest` -> enclosing-blocked; VALIDATABLE today against the replay (633 vs 563,
+  ~12% = uniform-tiling + the CSE-fold refinement below). Models the runtime we
+  have.
+- `Dag` -> home-blocked + remat-navigable placement. Predicts the runtime we are
+  heading toward; the regime where remat/path B is meaningful.
+One CSE-fold refinement for exact `Forest` fidelity: the current sweep folds
+cross-tree CSE into one spanning cell (a DAG assumption); strict forest would
+un-fold sub-scope cross-tree CSE into per-tree cells. It was immaterial here
+(cross-tree co-residency is only the 120 GB top-cache), so the footprint rule is
+the PRIMARY knob and CSE-fold-scope a SECONDARY one.
+
+**Consequences (corrected).** (i) Neither `home` nor `enclosing` is "the fix";
+they are the two execution-model footprints. (ii) Path B / remat placement is
+moot for the CURRENT (forest) runtime (pinned endpoint) but is the real
+peak-vs-recompute lever for the FUTURE (DAG) runtime. (iii) The enabling change is
+not a `cell_footprint` patch -- it is upgrading the runtime to whole-scope descent
+(proper batched DAG traversal), after which the co-residency oracle is accurate,
+the ~76% recompute and ~5x replay penalty collapse, and remat fits the peak to B.
+(iv) Meanwhile the oracle can already model BOTH runtimes via `ExecutionModel`,
+with `Forest` cross-checked against the replay.
