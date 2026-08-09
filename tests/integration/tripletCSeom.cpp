@@ -693,78 +693,81 @@ class compute_eomcc_closedshell_triplet {
       const auto ext_idxs = external_indices(eqvec[i]);
       const auto ext_groups = unwrap_ext_groups(ext_idxs);
 
-      // ----- os_eom main path: open_shell_CC_spintrace_by_sector + sum -----
-      auto os_sectors = open_shell_CC_spintrace_by_sector(eqvec[i]);
-      const size_t n_cases = os_sectors.size();
-      std::wcout << "number of spin cases " << n_cases << "\n";
-      SEQUANT_ASSERT(n_cases >= 2);
-
-      auto summed_spinfree = std::make_shared<Sum>();
-      for (size_t sc = 0; sc < n_cases; ++sc) {
-        ExprPtr stripped = os_sectors[sc]->clone();
-        expand(stripped);
-        std::wcout << "sc" << sc << "\n";
-        std::wcout << "spin-free sector R[" << i << "] has " << stripped->size()
-                   << " terms\n";
-        canonicalize(stripped);
-        summed_spinfree->append(stripped);
-      }
-
-      ExprPtr summed = summed_spinfree;
-      simplify(summed);
-      summed = biorthogonal_transform_pre_nnsproject(summed, ext_idxs);
-      std::wcout << "R[" << i
-                 << "] open-shell sum (Ŝ NOT expanded): " << summed->size()
-                 << " terms\n";
-
-      auto singlet_ref = closed_shell_CC_spintrace(
-          eqvec[i], {.method = BiorthogonalizationMethod::V2});
-      simplify(singlet_ref);
-      std::wcout << "R[" << i << "] reference closed-shell (CC spintrace): "
-                 << singlet_ref->size() << " terms\n";
-
-      ExprPtr os_singlet = summed->clone();
-      simplify(os_singlet);
-      ExprPtr singlet_diff = os_singlet - singlet_ref;
-      canonicalize(singlet_diff);
-      simplify(singlet_diff);
-      std::wcout << "R[" << i << "] (open-shell singlet) - (closed-shell ref): "
-                 << singlet_diff->size() << " terms\n";
+      // Just test ----- os_eom main path: open_shell_CC_spintrace_by_sector +
+      // sum ----- auto os_sectors =
+      // open_shell_CC_spintrace_by_sector(eqvec[i]); const size_t n_cases =
+      // os_sectors.size(); std::wcout << "number of spin cases " << n_cases <<
+      // "\n"; SEQUANT_ASSERT(n_cases >= 2);
+      //
+      // auto summed_spinfree = std::make_shared<Sum>();
+      // for (size_t sc = 0; sc < n_cases; ++sc) {
+      //   ExprPtr stripped = os_sectors[sc]->clone();
+      //   expand(stripped);
+      //   std::wcout << "sc" << sc << "\n";
+      //   std::wcout << "spin-free sector R[" << i << "] has " <<
+      //   stripped->size()
+      //              << " terms\n";
+      //   canonicalize(stripped);
+      //   summed_spinfree->append(stripped);
+      // }
+      //
+      // ExprPtr summed = summed_spinfree;
+      // simplify(summed);
+      // summed = biorthogonal_transform_pre_nnsproject(summed, ext_idxs);
+      // std::wcout << "R[" << i
+      //            << "] open-shell sum (Ŝ NOT expanded): " << summed->size()
+      //            << " terms\n";
+      //
+      // auto singlet_ref = closed_shell_CC_spintrace(
+      //     eqvec[i], {.method = BiorthogonalizationMethod::V2});
+      // simplify(singlet_ref);
+      // std::wcout << "R[" << i << "] reference closed-shell (CC spintrace): "
+      //            << singlet_ref->size() << " terms\n";
+      //
+      // ExprPtr os_singlet = summed->clone();
+      // simplify(os_singlet);
+      // ExprPtr singlet_diff = os_singlet - singlet_ref;
+      // canonicalize(singlet_diff);
+      // simplify(singlet_diff);
+      // std::wcout << "R[" << i << "] (open-shell singlet) - (closed-shell
+      // ref): "
+      //            << singlet_diff->size() << " terms\n";
 
       // ----- os_eom independent path: spintrace_by_sector -----------------
-      {
-        auto sectors = spintrace_by_sector(eqvec[i], ext_groups);
-        std::wcout << L"\n========== R[" << i << L"] per-sector spin trace ("
-                   << sectors.size() << L" sectors) ==========\n";
-        for (auto& [label, sec] : sectors) {
-          std::wcout << L"  sector " << label << L": " << sec->size()
-                     << L" terms, " << count_distinct_hashes(sec->clone())
-                     << L" distinct hashes\n";
-        }
-
-        auto sector_total = std::make_shared<Sum>();
-        for (auto& [label, sec] : sectors) sector_total->append(sec->clone());
-
-        ExprPtr so = eqvec[i]->clone();
-        so->visit(
-            [](ExprPtr& n) {
-              if (n->is<Tensor>()) n->as<Tensor>().reset_tags();
-            },
-            /*atoms_only=*/true);
-        ExprPtr generic =
-            spintrace(so, ext_groups, /*spinfree_index_spaces=*/false);
-        canonicalize(generic);
-        simplify(generic);
-        generic = remove_spin_with_relabel(generic);
-        canonicalize(generic);
-        simplify(generic);
-
-        ExprPtr sector_generic_diff = ExprPtr(sector_total) - generic;
-        canonicalize(sector_generic_diff);
-        simplify(sector_generic_diff);
-        std::wcout << L"  R[" << i << L"] (Σ sectors) - (generic) : "
-                   << sector_generic_diff->size() << L" terms\n";
-      }
+      // {
+      //   auto sectors = spintrace_by_sector(eqvec[i], ext_groups);
+      //   std::wcout << L"\n========== R[" << i << L"] per-sector spin trace ("
+      //              << sectors.size() << L" sectors) ==========\n";
+      //   for (auto& [label, sec] : sectors) {
+      //     std::wcout << L"  sector " << label << L": " << sec->size()
+      //                << L" terms, " << count_distinct_hashes(sec->clone())
+      //                << L" distinct hashes\n";
+      //   }
+      //
+      //   auto sector_total = std::make_shared<Sum>();
+      //   for (auto& [label, sec] : sectors)
+      //   sector_total->append(sec->clone());
+      //
+      //   ExprPtr so = eqvec[i]->clone();
+      //   so->visit(
+      //       [](ExprPtr& n) {
+      //         if (n->is<Tensor>()) n->as<Tensor>().reset_tags();
+      //       },
+      //       /*atoms_only=*/true);
+      //   ExprPtr generic =
+      //       spintrace(so, ext_groups, /*spinfree_index_spaces=*/false);
+      //   canonicalize(generic);
+      //   simplify(generic);
+      //   generic = remove_spin_with_relabel(generic);
+      //   canonicalize(generic);
+      //   simplify(generic);
+      //
+      //   ExprPtr sector_generic_diff = ExprPtr(sector_total) - generic;
+      //   canonicalize(sector_generic_diff);
+      //   simplify(sector_generic_diff);
+      //   std::wcout << L"  R[" << i << L"] (Σ sectors) - (generic) : "
+      //              << sector_generic_diff->size() << L" terms\n";
+      // }
 
       // ----- triplet: explicitly spin-coupled basis (Hattig/Kohn/Hald) -----
       // doubles use the T (x) E coupling; triples the T (x) E (x) E coupling
@@ -928,12 +931,29 @@ class compute_eomcc_closedshell_triplet {
         simplify(T_diff);
         std::wcout << "R[" << i
                    << "] closed_shell_EOM_triplet_spintrace: " << st->size()
-                   << " terms, and " << count_distinct_hashes(T_ref->clone())
+                   << " terms, and " << count_distinct_hashes(st->clone())
                    << " distinct hashes, and time: " << dt.count() << " s\n";
         std::wcout << "R[" << i
                    << "] (production triplet) - (reference assembly): "
                    << term_count(T_diff) << " terms (expect 0)\n";
         runtime_assert(term_count(T_diff) == 0);
+
+        // validated term counts of the production triplet residual; pinning
+        // `st` also pins T_ref, since the two were just asserted equal
+        const auto n_st = term_count(st);
+        if (N == 2 && type == EqnType::right) {
+          if (np == 2 && nh == 2) {  // triplet EOM-CCSD(2h2p)
+            if (i == 1) runtime_assert(n_st == 42);
+            if (i == 2) runtime_assert(n_st == 540);
+          }
+        }
+        if (N == 3 && type == EqnType::right) {
+          if (np == 3 && nh == 3) {  // triplet EOM-CCSDT(3h3p)
+            if (i == 1) runtime_assert(n_st == 54);
+            if (i == 2) runtime_assert(n_st == 920);
+            if (i == 3) runtime_assert(n_st == 11592);
+          }
+        }
 
         // compact + te/ter experiment knobs are defined for the CCSD doubles
         // study only; in an N >= 3 theory even the doubles residual contains
