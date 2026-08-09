@@ -213,3 +213,48 @@ the dry-run prediction matches the pre-pass path.
   env override.
 - Perfect-CSE floor: unbatched at `max_footprint` >= ~10 TB -> 0 avoidable,
   `total_flops` = 1.58e16.
+
+## Path B, Task 1 crux probe -- FINDING (2026-08-09)
+
+`[.][dryrun-remat-equiv]` on the C60 aux+occ forest (55 terms) measured the remat
+MODELLED peak (`RematResult::profile.peak_bytes`) against the replay REALIZED peak
+(`cost_profile(..., &router).peak_bytes`), sweeping B:
+
+| B (GB) | modelled (GB) | realized (GB) | ratio real/mod | status |
+|---|---|---|---|---|
+| 2000 | 1976.2 | 563.40 | 0.285 | Feasible |
+| 1000 |  894.7 | 563.40 | 0.630 | Feasible |
+|  500 |  612.4 | 565.03 | 0.923 | RebatchNeeded |
+
+**The models diverge, and the realized peak is essentially INVARIANT to the remat
+placement.** The remat model shrinks with B (1976 -> 895 -> 612), but the replay
+lands on the byte-identical 563.40 GB at B=2000 and B=1000 -- exactly the occ-veto
+gate-off floor -- despite remat producing DIFFERENT placements at those two
+budgets. At B=500 remat reports `RebatchNeeded` (its model cannot fit 500 GB)
+while the replay actually realizes 565 GB: a FALSE infeasibility.
+
+**Interpretation (two readings, not yet disambiguated).** (a) The remat peak model
+(`cell_footprint` co-residency over static liveness intervals) systematically
+OVERCOUNTS the replay's batched-scratch high-watermark by up to ~3.5x -- a model
+bug to reconcile (Task 1b). (b) On C60 the realized peak is set by the DP's
+batched-scratch schedule (~563 GB), and home-scope/split PLACEMENT -- the only
+lever remat turns -- cannot move it; remat is then neither necessary nor
+sufficient to enforce B, and the DP's `peak_threshold` (batching) is the real
+budget lever. The invariance of the realized peak across B=2000/1000 favors (b),
+but (a) and (b) can both hold; a `SCHEDULE_RUN_EVENT` diff is needed to apportion.
+
+**Non-uniform tiling caveat (per E.V.).** The probe's `block_of` is a UNIFORM block
+size per space (Κ->256, occ->8). Real model tiling is NON-uniform (TA tile
+extents vary across a space), so a uniform-block peak model cannot match a
+non-uniformly-tiled realized peak exactly even after reconciling (a)/(b). This
+bounds how tight any remat-model budget can ever be, and is an independent reason
+NOT to claim a hard `peak <= B` from the uniform-block model.
+
+**Consequence for path B.** As written (remat placement enforces a hard `peak <=
+B`), path B does NOT hold on C60: placement does not move the realized peak, and
+the model that drives it is both pessimistic (reading a) and uniform-block
+approximate (tiling caveat). The honest deliverable is path A (shipped: measure
+the DP-governed true peak, gate off) plus documenting that the C60 realized peak
+is DP-batching-governed. Whether to pursue Task 1b (reconcile the model, keep
+remat as a conservative-but-non-binding proxy) or treat placement enforcement as
+out of scope for C60 is the open decision.

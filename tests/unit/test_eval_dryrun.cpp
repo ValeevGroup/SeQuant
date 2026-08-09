@@ -42,6 +42,7 @@
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
+#include <SeQuant/core/eval/placement_remat.hpp>
 #include <SeQuant/core/eval/placement_router.hpp>
 #include <SeQuant/core/eval/schedule_dump.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -5422,6 +5423,166 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
   // Perfect-CSE floor: unbatched gate-off builds every value once at full
   // extent.
   CHECK(base.total_flops == Catch::Approx(1.5798408944778614e16).epsilon(1e-6));
+}
+
+// PATH B, TASK 1 -- the crux PROBE (doc/dev/plans/2026-08-09-remat-into-cost-
+// profile-path-b.md). Path B enforces a memory budget B by running the remat
+// PLACEMENT pass ONCE on the final fused DAG (home-scope / split to fit B),
+// then replaying the placed schedule and measuring. That is only a real bound
+// if the remat pass's MODELLED peak (peak_profile_sweep over cell liveness
+// intervals + cell_footprint) equals the replay's REALIZED peak (the
+// batched-scratch high- watermark cost_profile tallies). They are two DIFFERENT
+// computations, so they can diverge -- exactly the gap the 2026-08-05 dry/wet
+// schedule-equivalence work closed elsewhere. This witness MEASURES that
+// agreement on the real C60 aux+occ forest across a budget sweep. It asserts
+// nothing about the ratio yet (Task 1 is a measurement + decision, not a
+// bound); it only sanity-checks that the pipeline runs and both peaks are
+// positive. Read the printed table:
+//   modelled ~= realized for all B  -> equivalence holds, proceed to the
+//   wiring; they diverge materially          -> reconcile (Task 1b) before
+//   claiming a
+//                                       hard peak <= B.
+// block_of = policy.batch_target_size is CORRECT here: cell_footprint /
+// compute_dag_boulevard consult block_of ONLY on modes being sliced (the batch
+// loops Κ->256, occ i->8); non-batched modes are sized full by cm.memsize.
+TEST_CASE("dryrun remat modelled-vs-replayed peak equivalence probe (C60)",
+          "[.][dryrun-remat-equiv]") {
+  auto ctx = get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+
+  auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                          "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = deserialize<ExprPtr>(line);
+  REQUIRE(static_cast<bool>(expr));
+  REQUIRE(expr->is<Sum>());
+  auto const& summands = expr->as<Sum>().summands();
+  REQUIRE(!summands.empty());
+  auto flatten_product = [](ExprPtr const& e) -> ExprPtr {
+    if (!e->is<Product>()) return e;
+    auto const& p = e->as<Product>();
+    return ex<Product>(p.scalar(), p.factors(), Product::Flatten::Yes);
+  };
+  std::size_t nterms = summands.size();
+  if (char const* nt = std::getenv("SEQUANT_UT_DRYRUN_NTERMS"))
+    nterms = std::min<std::size_t>(nterms, std::atoll(nt));
+  auto regime = df_regime(kC60_pVDZF12);
+
+  // --- aux+occ policy (the external-occ arm; identical to occ-veto run(1,1))
+  // --
+  sequant::BatchPolicy policy;
+  policy.batch_spectator_indices = true;
+  policy.order_aware_recompute = true;
+  policy.node_level_placement = true;
+  policy.is_batchable_contracted_index = [](Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  policy.is_batchable_external_index = [](Index const& ix) {
+    return ix.space().base_key() == L"i";
+  };
+  policy.batch_target_size = [](Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"Κ" ? std::size_t{256} : std::size_t{8};
+  };
+  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+  policy.accumulation_factor = 1.0;
+  policy.peak_threshold =
+      (std::getenv("SEQUANT_UT_DRYRUN_PEAK_THR_GB")
+           ? std::atof(std::getenv("SEQUANT_UT_DRYRUN_PEAK_THR_GB"))
+           : 100.0) *
+      1e9;
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      Expr const*, container::vector<NodeBatchAnnotation>>>();
+  OptimizeOptions opts;
+  opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = axes_map;
+
+  std::vector<EvalNodeDryRun> forest;
+  for (std::size_t s = 0; s < nterms; ++s) {
+    ExprPtr const term = flatten_product(summands[s]);
+    if (!term) continue;
+    auto optimized = optimize(term, opts);
+    if (!optimized) continue;
+    auto it = axes_map->find(optimized.get());
+    container::vector<NodeBatchAnnotation> node_axes;
+    if (it != axes_map->end()) node_axes = it->second;
+    BinarizationOptions bopts;
+    bopts.node_batch_axes = node_axes;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    forest.push_back(binarize<EvalExprDryRun>(optimized, {}, bopts));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+  REQUIRE(!forest.empty());
+
+  // --- the probe: remat once per budget, then replay-measure
+  // ------------------
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+  auto const& block_of = policy.batch_target_size;
+  auto const in = sequant::eval::remat_cells(forest, *cm, block_of);
+
+  auto status_str = [](sequant::eval::RematStatus s) -> wchar_t const* {
+    switch (s) {
+      case sequant::eval::RematStatus::Feasible:
+        return L"Feasible";
+      case sequant::eval::RematStatus::FactorizationInherent:
+        return L"FactorizationInherent";
+      case sequant::eval::RematStatus::RebatchNeeded:
+        return L"RebatchNeeded";
+    }
+    return L"?";
+  };
+
+  std::wcerr << L"\n=== [dryrun-remat-equiv] C60 aux+occ, " << nterms
+             << L" terms: MODELLED (remat) vs REALIZED (replay) peak ===\n";
+  std::wcerr << L"   B(GB)   modelled(GB)   realized(GB)   ratio(real/mod)"
+                L"   status   modeled_recompute(GB)\n";
+
+  for (double const B_gb : {2000.0, 1000.0, 500.0}) {
+    double const B = B_gb * 1e9;
+    auto const res = sequant::eval::rematerialize_to_budget(
+        in.cells, *cm, block_of, in.num_points, B);
+    double const modelled_gb = res.profile.peak_bytes / 1e9;
+
+    auto router = sequant::eval::remat_to_router(in.cells, res.cells, forest);
+    sequant::eval::dryrun::CacheConfig cfg;
+    cfg.max_footprint =
+        0.;  // gate OFF: measure the placed schedule's TRUE peak
+    cfg.min_repeats = 1;
+    cfg.is_volatile = [](EvalNodeDryRun const& n) {
+      if (!n.leaf() || !n->is_tensor()) return false;
+      return n->as_tensor().label() == L"t";
+    };
+    auto const cp = sequant::eval::dryrun::cost_profile(
+        forest, policy, cfg, regime, nullptr, &router);
+    double const realized_gb = cp.peak_bytes / 1e9;
+    double const ratio = modelled_gb > 0 ? realized_gb / modelled_gb : 0.0;
+
+    std::wcerr << L"  " << B_gb << L"        " << modelled_gb << L"          "
+               << realized_gb << L"          " << ratio << L"        "
+               << status_str(res.status) << L"      "
+               << (static_cast<double>(res.modeled_recompute) * 8.0 / 1e9)
+               << L"\n";
+
+    // Task 1 is a measurement + decision, not a bound. Only sanity-check the
+    // pipeline ran and produced positive peaks on both sides; the modelled-vs-
+    // realized JUDGEMENT is made by reading the table (plan Task 1 Step 5).
+    CHECK(modelled_gb > 0.0);
+    CHECK(realized_gb > 0.0);
+  }
 }
 
 // D5 avoidable-recomputation WITNESS: compare EXTERNAL-mode vs CONTRACTED-mode
