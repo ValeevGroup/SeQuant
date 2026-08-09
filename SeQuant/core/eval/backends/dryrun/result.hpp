@@ -127,11 +127,23 @@ struct DryRunOps {
     // overrides feed the same CostModel closures the static cost_profile() walk
     // uses, so per-op costs are consistent with the whole-forest totals.
     if (Logger::instance().eval.level > 0) {
-      container::svector<Index> const rhs = indices_of(other);
+      // Cost THIS op in the einsum ANNOTATION label space (lannot/rannot/
+      // this_annot), NOT the operands' stored `indices_` (idx / indices_of(
+      // other)). A DAG VALUE HAS NO INTRINSIC LABELS -- only ops bind labels to
+      // it, meaningful only within that op; a value's `indices_` merely holds
+      // whatever labels its PRODUCER used, which say nothing about how a
+      // CONSUMER binds it. The two diverge for every CSE-shared value used
+      // under a different binding: e.g. the (g.C)(g.C) legs are the SAME cached
+      // value (its `indices_` reads [i_1 i_4 K_2 a_4] from its producer) yet
+      // THIS op binds it as lannot=[i_2 i_3 K_2 a_3] and rannot=[i_2 i_1 K_2
+      // a_1]. Deriving `contracted` from the producer-labeled stored indices
+      // instead of this op's annotations unions modes from different label
+      // contexts and exploded the flops (6.65e16 vs the correct ~1.3e13). out U
+      // (lannot & rannot) == lannot U rannot == the real contraction volume.
       container::svector<Index> out(a.this_annot.begin(), a.this_annot.end());
       container::svector<Index> contracted;
-      for (auto const& ix : idx)
-        if (std::find(rhs.begin(), rhs.end(), ix) != rhs.end())
+      for (auto const& ix : a.lannot)
+        if (std::find(a.rannot.begin(), a.rannot.end(), ix) != a.rannot.end())
           contracted.push_back(ix);
       double const flops = cm->flops(out, contracted, merged);
       sequant::eval::detail::last_op_flops() = flops;  // for the Build event
