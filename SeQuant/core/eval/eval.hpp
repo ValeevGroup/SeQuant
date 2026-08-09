@@ -748,7 +748,8 @@ ResultPtr evaluate_impl(Node const& node,         //
               // release).
               SEQUANT_ASSERT(hd == 0 || [&] {
                 Index const& hm = ctx[hd - 1].first;
-                auto const phys = key.get_indices<container::svector<Index>>();
+                auto const phys =
+                    key.template get_indices<container::svector<Index>>();
                 if (std::find(phys.begin(), phys.end(), hm) == phys.end())
                   return false;
                 for (auto const& space : home->dag_scope)
