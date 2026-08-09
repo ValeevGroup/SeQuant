@@ -171,14 +171,8 @@ inline void count_product_by_extent(LeftT const& l, RightT const& r,
   eval::FlopCounter::record(eval::FlopCategory::Contraction, 2 * v * k, v);
 }
 
-/// Total real inner volume of a tensor of tensors: the sum of every non-empty
-/// local inner tensor's actual volume.
-template <typename ArrayT>
-[[nodiscard]] inline double inner_volume(ArrayT const& arr) {
-  return real_element_count(arr);
-}
-
-/// Extents, in \p labels order, of a real inner tensor.
+/// Product of the extents of the modes of a real inner tensor whose labels
+/// (\p labels, in the tensor's own order) also appear in \p against.
 template <typename InnerT>
 [[nodiscard]] inline double shared_extent_product(
     InnerT const& inner, std::vector<std::string_view> const& labels,
