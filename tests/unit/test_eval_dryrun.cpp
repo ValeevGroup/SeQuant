@@ -5711,3 +5711,77 @@ TEST_CASE("dryrun external-mode occ batching matches contracted-mode avoidable",
   // (external.peak_gb < 100.0) when the co-batching work lands.
   CHECK(external.peak_gb > 100.0);  // peak NOT yet bounded (~12481 GB)
 }
+
+// Does canonicalization preserve DISTINCT composite (PNO) proto pairs? A
+// contraction spanning composites on different occ pairs (a<i_1,i_2>,
+// b<i_2,i_3>) physically spans THREE occ; if canon_indices collapsed the pairs
+// onto one, its flops (and the DP/model sizing that reads canon_indices) would
+// undersize.
+TEST_CASE("canon_indices preserves distinct composite proto pairs",
+          "[eval_expr][composite-canon]") {
+  using namespace sequant;
+  auto ctx = get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  auto resetter = set_scoped_default_context(std::move(ctx));
+
+  Index const i1{L"i_1"}, i2{L"i_2"}, i3{L"i_3"};
+  auto const a_space = Index{L"a_1"}.space();
+  Index const a1{a_space, container::vector<Index>{i1, i2}};  // pair (i_1,i_2)
+  Index const a2{a_space, container::vector<Index>{i2, i3}};  // pair (i_2,i_3)
+  Tensor const t(L"I", bra{a1}, ket{a2}, Symmetry::Nonsymm);
+  REQUIRE(a1.has_proto_indices());
+  REQUIRE(a2.has_proto_indices());
+
+  EvalExpr const ev{t};
+  auto const& ci = ev.canon_indices();
+
+  auto nar = [](std::wstring_view w) {
+    std::string s;
+    for (wchar_t c : w) s += (c < 128 ? static_cast<char>(c) : '#');
+    return s;
+  };
+  std::set<std::wstring> distinct_protos;
+  std::vector<std::set<std::wstring>> pairs;
+  for (auto const& ix : ci)
+    if (ix.has_proto_indices()) {
+      std::set<std::wstring> p;
+      for (auto const& px : ix.proto_indices()) {
+        p.insert(std::wstring(px.full_label()));
+        distinct_protos.insert(std::wstring(px.full_label()));
+      }
+      pairs.push_back(p);
+    }
+  std::string dump;
+  for (auto const& ix : ci) dump += nar(ix.full_label()) + " ";
+  INFO("canon_indices = [" << dump << "]");
+  REQUIRE(pairs.size() == 2);
+  // Physical form spans THREE distinct occ (i_1,i_2,i_3); a collapse => TWO.
+  CHECK(distinct_protos.size() == 3);
+  CHECK(pairs[0] != pairs[1]);
+
+  // Binary contraction: A{a1<i_1,i_2>; i_4} * B{a2<i_2,i_3>; i_4} contracts
+  // i_4, so the RESULT carries a1<i_1,i_2> and a2<i_2,i_3> -- composites on
+  // distinct pairs, spanning 3 occ. This is the (binary) node whose
+  // canon_indices the static cost walk sizes; check IT preserves the distinct
+  // pairs too.
+  Index const i4{L"i_4"};
+  Tensor const A(L"A", bra{a1}, ket{i4}, Symmetry::Nonsymm);
+  Tensor const B(L"B", bra{a2}, ket{i4}, Symmetry::Nonsymm);
+  auto const prod = ex<Product>(ExprPtrList{ex<Tensor>(A), ex<Tensor>(B)});
+  auto const node = binarize(prod);
+  auto const& cci = node->canon_indices();
+  std::set<std::wstring> bprotos;
+  std::string bdump;
+  for (auto const& ix : cci) {
+    bdump += nar(ix.full_label()) + " ";
+    if (ix.has_proto_indices())
+      for (auto const& px : ix.proto_indices())
+        bprotos.insert(std::wstring(px.full_label()));
+  }
+  INFO("binary node canon_indices = [" << bdump << "]");
+  CHECK(bprotos.size() == 3);  // NOT 2 -- a collapse would merge the pairs
+}
