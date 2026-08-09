@@ -1,6 +1,8 @@
 #include <SeQuant/core/eval/flops.hpp>
 
+#include <map>
 #include <memory>
+#include <string>
 #include <mutex>
 #include <vector>
 
@@ -20,6 +22,13 @@ std::mutex& registry_mutex() {
 std::vector<std::unique_ptr<FlopReport>>& registry() {
   static std::vector<std::unique_ptr<FlopReport>> bins;
   return bins;
+}
+
+/// Why (and for which annotation triple) an operation could not be shaped.
+/// Guarded by registry_mutex(); only touched on the unsourced path.
+std::map<std::string, double>& unsourced_reasons() {
+  static std::map<std::string, double> m;
+  return m;
 }
 
 FlopReport& local_bin() {
@@ -70,11 +79,21 @@ void FlopCounter::record_kernels(double kernels, double m_sum, double n_sum,
   b.k_sum += k_sum;
 }
 
-void FlopCounter::record_unsourced() noexcept { local_bin().unsourced_ops += 1; }
+void FlopCounter::record_unsourced(std::string reason) {
+  local_bin().unsourced_ops += 1;
+  std::lock_guard<std::mutex> g(registry_mutex());
+  unsourced_reasons()[std::move(reason)] += 1;
+}
+
+std::map<std::string, double> FlopCounter::unsourced_detail() {
+  std::lock_guard<std::mutex> g(registry_mutex());
+  return unsourced_reasons();
+}
 
 void FlopCounter::reset() {
   std::lock_guard<std::mutex> g(registry_mutex());
   for (auto& bin : registry()) *bin = FlopReport{};
+  unsourced_reasons().clear();
 }
 
 FlopReport FlopCounter::read() {

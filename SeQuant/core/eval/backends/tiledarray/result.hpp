@@ -771,8 +771,8 @@ class ResultTensorOfTensorTA final : public Result {
       auto result = TA::einsum<TA::DeNest::True>(
           get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot), a.this_annot);
       if (eval::FlopCounter::enabled())
-        detail::count_product_denest(get<ArrayT>(), a.lannot, a.rannot,
-                                     a.this_annot);
+        detail::count_product_denest(get<ArrayT>(), other.get<ArrayT>(),
+                                     result, a.lannot, a.rannot, a.this_annot);
       log_ta_tensor_host_memory_use();
       return eval_result<that_type>(std::move(result));
 
@@ -781,8 +781,8 @@ class ResultTensorOfTensorTA final : public Result {
       auto result = TA::einsum(get<ArrayT>()(a.lannot),
                                other.get<ArrayT>()(a.rannot), a.this_annot);
       if (eval::FlopCounter::enabled())
-        detail::count_product_tot(get<ArrayT>(), result, a.lannot, a.rannot,
-                                  a.this_annot);
+        detail::count_product_tot(get<ArrayT>(), other.get<ArrayT>(), result,
+                                  a.lannot, a.rannot, a.this_annot);
       log_ta_tensor_host_memory_use();
       return eval_result<this_type>(std::move(result));
     } else {

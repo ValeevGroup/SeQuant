@@ -29,6 +29,8 @@
 
 #include <array>
 #include <cstddef>
+#include <map>
+#include <string>
 
 namespace sequant::eval {
 
@@ -108,8 +110,15 @@ class FlopCounter {
   static void record_kernels(double kernels, double m_sum, double n_sum,
                              double k_sum) noexcept;
 
-  /// Record an operation whose real shape could not be determined.
-  static void record_unsourced() noexcept;
+  /// Record an operation whose real shape could not be determined, tagged
+  /// with why and with the annotation triple that produced it. Off the hot
+  /// path by construction (it only runs when a shape could NOT be read), so
+  /// it may take a lock and build a string.
+  static void record_unsourced(std::string reason);
+
+  /// Per-reason census of the unsourced operations, for reporting the
+  /// coverage hole rather than hiding it. Local to this rank.
+  [[nodiscard]] static std::map<std::string, double> unsourced_detail();
 
  private:
   // Plain bool, not an atomic: read on the hot path, written once during

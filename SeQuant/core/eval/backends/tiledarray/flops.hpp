@@ -26,7 +26,9 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <limits>
 #include <string>
+#include <utility>
 #include <string_view>
 #include <vector>
 
@@ -142,139 +144,291 @@ inline void count_product_by_extent(LeftT const& l, RightT const& r,
       double e = mode_extent(l, la.outer, lab);
       if (e == 0) e = mode_extent(r, ra.outer, lab);
       if (e == 0) {  // an inner mode of a ToT: extent not in any TiledRange
-        eval::FlopCounter::record_unsourced();
+        eval::FlopCounter::record_unsourced(
+            "contracted inner mode has no TiledRange extent: " + lannot +
+            " * " + rannot + " = " + cannot);
         return;
       }
       k *= e;
       ++n_contracted;
     }
   double const v = real_element_count(c);
+  // No kernel shape is recorded here: TiledArray splits a flat contraction
+  // into many per-tile GEMMs whose individual shapes this layer never sees, so
+  // adding a fictitious single (M,N,K) would corrupt the shape statistics that
+  // the tensor-of-tensor walks measure exactly.
   if (n_contracted == 0) {
     eval::FlopCounter::record(eval::FlopCategory::Contraction, v, v);
-    eval::FlopCounter::record_kernels(1, v, 1, 1);
     return;
   }
   eval::FlopCounter::record(eval::FlopCategory::Contraction, 2 * v * k, v);
-  eval::FlopCounter::record_kernels(1, v, 1, k);
 }
 
-/// Record a tensor-of-tensor * tensor-of-tensor product that keeps its nest
-/// (`ToT * ToT -> ToT`) by walking the result's real inner tensors.
-///
-/// For each outer element c the work is one GEMM of shape (M(c), N(c), K(c)):
-///   |inner_C(c)| = M(c)*N(c)*H(c),  |inner_L(c)| = M(c)*K(c)*H(c)
-/// with H the inner Hadamard extent, so with
-///   M' := prod of the extents (read off inner_C(c)) of the labels shared by
-///         inner_L and inner_C   ( = M(c)*H(c) )
-///   K(c) = |inner_L(c)| / M'
-/// the flop count is `2 * |inner_C(c)| * K(c)` -- exact, and derived entirely
-/// from the two real inner tensors at c. This is where the per-pair variation
-/// of a CSV/PNO array is captured.
-///
-/// Requires the outer indices to be free/Hadamard (no outer contraction), so
-/// that each result outer element has exactly one matching left outer element.
-/// Anything else, or a left operand whose outer element is not local, is
-/// recorded as unsourced rather than guessed.
-template <typename LeftT, typename ResultT>
-inline void count_product_tot(LeftT const& l, ResultT const& c,
-                              std::string const& lannot,
-                              std::string const& rannot,
-                              std::string const& cannot) {
-  auto const la = split_annot(lannot), ra = split_annot(rannot),
-             ca = split_annot(cannot);
-  // outer contraction (a label in both operands' outer lists but not the
-  // result's) breaks the one-to-one outer correspondence this walk needs
-  for (auto lab : la.outer)
-    if (contains(ra.outer, lab) && !contains(ca.outer, lab)) {
-      eval::FlopCounter::record_unsourced();
-      return;
-    }
-  // position of each of the left operand's outer labels within the result's
-  // outer labels
-  std::vector<std::size_t> l_from_c(la.outer.size());
-  for (std::size_t d = 0; d < la.outer.size(); ++d) {
-    auto const it =
-        std::find(ca.outer.begin(), ca.outer.end(), la.outer[d]);
-    if (it == ca.outer.end()) {
-      eval::FlopCounter::record_unsourced();
-      return;
-    }
-    l_from_c[d] = static_cast<std::size_t>(it - ca.outer.begin());
-  }
+/// Total real inner volume of a tensor of tensors: the sum of every non-empty
+/// local inner tensor's actual volume.
+template <typename ArrayT>
+[[nodiscard]] inline double inner_volume(ArrayT const& arr) {
+  return real_element_count(arr);
+}
 
-  double flops = 0, elems = 0, kernels = 0, m_sum = 0, n_sum = 0, k_sum = 0;
+/// Extents, in \p labels order, of a real inner tensor.
+template <typename InnerT>
+[[nodiscard]] inline double shared_extent_product(
+    InnerT const& inner, std::vector<std::string_view> const& labels,
+    std::vector<std::string_view> const& against) {
+  double p = 1;
+  for (std::size_t d = 0; d < labels.size(); ++d)
+    if (contains(against, labels[d]))
+      p *= static_cast<double>(inner.range().extent(d));
+  return p;
+}
+
+/// Accumulator for one tensor-of-tensor product's measured work.
+struct TotWork {
+  double flops = 0, kernels = 0, m_sum = 0, n_sum = 0, k_sum = 0;
+  /// One GEMM of shape (M', |inner_C|/M', K): see count_product_tot.
+  void gemm(double vol_c, double mprime, double vol_operand) {
+    double const kk = vol_operand / mprime;
+    flops += 2 * vol_c * kk;
+    ++kernels;
+    m_sum += mprime;
+    n_sum += vol_c / mprime;
+    k_sum += kk;
+  }
+};
+
+/// Walk the operand \p o (left or right -- the roles are symmetric) whose
+/// outer labels cover the result's, one GEMM per real outer element.
+/// \return false, having recorded the reason, if a needed result element is
+///         not local.
+template <typename OperandT, typename ResultT>
+[[nodiscard]] inline bool count_tot_walk_operand(
+    OperandT const& o, ResultT const& c, AnnotLabels const& oa,
+    AnnotLabels const& ca, TotWork& w, std::string const& why) {
+  std::vector<std::size_t> c_from_o(ca.outer.size());
+  for (std::size_t d = 0; d < ca.outer.size(); ++d)
+    c_from_o[d] = static_cast<std::size_t>(
+        std::find(oa.outer.begin(), oa.outer.end(), ca.outer[d]) -
+        oa.outer.begin());
   using index1_type = typename ResultT::trange_type::range_type::index1_type;
-  std::vector<index1_type> lidx(la.outer.size());
+  std::vector<index1_type> cidx(ca.outer.size());
+  // The contracted outer index is typically the fastest-varying mode, so a
+  // one-entry memo on the result element turns the result lookup into a hit
+  // for a whole run of operand elements.
+  std::vector<index1_type> memo_idx;
+  double memo_vol = 0, memo_mprime = 0;
+  bool memo_ok = false;
+  for (auto it = o.begin(); it != o.end(); ++it) {
+    auto const otile = it->get();
+    for (auto const& oidx : otile.range()) {
+      auto const& inner_o = otile[oidx];
+      if (inner_o.empty()) continue;
+      for (std::size_t d = 0; d < c_from_o.size(); ++d)
+        cidx[d] = static_cast<index1_type>(oidx[c_from_o[d]]);
+      if (!memo_ok || memo_idx != cidx) {
+        memo_ok = false;
+        auto const ctile_idx = c.trange().element_to_tile(cidx);
+        if (c.is_zero(ctile_idx)) continue;  // zero result: no work
+        if (!c.is_local(ctile_idx)) {
+          eval::FlopCounter::record_unsourced("result outer tile is remote: " +
+                                              why);
+          return false;
+        }
+        auto const& inner_c = c.find_local(ctile_idx).get()[cidx];
+        if (inner_c.empty()) continue;
+        memo_idx = cidx;
+        memo_vol = static_cast<double>(inner_c.range().volume());
+        memo_mprime = shared_extent_product(inner_c, ca.inner, oa.inner);
+        memo_ok = memo_mprime > 0;
+        if (!memo_ok) continue;
+      }
+      w.gemm(memo_vol, memo_mprime,
+             static_cast<double>(inner_o.range().volume()));
+    }
+  }
+  return true;
+}
+
+/// Walk the RESULT's real inner tensors, and for each the full range of the
+/// contracted OUTER indices (an odometer over the left operand's own
+/// TiledRanges). Handles every outer structure, at a cost proportional to the
+/// contracted outer volume -- which is why the operand walks above are
+/// preferred when they apply.
+template <typename LeftT, typename ResultT>
+[[nodiscard]] inline bool count_tot_walk_result(
+    LeftT const& l, ResultT const& c, AnnotLabels const& la,
+    AnnotLabels const& ra, AnnotLabels const& ca, TotWork& w,
+    std::string const& why) {
+  using index1_type = typename ResultT::trange_type::range_type::index1_type;
+  constexpr auto npos = std::numeric_limits<std::size_t>::max();
+  std::vector<std::size_t> l_from_c(la.outer.size(), npos);
+  std::vector<std::size_t> contracted_dims;
+  for (std::size_t d = 0; d < la.outer.size(); ++d) {
+    auto const it = std::find(ca.outer.begin(), ca.outer.end(), la.outer[d]);
+    if (it != ca.outer.end())
+      l_from_c[d] = static_cast<std::size_t>(it - ca.outer.begin());
+    else if (contains(ra.outer, la.outer[d]))
+      contracted_dims.push_back(d);
+    else {
+      eval::FlopCounter::record_unsourced(
+          "left outer label is neither free nor contracted: " + why);
+      return false;
+    }
+  }
+  std::vector<std::pair<index1_type, index1_type>> crange;
+  crange.reserve(contracted_dims.size());
+  for (auto d : contracted_dims) {
+    auto const& er = l.trange().dim(d).elements_range();
+    crange.emplace_back(static_cast<index1_type>(er.first),
+                        static_cast<index1_type>(er.second));
+  }
+  std::vector<index1_type> lidx(la.outer.size()), odo(crange.size());
   for (auto it = c.begin(); it != c.end(); ++it) {
     auto const ctile = it->get();
     for (auto const& cidx : ctile.range()) {
       auto const& inner_c = ctile[cidx];
       if (inner_c.empty()) continue;
       double const vol_c = static_cast<double>(inner_c.range().volume());
-      elems += vol_c;
-      for (std::size_t d = 0; d < l_from_c.size(); ++d)
-        lidx[d] = static_cast<index1_type>(cidx[l_from_c[d]]);
-      auto const ltile_idx = l.trange().element_to_tile(lidx);
-      if (l.is_zero(ltile_idx)) continue;  // zero operand: no work
-      if (!l.is_local(ltile_idx)) {
-        eval::FlopCounter::record_unsourced();
-        return;
-      }
-      auto const& inner_l = l.find_local(ltile_idx).get()[lidx];
-      if (inner_l.empty()) continue;
-      // M' = product of the extents (from inner_C) of the labels inner_L and
-      // inner_C share; those are the external-left plus inner-Hadamard modes
-      double mprime = 1;
-      for (std::size_t d = 0; d < ca.inner.size(); ++d)
-        if (contains(la.inner, ca.inner[d]))
-          mprime *= static_cast<double>(inner_c.range().extent(d));
+      double const mprime = shared_extent_product(inner_c, ca.inner, la.inner);
       if (mprime <= 0) continue;
-      double const kk = static_cast<double>(inner_l.range().volume()) / mprime;
-      flops += 2 * vol_c * kk;
-      ++kernels;
-      m_sum += mprime;
-      n_sum += vol_c / mprime;
-      k_sum += kk;
+      for (std::size_t d = 0; d < la.outer.size(); ++d)
+        if (l_from_c[d] != npos)
+          lidx[d] = static_cast<index1_type>(cidx[l_from_c[d]]);
+      for (std::size_t j = 0; j < crange.size(); ++j) odo[j] = crange[j].first;
+      while (true) {
+        for (std::size_t j = 0; j < crange.size(); ++j)
+          lidx[contracted_dims[j]] = odo[j];
+        auto const ltile_idx = l.trange().element_to_tile(lidx);
+        if (!l.is_zero(ltile_idx)) {
+          if (!l.is_local(ltile_idx)) {
+            eval::FlopCounter::record_unsourced(
+                "left outer tile is remote: " + why);
+            return false;
+          }
+          auto const& inner_l = l.find_local(ltile_idx).get()[lidx];
+          if (!inner_l.empty())
+            w.gemm(vol_c, mprime,
+                   static_cast<double>(inner_l.range().volume()));
+        }
+        // advance the odometer; an empty odometer means exactly one pass
+        bool done = true;
+        for (std::size_t j = crange.size(); j-- > 0;) {
+          if (++odo[j] < crange[j].second) {
+            done = false;
+            break;
+          }
+          odo[j] = crange[j].first;
+        }
+        if (done) break;
+      }
     }
   }
-  eval::FlopCounter::record(eval::FlopCategory::Contraction, flops, elems);
-  eval::FlopCounter::record_kernels(kernels, m_sum, n_sum, k_sum);
+  return true;
+}
+
+/// Record a tensor-of-tensor * tensor-of-tensor product that keeps its nest
+/// (`ToT * ToT -> ToT`) by walking real inner tensors.
+///
+/// For one (result outer element, contracted-outer element) pair the work is
+/// one GEMM of shape (M, N, K):
+///   |inner_C| = M*N*H,  |inner_L| = M*K*H
+/// with H the inner Hadamard extent, so with
+///   M' := product of the extents (read off inner_C) of the labels shared by
+///         inner_L and inner_C   ( = M*H )
+///   K  = |inner_L| / M'
+/// the flop count is `2 * |inner_C| * K` -- exact, and derived entirely from
+/// the two real inner tensors. This is where the per-pair variation of a
+/// CSV/PNO array is captured.
+///
+/// Three walks, all exact, picked purely for cost. When one operand's outer
+/// labels cover the result's, walking THAT operand visits each GEMM exactly
+/// once and touches only real data -- essential when the contracted outer
+/// index is a large one (the DF Kappa, a PAO index). Otherwise the result is
+/// walked with an odometer over the contracted outer range.
+template <typename LeftT, typename RightT, typename ResultT>
+inline void count_product_tot(LeftT const& l, RightT const& r,
+                              ResultT const& c, std::string const& lannot,
+                              std::string const& rannot,
+                              std::string const& cannot) {
+  auto const la = split_annot(lannot), ra = split_annot(rannot),
+             ca = split_annot(cannot);
+  std::string const why = lannot + " * " + rannot + " = " + cannot;
+  bool outer_contraction = false;
+  for (auto lab : la.outer)
+    if (contains(ra.outer, lab) && !contains(ca.outer, lab))
+      outer_contraction = true;
+  auto covers = [&ca](AnnotLabels const& a) {
+    for (auto lab : ca.outer)
+      if (!contains(a.outer, lab)) return false;
+    return true;
+  };
+
+  TotWork w;
+  bool ok = true;
+  if (outer_contraction && covers(la))
+    ok = count_tot_walk_operand(l, c, la, ca, w, why);
+  else if (outer_contraction && covers(ra))
+    ok = count_tot_walk_operand(r, c, ra, ca, w, why);
+  else
+    ok = count_tot_walk_result(l, c, la, ra, ca, w, why);
+  if (!ok) return;
+  // Elements written is a property of the RESULT, counted once: accumulating
+  // it per kernel would multiply every result element by the number of
+  // contracted-outer terms summed into it.
+  eval::FlopCounter::record(eval::FlopCategory::Contraction, w.flops,
+                            real_element_count(c));
+  eval::FlopCounter::record_kernels(w.kernels, w.m_sum, w.n_sum, w.k_sum);
 }
 
 /// Record a `ToT * ToT -> T` (de-nesting) product: every inner mode is
-/// contracted, so each outer element contributes one dot product of length
-/// `|inner_L|`. Exact when the outer indices are pure Hadamard (identical
-/// label sets on both operands and the result), which is the only shape the
-/// CSV path emits; otherwise recorded as unsourced.
-template <typename LeftT>
-inline void count_product_denest(LeftT const& l, std::string const& lannot,
+/// contracted, so each (left outer element, result free index) pair
+/// contributes one dot product of length `|inner_L|`.
+///
+/// The result carries no inner index, so the per-GEMM N is 1 and the whole
+/// count collapses to `replication * 2 * (total real inner volume of the left
+/// operand)`, where `replication` is the product of the extents of the result
+/// outer labels the left operand does not carry (free indices supplied by the
+/// right operand; the left's inner volume is independent of them). Every left
+/// outer label must be free or contracted; anything else is unsourced.
+template <typename LeftT, typename RightT, typename ResultT>
+inline void count_product_denest(LeftT const& l, RightT const& r,
+                                 ResultT const& c, std::string const& lannot,
                                  std::string const& rannot,
                                  std::string const& cannot) {
   auto const la = split_annot(lannot), ra = split_annot(rannot),
              ca = split_annot(cannot);
-  auto same_set = [](std::vector<std::string_view> a,
-                     std::vector<std::string_view> b) {
-    std::sort(a.begin(), a.end());
-    std::sort(b.begin(), b.end());
-    return a == b;
-  };
-  if (!same_set(la.outer, ra.outer) || !same_set(la.outer, ca.outer)) {
-    eval::FlopCounter::record_unsourced();
-    return;
-  }
-  double flops = 0, kernels = 0, k_sum = 0;
+  for (auto lab : la.outer)
+    if (!contains(ca.outer, lab) && !contains(ra.outer, lab)) {
+      eval::FlopCounter::record_unsourced(
+          "ToT*ToT->T left outer label is neither free nor contracted: " +
+          lannot + " * " + rannot + " = " + cannot);
+      return;
+    }
+  double replication = 1;
+  for (auto lab : ca.outer)
+    if (!contains(la.outer, lab)) {
+      double const e = mode_extent(r, ra.outer, lab);
+      if (e == 0) {
+        eval::FlopCounter::record_unsourced(
+            "ToT*ToT->T result outer label has no extent on either operand: " +
+            lannot + " * " + rannot + " = " + cannot);
+        return;
+      }
+      replication *= e;
+    }
+  double flops = 0;
   for (auto it = l.begin(); it != l.end(); ++it) {
     auto const tile = it->get();
     for (auto const& inner : tile) {
       if (inner.empty()) continue;
-      double const v = static_cast<double>(inner.range().volume());
-      flops += 2 * v;
-      ++kernels;
-      k_sum += v;
+      flops += 2 * static_cast<double>(inner.range().volume());
     }
   }
-  eval::FlopCounter::record(eval::FlopCategory::Contraction, flops, kernels);
-  eval::FlopCounter::record_kernels(kernels, kernels, kernels, k_sum);
+  // No shape census: these are rank-1 dot products (M = N = 1), and there are
+  // orders of magnitude more of them than there are real GEMMs, so counting
+  // them would bury the GEMM shape statistics the ToT*ToT->ToT walks measure.
+  eval::FlopCounter::record(eval::FlopCategory::Contraction,
+                            replication * flops, real_element_count(c));
 }
 
 }  // namespace sequant::detail
