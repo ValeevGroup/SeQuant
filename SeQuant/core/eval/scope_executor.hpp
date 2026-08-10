@@ -195,11 +195,11 @@ template <meta::eval_node node_t>
 ///   across members is built once per block on the one scratch.
 ///
 /// - Contracted with a child (aux OUTER, occ INNER): each block builds the
-///   values HOMED at this node once (via \c ensure_hoist_slot on a FRESH
-///   per-level cache, so the value has unbounded life and is REUSED across
-///   every inner block, then dropped by \c reset() and rebuilt per outer
-///   block), then recurses into the child loop for the members that carry the
-///   inner mode and
+///   values HOMED at this node once (registered in the outer-level cache with
+///   their \c weighted_use_count in-block life, so a value is REUSED across the
+///   inner blocks that consume it and freed as soon as its last in-block use is
+///   done, then rebuilt after \c reset() per outer block), then recurses into
+///   the child loop for the members that carry the inner mode and
 ///   \c evaluate_impl's the members invariant to it, and ACCUMULATES each
 ///   block's per-member partial. The hoist cache IS the outer loop level (one
 ///   parent link == one loop), so slice-on-use crosses exactly the inner loops
