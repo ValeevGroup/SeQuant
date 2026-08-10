@@ -5775,6 +5775,199 @@ TEST_CASE("dryrun water-20 aux-batch fragmentation: gC composites priced rf==1",
   CHECK(n_kcon > 20);
 }
 
+// PNO-CCSD water-20 REMAT peak_threshold sweep. rematerialize_to_budget starts
+// from the peak-maximal seed (all intermediates hoisted / perfect CSE: gC built
+// ONCE, shared) and DEMOTES giants (slices them into the K loop -> per-consumer
+// rebuild) until the MODELLED peak fits the budget. This sweep answers: (Q1)
+// why remat demotes the 34 GB gC instead of hoisting it (the modelled seed peak
+// vs the budget), and (Q2) which peak_threshold stops demotion -> everything
+// stays hoisted -> the old-code (unfragmented) schedule. It also exposes the
+// modelled- vs-realized peak gap (this session's remat-peak overcount) as the
+// reason the threshold needed is far above the real peak.
+TEST_CASE("dryrun water-20 remat peak_threshold sweep: hoist vs demote gC",
+          "[.][dryrun-water-remat-sweep]") {
+  auto ctx = get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+
+  auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                          "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string sline = body;
+  if (auto nl = sline.find('\n'); nl != std::string::npos)
+    sline = sline.substr(0, nl);
+  auto expr = deserialize<ExprPtr>(sline);
+  REQUIRE(static_cast<bool>(expr));
+  REQUIRE(expr->is<Sum>());
+  auto const& summands = expr->as<Sum>().summands();
+  REQUIRE(!summands.empty());
+  auto flatten_product = [](ExprPtr const& e) -> ExprPtr {
+    if (!e->is<Product>()) return e;
+    auto const& p = e->as<Product>();
+    return ex<Product>(p.scalar(), p.factors(), Product::Flatten::Yes);
+  };
+  std::size_t nterms = summands.size();
+  if (char const* nt = std::getenv("SEQUANT_UT_DRYRUN_NTERMS"))
+    nterms = std::min<std::size_t>(nterms, std::atoll(nt));
+  auto regime = df_regime(kWater20_pVDZF12);
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  policy.is_batchable_external_index = [](Index const&) { return false; };
+  policy.batch_spectator_indices = false;
+  policy.batch_target_size = [](Index const&) -> std::size_t { return 256; };
+  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+  policy.accumulation_factor = 1.0;
+  policy.persistent_only = false;
+  policy.peak_threshold = 1e11;
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      Expr const*, container::vector<NodeBatchAnnotation>>>();
+  OptimizeOptions opts;
+  opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = axes_map;
+
+  std::vector<EvalNodeDryRun> forest;
+  for (std::size_t s = 0; s < nterms; ++s) {
+    ExprPtr const term = flatten_product(summands[s]);
+    if (!term) continue;
+    ExprPtr optimized;
+    try {
+      optimized = optimize(term, opts);
+    } catch (std::exception const&) {
+      continue;
+    }
+    if (!optimized) continue;
+    auto it = axes_map->find(optimized.get());
+    container::vector<NodeBatchAnnotation> node_axes;
+    if (it != axes_map->end()) node_axes = it->second;
+    BinarizationOptions bopts;
+    bopts.node_batch_axes = node_axes;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    forest.push_back(binarize<EvalExprDryRun>(optimized, {}, bopts));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+  REQUIRE(!forest.empty());
+
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+  auto const& block_of = policy.batch_target_size;
+  auto const in = sequant::eval::remat_cells(forest, *cm, block_of);
+  double const seed_peak =
+      sequant::eval::peak_profile_sweep(
+          sequant::eval::to_schedule(in.cells, *cm, block_of, in.num_points))
+          .peak_bytes /
+      1e9;
+  std::wcerr << L"\n=== [dryrun-water-remat-sweep] " << forest.size()
+             << L" terms; SEED (all hoisted, gC built once) modelled peak = "
+             << seed_peak << L" GB ===\n";
+  std::wcerr << L"   B(GB)   final_modelled(GB)   realized(GB)   avoidable(%)"
+                L"   modeled_recompute(GB)   status\n";
+  auto status_str = [](sequant::eval::RematStatus s) -> wchar_t const* {
+    switch (s) {
+      case sequant::eval::RematStatus::Feasible:
+        return L"Feasible";
+      case sequant::eval::RematStatus::FactorizationInherent:
+        return L"FactInherent";
+      case sequant::eval::RematStatus::RebatchNeeded:
+        return L"RebatchNeeded";
+    }
+    return L"?";
+  };
+  for (double const B_gb : {100.0, 300.0, 1000.0, 3000.0, 20000.0}) {
+    auto const res = sequant::eval::rematerialize_to_budget(
+        in.cells, *cm, block_of, in.num_points, B_gb * 1e9);
+    double const final_peak = res.profile.peak_bytes / 1e9;
+    auto router = sequant::eval::remat_to_router(in.cells, res.cells, forest);
+    sequant::eval::dryrun::CacheConfig cfg;
+    cfg.max_footprint = 0.;
+    cfg.min_repeats = 1;
+    cfg.is_volatile = [](EvalNodeDryRun const& n) {
+      return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
+    };
+    auto const cp = sequant::eval::dryrun::cost_profile(
+        forest, policy, cfg, regime, nullptr, &router);
+    double const avoid = cp.dryrun_flops > 0
+                             ? 100.0 * cp.avoidable_flops / cp.dryrun_flops
+                             : 0.0;
+    std::wcerr << L"  " << B_gb << L"      " << final_peak << L"          "
+               << (cp.peak_bytes / 1e9) << L"          " << avoid << L"        "
+               << (static_cast<double>(res.modeled_recompute) * 8.0 / 1e9)
+               << L"        " << status_str(res.status) << L"\n";
+  }
+
+  // The REAL Q2 lever: sweep the DP's peak_threshold (REBUILD the forest each
+  // time). A higher DP budget means fewer nodes must be sliced to fit -> fewer
+  // Kcon annotations -> fewer per-tree gC rebuilds -> less recompute. This
+  // changes the FOREST SCHEDULE, unlike remat's budget (inert above).
+  auto build_and_measure =
+      [&](double dp_thr) -> std::tuple<std::size_t, double, double> {
+    policy.peak_threshold = dp_thr;
+    opts.batch_policy = policy;
+    auto amap = std::make_shared<std::unordered_map<
+        Expr const*, container::vector<NodeBatchAnnotation>>>();
+    opts.term_batch_axes = amap;
+    std::vector<EvalNodeDryRun> fst;
+    std::size_t n_kcon = 0;
+    for (std::size_t s = 0; s < nterms; ++s) {
+      ExprPtr const term = flatten_product(summands[s]);
+      if (!term) continue;
+      ExprPtr optimized;
+      try {
+        optimized = optimize(term, opts);
+      } catch (std::exception const&) {
+        continue;
+      }
+      if (!optimized) continue;
+      auto it = amap->find(optimized.get());
+      container::vector<NodeBatchAnnotation> node_axes;
+      if (it != amap->end()) node_axes = it->second;
+      for (auto const& na : node_axes)
+        for (auto const& e : na.axes)
+          if (e.second == sequant::BatchModeType::Contracted &&
+              e.first.space().base_key() == L"Κ")
+            ++n_kcon;
+      BinarizationOptions bopts;
+      bopts.node_batch_axes = node_axes;
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+      fst.push_back(binarize<EvalExprDryRun>(optimized, {}, bopts));
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    }
+    sequant::eval::dryrun::CacheConfig cfg;
+    cfg.max_footprint = 0.;
+    cfg.min_repeats = 1;
+    cfg.is_volatile = [](EvalNodeDryRun const& n) {
+      return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
+    };
+    auto cp = sequant::eval::dryrun::cost_profile(fst, policy, cfg, regime);
+    double const av = cp.dryrun_flops > 0
+                          ? 100.0 * cp.avoidable_flops / cp.dryrun_flops
+                          : 0.0;
+    return {n_kcon, cp.peak_bytes / 1e9, av};
+  };
+  std::wcerr
+      << L"\n  --- DP peak_threshold sweep (rebuild forest; the schedule "
+         L"lever) ---\n   DP_thr(GB)   Kcon_members   realized_peak(GB)   "
+         L"avoidable(%)\n";
+  for (double const thr_gb : {100.0, 300.0, 1000.0, 3000.0, 20000.0}) {
+    auto const [nk, pk, av] = build_and_measure(thr_gb * 1e9);
+    std::wcerr << L"  " << thr_gb << L"          " << nk << L"          " << pk
+               << L"          " << av << L"\n";
+  }
+  CHECK(seed_peak > 0.0);
+}
+
 // D5 avoidable-recomputation WITNESS: compare EXTERNAL-mode vs CONTRACTED-mode
 // occ batching on the C60 residual forest, measuring avoidable recompute in
 // FLOPs against the batching-free (unlimited-memory) ideal.
