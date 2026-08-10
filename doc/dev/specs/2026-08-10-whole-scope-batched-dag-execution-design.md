@@ -19,11 +19,12 @@ identical energies, 2.2x wall):
   ~12 distinct shapes), and each is rebuilt per consumer batch group.
 - One concrete case: `g(μ̃,i₃,Κ)·C(i₃,i₂,μ̃;a₃<i₂,i₃>)` = `g{i₃,a₃<i₂,i₃>;K}` was
   built ONCE and shared (`store=10`, `access=30`) by the old code and rebuilt 15x
-  (`store=150`) by the new code -- a genuine placement/sharing regression, though
-  small in wall time here.
-- (The bulk of that specific 2.2x turned out to be a `MALLOC_ARENA_MAX`/trim
-  env-var confounder on the new run only, NOT code; the durable code finding is
-  the fragmentation + lost sharing, ~1.3-1.5x, which THIS project targets.)
+  (`store=150`) by the new code -- a genuine placement/sharing regression.
+
+The analysis showed a real performance impact from RECOMPUTATION of shared
+intermediates that forest descent forces (a K-slice cannot persist across trees)
+and that a whole-scope DAG schedule would eliminate. That recompute is what this
+project targets.
 
 The fix is the execution model the DAG-scope machinery (home scopes,
 `home_modes`/`home_depth`, the router, remat, the peak oracle) has always assumed
@@ -79,9 +80,11 @@ change, not an executor rewrite.
    and each value gets its home scope from the existing DAG-scope placement. Home
    is a mode-set (narrow-chain level) today; a tree-path later.
 2. **Schedule (new).** Build the scope tree (union of home paths -- one chain
-   today), assign each value to its home node, topologically order values within
-   and across nodes so every value is built before its consumers, and emit a
-   walkable scope-major schedule.
+   today) and assign each value to its home node. The cross-scope VALUE ORDERING
+   need not be pre-computed at first: the executor can materialize an above-homed
+   value lazily on first reference (see Open Questions). So the initial scheduler
+   deliverable is the scope tree + per-value home; an explicit ahead-of-time topo
+   order is a later optimization.
 3. **Execute (new driver, reused primitives).** Walk the scope tree.
 
 ### The load-bearing insight: replace the DRIVER, not the primitives
@@ -148,8 +151,9 @@ model predicts what actually runs. The win is not "no peak cost."
 ## Scope boundary
 
 **In scope:**
-- The scope-major SCHEDULER: fuse + read placement + build scope tree + topo-order
-  + emit a walkable schedule.
+- The scope-major SCHEDULER: fuse + read placement + build scope tree + emit a
+  walkable schedule (cross-scope value ordering lazy at first; explicit topo
+  later).
 - The general scope-tree EXECUTOR (pure realizer): the scope-tree DFS walk reusing
   the existing accumulate/scatter/slice-on-use/scratch primitives.
 - Validation on the NARROW canonical-chain placement the current machinery emits.
@@ -166,9 +170,12 @@ model predicts what actually runs. The win is not "no peak cost."
 
 ## Validation
 
-- **Correctness.** The whole-scope executor must produce results byte-identical to
-  forest descent (same math, different evaluation order). Validate on the water-20
-  and C60 CSV-CCSD doubles residuals used throughout this session.
+- **Correctness.** The whole-scope executor must produce results that agree with
+  forest descent to within SMALL NUMERICAL NOISE -- NOT byte-identical: the
+  schedule changes the evaluation/contraction order, so floating-point
+  non-associativity yields a tiny diff. Validate on the water-20 and C60 CSV-CCSD
+  doubles residuals (converged energies agree to a tight tolerance, not to the
+  bit).
 - **Cost model.** The dry-run cost model must predict the whole-scope realized
   peak/recompute. Under whole-scope descent the realized peak IS the placement
   co-residency, so the `home_modes` co-residency oracle becomes the faithful
@@ -180,11 +187,17 @@ model predicts what actually runs. The win is not "no peak cost."
 
 ## Open questions (resolve during implementation)
 
-- **Scheduler topological order across scope nodes.** A value homed at scope S is
-  needed by consumers in deeper scopes; the schedule must build it before
-  descending, and must order sibling values by data dependence. Define the
-  linearization precisely (a DFS of the scope tree with a topo sort of values per
-  node, respecting cross-scope edges).
+- **Cross-scope ordering: lazy first, explicit topo later.** A value homed at
+  scope S is needed by consumers in deeper scopes. The FIRST implementation need
+  not build an ahead-of-time topological order across scopes: it can reuse the
+  existing LAZY mechanism -- when the walk hits a node inside a batch loop whose
+  home is ABOVE, compute it in the form its home needs (e.g. full extent), place
+  it in the home's cache, and access it by slicing thereafter. On-demand
+  home-materialization + slice-on-access handles the ordering implicitly, exactly
+  as the current evaluator already does for a mid-loop reference to an
+  above-homed value. An explicit ahead-of-time topo sort (DFS of the scope tree +
+  per-node value ordering by data dependence) is a later optimization, not a
+  prerequisite.
 - **Fused-DAG construction.** `compute_dag_boulevard` already groups occurrences
   by hash into `ValueCell`s; confirm this is a sufficient fused-DAG representation
   for the scheduler, or what it must add (explicit inter-value edges, per-value
