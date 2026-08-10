@@ -452,6 +452,29 @@ std::size_t witness_parse_max_hwmark_bytes(std::string const& trace) {
   return best;
 }
 
+// Counts non-overlapping occurrences of `needle` in `haystack`. Used to count
+// `"Term | Begin"` trace records: both `sequant::evaluate(Nodes const&, ...)`
+// (forest descent) and `evaluate_whole_scope`'s shared per-root combine loop
+// emit ONE such record per forest root (an identical `log::term(TermMode::
+// Begin, xpr)` bracket, see eval.hpp / scope_executor.hpp), so this count is
+// the TERM-COUNT-SENSITIVE check `size_in_bytes()` alone cannot provide: a
+// silently dropped or double-counted root changes this count, whereas
+// `ResultDryRun::sum()`/`add_inplace()` (backends/dryrun/result.hpp) derive
+// the result's shape/overrides from the engine-supplied annotation and
+// positional merges -- independent of how many summands actually
+// contributed -- so `size_in_bytes()` alone would NOT necessarily change if a
+// root were dropped or duplicated. The two checks are complementary: this one
+// is the drop/duplicate detector, `size_in_bytes()` equality is the
+// shape/footprint agreement check layered on top of it.
+std::size_t witness_count_substr(std::string const& haystack,
+                                 std::string const& needle) {
+  std::size_t count = 0;
+  for (std::size_t pos = haystack.find(needle); pos != std::string::npos;
+       pos = haystack.find(needle, pos + needle.size()))
+    ++count;
+  return count;
+}
+
 // Total builds (summed over slices) of one specific node in a build tally
 // (CacheManager::recompute_tally()) -- identical helper to the one every
 // build-once witness in test_eval_dryrun.cpp defines locally.
@@ -472,14 +495,15 @@ std::size_t witness_builds_of(Tally const& tally,
 // [dryrun-water-frag] / "whole-scope executor builds shared aux composites
 // once per block" cases use (df_regime(kWater20_pVDZF12), K@256,
 // DenseTimeSpaceBatched perf-first objective) -- reused here, not
-// reinvented. Three things are checked together, on the SAME forest and the
+// reinvented. Four things are checked together, on the SAME forest and the
 // SAME whole-scope replay, because (per the design's "Watch item")
 // equivalence-to-tolerance alone would pass even if nothing shared:
 //
 //   (a) the whole-scope replay's TARGETED Κ-carrying shared composites (the
 //       scope's homed_values, resolved to forest nodes) each build AT MOST
 //       once per Κ-block, and the busiest one hits EXACTLY n_blocks -- the
-//       build-once win Task 3 introduced;
+//       build-once win Task 3 introduced (the KEY metric this witness
+//       exists to pin);
 //   (b) forest descent, replayed on the IDENTICAL forest with the batched
 //       custom evaluator, rebuilds the SAME composites MORE than the
 //       whole-scope build-once bound -- the fragmentation Task 3's win
@@ -490,17 +514,30 @@ std::size_t witness_builds_of(Tally const& tally,
 //       peak, read directly off the SAME replay's own eval trace (the `hw=`
 //       high-water mark every EvalStat record -- root cache or a
 //       batch-scratch cache nested inside detail::walk_scope -- reports;
-//       see witness_parse_max_hwmark_bytes's doc comment).
+//       see witness_parse_max_hwmark_bytes's doc comment);
+//   (d) whole-scope and forest descent -- run separately below on the
+//       IDENTICAL forest/policy for (b) anyway -- agree STRUCTURALLY: the
+//       SAME number of forest roots processed (a `Term | Begin` trace-record
+//       count equal to `forest.size()` on BOTH replays -- see
+//       witness_count_substr's doc comment for why this, not
+//       `size_in_bytes()` alone, is what actually rules out a silently
+//       dropped or double-counted root) and the SAME final result footprint
+//       (`size_in_bytes()` equality -- a shape/positional agreement check,
+//       not by itself a drop detector; see the same doc comment).
 //
-// Numeric equivalence: the real CSV-CCSD residual is intractable at real
-// tensor sizes (the whole reason test_eval_dryrun.cpp evaluates it
-// zero-data), so THIS witness stays zero-data DryRun for (a)-(c); the
-// numeric equivalence of the batched-summation algorithm itself is the
-// Task-3/4 real-data TA proxy in test_eval_ta.cpp ("evaluate_whole_scope
-// matches forest descent over one aux loop" / "... over nested aux+occ"),
-// which exercises the IDENTICAL sharing topology (a Κ-carrying composite
-// shared by two roots, contracted at each root) at a size small enough for
-// real TA arithmetic.
+// Numeric equivalence is NOT checked by this witness: the real CSV-CCSD
+// residual is intractable at real tensor sizes (the whole reason
+// test_eval_dryrun.cpp evaluates it zero-data), so DryRun's Result carries no
+// real floating-point content to compare -- (a)-(d) above are the zero-data
+// witness's full correctness surface. The numeric equivalence of the
+// batched-summation algorithm itself -- that whole-scope's reordered
+// accumulation reproduces the SAME NUMBERS forest descent does, to floating-
+// point tolerance -- is established separately, at small real-TA scale, by
+// the Task-3/4 real-data TA proxy in test_eval_ta.cpp ("evaluate_whole_scope
+// matches forest descent over one aux loop" / "... over nested aux+occ",
+// relative L2 < 1e-10), which exercises the IDENTICAL sharing topology (a
+// Κ-carrying composite shared by two roots, contracted at each root) at a
+// size small enough for real TA arithmetic.
 TEST_CASE(
     "whole-scope witness: water-20 aux-only residual builds shared "
     "composites once per block and the co-residency oracle predicts the "
@@ -653,8 +690,9 @@ TEST_CASE(
   logger.eval.stream = &ws_trace;
   auto ws_cache = sequant::cache_manager(forest);
   ws_cache.set_recompute_tally_enabled(true);
+  ResultPtr ws_result;
   try {
-    (void)sequant::eval::evaluate_whole_scope<sequant::Trace::On>(
+    ws_result = sequant::eval::evaluate_whole_scope<sequant::Trace::On>(
         forest, sched, rich, layout, yield, ws_cache, target);
   } catch (std::exception const& e) {
     std::cerr << "[scope-executor-witness-water20] whole-scope evaluate "
@@ -668,24 +706,28 @@ TEST_CASE(
                              witness_builds_of(ws_cache.recompute_tally(), n));
   REQUIRE(max_ws_builds > 0);
 
-  // Parse the whole-scope peak BEFORE the forest-descent run reuses the
-  // logger's stream (below), so the fd replay's own trace text cannot
-  // contaminate this measurement.
+  // Parse the whole-scope peak AND term-count BEFORE the forest-descent run
+  // reuses the logger's stream (below), so the fd replay's own trace text
+  // cannot contaminate either measurement.
   std::size_t const realized_peak_bytes =
       witness_parse_max_hwmark_bytes(ws_trace.str());
+  std::size_t const ws_term_count =
+      witness_count_substr(ws_trace.str(), "Term | Begin");
 
-  // ---- (b): forest-descent contrast, batched custom evaluator, on the
-  // IDENTICAL forest/policy. Same elevated logger level (see above), a FRESH
-  // trace sink (discarded -- only the build tally is read for this contrast).
-  // ----
+  // ---- (b) + (d): forest-descent contrast, batched custom evaluator, on the
+  // IDENTICAL forest/policy -- also the structural comparison target for (d).
+  // Same elevated logger level (see above), a FRESH trace sink (this one is
+  // READ, for (d)'s term-count check, unlike the C60 witness's discarded
+  // fd_trace). ----
   std::ostringstream fd_trace;
   logger.eval.stream = &fd_trace;
   auto fd_cache = sequant::cache_manager(forest);
   fd_cache.set_custom_evaluator(sequant::make_evaluator(policy, yield));
   fd_cache.set_recompute_tally_enabled(true);
+  ResultPtr fd_result;
   try {
-    (void)sequant::evaluate<sequant::Trace::On>(forest, layout, yield,
-                                                fd_cache);
+    fd_result =
+        sequant::evaluate<sequant::Trace::On>(forest, layout, yield, fd_cache);
   } catch (std::exception const& e) {
     std::cerr << "[scope-executor-witness-water20] forest-descent evaluate "
                  "threw: "
@@ -693,6 +735,9 @@ TEST_CASE(
   }
   logger.eval.level = prev_level;
   logger.eval.stream = prev_stream;
+
+  std::size_t const fd_term_count =
+      witness_count_substr(fd_trace.str(), "Term | Begin");
 
   std::size_t max_fd_builds = 0;
   for (auto const& n : k_homed)
@@ -718,6 +763,18 @@ TEST_CASE(
   std::wcerr << L"\n=== [scope-executor-witness-water20] water-20 aux-only, "
              << forest.size() << L" terms, n_blocks=" << n_blocks << L", "
              << k_homed.size() << L" Κ-homed composites ===\n"
+             << L"  whole-scope replay completed  = "
+             << (ws_result ? L"yes" : L"NO") << L"\n"
+             << L"  forest-descent replay completed = "
+             << (fd_result ? L"yes" : L"NO") << L"\n"
+             << L"  term (root) count: whole-scope = " << ws_term_count
+             << L", forest-descent = " << fd_term_count << L"  (forest.size()="
+             << forest.size() << L")\n"
+             << L"  final result size: whole-scope = "
+             << (ws_result ? double(ws_result->size_in_bytes()) / 1e9 : -1.0)
+             << L" GB, forest-descent = "
+             << (fd_result ? double(fd_result->size_in_bytes()) / 1e9 : -1.0)
+             << L" GB\n"
              << L"  whole-scope max builds (targeted composites) = "
              << max_ws_builds << L"  (n_blocks=" << n_blocks << L")\n"
              << L"  forest-descent max builds (SAME composites)  = "
@@ -749,6 +806,18 @@ TEST_CASE(
   CHECK(oracle_peak_bytes > 0.0);
   CHECK(ratio > 0.1);
   CHECK(ratio < 10.0);
+
+  // (d) structural agreement between whole-scope and forest descent, on the
+  // IDENTICAL forest/policy: the SAME number of forest roots processed (a
+  // dropped or double-counted root would change this) and the SAME final
+  // result footprint (a shape/positional agreement check -- see
+  // witness_count_substr's doc comment for why the term-count check, not
+  // this alone, is the drop/duplicate detector).
+  REQUIRE(ws_result);
+  REQUIRE(fd_result);
+  CHECK(ws_term_count == forest.size());
+  CHECK(fd_term_count == forest.size());
+  CHECK(ws_result->size_in_bytes() == fd_result->size_in_bytes());
 }
 
 // The C60 WITNESS. Same real C60 residual and the SAME occ-veto MPQC batch
@@ -787,14 +856,19 @@ TEST_CASE(
 //
 // Correctness-to-tolerance: DryRun is zero-data (no real floating-point
 // content to compare -- see test_eval_ta.cpp's real-data TA proxy for that
-// at a tractable size), so "correct" here means STRUCTURAL equivalence:
-// whole-scope and forest descent, replayed on the IDENTICAL forest, must
-// assemble the SAME final result footprint (size_in_bytes()) -- a
-// deterministic function of the residual's external (i, j) indices that a
-// dropped or double-counted root would perturb. This is the C60-scale
-// complement to test_eval_ta.cpp's small real-arithmetic equivalence tests:
-// it exercises the actual production residual (55 summands, both batch
-// roles individually annotated) that is intractable at real tensor sizes.
+// at a tractable size), so "correct" here means STRUCTURAL equivalence,
+// checked two ways: whole-scope and forest descent, replayed on the
+// IDENTICAL forest, must (1) process the SAME number of forest roots (a
+// `Term | Begin` trace-record count equal to `forest.size()` on BOTH
+// replays -- the check that actually rules out a silently dropped or
+// double-counted root; see witness_count_substr's doc comment for why
+// `size_in_bytes()` alone cannot), and (2) assemble the SAME final result
+// footprint (`size_in_bytes()` equality -- a shape/positional agreement
+// check layered on top, not by itself a drop detector). This is the
+// C60-scale complement to test_eval_ta.cpp's small real-arithmetic
+// equivalence tests: it exercises the actual production residual (55
+// summands, both batch roles individually annotated) that is intractable at
+// real tensor sizes.
 TEST_CASE(
     "whole-scope witness: C60 aux+occ residual runs whole-scope, matches "
     "forest descent structurally, and records the realized peak",
@@ -962,20 +1036,23 @@ TEST_CASE(
               << e.what() << "\n";
   }
 
-  // Parse the whole-scope peak BEFORE the forest-descent run reuses the
-  // logger's stream (below), so the fd replay's own trace text cannot
-  // contaminate this measurement.
+  // Parse the whole-scope peak AND term-count BEFORE the forest-descent run
+  // reuses the logger's stream (below), so the fd replay's own trace text
+  // cannot contaminate either measurement.
   std::size_t const realized_peak_bytes =
       witness_parse_max_hwmark_bytes(ws_trace.str());
+  std::size_t const ws_term_count =
+      witness_count_substr(ws_trace.str(), "Term | Begin");
   std::size_t max_ws_builds = 0;
   for (auto const& n : k_homed)
     max_ws_builds = std::max(max_ws_builds,
                              witness_builds_of(ws_cache.recompute_tally(), n));
 
   // ---- forest-descent contrast: SAME forest/policy, structural result +
-  // build tally, for the correctness check and the recompute-elimination
-  // direction. Same elevated logger level (see above), a FRESH trace sink
-  // (discarded -- only the build tally is read for this contrast). ----
+  // build tally, for the correctness check (including the term-count
+  // drop/duplicate detector, read from THIS trace below) and the
+  // recompute-elimination direction. Same elevated logger level (see
+  // above), a FRESH trace sink. ----
   std::ostringstream fd_trace;
   logger.eval.stream = &fd_trace;
   auto fd_cache = sequant::cache_manager(forest);
@@ -992,6 +1069,8 @@ TEST_CASE(
   logger.eval.level = prev_level;
   logger.eval.stream = prev_stream;
 
+  std::size_t const fd_term_count =
+      witness_count_substr(fd_trace.str(), "Term | Begin");
   std::size_t max_fd_builds = 0;
   for (auto const& n : k_homed)
     max_fd_builds = std::max(max_fd_builds,
@@ -1021,6 +1100,9 @@ TEST_CASE(
       << L"\n"
       << L"  forest-descent replay completed = " << (fd_result ? L"yes" : L"NO")
       << L"\n"
+      << L"  term (root) count: whole-scope = " << ws_term_count
+      << L", forest-descent = " << fd_term_count << L"  (forest.size()="
+      << forest.size() << L")\n"
       << L"  final result size: whole-scope = "
       << (ws_result ? double(ws_result->size_in_bytes()) / 1e9 : -1.0)
       << L" GB, forest-descent = "
@@ -1057,19 +1139,27 @@ TEST_CASE(
                << witness_builds_of(fd_cache.recompute_tally(), k_homed[i])
                << L"\n";
 
-  // Structural correctness, where checkable: both replays must complete and
-  // assemble the SAME final footprint (a dropped root or a mis-covered
-  // external-scatter slice would perturb this deterministic function of the
-  // residual's external indices).
+  // Structural correctness, where checkable: both replays must complete,
+  // process the SAME number of forest roots (the term-count check that
+  // actually rules out a dropped or double-counted root -- see
+  // witness_count_substr's doc comment), and assemble the SAME final
+  // footprint (a shape/positional agreement check layered on top).
   REQUIRE(ws_result);
   REQUIRE(fd_result);
+  CHECK(ws_term_count == forest.size());
+  CHECK(fd_term_count == forest.size());
   CHECK(ws_result->size_in_bytes() == fd_result->size_in_bytes());
 
   // Build-once/recompute: MEASURE and record only (see the per-composite
   // table above) -- the strict "== n_blocks, forest descent worse" bound is
   // the water-20 witness's assertion; here only the loose sanity floor holds
-  // (whole-scope built at least one targeted composite at all).
-  if (!k_homed.empty()) CHECK(max_ws_builds > 0);
+  // (whole-scope built at least one targeted composite at all). The
+  // precondition itself (some Κ-homed composite exists) is NOT optional --
+  // REQUIRE it directly so a future change that eliminated Κ-homed
+  // composites entirely would fail loudly here instead of this CHECK
+  // silently no-opping.
+  REQUIRE(!k_homed.empty());
+  CHECK(max_ws_builds > 0);
 
   // Peak/oracle: MEASURE and record only -- no budget assertion (the design's
   // Scope boundary explicitly leaves placement feasibility to the
