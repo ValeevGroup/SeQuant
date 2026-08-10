@@ -60,8 +60,9 @@ struct ScopeSchedule {
 namespace detail {
 
 ///
-/// \brief True iff \p mode ever survives, un-summed, into a forest-ROOT
-/// value's own (proto-expanded) carried slots.
+/// \brief True iff \p mode's index TYPE (\c IndexSpace::base_key()) ever
+/// survives, un-summed, into a forest-ROOT value's own (proto-expanded)
+/// carried slots.
 ///
 /// \details \c RichSchedule does not carry \c BatchModeType directly: the
 /// cross-occurrence meet in \c stamp_lifetime_masks folds EVERY kind
@@ -79,7 +80,17 @@ namespace detail {
 /// anyone's child -- a top-level tree of the forest -- keeps its
 /// default-seeded \c consumer_point == its own \c point.
 ///
+/// Matches by TYPE (\c base_key()), mirroring the technique \c
+/// build_scope_schedule's step 4 already uses for value->node assignment --
+/// NOT by exact \c Index identity (\c Index::operator== compares space AND
+/// ordinal). More than one physical \c Index label of the same type can
+/// appear across \p rich's cells (e.g. one occurrence's Κ_1 vs another's
+/// Κ_2), so an exact-Index match could miss a root occurrence that uses a
+/// different physical label of the very type being classified, silently
+/// misclassifying an External mode as Contracted.
+///
 inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
+  auto const& mode_bk = mode.space().base_key();
   for (auto const& cell : rich.cells) {
     bool const is_root =
         std::any_of(cell.occurrences.begin(), cell.occurrences.end(),
@@ -90,7 +101,10 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     container::svector<Index> slots;
     for (auto const& s : cell.carried)
       sequant::detail::proto_expand_into(slots, s);
-    if (std::find(slots.begin(), slots.end(), mode) != slots.end()) return true;
+    bool const has_type = std::any_of(
+        slots.begin(), slots.end(),
+        [&](Index const& ix) { return ix.space().base_key() == mode_bk; });
+    if (has_type) return true;
   }
   return false;
 }

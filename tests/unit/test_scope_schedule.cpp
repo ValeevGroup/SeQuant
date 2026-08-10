@@ -116,3 +116,42 @@ TEST_CASE("build_scope_schedule places values at their home scope",
   CHECK(!sched.root.homed_values.empty());
   CHECK(sched.num_values == rich.cells.size());
 }
+
+TEST_CASE(
+    "build_scope_schedule recognizes an External batch mode by index TYPE, "
+    "not exact Index identity",
+    "[scope-schedule]") {
+  // Regression test for the base_key()-vs-exact-Index fix in
+  // detail::mode_is_external (fix round 1): the batch mode is realized with
+  // physical label i_9 (stamped on Q, V's parent -- V is the value homed AT
+  // the resulting scope node), but the forest ROOT R carries a DIFFERENT
+  // physical label of the SAME type, i_5, on its own result. Pre-fix,
+  // mode_is_external compared the representative Index (i_9) against R's
+  // carried set by EXACT Index identity (space AND ordinal), found no match
+  // (i_9 != i_5), and wrongly reported Contracted; matching by
+  // IndexSpace::base_key() (both are type "i") correctly recognizes i_5 as
+  // the same batch-mode TYPE and reports External.
+  Index const i9{L"i_9"};
+
+  auto V = scope_inode("V{i_9;a_7}", scope_leaf("V1{i_9;o_1}"),
+                       scope_leaf("V2{o_1;a_7}"));
+  auto Q = scope_inode("Q{a_3;a_7}", std::move(V), scope_leaf("Z{a_3;a_7}"));
+  Q->set_batched_here({{i9, BatchModeType::External}});
+  // R (the forest ROOT) carries i_5 -- a DIFFERENT physical label of the same
+  // type "i" -- on its own result: the free/spectator index the External
+  // loop scatters into.
+  auto R = scope_inode("R{i_5;a_3}", std::move(Q), scope_leaf("W2{i_5;a_3}"));
+
+  SizeRegime const r;
+  CostModel const cm{r};
+  auto const block_of = [](Index const&) -> std::size_t { return 1; };
+
+  std::vector<EvalNode<EvalExpr>> forest{R};
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+
+  auto const sched = build_scope_schedule(rich, /*mode_order=*/{L"i"});
+  REQUIRE(sched.root.children.size() == 1);
+  CHECK(sched.root.children[0].mode.space().base_key() == L"i");
+  CHECK(sched.root.children[0].kind == BatchModeType::External);
+  CHECK(!sched.root.children[0].homed_values.empty());
+}
