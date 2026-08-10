@@ -23,6 +23,7 @@
 #include <SeQuant/core/eval/scope_executor.hpp>
 #include <SeQuant/core/eval/scope_schedule.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -41,14 +42,18 @@ using sequant::Constant;
 using sequant::EvalExpr;
 using sequant::EvalNode;
 using sequant::ExprPtr;
+using sequant::Index;
 using sequant::ResultPtr;
 using sequant::ResultScalar;
 using sequant::Variable;
 using sequant::eval::build_scope_schedule;
 using sequant::eval::compute_dag_boulevard;
 using sequant::eval::evaluate_whole_scope;
+using sequant::eval::OccurrenceRec;
 using sequant::eval::RichSchedule;
 using sequant::eval::ScopeSchedule;
+using sequant::eval::ValueCell;
+using sequant::eval::weighted_use_count;
 using sequant::eval::dryrun::CostModel;
 using sequant::eval::dryrun::SizeRegime;
 
@@ -228,4 +233,78 @@ TEST_CASE(
   // The cross-root accumulation EvalStat this fix restores: 2 forest roots
   // => exactly one add_inplace, hence exactly one SumInplace record.
   CHECK(trace.find("SumInplace") != std::string::npos);
+}
+
+// Task 5: the weighted use-count lifetime model (replaces the ensure_hoist_slot
+// MAX-life hack). life(V) = sum over consumers C of V, product over the loops
+// on the path (home(V), scope(C)] of n_blocks(L). Pinned here directly on a
+// small synthetic scope tree so the arithmetic is checkable by hand:
+//   - one consumer inside an n-block inner loop -> count == n,
+//   - two consumers -> the sum of each consumer's product,
+//   - two nested loops between home and consumer -> their product.
+// Loop modes are TYPE-keyed: "i" (occ) and "a" (virt) are both present in the
+// default context, so distinct types stand in for distinct realized loops.
+TEST_CASE("weighted_use_count sums consumers and multiplies nested loops",
+          "[scope-executor]") {
+  using Range = std::pair<std::size_t, std::size_t>;
+  Index const a1{L"a_1"};  // OUTER loop (type "a")
+  Index const i1{L"i_1"};  // INNER loop (type "i")
+
+  // n_blocks: 3 blocks for the inner ("i") loop, 5 for the outer ("a") loop.
+  auto const n_blocks = [](Index const& m) -> std::size_t {
+    auto const& bk = m.space().base_key();
+    if (bk == L"i") return 3;
+    if (bk == L"a") return 5;
+    return 1;
+  };
+
+  // (1) Home at the OUTER (a) loop; a single consumer sits inside the INNER (i)
+  // loop. The path (home, consumer] is just the inner loop -> life == 3.
+  {
+    ValueCell cell{};
+    cell.home_modes = {a1};
+    OccurrenceRec occ{};
+    occ.ectx = {{a1, Range{0, 5}}, {i1, Range{0, 4}}};  // outer a, inner i
+    cell.occurrences = {occ};
+    CHECK(weighted_use_count(cell, n_blocks) == 3);
+  }
+
+  // (2) Two consumers, same home (outer a): one inside the inner (i) loop
+  // (contributes 3), one AT the home with no inner loop (contributes 1). The
+  // life is the SUM: 3 + 1 == 4.
+  {
+    ValueCell cell{};
+    cell.home_modes = {a1};
+    OccurrenceRec inner{};
+    inner.ectx = {{a1, Range{0, 5}}, {i1, Range{0, 4}}};
+    OccurrenceRec at_home{};
+    at_home.ectx = {{a1, Range{0, 5}}};
+    cell.occurrences = {inner, at_home};
+    CHECK(weighted_use_count(cell, n_blocks) == 4);
+  }
+
+  // (3) Whole-nest invariant (empty home): a single consumer sits inside TWO
+  // nested loops (outer a, inner i). Both loops are on the path, so the counts
+  // MULTIPLY: 5 * 3 == 15.
+  {
+    ValueCell cell{};
+    cell.home_modes = {};  // homed at the root
+    OccurrenceRec occ{};
+    occ.ectx = {{a1, Range{0, 5}}, {i1, Range{0, 4}}};
+    cell.occurrences = {occ};
+    CHECK(weighted_use_count(cell, n_blocks) == 15);
+  }
+
+  // (4) Degenerate: a value used only at its own home (no enclosing inner loop)
+  // has the ordinary use count -- here two occurrences, both at home -> 2.
+  {
+    ValueCell cell{};
+    cell.home_modes = {a1};
+    OccurrenceRec o1{};
+    o1.ectx = {{a1, Range{0, 5}}};
+    OccurrenceRec o2{};
+    o2.ectx = {{a1, Range{0, 5}}};
+    cell.occurrences = {o1, o2};
+    CHECK(weighted_use_count(cell, n_blocks) == 2);
+  }
 }

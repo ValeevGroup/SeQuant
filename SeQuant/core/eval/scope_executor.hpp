@@ -49,6 +49,60 @@ build_value_node_map(R const& forest) {
   return out;
 }
 
+///
+/// \brief The WEIGHTED in-block use count of a homed value -- the correct
+/// NON-PERSISTENT cache life for a value stored at its home (built once per
+/// home block by \c reset(), then drained by exactly its in-block reads).
+/// Replaces the \c ensure_hoist_slot MAX-life hack: rather than living until
+/// the home scope closes, the value frees as soon as its last in-block consumer
+/// is done.
+///
+/// \details
+/// \verbatim
+///   life(V) = sum over consumers C of V
+///               product over loops L on the path (home(V), scope(C)] of
+///                 n_blocks(L)
+/// \endverbatim
+/// Each \c ValueCell::occurrences entry C is one consumer use-site; its \c ectx
+/// holds the loops ENCLOSING that use. The loops strictly INNER to V's home --
+/// the ectx modes whose TYPE (\c IndexSpace::base_key()) is not in \c
+/// home_modes -- are exactly the path (home(V), scope(C)]: each fires \c
+/// n_blocks times per home block, so an occurrence contributes their product
+/// and the consumers sum. Every genuine occurrence's \c ectx contains V's home
+/// loops (V is homed at the meet of its occurrences), so "ectx minus home" is
+/// the inner path. A value all of whose occurrences sit AT its home (no inner
+/// loop between) contributes 1 per occurrence -- the ordinary use count. An
+/// empty \c home_modes (a whole-nest invariant homed at the root) charges every
+/// enclosing loop of each consumer, so it is held across the entire nest, as
+/// the old MAX life did, but freed by its true last read rather than never.
+///
+/// TYPE-keyed throughout (matching the narrow scope tree and \c
+/// build_scope_schedule's value->node assignment), so an occurrence that binds
+/// a loop mode under a different physical ordinal is still counted.
+///
+/// \param cell the value whose life is computed.
+/// \param n_blocks the batch-block count of a loop mode (1 for a mode that is
+///        not a realized loop -- an unbatched mode contributes a factor of 1).
+///
+[[nodiscard]] inline std::size_t weighted_use_count(
+    ValueCell const& cell,
+    std::function<std::size_t(Index const&)> const& n_blocks) {
+  auto const in_home = [&cell](Index const& m) {
+    auto const& bk = m.space().base_key();
+    for (auto const& h : cell.home_modes)
+      if (h.space().base_key() == bk) return true;
+    return false;
+  };
+  std::size_t life = 0;
+  for (auto const& occ : cell.occurrences) {
+    std::size_t prod = 1;
+    for (auto const& [mode, range] : occ.ectx)
+      if (!in_home(mode)) prod *= n_blocks(mode);
+    life += prod;
+  }
+  return life;
+}
+
 namespace detail {
 
 /// \return the position of the first canonical result mode of \p n whose index
