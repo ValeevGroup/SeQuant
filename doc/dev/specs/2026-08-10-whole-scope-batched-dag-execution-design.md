@@ -148,6 +148,14 @@ homes, recompute returns -- but as a PRICED placement choice, not a forest-desce
 artifact. The wins are (1) cross-tree sharing is finally POSSIBLE, and (2) the cost
 model predicts what actually runs. The win is not "no peak cost."
 
+Crucially, whether a given placement is feasible -- e.g. whether C60's top scope
+holds too much data to fit -- is a PLACEMENT / OPTIMIZER question, NOT an executor
+question. The executor evaluates a fixed schedule; it does not produce or change
+it. If the top scope is over budget, the placement / budget / optimizer homes
+values deeper (accepting priced recompute) until it fits; the executor faithfully
+runs whatever it is handed. C60 feasibility therefore belongs to the future
+scope-tree-aware optimizer (out of scope, below), not to this project.
+
 ## Scope boundary
 
 **In scope:**
@@ -206,9 +214,6 @@ model predicts what actually runs. The win is not "no peak cost."
   confirm they compose correctly when a single scope block's result aggregates
   contributions from MULTIPLE trees (the accumulate target and scatter slice must
   be shared/pre-sized across trees).
-- **Root-scope residency for C60.** Values homed at the top scope are held for the
-  whole run; quantify the top-scope co-residency for C60 and confirm the budget /
-  placement keeps it feasible (this is where the relocated tradeoff bites hardest).
 - **Coexistence with forest descent.** A flag selecting whole-scope vs forest
   descent, and how the dry-run cost model selects the matching peak model.
 
