@@ -128,20 +128,10 @@ ExprPtr append_spin(const ExprPtr& expr,
 
 /// @brief Removes spin label from all indices in an expression
 /// @param expr an ExprPtr with spin indices
+/// @param relabel_collisions whether to relabel internal indices that would
+/// collide once spin labels are removed
 /// @return expr an ExprPtr with spin labels removed
-ExprPtr remove_spin(const ExprPtr& expr);
-
-/// @brief Removes spin labels while relabeling internal indices that cause
-/// collision.
-///
-/// In open-shell spin-traced expressions, distinct indices like i↑_1 and i↓_1
-/// share the same spatial ordinal. Naive spin removal collapses them onto the
-/// same label, breaking tensor network construction. This function detects such
-/// collisions in each product term and relabels internal indices to fresh
-/// ordinals before stripping spin.
-/// @param expr an ExprPtr with spin indices
-/// @return expr an ExprPtr with spin labels removed and no index collisions
-ExprPtr remove_spin_with_relabel(const ExprPtr& expr);
+ExprPtr remove_spin(const ExprPtr& expr, bool relabel_collisions = false);
 
 /// @brief Checks that columns conserve Ms (azimuthal spin qn); only
 /// filled columns (with 2 non-null indices) are considered
@@ -431,7 +421,8 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr);
 // clang-format off
 /// @brief Open-shell CC spintrace via external spin sectors (2^n assignments)
 /// @details Wraps spintrace_by_sector: expand_A_op + spintrace_impl per sector,
-/// then remove_spin_with_relabel. Summing the returned vectors equals generic
+/// then remove_spin with collision relabeling. Summing the returned vectors
+/// equals generic
 /// spintrace; each entry matches the corresponding spintrace_by_sector sector.
 /// @param expr EOM/CC moment with antisymmetrizer Â at the front of each term
 /// @return spin-free sector expressions in sector-index order (no labels)

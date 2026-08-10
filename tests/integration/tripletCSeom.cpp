@@ -758,7 +758,7 @@ class compute_eomcc_closedshell_triplet {
       //       spintrace(so, ext_groups, /*spinfree_index_spaces=*/false);
       //   canonicalize(generic);
       //   simplify(generic);
-      //   generic = remove_spin_with_relabel(generic);
+      //   generic = remove_spin(generic, true);
       //   canonicalize(generic);
       //   simplify(generic);
       //

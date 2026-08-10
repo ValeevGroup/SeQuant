@@ -314,63 +314,10 @@ ExprPtr append_spin(const ExprPtr& expr,
   throw Exception("Unsupported Expr type in append_spin");
 }
 
-ExprPtr remove_spin(const ExprPtr& expr) {
-  auto remove_spin_from_tensor = [](const Tensor& tensor) {
-    container::svector<Index> b(tensor.bra().begin(), tensor.bra().end());
-    container::svector<Index> k(tensor.ket().begin(), tensor.ket().end());
-    {
-      for (auto&& idx : ranges::views::concat(b, k)) {
-        idx = make_spinfree(idx);
-      }
-    }
-    // column symmetry must survive spin removal for triplet doubles
-    return ex<Tensor>(tensor.label(), bra(std::move(b)), ket(std::move(k)),
-                      tensor.aux(), tensor.symmetry(), tensor.braket_symmetry(),
-                      tensor.column_symmetry());
-  };
-
-  auto remove_spin_from_product =
-      [&remove_spin_from_tensor](const Product& product) {
-        auto result = std::make_shared<Product>();
-        result->scale(product.scalar());
-        for (auto&& term : product) {
-          if (term->is<Tensor>()) {
-            result->append(1, remove_spin_from_tensor(term->as<Tensor>()));
-          } else if (term->is<Constant>() || term->is<Variable>()) {
-            result->append(1, term);
-          } else {
-            throw Exception(
-                "Invalid Expr type in remove_spin::remove_spin_from_product: " +
-                term->type_name());
-          }
-        }
-        return result;
-      };
-
-  if (expr->is<Tensor>()) {
-    return remove_spin_from_tensor(expr->as<Tensor>());
-  } else if (expr->is<Product>()) {
-    return remove_spin_from_product(expr->as<Product>());
-  } else if (expr->is<Sum>()) {
-    auto result = std::make_shared<Sum>();
-    for (auto&& summand : *expr) {
-      result->append(remove_spin(summand));
-    }
-    return result;
-  } else if (expr->is<Constant>() || expr->is<Variable>()) {
-    return expr;
-  } else {
-    throw Exception("Invalid Expr type in remove_spin: " + expr->type_name());
-  }
-}
-
-ExprPtr remove_spin_with_relabel(const ExprPtr& expr) {
-  auto remove_spin_from_tensor_with_relabel = [](const Tensor& tensor) {
-    return remove_spin(ex<Tensor>(tensor));
-  };
-
-  auto remove_spin_from_product_with_relabel =
-      [](const Product& product) -> ExprPtr {
+ExprPtr remove_spin(const ExprPtr& expr, bool relabel_collisions) {
+  // relabels internal indices of a product whose spin-free identities would
+  // collide;
+  auto relabel_collided_indices = [](const Product& product) -> Product {
     // count occurrences in the current product to detect contracted indices.
     container::map<Index, std::size_t> index_occurrences;
     for (const auto& factor : product) {
@@ -429,23 +376,14 @@ ExprPtr remove_spin_with_relabel(const ExprPtr& expr) {
         ++next_ordinal;
         if (next_ordinal >= Index::min_tmp_index()) {
           throw Exception(
-              "remove_spin_with_relabel: exhausted non-reserved "
-              "ordinals while resolving spin collisions");
+              "remove_spin: exhausted non-reserved ordinals while resolving "
+              "spin collisions");
         }
 
         relabel_map[*it] = Index(it->space(), next_ordinal, it->proto_indices(),
                                  it->symmetric_proto_indices());
       }
     }
-
-    // if (!relabel_map.empty()) {
-    //   std::wcout << "relabel_map non-empty for product:\n";
-    //   std::wcout << to_latex_align(ex<Product>(product)) << "\n";
-    //   for (const auto& [from, to] : relabel_map) {
-    //     std::wcout << "  " << from.to_latex() << " -> " << to.to_latex()
-    //                << "\n";
-    //   }
-    // }
 
     Product relabeled_product = product;
     if (!relabel_map.empty()) {
@@ -457,25 +395,59 @@ ExprPtr remove_spin_with_relabel(const ExprPtr& expr) {
         }
       }
     }
-
-    return remove_spin(ex<Product>(std::move(relabeled_product)));
+    return relabeled_product;
   };
 
+  auto remove_spin_from_tensor = [](const Tensor& tensor) {
+    container::svector<Index> b(tensor.bra().begin(), tensor.bra().end());
+    container::svector<Index> k(tensor.ket().begin(), tensor.ket().end());
+    {
+      for (auto&& idx : ranges::views::concat(b, k)) {
+        idx = make_spinfree(idx);
+      }
+    }
+    // column symmetry must survive spin removal for triplet doubles
+    return ex<Tensor>(tensor.label(), bra(std::move(b)), ket(std::move(k)),
+                      tensor.aux(), tensor.symmetry(), tensor.braket_symmetry(),
+                      tensor.column_symmetry());
+  };
+
+  auto remove_spin_from_product =
+      [&remove_spin_from_tensor](const Product& product) {
+        auto result = std::make_shared<Product>();
+        result->scale(product.scalar());
+        for (auto&& term : product) {
+          if (term->is<Tensor>()) {
+            result->append(1, remove_spin_from_tensor(term->as<Tensor>()));
+          } else if (term->is<Constant>() || term->is<Variable>()) {
+            result->append(1, term);
+          } else {
+            throw Exception(
+                "Invalid Expr type in remove_spin::remove_spin_from_product: " +
+                term->type_name());
+          }
+        }
+        return result;
+      };
+
   if (expr->is<Tensor>()) {
-    return remove_spin_from_tensor_with_relabel(expr->as<Tensor>());
+    // a lone tensor has no contracted indices, hence no collisions to resolve
+    return remove_spin_from_tensor(expr->as<Tensor>());
   } else if (expr->is<Product>()) {
-    return remove_spin_from_product_with_relabel(expr->as<Product>());
+    if (relabel_collisions)
+      return remove_spin_from_product(
+          relabel_collided_indices(expr->as<Product>()));
+    return remove_spin_from_product(expr->as<Product>());
   } else if (expr->is<Sum>()) {
     auto result = std::make_shared<Sum>();
     for (auto&& summand : *expr) {
-      result->append(remove_spin_with_relabel(summand));
+      result->append(remove_spin(summand, relabel_collisions));
     }
     return result;
   } else if (expr->is<Constant>() || expr->is<Variable>()) {
     return expr;
   } else {
-    throw Exception("Invalid Expr type in remove_spin_with_relabel: " +
-                    expr->type_name());
+    throw Exception("Invalid Expr type in remove_spin: " + expr->type_name());
   }
 }
 
@@ -2403,7 +2375,8 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
         "closed_shell_EOM_triplet_spintrace: the explicitly spin-coupled "
         "triplet manifold is implemented for singles, doubles and triples");
 
-  // spintrace_by_sector already called remove_spin_with_relabel on each sector.
+  // spintrace_by_sector already removed spin (with collision relabeling) from
+  // each sector.
   auto sectors = spintrace_by_sector(expr, ext_groups, /*triplet_R=*/true,
                                      options.triplet_amp_no_swap);
   SEQUANT_ASSERT(sectors.size() == (std::size_t{1} << n_ext));
@@ -2551,7 +2524,7 @@ container::svector<std::pair<std::wstring, ExprPtr>> spintrace_by_sector(
     canonicalize(sector);
     simplify(sector);
     if (triplet_R) sector = triplet_adapt_amplitudes(sector, amp_no_swap);
-    sector = remove_spin_with_relabel(sector);
+    sector = remove_spin(sector, /*relabel_collisions=*/true);
     detail::reset_idx_tags(sector);
     canonicalize(sector);
     simplify(sector);
