@@ -11,9 +11,11 @@
 #include <array>
 #include <cstddef>
 #include <functional>
+#include <optional>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -46,6 +48,324 @@ build_value_node_map(R const& forest) {
   for (auto const& t : forest) visit(visit, t);
   return out;
 }
+
+namespace detail {
+
+/// \return the position of the first canonical result mode of \p n whose index
+///         TYPE (\c IndexSpace::base_key()) equals \p base, or nullopt.
+///
+/// \details TYPE-keyed counterpart of \c sequant::index_position (which matches
+/// an exact \c Index -- space AND ordinal). Task 4 drives membership /
+/// scatter-slot placement off the index TYPE the scope tree is keyed by, so a
+/// root binding the mode type under a different physical ordinal is neither
+/// misclassified nor mis-sliced (design integration point 3).
+template <meta::eval_node node_t>
+[[nodiscard]] std::optional<std::size_t> result_position_type(
+    node_t const& n, std::wstring const& base) {
+  auto const& idxs = n->canon_indices();
+  for (std::size_t p = 0; p < idxs.size(); ++p)
+    if (idxs[p].space().base_key() == base) return p;
+  return std::nullopt;
+}
+
+/// \return (leaf, position) of the first leaf below \p n (or \p n itself) that
+///         carries an index of TYPE \p base, or nullopt. TYPE-keyed counterpart
+///         of \c sequant::find_leaf_carrying.
+template <meta::eval_node node_t>
+[[nodiscard]] std::optional<std::pair<node_t, std::size_t>>
+find_leaf_carrying_type(node_t const& n, std::wstring const& base) {
+  if (n.leaf()) {
+    if (auto const p = result_position_type(n, base)) return std::pair{n, *p};
+    return std::nullopt;
+  }
+  if (auto l = find_leaf_carrying_type(n.left(), base)) return l;
+  return find_leaf_carrying_type(n.right(), base);
+}
+
+/// \return the PHYSICAL index \p root batches as an External (spectator) mode
+/// of
+///         TYPE \p base at its own root (from \c batched_here()), or nullopt.
+///         An External loop is realized per-member over the member's own
+///         physical index, so scatter uses this (not the schedule's canonical
+///         representative) -- the schedule's mode only names the TYPE.
+template <meta::eval_node node_t>
+[[nodiscard]] std::optional<Index> member_external_axis(
+    node_t const& root, std::wstring const& base) {
+  if (root.leaf()) return std::nullopt;
+  for (auto const& [ix, knd] : root->batched_here())
+    if (knd == BatchModeType::External && ix.space().base_key() == base)
+      return ix;
+  return std::nullopt;
+}
+
+///
+/// \brief The recursive scope-tree walk (Task 4): realizes one batch loop per
+/// \c ScopeNode, nesting into \c ScopeNode::children, and produces the result
+/// of every \p member root assembled over \p node and all deeper loops, under
+/// the enclosing batch context \p ectx held on \p parent_cache.
+///
+/// \details Three node shapes compose here, driven by \c ScopeNode::kind and
+/// whether the node has a child:
+///
+/// - Contracted LEAF (a single aux loop, no nested loop): the Task-3 path,
+///   BYTE-FOR-BYTE -- one shared \c make_batched_scratch over the whole member
+///   group, per-block \c evaluate_impl with Enter-stage slice-on-use, and
+///   cross-block \c add_inplace ACCUMULATE. Every K-carrying composite shared
+///   across members is built once per block on the one scratch.
+///
+/// - Contracted with a child (aux OUTER, occ INNER): each block builds the
+///   values HOMED at this node once (via \c ensure_hoist_slot on a FRESH
+///   per-level cache, so the value has unbounded life and is REUSED across
+///   every inner block, then dropped by \c reset() and rebuilt per outer
+///   block), then recurses into the child loop for the members that carry the
+///   inner mode and
+///   \c evaluate_impl's the members invariant to it, and ACCUMULATES each
+///   block's per-member partial. The hoist cache IS the outer loop level (one
+///   parent link == one loop), so slice-on-use crosses exactly the inner loops
+///   when an inner body fetches an outer-homed value.
+///
+/// - External (occ scatter): realized PER MEMBER over the member's own physical
+///   axis (\c member_external_axis), each on a solo \c make_batched_scratch,
+///   the per-block partials SCATTERed by \c write_into_slice into a
+///   \c pre_sized_zeros_over_mode destination -- the eval.hpp External
+///   primitive (eval.hpp:1955-2045), driven from the schedule rather than
+///   reimplemented. External blocks are disjoint slices, so they scatter (never
+///   accumulate).
+///
+/// The backend scope guard is HELD across every loop here (contracted and
+/// scatter alike), exactly as Task 3 and eval.hpp's External branch do.
+///
+/// \return per-member results, aligned with \p members.
+///
+template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
+          typename ScopeGuardFactory>
+[[nodiscard]] container::svector<ResultPtr> walk_scope(
+    ScopeNode const& node, container::svector<node_t const*> const& members,
+    typename CacheManager<node_t, FHC>::BatchContext const& ectx,
+    CacheManager<node_t, FHC>& parent_cache, F const& leaf_evaluator,
+    std::function<std::size_t(Index const&)> const& target_batch_size,
+    ScopeGuardFactory const& make_scope_guard,
+    std::unordered_map<std::size_t, node_t> const& vmap,
+    RichSchedule const& rich,
+    std::unordered_set<std::size_t> const& root_hashes) {
+  using Cache = CacheManager<node_t, FHC>;
+  using BatchContext = typename Cache::BatchContext;
+  using member_t = std::pair<node_t const*, Index>;
+
+  container::svector<ResultPtr> out(members.size());
+  ScopeNode const* const child =
+      node.children.empty() ? nullptr : &node.children.front();
+  std::wstring const base(node.mode.space().base_key());
+
+  // Recurse into the child loop for one member subset, forwarding all context.
+  auto recurse = [&](ScopeNode const& c,
+                     container::svector<node_t const*> const& subset,
+                     BatchContext const& sub_ectx,
+                     Cache& sub_parent) -> container::svector<ResultPtr> {
+    return walk_scope<EvalTrace, node_t, F, FHC, ScopeGuardFactory>(
+        c, subset, sub_ectx, sub_parent, leaf_evaluator, target_batch_size,
+        make_scope_guard, vmap, rich, root_hashes);
+  };
+
+  if (node.kind == BatchModeType::External) {
+    // -------- External SCATTER, realized PER MEMBER over its own axis.
+    // --------
+    for (std::size_t j = 0; j != members.size(); ++j) {
+      node_t const* const m = members[j];
+      auto const axopt = member_external_axis(*m, base);
+      if (!axopt) {
+        // This member does not batch the external mode: build it directly
+        // (invariant to the scatter), recursing the child loop if any.
+        if (child) {
+          out[j] = recurse(*child, container::svector<node_t const*>{m}, ectx,
+                           parent_cache)
+                       .front();
+        } else {
+          parent_cache.set_batch_context(ectx);
+          out[j] = evaluate_impl<EvalTrace>(*m, leaf_evaluator, parent_cache);
+        }
+        continue;
+      }
+      Index const axis = *axopt;
+      auto const dm = index_position(*m, axis);  // exact: the member's own axis
+      SEQUANT_ASSERT(dm &&
+                     "external batch mode is not free on the member's result");
+      auto const carrier = find_leaf_carrying(*m, axis);
+      SEQUANT_ASSERT(carrier && "no leaf carries the member's external mode");
+      ResultPtr const carrier_full = leaf_evaluator(carrier->first);
+      auto const batches =
+          leaf_evaluator(carrier->first)
+              ->mode_batches(carrier->second, target_batch_size(axis));
+
+      // A solo scratch (an external mode is not a shared-final mode): dedups
+      // repeats WITHIN the member subtree only. Reuses the same primitive the
+      // Task-3 contracted path uses to seed above-homed values sliced-on-use.
+      std::vector<member_t> solo{{m, axis}};
+      auto bs = sequant::detail::make_batched_scratch(solo, parent_cache);
+      for (auto const* s : bs.seeds)
+        (void)bs.cache.store(*s, parent_cache.access(*s));
+      bs.cache.set_parent(&parent_cache);
+
+      auto const scope_guard = make_scope_guard(batches.size());
+      (void)scope_guard;
+
+      ResultPtr dest;
+      for (auto const& [e_lo, e_hi] : batches) {
+        if (e_lo == e_hi) continue;
+        bs.cache.reset();
+        BatchContext ctx = ectx;
+        ctx.push_back({axis, {e_lo, e_hi}});
+        bs.cache.set_batch_context(ctx);
+        ResultPtr part =
+            child ? recurse(*child, container::svector<node_t const*>{m}, ctx,
+                            bs.cache)
+                        .front()
+                  : evaluate_impl<EvalTrace>(*m, leaf_evaluator, bs.cache);
+        if (!dest)
+          dest = part->pre_sized_zeros_over_mode(*dm, *carrier_full,
+                                                 carrier->second);
+        dest->write_into_slice(*part, *dm, e_lo, e_hi);
+      }
+      SEQUANT_ASSERT(dest);
+      out[j] = std::move(dest);
+    }
+    return out;
+  }
+
+  // -------- Contracted ACCUMULATE over node.mode. --------
+  Index const K = node.mode;
+
+  if (!child) {
+    // Task-3 single aux loop: ONE shared scratch, whole-forest co-evaluation,
+    // per-block accumulate. Members are guaranteed to carry K by the caller.
+    std::vector<member_t> group;
+    group.reserve(members.size());
+    for (auto const* m : members) group.emplace_back(m, K);
+
+    auto bs = sequant::detail::make_batched_scratch(group, parent_cache);
+    for (auto const* s : bs.seeds)
+      (void)bs.cache.store(*s, parent_cache.access(*s));
+    bs.cache.set_parent(&parent_cache);
+
+    container::svector<std::pair<std::size_t, std::size_t>> batches;
+    {
+      auto const lf = find_leaf_carrying_type(*members.front(), base);
+      SEQUANT_ASSERT(lf);
+      batches = leaf_evaluator(lf->first)->mode_batches(lf->second,
+                                                        target_batch_size(K));
+    }
+
+    container::svector<ResultPtr> acc(members.size());
+    auto const scope_guard = make_scope_guard(batches.size());
+    (void)scope_guard;
+    for (auto const& [e_lo, e_hi] : batches) {
+      if (e_lo == e_hi) continue;
+      bs.cache.reset();
+      BatchContext ctx = ectx;
+      ctx.push_back({K, {e_lo, e_hi}});
+      bs.cache.set_batch_context(std::move(ctx));
+      for (std::size_t m = 0; m != members.size(); ++m) {
+        ResultPtr part =
+            evaluate_impl<EvalTrace>(*members[m], leaf_evaluator, bs.cache);
+        if (!acc[m])
+          acc[m] = std::move(part);
+        else
+          acc[m]->add_inplace(*part);
+      }
+    }
+    for (std::size_t m = 0; m != members.size(); ++m) {
+      SEQUANT_ASSERT(acc[m]);
+      out[m] = std::move(acc[m]);
+    }
+    return out;
+  }
+
+  // Nested contracted loop (aux OUTER over an inner child loop). Members all
+  // carry K (outer). Split by whether they carry the child (inner) mode.
+  std::wstring const cbase(child->mode.space().base_key());
+  auto carries_child = [&](node_t const& m) -> bool {
+    if (child->kind == BatchModeType::External)
+      return member_external_axis(m, cbase).has_value() ||
+             result_position_type(m, cbase).has_value();
+    return find_leaf_carrying_type(m, cbase).has_value();
+  };
+  container::svector<std::size_t> inner_pos, direct_pos;
+  for (std::size_t m = 0; m != members.size(); ++m)
+    (carries_child(*members[m]) ? inner_pos : direct_pos).push_back(m);
+
+  // Values HOMED at this node (shared composites carrying K but invariant to
+  // the inner loop): built once per outer block via a hoist slot and reused
+  // across every inner block. Skip leaves (cheap, sliced on use) and forest
+  // roots (produced, not pre-built).
+  container::svector<node_t> homed;
+  for (auto vid : node.homed_values) {
+    auto const h = rich.cells[vid].hash;
+    auto const it = vmap.find(h);
+    if (it == vmap.end() || it->second.leaf() || root_hashes.count(h)) continue;
+    homed.push_back(it->second);
+  }
+
+  // A FRESH cache for THIS outer loop level: it holds the per-block hoisted
+  // homed values (ensure_hoist_slot => unbounded life, dropped by reset()), so
+  // they survive the whole inner loop and are reused across its blocks. Using a
+  // fresh cache (not make_batched_scratch, which would register the same values
+  // with a FINITE life the inner loop would drain) keeps the ONE-parent-link-
+  // per-loop invariant the Enter-stage slice-on-use relies on.
+  Cache outer = Cache::empty();
+  outer.set_parent(&parent_cache);
+
+  container::svector<std::pair<std::size_t, std::size_t>> batches;
+  {
+    auto const lf = find_leaf_carrying_type(*members.front(), base);
+    SEQUANT_ASSERT(lf);
+    batches = leaf_evaluator(lf->first)->mode_batches(lf->second,
+                                                      target_batch_size(K));
+  }
+
+  container::svector<node_t const*> inner_members;
+  for (auto p : inner_pos) inner_members.push_back(members[p]);
+
+  container::svector<ResultPtr> acc(members.size());
+  auto const scope_guard = make_scope_guard(batches.size());
+  (void)scope_guard;
+  for (auto const& [e_lo, e_hi] : batches) {
+    if (e_lo == e_hi) continue;
+    outer.reset();
+    BatchContext ctx = ectx;
+    ctx.push_back({K, {e_lo, e_hi}});
+    outer.set_batch_context(ctx);
+
+    // Build the outer-homed values ONCE for this block.
+    for (auto const& hv : homed) {
+      outer.ensure_hoist_slot(hv);
+      if (outer.alive(hv)) continue;  // shared: already built this block
+      (void)evaluate_impl<EvalTrace>(hv, leaf_evaluator, outer);
+    }
+
+    container::svector<ResultPtr> block(members.size());
+    for (auto p : direct_pos)
+      block[p] = evaluate_impl<EvalTrace>(*members[p], leaf_evaluator, outer);
+    if (!inner_members.empty()) {
+      auto sub = recurse(*child, inner_members, ctx, outer);
+      for (std::size_t k = 0; k != inner_pos.size(); ++k)
+        block[inner_pos[k]] = std::move(sub[k]);
+    }
+    for (std::size_t m = 0; m != members.size(); ++m) {
+      SEQUANT_ASSERT(block[m]);
+      if (!acc[m])
+        acc[m] = std::move(block[m]);
+      else
+        acc[m]->add_inplace(*block[m]);
+    }
+  }
+  for (std::size_t m = 0; m != members.size(); ++m) {
+    SEQUANT_ASSERT(acc[m]);
+    out[m] = std::move(acc[m]);
+  }
+  return out;
+}
+
+}  // namespace detail
 
 ///
 /// \brief Task 2 of the whole-scope batched DAG execution design (see
@@ -119,39 +439,37 @@ build_value_node_map(R const& forest) {
 /// \return The summed, per-root-permuted result, as \c sequant::evaluate(
 ///         Nodes const&, layout, ...) would produce for the same \p forest.
 ///
+/// \param rich The \c RichSchedule that produced \p sched (\c
+///        compute_dag_boulevard). Used to resolve a \c ScopeNode's \c
+///        homed_values (\c ValueCell::value_id's) back to forest nodes -- via
+///        each cell's \c hash and \c build_value_node_map -- so the nested walk
+///        (Task 4) can build a value HOMED at an outer loop once per outer
+///        block (design integration point 3: drive off the type-keyed \c
+///        homed_values, not a fragile exact-\c Index membership test).
 template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
           typename F, typename N, bool FHC,
           typename ScopeGuardFactory = ::sequant::make_no_scope_guard>
   requires meta::leaf_node_evaluator<std::ranges::range_value_t<Nodes>, F>
 ResultPtr evaluate_whole_scope(
-    Nodes const& forest, ScopeSchedule const& sched, auto const& layout,
-    F const& leaf_evaluator, CacheManager<N, FHC>& cache,
+    Nodes const& forest, ScopeSchedule const& sched, RichSchedule const& rich,
+    auto const& layout, F const& leaf_evaluator, CacheManager<N, FHC>& cache,
     std::function<std::size_t(Index const&)> target_batch_size = {},
     ScopeGuardFactory make_scope_guard = {}) {
   using node_t = std::ranges::range_value_t<Nodes>;
   static_assert(std::is_same_v<node_t, N>,
                 "the forest's node type and the cache's node type must match");
 
-  // Task 3 handles the ROOT-ONLY tree (Task 2) plus ONE realized batch loop --
-  // a single aux/contracted child scope. A deeper / branching scope tree needs
-  // the Task 4+ recursion, not implemented here.
-  SEQUANT_ASSERT(
-      sched.root.children.size() <= 1 &&
-      "evaluate_whole_scope (Task 3) implements the top scope plus at most ONE "
-      "batch loop (one sched.root.children entry); a deeper/branching scope "
-      "tree needs the Task 4+ batch-block recursion, not implemented here.");
-
   // if the layout is not the default constructed value need to permute --
   // mirrors sequant::evaluate(Node const&, layout, ...)'s identical check.
   bool const perm = layout != decltype(layout){};
 
   // The per-root, UNPERMUTED result, in forest order. The root-only case fills
-  // each entry with a direct evaluate_impl; the single-loop case fills the
-  // K-carrying roots from the accumulated batch loop (below) and the
-  // K-invariant roots directly. The final permute-to-layout + cross-root
+  // each entry with a direct evaluate_impl; a batched scope tree fills the
+  // loop-carrying roots from detail::walk_scope (accumulate/scatter per level)
+  // and the invariant roots directly. The final permute-to-layout + cross-root
   // add_inplace combine (which reproduces sequant::evaluate(Nodes const&,
   // layout, ...)'s trace/hwmark bookkeeping line-for-line) is SHARED by both
-  // cases, so Tasks 2-3 emit identical Term/SumInplace records.
+  // cases, so every case emits identical Term/SumInplace records.
   container::svector<node_t> roots;
   for (auto&& n : forest) roots.push_back(n);
   container::svector<ResultPtr> pre_results(roots.size());
@@ -162,120 +480,62 @@ ResultPtr evaluate_whole_scope(
       pre_results[i] =
           evaluate_impl<EvalTrace>(roots[i], leaf_evaluator, cache);
   } else {
-    // -------- Task 3 single batch loop (aux Κ, contracted). --------
+    // -------- Batched scope tree: recurse through sched.root.children.
+    // --------
     //
-    // The child scope is ONE realized contracted batch loop. Its mode K is
-    // summed away below every forest root that carries it, so those roots are
-    // homed at the ROOT scope (K not on their result) but built INCREMENTALLY:
-    // per K-block partials that ACCUMULATE. Every value HOMED at the K scope
-    // (the shared K-carrying gC composites) is built once per block on ONE
-    // scratch shared by ALL K-carrying roots -- so a composite shared across
-    // trees is built once per block, not once per consumer group. This is the
-    // exhaustive, whole-forest generalization of the OPPORTUNISTIC
-    // co-evaluation group in make_batched_custom_evaluator (eval.hpp): its
-    // trigger-seeded group becomes the explicit whole-forest member set the
-    // scope tree names, and the reused primitives (make_batched_scratch,
-    // per-block evaluate_impl with Enter-stage slice-on-use, and cross-block
-    // add_inplace) are DRIVEN from this walk rather than re-implemented.
-    ScopeNode const& kscope = sched.root.children.front();
-    SEQUANT_ASSERT(
-        kscope.children.empty() &&
-        "evaluate_whole_scope (Task 3): the single batch loop must be a LEAF "
-        "scope (no nested loops); a nested loop nest is Task 4+.");
-    SEQUANT_ASSERT(
-        kscope.kind == BatchModeType::Contracted &&
-        "evaluate_whole_scope (Task 3) realizes a CONTRACTED (accumulate) aux "
-        "loop; an External (scatter) loop is a later increment.");
+    // Each child of the root is one realized batch loop; a Contracted loop
+    // accumulates its per-block partials, an External loop scatters them into a
+    // pre-sized result, and a Contracted loop with a child nests an inner loop
+    // (aux OUTER over occ INNER) building its outer-homed values once per outer
+    // block. All of that lives in detail::walk_scope; this driver only splits
+    // the roots that participate in the loop nest from those invariant to it
+    // and runs the shared combine below.
     SEQUANT_ASSERT(target_batch_size &&
                    "evaluate_whole_scope with a realized batch loop needs a "
                    "target_batch_size (the batch partition source).");
-    Index const K = kscope.mode;
 
-    using member_t = std::pair<node_t const*, Index>;
+    // The value_id -> forest-node bridge (via ValueCell::hash) used to resolve
+    // each ScopeNode's homed_values to nodes for the build-once hoist, plus the
+    // forest-root hashes so a root is never pre-built as a homed value.
+    auto const vmap = build_value_node_map(forest);
+    std::unordered_set<std::size_t> root_hashes;
+    for (auto const& r : roots) root_hashes.insert(r->hash_value());
 
-    // Partition the roots: those that CARRY K (their result contracts K below
-    // them -- the co-evaluated members) vs those invariant to K (built once,
-    // like the root-only path).
-    container::svector<std::size_t> k_root_idx;
-    container::svector<std::size_t> plain_root_idx;
+    ScopeNode const& top = sched.root.children.front();
+    std::wstring const top_base(top.mode.space().base_key());
+
+    // Members = roots participating in the OUTERMOST loop (they carry its mode
+    // TYPE -- structurally for a contracted mode, or free/annotated for an
+    // external one). Every other root is invariant to the whole nest and built
+    // directly, exactly like the top-scope path. Membership is TYPE-keyed (not
+    // an exact-Index find_leaf_carrying) so a root that binds the mode type
+    // under a different physical ordinal is not misclassified.
+    container::svector<node_t const*> member_ptrs;
+    container::svector<std::size_t> member_idx;
     for (std::size_t i = 0; i != roots.size(); ++i) {
-      if (sequant::find_leaf_carrying(roots[i], K))
-        k_root_idx.push_back(i);
-      else
-        plain_root_idx.push_back(i);
+      bool const member =
+          top.kind == BatchModeType::Contracted
+              ? detail::find_leaf_carrying_type(roots[i], top_base).has_value()
+              : (detail::member_external_axis(roots[i], top_base).has_value() ||
+                 detail::result_position_type(roots[i], top_base).has_value());
+      if (member) {
+        member_ptrs.push_back(&roots[i]);
+        member_idx.push_back(i);
+      } else {
+        pre_results[i] =
+            evaluate_impl<EvalTrace>(roots[i], leaf_evaluator, cache);
+      }
     }
 
-    // K-invariant roots: built directly on the root cache, exactly as the
-    // top-scope path builds a root.
-    for (auto i : plain_root_idx)
-      pre_results[i] =
-          evaluate_impl<EvalTrace>(roots[i], leaf_evaluator, cache);
-
-    if (!k_root_idx.empty()) {
-      // The K partition: identical (whole-tile element ranges) across every
-      // member since K is one global aux mode. Read it once from any carrier
-      // leaf, exactly as pick_sliceable does in make_batched_custom_evaluator.
-      container::svector<std::pair<std::size_t, std::size_t>> batches;
-      {
-        auto const lf =
-            sequant::find_leaf_carrying(roots[k_root_idx.front()], K);
-        SEQUANT_ASSERT(lf);
-        batches = leaf_evaluator(lf->first)->mode_batches(lf->second,
-                                                          target_batch_size(K));
-      }
-
-      // The whole-forest co-evaluation group: every K-carrying root, paired
-      // with K. ONE scratch dedups the shared K-homed composites across ALL
-      // members (make_batched_scratch registers every repeated, consistently
-      // sliced internal subnode), so each is built once per block.
-      std::vector<member_t> group;
-      group.reserve(k_root_idx.size());
-      for (auto i : k_root_idx) group.emplace_back(&roots[i], K);
-
-      auto bs = sequant::detail::make_batched_scratch(group, cache);
-      for (auto const* s : bs.seeds) (void)bs.cache.store(*s, cache.access(*s));
-      // Chain the scratch under the root cache so an above-homed (K-invariant)
-      // value referenced mid-loop materializes lazily at its home and is sliced
-      // on use, and so per-build tallies route to the root cache.
-      bs.cache.set_parent(&cache);
-
-      // RAII scope for the batched partial contractions, HELD for the ENTIRE
-      // K-block loop -- mirroring make_batched_custom_evaluator's contracted
-      // path (eval.hpp:2157). A screening backend's factory relaxes
-      // block-sparse screening scaled by the batch count, so a contribution
-      // whose norm clears the threshold over the FULL K range (but not within
-      // one batch) is not dropped in every batch and lost from the K-sum. A
-      // no-op for the dense / DryRun backends (make_no_scope_guard), so this is
-      // byte-identical there.
-      auto const scope_guard = make_scope_guard(batches.size());
-      (void)scope_guard;
-
-      // Accumulate: each block's per-root partial adds into the root's running
-      // K-sum. `sum_K = sum_blocks sum_{K in block}`, exact.
-      std::vector<ResultPtr> acc(group.size());
-      for (auto const& [e_lo, e_hi] : batches) {
-        if (e_lo == e_hi) continue;
-        bs.cache.reset();
-        // The enclosing batch context is just THIS block (the loop is at the
-        // top scope). Setting it makes evaluate_impl's Enter-stage
-        // slice-on-use slice every K-carrying leaf/value to the block.
-        typename CacheManager<N, FHC>::BatchContext ctx;
-        ctx.push_back({K, {e_lo, e_hi}});
-        bs.cache.set_batch_context(std::move(ctx));
-        for (std::size_t m = 0; m != group.size(); ++m) {
-          ResultPtr part = evaluate_impl<EvalTrace>(*group[m].first,
-                                                    leaf_evaluator, bs.cache);
-          if (!acc[m])
-            acc[m] = std::move(part);
-          else
-            acc[m]->add_inplace(*part);
-        }
-      }
-      for (std::size_t m = 0; m != group.size(); ++m) {
-        SEQUANT_ASSERT(acc[m]);
-        pre_results[k_root_idx[m]] = std::move(acc[m]);
-      }
-      // Free the K scratch (bs goes out of scope here).
+    if (!member_ptrs.empty()) {
+      typename CacheManager<N, FHC>::BatchContext const empty_ctx;
+      auto res =
+          detail::walk_scope<EvalTrace, node_t, F, FHC, ScopeGuardFactory>(
+              top, member_ptrs, empty_ctx, cache, leaf_evaluator,
+              target_batch_size, make_scope_guard, vmap, rich, root_hashes);
+      SEQUANT_ASSERT(res.size() == member_ptrs.size());
+      for (std::size_t k = 0; k != member_ptrs.size(); ++k)
+        pre_results[member_idx[k]] = std::move(res[k]);
     }
   }
 

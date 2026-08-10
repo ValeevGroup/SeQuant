@@ -5933,7 +5933,7 @@ TEST_CASE("whole-scope executor builds shared aux composites once per block",
   ws_cache.set_recompute_tally_enabled(true);
   try {
     (void)sequant::eval::evaluate_whole_scope<Trace::On>(
-        forest, sched, layout, yield, ws_cache, target);
+        forest, sched, rich, layout, yield, ws_cache, target);
   } catch (std::exception const& e) {
     logger.eval.level = prev_level;
     logger.eval.stream = prev_stream;
@@ -5970,6 +5970,197 @@ TEST_CASE("whole-scope executor builds shared aux composites once per block",
   // The contrast: forest descent rebuilds a shared gC per consumer group, so at
   // least one value is built strictly more than once per block.
   CHECK(builds_fd > builds_ws);
+}
+
+// Task 4 of the whole-scope batched DAG execution design
+// (doc/dev/specs/2026-08-10-whole-scope-batched-dag-execution-design.md): the
+// NESTED (aux Κ OUTER, occ i INNER) build-once success metric. Same water-20
+// DF residual as the Task-3 test, now optimized with BOTH an aux Κ contracted
+// batch loop and an occ i external (spectator) batch loop engaged, so the scope
+// tree is a two-level chain root -> Κ (contracted) -> i (external). The
+// recursive walk must build a value HOMED at the OUTER Κ level once per Κ-block
+// and REUSE it across every inner occ-block: its total build count stays <=
+// n_Κ_blocks (NOT n_Κ_blocks * n_occ_blocks), proving the outer-homed value is
+// not re-formed per inner block. Driven off the schedule's type-keyed
+// homed_values (via the value_id -> node bridge), not an exact-Index membership
+// test. Zero-data DryRun: the build tally (not a numeric result) is the
+// witness, exactly as the Task-3 sharing test; the numeric equivalence of the
+// nested walk is covered by the real-data TA proxy in test_eval_ta.cpp.
+TEST_CASE(
+    "whole-scope executor builds outer-homed aux composites once per "
+    "Kappa-block across occ blocks",
+    "[scope-executor]") {
+  auto ctx = get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+
+  auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                          "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = deserialize<ExprPtr>(line);
+  REQUIRE(static_cast<bool>(expr));
+  REQUIRE(expr->is<Sum>());
+  auto const& summands = expr->as<Sum>().summands();
+  REQUIRE(!summands.empty());
+  auto flatten_product = [](ExprPtr const& e) -> ExprPtr {
+    if (!e->is<Product>()) return e;
+    auto const& p = e->as<Product>();
+    return ex<Product>(p.scalar(), p.factors(), Product::Flatten::Yes);
+  };
+  std::size_t nterms = std::min<std::size_t>(summands.size(), 40);
+  if (char const* nt = std::getenv("SEQUANT_UT_DRYRUN_NTERMS"))
+    nterms = std::min<std::size_t>(summands.size(), std::atoll(nt));
+
+  auto regime = df_regime(kWater20_pVDZF12);
+  auto cm = std::make_shared<CostModel const>(regime);
+
+  // A controlled NESTED forest (deterministic): two roots sharing an aux-only
+  // composite S = g*h (carries Κ, invariant to occ i -> homed at the OUTER Κ
+  // level), each with its own occ+aux subproduct P_k = u_k*w_k (carries Κ and
+  // i -> homed at the INNER i level). Mirrors the real-data TA proxy structure
+  // (test_eval_ta.cpp), so the zero-data DryRun build tally can witness the
+  // outer-homed build-once. Coercing the water-20 optimizer into a clean
+  // 2-level aux->occ schedule is threshold-fiddly and orthogonal to the
+  // executor's correctness -- the recursion is identical however the schedule
+  // was produced; the numeric equivalence of that recursion is covered by the
+  // real-data TA proxy.
+  (void)flatten_product;
+  (void)nterms;
+  auto mk = [](std::wstring const& s) {
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    return binarize<EvalExprDryRun>(deserialize<ExprPtr>(s));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  };
+  std::vector<EvalNodeDryRun> forest{
+      mk(L"(g{a_2;a_3;Κ_1} * h{a_3;a_2}) * (u1{i_1;a_4;Κ_1} * w1{a_4;i_2})"),
+      mk(L"(g{a_2;a_3;Κ_1} * h{a_3;a_2}) * (u2{i_1;a_4;Κ_1} * w2{a_4;i_2})")};
+  Index const K1{L"Κ_1"};
+  Index const i1{L"i_1"};
+  for (auto& nd : forest) {
+    nd->set_batched_here({{K1, sequant::BatchModeType::Contracted},
+                          {i1, sequant::BatchModeType::External}});
+    nd->set_batch_order_aware(true);
+  }
+
+  // Scope schedule: aux Κ OUTER, occ i INNER (mode_order pins the nesting).
+  auto const block_of = [](Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"i" ? 16 : 256;
+  };
+  auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  auto sched =
+      sequant::eval::build_scope_schedule<std::wstring>(rich, {L"Κ", L"i"});
+  REQUIRE(sched.root.children.size() == 1);
+  auto const& kscope = sched.root.children.front();
+  REQUIRE(kscope.mode.space().base_key() == L"Κ");
+  REQUIRE(kscope.kind == sequant::BatchModeType::Contracted);
+  REQUIRE(kscope.children.size() == 1);
+  auto const& iscope = kscope.children.front();
+  REQUIRE(iscope.mode.space().base_key() == L"i");
+  REQUIRE(iscope.kind == sequant::BatchModeType::External);
+  Index const K = kscope.mode;
+
+  // value_id -> node bridge: resolve the Κ-scope homed values (the shared
+  // aux-carrying, occ-invariant composites) to forest nodes.
+  auto const vmap = sequant::eval::build_value_node_map(forest);
+  std::unordered_set<std::size_t> root_hashes;
+  for (auto const& r : forest) root_hashes.insert(r->hash_value());
+  std::vector<EvalNodeDryRun> k_homed;
+  for (auto vid : kscope.homed_values) {
+    auto const h = rich.cells[vid].hash;
+    auto const it = vmap.find(h);
+    if (it == vmap.end() || it->second.leaf() || root_hashes.count(h)) continue;
+    k_homed.push_back(it->second);
+  }
+  REQUIRE(!k_homed.empty());
+
+  DryRunLeafEvaluator yield{cm};
+  auto const target = [](Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"i" ? 16 : 256;
+  };
+
+  // n_Κ_blocks (aux partition) and n_occ_blocks (occ partition).
+  std::size_t n_kappa = 0, n_occ = 0;
+  for (auto const& root : forest) {
+    if (!n_kappa)
+      if (auto lf = sequant::find_leaf_carrying(root, K))
+        n_kappa = yield(lf->first)->mode_batches(lf->second, 256).size();
+    if (!n_occ)
+      if (auto lf = sequant::eval::detail::find_leaf_carrying_type(root, L"i"))
+        n_occ = yield(lf->first)->mode_batches(lf->second, 16).size();
+  }
+  REQUIRE(n_kappa > 1);
+  REQUIRE(n_occ > 1);
+
+  // Total builds (summed over slices) of ONE specific node in a tally.
+  auto builds_of = [](auto const& tally,
+                      EvalNodeDryRun const& node) -> std::size_t {
+    auto it = tally.find(node);
+    if (it == tally.end()) return 0;
+    std::size_t b = 0;
+    for (auto const& [sig, bc] : it->second.slices) b += bc.first;
+    return b;
+  };
+  // The most-rebuilt aux-homed composite in a tally (the tightest witness).
+  auto max_k_homed = [&](auto const& tally) -> std::size_t {
+    std::size_t mx = 0;
+    for (auto const& n : k_homed) mx = std::max(mx, builds_of(tally, n));
+    return mx;
+  };
+
+  using annot_t = std::remove_cvref_t<decltype(forest.front()->annot())>;
+  annot_t const layout{};
+
+  auto& logger = Logger::instance();
+  auto const prev_level = logger.eval.level;
+  auto* const prev_stream = logger.eval.stream;
+  std::ostringstream trace_sink;
+  logger.eval.level = 1;
+  logger.eval.stream = &trace_sink;
+
+  // (1) WHOLE-SCOPE: drive the NESTED Κ->i loop nest; count builds.
+  auto ws_cache = sequant::cache_manager(forest);
+  ws_cache.set_recompute_tally_enabled(true);
+  try {
+    (void)sequant::eval::evaluate_whole_scope<Trace::On>(
+        forest, sched, rich, layout, yield, ws_cache, target);
+  } catch (std::exception const& e) {
+    logger.eval.level = prev_level;
+    logger.eval.stream = prev_stream;
+    std::cerr << "[scope-executor] nested whole-scope evaluate threw: "
+              << e.what() << "\n";
+    throw;
+  }
+  std::size_t const ws_khomed = max_k_homed(ws_cache.recompute_tally());
+
+  logger.eval.level = prev_level;
+  logger.eval.stream = prev_stream;
+
+  std::wcerr << L"\n=== [scope-executor] NESTED water-20 aux+occ, "
+             << forest.size() << L" terms, n_Kappa=" << n_kappa << L" n_occ="
+             << n_occ << L", " << k_homed.size()
+             << L" aux-homed composites ===\n"
+             << L"  whole-scope max aux-homed builds = " << ws_khomed
+             << L"  (<= n_Kappa=" << n_kappa << L", NOT n_Kappa*n_occ="
+             << (n_kappa * n_occ) << L")\n";
+
+  // The nested build-once win: a value homed at the OUTER Κ level is built at
+  // most once per Κ-block and REUSED across every inner occ-block -- so its
+  // total build count stays <= n_Κ_blocks (here == n_Κ, one build per block),
+  // strictly below the n_Κ*n_occ a per-inner-block rebuild would cost. (A
+  // Task-3-style forest-descent contrast is not meaningful for this minimal
+  // 2-root forest -- there is only one consumer group, so descent does not
+  // fragment; the numeric equivalence of the nested walk is covered by the
+  // real-data TA proxy in test_eval_ta.cpp.)
+  REQUIRE(ws_khomed > 0);
+  CHECK(ws_khomed <= n_kappa);
+  CHECK(ws_khomed < n_kappa * n_occ);
 }
 
 // PNO-CCSD water-20 REMAT peak_threshold sweep. rematerialize_to_budget starts

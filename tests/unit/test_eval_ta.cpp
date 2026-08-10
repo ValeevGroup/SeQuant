@@ -2252,13 +2252,112 @@ TEST_CASE("evaluate_whole_scope matches forest descent over one aux loop",
   auto const target_batch = [](sequant::Index const&) -> std::size_t {
     return 4;
   };
-  auto const got = evaluate_whole_scope(forest, sched, target, yield_, ws_cache,
-                                        target_batch)
+  auto const got = evaluate_whole_scope(forest, sched, rich, target, yield_,
+                                        ws_cache, target_batch)
                        ->get<TArrayD>();
 
   // Agreement to within FP noise (batched summation reorders the contraction).
   // Both `got` and `ref` are permuted to the `target` layout, so `target` is
   // their common annotation.
+  TArrayD diff;
+  diff(target) = got(target) - ref(target);
+  double const rel = TA::norm2(diff) / TA::norm2(ref);
+  INFO("relative L2 diff = " << rel);
+  CHECK(rel < 1e-10);
+}
+
+// Task 4 of the whole-scope batched DAG execution design
+// (doc/dev/specs/2026-08-10-whole-scope-batched-dag-execution-design.md):
+// NESTED-scope EQUIVALENCE. A two-root forest with a NESTED scope tree --
+// aux x_1 (CONTRACTED, OUTER) over occ i_1 (EXTERNAL/spectator, INNER) --
+// exercising the recursive walk (one batch loop per level) with accumulate at
+// the outer (contracted) exit and scatter at the inner (external) exit. The
+// roots SHARE an aux-only composite S = g*h (carries x_1, invariant to i_1),
+// homed at the OUTER x level: the executor must build it once per x-block and
+// reuse it across every inner i-block, while still reproducing the unbatched
+// forest-descent result to FP noise (the batched summation reorders both the
+// x-contraction and the i-scatter). Real TA data at a small tractable size,
+// exactly as the Task-3 aux-only equivalence test (the DryRun backend is
+// zero-data; a dropped/double-counted slice needs real arithmetic to witness).
+TEST_CASE("evaluate_whole_scope matches forest descent over nested aux+occ",
+          "[eval][scope-executor]") {
+  using sequant::evaluate;
+  using sequant::eval::build_scope_schedule;
+  using sequant::eval::build_value_node_map;
+  using sequant::eval::compute_dag_boulevard;
+  using sequant::eval::evaluate_whole_scope;
+  using TA::TArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+
+  auto& world = TA::get_default_world();
+  // occ multi-tiled (nocc 8 in tiles of 4 -> 2 tiles) so i_1 batches (external
+  // scatter), and aux multi-tiled (naux 12 in tiles of 4 -> 3 tiles) so x_1
+  // batches (contracted accumulate).
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 8, 6, 12};
+  yield_.set_max_tile(4);
+
+  // Two summable roots sharing the aux-only composite S = g*h (carries x_1,
+  // invariant to i_1 -> homed at the OUTER x level), each with its own occ+aux
+  // subproduct P_k = u_k*w_k (carries both x_1 and i_1,i_2 -> homed at the
+  // INNER i level):
+  //   F1 = (g{a2;a3;x1} * h{a3;a2}) * (u1{i1;a4;x1} * w1{a4;i2})
+  //   F2 = (g{a2;a3;x1} * h{a3;a2}) * (u2{i1;a4;x1} * w2{a4;i2})
+  // both contract x_1 (aux-aux) -> results over {i_1, i_2}; i_1 is the batched
+  // external (spectator) mode, i_2 an un-batched external.
+  auto const t1 = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{a_2;a_3;x_1} * h{a_3;a_2}) * (u1{i_1;a_4;x_1} * w1{a_4;i_2})");
+  auto const t2 = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{a_2;a_3;x_1} * h{a_3;a_2}) * (u2{i_1;a_4;x_1} * w2{a_4;i_2})");
+  std::string const target = "i_1,i_2";
+  std::vector<node_t> forest{eval_node(t1), eval_node(t2)};
+
+  sequant::Index const x1{L"x_1"};
+  sequant::Index const i1{L"i_1"};
+  for (auto& nd : forest) {
+    nd->set_batched_here({{x1, sequant::BatchModeType::Contracted},
+                          {i1, sequant::BatchModeType::External}});
+    nd->set_batch_order_aware(true);
+  }
+
+  // Reference: unbatched forest descent (ground truth). Without a custom
+  // evaluator batched_here is ignored, so this is the exact F1 + F2.
+  auto const ref = evaluate(forest, target, yield_)->get<TArrayD>();
+
+  // Scope schedule: aux x_1 outer (contracted), occ i_1 inner (external).
+  sequant::eval::dryrun::SizeRegime const regime;
+  sequant::eval::dryrun::CostModel const cm{regime};
+  auto const block_of = [](sequant::Index const&) -> std::size_t { return 4; };
+  auto rich = compute_dag_boulevard(forest, cm, block_of);
+  auto sched = build_scope_schedule<std::wstring>(rich, {L"x", L"i"});
+  REQUIRE(sched.root.children.size() == 1);
+  auto const& xscope = sched.root.children.front();
+  REQUIRE(xscope.mode.space().base_key() == L"x");
+  REQUIRE(xscope.kind == sequant::BatchModeType::Contracted);
+  REQUIRE(xscope.children.size() == 1);
+  auto const& iscope = xscope.children.front();
+  REQUIRE(iscope.mode.space().base_key() == L"i");
+  REQUIRE(iscope.kind == sequant::BatchModeType::External);
+  REQUIRE(iscope.children.empty());
+
+  // value_id -> node bridge: the OUTER x scope must home the shared aux-only
+  // composite S (carries x_1, not i_1).
+  auto const vmap = build_value_node_map(forest);
+  std::size_t n_x_homed = 0;
+  for (auto vid : xscope.homed_values)
+    if (vmap.count(rich.cells[vid].hash)) ++n_x_homed;
+  REQUIRE(n_x_homed > 0);
+
+  // Whole-scope evaluation over the nested aux+occ loop nest.
+  auto ws_cache = sequant::CacheManager<node_t>::empty();
+  auto const target_batch = [](sequant::Index const&) -> std::size_t {
+    return 4;
+  };
+  auto const got = evaluate_whole_scope(forest, sched, rich, target, yield_,
+                                        ws_cache, target_batch)
+                       ->get<TArrayD>();
+
+  // Agreement to within FP noise (the nested batched loop reorders the
+  // x-contraction and assembles i_1 by disjoint-slice scatter).
   TArrayD diff;
   diff(target) = got(target) - ref(target);
   double const rel = TA::norm2(diff) / TA::norm2(ref);

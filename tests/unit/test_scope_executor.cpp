@@ -159,8 +159,9 @@ TEST_CASE("evaluate_whole_scope matches forest descent for an unbatched forest",
 
   // evaluate_whole_scope, its own (fresh) cache -- must match exactly.
   auto whole_cache = sequant::CacheManager<ScalarNode>::empty();
-  ResultPtr const got = evaluate_whole_scope(
-      tf.forest, tf.sched, ScalarEvalExpr::annot_t{}, tf.yield, whole_cache);
+  ResultPtr const got =
+      evaluate_whole_scope(tf.forest, tf.sched, tf.rich,
+                           ScalarEvalExpr::annot_t{}, tf.yield, whole_cache);
   double const got_val = got->as<ResultScalar<double>>().value();
 
   // Hand-computed cross-check that the reference itself is right:
@@ -202,8 +203,9 @@ TEST_CASE(
   ResultPtr got;
   try {
     auto cache = sequant::CacheManager<ScalarNode>::empty();
-    got = evaluate_whole_scope<sequant::Trace::On>(
-        tf.forest, tf.sched, ScalarEvalExpr::annot_t{}, tf.yield, cache);
+    got = evaluate_whole_scope<sequant::Trace::On>(tf.forest, tf.sched, tf.rich,
+                                                   ScalarEvalExpr::annot_t{},
+                                                   tf.yield, cache);
   } catch (...) {
     logger_eval.level = saved_level;
     logger_eval.stream = saved_stream;
