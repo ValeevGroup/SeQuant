@@ -165,7 +165,7 @@ With this life the use-counted cache holds V for exactly its in-block accesses, 
 - [ ] **Step 3: Run to confirm (a) fails** (missing `weighted_use_count`) and note (b)/(c) as the invariants to preserve.
 - [ ] **Step 4: Implement `weighted_use_count`; store homed values at their home with it; remove `ensure_hoist_slot` from eval.hpp and scope_executor.hpp; drop the fresh-per-level-cache workaround.**
 - [ ] **Step 5: Run.** (a) green; (b) build-once still == n_blocks; (c) `[eval]` byte-identical numerics; and MEASURE the peak improvement from early release vs the old scope-close/MAX lifetime (report the number).
-- [ ] **Step 6: Remove `ensure_hoist_slot` from cache_manager.hpp** (no callers remain) and confirm the build.
+- [ ] **Step 6: `ensure_hoist_slot` stays in cache_manager.hpp (owner decision).** It is removed from the whole-scope executor, but eval.hpp's forest-descent batched hoist (eval.hpp:1917) genuinely still needs it: that path has no `RichSchedule` at the store site and realizes inner loops lazily, so the in-block read count is unknown at store time and `SIZE_MAX` is the only safe choice. `ensure_hoist_slot` is retained and gets deleted when forest descent itself is retired. Leave a comment at cache_manager.hpp:402 marking it forest-descent-only.
 - [ ] **Step 7: Commit.**
 
 ---
