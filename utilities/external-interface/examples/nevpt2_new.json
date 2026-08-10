@@ -65,7 +65,8 @@
 				"ecc": "1",
 				"en": "0-1",
 				"res1": "2-5",
-				"res2": "6-11"
+				"res2": "6-11",
+				"res": "2-11"
 			}
 		},
 		{
@@ -90,7 +91,19 @@
 		},
 		{
 			"kind": "output",
-			"inputs": "traced.en"
+			"inputs": "traced.res1"
+		},
+		{
+			"id": "biorth",
+			"kind": "project",
+			"inputs": "traced.res",
+			"options": {
+				"method": "biorthogonal"
+			}
+		},
+		{
+			"kind": "output",
+			"inputs": "biorth.res1"
 		}
 	]
 }
