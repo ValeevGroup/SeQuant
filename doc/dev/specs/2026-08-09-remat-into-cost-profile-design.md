@@ -302,17 +302,22 @@ placement ENFORCEMENT for C60 (path A is the realized-peak tool; the DP's
 (3) Shelve both. The `cell_footprint` fix stands on its own merit (the oracle
 bug) independent of whether path B ships.
 
-### Task 1b -- SUPERSEDED intermediate: "block enclosing_modes is THE fix"
+### Task 1b -- RETRACTED intermediates: "enclosing_modes is THE fix / IS the Forest footprint"
 
-An intermediate conclusion (committed `53146ff45`) held that the oracle's 30x
-overcount was a bug fixed by blocking `enclosing_modes` instead of `home_modes`,
-and that placement is peak-inert. Both the "bug" framing and the "inert" framing
-are RETRACTED -- they were measuring the current runtime and mistaking it for a
-law. The correct account is below (two execution models). `enclosing_modes` is
-not a bug fix; it is the FOREST-model footprint (see below), one endpoint of a
-placement spectrum, and it is not wrong -- it just models a different runtime.
+Two intermediate conclusions are RETRACTED. (1) `53146ff45`: the oracle's 30x
+overcount is a bug fixed by blocking `enclosing_modes` instead of `home_modes`,
+and placement is peak-inert. (2) The first draft of this section: `enclosing_modes`
+is the Forest-execution footprint, one endpoint of a placement spectrum. Both are
+wrong. `enclosing_modes` is a DAG property -- the UNION over a value's occurrences
+of every loop that encloses it -- NOT a placement; nothing homes a node there. It
+is not the Forest footprint: `633 ≈ 563` was a numerical coincidence (they do not
+even match -- ~12% apart with no principled reason), and in forest execution each
+node's residency is STILL governed by its `home_modes`, not by that union. The
+lasting result is the two-execution-models framing below and that `home_modes` is
+the location variable in BOTH runtimes; the `enclosing_modes` mechanism is dropped
+entirely.
 
-### Task 1b RESOLVED -- two execution models on one placement spectrum (2026-08-09)
+### Task 1b RESOLVED -- two execution models; the Forest static peak is an open problem (2026-08-09)
 
 **Replay-side trace** (`SEQUANT_UT_PEAK_COMPOSE`, cache_manager `note_working_set`
 diagnostic) dumps the composition at the 563 GB replay peak instant:
@@ -322,8 +327,12 @@ diagnostic) dumps the composition at the 563 GB replay peak instant:
            n_alive_chain=13         max_single_alive=24.4 GB
 ```
 
-The peak is 79% ONE transient contraction result (443.6 GB); co-resident cache is
-only 120 GB (largest single entry 24.4 GB -- NO 2930 GB giant is ever resident).
+`transient(result)` is `current_bytes - chain_residency` = the ONE result tensor
+being FORMED at that op. The peak is 79% that single transient (443.6 GB), with
+only 120 GB of co-resident cache and NO single resident above 24.4 GB -- so the
+443 GB result is not even retained (consumed/reduced immediately), and none of the
+static "2930 GB giants" is ever a cache resident. They are TRANSIENT contraction
+outputs.
 
 **The key (E.V.).** The current batched runtime is RECURSIVE FOREST DESCENT:
 evaluate each tree fully, one at a time. Cross-tree CSE survives only at the TOP
@@ -331,50 +340,48 @@ scope; a value shared by two trees BELOW the top scope is re-formed per tree
 (never co-resident). The OPTIMAL runtime is WHOLE-SCOPE DESCENT (proper batched
 DAG traversal): descend the fused forest scope by scope, doing all trees' work at
 each scope, so cross-tree sub-scope CSE is exploited and shared values are held
-co-resident. The static peak oracle (`peak_profile_sweep`, one CSE-folded cell
-per value spanning its whole-DAG liveness) models WHOLE-SCOPE descent; the replay
-(`cost_profile`) IS recursive forest descent. They are two EXECUTION MODELS, not
-two estimates of one peak -- which is why they never matched.
+co-resident. These are two EXECUTION MODELS, not two estimates of one peak -- which
+is why the static oracle and the replay never matched.
 
-**One placement spectrum.** The knob separating them is where each value is homed,
-which the peak sweep already takes as input:
+**Location is `home_modes` in BOTH models.** A node is materialized at its home
+scope and consumers deeper in the nest take slice-on-use views (eval.hpp,
+non-mutating). This holds for forest AND whole-scope descent; `home_modes` is the
+location variable throughout. `enclosing_modes` (a union over occurrences) is not
+a home and does not enter residency.
 
-| placement | footprint rule | peak | recompute | runtime |
-|---|---|---|---|---|
-| meet-home (full sharing) | home-blocked | 17667 GB | minimal | DAG, shared |
-| ... remat lowers ... | ... | ... | ... | (spectrum) |
-| max-deep (per-tree re-form) | enclosing-blocked | 633 GB | maximal (~76%) | FOREST (current) |
+**Why the static sweep (`peak_profile_sweep`) mismodels the Forest replay.** The
+gap is NOT home-vs-enclosing. The static sweep is the wrong KIND of model for the
+forest runtime on two independent counts, both visible in the trace:
+1. It **folds** a value's occurrences into ONE cell homed at the meet (∅ for the
+   divergent giants). Forest execution has PER-OCCURRENCE copies, each homed at
+   its own `home_modes`.
+2. It prices every cell as a **persistent resident** over its whole
+   `first_use..last_use` interval and sums co-residency. The forest peak is a
+   **transient working set** -- "the single largest result being FORMED + whatever
+   cache is resident at that op" -- a different quantity. The 443 GB result is
+   transient, never a persistent resident; the sweep has no notion of it.
 
-The current forest runtime is PINNED at the deep/enclosing endpoint: no placement
-freedom, max recompute (the ~76% avoidable = the cross-tree sub-scope CSE it
-throws away; same root cause as the known per-group-replay ~5x slowdown), min
-co-resident peak. That is why the replay lands at 563 ≈ the 633 enclosing floor
-and why placement looked "inert" -- you cannot move off an endpoint. The 443 GB
-transient IS a cell (the biggest contraction's result, enclosing-sliced), so the
-sweep captures it as the largest sliced cell; 633 ≈ 443 + co-residents is the
-forest peak, not a coincidence. The DAG runtime can sit ANYWHERE on the line, and
-remat/path B chooses the point that fits budget B at least recompute -- there,
-placement is a real lever.
+`peak_profile_sweep` (home-blocked, folded, persistent co-residency) is therefore
+a model of the WHOLE-SCOPE / DAG runtime, not the forest one.
 
-**Modeling both (the actionable design).** Add an `ExecutionModel` parameter to
-the peak oracle selecting the footprint rule:
-- `Forest` -> enclosing-blocked; VALIDATABLE today against the replay (633 vs 563,
-  ~12% = uniform-tiling + the CSE-fold refinement below). Models the runtime we
-  have.
-- `Dag` -> home-blocked + remat-navigable placement. Predicts the runtime we are
-  heading toward; the regime where remat/path B is meaningful.
-One CSE-fold refinement for exact `Forest` fidelity: the current sweep folds
-cross-tree CSE into one spanning cell (a DAG assumption); strict forest would
-un-fold sub-scope cross-tree CSE into per-tree cells. It was immaterial here
-(cross-tree co-residency is only the 120 GB top-cache), so the footprint rule is
-the PRIMARY knob and CSE-fold-scope a SECONDARY one.
+**Modeling both.** The forest runtime already HAS a faithful model: `cost_profile`
+-- the replay IS recursive forest descent (this is where the 563 GB comes from).
+`peak_profile_sweep` is the DAG-runtime model. So today: Forest = the replay, DAG =
+the sweep. A CHEAP STATIC forest model (predict ~563 without a full replay, so
+remat could optimize against the forest cost) is an OPEN problem: it would have to
+model per-op transient working sets + per-occurrence homing + a per-tree
+(sequential) timeline. It is NOT a footprint-rule swap, and `enclosing_modes` is
+not it. If an `ExecutionModel` parameter is added later, `Dag` = the existing
+home-blocked sweep; `Forest` = the replay until/unless the open static model is
+built.
 
 **Consequences (corrected).** (i) Neither `home` nor `enclosing` is "the fix";
-they are the two execution-model footprints. (ii) Path B / remat placement is
-moot for the CURRENT (forest) runtime (pinned endpoint) but is the real
-peak-vs-recompute lever for the FUTURE (DAG) runtime. (iii) The enabling change is
-not a `cell_footprint` patch -- it is upgrading the runtime to whole-scope descent
-(proper batched DAG traversal), after which the co-residency oracle is accurate,
-the ~76% recompute and ~5x replay penalty collapse, and remat fits the peak to B.
-(iv) Meanwhile the oracle can already model BOTH runtimes via `ExecutionModel`,
-with `Forest` cross-checked against the replay.
+`home_modes` is the location variable in both runtimes, and the static sweep's
+error is FOLDING + PERSISTENT-residency, not the block set. (ii) Path B / remat
+placement is moot for the CURRENT (forest) runtime (it re-forms sub-scope values
+per tree; nothing to place) but is the real peak-vs-recompute lever for the FUTURE
+(DAG) runtime. (iii) The enabling change is upgrading the runtime to whole-scope
+descent (proper batched DAG traversal), after which the co-residency sweep is the
+accurate model, the ~76% avoidable recompute and ~5x per-group-replay penalty
+collapse, and remat fits the peak to B. (iv) A cheap static Forest peak model
+remains unbuilt; the replay is today's only faithful forest peak.
