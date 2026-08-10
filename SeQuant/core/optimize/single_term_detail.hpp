@@ -116,6 +116,58 @@ auto flops_counter(has_index_extent auto&& ixex, InnerPow inner_pow = {}) {
              meta::range_of<Index> auto const& rhs,
              meta::range_of<Index> auto const& result) -> double {
     using ranges::views::concat;
+    // ToT contractibility guard. A contracted index -- shared by lhs & rhs but
+    // absent from result -- that carries NO proto-indices is an outer/batch
+    // axis in the tensor-of-tensor layout, which a ToT x ToT einsum cannot SUM
+    // (it batches a shared outer axis). It is contractible only when at least
+    // one operand is flat (proto-free) and thus supplies the index as an
+    // ordinary (summable) mode. If BOTH operands are proto-bearing (ToT) and
+    // such a contracted non-proto index exists -- the bare C.C overlap over the
+    // CSV expansion index mu -- the binary contraction is unevaluable; cost it
+    // +inf so the DP routes around it (contract C.t first, de-nesting the
+    // amplitude to a flat carrier of mu, then contract mu flat x ToT, exactly
+    // how the non-relativistic g.C path handles it). Self-gating: never fires
+    // for flat-only networks (no proto) or when either operand is flat (g.C,
+    // C.t).
+    {
+      auto const has_proto = [](Index const& i) {
+        return i.has_proto_indices();
+      };
+      if (ranges::any_of(lhs, has_proto) && ranges::any_of(rhs, has_proto)) {
+        for (auto const& k : lhs)
+          if (!k.has_proto_indices() && ranges::contains(rhs, k) &&
+              !ranges::contains(result, k))
+            return std::numeric_limits<double>::max();
+      }
+      // Proto-value contraction guard (the occ analogue of the C.C case above,
+      // and the flat x ToT case the both-ToT test does not reach). A contracted
+      // index k -- shared by lhs & rhs, absent from result -- that appears as a
+      // PROTO-INDEX of some index in either operand PARAMETRIZES that operand's
+      // per-proto inner (PNS/PNO) basis: summing k would mix distinct inner
+      // bases. The off-diagonal occ Fock f^i_k t̄^{kj} sums the occ k that is
+      // the amplitude's proto-parent, so the pair-(k,j) PNS basis of t̄'s
+      // virtuals a<k,j> depends on k; TA's ToT einsum cannot express that. Cost
+      // +inf so the DP first de-nests the amplitude against its coefficients
+      // (t̄.C.C -> flat carrier of k), after which k is an ordinary mode the
+      // flat Fock can contract. NB: this fires for a flat operand too (f is
+      // flat), but NOT for f.C / g.C (their contracted mu is a fresh CSV mode,
+      // never a proto-value) nor for the intra-pair vv-Fock t̄.f (contracts the
+      // shared virtual, an inner carrier -- itself proto-BEARING, hence
+      // excluded below).
+      {
+        auto const proto_value_in = [](auto const& operand, Index const& k) {
+          for (auto const& j : operand)
+            if (j.has_proto_indices() && ranges::contains(j.proto_indices(), k))
+              return true;
+          return false;
+        };
+        for (auto const& k : lhs)
+          if (!k.has_proto_indices() && ranges::contains(rhs, k) &&
+              !ranges::contains(result, k) &&
+              (proto_value_in(lhs, k) || proto_value_in(rhs, k)))
+            return std::numeric_limits<double>::max();
+      }
+    }
     // <IndexSet> is required here: concatenating the three operands repeats
     // every contracted/shared index, so it must be deduplicated before taking
     // the extent product (cf. memsize_counter, which processes each operand
