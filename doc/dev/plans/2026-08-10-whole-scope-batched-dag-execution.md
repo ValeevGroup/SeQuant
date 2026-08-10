@@ -203,6 +203,25 @@ End-to-end witnesses that whole-scope descent recovers sharing and that the cost
 
 ---
 
+### Task 8: MPQC runtime validation -- CSV-CCk energies, forest->DAG invariance
+
+Verify the whole-scope executor produces correct PNO-CCSD ENERGIES end-to-end through MPQC (the SeQuant unit witnesses of Task 7 validate the residual/oracle, not a full CCSD energy). This is the confidence gate before adoption. MPQC-side task; runs in the mpqc4 repo.
+
+**Files:**
+- Modify (MPQC): `src/mpqc/chemistry/qc/lcao/cc/cck.{h,ipp}` (a `batch:whole_scope` bool keyword, default false, threaded into `BatchPolicy::whole_scope_execution` via `make_csv_batch_policy`), `external/versions.cmake` (repin SeQuant).
+- Add (MPQC): a small validation input if one is needed for the forest-vs-DAG comparison.
+
+**Prerequisite:** SeQuant branch (Tasks 1-7) pushed; MPQC repinned to it.
+
+- [ ] **Step 1: Push SeQuant** (Tasks 1-7) and **repin SeQuant in MPQC** (`external/versions.cmake`, its own commit).
+- [ ] **Step 2: Wire the keyword.** Add `batch:whole_scope` (bool, default false) to CCk's KeyVal reading and thread it into `BatchPolicy::whole_scope_execution` in `make_csv_batch_policy` (csv_batch_policy.h). Document the keyword in the CCk Doxygen table.
+- [ ] **Step 3: Build MPQC** (`cmake --build <build> --target mpqc`, capped `-j`).
+- [ ] **Step 4: CSV-CCk validation suite.** Run the existing CSV-CCk validation tests (`ctest` for the csv-cck cases). Flag-off is byte-identical, so they must stay green; this confirms the repin + keyword wiring did not regress anything.
+- [ ] **Step 5: Water-8-mer forest->DAG energy invariance (local).** Run water-8-mer PNO-CCSD twice -- `batch:whole_scope=false` (forest) and `=true` (whole-scope) -- and confirm the correlation energy matches to a tight NUMERICAL-NOISE tolerance (NOT byte-identical: the DAG schedule changes contraction order). Record both energies + the delta.
+- [ ] **Step 6: Document + commit** the wiring; report the invariance result. (Water-20 on Owl is the owner's, post-push -- out of this task.)
+
+---
+
 ## Self-review notes
 
 - **Spec coverage:** scheduler (spec "Schedule (new)") -> Task 1; pure-realizer executor + driver-swap (spec "load-bearing insight", "pure realizer") -> Tasks 2-4; lazy home-materialization (spec Open Questions) -> Task 3; nested general tree (spec "scope tree") -> Task 4; weighted use-count lifetimes / remove ensure_hoist_slot (owner decision during Task 4 review) -> Task 5; coexistence + cost-model binding (spec "paradox resolved", Open Questions) -> Task 6; validation-to-tolerance + recompute-elimination (spec Validation) -> Task 7.
@@ -210,4 +229,5 @@ End-to-end witnesses that whole-scope descent recovers sharing and that the cost
 - **Greenfield honesty:** Tasks 3-4 depend on how `evaluate_impl`'s scratch/accumulate/scatter/lazy-home primitives compose under a whole-forest driver (a spec Open Question). Each task's FIRST deliverable is an equivalence test against forest descent, so the composition is validated empirically per increment rather than assumed. If a primitive does not compose (e.g. a scatter target cannot be shared across trees), that surfaces as a failing equivalence test at the smallest increment, not late.
 - **Task 5 (use-count cleanup) invariant:** it changes only WHEN cache entries free, never numerics -- the `[eval]` byte-identical pin (Step 2c/5c) is the guard; it also removes `ensure_hoist_slot` from eval.hpp's existing forest-descent batched path, so `[eval]` regression coverage is load-bearing.
 - **No silent regression:** Task 6 Step 4 pins the flag-OFF path byte-identical (forest descent unchanged) so whole-scope is purely additive until adopted.
+- **End-to-end energy gate:** Task 7 validates the residual/oracle at the SeQuant unit level; Task 8 (MPQC) is the actual PNO-CCSD ENERGY gate -- CSV-CCk validation green + water-8-mer forest->DAG correlation-energy invariance to numerical noise. Adoption is gated on Task 8, not Task 7.
 - **Watch item:** the "build once" sharing assertions (Tasks 3/5/7) are the real success metric -- equivalence-to-tolerance alone would pass even if nothing shared. Both must hold.
