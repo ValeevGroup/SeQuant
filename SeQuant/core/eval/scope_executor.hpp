@@ -9,6 +9,8 @@
 
 #include <any>
 #include <array>
+#include <cstddef>
+#include <string>
 
 namespace sequant::eval {
 
@@ -49,7 +51,12 @@ namespace sequant::eval {
 /// sequant::evaluate(Nodes const&, layout, ...) respectively, inlined (rather
 /// than delegated to those overloads) so that Tasks 3-4 have a natural seam
 /// to inject batch-context management (slicing on entry, accumulate/scatter
-/// on exit) around each per-value \c evaluate_impl call.
+/// on exit) around each per-value \c evaluate_impl call. The trace/hwmark
+/// bookkeeping (\c log::term boundaries, the Permute \c EvalStat, the
+/// SumInplace \c EvalStat) is reproduced line-for-line from those two
+/// overloads too -- \c EvalTrace-gated, so it costs nothing when off, but
+/// present so Tasks 3-4's batch-block trace/hwmark plumbing has a faithful
+/// root-only baseline to extend rather than a silent gap to rediscover.
 ///
 /// \param forest The forest whose per-root results are evaluated and summed;
 ///        same requirement as \c sequant::evaluate(Nodes const&, ...).
@@ -84,15 +91,67 @@ ResultPtr evaluate_whole_scope(Nodes const& forest, ScopeSchedule const& sched,
 
   ResultPtr result;
   for (auto&& n : forest) {
-    ResultPtr pre = evaluate_impl<EvalTrace>(n, leaf_evaluator, cache);
-    ResultPtr post =
-        perm ? pre->permute(std::array<std::any, 2>{n->annot(), layout}) : pre;
+    // Per-root term boundary -- mirrors sequant::evaluate(Node const&,
+    // layout, ...)'s identical log::term(Begin/End) bracket around its
+    // evaluate_impl + permute.
+    std::string xpr;
+    if constexpr (sequant::detail::trace(EvalTrace)) {
+      xpr = toUtf8(io::serialization::to_string(to_expr(n)));
+      log::term(log::TermMode::Begin, xpr);
+    }
+
+    ResultPtr const pre = evaluate_impl<EvalTrace>(n, leaf_evaluator, cache);
+
+    ResultPtr post;
+    auto const permute_time = sequant::detail::timed_eval_inplace([&]() {
+      post = perm ? pre->permute(std::array<std::any, 2>{n->annot(), layout})
+                  : pre;
+    });
+
+    SEQUANT_ASSERT(post);
+
+    // Permute EvalStat + term-End -- byte-for-byte the logging
+    // sequant::evaluate(Node const&, layout, ...) emits around the identical
+    // permute() call above.
+    if constexpr (sequant::detail::trace(EvalTrace)) {
+      if (perm) {
+        size_t hwmark = log::bytes(cache, post).value;
+        if (!cache.chain_holds(pre)) hwmark += log::bytes(pre).value;
+        hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
+        auto const stat =
+            log::EvalStat{.mode = log::EvalMode::Permute,
+                          .time = permute_time,
+                          .mem_result = log::bytes(post),
+                          .mem_alloc = log::bytes(post),
+                          .mem_hwmark = {cache.note_working_set(hwmark)}};
+        log::eval(stat, n->label());
+      }
+      log::term(log::TermMode::End, xpr);
+    }
 
     if (!result) {
       result = post;
       continue;
     }
-    result->add_inplace(*post);
+
+    // Cross-root accumulation -- mirrors sequant::evaluate(Nodes const&,
+    // layout, ...)'s identical timed add_inplace() + SumInplace EvalStat
+    // (there, `post` above is that overload's per-node `pre`).
+    auto const sum_time = sequant::detail::timed_eval_inplace(
+        [&]() { result->add_inplace(*post); });
+
+    if constexpr (sequant::detail::trace(EvalTrace)) {
+      size_t hwmark = log::bytes(cache, result).value;
+      if (!cache.chain_holds(post)) hwmark += log::bytes(post).value;
+      hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
+      auto const stat =
+          log::EvalStat{.mode = log::EvalMode::SumInplace,
+                        .time = sum_time,
+                        .mem_result = log::bytes(result),
+                        .mem_alloc = {0},
+                        .mem_hwmark = {cache.note_working_set(hwmark)}};
+      log::eval(stat, n->label());
+    }
   }
 
   return result;

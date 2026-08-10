@@ -24,12 +24,14 @@
 #include <SeQuant/core/eval/scope_schedule.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <map>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -107,40 +109,58 @@ ScalarNode scalar_tree(std::wstring_view spec) {
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 }
 
-}  // namespace
+///
+/// \brief The shared unbatched, two-root test forest + its Task-1
+/// ScopeSchedule + leaf evaluator, built via the real pipeline
+/// (compute_dag_boulevard -> build_scope_schedule): no node ever calls
+/// set_batched_here(), so the resulting scope tree must be root-only. Reused
+/// by both the numeric-equivalence test and the trace-fidelity (fix round 1)
+/// test below so the two exercise the identical forest.
+///
+struct TestForest {
+  std::vector<ScalarNode> forest;
+  RichSchedule rich;
+  ScopeSchedule sched;
+  ScalarLeafEvaluator yield;
+};
 
-TEST_CASE("evaluate_whole_scope matches forest descent for an unbatched forest",
-          "[scope-executor]") {
+TestForest make_test_forest() {
   // A two-root forest, each root a nontrivial Sum-of-Products over named
   // scalar Variables -- exercises both EvalOp::Sum and EvalOp::Product inside
   // evaluate_impl, plus the cross-root accumulation evaluate_whole_scope must
   // reproduce.
-  ScalarNode const p1 = scalar_tree(L"2 * a * b - c");
-  ScalarNode const p2 = scalar_tree(L"a * a + 3 * b - 2 * c");
-  std::vector<ScalarNode> const forest{p1, p2};
+  std::vector<ScalarNode> forest{scalar_tree(L"2 * a * b - c"),
+                                 scalar_tree(L"a * a + 3 * b - 2 * c")};
 
-  ScalarLeafEvaluator const yield{{{L"a", 2.0}, {L"b", -3.5}, {L"c", 7.25}}};
+  ScalarLeafEvaluator yield{{{L"a", 2.0}, {L"b", -3.5}, {L"c", 7.25}}};
 
-  // Build the Task-1 ScopeSchedule for this forest via the real pipeline
-  // (compute_dag_boulevard -> build_scope_schedule). No node ever calls
-  // set_batched_here(), so the resulting scope tree must be root-only.
   SizeRegime const regime;
   CostModel const cm{regime};
   auto const block_of = [](sequant::Index const&) -> std::size_t { return 1; };
-  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
-  ScopeSchedule const sched = build_scope_schedule<std::wstring>(rich, {});
-  REQUIRE(sched.root.children.empty());
-  REQUIRE(sched.num_values == rich.cells.size());
+  RichSchedule rich = compute_dag_boulevard(forest, cm, block_of);
+  ScopeSchedule sched = build_scope_schedule<std::wstring>(rich, {});
+
+  return TestForest{std::move(forest), std::move(rich), std::move(sched),
+                    std::move(yield)};
+}
+
+}  // namespace
+
+TEST_CASE("evaluate_whole_scope matches forest descent for an unbatched forest",
+          "[scope-executor]") {
+  TestForest const tf = make_test_forest();
+  REQUIRE(tf.sched.root.children.empty());
+  REQUIRE(tf.sched.num_values == tf.rich.cells.size());
 
   // Reference: existing per-tree forest descent, own (fresh) cache.
   auto ref_cache = sequant::CacheManager<ScalarNode>::empty();
-  ResultPtr const reference = sequant::evaluate(forest, yield, ref_cache);
+  ResultPtr const reference = sequant::evaluate(tf.forest, tf.yield, ref_cache);
   double const expected = reference->as<ResultScalar<double>>().value();
 
   // evaluate_whole_scope, its own (fresh) cache -- must match exactly.
   auto whole_cache = sequant::CacheManager<ScalarNode>::empty();
   ResultPtr const got = evaluate_whole_scope(
-      forest, sched, ScalarEvalExpr::annot_t{}, yield, whole_cache);
+      tf.forest, tf.sched, ScalarEvalExpr::annot_t{}, tf.yield, whole_cache);
   double const got_val = got->as<ResultScalar<double>>().value();
 
   // Hand-computed cross-check that the reference itself is right:
@@ -151,4 +171,59 @@ TEST_CASE("evaluate_whole_scope matches forest descent for an unbatched forest",
 
   CHECK(expected == Catch::Approx(hand));
   CHECK(got_val == Catch::Approx(expected));
+}
+
+// Fix round 1 (code review finding): evaluate_whole_scope's accumulation loop
+// must emit the SAME trace/hwmark bookkeeping sequant::evaluate(Nodes const&,
+// layout, ...) does around the identical permute()/add_inplace() calls -- the
+// per-root Term Begin/End boundary and, for every root after the first, a
+// SumInplace EvalStat. Verified here by actually capturing the eval-trace
+// stream under Trace::On (not just asserting it by inspection): a regression
+// that silently dropped the SumInplace record again (the exact bug this fix
+// addresses) would fail this test.
+TEST_CASE(
+    "evaluate_whole_scope emits Term/SumInplace trace records under "
+    "Trace::On",
+    "[scope-executor]") {
+  TestForest const tf = make_test_forest();
+  REQUIRE(tf.sched.root.children.empty());
+
+  // Logger is a process-wide Singleton; save/restore its eval-log state so
+  // this test cannot leak a nonzero level or a dangling stream pointer into
+  // whatever test runs next.
+  auto& logger_eval = sequant::Logger::instance().eval;
+  auto const saved_level = logger_eval.level;
+  auto* const saved_stream = logger_eval.stream;
+
+  std::ostringstream oss;
+  logger_eval.level = 1;
+  logger_eval.stream = &oss;
+
+  ResultPtr got;
+  try {
+    auto cache = sequant::CacheManager<ScalarNode>::empty();
+    got = evaluate_whole_scope<sequant::Trace::On>(
+        tf.forest, tf.sched, ScalarEvalExpr::annot_t{}, tf.yield, cache);
+  } catch (...) {
+    logger_eval.level = saved_level;
+    logger_eval.stream = saved_stream;
+    throw;
+  }
+
+  logger_eval.level = saved_level;
+  logger_eval.stream = saved_stream;
+
+  // Numeric result must be unaffected by tracing.
+  REQUIRE(got);
+  CHECK(got->as<ResultScalar<double>>().value() == Catch::Approx(-42.25));
+
+  std::string const trace = oss.str();
+  INFO("captured eval trace:\n" << trace);
+  // Per-root term boundary (log::term(Begin/End)), mirroring
+  // sequant::evaluate(Node const&, layout, ...)'s identical bracket.
+  CHECK(trace.find("Term | Begin") != std::string::npos);
+  CHECK(trace.find("Term | End") != std::string::npos);
+  // The cross-root accumulation EvalStat this fix restores: 2 forest roots
+  // => exactly one add_inplace, hence exactly one SumInplace record.
+  CHECK(trace.find("SumInplace") != std::string::npos);
 }
