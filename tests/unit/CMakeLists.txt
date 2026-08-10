@@ -165,6 +165,7 @@ set(eval_dryrun_test_sources
     "test_peak_profile.cpp"
     "test_placement_remat.cpp"
     "test_placement_router.cpp"
+    "test_scope_executor.cpp"
     "test_scope_schedule.cpp"
     "test_slicing_signature.cpp"
 )
