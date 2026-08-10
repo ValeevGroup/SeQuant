@@ -410,25 +410,68 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
     inner_groups[g].push_back(p);
   }
 
+  // Block count per loop-mode TYPE in the subtree rooted at THIS node (this
+  // loop and every deeper one), read off any member leaf carrying that type
+  // under the one global per-type tiling. This is the \c n_blocks a homed
+  // value's weighted in-block life is computed against (an inner consumer fires
+  // once per block of each loop between the value's home and that consumer).
+  std::unordered_map<std::wstring, std::size_t> nblocks_by_type;
+  {
+    auto add_scope = [&](auto&& self, ScopeNode const& sn) -> void {
+      std::wstring const bk(sn.mode.space().base_key());
+      if (!nblocks_by_type.count(bk)) {
+        for (auto const* mm : members)
+          if (auto const lf = find_leaf_carrying_type(*mm, bk)) {
+            nblocks_by_type.emplace(
+                bk, leaf_evaluator(lf->first)
+                        ->mode_batches(lf->second, target_batch_size(sn.mode))
+                        .size());
+            break;
+          }
+      }
+      for (auto const& c : sn.children) self(self, c);
+    };
+    for (auto const& c : node.children) add_scope(add_scope, c);
+  }
+  std::function<std::size_t(Index const&)> const n_blocks =
+      [&nblocks_by_type](Index const& m) -> std::size_t {
+    auto const it = nblocks_by_type.find(std::wstring(m.space().base_key()));
+    return it == nblocks_by_type.end() ? std::size_t{1} : it->second;
+  };
+
   // Values HOMED at this node (shared composites carrying K but invariant to
-  // the inner loop): built once per outer block via a hoist slot and reused
-  // across every inner block. Skip leaves (cheap, sliced on use) and forest
-  // roots (produced, not pre-built).
+  // the inner loop): built once per outer block and reused across every inner
+  // block. Skip leaves (cheap, sliced on use) and forest roots (produced, not
+  // pre-built). Each is registered in the outer cache with its WEIGHTED
+  // in-block use count as its non-persistent life (see weighted_use_count):
+  // reset() at each outer block rebuilds it, and it frees as soon as its last
+  // in-block consumer is done -- rather than the old ensure_hoist_slot MAX life
+  // that held it until the outer block closed. The +1 covers the homed build's
+  // own store()-time access (the CacheManager stores by access, decaying once):
+  // when a homed value is instead built as a byproduct of an earlier homed
+  // value's subtree, no explicit build store happens and the +1 is a harmless
+  // one-life overcount (the value still frees at the next reset()), so the life
+  // is NEVER an undercount -- the invariant that keeps this a lifetime-only
+  // change with byte-identical numerics and per-block build counts.
+  using Hasher = sequant::TreeNodeHasher<node_t, FHC>;
+  using Comp = sequant::TreeNodeEqualityComparator<node_t>;
   container::svector<node_t> homed;
+  std::unordered_map<node_t, std::size_t, Hasher, Comp> homed_life;
   for (auto vid : node.homed_values) {
     auto const h = rich.cells[vid].hash;
     auto const it = vmap.find(h);
     if (it == vmap.end() || it->second.leaf() || root_hashes.count(h)) continue;
     homed.push_back(it->second);
+    homed_life.emplace(it->second,
+                       weighted_use_count(rich.cells[vid], n_blocks) + 1);
   }
 
-  // A FRESH cache for THIS outer loop level: it holds the per-block hoisted
-  // homed values (ensure_hoist_slot => unbounded life, dropped by reset()), so
-  // they survive the whole inner loop and are reused across its blocks. Using a
-  // fresh cache (not make_batched_scratch, which would register the same values
-  // with a FINITE life the inner loop would drain) keeps the ONE-parent-link-
-  // per-loop invariant the Enter-stage slice-on-use relies on.
-  Cache outer = Cache::empty();
+  // The cache for THIS outer loop level, holding the per-block homed values
+  // with their weighted lives (above). reset() rebuilds each entry's life and
+  // drops its data for the next outer block; the ONE-parent-link-per-loop
+  // invariant the Enter-stage slice-on-use relies on is preserved (each nested
+  // loop wires exactly one parent link back to here).
+  Cache outer{std::move(homed_life)};
   outer.set_parent(&parent_cache);
 
   container::svector<std::pair<std::size_t, std::size_t>> batches;
@@ -450,7 +493,6 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
     // physical axis (a homed composite is a canonical node whose K label need
     // not equal the schedule representative).
     for (auto const& hv : homed) {
-      outer.ensure_hoist_slot(hv);
       if (outer.alive(hv)) continue;  // shared: already built this block
       BatchContext hctx = ectx;
       hctx.push_back(
