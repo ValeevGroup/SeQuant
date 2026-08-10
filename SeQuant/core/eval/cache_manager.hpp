@@ -25,8 +25,10 @@
 #include <memory>
 #include <optional>
 #include <ostream>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 namespace sequant::eval {
 
@@ -98,6 +100,26 @@ class CacheManager {
   using shaped_product_hook_type = std::function<ResultPtr(
       std::any const& node, Result const& left, Result const& right,
       std::array<std::any, 3> const& annot)>;
+
+  /// A whole-scope driver type. When set, the forest-range
+  /// `evaluate(Nodes const&, layout, leaf, cache)` entrypoint (eval.hpp) routes
+  /// the WHOLE forest through this driver instead of its per-tree descent,
+  /// passing the forest and the result layout. The driver type-erases the
+  /// `sequant::evaluate(forest, BatchPolicy, layout, leaf, cache, mode_order,
+  /// make_scope_guard)` overload (scope_executor.hpp) -- which builds the
+  /// batched-DAG schedule and calls `eval::evaluate_whole_scope` -- so that
+  /// eval.hpp need not include scope_executor.hpp (that would be a cycle:
+  /// scope_executor.hpp includes eval.hpp). The captured leaf evaluator,
+  /// BatchPolicy, mode_order and scope-guard factory live inside the closure,
+  /// which is built at the call site that owns those concrete types (e.g.
+  /// MPQC's batched CSV-CCk residual install). The forest is a
+  /// `std::vector<key_type>` and the layout a `std::string` (the residual
+  /// annotation); other evaluate() instantiations never match and stay on the
+  /// standard scheme. Empty (default) => no whole-scope routing; behavior is
+  /// byte-identical.
+  using whole_scope_driver_type =
+      std::function<ResultPtr(std::vector<key_type> const& forest,
+                              std::string const& layout, CacheManager&)>;
 
   /// The batch context: an ordered stack (outermost-first) of the enclosing
   /// realized batch loops, one entry per loop, `{axis K, {block_lo, block_hi}}`
@@ -279,6 +301,10 @@ class CacheManager {
 
   shaped_product_hook_type shaped_product_hook_{};
 
+  /// Optional whole-scope driver consulted by the forest-range evaluate() (see
+  /// whole_scope_driver_type). Empty => no whole-scope routing.
+  whole_scope_driver_type whole_scope_driver_{};
+
   /// Enclosing realized batch loops for slice-on-use (see BatchContext). Empty
   /// (default) => no enclosing batch loop; the batched evaluator sets it on the
   /// per-block scratch before each re-entry. Not cleared by reset() (it is
@@ -328,6 +354,18 @@ class CacheManager {
   [[nodiscard]] shaped_product_hook_type const& shaped_product_hook()
       const noexcept {
     return shaped_product_hook_;
+  }
+
+  /// Sets the whole-scope driver (see whole_scope_driver_type). Pass an empty
+  /// std::function to clear it.
+  void set_whole_scope_driver(whole_scope_driver_type fn) noexcept {
+    whole_scope_driver_ = std::move(fn);
+  }
+
+  /// \return the whole-scope driver (empty if none is set).
+  [[nodiscard]] whole_scope_driver_type const& whole_scope_driver()
+      const noexcept {
+    return whole_scope_driver_;
   }
 
   /// Sets the batch context (see batch_context_). Pass an empty context to

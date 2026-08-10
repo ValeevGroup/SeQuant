@@ -1105,6 +1105,23 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
 ResultPtr evaluate(Nodes const& nodes,  //
                    auto const& layout,  //
                    F const& leaf_evaluator, CacheManager<N, FHC>& cache) {
+  // Whole-scope dispatch (Task 9): if the cache carries a whole-scope driver
+  // (installed by a caller that requested batch:whole_scope), route the WHOLE
+  // forest through it instead of the per-tree descent below. The driver
+  // type-erases the scope_executor.hpp overload -- which lives downstream of
+  // this header and cannot be included here without a cycle. Guarded by
+  // `if constexpr` so it is a no-op (and byte-identical) for every
+  // instantiation except the concrete residual-forest shape the driver is
+  // built for: a `std::vector<N>` forest with a `std::string` layout. With no
+  // driver set (the default), this is a single null-function test and the
+  // standard scheme runs unchanged.
+  if constexpr (std::is_same_v<std::remove_cvref_t<Nodes>, std::vector<N>> &&
+                std::is_same_v<std::remove_cvref_t<decltype(layout)>,
+                               std::string>) {
+    if (auto const& drv = cache.whole_scope_driver(); drv)
+      return drv(nodes, layout, cache);
+  }
+
   ResultPtr result;
 
   for (auto&& n : nodes) {
