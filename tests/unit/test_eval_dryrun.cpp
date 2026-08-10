@@ -5864,6 +5864,33 @@ TEST_CASE("dryrun water-20 remat peak_threshold sweep: hoist vs demote gC",
   auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
   auto const& block_of = policy.batch_target_size;
   auto const in = sequant::eval::remat_cells(forest, *cm, block_of);
+  {  // Seed placement: are K-carrying gC composites hoisted (home=top) or homed
+     // INSIDE the K loop? Answers whether the default even attempts the hoist.
+    std::size_t n_kc = 0, n_top = 0, n_inloop = 0;
+    for (auto const& vc : in.cells) {
+      bool kc = false;
+      for (auto const& ix : vc.carried)
+        if (ix.space().base_key() == L"Κ") kc = true;
+      if (!kc) continue;
+      ++n_kc;
+      if (vc.home_modes.empty())
+        ++n_top;
+      else
+        ++n_inloop;
+    }
+    std::wcerr << L"\n  seed placement: " << n_kc
+               << L" K-carrying (gC-class) cells -- " << n_top
+               << L" homed at TOP, " << n_inloop << L" homed INSIDE a K loop\n";
+  }
+  // KEY: 17/21 gC composites are homed INSIDE the K loop because the DP batched
+  // their consumers Kcon across the board, so the meet-home computed by
+  // remat_cells sits in the K loop. This seed is peak_threshold-INDEPENDENT
+  // (remat_cells takes no threshold); rematerialize_to_budget only DEMOTES from
+  // it, never promotes -- so no peak_threshold hoists these to the top scope
+  // (where the top cache would build each once). Hoisting needs a
+  // promote-capable placement pass or NOT batching the consumers;
+  // peak_threshold is not the lever (confirmed by the flat sweep below and by
+  // the DP-threshold sweep further on).
   double const seed_peak =
       sequant::eval::peak_profile_sweep(
           sequant::eval::to_schedule(in.cells, *cm, block_of, in.num_points))
