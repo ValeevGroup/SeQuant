@@ -109,6 +109,24 @@ struct BatchPolicy {
   /// batchable index.
   double accumulation_factor = 0.0;
 
+  /// Coexistence switch (Task 6 of the whole-scope batched DAG execution
+  /// design, `doc/dev/specs/2026-08-10-whole-scope-batched-dag-execution-
+  /// design.md`) between the two RUNTIME EXECUTION MODELS: forest descent
+  /// (default false -- one tree at a time, `sequant::evaluate(Nodes const&,
+  /// ...)`, unchanged) and whole-scope descent (true -- one fused scope-tree
+  /// walk over the whole forest, `sequant::eval::evaluate_whole_scope`, so a
+  /// value shared across trees is built once per home block and reused,
+  /// rather than rebuilt per tree). Consulted by the `sequant::evaluate(
+  /// Nodes const&, BatchPolicy const&, ...)` driver overload
+  /// (`scope_executor.hpp`) to select the driver, and by
+  /// `sequant::eval::dryrun::cost_profile()` to select the matching peak
+  /// model: the co-residency oracle (`peak_profile_sweep` over `home_modes`)
+  /// when true, since that model is what predicts the whole-scope realized
+  /// peak, vs the batched-scratch replay high-watermark (models forest
+  /// descent) when false. Purely additive: false reproduces today's behavior
+  /// on both call sites byte-for-byte.
+  bool whole_scope_execution = false;
+
   /// Peak-memory budget in BYTES for the batched objectives. Its meaning
   /// DIFFERS between them:
   ///

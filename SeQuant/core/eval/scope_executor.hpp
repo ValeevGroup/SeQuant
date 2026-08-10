@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EVAL_SCOPE_EXECUTOR_HPP
 #define SEQUANT_EVAL_SCOPE_EXECUTOR_HPP
 
+#include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/result.hpp>
@@ -11,6 +12,7 @@
 #include <array>
 #include <cstddef>
 #include <functional>
+#include <initializer_list>
 #include <optional>
 #include <string>
 #include <type_traits>
@@ -784,5 +786,85 @@ ResultPtr evaluate_whole_scope(
 }
 
 }  // namespace sequant::eval
+
+namespace sequant {
+
+///
+/// \brief Task 6 of the whole-scope batched DAG execution design (see
+/// `doc/dev/specs/2026-08-10-whole-scope-batched-dag-execution-design.md`):
+/// the COEXISTENCE driver entry. Routes a whole-forest evaluation to either
+/// today's per-tree forest descent (\c sequant::evaluate(Nodes const&,
+/// layout, leaf_evaluator, cache), eval.hpp:1105 -- called UNCHANGED) or the
+/// whole-scope executor (\c eval::evaluate_whole_scope, Tasks 2-5), selected
+/// by \p policy.whole_scope_execution.
+///
+/// \details Flag OFF (\p policy.whole_scope_execution == false, the default)
+/// is an unconditional, first-statement forward to the existing \c
+/// sequant::evaluate(Nodes const&, layout, leaf_evaluator, cache) overload --
+/// no schedule is built, nothing else runs on this path. Because this is an
+/// ADDITIVE new overload (distinguished by the extra \p policy argument) and
+/// the pre-existing overload is not modified, every caller of that overload
+/// today stays byte-identical; a caller opts into this driver only by
+/// supplying a \c BatchPolicy explicitly.
+///
+/// Flag ON builds the \c eval::RichSchedule (\c eval::compute_dag_boulevard)
+/// and the narrow \c eval::ScopeSchedule (\c eval::build_scope_schedule) from
+/// \p forest's OWN placement -- the \c batched_here() annotations a prior
+/// factorizer pass (e.g. \c optimize() with a batched objective, or a test
+/// that stamps them directly) already recorded on \p forest's nodes -- then
+/// drives \c eval::evaluate_whole_scope with \p policy.batch_target_size as
+/// the batch-partition source and \p make_scope_guard forwarded verbatim. The
+/// throwaway \c eval::dryrun::CostModel / \c SizeRegime built here are inert
+/// for \c compute_dag_boulevard (its \c cm parameter is unused, kept only for
+/// signature symmetry -- see its doc comment); they carry none of \p policy's
+/// or the real backend's sizing information.
+///
+/// \param mode_order Ranks the scope-tree's canonical chain order (outermost
+///        first; see \c eval::build_scope_schedule). Only consulted when the
+///        flag is on. Empty (default) falls back to alphabetical order per
+///        index type: per \c build_scope_schedule's own doc, chain order does
+///        not affect NUMERIC correctness (only which axis nests outer vs.
+///        inner -- a performance, not correctness, concern), so the default
+///        is safe; a caller that cares about nesting order (e.g. aux outer /
+///        occ inner, for peak) passes it explicitly.
+/// \param make_scope_guard Backend scope-guard factory forwarded to \c
+///        evaluate_whole_scope verbatim when the flag is on; unused (never
+///        constructed or invoked) when it is off.
+///
+template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
+          typename F, typename N, bool FHC,
+          typename ScopeGuardFactory = make_no_scope_guard>
+  requires meta::leaf_node_evaluator<std::ranges::range_value_t<Nodes>, F>
+ResultPtr evaluate(Nodes const& forest, BatchPolicy const& policy,
+                   auto const& layout, F const& leaf_evaluator,
+                   CacheManager<N, FHC>& cache,
+                   std::initializer_list<std::wstring> mode_order = {},
+                   ScopeGuardFactory make_scope_guard = {}) {
+  if (!policy.whole_scope_execution)
+    return evaluate<EvalTrace>(forest, layout, leaf_evaluator, cache);
+
+  // BatchPolicy docs: an empty batch_target_size means "no batching"; guard
+  // the same way make_evaluator(policy, ...) does rather than let an empty
+  // std::function throw std::bad_function_call out of compute_dag_boulevard /
+  // evaluate_whole_scope.
+  std::function<std::size_t(Index const&)> const target =
+      policy.batch_target_size
+          ? policy.batch_target_size
+          : std::function<std::size_t(Index const&)>(
+                [](Index const&) -> std::size_t { return 1; });
+
+  eval::dryrun::SizeRegime const regime;
+  eval::dryrun::CostModel const cm{regime};
+  eval::RichSchedule const rich =
+      eval::compute_dag_boulevard(forest, cm, target);
+  eval::ScopeSchedule const sched =
+      eval::build_scope_schedule(rich, mode_order);
+
+  return eval::evaluate_whole_scope<EvalTrace>(forest, sched, rich, layout,
+                                               leaf_evaluator, cache, target,
+                                               make_scope_guard);
+}
+
+}  // namespace sequant
 
 #endif  // SEQUANT_EVAL_SCOPE_EXECUTOR_HPP

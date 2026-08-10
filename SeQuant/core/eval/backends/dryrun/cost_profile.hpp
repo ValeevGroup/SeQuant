@@ -10,6 +10,7 @@
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/lifetime_mask.hpp>
+#include <SeQuant/core/eval/peak_profile.hpp>
 #include <SeQuant/core/eval/placement_router.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/logger.hpp>
@@ -220,9 +221,28 @@ inline std::vector<AvoidableNode> avoidable_nodes_from_tally(
 /// by \c cost_profile(). All quantities are summed/maxed over every summand
 /// tree in the forest.
 struct CostProfile {
-  /// Predicted peak working-set (bytes): the max over summands of the
-  /// batched-scratch high-watermark folded by the Task-3 \c PeakSink and the
-  /// outer gated cache's \c working_set_hwmark().
+  /// Predicted peak working-set (bytes). Task 6 (whole-scope batched DAG
+  /// execution design) makes this model SELECTED by \c
+  /// BatchPolicy::whole_scope_execution, since the two runtime drivers
+  /// realize different co-residency:
+  ///
+  /// - \p policy.whole_scope_execution == false (default, forest descent):
+  ///   the max over summands of the batched-scratch high-watermark folded by
+  ///   the Task-3 \c PeakSink and the outer gated cache's \c
+  ///   working_set_hwmark() -- unchanged from before this field's Task-6
+  ///   selection existed. See the paragraphs below for its accounting detail.
+  /// - \p policy.whole_scope_execution == true (whole-scope descent): the
+  ///   CO-RESIDENCY oracle (\c eval::peak_profile_sweep over \c
+  ///   eval::compute_dag_path's \c home_modes-based footprints), computed
+  ///   ONCE over the whole fused forest rather than per-summand. Per the
+  ///   design's "paradox resolved" section, this is the model that MATCHES
+  ///   the realized whole-scope peak (forest descent never co-resides
+  ///   cross-tree, so the batched-scratch replay watermark below is the wrong
+  ///   oracle once execution actually routes through \c
+  ///   eval::evaluate_whole_scope).
+  ///
+  /// The remainder of this doc comment describes the flag-OFF (default)
+  /// accounting; it is unaffected by the flag.
   ///
   /// This ACCOUNTS FOR co-resident residency across the scope chain, rather
   /// than being the max-of-independent-hwmarks lower bound it was before: each
@@ -484,8 +504,14 @@ inline CostProfile cost_profile(
     // Fold the outer cached residency BEFORE reset() (which zeroes the
     // hwmark). `peak` folds every batched scratch high-watermark across all
     // summands via std::max, so its running load() is the global scratch peak.
-    profile.peak_bytes = std::max(
-        {profile.peak_bytes, peak.load(), double(cache.working_set_hwmark())});
+    // Only feeds profile.peak_bytes when the co-residency oracle (below) is
+    // NOT selected -- see CostProfile::peak_bytes's doc comment (Task 6):
+    // this replay watermark models forest descent, the co-residency oracle
+    // models whole-scope descent, and the two are mutually exclusive
+    // predictors, not folded together.
+    if (!policy.whole_scope_execution)
+      profile.peak_bytes = std::max({profile.peak_bytes, peak.load(),
+                                     double(cache.working_set_hwmark())});
     // NO per-term reset. A real solve's cache spans the whole iteration (all
     // summands + equations) and reuses cross-summand values, evicting only by
     // the lifetime mask stamped over the whole forest. Resetting between terms
@@ -495,6 +521,27 @@ inline CostProfile cost_profile(
     // cache across the whole forest; the lifetime mask releases each value
     // after its last cross-term use. (This makes the dry-run schedule match the
     // wet run's; see doc/dev/specs/2026-08-05-...schedule-equivalence.)
+  }
+
+  // Task 6 (whole-scope batched DAG execution design): under
+  // policy.whole_scope_execution, replace the per-summand replay watermark
+  // folded above (skipped, see the guard inside the loop) with the
+  // CO-RESIDENCY oracle computed ONCE over the WHOLE fused forest -- the
+  // model that matches the peak sequant::eval::evaluate_whole_scope actually
+  // realizes (see CostProfile::peak_bytes's doc comment). block_of mirrors
+  // the batch-partition source the whole-scope driver itself uses (see
+  // sequant::evaluate(Nodes const&, BatchPolicy const&, ...),
+  // scope_executor.hpp): policy.batch_target_size, guarded the same way
+  // (empty => decline batching, size 1) so an unset policy never throws
+  // std::bad_function_call out of compute_dag_path.
+  if (policy.whole_scope_execution) {
+    std::function<std::size_t(Index const&)> const block_of =
+        policy.batch_target_size
+            ? policy.batch_target_size
+            : std::function<std::size_t(Index const&)>(
+                  [](Index const&) -> std::size_t { return 1; });
+    auto const dag = compute_dag_path(forest, *cm, block_of);
+    profile.peak_bytes = peak_profile_sweep(dag).peak_bytes;
   }
 
   // Read the replay-tallied (recompute-aware) totals the sink accumulated over

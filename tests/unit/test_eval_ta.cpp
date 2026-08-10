@@ -2365,6 +2365,140 @@ TEST_CASE("evaluate_whole_scope matches forest descent over nested aux+occ",
   CHECK(rel < 1e-10);
 }
 
+// Task 6 of the whole-scope batched DAG execution design
+// (doc/dev/specs/2026-08-10-whole-scope-batched-dag-execution-design.md):
+// COEXISTENCE. sequant::evaluate(forest, policy, layout, leaf, cache, ...) --
+// the driver-entry overload added by scope_executor.hpp -- must route to
+// eval::evaluate_whole_scope when policy.whole_scope_execution is true, and
+// to the UNMODIFIED sequant::evaluate(Nodes const&, layout, ...) forest
+// descent (BYTE-IDENTICAL, no schedule built) when it is false. Same aux-only
+// two-root forest as the Task-3 equivalence test above (S = g*h shared,
+// contracts x_1 at each root).
+//
+// Discriminator: without a custom evaluator, plain forest descent ignores
+// batched_here entirely, so a NAIVE numeric-equivalence-to-reference check
+// alone cannot tell "routed to whole-scope" apart from "silently fell through
+// to forest descent" -- both would land close to the unbatched reference. The
+// flag-ON branch is instead cross-checked against an INDEPENDENT direct call
+// to eval::evaluate_whole_scope (same schedule/target, fresh cache): agreement
+// there, given whole-scope's batched summation reorders arithmetic vs the
+// unbatched reference (see the Task-3 test above), is real evidence the
+// dispatcher actually took the whole-scope path. The flag-OFF branch is
+// checked against the reference at a tolerance (1e-13) far tighter than the
+// flag-ON branch's (1e-10 -- a genuine batched reordering): it is (by
+// construction) the very same function call, so any disagreement above the
+// machine-epsilon noise floor of TA's own tile-wise reduction order (not
+// guaranteed deterministic across independently scheduled World tasks, even
+// for the identical, unreordered contraction) would be a routing bug.
+TEST_CASE(
+    "sequant::evaluate(forest, policy, ...) routes to whole-scope vs forest "
+    "descent by BatchPolicy::whole_scope_execution",
+    "[eval][scope-executor]") {
+  using sequant::evaluate;
+  using sequant::eval::build_scope_schedule;
+  using sequant::eval::compute_dag_boulevard;
+  using sequant::eval::evaluate_whole_scope;
+  using TA::TArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+
+  auto& world = TA::get_default_world();
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 6, 12};
+  yield_.set_max_tile(4);
+
+  auto const aux =
+      sequant::get_default_context().index_space_registry()->retrieve(L"x");
+  auto accept_aux = [aux](sequant::Index const& ix) {
+    return ix.space() == aux;
+  };
+
+  auto const t1 = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (p{a_3;i_2;x_1} * q{i_4;a_3})");
+  auto const t2 = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (r{a_3;i_2;x_1} * w{i_4;a_3})");
+  std::string const target = "i_1,i_2,i_3,i_4";
+  std::vector<node_t> forest{eval_node(t1), eval_node(t2)};
+
+  sequant::Index x1;
+  for (auto& nd : forest) {
+    auto const ax = sequant::batch_axis(nd, accept_aux);
+    REQUIRE(ax.has_value());
+    x1 = *ax;
+    nd->set_batched_here({{*ax, sequant::BatchModeType::Contracted}});
+    nd->set_batch_order_aware(true);
+  }
+  REQUIRE(x1.space() == aux);
+
+  // Reference: today's unbatched forest descent (fresh cache).
+  auto const ref = evaluate(forest, target, yield_)->get<TArrayD>();
+
+  auto const target_batch = [](sequant::Index const&) -> std::size_t {
+    return 4;
+  };
+
+  // Independent direct whole-scope call (fresh cache), for the flag-ON
+  // cross-check.
+  sequant::eval::dryrun::SizeRegime const regime;
+  sequant::eval::dryrun::CostModel const cm{regime};
+  auto const block_of = [](sequant::Index const&) -> std::size_t { return 4; };
+  auto rich = compute_dag_boulevard(forest, cm, block_of);
+  auto sched = build_scope_schedule<std::wstring>(
+      rich, {std::wstring(x1.space().base_key())});
+  REQUIRE(sched.root.children.size() == 1);
+  auto ws_ref_cache = sequant::CacheManager<node_t>::empty();
+  auto const direct_ws =
+      evaluate_whole_scope(forest, sched, rich, target, yield_, ws_ref_cache,
+                           target_batch)
+          ->get<TArrayD>();
+
+  // ---- flag ON: dispatcher must agree with the independent whole-scope
+  // call (both realize the identical batched-summation algorithm; agreement
+  // only up to FP noise, same convention as "make_evaluator BatchPolicy
+  // adapter" above) and stay within the Task-3 tolerance of the unbatched
+  // reference.
+  {
+    sequant::BatchPolicy policy_on;
+    policy_on.batch_target_size = target_batch;
+    policy_on.whole_scope_execution = true;
+
+    auto cache_on = sequant::CacheManager<node_t>::empty();
+    auto const got_on = evaluate(forest, policy_on, target, yield_, cache_on,
+                                 {std::wstring(x1.space().base_key())})
+                            ->get<TArrayD>();
+
+    CHECK(equal_tarrays<Loose>(got_on, direct_ws));
+
+    TArrayD diff;
+    diff(target) = got_on(target) - ref(target);
+    double const rel = TA::norm2(diff) / TA::norm2(ref);
+    INFO("relative L2 diff vs unbatched reference = " << rel);
+    CHECK(rel < 1e-10);
+  }
+
+  // ---- flag OFF: dispatcher must equal today's forest descent -- the same
+  // underlying sequant::evaluate(Nodes const&, layout, ...) call, no schedule
+  // built, no reordering. Compared by RELATIVE L2 norm rather than
+  // equal_tarrays<Tight>'s fixed ABSOLUTE margin (~2 ULP): TA's own tile-wise
+  // reduction order is not guaranteed deterministic across two independently
+  // scheduled World tasks even for the identical, unreordered contraction (a
+  // pre-existing TA property, unrelated to this driver), so a fixed absolute
+  // margin can spuriously fail on an O(10)-scale result even when the
+  // relative agreement is at the machine-epsilon noise floor. The bound here
+  // (1e-13) is far tighter than the flag-ON branch's 1e-10 -- which reflects
+  // a GENUINE reordering (batched summation) -- so the two remain clearly
+  // distinguishable.
+  {
+    sequant::BatchPolicy const policy_off;  // whole_scope_execution = false
+    auto cache_off = sequant::CacheManager<node_t>::empty();
+    auto const got_off =
+        evaluate(forest, policy_off, target, yield_, cache_off)->get<TArrayD>();
+    TArrayD diff;
+    diff(target) = got_off(target) - ref(target);
+    double const rel_off = TA::norm2(diff) / TA::norm2(ref);
+    INFO("relative L2 diff (flag OFF vs reference) = " << rel_off);
+    CHECK(rel_off < 1e-13);
+  }
+}
+
 TEST_CASE("eval_batched_custom_evaluator dedups within-batch repeats",
           "[.][blocked-on-per-context-caching]") {
   using sequant::evaluate;

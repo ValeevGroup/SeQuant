@@ -6309,6 +6309,94 @@ TEST_CASE(
   CHECK(t_builds < 2 * n_kappa * n_mu);
 }
 
+// Task 6 of the whole-scope batched DAG execution design
+// (doc/dev/specs/2026-08-10-whole-scope-batched-dag-execution-design.md):
+// cost_profile()'s peak-model SELECTION. Under BatchPolicy::whole_scope_
+// execution, cost_profile() must report the CO-RESIDENCY oracle (\c
+// eval::peak_profile_sweep over \c eval::compute_dag_path's home_modes
+// footprints, computed ONCE over the whole fused forest) rather than the
+// batched-scratch replay high-watermark it reports when the flag is off --
+// the model that matches the peak sequant::evaluate(forest, policy, ...)
+// actually realizes once it routes to eval::evaluate_whole_scope (see the
+// routing test in test_eval_ta.cpp and CostProfile::peak_bytes's doc
+// comment).
+//
+// A small hand-built two-root forest sharing S = g*h (carries the batch axis
+// a_5, an unoccupied-space index reused as a generic "aux-like" batch mode so
+// this test needs no DF/PAO space registration): each root contracts a_5 at
+// its root -- the same Κ-only topology as the Task-3 TA equivalence test,
+// ported to zero-data DryRun (cost_profile's own domain).
+TEST_CASE(
+    "cost_profile selects the co-residency peak model under "
+    "whole_scope_execution",
+    "[dryrun][cost_profile][scope-executor]") {
+  using sequant::eval::dryrun::CacheConfig;
+  using sequant::eval::dryrun::cost_profile;
+  using sequant::eval::dryrun::CostProfile;
+
+  auto ctx = get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+
+  SizeRegime regime;
+  regime.space_extent = {{L"i", 8}, {L"a", 20}};
+
+  auto mk = [](std::wstring const& s) {
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    return binarize<EvalExprDryRun>(deserialize<ExprPtr>(s));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  };
+  std::vector<EvalNodeDryRun> forest{
+      mk(L"(g{a_2;i_1;a_5} * h{i_3;a_2}) * (p{a_3;i_2;a_5} * q{i_4;a_3})"),
+      mk(L"(g{a_2;i_1;a_5} * h{i_3;a_2}) * (r{a_3;i_2;a_5} * w{i_4;a_3})")};
+  Index const a5{L"a_5"};
+  for (auto& nd : forest) {
+    nd->set_batched_here({{a5, sequant::BatchModeType::Contracted}});
+    nd->set_batch_order_aware(true);
+  }
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](Index const& ix) {
+    return ix.space().base_key() == L"a";
+  };
+  policy.batch_target_size = [](Index const&) -> std::size_t { return 4; };
+  policy.accumulation_factor = 1.0;
+
+  CacheConfig cfg;
+  cfg.max_footprint = 0.;  // no footprint gate
+  cfg.min_repeats = 1;
+
+  // ---- flag OFF: unaffected by Task 6 -- the existing batched-scratch
+  // replay watermark.
+  CostProfile const cp_off =
+      cost_profile(forest, policy, cfg, regime, /*trace=*/nullptr);
+  REQUIRE(cp_off.peak_bytes > 0.);
+
+  // ---- flag ON: must equal the INDEPENDENT co-residency oracle (same
+  // regime/block_of), computed once over the whole forest.
+  policy.whole_scope_execution = true;
+  CostProfile const cp_on =
+      cost_profile(forest, policy, cfg, regime, /*trace=*/nullptr);
+
+  CostModel const cm{regime};
+  auto const block_of = [](Index const&) -> std::size_t { return 4; };
+  auto const dag = sequant::eval::compute_dag_path(forest, cm, block_of);
+  double const oracle_peak = sequant::eval::peak_profile_sweep(dag).peak_bytes;
+
+  std::wcerr << L"\n[cost_profile-peak-select] flag-off (replay) peak_bytes="
+             << cp_off.peak_bytes << L"  flag-on (co-residency) peak_bytes="
+             << cp_on.peak_bytes << L"  independent oracle=" << oracle_peak
+             << L"\n";
+
+  // THE selection proof: the flag-ON number is EXACTLY the independent
+  // co-residency oracle, not a variant of the replay watermark.
+  CHECK(cp_on.peak_bytes == oracle_peak);
+  // The flag is not a silent no-op: the two models genuinely differ on this
+  // shared/batched forest (forest descent never co-resides the two roots'
+  // work the way the whole-forest co-residency sweep prices it).
+  CHECK(cp_on.peak_bytes != cp_off.peak_bytes);
+}
+
 // PNO-CCSD water-20 REMAT peak_threshold sweep. rematerialize_to_budget starts
 // from the peak-maximal seed (all intermediates hoisted / perfect CSE: gC built
 // ONCE, shared) and DEMOTES giants (slices them into the K loop -> per-consumer
