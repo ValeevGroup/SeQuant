@@ -6163,6 +6163,152 @@ TEST_CASE(
   CHECK(ws_khomed < n_kappa * n_occ);
 }
 
+// Task 4 fix round 2 (review finding): the NESTED walk must recurse into the
+// child loop GROUPED across members (grouped by mapped physical axis), so a
+// sub-intermediate shared among the inner members is co-evaluated once, not
+// rebuilt per member. Fix round 1 had turned the single grouped child recursion
+// into per-member singleton recursions -- the singleton-batch-group
+// fragmentation this project exists to eliminate; it is invisible to a
+// Contracted->External nest (the External child is per-member solo either way),
+// so this pins it with a two-level Contracted->Contracted nest (aux Κ OUTER
+// over PAO μ̃ INNER, both contracted) whose two roots SHARE a Κ+μ̃-carrying
+// sub-intermediate T = p*q homed at the INNER μ̃ level. Under grouped recursion
+// the inner make_batched_scratch dedups T across the two members -> T is built
+// once per (Κ,μ̃) block == n_Κ*n_μ̃; a per-member singleton recursion would
+// rebuild it per member == 2*n_Κ*n_μ̃. (Zero-data DryRun build tally is the
+// witness, as in the sibling nested test.)
+TEST_CASE(
+    "whole-scope executor co-evaluates a shared inner composite once under "
+    "grouped nested recursion",
+    "[scope-executor]") {
+  auto ctx = get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+
+  auto regime = df_regime(kWater20_pVDZF12);
+  auto cm = std::make_shared<CostModel const>(regime);
+
+  // Two roots sharing T = p*q (carries Κ and μ̃ -> homed at the INNER μ̃ level),
+  // each contracting BOTH Κ (outer) and μ̃ (inner) with its own leaf r_k.
+  auto mk = [](std::wstring const& s) {
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    return binarize<EvalExprDryRun>(deserialize<ExprPtr>(s));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  };
+  std::vector<EvalNodeDryRun> forest{
+      mk(L"(p{μ̃_1;a_1;Κ_1} * q{a_1;i_1}) * r1{μ̃_1;a_2;Κ_1}"),
+      mk(L"(p{μ̃_1;a_1;Κ_1} * q{a_1;i_1}) * r2{μ̃_1;a_2;Κ_1}")};
+  Index const K1{L"Κ_1"};
+  Index const mu1{L"μ̃_1"};
+  for (auto& nd : forest) {
+    nd->set_batched_here({{K1, sequant::BatchModeType::Contracted},
+                          {mu1, sequant::BatchModeType::Contracted}});
+    nd->set_batch_order_aware(true);
+  }
+
+  // Scope schedule: aux Κ OUTER, PAO μ̃ INNER, both contracted.
+  auto const block_of = [](Index const&) -> std::size_t { return 256; };
+  auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  auto sched =
+      sequant::eval::build_scope_schedule<std::wstring>(rich, {L"Κ", L"μ̃"});
+  REQUIRE(sched.root.children.size() == 1);
+  auto const& kscope = sched.root.children.front();
+  REQUIRE(kscope.mode.space().base_key() == L"Κ");
+  REQUIRE(kscope.kind == sequant::BatchModeType::Contracted);
+  REQUIRE(kscope.children.size() == 1);
+  auto const& mscope = kscope.children.front();
+  REQUIRE(mscope.mode.space().base_key() == L"μ̃");
+  REQUIRE(mscope.kind == sequant::BatchModeType::Contracted);
+  Index const K = kscope.mode;
+
+  // The shared inner composite T is homed at the INNER μ̃ node.
+  auto const vmap = sequant::eval::build_value_node_map(forest);
+  std::unordered_set<std::size_t> root_hashes;
+  for (auto const& r : forest) root_hashes.insert(r->hash_value());
+  std::vector<EvalNodeDryRun> inner_homed;
+  for (auto vid : mscope.homed_values) {
+    auto const h = rich.cells[vid].hash;
+    auto const it = vmap.find(h);
+    if (it == vmap.end() || it->second.leaf() || root_hashes.count(h)) continue;
+    inner_homed.push_back(it->second);
+  }
+  REQUIRE(!inner_homed.empty());
+
+  DryRunLeafEvaluator yield{cm};
+  auto const target = [](Index const&) -> std::size_t { return 256; };
+
+  std::size_t n_kappa = 0, n_mu = 0;
+  for (auto const& root : forest) {
+    if (!n_kappa)
+      if (auto lf = sequant::find_leaf_carrying(root, K))
+        n_kappa = yield(lf->first)->mode_batches(lf->second, 256).size();
+    if (!n_mu)
+      if (auto lf = sequant::eval::detail::find_leaf_carrying_type(root, L"μ̃"))
+        n_mu = yield(lf->first)->mode_batches(lf->second, 256).size();
+  }
+  REQUIRE(n_kappa > 1);
+  REQUIRE(n_mu > 1);
+
+  auto builds_of = [](auto const& tally,
+                      EvalNodeDryRun const& node) -> std::size_t {
+    auto it = tally.find(node);
+    if (it == tally.end()) return 0;
+    std::size_t b = 0;
+    for (auto const& [sig, bc] : it->second.slices) b += bc.first;
+    return b;
+  };
+  auto max_inner_homed = [&](auto const& tally) -> std::size_t {
+    std::size_t mx = 0;
+    for (auto const& n : inner_homed) mx = std::max(mx, builds_of(tally, n));
+    return mx;
+  };
+
+  using annot_t = std::remove_cvref_t<decltype(forest.front()->annot())>;
+  annot_t const layout{};
+
+  auto& logger = Logger::instance();
+  auto const prev_level = logger.eval.level;
+  auto* const prev_stream = logger.eval.stream;
+  std::ostringstream trace_sink;
+  logger.eval.level = 1;
+  logger.eval.stream = &trace_sink;
+
+  auto ws_cache = sequant::cache_manager(forest);
+  ws_cache.set_recompute_tally_enabled(true);
+  try {
+    (void)sequant::eval::evaluate_whole_scope<Trace::On>(
+        forest, sched, rich, layout, yield, ws_cache, target);
+  } catch (std::exception const& e) {
+    logger.eval.level = prev_level;
+    logger.eval.stream = prev_stream;
+    std::cerr << "[scope-executor] grouped-nested evaluate threw: " << e.what()
+              << "\n";
+    throw;
+  }
+  std::size_t const t_builds = max_inner_homed(ws_cache.recompute_tally());
+
+  logger.eval.level = prev_level;
+  logger.eval.stream = prev_stream;
+
+  std::wcerr << L"\n=== [scope-executor] NESTED Κ->μ̃ (both contracted), "
+             << forest.size() << L" terms, n_Kappa=" << n_kappa << L" n_mu="
+             << n_mu << L" ===\n"
+             << L"  shared inner-homed builds = " << t_builds
+             << L"  (grouped == n_Κ*n_μ̃=" << (n_kappa * n_mu)
+             << L", singleton would be 2x=" << (2 * n_kappa * n_mu) << L")\n";
+
+  // The grouped-recursion CSE guard: the shared inner composite is co-evaluated
+  // once per (Κ,μ̃) block across BOTH members, so its build count is n_Κ*n_μ̃ --
+  // NOT the 2*n_Κ*n_μ̃ a per-member (singleton) child recursion would cost.
+  REQUIRE(t_builds > 0);
+  CHECK(t_builds == n_kappa * n_mu);
+  CHECK(t_builds < 2 * n_kappa * n_mu);
+}
+
 // PNO-CCSD water-20 REMAT peak_threshold sweep. rematerialize_to_budget starts
 // from the peak-maximal seed (all intermediates hoisted / perfect CSE: gC built
 // ONCE, shared) and DEMOTES giants (slices them into the K loop -> per-consumer

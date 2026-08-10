@@ -332,6 +332,30 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
   for (std::size_t m = 0; m != members.size(); ++m)
     (carries_child(*members[m]) ? inner_pos : direct_pos).push_back(m);
 
+  // Group the inner members by their MAPPED physical outer axis: members that
+  // share a physical contracted axis co-evaluate together in ONE child
+  // recursion so the child level's make_batched_scratch preserves their
+  // cross-member CSE (a sub-intermediate shared among them is built once, not
+  // per member) -- the whole point of the grouped path, and what a per-member
+  // (singleton) recursion would fragment. Members with distinct physical axes
+  // form distinct groups (each sliced on its own label -- antipattern-1 fix).
+  // Single-aux-label forests collapse to ONE group. Mirrors the Contracted-leaf
+  // grouping above (make_batched_scratch over the members sharing the axis),
+  // lifted to the nested level. Grouping is block-independent, so it is
+  // computed once here.
+  container::svector<Index> inner_group_axis;
+  container::svector<container::svector<std::size_t>> inner_groups;
+  for (auto p : inner_pos) {
+    std::size_t g = 0;
+    for (; g != inner_group_axis.size(); ++g)
+      if (inner_group_axis[g] == axes[p]) break;
+    if (g == inner_group_axis.size()) {
+      inner_group_axis.push_back(axes[p]);
+      inner_groups.emplace_back();
+    }
+    inner_groups[g].push_back(p);
+  }
+
   // Values HOMED at this node (shared composites carrying K but invariant to
   // the inner loop): built once per outer block via a hoist slot and reused
   // across every inner block. Skip leaves (cheap, sliced on use) and forest
@@ -384,7 +408,8 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
     // Each member is looped on ITS OWN physical axis for the outer mode (same
     // element range across members; only the label differs). Direct members
     // (invariant to the inner loop) build on `outer`; inner members recurse the
-    // child loop with that per-member axis carried in the enclosing context.
+    // child loop GROUPED by shared physical axis, so members sharing an axis
+    // are co-evaluated in one child recursion (cross-member CSE preserved).
     container::svector<ResultPtr> block(members.size());
     for (auto p : direct_pos) {
       BatchContext mctx = ectx;
@@ -392,12 +417,15 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
       outer.set_batch_context(mctx);
       block[p] = evaluate_impl<EvalTrace>(*members[p], leaf_evaluator, outer);
     }
-    for (auto p : inner_pos) {
-      BatchContext mctx = ectx;
-      mctx.push_back({axes[p], {e_lo, e_hi}});
-      block[p] = recurse(*child, container::svector<node_t const*>{members[p]},
-                         mctx, outer)
-                     .front();
+    for (std::size_t g = 0; g != inner_groups.size(); ++g) {
+      BatchContext gctx = ectx;
+      gctx.push_back({inner_group_axis[g], {e_lo, e_hi}});
+      container::svector<node_t const*> gmembers;
+      gmembers.reserve(inner_groups[g].size());
+      for (auto p : inner_groups[g]) gmembers.push_back(members[p]);
+      auto sub = recurse(*child, gmembers, gctx, outer);
+      for (std::size_t k = 0; k != inner_groups[g].size(); ++k)
+        block[inner_groups[g][k]] = std::move(sub[k]);
     }
     for (std::size_t m = 0; m != members.size(); ++m) {
       SEQUANT_ASSERT(block[m]);
