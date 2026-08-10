@@ -141,7 +141,36 @@ Generalize the walk to a nested scope tree: recurse into child scope nodes, one 
 
 ---
 
-### Task 5: Coexistence flag + cost-model peak-model selection
+### Task 5: Weighted use-count lifetimes -- remove `ensure_hoist_slot`
+
+Replace the `ensure_hoist_slot` MAX-life hack (in BOTH eval.hpp's router-driven batched path and the whole-scope executor) with the correct WEIGHTED use count, so a value's cache life is deterministic and it is released as soon as its last in-block consumer is done (not when its home scope closes). This is the executor's core lifetime model and also fixes a long-standing misdesign in the forest-descent batched eval.
+
+**Rationale (owner decision):** `ensure_hoist_slot(key)` (cache_manager.hpp:402) sets `life = MAX` because the emitted `effective_count` for a loop-invariant is 1 (it counts only the escaped-outer set), which as a life drains the entry after first use. The CORRECT life weights each consumer's access by the iteration counts of the nested loops between the value's home and the consumer:
+```
+life(V) = sum over consumers C of V:  product over loops L on the path (home(V), scope(C)]:  n_blocks(L)
+```
+With this life the use-counted cache holds V for exactly its in-block accesses, `reset()` at the home scope's block boundary rebuilds it for the next block, and V frees early. The correct store location is V's remat home (`node(home_meet)` + router).
+
+**Files:**
+- Investigate + modify: wherever `effective_count` / the escaped-outer set is computed and emitted for the batched eval (find it first -- likely the placement/schedule or eval.hpp's batched-annotation walk).
+- Modify: `SeQuant/core/eval/eval.hpp` (the router hoist path ~1875-1930 -- drop `ensure_hoist_slot`, store at home with the weighted life), `SeQuant/core/eval/scope_executor.hpp` (the nested path -- drop `ensure_hoist_slot` + the fresh-per-level-cache workaround; store homed values at their home node's scratch with the weighted life).
+- Modify: `SeQuant/core/eval/cache_manager.hpp` (remove `ensure_hoist_slot` once no callers remain).
+- Test: `tests/unit/test_scope_executor.cpp`, and a `[eval]` regression run.
+
+**Interfaces:**
+- Produces: a `weighted_use_count(value, scope_tree, block_counts)` computation (Sum-over-consumers Product-over-intervening-loops), consumed as the cache life when a homed value is stored.
+
+- [ ] **Step 1: Locate the current use-count/`effective_count` emission** for the batched eval (grep `effective_count`, `escaped`, the `ensure_hoist_slot` call sites) and document in the report where the life originates and why it is 1 for invariants.
+- [ ] **Step 2: Write the failing tests.** (a) a unit test of `weighted_use_count` on a small nested scope tree (home at outer, consumer inside an n-block inner loop -> count == n, and a two-consumer case summing correctly); (b) the whole-scope build-once metric (Task 3/4: water-20 shared composite built == n_blocks) must still hold WITHOUT `ensure_hoist_slot`; (c) a `[eval]` numeric-equivalence pin (the forest-descent batched eval must stay BYTE-IDENTICAL in results -- a lifetime change must not alter numerics, only when entries free).
+- [ ] **Step 3: Run to confirm (a) fails** (missing `weighted_use_count`) and note (b)/(c) as the invariants to preserve.
+- [ ] **Step 4: Implement `weighted_use_count`; store homed values at their home with it; remove `ensure_hoist_slot` from eval.hpp and scope_executor.hpp; drop the fresh-per-level-cache workaround.**
+- [ ] **Step 5: Run.** (a) green; (b) build-once still == n_blocks; (c) `[eval]` byte-identical numerics; and MEASURE the peak improvement from early release vs the old scope-close/MAX lifetime (report the number).
+- [ ] **Step 6: Remove `ensure_hoist_slot` from cache_manager.hpp** (no callers remain) and confirm the build.
+- [ ] **Step 7: Commit.**
+
+---
+
+### Task 6: Coexistence flag + cost-model peak-model selection
 
 Select whole-scope vs forest descent by a flag at the driver entry, and make the dry-run cost model price the matching peak model (co-residency oracle for whole-scope).
 
@@ -160,7 +189,7 @@ Select whole-scope vs forest descent by a flag at the driver entry, and make the
 
 ---
 
-### Task 6: Whole-branch validation (water-20 + C60)
+### Task 7: Whole-branch validation (water-20 + C60)
 
 End-to-end witnesses that whole-scope descent recovers sharing and that the cost model predicts it.
 
@@ -176,8 +205,9 @@ End-to-end witnesses that whole-scope descent recovers sharing and that the cost
 
 ## Self-review notes
 
-- **Spec coverage:** scheduler (spec "Schedule (new)") -> Task 1; pure-realizer executor + driver-swap (spec "load-bearing insight", "pure realizer") -> Tasks 2-4; lazy home-materialization (spec Open Questions) -> Task 3; nested general tree (spec "scope tree") -> Task 4; coexistence + cost-model binding (spec "paradox resolved", Open Questions) -> Task 5; validation-to-tolerance + recompute-elimination (spec Validation) -> Task 6.
+- **Spec coverage:** scheduler (spec "Schedule (new)") -> Task 1; pure-realizer executor + driver-swap (spec "load-bearing insight", "pure realizer") -> Tasks 2-4; lazy home-materialization (spec Open Questions) -> Task 3; nested general tree (spec "scope tree") -> Task 4; weighted use-count lifetimes / remove ensure_hoist_slot (owner decision during Task 4 review) -> Task 5; coexistence + cost-model binding (spec "paradox resolved", Open Questions) -> Task 6; validation-to-tolerance + recompute-elimination (spec Validation) -> Task 7.
 - **Scope guardrails:** general branching-tree PLACEMENT and the intraloop-CSE-pricing OPTIMIZER are explicitly OUT (spec Scope boundary); no task touches them. C60 top-scope feasibility is measured, not enforced (executor is a pure realizer).
 - **Greenfield honesty:** Tasks 3-4 depend on how `evaluate_impl`'s scratch/accumulate/scatter/lazy-home primitives compose under a whole-forest driver (a spec Open Question). Each task's FIRST deliverable is an equivalence test against forest descent, so the composition is validated empirically per increment rather than assumed. If a primitive does not compose (e.g. a scatter target cannot be shared across trees), that surfaces as a failing equivalence test at the smallest increment, not late.
-- **No silent regression:** Task 5 Step 4 pins the flag-OFF path byte-identical (forest descent unchanged) so whole-scope is purely additive until adopted.
-- **Watch item:** the "build once" sharing assertions (Tasks 3/6) are the real success metric -- equivalence-to-tolerance alone would pass even if nothing shared. Both must hold.
+- **Task 5 (use-count cleanup) invariant:** it changes only WHEN cache entries free, never numerics -- the `[eval]` byte-identical pin (Step 2c/5c) is the guard; it also removes `ensure_hoist_slot` from eval.hpp's existing forest-descent batched path, so `[eval]` regression coverage is load-bearing.
+- **No silent regression:** Task 6 Step 4 pins the flag-OFF path byte-identical (forest descent unchanged) so whole-scope is purely additive until adopted.
+- **Watch item:** the "build once" sharing assertions (Tasks 3/5/7) are the real success metric -- equivalence-to-tolerance alone would pass even if nothing shared. Both must hold.
