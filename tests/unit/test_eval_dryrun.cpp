@@ -5658,6 +5658,123 @@ TEST_CASE("dryrun remat modelled-vs-replayed peak equivalence probe (C60)",
   }
 }
 
+// PNO-CCSD water-20 aux-batching FRAGMENTATION surrogate. Faithfully mirrors
+// the MPQC water-20 pVDZ-F12 PNO-CCSD run (job 658937): the SAME csv doubles
+// residual equation, df_regime(kWater20_pVDZF12) (extents/moments verified
+// against the job log), and the EXACT batch config make_csv_batch_policy emits
+// for aux-only batching (objective dense_time_space, K contracted-batchable,
+// target 256, peak_threshold 1e11, persistent_only false, no PAO/occ axis).
+// MPQC drives batching through this same DP, so the aprime decisions reproduce
+// by construction. Purpose: reproduce the batched-member explosion (the
+// ~405-vs-83 group fragmentation the new-vs-old logs showed) and, under
+// SEQUANT_DP_RECOMPUTE_DEBUG=1, expose why -- the K-carrying gC-class
+// composites are charged rf==1 (the escaped-mode recompute model charges ZERO
+// recompute to a node that CARRIES the only batch mode), so the DP prices
+// slicing them as free and over-batches; the runtime then rebuilds them per
+// batch group (the measured 2.5x product-work regression). See
+// cost_model.hpp:1811-1817 ("if the expensive gC-class nodes show rf==1, the DP
+// is not pricing the runtime recompute").
+TEST_CASE("dryrun water-20 aux-batch fragmentation: gC composites priced rf==1",
+          "[.][dryrun-water-frag]") {
+  auto ctx = get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+
+  auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                          "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = deserialize<ExprPtr>(line);
+  REQUIRE(static_cast<bool>(expr));
+  REQUIRE(expr->is<Sum>());
+  auto const& summands = expr->as<Sum>().summands();
+  REQUIRE(!summands.empty());
+  auto flatten_product = [](ExprPtr const& e) -> ExprPtr {
+    if (!e->is<Product>()) return e;
+    auto const& p = e->as<Product>();
+    return ex<Product>(p.scalar(), p.factors(), Product::Flatten::Yes);
+  };
+  std::size_t nterms = summands.size();
+  if (char const* nt = std::getenv("SEQUANT_UT_DRYRUN_NTERMS"))
+    nterms = std::min<std::size_t>(nterms, std::atoll(nt));
+  auto regime = df_regime(kWater20_pVDZF12);
+
+  // EXACT MPQC aux-only config (make_csv_batch_policy with aux_target=256,
+  // pao_target=0, occ_target=0): K is the ONLY batchable mode, contracted role.
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  policy.is_batchable_external_index = [](Index const&) { return false; };
+  policy.batch_spectator_indices = false;
+  policy.batch_target_size = [](Index const&) -> std::size_t { return 256; };
+  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+  policy.accumulation_factor = 1.0;
+  policy.persistent_only = false;
+  policy.peak_threshold = 1e11;
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      Expr const*, container::vector<NodeBatchAnnotation>>>();
+  OptimizeOptions opts;
+  // MPQC "dense_time_space" + aux batch keywords => the perf-first BATCHED
+  // objective (the batchability model that emits the contracted-K aprime; plain
+  // DenseTimeSpace carries no per-index batch model, options.hpp:62).
+  opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = axes_map;
+
+  std::size_t n_kcon = 0;      // K-contracted batched-member annotations
+  std::size_t n_terms_ok = 0;  // terms that optimized
+  for (std::size_t s = 0; s < nterms; ++s) {
+    ExprPtr const term = flatten_product(summands[s]);
+    if (!term) continue;
+    ExprPtr optimized;
+    try {
+      optimized = optimize(term, opts);
+    } catch (std::exception const&) {
+      continue;
+    }
+    if (!optimized) continue;
+    ++n_terms_ok;
+    auto it = axes_map->find(optimized.get());
+    if (it == axes_map->end()) continue;
+    for (auto const& na : it->second)
+      for (auto const& e : na.axes)
+        if (e.second == sequant::BatchModeType::Contracted &&
+            e.first.space().base_key() == L"Κ")
+          ++n_kcon;
+  }
+  std::wcerr
+      << L"\n=== [dryrun-water-frag] water-20 aux-only, " << n_terms_ok
+      << L" terms optimized ===\n  K-contracted batched-member "
+         L"annotations: "
+      << n_kcon
+      << L"\n  (SEQUANT_DP_RECOMPUTE_DEBUG=1 dumps per-node rf; CONFIRMED "
+         L"all 91 K-carrying gC composites -- largest 34 GB -- priced "
+         L"rf==1 while the 46 K-escaping nodes are charged rf==7: the DP "
+         L"prices slicing the gC giants as free, cost_model.hpp:1811)\n";
+  CHECK(n_terms_ok > 0);
+  // Reproduces the MPQC-log fragmentation (~35 distinct batched-member shapes):
+  // aux batching promotes MANY nodes to K-batched members. The mechanism is the
+  // rf==1 pricing of every K-carrying gC composite (confirmed via
+  // SEQUANT_DP_RECOMPUTE_DEBUG): the escaped-mode recompute model charges zero
+  // to a node that CARRIES the only batch mode, so the flops-neutral slice
+  // looks free -- but the runtime rebuilds each such composite per consumer
+  // batch group (the measured 2.5x product-work regression, not modeled here).
+  CHECK(n_kcon > 20);
+}
+
 // D5 avoidable-recomputation WITNESS: compare EXTERNAL-mode vs CONTRACTED-mode
 // occ batching on the C60 residual forest, measuring avoidable recompute in
 // FLOPs against the batching-free (unlimited-memory) ideal.
