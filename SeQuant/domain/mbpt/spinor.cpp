@@ -1,4 +1,5 @@
 #include <SeQuant/domain/mbpt/spinor.hpp>
+#include <regex>
 
 #include <SeQuant/domain/mbpt/spin.hpp>
 
@@ -6,6 +7,7 @@
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/indices.hpp>
@@ -284,9 +286,16 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(const ExprPtr& expr,
   // With ḡ still antisymmetric here, the driver Â[ḡ] reduces to ḡ: the bra!ket!
   // signed permutations of an antisymmetric tensor sum to bra!ket!·ḡ,
   // cancelling expand_A_op's 1/(bra!ket!) normalization.
+  const bool kram_stage = std::getenv("MPQC_KRAM_PROTO_CHECK") != nullptr;
+  auto stage = [&](const char* s) {
+    if (kram_stage) std::wcout << L"[kram-stage] " << s << L"\n" << std::flush;
+  };
   ExprPtr inner = expand_A_op(expr);
+  stage("A-expand done");
   expand(inner);
+  stage("expand done");
   rapid_simplify(inner);
+  stage("rapid_simplify(inner) done -> entering block loop");
 
   // Optional g-expansion (AFTER A-expand, while still Kramers-FREE so
   // expand_antisymm's Ms-conserving guard keeps every permutation): replace
@@ -301,8 +310,50 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(const ExprPtr& expr,
   // Emit one block per external representative.
   container::svector<ExprPtr> blocks;
   blocks.reserve(orbits.size());
+
+  // Rebuild each proto-indexed replacement value's proto-bundle by mapping the
+  // ORIGINAL proto-indices through the same config map. make_spin{alpha,beta}
+  // labels an index AND (via make_index_with_spincase's recursion) its proto-
+  // indices with the *outer* index's single Kramers spin — which is wrong for a
+  // CSV/PNS virtual whose proto-bundle is the occ pair (each occ carries its
+  // own config spin, e.g. i↓ vs i↑). Left unfixed, canonicalize reconciles the
+  // inconsistent proto vs occ labels by collapsing the two proto-indices to the
+  // same dummy (a↑^{i↑ i↑}), which trips TensorNetworkV3::Edge::add_vertex. A
+  // proto-index absent from the map (e.g. an already-labeled external occ
+  // during the internal fold) is kept as-is.
+  auto fix_proto_bundles = [](container::map<Index, Index>& repl) {
+    for (auto& kv : repl) {
+      const Index& orig = kv.first;
+      if (!orig.has_proto_indices()) continue;
+      auto proto = orig.proto_indices();
+      for (auto& p : proto) {
+        auto it = repl.find(p);
+        if (it != repl.end() && !(it->second == p)) p = it->second;
+      }
+      // ALWAYS rebuild kv.second's proto-bundle from orig's (config-mapped)
+      // proto, never keep make_spin{alpha,beta}'s: that helper stamps the WHOLE
+      // proto-bundle with the outer virtual's single Kramers spin, which is
+      // wrong for a CSV/PNS virtual whose proto is the occ pair. The correct
+      // proto is orig's, with each proto-index carrying its OWN config spin
+      // (mapped via repl if that occ is in this config map, else kept at its
+      // already-labeled external value). Rebuilding only when some proto-index
+      // was in the map (the old `if (changed)`) missed the case where EVERY
+      // proto-index is external -- e.g. a DOWN internal virtual of an UP
+      // external pair in the vv-Fock coupling f_a^c t̄: make_spinbeta stamped
+      // i↓,i↓ but the pair (and thus the correct proto) is i↑,i↑. Left unfixed,
+      // that virtual carries the down-pair proto tuple, so the amplitude spans
+      // two distinct proto tuples and its ToT gains a spurious second pair of
+      // outer occ axes that no longer matches the residual head.
+      kv.second =
+          Index(kv.second.space(), kv.second.ordinal(), std::move(proto));
+    }
+  };
+  std::size_t block_idx = 0;
   for (const auto& orbit : orbits) {
     const std::uint64_t cfg = orbit.front();  // canonical (orbit-min)
+    stage((std::string("block ") + std::to_string(block_idx++) +
+           " start (cfg=" + std::to_string(cfg) + ")")
+              .c_str());
 
     // Stage 2a: label the external indices for this block.
     container::map<Index, Index> ext_repl;
@@ -311,6 +362,7 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(const ExprPtr& expr,
       ext_repl.emplace(ext[k],
                        down ? make_spinbeta(ext[k]) : make_spinalpha(ext[k]));
     }
+    fix_proto_bundles(ext_repl);
     ExprPtr block = append_spin(inner, ext_repl);
 
     // Stage 2b (internal fold): the still-unlabeled (spin-any) indices of a
@@ -342,6 +394,7 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(const ExprPtr& expr,
           int_repl.emplace(internal[k], down ? make_spinbeta(internal[k])
                                              : make_spinalpha(internal[k]));
         }
+        fix_proto_bundles(int_repl);
         sum->append(append_spin(term, int_repl));
       }
       return sum;
@@ -355,7 +408,33 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(const ExprPtr& expr,
       block = fold_term(block);
     }
 
+    // Diagnostic (MPQC_KRAM_PROTO_CHECK): detect any index whose proto-index
+    // bundle contains a repeated index (e.g. a↑_1^{i↑_2 i↑_2}), which trips
+    // TensorNetworkV3 during canonicalize. Reports whether the repeat is
+    // present BEFORE canonicalize (from append_spin/fold) or introduced BY
+    // canonicalize.
+    auto proto_repeat_report = [](const ExprPtr& e, const char* when) {
+      if (!std::getenv("MPQC_KRAM_PROTO_CHECK")) return;
+      // String-based scan of the latex (robust vs LabelCompare dedup): look for
+      // any tensor index whose proto-bundle repeats an index, i.e. `^{{X}{X}}`.
+      const std::wstring tex = to_latex(e);
+      static const std::wregex re(LR"(\^\{\{([^}]+)\}\{([^}]+)\}\})");
+      for (auto it = std::wsregex_iterator(tex.begin(), tex.end(), re);
+           it != std::wsregex_iterator(); ++it)
+        if ((*it)[1].str() == (*it)[2].str())
+          std::wcout << L"[proto-check " << when << L"] repeated proto bundle {"
+                     << (*it)[1].str() << L"}{" << (*it)[2].str() << L"}\n";
+    };
+    proto_repeat_report(block, "pre-canon");
+    if (std::getenv("MPQC_KRAM_BLOCK_DUMP"))
+      std::wcout << L"[kram-block] block " << (block_idx - 1)
+                 << L" pre-canon:\n"
+                 << to_latex(block) << L"\n"
+                 << std::flush;
+    stage("  pre-canon check done, calling canonicalize");
     canonicalize(block);  // sigma merge + dummy canonicalization
+    stage("  canonicalize done");
+    proto_repeat_report(block, "post-canon");
     rapid_simplify(block);
     blocks.push_back(block);
   }
