@@ -103,16 +103,31 @@ build_value_node_map(R const& forest) {
 /// \param leaf_evaluator The leaf evaluator, as in \c sequant::evaluate.
 /// \param cache The cache for common sub-expression elimination, as in \c
 ///        sequant::evaluate.
+/// \param target_batch_size Per-index batch partition size (elements), the
+///        source of the K partition for a realized batch loop; unused for the
+///        root-only case. Same meaning as \c make_batched_custom_evaluator's
+///        \p target_batch_size.
+/// \param make_scope_guard Backend scope-guard factory, called with the batch
+///        count and its RAII result HELD for the entire K-block loop -- exactly
+///        as \c make_batched_custom_evaluator's contracted path does
+///        (eval.hpp:2157). A screening backend uses it to relax block-sparse
+///        screening scaled by the batch count so a contribution significant
+///        over the FULL K range is not dropped within an individual batch (see
+///        \c no_scope_guard). Defaults to \c make_no_scope_guard (a no-op for
+///        the dense / DryRun backends), keeping every existing caller
+///        byte-identical.
 /// \return The summed, per-root-permuted result, as \c sequant::evaluate(
 ///         Nodes const&, layout, ...) would produce for the same \p forest.
 ///
 template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
-          typename F, typename N, bool FHC>
+          typename F, typename N, bool FHC,
+          typename ScopeGuardFactory = ::sequant::make_no_scope_guard>
   requires meta::leaf_node_evaluator<std::ranges::range_value_t<Nodes>, F>
 ResultPtr evaluate_whole_scope(
     Nodes const& forest, ScopeSchedule const& sched, auto const& layout,
     F const& leaf_evaluator, CacheManager<N, FHC>& cache,
-    std::function<std::size_t(Index const&)> target_batch_size = {}) {
+    std::function<std::size_t(Index const&)> target_batch_size = {},
+    ScopeGuardFactory make_scope_guard = {}) {
   using node_t = std::ranges::range_value_t<Nodes>;
   static_assert(std::is_same_v<node_t, N>,
                 "the forest's node type and the cache's node type must match");
@@ -223,6 +238,17 @@ ResultPtr evaluate_whole_scope(
       // value referenced mid-loop materializes lazily at its home and is sliced
       // on use, and so per-build tallies route to the root cache.
       bs.cache.set_parent(&cache);
+
+      // RAII scope for the batched partial contractions, HELD for the ENTIRE
+      // K-block loop -- mirroring make_batched_custom_evaluator's contracted
+      // path (eval.hpp:2157). A screening backend's factory relaxes
+      // block-sparse screening scaled by the batch count, so a contribution
+      // whose norm clears the threshold over the FULL K range (but not within
+      // one batch) is not dropped in every batch and lost from the K-sum. A
+      // no-op for the dense / DryRun backends (make_no_scope_guard), so this is
+      // byte-identical there.
+      auto const scope_guard = make_scope_guard(batches.size());
+      (void)scope_guard;
 
       // Accumulate: each block's per-root partial adds into the root's running
       // K-sum. `sum_K = sum_blocks sum_{K in block}`, exact.
