@@ -42,9 +42,12 @@
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
+#include <SeQuant/core/eval/peak_profile.hpp>
 #include <SeQuant/core/eval/placement_remat.hpp>
 #include <SeQuant/core/eval/placement_router.hpp>
 #include <SeQuant/core/eval/schedule_dump.hpp>
+#include <SeQuant/core/eval/scope_executor.hpp>
+#include <SeQuant/core/eval/scope_schedule.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/index.hpp>
@@ -5773,6 +5776,200 @@ TEST_CASE("dryrun water-20 aux-batch fragmentation: gC composites priced rf==1",
   // looks free -- but the runtime rebuilds each such composite per consumer
   // batch group (the measured 2.5x product-work regression, not modeled here).
   CHECK(n_kcon > 20);
+}
+
+// Task 3 of the whole-scope batched DAG execution design
+// (doc/dev/specs/2026-08-10-whole-scope-batched-dag-execution-design.md): the
+// SHARING (build-once) success metric. Same aux-only water-20 batched forest as
+// [dryrun-water-frag], now EVALUATED (zero-data DryRun) two ways with the
+// per-DISTINCT-value build tally (CacheManager::recompute_tally) enabled:
+//   (1) WHOLE-SCOPE descent (evaluate_whole_scope): drives ONE aux Κ loop for
+//       the whole fused forest, so every K-carrying gC composite is built at
+//       most ONCE PER K-BLOCK (max builds over any value == n_blocks), shared
+//       across all trees -- the regression this project targets.
+//   (2) forest descent (evaluate(forest, ...) + the batched custom evaluator):
+//       the trigger-seeded co-evaluation fragments, rebuilding a shared gC per
+//       consumer group -- some value's builds EXCEED n_blocks.
+// The contrast (2) > (1) is the sharing win; (1)'s <= n_blocks bound is the
+// hard assertion.
+TEST_CASE("whole-scope executor builds shared aux composites once per block",
+          "[scope-executor]") {
+  auto ctx = get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+
+  auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                          "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = deserialize<ExprPtr>(line);
+  REQUIRE(static_cast<bool>(expr));
+  REQUIRE(expr->is<Sum>());
+  auto const& summands = expr->as<Sum>().summands();
+  REQUIRE(!summands.empty());
+  auto flatten_product = [](ExprPtr const& e) -> ExprPtr {
+    if (!e->is<Product>()) return e;
+    auto const& p = e->as<Product>();
+    return ex<Product>(p.scalar(), p.factors(), Product::Flatten::Yes);
+  };
+  // Cap the term count so both replays stay quick; the default keeps enough
+  // terms that aux composites are shared across trees (env override available).
+  std::size_t nterms = std::min<std::size_t>(summands.size(), 40);
+  if (char const* nt = std::getenv("SEQUANT_UT_DRYRUN_NTERMS"))
+    nterms = std::min<std::size_t>(summands.size(), std::atoll(nt));
+
+  auto regime = df_regime(kWater20_pVDZF12);
+  auto cm = std::make_shared<CostModel const>(regime);
+
+  // EXACT MPQC aux-only config (make_csv_batch_policy, aux_target=256),
+  // matching [dryrun-water-frag]: Κ is the only batchable mode, contracted
+  // role.
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  policy.is_batchable_external_index = [](Index const&) { return false; };
+  policy.batch_spectator_indices = false;
+  policy.batch_target_size = [](Index const&) -> std::size_t { return 256; };
+  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+  policy.accumulation_factor = 1.0;
+  policy.persistent_only = false;
+  policy.peak_threshold = 1e11;
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      Expr const*, container::vector<NodeBatchAnnotation>>>();
+  OptimizeOptions opts;
+  opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = axes_map;
+
+  std::vector<EvalNodeDryRun> forest;
+  for (std::size_t s = 0; s < nterms; ++s) {
+    ExprPtr const term = flatten_product(summands[s]);
+    if (!term) continue;
+    ExprPtr optimized;
+    try {
+      optimized = optimize(term, opts);
+    } catch (std::exception const&) {
+      continue;
+    }
+    if (!optimized) continue;
+    BinarizationOptions bopts;
+    if (auto it = axes_map->find(optimized.get()); it != axes_map->end())
+      bopts.node_batch_axes = it->second;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    forest.push_back(binarize<EvalExprDryRun>(optimized, {}, bopts));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+  REQUIRE(!forest.empty());
+
+  // Scope schedule: aux Κ is the single realized batch loop.
+  auto const block_of = [](Index const&) -> std::size_t { return 256; };
+  auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  auto sched = sequant::eval::build_scope_schedule<std::wstring>(rich, {L"Κ"});
+  REQUIRE(sched.root.children.size() == 1);
+  Index const K = sched.root.children.front().mode;
+  REQUIRE(K.space().base_key() == L"Κ");
+  REQUIRE(sched.root.children.front().kind ==
+          sequant::BatchModeType::Contracted);
+
+  // value_id -> node bridge: the K scope homes the shared aux-carrying
+  // composites; resolve them to nodes to demonstrate the bridge.
+  auto const vmap = sequant::eval::build_value_node_map(forest);
+  std::size_t n_k_homed = 0;
+  for (auto vid : sched.root.children.front().homed_values)
+    if (vmap.count(rich.cells[vid].hash)) ++n_k_homed;
+  REQUIRE(n_k_homed > 0);
+
+  DryRunLeafEvaluator yield{cm};
+  auto const target = [](Index const&) -> std::size_t { return 256; };
+
+  // n_blocks from any aux carrier's realized partition.
+  std::size_t n_blocks = 0;
+  for (auto const& root : forest)
+    if (auto lf = sequant::find_leaf_carrying(root, K)) {
+      n_blocks = yield(lf->first)->mode_batches(lf->second, 256).size();
+      break;
+    }
+  REQUIRE(n_blocks > 1);
+
+  // Max total builds (summed over slices) of any distinct value in a tally.
+  auto max_builds = [](auto const& tally) -> std::size_t {
+    std::size_t mx = 0;
+    for (auto const& [node, bt] : tally) {
+      std::size_t b = 0;
+      for (auto const& [sig, bc] : bt.slices) b += bc.first;
+      mx = std::max(mx, b);
+    }
+    return mx;
+  };
+
+  using annot_t = std::remove_cvref_t<decltype(forest.front()->annot())>;
+  annot_t const layout{};  // default => no permute in the cross-root combine
+
+  // The per-op build tally (last_op_flops in DryRunOps::prod) is populated only
+  // when the eval log level > 0; redirect the trace to a private stream so it
+  // does not spam stdout, and restore afterward (the Logger is a Singleton).
+  auto& logger = Logger::instance();
+  auto const prev_level = logger.eval.level;
+  auto* const prev_stream = logger.eval.stream;
+  std::ostringstream trace_sink;
+  logger.eval.level = 1;
+  logger.eval.stream = &trace_sink;
+
+  // (1) WHOLE-SCOPE: drive the single-K loop; count builds.
+  auto ws_cache = sequant::cache_manager(forest);
+  ws_cache.set_recompute_tally_enabled(true);
+  try {
+    (void)sequant::eval::evaluate_whole_scope<Trace::On>(
+        forest, sched, layout, yield, ws_cache, target);
+  } catch (std::exception const& e) {
+    logger.eval.level = prev_level;
+    logger.eval.stream = prev_stream;
+    std::cerr << "[scope-executor] whole-scope evaluate threw: " << e.what()
+              << "\n";
+  }
+  std::size_t const builds_ws = max_builds(ws_cache.recompute_tally());
+
+  // (2) forest descent + batched custom evaluator (the fragmenting path).
+  auto fd_cache = sequant::cache_manager(forest);
+  fd_cache.set_custom_evaluator(sequant::make_evaluator(policy, yield));
+  fd_cache.set_recompute_tally_enabled(true);
+  try {
+    (void)sequant::evaluate<Trace::On>(forest, layout, yield, fd_cache);
+  } catch (std::exception const& e) {
+    std::cerr << "[scope-executor] forest-descent evaluate threw: " << e.what()
+              << "\n";
+  }
+  std::size_t const builds_fd = max_builds(fd_cache.recompute_tally());
+
+  logger.eval.level = prev_level;
+  logger.eval.stream = prev_stream;
+
+  std::wcerr << L"\n=== [scope-executor] water-20 aux-only, " << forest.size()
+             << L" terms, n_blocks=" << n_blocks
+             << L" ===\n  whole-scope max builds/value = " << builds_ws
+             << L"\n  forest-descent max builds/value = " << builds_fd << L"\n";
+
+  // The build-once win: under whole-scope no value is built more than once per
+  // K-block (each K-carrying gC composite is shared across all trees and built
+  // exactly once per block).
+  REQUIRE(builds_ws > 0);
+  CHECK(builds_ws <= n_blocks);
+  // The contrast: forest descent rebuilds a shared gC per consumer group, so at
+  // least one value is built strictly more than once per block.
+  CHECK(builds_fd > builds_ws);
 }
 
 // PNO-CCSD water-20 REMAT peak_threshold sweep. rematerialize_to_budget starts

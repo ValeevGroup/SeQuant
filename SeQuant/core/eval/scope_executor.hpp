@@ -10,9 +10,42 @@
 #include <any>
 #include <array>
 #include <cstddef>
+#include <functional>
 #include <string>
+#include <type_traits>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace sequant::eval {
+
+///
+/// \brief The value_id -> forest-node bridge (design integration point 1).
+///
+/// \details \c ScopeNode::homed_values are \c ValueCell::value_id's; a value's
+/// eval node is recovered through the \c ValueCell::hash it carries -- exactly
+/// the \c EvalExpr::hash_value() identity \c CacheManager dedups by. This maps
+/// every distinct forest node by that hash, so a \c value_id resolves as
+/// `map[rich.cells[value_id].hash]`. Under perfect CSE many occurrences share
+/// one hash; a single representative node (the first visited) is kept, which is
+/// all a homed value needs (every occurrence is the same value). Pure lookup
+/// construction -- no execution.
+///
+template <meta::eval_node_range R>
+[[nodiscard]] std::unordered_map<std::size_t, std::ranges::range_value_t<R>>
+build_value_node_map(R const& forest) {
+  using node_t = std::ranges::range_value_t<R>;
+  std::unordered_map<std::size_t, node_t> out;
+  auto visit = [&out](auto&& self, node_t const& n) -> void {
+    out.emplace(n->hash_value(), n);
+    if (!n.leaf()) {
+      self(self, n.left());
+      self(self, n.right());
+    }
+  };
+  for (auto const& t : forest) visit(visit, t);
+  return out;
+}
 
 ///
 /// \brief Task 2 of the whole-scope batched DAG execution design (see
@@ -76,21 +109,154 @@ namespace sequant::eval {
 template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
           typename F, typename N, bool FHC>
   requires meta::leaf_node_evaluator<std::ranges::range_value_t<Nodes>, F>
-ResultPtr evaluate_whole_scope(Nodes const& forest, ScopeSchedule const& sched,
-                               auto const& layout, F const& leaf_evaluator,
-                               CacheManager<N, FHC>& cache) {
+ResultPtr evaluate_whole_scope(
+    Nodes const& forest, ScopeSchedule const& sched, auto const& layout,
+    F const& leaf_evaluator, CacheManager<N, FHC>& cache,
+    std::function<std::size_t(Index const&)> target_batch_size = {}) {
+  using node_t = std::ranges::range_value_t<Nodes>;
+  static_assert(std::is_same_v<node_t, N>,
+                "the forest's node type and the cache's node type must match");
+
+  // Task 3 handles the ROOT-ONLY tree (Task 2) plus ONE realized batch loop --
+  // a single aux/contracted child scope. A deeper / branching scope tree needs
+  // the Task 4+ recursion, not implemented here.
   SEQUANT_ASSERT(
-      sched.root.children.empty() &&
-      "evaluate_whole_scope (Task 2) only implements the top-scope walk: a "
-      "scope tree with realized batch loops (non-empty sched.root.children) "
-      "needs the Task 3+ batch-block recursion, not implemented here.");
+      sched.root.children.size() <= 1 &&
+      "evaluate_whole_scope (Task 3) implements the top scope plus at most ONE "
+      "batch loop (one sched.root.children entry); a deeper/branching scope "
+      "tree needs the Task 4+ batch-block recursion, not implemented here.");
 
   // if the layout is not the default constructed value need to permute --
   // mirrors sequant::evaluate(Node const&, layout, ...)'s identical check.
   bool const perm = layout != decltype(layout){};
 
+  // The per-root, UNPERMUTED result, in forest order. The root-only case fills
+  // each entry with a direct evaluate_impl; the single-loop case fills the
+  // K-carrying roots from the accumulated batch loop (below) and the
+  // K-invariant roots directly. The final permute-to-layout + cross-root
+  // add_inplace combine (which reproduces sequant::evaluate(Nodes const&,
+  // layout, ...)'s trace/hwmark bookkeeping line-for-line) is SHARED by both
+  // cases, so Tasks 2-3 emit identical Term/SumInplace records.
+  container::svector<node_t> roots;
+  for (auto&& n : forest) roots.push_back(n);
+  container::svector<ResultPtr> pre_results(roots.size());
+
+  if (sched.root.children.empty()) {
+    // -------- Task 2 top-scope walk: every root built directly. --------
+    for (std::size_t i = 0; i != roots.size(); ++i)
+      pre_results[i] =
+          evaluate_impl<EvalTrace>(roots[i], leaf_evaluator, cache);
+  } else {
+    // -------- Task 3 single batch loop (aux Κ, contracted). --------
+    //
+    // The child scope is ONE realized contracted batch loop. Its mode K is
+    // summed away below every forest root that carries it, so those roots are
+    // homed at the ROOT scope (K not on their result) but built INCREMENTALLY:
+    // per K-block partials that ACCUMULATE. Every value HOMED at the K scope
+    // (the shared K-carrying gC composites) is built once per block on ONE
+    // scratch shared by ALL K-carrying roots -- so a composite shared across
+    // trees is built once per block, not once per consumer group. This is the
+    // exhaustive, whole-forest generalization of the OPPORTUNISTIC
+    // co-evaluation group in make_batched_custom_evaluator (eval.hpp): its
+    // trigger-seeded group becomes the explicit whole-forest member set the
+    // scope tree names, and the reused primitives (make_batched_scratch,
+    // per-block evaluate_impl with Enter-stage slice-on-use, and cross-block
+    // add_inplace) are DRIVEN from this walk rather than re-implemented.
+    ScopeNode const& kscope = sched.root.children.front();
+    SEQUANT_ASSERT(
+        kscope.children.empty() &&
+        "evaluate_whole_scope (Task 3): the single batch loop must be a LEAF "
+        "scope (no nested loops); a nested loop nest is Task 4+.");
+    SEQUANT_ASSERT(
+        kscope.kind == BatchModeType::Contracted &&
+        "evaluate_whole_scope (Task 3) realizes a CONTRACTED (accumulate) aux "
+        "loop; an External (scatter) loop is a later increment.");
+    SEQUANT_ASSERT(target_batch_size &&
+                   "evaluate_whole_scope with a realized batch loop needs a "
+                   "target_batch_size (the batch partition source).");
+    Index const K = kscope.mode;
+
+    using member_t = std::pair<node_t const*, Index>;
+
+    // Partition the roots: those that CARRY K (their result contracts K below
+    // them -- the co-evaluated members) vs those invariant to K (built once,
+    // like the root-only path).
+    container::svector<std::size_t> k_root_idx;
+    container::svector<std::size_t> plain_root_idx;
+    for (std::size_t i = 0; i != roots.size(); ++i) {
+      if (sequant::find_leaf_carrying(roots[i], K))
+        k_root_idx.push_back(i);
+      else
+        plain_root_idx.push_back(i);
+    }
+
+    // K-invariant roots: built directly on the root cache, exactly as the
+    // top-scope path builds a root.
+    for (auto i : plain_root_idx)
+      pre_results[i] =
+          evaluate_impl<EvalTrace>(roots[i], leaf_evaluator, cache);
+
+    if (!k_root_idx.empty()) {
+      // The K partition: identical (whole-tile element ranges) across every
+      // member since K is one global aux mode. Read it once from any carrier
+      // leaf, exactly as pick_sliceable does in make_batched_custom_evaluator.
+      container::svector<std::pair<std::size_t, std::size_t>> batches;
+      {
+        auto const lf =
+            sequant::find_leaf_carrying(roots[k_root_idx.front()], K);
+        SEQUANT_ASSERT(lf);
+        batches = leaf_evaluator(lf->first)->mode_batches(lf->second,
+                                                          target_batch_size(K));
+      }
+
+      // The whole-forest co-evaluation group: every K-carrying root, paired
+      // with K. ONE scratch dedups the shared K-homed composites across ALL
+      // members (make_batched_scratch registers every repeated, consistently
+      // sliced internal subnode), so each is built once per block.
+      std::vector<member_t> group;
+      group.reserve(k_root_idx.size());
+      for (auto i : k_root_idx) group.emplace_back(&roots[i], K);
+
+      auto bs = sequant::detail::make_batched_scratch(group, cache);
+      for (auto const* s : bs.seeds) (void)bs.cache.store(*s, cache.access(*s));
+      // Chain the scratch under the root cache so an above-homed (K-invariant)
+      // value referenced mid-loop materializes lazily at its home and is sliced
+      // on use, and so per-build tallies route to the root cache.
+      bs.cache.set_parent(&cache);
+
+      // Accumulate: each block's per-root partial adds into the root's running
+      // K-sum. `sum_K = sum_blocks sum_{K in block}`, exact.
+      std::vector<ResultPtr> acc(group.size());
+      for (auto const& [e_lo, e_hi] : batches) {
+        if (e_lo == e_hi) continue;
+        bs.cache.reset();
+        // The enclosing batch context is just THIS block (the loop is at the
+        // top scope). Setting it makes evaluate_impl's Enter-stage
+        // slice-on-use slice every K-carrying leaf/value to the block.
+        typename CacheManager<N, FHC>::BatchContext ctx;
+        ctx.push_back({K, {e_lo, e_hi}});
+        bs.cache.set_batch_context(std::move(ctx));
+        for (std::size_t m = 0; m != group.size(); ++m) {
+          ResultPtr part = evaluate_impl<EvalTrace>(*group[m].first,
+                                                    leaf_evaluator, bs.cache);
+          if (!acc[m])
+            acc[m] = std::move(part);
+          else
+            acc[m]->add_inplace(*part);
+        }
+      }
+      for (std::size_t m = 0; m != group.size(); ++m) {
+        SEQUANT_ASSERT(acc[m]);
+        pre_results[k_root_idx[m]] = std::move(acc[m]);
+      }
+      // Free the K scratch (bs goes out of scope here).
+    }
+  }
+
+  // -------- Shared combine: permute each root to layout and sum. --------
   ResultPtr result;
-  for (auto&& n : forest) {
+  for (std::size_t i = 0; i != roots.size(); ++i) {
+    node_t const& n = roots[i];
     // Per-root term boundary -- mirrors sequant::evaluate(Node const&,
     // layout, ...)'s identical log::term(Begin/End) bracket around its
     // evaluate_impl + permute.
@@ -100,7 +266,8 @@ ResultPtr evaluate_whole_scope(Nodes const& forest, ScopeSchedule const& sched,
       log::term(log::TermMode::Begin, xpr);
     }
 
-    ResultPtr const pre = evaluate_impl<EvalTrace>(n, leaf_evaluator, cache);
+    ResultPtr const pre = std::move(pre_results[i]);
+    SEQUANT_ASSERT(pre);
 
     ResultPtr post;
     auto const permute_time = sequant::detail::timed_eval_inplace([&]() {
