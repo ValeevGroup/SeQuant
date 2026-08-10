@@ -98,6 +98,33 @@ template <meta::eval_node node_t>
   return std::nullopt;
 }
 
+/// \return the PHYSICAL index \p root batches as a Contracted mode of TYPE \p
+///         base (from \c batched_here() -- the authoritative source of WHICH
+///         physical index is batched), or, failing that, the physical label a
+///         leaf below \p root carries for that type.
+///
+/// \details Index labels are meaningful only within a single tree, so the
+/// schedule's canonical scope mode (\c ScopeNode::mode) must be MAPPED to each
+/// member's OWN physical axis before it is pushed into that member's batch
+/// context / used to slice it -- exactly as \c member_external_axis does for
+/// the external path. Reusing the schedule's canonical mode for every member
+/// would (silently, since each tree today binds a single aux label) fail to
+/// slice a member that binds the contracted mode under a different physical
+/// label, building it full and mis-accumulating it. A contracted mode is summed
+/// away below the root (never on its result), so this reads it off \c
+/// batched_here() or a carrying leaf, not the root's own \c canon_indices.
+template <meta::eval_node node_t>
+[[nodiscard]] std::optional<Index> member_contracted_axis(
+    node_t const& root, std::wstring const& base) {
+  if (!root.leaf())
+    for (auto const& [ix, knd] : root->batched_here())
+      if (knd == BatchModeType::Contracted && ix.space().base_key() == base)
+        return ix;
+  if (auto const lf = find_leaf_carrying_type(root, base))
+    return lf->first->canon_indices()[lf->second];
+  return std::nullopt;
+}
+
 ///
 /// \brief The recursive scope-tree walk (Task 4): realizes one batch loop per
 /// \c ScopeNode, nesting into \c ScopeNode::children, and produces the result
@@ -235,12 +262,22 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
   // -------- Contracted ACCUMULATE over node.mode. --------
   Index const K = node.mode;
 
+  // The schedule's canonical contracted mode K mapped to EACH member's own
+  // physical axis (see member_contracted_axis): Index labels are meaningful
+  // only within a tree, so a member is sliced on ITS OWN label, never the
+  // schedule representative reused across members.
+  container::svector<Index> axes;
+  axes.reserve(members.size());
+  for (auto const* m : members)
+    axes.push_back(member_contracted_axis(*m, base).value_or(K));
+
   if (!child) {
     // Task-3 single aux loop: ONE shared scratch, whole-forest co-evaluation,
     // per-block accumulate. Members are guaranteed to carry K by the caller.
     std::vector<member_t> group;
     group.reserve(members.size());
-    for (auto const* m : members) group.emplace_back(m, K);
+    for (std::size_t m = 0; m != members.size(); ++m)
+      group.emplace_back(members[m], axes[m]);
 
     auto bs = sequant::detail::make_batched_scratch(group, parent_cache);
     for (auto const* s : bs.seeds)
@@ -261,10 +298,12 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
     for (auto const& [e_lo, e_hi] : batches) {
       if (e_lo == e_hi) continue;
       bs.cache.reset();
-      BatchContext ctx = ectx;
-      ctx.push_back({K, {e_lo, e_hi}});
-      bs.cache.set_batch_context(std::move(ctx));
       for (std::size_t m = 0; m != members.size(); ++m) {
+        // Slice each member on ITS OWN physical axis; the element range is the
+        // same across members (one global aux tiling), only the label differs.
+        BatchContext ctx = ectx;
+        ctx.push_back({axes[m], {e_lo, e_hi}});
+        bs.cache.set_batch_context(ctx);
         ResultPtr part =
             evaluate_impl<EvalTrace>(*members[m], leaf_evaluator, bs.cache);
         if (!acc[m])
@@ -322,33 +361,43 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
                                                       target_batch_size(K));
   }
 
-  container::svector<node_t const*> inner_members;
-  for (auto p : inner_pos) inner_members.push_back(members[p]);
-
   container::svector<ResultPtr> acc(members.size());
   auto const scope_guard = make_scope_guard(batches.size());
   (void)scope_guard;
   for (auto const& [e_lo, e_hi] : batches) {
     if (e_lo == e_hi) continue;
     outer.reset();
-    BatchContext ctx = ectx;
-    ctx.push_back({K, {e_lo, e_hi}});
-    outer.set_batch_context(ctx);
 
-    // Build the outer-homed values ONCE for this block.
+    // Build the outer-homed values ONCE for this block, each sliced on ITS OWN
+    // physical axis (a homed composite is a canonical node whose K label need
+    // not equal the schedule representative).
     for (auto const& hv : homed) {
       outer.ensure_hoist_slot(hv);
       if (outer.alive(hv)) continue;  // shared: already built this block
+      BatchContext hctx = ectx;
+      hctx.push_back(
+          {member_contracted_axis(hv, base).value_or(K), {e_lo, e_hi}});
+      outer.set_batch_context(hctx);
       (void)evaluate_impl<EvalTrace>(hv, leaf_evaluator, outer);
     }
 
+    // Each member is looped on ITS OWN physical axis for the outer mode (same
+    // element range across members; only the label differs). Direct members
+    // (invariant to the inner loop) build on `outer`; inner members recurse the
+    // child loop with that per-member axis carried in the enclosing context.
     container::svector<ResultPtr> block(members.size());
-    for (auto p : direct_pos)
+    for (auto p : direct_pos) {
+      BatchContext mctx = ectx;
+      mctx.push_back({axes[p], {e_lo, e_hi}});
+      outer.set_batch_context(mctx);
       block[p] = evaluate_impl<EvalTrace>(*members[p], leaf_evaluator, outer);
-    if (!inner_members.empty()) {
-      auto sub = recurse(*child, inner_members, ctx, outer);
-      for (std::size_t k = 0; k != inner_pos.size(); ++k)
-        block[inner_pos[k]] = std::move(sub[k]);
+    }
+    for (auto p : inner_pos) {
+      BatchContext mctx = ectx;
+      mctx.push_back({axes[p], {e_lo, e_hi}});
+      block[p] = recurse(*child, container::svector<node_t const*>{members[p]},
+                         mctx, outer)
+                     .front();
     }
     for (std::size_t m = 0; m != members.size(); ++m) {
       SEQUANT_ASSERT(block[m]);
