@@ -68,22 +68,18 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     }
   }  // SECTION("energy")
 
-  SECTION("with_hbar_comm_rank") {
+  SECTION("hbar_comm_rank") {
     const auto N = 2;
-    const CC::Options opts{.ansatz = CC::Ansatz::U, .hbar_comm_rank = 2};
-    auto bch2 = CC(N, opts);
-    auto bch3 = bch2.with_hbar_comm_rank(3);
-    REQUIRE(bch2.hbar_comm_rank() == 2);
-    REQUIRE(bch3.hbar_comm_rank() == 3);
+    REQUIRE(CC(N, {.ansatz = CC::Ansatz::U, .hbar_comm_rank = 2})
+                .hbar_comm_rank() == 2);
     // rank 0 is a valid truncation (H̄ = H); only CC::λ rejects it, since it
     // derives at rank - 1
-    REQUIRE(bch2.with_hbar_comm_rank(0).hbar_comm_rank() == 0);
     if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
       // the ctor is the only check
       REQUIRE_THROWS_AS(CC(N, {.ansatz = CC::Ansatz::U}), Exception);
       REQUIRE_THROWS_AS(CC(N, {.hbar_comm_rank = 0}).λ(), Exception);
     }
-  }  // SECTION("with_hbar_comm_rank")
+  }  // SECTION("hbar_comm_rank")
 
   SECTION("rdm") {
     constexpr auto N = 2;

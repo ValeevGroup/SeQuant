@@ -76,11 +76,6 @@ class CC {
   /// not set
   [[nodiscard]] std::optional<size_t> hbar_comm_rank() const;
 
-  /// @brief returns a copy of this object whose H̄ commutator truncation rank
-  /// is @p rank, leaving this engine unchanged; all other options are carried
-  /// over
-  [[nodiscard]] CC with_hbar_comm_rank(size_t rank) const;
-
   /// @return true if singles amplitudes are excluded from \f$ \hat{T} \f$ and
   /// \f$ \hat{\Lambda} \f$
   [[nodiscard]] bool skip_singles() const;
