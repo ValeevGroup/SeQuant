@@ -28,6 +28,7 @@
 #include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
 #include <SeQuant/core/eval/backends/dryrun/cost_profile.hpp>
 #include <SeQuant/core/eval/backends/dryrun/eval_expr.hpp>
+#include <SeQuant/core/eval/backends/dryrun/meter.hpp>
 #include <SeQuant/core/eval/backends/dryrun/result.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
@@ -825,6 +826,89 @@ TEST_CASE(
   CHECK(ws_term_count == forest.size());
   CHECK(fd_term_count == forest.size());
   CHECK(ws_result->size_in_bytes() == fd_result->size_in_bytes());
+
+  // ---- meter() both executors, on the SAME forest/policy/regime/cfg the
+  // replays above already used. Unlike k_homed (which deliberately tracks
+  // only the K scope's homed values, skipping forest roots and leaves), the
+  // meter's home_fidelity list covers EVERY distinct value in the recompute
+  // tally, including the Kappa-free composites homed at the root scope
+  // (home == "" -- a whole-nest invariant, not a K-block-local one) that
+  // k_homed structurally excludes. Reporting those rebuild counts honestly
+  // (not asserting them away) is this task's whole point -- the executor fix
+  // that would make root-homed composites build once too is out of scope
+  // here.
+  sequant::BatchPolicy policy_fd = policy;
+  policy_fd.whole_scope_execution = false;
+
+  auto const ws_rep =
+      sequant::eval::dryrun::meter(forest, policy_ws, regime, cfg);
+  auto const fd_rep =
+      sequant::eval::dryrun::meter(forest, policy_fd, regime, cfg);
+
+  auto const has_root_homed = [](sequant::eval::dryrun::MeterReport const& r) {
+    return std::any_of(r.home_fidelity.begin(), r.home_fidelity.end(),
+                       [](auto const& h) { return h.home.empty(); });
+  };
+
+  if (auto it =
+          std::find_if(ws_rep.home_fidelity.begin(), ws_rep.home_fidelity.end(),
+                       [](auto const& h) { return h.home.empty(); });
+      it != ws_rep.home_fidelity.end()) {
+    std::cerr << "  [scope-executor-witness-water20] sample root-homed "
+                 "(home={}) composite: "
+              << it->label << ", builds=" << it->builds << "\n";
+  }
+
+  // (1) monitor == established measurement, per executor: the whole-scope
+  // meter's own PeakMonitor agrees with the SAME realized_peak_bytes parsed
+  // off the (a)-(d) replay's trace above -- WITHIN a small tolerance, not
+  // bit-for-bit: meter()'s cache is built from cfg (is_volatile flags 't'
+  // leaves, min_repeats=1), whereas the (a)-(d) run above's ws_cache is the
+  // plain sequant::cache_manager(forest) (no persistence split, min_repeats
+  // default 2) -- a DIFFERENT, slightly more permissive admission policy, so
+  // a ~1% peak delta (measured: ~0.9%) is expected from admitting a few extra
+  // P-frontier nodes, not a bug. 2% comfortably covers that measured gap
+  // while still catching a gross regression.
+  CHECK(double(ws_rep.peak_bytes) ==
+        Catch::Approx(double(realized_peak_bytes)).epsilon(0.02));
+
+  // (2) new signals populated, both executors.
+  CHECK(ws_rep.builds_total > 0);
+  CHECK(fd_rep.builds_total > 0);
+  CHECK(!ws_rep.home_fidelity.empty());
+  // Kappa-free home={} composites now appear (the old k_homed EXCLUDED them
+  // by construction -- see this block's doc comment above):
+  CHECK(has_root_homed(ws_rep));  // REPORTED, not asserted == 1 (the
+                                  // executor fix is out of scope here)
+
+  // (3) forest-vs-whole-scope comparison is now a report diff. NOTE this is
+  // NOT the same "forest descent" fd_cache measures above ((b), max_fd_builds
+  // > max_ws_builds, the per-root FRAGMENTED-but-still-BATCHED baseline built
+  // by explicitly installing fd_cache.set_custom_evaluator(make_evaluator(
+  // policy, yield)) before the walk): meter()'s policy_fd.whole_scope_execution
+  // = false instead drives the coexistence entry's OTHER branch (sequant::
+  // evaluate(Nodes const&, BatchPolicy const&, ...), scope_executor.hpp),
+  // which for flag-off is documented as "an unconditional forward to ...
+  // sequant::evaluate(Nodes const&, layout, leaf_evaluator, cache) -- no
+  // schedule is built" -- and meter() never installs a custom evaluator on
+  // its internal cache, so that forward's own custom-evaluator interception
+  // (eval.hpp's `if (auto const& custom_eval = cache.custom_evaluator();
+  // custom_eval)`) never fires either. fd_rep therefore reports a fully
+  // UNBATCHED, single-shot baseline (K evaluated as one unsliced block, never
+  // replayed per block), not the fragmented-batched one -- so it is the
+  // FEWER-builds baseline, not the more-builds one: whole-scope structurally
+  // replays every K-homed value once per block (n_blocks of them), which an
+  // unbatched single pass never does, so ws_rep.builds_total is the one that
+  // cannot be smaller. (Verified: 40-term water-20 measures fd=195,
+  // ws=978 -- ws MORE than 5x fd, the reverse of the (b) fragmented-baseline
+  // comparison above.) This looks like a real gap in Task 3's meter() (its
+  // own doc comment claims to "mirror MPQC's wet dispatch" for BOTH flag
+  // states, which would require installing sequant::make_evaluator(policy,
+  // yield) as meter()'s cache's custom evaluator before the coexistence-entry
+  // call so the flag-off path is a fair per-root-batched comparison instead
+  // of an unbatched one) -- flagged for a follow-up, not fixed here (test-only
+  // change, meter() is a fixed Task-3 interface).
+  CHECK(ws_rep.builds_total >= fd_rep.builds_total);
 }
 
 // The C60 WITNESS. Same real C60 residual and the SAME occ-veto MPQC batch
