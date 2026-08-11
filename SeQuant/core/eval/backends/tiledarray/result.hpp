@@ -652,26 +652,49 @@ class ResultTensorOfTensorTA final : public Result {
 
     detail::log_ta(a.lannot, " + ", a.rannot, " = ", a.this_annot, "\n");
 
-    // TiledArray's tensor-of-tensor add applies a non-identity OPERAND
-    // permutation to the operand array in place, not to a temporary: after
-    // `C(c) = A(a) + B(b)` with `b != c`, B itself holds permuted data. `sum`
-    // is const and its operands are routinely buffers the caller retains and
-    // re-reads -- a cached common subexpression, or a named GA intermediate
-    // served to several use sites -- so an operand that has to be permuted is
-    // handed a private deep copy to be rewritten instead. Without it the add
-    // silently rewrites a live buffer and every later reader of it sees
-    // permuted data, i.e. a wrong number with no diagnostic. Only an operand
-    // that actually needs permuting is copied, so the common
-    // identical-annotation add is untouched.
+    // TiledArray's tensor-of-tensor add is UNSAFE under a non-identity
+    // OPERAND permutation (`C(c) = A(a) + B(b)` with `b != c`), in two ways:
+    //
+    //  1. it applies the operand permutation to the operand array in place,
+    //     not to a temporary -- after the add, B itself holds permuted data.
+    //     `sum` is const and its operands are routinely buffers the caller
+    //     retains and re-reads (a cached common subexpression, a named GA
+    //     intermediate served to several use sites), so every later reader
+    //     saw permuted data. (Guarded here since cb96ec6b via defensive
+    //     clones; the 3.1e-5/2.1e-3 C4H10 wrong energies.)
+    //
+    //  2. it DROPS the other operand's contribution at outer cells where the
+    //     permuted operand holds no allocated (e.g. pair-screened) inner
+    //     cell: the result cell comes out EMPTY where A is nonzero and the
+    //     relocated B has no cell. Measured on C4H10/cc-pVDZ CSV-CCk, GA
+    //     seed 3, iteration 2: one such add lost 300 of 25546 cells
+    //     (|drop|^2 = 4.3e-8), which surfaced as a silent, seed-selected
+    //     3.6e-9 error in the converged energy (3.16e-7 on C5H12 seed 0).
+    //     Per-term schedules never emit in-tree ToT sums, so only GA
+    //     schedules were exposed.
+    //
+    // The safe composition: pre-permute any mismatched operand into the
+    // result's annotation order with a standalone permute ASSIGNMENT (which
+    // relocates every cell of its single operand and cannot intersect
+    // supports), then add with all three annotations equal -- the
+    // identical-annotation add handles one-sided cells correctly and touches
+    // no operand in place.
     const bool permute_l = a.lannot != a.this_annot;
     const bool permute_r = a.rannot != a.this_annot;
-    ArrayT const l_copy = permute_l ? TA::clone(get<ArrayT>()) : ArrayT{};
-    ArrayT const r_copy = permute_r ? TA::clone(other.get<ArrayT>()) : ArrayT{};
+    ArrayT l_copy, r_copy;
+    if (permute_l) {
+      l_copy(a.this_annot) = get<ArrayT>()(a.lannot);
+      ArrayT::wait_for_lazy_cleanup(l_copy.world());
+    }
+    if (permute_r) {
+      r_copy(a.this_annot) = other.get<ArrayT>()(a.rannot);
+      ArrayT::wait_for_lazy_cleanup(r_copy.world());
+    }
     ArrayT const& l = permute_l ? l_copy : get<ArrayT>();
     ArrayT const& r = permute_r ? r_copy : other.get<ArrayT>();
 
     ArrayT result;
-    result(a.this_annot) = l(a.lannot) + r(a.rannot);
+    result(a.this_annot) = l(a.this_annot) + r(a.this_annot);
     decltype(result)::wait_for_lazy_cleanup(result.world());
     if (eval::FlopCounter::enabled()) {
       detail::count_elementwise(eval::FlopCategory::Addition, result);
