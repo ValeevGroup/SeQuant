@@ -230,3 +230,79 @@ TEST_CASE(
   CHECK(root_it->home.empty());
   CHECK(root_it->uses.empty());
 }
+
+// Task 3: meter() drives the REAL policy-selected executor (whole-scope or
+// forest descent, chosen by BatchPolicy::whole_scope_execution) through the
+// sizing backend with its own metered cache, rather than a hand-rolled proxy
+// of one. This forest carries a genuine Contracted batch axis (a_3, the
+// "aux"-analog): with whole_scope_execution=true, the coexistence entry
+// (scope_executor.hpp) rebuilds a scope tree with ONE realized batch loop
+// from that stamp and drives the executor's nested batch-scratch caches
+// (a Task-1 coverage gap -- no earlier [meter] test exercised a multi-level
+// PeakMonitor parent-chain under a real batched walk); with it false, the
+// SAME forest runs through today's unbatched per-tree descent. Both modes
+// must report a positive peak/build count and the matching `whole_scope`
+// flag.
+TEST_CASE(
+    "meter runs the policy-selected executor (whole-scope and forest) with "
+    "the sizing backend and a metered cache",
+    "[meter]") {
+  using sequant::BatchModeType;
+  using sequant::BatchPolicy;
+  using sequant::Index;
+  using sequant::eval::dryrun::CacheConfig;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using sequant::eval::dryrun::meter;
+  using sequant::eval::dryrun::SizeRegime;
+
+  // Same small, self-consistent regime as the tests above; "a" (extent 20)
+  // doubles as the batch-axis space here (target_size 5 => 4 blocks).
+  SizeRegime regime;
+  regime.space_extent = {
+      {L"i", 10},
+      {L"a", 20},
+  };
+
+  // A single-root, fully-contracted product -- a_3 is a genuine operand
+  // index of BOTH factors (contracted away at the root), hand-stamped as the
+  // root's one Contracted batch axis (no optimize() involved, matching
+  // test_eval_dryrun.cpp's hand-built batch-annotation recipe): the
+  // coexistence entry rebuilds its schedule from the forest's OWN
+  // batched_here() stamps, not from BatchPolicy predicates, so this alone is
+  // enough for it to realize a non-root-only scope tree.
+  auto expr =
+      sequant::deserialize<sequant::ExprPtr>(L"g{i_1;a_3} * h{a_3;i_1}");
+  REQUIRE(static_cast<bool>(expr));
+
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto node = sequant::binarize<EvalExprDryRun>(expr);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE_FALSE(node.leaf());
+
+  Index const a3{L"a_3"};
+  node->set_batched_here({{a3, BatchModeType::Contracted}});
+
+  std::vector<EvalNodeDryRun> const forest{node};
+
+  CacheConfig const cfg;  // default: no footprint gate, min_repeats=2
+
+  BatchPolicy policy;
+  policy.batch_target_size = [](Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"a" ? std::size_t{5} : std::size_t{1};
+  };
+
+  // ---- whole-scope: exercises the nested batch-scratch walk. ----
+  policy.whole_scope_execution = true;
+  auto const ws_report = meter(forest, policy, regime, cfg);
+  CHECK(ws_report.peak_bytes > 0.0);
+  CHECK(ws_report.builds_total > 0);
+  CHECK(ws_report.whole_scope == true);
+
+  // ---- forest descent: the SAME forest/policy, flag off. ----
+  policy.whole_scope_execution = false;
+  auto const fd_report = meter(forest, policy, regime, cfg);
+  CHECK(fd_report.peak_bytes > 0.0);
+  CHECK(fd_report.builds_total > 0);
+  CHECK(fd_report.whole_scope == false);
+}

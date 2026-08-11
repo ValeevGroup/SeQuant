@@ -1,14 +1,23 @@
 #ifndef SEQUANT_CORE_EVAL_BACKENDS_DRYRUN_METER_HPP
 #define SEQUANT_CORE_EVAL_BACKENDS_DRYRUN_METER_HPP
 
+#include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval/backends/dryrun/cost_profile.hpp>
+#include <SeQuant/core/eval/backends/dryrun/eval_expr.hpp>
 #include <SeQuant/core/eval/peak_monitor.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
+#include <SeQuant/core/eval/placement_router.hpp>
+#include <SeQuant/core/eval/scope_executor.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <algorithm>
 #include <cstddef>
+#include <functional>
+#include <memory>
+#include <ostream>
 #include <ranges>
 #include <string>
 #include <unordered_map>
@@ -205,6 +214,133 @@ MeterReport assemble_report(Cache const& cache, PeakMonitor const& mon,
             });
 
   return report;
+}
+
+///
+/// \brief Runs the policy-selected executor (whole-scope or per-tree forest
+/// descent, per \p policy.whole_scope_execution) over \p forest through the
+/// DryRun sizing backend, metering the replay with a fresh, \c PeakMonitor
+/// -wired, build-tallying cache, and returns the assembled \c MeterReport.
+///
+/// Mirrors MPQC's wet dispatch: this drives the SAME Task-6 coexistence entry
+/// point (\c sequant::evaluate(Nodes const&, BatchPolicy const&, layout, F,
+/// CacheManager&, mode_order, ScopeGuardFactory), \c scope_executor.hpp) a
+/// real solve would use under \p policy -- whole-scope and forest descent are
+/// selected by the SAME flag, not two independently maintained code paths --
+/// so the metered replay is exactly the run \p policy describes, not a
+/// hand-rolled proxy of it. Non-throwing wrapper (if desired) is the
+/// caller's responsibility; an exception from the replay propagates out of
+/// this call, but the RAII logger-state guard still restores
+/// \c Logger::instance().eval on the way out.
+///
+/// \param forest the evaluation forest (a range of \c EvalNodeDryRun).
+/// \param policy the batch policy driving the coexistence entry -- in
+///        particular \c whole_scope_execution (executor selection) and
+///        \c batch_target_size (the batch-partition source; also the source
+///        of the \c block_of function this call builds its OWN \c rich
+///        schedule with, for \c assemble_report -- the coexistence entry
+///        builds an independent, internal \c RichSchedule of its own from
+///        the SAME \p policy.batch_target_size to drive the executor).
+/// \param regime the size regime supplying the DryRun \c CostModel.
+/// \param cfg cache configuration (footprint gate, min repeats, volatility)
+///        for the metered cache, built exactly as \c build_dryrun_cache does
+///        (same footprint arithmetic, same is_volatile default) -- NOT via
+///        that builder directly, since its is_volatile default (substituted
+///        for an empty \c cfg.is_volatile) is internal to it and would
+///        otherwise be invisible to \c assemble_report below, which also
+///        needs a callable predicate (an empty \c cfg.is_volatile passed to
+///        it directly throws \c std::bad_function_call from
+///        \c compute_volatility). The SAME locally-defaulted predicate is
+///        used for both.
+/// \param router optional placement override, installed on the metered cache
+///        when non-null.
+/// \param trace optional sink for the eval trace; when non-null,
+///        \c Logger::instance().eval.stream is redirected there for the
+///        duration of the call (restored on exit, along with the elevated
+///        \c eval.level and the installed \c eval.node_meta).
+/// \return the assembled \c MeterReport (peak, persistent/volatile
+///         FLOPs+time, build-vs-home fidelity), stamped with
+///         \p policy.whole_scope_execution.
+///
+inline MeterReport meter(
+    std::vector<EvalNodeDryRun> const& forest, BatchPolicy const& policy,
+    SizeRegime const& regime, CacheConfig const& cfg,
+    PlacementRouter<EvalNodeDryRun> const* router = nullptr,
+    std::ostream* trace = nullptr) {
+  auto cm = std::make_shared<CostModel const>(regime);
+  DryRunLeafEvaluator yield{cm};
+
+  // Default is_volatile the SAME way build_dryrun_cache does (an empty
+  // cfg.is_volatile means nothing is volatile) -- but keep the defaulted
+  // function LOCAL rather than routing through that builder, so the exact
+  // same predicate can also be threaded to assemble_report below.
+  std::function<bool(EvalNodeDryRun const&)> const is_volatile =
+      cfg.is_volatile ? cfg.is_volatile
+                      : std::function<bool(EvalNodeDryRun const&)>(
+                            [](EvalNodeDryRun const&) { return false; });
+
+  // Footprint (bytes) of a node's RESULT, identical to build_dryrun_cache's
+  // footprint_of (cost_profile.hpp): the moment-aware memsize counter over
+  // canon_indices(), scaled to bytes, so cfg.max_footprint gates like-for-like.
+  auto memsize = sequant::opt::detail::memsize_counter(regime.idx_to_extent(),
+                                                       regime.inner_pow_fn());
+  auto footprint_of =
+      [memsize = std::move(memsize)](EvalNodeDryRun const& n) -> double {
+    std::vector<Index> const result(n->canon_indices().begin(),
+                                    n->canon_indices().end());
+    return memsize(std::vector<Index>{}, std::vector<Index>{}, result) * 8.0;
+  };
+
+  auto cache =
+      sequant::cache_manager(forest, is_volatile, cfg.min_repeats,
+                             std::move(footprint_of), cfg.max_footprint);
+  cache.set_recompute_tally_enabled(true);
+  if (router) cache.set_placement_router(router);
+
+  PeakMonitor mon;
+  cache.set_peak_monitor(&mon);
+
+  // The SAME block_of source the coexistence entry itself derives from
+  // policy.batch_target_size (scope_executor.hpp's evaluate(Nodes const&,
+  // BatchPolicy const&, ...)) -- an empty batch_target_size means "no
+  // batching", guarded identically so compute_dag_boulevard never invokes an
+  // empty std::function.
+  std::function<std::size_t(Index const&)> const block_of =
+      policy.batch_target_size
+          ? policy.batch_target_size
+          : std::function<std::size_t(Index const&)>(
+                [](Index const&) -> std::size_t { return 1; });
+  RichSchedule const rich = compute_dag_boulevard(forest, *cm, block_of);
+
+  // RAII save/restore of every Logger::eval field this call touches, so an
+  // exception from the replay below still leaves the process-wide Singleton
+  // exactly as this call found it.
+  auto& logger = Logger::instance();
+  struct LoggerStateGuard {
+    Logger& l;
+    std::size_t prev_level;
+    std::ostream* prev_stream;
+    std::function<std::string(std::size_t)> prev_node_meta;
+    ~LoggerStateGuard() {
+      l.eval.level = prev_level;
+      l.eval.stream = prev_stream;
+      l.eval.node_meta = std::move(prev_node_meta);
+    }
+  } guard{logger, logger.eval.level, logger.eval.stream, logger.eval.node_meta};
+
+  // Ensure printing() so DryRunOps::prod records flops/exec (feeding
+  // cache.tally_build) and note_working_set() actually observes the
+  // PeakMonitor -- without raising the level any HIGHER than a caller who
+  // already wants a louder trace.
+  logger.eval.level = std::max<std::size_t>(logger.eval.level, 1);
+  if (trace) logger.eval.stream = trace;
+  logger.eval.node_meta = make_node_meta(rich);
+
+  (void)sequant::evaluate<Trace::On>(forest, policy, std::wstring{}, yield,
+                                     cache, {}, sequant::make_no_scope_guard{});
+
+  return assemble_report(cache, mon, rich, forest, is_volatile,
+                         policy.whole_scope_execution);
 }
 
 }  // namespace sequant::eval::dryrun
