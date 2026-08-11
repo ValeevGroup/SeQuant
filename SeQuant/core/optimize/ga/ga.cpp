@@ -29,14 +29,34 @@ struct SeedScratch {
 /// The exact single-term contraction-order DP, on the KeyTable's per-subset
 /// index masks. Same recurrence as `opt::detail::single_term_opt<DenseFLOPs>`,
 /// and four things must stay exact because they decide which tree comes out:
-/// the cost (`merge_volume` + the `v == 1. -> 0.` scalar rule is
-/// `flops_counter`, under default `CostParams`, so the seed is deliberately
-/// volatility-BLIND even when the Fitness cost is not); the ascending subset
-/// order; the bipartition order (the `a < S^a` half, `a` ascending, `(a-S)&S`
-/// being the submask successor); and the `<=` TIE-BREAK, so the LAST
-/// equal-cost bipartition wins. Child ordering needs no analogue: the laminar
-/// family is determined by the SET of chosen splits.
-TreeCode seed_tree(TermTable const& T, SeedScratch& scr) {
+/// the per-merge charge (\p cm, below); the ascending subset order; the
+/// bipartition order (the `a < S^a` half, `a` ascending, `(a-S)&S` being the
+/// submask successor); and the `<=` TIE-BREAK, so the LAST equal-cost
+/// bipartition wins. Child ordering needs no analogue: the laminar family is
+/// determined by the SET of chosen splits.
+///
+/// \p cm is the ONLY difference between the blind and the volatility-aware
+/// seed, and both run through this one body precisely so the three ordering
+/// rules above cannot drift between them:
+///
+/// - `nullptr` -- `merge_volume` + the `v == 1. -> 0.` scalar rule, which is
+///   `flops_counter` under default `CostParams`: deliberately volatility-BLIND
+///   even when the `Fitness` cost is not. `seed_genome(kt)`, the default, and
+///   the behavior the reference numbers assume.
+/// - non-null (`seed_genome(kt, cm)`, reached only under
+///   `GAOptions::volatility_aware_seed`) -- `cm->merge(T, a, b, replayed)` with
+///   `replayed = is_volatile(S)`: the PER-TERM rule, i.e. persistent work is
+///   assumed paid once and only amplitude-dependent work is charged
+///   `volatile_weight` times. Under a matched `CostModel::amortize_persistent`
+///   emission that is exactly what `Fitness::resolve` charges an unshared
+///   cluster, so no sharing estimate is needed here (an earlier prototype
+///   iterated one; it was measured to search WORSE and is deliberately gone).
+///   It stays a heuristic in two known ways -- sharing can only make a cluster
+///   cheaper than the DP assumed, and a cluster over `naming_cap_elems` is
+///   charged x volatile_weight by the objective but once by this DP -- which
+///   is harmless: the seed is a starting point, and every genome the search
+///   compares is scored by `Fitness`, never by this.
+TreeCode seed_tree(TermTable const& T, CostModel const* cm, SeedScratch& scr) {
   const int n = static_cast<int>(T.n());
   if (n < 3) return TreeCode(n - 1, 0);  // 1 or 2 leaves: the only tree
   const NodeMask full = T.full();
@@ -45,13 +65,21 @@ TreeCode seed_tree(TermTable const& T, SeedScratch& scr) {
   scr.split.assign(N, 0);
   for (NodeMask S = 1; S < N; ++S) {
     if (std::popcount(S) < 2) continue;
+    // every bipartition of S produces S, so they share its volatility
+    const bool replayed = cm && CostModel::is_volatile(T, S);
     double best = std::numeric_limits<double>::max();
     NodeMask best_a = 0;
     for (NodeMask a = S & (~S + 1); a; a = (a - S) & S) {
       const NodeMask b = S ^ a;
       if (a > b) break;
-      const double v = merge_volume(T, a, b);
-      const double c = scr.cost[a] + scr.cost[b] + (v == 1. ? 0. : v);
+      double m;
+      if (cm) {
+        m = cm->merge(T, a, b, replayed);
+      } else {
+        const double v = merge_volume(T, a, b);
+        m = (v == 1. ? 0. : v);
+      }
+      const double c = scr.cost[a] + scr.cost[b] + m;
       if (c <= best) {  // last equal-cost bipartition wins
         best = c;
         best_a = a;
@@ -351,16 +379,26 @@ Scored ga_once(Fitness const& F, Genome const& g0, GAOptions const& opts,
 
 }  // namespace
 
-Genome seed_genome(KeyTable const& kt) {
+namespace {
+
+Genome seed_genome_impl(KeyTable const& kt, CostModel const* cm) {
   Genome out;
   SeedScratch scr;
   for (auto const& T : kt.terms) {
-    const TreeCode code = seed_tree(T, scr);
+    const TreeCode code = seed_tree(T, cm, scr);
     out.g.insert(out.g.end(), code.begin(), code.end());
   }
   for (auto const& tgt : kt.targets)
     out.h.insert(out.h.end(), tgt.terms.size() - 1, 0);
   return out;
+}
+
+}  // namespace
+
+Genome seed_genome(KeyTable const& kt) { return seed_genome_impl(kt, nullptr); }
+
+Genome seed_genome(KeyTable const& kt, CostModel const& cost) {
+  return seed_genome_impl(kt, &cost);
 }
 
 // One block's NNI neighbourhood is evaluated concurrently, and the parallel

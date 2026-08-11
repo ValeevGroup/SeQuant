@@ -174,6 +174,43 @@ struct OptimizeOptions {
   /// ObjectiveFunction::DenseFLOPs.
   double volatile_weight = 1.0;
 
+  /// GA factorizer only. Widen the amortization class from "arrays used at
+  /// >= 2 sites" to "used at >= 2 sites OR amplitude-free": persistent
+  /// single-use intermediates become NAMED definitions that the runtime
+  /// evaluates once per solve (mpqc4's `refresh` never re-evaluates a
+  /// non-volatile definition), and the objective charges them once instead of
+  /// \ref volatile_weight times. Emission and objective read one shared
+  /// predicate (`opt::ga::CostModel::runtime_amortized`), so they cannot
+  /// disagree. \c false (default) is the historical contract bit for bit.
+  /// Inert without \c batch_policy.is_volatile_leaf.
+  ///
+  /// The cost is residency: every newly named array stays live for the whole
+  /// solve. Bound it with \ref ga_naming_cap_elems.
+  bool ga_amortize_persistent = false;
+
+  /// GA factorizer only, and only with \ref ga_amortize_persistent. Hard
+  /// per-array cap, in ELEMENTS, on the newly named class: a persistent
+  /// single-use array larger than this is not named, stays inlined, and stays
+  /// charged \ref volatile_weight times -- objective and emission remain
+  /// matched at any cap. Arrays used at >= 2 sites are named regardless, as
+  /// before, so 0 degrades exactly to \c ga_amortize_persistent == false.
+  /// Default 2e8 (~1.6 GB fp64) is conservative and meant to be tuned against
+  /// measured peak RSS.
+  double ga_naming_cap_elems = 2e8;
+
+  /// GA factorizer only. Seed the search with the volatility-WEIGHTED per-term
+  /// DP instead of the blind one -- the same knob as
+  /// `opt::ga::GAOptions::volatility_aware_seed`, surfaced here so all three GA
+  /// knobs can be plumbed from one options struct; the two are a union (both
+  /// default off, either turns it on). Inert without
+  /// \c batch_policy.is_volatile_leaf, so blind universes are untouched.
+  ///
+  /// This is a SEARCH knob, unlike the two above: it changes where the search
+  /// starts, not what anything costs. It is also the single largest measured
+  /// lever at \ref volatile_weight > 1 -- the blind seed is the vw = 1 optimum
+  /// and the population never leaves its basin.
+  bool ga_volatility_aware_seed = false;
+
   /// Relative peak tolerance for the peak objectives' final selection: among
   /// the Pareto frontier of (peak, flops) trade-offs, pick the fewest-flops
   /// schedule whose peak is within (1 + peak_flops_tolerance) of the minimum.

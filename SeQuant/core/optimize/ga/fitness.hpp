@@ -489,6 +489,14 @@ struct Schedule {
   double total = 0, l1 = 0, l2 = 0;
   container::svector<Summand> roots;  ///< one per target
   container::map<std::size_t, Cluster> pick;  ///< key -> producing cluster
+  /// key -> how many sites `resolve` charged it to: the L2 demands (with
+  /// multiplicity) plus one per parent slot in the resolved DAG. `>= 2` is the
+  /// `shared` bit the objective feeds `CostModel::runtime_amortized`, and it
+  /// must equal emission's render-site count (`ga::emission_use_counts`) key
+  /// for key -- the [ga] "persistent naming matches the objective" test pins
+  /// that, because the matched pair is only matched if the two counts agree.
+  /// Filled by `explain` only (the cost path never materializes it).
+  container::map<std::size_t, int> uses;
   ForestState forest;
 };
 
@@ -574,9 +582,13 @@ class Fitness {
   /// during construction would reorder the sum and over-count.
   void cost_of_cost_val(EvalScratch const& scratch, int val, double& l2,
                         container::svector<Cluster>& demanded) const;
+  /// \param pick_out if non-null, receives the producer of every walked key;
+  ///        \param uses_out (only read when \p pick_out is) receives the
+  ///        matching per-key charge counts (\ref Schedule::uses).
   double resolve(ForestState const& st, EvalScratch& scratch,
                  container::svector<Cluster> const& demanded,
-                 container::map<std::size_t, Cluster>* pick_out) const;
+                 container::map<std::size_t, Cluster>* pick_out,
+                 container::map<std::size_t, int>* uses_out = nullptr) const;
 
   KeyTable const* kt_;
   CostModel cost_;

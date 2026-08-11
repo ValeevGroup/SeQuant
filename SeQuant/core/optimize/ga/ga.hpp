@@ -28,14 +28,43 @@ struct GAOptions {
   /// Print the search's per-phase wall time (hill_climb / breed / eval /
   /// select) to stderr.
   bool report_phases = false;
+  /// Seed the L1 trees with the volatility-WEIGHTED per-term DP
+  /// (`seed_genome(kt, cost)`) instead of the blind one. Off by default: the
+  /// blind seed is what the recorded reference numbers assume, and the flag
+  /// changes every vw > 1 schedule by construction.
+  ///
+  /// Why it exists: the blind seed is the vw = 1 optimum, and the population
+  /// never crosses out of its basin -- MEASURED, its winners keep ~2x the
+  /// per-iteration volatile flops of the weighted seed's at every vw > 1, and
+  /// the whole GA-vs-GA gap at vw > 1 is that basin. With this on and nothing
+  /// else changed, the search reaches 0.845-0.911 x the per-term schedule's
+  /// own (cached-runtime) cost at vw = 20, where the blind seed reaches 1.72x.
+  ///
+  /// Inert unless the cost is volatility-aware; `optimize_ga` additionally
+  /// gates it on a volatile-leaf predicate being supplied at all, so blind
+  /// universes stay bit-identical whatever this says.
+  bool volatility_aware_seed = false;
 };
 
 /// Per-term optimal binarizations (an exact subset DP over the key table's
 /// per-subset index masks -- see `seed_tree` in ga.cpp) plus flat L2 trees;
 /// the mandatory starting point of the search. Deliberately volatility-BLIND:
 /// the per-term flop optimum under the unweighted cost, whatever weighting the
-/// `Fitness` applies. That is the behavior the reference numbers assume.
+/// `Fitness` applies. That is the behavior the reference numbers assume, and
+/// it is what `GAOptions::volatility_aware_seed == false` (the default) runs.
 Genome seed_genome(KeyTable const& kt);
+
+/// The same DP, same subset order, same bipartition order and same `<=`
+/// tie-break -- one shared body -- with each merge charged \p cost instead of
+/// the unweighted flop count: `cost.merge(T, a, b, is_volatile(a|b))`, the
+/// PER-TERM replay rule (only amplitude-dependent work is charged
+/// `volatile_weight` times; persistent work is assumed built once, which is
+/// what a `CostModel::amortize_persistent` emission delivers). Reached only
+/// under `GAOptions::volatility_aware_seed`. Reproduces `seed_genome(kt)` bit
+/// for bit whenever the charge coincides -- in particular for
+/// `CostModel::native()` on a volatility-blind table, and for any volatile
+/// mask at `volatile_weight == 1`. L2 genes stay flat zeros either way.
+Genome seed_genome(KeyTable const& kt, CostModel const& cost);
 
 /// Deterministic full-neighbourhood NNI descent on both layers; returns the
 /// reached cost.

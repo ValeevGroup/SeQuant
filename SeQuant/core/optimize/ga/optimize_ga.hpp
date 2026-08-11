@@ -10,9 +10,19 @@
 // term enters it. Its one piece of iteration awareness is
 // OptimizeOptions::volatile_weight: a merge is charged `volatile_weight` times
 // if its cluster contains a volatile leaf and once otherwise, which with no
-// volatile-leaf predicate reduces exactly to a single-shot flop count. All
-// flop figures are upper bounds: producer resolution is greedy by default,
-// exact resolution being exponential in the key-fibre product.
+// volatile-leaf predicate reduces exactly to a single-shot flop count. WHICH
+// amplitude-free merges escape that charge is decided by
+// OptimizeOptions::ga_amortize_persistent / ga_naming_cap_elems, and by the one
+// predicate emission names arrays with (opt::ga::CostModel::runtime_amortized),
+// so the objective can never claim an amortization the emitted schedule does
+// not deliver. All flop figures are upper bounds: producer resolution is greedy
+// by default, exact resolution being exponential in the key-fibre product.
+//
+// Iteration awareness reaches the SEARCH too, but only through one knob:
+// GAOptions::volatility_aware_seed / OptimizeOptions::ga_volatility_aware_seed
+// start it at the replay-weighted per-term optimum instead of the unweighted
+// one. Both default off, and all three knobs are ignored unless a volatile-leaf
+// predicate is supplied.
 
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/optimize/ga/emit.hpp>

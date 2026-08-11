@@ -16,13 +16,29 @@ GAResult optimize_ga(container::svector<TargetInput> const& targets,
   // consulted only when a volatile-leaf predicate is supplied, so callers that
   // pass none keep the historical volatility-blind cost bit for bit.
   CostModel cm = cost;
-  if (opts.batch_policy.is_volatile_leaf)
+  if (opts.batch_policy.is_volatile_leaf) {
     cm.volatile_weight = opts.volatile_weight;
+    // The matched pair (cost.hpp): widening the amortization class is only
+    // meaningful once volatility is modelled, and it widens BOTH the
+    // objective's replay rule and emission's naming rule at once.
+    cm.amortize_persistent = opts.ga_amortize_persistent;
+    cm.naming_cap_elems = opts.ga_naming_cap_elems;
+  }
   GAResult out;
   auto kt = build_key_table(targets, ixex, opts.batch_policy.is_volatile_leaf);
   Fitness fitness(kt, cm, resolution, ga_opts.memo_capacity);
   SearchTrace trace;
-  auto [flops, genome] = run_ga(fitness, seed_genome(kt), ga_opts, &trace);
+  // The seed. Weighted only on request, and only where volatility is modelled
+  // at all -- so a caller with no volatile-leaf predicate keeps the blind
+  // per-term DP, and every number recorded against it, whatever it sets. The
+  // two surfaces are a UNION, not a precedence: both default off, either turns
+  // it on, and neither can turn the other off.
+  const bool aware_seed =
+      static_cast<bool>(opts.batch_policy.is_volatile_leaf) &&
+      (ga_opts.volatility_aware_seed || opts.ga_volatility_aware_seed);
+  auto [flops, genome] =
+      run_ga(fitness, aware_seed ? seed_genome(kt, cm) : seed_genome(kt),
+             ga_opts, &trace);
   Schedule schedule = fitness.explain(genome);
   out.flops = flops;
   out.seed_flops = trace.seed_cost;

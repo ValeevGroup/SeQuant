@@ -24,6 +24,14 @@
 // with the face renamed through the canonical correspondence); factored sums
 // are emitted as (X1' + X2') * V. inline_definitions substitutes the
 // definitions back, reproducing the fully-unrolled emission exactly.
+//
+// WHICH keys get named is not this file's decision: it is
+// `CostModel::runtime_amortized`, the same function `Fitness::resolve` charges
+// by. Naming a key the objective still charges per replay wastes residency;
+// charging once a key emission inlines makes the objective lie. Under
+// `CostModel::amortize_persistent` the named class widens from "used at >= 2
+// sites" to "used at >= 2 sites OR amplitude-free, slot-bearing and under
+// `naming_cap_elems`", on both sides at once.
 
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/optimize/ga/fitness.hpp>
@@ -56,6 +64,13 @@ container::svector<ExprPtr> inline_definitions(Emission const& em);
 /// inline_definitions(emit_named(fitness, schedule)).
 container::svector<ExprPtr> emit(Fitness const& fitness,
                                  Schedule const& schedule);
+
+/// Render-site count per keyed array -- `emit_named`'s pass 1, run on its own.
+/// Exposed so the [ga] tests can pin it against `Schedule::uses`: emission
+/// counts render sites and `Fitness::resolve` counts L2 demands plus parent
+/// slots, and the matched pair is only matched while those two counts agree.
+container::map<std::size_t, std::size_t> emission_use_counts(
+    Fitness const& fitness, Schedule const& schedule);
 
 }  // namespace sequant::opt::ga
 

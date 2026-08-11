@@ -614,7 +614,8 @@ void Fitness::cost_of_cost_val(EvalScratch const& sc, int val, double& l2,
 // `seeds` and gated by first insertion, and `pick_out` sorts before copying.
 double Fitness::resolve(ForestState const& st, EvalScratch& sc,
                         container::svector<Cluster> const& demanded,
-                        container::map<std::size_t, Cluster>* pick_out) const {
+                        container::map<std::size_t, Cluster>* pick_out,
+                        container::map<std::size_t, int>* uses_out) const {
   auto& seeds = sc.seeds;
   seeds.clear();
   for (auto const& c : demanded)
@@ -626,12 +627,15 @@ double Fitness::resolve(ForestState const& st, EvalScratch& sc,
     auto const* cc = st.terms[c.d].children_of(c.S);
     return cost_.merge(kt_->terms[c.d], cc[0], cc[1]);
   };
-  // A key is paid once per solve only if it is BOTH amplitude-free AND shared,
-  // because emission stores exactly the keys used at more than one site and
-  // inlines the rest. Weighting every amplitude-free merge by 1 instead
-  // promises reuse the runtime never provides, and the search answers by
-  // manufacturing single-use amplitude-free work. Mirrors the eval cache's own
-  // `count >= min_repeats || persistent` rule.
+  // A key is paid once per solve exactly when emission will name it and the
+  // runtime will therefore build it once: `CostModel::runtime_amortized`
+  // decides that, and emission asks the same function the same question. By
+  // default that is "amplitude-free AND shared", because emission stores
+  // exactly the keys used at more than one site and inlines the rest; weighting
+  // every amplitude-free merge by 1 without widening emission would promise
+  // reuse the runtime never provides, and the search answers by manufacturing
+  // single-use amplitude-free work. `CostModel::amortize_persistent` widens
+  // BOTH sides at once (see cost.hpp).
   auto& uses = sc.uses;
   auto& uses_set = sc.uses_set;
   auto& walked = sc.walked;
@@ -693,9 +697,12 @@ double Fitness::resolve(ForestState const& st, EvalScratch& sc,
       auto const& T = kt_->terms[c.d];
       const bool shared = (uses_set.contains(k) ? uses[k] : 0) >= 2;
       // without volatility tracking the objective is the single-shot DAG
-      // count, every distinct key charged exactly once
-      const bool replayed = kt_->volatility_aware &&
-                            (CostModel::is_volatile(T, c.S) || !shared);
+      // count, every distinct key charged exactly once. With it, the key is
+      // charged once iff emission will make the runtime build it once -- the
+      // SAME predicate emission names by (cost.hpp), evaluated on the SAME
+      // producer cluster and the same `shared` bit.
+      const bool replayed =
+          kt_->volatility_aware && !cost_.runtime_amortized(T, c.S, shared);
       cost += cost_.merge(T, cc[0], cc[1], replayed);
       for (int i = 0; i < 2; ++i)
         if (std::popcount(cc[i]) >= 2) stack.push_back(T.key[cc[i]]);
@@ -725,7 +732,11 @@ double Fitness::resolve(ForestState const& st, EvalScratch& sc,
 
   auto copy_picks = [&] {
     std::sort(seen_list.begin(), seen_list.end());
-    for (std::uint32_t k : seen_list) (*pick_out)[k] = pick[k];
+    for (std::uint32_t k : seen_list) {
+      (*pick_out)[k] = pick[k];
+      if (uses_out)
+        (*uses_out)[k] = uses_set.contains(k) ? uses[k] : 0;
+    }
   };
 
   if (resolution_ == ProducerResolution::Exact) {
@@ -846,7 +857,7 @@ Schedule Fitness::explain(Genome const& genome, EvalScratch& sc) const {
   }
   container::svector<Cluster> demanded;
   for (auto const& root : sch.roots) cost_of_value(root.val, sch.l2, demanded);
-  sch.l1 = resolve(sch.forest, sc, demanded, &sch.pick);
+  sch.l1 = resolve(sch.forest, sc, demanded, &sch.pick, &sch.uses);
   sch.total = sch.l1 + sch.l2;
   return sch;
 }

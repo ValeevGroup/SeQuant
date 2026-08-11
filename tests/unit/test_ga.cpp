@@ -32,6 +32,7 @@
 #include <cstdio>
 #include <fstream>
 #include <functional>
+#include <limits>
 #include <random>
 #include <set>
 #include <unordered_map>
@@ -948,6 +949,251 @@ TEST_CASE("ga python parity", "[ga]") {
   }
 }
 
+// ------------------------------------------------ volatility-aware seed ----
+
+/// An independent restatement of `seed_tree`'s weighted DP: recursive with a
+/// hash memo instead of an ascending subset sweep, but sharing the three
+/// tie-sensitive conventions that decide WHICH of several equal-cost trees
+/// comes out -- the bipartition order (the `a < S^a` half, `a` ascending
+/// through the submask successor), the `<=` last-equal-wins tie-break, and the
+/// per-merge charge `cost.merge(T, a, b, is_volatile(S))`. A reference that
+/// did not share them could only compare costs; this one compares GENOMES,
+/// which is what the search actually consumes.
+ga::Genome reference_aware_seed(ga::KeyTable const& kt,
+                                ga::CostModel const& cost) {
+  ga::Genome out;
+  for (auto const& T : kt.terms) {
+    const int n = static_cast<int>(T.n());
+    if (n < 3) {  // 1 or 2 leaves: the only tree
+      out.g.insert(out.g.end(), n - 1, 0);
+      continue;
+    }
+    std::unordered_map<ga::NodeMask, std::pair<double, ga::NodeMask>> memo;
+    std::function<double(ga::NodeMask)> best = [&](ga::NodeMask S) -> double {
+      if (std::popcount(S) < 2) return 0.;
+      if (auto it = memo.find(S); it != memo.end()) return it->second.first;
+      const bool replayed = ga::CostModel::is_volatile(T, S);
+      double bc = std::numeric_limits<double>::max();
+      ga::NodeMask ba = 0;
+      for (ga::NodeMask a = S & (~S + 1); a; a = (a - S) & S) {
+        const ga::NodeMask b = S ^ a;
+        if (a > b) break;
+        const double c = best(a) + best(b) + cost.merge(T, a, b, replayed);
+        if (c <= bc) {
+          bc = c;
+          ba = a;
+        }
+      }
+      memo.emplace(S, std::pair{bc, ba});
+      return bc;
+    };
+    best(T.full());
+    ga::Laminar fam;
+    for (int v = 0; v < n; ++v) fam.push_back(ga::NodeMask{1} << v);
+    container::svector<ga::NodeMask> stack{T.full()};
+    while (!stack.empty()) {
+      const ga::NodeMask S = stack.back();
+      stack.pop_back();
+      fam.push_back(S);
+      const ga::NodeMask a = memo.at(S).second, b = S ^ a;
+      if (std::popcount(a) >= 2) stack.push_back(a);
+      if (std::popcount(b) >= 2) stack.push_back(b);
+    }
+    ga::canon_sort(fam);
+    const ga::TreeCode code = ga::encode_tree(std::move(fam), n);
+    out.g.insert(out.g.end(), code.begin(), code.end());
+  }
+  for (auto const& tgt : kt.targets)
+    out.h.insert(out.h.end(), tgt.terms.size() - 1, 0);
+  return out;
+}
+
+// `GAOptions::volatility_aware_seed` (and its `OptimizeOptions` twin
+// `ga_volatility_aware_seed`), both default off: the same per-term DP,
+// charging every merge through the CostModel -- `replays(is_volatile(S))`,
+// the per-term rule -- instead of the raw flop count. It exists because the
+// blind seed is the volatile_weight == 1 optimum and the population never
+// leaves its basin; it is the single largest measured lever at vw > 1.
+//
+// Four things have to hold, and each gets a section:
+//   1. wherever the two charges coincide the weighted DP reproduces the blind
+//      seed GENE FOR GENE -- ga.hpp's "the reference numbers assume the blind
+//      seed" is a promise about the default, and it must survive the default
+//      now flowing through a shared, parameterized DP body;
+//   2. at vw > 1 the result is the per-term optimum UNDER THE WEIGHTED COST,
+//      proved exhaustively against every binary tree of every term rather than
+//      against a second DP that could share a mistake;
+//   3. genome equality against an independently written DP at five replay
+//      weights and both cost conventions (the prototype's out-of-tree
+//      `libcheck`, brought in-tree), plus a pinned cost so a change of TREE at
+//      equal cost still shows up;
+//   4. the knob reaches the seed through `optimize_ga` from either surface,
+//      and is inert without a volatile-leaf predicate.
+TEST_CASE("ga volatility-aware seed", "[ga]") {
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  mbpt::add_df_spaces(reg);
+  mbpt::add_pao_spaces(reg);
+  auto const terms = load_md_terms(SEQUANT_UNIT_TESTS_SOURCE_DIR
+                                   "/ga_pao_ccsd_df.md");
+  REQUIRE(terms.size() == 86);
+  std::function<bool(Tensor const&)> const amplitude = [](Tensor const& t) {
+    return t.label() == L"t";
+  };
+  const std::array<double, 5> weights{1., 5., 20., 50., 100.};
+
+  SECTION("inert wherever the two charges coincide") {
+    for (int mode : {0, 1}) {
+      INFO("universe mode " << mode);
+      auto kt = ga::build_key_table(universe(terms, mode), python_extent);
+      REQUIRE_FALSE(kt.volatility_aware);
+      auto const blind = ga::seed_genome(kt);
+      // (a) no volatile mask under native(): the weighted charge IS
+      // `merge_volume` + the scalar rule, term for term
+      auto const aware = ga::seed_genome(kt, ga::CostModel::native());
+      CHECK(aware.g == blind.g);
+      CHECK(aware.h == blind.h);
+      // (b) with a volatile mask, at volatile_weight == 1: `replays` is 1 on
+      // both classes, so the weighting cancels and the basin is still the
+      // vw == 1 one -- which is exactly why the blind seed is bad at vw > 1
+      auto ktv =
+          ga::build_key_table(universe(terms, mode), python_extent, amplitude);
+      REQUIRE(ktv.volatility_aware);
+      CHECK(ga::seed_genome(ktv).g == blind.g);
+      CHECK(ga::seed_genome(ktv, ga::CostModel::native()).g == blind.g);
+    }
+  }
+
+  SECTION("per-term optimal under the weighted cost, exhaustively") {
+    // Every binary tree of every term of the f-only universe, at five replay
+    // weights: the seed's block must ATTAIN the minimum weighted cost. The
+    // enumeration is the odometer over gene ranges 2k-3 the codec test uses;
+    // `tree_cost` decodes and walks the family, sharing no code with the DP.
+    auto kt = ga::build_key_table(universe(terms, 0), python_extent, amplitude);
+    REQUIRE(kt.volatility_aware);
+    ga::Fitness F(kt, ga::CostModel::python_parity());
+    std::size_t enumerated = 0;
+    for (double vw : weights) {
+      auto cm = ga::CostModel::python_parity();
+      cm.volatile_weight = vw;
+      auto const seed = ga::seed_genome(kt, cm);
+      for (std::size_t d = 0; d < kt.terms.size(); ++d) {
+        const int n = static_cast<int>(kt.terms[d].n());
+        container::svector<int> ranges(n - 1, 1);
+        for (int k = 2; k <= n; ++k) ranges[k - 2] = 2 * k - 3;
+        ga::TreeCode code(n - 1, 0);
+        double best = std::numeric_limits<double>::max();
+        std::size_t trees = 0;
+        while (true) {
+          best = std::min(best, tree_cost(kt, cm, static_cast<int>(d), code));
+          ++trees;
+          int i = 0;
+          for (; i < n - 1; ++i) {
+            if (++code[i] < ranges[i]) break;
+            code[i] = 0;
+          }
+          if (i == n - 1) break;
+        }
+        REQUIRE(trees == double_factorial(n));
+        enumerated += trees;
+        auto const [lo, hi] = F.layout().g_slice[d];
+        INFO("volatile_weight " << vw << ", term " << d << " of " << n
+                                << " leaves");
+        CHECK(tree_cost(kt, cm, static_cast<int>(d),
+                        {seed.g.begin() + lo, seed.g.begin() + hi}) == best);
+      }
+    }
+    std::printf("  exhaustive: %zu trees enumerated\n", enumerated);
+  }
+
+  SECTION("genome equality with an independent DP, five replay weights") {
+    for (int mode : {0, 1}) {
+      auto kt =
+          ga::build_key_table(universe(terms, mode), python_extent, amplitude);
+      REQUIRE(kt.volatility_aware);
+      for (auto base : {ga::CostModel::native(),
+                        ga::CostModel::python_parity()}) {
+        for (double vw : weights) {
+          auto cm = base;
+          cm.volatile_weight = vw;
+          INFO("universe mode " << mode << ", merge_factor " << cm.merge_factor
+                                << ", volatile_weight " << vw);
+          auto const mine = ga::seed_genome(kt, cm);
+          auto const ref = reference_aware_seed(kt, cm);
+          CHECK(mine.g == ref.g);
+          CHECK(mine.h == ref.h);
+        }
+      }
+    }
+  }
+
+  SECTION("pinned costs under the python-parity objective, g-only") {
+    // The seed the search would start from, scored by the objective it will be
+    // searched under. Both numbers are pinned because genome equality alone
+    // cannot see a change of COST convention, and the cost alone cannot see a
+    // change of tree at equal cost.
+    auto kt = ga::build_key_table(universe(terms, 1), python_extent, amplitude);
+    auto cm = ga::CostModel::python_parity();
+    cm.volatile_weight = 20.;
+    ga::Fitness F(kt, cm);
+    auto const blind = ga::seed_genome(kt);
+    auto const aware = ga::seed_genome(kt, cm);
+    CHECK(aware.g != blind.g);  // the knob bites on this universe
+    // MEASURED: the weighted seed is 2.02x cheaper than the blind one under
+    // the objective the search runs on -- the whole point of the knob.
+    CHECK(F(blind) == 1181961765240060.);
+    CHECK(F(aware) == 585153765240060.);
+  }
+
+  SECTION("reaches the seed through optimize_ga, from either surface") {
+    // g-only, not f-only: MEASURED, the f-only universe's weighted seed is the
+    // blind seed at every weight, so it cannot tell the two paths apart
+    auto targets = universe(terms, 1);
+    auto cm = ga::CostModel::native();
+    cm.volatile_weight = 20.;
+    auto kt = ga::build_key_table(targets, python_extent, amplitude);
+    const double blind_cost = ga::Fitness(kt, cm)(ga::seed_genome(kt));
+    const double aware_cost = ga::Fitness(kt, cm)(ga::seed_genome(kt, cm));
+    REQUIRE(aware_cost != blind_cost);
+
+    // the defaults, pinned separately from the behavior below so that a
+    // deliberate default flip (plan step 6) shows up HERE and nowhere else
+    CHECK_FALSE(ga::GAOptions{}.volatility_aware_seed);
+    CHECK_FALSE(OptimizeOptions{}.ga_volatility_aware_seed);
+
+    OptimizeOptions opts;
+    opts.idx_to_extent = python_extent;
+    opts.batch_policy.is_volatile_leaf = amplitude;
+    opts.volatile_weight = 20.;
+    opts.ga_volatility_aware_seed = false;  // the default, spelled out
+    // the search itself is irrelevant here -- `seed_cost` is F(seed), taken
+    // before the first move -- so it is cut to the bone
+    ga::GAOptions ga_opts;
+    ga_opts.population = 8;
+    ga_opts.generations = 1;
+    ga_opts.restarts = 1;
+    ga_opts.hill_climb_sweeps = 0;
+    ga_opts.volatility_aware_seed = false;  // the default, spelled out
+
+    CHECK(ga::optimize_ga(targets, opts, ga_opts).seed_flops == blind_cost);
+    auto ga_on = ga_opts;
+    ga_on.volatility_aware_seed = true;
+    CHECK(ga::optimize_ga(targets, opts, ga_on).seed_flops == aware_cost);
+    auto opts_on = opts;
+    opts_on.ga_volatility_aware_seed = true;
+    CHECK(ga::optimize_ga(targets, opts_on, ga_opts).seed_flops == aware_cost);
+    // the union of the two surfaces, not a precedence
+    CHECK(ga::optimize_ga(targets, opts_on, ga_on).seed_flops == aware_cost);
+    // ... and inert without a volatile-leaf predicate, whatever both say:
+    // the objective is then blind too, so the seed cost is the blind one
+    auto opts_blind = opts_on;
+    opts_blind.batch_policy.is_volatile_leaf = {};
+    auto ktb = ga::build_key_table(targets, python_extent);
+    const double blind_obj = ga::Fitness(ktb)(ga::seed_genome(ktb));
+    CHECK(ga::optimize_ga(targets, opts_blind, ga_on).seed_flops == blind_obj);
+  }
+}
+
 // T-A5 gave `Fitness::operator()` its own cost-only L2 recursion
 // (`build_node_cost` + `cost_of_cost_val` over `CostVal`s) so the ~164k
 // evaluations of a search stop materializing a `Schedule` they throw away.
@@ -999,6 +1245,30 @@ TEST_CASE("ga cost path agrees with explain", "[ga]") {
                             slice_genome(ref.winner_g, ref.winner_h),
                             slice_genome(ref.g_opt, ref.h0)},
                            0x5eed'09'01ull);
+  }
+
+  SECTION("g-only universe, volatility-aware, amortize_persistent on") {
+    // The blind path is what every other section exercises: `replayed` is
+    // false everywhere and `CostModel::runtime_amortized` is short-circuited
+    // out. This one drives the branch that actually reads it -- a volatile
+    // mask, a replay weight > 1, and the widened amortization class -- so a
+    // divergence between `operator()` and `explain` in the NEW rule cannot
+    // hide. Never relax this; extend it.
+    auto const& ref = ga_reference::gonly;
+    std::function<bool(Tensor const&)> const amplitude = [](Tensor const& t) {
+      return t.label() == L"t";
+    };
+    auto kt = ga::build_key_table(universe(terms, 1), python_extent, amplitude);
+    REQUIRE(kt.volatility_aware);
+    auto cm = ga::CostModel::python_parity();
+    cm.volatile_weight = 20.0;
+    cm.amortize_persistent = true;
+    ga::Fitness F(kt, cm);
+    check_cost_path_agrees(kt, F,
+                           {ga::seed_genome(kt),
+                            slice_genome(ref.winner_g, ref.winner_h),
+                            slice_genome(ref.g_opt, ref.h0)},
+                           0x5eed'09'02ull);
   }
 
   SECTION("81-term R1+R2 universe at DZ extents") {
@@ -1553,26 +1823,41 @@ TEST_CASE("ga replay weighting preserves the mathematics", "[ga]") {
   auto const targets = universe(terms, 1);
   auto const& ref = ga_reference::gonly;
   auto const genome = slice_genome(ref.winner_g, ref.winner_h);
+  // MEASURED: the winner's schedule contains no persistent SINGLE-USE keyed
+  // array (every amplitude-free key it resolves is already shared), so
+  // `amortize_persistent` is a no-op on it at any cap. The seed's schedule has
+  // one -- with a Κ x μ̃ face, hence only above the default cap -- so the
+  // sections that exercise the widened rule run on the seed instead.
+  auto const seed = slice_genome(ref.g_opt, ref.h0);
 
   std::function<bool(Tensor const&)> const amplitude = [](Tensor const& t) {
     return t.label() == L"t";
   };
   std::function<bool(Tensor const&)> const no_predicate{};
 
-  // Evaluate the fixed genome under one weight; optionally hand back the
-  // emitted (fully inlined) expressions. The KeyTable must outlive the
-  // Fitness that borrows it, so everything stays inside the lambda.
+  // Evaluate one genome under one weight; optionally hand back the emitted
+  // (fully inlined) expressions. The KeyTable must outlive the Fitness that
+  // borrows it, so everything stays inside the lambda.
+  struct Widen {  // the amortize_persistent knobs, off by default
+    bool on = false;
+    double cap = 2e8;
+  };
   auto schedule_cost = [&](double weight,
                            std::function<bool(Tensor const&)> const& pred,
-                           container::svector<ExprPtr>* emitted = nullptr) {
+                           container::svector<ExprPtr>* emitted = nullptr,
+                           Widen widen = {},
+                           ga::Genome const* g = nullptr) {
     auto kt = ga::build_key_table(targets, python_extent, pred);
     auto cm = ga::CostModel::python_parity();
     cm.volatile_weight = weight;
+    cm.amortize_persistent = widen.on;
+    cm.naming_cap_elems = widen.cap;
     ga::Fitness F(kt, cm, ga::ProducerResolution::Greedy);
-    auto sch = F.explain(genome);
+    auto sch = F.explain(g ? *g : genome);
     if (emitted) *emitted = ga::emit(F, sch);
     return sch.total;
   };
+  const Widen widened{true, std::numeric_limits<double>::max()};
 
   SECTION("inert without a volatile-leaf predicate") {
     // No predicate => volatile_mask is 0 => nothing is ever charged twice.
@@ -1609,6 +1894,52 @@ TEST_CASE("ga replay weighting preserves the mathematics", "[ga]") {
       }
     }
   }
+
+  // `CostModel::amortize_persistent` changes WHICH keyed arrays become named
+  // definitions (persistent single-use ones now do), so it changes the emitted
+  // syntax at every weight. What it may not change is the mathematics -- the
+  // naming rule is a materialization decision, not an algebraic one.
+  SECTION("every weight emits the same mathematics, amortize_persistent on") {
+    for (double w : {1.0, 2.0, 20.0, 100.0}) {
+      container::svector<ExprPtr> emitted;
+      schedule_cost(w, amplitude, &emitted, widened, &seed);
+      REQUIRE(emitted.size() == targets.size());
+      for (std::size_t t = 0; t < targets.size(); ++t) {
+        Sum original;
+        for (std::size_t s = 0; s < targets[t].summands.size(); ++s) {
+          REQUIRE(targets[t].ext[s] == targets[t].ext.front());
+          original.append(targets[t].summands[s]->clone());
+        }
+        INFO("volatile_weight = " << w << " (amortize_persistent), target "
+                                  << t);
+        REQUIRE_THAT(emitted[t], EquivalentTo(ex<Sum>(std::move(original))));
+      }
+    }
+  }
+
+  // Widening the amortization class can only remove replay charges, never add
+  // them: producer picks are chosen by the UNWEIGHTED-by-sharing `merge_of`
+  // and are therefore identical, and every walked key is charged x1 where it
+  // used to be charged x volatile_weight. So the flag-on objective is a
+  // pointwise lower bound on the flag-off one -- and at vw = 1 the two rules
+  // coincide exactly, which is the sanity end of the same statement.
+  SECTION("amortize_persistent lowers the objective, and is inert at vw = 1") {
+    CHECK(schedule_cost(1.0, amplitude, nullptr, widened, &seed) ==
+          schedule_cost(1.0, amplitude, nullptr, {}, &seed));
+    for (double w : {2.0, 20.0, 100.0}) {
+      INFO("volatile_weight = " << w);
+      CHECK(schedule_cost(w, amplitude, nullptr, widened, &seed) <=
+            schedule_cost(w, amplitude, nullptr, {}, &seed));
+    }
+    // it must genuinely bite somewhere, or the sections above prove nothing
+    CHECK(schedule_cost(20.0, amplitude, nullptr, widened, &seed) <
+          schedule_cost(20.0, amplitude, nullptr, {}, &seed));
+    // and it is still inert without a volatile-leaf predicate: the emission
+    // rule short-circuits on KeyTable::volatility_aware, which is what keeps
+    // the volatility-blind ga_reference fixtures untouched
+    CHECK(schedule_cost(20.0, no_predicate, nullptr, widened, &seed) ==
+          schedule_cost(1.0, no_predicate, nullptr, {}, &seed));
+  }
 }
 
 // The named-emission runtime contract: every shared array is a named tensor
@@ -1627,11 +1958,22 @@ TEST_CASE("ga named emission runtime contract", "[ga]") {
   auto const terms = load_md_terms(SEQUANT_UNIT_TESTS_SOURCE_DIR
                                    "/ga_pao_ccsd_df.md");
 
+  // \p pred / \p amortize_persistent select the emission contract under test:
+  // empty/false is the historical one (only multiply-used arrays are named),
+  // and a predicate with the flag on adds the persistent single-use class. The
+  // per-definition loops below are written over WHATEVER definitions exist, so
+  // they cover the new class for free; only the "every definition is shared"
+  // claim has to become the sharper volatile/persistent statement.
   auto verify = [](container::svector<ga::TargetInput> const& targets,
-                   ga::Genome const& genome) {
-    auto kt = ga::build_key_table(targets, python_extent);
-    ga::Fitness F(kt, ga::CostModel::python_parity(),
-                  ga::ProducerResolution::Greedy);
+                   ga::Genome const& genome,
+                   std::function<bool(Tensor const&)> const& pred = {},
+                   bool amortize_persistent = false, double cap = 2e8) {
+    auto kt = ga::build_key_table(targets, python_extent, pred);
+    auto cm = ga::CostModel::python_parity();
+    if (pred) cm.volatile_weight = 20.0;
+    cm.amortize_persistent = amortize_persistent;
+    cm.naming_cap_elems = cap;
+    ga::Fitness F(kt, cm, ga::ProducerResolution::Greedy);
     auto sch = F.explain(genome);
     auto em = ga::emit_named(F, sch);
     REQUIRE(em.targets.size() == targets.size());
@@ -1695,14 +2037,63 @@ TEST_CASE("ga named emission runtime contract", "[ga]") {
     for (std::size_t i = 0; i < em.definitions.size(); ++i)
       scan(em.definitions[i].expression(), i);
 
-    // every definition is genuinely shared (>= 2 use sites)
-    for (auto const& d : em.definitions) {
+    // Volatile/persistent partition, replaying mpqc4's `depends_on_volatile`
+    // (sequant.cpp) in-test: a definition is volatile iff its body holds an
+    // amplitude leaf or USES a volatile definition. That transitive rule is
+    // what decides, at runtime, whether `refresh` re-evaluates the definition
+    // every iteration -- so the objective's persistent x1 charge is only
+    // honest if the definitions it named come out persistent here. Definitions
+    // are emitted in dependency order, so one forward pass suffices.
+    container::map<std::wstring, bool> volatile_def;
+    std::function<bool(ExprPtr const&)> body_volatile =
+        [&](ExprPtr const& e) -> bool {
+      if (e->is<Product>()) {
+        for (auto const& f : e->as<Product>().factors())
+          if (body_volatile(f)) return true;
+        return false;
+      }
+      if (e->is<Sum>()) {
+        for (auto const& s : e->as<Sum>().summands())
+          if (body_volatile(s)) return true;
+        return false;
+      }
+      if (!e->is<Tensor>()) return false;
+      auto const& t = e->as<Tensor>();
+      if (ga::is_named_intermediate(t.label())) {
+        auto it = volatile_def.find(std::wstring(t.label()));
+        REQUIRE(it != volatile_def.end());  // dependency order, again
+        return it->second;
+      }
+      return pred && pred(t);
+    };
+    for (auto const& d : em.definitions)
+      volatile_def.emplace(std::wstring(d.label()),
+                           body_volatile(d.expression()));
+
+    // Every definition is either genuinely shared (>= 2 use sites, the
+    // historical contract) or a PERSISTENT single-use array -- and the latter
+    // exists only when the flag that widened the objective's rule is on.
+    std::size_t n_single_use = 0;
+    for (std::size_t i = 0; i < em.definitions.size(); ++i) {
+      auto const& d = em.definitions[i];
       auto it = n_uses.find(d.label());
       REQUIRE(it != n_uses.end());
-      CHECK(it->second >= 2);
+      if (it->second >= 2) continue;
+      INFO("single-use definition #" << i);
+      CHECK(amortize_persistent);
+      CHECK(!volatile_def.at(std::wstring(d.label())));
+      ++n_single_use;
     }
-    std::printf("  named emission: %zu definitions over %zu targets\n",
-                em.definitions.size(), em.targets.size());
+    // ... and when it is on, the new class must be non-empty, or every check
+    // above is a check of the old contract wearing a new flag
+    if (amortize_persistent) CHECK(n_single_use > 0);
+    std::printf("  named emission: %zu definitions (%zu single-use) over %zu "
+                "targets\n",
+                em.definitions.size(), n_single_use, em.targets.size());
+  };
+
+  std::function<bool(Tensor const&)> const amplitude = [](Tensor const& t) {
+    return t.label() == L"t";
   };
 
   SECTION("f-only, control schedule") {
@@ -1712,6 +2103,168 @@ TEST_CASE("ga named emission runtime contract", "[ga]") {
   SECTION("g-only, prototype winner") {
     auto const& ref = ga_reference::gonly;
     verify(universe(terms, 1), slice_genome(ref.winner_g, ref.winner_h));
+  }
+  SECTION("f-only, control schedule, amortize_persistent on") {
+    auto const& ref = ga_reference::fonly;
+    verify(universe(terms, 0), slice_genome(ref.g_ctrl, ref.h_ctrl), amplitude,
+           true);
+  }
+  SECTION("g-only, seed, amortize_persistent on (cap lifted)") {
+    // Not the winner: its schedule has no persistent single-use array at all
+    // (see "ga replay weighting..."), and the seed's one has a Κ x μ̃ face, so
+    // the new naming class is only non-empty here with the cap lifted.
+    auto const& ref = ga_reference::gonly;
+    verify(universe(terms, 1), slice_genome(ref.g_opt, ref.h0), amplitude, true,
+           std::numeric_limits<double>::max());
+  }
+}
+
+// The matched pair. `Fitness::resolve` and `emit.cpp` call ONE function --
+// `CostModel::runtime_amortized` -- so the objective's replay rule and
+// emission's naming rule cannot drift as code. They can still drift as
+// DECISIONS, in exactly one way: the two sides compute the `shared` argument
+// independently (resolve counts L2 demands with multiplicity plus one per
+// parent slot; emission counts render sites), and nothing inside the shared
+// predicate can notice if those two counts disagree. This pins them equal, and
+// then pins the consequence: the emitted definitions are exactly the keys the
+// predicate names. It also pins the naming cap's degradation guarantee, which
+// is the only thing that makes a hard cap safe to ship -- a capped key stays
+// inlined AND stays charged x volatile_weight, so cap 0 reproduces the
+// pre-flag objective and emission exactly.
+TEST_CASE("ga persistent naming matches the objective", "[ga]") {
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  mbpt::add_df_spaces(reg);
+  mbpt::add_pao_spaces(reg);
+
+  auto const terms = load_md_terms(SEQUANT_UNIT_TESTS_SOURCE_DIR
+                                   "/ga_pao_ccsd_df.md");
+
+  std::function<bool(Tensor const&)> const amplitude = [](Tensor const& t) {
+    return t.label() == L"t";
+  };
+
+  struct Outcome {
+    double total;
+    std::size_t n_defs;
+  };
+
+  auto check = [&](container::svector<ga::TargetInput> const& targets,
+                   ga::Genome const& genome, bool amortize_persistent,
+                   double cap, std::size_t (*extent)(Index const&)) {
+    auto kt = ga::build_key_table(targets, extent, amplitude);
+    REQUIRE(kt.volatility_aware);
+    auto cm = ga::CostModel::python_parity();
+    cm.volatile_weight = 20.0;
+    cm.amortize_persistent = amortize_persistent;
+    cm.naming_cap_elems = cap;
+    ga::Fitness F(kt, cm, ga::ProducerResolution::Greedy);
+    auto sch = F.explain(genome);
+    auto em = ga::emit_named(F, sch);
+
+    // (1) the two `shared` bits are the same bit: same key set, same counts
+    auto const ec = ga::emission_use_counts(F, sch);
+    CHECK(ec.size() == sch.uses.size());
+    for (auto const& [k, u] : sch.uses) {
+      INFO("key " << k);
+      auto it = ec.find(k);
+      REQUIRE(it != ec.end());
+      CHECK(it->second == static_cast<std::size_t>(u));
+    }
+
+    // (2) emission named exactly the keys the shared predicate names -- the
+    // count is enough, because (1) already fixed every input it reads
+    std::size_t want = 0, persistent_single = 0;
+    for (auto const& [k, p] : sch.pick) {
+      auto const uit = sch.uses.find(k);
+      REQUIRE(uit != sch.uses.end());
+      const bool shared = uit->second >= 2;
+      want += shared ||
+              cm.runtime_amortized(kt.terms[p.d], p.S, /*shared=*/false);
+      persistent_single +=
+          !shared && !ga::CostModel::is_volatile(kt.terms[p.d], p.S);
+    }
+    CHECK(em.definitions.size() == want);
+    std::printf("  naming: %zu picked, %zu named, %zu persistent single-use\n",
+                sch.pick.size(), em.definitions.size(), persistent_single);
+    return Outcome{sch.total, em.definitions.size()};
+  };
+
+  /// The four configurations every universe is put through: the pre-flag
+  /// contract, the shipping default cap, a zero cap, and no cap at all.
+  struct Sweep {
+    Outcome off, on, capped, uncapped;
+  };
+  auto sweep = [&](container::svector<ga::TargetInput> const& targets,
+                   ga::Genome const& genome,
+                   std::size_t (*extent)(Index const&) = python_extent) {
+    Sweep s{check(targets, genome, false, 2e8, extent),
+            check(targets, genome, true, 2e8, extent),
+            check(targets, genome, true, 0.0, extent),
+            check(targets, genome, true, std::numeric_limits<double>::max(),
+                  extent)};
+    // Widening the amortization class can only add names and remove replay
+    // charges: producer picks are made by the sharing-blind `merge_of`, so
+    // they are identical across all four, and only the per-key charge moves.
+    CHECK(s.on.n_defs >= s.off.n_defs);
+    CHECK(s.on.total <= s.off.total);
+    // A zero cap refuses every array of the NEW class (none has fewer than one
+    // element), leaving the pre-flag contract intact on BOTH sides at once --
+    // which is the whole reason a hard cap is safe: it cannot desynchronize
+    // the objective from the emission, only shrink what both amortize.
+    CHECK(s.capped.n_defs == s.off.n_defs);
+    CHECK(s.capped.total == s.off.total);
+    // ... and the cap is monotone the other way too
+    CHECK(s.uncapped.n_defs >= s.on.n_defs);
+    CHECK(s.uncapped.total <= s.on.total);
+    return s;
+  };
+
+  SECTION("f-only, control schedule") {
+    // its one persistent single-use array is small, so the shipping default
+    // cap already names it
+    auto const& ref = ga_reference::fonly;
+    auto const s =
+        sweep(universe(terms, 0), slice_genome(ref.g_ctrl, ref.h_ctrl));
+    CHECK(s.on.n_defs > s.off.n_defs);
+    CHECK(s.on.total < s.off.total);
+  }
+  SECTION("g-only, prototype winner") {
+    // MEASURED: this schedule has no persistent single-use key at all, so the
+    // flag is a no-op here at any cap. Pinned because it is the honest
+    // statement about how narrow the new class can be.
+    auto const& ref = ga_reference::gonly;
+    auto const s =
+        sweep(universe(terms, 1), slice_genome(ref.winner_g, ref.winner_h));
+    CHECK(s.uncapped.n_defs == s.off.n_defs);
+    CHECK(s.uncapped.total == s.off.total);
+  }
+  SECTION("g-only, seed") {
+    // The cap doing its job: this schedule HAS a persistent single-use array,
+    // but its face carries a Κ and a μ̃ (3000 x 1000 at the prototype's
+    // extents), so the 2e8-element default refuses it residency -- and refuses
+    // it on both sides, leaving the objective identical to flag-off. Lift the
+    // cap and it is named and charged once. This is the step-4 contract in
+    // both directions.
+    auto const& ref = ga_reference::gonly;
+    auto const s = sweep(universe(terms, 1), slice_genome(ref.g_opt, ref.h0));
+    CHECK(s.on.n_defs == s.off.n_defs);
+    CHECK(s.on.total == s.off.total);
+    CHECK(s.uncapped.n_defs > s.off.n_defs);
+    CHECK(s.uncapped.total < s.off.total);
+  }
+  SECTION("81-term R1+R2 universe at DZ extents") {
+    // The universe the mpqc4 CSV-CCSD job is taken on, at extents where the
+    // cap does not bind: the widest coverage of the new naming class the [ga]
+    // tag can afford. All-zeros is a valid deterministic genome (see the
+    // cost-path test's note on why the seed DP is not used here).
+    auto kt = ga::build_key_table(universe(terms, 3), dz_extent, amplitude);
+    REQUIRE(kt.terms.size() == 81);
+    ga::Fitness F(kt);
+    auto const s =
+        sweep(universe(terms, 3), zero_genome(F.layout()), dz_extent);
+    CHECK(s.on.n_defs > s.off.n_defs);
+    CHECK(s.on.total < s.off.total);
   }
 }
 

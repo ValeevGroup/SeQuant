@@ -48,6 +48,25 @@ struct CostModel {
   /// `persistent_flops + N * volatile_flops`. Mirrors
   /// CostParams::volatile_weight; 1.0 is the volatility-blind cost.
   double volatile_weight = 1.0;
+  /// Widen the amortization class from "shared" to "shared OR persistent":
+  /// emission NAMES every amplitude-free keyed array it can (not only the
+  /// multiply-used ones), so the runtime evaluates it once per solve and the
+  /// objective may charge it once. Off by default = the historical contract,
+  /// bit for bit, on every path. Read ONLY through \ref runtime_amortized, so
+  /// `Fitness::resolve` and `emit.cpp` cannot disagree about what it means.
+  bool amortize_persistent = false;
+  /// Hard per-array cap, in elements, on the class \ref amortize_persistent
+  /// adds. Every newly named persistent array becomes resident for the whole
+  /// solve (mpqc4's `GAImedStore` never evicts), so an uncapped rule can hoist
+  /// an arbitrarily large intermediate. A key over the cap is simply not
+  /// amortized: it stays inlined at emission AND stays charged
+  /// x volatile_weight in the objective -- the two sides move together because
+  /// the cap is read inside the shared predicate. Shared (use_count >= 2) keys
+  /// are named regardless, exactly as before, so `naming_cap_elems == 0`
+  /// degrades to the pre-\ref amortize_persistent contract. Default 2e8
+  /// elements (~1.6 GB fp64) is deliberately conservative and meant to be
+  /// tuned against measured peak RSS, not trusted.
+  double naming_cap_elems = 2e8;
 
   static CostModel native() { return {1.0, true}; }
   static CostModel python_parity() { return {2.0, false}; }
@@ -61,6 +80,37 @@ struct CostModel {
   /// How many times work of this volatility is paid over the whole solve.
   double replays(bool volatile_work) const {
     return volatile_work ? volatile_weight : 1.0;
+  }
+
+  /// **The matched pair.** Whether the array produced by cluster \p S of term
+  /// \p T is built ONCE per solve rather than rebuilt on every replay, given
+  /// whether it is rendered at more than one site (\p shared).
+  ///
+  /// This one function is both the objective's replay rule (`Fitness::resolve`
+  /// charges `x volatile_weight` exactly where this is false) and emission's
+  /// naming rule (`emit.cpp` names a key iff it is `shared` or this says the
+  /// runtime would amortize it). They cannot drift because there is nothing to
+  /// keep in sync: promising amortization the emission does not deliver makes
+  /// the objective lie, and naming what the objective still charges per replay
+  /// wastes residency for nothing.
+  ///
+  /// - volatile work is never amortized: its value changes every iteration;
+  /// - `shared` work is amortized today and always was (emission names it);
+  /// - persistent single-use work is amortized only under
+  ///   \ref amortize_persistent, and only if it can actually be named: a
+  ///   scalar-faced cluster has no slots (`define()`'s `!slots.empty()` assert,
+  ///   and mpqc4's, are BOTH compiled out in release, so this guard is the only
+  ///   thing standing between such a cluster and a silently slotless head), and
+  ///   an over-cap cluster is refused residency (\ref naming_cap_elems).
+  ///
+  /// \note Volatility-blind tables must short-circuit this entirely: callers
+  ///       gate on `KeyTable::volatility_aware` (the L2 replay flag), which is
+  ///       not visible from here.
+  bool runtime_amortized(TermTable const& T, NodeMask S, bool shared) const {
+    if (is_volatile(T, S)) return false;
+    if (shared) return true;
+    return amortize_persistent && !T.canon_face_bits[S].empty() &&
+           T.face_size(S) <= naming_cap_elems;
   }
 
   /// \p volatile_work: whether the merged value depends on the amplitudes.

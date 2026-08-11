@@ -90,10 +90,21 @@ struct Emitter {
 
   /// key -> number of render sites (the producer's own site included)
   container::map<std::size_t, std::size_t> use_count;
-  /// key -> assigned intermediate label (shared keys only)
+  /// key -> assigned intermediate label (named keys only)
   container::map<std::size_t, std::wstring> names;
   /// definitions in emission (dependency) order
   container::svector<ResultExpr> defs;
+  /// \warning Restarts at 1 on every `emit_named` call, so two emissions
+  /// produce two disjoint schedules sharing the label namespace `IGA1, IGA2,
+  /// ...`. Safe within one solve (the only thing the current pipeline does --
+  /// a second target set is hard-rejected before this path), but mpqc4's
+  /// `ctx.extra_volatile_labels` is ENGINE-lifetime: a second emission in the
+  /// same engine (lambda/EOM) could see a reused `IGA<n>` still marked volatile
+  /// from the first and needlessly re-evaluate it every iteration. Performance
+  /// only, and pre-existing -- but `CostModel::amortize_persistent` makes many
+  /// more names, so it gets easier to hit. The one-line fix when lambda lands:
+  /// give each solve its own label prefix (thread a per-emission suffix into
+  /// `named_intermediate_prefix`) instead of restarting the counter.
   std::size_t name_counter = 1;
 
   KeyTable const& kt() const { return F.table(); }
@@ -137,7 +148,26 @@ struct Emitter {
     return it != use_count.end() && it->second >= 2;
   }
 
-  /// Ensure the definition of shared key \p k (producer \p p) has been
+  /// Whether key \p k, produced by cluster \p p, becomes a named definition.
+  /// THE decision this file exists to keep honest: it is
+  /// `CostModel::runtime_amortized`, the very function `Fitness::resolve`
+  /// decided the key's replay charge with, asked on the same producer cluster.
+  /// `shared` keys are named as they always were (a shared VOLATILE key is
+  /// named too -- it is stored and refreshed per iteration, which is why
+  /// `runtime_amortized` is only consulted for the single-use case); the
+  /// persistent single-use class is what `amortize_persistent` adds, and the
+  /// scalar-face and cap guards live inside the shared predicate so a key the
+  /// objective charged x volatile_weight is never named behind its back.
+  ///
+  /// Volatility-blind tables short-circuit to today's rule exactly, which is
+  /// what keeps the `ga_reference.hpp` parity fixtures untouched.
+  bool named(std::size_t k, Cluster p) const {
+    if (shared(k)) return true;
+    return kt().volatility_aware &&
+           F.cost().runtime_amortized(kt().terms[p.d], p.S, /*shared=*/false);
+  }
+
+  /// Ensure the definition of named key \p k (producer \p p) has been
   /// emitted; definitions this one depends on are emitted first (the body
   /// render below references them by name).
   /// \note returns (and captures) the label BY VALUE: `names` is a flat_map,
@@ -164,8 +194,8 @@ struct Emitter {
       return kt().terms[d].tensors[std::countr_zero(S)];
     auto const k = kt().terms[d].key[S];
     auto it = sch.pick.find(k);
-    if (it != sch.pick.end() && shared(k)) {
-      // shared array: define once under a canonical-face head, reference by
+    if (it != sch.pick.end() && named(k, it->second)) {
+      // named array: define once under a canonical-face head, reference by
       // name here; this site's slots are ITS canonical face order, which zips
       // axis-wise with the definition head's
       std::wstring const label = define(k, it->second);
@@ -361,6 +391,13 @@ container::svector<ExprPtr> inline_definitions(Emission const& em) {
 container::svector<ExprPtr> emit(Fitness const& fitness,
                                  Schedule const& schedule) {
   return inline_definitions(emit_named(fitness, schedule));
+}
+
+container::map<std::size_t, std::size_t> emission_use_counts(
+    Fitness const& fitness, Schedule const& schedule) {
+  Emitter em{fitness, schedule};
+  for (auto const& root : schedule.roots) em.count(root);
+  return std::move(em.use_count);
 }
 
 }  // namespace sequant::opt::ga
