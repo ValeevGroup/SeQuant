@@ -771,7 +771,7 @@ class compute_eomcc_closedshell_triplet {
 
       // ----- triplet: explicitly spin-coupled basis (Hattig/Kohn/Hald) -----
       // doubles use the T (x) E coupling; triples the T (x) E (x) E coupling
-      // (18-op orbit, tools/triplet_triples_check.py)
+      // (18-op perm set, tools/triplet_triples_check.py)
       if (N > 3 || ext_groups.size() > 3) {
         std::wcout << "R[" << i
                    << "] triplet: skipped (explicitly spin-coupled triplet "
@@ -808,7 +808,7 @@ class compute_eomcc_closedshell_triplet {
       } else if (ext_groups.size() == 3) {
         // triples: P3 = (1/80)[6 V - V_ps01 - V_ps02 + 2 V_ks12] with an
         // extra 1/2 (metric idempotency: 36 ordered labels cover the 18-op
-        // orbit 2:1) -> 1/160 (tools/triplet_triples_check.py, checks 2+6)
+        // perm 2:1) -> 1/160 (tools/triplet_triples_check.py, checks 2+6)
         const auto& g0 = ext_idxs.at(0);
         const auto& g1 = ext_idxs.at(1);
         const auto& g2 = ext_idxs.at(2);
@@ -823,7 +823,7 @@ class compute_eomcc_closedshell_triplet {
         const container::map<Index, Index> ket_swap_12{{k[1], k[2]},
                                                        {k[2], k[1]}};
 
-        // null-space identity: the sum over the whole 18-op orbit (as the 36
+        // null-space identity: the sum over the whole 18-op perm set (as the 36
         // independent bra x ket external permutations, a 2:1 cover) vanishes
         // -- the rank-3 analog of V + V_ps + V_bs + V_ks = 0
         {
@@ -833,7 +833,7 @@ class compute_eomcc_closedshell_triplet {
                                                           {1, 2, 0},
                                                           {2, 0, 1},
                                                           {2, 1, 0}}};
-          auto orbit_sum = std::make_shared<Sum>();
+          auto perm_sum = std::make_shared<Sum>();
           for (const auto& pb : s3) {
             for (const auto& pk : s3) {
               container::map<Index, Index> m;
@@ -841,15 +841,15 @@ class compute_eomcc_closedshell_triplet {
                 if (pb[n] != n) m.emplace(b[n], b[pb[n]]);
                 if (pk[n] != n) m.emplace(k[n], k[pk[n]]);
               }
-              orbit_sum->append(m.empty() ? V->clone() : transform_expr(V, m));
+              perm_sum->append(m.empty() ? V->clone() : transform_expr(V, m));
             }
           }
-          ExprPtr null_check = orbit_sum;
+          ExprPtr null_check = perm_sum;
           canonicalize(null_check);
           simplify(null_check);
           std::wcout << "R[" << i
                      << "] triplet triples null-space identity (Σ 18-op "
-                        "orbit): "
+                        "perm set): "
                      << term_count(null_check) << " terms (expect 0)\n";
           runtime_assert(term_count(null_check) == 0);
         }

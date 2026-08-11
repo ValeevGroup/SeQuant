@@ -2392,8 +2392,8 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
     if (options.triplet_doubles_compact)
       triplet = triplet_maxcoeff_compact(
           triplet, ext_groups,
-          options.triplet_te_only ? TripletOrbitWeightKind::TeNnsReconstruction
-                                  : TripletOrbitWeightKind::NnsReconstruction);
+          options.triplet_te_only ? TripletWeightKind::TeNnsReconstruction
+                                  : TripletWeightKind::NnsReconstruction);
   }
   simplify(triplet);
   std::wcout << "closed_shell_EOM_triplet_spintrace size: " << triplet->size()

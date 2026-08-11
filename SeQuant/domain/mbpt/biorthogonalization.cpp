@@ -26,6 +26,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <numeric>
 
 namespace sequant::mbpt {
 
@@ -696,64 +697,48 @@ constexpr std::array<std::array<std::array<int, 6>, 2>, 18>
 constexpr std::array<int, 18> triplet_triples_op_w10{
     5, -1, -1, -1, 1, 1, -2, -2, 1, 0, 1, 0, 0, 0, 1, -2, 1, -2};
 
-std::size_t triplet_slot_perm_orbit_order(std::size_t n_particles) {
-  std::size_t nf = 1;
-  for (std::size_t i = 2; i <= n_particles; ++i) nf *= i;
-  return nf * nf;
+// (n!)^2: the n bra slots and the n ket slots are permuted
+// independently
+std::size_t slot_perm_count(std::size_t n_particles) {
+  return static_cast<std::size_t>(factorial(n_particles) *
+                                  factorial(n_particles));
 }
 
 // flat index of a slot permutation (the row format of
 // triplet_triples_slot_perms)
-std::size_t triplet_slot_perm_index(
-    const container::svector<std::size_t>& images) {
-  SEQUANT_ASSERT(images.size() % 2 == 0);
-  const std::size_t n_particles = images.size() / 2;
-  const auto num_perms = triplet_slot_perm_orbit_order(n_particles);
+std::size_t slot_perm_index(const container::svector<std::size_t>& ords) {
+  SEQUANT_ASSERT(ords.size() % 2 == 0);
+  const std::size_t n_particles = ords.size() / 2;
+  const auto num_perms = slot_perm_count(n_particles);
   for (std::size_t p = 0; p != num_perms; ++p) {
-    if (detail::triplet_slot_perm_ords(p, n_particles) == images) return p;
+    if (detail::compute_bra_ket_permuted_indices(p, n_particles) == ords)
+      return p;
   }
-  throw Exception(
-      "triplet_slot_perm_index: not a valid S_n x S_n slot permutation");
+  throw Exception("slot_perm_index: not a valid S_n x S_n slot permutation");
 }
 
-// flat index of the identity slot permutation
-std::size_t triplet_identity_perm_index(std::size_t n_particles) {
-  const auto num_perms = triplet_slot_perm_orbit_order(n_particles);
-  for (std::size_t p = 0; p != num_perms; ++p) {
-    const auto ords = detail::triplet_slot_perm_ords(p, n_particles);
-    bool is_identity = true;
-    for (std::size_t s = 0; s != ords.size(); ++s) {
-      if (ords[s] != s) {
-        is_identity = false;
-        break;
-      }
-    }
-    if (is_identity) return p;
-  }
-  SEQUANT_UNREACHABLE;
-}
-
-// the idempotent null-space projector row over the S_n x S_n slot-perm
-// orbit: {3/4, -1/4, -1/4, -1/4} for n = 2; for n = 3 the per-representative
-// weights w10[m]/20 distributed over the 36 slot perms by 18x2
+// slot perms: {3/4, -1/4, -1/4, -1/4} for n = 2;
+// for n = 3 the per-representative weights w10[m]/20 distributed over the 36
+// slot perms by 18x2
 std::vector<rational> make_triplet_nullspace_weights(std::size_t n_particles) {
   switch (n_particles) {
     case 2: {
-      std::vector<rational> weights(triplet_slot_perm_orbit_order(2),
-                                    ratio(-1, 4));
-      weights[triplet_identity_perm_index(2)] = ratio(3, 4);
+      std::vector<rational> weights(slot_perm_count(2), ratio(-1, 4));
+      container::svector<std::size_t> identity_ords(4);
+      std::iota(identity_ords.begin(), identity_ords.end(), std::size_t{0});
+      weights[slot_perm_index(identity_ords)] = ratio(3, 4);
       return weights;
     }
 
     case 3: {
-      std::vector<rational> weights(triplet_slot_perm_orbit_order(3), 0);
+      std::vector<rational> weights(slot_perm_count(3), 0);
       std::vector<bool> assigned(weights.size(), false);
       for (std::size_t m = 0; m != 18; ++m) {
         for (std::size_t r = 0; r != 2; ++r) {
           container::svector<std::size_t> images(6);
           for (std::size_t s = 0; s != 6; ++s)
             images[s] = triplet_triples_slot_perms[m][r][s];
-          const auto p = triplet_slot_perm_index(images);
+          const auto p = slot_perm_index(images);
           SEQUANT_ASSERT(!assigned[p]);
           weights[p] = ratio(triplet_triples_op_w10[m], 20);
           assigned[p] = true;
@@ -766,7 +751,7 @@ std::vector<rational> make_triplet_nullspace_weights(std::size_t n_particles) {
 
     default:
       throw Exception(
-          "triplet slot-perm orbit weights only available for n_particles = "
+          "triplet slot-perm weights only available for n_particles = "
           "2, 3, requested rank is : " +
           std::to_string(n_particles));
   }
@@ -776,13 +761,13 @@ std::vector<rational> make_triplet_nullspace_weights(std::size_t n_particles) {
 // for the formulas
 std::vector<rational> make_triplet_combined_residual_weights(
     std::size_t n_particles, bool te_only) {
-  std::vector<rational> weights(triplet_slot_perm_orbit_order(n_particles), 0);
+  std::vector<rational> weights(slot_perm_count(n_particles), 0);
 
   auto set = [&](container::svector<std::size_t> bra,
                  const container::svector<std::size_t>& ket, rational coeff) {
     SEQUANT_ASSERT(bra.size() == n_particles && ket.size() == n_particles);
     for (const auto s : ket) bra.push_back(n_particles + s);
-    weights[triplet_slot_perm_index(bra)] = coeff;
+    weights[slot_perm_index(bra)] = coeff;
   };
 
   if (te_only) {
@@ -817,9 +802,9 @@ std::vector<rational> make_triplet_combined_residual_weights(
 }
 
 // (memoized) rational weight rows for the symbolic triplet primitives
-const std::vector<rational>& triplet_orbit_weights_rational(
-    std::size_t n_particles, TripletOrbitWeightKind kind) {
-  using CacheKey = std::pair<std::size_t, TripletOrbitWeightKind>;
+const std::vector<rational>& triplet_weights_rational(std::size_t n_particles,
+                                                      TripletWeightKind kind) {
+  using CacheKey = std::pair<std::size_t, TripletWeightKind>;
   // the rows are cached behind a pointer since the cache holds several keys
   // and flat_map insertions would invalidate references into it
   using CachedRow = std::unique_ptr<const std::vector<rational>>;
@@ -834,40 +819,42 @@ const std::vector<rational>& triplet_orbit_weights_rational(
       cache, cache_mutex, cache_cv, key, [&]() -> CachedRow {
         auto make_row = [&]() -> std::vector<rational> {
           switch (kind) {
-            case TripletOrbitWeightKind::NullspaceProjector:
+            case TripletWeightKind::NullspaceProjector:
               return make_triplet_nullspace_weights(n_particles);
 
-            case TripletOrbitWeightKind::NnsReconstruction: {
+            case TripletWeightKind::NnsReconstruction: {
               auto weights = make_triplet_nullspace_weights(n_particles);
+              container::svector<std::size_t> identity_ords(2 * n_particles);
+              std::iota(identity_ords.begin(), identity_ords.end(),
+                        std::size_t{0});
               const auto identity_weight =
-                  weights.at(triplet_identity_perm_index(n_particles));
+                  weights.at(slot_perm_index(identity_ords));
               SEQUANT_ASSERT(identity_weight != 0);
               for (auto& w : weights) w /= identity_weight;
               return weights;
             }
 
-            case TripletOrbitWeightKind::CombinedResidual:
+            case TripletWeightKind::CombinedResidual:
               return make_triplet_combined_residual_weights(n_particles,
                                                             /*te_only=*/false);
 
-            case TripletOrbitWeightKind::TeCombinedResidual:
+            case TripletWeightKind::TeCombinedResidual:
               return make_triplet_combined_residual_weights(n_particles,
                                                             /*te_only=*/true);
 
-            case TripletOrbitWeightKind::TeNnsReconstruction:
-            case TripletOrbitWeightKind::TeReconstruction: {
+            case TripletWeightKind::TeNnsReconstruction:
+            case TripletWeightKind::TeReconstruction: {
               if (n_particles != 2)
                 throw Exception(
-                    "bare-TE triplet orbit weights are only defined for "
+                    "bare-TE triplet weights are only defined for "
                     "n_particles = 2");
               const auto swap_weight =
-                  kind == TripletOrbitWeightKind::TeNnsReconstruction
-                      ? ratio(-1, 2)
-                      : ratio(1, 4);
-              std::vector<rational> weights(triplet_slot_perm_orbit_order(2),
-                                            0);
+                  kind == TripletWeightKind::TeNnsReconstruction ? ratio(-1, 2)
+                                                                 : ratio(1, 4);
+              std::vector<rational> weights(slot_perm_count(2), 0);
               for (std::size_t p = 0; p != weights.size(); ++p) {
-                const auto ords = detail::triplet_slot_perm_ords(p, 2);
+                const auto ords =
+                    detail::compute_bra_ket_permuted_indices(p, 2);
                 const bool bra_swapped = ords[0] != 0;
                 const bool ket_swapped = ords[2] != 2;
                 if (!bra_swapped && !ket_swapped)
@@ -885,12 +872,13 @@ const std::vector<rational>& triplet_orbit_weights_rational(
       });
 }
 
-// index relabeling realizing slot perm ords on the external bra/ket index
-// n-tuples: b[i] -> b[ords[i]], k[i] -> k[ords[n + i] - n]
-container::map<Index, Index> triplet_slot_perm_map(
+// index replacement map realizing slot permutation p on the external bra/ket
+// index n-tuples: b[i] -> b[ords[i]], k[i] -> k[ords[n + i] - n]
+container::map<Index, Index> slot_perm_replacements(
     const container::svector<Index>& b, const container::svector<Index>& k,
-    const container::svector<std::size_t>& ords) {
+    std::size_t p) {
   const std::size_t n_particles = b.size();
+  const auto ords = detail::compute_bra_ket_permuted_indices(p, n_particles);
   container::map<Index, Index> m;
   for (std::size_t i = 0; i != n_particles; ++i) {
     if (ords[i] != i) m.emplace(b[i], b[ords[i]]);
@@ -901,7 +889,7 @@ container::map<Index, Index> triplet_slot_perm_map(
 }
 
 std::pair<container::svector<Index>, container::svector<Index>>
-triplet_external_bra_ket(
+external_bra_ket(
     const container::svector<container::svector<Index>>& ext_idxs) {
   container::svector<Index> b, k;
   b.reserve(ext_idxs.size());
@@ -927,12 +915,11 @@ std::pair<ExprPtr, Product::scalar_type> canonical_unit_product(
   return {std::move(out), sign};
 }
 
-ExprPtr triplet_weighted_orbit(
+ExprPtr triplet_weighted_perm_sum(
     const ExprPtr& compact_expr,
     const container::svector<container::svector<Index>>& ext_idxs,
     const std::vector<rational>& weights) {
-  const std::size_t n_particles = ext_idxs.size();
-  const auto [b, k] = triplet_external_bra_ket(ext_idxs);
+  const auto [b, k] = external_bra_ket(ext_idxs);
 
   Sum out;
   for (const auto& term : *compact_expr) {
@@ -943,8 +930,7 @@ ExprPtr triplet_weighted_orbit(
     for (std::size_t p = 0; p != weights.size(); ++p) {
       const auto& w = weights[p];
       if (w == 0) continue;
-      const auto map = triplet_slot_perm_map(
-          b, k, detail::triplet_slot_perm_ords(p, n_particles));
+      const auto map = slot_perm_replacements(b, k, p);
       if (map.empty())
         out.append(w == 1 ? term : ex<Constant>(w) * term);
       else
@@ -964,20 +950,19 @@ ExprPtr triplet_combined_residual(
     const container::svector<container::svector<Index>>& ext_idxs,
     bool te_only) {
   const std::size_t n_particles = ext_idxs.size();
-  const auto& weights = triplet_orbit_weights_rational(
-      n_particles, te_only ? TripletOrbitWeightKind::TeCombinedResidual
-                           : TripletOrbitWeightKind::CombinedResidual);
-  SEQUANT_ASSERT(weights.size() == triplet_slot_perm_orbit_order(n_particles));
+  const auto& weights = triplet_weights_rational(
+      n_particles, te_only ? TripletWeightKind::TeCombinedResidual
+                           : TripletWeightKind::CombinedResidual);
+  SEQUANT_ASSERT(weights.size() == slot_perm_count(n_particles));
 
-  if (V->is<Sum>()) return triplet_weighted_orbit(V, ext_idxs, weights);
+  if (V->is<Sum>()) return triplet_weighted_perm_sum(V, ext_idxs, weights);
 
-  const auto [b, k] = triplet_external_bra_ket(ext_idxs);
+  const auto [b, k] = external_bra_ket(ext_idxs);
   Sum out;
   for (std::size_t p = 0; p != weights.size(); ++p) {
     const auto& w = weights[p];
     if (w == 0) continue;
-    const auto map = triplet_slot_perm_map(
-        b, k, detail::triplet_slot_perm_ords(p, n_particles));
+    const auto map = slot_perm_replacements(b, k, p);
     out.append(map.empty() ? ex<Constant>(w) * V : transform_expr(V, map, w));
   }
   auto result = ex<Sum>(out);
@@ -987,7 +972,7 @@ ExprPtr triplet_combined_residual(
 
 ExprPtr triplet_maxcoeff_compact(
     ExprPtr expr, const container::svector<container::svector<Index>>& ext_idxs,
-    TripletOrbitWeightKind kind) {
+    TripletWeightKind kind) {
   if (!expr->is<Sum>()) return expr;
   const std::size_t n_particles = ext_idxs.size();
   if (n_particles != 2 && n_particles != 3) return expr;
@@ -1001,8 +986,8 @@ ExprPtr triplet_maxcoeff_compact(
   canonicalize(work);
   simplify(work);
 
-  const auto& weights = triplet_orbit_weights_rational(n_particles, kind);
-  const auto [b, k] = triplet_external_bra_ket(ext_idxs);
+  const auto& weights = triplet_weights_rational(n_particles, kind);
+  const auto [b, k] = external_bra_ket(ext_idxs);
 
   container::map<std::size_t, container::vector<ExprPtr>> groups;
   for (const auto& term : *work) {
@@ -1022,8 +1007,7 @@ ExprPtr triplet_maxcoeff_compact(
 
     container::map<std::size_t, Product::scalar_type> pred_weight;
     for (std::size_t p = 0; p != weights.size(); ++p) {
-      const auto map = triplet_slot_perm_map(
-          b, k, detail::triplet_slot_perm_ords(p, n_particles));
+      const auto map = slot_perm_replacements(b, k, p);
       ExprPtr t =
           map.empty() ? rep_unit->clone() : transform_expr(rep_unit, map);
       auto [u, s] = canonical_unit_product(t);
@@ -1044,7 +1028,7 @@ ExprPtr triplet_maxcoeff_compact(
     if (n_predicted_members != terms.size())
       throw Exception(
           "triplet_maxcoeff_compact: hash group does not match the "
-          "single-representative orbit pattern; the residual cannot be "
+          "single-representative pattern; the residual cannot be "
           "compacted losslessly");
     for (const auto& t : terms) {
       const auto [u, s] = canonical_unit_product(t);
@@ -1053,7 +1037,7 @@ ExprPtr triplet_maxcoeff_compact(
           t->as<Product>().scalar() * s != kept_coeff * it->second)
         throw Exception(
             "triplet_maxcoeff_compact: hash group does not match the "
-            "single-representative orbit pattern; the residual cannot be "
+            "single-representative pattern; the residual cannot be "
             "compacted losslessly");
     }
 
@@ -1067,13 +1051,12 @@ ExprPtr triplet_maxcoeff_compact(
 ExprPtr triplet_symbolic_reconstruct(
     ExprPtr compact_expr,
     const container::svector<container::svector<Index>>& ext_idxs,
-    TripletOrbitWeightKind kind) {
+    TripletWeightKind kind) {
   if (!compact_expr->is<Sum>()) return compact_expr;
   const std::size_t n_particles = ext_idxs.size();
   if (n_particles != 2 && n_particles != 3) return compact_expr;
-  return triplet_weighted_orbit(
-      compact_expr, ext_idxs,
-      triplet_orbit_weights_rational(n_particles, kind));
+  return triplet_weighted_perm_sum(compact_expr, ext_idxs,
+                                   triplet_weights_rational(n_particles, kind));
 }
 
 template <detail::index_group_range IdxGroups>
@@ -1159,10 +1142,9 @@ container::svector<size_t> compute_permuted_indices(
   return permuted_indices;
 }
 
-container::svector<size_t> triplet_slot_perm_ords(size_t perm_index,
-                                                  size_t n_particles) {
-  size_t num_perms = 1;
-  for (size_t i = 2; i <= n_particles; ++i) num_perms *= i;
+container::svector<size_t> compute_bra_ket_permuted_indices(
+    size_t perm_index, size_t n_particles) {
+  const auto num_perms = static_cast<size_t>(factorial(n_particles));
   SEQUANT_ASSERT(perm_index < num_perms * num_perms);
 
   container::svector<size_t> bra_slots(n_particles);
@@ -1180,28 +1162,28 @@ container::svector<size_t> triplet_slot_perm_ords(size_t perm_index,
   return ords;
 }
 
-container::svector<std::string> triplet_slot_perm_layouts(
-    std::string const& orig_layout, size_t n_particles) {
-  const auto parts = split_annotation(orig_layout);
+container::svector<std::string> slot_perm_annots(std::string const& orig_annot,
+                                                 size_t n_particles) {
+  const auto parts = split_annotation(orig_annot);
   SEQUANT_ASSERT(parts.size() == 2 * n_particles &&
-                 "triplet_slot_perm_layouts: annotation rank must equal "
+                 "slot_perm_annots: annotation rank must equal "
                  "2 * n_particles");
 
-  const auto num_perms = triplet_slot_perm_orbit_order(n_particles);
-  container::svector<std::string> layouts;
-  layouts.reserve(num_perms);
+  const auto num_perms = slot_perm_count(n_particles);
+  container::svector<std::string> annots;
+  annots.reserve(num_perms);
   for (size_t p = 0; p != num_perms; ++p) {
-    const auto ords = triplet_slot_perm_ords(p, n_particles);
+    const auto ords = compute_bra_ket_permuted_indices(p, n_particles);
     container::svector<std::string> permuted(parts.size());
     for (size_t s = 0; s != parts.size(); ++s) permuted[s] = parts[ords[s]];
-    layouts.push_back(join_annotation(permuted));
+    annots.push_back(join_annotation(permuted));
   }
-  return layouts;
+  return annots;
 }
 
-std::vector<double> compute_triplet_orbit_weights(std::size_t n_particles,
-                                                  TripletOrbitWeightKind kind) {
-  const auto& weights = triplet_orbit_weights_rational(n_particles, kind);
+std::vector<double> compute_triplet_weights(std::size_t n_particles,
+                                            TripletWeightKind kind) {
+  const auto& weights = triplet_weights_rational(n_particles, kind);
   std::vector<double> coeffs;
   coeffs.reserve(weights.size());
   for (const auto& w : weights) {

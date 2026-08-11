@@ -88,13 +88,8 @@ ExprPtr WK_biorthogonalization_filter(
     ExprPtr expr,
     const container::svector<container::svector<Index>>& ext_idxs);
 
-/// \brief Weight rows over the S_n x S_n orbit of external slot permutations
-/// used by the closed-shell triplet primitives
-///
-/// The orbit is enumerated with flat index p = rank(sigma) * n! + rank(tau)
-/// in Myrvold-Ruskey unrank order (the order of
-/// detail::compute_permuted_indices), sigma/tau permuting the n bra/ket slots.
-enum class TripletOrbitWeightKind {
+/// TODO separate them to two categories:  biorthogonalization and NNS
+enum class TripletWeightKind {
   /// idempotent null-space projector row
   NullspaceProjector,
   /// identity-normalized NullspaceProjector row (metric NNS reconstruction)
@@ -109,23 +104,21 @@ enum class TripletOrbitWeightKind {
   TeCombinedResidual
 };
 
-/// \brief Lossless compaction of the closed-shell triplet residual: keeps one
-/// orbit representative per tensor-network hash group, scaled such that the
-/// orbit sum of triplet_symbolic_reconstruct with the same \p kind is exact
-///
+/// \brief Compaction of the closed-shell triplet residual: keeps one
+/// representative slot permutation per tensor-network hash group.
 /// \param expr The residual; returned unchanged unless it is a Sum
-/// \param ext_idxs A vector of external index groups (must have 2 or 3 groups)
+/// \param ext_idxs A vector of external index groups
 /// \param kind The weight row that generated the residual
 /// \return The compacted expression
 /// \throw Exception if a hash group does not match the single-representative
-///        orbit pattern (the residual cannot be compacted losslessly)
 [[nodiscard]] ExprPtr triplet_maxcoeff_compact(
     ExprPtr expr, const container::svector<container::svector<Index>>& ext_idxs,
-    TripletOrbitWeightKind kind = TripletOrbitWeightKind::NnsReconstruction);
+    TripletWeightKind kind = TripletWeightKind::NnsReconstruction);
 
 // clang-format off
-/// \brief Assembles the paper-combined closed-shell triplet residual from the
+/// \brief Assembles the closed-shell triplet residual from the
 /// sector-summed primitive V, for any supported rank
+/// (rank 2 based on Kohn's paper)
 ///
 ///   n = 2: Omega = (3 V - V_ps)/16 (Faber's paper)
 ///   te_only (n = 2, EFV experiment): Omega = V/4, i.e. the bare TE primitive
@@ -160,7 +153,7 @@ enum class TripletOrbitWeightKind {
 [[nodiscard]] ExprPtr triplet_symbolic_reconstruct(
     ExprPtr compact_expr,
     const container::svector<container::svector<Index>>& ext_idxs,
-    TripletOrbitWeightKind kind = TripletOrbitWeightKind::NnsReconstruction);
+    TripletWeightKind kind = TripletWeightKind::NnsReconstruction);
 
 /// @brief Performs biorthogonal transformation with factored out NNS projector
 /// @details Applies biorthogonal transformation. When factor_out_nns_projector
@@ -209,65 +202,65 @@ container::svector<size_t> compute_permuted_indices(
     const container::svector<size_t>& indices, size_t perm_rank,
     size_t n_particles);
 
-/// \brief Provides the slot images of one member of the S_n x S_n
-/// external-slot-permutation orbit (see TripletOrbitWeightKind for the
-/// enumeration order)
+/// \brief Provides bra and ket permuted indices
+/// for the S_n x S_n external slot permutations, by applying
+/// compute_permuted_indices to the bra and the ket slots separately
 ///
-/// \param perm_index The flat orbit index, in [0, (n!)^2)
+/// \param perm_index The flat perm index, in [0, (n!)^2)
 /// \param n_particles The rank of external index pairs
 ///
-/// \return The 2*n_particles slot images: slot s displays slot ords[s], the
+/// \return The 2*n_particles slot orders: slot s displays slot ords[s], the
 ///         first n_particles slots being the bra and the rest the ket ones
-[[nodiscard]] container::svector<size_t> triplet_slot_perm_ords(
+[[nodiscard]] container::svector<size_t> compute_bra_ket_permuted_indices(
     size_t perm_index, size_t n_particles);
 
-/// \brief Provides the annotation layouts of the S_n x S_n
-/// external-slot-permutation orbit of a rank-2n annotation
+/// \brief Provides the annotations of the S_n x S_n
+/// external slot permutations of a rank-2n annotation
 ///
-/// \param orig_layout A comma-separated rank-2n annotation, e.g.
+/// \param orig_annot A comma-separated rank-2n annotation, e.g.
 ///        "a_1,a_2,i_1,i_2" (bra slots first, then ket slots)
 /// \param n_particles The rank of external index pairs
 ///
-/// \return The (n!)^2 permuted annotations in flat orbit order
-[[nodiscard]] container::svector<std::string> triplet_slot_perm_layouts(
-    std::string const& orig_layout, size_t n_particles);
+/// \return The (n!)^2 permuted annotations in flat perm order
+[[nodiscard]] container::svector<std::string> slot_perm_annots(
+    std::string const& orig_annot, size_t n_particles);
 
 /// \brief Computes the weight row over the S_n x S_n
-/// external-slot-permutation orbit for the closed-shell triplet primitives
+/// external slot permutations for the closed-shell triplet primitives
 ///
 /// \param n_particles The rank of external index pairs (2 or 3; 2 only for
 ///        the bare-TE kinds)
 /// \param kind The weight row to compute
 ///
-/// \return Vector of weights in flat orbit order
+/// \return Vector of weights in flat perm order
 ///
 /// \throw Exception for unsupported \p n_particles / \p kind combinations
-[[nodiscard]] std::vector<double> compute_triplet_orbit_weights(
-    std::size_t n_particles, TripletOrbitWeightKind kind);
+[[nodiscard]] std::vector<double> compute_triplet_weights(
+    std::size_t n_particles, TripletWeightKind kind);
 
 /// \brief Provides the numeric weight row over the S_n x S_n
-/// external-slot-permutation orbit for the closed-shell triplet primitives
+/// external slot permutations for the closed-shell triplet primitives
 ///
 /// \tparam T The numeric type (must be floating point or complex)
 /// \param n_particles The rank of external index pairs
 /// \param kind The weight row to provide
 ///
-/// \return (memoized) Vector of weights in flat orbit order; empty unless
+/// \return (memoized) Vector of weights in flat perm order; empty unless
 ///         \p n_particles is 2 or 3 (2 only for the bare-TE kinds)
 template <typename T>
   requires(std::floating_point<T> || meta::is_complex_v<T>)
-[[nodiscard]] const std::vector<T>& triplet_orbit_weights(
-    std::size_t n_particles, TripletOrbitWeightKind kind) {
+[[nodiscard]] const std::vector<T>& triplet_weights(std::size_t n_particles,
+                                                    TripletWeightKind kind) {
   static const std::vector<T> empty_vec{};
 
-  const bool te_kind = kind == TripletOrbitWeightKind::TeNnsReconstruction ||
-                       kind == TripletOrbitWeightKind::TeReconstruction ||
-                       kind == TripletOrbitWeightKind::TeCombinedResidual;
+  const bool te_kind = kind == TripletWeightKind::TeNnsReconstruction ||
+                       kind == TripletWeightKind::TeReconstruction ||
+                       kind == TripletWeightKind::TeCombinedResidual;
   if ((n_particles != 2 && n_particles != 3) || (te_kind && n_particles != 2)) {
     return empty_vec;
   }
 
-  using CacheKey = std::pair<std::size_t, TripletOrbitWeightKind>;
+  using CacheKey = std::pair<std::size_t, TripletWeightKind>;
   // the rows are cached behind a pointer since the cache holds several keys
   // and flat_map insertions would invalidate references into it
   using CachedRow = std::unique_ptr<const std::vector<T>>;
@@ -280,7 +273,7 @@ template <typename T>
 
   return *sequant::detail::memoize(
       cache, cache_mutex, cache_cv, key, [&]() -> CachedRow {
-        auto coeffs = compute_triplet_orbit_weights(n_particles, kind);
+        auto coeffs = compute_triplet_weights(n_particles, kind);
         std::vector<T> weights;
         weights.reserve(coeffs.size());
         for (const auto& c : coeffs) {
@@ -644,27 +637,27 @@ namespace detail {
 
 /// \brief Weighted sum over the S_n x S_n external-slot permutations of a
 /// rank-2n TA::DistArray:
-///   out(orig) = sum_p weights[p] * arr(layout_p),
-/// with the layouts generated by triplet_slot_perm_layouts and the weight row
-/// selected by the caller (see TripletOrbitWeightKind). Zero-weight
+///   out(orig) = sum_p weights[p] * arr(annot_p),
+/// with the annotations generated by slot_perm_annots and the weight row
+/// selected by the caller (see TripletWeightKind). Zero-weight
 /// permutations are skipped.
 template <typename... Args>
-auto triplet_orbit_combine_ta(
+auto triplet_perm_combine_ta(
     TA::DistArray<Args...> const& arr, std::string const& orig_layout,
     std::size_t n_particles,
     std::vector<typename TA::DistArray<Args...>::numeric_type> const& weights) {
   using numeric_type = typename TA::DistArray<Args...>::numeric_type;
-  const auto layouts = triplet_slot_perm_layouts(orig_layout, n_particles);
-  SEQUANT_ASSERT(layouts.size() == weights.size());
+  const auto annots = slot_perm_annots(orig_layout, n_particles);
+  SEQUANT_ASSERT(annots.size() == weights.size());
 
   TA::DistArray<Args...> result;
   bool result_initialized = false;
   for (std::size_t p = 0; p != weights.size(); ++p) {
     if (weights[p] == numeric_type(0)) continue;
     if (result_initialized) {
-      result(orig_layout) += weights[p] * arr(layouts[p]);
+      result(orig_layout) += weights[p] * arr(annots[p]);
     } else {
-      result(orig_layout) = weights[p] * arr(layouts[p]);
+      result(orig_layout) = weights[p] * arr(annots[p]);
       result_initialized = true;
     }
   }
@@ -673,19 +666,19 @@ auto triplet_orbit_combine_ta(
   return result;
 }
 
-/// \brief Applies the \p kind weight row over the triplet slot-perm orbit of
+/// \brief Applies the \p kind weight row over the triplet slot permutations of
 /// \p arr; no-op unless the array rank is 4 or 6 (n_particles = rank/2) and
 /// the row is available for that rank
 template <typename... Args>
-auto triplet_orbit_project_ta(TA::DistArray<Args...> const& arr,
-                              std::string const& orig_layout,
-                              TripletOrbitWeightKind kind) {
+auto triplet_perm_project_ta(TA::DistArray<Args...> const& arr,
+                             std::string const& orig_layout,
+                             TripletWeightKind kind) {
   using numeric_type = typename TA::DistArray<Args...>::numeric_type;
   const std::size_t rank = arr.trange().rank();
   if (rank != 4 && rank != 6) return arr;
-  const auto& weights = triplet_orbit_weights<numeric_type>(rank / 2, kind);
+  const auto& weights = triplet_weights<numeric_type>(rank / 2, kind);
   if (weights.empty()) return arr;
-  return triplet_orbit_combine_ta<Args...>(arr, orig_layout, rank / 2, weights);
+  return triplet_perm_combine_ta<Args...>(arr, orig_layout, rank / 2, weights);
 }
 
 }  // namespace detail
@@ -696,8 +689,8 @@ auto triplet_orbit_project_ta(TA::DistArray<Args...> const& arr,
 template <typename... Args>
 auto triplet_nullspace_project_ta(TA::DistArray<Args...> const& arr,
                                   std::string const& orig_layout) {
-  return detail::triplet_orbit_project_ta(
-      arr, orig_layout, TripletOrbitWeightKind::NullspaceProjector);
+  return detail::triplet_perm_project_ta(arr, orig_layout,
+                                         TripletWeightKind::NullspaceProjector);
 }
 
 template <typename... Args>
@@ -714,8 +707,8 @@ auto triplet_nullspace_project(TA::DistArray<Args...> const& arr,
 template <typename... Args>
 auto triplet_nns_project_ta(TA::DistArray<Args...> const& arr,
                             std::string const& orig_layout) {
-  return detail::triplet_orbit_project_ta(
-      arr, orig_layout, TripletOrbitWeightKind::NnsReconstruction);
+  return detail::triplet_perm_project_ta(arr, orig_layout,
+                                         TripletWeightKind::NnsReconstruction);
 }
 
 template <typename... Args>
@@ -731,8 +724,8 @@ auto triplet_nns_project(TA::DistArray<Args...> const& arr,
 template <typename... Args>
 auto triplet_te_nns_project_ta(TA::DistArray<Args...> const& arr,
                                std::string const& orig_layout) {
-  return detail::triplet_orbit_project_ta(
-      arr, orig_layout, TripletOrbitWeightKind::TeNnsReconstruction);
+  return detail::triplet_perm_project_ta(
+      arr, orig_layout, TripletWeightKind::TeNnsReconstruction);
 }
 
 template <typename... Args>
@@ -743,14 +736,12 @@ auto triplet_te_nns_project(TA::DistArray<Args...> const& arr,
 
 /// \brief TE-only -> full-metric reconstruction for triplet R2 (EFV
 /// experiment), via the exact identity
-/// Omega = te_a + (1/4)(bra_swap(te_a) + ket_swap(te_a)). Apply to the H*R
-/// residual when the te_only equations were evaluated; no-op unless the
-/// array rank is 4.
+/// Omega = te_a + (1/4)(bra_swap(te_a) + ket_swap(te_a)).
 template <typename... Args>
 auto triplet_te_reconstruct_ta(TA::DistArray<Args...> const& arr,
                                std::string const& orig_layout) {
-  return detail::triplet_orbit_project_ta(
-      arr, orig_layout, TripletOrbitWeightKind::TeReconstruction);
+  return detail::triplet_perm_project_ta(arr, orig_layout,
+                                         TripletWeightKind::TeReconstruction);
 }
 
 template <typename... Args>
@@ -765,11 +756,9 @@ auto triplet_te_reconstruct(TA::DistArray<Args...> const& arr,
 
 namespace detail {
 
-/// \brief BTAS analogue of triplet_orbit_combine_ta. Slots are taken
-/// positionally, the first n_particles being the bra and the rest the ket
-/// externals (no annotation support in btas::Tensor).
+/// \brief BTAS analogue of triplet_perm_combine_ta
 template <typename... Args>
-auto triplet_orbit_combine_btas(
+auto triplet_perm_combine_btas(
     btas::Tensor<Args...> const& arr, std::size_t n_particles,
     std::vector<typename btas::Tensor<Args...>::numeric_type> const& weights) {
   using ranges::views::iota;
@@ -783,7 +772,8 @@ auto triplet_orbit_combine_btas(
   bool result_initialized = false;
   for (std::size_t p = 0; p != weights.size(); ++p) {
     if (weights[p] == numeric_type(0)) continue;
-    const sequant::detail::perm_t annot = triplet_slot_perm_ords(p, rank / 2);
+    const sequant::detail::perm_t annot =
+        compute_bra_ket_permuted_indices(p, rank / 2);
 
     btas::Tensor<Args...> temp;
     btas::permute(arr, annot, temp, perm);
@@ -799,19 +789,19 @@ auto triplet_orbit_combine_btas(
   return result;
 }
 
-/// \brief BTAS analogue of triplet_orbit_project_ta; \p orig_layout is
+/// \brief BTAS analogue of triplet_perm_project_ta; \p orig_layout is
 /// accepted for signature parity with the TA overloads but not consulted
 /// (slots are positional)
 template <typename... Args>
-auto triplet_orbit_project_btas(btas::Tensor<Args...> const& arr,
-                                [[maybe_unused]] std::string const& orig_layout,
-                                TripletOrbitWeightKind kind) {
+auto triplet_perm_project_btas(btas::Tensor<Args...> const& arr,
+                               [[maybe_unused]] std::string const& orig_layout,
+                               TripletWeightKind kind) {
   using numeric_type = typename btas::Tensor<Args...>::numeric_type;
   const std::size_t rank = arr.rank();
   if (rank != 4 && rank != 6) return arr;
-  const auto& weights = triplet_orbit_weights<numeric_type>(rank / 2, kind);
+  const auto& weights = triplet_weights<numeric_type>(rank / 2, kind);
   if (weights.empty()) return arr;
-  return triplet_orbit_combine_btas<Args...>(arr, rank / 2, weights);
+  return triplet_perm_combine_btas<Args...>(arr, rank / 2, weights);
 }
 
 }  // namespace detail
@@ -820,8 +810,8 @@ auto triplet_orbit_project_btas(btas::Tensor<Args...> const& arr,
 template <typename... Args>
 auto triplet_nns_project_btas(btas::Tensor<Args...> const& arr,
                               std::string const& orig_layout) {
-  return detail::triplet_orbit_project_btas(
-      arr, orig_layout, TripletOrbitWeightKind::NnsReconstruction);
+  return detail::triplet_perm_project_btas(
+      arr, orig_layout, TripletWeightKind::NnsReconstruction);
 }
 
 template <typename... Args>
@@ -834,8 +824,8 @@ auto triplet_nns_project(btas::Tensor<Args...> const& arr,
 template <typename... Args>
 auto triplet_nullspace_project_btas(btas::Tensor<Args...> const& arr,
                                     std::string const& orig_layout) {
-  return detail::triplet_orbit_project_btas(
-      arr, orig_layout, TripletOrbitWeightKind::NullspaceProjector);
+  return detail::triplet_perm_project_btas(
+      arr, orig_layout, TripletWeightKind::NullspaceProjector);
 }
 
 template <typename... Args>

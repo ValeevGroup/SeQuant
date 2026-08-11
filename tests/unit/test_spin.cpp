@@ -2323,8 +2323,7 @@ TEST_CASE("triplet_doubles_compact", "[spin][triplet]") {
   using namespace sequant;
   using namespace sequant::mbpt;
 
-  const auto layouts =
-      mbpt::detail::triplet_slot_perm_layouts("a_1,a_2,i_1,i_2", 2);
+  const auto layouts = mbpt::detail::slot_perm_annots("a_1,a_2,i_1,i_2", 2);
   REQUIRE(layouts.size() == 4);
   std::vector<std::string> sorted(layouts.begin(), layouts.end());
   std::sort(sorted.begin(), sorted.end());
@@ -2430,7 +2429,7 @@ TEST_CASE("triplet_triples_swap_layouts", "[spin][triplet]") {
   using namespace sequant::mbpt;
 
   const auto layouts =
-      mbpt::detail::triplet_slot_perm_layouts("a_1,a_2,a_3,i_1,i_2,i_3", 3);
+      mbpt::detail::slot_perm_annots("a_1,a_2,a_3,i_1,i_2,i_3", 3);
   REQUIRE(layouts.size() == 36);
   std::vector<std::string> all(layouts.begin(), layouts.end());
   std::sort(all.begin(), all.end());
@@ -2565,12 +2564,12 @@ TEST_CASE("triplet_doubles_te_reconstruct", "[spin][triplet]") {
   // compaction against the bare-TE row keeps the (-2c) representative per
   // group.
   const ExprPtr compact = triplet_maxcoeff_compact(
-      full, ext_idxs, TripletOrbitWeightKind::TeNnsReconstruction);
+      full, ext_idxs, TripletWeightKind::TeNnsReconstruction);
   REQUIRE(compact->is<Sum>());
   REQUIRE(compact->size() == 2);
 
   const ExprPtr recon = triplet_symbolic_reconstruct(
-      compact, ext_idxs, TripletOrbitWeightKind::TeNnsReconstruction);
+      compact, ext_idxs, TripletWeightKind::TeNnsReconstruction);
   REQUIRE(recon->is<Sum>());
   REQUIRE(recon->size() == 6);
 
@@ -2588,17 +2587,17 @@ TEST_CASE("triplet_doubles_te_reconstruct", "[spin][triplet]") {
   REQUIRE(diff->size() == 0);
 }
 
-TEST_CASE("triplet_generic_orbit", "[spin][triplet]") {
+TEST_CASE("triplet_generic_perms", "[spin][triplet]") {
   using namespace sequant;
   using namespace sequant::mbpt;
 
   // weight rows: the NnsReconstruction row is the identity-normalized
   // NullspaceProjector row
   auto require_normalized = [](std::size_t n, double identity_weight) {
-    const auto& nullspace = mbpt::detail::triplet_orbit_weights<double>(
-        n, TripletOrbitWeightKind::NullspaceProjector);
-    const auto& nns = mbpt::detail::triplet_orbit_weights<double>(
-        n, TripletOrbitWeightKind::NnsReconstruction);
+    const auto& nullspace = mbpt::detail::triplet_weights<double>(
+        n, TripletWeightKind::NullspaceProjector);
+    const auto& nns = mbpt::detail::triplet_weights<double>(
+        n, TripletWeightKind::NnsReconstruction);
     REQUIRE(nullspace.size() == nns.size());
     for (std::size_t p = 0; p != nns.size(); ++p) {
       CAPTURE(n, p);
@@ -2609,7 +2608,7 @@ TEST_CASE("triplet_generic_orbit", "[spin][triplet]") {
   require_normalized(3, 1.0 / 4.0);  // w10[m]/20, identity op weight 5/20
 
   // the bare-TE rows exist only for n = 2
-  REQUIRE(mbpt::detail::triplet_orbit_weights<double>(
-              3, TripletOrbitWeightKind::TeNnsReconstruction)
+  REQUIRE(mbpt::detail::triplet_weights<double>(
+              3, TripletWeightKind::TeNnsReconstruction)
               .empty());
 }
