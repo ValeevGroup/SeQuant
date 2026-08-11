@@ -864,12 +864,12 @@ ResultPtr evaluate_whole_scope(
         size_t hwmark = log::bytes(cache, post).value;
         if (!cache.chain_holds(pre)) hwmark += log::bytes(pre).value;
         hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
-        auto const stat =
-            log::EvalStat{.mode = log::EvalMode::Permute,
-                          .time = permute_time,
-                          .mem_result = log::bytes(post),
-                          .mem_alloc = log::bytes(post),
-                          .mem_hwmark = {cache.note_working_set(hwmark)}};
+        auto const stat = log::EvalStat{
+            .mode = log::EvalMode::Permute,
+            .time = permute_time,
+            .mem_result = log::bytes(post),
+            .mem_alloc = log::bytes(post),
+            .mem_hwmark = {cache.note_working_set(hwmark, n->hash_value())}};
         log::eval(stat, n->label());
       }
       log::term(log::TermMode::End, xpr);
@@ -890,12 +890,12 @@ ResultPtr evaluate_whole_scope(
       size_t hwmark = log::bytes(cache, result).value;
       if (!cache.chain_holds(post)) hwmark += log::bytes(post).value;
       hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
-      auto const stat =
-          log::EvalStat{.mode = log::EvalMode::SumInplace,
-                        .time = sum_time,
-                        .mem_result = log::bytes(result),
-                        .mem_alloc = {0},
-                        .mem_hwmark = {cache.note_working_set(hwmark)}};
+      auto const stat = log::EvalStat{
+          .mode = log::EvalMode::SumInplace,
+          .time = sum_time,
+          .mem_result = log::bytes(result),
+          .mem_alloc = {0},
+          .mem_hwmark = {cache.note_working_set(hwmark, n->hash_value())}};
       log::eval(stat, n->label());
     }
   }

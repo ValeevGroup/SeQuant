@@ -161,6 +161,7 @@ endif()
 ##########################
 set(eval_dryrun_test_sources
     "test_eval_dryrun.cpp"
+    "test_meter.cpp"
     "test_occurrence_key.cpp"
     "test_peak_profile.cpp"
     "test_placement_remat.cpp"

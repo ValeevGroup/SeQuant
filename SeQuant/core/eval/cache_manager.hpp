@@ -7,6 +7,7 @@
 #include <SeQuant/core/eval/eval_node_compare.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
 #include <SeQuant/core/eval/lifetime_mask.hpp>
+#include <SeQuant/core/eval/peak_monitor.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/expr.hpp>
 
@@ -317,6 +318,13 @@ class CacheManager {
   /// outlive this cache.
   eval::PlacementRouter<TreeNode> const* placement_router_ = nullptr;
 
+  /// Non-owning hierarchy-wide co-resident high-water tracker (see
+  /// \c eval::PeakMonitor). Null (default) => \c note_working_set() only
+  /// updates this cache's own \c working_set_hwmark_; \c peak_monitor() falls
+  /// through to \c parent_ (only the root cache is wired in practice). The
+  /// pointee must outlive this cache.
+  eval::PeakMonitor* peak_monitor_ = nullptr;
+
   /// Optional OWNING backing for \c placement_router_. A router built by a
   /// pre-pass (e.g. the remat placement pass) is a local at the build site; a
   /// CacheManager returned BY VALUE from such a builder must carry the router
@@ -413,6 +421,19 @@ class CacheManager {
                              : nullptr;
   }
 
+  /// Sets the local peak monitor (see peak_monitor_). Pass nullptr to detach.
+  /// Non-owning; the pointee must outlive this cache.
+  void set_peak_monitor(eval::PeakMonitor* m) noexcept { peak_monitor_ = m; }
+
+  /// \return the local peak monitor if set, else the one inherited from
+  ///         \c parent_ (only the root cache is wired in practice); nullptr
+  ///         if none is wired anywhere along the chain. Non-owning.
+  [[nodiscard]] eval::PeakMonitor* peak_monitor() const noexcept {
+    return peak_monitor_ ? peak_monitor_
+           : parent_     ? parent_->peak_monitor()
+                         : nullptr;
+  }
+
   /// Sets the schedule-dump sink (see schedule_sink_). Pass nullptr to detach.
   /// Non-owning; the pointee (and its \c os) must outlive this cache.
   void set_schedule_sink(eval::ScheduleSink* s) noexcept { schedule_sink_ = s; }
@@ -473,9 +494,14 @@ class CacheManager {
 
   /// Fold the per-op live working set @p current_bytes into the running
   /// high-water mark and return the updated mark. Reported as `hw=` in the
-  /// per-op eval trace; monotonically non-decreasing until reset().
-  size_t note_working_set(size_t current_bytes) noexcept {
+  /// per-op eval trace; monotonically non-decreasing until reset(). @p op_hash
+  /// (default 0) identifies the op node being evaluated at the call site (0
+  /// when no node is in scope there); forwarded to \c peak_monitor()'s
+  /// \c observe() so a wired \c PeakMonitor can report WHERE its hierarchy-
+  /// wide high-water was observed.
+  size_t note_working_set(size_t current_bytes, size_t op_hash = 0) noexcept {
     working_set_hwmark_ = std::max(working_set_hwmark_, current_bytes);
+    if (auto* m = peak_monitor()) m->observe(current_bytes, op_hash);
     // DIAGNOSTIC (SEQUANT_UT_PEAK_COMPOSE): on each new GLOBAL max working set,
     // print what composes it -- the co-resident cache chain vs the single
     // transient result/scratch being formed (current_bytes - chain_residency),

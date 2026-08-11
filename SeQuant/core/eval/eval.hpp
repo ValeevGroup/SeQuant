@@ -655,11 +655,12 @@ ResultPtr evaluate_impl(Node const& node,         //
       size_t hwmark = log::bytes(cache, post).value;
       if (!cache.alive(nd)) hwmark += log::bytes(res).value;
       hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
-      auto stat = log::EvalStat{.mode = log::EvalMode::MultByPhase,
-                                .time = time,
-                                .mem_result = log::bytes(post),
-                                .mem_alloc = log::bytes(post),
-                                .mem_hwmark = {cache.note_working_set(hwmark)}};
+      auto stat = log::EvalStat{
+          .mode = log::EvalMode::MultByPhase,
+          .time = time,
+          .mem_result = log::bytes(post),
+          .mem_alloc = log::bytes(post),
+          .mem_hwmark = {cache.note_working_set(hwmark, nd->hash_value())}};
       log::eval(stat, std::format("{} * {}", phase, nd->label()),
                 log::slice_home_annot(nd, cache.batch_context()));
     }
@@ -877,14 +878,13 @@ ResultPtr evaluate_impl(Node const& node,         //
                 size_t hwmark = log::bytes(cache, intercepted).value;
                 hwmark +=
                     cache.parent() ? cache.parent()->chain_residency() : 0;
-                log::eval(
-                    log::EvalStat{
-                        .mode = log::eval_mode(f.node),
-                        .time = time,
-                        .mem_result = log::bytes(intercepted),
-                        .mem_alloc = log::bytes(intercepted),
-                        .mem_hwmark = {cache.note_working_set(hwmark)}},
-                    log::label(f.node, cache.batch_context()));
+                log::eval(log::EvalStat{.mode = log::eval_mode(f.node),
+                                        .time = time,
+                                        .mem_result = log::bytes(intercepted),
+                                        .mem_alloc = log::bytes(intercepted),
+                                        .mem_hwmark = {cache.note_working_set(
+                                            hwmark, f.node->hash_value())}},
+                          log::label(f.node, cache.batch_context()));
               }
               log::release_after_op();
               finalize(finish_phase_b(f, std::move(intercepted)));
@@ -901,13 +901,13 @@ ResultPtr evaluate_impl(Node const& node,         //
           if constexpr (detail::trace(EvalTrace)) {
             size_t hwmark = log::bytes(cache, result).value;
             hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
-            log::eval(
-                log::EvalStat{.mode = log::eval_mode(f.node),
-                              .time = time,
-                              .mem_result = log::bytes(result),
-                              .mem_alloc = log::bytes(result),
-                              .mem_hwmark = {cache.note_working_set(hwmark)}},
-                log::label(f.node, cache.batch_context()));
+            log::eval(log::EvalStat{.mode = log::eval_mode(f.node),
+                                    .time = time,
+                                    .mem_result = log::bytes(result),
+                                    .mem_alloc = log::bytes(result),
+                                    .mem_hwmark = {cache.note_working_set(
+                                        hwmark, f.node->hash_value())}},
+                      log::label(f.node, cache.batch_context()));
           }
           log::release_after_op();
           // Store the FULL leaf under its canonical key (a block slice would
@@ -946,15 +946,15 @@ ResultPtr evaluate_impl(Node const& node,         //
           size_t hwmark = log::bytes(cache, result).value;
           if (!cache.chain_holds(f.left)) hwmark += log::bytes(f.left).value;
           hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
-          log::eval(
-              log::EvalStat{.mode = log::eval_mode(f.node),
-                            .time = time,
-                            .mem_result = log::bytes(result),
-                            .mem_alloc = log::bytes(result),
-                            .mem_hwmark = {cache.note_working_set(hwmark)},
-                            .mem_left = log::bytes(f.left),
-                            .mem_right = log::bytes(f.right)},
-              log::label(f.node, cache.batch_context()));
+          log::eval(log::EvalStat{.mode = log::eval_mode(f.node),
+                                  .time = time,
+                                  .mem_result = log::bytes(result),
+                                  .mem_alloc = log::bytes(result),
+                                  .mem_hwmark = {cache.note_working_set(
+                                      hwmark, f.node->hash_value())},
+                                  .mem_left = log::bytes(f.left),
+                                  .mem_right = log::bytes(f.right)},
+                    log::label(f.node, cache.batch_context()));
         }
         log::release_after_op();
         finalize(finish_phase_b(f, std::move(result)));
@@ -1055,15 +1055,15 @@ ResultPtr evaluate_impl(Node const& node,         //
           if (f.right && !cache.chain_holds(f.right))
             hwmark += log::bytes(f.right).value;
           hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
-          log::eval(
-              log::EvalStat{.mode = log::eval_mode(f.node),
-                            .time = time,
-                            .mem_result = log::bytes(result),
-                            .mem_alloc = log::bytes(result),
-                            .mem_hwmark = {cache.note_working_set(hwmark)},
-                            .mem_left = log::bytes(f.left),
-                            .mem_right = log::bytes(f.right)},
-              log::label(f.node, cache.batch_context()));
+          log::eval(log::EvalStat{.mode = log::eval_mode(f.node),
+                                  .time = time,
+                                  .mem_result = log::bytes(result),
+                                  .mem_alloc = log::bytes(result),
+                                  .mem_hwmark = {cache.note_working_set(
+                                      hwmark, f.node->hash_value())},
+                                  .mem_left = log::bytes(f.left),
+                                  .mem_right = log::bytes(f.right)},
+                    log::label(f.node, cache.batch_context()));
         }
         log::release_after_op();
         finalize(finish_phase_b(f, std::move(result)));
@@ -1142,11 +1142,12 @@ ResultPtr evaluate(Node const& node,           //
       if (!cache.chain_holds(result.pre))
         hwmark += log::bytes(result.pre).value;
       hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
-      auto stat = log::EvalStat{.mode = log::EvalMode::Permute,
-                                .time = time,
-                                .mem_result = log::bytes(result.post),
-                                .mem_alloc = log::bytes(result.post),
-                                .mem_hwmark = {cache.note_working_set(hwmark)}};
+      auto stat = log::EvalStat{
+          .mode = log::EvalMode::Permute,
+          .time = time,
+          .mem_result = log::bytes(result.post),
+          .mem_alloc = log::bytes(result.post),
+          .mem_hwmark = {cache.note_working_set(hwmark, node->hash_value())}};
       log::eval(stat, node->label(),
                 log::slice_home_annot(node, cache.batch_context()));
     }
@@ -1220,11 +1221,12 @@ ResultPtr evaluate(Nodes const& nodes,  //
       size_t hwmark = log::bytes(cache, result).value;
       if (!cache.chain_holds(pre)) hwmark += log::bytes(pre).value;
       hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
-      auto stat = log::EvalStat{.mode = log::EvalMode::SumInplace,
-                                .time = time,
-                                .mem_result = log::bytes(result),
-                                .mem_alloc = {0},
-                                .mem_hwmark = {cache.note_working_set(hwmark)}};
+      auto stat = log::EvalStat{
+          .mode = log::EvalMode::SumInplace,
+          .time = time,
+          .mem_result = log::bytes(result),
+          .mem_alloc = {0},
+          .mem_hwmark = {cache.note_working_set(hwmark, n->hash_value())}};
       log::eval(stat, n->label(),
                 log::slice_home_annot(n, cache.batch_context()));
     }
