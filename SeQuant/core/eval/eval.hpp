@@ -421,17 +421,17 @@ constexpr bool is_cache_manager_v = false;
 template <typename N, bool F>
 constexpr bool is_cache_manager_v<CacheManager<N, F>> = true;
 
-// The `sizeof...(Args) > 0` guard is load-bearing: with an empty pack
-// `sizeof...(Args) - 1` underflows to SIZE_MAX and `std::tuple_element_t<
-// SIZE_MAX, std::tuple<>>` is a hard error (a static_assert), not SFINAE. The
-// conjunction short-circuits so the tuple_element type is never formed when the
-// pack is empty, letting the variadic evaluate()/evaluate_impl() overloads be
-// considered (and correctly rejected) for a zero-argument call under gcc.
+// True if ANY of Args is a CacheManager. The fold over `||` is well-defined
+// (and false) for an empty pack, so there is no tuple_element underflow to
+// guard against. Used to keep the variadic cache-appending
+// evaluate()/evaluate_impl() forwarders below from matching a call that ALREADY
+// carries a cache -- e.g. the scope-executor overload
+// evaluate(forest, policy, layout, leaf, cache, mode_order, guard), whose
+// CacheManager is NOT the last argument. A last-argument-only check let the
+// forwarder fire on that overload, append a second cache, and fail to resolve.
 template <typename... Args>
-concept last_type_is_cache_manager =
-    sizeof...(Args) > 0 &&
-    is_cache_manager_v<std::remove_cvref_t<
-        std::tuple_element_t<sizeof...(Args) - 1, std::tuple<Args...>>>>;
+concept any_type_is_cache_manager =
+    (... || is_cache_manager_v<std::remove_cvref_t<Args>>);
 
 template <typename... Args>
 auto&& arg0(Args&&... args) {
@@ -1205,7 +1205,7 @@ ResultPtr evaluate(Nodes const& nodes,  //
 /// \return Evaluated result as ResultPtr.
 ///
 template <Trace EvalTrace = Trace::Default, typename... Args>
-  requires(!detail::last_type_is_cache_manager<Args...>)
+  requires(!detail::any_type_is_cache_manager<Args...>)
 ResultPtr evaluate(Args&&... args) {
   using Node = std::remove_cvref_t<decltype(detail::node0(
       detail::arg0(std::forward<Args>(args)...)))>;
@@ -1218,7 +1218,7 @@ ResultPtr evaluate(Args&&... args) {
 /// build so that re-entry stays spelled evaluate_impl rather than the top-level
 /// evaluate.
 template <Trace EvalTrace = Trace::Default, typename... Args>
-  requires(!detail::last_type_is_cache_manager<Args...>)
+  requires(!detail::any_type_is_cache_manager<Args...>)
 ResultPtr evaluate_impl(Args&&... args) {
   using Node = std::remove_cvref_t<decltype(detail::node0(
       detail::arg0(std::forward<Args>(args)...)))>;
