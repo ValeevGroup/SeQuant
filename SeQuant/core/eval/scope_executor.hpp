@@ -294,15 +294,21 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
       // the two traces are directly comparable). Gated by the standard trace
       // level via log::printing() -- a first-class trace facility, not
       // env-gated.
+      auto const scatter_scope = [&] {
+        BatchContext s = ectx;
+        s.push_back({axis, {0, 0}});
+        return log::scope_annot(s);
+      };
       if (log::printing()) {
         log::log("BatchGroup", "Begin",
-                 std::format("1 member scattered over {} ext batches",
-                             batches.size()));
+                 std::format("1 member scattered over {} ext batches {}",
+                             batches.size(), scatter_scope()));
         log::log("BatchMember",
                  toUtf8(io::serialization::to_string(to_expr(*m))));
         log::log("BatchAxes",
-                 std::format("depth={} picked={}:ext nbatches={}", ectx.size(),
-                             toUtf8(axis.full_label()), batches.size()));
+                 std::format("depth={} picked={}:ext nbatches={} {}",
+                             ectx.size(), toUtf8(axis.full_label()),
+                             batches.size(), scatter_scope()));
       }
       auto const scope_guard = make_scope_guard(batches.size());
       (void)scope_guard;
@@ -325,7 +331,7 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
         dest->write_into_slice(*part, *dm, e_lo, e_hi);
       }
       SEQUANT_ASSERT(dest);
-      if (log::printing()) log::log("BatchGroup", "End");
+      if (log::printing()) log::log("BatchGroup", "End", scatter_scope());
       out[j] = std::move(dest);
     }
     return out;
@@ -366,16 +372,21 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
 
     // Loop-structure trace (mirrors eval.hpp's forest BatchGroup markers;
     // log::printing()-gated, first-class -- not env-gated).
+    auto const con_scope = [&] {
+      BatchContext s = ectx;
+      s.push_back({K, {0, 0}});
+      return log::scope_annot(s);
+    };
     if (log::printing()) {
       log::log("BatchGroup", "Begin",
-               std::format("{} members co-evaluated over {} aux batches",
-                           members.size(), batches.size()));
+               std::format("{} members co-evaluated over {} aux batches {}",
+                           members.size(), batches.size(), con_scope()));
       for (auto const* m : members)
         log::log("BatchMember",
                  toUtf8(io::serialization::to_string(to_expr(*m))));
-      log::log("BatchAxes",
-               std::format("depth={} picked={}:con nbatches={}", ectx.size(),
-                           toUtf8(K.full_label()), batches.size()));
+      log::log("BatchAxes", std::format("depth={} picked={}:con nbatches={} {}",
+                                        ectx.size(), toUtf8(K.full_label()),
+                                        batches.size(), con_scope()));
     }
     container::svector<ResultPtr> acc(members.size());
     auto const scope_guard = make_scope_guard(batches.size());
@@ -401,7 +412,7 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
       SEQUANT_ASSERT(acc[m]);
       out[m] = std::move(acc[m]);
     }
-    if (log::printing()) log::log("BatchGroup", "End");
+    if (log::printing()) log::log("BatchGroup", "End", con_scope());
     return out;
   }
 
@@ -517,17 +528,23 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
   // Loop-structure trace (mirrors eval.hpp's forest BatchGroup markers;
   // log::printing()-gated, first-class -- not env-gated). Nested loops emit
   // their own Begin/End via the child recursion, so depth distinguishes levels.
+  auto const nested_scope = [&] {
+    BatchContext s = ectx;
+    s.push_back({K, {0, 0}});
+    return log::scope_annot(s);
+  };
   if (log::printing()) {
     log::log("BatchGroup", "Begin",
-             std::format("{} members ({} homed) over {} aux batches (nested)",
-                         members.size(), homed.size(), batches.size()));
+             std::format(
+                 "{} members ({} homed) over {} aux batches (nested) {}",
+                 members.size(), homed.size(), batches.size(), nested_scope()));
     for (auto const* m : members)
       log::log("BatchMember",
                toUtf8(io::serialization::to_string(to_expr(*m))));
-    log::log(
-        "BatchAxes",
-        std::format("depth={} picked={}:con nbatches={} homed={}", ectx.size(),
-                    toUtf8(K.full_label()), batches.size(), homed.size()));
+    log::log("BatchAxes",
+             std::format("depth={} picked={}:con nbatches={} homed={} {}",
+                         ectx.size(), toUtf8(K.full_label()), batches.size(),
+                         homed.size(), nested_scope()));
   }
   container::svector<ResultPtr> acc(members.size());
   auto const scope_guard = make_scope_guard(batches.size());
@@ -582,7 +599,7 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
     SEQUANT_ASSERT(acc[m]);
     out[m] = std::move(acc[m]);
   }
-  if (log::printing()) log::log("BatchGroup", "End");
+  if (log::printing()) log::log("BatchGroup", "End", nested_scope());
   return out;
 }
 

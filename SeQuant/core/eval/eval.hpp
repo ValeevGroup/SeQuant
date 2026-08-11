@@ -395,6 +395,63 @@ inline void release_after_op() {
                            node.right()->label(), node->label());
 }
 
+/// Scope annotation for the batch-loop enter/leave markers (and reused by
+/// slice_home_annot): the base_keys of the currently-open batch loops,
+/// outermost-first, e.g. `scope={i,i,K,}`. \p active is a CacheManager
+/// batch_context() -- a sequence of {Index mode, element-range} entries.
+template <typename BatchContext>
+std::string scope_annot(BatchContext const& active) {
+  std::string scope;
+  for (auto const& e : active) {
+    scope += toUtf8(e.first.space().base_key());
+    scope += ",";
+  }
+  return std::format("scope={{{}}}", scope);
+}
+
+/// Per-op slice/home-scope metadata, reported IDENTICALLY for the forest
+/// evaluator and the whole-scope (DAG) executor so their traces diff cleanly:
+///   canon=[<canon_indices full_labels>] sliced=[<ordinal>:<base_key> ...]
+///   scope={..}
+/// - canon = node->canon_indices() full_labels: THIS occurrence's array layout
+///   (labels are valid here -- they identify the layout the ordinals index).
+/// - sliced = for each canon-index POSITION p whose space().base_key() matches
+///   an open batch loop in \p active, `p:base_key`. Ordinal:base-space-key
+///   ONLY -- never a bare label (labels are tree-scoped; ordinals are
+///   DAG-safe).
+/// - scope = the open loops, outer..inner (see scope_annot).
+template <meta::eval_node Node, typename BatchContext>
+std::string slice_home_annot(Node const& node, BatchContext const& active) {
+  std::string canon, sliced;
+  auto const& idxs = node->canon_indices();
+  for (auto const& ix : idxs) {
+    canon += toUtf8(ix.full_label());
+    canon += " ";
+  }
+  for (std::size_t p = 0; p < idxs.size(); ++p) {
+    auto const bk = idxs[p].space().base_key();
+    for (auto const& e : active)
+      if (e.first.space().base_key() == bk) {
+        sliced += std::format("{}:{} ", p, toUtf8(std::wstring(bk)));
+        break;
+      }
+  }
+  return std::format("canon=[{}] sliced=[{}] {}", canon, sliced,
+                     scope_annot(active));
+}
+
+/// Enriched node-info trailer for trace emission: the node label (see the
+/// single-arg overload) followed by the per-op slice/home-scope metadata (see
+/// slice_home_annot), so every compute and cache-read trace line carries which
+/// of the node's modes are sliced by the active batch loops and the loop-nest
+/// scope. Centralized here so the forest and DAG paths reach it uniformly
+/// through the one node-info trailer. Only invoked under printing() (at the
+/// trace emission sites), so the canon/sliced formatting cost is trace-only.
+template <meta::eval_node Node, typename BatchContext>
+[[nodiscard]] std::string label(Node const& node, BatchContext const& active) {
+  return std::format("{} {}", label(node), slice_home_annot(node, active));
+}
+
 }  // namespace log
 
 // implementation details of the eval engine; prefer sequant::detail over an
@@ -597,7 +654,8 @@ ResultPtr evaluate_impl(Node const& node,         //
                                 .mem_result = log::bytes(post),
                                 .mem_alloc = log::bytes(post),
                                 .mem_hwmark = {cache.note_working_set(hwmark)}};
-      log::eval(stat, std::format("{} * {}", phase, nd->label()));
+      log::eval(stat, std::format("{} * {}", phase, nd->label()),
+                log::slice_home_annot(nd, cache.batch_context()));
     }
     return post;
   };
@@ -698,7 +756,7 @@ ResultPtr evaluate_impl(Node const& node,         //
     if (!f.store_after) return rb;
     auto ptr = cache.store(f.node, apply_phase(f.node, std::move(rb)));
     if constexpr (detail::trace(EvalTrace))
-      log::cache(f.node, cache, log::label(f.node));
+      log::cache(f.node, cache, log::label(f.node, cache.batch_context()));
     return apply_phase(f.node, ptr);
   };
 
@@ -762,7 +820,8 @@ ResultPtr evaluate_impl(Node const& node,         //
                 std::size_t const hops = use_depth - hd;
                 if (ResultPtr ptr = cache.access_at_hops(f.node, hops); ptr) {
                   if constexpr (detail::trace(EvalTrace))
-                    log::cache(f.node, cache, log::label(f.node));
+                    log::cache(f.node, cache,
+                               log::label(f.node, cache.batch_context()));
 #ifdef SEQUANT_ROUTER_SHADOW
                   // Dev-only correctness check (default OFF): for a NO-OP
                   // override (residency == the value's ACTUAL current home),
@@ -785,7 +844,8 @@ ResultPtr evaluate_impl(Node const& node,         //
           if (routed) break;
           if (auto m = cache.access_at(f.node); m.ptr) {
             if constexpr (detail::trace(EvalTrace))
-              log::cache(f.node, cache, log::label(f.node));
+              log::cache(f.node, cache,
+                         log::label(f.node, cache.batch_context()));
             // Slice-on-use: a value fetched `m.hops` scopes up does not have
             // this scope's (and any intervening) batch slices baked in, so
             // slice it to the current block for the loops the fetch crossed. A
@@ -818,7 +878,7 @@ ResultPtr evaluate_impl(Node const& node,         //
                         .mem_result = log::bytes(intercepted),
                         .mem_alloc = log::bytes(intercepted),
                         .mem_hwmark = {cache.note_working_set(hwmark)}},
-                    log::label(f.node));
+                    log::label(f.node, cache.batch_context()));
               }
               log::release_after_op();
               finalize(finish_phase_b(f, std::move(intercepted)));
@@ -841,7 +901,7 @@ ResultPtr evaluate_impl(Node const& node,         //
                               .mem_result = log::bytes(result),
                               .mem_alloc = log::bytes(result),
                               .mem_hwmark = {cache.note_working_set(hwmark)}},
-                log::label(f.node));
+                log::label(f.node, cache.batch_context()));
           }
           log::release_after_op();
           // Store the FULL leaf under its canonical key (a block slice would
@@ -888,7 +948,7 @@ ResultPtr evaluate_impl(Node const& node,         //
                             .mem_hwmark = {cache.note_working_set(hwmark)},
                             .mem_left = log::bytes(f.left),
                             .mem_right = log::bytes(f.right)},
-              log::label(f.node));
+              log::label(f.node, cache.batch_context()));
         }
         log::release_after_op();
         finalize(finish_phase_b(f, std::move(result)));
@@ -997,7 +1057,7 @@ ResultPtr evaluate_impl(Node const& node,         //
                             .mem_hwmark = {cache.note_working_set(hwmark)},
                             .mem_left = log::bytes(f.left),
                             .mem_right = log::bytes(f.right)},
-              log::label(f.node));
+              log::label(f.node, cache.batch_context()));
         }
         log::release_after_op();
         finalize(finish_phase_b(f, std::move(result)));
@@ -1081,7 +1141,8 @@ ResultPtr evaluate(Node const& node,           //
                                 .mem_result = log::bytes(result.post),
                                 .mem_alloc = log::bytes(result.post),
                                 .mem_hwmark = {cache.note_working_set(hwmark)}};
-      log::eval(stat, node->label());
+      log::eval(stat, node->label(),
+                log::slice_home_annot(node, cache.batch_context()));
     }
     log::term(log::TermMode::End, xpr);
   }
@@ -1158,7 +1219,8 @@ ResultPtr evaluate(Nodes const& nodes,  //
                                 .mem_result = log::bytes(result),
                                 .mem_alloc = {0},
                                 .mem_hwmark = {cache.note_working_set(hwmark)}};
-      log::eval(stat, n->label());
+      log::eval(stat, n->label(),
+                log::slice_home_annot(n, cache.batch_context()));
     }
   }
 
@@ -1969,12 +2031,15 @@ template <typename F, typename IndexPredicate = accept_any_index,
         res += toUtf8(ix.full_label());
         res += " ";
       }
-      log::log("BatchAxes",
-               std::format(
-                   "depth={} picked={}:{} nbatches={} annot=[{}] result=[{}]",
-                   depth, toUtf8(K.full_label()),
-                   picked_kind == BatchModeType::External ? "ext" : "con",
-                   batches.size(), annot, res));
+      auto scope_ctx = cache.batch_context();
+      scope_ctx.push_back({K, {0, 0}});
+      log::log(
+          "BatchAxes",
+          std::format("depth={} picked={}:{} nbatches={} annot=[{}] "
+                      "result=[{}] {}",
+                      depth, toUtf8(K.full_label()),
+                      picked_kind == BatchModeType::External ? "ext" : "con",
+                      batches.size(), annot, res, log::scope_annot(scope_ctx)));
     }
 
     if (picked_kind == BatchModeType::External) {
@@ -2136,9 +2201,12 @@ template <typename F, typename IndexPredicate = accept_any_index,
     if (log::printing()) {
       std::size_t n_members = 0;
       for (auto const& layer : layers) n_members += layer.size();
-      log::log("BatchGroup", "Begin",
-               std::format("{} members co-evaluated over {} aux batches",
-                           n_members, batches.size()));
+      auto scope_ctx = cache.batch_context();
+      scope_ctx.push_back({K, {0, 0}});
+      log::log(
+          "BatchGroup", "Begin",
+          std::format("{} members co-evaluated over {} aux batches {}",
+                      n_members, batches.size(), log::scope_annot(scope_ctx)));
       for (auto const& layer : layers)
         for (auto const& mk : layer)
           log::log("BatchMember",
@@ -2274,7 +2342,11 @@ template <typename F, typename IndexPredicate = accept_any_index,
         (void)cache.store(*mem, std::move(v));
       }
     }
-    if (log::printing()) log::log("BatchGroup", "End");
+    if (log::printing()) {
+      auto scope_ctx = cache.batch_context();
+      scope_ctx.push_back({K, {0, 0}});
+      log::log("BatchGroup", "End", log::scope_annot(scope_ctx));
+    }
     SEQUANT_ASSERT(trigger_result);
     return trigger_result;
   };
