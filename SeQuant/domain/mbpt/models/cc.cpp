@@ -253,6 +253,8 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
                    "pertbar_comm_rank must be specified for unitary "
                    "ansatz");
   }
+  SEQUANT_ASSERT(hbar_expansion_ != HbarExpansion::Bernoulli,
+                 "CC::tʼ: the Bernoulli expansion is not supported yet");
 
   // construct h1_bar
   // truncate h1_bar at rank 2 for one-body perturbation operator and at rank 4
