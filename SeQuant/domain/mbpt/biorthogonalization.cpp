@@ -670,32 +670,40 @@ std::string join_annotation(container::svector<std::string> const& parts) {
   return out;
 }
 
-// The n = 3 triplet weight rows derive from the 18*18 matrix of TEE operators
-// (6 ket/bra-swaps x 3 T column-swaps)
-constexpr std::array<std::array<std::array<int, 6>, 2>, 18>
-    triplet_triples_slot_perms{{
-        {{{0, 1, 2, 3, 4, 5}, {0, 2, 1, 3, 5, 4}}},  // sigma=(a,b,c) t=0
-        {{{1, 0, 2, 4, 3, 5}, {1, 2, 0, 4, 5, 3}}},  // sigma=(a,b,c) t=1
-        {{{2, 0, 1, 5, 3, 4}, {2, 1, 0, 5, 4, 3}}},  // sigma=(a,b,c) t=2
-        {{{0, 2, 1, 3, 4, 5}, {0, 1, 2, 3, 5, 4}}},  // sigma=(a,c,b) t=0
-        {{{2, 0, 1, 4, 3, 5}, {2, 1, 0, 4, 5, 3}}},  // sigma=(a,c,b) t=1
-        {{{1, 0, 2, 5, 3, 4}, {1, 2, 0, 5, 4, 3}}},  // sigma=(a,c,b) t=2
-        {{{1, 0, 2, 3, 4, 5}, {1, 2, 0, 3, 5, 4}}},  // sigma=(b,a,c) t=0
-        {{{0, 1, 2, 4, 3, 5}, {0, 2, 1, 4, 5, 3}}},  // sigma=(b,a,c) t=1
-        {{{2, 1, 0, 5, 3, 4}, {2, 0, 1, 5, 4, 3}}},  // sigma=(b,a,c) t=2
-        {{{1, 2, 0, 3, 4, 5}, {1, 0, 2, 3, 5, 4}}},  // sigma=(b,c,a) t=0
-        {{{2, 1, 0, 4, 3, 5}, {2, 0, 1, 4, 5, 3}}},  // sigma=(b,c,a) t=1
-        {{{0, 1, 2, 5, 3, 4}, {0, 2, 1, 5, 4, 3}}},  // sigma=(b,c,a) t=2
-        {{{2, 0, 1, 3, 4, 5}, {2, 1, 0, 3, 5, 4}}},  // sigma=(c,a,b) t=0
-        {{{0, 2, 1, 4, 3, 5}, {0, 1, 2, 4, 5, 3}}},  // sigma=(c,a,b) t=1
-        {{{1, 2, 0, 5, 3, 4}, {1, 0, 2, 5, 4, 3}}},  // sigma=(c,a,b) t=2
-        {{{2, 1, 0, 3, 4, 5}, {2, 0, 1, 3, 5, 4}}},  // sigma=(c,b,a) t=0
-        {{{1, 2, 0, 4, 3, 5}, {1, 0, 2, 4, 5, 3}}},  // sigma=(c,b,a) t=1
-        {{{0, 2, 1, 5, 3, 4}, {0, 1, 2, 5, 4, 3}}},  // sigma=(c,b,a) t=2
-    }};
+/// The triplet n = 3 non-null-space weights
+rational triplet_triples_slot_weight(
+    const container::svector<std::size_t>& ords) {
+  // w10 is the first row of the non-null-sapce projector: G . pinv(G)
+  // of the 18x18 TEE overlap matrix
+  constexpr std::array<int, 18> w10{5, -1, -1, -1, 1, 1, -2, -2, 1,
+                                    0, 1,  0,  0,  0, 1, -2, 1,  -2};
 
-constexpr std::array<int, 18> triplet_triples_op_w10{
-    5, -1, -1, -1, 1, 1, -2, -2, 1, 0, 1, 0, 0, 0, 1, -2, 1, -2};
+  SEQUANT_ASSERT(ords.size() == 6);
+  constexpr std::size_t n = 3;
+
+  std::array<std::size_t, n> ph{}, pv{}, pv_inv{};
+  for (std::size_t i = 0; i != n; ++i) {
+    ph[i] = ords[i];
+    pv[i] = ords[n + i] - n;
+  }
+  for (std::size_t i = 0; i != n; ++i) pv_inv[pv[i]] = i;
+
+  std::array<std::size_t, n> sigma{};
+  for (std::size_t i = 0; i != n; ++i) sigma[i] = ph[pv_inv[i]];
+
+  // lexicographic rank of sigma among the n! permutations of {0, .., n-1}
+  std::array<std::size_t, n> perm{};
+  std::iota(perm.begin(), perm.end(), std::size_t{0});
+  std::size_t sigma_rank = 0;
+  while (perm != sigma) {
+    ++sigma_rank;
+    [[maybe_unused]] const bool has_next =
+        std::next_permutation(perm.begin(), perm.end());
+    SEQUANT_ASSERT(has_next);
+  }
+
+  return ratio(w10[n * sigma_rank + pv[0]], 20);
+}
 
 // (n!)^2: the n bra slots and the n ket slots are permuted
 // independently
@@ -704,8 +712,7 @@ std::size_t slot_perm_count(std::size_t n_particles) {
                                   factorial(n_particles));
 }
 
-// flat index of a slot permutation (the row format of
-// triplet_triples_slot_perms)
+// flat index of a slot permutation
 std::size_t slot_perm_index(const container::svector<std::size_t>& ords) {
   SEQUANT_ASSERT(ords.size() % 2 == 0);
   const std::size_t n_particles = ords.size() / 2;
@@ -732,20 +739,10 @@ std::vector<rational> make_triplet_nullspace_weights(std::size_t n_particles) {
 
     case 3: {
       std::vector<rational> weights(slot_perm_count(3), 0);
-      std::vector<bool> assigned(weights.size(), false);
-      for (std::size_t m = 0; m != 18; ++m) {
-        for (std::size_t r = 0; r != 2; ++r) {
-          container::svector<std::size_t> images(6);
-          for (std::size_t s = 0; s != 6; ++s)
-            images[s] = triplet_triples_slot_perms[m][r][s];
-          const auto p = slot_perm_index(images);
-          SEQUANT_ASSERT(!assigned[p]);
-          weights[p] = ratio(triplet_triples_op_w10[m], 20);
-          assigned[p] = true;
-        }
+      for (std::size_t p = 0; p != weights.size(); ++p) {
+        weights[p] = triplet_triples_slot_weight(
+            detail::compute_bra_ket_permuted_indices(p, 3));
       }
-      SEQUANT_ASSERT(std::all_of(assigned.begin(), assigned.end(),
-                                 [](bool b) { return b; }));
       return weights;
     }
 
