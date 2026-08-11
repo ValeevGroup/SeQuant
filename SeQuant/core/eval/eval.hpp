@@ -421,9 +421,17 @@ constexpr bool is_cache_manager_v = false;
 template <typename N, bool F>
 constexpr bool is_cache_manager_v<CacheManager<N, F>> = true;
 
+// The `sizeof...(Args) > 0` guard is load-bearing: with an empty pack
+// `sizeof...(Args) - 1` underflows to SIZE_MAX and `std::tuple_element_t<
+// SIZE_MAX, std::tuple<>>` is a hard error (a static_assert), not SFINAE. The
+// conjunction short-circuits so the tuple_element type is never formed when the
+// pack is empty, letting the variadic evaluate()/evaluate_impl() overloads be
+// considered (and correctly rejected) for a zero-argument call under gcc.
 template <typename... Args>
-concept last_type_is_cache_manager = is_cache_manager_v<std::remove_cvref_t<
-    std::tuple_element_t<sizeof...(Args) - 1, std::tuple<Args...>>>>;
+concept last_type_is_cache_manager =
+    sizeof...(Args) > 0 &&
+    is_cache_manager_v<std::remove_cvref_t<
+        std::tuple_element_t<sizeof...(Args) - 1, std::tuple<Args...>>>>;
 
 template <typename... Args>
 auto&& arg0(Args&&... args) {
