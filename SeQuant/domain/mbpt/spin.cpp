@@ -2324,38 +2324,6 @@ ExprPtr triplet_adapt_amplitudes(const ExprPtr& spin_labeled,
   return spin_labeled;
 }
 
-ExprPtr triplet_doubles_paper_combined_residual(
-    const ExprPtr& TE, const container::map<Index, Index>& pair_swap,
-    bool te_only = false) {
-  // EFV test, te_only, ter_only
-  // post-processing for te_only restores the dropped TE_swap. This is what I
-  // checked, not what EFV asked me to test. Omega = (3*TE - TE_ps)/16 = TE/4 +
-  // (TE_bs + TE_ks)/16 (null-space identity TE + TE_ps + TE_bs + TE_ks = 0).
-  if (te_only) return ex<Constant>(ratio(1, 4)) * TE;
-  ExprPtr TE_ps = transform_expr(TE, pair_swap);
-  ExprPtr tauSymm = TE + TE_ps;
-  ExprPtr tauAnti = TE - TE_ps;
-  ExprPtr tauSymm_N = ex<Constant>(ratio(1, 8)) * tauSymm;
-  ExprPtr tauAnti_N = ex<Constant>(ratio(1, 8)) * tauAnti;
-  return ex<Constant>(ratio(1, 2)) * tauSymm_N +
-         tauAnti_N;  // paper does not have this 1/2. why? it correct. Faber
-                     // paper has the factor.
-}
-
-// The 18 TEE ops (6 pairings x 3 T
-// positions) have rank 9. The minimal null-space-reduced
-// dual of TEE is : (1/80)[ 6 TEE - TEE_ps01 - TEE_ps02 + 2 TEE_ks12 ].
-ExprPtr triplet_triples_paper_combined_residual(
-    const ExprPtr& TEE, const container::map<Index, Index>& pair_swap_01,
-    const container::map<Index, Index>& pair_swap_02,
-    const container::map<Index, Index>& ket_swap_12) {
-  ExprPtr TEE_ps01 = transform_expr(TEE, pair_swap_01);
-  ExprPtr TEE_ps02 = transform_expr(TEE, pair_swap_02);
-  ExprPtr TEE_ks12 = transform_expr(TEE, ket_swap_12);
-  return ex<Constant>(ratio(1, 160)) * (ex<Constant>(6) * TEE - TEE_ps01 -
-                                        TEE_ps02 + ex<Constant>(2) * TEE_ks12);
-}
-
 }  // namespace
 
 ExprPtr closed_shell_EOM_triplet_spintrace(
@@ -2410,76 +2378,22 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
         SEQUANT_ASSERT(false && "unreachable");
         abort();
     }
-  } else if (n_ext == 2) {
-    // paper orthonormal (1)/(2) channels (1/8) folded into one R2 residual
-    const auto& g0 = ext_idxs.at(0);
-    const auto& g1 = ext_idxs.at(1);
-    SEQUANT_ASSERT(g0.size() == 2 && g1.size() == 2);
-    container::map<Index, Index> pair_swap;
-    const Index b0 = get_bra_idx(g0);
-    const Index b1 = get_bra_idx(g1);
-    const Index k0 = get_ket_idx(g0);
-    const Index k1 = get_ket_idx(g1);
-    pair_swap.emplace(b0, b1);
-    pair_swap.emplace(b1, b0);
-    pair_swap.emplace(k0, k1);
-    pair_swap.emplace(k1, k0);
+  } else {  // n_ext == 2 or 3: one set of external permutation weights
+    if (n_ext != 2 && (options.triplet_te_only || options.triplet_amp_no_swap))
+      throw Exception(
+          "closed_shell_EOM_triplet_spintrace: te_only/ter_only are "
+          "doubles-only experiments, not implemented beyond doubles");
+    SEQUANT_ASSERT(std::all_of(ext_idxs.begin(), ext_idxs.end(),
+                               [](const auto& g) { return g.size() == 2; }));
 
-    triplet = triplet_doubles_paper_combined_residual(triplet, pair_swap,
-                                                      options.triplet_te_only);
-    // the te_only combined residual is a Constant*Sum Product;
-    // triplet_maxcoeff_compact only acts on a top-level Sum.
+    triplet =
+        triplet_combined_residual(triplet, ext_groups, options.triplet_te_only);
     simplify(triplet);
     if (options.triplet_doubles_compact)
-      // Keep the verified orbit representative per hash group so the dropped
-      // terms can be rebuilt exactly: paper metric keeps the -3c member of
-      // each {c,c,c,-3c} group (triplet_symbolic_reconstruct, or the
-      // {1,-1/3,-1/3,-1/3} four-swap reconstruction on the tensor side);
-      // te_only keeps the -2c member of each {c,c,-2c} group
-      // (TeNnsReconstruction, {1,-1/2,-1/2,0}).
       triplet = triplet_maxcoeff_compact(
           triplet, ext_groups,
           options.triplet_te_only ? TripletOrbitWeightKind::TeNnsReconstruction
                                   : TripletOrbitWeightKind::NnsReconstruction);
-  } else {  // n_ext == 3
-    if (options.triplet_te_only || options.triplet_amp_no_swap)
-      throw Exception(
-          "closed_shell_EOM_triplet_spintrace: te_only/ter_only are "
-          "doubles-only experiments, not implemented for triples");
-    const auto& g0 = ext_idxs.at(0);
-    const auto& g1 = ext_idxs.at(1);
-    const auto& g2 = ext_idxs.at(2);
-    SEQUANT_ASSERT(g0.size() == 2 && g1.size() == 2 && g2.size() == 2);
-    auto whole_pair_swap = [](const auto& ga, const auto& gb) {
-      container::map<Index, Index> m;
-      const Index ba = get_bra_idx(ga);
-      const Index bb = get_bra_idx(gb);
-      const Index ka = get_ket_idx(ga);
-      const Index kb = get_ket_idx(gb);
-      m.emplace(ba, bb);
-      m.emplace(bb, ba);
-      m.emplace(ka, kb);
-      m.emplace(kb, ka);
-      return m;
-    };
-    container::map<Index, Index> ket_swap_12;
-    {
-      const Index k1 = get_ket_idx(g1);
-      const Index k2 = get_ket_idx(g2);
-      ket_swap_12.emplace(k1, k2);
-      ket_swap_12.emplace(k2, k1);
-    }
-    triplet = triplet_triples_paper_combined_residual(
-        triplet, whole_pair_swap(g0, g1), whole_pair_swap(g0, g2), ket_swap_12);
-    // the combined residual is a Constant*Sum Product;
-    // triplet_maxcoeff_compact only acts on a top-level Sum.
-    simplify(triplet);
-    if (options.triplet_doubles_compact)
-      // Keep one 36-slot-perm-orbit representative per hash group, scaled by
-      // the inverse stabilizer order, so the dropped terms can be rebuilt
-      // exactly (triplet_symbolic_reconstruct, or the w10[m]/5 36-perm
-      // reconstruction of triplet_nns_project on the tensor side).
-      triplet = triplet_maxcoeff_compact(triplet, ext_groups);
   }
   simplify(triplet);
   std::wcout << "closed_shell_EOM_triplet_spintrace size: " << triplet->size()
@@ -2487,11 +2401,6 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
   return triplet;
 }
 
-// number-conserving spin trace that keeps external spin sectors separate.
-// returns one spin-free expression per external spin string (αα.., αβ.., ..,
-// ββ..). summing all returned sectors reproduces generic spintrace() exactly,
-// so each entry is a genuine projection of the same result onto one external
-// sector.
 container::svector<std::pair<std::wstring, ExprPtr>> spintrace_by_sector(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups,

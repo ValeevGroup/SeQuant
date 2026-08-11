@@ -772,6 +772,50 @@ std::vector<rational> make_triplet_nullspace_weights(std::size_t n_particles) {
   }
 }
 
+// the paper-combined residual assembly weights; see triplet_combined_residual
+// for the formulas
+std::vector<rational> make_triplet_combined_residual_weights(
+    std::size_t n_particles, bool te_only) {
+  std::vector<rational> weights(triplet_slot_perm_orbit_order(n_particles), 0);
+
+  auto set = [&](container::svector<std::size_t> bra,
+                 const container::svector<std::size_t>& ket, rational coeff) {
+    SEQUANT_ASSERT(bra.size() == n_particles && ket.size() == n_particles);
+    for (const auto s : ket) bra.push_back(n_particles + s);
+    weights[triplet_slot_perm_index(bra)] = coeff;
+  };
+
+  if (te_only) {
+    if (n_particles != 2)
+      throw Exception(
+          "the bare-TE triplet residual weights are only defined for "
+          "n_particles = 2");
+    set({0, 1}, {0, 1}, ratio(1, 4));
+    return weights;
+  }
+
+  switch (n_particles) {
+    case 2:
+      set({0, 1}, {0, 1}, ratio(3, 16));   // identity
+      set({1, 0}, {1, 0}, ratio(-1, 16));  // whole-pair swap
+      break;
+
+    case 3:
+      set({0, 1, 2}, {0, 1, 2}, ratio(6, 160));   // identity
+      set({1, 0, 2}, {1, 0, 2}, ratio(-1, 160));  // pair swap 0 <-> 1
+      set({2, 1, 0}, {2, 1, 0}, ratio(-1, 160));  // pair swap 0 <-> 2
+      set({0, 1, 2}, {0, 2, 1}, ratio(2, 160));   // ket swap 1 <-> 2
+      break;
+
+    default:
+      throw Exception(
+          "triplet paper-combined residual weights are only available for "
+          "n_particles = 2, 3, requested rank is : " +
+          std::to_string(n_particles));
+  }
+  return weights;
+}
+
 // (memoized) rational weight rows for the symbolic triplet primitives
 const std::vector<rational>& triplet_orbit_weights_rational(
     std::size_t n_particles, TripletOrbitWeightKind kind) {
@@ -801,6 +845,14 @@ const std::vector<rational>& triplet_orbit_weights_rational(
               for (auto& w : weights) w /= identity_weight;
               return weights;
             }
+
+            case TripletOrbitWeightKind::CombinedResidual:
+              return make_triplet_combined_residual_weights(n_particles,
+                                                            /*te_only=*/false);
+
+            case TripletOrbitWeightKind::TeCombinedResidual:
+              return make_triplet_combined_residual_weights(n_particles,
+                                                            /*te_only=*/true);
 
             case TripletOrbitWeightKind::TeNnsReconstruction:
             case TripletOrbitWeightKind::TeReconstruction: {
@@ -906,6 +958,32 @@ ExprPtr triplet_weighted_orbit(
 }
 
 }  // namespace
+
+ExprPtr triplet_combined_residual(
+    const ExprPtr& V,
+    const container::svector<container::svector<Index>>& ext_idxs,
+    bool te_only) {
+  const std::size_t n_particles = ext_idxs.size();
+  const auto& weights = triplet_orbit_weights_rational(
+      n_particles, te_only ? TripletOrbitWeightKind::TeCombinedResidual
+                           : TripletOrbitWeightKind::CombinedResidual);
+  SEQUANT_ASSERT(weights.size() == triplet_slot_perm_orbit_order(n_particles));
+
+  if (V->is<Sum>()) return triplet_weighted_orbit(V, ext_idxs, weights);
+
+  const auto [b, k] = triplet_external_bra_ket(ext_idxs);
+  Sum out;
+  for (std::size_t p = 0; p != weights.size(); ++p) {
+    const auto& w = weights[p];
+    if (w == 0) continue;
+    const auto map = triplet_slot_perm_map(
+        b, k, detail::triplet_slot_perm_ords(p, n_particles));
+    out.append(map.empty() ? ex<Constant>(w) * V : transform_expr(V, map, w));
+  }
+  auto result = ex<Sum>(out);
+  simplify(result);
+  return result;
+}
 
 ExprPtr triplet_maxcoeff_compact(
     ExprPtr expr, const container::svector<container::svector<Index>>& ext_idxs,

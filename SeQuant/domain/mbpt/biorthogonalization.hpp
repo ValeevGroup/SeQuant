@@ -4,6 +4,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/slotted_index.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/memoize.hpp>
@@ -101,7 +102,11 @@ enum class TripletOrbitWeightKind {
   /// bare-TE (te_only) undo-compact row {1, -1/2, -1/2, 0}; n = 2 only
   TeNnsReconstruction,
   /// bare-TE -> paper-metric reconstruction row {1, 1/4, 1/4, 0}; n = 2 only
-  TeReconstruction
+  TeReconstruction,
+  /// paper-combined residual assembly weights (see triplet_combined_residual)
+  CombinedResidual,
+  /// bare-TE (te_only) residual assembly weights {1/4, 0, 0, 0}; n = 2 only
+  TeCombinedResidual
 };
 
 /// \brief Lossless compaction of the closed-shell triplet residual: keeps one
@@ -117,6 +122,32 @@ enum class TripletOrbitWeightKind {
 [[nodiscard]] ExprPtr triplet_maxcoeff_compact(
     ExprPtr expr, const container::svector<container::svector<Index>>& ext_idxs,
     TripletOrbitWeightKind kind = TripletOrbitWeightKind::NnsReconstruction);
+
+// clang-format off
+/// \brief Assembles the paper-combined closed-shell triplet residual from the
+/// sector-summed primitive V, for any supported rank
+///
+///   n = 2: Omega = (3 V - V_ps)/16 (Faber's paper)
+///   te_only (n = 2, EFV experiment): Omega = V/4, i.e. the bare TE primitive
+///          with the external pair swap dropped. The dropped part is restored
+///          by the postprocessing Omega = V/4 + (V_bs + V_ks)/16
+///   n = 3: Omega = (6 V - V_ps01 - V_ps02 + 2 V_ks12)/160
+///          the 18 TEE ops (6 pairings x 3 T positions) have rank 9;
+///
+/// Supporting a new rank means adding weights to the CombinedResidual case
+/// of the triplet weight table
+///
+/// \param V The sector-summed triplet primitive
+/// \param ext_idxs A vector of external index groups (must have 2 or 3 groups)
+/// \param te_only Assemble the bare-TE weights instead (n = 2 only)
+/// \note I might want to have te_only for triples if EFV prefer it (tee_only)
+/// \return The combined residual, simplified
+/// \throw Exception for unsupported \p ext_idxs sizes
+// clang-format on
+[[nodiscard]] ExprPtr triplet_combined_residual(
+    const ExprPtr& V,
+    const container::svector<container::svector<Index>>& ext_idxs,
+    bool te_only = false);
 
 /// \brief Symbolic inverse of triplet_maxcoeff_compact: rebuilds the full
 /// residual as the weighted sum of the kept terms over the (n!)^2 external
@@ -230,7 +261,8 @@ template <typename T>
   static const std::vector<T> empty_vec{};
 
   const bool te_kind = kind == TripletOrbitWeightKind::TeNnsReconstruction ||
-                       kind == TripletOrbitWeightKind::TeReconstruction;
+                       kind == TripletOrbitWeightKind::TeReconstruction ||
+                       kind == TripletOrbitWeightKind::TeCombinedResidual;
   if ((n_particles != 2 && n_particles != 3) || (te_kind && n_particles != 2)) {
     return empty_vec;
   }
