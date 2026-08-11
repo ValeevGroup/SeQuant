@@ -436,8 +436,14 @@ std::string slice_home_annot(Node const& node, BatchContext const& active) {
         break;
       }
   }
-  return std::format("canon=[{}] sliced=[{}] {}", canon, sliced,
-                     scope_annot(active));
+  auto annot = std::format("canon=[{}] sliced=[{}] {}", canon, sliced,
+                           scope_annot(active));
+  // Append any schedule-derived per-node metadata (e.g. the value's remat
+  // home + use scopes -- properties the running annotation cannot see). Empty
+  // provider => nothing appended => byte-identical to the base annotation.
+  if (auto const& nm = Logger::instance().eval.node_meta; nm)
+    annot += " " + nm(node->hash_value());
+  return annot;
 }
 
 /// Enriched node-info trailer for trace emission: the node label (see the

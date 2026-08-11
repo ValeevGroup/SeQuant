@@ -724,6 +724,12 @@ TEST_CASE(
   auto fd_cache = sequant::cache_manager(forest);
   fd_cache.set_custom_evaluator(sequant::make_evaluator(policy, yield));
   fd_cache.set_recompute_tally_enabled(true);
+  // The forest descent does NOT go through evaluate_whole_scope, so install the
+  // same schedule-derived per-op annotation (remat home + use scopes) around it
+  // -- save/restore -- so both traces carry identical home/uses annotations for
+  // clean diffing.
+  auto const prev_node_meta = logger.eval.node_meta;
+  logger.eval.node_meta = sequant::eval::make_node_meta(rich);
   ResultPtr fd_result;
   try {
     fd_result =
@@ -733,6 +739,7 @@ TEST_CASE(
                  "threw: "
               << e.what() << "\n";
   }
+  logger.eval.node_meta = prev_node_meta;
   logger.eval.level = prev_level;
   logger.eval.stream = prev_stream;
 

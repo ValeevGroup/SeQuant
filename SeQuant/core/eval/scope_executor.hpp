@@ -605,6 +605,51 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
 
 }  // namespace detail
 
+/// \brief Build a per-node trace-metadata provider from a \c RichSchedule.
+///
+/// \details Returns a callable, hash -> string, that annotates a value with its
+/// SCHEDULE properties the running per-op annotation cannot see: the value's
+/// remat HOME dag-scope and, for each of its use-sites, that use's dag-scope.
+/// A dag-scope is the comma-joined \c IndexSpace::base_key() list of a mode
+/// sequence (no trailing comma -- the same convention as \c log::scope_annot),
+/// so the produced string is
+///   `home={<home dag-scope>} uses=[{<use dag-scope>},{<use dag-scope>},...]`.
+/// The map is built ONCE from \c rich.cells (keyed by \c ValueCell::hash, which
+/// equals a node's \c hash_value()), then captured by the returned lambda; an
+/// unknown hash yields the empty string. Intended to be installed on
+/// \c Logger::instance().eval.node_meta so \c log::slice_home_annot appends it.
+inline std::function<std::string(std::size_t)> make_node_meta(
+    RichSchedule const& rich) {
+  std::unordered_map<std::size_t, std::string> map;
+  map.reserve(rich.cells.size());
+  auto const dag_scope = [](auto const& modes) {
+    std::string s;
+    for (auto const& m : modes) {
+      if (!s.empty()) s += ",";
+      s += toUtf8(m.space().base_key());
+    }
+    return s;
+  };
+  for (auto const& cell : rich.cells) {
+    std::string uses;
+    for (auto const& occ : cell.occurrences) {
+      if (!uses.empty()) uses += ",";
+      std::string sc;
+      for (auto const& e : occ.ectx) {
+        if (!sc.empty()) sc += ",";
+        sc += toUtf8(e.first.space().base_key());
+      }
+      uses += std::format("{{{}}}", sc);
+    }
+    map.emplace(cell.hash, std::format("home={{{}}} uses=[{}]",
+                                       dag_scope(cell.home_modes), uses));
+  }
+  return [map = std::move(map)](std::size_t hash) -> std::string {
+    auto const it = map.find(hash);
+    return it != map.end() ? it->second : std::string{};
+  };
+}
+
 ///
 /// \brief Task 2 of the whole-scope batched DAG execution design (see
 /// `doc/dev/specs/2026-08-10-whole-scope-batched-dag-execution-design.md`):
@@ -696,6 +741,16 @@ ResultPtr evaluate_whole_scope(
   using node_t = std::ranges::range_value_t<Nodes>;
   static_assert(std::is_same_v<node_t, N>,
                 "the forest's node type and the cache's node type must match");
+
+  // Install a schedule-derived per-op trace annotation (remat home + use
+  // scopes) for the duration of this replay, restored on ANY exit. Purely a
+  // logging affordance -- gated on printing() so it is a no-op (byte-identical
+  // trace, no map build) when tracing is off; the guard restores regardless.
+  struct NodeMetaGuard {
+    std::function<std::string(std::size_t)> prev;
+    ~NodeMetaGuard() { Logger::instance().eval.node_meta = std::move(prev); }
+  } node_meta_guard{std::move(Logger::instance().eval.node_meta)};
+  if (log::printing()) Logger::instance().eval.node_meta = make_node_meta(rich);
 
   // if the layout is not the default constructed value need to permute --
   // mirrors sequant::evaluate(Node const&, layout, ...)'s identical check.

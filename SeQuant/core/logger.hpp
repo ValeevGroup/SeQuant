@@ -72,7 +72,17 @@ struct Logger : public Singleton<Logger> {
     /// (e.g. glibc malloc_trim), so it needs no cross-rank matching. Empty
     /// function = no release (default).
     std::function<void()> release_memory = {};
-  } eval = {0, nullptr, {}, {}, {}};
+
+    /// Optional per-node metadata provider, keyed by a node's
+    /// \c EvalExpr::hash_value(). When set, the per-op trace annotation (see
+    /// \c log::slice_home_annot) appends this provider's string for the node,
+    /// so a line can also carry SCHEDULE properties the running annotation
+    /// cannot see -- e.g. the value's remat home and its use scopes. Consulted
+    /// only under \c log::printing() at the trace-emission sites; empty
+    /// function = nothing appended (default), so the annotation is
+    /// byte-identical to before.
+    std::function<std::string(std::size_t hash)> node_meta = {};
+  } eval = {0, nullptr, {}, {}, {}, {}};
 
  private:
   friend class Singleton<Logger>;
