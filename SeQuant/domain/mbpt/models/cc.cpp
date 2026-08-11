@@ -34,41 +34,40 @@ namespace sequant::mbpt {
 
 CC::CC(size_t n) : CC(n, Options{}) {}
 
-CC::CC(size_t n, const Options& opts)
-    : N(n),
-      ansatz_(opts.ansatz),
-      skip_singles_(opts.skip_singles.value_or(ansatz_ == Ansatz::oT ||
-                                               ansatz_ == Ansatz::oU)),
-      screen_(opts.screen),
-      use_topology_(opts.use_topology),
-      hbar_comm_rank_(opts.hbar_comm_rank),
-      hbar_singles_comm_rank_(opts.hbar_singles_comm_rank),
-      pertbar_comm_rank_(opts.pertbar_comm_rank) {
+CC::CC(size_t n, const Options& opts) : N(n), opts_(opts) {
   if (unitary())
-    SEQUANT_ASSERT(hbar_comm_rank_,
+    SEQUANT_ASSERT(opts_.hbar_comm_rank,
                    "CC: hbar_comm_rank is required for unitary ansatz");
-  if (ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU)
-    SEQUANT_ASSERT(skip_singles_,
+  if (opts_.ansatz == Ansatz::oT || opts_.ansatz == Ansatz::oU)
+    SEQUANT_ASSERT(skip_singles(),
                    "CC: skip_singles must be true for orbital-optimized "
                    "ansatz");
 }
 
-CC::Ansatz CC::ansatz() const { return ansatz_; }
+CC::Ansatz CC::ansatz() const { return opts_.ansatz; }
 
 bool CC::unitary() const {
-  return ansatz_ == Ansatz::U || ansatz_ == Ansatz::oU;
+  return opts_.ansatz == Ansatz::U || opts_.ansatz == Ansatz::oU;
 }
 
-std::optional<size_t> CC::hbar_comm_rank() const { return hbar_comm_rank_; }
+std::optional<size_t> CC::hbar_comm_rank() const {
+  return opts_.hbar_comm_rank;
+}
 
-bool CC::skip_singles() const { return skip_singles_; }
+/// resolves the `skip_singles` default: on for orbital-optimized ansätze, off
+/// otherwise. Kept here rather than in the ctor so `Options` round-trips.
+bool CC::skip_singles() const {
+  return opts_.skip_singles.value_or(opts_.ansatz == Ansatz::oT ||
+                                     opts_.ansatz == Ansatz::oU);
+}
 
-bool CC::screen() const { return screen_; }
+bool CC::screen() const { return opts_.screen; }
 
-bool CC::use_topology() const { return use_topology_; }
+bool CC::use_topology() const { return opts_.use_topology; }
 
 ExprPtr CC::hbar(std::optional<size_t> truncation_rank) const {
-  const auto truncation = truncation_rank.value_or(hbar_comm_rank_.value_or(4));
+  const auto truncation =
+      truncation_rank.value_or(opts_.hbar_comm_rank.value_or(4));
 
   // for a non-unitary ansatz this is the cheaper connected-product form, which
   // is only equivalent to the commutator once the caller supplies operator
@@ -78,10 +77,10 @@ ExprPtr CC::hbar(std::optional<size_t> truncation_rank) const {
   // extra singles-only commutators: wrap H̄ with the t1 similarity transform
   // to order K. Same commutator form as above, since the same connectivity is
   // supplied downstream.
-  if (hbar_singles_comm_rank_.value_or(0) > 0) {
+  if (opts_.hbar_singles_comm_rank.value_or(0) > 0) {
     auto opts = lst_options();
     opts.skip_clone = true;
-    result = mbpt::lst(result, op::t(1), *hbar_singles_comm_rank_, opts);
+    result = mbpt::lst(result, op::t(1), *opts_.hbar_singles_comm_rank, opts);
   }
   return result;
 }
@@ -117,7 +116,7 @@ std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) const {
     std::shared_ptr<Sum>
         hbar_le_p;  // keeps products that can produce excitations rank <=p
 
-    if (screen_) {  // if operator level screening is on
+    if (opts_.screen) {  // if operator level screening is on
       for (auto& term : *hbar) {
         SEQUANT_ASSERT(term->is<Product>() || term->is<op_t>());
         if (raises_vacuum_up_to_rank(term, p)) {
@@ -151,7 +150,7 @@ std::vector<ExprPtr> CC::λ() const {
   SEQUANT_ASSERT(!unitary() && "there is no need for CC::λ for unitary ansatz");
 
   // construct hbar
-  const auto commutator_rank = hbar_comm_rank_.value_or(4);
+  const auto commutator_rank = opts_.hbar_comm_rank.value_or(4);
   SEQUANT_ASSERT(commutator_rank >= 1 && "CC::λ: hbar_comm_rank must be >= 1");
   auto hbar = this->hbar(commutator_rank -
                          1);  // -1 because of the connection with the projector
@@ -184,8 +183,8 @@ std::vector<ExprPtr> CC::λ() const {
     std::shared_ptr<Sum>
         lhbar_for_vev;  // keeps products that can produce non-zero VEV
     std::shared_ptr<Sum>
-        lhbar_le_p;  // keeps products that can produce excitations rank <=p
-    if (screen_) {   // if operator level screening is enabled
+        lhbar_le_p;      // keeps products that can produce excitations rank <=p
+    if (opts_.screen) {  // if operator level screening is enabled
       for (auto& term : *lhbar) {  // pick terms from lhbar
         SEQUANT_ASSERT(term->is<Product>() || term->is<op_t>());
 
@@ -231,7 +230,7 @@ ExprPtr CC::rdm(size_t rank, std::optional<size_t> comm_rank) const {
   // connected-product form; the {ã,t} connectivity handed to ref_av below is
   // what makes it equivalent to the explicit commutator.
   const auto commutator_rank = comm_rank.value_or(
-      unitary() ? hbar_comm_rank_.value() : std::min(2 * rank, rank + N));
+      unitary() ? opts_.hbar_comm_rank.value() : std::min(2 * rank, rank + N));
   auto bar =
       mbpt::lst(replacer, T(N, skip_singles()), commutator_rank, lst_options());
 
@@ -255,20 +254,21 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
                  "sequant::mbpt::CC::tʼ(): only one-body perturbation "
                  "operator is supported now");
   if (unitary())
-    SEQUANT_ASSERT(pertbar_comm_rank_,
+    SEQUANT_ASSERT(opts_.pertbar_comm_rank,
                    "pertbar_comm_rank must be specified for unitary ansatz");
 
   // construct h1_bar
   // truncate h1_bar at rank 2 for one-body perturbation operator and at rank 4
   // for two-body perturbation operator; unless specified otherwise
   const auto h1_truncate_default = rank == 1 ? 2 : 4;
-  const auto h1_truncate_at = pertbar_comm_rank_.value_or(h1_truncate_default);
+  const auto h1_truncate_at =
+      opts_.pertbar_comm_rank.value_or(h1_truncate_default);
   const auto h1_bar =
       mbpt::lst(Hʼ(rank, {.order = order, .nbatch = nbatch}),
                 T(N, skip_singles()), h1_truncate_at, lst_options());
 
   // construct [hbar, Tʼ(1)]
-  const auto hbar_truncate_at = hbar_comm_rank_.value_or(
+  const auto hbar_truncate_at = opts_.hbar_comm_rank.value_or(
       3);  // notice 3 instead of 4 here, this is because of the commutator with
            // T'(1). In case 4 is used, it will generate more terms but they
            // will not contribute.
@@ -316,7 +316,7 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
                  "operator is supported now");
   SEQUANT_ASSERT(!unitary() &&
                  "there is no need for CC::λʼ for unitary ansatz");
-  SEQUANT_ASSERT(ansatz_ == Ansatz::T &&
+  SEQUANT_ASSERT(opts_.ansatz == Ansatz::T &&
                  "CC::λʼ: only traditional ansatz is supported");
 
   // construct hbar
@@ -325,8 +325,8 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
   // construct h1_bar
   // truncate h1_bar at rank 2 for one-body perturbation operator and at rank 4
   // for two-body perturbation operator; unless specified otherwise
-  const auto h1_truncate_at = (rank == 1) ? pertbar_comm_rank_.value_or(2)
-                                          : pertbar_comm_rank_.value_or(4);
+  const auto h1_truncate_at = (rank == 1) ? opts_.pertbar_comm_rank.value_or(2)
+                                          : opts_.pertbar_comm_rank.value_or(4);
   // connected form (this path is non-unitary, see the assert above); the
   // op_connect built below is a superset of default_op_connections() and so
   // supplies the connectivity that makes it equivalent to the commutator
