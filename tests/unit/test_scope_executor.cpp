@@ -881,34 +881,52 @@ TEST_CASE(
   CHECK(has_root_homed(ws_rep));  // REPORTED, not asserted == 1 (the
                                   // executor fix is out of scope here)
 
-  // (3) forest-vs-whole-scope comparison is now a report diff. NOTE this is
-  // NOT the same "forest descent" fd_cache measures above ((b), max_fd_builds
-  // > max_ws_builds, the per-root FRAGMENTED-but-still-BATCHED baseline built
-  // by explicitly installing fd_cache.set_custom_evaluator(make_evaluator(
-  // policy, yield)) before the walk): meter()'s policy_fd.whole_scope_execution
-  // = false instead drives the coexistence entry's OTHER branch (sequant::
-  // evaluate(Nodes const&, BatchPolicy const&, ...), scope_executor.hpp),
-  // which for flag-off is documented as "an unconditional forward to ...
-  // sequant::evaluate(Nodes const&, layout, leaf_evaluator, cache) -- no
-  // schedule is built" -- and meter() never installs a custom evaluator on
-  // its internal cache, so that forward's own custom-evaluator interception
-  // (eval.hpp's `if (auto const& custom_eval = cache.custom_evaluator();
-  // custom_eval)`) never fires either. fd_rep therefore reports a fully
-  // UNBATCHED, single-shot baseline (K evaluated as one unsliced block, never
-  // replayed per block), not the fragmented-batched one -- so it is the
-  // FEWER-builds baseline, not the more-builds one: whole-scope structurally
-  // replays every K-homed value once per block (n_blocks of them), which an
-  // unbatched single pass never does, so ws_rep.builds_total is the one that
-  // cannot be smaller. (Verified: 40-term water-20 measures fd=195,
-  // ws=978 -- ws MORE than 5x fd, the reverse of the (b) fragmented-baseline
-  // comparison above.) This looks like a real gap in Task 3's meter() (its
-  // own doc comment claims to "mirror MPQC's wet dispatch" for BOTH flag
-  // states, which would require installing sequant::make_evaluator(policy,
-  // yield) as meter()'s cache's custom evaluator before the coexistence-entry
-  // call so the flag-off path is a fair per-root-batched comparison instead
-  // of an unbatched one) -- flagged for a follow-up, not fixed here (test-only
-  // change, meter() is a fixed Task-3 interface).
-  CHECK(ws_rep.builds_total >= fd_rep.builds_total);
+  // (3) forest-vs-whole-scope comparison, via meter()'s OWN reports this
+  // time (not the separate fd_cache/ws_cache pair (a)-(d) used): meter()'s
+  // policy_fd.whole_scope_execution = false path now installs sequant::
+  // make_evaluator(policy, yield) as its internal cache's custom evaluator
+  // before the coexistence-entry call (mirroring MPQC's wet forest path,
+  // cck.ipp's `else` branch) rather than leaving that interception dark, so
+  // fd_rep is the SAME per-root FRAGMENTED-but-still-BATCHED replay
+  // max_fd_builds measures in (b) above, not an unbatched single pass
+  // (confirmed: fd_rep.builds_total nearly doubles once the evaluator is
+  // installed). The per-node comparison (b) already established --
+  // fragmentation rebuilds a K-homed composite strictly more than
+  // whole-scope's build-once-per-block bound -- reproduces through meter()'s
+  // own home_fidelity list for the busiest K-homed composite, so re-check it
+  // here rather than re-deriving (b)'s fd_cache/ws_cache pair a second time.
+  //
+  // The REPORT-WIDE totals (fd_rep.builds_total vs ws_rep.builds_total), by
+  // contrast, are NOT a meaningful ordering and are deliberately left
+  // UNASSERTED: ws_rep.builds_total is inflated by evaluate_whole_scope's
+  // own, separately-diagnosed per-BatchGroup full-materialization replay
+  // (see project history on the water-20 slowdown: "GROUND TRUTH ... Time
+  // sink = per-group FULL replay after BatchGroup|End ... + leaf
+  // re-materializations/iter"), which rebuilds many NON-K-homed values too,
+  // on top of (not instead of) its build-once sharing of the K-homed
+  // composites -- an orthogonal, already-tracked executor cost, not what
+  // this comparison is about. Measured on this 40-term fixture: fd_rep
+  // builds_total = 366 (batched, up from 195 unbatched pre-fix), ws_rep
+  // builds_total = 978 -- so the REPORT-WIDE total is actually SMALLER for
+  // the batched forest path despite its per-composite fragmentation being
+  // worse; asserting a report-wide ordering here would either be false
+  // (fd >= ws) or would silently paper over the whole-scope over-replay cost
+  // (ws >= fd) instead of exercising the fact this block is actually about.
+  auto const builds_of_hash = [](sequant::eval::dryrun::MeterReport const& r,
+                                 std::size_t h) -> std::size_t {
+    auto const it = std::find_if(r.home_fidelity.begin(), r.home_fidelity.end(),
+                                 [h](auto const& hf) { return hf.hash == h; });
+    return it == r.home_fidelity.end() ? 0 : it->builds;
+  };
+  std::size_t max_fd_rep_builds = 0, max_ws_rep_builds = 0;
+  for (auto const& n : k_homed) {
+    auto const h = n->hash_value();
+    max_fd_rep_builds = std::max(max_fd_rep_builds, builds_of_hash(fd_rep, h));
+    max_ws_rep_builds = std::max(max_ws_rep_builds, builds_of_hash(ws_rep, h));
+  }
+  CHECK(max_fd_rep_builds > 0);
+  CHECK(max_ws_rep_builds > 0);
+  CHECK(max_fd_rep_builds > max_ws_rep_builds);
 }
 
 // The C60 WITNESS. Same real C60 residual and the SAME occ-veto MPQC batch

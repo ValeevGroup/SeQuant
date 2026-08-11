@@ -336,6 +336,21 @@ inline MeterReport meter(
   if (trace) logger.eval.stream = trace;
   logger.eval.node_meta = make_node_meta(rich);
 
+  // Forest descent (whole_scope_execution == false) needs the SAME batched
+  // custom evaluator MPQC's wet forest path installs (cck.ipp's `else`
+  // branch, `cache.set_custom_evaluator(sequant::make_evaluator(ctx.
+  // batch_policy, yielder, make_scope_guard))`): without it, plain
+  // sequant::evaluate(Nodes const&, ...) ignores every batched_here()
+  // stamp and runs an unbatched, no-schedule single pass -- an infidelity
+  // vs. the wet run this meter is supposed to mirror. Installed ONLY on
+  // this branch: evaluate_impl consults cache.custom_evaluator() on every
+  // non-leaf node, so installing it unconditionally would also fire on the
+  // whole-scope path's invariant-root evaluate_impl calls (evaluate_whole_
+  // scope, not the batched custom evaluator, must drive those).
+  if (!policy.whole_scope_execution)
+    cache.set_custom_evaluator(
+        sequant::make_evaluator(policy, yield, sequant::make_no_scope_guard{}));
+
   (void)sequant::evaluate<Trace::On>(forest, policy, std::wstring{}, yield,
                                      cache, {}, sequant::make_no_scope_guard{});
 
