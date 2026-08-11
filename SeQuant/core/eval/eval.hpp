@@ -1036,7 +1036,8 @@ ResultPtr evaluate_impl(Node const& node,         //
                   slice_sig += ';';
                 }
               cache.tally_build(f.node, slice_sig,
-                                eval::detail::last_op_flops());
+                                eval::detail::last_op_flops(),
+                                eval::detail::last_op_exec());
             }
           }
         }

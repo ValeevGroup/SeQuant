@@ -5909,7 +5909,7 @@ TEST_CASE("whole-scope executor builds shared aux composites once per block",
     std::size_t mx = 0;
     for (auto const& [node, bt] : tally) {
       std::size_t b = 0;
-      for (auto const& [sig, bc] : bt.slices) b += bc.first;
+      for (auto const& [sig, bc] : bt.slices) b += bc.count;
       mx = std::max(mx, b);
     }
     return mx;
@@ -6104,7 +6104,7 @@ TEST_CASE(
     auto it = tally.find(node);
     if (it == tally.end()) return 0;
     std::size_t b = 0;
-    for (auto const& [sig, bc] : it->second.slices) b += bc.first;
+    for (auto const& [sig, bc] : it->second.slices) b += bc.count;
     return b;
   };
   // The most-rebuilt aux-homed composite in a tally (the tightest witness).
@@ -6258,7 +6258,7 @@ TEST_CASE(
     auto it = tally.find(node);
     if (it == tally.end()) return 0;
     std::size_t b = 0;
-    for (auto const& [sig, bc] : it->second.slices) b += bc.first;
+    for (auto const& [sig, bc] : it->second.slices) b += bc.count;
     return b;
   };
   auto max_inner_homed = [&](auto const& tally) -> std::size_t {

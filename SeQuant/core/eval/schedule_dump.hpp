@@ -40,6 +40,16 @@ inline double& last_op_flops() noexcept {
   return f;
 }
 
+/// DIAGNOSTIC: the roofline exec-cost estimate (cm->exec_cost) for the LAST
+/// product op, stashed by DryRunOps::prod alongside \c last_op_flops() and
+/// read by the Build-event choke in eval.hpp so each per-build tally entry
+/// carries the SAME time estimate the replay computed. Thread-local;
+/// single-threaded dry-run replay.
+inline double& last_op_exec() noexcept {
+  static thread_local double f = 0.0;
+  return f;
+}
+
 inline std::string sched_json_escape(std::string const& s) {
   std::string o;
   o.reserve(s.size() + 8);

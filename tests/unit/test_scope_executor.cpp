@@ -484,7 +484,7 @@ std::size_t witness_builds_of(Tally const& tally,
   auto it = tally.find(n);
   if (it == tally.end()) return 0;
   std::size_t b = 0;
-  for (auto const& [sig, bc] : it->second.slices) b += bc.first;
+  for (auto const& [sig, bc] : it->second.slices) b += bc.count;
   return b;
 }
 

@@ -153,9 +153,9 @@ inline std::vector<AvoidableNode> avoidable_nodes_from_tally(
   auto roll = [](auto const& t) {
     double total = 0, once = 0, extra_builds = 0;
     for (auto const& [sig, bc] : t.slices) {
-      total += bc.first * bc.second;
-      once += bc.second;
-      extra_builds += static_cast<double>(bc.first - 1);
+      total += bc.count * bc.flops;
+      once += bc.flops;
+      extra_builds += static_cast<double>(bc.count - 1);
     }
     return std::tuple{total, once, extra_builds};
   };
@@ -199,7 +199,7 @@ inline std::vector<AvoidableNode> avoidable_nodes_from_tally(
       (void)extra;
       if (total <= once) continue;
       std::size_t builds = 0;
-      for (auto const& [sig, bc] : t.slices) builds += bc.first;
+      for (auto const& [sig, bc] : t.slices) builds += bc.count;
       ranked.emplace_back(total - once, builds, t.slices.size(), total, once);
     }
     std::sort(ranked.begin(), ranked.end(), [](auto const& a, auto const& b) {
@@ -571,7 +571,7 @@ inline CostProfile cost_profile(
     std::size_t idx = 0;
     for (auto const& [node, t] : tally) {
       double once = 0.0;
-      for (auto const& [sig, bc] : t.slices) once += bc.second;
+      for (auto const& [sig, bc] : t.slices) once += bc.flops;
       profile.sig_full_flops.emplace(
           std::to_string(idx++) + ":" + std::to_string(node->hash_value()),
           once);

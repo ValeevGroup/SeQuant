@@ -199,6 +199,7 @@ struct DryRunOps {
       double const flops = cm->flops(out, contracted, label_extents);
       sequant::eval::detail::last_op_flops() = flops;  // for the Build event
       double const exec = cm->exec_cost(flops, cm->memsize(idx, ov), 4096);
+      sequant::eval::detail::last_op_exec() = exec;  // for the Build event
       write_log(Logger::instance(), "OpCost", std::format(" | {}", flops),
                 std::format(" | {}", exec), '\n');
       // Fold this op's SLICED-extent cost into the replay cost sink, if one is

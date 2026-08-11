@@ -163,8 +163,13 @@ class CacheManager {
   /// enclosing loop, whose projected signature is identical every block -- has
   /// builds>1 at one slice -> (builds-1)*cost avoidable. Costs need not be
   /// uniform across slices; each slice carries its own realized cost.
+  struct BuildRecord {
+    std::size_t count = 0;  // number of builds of this exact (value, slice)
+    double flops = 0;       // this slice's actual realized-extent FLOPs
+    double exec = 0;        // this slice's actual roofline exec-cost estimate
+  };
   struct BuildTally {
-    std::unordered_map<std::string, std::pair<std::size_t, double>> slices;
+    std::unordered_map<std::string, BuildRecord> slices;
   };
 
  private:
@@ -549,15 +554,16 @@ class CacheManager {
   /// scratch -- accumulates in ONE map keyed by node identity (see
   /// recompute_tally_). Called only in the dry-run costing replay.
   void tally_build(key_type const& key, std::string const& slice_sig,
-                   double flops) noexcept {
+                   double flops, double exec) noexcept {
     if (parent_) {
-      parent_->tally_build(key, slice_sig, flops);
+      parent_->tally_build(key, slice_sig, flops, exec);
       return;
     }
     if (!recompute_tally_enabled_) return;  // wet path: no-op
     auto& slice = recompute_tally_[key].slices[slice_sig];
-    slice.first += 1;      // one more build of this exact (value, slice)
-    slice.second = flops;  // this slice's actual cost (same for repeats)
+    slice.count += 1;     // one more build of this exact (value, slice)
+    slice.flops = flops;  // this slice's actual cost (same for repeats)
+    slice.exec = exec;    // this slice's actual exec-cost (same for repeats)
   }
 
   /// Enable/disable the per-node recompute tally (see
