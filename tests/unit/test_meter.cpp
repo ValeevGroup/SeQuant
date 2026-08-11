@@ -13,6 +13,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <memory>
 #include <sstream>
@@ -119,15 +120,41 @@ TEST_CASE(
   };
   auto cm = std::make_shared<CostModel const>(regime);
 
-  // One volatile leaf (t) contracted against one persistent leaf (g); the
-  // resulting product is fully contracted to a scalar (no external indices).
-  auto expr = sequant::deserialize<sequant::ExprPtr>("g{i_1;a_3} * t{a_3;i_1}");
+  // Three-factor product, folded LEFT-TO-RIGHT by binarize (see
+  // fold_left_to_node, binary_node.hpp): root == (X * t) with X == (g * h).
+  // X is a PERSISTENT internal node (neither g nor h is volatile); the root
+  // additionally consumes the volatile leaf t, so the root is volatile --
+  // exercising BOTH branches of assemble_report's persistent/volatile split.
+  // X keeps i_1 (from g) and i_2 (from h) external after contracting a_3; t
+  // contracts i_2 and keeps a_5 external, so the ROOT keeps i_1 and a_5
+  // external too (not a bare scalar). That is deliberate: i_1 being a
+  // genuine external slot of BOTH X and the root lets the ROOT's own
+  // External loop over i_1 (stamped below) give X a NONEMPTY home -- X sits
+  // inside that loop but does not own it -- while the root's OWN home stays
+  // empty (a node's own realized loop is excluded from its own home; see
+  // compute_dag_boulevard's own_modes_union subtraction). That asymmetry is
+  // the content check below: a broken cell_by_hash lookup in assemble_report
+  // would silently default BOTH to empty, indistinguishable from the root's
+  // genuinely-empty case, so only X's nonempty "i" catches a broken lookup.
+  auto expr = sequant::deserialize<sequant::ExprPtr>(
+      "g{i_1;a_3} * h{a_3;i_2} * t{i_2;a_5}");
   REQUIRE(static_cast<bool>(expr));
 
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   auto node = sequant::binarize<EvalExprDryRun>(expr);
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   REQUIRE_FALSE(node.leaf());
+  REQUIRE_FALSE(node.left().leaf());  // X == g * h (persistent)
+  REQUIRE(node.right().leaf());       // t (volatile)
+
+  sequant::Index const mode{L"i_1"};
+  REQUIRE(sequant::index_position(node, mode).has_value());
+  REQUIRE(sequant::index_position(node.left(), mode).has_value());
+  // Stamp the ROOT's own External loop over i_1. Plain (non-scope)
+  // evaluate() ignores batched_here without a custom evaluator (see
+  // test_eval_dryrun.cpp's equivalent stamping), so this only feeds
+  // compute_dag_boulevard's home/ectx bookkeeping below, not the replay.
+  node->set_batched_here({{mode, sequant::BatchModeType::External}});
 
   std::vector<EvalNodeDryRun> const forest{node};
 
@@ -171,7 +198,35 @@ TEST_CASE(
                                       /*whole_scope=*/false);
 
   CHECK(report.builds_total > 0);
-  CHECK(report.flops_volatile > 0.0);
   CHECK_FALSE(report.home_fidelity.empty());
   CHECK(report.whole_scope == false);
+
+  // EXEC/COST SPLIT: exec is threaded BuildRecord -> tally_build ->
+  // assemble_report independently of (and not swapped with) flops -- both
+  // the volatile (root) and persistent (X) buckets get a positive exec
+  // estimate alongside their flops.
+  CHECK(report.flops_volatile > 0.0);
+  CHECK(report.cost_volatile > 0.0);
+  CHECK(report.flops_persistent > 0.0);
+  CHECK(report.cost_persistent > 0.0);
+
+  // HOME-FIDELITY CONTENT: look up X's (persistent, g*h) and the root's
+  // entries by hash and check their home/uses STRINGS, not just
+  // non-emptiness of the whole list -- see the forest-design comment above
+  // for why X's nonempty "i" is the discriminating case.
+  auto const find_by_hash = [&](std::size_t h) {
+    return std::find_if(report.home_fidelity.begin(),
+                        report.home_fidelity.end(),
+                        [h](auto const& hf) { return hf.hash == h; });
+  };
+
+  auto const x_it = find_by_hash(node.left()->hash_value());
+  REQUIRE(x_it != report.home_fidelity.end());
+  CHECK(x_it->home == "i");
+  CHECK(x_it->uses == "i");
+
+  auto const root_it = find_by_hash(node->hash_value());
+  REQUIRE(root_it != report.home_fidelity.end());
+  CHECK(root_it->home.empty());
+  CHECK(root_it->uses.empty());
 }
