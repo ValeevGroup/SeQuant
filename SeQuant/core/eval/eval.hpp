@@ -403,8 +403,8 @@ template <typename BatchContext>
 std::string scope_annot(BatchContext const& active) {
   std::string scope;
   for (auto const& e : active) {
+    if (!scope.empty()) scope += ",";
     scope += toUtf8(e.first.space().base_key());
-    scope += ",";
   }
   return std::format("scope={{{}}}", scope);
 }
