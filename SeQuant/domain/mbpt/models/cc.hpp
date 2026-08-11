@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <limits>
 #include <optional>
+#include <utility>
 #include <vector>
 
 namespace sequant {
@@ -104,6 +105,30 @@ class CC {
 
   /// @return the choice of H̄ expansion
   [[nodiscard]] HbarExpansion hbar_expansion() const;
+
+  // clang-format off
+  /// @brief returns a copy of this engine with @p mutate applied to its options
+  /// @param mutate a callable taking `Options&`
+  /// @return the mutated copy
+  /// @note The copy is built through the normal constructor, so the *result* is
+  ///   validated; intermediate states are not, since there are none. This is why
+  ///   the options are mutated in one callable rather than by a chain of
+  ///   per-option setters: the ctor invariants couple the options (unitary needs
+  ///   `hbar_comm_rank`; `oT`/`oU` need `skip_singles`), so a chain would have
+  ///   to visit configurations that cannot be valid.
+  /// @code
+  ///   auto report = cc.with([](auto& o) {
+  ///     o.ansatz = Ansatz::U;
+  ///     o.hbar_comm_rank = 3;
+  ///   });
+  /// @endcode
+  // clang-format on
+  template <typename F>
+  [[nodiscard]] CC with(F&& mutate) const {
+    auto o = opts_;
+    std::forward<F>(mutate)(o);
+    return CC(N, o);
+  }
 
   /// @return true if singles amplitudes are excluded from \f$ \hat{T} \f$ and
   /// \f$ \hat{\Lambda} \f$
@@ -277,14 +302,15 @@ class CC {
 
  private:
   size_t N;
-  Ansatz ansatz_ = Ansatz::T;
-  bool skip_singles_ = false;
-  bool screen_ = true;
-  bool use_topology_ = true;
-  std::optional<size_t> hbar_comm_rank_ = std::nullopt;
-  std::optional<size_t> hbar_singles_comm_rank_ = std::nullopt;
-  std::optional<size_t> pertbar_comm_rank_ = std::nullopt;
-  HbarExpansion hbar_expansion_ = HbarExpansion::BCH;
+  /// @note Stored whole, rather than decomposed into one member per option, so
+  ///   that `with()` can round-trip it losslessly. In particular
+  ///   `Options::skip_singles` stays `std::optional<bool>` and is resolved on
+  ///   demand by `skip_singles()`. Were the resolved `bool` stored instead,
+  ///   `with()` would pin it, and `cc.with([](auto& o){ o.ansatz = Ansatz::oU;
+  ///   })` on a non-orbital-optimized engine would carry `false` into an ansatz
+  ///   whose ctor requires `true`, where fresh construction defaults it
+  ///   correctly.
+  Options opts_;
 
   /// @brief assembles the right-hand UCC EOM equations
   /// @param block_ranks see `eom_r`; empty uses the configured H̄ rank, or 4
