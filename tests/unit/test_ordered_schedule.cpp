@@ -35,6 +35,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <functional>
+#include <numeric>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -806,4 +807,358 @@ TEST_CASE(
   CHECK_FALSE(flagged(1000));  // Lc: carried, not a LoopLocal candidate
   CHECK_FALSE(flagged(1005));  // Wc: carried / in consumer_pass
   CHECK(dem.size() == 2);
+}
+
+// ===========================================================================
+// Task 5: acceptance + executor-shape validation.
+//
+// Both TEST_CASEs below reuse the SAME two real fixtures the Task 3 and
+// Task 4 tests above already build (water-20's aux-only residual and the
+// cross-iteration forced-split fixture), factored into two small builder
+// functions so the acceptance and executor-shape checks below run against
+// literally the same data rather than a re-derived copy. The existing Task
+// 3/4 TEST_CASEs above are left untouched (their own inline setup is not
+// replaced) to avoid disturbing already-pinned behavior; these builders are
+// net-new, consumed only by the two TEST_CASEs that follow them.
+// ===========================================================================
+
+namespace {
+
+struct OrderedSchedFixture {
+  std::vector<sequant::eval::dryrun::EvalNodeDryRun> forest;
+  sequant::eval::RichSchedule rich;
+  sequant::eval::LegalitySchedule legality;
+  OrderedSchedule sched;
+};
+
+// Same recipe as the "water-20 aux-only residual places the Κ-contraction
+// result..." TEST_CASE above (lines ~231-333), stopping once the schedule is
+// built (no further per-value inspection here -- that is this function's
+// caller's job).
+OrderedSchedFixture orderedsched_water20_fixture() {
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using Node = EvalNodeDryRun;
+
+  auto ctx = sequant::get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  auto const body =
+      orderedsched_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                                 "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = sequant::deserialize<sequant::ExprPtr>(line);
+  REQUIRE(static_cast<bool>(expr));
+  REQUIRE(expr->is<sequant::Sum>());
+  auto const& summands = expr->as<sequant::Sum>().summands();
+  REQUIRE(!summands.empty());
+
+  std::size_t nterms = std::min<std::size_t>(summands.size(), 40);
+  if (char const* nt = std::getenv("SEQUANT_UT_DRYRUN_NTERMS"))
+    nterms = std::min<std::size_t>(summands.size(), std::atoll(nt));
+
+  auto regime = orderedsched_witness_df_regime(kOrderedSchedWater20_pVDZF12);
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  // EXACT MPQC aux-only config (make_csv_batch_policy, aux_target=256): Κ is
+  // the only batchable mode, contracted role.
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  policy.is_batchable_external_index = [](sequant::Index const&) {
+    return false;
+  };
+  policy.batch_spectator_indices = false;
+  policy.batch_target_size = [](sequant::Index const&) -> std::size_t {
+    return 256;
+  };
+  policy.is_volatile_leaf = [](sequant::Tensor const& t) {
+    return t.label() == L"t";
+  };
+  policy.accumulation_factor = 1.0;
+  policy.persistent_only = false;
+  policy.peak_threshold = 1e11;
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      sequant::Expr const*,
+      sequant::container::vector<sequant::NodeBatchAnnotation>>>();
+  sequant::OptimizeOptions opts;
+  opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = axes_map;
+
+  std::vector<Node> forest;
+  for (std::size_t s = 0; s < nterms; ++s) {
+    sequant::ExprPtr const term =
+        orderedsched_witness_flatten_product(summands[s]);
+    if (!term) continue;
+    sequant::ExprPtr optimized;
+    try {
+      optimized = sequant::optimize(term, opts);
+    } catch (std::exception const&) {
+      continue;
+    }
+    if (!optimized) continue;
+    sequant::BinarizationOptions bopts;
+    if (auto it = axes_map->find(optimized.get()); it != axes_map->end())
+      bopts.node_batch_axes = it->second;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    forest.push_back(sequant::binarize<EvalExprDryRun>(optimized, {}, bopts));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+  REQUIRE(!forest.empty());
+
+  auto const block_of = [](sequant::Index const&) -> std::size_t {
+    return 256;
+  };
+  auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  REQUIRE(!rich.cells.empty());
+
+  auto legality = sequant::eval::analyze_legality(rich, forest, policy);
+  REQUIRE(legality.cells.size() == rich.cells.size());
+
+  auto sched =
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"Κ"});
+  REQUIRE(well_formed(sched));
+
+  return OrderedSchedFixture{std::move(forest), std::move(rich),
+                             std::move(legality), std::move(sched)};
+}
+
+// Same recipe as the "forced-split occ axis realizes TWO ordered sibling
+// blocks..." TEST_CASE above (lines ~608-657), stopping once the schedule is
+// built.
+OrderedSchedFixture orderedsched_cross_iteration_fixture() {
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using Node = EvalNodeDryRun;
+
+  auto const body =
+      orderedsched_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                                 "/data/legality_cross_iteration.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = sequant::deserialize<sequant::ExprPtr>(line);
+  REQUIRE(static_cast<bool>(expr));
+
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto node = sequant::binarize<EvalExprDryRun>(expr);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE_FALSE(node.leaf());
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_external_index = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"i";
+  };
+
+  sequant::eval::dryrun::SizeRegime regime;
+  regime.space_extent = {{L"i", 8u}, {L"a", 16u}};
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  std::vector<Node> forest{node};
+  auto const block_of = [](sequant::Index const&) -> std::size_t { return 4; };
+  auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  REQUIRE(!rich.cells.empty());
+
+  auto legality = sequant::eval::analyze_legality(rich, forest, policy);
+
+  auto sched =
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"});
+  REQUIRE(well_formed(sched));
+
+  return OrderedSchedFixture{std::move(forest), std::move(rich),
+                             std::move(legality), std::move(sched)};
+}
+
+///
+/// \brief Collects every value_id PRODUCED anywhere in \p block's subtree,
+/// tagged by its production ROLE: \c std::nullopt for a plain \c BuildStep
+/// (Transient, per \c build_ordered_schedule's own doc comment -- "Transient
+/// is realized as produced-by-BuildStep-and-nothing-else", not as an explicit
+/// \c outputs entry), or the stored \c OutputKind for a block \c outputs
+/// entry. An independent, test-side mirror of \c
+/// detail::collect_production_ids (kept internal to ordered_schedule.hpp),
+/// walking only the PUBLIC IR (\c Step / \c BuildStep / \c ScopeBlock /
+/// outputs) -- used below to hard-assert COMPLETENESS (every value_id in
+/// [0, num_values) is produced at least once), which \c well_formed's own
+/// single-producer check does not assert (it only rules out duplicates, not
+/// gaps).
+///
+void orderedsched_collect_productions(
+    ScopeBlock const& block,
+    std::vector<std::pair<std::size_t, std::optional<OutputKind>>>& out) {
+  for (Step const& step : block.steps) {
+    if (auto const* build = std::get_if<BuildStep>(&step.value)) {
+      out.push_back({build->value_id, std::nullopt});
+    } else {
+      orderedsched_collect_productions(std::get<ScopeBlock>(step.value), out);
+    }
+  }
+  for (auto const& [vid, kind] : block.outputs) out.push_back({vid, kind});
+}
+
+}  // namespace
+
+TEST_CASE(
+    "build_ordered_schedule: acceptance -- water-20 + cross-iteration "
+    "OrderedSchedules are well_formed with EVERY value_id produced exactly "
+    "once, and all four production-site roles (Transient, AccumulateSum, "
+    "AccumulateScatter producer pass, AccumulateScatter consumer pass) "
+    "reachable across these two inputs are demonstrably exercised",
+    "[ordered-schedule]") {
+  auto const water20 = orderedsched_water20_fixture();
+  auto const cross = orderedsched_cross_iteration_fixture();
+
+  // well_formed + COMPLETENESS: every value_id in [0, num_values) is
+  // produced EXACTLY once (well_formed itself only rules out duplicates; the
+  // exact-match against [0, num_values) below additionally asserts no gaps).
+  for (auto const* fx : {&water20, &cross}) {
+    CHECK(well_formed(fx->sched));
+
+    std::vector<std::pair<std::size_t, std::optional<OutputKind>>> prods;
+    orderedsched_collect_productions(fx->sched.root, prods);
+
+    std::vector<std::size_t> ids;
+    ids.reserve(prods.size());
+    for (auto const& [vid, kind] : prods) {
+      (void)kind;
+      ids.push_back(vid);
+    }
+    std::sort(ids.begin(), ids.end());
+    std::vector<std::size_t> expected(fx->sched.num_values);
+    std::iota(expected.begin(), expected.end(), std::size_t{0});
+    CHECK(ids == expected);
+  }
+
+  // Transient + AccumulateSum (water-20): a plain BuildStep with no outputs
+  // entry anywhere (Transient -- individually pinned for the Κ-local
+  // intermediate and the I(i,i;a,a) root composite by the water-20 TEST_CASE
+  // above; reconfirmed here from the SAME fixture data), and the {Κ} block's
+  // own Κ-contraction-result AccumulateSum output (also individually pinned
+  // above).
+  {
+    std::vector<std::pair<std::size_t, std::optional<OutputKind>>> prods;
+    orderedsched_collect_productions(water20.sched.root, prods);
+    CHECK(std::any_of(prods.begin(), prods.end(),
+                      [](auto const& p) { return !p.second.has_value(); }));
+    CHECK(std::any_of(prods.begin(), prods.end(), [](auto const& p) {
+      return p.second == OutputKind::AccumulateSum;
+    }));
+  }
+
+  // AccumulateScatter, both the PRODUCER-pass and CONSUMER-pass roles
+  // (cross-iteration): the split structure itself (two sibling {i} blocks
+  // with distinct ordinals -- individually pinned by the Task 4 TEST_CASE
+  // above; reconfirmed here), each escaping its values via AccumulateScatter.
+  {
+    std::vector<ScopeBlock const*> occ_blocks;
+    for (auto const& step : cross.sched.root.steps)
+      if (auto const* c = std::get_if<ScopeBlock>(&step.value))
+        if (c->axis.space().base_key() == L"i") occ_blocks.push_back(c);
+    REQUIRE(occ_blocks.size() == 2);
+    std::vector<int> ordinals{occ_blocks[0]->ordinal, occ_blocks[1]->ordinal};
+    std::sort(ordinals.begin(), ordinals.end());
+    CHECK(ordinals == std::vector<int>{0, 1});
+
+    for (auto const* blk : occ_blocks) {
+      REQUIRE(!blk->outputs.empty());
+      CHECK(std::all_of(blk->outputs.begin(), blk->outputs.end(),
+                        [](auto const& p) {
+                          return p.second == OutputKind::AccumulateScatter;
+                        }));
+    }
+  }
+}
+
+// ===========================================================================
+// Task 5: executor-shape validation -- documents exactly what SP3's executor
+// will read off the OrderedSchedule IR. \c scope_executor.hpp's \c walk_scope
+// (see its own doc comment, "the value_id -> forest-node bridge") reads a \c
+// ScopeNode's \c mode / \c kind / \c homed_values plus EXACTLY ONE child (\c
+// node.children.front(), even though \c ScopeNode::children is a vector --
+// there is today no consumer of more than one sibling child block at a
+// level). \c OrderedSchedule's \c ScopeBlock generalizes this: \c axis / \c
+// kind carry the same meaning, \c outputs replaces \c homed_values' implicit
+// "built here, never leaves" with an explicit value_id -> \c OutputKind map,
+// and -- the piece \c scope_executor.hpp's single-child pattern lacks -- \c
+// steps interleaves build steps with an ORDERED LIST of sibling child \c
+// ScopeBlocks (Task 4's forced-split producer/consumer passes are two such
+// siblings at ONE level). This test asserts that shape is actually present
+// and walkable on both real fixtures, and that value_ids resolve through
+// \c rich.cells[...].hash exactly as \c scope_executor.hpp's \c
+// build_value_node_map bridge already does elsewhere. A structural assertion
+// only -- SP3 will consume this; SP2 does not execute anything.
+// ===========================================================================
+TEST_CASE(
+    "build_ordered_schedule: executor-shape -- axis/kind/outputs per block, "
+    "an ORDERED list of sibling child blocks (not a single chained child), "
+    "and value_ids resolvable through rich.cells[...].hash",
+    "[ordered-schedule]") {
+  auto const water20 = orderedsched_water20_fixture();
+  auto const cross = orderedsched_cross_iteration_fixture();
+
+  // Per-block shape (water-20's {Κ} block): axis (an Index), kind (a
+  // BatchModeType), outputs (an svector of (value_id, OutputKind) pairs).
+  auto const k_idx =
+      orderedsched_index_of_child_block(water20.sched.root, L"Κ");
+  REQUIRE(k_idx.has_value());
+  ScopeBlock const& k_block =
+      std::get<ScopeBlock>(water20.sched.root.steps[*k_idx].value);
+  CHECK(k_block.axis.space().base_key() == L"Κ");
+  CHECK((k_block.kind == sequant::BatchModeType::Contracted ||
+         k_block.kind == sequant::BatchModeType::External));
+  for (auto const& [vid, out_kind] : k_block.outputs) {
+    CHECK(vid < water20.rich.cells.size());
+    CHECK((out_kind == OutputKind::AccumulateSum ||
+           out_kind == OutputKind::AccumulateScatter));
+  }
+
+  // ORDERED LIST of sibling child blocks, not a single chained child: the
+  // cross-iteration root holds TWO {i} ScopeBlock steps side by side in the
+  // SAME steps list, each reachable in its own right by walking that list --
+  // unlike scope_executor.hpp's ScopeNode::children.front()-only pattern,
+  // which would silently see only the first.
+  std::vector<ScopeBlock const*> root_children;
+  for (auto const& step : cross.sched.root.steps)
+    if (auto const* c = std::get_if<ScopeBlock>(&step.value))
+      root_children.push_back(c);
+  REQUIRE(root_children.size() == 2);  // the split producer/consumer siblings
+  CHECK(root_children[0]->ordinal != root_children[1]->ordinal);
+  CHECK(root_children[0]->axis.space().base_key() ==
+        root_children[1]->axis.space().base_key());  // same axis TYPE ("i")
+
+  // value_ids resolvable through rich.cells[...].hash -- exactly the bridge
+  // scope_executor.hpp's build_value_node_map / walk_scope rely on
+  // (rich.cells[vid].hash -> vmap lookup, see design integration point 1):
+  // every value_id produced anywhere in EITHER schedule indexes validly into
+  // its own RichSchedule, that index's stored value_id round-trips, and its
+  // hash resolves to an actual forest node.
+  for (auto const* fx : {&water20, &cross}) {
+    auto const vmap = sequant::eval::build_value_node_map(fx->forest);
+    std::vector<std::pair<std::size_t, std::optional<OutputKind>>> prods;
+    orderedsched_collect_productions(fx->sched.root, prods);
+    REQUIRE(!prods.empty());
+    for (auto const& [vid, kind] : prods) {
+      (void)kind;
+      REQUIRE(vid < fx->rich.cells.size());
+      CHECK(fx->rich.cells[vid].value_id == vid);
+      CHECK(vmap.find(fx->rich.cells[vid].hash) != vmap.end());
+    }
+  }
 }
