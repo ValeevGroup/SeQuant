@@ -1018,14 +1018,24 @@ TEST_CASE("w20 peak composition: tier-A/tier-B decomposition at realized peak",
   auto ordered_cache = sequant::cache_manager(forest);
   sequant::eval::PeakMonitor mon;
   std::size_t peak_total_snapshot = 0;
+  std::size_t peak_clock = 0;
   std::vector<sequant::eval::PeakLiveEntry> peak_liveset;
   mon.on_peak_liveset =
       [&](std::size_t total,
           std::vector<sequant::eval::PeakLiveEntry> const& live) {
         peak_total_snapshot = total;  // last (== max) advance wins
         peak_liveset = live;
+        // DIAGNOSTIC: timestamp THIS high-water in the access-clock timeline.
+        // on_peak_liveset fires (in note_working_set) BEFORE observe advances
+        // the mark, and only on a genuine new global high-water, so the FINAL
+        // firing (max peak) captures the clock value at the peak instant. The
+        // peak op's own operands were read just before this note_working_set
+        // call, so their stamps are <= peak_clock.
+        peak_clock = sequant::eval::AccessClock::now();
       };
   ordered_cache.set_peak_monitor(&mon);
+  // DIAGNOSTIC: zero the access clock + last-read record for THIS measured run.
+  sequant::eval::AccessClock::reset();
   ResultPtr ord_result;
   try {
     ord_result = sequant::eval::evaluate_ordered_schedule<sequant::Trace::On>(
@@ -1036,6 +1046,18 @@ TEST_CASE("w20 peak composition: tier-A/tier-B decomposition at realized peak",
   }
   logger.eval.level = prev_level;
   logger.eval.stream = prev_stream;
+
+  // DIAGNOSTIC: hashes still ALIVE on the root cache AFTER the run == pinned
+  // home entries (tier-A composites + block escape outputs the executor homes
+  // at root via ensure_home_slot). A genuinely use-counted (LoopLocal
+  // transient) value was released at its last use and is NOT alive here. This
+  // is the true discriminator for the tier-B sanity check: "dead-but-retained"
+  // is EXPECTED for a pinned entry, but a NON-pinned (use-counted) entry that
+  // looks dead-but-retained at peak signals a missed read path.
+  std::unordered_set<std::size_t> pinned_now;
+  ordered_cache.for_each_key([&](Node const& k) {
+    if (ordered_cache.alive(k)) pinned_now.insert(k->hash_value());
+  });
 
   auto const GB = [](std::size_t b) { return double(b) / 1e9; };
   auto const TB = [](std::size_t b) { return double(b) / 1e12; };
@@ -1154,6 +1176,201 @@ TEST_CASE("w20 peak composition: tier-A/tier-B decomposition at realized peak",
              << L" - 0.36 = " << (ordered_TB - whole_scope_TB)
              << L" TB) ~= tierA home-floor sum (" << TB(tierA_sum)
              << L" TB)? ---\n";
+
+  // ==================================================================
+  // (6) EAGER-RELEASE RECLAIM: of the tier-A home floor alive at the
+  //     realized peak, how much is DEAD-BUT-RETAINED -- its genuine last
+  //     cache READ (AccessClock last_access) already happened BEFORE the
+  //     peak instant (peak_clock) yet it stays pinned resident-until-reset.
+  //     That sum is exactly the memory an eager release-at-last-use would
+  //     reclaim on THIS peak.
+  // ==================================================================
+  auto const& lam = sequant::eval::AccessClock::last_access_map();
+  std::size_t const total_ticks = sequant::eval::AccessClock::now();
+  auto const last_access_of = [&](std::size_t h) -> std::size_t {
+    auto it = lam.find(h);
+    return it == lam.end() ? 0 : it->second;  // 0 == never cache-read
+  };
+
+  // forest-root hashes: their result buffer is ALSO pinned by the executor's
+  // value_results vector until the final combine (after peak), so releasing
+  // only the cache entry would not actually free them here -- reported as a
+  // caveat, not subtracted from the primary metric (which is defined purely on
+  // last_access < peak).
+  std::unordered_set<std::size_t> root_hashes;
+  for (auto&& n : forest) root_hashes.insert(n->hash_value());
+
+  // which hashes are alive at the realized peak (the snapshot set).
+  std::unordered_set<std::size_t> alive_at_peak;
+  for (auto const& e : peak_liveset) alive_at_peak.insert(e.hash);
+
+  // peak-liveset bytes per hash (the modeled size AT peak).
+  std::unordered_map<std::size_t, std::size_t> peak_bytes_of;
+  for (auto const& e : peak_liveset) peak_bytes_of[e.hash] = e.bytes;
+
+  struct DR {
+    std::size_t vid, bytes, last;
+    bool is_root;
+    std::wstring label;
+  };
+  std::vector<DR> dead_rows, live_rows;
+  std::size_t reclaimable = 0, reclaimable_nonroot = 0;
+  std::size_t neverread_bytes = 0;
+  for (auto const& r : tierA) {
+    std::size_t const h = cell_of_vid(r.vid).hash;
+    if (!alive_at_peak.count(h)) continue;  // only floor ALIVE at peak
+    std::size_t const la = last_access_of(h);
+    std::size_t const bytes =
+        peak_bytes_of.count(h) ? peak_bytes_of[h] : r.bytes;
+    bool const is_root = root_hashes.count(h) != 0;
+    DR row{r.vid, bytes, la, is_root, r.label};
+    if (la < peak_clock) {  // dead-but-retained
+      reclaimable += bytes;
+      if (!is_root) reclaimable_nonroot += bytes;
+      if (la == 0) neverread_bytes += bytes;
+      dead_rows.push_back(row);
+    } else {
+      live_rows.push_back(row);
+    }
+  }
+  std::sort(dead_rows.begin(), dead_rows.end(),
+            [](DR const& a, DR const& b) { return a.bytes > b.bytes; });
+
+  std::size_t const floor = tierA_sum;
+  std::size_t const peak = mon.hwmark_bytes;
+  std::wcerr << L"\n============ (6) EAGER-RELEASE RECLAIM ============\n";
+  std::wcerr << L"  peak_clock = " << peak_clock << L" of " << total_ticks
+             << L" total reads  ("
+             << (total_ticks ? 100.0 * peak_clock / total_ticks : 0.0)
+             << L"% through the walk => peak is "
+             << (peak_clock * 2 < total_ticks ? L"EARLY" : L"LATE") << L")\n";
+  std::wcerr << L"  peak op last cache-read clock = "
+             << last_access_of(mon.peak.op_hash) << L" (op_hash="
+             << mon.peak.op_hash << L")\n";
+  std::wcerr << L"  tier-A home floor              = " << floor << L" B ("
+             << TB(floor) << L" TB)\n";
+  std::wcerr << L"  realized peak                  = " << peak << L" B ("
+             << TB(peak) << L" TB)\n";
+  std::wcerr << L"  DEAD-BUT-RETAINED (reclaimable)= " << reclaimable << L" B ("
+             << TB(reclaimable) << L" TB)\n";
+  std::wcerr << L"     = " << (floor ? 100.0 * reclaimable / floor : 0.0)
+             << L"% of the 0.712 TB floor, "
+             << (peak ? 100.0 * reclaimable / peak : 0.0)
+             << L"% of the 0.99 TB peak\n";
+  std::wcerr << L"     of which NEVER cache-read (last_access==0) = "
+             << neverread_bytes << L" B (" << TB(neverread_bytes) << L" TB)\n";
+  std::wcerr << L"     of which value_results-pinned forest ROOTS = "
+             << (reclaimable - reclaimable_nonroot) << L" B; NON-root "
+             << L"(truly free to drop here) = " << reclaimable_nonroot
+             << L" B (" << TB(reclaimable_nonroot) << L" TB)\n";
+  std::wcerr << L"  projected post-eager-release peak = "
+             << (peak - reclaimable) << L" B (" << TB(peak - reclaimable)
+             << L" TB)\n";
+  std::wcerr << L"  (non-root-only projection         = "
+             << (peak - reclaimable_nonroot) << L" B ("
+             << TB(peak - reclaimable_nonroot) << L" TB))\n";
+
+  std::wcerr
+      << L"\n  -- top DEAD-BUT-RETAINED tier-A composites (by size) --\n";
+  for (std::size_t i = 0; i < dead_rows.size() && i < 20; ++i)
+    std::wcerr << L"    vid=" << dead_rows[i].vid << L"  "
+               << GB(dead_rows[i].bytes) << L" GB  last_access="
+               << dead_rows[i].last << L" < peak_clock=" << peak_clock
+               << (dead_rows[i].is_root ? L"  [ROOT]" : L"") << L"  "
+               << dead_rows[i].label << L"\n";
+
+  // The specific big composites the analysis flags.
+  std::wcerr << L"\n  -- fate of the BIG composites --\n";
+  for (std::size_t vid :
+       {std::size_t(88), std::size_t(163), std::size_t(115), std::size_t(87)}) {
+    if (vid >= rich.cells.size()) continue;
+    std::size_t const h = cell_of_vid(vid).hash;
+    std::size_t const la = last_access_of(h);
+    bool const alive = alive_at_peak.count(h) != 0;
+    std::size_t const bytes =
+        peak_bytes_of.count(h) ? peak_bytes_of[h] : foot(cell_of_vid(vid));
+    std::wstring const verdict =
+        !alive ? L"NOT alive at peak"
+               : (la < peak_clock ? L"RECLAIMABLE (dead-but-retained)"
+                                  : L"PENDING at peak (read >= peak_clock)");
+    std::wcerr << L"    vid=" << vid << L"  " << GB(bytes)
+               << L" GB  last_access=" << la << L" vs peak_clock=" << peak_clock
+               << L"  " << node_kind(h) << L"{"
+               << space_sig(cell_of_vid(vid).carried) << L"}  => " << verdict
+               << L"\n";
+  }
+
+  // (7) SANITY CHECK (corrected classification): the probe's "tier-B" set
+  //     (values enumerated inside aux ScopeBlocks) MIXES two kinds:
+  //       (a) genuine LoopLocal transients ([build]) -- use-counted, released
+  //           at last use, NOT alive post-run; and
+  //       (b) block ESCAPE outputs ([out:Sum]/[out:Scatter]) -- which the
+  //           executor HOMES at the root cache (ensure_home_slot, pinned) on
+  //           block close, so they behave exactly like tier-A.
+  //     Only (a) is use-counted, so only (a) must have last_access >=
+  //     peak_clock when alive at peak. Discriminate with pinned_now (alive on
+  //     root post- run): a pinned entry that looks dead-but-retained is
+  //     EXPECTED (it is just more pinned floor); a NON-pinned entry that looks
+  //     dead is the real missed-read-path signal.
+  std::size_t tierB_alive = 0, tierB_pending = 0;
+  std::size_t tierB_pinned_dead = 0, tierB_pinned_dead_bytes = 0;
+  std::size_t tierB_transient_dead = 0, tierB_transient_dead_bytes = 0;
+  for (auto const& r : tierB) {
+    std::size_t const h = cell_of_vid(r.vid).hash;
+    if (!alive_at_peak.count(h)) continue;
+    ++tierB_alive;
+    std::size_t const la = last_access_of(h);
+    std::size_t const bytes =
+        peak_bytes_of.count(h) ? peak_bytes_of[h] : r.bytes;
+    if (la >= peak_clock) {
+      ++tierB_pending;
+    } else if (pinned_now.count(h)) {
+      ++tierB_pinned_dead;  // homed escape output: dead-but-retained EXPECTED
+      tierB_pinned_dead_bytes += bytes;
+    } else {
+      ++tierB_transient_dead;  // genuine transient looking dead: the RED FLAG
+      tierB_transient_dead_bytes += bytes;
+    }
+  }
+  std::wcerr << L"\n============ (7) SANITY CHECK (tier-B, corrected) ======\n";
+  std::wcerr << L"  tier-B alive at peak = " << tierB_alive << L"\n";
+  std::wcerr << L"    pending (last>=peak, use-counted still-needed) = "
+             << tierB_pending << L"\n";
+  std::wcerr << L"    PINNED homed-output dead-but-retained (EXPECTED) = "
+             << tierB_pinned_dead << L" (" << TB(tierB_pinned_dead_bytes)
+             << L" TB)\n";
+  std::wcerr << L"    NON-pinned transient looking dead (RED FLAG if >0) = "
+             << tierB_transient_dead << L" (" << TB(tierB_transient_dead_bytes)
+             << L" TB)\n";
+  std::wcerr << L"  => "
+             << (tierB_transient_dead == 0
+                     ? L"PASS: every use-counted transient alive at peak is "
+                       L"still-pending; instrumentation catches all reads"
+                     : L"SUSPECT: a use-counted transient looks dead -- missed "
+                       L"read path")
+             << L"\n";
+
+  // (8) The FULL pinned peak: tier-A floor + homed escape outputs are BOTH
+  //     pinned-until-reset and BOTH mostly dead-but-retained at the peak.
+  //     Report the combined reclaimable so the caller sees the whole pinned
+  //     overhang.
+  std::size_t const pinned_dead_total = reclaimable + tierB_pinned_dead_bytes;
+  std::wcerr << L"\n============ (8) TOTAL PINNED DEAD-BUT-RETAINED ========\n";
+  std::wcerr << L"  tier-A floor reclaimable          = " << reclaimable
+             << L" B (" << TB(reclaimable) << L" TB)\n";
+  std::wcerr << L"  + homed escape-output reclaimable = "
+             << tierB_pinned_dead_bytes << L" B ("
+             << TB(tierB_pinned_dead_bytes) << L" TB)\n";
+  std::wcerr << L"  = TOTAL pinned dead-but-retained  = " << pinned_dead_total
+             << L" B (" << TB(pinned_dead_total) << L" TB), "
+             << (peak ? 100.0 * pinned_dead_total / peak : 0.0)
+             << L"% of the realized peak\n";
+  std::wcerr << L"  residual live at peak instant     = "
+             << (peak - pinned_dead_total) << L" B ("
+             << TB(peak - pinned_dead_total) << L" TB)\n";
+  std::wcerr << L"  NOTE: releasing at last-use MOVES the global peak; this "
+                L"residual is a LOWER BOUND on the post-release peak, and the "
+                L"reclaim an UPPER BOUND on the saving at THIS instant.\n";
 
   std::wcerr << L"====================================================\n";
   CHECK(mon.hwmark_bytes > 0);

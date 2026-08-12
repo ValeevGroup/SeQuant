@@ -53,6 +53,57 @@ struct ScheduleSink {
   bool fired = false;
 };
 
+/// \brief DIAGNOSTIC (analysis-only, OFF by default): a global monotonic
+///        "access clock" stamped on every genuine cache READ, plus a
+///        per-value (keyed by canonical node hash) record of the LAST clock at
+///        which that value was read.
+///
+/// Home (root-homed) cache entries are pinned (life_c == SIZE_MAX), so their
+/// lifetime counter never drains and cannot be used to infer their genuine last
+/// use. This clock records the real thing: \c CacheManager::access_at and
+/// \c access_at_hops (the ONLY genuine consumer-read paths -- the store-return
+/// \c entry::access() bypasses both) call \c tick() and stamp the read value's
+/// hash into \c last_access_map on every hit when \c enabled(). The record is a
+/// GLOBAL map keyed by node hash (not a per-entry field) deliberately: a
+/// batch-loop tier-B value lives on a per-block scratch cache that is destroyed
+/// at block close, so a per-entry field would be lost; the global map keeps the
+/// value's FINAL last-read clock across the whole run regardless of which
+/// (root or transient scratch) scope held it. Reset by the harness before a
+/// measured run. Single-threaded dry-run only. When \c enabled() is false every
+/// stamp site is a no-op and the eval path stays byte-identical.
+struct AccessClock {
+  /// One-shot env gate (SEQUANT_UT_ACCESS_CLOCK). Read once; when unset every
+  /// stamp site below is inert.
+  static bool enabled() noexcept {
+    static bool const on = std::getenv("SEQUANT_UT_ACCESS_CLOCK") != nullptr;
+    return on;
+  }
+  static std::size_t& counter() noexcept {
+    static std::size_t c = 0;
+    return c;
+  }
+  /// hash -> final (max) clock at which a value with that hash was read.
+  static std::unordered_map<std::size_t, std::size_t>&
+  last_access_map() noexcept {
+    static std::unordered_map<std::size_t, std::size_t> m;
+    return m;
+  }
+  /// Advance and return the clock (one genuine read == one tick).
+  static std::size_t tick() noexcept { return ++counter(); }
+  /// Current clock value WITHOUT advancing (used to timestamp the peak).
+  static std::size_t now() noexcept { return counter(); }
+  /// Record a genuine read of the value with hash @p h at a fresh clock tick.
+  static void stamp(std::size_t h) noexcept {
+    if (!enabled()) return;
+    last_access_map()[h] = tick();
+  }
+  /// Clear the clock and the per-value record before a measured run.
+  static void reset() noexcept {
+    counter() = 0;
+    last_access_map().clear();
+  }
+};
+
 }  // namespace sequant::eval
 
 namespace sequant {
@@ -678,7 +729,12 @@ class CacheManager {
   /// batch loops the fetch crossed.
   [[nodiscard]] AccessResult access_at(key_type const& key) noexcept {
     if (auto found = cache_map_.find(key); found != cache_map_.end())
-      if (auto data = found->second.access(); data) return {data, 0};
+      if (auto data = found->second.access(); data) {
+        // DIAGNOSTIC (SEQUANT_UT_ACCESS_CLOCK): stamp this genuine local-hit
+        // read into the global access clock. No-op when the gate is off.
+        eval::AccessClock::stamp(found->first->hash_value());
+        return {data, 0};
+      }
     if (!parent_) return {nullptr, 0};
     auto up = parent_->access_at(key);
     return {up.ptr, up.hops + 1};  // count the link we just crossed
@@ -707,8 +763,14 @@ class CacheManager {
     CacheManager* c = this;
     for (std::size_t i = 0; i < hops && c; ++i) c = c->parent_;
     if (!c) return nullptr;
-    if (auto found = c->cache_map_.find(key); found != c->cache_map_.end())
-      return found->second.access();
+    if (auto found = c->cache_map_.find(key); found != c->cache_map_.end()) {
+      auto data = found->second.access();
+      // DIAGNOSTIC (SEQUANT_UT_ACCESS_CLOCK): stamp this genuine
+      // router-directed read into the global access clock. No-op when the gate
+      // is off.
+      if (data) eval::AccessClock::stamp(found->first->hash_value());
+      return data;
+    }
     return nullptr;
   }
 
