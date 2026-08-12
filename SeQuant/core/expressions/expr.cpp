@@ -77,19 +77,9 @@ ExprPtr &Expr::back() { return at(size() - 1); }
 
 const ExprPtr &Expr::back() const { return at(size() - 1); }
 
-Exception Expr::not_implemented(const char *fn) const {
-  std::ostringstream oss;
-  oss << "Expr::" << fn
-      << " not implemented in this derived class (type_name=" << type_name()
-      << ")";
-  return Exception(oss.str());
+std::wstring Expr::to_latex() const {
+  throw Exception("to_latex not implemented for " + type_id());
 }
-
-std::wstring Expr::to_latex() const { throw not_implemented("to_latex"); }
-
-ExprPtr Expr::clone() const { throw not_implemented("clone"); }
-
-void Expr::adjoint() { throw not_implemented("adjoint"); }
 
 std::wstring_view Variable::label() const { return label_; }
 

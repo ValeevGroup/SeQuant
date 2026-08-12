@@ -38,6 +38,7 @@ struct Dummy : public sequant::Expr {
   std::wstring to_latex() const override { return L"{\\text{Dummy}}"; }
   type_id_type type_id() const override { return get_type_id<Dummy>(); };
   sequant::ExprPtr clone() const override { return sequant::ex<Dummy>(); }
+  void adjoint() override {}
   bool static_equal(const sequant::Expr &) const override { return true; }
 };
 
@@ -68,6 +69,8 @@ struct VecExpr : public std::vector<T>, public sequant::Expr {
   }
 
   type_id_type type_id() const override { return get_type_id<VecExpr<T>>(); };
+
+  void adjoint() override {}
 
   sequant::ConstExprIterator begin_subexpr() const override {
     if constexpr (sequant::Expr::is_shared_ptr_of_expr<T>::value) {
@@ -413,10 +416,6 @@ TEST_CASE("expr", "[elements]") {
   }
 
   SECTION("adjoint") {
-    {  // not implemented by default
-      const auto e = std::make_shared<Dummy>();
-      REQUIRE_THROWS_AS(e->adjoint(), Exception);
-    }
     {  // implemented in Adjointable
       const auto e = std::make_shared<Adjointable>();
       REQUIRE_NOTHROW(e->adjoint());

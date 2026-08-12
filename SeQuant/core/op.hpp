@@ -1061,6 +1061,8 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>,
     return Expr::get_type_id<NormalOperatorSequence>();
   };
 
+  ExprPtr clone() const override { return ex<NormalOperatorSequence>(*this); }
+
   friend bool operator==(const NormalOperatorSequence &nopseq1,
                          const NormalOperatorSequence &nopseq2) {
     return nopseq1.vacuum() == nopseq2.vacuum() &&
