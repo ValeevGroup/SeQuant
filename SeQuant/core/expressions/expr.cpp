@@ -78,7 +78,7 @@ ExprPtr &Expr::back() { return at(size() - 1); }
 const ExprPtr &Expr::back() const { return at(size() - 1); }
 
 std::wstring Expr::to_latex() const {
-  throw Exception("to_latex not implemented for " + type_id());
+  throw Exception("to_latex not implemented for " + type_name());
 }
 
 std::wstring_view Variable::label() const { return label_; }
