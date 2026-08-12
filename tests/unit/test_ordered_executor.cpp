@@ -1416,4 +1416,44 @@ TEST_CASE(
       cache2.access_at(n).ptr);  // still alive despite use_count=1 (persistent)
   cache2.reset();
   CHECK(cache2.access_at(n).ptr);  // survives reset()
+
+  // Upgrade-existing-entry branch (the `!inserted` arm): a SECOND
+  // ensure_home_slot call on the SAME key in the SAME cache must re-arm the
+  // already-present entry via set_life()/make_persistent(), not leave its
+  // original (possibly already-exhausted) count in place. Task 4 relies on
+  // this branch to re-home a node the base cache_manager may have already
+  // registered, so it must be exercised, not merely inspected.
+
+  // (a) insert bounded life=1, then UPGRADE to bounded life=3 on the same
+  // key/cache. If the upgrade were a no-op (stale life=1 left in place), the
+  // store() below -- which itself performs an implicit access() -- would
+  // already be the 1-of-1 last use and drain the entry on the spot, so the
+  // very next access_at() would immediately return nullptr. Instead it must
+  // survive two more explicit reads and drain only at the upgraded 3rd.
+  auto cache3 = sequant::CacheManager<ScalarNode>::empty();
+  cache3.ensure_home_slot(n, /*use_count=*/1, /*persistent=*/false);  // insert
+  cache3.ensure_home_slot(n, /*use_count=*/3,
+                          /*persistent=*/false);  // upgrade: set_life(3)
+  (void)cache3.store(
+      n, sequant::eval_result<ResultScalar<double>>(3.0));  // use 1 of 3
+  CHECK(cache3.access_at(n).ptr);        // use 2 of 3 (would be dead if stale)
+  CHECK(cache3.access_at(n).ptr);        // use 3 of 3 -> drains
+  CHECK_FALSE(cache3.access_at(n).ptr);  // released at the UPGRADED bound
+
+  // (b) insert bounded life=1, then UPGRADE to persistent on the same
+  // key/cache. If the upgrade were a no-op (stale non-persistent life=1),
+  // store()'s implicit access() would again already be the last use and
+  // drain the entry, so the very next access_at() would return nullptr.
+  // Instead it must survive repeated reads past the original count=1 AND a
+  // reset(), proving make_persistent() latched on the pre-existing entry.
+  auto cache4 = sequant::CacheManager<ScalarNode>::empty();
+  cache4.ensure_home_slot(n, /*use_count=*/1, /*persistent=*/false);  // insert
+  cache4.ensure_home_slot(n, /*use_count=*/1,
+                          /*persistent=*/true);  // upgrade: make_persistent()
+  (void)cache4.store(n, sequant::eval_result<ResultScalar<double>>(4.0));
+  CHECK(cache4.access_at(n).ptr);
+  CHECK(cache4.access_at(n).ptr);  // past the original count=1 (would be dead
+                                   // if stale)
+  cache4.reset();
+  CHECK(cache4.access_at(n).ptr);  // survives reset() too
 }
