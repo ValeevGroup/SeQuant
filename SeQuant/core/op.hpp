@@ -955,6 +955,13 @@ class NormalOperator : public Operator<S>,
   }
 };
 
+template <>
+const container::svector<std::wstring> &
+NormalOperator<Statistics::BoseEinstein>::labels();
+template <>
+const container::svector<std::wstring> &
+NormalOperator<Statistics::FermiDirac>::labels();
+
 static_assert(
     is_tensor<NormalOperator<Statistics::FermiDirac>>,
     "The NormalOperator<Statistics::FermiDirac> class does not fulfill the "
