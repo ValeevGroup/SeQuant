@@ -593,3 +593,122 @@ TEST_CASE(
   REQUIRE(top_idx.has_value());
   CHECK(*top_idx > *k_child_idx);
 }
+
+// ===========================================================================
+// Task 4: forced loop split. On the synthetic cross-iteration fixture
+// B{i_3,i_4} = A{;i_3} * A{;i_4} (occ made batchable in the EXTERNAL role, no
+// enclosing occ loop realized), every occ-carrying value is LoopCarried on occ
+// (test_legality.cpp's own cross-iteration test pins this). The outer-product
+// root B is a strict dependency-ancestor of the two loop-carried leaves it
+// reads, so it lands in the CONSUMER pass while the leaves land in the PRODUCER
+// pass: build_ordered_schedule must realize the occ loop as TWO ordered sibling
+// blocks with distinct ordinals, producer (ordinal 0) before consumer (ordinal
+// 1), each escaping its values via AccumulateScatter.
+// ===========================================================================
+TEST_CASE(
+    "build_ordered_schedule: a forced-split occ axis realizes TWO ordered "
+    "sibling blocks -- a producer pass (loop-carried operands scattered to "
+    "full) before a consumer pass (the cross-iteration read) -- with distinct "
+    "ordinals",
+    "[ordered-schedule]") {
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using Node = EvalNodeDryRun;
+
+  auto const body =
+      orderedsched_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                                 "/data/legality_cross_iteration.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = sequant::deserialize<sequant::ExprPtr>(line);
+  REQUIRE(static_cast<bool>(expr));
+
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto node = sequant::binarize<EvalExprDryRun>(expr);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE_FALSE(node.leaf());
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_external_index = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"i";
+  };
+
+  sequant::eval::dryrun::SizeRegime regime;
+  regime.space_extent = {{L"i", 8u}, {L"a", 16u}};
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  std::vector<Node> forest{node};
+  auto const block_of = [](sequant::Index const&) -> std::size_t { return 4; };
+  auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  REQUIRE(!rich.cells.empty());
+
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+
+  // No LoopLocal value is read from both passes here (the shared operand is a
+  // leaf, materialized regardless), so the demotion source reports nothing:
+  // the split is driven purely by the loop-carried structure.
+  CHECK(sequant::eval::forced_split_demotions(rich, legality).empty());
+
+  auto const sched =
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"});
+  REQUIRE(well_formed(sched));
+  CHECK(sched.num_values == rich.cells.size());
+
+  // The root's steps hold exactly TWO occ ("i") child blocks, ordinals 0 & 1.
+  std::vector<ScopeBlock const*> occ_blocks;
+  for (auto const& step : sched.root.steps)
+    if (auto const* c = std::get_if<ScopeBlock>(&step.value))
+      if (c->axis.space().base_key() == L"i") occ_blocks.push_back(c);
+  REQUIRE(occ_blocks.size() == 2);
+  std::vector<int> ordinals{occ_blocks[0]->ordinal, occ_blocks[1]->ordinal};
+  std::sort(ordinals.begin(), ordinals.end());
+  CHECK(ordinals == std::vector<int>{0, 1});
+
+  ScopeBlock const* producer = nullptr;
+  ScopeBlock const* consumer = nullptr;
+  for (auto const* blk : occ_blocks)
+    (blk->ordinal == 0 ? producer : consumer) = blk;
+  REQUIRE(producer != nullptr);
+  REQUIRE(consumer != nullptr);
+
+  // The outer-product root B{i_3,i_4} (the node's own value) is the loop-
+  // carried CONSUMER: an AccumulateScatter output of the ordinal-1 block, and a
+  // BuildStep nowhere.
+  auto const b_hash = node->hash_value();
+  auto const b_it =
+      std::find_if(rich.cells.begin(), rich.cells.end(),
+                   [&](auto const& vc) { return vc.hash == b_hash; });
+  REQUIRE(b_it != rich.cells.end());
+  std::size_t const b_id = b_it->value_id;
+
+  auto const has_scatter = [](ScopeBlock const& blk, std::size_t vid) {
+    return std::any_of(
+        blk.outputs.begin(), blk.outputs.end(), [&](auto const& p) {
+          return p.first == vid && p.second == OutputKind::AccumulateScatter;
+        });
+  };
+  CHECK(has_scatter(*consumer, b_id));
+  CHECK_FALSE(has_scatter(*producer, b_id));
+  CHECK_FALSE(orderedsched_index_of_build_step(*consumer, b_id).has_value());
+  CHECK_FALSE(orderedsched_index_of_build_step(sched.root, b_id).has_value());
+
+  // The producer pass carries the loop-carried leaf operand(s) B reads -- each
+  // a scatter output there, none of them B.
+  REQUIRE(!producer->outputs.empty());
+  for (auto const& [vid, kind] : producer->outputs) {
+    CHECK(kind == OutputKind::AccumulateScatter);
+    CHECK(vid != b_id);
+  }
+
+  // Producer pass is ordered BEFORE the consumer pass in the root's steps.
+  std::optional<std::size_t> prod_pos, cons_pos;
+  for (std::size_t i = 0; i < sched.root.steps.size(); ++i)
+    if (auto const* c = std::get_if<ScopeBlock>(&sched.root.steps[i].value))
+      if (c->axis.space().base_key() == L"i")
+        (c->ordinal == 0 ? prod_pos : cons_pos) = i;
+  REQUIRE(prod_pos.has_value());
+  REQUIRE(cons_pos.has_value());
+  CHECK(*prod_pos < *cons_pos);
+}

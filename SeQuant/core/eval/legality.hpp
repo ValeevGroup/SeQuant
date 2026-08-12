@@ -11,7 +11,10 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <functional>
+#include <string>
 #include <unordered_map>
+#include <utility>
 
 namespace sequant::eval {
 
@@ -94,6 +97,31 @@ struct CellLegality {
 struct LegalitySchedule {
   container::svector<CellLegality> cells;
 };
+
+///
+/// \brief A sequencer-supplied source of monotone demotions for \c
+/// analyze_legality's fixpoint (SP2, Task 4).
+///
+/// \details Given the CURRENT \c LegalitySchedule (one round's classification),
+/// returns the set of \c (ValueCell::hash, axis-SPACE-\c base_key()) pairs that
+/// must be demoted \c LoopLocal -> \c LoopCarried on that axis in the NEXT
+/// round
+/// -- e.g. a value that is \c LoopLocal on a forced-split axis \c L but is used
+/// in BOTH resulting \c L-passes, which cannot keep a single per-\c L copy
+/// alive across the split (see \c ordered_schedule.hpp's \c
+/// forced_split_demotions, the concrete SP2 source). The demotion is a property
+/// of SP2's ORDERED split pass structure, not of the DAG SP1 sees, which is why
+/// SP1 supplies NONE (the default-constructed, empty source): with no source \c
+/// analyze_legality is BYTE-IDENTICAL to its pre-SP2 behavior (the fixpoint
+/// runs exactly one inert round). The source is consulted afresh each round, so
+/// a value already demoted in a prior round is simply not re-reported (it is no
+/// longer \c LoopLocal), which -- together with the caller de-duplicating
+/// against the running demotion set -- keeps the fixpoint monotone and bounded
+/// by \c Sum|per_axis|+1.
+///
+using DemotionSource =
+    std::function<container::svector<std::pair<std::size_t, std::wstring>>(
+        LegalitySchedule const&)>;
 
 ///
 /// \brief Group \p cell's \c forced_split_axes by axis SPACE TYPE (\c
@@ -264,21 +292,25 @@ struct LegalitySchedule {
 /// least one per-axis entry) guards against a non-terminating bug via \c
 /// SEQUANT_ASSERT.
 ///
-/// \par SP2 scoping of the demotion (JUDGMENT CALL -- deferred, see report)
+/// \par SP2 wiring of the demotion (Task 4)
 /// "Used in both \c L-passes" is a property of the PASS STRUCTURE -- the
-/// ordered, split schedule that SP2 builds -- not of the DAG SP1 sees. SP1
-/// performs NO reordering: there is a single pass, so no value is yet "used in
-/// two passes" and no demotion is soundly derivable here. Emitting one now
-/// (e.g. from a DAG reachability guess at where SP2 will place the split
-/// boundary) would be an UNSOUND approximation. This function therefore ships
-/// the sound \c forced_split_axes record plus the fixpoint LOOP STRUCTURE
-/// (which converges immediately in SP1, since \c derive_demotions is inert)
-/// and leaves the demotion itself as a clearly-marked SP2 hook. See \c
-/// derive_demotions below.
+/// ordered, split schedule that SP2 builds -- not of the DAG SP1 sees. It is
+/// therefore supplied FROM OUTSIDE, via the optional \p demotion_source
+/// callback: the SP2 sequencer passes \c forced_split_demotions (\c
+/// ordered_schedule.hpp), which knows the producer/consumer pass partition and
+/// reports every \c LoopLocal value read from BOTH passes of a forced split.
+/// Each fixpoint round consults it and grows the monotone demotion set; a
+/// productive round demotes at least one \c per_axis entry, so the tightened
+/// cap
+/// \c Sum|per_axis|+1 still bounds termination. When \p demotion_source is
+/// EMPTY (the SP1 default), \c derive_demotions is inert (the loop runs exactly
+/// one round) and this function is BYTE-IDENTICAL to its pre-SP2 behavior --
+/// deriving a demotion from a DAG guess is thereby avoided, not approximated.
 ///
 template <meta::eval_node_range R>
 [[nodiscard]] inline LegalitySchedule analyze_legality(
-    RichSchedule const& rich, R const& forest, BatchPolicy const& policy) {
+    RichSchedule const& rich, R const& forest, BatchPolicy const& policy,
+    DemotionSource demotion_source = {}) {
   using Node = std::ranges::range_value_t<R>;
 
   std::unordered_map<std::size_t, Node> node_of;
@@ -367,23 +399,30 @@ template <meta::eval_node_range R>
     return out;
   };
 
-  // SP2 HOOK -- the monotone demotion step. Given the current schedule (its
-  // per_axis roles and forced_split_axes), enlarge `demotions` with every
-  // (value, axis) that is used in BOTH L-passes of a forced L-split and must
-  // therefore lift its floor. Returns true iff it added anything.
+  // The monotone demotion step. Given the current schedule (its per_axis roles
+  // and forced_split_axes), enlarge `demotions` with every (value, axis) the
+  // sequencer-supplied `demotion_source` reports as used in BOTH L-passes of a
+  // forced L-split (and which must therefore lift its floor). Returns true iff
+  // it added anything not already recorded.
   //
-  // In SP1 this is DELIBERATELY INERT (returns false without touching
-  // `demotions`): "used in both L-passes" is a property of SP2's ordered,
-  // split pass structure, which SP1 does not build (SP1 does no reordering, so
-  // there is a single pass and nothing is used in two passes yet). Deriving a
-  // demotion here from a DAG guess at where SP2 will split would be unsound;
-  // the sound SP1 output is the forced_split_axes record above, which SP2
-  // consumes to build the passes and then apply this demotion for real. See
-  // the function's \par SP2 scoping note.
-  auto const derive_demotions =
-      [&](LegalitySchedule const& /*current*/) -> bool {
-    (void)demotions;  // SP2 will grow this; SP1 leaves it untouched.
-    return false;
+  // With NO source (the SP1 default) this is DELIBERATELY INERT (returns false
+  // without touching `demotions`): "used in both L-passes" is a property of
+  // SP2's ordered, split pass structure, which is supplied from outside, not
+  // guessed from the DAG here. The de-duplication against the running set below
+  // is what keeps the fixpoint monotone (a pair already demoted is never
+  // counted as growth) and guarantees convergence within the cap even if the
+  // source re-reports a stale pair.
+  auto const derive_demotions = [&](LegalitySchedule const& current) -> bool {
+    if (!demotion_source) return false;  // SP1: inert, byte-identical
+    bool grew = false;
+    for (auto const& [hash, key] : demotion_source(current)) {
+      auto& keys = demotions[hash];
+      if (std::find(keys.begin(), keys.end(), key) == keys.end()) {
+        keys.push_back(key);
+        grew = true;
+      }
+    }
+    return grew;
   };
 
   LegalitySchedule out = build_cells();

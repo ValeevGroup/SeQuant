@@ -29,6 +29,7 @@
 #include <sstream>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 TEST_CASE(
@@ -541,6 +542,208 @@ TEST_CASE(
     for (auto const& fx : cl.forced_split_axes)
       CHECK(std::find(cl.build_site.begin(), cl.build_site.end(), fx) !=
             cl.build_site.end());
+}
+
+// ===========================================================================
+// SP2 Task 4: the monotone DEMOTION fixpoint, driven by a sequencer-supplied
+// DemotionSource (analyze_legality's optional callback). A LoopLocal value used
+// in BOTH passes of a forced split is demoted LoopLocal -> LoopCarried on that
+// axis, which lifts its home floor. The cross-iteration fixture has no
+// LoopLocal-in-both value (its shared operand is a leaf), so the mechanism is
+// exercised on the water-20 aux-only fixture -- which HAS Κ-LoopLocal
+// intermediates -- with a SYNTHETIC source that names one such value: the point
+// under test is the fixpoint's role-flip / floor-lift / termination, not the
+// organic discovery (which forced_split_demotions handles and is pinned by
+// test_ordered_schedule.cpp's split test). With NO source, analyze_legality is
+// byte-identical -- asserted here too.
+// ===========================================================================
+TEST_CASE(
+    "analyze_legality: a sequencer-supplied demotion source flips a LoopLocal "
+    "axis to LoopCarried (lifting its home floor); the fixpoint terminates; no "
+    "source leaves the result byte-identical",
+    "[legality]") {
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using Node = EvalNodeDryRun;
+
+  auto ctx = sequant::get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  auto const body =
+      legality_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                             "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = sequant::deserialize<sequant::ExprPtr>(line);
+  REQUIRE(static_cast<bool>(expr));
+  REQUIRE(expr->is<sequant::Sum>());
+  auto const& summands = expr->as<sequant::Sum>().summands();
+  REQUIRE(!summands.empty());
+
+  std::size_t nterms = std::min<std::size_t>(summands.size(), 40);
+  if (char const* nt = std::getenv("SEQUANT_UT_DRYRUN_NTERMS"))
+    nterms = std::min<std::size_t>(summands.size(), std::atoll(nt));
+
+  auto regime = legality_witness_df_regime(kLegalityWater20_pVDZF12);
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  policy.is_batchable_external_index = [](sequant::Index const&) {
+    return false;
+  };
+  policy.batch_spectator_indices = false;
+  policy.batch_target_size = [](sequant::Index const&) -> std::size_t {
+    return 256;
+  };
+  policy.is_volatile_leaf = [](sequant::Tensor const& t) {
+    return t.label() == L"t";
+  };
+  policy.accumulation_factor = 1.0;
+  policy.persistent_only = false;
+  policy.peak_threshold = 1e11;
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      sequant::Expr const*,
+      sequant::container::vector<sequant::NodeBatchAnnotation>>>();
+  sequant::OptimizeOptions opts;
+  opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = axes_map;
+
+  std::vector<Node> forest;
+  for (std::size_t s = 0; s < nterms; ++s) {
+    sequant::ExprPtr const term = legality_witness_flatten_product(summands[s]);
+    if (!term) continue;
+    sequant::ExprPtr optimized;
+    try {
+      optimized = sequant::optimize(term, opts);
+    } catch (std::exception const&) {
+      continue;
+    }
+    if (!optimized) continue;
+    sequant::BinarizationOptions bopts;
+    if (auto it = axes_map->find(optimized.get()); it != axes_map->end())
+      bopts.node_batch_axes = it->second;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    forest.push_back(sequant::binarize<EvalExprDryRun>(optimized, {}, bopts));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+  REQUIRE(!forest.empty());
+
+  auto const block_of = [](sequant::Index const&) -> std::size_t {
+    return 256;
+  };
+  auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  REQUIRE(!rich.cells.empty());
+
+  auto const is_K = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  auto const has_K = [&](auto const& v) {
+    return std::any_of(v.begin(), v.end(), is_K);
+  };
+
+  // Baseline: no source. Must be byte-identical to the empty-source overload
+  // (both take the inert branch of derive_demotions).
+  auto const base = sequant::eval::analyze_legality(rich, forest, policy);
+  auto const base_empty_source = sequant::eval::analyze_legality(
+      rich, forest, policy, sequant::eval::DemotionSource{});
+  REQUIRE(base.cells.size() == base_empty_source.cells.size());
+  for (std::size_t i = 0; i < base.cells.size(); ++i) {
+    REQUIRE(base.cells[i].hash == base_empty_source.cells[i].hash);
+    REQUIRE(base.cells[i].per_axis.size() ==
+            base_empty_source.cells[i].per_axis.size());
+    for (std::size_t k = 0; k < base.cells[i].per_axis.size(); ++k)
+      CHECK(base.cells[i].per_axis[k].role ==
+            base_empty_source.cells[i].per_axis[k].role);
+  }
+
+  // Pick a value that classifies Κ as LoopLocal (a Κ-carrying, loop-lockstep
+  // intermediate -- test_ordered_schedule.cpp's Target 3 confirms one exists).
+  std::optional<std::size_t> target_hash;
+  for (auto const& cl : base.cells) {
+    if (std::any_of(cl.per_axis.begin(), cl.per_axis.end(),
+                    [&](auto const& ac) {
+                      return is_K(ac.axis) &&
+                             ac.role == sequant::eval::LoopRole::LoopLocal;
+                    })) {
+      target_hash = cl.hash;
+      break;
+    }
+  }
+  REQUIRE(target_hash.has_value());
+
+  // In the baseline the target is LoopLocal on Κ and Κ is IN its home floor.
+  {
+    auto const it =
+        std::find_if(base.cells.begin(), base.cells.end(),
+                     [&](auto const& cl) { return cl.hash == *target_hash; });
+    REQUIRE(it != base.cells.end());
+    CHECK(has_K(it->home_floor));
+    CHECK_FALSE(has_K(it->forced_split_axes));
+  }
+
+  // A synthetic demotion source that names the target on Κ every round; the
+  // fixpoint de-dups, so it demotes once and then converges (a run past the cap
+  // would SEQUANT_ASSERT inside analyze_legality).
+  std::size_t rounds = 0;
+  sequant::eval::DemotionSource source =
+      [&](sequant::eval::LegalitySchedule const&)
+      -> sequant::container::svector<std::pair<std::size_t, std::wstring>> {
+    ++rounds;
+    return {{*target_hash, std::wstring{L"Κ"}}};
+  };
+  auto const demoted =
+      sequant::eval::analyze_legality(rich, forest, policy, std::move(source));
+  REQUIRE(demoted.cells.size() == base.cells.size());
+  CHECK(rounds >= 2);  // productive round(s) + one no-growth round to converge
+
+  // The target's Κ role is now LoopCarried, Κ is LIFTED out of its home floor,
+  // and Κ appears in its forced_split_axes.
+  {
+    auto const it =
+        std::find_if(demoted.cells.begin(), demoted.cells.end(),
+                     [&](auto const& cl) { return cl.hash == *target_hash; });
+    REQUIRE(it != demoted.cells.end());
+    auto const ax = std::find_if(it->per_axis.begin(), it->per_axis.end(),
+                                 [&](auto const& ac) { return is_K(ac.axis); });
+    REQUIRE(ax != it->per_axis.end());
+    CHECK(ax->role == sequant::eval::LoopRole::LoopCarried);
+    CHECK_FALSE(has_K(it->home_floor));
+    CHECK(has_K(it->forced_split_axes));
+  }
+
+  // Every OTHER cell's Κ role is unchanged (the source demotes only the value
+  // it names -- monotone, targeted growth, no collateral role changes).
+  for (auto const& cl : base.cells) {
+    if (cl.hash == *target_hash) continue;
+    auto const it =
+        std::find_if(demoted.cells.begin(), demoted.cells.end(),
+                     [&](auto const& d) { return d.hash == cl.hash; });
+    REQUIRE(it != demoted.cells.end());
+    auto const role_on_K =
+        [&](auto const& c) -> std::optional<sequant::eval::LoopRole> {
+      for (auto const& ac : c.per_axis)
+        if (is_K(ac.axis)) return ac.role;
+      return std::nullopt;
+    };
+    CHECK(role_on_K(cl) == role_on_K(*it));
+  }
 }
 
 // ===========================================================================

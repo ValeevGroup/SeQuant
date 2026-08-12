@@ -17,6 +17,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <variant>
 
@@ -350,19 +351,176 @@ inline container::vector<Step> ordered_schedule_topo_sort_steps(
   return out_steps;
 }
 
+///
+/// \brief The GLOBAL direct-dependency edges of a \c RichSchedule, recovered
+/// from \c rich alone (no forest access): \c depends_on[p] lists every value_id
+/// the value \c p directly READS, and \c consumers_of[c] lists every value_id
+/// that directly reads \c c (the reverse). Same recovery \c
+/// build_ordered_schedule uses inline (occurrence \c consumer_point ->
+/// producing value_id via \c point_owner); factored here so the split-pass
+/// partition and \c build_ordered_schedule agree edge-for-edge.
+///
+struct OrderedScheduleDepGraph {
+  std::unordered_map<std::size_t, std::size_t> value_id_of;  //!< hash -> id
+  std::unordered_map<std::size_t, container::svector<std::size_t>> depends_on;
+  std::unordered_map<std::size_t, container::svector<std::size_t>> consumers_of;
+};
+
+inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
+    RichSchedule const& rich) {
+  OrderedScheduleDepGraph g;
+  g.value_id_of.reserve(rich.cells.size());
+  for (ValueCell const& vc : rich.cells)
+    g.value_id_of.emplace(vc.hash, vc.value_id);
+
+  std::unordered_map<std::size_t, std::size_t> point_owner;
+  for (ValueCell const& vc : rich.cells)
+    for (OccurrenceRec const& occ : vc.occurrences)
+      point_owner[occ.point] = vc.value_id;
+
+  for (ValueCell const& vc : rich.cells)
+    for (OccurrenceRec const& occ : vc.occurrences) {
+      if (occ.consumer_point == occ.point) continue;  // forest root
+      auto const it = point_owner.find(occ.consumer_point);
+      if (it == point_owner.end()) continue;  // defensive
+      std::size_t const parent = it->second;
+      auto& deps = g.depends_on[parent];
+      if (std::find(deps.begin(), deps.end(), vc.value_id) == deps.end()) {
+        deps.push_back(vc.value_id);
+        g.consumers_of[vc.value_id].push_back(parent);
+      }
+    }
+  return g;
+}
+
+///
+/// \brief The producer/consumer pass partition of one forced-split axis TYPE
+/// \p axis_key (SP2, Task 4): which values are LOOP-CARRIED on the axis (the
+/// values that force the split), and which values belong to the CONSUMER pass
+/// (a strict dependency-ancestor of some carried value -- it reads a carried
+/// value's completed result, so it cannot run until the producer pass has
+/// closed the axis loop and scattered that value to full). Every other value is
+/// in the PRODUCER pass (it builds the carried values, or is unrelated).
+///
+struct ForcedSplitPasses {
+  std::unordered_set<std::size_t> carried;        //!< LoopCarried-on-axis ids
+  std::unordered_set<std::size_t> consumer_pass;  //!< strict ancestors thereof
+};
+
+inline ForcedSplitPasses forced_split_passes(std::wstring const& axis_key,
+                                             LegalitySchedule const& legality,
+                                             OrderedScheduleDepGraph const& g) {
+  ForcedSplitPasses r;
+  for (CellLegality const& cl : legality.cells) {
+    bool const carried_here = std::any_of(
+        cl.per_axis.begin(), cl.per_axis.end(), [&](AxisClass const& ac) {
+          return ac.role == LoopRole::LoopCarried &&
+                 ac.axis.space().base_key() == axis_key;
+        });
+    if (!carried_here) continue;
+    auto const it = g.value_id_of.find(cl.hash);
+    if (it != g.value_id_of.end()) r.carried.insert(it->second);
+  }
+
+  // consumer_pass = strict dependency-ancestors of the carried set: walk UP the
+  // consumer edges from each carried value (a carried value that is itself an
+  // ancestor of ANOTHER carried value is thereby included -- it consumes a
+  // completed carried value -- while a carried value that is only a source of
+  // others is not, and stays in the producer pass).
+  container::svector<std::size_t> stack;
+  auto const push = [&](std::size_t v) {
+    if (r.consumer_pass.insert(v).second) stack.push_back(v);
+  };
+  for (std::size_t c : r.carried) {
+    auto const it = g.consumers_of.find(c);
+    if (it != g.consumers_of.end())
+      for (std::size_t p : it->second) push(p);
+  }
+  while (!stack.empty()) {
+    std::size_t const v = stack.back();
+    stack.pop_back();
+    auto const it = g.consumers_of.find(v);
+    if (it != g.consumers_of.end())
+      for (std::size_t p : it->second) push(p);
+  }
+  return r;
+}
+
 }  // namespace detail
+
+///
+/// \brief The SP2 \c DemotionSource (\c legality.hpp) for forced loop splits
+/// (Task 4): every \c (hash, axis-base-key) that must be demoted \c LoopLocal
+/// -> \c LoopCarried because it is read from BOTH passes of a forced split.
+///
+/// \details For each forced-split axis TYPE \c L (\c forced_split_types over
+/// every cell) the split makes two ordered \c L-passes -- a PRODUCER pass that
+/// builds the loop-carried values to full and a CONSUMER pass that reads them
+/// (see \c build_ordered_schedule). A value that is \c LoopLocal on \c L (a
+/// single per-iteration copy, homed INSIDE the \c L loop) but that is read by a
+/// value in the producer pass AND by a value in the consumer pass cannot keep
+/// that per-iteration copy alive across the split boundary (the producer pass's
+/// \c L loop has closed by the time the consumer pass runs). It is therefore
+/// demoted \c LoopLocal -> \c LoopCarried on \c L -- materialized in full,
+/// lifting its home floor out of \c L. Wire this into \c analyze_legality as
+/// its
+/// \c demotion_source to grow the monotone fixpoint (Task 4). Recomputed afresh
+/// each round on the CURRENT schedule; a value already demoted is no longer \c
+/// LoopLocal, so it is not re-reported, and the fixpoint converges.
+///
+[[nodiscard]] inline container::svector<std::pair<std::size_t, std::wstring>>
+forced_split_demotions(RichSchedule const& rich,
+                       LegalitySchedule const& legality) {
+  auto const g = detail::ordered_schedule_dep_graph(rich);
+
+  // forced-split axis TYPES, in first-discovery order across cells.
+  container::svector<std::wstring> axes;
+  for (CellLegality const& cl : legality.cells)
+    for (Index const& ix : forced_split_types(cl)) {
+      std::wstring key{ix.space().base_key()};
+      if (std::find(axes.begin(), axes.end(), key) == axes.end())
+        axes.push_back(std::move(key));
+    }
+
+  container::svector<std::pair<std::size_t, std::wstring>> out;
+  for (std::wstring const& key : axes) {
+    auto const passes = detail::forced_split_passes(key, legality, g);
+    for (CellLegality const& cl : legality.cells) {
+      bool const loop_local_here = std::any_of(
+          cl.per_axis.begin(), cl.per_axis.end(), [&](AxisClass const& ac) {
+            return ac.role == LoopRole::LoopLocal &&
+                   ac.axis.space().base_key() == key;
+          });
+      if (!loop_local_here) continue;
+      auto const vid_it = g.value_id_of.find(cl.hash);
+      if (vid_it == g.value_id_of.end()) continue;
+      auto const cons_it = g.consumers_of.find(vid_it->second);
+      if (cons_it == g.consumers_of.end()) continue;
+      bool in_producer = false, in_consumer = false;
+      for (std::size_t c : cons_it->second) {
+        if (passes.consumer_pass.count(c))
+          in_consumer = true;
+        else
+          in_producer = true;
+      }
+      if (in_producer && in_consumer) out.push_back({cl.hash, key});
+    }
+  }
+  return out;
+}
 
 ///
 /// \brief Task 3 of the ordered-scope batched-eval design (SP2): the
 /// deterministic sequencer -- lowers SP1's \c LegalitySchedule (per-value
 /// \c home_floor / \c per_axis roles) plus the \c RichSchedule (per-value
 /// \c first_use / \c last_use over the forest's single post-order static-
-/// point timeline) into an \c OrderedSchedule. NON-SPLIT case only: every
-/// batch axis TYPE realizes exactly ONE loop block, chained (not branched)
-/// exactly as \c build_scope_schedule's single canonical chain -- splitting
-/// one axis TYPE into several disjoint passes is Task 4.
+/// point timeline) into an \c OrderedSchedule. Every batch axis TYPE realizes
+/// ONE loop block, chained (not branched) exactly as \c build_scope_schedule's
+/// single canonical chain -- EXCEPT the innermost forced-split axis, which
+/// Task 4 realizes as two ordered producer/consumer passes (see step 2b and
+/// \c forced_split_demotions).
 ///
-/// \details Three-part algorithm, pure scheduling (no cost choice):
+/// \details Four-part algorithm, pure scheduling (no cost choice):
 ///
 /// \par 1. The canonical chain
 /// One loop block per distinct batch axis TYPE (\c IndexSpace::base_key())
@@ -486,40 +644,18 @@ inline container::vector<Step> ordered_schedule_topo_sort_steps(
   OrderedSchedule out;
   out.num_values = rich.cells.size();
 
-  // hash -> value_id (== the value's slot in rich.cells, per ValueCell's own
-  // doc comment).
-  std::unordered_map<std::size_t, std::size_t> value_id_of;
-  value_id_of.reserve(rich.cells.size());
-  for (ValueCell const& vc : rich.cells)
-    value_id_of.emplace(vc.hash, vc.value_id);
-
-  // GLOBAL direct-dependency edges, recovered from rich alone (see the
-  // function doc comment's part 3): for every occurrence of every value,
-  // its consumer_point names its structural PARENT's own production point;
-  // point_owner resolves that point back to the value_id whose occurrence
-  // starts there.
-  std::unordered_map<std::size_t, std::size_t> point_owner;
-  for (ValueCell const& vc : rich.cells)
-    for (OccurrenceRec const& occ : vc.occurrences)
-      point_owner[occ.point] = vc.value_id;
-
-  std::unordered_map<std::size_t, container::svector<std::size_t>> depends_on;
-  for (ValueCell const& vc : rich.cells)
-    for (OccurrenceRec const& occ : vc.occurrences) {
-      if (occ.consumer_point == occ.point)
-        continue;  // forest root: no structural parent
-      auto const owner_it = point_owner.find(occ.consumer_point);
-      if (owner_it == point_owner.end())
-        continue;  // defensive; every point is stamped by compute_dag_boulevard
-      auto& deps = depends_on[owner_it->second];
-      if (std::find(deps.begin(), deps.end(), vc.value_id) == deps.end())
-        deps.push_back(vc.value_id);
-    }
+  // hash -> value_id and the GLOBAL direct-dependency edges, recovered from
+  // rich alone (see the function doc comment's part 3, and \c
+  // ordered_schedule_dep_graph): for every occurrence of every value, its
+  // consumer_point names its structural PARENT's own production point,
+  // resolved back to the parent value_id.
+  auto const g = detail::ordered_schedule_dep_graph(rich);
+  auto const& value_id_of = g.value_id_of;
   static container::svector<std::size_t> const kNoDeps{};
   auto const requires_of =
       [&](std::size_t vid) -> container::svector<std::size_t> const& {
-    auto const it = depends_on.find(vid);
-    return it == depends_on.end() ? kNoDeps : it->second;
+    auto const it = g.depends_on.find(vid);
+    return it == g.depends_on.end() ? kNoDeps : it->second;
   };
 
   // 1. The canonical chain: one representative Index per distinct axis TYPE
@@ -616,26 +752,119 @@ inline container::vector<Step> ordered_schedule_topo_sort_steps(
       root_build_ids.push_back(vid);
   }
 
-  // 3. Assemble the chain bottom-up (innermost first). Alongside each
-  // already-built child block, thread up: child_own_outputs (bucket[d+1]'s
-  // OWN escape outputs -- what block[d+1] makes visible to block[d]'s own
-  // siblings, i.e. its "produced" as a candidate step one level up),
-  // child_produced_all / child_requires_all (the FULL recursive
-  // produced/external-need sets of block[d+1]'s WHOLE subtree -- used only
-  // to grow THIS level's own produced_all/requires_all further, per the
-  // function doc comment's part 3), and child_tie_key (the deterministic
-  // tie-break for placing block[d+1] within block[d]'s own steps).
-  std::optional<ScopeBlock> child_block;
-  container::svector<std::size_t> child_own_outputs;
-  container::svector<std::size_t> child_produced_all;
-  container::svector<std::size_t> child_requires_all;
-  std::size_t child_tie_key = 0;
-
   auto const union_into = [](container::svector<std::size_t>& acc,
                              container::svector<std::size_t> const& add) {
     for (std::size_t v : add)
       if (std::find(acc.begin(), acc.end(), v) == acc.end()) acc.push_back(v);
   };
+
+  // 2b. FORCED LOOP SPLIT (Task 4). If the INNERMOST realized axis type
+  // (types[n-1]) is forced to split -- some cell is LoopCarried on it -- and
+  // its values divide into a non-empty PRODUCER pass and a non-empty CONSUMER
+  // pass (a value is in the consumer pass iff it is a strict dependency-
+  // ancestor of a loop-carried value, i.e. it reads that value's completed
+  // result: see detail::forced_split_passes), the {L} loop is realized as TWO
+  // ordered sibling blocks with distinct ordinals -- a producer pass (ordinal
+  // 0, builds the loop-carried values to full via their AccumulateScatter
+  // outputs) then a consumer pass (ordinal 1, the cross-iteration reads).
+  //
+  // Restricted to the INNERMOST axis (d == n-1) so there is no deeper loop
+  // chain to fork across the two passes. A forced-split axis that is NOT the
+  // innermost realized axis is left UNSPLIT here (a single block, exactly as
+  // Task 3) -- a clearly-documented INERT hook deferred to a later task: the
+  // general split forks the whole enclosed sub-chain, and no current fixture
+  // (nor any consumer -- SP3's executor does not yet read this IR) exercises
+  // it, so a sound conservative single block beats an unsound partial fork.
+  std::optional<detail::ForcedSplitPasses> split_passes;
+  if (n > 0) {
+    std::wstring const inner_key{types[n - 1].space().base_key()};
+    bool const inner_forced =
+        std::any_of(legality.cells.begin(), legality.cells.end(),
+                    [&](CellLegality const& cl) {
+                      for (Index const& ix : forced_split_types(cl))
+                        if (ix.space().base_key() == inner_key) return true;
+                      return false;
+                    });
+    if (inner_forced) {
+      auto passes = detail::forced_split_passes(inner_key, legality, g);
+      bool has_prod = false, has_cons = false;
+      auto const tally = [&](std::size_t vid) {
+        (passes.consumer_pass.count(vid) ? has_cons : has_prod) = true;
+      };
+      for (std::size_t v : buckets[n - 1].build_ids) tally(v);
+      for (auto const& o : buckets[n - 1].outputs) tally(o.first);
+      if (has_prod && has_cons) split_passes = std::move(passes);
+    }
+  }
+
+  // Small helpers shared by the (usual) single-block path and the split path.
+  auto const external_needs =
+      [&](container::svector<std::size_t> const& produced)
+      -> container::svector<std::size_t> {
+    container::svector<std::size_t> req;
+    for (std::size_t v : produced) union_into(req, requires_of(v));
+    req.erase(std::remove_if(req.begin(), req.end(),
+                             [&](std::size_t v) {
+                               return std::find(produced.begin(),
+                                                produced.end(),
+                                                v) != produced.end();
+                             }),
+              req.end());
+    return req;
+  };
+  auto const min_first_use =
+      [&](container::svector<std::size_t> const& ids) -> std::size_t {
+    std::size_t k = std::numeric_limits<std::size_t>::max();
+    for (std::size_t v : ids) k = std::min(k, rich.cells[v].first_use);
+    return k == std::numeric_limits<std::size_t>::max() ? std::size_t{0} : k;
+  };
+  auto const make_block =
+      [&](Index const& axis, int ordinal,
+          container::svector<std::size_t> const& build_ids,
+          container::svector<std::pair<std::size_t, OutputKind>> const& outputs,
+          container::vector<Step>&& child_steps,
+          container::vector<detail::OrderedScheduleStepMeta>&& child_metas)
+      -> ScopeBlock {
+    container::vector<Step> items;
+    container::vector<detail::OrderedScheduleStepMeta> meta;
+    for (std::size_t v : build_ids) {
+      items.push_back(Step{BuildStep{v}});
+      detail::OrderedScheduleStepMeta m;
+      m.produced.push_back(v);
+      m.requires_.assign(requires_of(v).begin(), requires_of(v).end());
+      m.tie_key = rich.cells[v].first_use;
+      meta.push_back(std::move(m));
+    }
+    for (std::size_t k = 0; k < child_steps.size(); ++k) {
+      items.push_back(std::move(child_steps[k]));
+      meta.push_back(std::move(child_metas[k]));
+    }
+    ScopeBlock block;
+    block.axis = axis;
+    block.ordinal = ordinal;
+    block.kind = detail::mode_is_external(rich, axis)
+                     ? BatchModeType::External
+                     : BatchModeType::Contracted;
+    block.steps =
+        detail::ordered_schedule_topo_sort_steps(std::move(items), meta);
+    block.outputs.assign(outputs.begin(), outputs.end());
+    return block;
+  };
+
+  // 3. Assemble the chain bottom-up (innermost first). Thread up a LIST of
+  // child block Steps to embed one level out -- normally ONE (the single block
+  // for the deeper axis, exactly as Task 3), but TWO at the split depth (the
+  // producer/consumer passes) -- each paired with the meta the outer topo-sort
+  // needs (its OWN escape outputs as `produced`, its whole subtree's external
+  // need as `requires_`, and a deterministic `tie_key`). child_produced_all /
+  // child_requires_all carry the FULL recursive produced/external-need sets of
+  // everything built at this depth (identical whether one block or two -- the
+  // outer level sees the same production/need set either way) to grow the next
+  // level's own sets, per the function doc comment's part 3.
+  container::vector<Step> pending_steps;
+  container::vector<detail::OrderedScheduleStepMeta> pending_metas;
+  container::svector<std::size_t> child_produced_all;
+  container::svector<std::size_t> child_requires_all;
 
   for (std::size_t i = 0; i < n; ++i) {
     std::size_t const d = n - 1 - i;  // innermost (n-1) to outermost (0)
@@ -647,11 +876,11 @@ inline container::vector<Step> ordered_schedule_topo_sort_steps(
       own_produced.push_back(out_entry.first);
 
     container::svector<std::size_t> produced_all = own_produced;
-    if (child_block) union_into(produced_all, child_produced_all);
+    union_into(produced_all, child_produced_all);
 
     container::svector<std::size_t> requires_all;
     for (std::size_t v : own_produced) union_into(requires_all, requires_of(v));
-    if (child_block) union_into(requires_all, child_requires_all);
+    union_into(requires_all, child_requires_all);
     requires_all.erase(std::remove_if(requires_all.begin(), requires_all.end(),
                                       [&](std::size_t v) {
                                         return std::find(produced_all.begin(),
@@ -661,56 +890,66 @@ inline container::vector<Step> ordered_schedule_topo_sort_steps(
                                       }),
                        requires_all.end());
 
-    // This level's own candidate steps: build_ids (individual BuildStep's)
-    // plus the already-built child block (one Step), each with its own
-    // produced/requires_/tie_key metadata (see the function doc comment's
-    // part 3).
-    container::vector<Step> items;
-    container::vector<detail::OrderedScheduleStepMeta> meta;
-    for (std::size_t v : bucket.build_ids) {
-      items.push_back(Step{BuildStep{v}});
+    container::vector<Step> next_steps;
+    container::vector<detail::OrderedScheduleStepMeta> next_metas;
+
+    if (split_passes && d == n - 1) {
+      // Innermost split: partition this bucket's homed BuildSteps and escape
+      // outputs into the producer (ordinal 0) and consumer (ordinal 1) passes
+      // by consumer_pass membership. d == n-1 => no pending child blocks to
+      // fork. The consumer block reads the producer block's escaped (now-full)
+      // outputs, so its `requires_` names them and the outer topo-sort orders
+      // the producer pass first.
+      auto const in_consumer = [&](std::size_t vid) {
+        return split_passes->consumer_pass.count(vid) != 0;
+      };
+      auto const emit_pass =
+          [&](int ordinal, container::svector<std::size_t> const& builds,
+              container::svector<std::pair<std::size_t, OutputKind>> const&
+                  outs) {
+            container::svector<std::size_t> pass_produced = builds;
+            for (auto const& o : outs) pass_produced.push_back(o.first);
+            next_steps.push_back(
+                Step{make_block(types[d], ordinal, builds, outs, {}, {})});
+            detail::OrderedScheduleStepMeta m;
+            for (auto const& o : outs) m.produced.push_back(o.first);
+            m.requires_ = external_needs(pass_produced);
+            m.tie_key = min_first_use(pass_produced);
+            next_metas.push_back(std::move(m));
+          };
+
+      container::svector<std::size_t> prod_builds, cons_builds;
+      for (std::size_t v : bucket.build_ids)
+        (in_consumer(v) ? cons_builds : prod_builds).push_back(v);
+      container::svector<std::pair<std::size_t, OutputKind>> prod_outs,
+          cons_outs;
+      for (auto const& o : bucket.outputs)
+        (in_consumer(o.first) ? cons_outs : prod_outs).push_back(o);
+
+      emit_pass(0, prod_builds, prod_outs);
+      emit_pass(1, cons_builds, cons_outs);
+    } else {
+      ScopeBlock block =
+          make_block(types[d], 0, bucket.build_ids, bucket.outputs,
+                     std::move(pending_steps), std::move(pending_metas));
+      next_steps.push_back(Step{std::move(block)});
       detail::OrderedScheduleStepMeta m;
-      m.produced.push_back(v);
-      m.requires_.assign(requires_of(v).begin(), requires_of(v).end());
-      m.tie_key = rich.cells[v].first_use;
-      meta.push_back(std::move(m));
-    }
-    if (child_block) {
-      items.push_back(Step{std::move(*child_block)});
-      detail::OrderedScheduleStepMeta m;
-      m.produced = child_own_outputs;
-      m.requires_ = child_requires_all;
-      m.tie_key = child_tie_key;
-      meta.push_back(std::move(m));
+      for (auto const& out_entry : bucket.outputs)
+        m.produced.push_back(out_entry.first);
+      m.requires_ = requires_all;
+      m.tie_key = min_first_use(produced_all);
+      next_metas.push_back(std::move(m));
     }
 
-    ScopeBlock block;
-    block.axis = types[d];
-    block.ordinal = 0;
-    block.kind = detail::mode_is_external(rich, types[d])
-                     ? BatchModeType::External
-                     : BatchModeType::Contracted;
-    block.steps =
-        detail::ordered_schedule_topo_sort_steps(std::move(items), meta);
-    block.outputs.assign(bucket.outputs.begin(), bucket.outputs.end());
-
-    std::size_t tie_key = std::numeric_limits<std::size_t>::max();
-    for (std::size_t v : produced_all)
-      tie_key = std::min(tie_key, rich.cells[v].first_use);
-    if (tie_key == std::numeric_limits<std::size_t>::max())
-      tie_key = 0;  // empty subtree: harmless fallback
-
-    child_block = std::move(block);
-    child_own_outputs.clear();
-    for (auto const& out_entry : bucket.outputs)
-      child_own_outputs.push_back(out_entry.first);
+    pending_steps = std::move(next_steps);
+    pending_metas = std::move(next_metas);
     child_produced_all = std::move(produced_all);
     child_requires_all = std::move(requires_all);
-    child_tie_key = tie_key;
   }
 
-  // Root assembly: root-level BuildStep's plus, if the chain is non-empty,
-  // the outermost block as one Step.
+  // Root assembly: root-level BuildStep's plus the outermost block(s) as
+  // Step(s) (one in the usual chain; two if the outermost axis itself was the
+  // innermost -- i.e. n == 1 -- and got split).
   container::vector<Step> root_items;
   container::vector<detail::OrderedScheduleStepMeta> root_meta;
   for (std::size_t v : root_build_ids) {
@@ -721,13 +960,9 @@ inline container::vector<Step> ordered_schedule_topo_sort_steps(
     m.tie_key = rich.cells[v].first_use;
     root_meta.push_back(std::move(m));
   }
-  if (child_block) {
-    root_items.push_back(Step{std::move(*child_block)});
-    detail::OrderedScheduleStepMeta m;
-    m.produced = child_own_outputs;
-    m.requires_ = child_requires_all;
-    m.tie_key = child_tie_key;
-    root_meta.push_back(std::move(m));
+  for (std::size_t k = 0; k < pending_steps.size(); ++k) {
+    root_items.push_back(std::move(pending_steps[k]));
+    root_meta.push_back(std::move(pending_metas[k]));
   }
   out.root.steps = detail::ordered_schedule_topo_sort_steps(
       std::move(root_items), root_meta);
