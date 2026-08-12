@@ -451,22 +451,37 @@ inline ForcedSplitPasses forced_split_passes(std::wstring const& axis_key,
 ///
 /// \brief The SP2 \c DemotionSource (\c legality.hpp) for forced loop splits
 /// (Task 4): every \c (hash, axis-base-key) that must be demoted \c LoopLocal
-/// -> \c LoopCarried because it is read from BOTH passes of a forced split.
+/// -> \c LoopCarried because a producer-side value is read across the split.
 ///
 /// \details For each forced-split axis TYPE \c L (\c forced_split_types over
 /// every cell) the split makes two ordered \c L-passes -- a PRODUCER pass that
 /// builds the loop-carried values to full and a CONSUMER pass that reads them
-/// (see \c build_ordered_schedule). A value that is \c LoopLocal on \c L (a
-/// single per-iteration copy, homed INSIDE the \c L loop) but that is read by a
-/// value in the producer pass AND by a value in the consumer pass cannot keep
-/// that per-iteration copy alive across the split boundary (the producer pass's
-/// \c L loop has closed by the time the consumer pass runs). It is therefore
-/// demoted \c LoopLocal -> \c LoopCarried on \c L -- materialized in full,
-/// lifting its home floor out of \c L. Wire this into \c analyze_legality as
-/// its
-/// \c demotion_source to grow the monotone fixpoint (Task 4). Recomputed afresh
-/// each round on the CURRENT schedule; a value already demoted is no longer \c
-/// LoopLocal, so it is not re-reported, and the fixpoint converges.
+/// (see \c build_ordered_schedule). A value \c V that is \c LoopLocal on \c L
+/// (a single per-iteration copy, homed INSIDE the \c L loop) and HOMED on the
+/// producer side (\c V itself is NOT in \c consumer_pass) is demoted the moment
+/// ANY of its DIRECT consumers lands in the consumer pass: that consumer runs
+/// in a later, disjoint \c L-loop and cannot see \c V's per-iteration
+/// producer-side copy, so \c V must be materialized in full (\c LoopCarried ->
+/// an \c AccumulateScatter escape output of the producer pass), lifting its
+/// home floor out of \c L.
+///
+/// \par Why the trigger is SINGLE-SIDED (not "read from both passes")
+/// The pass closure (\c forced_split_passes) is one-directional: if \c V were
+/// in
+/// \c consumer_pass, EVERY direct consumer of \c V would be forced into \c
+/// consumer_pass too, so a consumer-homed value is never read from the producer
+/// side and needs no demotion (hence the \c consumer_pass guard on \c V). The
+/// only unsound case is therefore the asymmetric one -- \c V homed producer
+/// whose SOLE consumer reads the carried leaf (that consumer is unconditionally
+/// in \c consumer_pass). Requiring a producer-side consumer TOO would skip it,
+/// leaving \c V an invisible producer-pass transient the consumer block
+/// requires but no producer emits -- a silent mis-schedule. Demoting on ANY
+/// consumer-pass reader closes that gap and is complete.
+///
+/// Wire this into \c analyze_legality as its \c demotion_source to grow the
+/// monotone fixpoint (Task 4). Recomputed afresh each round on the CURRENT
+/// schedule; a value already demoted is no longer \c LoopLocal, so it is not
+/// re-reported, and the fixpoint converges.
 ///
 [[nodiscard]] inline container::svector<std::pair<std::size_t, std::wstring>>
 forced_split_demotions(RichSchedule const& rich,
@@ -494,16 +509,27 @@ forced_split_demotions(RichSchedule const& rich,
       if (!loop_local_here) continue;
       auto const vid_it = g.value_id_of.find(cl.hash);
       if (vid_it == g.value_id_of.end()) continue;
-      auto const cons_it = g.consumers_of.find(vid_it->second);
+      std::size_t const vid = vid_it->second;
+      // V must be HOMED on the producer side (not itself in consumer_pass): a
+      // consumer-pass value's own consumers are, by the one-directional closure
+      // in forced_split_passes, all in consumer_pass too, so it is never read
+      // from the producer side and needs no demotion.
+      if (passes.consumer_pass.count(vid)) continue;
+      auto const cons_it = g.consumers_of.find(vid);
       if (cons_it == g.consumers_of.end()) continue;
-      bool in_producer = false, in_consumer = false;
-      for (std::size_t c : cons_it->second) {
-        if (passes.consumer_pass.count(c))
-          in_consumer = true;
-        else
-          in_producer = true;
-      }
-      if (in_producer && in_consumer) out.push_back({cl.hash, key});
+      // SINGLE-SIDED trigger: demote as soon as ANY direct consumer of V lands
+      // in the consumer pass. V is a producer-side LoopLocal transient, so
+      // WITHOUT this demotion it would be an invisible per-iteration value the
+      // consumer pass (a later, disjoint L-loop) cannot see -- a silent
+      // mis-schedule. Requiring a producer-side consumer TOO (the old `&&`)
+      // wrongly skipped the case where V's SOLE consumer reads the carried
+      // value (and is thereby forced into consumer_pass): demoting V ->
+      // LoopCarried materializes it as an AccumulateScatter escape output of
+      // the producer pass, visible across the split.
+      bool const read_by_consumer_pass = std::any_of(
+          cons_it->second.begin(), cons_it->second.end(),
+          [&](std::size_t c) { return passes.consumer_pass.count(c); });
+      if (read_by_consumer_pass) out.push_back({cl.hash, key});
     }
   }
   return out;

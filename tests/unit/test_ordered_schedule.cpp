@@ -712,3 +712,98 @@ TEST_CASE(
   REQUIRE(cons_pos.has_value());
   CHECK(*prod_pos < *cons_pos);
 }
+
+// ===========================================================================
+// Task 4 (Fix round 1): the demotion trigger in forced_split_demotions is
+// SINGLE-SIDED -- a producer-homed LoopLocal value V (V itself NOT in
+// consumer_pass) is demoted the moment ANY direct consumer of V lands in the
+// consumer pass, NOT only when V ALSO has a producer-side consumer. A hand-
+// built dep graph + legality isolates the four cases (the split-pass BFS is
+// one-directional, so a consumer-homed value never leaks back to the producer
+// side and needs no demotion -- hence the asymmetric "sole consumer" case is
+// the only unsound one, and it is exactly the one the old `&&` trigger missed):
+//
+//   Lc (id0)  -- LoopCarried leaf on occ  (forces the split)
+//   Wc (id5)  -- LoopCarried, reads Lc    => a strict ancestor of Lc, so it is
+//                                            in consumer_pass
+//   Pu (id4)  -- producer-side root, reads Vboth+Vprod (reads NO carried value,
+//                                            so NOT in consumer_pass)
+//   Vboth(id1)-- LoopLocal, read by Pu (producer) AND Wc (consumer) => flagged
+//   Vsole(id2)-- LoopLocal, read ONLY by Wc (consumer) => flagged (the case the
+//                                            old `&&` trigger silently dropped)
+//   Vprod(id3)-- LoopLocal, read ONLY by Pu (producer) => NOT flagged
+// ===========================================================================
+TEST_CASE(
+    "forced_split_demotions: single-sided trigger flags a producer-homed "
+    "LoopLocal read by any consumer-pass value, including its SOLE consumer",
+    "[ordered-schedule]") {
+  sequant::Index const i{L"i_1"};
+
+  auto const make_cell =
+      [](std::size_t id, std::size_t hash,
+         std::vector<std::pair<std::size_t, std::size_t>> const& occs) {
+        sequant::eval::ValueCell vc{};
+        vc.value_id = id;
+        vc.hash = hash;
+        vc.first_use = 0;
+        vc.last_use = 0;
+        for (auto const& [p, cp] : occs) {
+          sequant::eval::OccurrenceRec o{};
+          o.point = p;
+          o.consumer_point = cp;
+          vc.occurrences.push_back(std::move(o));
+        }
+        return vc;
+      };
+
+  // consumer_point == point means "forest root" (no structural parent).
+  sequant::eval::RichSchedule rich;
+  rich.cells.push_back(make_cell(0, 1000, {{0, 50}}));  // Lc  -> Wc
+  rich.cells.push_back(
+      make_cell(1, 1001, {{10, 40}, {11, 50}}));         // Vboth->Pu,Wc
+  rich.cells.push_back(make_cell(2, 1002, {{20, 50}}));  // Vsole-> Wc
+  rich.cells.push_back(make_cell(3, 1003, {{30, 40}}));  // Vprod-> Pu
+  rich.cells.push_back(make_cell(4, 1004, {{40, 40}}));  // Pu  (root)
+  rich.cells.push_back(make_cell(5, 1005, {{50, 50}}));  // Wc  (root)
+
+  auto const make_legality = [&](std::size_t hash,
+                                 sequant::eval::LoopRole role) {
+    sequant::eval::CellLegality cl;
+    cl.hash = hash;
+    sequant::eval::AxisClass ac;
+    ac.axis = i;
+    ac.role = role;
+    cl.per_axis.push_back(ac);
+    if (role == sequant::eval::LoopRole::LoopCarried)
+      cl.forced_split_axes.push_back(i);
+    return cl;
+  };
+  sequant::eval::LegalitySchedule legality;
+  legality.cells.push_back(
+      make_legality(1000, sequant::eval::LoopRole::LoopCarried));
+  legality.cells.push_back(
+      make_legality(1001, sequant::eval::LoopRole::LoopLocal));
+  legality.cells.push_back(
+      make_legality(1002, sequant::eval::LoopRole::LoopLocal));
+  legality.cells.push_back(
+      make_legality(1003, sequant::eval::LoopRole::LoopLocal));
+  legality.cells.push_back(
+      make_legality(1004, sequant::eval::LoopRole::LoopLocal));
+  legality.cells.push_back(
+      make_legality(1005, sequant::eval::LoopRole::LoopCarried));
+
+  auto const dem = sequant::eval::forced_split_demotions(rich, legality);
+  auto const flagged = [&](std::size_t hash) {
+    return std::any_of(dem.begin(), dem.end(), [&](auto const& p) {
+      return p.first == hash && p.second == L"i";
+    });
+  };
+
+  CHECK(flagged(1001));        // Vboth: producer + consumer reader
+  CHECK(flagged(1002));        // Vsole: SOLE consumer is consumer-pass
+  CHECK_FALSE(flagged(1003));  // Vprod: only a producer-side consumer
+  CHECK_FALSE(flagged(1004));  // Pu: no consumers at all
+  CHECK_FALSE(flagged(1000));  // Lc: carried, not a LoopLocal candidate
+  CHECK_FALSE(flagged(1005));  // Wc: carried / in consumer_pass
+  CHECK(dem.size() == 2);
+}
