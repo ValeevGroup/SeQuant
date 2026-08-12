@@ -77,90 +77,6 @@ ExprPtr &Expr::back() { return at(size() - 1); }
 
 const ExprPtr &Expr::back() const { return at(size() - 1); }
 
-ExprPtr ExprPtr::clone() const & {
-  if (!*this) return {};
-  return ExprPtr(as_shared_ptr()->clone());
-}
-
-ExprPtr ExprPtr::clone() && noexcept { return std::move(*this); }
-
-ExprPtr::base_type &ExprPtr::as_shared_ptr() & {
-  return static_cast<base_type &>(*this);
-}
-const ExprPtr::base_type &ExprPtr::as_shared_ptr() const & {
-  return static_cast<const base_type &>(*this);
-}
-ExprPtr::base_type &&ExprPtr::as_shared_ptr() && {
-  return static_cast<base_type &&>(*this);
-}
-
-Expr &ExprPtr::operator*() & {
-  SEQUANT_ASSERT(this->operator bool());
-  return *(this->get());
-}
-
-const Expr &ExprPtr::operator*() const & {
-  SEQUANT_ASSERT(this->operator bool());
-  return *(this->get());
-}
-
-Expr &&ExprPtr::operator*() && {
-  SEQUANT_ASSERT(this->operator bool());
-  return std::move(*(this->get()));
-}
-
-ExprPtr &ExprPtr::operator+=(const ExprPtr &other) {
-  if (!other) return *this;
-
-  if (!*this) {
-    *this = other.clone();
-  } else if (as_shared_ptr()->is<Sum>()) {
-    as_shared_ptr()->operator+=(*other);
-  } else if (as_shared_ptr()->is<Constant>() && other->is<Constant>()) {
-    *this = ex<Constant>(this->as<Constant>().value() +
-                         other->as<Constant>().value());
-  } else {
-    *this = ex<Sum>(ExprPtrList{*this, other});
-  }
-  return *this;
-}
-
-ExprPtr &ExprPtr::operator-=(const ExprPtr &other) {
-  if (!other) return *this;
-
-  if (!*this) {
-    *this = ex<Constant>(-1) * other.clone();
-  } else if (as_shared_ptr()->is<Sum>()) {
-    as_shared_ptr()->operator-=(*other);
-  } else if (as_shared_ptr()->is<Constant>() && other->is<Constant>()) {
-    *this = ex<Constant>(this->as<Constant>().value() -
-                         other->as<Constant>().value());
-  } else {
-    *this = ex<Sum>(ExprPtrList{*this, ex<Product>(-1, ExprPtrList{other})});
-  }
-  return *this;
-}
-
-ExprPtr &ExprPtr::operator*=(const ExprPtr &other) {
-  if (!other) return *this;
-
-  if (!*this) {
-    *this = other.clone();
-  } else if (as_shared_ptr()->is<Product>()) {
-    as_shared_ptr()->operator*=(*other);
-  } else if (as_shared_ptr()->is<Constant>() && other->is<Constant>()) {
-    *this = ex<Constant>(this->as<Constant>().value() *
-                         other->as<Constant>().value());
-  } else {
-    *this = ex<Product>(ExprPtrList{*this, other});
-  }
-  return *this;
-}
-
-std::size_t ExprPtr::size() const { return this->get()->size(); }
-
-std::wstring ExprPtr::to_latex() const { return as_shared_ptr()->to_latex(); }
-
 Exception Expr::not_implemented(const char *fn) const {
   std::ostringstream oss;
   oss << "Expr::" << fn
@@ -182,12 +98,6 @@ Expr &Expr::operator^=(const Expr &) { throw not_implemented("operator^="); }
 Expr &Expr::operator+=(const Expr &) { throw not_implemented("operator+="); }
 
 Expr &Expr::operator-=(const Expr &) { throw not_implemented("operator-="); }
-
-ExprPtr adjoint(const ExprPtr &expr) {
-  auto result = expr->clone();
-  result->adjoint();
-  return result;
-}
 
 void Constant::adjoint() {
   value_ = conj(value_);
