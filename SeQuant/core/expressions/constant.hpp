@@ -78,11 +78,11 @@ class Constant : public Expr {
   /// @brief adjoint of a Constant is its complex conjugate
   virtual void adjoint() override;
 
-  Expr &operator*=(const Expr &that) override;
+  Constant &operator*=(const Expr &that);
 
-  virtual Expr &operator+=(const Expr &that) override;
+  Constant &operator+=(const Expr &that);
 
-  virtual Expr &operator-=(const Expr &that) override;
+  Constant &operator-=(const Expr &that);
 
   /// @param[in] v a scalar
   /// @return true if this is zero

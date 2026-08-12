@@ -330,38 +330,6 @@ class Expr : public std::enable_shared_from_this<Expr> {
     return boost::core::demangle(typeid(*this).name());
   }
 
-  /** @name in-place arithmetic operators
-   *  Virtual in-place arithmetic operators to be overridden in expressions for
-   * which these make sense.
-   */
-  ///@{
-
-  /// @brief in-place multiply @c *this by @c that
-  /// @return reference to @c *this
-  /// @throw Exception if not implemented for this class, or cannot be
-  /// implemented for the particular @c that
-  virtual Expr &operator*=(const Expr &that);
-
-  /// @brief in-place non-commutatively-multiply @c *this by @c that
-  /// @return reference to @c *this
-  /// @throw Exception if not implemented for this class, or cannot be
-  /// implemented for the particular @c that
-  virtual Expr &operator^=(const Expr &that);
-
-  /// @brief in-place add @c that to @c *this
-  /// @return reference to @c *this
-  /// @throw Exception if not implemented for this class, or cannot be
-  /// implemented for the particular @c that
-  virtual Expr &operator+=(const Expr &that);
-
-  /// @brief in-place subtract @c that from @c *this
-  /// @return reference to @c *this
-  /// @throw Exception if not implemented for this class, or cannot be
-  /// implemented for the particular @c that
-  virtual Expr &operator-=(const Expr &that);
-
-  ///@}
-
   ExprIterator begin();
   ExprIterator end();
   ConstExprIterator begin() const;

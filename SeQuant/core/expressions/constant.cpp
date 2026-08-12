@@ -21,7 +21,7 @@ void Constant::adjoint() {
   reset_hash_value();
 }
 
-Expr &Constant::operator*=(const Expr &that) {
+Constant &Constant::operator*=(const Expr &that) {
   if (that.is<Constant>()) {
     value_ *= that.as<Constant>().value();
   } else {
@@ -30,7 +30,7 @@ Expr &Constant::operator*=(const Expr &that) {
   return *this;
 }
 
-Expr &Constant::operator+=(const Expr &that) {
+Constant &Constant::operator+=(const Expr &that) {
   if (that.is<Constant>()) {
     value_ += that.as<Constant>().value();
   } else {
@@ -39,7 +39,7 @@ Expr &Constant::operator+=(const Expr &that) {
   return *this;
 }
 
-Expr &Constant::operator-=(const Expr &that) {
+Constant &Constant::operator-=(const Expr &that) {
   if (that.is<Constant>()) {
     value_ -= that.as<Constant>().value();
   } else {

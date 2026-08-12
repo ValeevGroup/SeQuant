@@ -193,7 +193,7 @@ class Power : public Expr {
   ///      and the effective conjugation parities align. For a Constant base
   ///      only the fully unconjugated case combines.
   /// @throw Exception if @p that is not combinable.
-  Expr& operator*=(const Expr& that) override {
+  Power& operator*=(const Expr& that) {
     // b^e1 *= b^e2  ->  b^(e1+e2)
     if (that.is<Power>()) {
       const auto& other = that.as<Power>();

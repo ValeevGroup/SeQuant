@@ -105,7 +105,7 @@ class Sum : public Expr {
         auto summand_constant = summand.as_shared_ptr<Constant>();
         if (constant_summand_idx_) {  // add up to the existing constant ...
           SEQUANT_ASSERT(summands_.at(*constant_summand_idx_)->is<Constant>());
-          *summands_[*constant_summand_idx_] += *summand_constant;
+          summands_[*constant_summand_idx_].as<Constant>() += *summand_constant;
           do_erase = true;
         } else {  // or memorize the position of the constant
           constant_summand_idx_ = pos;
@@ -134,7 +134,7 @@ class Sum : public Expr {
           if (constant_summand_idx_) {
             SEQUANT_ASSERT(
                 summands_.at(*constant_summand_idx_)->is<Constant>());
-            *(summands_[*constant_summand_idx_]) += *summand;
+            summands_[*constant_summand_idx_].as<Constant>() += *summand;
           } else {
             summands_.push_back(summand->clone());
             constant_summand_idx_ = summands_.size() - 1;
@@ -162,7 +162,8 @@ class Sum : public Expr {
           if (constant_summand_idx_) {  // add up to the existing constant ...
             SEQUANT_ASSERT(
                 summands_.at(*constant_summand_idx_)->is<Constant>());
-            *summands_[*constant_summand_idx_] += *summand_constant;
+            summands_[*constant_summand_idx_].as<Constant>() +=
+                *summand_constant;
           } else {  // or include the nonzero constant and update
             // constant_summand_idx_
             summands_.insert(summands_.begin(), summand->clone());
@@ -261,12 +262,12 @@ class Sum : public Expr {
   /// @brief adjoint of a Sum is a sum of adjoints of its factors
   virtual void adjoint() override;
 
-  virtual Expr &operator+=(const Expr &that) override {
+  Sum &operator+=(const Expr &that) {
     this->append(const_cast<Expr &>(that).shared_from_this());
     return *this;
   }
 
-  virtual Expr &operator-=(const Expr &that) override {
+  Sum &operator-=(const Expr &that) {
     if (that.is<Constant>())
       this->append(ex<Constant>(-that.as<Constant>().value()));
     else

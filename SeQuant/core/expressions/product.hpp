@@ -362,7 +362,7 @@ class Product : public Expr {
     return result;
   }
 
-  virtual Expr &operator*=(const Expr &that) override {
+  virtual Product &operator*=(const Expr &that) {
     if (!that.is<Constant>()) {
       this->append(1, const_cast<Expr &>(that).shared_from_this());
     } else {
