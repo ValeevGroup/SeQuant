@@ -2408,6 +2408,150 @@ TEST_CASE(
   CHECK(rel < 1e-10);
 }
 
+// SP3 Task 3 of the ordered-scope batched-eval design (the sequel to Task 2
+// above -- see ordered_schedule.hpp's own doc comments for the SP2
+// OrderedSchedule IR and ordered_executor.hpp's
+// detail::run_ordered_contracted_block for the executor this test drives):
+// EQUIVALENCE for a realized External loop block (AccumulateScatter,
+// loop-carried output). Mirrors the Task-2 aux-only test's harness almost
+// exactly (same shared-composite structure, same SP1/SP2/SP3 pipeline), but
+// with the batch axis a SPECTATOR that survives into each root's own result
+// (occ i_1) instead of one both roots reduce away: F1/F2 = S ⊗ T_k, an OUTER
+// PRODUCT between the i_1-carrying shared composite S and an all-virtual
+// factor T_k that shares no index with S at all, so i_1 is never contracted
+// anywhere -- it is free on F1/F2's own result, which is exactly what makes
+// build_ordered_schedule classify it LoopCarried (escaping as
+// AccumulateScatter) rather than Reduction (AccumulateSum, Task 2's shape).
+// Every i-space index anywhere in the forest is the SAME literal i_1 (every
+// other free index is virtual, a different space entirely, deliberately kept
+// out of the "i" axis TYPE's bucket) so the single-physical-label
+// simplification run_ordered_contracted_block's own \note documents holds
+// throughout -- see that \note for why a forest naming the occ TYPE under
+// more than one physical Index in one block is out of scope here. Real TA
+// data at a small tractable size (the DryRun backend is zero-data and cannot
+// witness a dropped/double-written scatter slice).
+TEST_CASE(
+    "evaluate_ordered_schedule matches forest descent over one External "
+    "loop block",
+    "[eval][ordered-executor]") {
+  using sequant::evaluate;
+  using sequant::eval::analyze_legality;
+  using sequant::eval::build_ordered_schedule;
+  using sequant::eval::build_value_node_map;
+  using sequant::eval::compute_dag_boulevard;
+  using sequant::eval::evaluate_ordered_schedule;
+  using sequant::eval::OrderedSchedule;
+  using sequant::eval::OutputKind;
+  using sequant::eval::RichSchedule;
+  using sequant::eval::ScopeBlock;
+  using TA::TArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+
+  auto& world = TA::get_default_world();
+  // occ multi-tiled (nocc 8 in tiles of 4 -> 2 tiles) so i_1 batches into
+  // more than one disjoint scatter slice.
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 8, 6, 12};
+  yield_.set_max_tile(4);
+
+  auto const occ =
+      sequant::get_default_context().index_space_registry()->retrieve(L"i");
+
+  // S = g*h carries i_1 (free, LoopLocal under the loop F1/F2 realize) and a
+  // virtual spectator a_3 (contracts a_2). T1/T2 are ALL-virtual (no occ
+  // index anywhere), so F_k = S ⊗ T_k is an OUTER PRODUCT: i_1 shares nothing
+  // to contract against and survives whole into F_k's own result --
+  // LoopCarried, not Reduction.
+  //   S  = g{a_2;i_1} * h{a_3;a_2}
+  //   T1 = p{a_4;a_5} * q{a_6;a_4}
+  //   T2 = r{a_4;a_5} * w{a_6;a_4}
+  //   F1 = S * T1, F2 = S * T2  ->  results over {i_1, a_3, a_5, a_6}
+  auto const t1 = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{a_2;i_1} * h{a_3;a_2}) * (p{a_4;a_5} * q{a_6;a_4})");
+  auto const t2 = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{a_2;i_1} * h{a_3;a_2}) * (r{a_4;a_5} * w{a_6;a_4})");
+  std::string const target = "i_1,a_3,a_5,a_6";
+  std::vector<node_t> forest{eval_node(t1), eval_node(t2)};
+
+  // Reference: unbatched forest descent (ground truth), taken BEFORE
+  // batched_here() is stamped below -- forest descent ignores it regardless
+  // (no custom evaluator installed), but this keeps the reference call
+  // manifestly independent of the annotation.
+  auto const ref = evaluate(forest, target, yield_)->get<TArrayD>();
+
+  // SP1's compute_dag_boulevard (peak_profile.hpp) builds each occurrence's
+  // enclosing-loop context (OccurrenceRec::ectx) off batched_here() during
+  // its descent (see the Task-2 test's own comment for the full mechanics).
+  // Both roots themselves realize the i_1 loop (mirroring the Task-2 test's
+  // own precedent of stamping batched_here directly on each forest root):
+  // descendants below them (S, g, h) see an enclosing i_1 loop and lock-step
+  // to it (LoopLocal); the roots' OWN occurrences have no enclosing loop at
+  // all (nothing wraps a forest root) and still carry i_1 on their own
+  // result, which is exactly the LoopCarried (AccumulateScatter) shape this
+  // test exists to exercise.
+  sequant::Index const i1{L"i_1"};
+  for (auto& nd : forest)
+    nd->set_batched_here({{i1, sequant::BatchModeType::External}});
+
+  // SP1/SP2: i_1 (the occ space) is the only batchable index, marked
+  // EXTERNAL (spectator) rather than contracted -- the natural fixture for
+  // an External-only Task 3 block.
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](sequant::Index const&) {
+    return false;
+  };
+  policy.is_batchable_external_index = [occ](sequant::Index const& ix) {
+    return ix.space() == occ;
+  };
+
+  sequant::eval::dryrun::SizeRegime const regime;
+  sequant::eval::dryrun::CostModel const cm{regime};
+  auto const block_of = [](sequant::Index const&) -> std::size_t { return 4; };
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {L"i"});
+
+  // Precondition this test exists to exercise: a realized External loop
+  // block at the root, with an AccumulateScatter output for EACH root (F1
+  // and F2 each escape the loop on their own).
+  ScopeBlock const* i_block = nullptr;
+  for (auto const& step : ordered.root.steps)
+    if (auto const* b = std::get_if<ScopeBlock>(&step.value)) i_block = b;
+  REQUIRE(i_block != nullptr);
+  REQUIRE(i_block->kind == sequant::BatchModeType::External);
+  REQUIRE(i_block->outputs.size() == 2);
+  for (auto const& [vid, kind] : i_block->outputs) {
+    (void)vid;
+    REQUIRE(kind == OutputKind::AccumulateScatter);
+  }
+
+  // value_id -> node bridge: the i_1 block must home the shared composite S
+  // as a plain BuildStep (LoopLocal), exactly like the Task-2 test's
+  // n_build_ids > 0 check.
+  auto const vmap = build_value_node_map(forest);
+  std::size_t n_build_ids = 0;
+  for (auto const& step : i_block->steps)
+    if (std::holds_alternative<sequant::eval::BuildStep>(step.value))
+      ++n_build_ids;
+  REQUIRE(n_build_ids > 0);
+
+  // evaluate_ordered_schedule over the single i_1 loop block.
+  auto cache = sequant::CacheManager<node_t>::empty();
+  std::function<std::size_t(sequant::Index const&)> const target_batch =
+      [](sequant::Index const&) -> std::size_t { return 4; };
+  auto const got = evaluate_ordered_schedule(forest, ordered, rich, target,
+                                             yield_, cache, target_batch)
+                       ->get<TArrayD>();
+
+  // Agreement to within FP noise (the batched scatter reassembles i_1 from
+  // disjoint slices in a different order than the unbatched reference).
+  TArrayD diff;
+  diff(target) = got(target) - ref(target);
+  double const rel = TA::norm2(diff) / TA::norm2(ref);
+  INFO("relative L2 diff = " << rel);
+  CHECK(rel < 1e-10);
+}
+
 // Task 4 of the whole-scope batched DAG execution design
 // (doc/dev/specs/2026-08-10-whole-scope-batched-dag-execution-design.md):
 // NESTED-scope EQUIVALENCE. A two-root forest with a NESTED scope tree --

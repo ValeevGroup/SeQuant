@@ -117,8 +117,8 @@ template <typename node_t>
 }
 
 ///
-/// \brief SP3 Task 2: realize one Contracted \c ScopeBlock's batch loop
-/// against \p parent_cache -- the ordered-schedule counterpart of \c
+/// \brief SP3 Tasks 2-3: realize one \c ScopeBlock's batch loop against
+/// \p parent_cache -- the ordered-schedule counterpart of \c
 /// scope_executor.hpp's \c detail::walk_scope, simplified to the shape the
 /// \c OrderedSchedule IR already gives: \p block's own \c steps are a
 /// topologically ORDERED interleaving of \c BuildStep's (values homed AT
@@ -126,47 +126,89 @@ template <typename node_t>
 /// ordered_schedule.hpp's \c OutputKind doc comment: built fresh every batch
 /// on the per-batch scratch and simply dropped by the next \c reset(), never
 /// stored anywhere) and nested child \c ScopeBlock steps (realized
-/// recursively, in full, once per iteration of THIS loop -- an outer
-/// Contracted loop with an inner child re-runs the WHOLE inner loop every
-/// outer batch, exactly as \c walk_scope's nested case does); \p block's own
-/// \c outputs list the values that escape it on close (SP3 Task 3's
-/// AccumulateScatter aside, only \c AccumulateSum here): summed via \c
-/// add_inplace across every batch, then stored at \p parent_cache -- the
-/// scope one level OUT of this loop, i.e. where the \c ScopeBlock step
-/// itself sits in ITS OWN enclosing block's \c steps -- so a later step at
-/// that level reads it whole via the ordinary Checked cache probe, and
-/// mirrored into \p value_results (keyed by the SAME global \c value_id
-/// space \c evaluate_ordered_schedule's root walk uses) so the final
-/// per-root combine can resolve a forest root produced INSIDE a loop block
-/// exactly as it resolves one produced by a plain root \c BuildStep.
+/// recursively, in full, once per iteration of THIS loop -- an outer loop
+/// with an inner child re-runs the WHOLE inner loop every outer batch,
+/// exactly as \c walk_scope's nested case does); \p block's own \c outputs
+/// list the values that escape it on close, either \c AccumulateSum
+/// (reduction: summed via \c add_inplace across every batch -- Task 2) or \c
+/// AccumulateScatter (loop-carried: written into a disjoint slice of a
+/// pre-sized destination every batch -- Task 3, mirroring \c walk_scope's
+/// External branch's \c pre_sized_zeros_over_mode / \c write_into_slice
+/// pair). A block may mix both kinds of output freely (and \c BuildStep
+/// Transients alongside them): the batch loop is the SAME either way -- only
+/// how each output's per-batch \c part is folded into its own running result
+/// differs by its \c OutputKind. Every output, once closed, is stored at \p
+/// parent_cache -- the scope one level OUT of this loop, i.e. where the \c
+/// ScopeBlock step itself sits in ITS OWN enclosing block's \c steps -- so a
+/// later step at that level reads it whole via the ordinary Checked cache
+/// probe, and mirrored into \p value_results (keyed by the SAME global \c
+/// value_id space \c evaluate_ordered_schedule's root walk uses) so the
+/// final per-root combine can resolve a forest root produced INSIDE a loop
+/// block exactly as it resolves one produced by a plain root \c BuildStep.
 ///
 /// \details Per batch: \c bs.cache.reset() (drops every Transient/LoopLocal
 /// value from the PRIOR batch), the batch context is extended by this
 /// block's own axis over the batch's element range, then \p block's own \c
 /// steps run in schedule order (a \c BuildStep evaluated on the scratch; a
 /// nested \c ScopeBlock realized recursively, its own full loop nested
-/// inside this single batch), and finally each \c AccumulateSum output is
-/// (re)built on the SAME scratch (its operands -- this block's own \c
-/// BuildStep values and/or a nested block's already-summed output, both
-/// alive on \c bs.cache for this batch -- are already resolved) and summed
-/// into the running accumulator. \c make_batched_scratch's shared-scratch
-/// CSE dedups any sub-intermediate repeated across this block's own
-/// \c BuildStep/\c outputs production sites (co-evaluated as one \p members
-/// group, mirroring \c walk_scope's single-aux-loop \c group), the same
-/// mechanism \c walk_scope's Task-3 leaf case relies on.
+/// inside this single batch), and finally each output is (re)built on the
+/// SAME scratch (its operands -- this block's own \c BuildStep values and/or
+/// a nested block's already-closed output, both alive on \c bs.cache for
+/// this batch -- are already resolved): an \c AccumulateSum output is summed
+/// into its running accumulator; an \c AccumulateScatter output is \c
+/// write_into_slice'd into its running destination (built once, on the FIRST
+/// nonempty batch, via \c pre_sized_zeros_over_mode against the SAME carrier
+/// leaf \c mode_batches itself was sourced from -- sound because of the \c
+/// \note below: every value in this block, escape output included, shares
+/// ONE physical axis identity, hence one tiling). \c make_batched_scratch's
+/// shared-scratch CSE dedups any sub-intermediate repeated across this
+/// block's own \c BuildStep/\c outputs production sites (co-evaluated as one
+/// \p members group, mirroring \c walk_scope's single-aux-loop \c group),
+/// the same mechanism \c walk_scope's Task-3 leaf case relies on -- and,
+/// because that CSE and the batch partition are shared across BOTH output
+/// kinds here (unlike \c walk_scope's External branch, which cannot share a
+/// scratch or a batch partition across members that may bind independently-
+/// labeled physical axes -- see the \note below for why \c OrderedSchedule's
+/// members can), a mixed-kind block realizes its \c AccumulateSum and \c
+/// AccumulateScatter outputs in the SAME single pass over \c batches, not
+/// two.
+///
+/// \par Forced-split producer/consumer passes (SP2 Task 4)
+/// A forced split realizes its axis as TWO sibling \c ScopeBlock \c Step's
+/// at the SAME nesting level (ordinal 0 the producer, ordinal 1 the
+/// consumer) rather than one nested inside the other -- see \c
+/// build_ordered_schedule's step 2b. No special-casing is needed here for
+/// that shape: \c evaluate_ordered_schedule's root walk (and this function's
+/// own \c steps loop, for a split at a non-root level) already runs sibling
+/// \c Step's in \p block.steps SEQUENTIALLY, and \c
+/// ordered_schedule_topo_sort_steps already guarantees the consumer pass
+/// sorts AFTER the producer pass (the consumer's \c requires_ names the
+/// producer's escaped -- now \c AccumulateScatter'd to FULL -- outputs, a
+/// real dependency edge). Since each pass, on closing, \c stores its outputs
+/// at THIS level's shared \p parent_cache (or \c cache at the root) before
+/// the next sibling step begins, the consumer pass's own inner \c BuildStep
+/// probes find the producer's completed value there via the ordinary
+/// Checked cache lookup -- reading it WHOLE, exactly as design intends. This
+/// is the identical mechanism Task 2 already relies on for a plain nested
+/// child block reading an enclosing block's homed value; a forced split
+/// changes only which axis realizes two blocks instead of one, not how
+/// cross-step visibility works.
 ///
 /// \note Every value inside \p block is keyed off \p block's own \c axis (a
 /// single canonical \c Index, not a per-value physical remap) -- unlike \c
-/// walk_scope's \c member_contracted_axis, which maps the schedule's
-/// canonical mode to EACH member's own physical label because \c
-/// ScopeSchedule's members are independently-labeled forest ROOTS. \c
-/// OrderedSchedule's own bucketing (\c build_ordered_schedule's step 2)
-/// instead groups by axis TYPE across the WHOLE forest, so a schedule built
-/// from a forest whose cells name that TYPE under more than one physical
-/// \c Index would need the same remap \c walk_scope applies; no fixture
-/// exercises that yet (a single-physical-label forest, e.g. every operand
-/// naming the same literal \c x_1), so this is not handled here -- a later
-/// task's job if it becomes live.
+/// walk_scope's \c member_contracted_axis / \c member_external_axis, which
+/// map the schedule's canonical mode to EACH member's own physical label
+/// because \c ScopeSchedule's members are independently-labeled forest
+/// ROOTS. \c OrderedSchedule's own bucketing (\c build_ordered_schedule's
+/// step 2) instead groups by axis TYPE across the WHOLE forest, so a
+/// schedule built from a forest whose cells name that TYPE under more than
+/// one physical \c Index would need the same remap \c walk_scope applies;
+/// \c ordered_axis_label_mismatch defensively asserts against that case (see
+/// its own doc comment) rather than silently mis-evaluating -- no fixture
+/// exercises the multi-label case yet (every current fixture, including
+/// External/\c AccumulateScatter ones, names its batch axis under a single
+/// literal \c Index throughout), so the remap itself is not implemented
+/// here -- a later task's job if it becomes live.
 ///
 template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
 void run_ordered_contracted_block(
@@ -181,11 +223,6 @@ void run_ordered_contracted_block(
   using BatchContext = typename Cache::BatchContext;
   using member_t = std::pair<node_t const*, Index>;
 
-  SEQUANT_ASSERT(
-      block.kind == BatchModeType::Contracted &&
-      "evaluate_ordered_schedule: an External loop block (AccumulateScatter "
-      "on close) is SP3 Task 3's job -- Task 2 handles Contracted only.");
-
   auto const resolve = [&](std::size_t vid) -> node_t const& {
     auto const hash = rich.cells[vid].hash;
     auto const it = vmap.find(hash);
@@ -196,13 +233,14 @@ void run_ordered_contracted_block(
   };
 
   // members co-evaluated within one batch pass: this block's own direct
-  // BuildStep values plus its own AccumulateSum output values -- one shared
-  // scratch, so a sub-intermediate repeated between/within them is built
-  // once per batch (mirrors walk_scope's Task-3 single-aux-loop `group`).
-  // Each member is defensively checked against the single-physical-label
-  // simplification this function's own doc comment (\note) documents: see
-  // ordered_axis_label_mismatch's doc comment for why a silent skip here
-  // would otherwise be a silently N-fold-inflated reduction, not a crash.
+  // BuildStep values plus its own escape output values (AccumulateSum AND
+  // AccumulateScatter alike -- see this function's own doc comment for why
+  // they share one scratch/one batch partition here, unlike walk_scope's
+  // External branch). Each member is defensively checked against the
+  // single-physical-label simplification this function's own doc comment
+  // (\note) documents: see ordered_axis_label_mismatch's doc comment for why
+  // a silent skip here would otherwise be a silently N-fold-inflated
+  // reduction, not a crash.
   std::vector<member_t> members;
   for (Step const& step : block.steps)
     if (auto const* build = std::get_if<BuildStep>(&step.value)) {
@@ -213,16 +251,31 @@ void run_ordered_contracted_block(
           "block not yet supported");
       members.push_back({&nd, block.axis});
     }
-  for (auto const& [vid, kind] : block.outputs) {
-    SEQUANT_ASSERT(kind == OutputKind::AccumulateSum &&
-                   "evaluate_ordered_schedule: an AccumulateScatter output "
-                   "is SP3 Task 3's job -- Task 2 handles AccumulateSum "
-                   "(reduction) only.");
+
+  // dm[k]: for an AccumulateScatter output, the position of block.axis on
+  // ITS OWN result (computed once here, outside the batch loop, since a
+  // value's structural mode order is the same across every batch) -- the
+  // scatter mode walk_scope's External branch resolves per member via
+  // index_position(*m, axis). Left at nullopt (and unused) for an
+  // AccumulateSum output, which reduces block.axis away at its own node and
+  // so never carries it on its own result.
+  container::vector<std::optional<std::size_t>> dm(block.outputs.size());
+  for (std::size_t k = 0; k != block.outputs.size(); ++k) {
+    auto const vid = block.outputs[k].first;
+    auto const kind = block.outputs[k].second;
+    SEQUANT_ASSERT(kind == OutputKind::AccumulateSum ||
+                   kind == OutputKind::AccumulateScatter);
     node_t const& nd = resolve(vid);
     SEQUANT_ASSERT(!ordered_axis_label_mismatch(nd, block.axis) &&
                    "evaluate_ordered_schedule: multi-physical-label axis in "
                    "one block not yet supported");
     members.push_back({&nd, block.axis});
+    if (kind == OutputKind::AccumulateScatter) {
+      dm[k] = index_position(nd, block.axis);
+      SEQUANT_ASSERT(dm[k] &&
+                     "evaluate_ordered_schedule: an AccumulateScatter output "
+                     "does not carry its own escape axis on its result");
+    }
   }
 
   auto bs = sequant::detail::make_batched_scratch(members, parent_cache);
@@ -234,10 +287,12 @@ void run_ordered_contracted_block(
   SEQUANT_ASSERT(lf &&
                  "evaluate_ordered_schedule: no leaf below this loop block "
                  "carries its own axis -- cannot source mode_batches");
+  ResultPtr const carrier_full = leaf_evaluator(lf->first);
   auto const batches =
-      leaf_evaluator(lf->first)->mode_batches(lf->second, target(block.axis));
+      carrier_full->mode_batches(lf->second, target(block.axis));
 
   container::vector<ResultPtr> acc(block.outputs.size());
+  container::vector<ResultPtr> dest(block.outputs.size());
   for (auto const& [e_lo, e_hi] : batches) {
     if (e_lo == e_hi) continue;
     bs.cache.reset();
@@ -259,50 +314,56 @@ void run_ordered_contracted_block(
 
     for (std::size_t k = 0; k != block.outputs.size(); ++k) {
       auto const vid = block.outputs[k].first;
+      auto const kind = block.outputs[k].second;
       ResultPtr part =
           evaluate_impl<EvalTrace>(resolve(vid), leaf_evaluator, bs.cache);
-      if (!acc[k])
-        acc[k] = std::move(part);
-      else
-        acc[k]->add_inplace(*part);
+      if (kind == OutputKind::AccumulateSum) {
+        if (!acc[k])
+          acc[k] = std::move(part);
+        else
+          acc[k]->add_inplace(*part);
+      } else {
+        if (!dest[k])
+          dest[k] = part->pre_sized_zeros_over_mode(*dm[k], *carrier_full,
+                                                    lf->second);
+        dest[k]->write_into_slice(*part, *dm[k], e_lo, e_hi);
+      }
     }
   }
 
   for (std::size_t k = 0; k != block.outputs.size(); ++k) {
-    SEQUANT_ASSERT(acc[k] &&
-                   "evaluate_ordered_schedule: a loop block realized zero "
-                   "batches for an AccumulateSum output");
     auto const vid = block.outputs[k].first;
-    value_results[vid] = acc[k];
-    (void)parent_cache.store(resolve(vid), std::move(acc[k]));
+    auto const kind = block.outputs[k].second;
+    ResultPtr& out = (kind == OutputKind::AccumulateSum) ? acc[k] : dest[k];
+    SEQUANT_ASSERT(out &&
+                   "evaluate_ordered_schedule: a loop block realized zero "
+                   "batches for an escape output");
+    value_results[vid] = out;
+    (void)parent_cache.store(resolve(vid), std::move(out));
   }
 }
 
 }  // namespace detail
 
 ///
-/// \brief SP3 Tasks 1-2 of the ordered-scope batched-eval design: the
+/// \brief SP3 Tasks 1-3 of the ordered-scope batched-eval design: the
 /// ORDERED executor. Walks \c ordered.root.steps in sequence, building one
 /// value per root-level \c BuildStep via \c evaluate_impl (which cache-probes
 /// every operand at its own \c Stage::Enter, so a value already \c
 /// cache.store'd by an earlier step short-circuits its own re-descent -- see
-/// \c evaluate_impl's doc comment) and one value per root-level Contracted
-/// \c ScopeBlock via \c detail::run_ordered_contracted_block (Task 2: a
-/// realized batch loop, its own \c BuildStep's/nested child blocks run per
-/// batch on a scratch cache, its \c AccumulateSum outputs summed across
-/// batches and stored at the level the block itself sits in), then combines
-/// the forest roots' results into the final \c ResultPtr exactly as \c
+/// \c evaluate_impl's doc comment) and one value per root-level \c ScopeBlock
+/// (Contracted or External alike) via \c detail::run_ordered_contracted_block
+/// (Task 2: a realized batch loop, its own \c BuildStep's/nested child blocks
+/// run per batch on a scratch cache, its \c AccumulateSum outputs summed
+/// across batches; Task 3: its \c AccumulateScatter outputs written into a
+/// disjoint slice of a pre-sized destination each batch -- both kinds stored
+/// at the level the block itself sits in on close, including a forced
+/// split's two ordinal-ordered producer/consumer sibling blocks, run in
+/// schedule order like any other pair of steps), then combines the forest
+/// roots' results into the final \c ResultPtr exactly as \c
 /// evaluate_whole_scope's shared root-combine loop does (permute-to-\p
 /// layout + cross-root \c add_inplace, with the identical Term/Permute/
 /// SumInplace trace bookkeeping).
-///
-/// \details A root-level External \c ScopeBlock (\c AccumulateScatter on
-/// close) is SP3 Task 3's job -- \c detail::run_ordered_contracted_block
-/// trips a loud \c SEQUANT_ASSERT on \c BatchModeType::External or an
-/// \c AccumulateScatter output rather than silently mis-evaluating; no
-/// caller of the Task 1/2 gating flag exercises External batching yet (see
-/// \c BatchPolicy::ordered_schedule_execution), so this is an inert
-/// tripwire today, not a live restriction.
 ///
 /// \param forest The forest whose per-root results are evaluated and summed;
 ///        same requirement as \c evaluate_whole_scope's \p forest.
@@ -354,14 +415,13 @@ ResultPtr evaluate_ordered_schedule(
   // rather than re-resolving it through the cache.
   container::vector<ResultPtr> value_results(ordered.num_values);
 
-  // -------- Tasks 1-2: walk the root block's own steps, in order. --------
+  // -------- Tasks 1-3: walk the root block's own steps, in order. --------
   // A BuildStep is built directly (Task 1); a child ScopeBlock (a realized
-  // batch loop) is run via detail::run_ordered_contracted_block (Task 2),
-  // which mirrors its own AccumulateSum outputs into value_results so the
-  // root-combine below resolves a forest root produced inside a loop block
-  // exactly like one produced by a plain root BuildStep. An External child
-  // block (AccumulateScatter) is SP3 Task 3's job; see the function doc
-  // comment for why that is a loud tripwire, not a silent gap, today.
+  // batch loop, Contracted or External alike) is run via
+  // detail::run_ordered_contracted_block (Task 2 AccumulateSum, Task 3
+  // AccumulateScatter), which mirrors its own outputs into value_results so
+  // the root-combine below resolves a forest root produced inside a loop
+  // block exactly like one produced by a plain root BuildStep.
   typename CacheManager<N, FHC>::BatchContext const root_ectx;
   for (Step const& step : ordered.root.steps) {
     if (auto const* build = std::get_if<BuildStep>(&step.value)) {
