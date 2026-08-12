@@ -61,7 +61,14 @@ struct CellLegality {
   //!< Task 2.
   container::svector<AxisClass> per_axis;
 
-  //!< The shallowest legal home mode-set for this value. Filled in Task 3.
+  //!< The shallowest legal home mode-set for this value: the \c per_axis
+  //!< axes whose role is \c LoopLocal (the axes the value stays sliced on --
+  //!< the value is homed INSIDE these). Every other \c build_site axis --
+  //!< \c Reduction, \c LoopCarried -- is lifted OUT (the value is homed
+  //!< above it), as is any axis absent from \c build_site altogether (the
+  //!< IMPLICIT \c LoopInvariant case: the value never depended on it, so it
+  //!< was trivially hoisted over it). Filled in Task 3 by \c
+  //!< analyze_legality.
   container::svector<Index> home_floor;
 
   //!< Loops that must re-enter (the value cannot be homed above them without
@@ -173,8 +180,9 @@ struct LegalitySchedule {
 ///
 /// \brief Fold a \c RichSchedule into the first real \c LegalitySchedule: one
 /// \c CellLegality per \c ValueCell, with its at-node \c build_site (\c
-/// build_site_of) and \c per_axis classification (\c classify_axis) filled
-/// in. \c home_floor / \c forced_split_axes are left empty (Task 3/4).
+/// build_site_of), \c per_axis classification (\c classify_axis), and \c
+/// home_floor (the \c LoopLocal subset of \c per_axis) filled in. \c
+/// forced_split_axes is left empty (Task 4).
 ///
 /// \details \c ValueCell does not itself retain the forest node its \c hash
 /// resolves to (only \c carried, a copy of the node's \c canon_indices()), so
@@ -233,6 +241,14 @@ template <meta::eval_node_range R>
           classify_axis(vc.carried, contracted_below, axis, vc.occurrences);
       cl.per_axis.push_back(std::move(ac));
     }
+
+    // home_floor: the LoopLocal subset of per_axis -- the axes the value
+    // stays sliced on (homed inside). Every other build-site axis
+    // (Reduction, LoopCarried) is lifted out, as is any axis outside
+    // build_site altogether (the implicit LoopInvariant case).
+    for (AxisClass const& ac : cl.per_axis)
+      if (ac.role == LoopRole::LoopLocal) cl.home_floor.push_back(ac.axis);
+
     cl.build_site = std::move(site);
     out.cells.push_back(std::move(cl));
   }

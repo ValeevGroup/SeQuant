@@ -305,6 +305,14 @@ TEST_CASE(
                          [&](auto const& ac) { return is_K(ac.axis); });
         REQUIRE(ax_it != cl_it->per_axis.end());
         CHECK(ax_it->role == sequant::eval::LoopRole::Reduction);
+
+        // Task 3: I(μ̃,μ̃)'s home_floor must EXCLUDE Κ -- a Reduction axis is
+        // lifted out, never a home-floor member. Cross-check against the
+        // existing meet-residency home (ValueCell::home_modes): both
+        // "homes" should agree that Κ is not in the floor.
+        CHECK_FALSE(carries_type(cl_it->home_floor, is_K));
+        CHECK(carries_type(cl_it->home_floor, is_K) ==
+              carries_type(vc.home_modes, is_K));
         break;
       }
     }
@@ -372,6 +380,14 @@ TEST_CASE(
     CHECK_FALSE(carries_type(cl_it->build_site, is_K));
     CHECK(std::none_of(cl_it->per_axis.begin(), cl_it->per_axis.end(),
                        [&](auto const& ac) { return is_K(ac.axis); }));
+
+    // Task 3: I(i,i;a,a)'s home_floor must EXCLUDE Κ too -- Κ is
+    // LoopInvariant here (absent from build_site altogether, the IMPLICIT
+    // case), so it can never surface in home_floor either. Cross-check
+    // against the meet-residency home (ValueCell::home_modes).
+    CHECK_FALSE(carries_type(cl_it->home_floor, is_K));
+    CHECK(carries_type(cl_it->home_floor, is_K) ==
+          carries_type(cell_it->home_modes, is_K));
   }
 
   // Target 3: a Κ-CARRYING leaf/intermediate used AT the loop variable
@@ -407,6 +423,17 @@ TEST_CASE(
                          [&](auto const& ac) { return is_K(ac.axis); });
         REQUIRE(ax_it != cl_it->per_axis.end());
         CHECK(ax_it->role == sequant::eval::LoopRole::LoopLocal);
+
+        // Task 3: a Κ-local value's home_floor must INCLUDE Κ -- it stays
+        // sliced on (homed inside) the axis it is locked to lockstep with
+        // its enclosing loop. Cross-check against the meet-residency home
+        // (ValueCell::home_modes); INFO records any divergence for the
+        // report rather than forcing agreement.
+        CHECK(carries_type(cl_it->home_floor, is_K));
+        WARN("Κ-local value hash="
+             << vc.hash << " leaf=" << it->second.leaf()
+             << " home_floor has Κ=" << carries_type(cl_it->home_floor, is_K)
+             << " home_modes has Κ=" << carries_type(vc.home_modes, is_K));
       } else if (role == sequant::eval::LoopRole::LoopCarried) {
         found_loop_carried = true;
       }
