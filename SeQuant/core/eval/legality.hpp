@@ -58,7 +58,12 @@ struct CellLegality {
   container::svector<Index> build_site;
 
   //!< One entry per \c build_site axis, classifying its role. Filled in
-  //!< Task 2.
+  //!< Task 2. NOTE for SP2: \c LoopRole::LoopInvariant is NEVER stored here --
+  //!< every \c build_site axis is by construction carried or contracted, so
+  //!< \c classify_axis returns only LoopLocal/Reduction/LoopCarried at these
+  //!< axes. A LoopInvariant axis is the IMPLICIT case (batchable + enclosing
+  //!< but absent from \c build_site); recover it from that absence, not from a
+  //!< \c per_axis entry (see \c home_floor).
   container::svector<AxisClass> per_axis;
 
   //!< The shallowest legal home mode-set for this value: the \c per_axis
@@ -72,7 +77,11 @@ struct CellLegality {
   container::svector<Index> home_floor;
 
   //!< Loops that must re-enter (the value cannot be homed above them without
-  //!< a re-materializing split). Filled in Task 3/4.
+  //!< a re-materializing split). Filled in Task 3/4. NOTE for SP2: entries are
+  //!< per-\c Index-INSTANCE, not per-space-type -- an outer product like
+  //!< \c A{;i_3}*A{;i_4} lists BOTH i_3 and i_4 (both LoopCarried on space i),
+  //!< yet they name a SINGLE occ loop to split. SP2 must group these by
+  //!< \c space().base_key() to recover the axis (loop) to split.
   container::svector<Index> forced_split_axes;
 };
 
@@ -169,6 +178,14 @@ struct LegalitySchedule {
                  // type at this occurrence
     found_enclosing = true;
 
+    // NOTE for SP2: this checks only the FIRST same-type carried slot against
+    // the enclosing loop's variable. When a value carries TWO indices of L's
+    // space (e.g. i_3 lockstep, i_4 free) UNDER a realized L loop, the free
+    // i_4 escapes this check and the value is (unsoundly) called LoopLocal.
+    // SP1's fixtures never realize such a case (the multi-carried outer
+    // product has no enclosing loop, so it falls through to LoopCarried
+    // below); SP2, which realizes occ loops, must compare EVERY same-type
+    // carried slot, not just the first.
     auto const carried_it =
         std::find_if(occ.carried.begin(), occ.carried.end(), same_type);
     if (carried_it == occ.carried.end() || !(*carried_it == ectx_it->first))
@@ -340,6 +357,13 @@ template <meta::eval_node_range R>
   // (demotes at least one LoopLocal axis to LoopCarried), and homes only ever
   // lift, so at most cells.size() lifts are possible: cells.size()+1 rounds is
   // a hard non-termination tripwire, asserted below.
+  //
+  // NOTE for SP2: this cap assumes CELL-granular progress (>= one whole cell
+  // demoted per round). Once \c derive_demotions is grown to demote a single
+  // (cell, axis) pair per round, a cell can be lifted on several axes over
+  // several rounds, so the tight bound becomes Sum_over_cells |per_axis| + 1;
+  // raise \c cap accordingly (or demote all eligible axes of a cell at once)
+  // to keep this a non-termination tripwire rather than a false trip.
   [[maybe_unused]] std::size_t const cap = out.cells.size() + 1;
   for (std::size_t iter = 0;; ++iter) {
     SEQUANT_ASSERT(iter <= cap,
