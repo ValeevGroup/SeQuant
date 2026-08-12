@@ -320,6 +320,8 @@ set(SeQuant_symb_src
         SeQuant/core/expressions/result_expr.hpp
         SeQuant/core/expressions/tensor.cpp
         SeQuant/core/expressions/tensor.hpp
+        SeQuant/core/expressions/variable.cpp
+        SeQuant/core/expressions/variable.hpp
         SeQuant/core/hash.cpp
         SeQuant/core/hash.hpp
         SeQuant/core/hugenholtz.hpp

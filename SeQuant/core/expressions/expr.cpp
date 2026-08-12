@@ -26,7 +26,6 @@
 #include <range/v3/view/reverse.hpp>
 #include <range/v3/view/transform.hpp>
 
-#include <thread>
 #include <vector>
 
 namespace sequant {
@@ -80,27 +79,6 @@ const ExprPtr &Expr::back() const { return at(size() - 1); }
 std::wstring Expr::to_latex() const {
   throw Exception("to_latex not implemented for " + type_name());
 }
-
-std::wstring_view Variable::label() const { return label_; }
-
-void Variable::set_label(std::wstring label) {
-  label_ = std::move(label);
-  reset_hash_value();
-}
-
-void Variable::conjugate() { conjugated_ = !conjugated_; }
-
-bool Variable::conjugated() const { return conjugated_; }
-
-std::wstring Variable::to_latex() const {
-  std::wstring result = L"{" + io::latex::utf_to_string(label_) + L"}";
-  if (conjugated_) result = L"{" + result + L"^*" + L"}";
-  return result;
-}
-
-ExprPtr Variable::clone() const { return ex<Variable>(*this); }
-
-void Variable::adjoint() { conjugate(); }
 
 bool Product::is_commutative() const {
   bool result = true;
