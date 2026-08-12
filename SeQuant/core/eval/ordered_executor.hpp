@@ -1,11 +1,11 @@
 #ifndef SEQUANT_EVAL_ORDERED_EXECUTOR_HPP
 #define SEQUANT_EVAL_ORDERED_EXECUTOR_HPP
 
-#include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
+#include <SeQuant/core/eval/forest_combine.hpp>
 #include <SeQuant/core/eval/ordered_schedule.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
 #include <SeQuant/core/eval/result.hpp>
@@ -13,11 +13,8 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
-#include <any>
-#include <array>
 #include <cstddef>
 #include <functional>
-#include <string>
 #include <type_traits>
 #include <unordered_map>
 #include <variant>
@@ -121,89 +118,33 @@ ResultPtr evaluate_ordered_schedule(
     }
   }
 
-  // hash -> value_id, to resolve each forest root's own build above for the
-  // combine loop below.
+  // hash -> value_id, to resolve each forest root's own build above into the
+  // shared combine step's per-root pre_results below.
   std::unordered_map<std::size_t, std::size_t> hash_to_vid;
   hash_to_vid.reserve(rich.cells.size());
   for (auto const& c : rich.cells) hash_to_vid.emplace(c.hash, c.value_id);
 
-  container::vector<node_t> roots;
+  container::svector<node_t> roots;
   for (auto&& n : forest) roots.push_back(n);
 
-  // -------- Shared combine: permute each root to layout and sum. --------
-  // Reproduces evaluate_whole_scope's shared combine loop (scope_executor.hpp)
-  // verbatim: the per-root Term Begin/End boundary, the Permute EvalStat, and
-  // the cross-root add_inplace + SumInplace EvalStat -- byte-identical
-  // trace/hwmark bookkeeping to that function and to
-  // sequant::evaluate(Nodes const&, layout, ...).
-  bool const perm = layout != decltype(layout){};
-
-  ResultPtr result;
+  container::svector<ResultPtr> pre_results(roots.size());
   for (std::size_t i = 0; i != roots.size(); ++i) {
-    node_t const& n = roots[i];
-
-    std::string xpr;
-    if constexpr (sequant::detail::trace(EvalTrace)) {
-      xpr = toUtf8(io::serialization::to_string(to_expr(n)));
-      log::term(log::TermMode::Begin, xpr);
-    }
-
-    auto const vid_it = hash_to_vid.find(n->hash_value());
+    auto const vid_it = hash_to_vid.find(roots[i]->hash_value());
     SEQUANT_ASSERT(vid_it != hash_to_vid.end() &&
                    "evaluate_ordered_schedule: forest root not found in the "
                    "schedule's value map");
-    ResultPtr const pre = value_results[vid_it->second];
-    SEQUANT_ASSERT(pre &&
+    pre_results[i] = value_results[vid_it->second];
+    SEQUANT_ASSERT(pre_results[i] &&
                    "evaluate_ordered_schedule: forest root was never "
                    "produced by a root BuildStep");
-
-    ResultPtr post;
-    auto const permute_time = sequant::detail::timed_eval_inplace([&]() {
-      post = perm ? pre->permute(std::array<std::any, 2>{n->annot(), layout})
-                  : pre;
-    });
-
-    SEQUANT_ASSERT(post);
-
-    if constexpr (sequant::detail::trace(EvalTrace)) {
-      if (perm) {
-        size_t hwmark = log::bytes(cache, post).value;
-        if (!cache.chain_holds(pre)) hwmark += log::bytes(pre).value;
-        hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
-        auto const stat = log::EvalStat{
-            .mode = log::EvalMode::Permute,
-            .time = permute_time,
-            .mem_result = log::bytes(post),
-            .mem_alloc = log::bytes(post),
-            .mem_hwmark = {cache.note_working_set(hwmark, n->hash_value())}};
-        log::eval(stat, n->label());
-      }
-      log::term(log::TermMode::End, xpr);
-    }
-
-    if (!result) {
-      result = post;
-      continue;
-    }
-
-    auto const sum_time = sequant::detail::timed_eval_inplace(
-        [&]() { result->add_inplace(*post); });
-
-    if constexpr (sequant::detail::trace(EvalTrace)) {
-      size_t hwmark = log::bytes(cache, result).value;
-      if (!cache.chain_holds(post)) hwmark += log::bytes(post).value;
-      hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
-      auto const stat = log::EvalStat{
-          .mode = log::EvalMode::SumInplace,
-          .time = sum_time,
-          .mem_result = log::bytes(result),
-          .mem_alloc = {0},
-          .mem_hwmark = {cache.note_working_set(hwmark, n->hash_value())}};
-      log::eval(stat, n->label());
-    }
   }
 
-  return result;
+  // -------- Shared combine: permute each root to layout and sum. --------
+  // combine_forest_roots (forest_combine.hpp) is the SAME helper
+  // evaluate_whole_scope's tail calls, so the two executors emit
+  // byte-identical Term/Permute/SumInplace trace bookkeeping without a
+  // hand-synced second copy.
+  return combine_forest_roots<EvalTrace>(roots, pre_results, layout, cache);
 }
 
 }  // namespace sequant::eval
