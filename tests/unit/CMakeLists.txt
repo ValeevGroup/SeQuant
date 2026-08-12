@@ -164,6 +164,7 @@ set(eval_dryrun_test_sources
     "test_legality.cpp"
     "test_meter.cpp"
     "test_occurrence_key.cpp"
+    "test_ordered_schedule.cpp"
     "test_peak_profile.cpp"
     "test_placement_remat.cpp"
     "test_placement_router.cpp"
