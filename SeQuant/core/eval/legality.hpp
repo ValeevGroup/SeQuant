@@ -7,6 +7,7 @@
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -206,10 +207,15 @@ template <meta::eval_node_range R>
     CellLegality cl;
     cl.hash = vc.hash;
 
+    // Every RichSchedule cell was produced by walking THIS SAME forest (see
+    // compute_dag_boulevard), so its hash must resolve here; a miss would
+    // silently leave contracted_below empty and misclassify the cell rather
+    // than surface the underlying bug.
+    auto const it = node_of.find(vc.hash);
+    SEQUANT_ASSERT(it != node_of.end());
     container::svector<Index> contracted_below;
-    if (auto const it = node_of.find(vc.hash); it != node_of.end())
-      for (Index const& ix : contracted_indices(it->second))
-        contracted_below.push_back(ix);
+    for (Index const& ix : contracted_indices(it->second))
+      contracted_below.push_back(ix);
 
     container::svector<Index> site;
     auto const add_if_new = [&](Index const& ix) {

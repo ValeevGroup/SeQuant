@@ -377,9 +377,11 @@ TEST_CASE(
   // Target 3: a Κ-CARRYING leaf/intermediate used AT the loop variable
   // (Q1 true, Q2b lockstep) -> LoopLocal. Scan every value that itself
   // carries a Κ-typed index (leaves included -- e.g. the DF integral
-  // g{Κ;μ̃,ν̃}) and classify it; report whether a LoopLocal one exists (the
-  // loop-CARRIED counterpart is deferred to Task 5's synthetic fixture per
-  // the brief, so it is NOT asserted here either way).
+  // g{Κ;μ̃,ν̃}) and classify it; the brief requires at least one LoopLocal
+  // candidate be found in this fixture (REQUIRE'd below, same rigor as
+  // Targets 1/2). The loop-CARRIED counterpart is deferred to Task 5's
+  // synthetic fixture per the brief, so found_loop_carried is reported but
+  // NOT asserted either way.
   {
     bool found_loop_local = false;
     bool found_loop_carried = false;
@@ -409,11 +411,17 @@ TEST_CASE(
         found_loop_carried = true;
       }
     }
-    // Deferred to Task 5's synthetic fixture per the brief -- no hard
-    // assertion on found_loop_local (or found_loop_carried) here; every
-    // Κ-carrying candidate that WAS classified LoopLocal was already
-    // checked above, so this loop's job is just to report what exists.
-    WARN("water-20 Κ-carrying values: LoopLocal seen="
+    // Every Κ-carrying candidate that WAS classified LoopLocal was already
+    // checked above (per_axis wiring agreement); this REQUIRE guarantees the
+    // LoopLocal path is actually exercised at least once by this fixture
+    // (matching Targets 1/2, which REQUIRE their own candidate was found) --
+    // without it, a future shift in the fixture/optimizer output could
+    // silently drop LoopLocal coverage entirely.
+    INFO("water-20 Κ-carrying values: LoopLocal seen="
          << found_loop_local << " LoopCarried seen=" << found_loop_carried);
+    REQUIRE(found_loop_local);
+    // Loop-carried case remains deferred to Task 5's synthetic fixture per
+    // the brief -- found_loop_carried is recorded (via INFO above) but not
+    // asserted either way.
   }
 }
