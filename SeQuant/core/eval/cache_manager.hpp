@@ -255,6 +255,18 @@ class CacheManager {
       return data_p && data_p.get() == other.get();
     }
 
+    /// Upgrade this entry to an unbounded (resident-until-reset) non-persistent
+    /// life, preserving any currently stored data and its cached size. Used to
+    /// re-home an existing finite-life CSE entry at a scope where the value
+    /// must survive ALL of its (possibly per-block-repeated) reads within one
+    /// evaluation, so a partially drained entry becomes resident again rather
+    /// than being freed and rebuilt by a later consumer. See \c
+    /// CacheManager::ensure_home_slot.
+    void make_resident() noexcept {
+      max_life = std::numeric_limits<size_t>::max();
+      life_c = std::numeric_limits<size_t>::max();
+    }
+
    private:
     [[nodiscard]] int decay() noexcept {
       return life_c > 0 ? static_cast<int>(--life_c) : 0;
@@ -466,6 +478,27 @@ class CacheManager {
   void ensure_hoist_slot(key_type const& key) {
     cache_map_.try_emplace(
         key, entry{std::numeric_limits<size_t>::max(), /*persistent=*/false});
+  }
+
+  /// Ensure @p key has a RESIDENT home slot at THIS cache: an unbounded
+  /// non-persistent life (like \c ensure_hoist_slot -- lives until the next
+  /// \c reset()), so the value, once stored, is read by every consumer rather
+  /// than drained and rebuilt. Unlike \c ensure_hoist_slot (which is a no-op
+  /// on an existing entry), this UPGRADES an existing finite-life CSE entry to
+  /// the same unbounded life via \c entry::make_resident, preserving any
+  /// stored data. Used by the ordered executor (\c ordered_executor.hpp) to
+  /// home a root-scope \c BuildStep value (its \c CellLegality::home_floor is
+  /// empty -- a whole-nest invariant) at the root cache so it is built ONCE
+  /// and read by every consumer, including a block-internal consumer reaching
+  /// it through the scope chain -- the "de-alias the composite to root"
+  /// property the ordered schedule's per-value homing exists to provide, and
+  /// which the plain per-forest CSE life (drained after its unbatched use
+  /// count) does not, since a realized batch loop reads a root-homed invariant
+  /// once per block.
+  void ensure_home_slot(key_type const& key) {
+    auto [it, inserted] = cache_map_.try_emplace(
+        key, entry{std::numeric_limits<size_t>::max(), /*persistent=*/false});
+    if (!inserted) it->second.make_resident();
   }
 
   /// Default persistence classifier: every entry is non-persistent (NP).

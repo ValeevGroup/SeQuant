@@ -339,7 +339,16 @@ void run_ordered_contracted_block(
                    "evaluate_ordered_schedule: a loop block realized zero "
                    "batches for an escape output");
     value_results[vid] = out;
-    (void)parent_cache.store(resolve(vid), std::move(out));
+    // Home the closed output at the scope one level OUT with a RESIDENT slot
+    // so a later step there reads it WHOLE (via the ordinary Checked probe)
+    // instead of re-descending and rebuilding it -- for an AccumulateSum
+    // reduction that means rebuilding the FULL un-batched contraction (the
+    // very peak this loop batched away). store() is a no-op on an unregistered
+    // key, so without homing the output first, a consumer used only once (not
+    // a CSE candidate) would silently recompute it.
+    node_t const& out_node = resolve(vid);
+    if (!out_node.leaf()) parent_cache.ensure_home_slot(out_node);
+    (void)parent_cache.store(out_node, std::move(out));
   }
 }
 
@@ -432,6 +441,18 @@ ResultPtr evaluate_ordered_schedule(
       SEQUANT_ASSERT(it != vmap.end() &&
                      "evaluate_ordered_schedule: BuildStep value not found "
                      "in the forest's value-node map");
+      // Home this root-scope value at the root cache with a RESIDENT slot
+      // (unbounded life until the per-term reset), so it is built ONCE and
+      // read whole by every later consumer -- a root-level ancestor BuildStep
+      // that would otherwise re-descend and rebuild it (the plain per-forest
+      // CSE life, if any, is drained by its unbatched use count), and a
+      // block-internal consumer reaching it up the scope chain (which reads a
+      // root-homed invariant once per batch block). Without this, each such
+      // consumer recomputes the composite; ensure_home_slot is what makes a
+      // Κ-free home={} composite (I(i,i;a,a)) build exactly once. Leaves need
+      // no slot (the leaf evaluator just hands back a precomputed input), so
+      // this targets only the internal-node BuildSteps the schedule homes here.
+      if (!it->second.leaf()) cache.ensure_home_slot(it->second);
       value_results[vid] =
           evaluate_impl<EvalTrace>(it->second, leaf_evaluator, cache);
     } else {
