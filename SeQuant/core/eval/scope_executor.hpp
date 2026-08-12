@@ -896,9 +896,20 @@ ResultPtr evaluate(Nodes const& forest, BatchPolicy const& policy,
     eval::OrderedSchedule const ordered =
         eval::build_ordered_schedule(rich, legality, policy, mode_order);
 
+    // NODE-level lift of policy.is_volatile_leaf, exactly as make_evaluator's
+    // own is_volatile_node lift (eval.hpp) computes it -- threaded into the
+    // ordered executor for a later task's home-value volatile-vs-persistent
+    // classification; not yet consulted there.
+    using node_t = std::ranges::range_value_t<Nodes>;
+    auto is_volatile_node =
+        [p = policy.is_volatile_leaf](node_t const& n) -> bool {
+      if (!n.leaf() || !n->is_tensor()) return false;
+      return p && p(n->as_tensor());
+    };
+
     return eval::evaluate_ordered_schedule<EvalTrace>(
         forest, ordered, rich, layout, leaf_evaluator, cache, target,
-        make_scope_guard);
+        make_scope_guard, is_volatile_node);
   }
 
   if (!policy.whole_scope_execution)

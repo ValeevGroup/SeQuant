@@ -264,6 +264,12 @@ template <typename node_t>
 /// literal \c Index throughout), so the remap itself is not implemented
 /// here -- a later task's job if it becomes live.
 ///
+/// \note \p is_volatile (trailing, defaulted) is the NODE-level lift of \c
+/// BatchPolicy::is_volatile_leaf -- see \c evaluate_ordered_schedule's own
+/// doc comment for where it is produced. Threaded through this function's
+/// own recursion (the nested \c ScopeBlock call below) so it reaches every
+/// level, but not yet CONSULTED here -- a later task's job.
+///
 template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
 void run_ordered_contracted_block(
     ScopeBlock const& block,
@@ -272,8 +278,8 @@ void run_ordered_contracted_block(
     CacheManager<N, FHC>& parent_cache,
     std::function<std::size_t(Index const&)> const& target,
     typename CacheManager<N, FHC>::BatchContext const& ectx,
-    container::vector<ResultPtr>& value_results,
-    container::vector<char>& built) {
+    container::vector<ResultPtr>& value_results, container::vector<char>& built,
+    std::function<bool(node_t const&)> const& is_volatile = {}) {
   using Cache = CacheManager<N, FHC>;
   using BatchContext = typename Cache::BatchContext;
   using member_t = std::pair<node_t const*, Index>;
@@ -378,7 +384,7 @@ void run_ordered_contracted_block(
       } else if (auto const* child = std::get_if<ScopeBlock>(&step.value)) {
         run_ordered_contracted_block<EvalTrace>(
             *child, vmap, rich, leaf_evaluator, bs.cache, target, ctx,
-            value_results, built);
+            value_results, built, is_volatile);
       } else {
         // R4: the Step variant has exactly BuildStep/ScopeBlock alternatives;
         // a valueless-by-exception or future third alternative is a schedule
@@ -485,6 +491,13 @@ void run_ordered_contracted_block(
 /// \param make_scope_guard Backend scope-guard factory; unused by Tasks 1-2
 ///        (no backend screening relaxation is threaded into the loop-block
 ///        walk yet), threaded for interface symmetry with later tasks.
+/// \param is_volatile NODE-level volatility predicate (empty means
+///        "never volatile"), the lift of \c BatchPolicy::is_volatile_leaf
+///        exactly as \c make_evaluator's own \c is_volatile_node lift
+///        (eval.hpp) computes it -- threaded down through \c
+///        detail::run_ordered_contracted_block's recursion but not yet
+///        CONSULTED here (a later task's job: classifying a home value
+///        volatile-vs-persistent via \c subtree_any at the homing sites).
 /// \return The summed, per-root-permuted result, as \c evaluate_whole_scope
 ///         (and, for an unbatched forest, forest descent itself) would
 ///         produce for the same \p forest.
@@ -498,7 +511,9 @@ ResultPtr evaluate_ordered_schedule(
     RichSchedule const& rich, auto const& layout, F const& leaf_evaluator,
     CacheManager<N, FHC>& cache,
     std::function<std::size_t(Index const&)> const& target,
-    [[maybe_unused]] ScopeGuardFactory const& make_scope_guard = {}) {
+    [[maybe_unused]] ScopeGuardFactory const& make_scope_guard = {},
+    std::function<bool(std::ranges::range_value_t<Nodes> const&)> const&
+        is_volatile = {}) {
   using node_t = std::ranges::range_value_t<Nodes>;
   static_assert(std::is_same_v<node_t, N>,
                 "the forest's node type and the cache's node type must match");
@@ -556,7 +571,7 @@ ResultPtr evaluate_ordered_schedule(
     } else if (auto const* block = std::get_if<ScopeBlock>(&step.value)) {
       detail::run_ordered_contracted_block<EvalTrace>(
           *block, vmap, rich, leaf_evaluator, cache, target, root_ectx,
-          value_results, built);
+          value_results, built, is_volatile);
     } else {
       // R4: the Step variant has exactly BuildStep/ScopeBlock alternatives; any
       // other state is a schedule this executor cannot interpret.
