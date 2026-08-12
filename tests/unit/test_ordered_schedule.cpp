@@ -2,13 +2,46 @@
 // OrderedSchedule IR (SeQuant/core/eval/ordered_schedule.hpp) -- an ORDERED
 // tree of loop blocks and build steps -- plus its well_formed structural
 // sanity check. No sequencer/executor here.
+//
+// Task 3 (below, "[ordered-schedule]" water-20 acceptance test) pins
+// build_ordered_schedule -- the deterministic sequencer that lowers SP1's
+// LegalitySchedule + the RichSchedule into an OrderedSchedule for the
+// NON-SPLIT case.
 
+#include <SeQuant/core/batch_policy.hpp>
+#include <SeQuant/core/context.hpp>
+#include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
+#include <SeQuant/core/eval/backends/dryrun/eval_expr.hpp>
+#include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
+#include <SeQuant/core/eval/eval.hpp>
+#include <SeQuant/core/eval/eval_expr.hpp>
+#include <SeQuant/core/eval/legality.hpp>
 #include <SeQuant/core/eval/ordered_schedule.hpp>
+#include <SeQuant/core/eval/peak_profile.hpp>
+#include <SeQuant/core/eval/scope_executor.hpp>
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/optimize/optimize.hpp>
+#include <SeQuant/core/optimize/options.hpp>
+#include <SeQuant/core/runtime.hpp>
+#include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
+#include <array>
+#include <cstdlib>
+#include <fstream>
+#include <functional>
+#include <optional>
+#include <sstream>
+#include <string>
+#include <unordered_map>
 #include <utility>
+#include <variant>
+#include <vector>
 
 using sequant::Index;
 using sequant::eval::BuildStep;
@@ -109,4 +142,313 @@ TEST_CASE(
   sched.num_values = 1;
 
   CHECK_FALSE(well_formed(sched));
+}
+
+// ===========================================================================
+// Task 3: build_ordered_schedule, validated on the real water-20 CSV-CCSD
+// doubles residual (DF/aux-only batching) -- the exact fixture test_legality.
+// cpp's "classify_axis / analyze_legality: four-way axis classification on
+// the water-20 aux-only residual" test already exercises (same recipe,
+// duplicated under an `orderedsched_` prefix per that file's own convention:
+// no shared test header exists for these DryRun fixtures, and same-named
+// anonymous-namespace helpers would collide under CMake UNITY_BUILD grouping).
+// ===========================================================================
+
+namespace {
+
+std::string orderedsched_witness_slurp(std::string const& path) {
+  std::ifstream in(path);
+  std::stringstream ss;
+  ss << in.rdbuf();
+  return ss.str();
+}
+
+struct OrderedSchedWater20ProblemSize {
+  std::size_t mu_tilde;
+  std::size_t aux;
+  std::size_t i_occ;
+  std::array<double, 5> pno_M;
+  std::array<double, 5> osv_M;
+};
+
+inline constexpr OrderedSchedWater20ProblemSize kOrderedSchedWater20_pVDZF12{
+    /*mu_tilde=*/896u,
+    /*aux=*/1682u,
+    /*i_occ=*/80u,
+    /*pno_M=*/
+    {1.0, 23.175775480059084, 25.865548281212597, 28.171416142614103,
+     30.03848680550367},
+    /*osv_M=*/
+    {1.0, 58.987499999999997, 59.289227520688783, 59.584437469011633,
+     59.872014818179686}};
+
+sequant::eval::dryrun::SizeRegime orderedsched_witness_df_regime(
+    OrderedSchedWater20ProblemSize const& p) {
+  sequant::eval::dryrun::SizeRegime r;
+  r.space_extent = {
+      {L"i", p.i_occ},
+      {L"μ̃", p.mu_tilde},
+      {L"Κ", p.aux},
+      {L"a", p.mu_tilde},
+  };
+  r.csv_pno_moment = p.pno_M;
+  r.csv_osv_moment = p.osv_M;
+  return r;
+}
+
+sequant::ExprPtr orderedsched_witness_flatten_product(
+    sequant::ExprPtr const& e) {
+  if (!e->is<sequant::Product>()) return e;
+  auto const& p = e->as<sequant::Product>();
+  return sequant::ex<sequant::Product>(p.scalar(), p.factors(),
+                                       sequant::Product::Flatten::Yes);
+}
+
+// Recursively count how many BuildStep/child-ScopeBlock steps sit inside
+// `block`'s OWN steps list before the first step whose ScopeBlock axis TYPE
+// is `axis_key` -- used to confirm relative ORDER (not just presence) among
+// a block's steps.
+std::optional<std::size_t> orderedsched_index_of_child_block(
+    ScopeBlock const& block, std::wstring const& axis_key) {
+  for (std::size_t i = 0; i < block.steps.size(); ++i) {
+    if (auto const* child = std::get_if<ScopeBlock>(&block.steps[i].value))
+      if (child->axis.space().base_key() == axis_key) return i;
+  }
+  return std::nullopt;
+}
+
+std::optional<std::size_t> orderedsched_index_of_build_step(
+    ScopeBlock const& block, std::size_t value_id) {
+  for (std::size_t i = 0; i < block.steps.size(); ++i) {
+    if (auto const* b = std::get_if<BuildStep>(&block.steps[i].value))
+      if (b->value_id == value_id) return i;
+  }
+  return std::nullopt;
+}
+
+}  // namespace
+
+TEST_CASE(
+    "build_ordered_schedule: water-20 aux-only residual places the "
+    "Κ-contraction result as an AccumulateSum output of the {Κ} block, "
+    "ordered before the root-level composite that reads it",
+    "[ordered-schedule]") {
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using Node = EvalNodeDryRun;
+
+  auto ctx = sequant::get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  auto const body =
+      orderedsched_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                                 "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = sequant::deserialize<sequant::ExprPtr>(line);
+  REQUIRE(static_cast<bool>(expr));
+  REQUIRE(expr->is<sequant::Sum>());
+  auto const& summands = expr->as<sequant::Sum>().summands();
+  REQUIRE(!summands.empty());
+
+  std::size_t nterms = std::min<std::size_t>(summands.size(), 40);
+  if (char const* nt = std::getenv("SEQUANT_UT_DRYRUN_NTERMS"))
+    nterms = std::min<std::size_t>(summands.size(), std::atoll(nt));
+
+  auto regime = orderedsched_witness_df_regime(kOrderedSchedWater20_pVDZF12);
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  // EXACT MPQC aux-only config (make_csv_batch_policy, aux_target=256): Κ is
+  // the only batchable mode, contracted role.
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  policy.is_batchable_external_index = [](sequant::Index const&) {
+    return false;
+  };
+  policy.batch_spectator_indices = false;
+  policy.batch_target_size = [](sequant::Index const&) -> std::size_t {
+    return 256;
+  };
+  policy.is_volatile_leaf = [](sequant::Tensor const& t) {
+    return t.label() == L"t";
+  };
+  policy.accumulation_factor = 1.0;
+  policy.persistent_only = false;
+  policy.peak_threshold = 1e11;
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      sequant::Expr const*,
+      sequant::container::vector<sequant::NodeBatchAnnotation>>>();
+  sequant::OptimizeOptions opts;
+  opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = axes_map;
+
+  std::vector<Node> forest;
+  for (std::size_t s = 0; s < nterms; ++s) {
+    sequant::ExprPtr const term =
+        orderedsched_witness_flatten_product(summands[s]);
+    if (!term) continue;
+    sequant::ExprPtr optimized;
+    try {
+      optimized = sequant::optimize(term, opts);
+    } catch (std::exception const&) {
+      continue;
+    }
+    if (!optimized) continue;
+    sequant::BinarizationOptions bopts;
+    if (auto it = axes_map->find(optimized.get()); it != axes_map->end())
+      bopts.node_batch_axes = it->second;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    forest.push_back(sequant::binarize<EvalExprDryRun>(optimized, {}, bopts));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+  REQUIRE(!forest.empty());
+
+  auto const block_of = [](sequant::Index const&) -> std::size_t {
+    return 256;
+  };
+  auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  REQUIRE(!rich.cells.empty());
+
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  REQUIRE(legality.cells.size() == rich.cells.size());
+
+  auto const sched =
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"Κ"});
+  REQUIRE(well_formed(sched));
+  CHECK(sched.num_values == rich.cells.size());
+
+  // The root's steps must contain exactly one {Κ} child ScopeBlock.
+  auto const k_child_idx = orderedsched_index_of_child_block(sched.root, L"Κ");
+  REQUIRE(k_child_idx.has_value());
+  ScopeBlock const& k_block =
+      std::get<ScopeBlock>(sched.root.steps[*k_child_idx].value);
+  CHECK(k_block.axis.space().base_key() == L"Κ");
+
+  // The Κ-contraction RESULT (a non-leaf value that does not itself carry Κ
+  // but reduces it at its own node -- classify_axis Reduction, same target
+  // identification as test_legality.cpp's water-20 test) must be an
+  // AccumulateSum output of the {Κ} block, with NO BuildStep anywhere in the
+  // whole schedule (single-producer: its only production site is that
+  // output entry).
+  auto const is_K = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  auto const carries_type =
+      [&](sequant::container::svector<sequant::Index> const& v,
+          auto const& pred) { return std::any_of(v.begin(), v.end(), pred); };
+  auto const vmap = sequant::eval::build_value_node_map(forest);
+
+  std::optional<std::size_t> mu_mu_value_id;
+  std::optional<std::size_t> parent_value_id;  // I(i,i;a,a)-shaped consumer
+  {
+    std::optional<std::size_t> mu_mu_hash;
+    auto const is_mu_mu_pair = [](auto const& carried) {
+      return carried.size() == 2 &&
+             std::all_of(carried.begin(), carried.end(),
+                         [](sequant::Index const& ix) {
+                           return ix.space().base_key() == L"μ̃";
+                         });
+    };
+    for (bool const require_mu_mu : {true, false}) {
+      if (mu_mu_hash) break;
+      for (auto const& vc : rich.cells) {
+        auto const it = vmap.find(vc.hash);
+        if (it == vmap.end() || it->second.leaf()) continue;
+        if (carries_type(vc.carried, is_K)) continue;
+        auto const contracted = sequant::contracted_indices(it->second);
+        auto const k_it =
+            std::find_if(contracted.begin(), contracted.end(), is_K);
+        if (k_it == contracted.end()) continue;
+        if (require_mu_mu && !is_mu_mu_pair(vc.carried)) continue;
+        mu_mu_hash = vc.hash;
+        mu_mu_value_id = vc.value_id;
+        break;
+      }
+    }
+    REQUIRE(mu_mu_hash.has_value());
+
+    // Its structural parent (the Κ-free composite consuming it) --
+    // identical search to test_legality.cpp's Target 2.
+    std::optional<Node> parent;
+    std::function<void(Node const&)> find_parent = [&](Node const& n) {
+      if (parent || n.leaf()) return;
+      if (n.left()->hash_value() == *mu_mu_hash ||
+          n.right()->hash_value() == *mu_mu_hash) {
+        parent = n;
+        return;
+      }
+      find_parent(n.left());
+      find_parent(n.right());
+    };
+    for (auto const& tree : forest) {
+      find_parent(tree);
+      if (parent) break;
+    }
+    REQUIRE(parent.has_value());
+    auto const parent_hash = (*parent)->hash_value();
+    auto const cell_it =
+        std::find_if(rich.cells.begin(), rich.cells.end(),
+                     [&](auto const& vc) { return vc.hash == parent_hash; });
+    REQUIRE(cell_it != rich.cells.end());
+    parent_value_id = cell_it->value_id;
+  }
+  REQUIRE(mu_mu_value_id.has_value());
+  REQUIRE(parent_value_id.has_value());
+
+  // AccumulateSum output of the {Κ} block, not a BuildStep anywhere.
+  auto const out_it =
+      std::find_if(k_block.outputs.begin(), k_block.outputs.end(),
+                   [&](auto const& p) { return p.first == *mu_mu_value_id; });
+  REQUIRE(out_it != k_block.outputs.end());
+  CHECK(out_it->second == OutputKind::AccumulateSum);
+  CHECK_FALSE(
+      orderedsched_index_of_build_step(k_block, *mu_mu_value_id).has_value());
+  CHECK_FALSE(orderedsched_index_of_build_step(sched.root, *mu_mu_value_id)
+                  .has_value());
+
+  // I(i,i;a,a) (the parent) is a root-level BuildStep, ordered AFTER the
+  // {Κ} child block in the root's steps.
+  auto const parent_idx =
+      orderedsched_index_of_build_step(sched.root, *parent_value_id);
+  REQUIRE(parent_idx.has_value());
+  CHECK(*parent_idx > *k_child_idx);
+
+  // At least one Κ-carrying LoopLocal intermediate (test_legality.cpp's
+  // Target 3) is Transient: a BuildStep INSIDE the {Κ} block, with no
+  // outputs entry anywhere (not an accumulate output).
+  bool found_k_local_transient = false;
+  for (auto const& cl : legality.cells) {
+    bool const k_local = std::any_of(
+        cl.per_axis.begin(), cl.per_axis.end(), [&](auto const& ac) {
+          return is_K(ac.axis) && ac.role == sequant::eval::LoopRole::LoopLocal;
+        });
+    if (!k_local) continue;
+    auto const vid_it =
+        std::find_if(rich.cells.begin(), rich.cells.end(),
+                     [&](auto const& vc) { return vc.hash == cl.hash; });
+    REQUIRE(vid_it != rich.cells.end());
+    std::size_t const vid = vid_it->value_id;
+    if (orderedsched_index_of_build_step(k_block, vid).has_value()) {
+      found_k_local_transient = true;
+      CHECK_FALSE(std::any_of(k_block.outputs.begin(), k_block.outputs.end(),
+                              [&](auto const& p) { return p.first == vid; }));
+    }
+  }
+  REQUIRE(found_k_local_transient);
 }
