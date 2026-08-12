@@ -729,10 +729,6 @@ ResultPtr evaluate_whole_scope(
   } node_meta_guard{std::move(Logger::instance().eval.node_meta)};
   if (log::printing()) Logger::instance().eval.node_meta = make_node_meta(rich);
 
-  // if the layout is not the default constructed value need to permute --
-  // mirrors sequant::evaluate(Node const&, layout, ...)'s identical check.
-  bool const perm = layout != decltype(layout){};
-
   // The per-root, UNPERMUTED result, in forest order. The root-only case fills
   // each entry with a direct evaluate_impl; a batched scope tree fills the
   // loop-carrying roots from detail::walk_scope (accumulate/scatter per level)
