@@ -1375,3 +1375,45 @@ TEST_CASE("w20 peak composition: tier-A/tier-B decomposition at realized peak",
   std::wcerr << L"====================================================\n";
   CHECK(mon.hwmark_bytes > 0);
 }
+
+// Task 1 of the eager-home-release plan (the sequel to this file's own
+// ordered-executor design): the bounded/persistent CacheManager::
+// ensure_home_slot(key, use_count, persistent) overload, which later tasks
+// use to replace the unconditional SIZE_MAX pin the zero-arg
+// ensure_home_slot(key) installs (see its call site's doc comment above,
+// "at root via ensure_home_slot"). Proves both lifetimes directly against
+// entry::access()/store()/reset(), independent of the ordered executor
+// itself: a volatile (non-persistent) slot is released at its genuine
+// use_count-th access, and a persistent slot is never drained and survives
+// reset().
+TEST_CASE(
+    "ensure_home_slot bounds life for volatile and persists for invariant",
+    "[ordered-executor]") {
+  // A realistic ScalarNode cache key: the root of a scalar-forest tree (see
+  // scalar_tree above), a non-leaf node like the ones the ordered executor
+  // actually homes.
+  ScalarNode const n = scalar_tree(L"2 * a * b - c");
+  REQUIRE_FALSE(n.leaf());
+
+  // Volatile: bounded life == use_count, non-persistent, released at its
+  // genuine last use. CacheManager::store() itself performs an implicit
+  // access() (see its doc comment: "Implictly accesses the stored data,
+  // hence, decays the lifetime"), so the store below IS use 1 of 2; one more
+  // explicit access_at() is use 2 of 2 and drains the entry.
+  auto cache = sequant::CacheManager<ScalarNode>::empty();
+  cache.ensure_home_slot(n, /*use_count=*/2, /*persistent=*/false);
+  (void)cache.store(
+      n, sequant::eval_result<ResultScalar<double>>(1.0));  // use 1 of 2
+  CHECK(cache.access_at(n).ptr);        // use 2 of 2 -> drains
+  CHECK_FALSE(cache.access_at(n).ptr);  // released after last use
+
+  // Persistent: never drained regardless of use_count, and survives reset().
+  auto cache2 = sequant::CacheManager<ScalarNode>::empty();
+  cache2.ensure_home_slot(n, /*use_count=*/1, /*persistent=*/true);
+  (void)cache2.store(n, sequant::eval_result<ResultScalar<double>>(2.0));
+  CHECK(cache2.access_at(n).ptr);
+  CHECK(
+      cache2.access_at(n).ptr);  // still alive despite use_count=1 (persistent)
+  cache2.reset();
+  CHECK(cache2.access_at(n).ptr);  // survives reset()
+}

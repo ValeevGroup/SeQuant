@@ -318,6 +318,24 @@ class CacheManager {
       life_c = std::numeric_limits<size_t>::max();
     }
 
+    /// Set (or reset) this entry's bounded life to exactly @p count uses,
+    /// preserving any currently stored data. Used by \c
+    /// CacheManager::ensure_home_slot(key, use_count, persistent) to home a
+    /// value with a genuine use-count-bounded lifetime -- released at its
+    /// count-th access -- rather than \c make_resident's unconditional
+    /// unbounded pin.
+    void set_life(size_t count) noexcept {
+      max_life = count;
+      life_c = count;
+    }
+
+    /// Upgrade this entry to persistent (never drained on access, survives
+    /// reset()), preserving any currently stored data. Used by \c
+    /// CacheManager::ensure_home_slot(key, use_count, persistent) to promote
+    /// an existing entry when a later caller discovers the key is actually
+    /// iteration-invariant.
+    void make_persistent() noexcept { persistent_ = true; }
+
    private:
     [[nodiscard]] int decay() noexcept {
       return life_c > 0 ? static_cast<int>(--life_c) : 0;
@@ -550,6 +568,27 @@ class CacheManager {
     auto [it, inserted] = cache_map_.try_emplace(
         key, entry{std::numeric_limits<size_t>::max(), /*persistent=*/false});
     if (!inserted) it->second.make_resident();
+  }
+
+  /// Home @p key with a bounded (use-count) or persistent lifetime, instead
+  /// of \c ensure_home_slot(key)'s unconditional \c make_resident pin. A
+  /// persistent slot survives \c reset() (iteration-invariant); a
+  /// non-persistent slot is released at its @p use_count-th access (its
+  /// genuine last use) rather than living unbounded until the next reset().
+  /// Idempotent like \c ensure_home_slot(key): an already-present entry is
+  /// upgraded in place (to persistent, or to the new bounded life) rather
+  /// than replaced, preserving any stored data.
+  void ensure_home_slot(key_type const& key, std::size_t use_count,
+                        bool persistent) {
+    auto [it, inserted] = cache_map_.try_emplace(
+        key, entry{persistent ? std::numeric_limits<size_t>::max() : use_count,
+                   persistent});
+    if (!inserted) {
+      if (persistent)
+        it->second.make_persistent();
+      else
+        it->second.set_life(use_count);
+    }
   }
 
   /// Default persistence classifier: every entry is non-persistent (NP).
