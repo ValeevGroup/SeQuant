@@ -180,9 +180,9 @@ struct LegalitySchedule {
 ///
 /// \brief Fold a \c RichSchedule into the first real \c LegalitySchedule: one
 /// \c CellLegality per \c ValueCell, with its at-node \c build_site (\c
-/// build_site_of), \c per_axis classification (\c classify_axis), and \c
-/// home_floor (the \c LoopLocal subset of \c per_axis) filled in. \c
-/// forced_split_axes is left empty (Task 4).
+/// build_site_of), \c per_axis classification (\c classify_axis), \c home_floor
+/// (the \c LoopLocal subset of \c per_axis), and \c forced_split_axes (the \c
+/// LoopCarried subset of \c per_axis, Task 4) filled in.
 ///
 /// \details \c ValueCell does not itself retain the forest node its \c hash
 /// resolves to (only \c carried, a copy of the node's \c canon_indices()), so
@@ -191,6 +191,38 @@ struct LegalitySchedule {
 /// scope_executor.hpp's \c build_value_node_map) to recover each cell's own
 /// \c contracted_indices(node). Under perfect CSE every occurrence of a value
 /// shares one node shape, so the first-visited representative suffices.
+///
+/// \par Forced splits (Task 4, SOUND SP1 core)
+/// A value classified \c LoopCarried on axis \c L survives the axis into its
+/// own result indices, so its producing \c L-loop must CLOSE before any
+/// cross-iteration consumer can read it (the consumer, at a different \c L
+/// iteration, reads a value bound to a foreign \c L index). \c L is therefore
+/// recorded in that value's \c forced_split_axes: the axis cannot be a single
+/// unbroken loop around this value. This is directly derivable from the
+/// per-axis roles alone and is the deliverable this task ships as sound.
+///
+/// \par The monotone fixpoint (Task 4)
+/// The analysis is wrapped in a bounded fixpoint. The design's intended body
+/// is a DEMOTION: once \c L is forced to split, a value used in BOTH resulting
+/// \c L-passes cannot keep a single per-\c L copy alive across the split, so it
+/// is demoted \c LoopLocal -> \c LoopCarried on \c L, which lifts its home
+/// floor; classification/floors are re-derived and the round repeats until no
+/// floor rises. Because a home can only ever LIFT (a role only moves toward
+/// \c LoopCarried, never back), the fixpoint is monotone and terminates; the
+/// hard cap \c cells.size()+1 (each productive round lifts at least one floor)
+/// guards against a non-terminating bug via \c SEQUANT_ASSERT.
+///
+/// \par SP2 scoping of the demotion (JUDGMENT CALL -- deferred, see report)
+/// "Used in both \c L-passes" is a property of the PASS STRUCTURE -- the
+/// ordered, split schedule that SP2 builds -- not of the DAG SP1 sees. SP1
+/// performs NO reordering: there is a single pass, so no value is yet "used in
+/// two passes" and no demotion is soundly derivable here. Emitting one now
+/// (e.g. from a DAG reachability guess at where SP2 will place the split
+/// boundary) would be an UNSOUND approximation. This function therefore ships
+/// the sound \c forced_split_axes record plus the fixpoint LOOP STRUCTURE
+/// (which converges immediately in SP1, since \c derive_demotions is inert)
+/// and leaves the demotion itself as a clearly-marked SP2 hook. See \c
+/// derive_demotions below.
 ///
 template <meta::eval_node_range R>
 [[nodiscard]] inline LegalitySchedule analyze_legality(
@@ -209,48 +241,111 @@ template <meta::eval_node_range R>
 
   auto const batchable = policy.is_batchable_index();
 
-  LegalitySchedule out;
-  out.cells.reserve(rich.cells.size());
-  for (ValueCell const& vc : rich.cells) {
-    CellLegality cl;
-    cl.hash = vc.hash;
+  // Monotone demotion set (the fixpoint state): hash -> the axis SPACE
+  // base_keys forced from LoopLocal to LoopCarried by a prior round. Grows
+  // only; empty in SP1 (see derive_demotions).
+  std::unordered_map<std::size_t, container::svector<std::wstring>> demotions;
+  auto const is_demoted = [&](std::size_t hash, Index const& axis) {
+    auto const it = demotions.find(hash);
+    if (it == demotions.end()) return false;
+    std::wstring const key{axis.space().base_key()};
+    return std::find(it->second.begin(), it->second.end(), key) !=
+           it->second.end();
+  };
 
-    // Every RichSchedule cell was produced by walking THIS SAME forest (see
-    // compute_dag_boulevard), so its hash must resolve here; a miss would
-    // silently leave contracted_below empty and misclassify the cell rather
-    // than surface the underlying bug.
-    auto const it = node_of.find(vc.hash);
-    SEQUANT_ASSERT(it != node_of.end());
-    container::svector<Index> contracted_below;
-    for (Index const& ix : contracted_indices(it->second))
-      contracted_below.push_back(ix);
+  // One classification round over every cell, honoring the current demotion
+  // set. Pure in `demotions` (and the fixed inputs), so re-running it is what
+  // makes the fixpoint well-defined.
+  auto const build_cells = [&]() -> LegalitySchedule {
+    LegalitySchedule out;
+    out.cells.reserve(rich.cells.size());
+    for (ValueCell const& vc : rich.cells) {
+      CellLegality cl;
+      cl.hash = vc.hash;
 
-    container::svector<Index> site;
-    auto const add_if_new = [&](Index const& ix) {
-      if (!batchable(ix)) return;
-      if (std::find(site.begin(), site.end(), ix) == site.end())
-        site.push_back(ix);
-    };
-    for (Index const& ix : vc.carried) add_if_new(ix);
-    for (Index const& ix : contracted_below) add_if_new(ix);
+      // Every RichSchedule cell was produced by walking THIS SAME forest (see
+      // compute_dag_boulevard), so its hash must resolve here; a miss would
+      // silently leave contracted_below empty and misclassify the cell rather
+      // than surface the underlying bug.
+      auto const it = node_of.find(vc.hash);
+      SEQUANT_ASSERT(it != node_of.end());
+      container::svector<Index> contracted_below;
+      for (Index const& ix : contracted_indices(it->second))
+        contracted_below.push_back(ix);
 
-    for (Index const& axis : site) {
-      AxisClass ac;
-      ac.axis = axis;
-      ac.role =
-          classify_axis(vc.carried, contracted_below, axis, vc.occurrences);
-      cl.per_axis.push_back(std::move(ac));
+      container::svector<Index> site;
+      auto const add_if_new = [&](Index const& ix) {
+        if (!batchable(ix)) return;
+        if (std::find(site.begin(), site.end(), ix) == site.end())
+          site.push_back(ix);
+      };
+      for (Index const& ix : vc.carried) add_if_new(ix);
+      for (Index const& ix : contracted_below) add_if_new(ix);
+
+      for (Index const& axis : site) {
+        AxisClass ac;
+        ac.axis = axis;
+        ac.role =
+            classify_axis(vc.carried, contracted_below, axis, vc.occurrences);
+        // Monotone demotion (SP2 hook): a prior fixpoint round can force an
+        // axis LoopLocal -> LoopCarried; roles only ever move toward
+        // LoopCarried, never back, which is what makes the fixpoint monotone.
+        if (ac.role == LoopRole::LoopLocal && is_demoted(vc.hash, axis))
+          ac.role = LoopRole::LoopCarried;
+        cl.per_axis.push_back(std::move(ac));
+      }
+
+      for (AxisClass const& ac : cl.per_axis) {
+        // home_floor: the LoopLocal subset of per_axis -- the axes the value
+        // stays sliced on (homed inside). Every other build-site axis
+        // (Reduction, LoopCarried) is lifted out, as is any axis outside
+        // build_site altogether (the implicit LoopInvariant case).
+        if (ac.role == LoopRole::LoopLocal) cl.home_floor.push_back(ac.axis);
+        // forced_split_axes: the LoopCarried subset. The value survives the
+        // axis into its own result, so its producing loop must close before
+        // any cross-iteration consumer -- the loop cannot stay a single
+        // unbroken pass around this value.
+        if (ac.role == LoopRole::LoopCarried)
+          cl.forced_split_axes.push_back(ac.axis);
+      }
+
+      cl.build_site = std::move(site);
+      out.cells.push_back(std::move(cl));
     }
+    return out;
+  };
 
-    // home_floor: the LoopLocal subset of per_axis -- the axes the value
-    // stays sliced on (homed inside). Every other build-site axis
-    // (Reduction, LoopCarried) is lifted out, as is any axis outside
-    // build_site altogether (the implicit LoopInvariant case).
-    for (AxisClass const& ac : cl.per_axis)
-      if (ac.role == LoopRole::LoopLocal) cl.home_floor.push_back(ac.axis);
+  // SP2 HOOK -- the monotone demotion step. Given the current schedule (its
+  // per_axis roles and forced_split_axes), enlarge `demotions` with every
+  // (value, axis) that is used in BOTH L-passes of a forced L-split and must
+  // therefore lift its floor. Returns true iff it added anything.
+  //
+  // In SP1 this is DELIBERATELY INERT (returns false without touching
+  // `demotions`): "used in both L-passes" is a property of SP2's ordered,
+  // split pass structure, which SP1 does not build (SP1 does no reordering, so
+  // there is a single pass and nothing is used in two passes yet). Deriving a
+  // demotion here from a DAG guess at where SP2 will split would be unsound;
+  // the sound SP1 output is the forced_split_axes record above, which SP2
+  // consumes to build the passes and then apply this demotion for real. See
+  // the function's \par SP2 scoping note.
+  auto const derive_demotions =
+      [&](LegalitySchedule const& /*current*/) -> bool {
+    (void)demotions;  // SP2 will grow this; SP1 leaves it untouched.
+    return false;
+  };
 
-    cl.build_site = std::move(site);
-    out.cells.push_back(std::move(cl));
+  LegalitySchedule out = build_cells();
+
+  // Monotone fixpoint. Each productive round lifts at least one home floor
+  // (demotes at least one LoopLocal axis to LoopCarried), and homes only ever
+  // lift, so at most cells.size() lifts are possible: cells.size()+1 rounds is
+  // a hard non-termination tripwire, asserted below.
+  [[maybe_unused]] std::size_t const cap = out.cells.size() + 1;
+  for (std::size_t iter = 0;; ++iter) {
+    SEQUANT_ASSERT(iter <= cap,
+                   "analyze_legality: forced-split fixpoint did not converge");
+    if (!derive_demotions(out)) break;
+    out = build_cells();
   }
   return out;
 }

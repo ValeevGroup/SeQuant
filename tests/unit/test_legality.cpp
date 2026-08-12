@@ -452,3 +452,93 @@ TEST_CASE(
     // asserted either way.
   }
 }
+
+// ===========================================================================
+// Task 4: forced_split_axes + the monotone fixpoint, on a SYNTHETIC
+// cross-iteration fixture. Water-20's aux-only residual has no LoopCarried
+// value (every Κ is contracted immediately), so the loop-carried case must be
+// authored here. The fixture is B{i_3,i_4} = A{;i_3} * A{;i_4}: an outer
+// product that carries TWO distinct occupied indices into its own result, so
+// with the occupied space made batchable in the EXTERNAL role and no enclosing
+// occ batch loop realized, the occ axis survives into the value's result with
+// nothing to lock it to a loop iteration -> classify_axis == LoopCarried.
+// Saved to data/legality_cross_iteration.txt for Task 5 to reuse.
+// ===========================================================================
+TEST_CASE(
+    "analyze_legality: a loop-carried value records its axis in "
+    "forced_split_axes; the fixpoint terminates (synthetic cross-iteration "
+    "fixture)",
+    "[legality]") {
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using Node = EvalNodeDryRun;
+
+  auto const body =
+      legality_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                             "/data/legality_cross_iteration.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = sequant::deserialize<sequant::ExprPtr>(line);
+  REQUIRE(static_cast<bool>(expr));
+
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto node = sequant::binarize<EvalExprDryRun>(expr);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE_FALSE(node.leaf());
+
+  // occ ("i") batchable in the EXTERNAL role -> i_3/i_4 are batch axes.
+  sequant::BatchPolicy policy;
+  policy.is_batchable_external_index = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"i";
+  };
+
+  // Minimal DryRun cost model: compute_dag_boulevard prices no footprints, and
+  // block_of only sizes enclosing-loop entries (there are none here).
+  sequant::eval::dryrun::SizeRegime regime;
+  regime.space_extent = {{L"i", 8u}, {L"a", 16u}};
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  std::vector<Node> forest{node};
+  auto const block_of = [](sequant::Index const&) -> std::size_t { return 4; };
+  auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  REQUIRE(!rich.cells.empty());
+
+  // The fixpoint must terminate (a run past the cap SEQUANT_ASSERTs inside).
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  REQUIRE(legality.cells.size() == rich.cells.size());
+
+  auto const is_i = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"i";
+  };
+  auto const has_i = [&](auto const& v) {
+    return std::any_of(v.begin(), v.end(), is_i);
+  };
+
+  // Every occ-carrying value here is LoopCarried on occ (survives the axis,
+  // no enclosing occ loop): its occ axis must land in forced_split_axes and
+  // be EXCLUDED from home_floor (a LoopCarried axis is lifted out).
+  bool found_loop_carried = false;
+  for (auto const& cl : legality.cells) {
+    if (!has_i(cl.build_site)) continue;
+    for (auto const& ac : cl.per_axis)
+      if (is_i(ac.axis)) CHECK(ac.role == sequant::eval::LoopRole::LoopCarried);
+    if (has_i(cl.forced_split_axes)) {
+      found_loop_carried = true;
+      CHECK_FALSE(has_i(cl.home_floor));
+    }
+  }
+  // The B{i_3,i_4} outer-product root itself carries both occ indices; its
+  // forced_split_axes must name occ.
+  REQUIRE(found_loop_carried);
+
+  // A value that is NOT loop-carried on occ has no occ forced split (sanity:
+  // forced_split_axes is not spuriously populated). No such value exists in
+  // this all-LoopCarried fixture, so we only assert the record never contains
+  // a non-build-site axis.
+  for (auto const& cl : legality.cells)
+    for (auto const& fx : cl.forced_split_axes)
+      CHECK(std::find(cl.build_site.begin(), cl.build_site.end(), fx) !=
+            cl.build_site.end());
+}
