@@ -542,3 +542,240 @@ TEST_CASE(
       CHECK(std::find(cl.build_site.begin(), cl.build_site.end(), fx) !=
             cl.build_site.end());
 }
+
+// ===========================================================================
+// Task 5 (SP1 acceptance): a single, explicitly-named test documenting that
+// all FOUR LoopRole values are demonstrably produced by analyze_legality /
+// classify_axis across SP1's two canonical inputs. This test does NOT
+// re-derive the detailed per-role assertions already proven end-to-end
+// elsewhere in this file -- it only re-tallies which LoopRole each already-
+// exercised input actually produces, as one consolidated acceptance point:
+//   - "classify_axis / analyze_legality: four-way axis classification on the
+//     water-20 aux-only residual" already REQUIREs/CHECKs, against
+//     analyze_legality's own LegalitySchedule: Reduction (the mu~,mu~
+//     Kappa-contraction result), LoopInvariant (the I(i,i;a,a) composite
+//     above it -- the Task-1 whole-subtree-vs-at-node correction target;
+//     home_floor excludes Kappa in both), and LoopLocal (at least one
+//     Kappa-carrying value, home_floor includes Kappa).
+//   - "analyze_legality: a loop-carried value records its axis in
+//     forced_split_axes; ..." already REQUIREs LoopCarried on the synthetic
+//     cross-iteration fixture, plus (Task 5 item 2) forced_split_axes is
+//     non-empty and home_floor EXCLUDES the split axis for that value.
+// Both fixtures are re-run here (same recipe, same shared helpers) purely to
+// tally LoopRole coverage; LoopInvariant is IMPLICIT in analyze_legality's
+// own output (an axis classified LoopInvariant is, by construction, never a
+// build_site member -- see CellLegality::home_floor's doc comment), so it is
+// witnessed via one direct classify_axis call on a cell with no Kappa
+// dependence at its own node, exactly as the water-20 test's Target 2 does.
+// ===========================================================================
+TEST_CASE(
+    "SP1 acceptance: analyze_legality / classify_axis demonstrably produce "
+    "all four LoopRole values (LoopLocal, Reduction, LoopCarried, "
+    "LoopInvariant) across the water-20 and cross-iteration canonical "
+    "inputs",
+    "[legality]") {
+  using sequant::eval::LoopRole;
+
+  bool saw_local = false;
+  bool saw_reduction = false;
+  bool saw_invariant = false;
+
+  // --- Water-20 aux-only residual: LoopLocal, Reduction, LoopInvariant ---
+  {
+    using sequant::eval::dryrun::EvalExprDryRun;
+    using sequant::eval::dryrun::EvalNodeDryRun;
+    using Node = EvalNodeDryRun;
+
+    auto ctx = sequant::get_default_context().clone();
+    ctx.set_first_dummy_index_ordinal(1000000);
+    auto isr = ctx.mutable_index_space_registry();
+    REQUIRE(isr != nullptr);
+    sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+    sequant::mbpt::add_df_spaces(isr);
+    auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+    auto const body =
+        legality_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                               "/data/csv_ccsd_doubles_residual_df.txt");
+    REQUIRE(!body.empty());
+    std::string line = body;
+    if (auto nl = line.find('\n'); nl != std::string::npos)
+      line = line.substr(0, nl);
+    auto expr = sequant::deserialize<sequant::ExprPtr>(line);
+    REQUIRE(static_cast<bool>(expr));
+    REQUIRE(expr->is<sequant::Sum>());
+    auto const& summands = expr->as<sequant::Sum>().summands();
+    REQUIRE(!summands.empty());
+
+    std::size_t nterms = std::min<std::size_t>(summands.size(), 40);
+    if (char const* nt = std::getenv("SEQUANT_UT_DRYRUN_NTERMS"))
+      nterms = std::min<std::size_t>(summands.size(), std::atoll(nt));
+
+    auto regime = legality_witness_df_regime(kLegalityWater20_pVDZF12);
+    auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+    sequant::BatchPolicy policy;
+    policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
+      return ix.space().base_key() == L"Κ";
+    };
+    policy.is_batchable_external_index = [](sequant::Index const&) {
+      return false;
+    };
+    policy.batch_spectator_indices = false;
+    policy.batch_target_size = [](sequant::Index const&) -> std::size_t {
+      return 256;
+    };
+    policy.is_volatile_leaf = [](sequant::Tensor const& t) {
+      return t.label() == L"t";
+    };
+    policy.accumulation_factor = 1.0;
+    policy.persistent_only = false;
+    policy.peak_threshold = 1e11;
+
+    auto axes_map = std::make_shared<std::unordered_map<
+        sequant::Expr const*,
+        sequant::container::vector<sequant::NodeBatchAnnotation>>>();
+    sequant::OptimizeOptions opts;
+    opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
+    opts.idx_to_extent = regime.idx_to_extent();
+    opts.inner_pow = regime.inner_pow_fn();
+    opts.batch_policy = policy;
+    opts.volatile_weight = 20.0;
+    opts.roofline.machine_balance = 200.0;
+    opts.roofline.fast_mem_elems = 1000000.0;
+    opts.term_batch_axes = axes_map;
+
+    std::vector<Node> forest;
+    for (std::size_t s = 0; s < nterms; ++s) {
+      sequant::ExprPtr const term =
+          legality_witness_flatten_product(summands[s]);
+      if (!term) continue;
+      sequant::ExprPtr optimized;
+      try {
+        optimized = sequant::optimize(term, opts);
+      } catch (std::exception const&) {
+        continue;
+      }
+      if (!optimized) continue;
+      sequant::BinarizationOptions bopts;
+      if (auto it = axes_map->find(optimized.get()); it != axes_map->end())
+        bopts.node_batch_axes = it->second;
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+      forest.push_back(sequant::binarize<EvalExprDryRun>(optimized, {}, bopts));
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    }
+    REQUIRE(!forest.empty());
+
+    auto const block_of = [](sequant::Index const&) -> std::size_t {
+      return 256;
+    };
+    auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+    REQUIRE(!rich.cells.empty());
+
+    auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+    REQUIRE(legality.cells.size() == rich.cells.size());
+
+    for (auto const& cl : legality.cells) {
+      for (auto const& ac : cl.per_axis) {
+        if (ac.role == LoopRole::LoopLocal) saw_local = true;
+        if (ac.role == LoopRole::Reduction) saw_reduction = true;
+      }
+    }
+
+    auto const is_K = [](sequant::Index const& ix) {
+      return ix.space().base_key() == L"Κ";
+    };
+    auto const carries_K =
+        [&](sequant::container::svector<sequant::Index> const& v) {
+          return std::any_of(v.begin(), v.end(), is_K);
+        };
+
+    // A concrete Κ Index instance to probe with -- classify_axis only ever
+    // compares TYPE, never identity.
+    sequant::Index k_axis;
+    bool found_k = false;
+    for (auto const& vc : rich.cells) {
+      auto const it = std::find_if(vc.carried.begin(), vc.carried.end(), is_K);
+      if (it != vc.carried.end()) {
+        k_axis = *it;
+        found_k = true;
+        break;
+      }
+    }
+    REQUIRE(found_k);
+
+    // LoopInvariant, witnessed directly (implicit case, never in per_axis):
+    // a non-leaf cell whose OWN node neither carries Κ nor contracts it.
+    auto const vmap = sequant::eval::build_value_node_map(forest);
+    for (auto const& vc : rich.cells) {
+      if (carries_K(vc.carried)) continue;
+      auto const it = vmap.find(vc.hash);
+      if (it == vmap.end() || it->second.leaf()) continue;
+      auto const contracted = sequant::contracted_indices(it->second);
+      if (std::any_of(contracted.begin(), contracted.end(), is_K)) continue;
+      sequant::container::svector<sequant::Index> contracted_below(
+          contracted.begin(), contracted.end());
+      if (sequant::eval::classify_axis(vc.carried, contracted_below, k_axis,
+                                       vc.occurrences) ==
+          LoopRole::LoopInvariant) {
+        saw_invariant = true;
+        break;
+      }
+    }
+  }
+
+  CHECK(saw_local);
+  CHECK(saw_reduction);
+  CHECK(saw_invariant);
+
+  // --- Synthetic cross-iteration fixture: LoopCarried ---
+  bool saw_carried = false;
+  {
+    using sequant::eval::dryrun::EvalExprDryRun;
+    using sequant::eval::dryrun::EvalNodeDryRun;
+    using Node = EvalNodeDryRun;
+
+    auto const body =
+        legality_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                               "/data/legality_cross_iteration.txt");
+    REQUIRE(!body.empty());
+    std::string line = body;
+    if (auto nl = line.find('\n'); nl != std::string::npos)
+      line = line.substr(0, nl);
+    auto expr = sequant::deserialize<sequant::ExprPtr>(line);
+    REQUIRE(static_cast<bool>(expr));
+
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = sequant::binarize<EvalExprDryRun>(expr);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE_FALSE(node.leaf());
+
+    sequant::BatchPolicy policy;
+    policy.is_batchable_external_index = [](sequant::Index const& ix) {
+      return ix.space().base_key() == L"i";
+    };
+
+    sequant::eval::dryrun::SizeRegime regime;
+    regime.space_extent = {{L"i", 8u}, {L"a", 16u}};
+    auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+    std::vector<Node> forest{node};
+    auto const block_of = [](sequant::Index const&) -> std::size_t {
+      return 4;
+    };
+    auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+    REQUIRE(!rich.cells.empty());
+
+    auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+    REQUIRE(legality.cells.size() == rich.cells.size());
+
+    for (auto const& cl : legality.cells)
+      for (auto const& ac : cl.per_axis)
+        if (ac.role == LoopRole::LoopCarried) saw_carried = true;
+  }
+
+  CHECK(saw_carried);
+
+  // Consolidated SP1 acceptance: all four roles demonstrably reachable.
+  CHECK((saw_local && saw_reduction && saw_invariant && saw_carried));
+}
