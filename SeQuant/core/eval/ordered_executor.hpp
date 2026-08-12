@@ -218,10 +218,23 @@ void run_ordered_contracted_block(
     CacheManager<N, FHC>& parent_cache,
     std::function<std::size_t(Index const&)> const& target,
     typename CacheManager<N, FHC>::BatchContext const& ectx,
-    container::vector<ResultPtr>& value_results) {
+    container::vector<ResultPtr>& value_results,
+    container::vector<char>& built) {
   using Cache = CacheManager<N, FHC>;
   using BatchContext = typename Cache::BatchContext;
   using member_t = std::pair<node_t const*, Index>;
+
+  // R4 (SP3 Task 5): loud guard on this block's batch-mode kind. The batch-loop
+  // primitive below realizes Contracted and External blocks UNIFORMLY (their
+  // difference is carried entirely by each escape output's OutputKind, handled
+  // per-output below), so both are supported; any OTHER BatchModeType value is
+  // a schedule this executor cannot interpret and must refuse loudly rather
+  // than silently mis-run. (An assert -- not a switch/default -- so the 2-value
+  // enum does not trip -Wcovered-switch-default.)
+  SEQUANT_ASSERT((block.kind == BatchModeType::Contracted ||
+                  block.kind == BatchModeType::External) &&
+                 "evaluate_ordered_schedule: unsupported ScopeBlock batch-mode "
+                 "kind -- only Contracted/External are realizable");
 
   auto const resolve = [&](std::size_t vid) -> node_t const& {
     auto const hash = rich.cells[vid].hash;
@@ -304,11 +317,20 @@ void run_ordered_contracted_block(
       if (auto const* build = std::get_if<BuildStep>(&step.value)) {
         (void)evaluate_impl<EvalTrace>(resolve(build->value_id), leaf_evaluator,
                                        bs.cache);
+        // R3: record this loop-local Transient as produced (it is built fresh
+        // every batch on the scratch and never lands in value_results, so the
+        // built ledger is the only faithful "was built" slot for it).
+        built[build->value_id] = 1;
+      } else if (auto const* child = std::get_if<ScopeBlock>(&step.value)) {
+        run_ordered_contracted_block<EvalTrace>(
+            *child, vmap, rich, leaf_evaluator, bs.cache, target, ctx,
+            value_results, built);
       } else {
-        auto const& child = std::get<ScopeBlock>(step.value);
-        run_ordered_contracted_block<EvalTrace>(child, vmap, rich,
-                                                leaf_evaluator, bs.cache,
-                                                target, ctx, value_results);
+        // R4: the Step variant has exactly BuildStep/ScopeBlock alternatives;
+        // a valueless-by-exception or future third alternative is a schedule
+        // this executor cannot interpret.
+        SEQUANT_ASSERT(false &&
+                       "evaluate_ordered_schedule: unsupported Step variant");
       }
     }
 
@@ -322,11 +344,18 @@ void run_ordered_contracted_block(
           acc[k] = std::move(part);
         else
           acc[k]->add_inplace(*part);
-      } else {
+      } else if (kind == OutputKind::AccumulateScatter) {
         if (!dest[k])
           dest[k] = part->pre_sized_zeros_over_mode(*dm[k], *carrier_full,
                                                     lf->second);
         dest[k]->write_into_slice(*part, *dm[k], e_lo, e_hi);
+      } else {
+        // R4: an escape output is AccumulateSum or AccumulateScatter (a
+        // Transient never appears in outputs -- see OutputKind's doc comment);
+        // any other kind is a construct this batch fold cannot realize.
+        SEQUANT_ASSERT(false &&
+                       "evaluate_ordered_schedule: unsupported escape "
+                       "OutputKind in batch fold");
       }
     }
   }
@@ -334,11 +363,17 @@ void run_ordered_contracted_block(
   for (std::size_t k = 0; k != block.outputs.size(); ++k) {
     auto const vid = block.outputs[k].first;
     auto const kind = block.outputs[k].second;
+    // R4: exhaustive on OutputKind before selecting the running result to home.
+    SEQUANT_ASSERT((kind == OutputKind::AccumulateSum ||
+                    kind == OutputKind::AccumulateScatter) &&
+                   "evaluate_ordered_schedule: unsupported escape OutputKind "
+                   "at block close");
     ResultPtr& out = (kind == OutputKind::AccumulateSum) ? acc[k] : dest[k];
     SEQUANT_ASSERT(out &&
                    "evaluate_ordered_schedule: a loop block realized zero "
                    "batches for an escape output");
     value_results[vid] = out;
+    built[vid] = 1;  // R3: this escape output is produced (homed below).
     // Home the closed output at the scope one level OUT with a RESIDENT slot
     // so a later step there reads it WHOLE (via the ordinary Checked probe)
     // instead of re-descending and rebuilding it -- for an AccumulateSum
@@ -424,6 +459,14 @@ ResultPtr evaluate_ordered_schedule(
   // rather than re-resolving it through the cache.
   container::vector<ResultPtr> value_results(ordered.num_values);
 
+  // R3 (SP3 Task 5): executor-side run-completeness ledger. Set to 1 at the
+  // EXACT site each scheduled value is actually built -- a root-level BuildStep
+  // below, a loop-local Transient BuildStep, or a block escape output's close
+  // (see run_ordered_contracted_block). This is the true "was built" slot for
+  // the completeness assert at the tail (value_results holds only root-scope
+  // escaping values, so a loop-local Transient never lands there).
+  container::vector<char> built(ordered.num_values, 0);
+
   // -------- Tasks 1-3: walk the root block's own steps, in order. --------
   // A BuildStep is built directly (Task 1); a child ScopeBlock (a realized
   // batch loop, Contracted or External alike) is run via
@@ -455,11 +498,37 @@ ResultPtr evaluate_ordered_schedule(
       if (!it->second.leaf()) cache.ensure_home_slot(it->second);
       value_results[vid] =
           evaluate_impl<EvalTrace>(it->second, leaf_evaluator, cache);
-    } else {
-      auto const& block = std::get<ScopeBlock>(step.value);
+      built[vid] = 1;  // R3: this root-scope value is produced.
+    } else if (auto const* block = std::get_if<ScopeBlock>(&step.value)) {
       detail::run_ordered_contracted_block<EvalTrace>(
-          block, vmap, rich, leaf_evaluator, cache, target, root_ectx,
-          value_results);
+          *block, vmap, rich, leaf_evaluator, cache, target, root_ectx,
+          value_results, built);
+    } else {
+      // R4: the Step variant has exactly BuildStep/ScopeBlock alternatives; any
+      // other state is a schedule this executor cannot interpret.
+      SEQUANT_ASSERT(false &&
+                     "evaluate_ordered_schedule: unsupported Step variant at "
+                     "root scope");
+    }
+  }
+
+  // R3: run-completeness. Every value_id the schedule PROMISES to produce --
+  // every BuildStep (root-level or loop-local Transient) and every block escape
+  // output, enumerated by collect_production_ids -- must have been actually
+  // built by the walk above. Complements well_formed's STATIC single-producer
+  // check, which checks no DUPLICATE production but NOT completeness (see
+  // ordered_schedule.hpp well_formed's \note). A gap here means the executor
+  // skipped a scheduled value: a silent under-execution to refuse, not ignore.
+  {
+    container::vector<std::size_t> production_ids;
+    detail::collect_production_ids(ordered.root, production_ids);
+    for (std::size_t const vid : production_ids) {
+      SEQUANT_ASSERT(vid < ordered.num_values &&
+                     "evaluate_ordered_schedule: production value_id out of "
+                     "range");
+      SEQUANT_ASSERT(built[vid] &&
+                     "evaluate_ordered_schedule: a scheduled value_id was "
+                     "never produced during the run (incomplete execution)");
     }
   }
 

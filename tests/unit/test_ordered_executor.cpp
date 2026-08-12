@@ -31,6 +31,7 @@
 #include <SeQuant/core/eval/node_batch_annotation.hpp>
 #include <SeQuant/core/eval/ordered_executor.hpp>
 #include <SeQuant/core/eval/ordered_schedule.hpp>
+#include <SeQuant/core/eval/peak_monitor.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/eval/scope_executor.hpp>
@@ -568,6 +569,13 @@ TEST_CASE(
   logger.eval.stream = &ord_trace;
   auto ordered_cache = sequant::cache_manager(forest);
   ordered_cache.set_recompute_tally_enabled(true);
+  // R1/R2: install the hierarchy-wide PeakMonitor on the ROOT cache only; it
+  // propagates to every per-batch scratch via peak_monitor()'s parent_
+  // fallthrough (the scratch caches set_parent to this root), so note_working_
+  // set() calls anywhere in the ordered walk fold into ONE high-water mark. No
+  // executor wiring -- the install lives entirely here.
+  sequant::eval::PeakMonitor ord_mon;
+  ordered_cache.set_peak_monitor(&ord_mon);
   ResultPtr ord_result;
   try {
     ord_result = sequant::eval::evaluate_ordered_schedule<sequant::Trace::On>(
@@ -584,6 +592,11 @@ TEST_CASE(
       sequant::eval::build_scope_schedule<std::wstring>(rich, {L"Κ"});
   auto ws_cache = sequant::cache_manager(forest);
   ws_cache.set_recompute_tally_enabled(true);
+  // R2: same measurement on the whole-scope executor's own root cache, so the
+  // ordered-vs-whole-scope peak comparison below is apples-to-apples (both
+  // realized peaks, both via a root PeakMonitor, both under Trace::On).
+  sequant::eval::PeakMonitor ws_mon;
+  ws_cache.set_peak_monitor(&ws_mon);
   ResultPtr ws_result;
   try {
     ws_result = sequant::eval::evaluate_whole_scope<sequant::Trace::On>(
@@ -599,6 +612,12 @@ TEST_CASE(
   logger.eval.stream = &fd_trace;
   auto fd_cache = sequant::cache_manager(forest);
   fd_cache.set_recompute_tally_enabled(true);
+  // Reference peak too: forest descent also builds-once (CSE) and keeps shared
+  // composites resident, so its realized peak is the natural build-once
+  // baseline the ordered executor's peak should track (both keep the Kappa-free
+  // composite resident once) -- reported alongside for context.
+  sequant::eval::PeakMonitor fd_mon;
+  fd_cache.set_peak_monitor(&fd_mon);
   ResultPtr fd_result;
   try {
     fd_result =
@@ -684,4 +703,96 @@ TEST_CASE(
   // contrast holds for the busiest of them too.
   CHECK(worst_ord == 1);
   CHECK(worst_ws > 1);
+
+  // ---- Step 1 (R1/R2): realized-peak monitoring. All three peaks are measured
+  // the SAME way (a PeakMonitor on each executor's root cache, every run under
+  // Trace::On, all on THIS shared forest), emitted for context.
+  //
+  // The peak assertion is vs the BUILD-ONCE baseline (forest descent, pure
+  // CSE), NOT vs whole-scope. Whole-scope's per-block REBUILD is a recompute /
+  // peak-MINIMIZATION strategy: it drops each rebuild transiently, so fewer
+  // values are co-resident and its peak is a LOWER bound (the recompute floor),
+  // NOT an upper bound a build-once executor should be expected to meet. Both
+  // build-once executors (forest descent and ordered) instead keep shared
+  // composites resident across the whole walk -- the space/time tradeoff. The
+  // right invariant is that ordered's build-once homing does not raise peak
+  // over the build-once REFERENCE (forest descent), which it satisfies (and
+  // here strictly improves on). Per-composite home-vs-rebuild peak control
+  // (choosing which composites to home vs recompute to cap peak) is SP4's
+  // cost-driven job; SP3 executes whatever build_ordered_schedule produces.
+  std::wcerr << L"  realized peak (bytes): ordered = " << ord_mon.hwmark_bytes
+             << L", whole-scope = " << ws_mon.hwmark_bytes
+             << L", forest-descent = " << fd_mon.hwmark_bytes << L"\n";
+  INFO("realized peak (bytes): ordered = "
+       << ord_mon.hwmark_bytes << ", whole-scope = " << ws_mon.hwmark_bytes
+       << ", forest-descent = " << fd_mon.hwmark_bytes);
+  CAPTURE(ord_mon.hwmark_bytes, ws_mon.hwmark_bytes, fd_mon.hwmark_bytes);
+  // R1: if the ordered high-water is 0, the ordered build path never called
+  // note_working_set() where the reference does -- a real executor gap, not a
+  // test artifact. Under Trace::On every evaluate_impl / combine step notes its
+  // working set, so a nonzero mark confirms the monitor observes the ordered
+  // walk.
+  CHECK(ord_mon.hwmark_bytes > 0);
+  CHECK(ws_mon.hwmark_bytes > 0);
+  CHECK(fd_mon.hwmark_bytes > 0);
+  // R2 (ruling: assert vs the build-once baseline): the ordered executor's
+  // build-once homing must not raise peak over forest descent's build-once CSE.
+  CHECK(ord_mon.hwmark_bytes <= fd_mon.hwmark_bytes);
+
+  // ---- Step 1 (R3): test-side run-completeness cross-check, complementing
+  // the SEQUANT_ASSERT inside evaluate_ordered_schedule (a no-op in this
+  // IGNORE-assert release build; ACTIVE in cmake-build-debug, where the
+  // executor-side `built` ledger -- set at every real production site, product
+  // or sum -- is the AUTHORITATIVE completeness gate; it is proven to hold on
+  // this witness in debug). This proxy cross-checks completeness from OUTSIDE
+  // the executor against the forest-descent (pure-CSE) reference tally: the
+  // ordered executor must build, at least once, every PRODUCT the reference
+  // run builds at least once. Comparing to the reference tally (rather than
+  // asserting >=1 outright) is the correct calibration -- a scheduled product
+  // that CSE folds to a home/cache alias is built ONCE under some other cell's
+  // identity and served as a dedup hit thereafter, so recompute_tally() shows
+  // 0 for THAT vid under BOTH runs; that is not a gap. A vid the reference
+  // builds but ordered does not (ord 0, fd >=1) WOULD be a real skip. (Only
+  // products are compared: tally_build records only the contraction branch of
+  // evaluate_impl -- a Sum-typed node is summed, never tallied.)
+  {
+    sequant::container::vector<std::size_t> prod_ids;
+    sequant::eval::detail::collect_production_ids(ordered.root, prod_ids);
+    std::size_t checked = 0, ord_missing_vs_fd = 0, dedup_alias = 0;
+    for (std::size_t const vid : prod_ids) {
+      REQUIRE(vid < ordered.num_values);
+      auto const it = vmap.find(rich.cells[vid].hash);
+      REQUIRE(it != vmap.end());
+      if (it->second.leaf()) continue;  // leaves are handed back, never built
+      if (!it->second->is_product()) continue;  // only products are tallied
+      auto const ord_b =
+          orderedexec_builds_of(ordered_cache.recompute_tally(), it->second);
+      auto const fd_b =
+          orderedexec_builds_of(fd_cache.recompute_tally(), it->second);
+      if (fd_b >= 1) {
+        ++checked;
+        if (ord_b < 1) ++ord_missing_vs_fd;
+      } else if (ord_b < 1) {
+        ++dedup_alias;  // built by neither as a distinct product (CSE alias)
+      }
+    }
+    std::wcerr << L"  completeness cross-check: " << checked
+               << L" reference-built products, ordered-missing = "
+               << ord_missing_vs_fd << L", CSE-alias (exempt) = " << dedup_alias
+               << L"\n";
+    CHECK(checked > 0);
+    CHECK(ord_missing_vs_fd == 0);
+  }
+
+  // ---- R4: confirm SP2's build-time non-innermost forced-split tripwire
+  // stands (ordered_schedule.hpp:839-860). That SEQUANT_ASSERT in
+  // build_ordered_schedule prevents a non-innermost forced-split
+  // OrderedSchedule from EVER being constructed, so evaluate_ordered_schedule
+  // (which takes no `legality` and carries no runtime split marker) need not --
+  // and cannot -- re-derive it; the executor's own loud guards (exhaustive
+  // Step-variant, OutputKind, and BatchModeType dispatch, all
+  // SEQUANT_ASSERT(false, ...) in ordered_executor.hpp) refuse any OTHER
+  // unsupported construct. The schedule built here is well_formed (asserted
+  // above) and executed to completion.
+  CHECK(sequant::eval::well_formed(ordered));
 }
