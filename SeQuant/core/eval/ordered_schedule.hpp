@@ -235,6 +235,121 @@ struct OrderedScheduleDepthBucket {
   container::svector<std::pair<std::size_t, OutputKind>> outputs;
 };
 
+///
+/// \brief Per-candidate-step metadata for \c ordered_schedule_topo_sort_steps:
+/// which value_id's this step (a \c BuildStep or a nested child \c
+/// ScopeBlock, already built) makes visible to ITS OWN siblings at this
+/// SAME block level (\c produced), which value_id's its content directly
+/// needs (\c requires_, unfiltered -- see \c ordered_schedule_topo_sort_steps
+/// for how the irrelevant/external entries are dropped), and a tie-break key
+/// for when the true dependency order leaves two ready steps unordered.
+///
+struct OrderedScheduleStepMeta {
+  container::svector<std::size_t> produced;
+  container::svector<std::size_t> requires_;
+  std::size_t tie_key = 0;
+};
+
+///
+/// \brief Topologically sort \p items (one already-built \c Step per entry,
+/// paired index-for-index with \p meta) by the LOCAL dependency edges among
+/// THIS block's own steps: step A must precede step B whenever B's \c
+/// requires_ names a value_id that's in A's \c produced. Kahn's algorithm;
+/// among simultaneously-ready steps, always picks the smallest \c tie_key
+/// first, for a deterministic result when the true dependency order leaves
+/// steps genuinely unordered relative to each other.
+///
+/// \details Replaces an earlier (unsound) scalar-key-only sort: a single
+/// scalar per step can be MADE to sort a child block before every value that
+/// reads its output (see \c build_ordered_schedule's own doc comment, part
+/// 3), but it cannot ALSO guarantee a step sorts after every value its own
+/// content reads as an input -- those are two independent constraints a
+/// single total order can satisfy only when they happen to agree, which
+/// water-20's own aux-only fixture never stresses (its \c {Κ} block's
+/// content is leaf-only, needing no root-homed input). A real topological
+/// sort over the ACTUAL per-step dependency edges satisfies both directions
+/// by construction, superseding the scalar key -- the key survives only as
+/// the tie-break \c build_ordered_schedule still needs for the (usual)
+/// case of two steps with no dependency relation to each other at all.
+///
+/// \c SEQUANT_ASSERT's that every item is placed exactly once (a cycle in
+/// this LOCAL edge set would be a bug -- these edges are a sub-relation of
+/// the whole-forest DAG's edges, restricted to one block's own siblings, so
+/// they inherit its acyclicity), then re-derives the local edges a SECOND
+/// time against the FINAL order and \c SEQUANT_ASSERT's every one is
+/// actually satisfied (a loud tripwire against any future violation of this
+/// invariant, per the design review that requested it, rather than a silent
+/// mis-order).
+///
+inline container::vector<Step> ordered_schedule_topo_sort_steps(
+    container::vector<Step> items,
+    container::vector<OrderedScheduleStepMeta> const& meta) {
+  std::size_t const m = items.size();
+  SEQUANT_ASSERT(meta.size() == m);
+
+  // value_id -> which LOCAL item produces it. well_formed's whole-schedule
+  // single-producer invariant guarantees at most one item at ANY level can
+  // claim a given value_id; a value_id absent here is external to this
+  // level (resolved at an ancestor level, not a local ordering constraint).
+  std::unordered_map<std::size_t, std::size_t> produced_by;
+  for (std::size_t i = 0; i < m; ++i)
+    for (std::size_t vid : meta[i].produced) produced_by.emplace(vid, i);
+
+  container::vector<container::svector<std::size_t>> prerequisites(m);
+  container::vector<std::size_t> indegree(m, 0);
+  container::vector<container::svector<std::size_t>> dependents(m);
+  for (std::size_t i = 0; i < m; ++i) {
+    for (std::size_t vid : meta[i].requires_) {
+      auto const it = produced_by.find(vid);
+      if (it == produced_by.end() || it->second == i) continue;
+      auto& preqs = prerequisites[i];
+      if (std::find(preqs.begin(), preqs.end(), it->second) == preqs.end()) {
+        preqs.push_back(it->second);
+        dependents[it->second].push_back(i);
+      }
+    }
+    indegree[i] = prerequisites[i].size();
+  }
+
+  container::svector<std::size_t> ready;
+  for (std::size_t i = 0; i < m; ++i)
+    if (indegree[i] == 0) ready.push_back(i);
+
+  container::svector<std::size_t> order;
+  order.reserve(m);
+  while (!ready.empty()) {
+    auto const best_it = std::min_element(
+        ready.begin(), ready.end(), [&](std::size_t a, std::size_t b) {
+          if (meta[a].tie_key != meta[b].tie_key)
+            return meta[a].tie_key < meta[b].tie_key;
+          return a < b;  // full determinism on an exact tie
+        });
+    std::size_t const cur = *best_it;
+    ready.erase(best_it);
+    order.push_back(cur);
+    for (std::size_t dep : dependents[cur]) {
+      SEQUANT_ASSERT(indegree[dep] > 0);
+      if (--indegree[dep] == 0) ready.push_back(dep);
+    }
+  }
+  // No cycle: see the function doc comment.
+  SEQUANT_ASSERT(order.size() == m);
+
+  // Post-sort validation (loud tripwire, see the function doc comment):
+  // every local prerequisite must actually precede its dependent.
+  container::vector<std::size_t> position(m);
+  for (std::size_t pos = 0; pos < order.size(); ++pos)
+    position[order[pos]] = pos;
+  for (std::size_t i = 0; i < m; ++i)
+    for (std::size_t p : prerequisites[i])
+      SEQUANT_ASSERT(position[p] < position[i]);
+
+  container::vector<Step> out_steps;
+  out_steps.reserve(m);
+  for (std::size_t idx : order) out_steps.push_back(std::move(items[idx]));
+  return out_steps;
+}
+
 }  // namespace detail
 
 ///
@@ -298,42 +413,64 @@ struct OrderedScheduleDepthBucket {
 ///     forced_split_axes's doc comment) resolve to the one axis TYPE they
 ///     both name, so there is no real tie to break.
 ///
-/// \par 3. Topological order within a block
+/// \par 3. Topological order within a block -- a REAL topological sort
 /// Each block's own \c steps interleave its \c BuildStep's (one per value
 /// homed there) with, if the chain continues, ONE nested child \c
-/// ScopeBlock \c Step for the next-deeper axis. Ordered by a
-/// \c (representative_point, category) key, category 0 (child block) before
-/// category 1 (\c BuildStep), stable-sorted ascending:
-///   - a \c BuildStep's key is \c (value's \c ValueCell::first_use, 1) --
-///     the point the value is first produced.
-///   - a child block's key is \c (representative_point, 0), where \c
-///     representative_point is the MIN \c ValueCell::first_use over every
-///     value produced ANYWHERE in that block's subtree (its own \c
-///     BuildStep's and \c outputs entries, folded recursively through any
-///     further-nested child) -- NOT the max. \c compute_dag_boulevard's
-///     \c point counter is monotone WITHIN one tree (post-order: every
-///     operand's point precedes its consumer's) but carries NO cross-tree
-///     meaning -- the forest's later trees (terms) simply continue
-///     counting, so a single loop block realized ONCE across the WHOLE
-///     forest (the non-split case) aggregates content from EVERY term that
-///     touches its axis, and an EARLY term's own consumer can have a much
-///     SMALLER point than a LATER term's content also homed in this same
-///     block. Using the MAX would place the block after only the latest
-///     term's content and thus, wrongly, before some earlier term's true
-///     consumer (this was tried and failed the water-20 test below: an
-///     early-term consumer sorted BEFORE the block whose output it reads).
-///     The MIN is provably safe in the "before every true consumer"
-///     direction instead: for ANY value V that directly reads a value O
-///     the block produces, \c V.first_use == O's own \c consumer_point
-///     (V is O's structural parent) which is >= O's own \c point, which is
-///     >= the block's \c representative_point by construction (O is one of
-///     the values the MIN ranges over) -- so \c representative_point <=
-///     V.first_use always, and the tie case (equality, exactly water-20's
-///     shape: I(i,i;a,a)'s \c first_use IS I(μ̃,μ̃)'s own point) is broken
-///     correctly by the category tie-break (0 < 1, block first). The
-///     symmetric risk (scheduling the block too EARLY, before some OTHER
-///     value it genuinely depends on as an external input) is not derived
-///     as rigorously -- see the report for this JUDGMENT CALL's scope.
+/// ScopeBlock \c Step for the next-deeper axis. These are ordered by
+/// \c detail::ordered_schedule_topo_sort_steps against a per-step DEPENDENCY
+/// GRAPH, not a scalar key alone (see below for why a scalar key cannot
+/// suffice), reconstructed from \p rich alone -- no forest access needed:
+///   - GLOBAL direct-dependency edges: for every \c OccurrenceRec of every
+///     value, its \c consumer_point names the static point of its
+///     structural PARENT node; resolving that point back to the value_id
+///     whose OWN occurrence starts there (\c point_owner, built once up
+///     front) recovers "this parent value directly reads that child value"
+///     -- the exact same edges the forest itself encodes, without needing
+///     the forest.
+///   - Per LEVEL (one \c ScopeBlock's own \c steps list, including root),
+///     each candidate step gets a \c detail::OrderedScheduleStepMeta:
+///     - a \c BuildStep{v}'s \c produced = `{v}`; its \c requires_ = every
+///       value_id \c v directly reads (raw, unfiltered -- irrelevant/
+///       external entries are dropped by the topo-sort itself, since they
+///       simply never match a LOCAL \c produced set).
+///     - a nested child block's \c produced = that block's OWN top-level
+///       \c outputs value_id's (what it makes visible to ITS OWN parent's
+///       siblings -- its internal \c BuildStep's and any FURTHER-nested
+///       child's content are never directly readable from outside it: by
+///       construction, a value crossing a block boundary as an operand
+///       must first have been resolved out of that axis, which is exactly
+///       the escape/\c outputs case). Its \c requires_ is the FULL,
+///       recursively bubbled external need of its WHOLE subtree (built
+///       bottom-up alongside the block itself: \c requires_all(level) =
+///       (this level's own direct needs UNION its child's already-bubbled
+///       \c requires_all) MINUS \c produced_all(level), where
+///       \c produced_all is everything ever produced ANYWHERE in the
+///       subtree, recursively) -- so a need that is only satisfiable
+///       several levels further out (e.g. a root-homed common factor
+///       consumed by a value nested two axes deep) still surfaces at
+///       whichever level can actually satisfy it.
+///   - Ties (two ready steps with no dependency relation to each other) are
+///     broken by \c tie_key ascending: a \c BuildStep's is its value's own
+///     \c ValueCell::first_use; a child block's is the MIN \c first_use
+///     over its own \c produced_all (deterministic, and -- though no longer
+///     load-bearing for correctness, since the real edges now enforce both
+///     directions -- still places a block as early as its own true
+///     dependency slack allows).
+///
+/// A single SCALAR key alone cannot express both directions of this at
+/// once: an earlier version of this function used the MIN-\c first_use
+/// value itself as the sort key (not just a tie-break), which is provably
+/// sound for "the block sorts before every true consumer" (see the MIN vs
+/// MAX reasoning that was here, now superseded) but has NO corresponding
+/// guarantee for "the block sorts after every true input it reads" -- a
+/// value produced by a same-level sibling \c BuildStep (e.g. a root-homed
+/// operand consumed by content nested inside a child block) could still
+/// land, by raw point value, AFTER the block's MIN-derived key, silently
+/// mis-ordering the schedule with no structural check to catch it. The real
+/// topological sort above satisfies both directions by construction and is
+/// checked twice (no-cycle placement count, then a second pass confirming
+/// every edge survived the final order) -- see \c
+/// ordered_schedule_topo_sort_steps's own doc comment.
 ///
 /// \p policy is accepted for interface symmetry with the rest of the SP1/
 /// SP2 pipeline (every stage from \c analyze_legality onward threads it)
@@ -355,6 +492,35 @@ struct OrderedScheduleDepthBucket {
   value_id_of.reserve(rich.cells.size());
   for (ValueCell const& vc : rich.cells)
     value_id_of.emplace(vc.hash, vc.value_id);
+
+  // GLOBAL direct-dependency edges, recovered from rich alone (see the
+  // function doc comment's part 3): for every occurrence of every value,
+  // its consumer_point names its structural PARENT's own production point;
+  // point_owner resolves that point back to the value_id whose occurrence
+  // starts there.
+  std::unordered_map<std::size_t, std::size_t> point_owner;
+  for (ValueCell const& vc : rich.cells)
+    for (OccurrenceRec const& occ : vc.occurrences)
+      point_owner[occ.point] = vc.value_id;
+
+  std::unordered_map<std::size_t, container::svector<std::size_t>> depends_on;
+  for (ValueCell const& vc : rich.cells)
+    for (OccurrenceRec const& occ : vc.occurrences) {
+      if (occ.consumer_point == occ.point)
+        continue;  // forest root: no structural parent
+      auto const owner_it = point_owner.find(occ.consumer_point);
+      if (owner_it == point_owner.end())
+        continue;  // defensive; every point is stamped by compute_dag_boulevard
+      auto& deps = depends_on[owner_it->second];
+      if (std::find(deps.begin(), deps.end(), vc.value_id) == deps.end())
+        deps.push_back(vc.value_id);
+    }
+  static container::svector<std::size_t> const kNoDeps{};
+  auto const requires_of =
+      [&](std::size_t vid) -> container::svector<std::size_t> const& {
+    auto const it = depends_on.find(vid);
+    return it == depends_on.end() ? kNoDeps : it->second;
+  };
 
   // 1. The canonical chain: one representative Index per distinct axis TYPE
   // present in ANY cell's per_axis (LoopLocal, Reduction, OR LoopCarried --
@@ -450,23 +616,73 @@ struct OrderedScheduleDepthBucket {
       root_build_ids.push_back(vid);
   }
 
-  // 3. Assemble the chain bottom-up (innermost first), threading each
-  // block's representative point up to its parent depth.
+  // 3. Assemble the chain bottom-up (innermost first). Alongside each
+  // already-built child block, thread up: child_own_outputs (bucket[d+1]'s
+  // OWN escape outputs -- what block[d+1] makes visible to block[d]'s own
+  // siblings, i.e. its "produced" as a candidate step one level up),
+  // child_produced_all / child_requires_all (the FULL recursive
+  // produced/external-need sets of block[d+1]'s WHOLE subtree -- used only
+  // to grow THIS level's own produced_all/requires_all further, per the
+  // function doc comment's part 3), and child_tie_key (the deterministic
+  // tie-break for placing block[d+1] within block[d]'s own steps).
   std::optional<ScopeBlock> child_block;
-  std::size_t child_rep_point = 0;
+  container::svector<std::size_t> child_own_outputs;
+  container::svector<std::size_t> child_produced_all;
+  container::svector<std::size_t> child_requires_all;
+  std::size_t child_tie_key = 0;
+
+  auto const union_into = [](container::svector<std::size_t>& acc,
+                             container::svector<std::size_t> const& add) {
+    for (std::size_t v : add)
+      if (std::find(acc.begin(), acc.end(), v) == acc.end()) acc.push_back(v);
+  };
 
   for (std::size_t i = 0; i < n; ++i) {
     std::size_t const d = n - 1 - i;  // innermost (n-1) to outermost (0)
     detail::OrderedScheduleDepthBucket const& bucket = buckets[d];
 
-    container::vector<std::pair<std::pair<std::size_t, int>, Step>> items;
-    for (std::size_t v : bucket.build_ids)
-      items.push_back({{rich.cells[v].first_use, 1}, Step{BuildStep{v}}});
-    if (child_block)
-      items.push_back({{child_rep_point, 0}, Step{std::move(*child_block)}});
-    std::stable_sort(
-        items.begin(), items.end(),
-        [](auto const& a, auto const& b) { return a.first < b.first; });
+    container::svector<std::size_t> own_produced;
+    for (std::size_t v : bucket.build_ids) own_produced.push_back(v);
+    for (auto const& out_entry : bucket.outputs)
+      own_produced.push_back(out_entry.first);
+
+    container::svector<std::size_t> produced_all = own_produced;
+    if (child_block) union_into(produced_all, child_produced_all);
+
+    container::svector<std::size_t> requires_all;
+    for (std::size_t v : own_produced) union_into(requires_all, requires_of(v));
+    if (child_block) union_into(requires_all, child_requires_all);
+    requires_all.erase(std::remove_if(requires_all.begin(), requires_all.end(),
+                                      [&](std::size_t v) {
+                                        return std::find(produced_all.begin(),
+                                                         produced_all.end(),
+                                                         v) !=
+                                               produced_all.end();
+                                      }),
+                       requires_all.end());
+
+    // This level's own candidate steps: build_ids (individual BuildStep's)
+    // plus the already-built child block (one Step), each with its own
+    // produced/requires_/tie_key metadata (see the function doc comment's
+    // part 3).
+    container::vector<Step> items;
+    container::vector<detail::OrderedScheduleStepMeta> meta;
+    for (std::size_t v : bucket.build_ids) {
+      items.push_back(Step{BuildStep{v}});
+      detail::OrderedScheduleStepMeta m;
+      m.produced.push_back(v);
+      m.requires_.assign(requires_of(v).begin(), requires_of(v).end());
+      m.tie_key = rich.cells[v].first_use;
+      meta.push_back(std::move(m));
+    }
+    if (child_block) {
+      items.push_back(Step{std::move(*child_block)});
+      detail::OrderedScheduleStepMeta m;
+      m.produced = child_own_outputs;
+      m.requires_ = child_requires_all;
+      m.tie_key = child_tie_key;
+      meta.push_back(std::move(m));
+    }
 
     ScopeBlock block;
     block.axis = types[d];
@@ -474,35 +690,47 @@ struct OrderedScheduleDepthBucket {
     block.kind = detail::mode_is_external(rich, types[d])
                      ? BatchModeType::External
                      : BatchModeType::Contracted;
-    for (auto& [key, step] : items) block.steps.push_back(std::move(step));
+    block.steps =
+        detail::ordered_schedule_topo_sort_steps(std::move(items), meta);
     block.outputs.assign(bucket.outputs.begin(), bucket.outputs.end());
 
-    std::size_t rep = std::numeric_limits<std::size_t>::max();
-    for (std::size_t v : bucket.build_ids)
-      rep = std::min(rep, rich.cells[v].first_use);
-    for (auto const& [vid, kind] : bucket.outputs)
-      rep = std::min(rep, rich.cells[vid].first_use);
-    if (child_block) rep = std::min(rep, child_rep_point);
-    if (rep == std::numeric_limits<std::size_t>::max())
-      rep = 0;  // empty block (no direct content, no child): harmless
-                // fallback, see the function doc comment's part 3.
+    std::size_t tie_key = std::numeric_limits<std::size_t>::max();
+    for (std::size_t v : produced_all)
+      tie_key = std::min(tie_key, rich.cells[v].first_use);
+    if (tie_key == std::numeric_limits<std::size_t>::max())
+      tie_key = 0;  // empty subtree: harmless fallback
 
     child_block = std::move(block);
-    child_rep_point = rep;
+    child_own_outputs.clear();
+    for (auto const& out_entry : bucket.outputs)
+      child_own_outputs.push_back(out_entry.first);
+    child_produced_all = std::move(produced_all);
+    child_requires_all = std::move(requires_all);
+    child_tie_key = tie_key;
   }
 
   // Root assembly: root-level BuildStep's plus, if the chain is non-empty,
   // the outermost block as one Step.
-  container::vector<std::pair<std::pair<std::size_t, int>, Step>> root_items;
-  for (std::size_t v : root_build_ids)
-    root_items.push_back({{rich.cells[v].first_use, 1}, Step{BuildStep{v}}});
-  if (child_block)
-    root_items.push_back({{child_rep_point, 0}, Step{std::move(*child_block)}});
-  std::stable_sort(
-      root_items.begin(), root_items.end(),
-      [](auto const& a, auto const& b) { return a.first < b.first; });
-  for (auto& [key, step] : root_items)
-    out.root.steps.push_back(std::move(step));
+  container::vector<Step> root_items;
+  container::vector<detail::OrderedScheduleStepMeta> root_meta;
+  for (std::size_t v : root_build_ids) {
+    root_items.push_back(Step{BuildStep{v}});
+    detail::OrderedScheduleStepMeta m;
+    m.produced.push_back(v);
+    m.requires_.assign(requires_of(v).begin(), requires_of(v).end());
+    m.tie_key = rich.cells[v].first_use;
+    root_meta.push_back(std::move(m));
+  }
+  if (child_block) {
+    root_items.push_back(Step{std::move(*child_block)});
+    detail::OrderedScheduleStepMeta m;
+    m.produced = child_own_outputs;
+    m.requires_ = child_requires_all;
+    m.tie_key = child_tie_key;
+    root_meta.push_back(std::move(m));
+  }
+  out.root.steps = detail::ordered_schedule_topo_sort_steps(
+      std::move(root_items), root_meta);
 
   SEQUANT_ASSERT(well_formed(out));
   return out;

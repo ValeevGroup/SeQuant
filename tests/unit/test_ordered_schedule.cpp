@@ -452,3 +452,144 @@ TEST_CASE(
   }
   REQUIRE(found_k_local_transient);
 }
+
+// ===========================================================================
+// Fix round 1 (design review): a single scalar sort key can place a child
+// block BEFORE every value that reads its output (the direction water-20
+// above already exercises), but it has NO corresponding guarantee that the
+// block sorts AFTER every value ITS OWN content reads as an input -- water-
+// 20's {Κ} block happens to be leaf-only, so that direction was never
+// stressed. This is a small HAND-BUILT fixture (mirrors test_scope_schedule.
+// cpp's own scope_eval_tensor/scope_leaf/scope_inode helpers, prefixed
+// distinctly to avoid a UNITY_BUILD anonymous-namespace collision) exercising
+// BOTH directions in one forest:
+//   R{a_1;a_2}          -- Κ-INDEPENDENT leaf: carries/contracts no Κ at its
+//                          own node, so it is ROOT-homed even though it sits
+//                          structurally under a realized Κ loop.
+//   G{Κ_1;a_1}, H{Κ_1;a_3} -- Κ-carrying leaves, lockstep with the enclosing
+//                          Κ loop -> LoopLocal (BuildStep's inside {Κ}).
+//   V{Κ_1;a_2} = G * R  -- Κ-local (LoopLocal): DIRECTLY READS R, the
+//                          root-homed leaf above -- the "block follows its
+//                          own input" direction.
+//   W{a_2;a_3} = V * H, with Κ realized AT W (batched_here) -- contracts Κ_1
+//                          at its own node -> Reduction, AccumulateSum
+//                          output of {Κ}.
+//   Z{a_2;a_3}          -- unrelated Κ-free leaf, root-homed.
+//   Top = W * Z          -- Κ-free at its own node (LoopInvariant) -> a
+//                          root-level BuildStep that READS W, the {Κ}
+//                          block's own output -- the "block precedes its
+//                          consumer" direction (water-20's own shape).
+// Expected root order: R (and G's/H's/Z's placement is unconstrained by any
+// edge) before {Κ}, and {Κ} before Top.
+// ===========================================================================
+
+namespace {
+
+sequant::EvalExpr orderedsched_eval_tensor(std::string_view tensor) {
+  auto expr = sequant::deserialize<sequant::ExprPtr>(std::string(tensor));
+  REQUIRE(static_cast<bool>(expr));
+  return sequant::EvalExpr{expr->as<sequant::Tensor>()};
+}
+
+sequant::EvalNode<sequant::EvalExpr> orderedsched_leaf(
+    std::string_view tensor) {
+  return sequant::EvalNode<sequant::EvalExpr>{orderedsched_eval_tensor(tensor)};
+}
+
+// An internal node whose own result is `result`'s signature, formed as the
+// PRODUCT of `l` and `r` (op_type stamped Product via EvalOpSetter, needed
+// for contracted_indices()/is_product() -- test_scope_schedule.cpp's own
+// scope_inode never needed this, since build_scope_schedule never consults
+// contracted_indices, but build_site_of/analyze_legality do).
+sequant::EvalNode<sequant::EvalExpr> orderedsched_inode(
+    std::string_view result, sequant::EvalNode<sequant::EvalExpr> l,
+    sequant::EvalNode<sequant::EvalExpr> r) {
+  sequant::EvalExpr data = orderedsched_eval_tensor(result);
+  sequant::EvalOpSetter{}.set(data, sequant::EvalOp::Product);
+  return sequant::EvalNode<sequant::EvalExpr>{std::move(data), std::move(l),
+                                              std::move(r)};
+}
+
+}  // namespace
+
+TEST_CASE(
+    "build_ordered_schedule: a root-homed leaf consumed INSIDE the {Κ} "
+    "block sorts before it, and the {Κ} block sorts before the root-level "
+    "composite that reads its AccumulateSum output -- both directions in "
+    "one forest",
+    "[ordered-schedule]") {
+  auto ctx = sequant::get_default_context().clone();
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_df_spaces(isr);  // Κ (DF aux)
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  Index const K{L"Κ_1"};
+
+  auto R = orderedsched_leaf("R{a_1;a_2}");
+  auto G = orderedsched_leaf("G{Κ_1;a_1}");
+  auto V = orderedsched_inode("V{Κ_1;a_2}", G, R);  // contracts a_1; reads R
+  auto H = orderedsched_leaf("H{Κ_1;a_3}");
+  auto W = orderedsched_inode("W{a_2;a_3}", V, H);  // contracts Κ_1
+  W->set_batched_here({{K, sequant::BatchModeType::Contracted}});
+  auto Z = orderedsched_leaf("Z{a_2;a_3}");
+  auto Top = orderedsched_inode("Top{a_9;a_10}", W, Z);  // Κ-free; reads W
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+
+  sequant::eval::dryrun::SizeRegime regime;
+  regime.space_extent = {{L"a", 8u}, {L"Κ", 6u}};
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  std::vector<sequant::EvalNode<sequant::EvalExpr>> forest{Top};
+  auto const block_of = [](Index const&) -> std::size_t { return 4; };
+  auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  REQUIRE(!rich.cells.empty());
+
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  REQUIRE(legality.cells.size() == rich.cells.size());
+
+  auto const sched =
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"Κ"});
+  REQUIRE(well_formed(sched));
+
+  auto const value_id_of = [&](std::string_view tensor) -> std::size_t {
+    auto const hash = orderedsched_eval_tensor(tensor).hash_value();
+    auto const it =
+        std::find_if(rich.cells.begin(), rich.cells.end(),
+                     [&](auto const& vc) { return vc.hash == hash; });
+    REQUIRE(it != rich.cells.end());
+    return it->value_id;
+  };
+  std::size_t const r_id = value_id_of("R{a_1;a_2}");
+  std::size_t const w_id = value_id_of("W{a_2;a_3}");
+  std::size_t const top_id = value_id_of("Top{a_9;a_10}");
+
+  auto const k_child_idx = orderedsched_index_of_child_block(sched.root, L"Κ");
+  REQUIRE(k_child_idx.has_value());
+  ScopeBlock const& k_block =
+      std::get<ScopeBlock>(sched.root.steps[*k_child_idx].value);
+  CHECK(k_block.axis.space().base_key() == L"Κ");
+
+  // W is the {Κ} block's AccumulateSum output; no BuildStep for it anywhere.
+  auto const w_out_it =
+      std::find_if(k_block.outputs.begin(), k_block.outputs.end(),
+                   [&](auto const& p) { return p.first == w_id; });
+  REQUIRE(w_out_it != k_block.outputs.end());
+  CHECK(w_out_it->second == OutputKind::AccumulateSum);
+
+  // R is a root-level BuildStep, positioned BEFORE the {Κ} block: V (inside
+  // {Κ}) directly reads it, so the block must sort after it.
+  auto const r_idx = orderedsched_index_of_build_step(sched.root, r_id);
+  REQUIRE(r_idx.has_value());
+  CHECK(*r_idx < *k_child_idx);
+
+  // Top is a root-level BuildStep, positioned AFTER the {Κ} block: it reads
+  // W, the block's own accumulated output.
+  auto const top_idx = orderedsched_index_of_build_step(sched.root, top_id);
+  REQUIRE(top_idx.has_value());
+  CHECK(*top_idx > *k_child_idx);
+}
