@@ -24,16 +24,22 @@ TEST_CASE(
     "[ordered-schedule]") {
   Index const i1{L"i_1"};
 
+  // value_id 1 is the per-iteration transient built inside the loop; value_id
+  // 2 is the DISTINCT accumulator that the block's own AccumulateSum output
+  // entry produces on close (its single production site IS that output
+  // entry, not a BuildStep) -- giving both the same id would double-produce
+  // value_id 1 (once as a BuildStep, again as an output), which the
+  // single-producer invariant below correctly rejects.
   ScopeBlock child;
   child.axis = i1;
   child.ordinal = 0;
   child.steps.push_back(Step{BuildStep{1}});
-  child.outputs.push_back({1, OutputKind::AccumulateSum});
+  child.outputs.push_back({2, OutputKind::AccumulateSum});
 
   OrderedSchedule sched;
   sched.root.steps.push_back(Step{BuildStep{0}});
   sched.root.steps.push_back(Step{std::move(child)});
-  sched.num_values = 2;
+  sched.num_values = 3;
 
   CHECK(well_formed(sched));
 }
@@ -80,6 +86,27 @@ TEST_CASE("well_formed rejects an out-of-range output value_id",
   OrderedSchedule sched;
   sched.root.steps.push_back(Step{std::move(child)});
   sched.num_values = 1;  // output value_id 7 is out of range
+
+  CHECK_FALSE(well_formed(sched));
+}
+
+TEST_CASE(
+    "well_formed rejects a value_id produced twice: once as a root "
+    "BuildStep and again as a child block's AccumulateSum output",
+    "[ordered-schedule]") {
+  // Single-producer (SSA-like) invariant, checked WHOLE-SCHEDULE (not just
+  // within one block): value_id 0 is built directly at the root AND is also
+  // claimed as the accumulated output of an unrelated child loop -- two
+  // production sites for the same value_id, which is never legal regardless
+  // of how far apart in the tree they sit.
+  ScopeBlock child;
+  child.axis = Index{L"i_1"};
+  child.outputs.push_back({0, OutputKind::AccumulateSum});
+
+  OrderedSchedule sched;
+  sched.root.steps.push_back(Step{BuildStep{0}});
+  sched.root.steps.push_back(Step{std::move(child)});
+  sched.num_values = 1;
 
   CHECK_FALSE(well_formed(sched));
 }

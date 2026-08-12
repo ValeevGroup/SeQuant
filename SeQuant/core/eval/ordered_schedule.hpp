@@ -5,6 +5,7 @@
 #include <SeQuant/core/eval/fwd.hpp>
 #include <SeQuant/core/index.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <utility>
 #include <variant>
@@ -42,11 +43,8 @@ struct BuildStep {
   std::size_t value_id;
 };
 
-struct ScopeBlock;  // fwd; ScopeBlock::steps (below) holds container::vector
-                    // <Step>, so Step must be at least forward-declared
-                    // before ScopeBlock -- see Step's own doc comment (right
-                    // after ScopeBlock) for why Step's FULL definition has to
-                    // come AFTER ScopeBlock's, not before it.
+struct ScopeBlock;  // fwd; see Step's doc comment (below ScopeBlock) for why
+                    // both types are forward-declared here.
 struct Step;        // fwd; see immediately below.
 
 ///
@@ -65,10 +63,9 @@ struct ScopeBlock {
                                     //!< or External (scatter on block exit);
                                     //!< meaningless on the root.
   container::vector<Step> steps{};  //!< ORDERED: build-or-child-block,
-                                    //!< interleaved. \c container::vector
-                                    //!< (not \c svector) because \c Step is
-                                    //!< only forward-declared here -- see \c
-                                    //!< Step's doc comment.
+                                    //!< interleaved (see \c Step's doc
+                                    //!< comment for why \c container::vector,
+                                    //!< not \c svector).
   container::svector<std::pair<std::size_t, OutputKind>>
       outputs{};  //!< value_id -> how it leaves this block on close.
 };
@@ -164,17 +161,55 @@ inline bool ordered_schedule_block_well_formed(ScopeBlock const& block,
   return true;
 }
 
+///
+/// \brief Append every value_id \p block PRODUCES -- as a \c BuildStep
+/// (recursively, through every nested child block) or as a value_id in
+/// \p block's own \c outputs -- to \p out.
+///
+/// \details Feeds the whole-schedule single-producer check in \c
+/// well_formed: a \c BuildStep and a block \c outputs entry are both
+/// "production sites" for a value_id in the SSA-like sense the schedule is
+/// meant to hold, so both contribute to the same collected list.
+///
+inline void collect_production_ids(ScopeBlock const& block,
+                                   container::vector<std::size_t>& out) {
+  for (Step const& step : block.steps) {
+    if (auto const* build = std::get_if<BuildStep>(&step.value)) {
+      out.push_back(build->value_id);
+    } else {
+      auto const& child = std::get<ScopeBlock>(step.value);
+      collect_production_ids(child, out);
+    }
+  }
+  for (auto const& [value_id, kind] : block.outputs) {
+    (void)kind;
+    out.push_back(value_id);
+  }
+}
+
 }  // namespace detail
 
 ///
-/// \brief Structural sanity check on \p sched (no sequencer logic): every \c
-/// BuildStep::value_id is < \c sched.num_values; ordinals are unique among
-/// same-axis (\c IndexSpace::base_key()) sibling blocks within a parent; and
-/// every \c ScopeBlock::outputs value_id is < \c sched.num_values.
+/// \brief Structural sanity check on \p sched (no sequencer logic):
+///   - every \c BuildStep::value_id is < \c sched.num_values;
+///   - ordinals are unique among same-axis (\c IndexSpace::base_key())
+///     sibling blocks within a parent;
+///   - every \c ScopeBlock::outputs value_id is < \c sched.num_values;
+///   - SINGLE-PRODUCER (SSA-like): across the WHOLE schedule, no value_id
+///     appears more than once total among every \c BuildStep and every
+///     block's \c outputs entries combined -- a value built directly must
+///     not also be a loop output, a loop-accumulated value must not also be
+///     built directly, and no value may be produced twice.
 ///
 [[nodiscard]] inline bool well_formed(OrderedSchedule const& sched) {
-  return detail::ordered_schedule_block_well_formed(sched.root,
-                                                    sched.num_values);
+  if (!detail::ordered_schedule_block_well_formed(sched.root, sched.num_values))
+    return false;
+
+  container::vector<std::size_t> production_ids;
+  detail::collect_production_ids(sched.root, production_ids);
+  std::sort(production_ids.begin(), production_ids.end());
+  return std::adjacent_find(production_ids.begin(), production_ids.end()) ==
+         production_ids.end();
 }
 
 }  // namespace sequant::eval
