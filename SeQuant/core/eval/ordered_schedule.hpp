@@ -42,8 +42,15 @@ namespace sequant::eval {
 /// \brief What happens to a value at the close of its home \c ScopeBlock.
 ///
 enum class OutputKind {
-  Transient,          //!< the value's home IS this block; nothing carries out
-  AccumulateSum,      //!< reduction: summed into an outer accumulator
+  Transient,      //!< the value's home IS this block; nothing carries out.
+                  //!< NOTE (SP3 readers): a Transient value NEVER appears in
+                  //!< any block's \c outputs list -- it is realized purely
+                  //!< as a plain \c BuildStep, and an explicit Transient \c
+                  //!< outputs entry would double-produce it (violating \c
+                  //!< well_formed's single-producer check). Do NOT scan \c
+                  //!< outputs for Transient; it is the ABSENCE of an escape
+                  //!< output, not a recorded one.
+  AccumulateSum,  //!< reduction: summed into an outer accumulator
   AccumulateScatter,  //!< loop-carried: scattered into a disjoint outer slice
 };
 
@@ -211,6 +218,12 @@ inline void collect_production_ids(ScopeBlock const& block,
 ///     block's \c outputs entries combined -- a value built directly must
 ///     not also be a loop output, a loop-accumulated value must not also be
 ///     built directly, and no value may be produced twice.
+///
+/// \note This checks single-producer (no DUPLICATE production) but NOT
+/// completeness (no value_id GAPS -- that every id in `[0, num_values)` is
+/// produced somewhere). Completeness holds by construction of \c
+/// build_ordered_schedule and is asserted in the Task-5 acceptance test, so an
+/// SP3 reader must NOT assume \c well_formed implies every value_id is present.
 ///
 [[nodiscard]] inline bool well_formed(OrderedSchedule const& sched) {
   if (!detail::ordered_schedule_block_well_formed(sched.root, sched.num_values))
@@ -821,6 +834,29 @@ forced_split_demotions(RichSchedule const& rich,
       for (auto const& o : buckets[n - 1].outputs) tally(o.first);
       if (has_prod && has_cons) split_passes = std::move(passes);
     }
+  }
+
+  // Fail-safe for the non-innermost deferral above. The split fires ONLY at the
+  // innermost realized axis (d == n-1); an OUTER realized axis (d < n-1) that
+  // is genuinely forced to split would fall through to a single unbroken block
+  // -- NOT a safe conservative choice but a SILENTLY WRONG cross-iteration
+  // schedule (the loop is never actually split). No current input reaches here
+  // (no multi-axis forced split exists), so this assert is inert today; it
+  // turns that future silent mis-schedule into a loud failure the moment SP3 or
+  // a later change introduces one. (n <= 1 skips the loop: the sole axis is by
+  // definition the innermost.)
+  for (std::size_t d = 0; d + 1 < n; ++d) {
+    std::wstring const outer_key{types[d].space().base_key()};
+    bool const outer_forced =
+        std::any_of(legality.cells.begin(), legality.cells.end(),
+                    [&](CellLegality const& cl) {
+                      for (Index const& ix : forced_split_types(cl))
+                        if (ix.space().base_key() == outer_key) return true;
+                      return false;
+                    });
+    SEQUANT_ASSERT(!outer_forced,
+                   "build_ordered_schedule: non-innermost forced split not yet "
+                   "supported (SP2 deferral)");
   }
 
   // Small helpers shared by the (usual) single-block path and the split path.
