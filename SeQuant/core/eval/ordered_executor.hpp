@@ -71,6 +71,52 @@ template <typename node_t>
 }
 
 ///
+/// \brief Defensive check for the single-physical-label simplification \c
+/// run_ordered_contracted_block's own doc comment (\c \\note) documents: \p
+/// node's subtree carries \p axis's TYPE (\c IndexSpace::base_key()) at some
+/// leaf, but \p node's own subtree never carries the EXACT \p axis \c Index
+/// (identity: space + ordinal + proto-indices) anywhere below it.
+///
+/// \details \c run_ordered_contracted_block slices/accumulates every value
+/// in its block by \p axis's exact identity (\c ctx.push_back({block.axis,
+/// ...})); \c evaluate_impl's Enter-stage \c slice_to_use then looks up that
+/// EXACT \c Index on each fetched node (\c index_position(nd, block.axis)).
+/// A member that instead carries a DIFFERENT physical label of the SAME
+/// TYPE (e.g. a forest whose cells name the aux space under both \c x_1 and
+/// \c x_2) would silently fail that lookup -- \c index_position returns
+/// \c nullopt, so the node is never sliced, builds FULL every batch, and is
+/// \c add_inplace'd once per batch: an N-fold-inflated reduction with NO
+/// diagnostic. This predicate lets the caller turn that into a loud \c
+/// SEQUANT_ASSERT instead, mirroring the AccumulateScatter/External asserts
+/// already in this file.
+///
+template <typename node_t>
+[[nodiscard]] bool ordered_axis_label_mismatch(node_t const& node,
+                                               Index const& axis) {
+  auto const base = axis.space().base_key();
+  bool carries_type = false;
+  bool carries_exact = false;
+  auto const walk = [&](auto&& self, node_t const& n) -> void {
+    if (carries_exact) return;  // already proven safe; no need to keep going
+    if (n.leaf()) {
+      for (Index const& ix : n->canon_indices()) {
+        if (ix.space().base_key() != base) continue;
+        carries_type = true;
+        if (ix == axis) {
+          carries_exact = true;
+          return;
+        }
+      }
+      return;
+    }
+    self(self, n.left());
+    self(self, n.right());
+  };
+  walk(walk, node);
+  return carries_type && !carries_exact;
+}
+
+///
 /// \brief SP3 Task 2: realize one Contracted \c ScopeBlock's batch loop
 /// against \p parent_cache -- the ordered-schedule counterpart of \c
 /// scope_executor.hpp's \c detail::walk_scope, simplified to the shape the
@@ -153,16 +199,30 @@ void run_ordered_contracted_block(
   // BuildStep values plus its own AccumulateSum output values -- one shared
   // scratch, so a sub-intermediate repeated between/within them is built
   // once per batch (mirrors walk_scope's Task-3 single-aux-loop `group`).
+  // Each member is defensively checked against the single-physical-label
+  // simplification this function's own doc comment (\note) documents: see
+  // ordered_axis_label_mismatch's doc comment for why a silent skip here
+  // would otherwise be a silently N-fold-inflated reduction, not a crash.
   std::vector<member_t> members;
   for (Step const& step : block.steps)
-    if (auto const* build = std::get_if<BuildStep>(&step.value))
-      members.push_back({&resolve(build->value_id), block.axis});
+    if (auto const* build = std::get_if<BuildStep>(&step.value)) {
+      node_t const& nd = resolve(build->value_id);
+      SEQUANT_ASSERT(
+          !ordered_axis_label_mismatch(nd, block.axis) &&
+          "evaluate_ordered_schedule: multi-physical-label axis in one "
+          "block not yet supported");
+      members.push_back({&nd, block.axis});
+    }
   for (auto const& [vid, kind] : block.outputs) {
     SEQUANT_ASSERT(kind == OutputKind::AccumulateSum &&
                    "evaluate_ordered_schedule: an AccumulateScatter output "
                    "is SP3 Task 3's job -- Task 2 handles AccumulateSum "
                    "(reduction) only.");
-    members.push_back({&resolve(vid), block.axis});
+    node_t const& nd = resolve(vid);
+    SEQUANT_ASSERT(!ordered_axis_label_mismatch(nd, block.axis) &&
+                   "evaluate_ordered_schedule: multi-physical-label axis in "
+                   "one block not yet supported");
+    members.push_back({&nd, block.axis});
   }
 
   auto bs = sequant::detail::make_batched_scratch(members, parent_cache);
