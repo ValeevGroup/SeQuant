@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <vector>
 
 namespace sequant::eval {
 
@@ -12,6 +13,13 @@ namespace sequant::eval {
 struct PeakEvent {
   std::size_t bytes = 0;
   std::size_t op_hash = 0;
+};
+
+/// \brief DIAGNOSTIC (analysis-only): one alive cache entry snapshotted at a
+///        high-water advance -- the value's CSE hash and its modeled byte size.
+struct PeakLiveEntry {
+  std::size_t hash = 0;
+  std::size_t bytes = 0;
 };
 
 /// \brief Hierarchy-wide co-resident memory high-water tracker.
@@ -33,6 +41,17 @@ struct PeakMonitor {
   /// Optional callback fired each time \c hwmark_bytes advances (i.e. exactly
   /// when \c peak is updated). Empty (default) => no-op.
   std::function<void(PeakEvent const&)> on_peak{};
+
+  /// DIAGNOSTIC (analysis-only): optional callback fired -- by
+  /// \c CacheManager::note_working_set, BEFORE \c observe advances the mark --
+  /// each time a new global high-water is about to be recorded, carrying the
+  /// total co-resident bytes and the full alive-entry set (chain-wide) at that
+  /// instant. Empty (default) => \c note_working_set never enumerates the live
+  /// set, so the fold is byte-identical to the pre-hook path. Used to decompose
+  /// a realized peak into its co-resident values.
+  std::function<void(std::size_t total_bytes,
+                     std::vector<PeakLiveEntry> const&)>
+      on_peak_liveset{};
 
   /// Observe one candidate high-water sample. Advances \c hwmark_bytes (and
   /// fires \c on_peak) only if \p bytes exceeds the current mark; a sample at

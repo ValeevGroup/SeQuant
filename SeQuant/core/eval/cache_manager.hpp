@@ -539,7 +539,20 @@ class CacheManager {
   /// wide high-water was observed.
   size_t note_working_set(size_t current_bytes, size_t op_hash = 0) noexcept {
     working_set_hwmark_ = std::max(working_set_hwmark_, current_bytes);
-    if (auto* m = peak_monitor()) m->observe(current_bytes, op_hash);
+    if (auto* m = peak_monitor()) {
+      // DIAGNOSTIC (analysis-only): if a live-set capture hook is installed,
+      // enumerate the chain's alive entries BEFORE observe() advances the mark,
+      // on each real high-water advance. Gated on on_peak_liveset being set, so
+      // the default path is byte-identical (no enumeration).
+      if (m->on_peak_liveset && current_bytes > m->hwmark_bytes) {
+        std::vector<eval::PeakLiveEntry> live;
+        for (CacheManager const* c = this; c; c = c->parent_)
+          for (auto const& [k, e] : c->cache_map_)
+            if (e.alive()) live.push_back({k->hash_value(), e.size_in_bytes()});
+        m->on_peak_liveset(current_bytes, live);
+      }
+      m->observe(current_bytes, op_hash);
+    }
     // DIAGNOSTIC (SEQUANT_UT_PEAK_COMPOSE): on each new GLOBAL max working set,
     // print what composes it -- the co-resident cache chain vs the single
     // transient result/scratch being formed (current_bytes - chain_residency),

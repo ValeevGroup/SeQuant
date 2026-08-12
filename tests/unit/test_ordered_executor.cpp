@@ -796,3 +796,365 @@ TEST_CASE(
   // above) and executed to completion.
   CHECK(sequant::eval::well_formed(ordered));
 }
+
+// ===========================================================================
+// ANALYSIS PROBE (uncommitted diagnostic): decompose the water-20 ORDERED
+// executor dense-model peak into tier A (root-homed Κ-free composites) vs
+// tier B (Κ-carrying aux-loop working set), and snapshot the co-resident set
+// at the instant of realized high-water. Reuses the same fixture as the
+// witness above. Run by name: [.][w20-peak-composition].
+// ===========================================================================
+TEST_CASE("w20 peak composition: tier-A/tier-B decomposition at realized peak",
+          "[.][w20-peak-composition]") {
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using Node = EvalNodeDryRun;
+
+  auto ctx = sequant::get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  auto const body =
+      orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                                "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = sequant::deserialize<sequant::ExprPtr>(line);
+  REQUIRE(expr->is<sequant::Sum>());
+  auto const& summands = expr->as<sequant::Sum>().summands();
+
+  std::size_t nterms = std::min<std::size_t>(summands.size(), 40);
+  if (char const* nt = std::getenv("SEQUANT_UT_DRYRUN_NTERMS"))
+    nterms = std::min<std::size_t>(summands.size(), std::atoll(nt));
+
+  auto regime = orderedexec_witness_df_regime(kOrderedExecWater20_pVDZF12);
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  policy.is_batchable_external_index = [](sequant::Index const&) {
+    return false;
+  };
+  policy.batch_spectator_indices = false;
+  policy.batch_target_size = [](sequant::Index const&) -> std::size_t {
+    return 256;
+  };
+  policy.is_volatile_leaf = [](sequant::Tensor const& t) {
+    return t.label() == L"t";
+  };
+  policy.accumulation_factor = 1.0;
+  policy.persistent_only = false;
+  policy.peak_threshold = 1e11;
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      sequant::Expr const*,
+      sequant::container::vector<sequant::NodeBatchAnnotation>>>();
+  sequant::OptimizeOptions opts;
+  opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = axes_map;
+
+  std::vector<Node> forest;
+  for (std::size_t s = 0; s < nterms; ++s) {
+    sequant::ExprPtr const term =
+        orderedexec_witness_flatten_product(summands[s]);
+    if (!term) continue;
+    sequant::ExprPtr optimized;
+    try {
+      optimized = sequant::optimize(term, opts);
+    } catch (std::exception const&) {
+      continue;
+    }
+    if (!optimized) continue;
+    sequant::BinarizationOptions bopts;
+    if (auto it = axes_map->find(optimized.get()); it != axes_map->end())
+      bopts.node_batch_axes = it->second;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    forest.push_back(sequant::binarize<EvalExprDryRun>(optimized, {}, bopts));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+  REQUIRE(!forest.empty());
+
+  auto const block_of = [](sequant::Index const&) -> std::size_t {
+    return 256;
+  };
+  auto const rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  REQUIRE(!rich.cells.empty());
+
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  auto const ordered =
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"Κ"});
+  REQUIRE(sequant::eval::well_formed(ordered));
+
+  auto const vmap = sequant::eval::build_value_node_map(forest);
+
+  // hash -> ValueCell index
+  std::unordered_map<std::size_t, std::size_t> hash_to_cell;
+  for (auto const& vc : rich.cells) hash_to_cell.emplace(vc.hash, vc.value_id);
+  // value_id -> cell index (identity here, but explicit)
+  auto const cell_of_vid =
+      [&](std::size_t vid) -> sequant::eval::ValueCell const& {
+    return rich.cells[vid];
+  };
+
+  auto const is_K = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  auto const space_sig =
+      [](sequant::container::svector<sequant::Index> const& v) -> std::wstring {
+    std::wstring s;
+    for (std::size_t i = 0; i < v.size(); ++i) {
+      if (i) s += L",";
+      s += std::wstring(v[i].space().base_key());
+    }
+    return s;
+  };
+  auto const foot = [&](sequant::eval::ValueCell const& vc) -> std::size_t {
+    return sequant::eval::detail::cell_footprint(vc.carried, vc.home_modes, *cm,
+                                                 block_of);
+  };
+  auto const node_kind = [&](std::size_t hash) -> std::wstring {
+    auto it = vmap.find(hash);
+    if (it == vmap.end()) return L"<?>";
+    if (it->second.leaf()) return L"leaf:" + it->second->to_latex();
+    return L"I";
+  };
+
+  // ---------------- (1) TIER A: root-level BuildSteps ----------------
+  std::vector<std::size_t> tierA_vids;
+  for (auto const& step : ordered.root.steps)
+    if (auto const* b = std::get_if<sequant::eval::BuildStep>(&step.value))
+      tierA_vids.push_back(b->value_id);
+
+  struct Row {
+    std::size_t vid, bytes;
+    std::wstring label;
+  };
+  std::vector<Row> tierA;
+  std::size_t tierA_sum = 0;
+  for (auto vid : tierA_vids) {
+    auto const& vc = cell_of_vid(vid);
+    std::size_t const b = foot(vc);
+    tierA_sum += b;
+    tierA.push_back(
+        {vid, b, node_kind(vc.hash) + L"{" + space_sig(vc.carried) + L"}"});
+  }
+  std::sort(tierA.begin(), tierA.end(),
+            [](Row const& a, Row const& b) { return a.bytes > b.bytes; });
+
+  // ---------------- (2) TIER B: aux ScopeBlock nested steps ----------------
+  std::vector<Row> tierB;
+  std::size_t tierB_sum = 0;
+  std::optional<Row> a1_row;
+  std::function<void(sequant::eval::ScopeBlock const&)> walk_block =
+      [&](sequant::eval::ScopeBlock const& blk) {
+        auto record = [&](std::size_t vid, bool is_output,
+                          sequant::eval::OutputKind kind) {
+          auto const& vc = cell_of_vid(vid);
+          std::size_t const b = foot(vc);
+          tierB_sum += b;
+          std::wstring tag =
+              is_output ? (kind == sequant::eval::OutputKind::AccumulateSum
+                               ? L" [out:Sum]"
+                               : L" [out:Scatter]")
+                        : L" [build]";
+          Row r{vid, b,
+                node_kind(vc.hash) + L"{" + space_sig(vc.carried) + L"}" + tag};
+          tierB.push_back(r);
+          // a1{i1,i2;mutilde1;K1}: the K1-carrying PPL prerequisite. Match any
+          // Κ-carrying LoopLocal [build] cell (NOT an escape output -- those
+          // are Κ-reductions that carry Κ only BELOW), pick the LARGEST
+          // per-block.
+          bool const carries_K =
+              std::any_of(vc.carried.begin(), vc.carried.end(), is_K);
+          if (!is_output && carries_K && (!a1_row || b > a1_row->bytes))
+            a1_row = r;
+        };
+        for (auto const& step : blk.steps)
+          if (auto const* b =
+                  std::get_if<sequant::eval::BuildStep>(&step.value))
+            record(b->value_id, false,
+                   sequant::eval::OutputKind::AccumulateSum);
+        for (auto const& [vid, kind] : blk.outputs) record(vid, true, kind);
+        for (auto const& step : blk.steps)
+          if (auto const* child =
+                  std::get_if<sequant::eval::ScopeBlock>(&step.value))
+            walk_block(*child);
+      };
+  // enumerate every root-level ScopeBlock (the aux Κ loop(s))
+  for (auto const& step : ordered.root.steps)
+    if (auto const* child = std::get_if<sequant::eval::ScopeBlock>(&step.value))
+      walk_block(*child);
+  std::sort(tierB.begin(), tierB.end(),
+            [](Row const& a, Row const& b) { return a.bytes > b.bytes; });
+
+  // ---------------- run the ordered executor with peak monitor ----------
+  using annot_t = std::remove_cvref_t<decltype(forest.front()->annot())>;
+  annot_t const layout{};
+  sequant::eval::dryrun::DryRunLeafEvaluator const yield{cm};
+  std::function<std::size_t(sequant::Index const&)> const target =
+      [](sequant::Index const&) -> std::size_t { return 256; };
+
+  auto& logger = sequant::Logger::instance();
+  auto const prev_level = logger.eval.level;
+  auto* const prev_stream = logger.eval.stream;
+  std::ostringstream sink;
+  logger.eval.level = 1;
+  logger.eval.stream = &sink;
+
+  auto ordered_cache = sequant::cache_manager(forest);
+  sequant::eval::PeakMonitor mon;
+  std::size_t peak_total_snapshot = 0;
+  std::vector<sequant::eval::PeakLiveEntry> peak_liveset;
+  mon.on_peak_liveset =
+      [&](std::size_t total,
+          std::vector<sequant::eval::PeakLiveEntry> const& live) {
+        peak_total_snapshot = total;  // last (== max) advance wins
+        peak_liveset = live;
+      };
+  ordered_cache.set_peak_monitor(&mon);
+  ResultPtr ord_result;
+  try {
+    ord_result = sequant::eval::evaluate_ordered_schedule<sequant::Trace::On>(
+        forest, ordered, rich, layout, yield, ordered_cache, target);
+  } catch (std::exception const& e) {
+    std::cerr << "[w20-peak-composition] ordered evaluate threw: " << e.what()
+              << "\n";
+  }
+  logger.eval.level = prev_level;
+  logger.eval.stream = prev_stream;
+
+  auto const GB = [](std::size_t b) { return double(b) / 1e9; };
+  auto const TB = [](std::size_t b) { return double(b) / 1e12; };
+
+  std::wcerr << L"\n================= [w20-peak-composition] " << forest.size()
+             << L" terms =================\n";
+  std::wcerr << L"realized ordered peak (hwmark) = " << mon.hwmark_bytes
+             << L" bytes (" << TB(mon.hwmark_bytes) << L" TB)\n";
+
+  // ---- (1) tier A ----
+  std::wcerr << L"\n--- TIER A: root-homed Κ-free composites (" << tierA.size()
+             << L" BuildSteps), SUM = " << tierA_sum << L" bytes ("
+             << TB(tierA_sum) << L" TB) ---\n";
+  for (std::size_t i = 0; i < tierA.size() && i < 20; ++i)
+    std::wcerr << L"  vid=" << tierA[i].vid << L"  " << GB(tierA[i].bytes)
+               << L" GB  " << tierA[i].label << L"\n";
+
+  // ---- (2) tier B ----
+  std::wcerr << L"\n--- TIER B: Κ-carrying aux-loop working set ("
+             << tierB.size() << L" steps), per-Κ-block SUM = " << tierB_sum
+             << L" bytes (" << GB(tierB_sum) << L" GB) ---\n";
+  for (std::size_t i = 0; i < tierB.size() && i < 25; ++i)
+    std::wcerr << L"  vid=" << tierB[i].vid << L"  " << GB(tierB[i].bytes)
+               << L" GB  " << tierB[i].label << L"\n";
+  if (a1_row)
+    std::wcerr << L"\n  a1{i1,i2;mutilde1;K1} LOCATED in aux block (tier B): "
+               << L"vid=" << a1_row->vid << L"  per-block " << GB(a1_row->bytes)
+               << L" GB  " << a1_row->label << L"\n";
+  else
+    std::wcerr << L"\n  a1{i1,i2;mutilde1;K1}: NOT FOUND among tier-B cells\n";
+
+  // ---- (3) peak op ----
+  std::wcerr << L"\n--- (3) PEAK OP: op_hash=" << mon.peak.op_hash
+             << L"  bytes=" << mon.peak.bytes << L" (" << TB(mon.peak.bytes)
+             << L" TB) ---\n";
+  {
+    auto it = vmap.find(mon.peak.op_hash);
+    std::wstring where = L"unknown";
+    bool in_tierA = std::any_of(tierA.begin(), tierA.end(), [&](Row const& r) {
+      return cell_of_vid(r.vid).hash == mon.peak.op_hash;
+    });
+    bool in_tierB = std::any_of(tierB.begin(), tierB.end(), [&](Row const& r) {
+      return cell_of_vid(r.vid).hash == mon.peak.op_hash;
+    });
+    if (in_tierA)
+      where = L"TIER A (root-homed)";
+    else if (in_tierB)
+      where = L"TIER B (aux loop)";
+    if (it != vmap.end()) {
+      auto const hc = hash_to_cell.find(mon.peak.op_hash);
+      std::wstring lab = hc != hash_to_cell.end()
+                             ? node_kind(mon.peak.op_hash) + L"{" +
+                                   space_sig(rich.cells[hc->second].carried) +
+                                   L"}"
+                             : it->second->to_latex();
+      std::wcerr << L"  peak op node = " << lab << L"   [" << where << L"]\n";
+    } else {
+      std::wcerr << L"  peak op_hash not in vmap (transient/leaf) [" << where
+                 << L"]\n";
+    }
+  }
+
+  // ---- (4) co-resident set at peak ----
+  std::wstring const kA = L"A", kB = L"B", kLeaf = L"leaf/input", kOther = L"?";
+  std::unordered_map<std::size_t, std::wstring> tierA_hashes, tierB_hashes;
+  for (auto const& r : tierA) tierA_hashes[cell_of_vid(r.vid).hash] = r.label;
+  for (auto const& r : tierB) tierB_hashes[cell_of_vid(r.vid).hash] = r.label;
+
+  std::sort(peak_liveset.begin(), peak_liveset.end(),
+            [](auto const& a, auto const& b) { return a.bytes > b.bytes; });
+  std::size_t liveA = 0, liveB = 0, liveLeaf = 0, liveOther = 0, liveTotal = 0;
+  std::wcerr << L"\n--- (4) CO-RESIDENT SET AT PEAK (total snapshot = "
+             << peak_total_snapshot << L" bytes, " << TB(peak_total_snapshot)
+             << L" TB; " << peak_liveset.size() << L" alive entries) ---\n";
+  for (auto const& e : peak_liveset) {
+    liveTotal += e.bytes;
+    std::wstring tier, lab;
+    if (auto it = tierA_hashes.find(e.hash); it != tierA_hashes.end()) {
+      tier = kA;
+      lab = it->second;
+      liveA += e.bytes;
+    } else if (auto it2 = tierB_hashes.find(e.hash);
+               it2 != tierB_hashes.end()) {
+      tier = kB;
+      lab = it2->second;
+      liveB += e.bytes;
+    } else {
+      auto vit = vmap.find(e.hash);
+      if (vit != vmap.end() && vit->second.leaf()) {
+        tier = kLeaf;
+        lab = L"leaf:" + vit->second->to_latex();
+        liveLeaf += e.bytes;
+      } else {
+        tier = kOther;
+        auto hc = hash_to_cell.find(e.hash);
+        lab = hc != hash_to_cell.end()
+                  ? node_kind(e.hash) + L"{" +
+                        space_sig(rich.cells[hc->second].carried) + L"}"
+                  : L"<not-in-rich>";
+        liveOther += e.bytes;
+      }
+    }
+    if (e.bytes > 1e8)  // only print entries > 0.1 GB to keep it readable
+      std::wcerr << L"  [" << tier << L"] " << GB(e.bytes) << L" GB  " << lab
+                 << L"\n";
+  }
+  std::wcerr << L"\n  co-resident totals: tierA = " << GB(liveA)
+             << L" GB, tierB = " << GB(liveB) << L" GB, leaf/input = "
+             << GB(liveLeaf) << L" GB, other = " << GB(liveOther)
+             << L" GB ; SUM = " << GB(liveTotal) << L" GB\n";
+
+  // ---- (5) hypothesis: ordered - whole_scope ~= tierA_sum? ----
+  double const whole_scope_TB = 0.36;
+  double const ordered_TB = TB(mon.hwmark_bytes);
+  std::wcerr << L"\n--- (5) HYPOTHESIS: ordered - whole_scope (=" << ordered_TB
+             << L" - 0.36 = " << (ordered_TB - whole_scope_TB)
+             << L" TB) ~= tierA home-floor sum (" << TB(tierA_sum)
+             << L" TB)? ---\n";
+
+  std::wcerr << L"====================================================\n";
+  CHECK(mon.hwmark_bytes > 0);
+}
