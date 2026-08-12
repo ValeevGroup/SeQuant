@@ -99,11 +99,6 @@ Expr &Expr::operator+=(const Expr &) { throw not_implemented("operator+="); }
 
 Expr &Expr::operator-=(const Expr &) { throw not_implemented("operator-="); }
 
-void Constant::adjoint() {
-  value_ = conj(value_);
-  reset_hash_value();
-}
-
 std::wstring_view Variable::label() const { return label_; }
 
 void Variable::set_label(std::wstring label) {

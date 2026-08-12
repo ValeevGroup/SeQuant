@@ -306,6 +306,8 @@ set(SeQuant_symb_src
         SeQuant/core/context.hpp
         SeQuant/core/expressions/abstract_tensor.cpp
         SeQuant/core/expressions/abstract_tensor.hpp
+        SeQuant/core/expressions/constant.cpp
+        SeQuant/core/expressions/constant.hpp
         SeQuant/core/expressions/expr.cpp
         SeQuant/core/expressions/expr.hpp
         SeQuant/core/expressions/expr_algorithms.cpp
