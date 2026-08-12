@@ -77,11 +77,12 @@ struct CellLegality {
   container::svector<Index> home_floor;
 
   //!< Loops that must re-enter (the value cannot be homed above them without
-  //!< a re-materializing split). Filled in Task 3/4. NOTE for SP2: entries are
-  //!< per-\c Index-INSTANCE, not per-space-type -- an outer product like
-  //!< \c A{;i_3}*A{;i_4} lists BOTH i_3 and i_4 (both LoopCarried on space i),
-  //!< yet they name a SINGLE occ loop to split. SP2 must group these by
-  //!< \c space().base_key() to recover the axis (loop) to split.
+  //!< a re-materializing split). Filled in Task 3/4. Entries are per-\c
+  //!< Index-INSTANCE, not per-space-type -- an outer product like \c
+  //!< A{;i_3}*A{;i_4} lists BOTH i_3 and i_4 (both LoopCarried on space i),
+  //!< yet they name a SINGLE occ loop to split. Consumers that want the
+  //!< distinct loops (axes) to split, not the raw per-instance list, should
+  //!< use \c forced_split_types below.
   container::svector<Index> forced_split_axes;
 };
 
@@ -93,6 +94,32 @@ struct CellLegality {
 struct LegalitySchedule {
   container::svector<CellLegality> cells;
 };
+
+///
+/// \brief Group \p cell's \c forced_split_axes by axis SPACE TYPE (\c
+/// base_key()), collapsing multiple same-type \c Index INSTANCES into the
+/// single loop (axis) they jointly force to split.
+///
+/// \details \c forced_split_axes is recorded per \c Index instance (see its
+/// field doc): an outer product like \c A{;i_3}*A{;i_4} lists BOTH \c i_3 and
+/// \c i_4, both \c LoopCarried on the occ space, but they name only ONE occ
+/// loop that must re-enter. This returns one representative \c Index per
+/// distinct \c base_key(), in \c forced_split_axes's discovery order, so a
+/// consumer that needs "which loops must split" (not "which indices are
+/// carried") gets a de-duplicated-by-type answer.
+///
+[[nodiscard]] inline container::svector<Index> forced_split_types(
+    CellLegality const& cell) {
+  container::svector<Index> out;
+  for (Index const& ix : cell.forced_split_axes) {
+    auto const same_type = [&](Index const& o) {
+      return o.space().base_key() == ix.space().base_key();
+    };
+    if (std::find_if(out.begin(), out.end(), same_type) == out.end())
+      out.push_back(ix);
+  }
+  return out;
+}
 
 ///
 /// \brief The AT-NODE build-site of the value rooted at \p node: the
@@ -143,13 +170,16 @@ struct LegalitySchedule {
 ///     - YES -> Q2b: for every occurrence that has an ENCLOSING loop of that
 ///       axis type in its \c OccurrenceRec::ectx, compare (via the
 ///       ordinal-and-proto-aware \c Index::operator==) that loop's own
-///       \c Index against the occurrence's own carried index of the same
-///       type. Bound to the SAME \c Index at every such occurrence (lockstep
-///       with the enclosing loop) -> \c LoopLocal; bound to a DIFFERENT
-///       \c Index at any occurrence (a free / cross-iteration read) ->
-///       \c LoopCarried. If no occurrence has an enclosing loop of that type
-///       at all, the axis is a plain free result index with nothing to lock
-///       it to a loop iteration -> \c LoopCarried.
+///       \c Index against EVERY one of the occurrence's own carried indices
+///       of the same type (an occurrence may carry more than one same-space
+///       index, e.g. an outer product carrying both a lockstep and a free
+///       slot of the same space). Bound to the SAME \c Index at EVERY such
+///       slot, at every such occurrence (lockstep with the enclosing loop)
+///       -> \c LoopLocal; bound to a DIFFERENT \c Index at ANY slot, at any
+///       occurrence (a free / cross-iteration read) -> \c LoopCarried. If no
+///       occurrence has an enclosing loop of that type at all, the axis is a
+///       plain free result index with nothing to lock it to a loop iteration
+///       -> \c LoopCarried.
 ///
 [[nodiscard]] inline LoopRole classify_axis(
     container::svector<Index> const& carried,
@@ -178,18 +208,22 @@ struct LegalitySchedule {
                  // type at this occurrence
     found_enclosing = true;
 
-    // NOTE for SP2: this checks only the FIRST same-type carried slot against
-    // the enclosing loop's variable. When a value carries TWO indices of L's
-    // space (e.g. i_3 lockstep, i_4 free) UNDER a realized L loop, the free
-    // i_4 escapes this check and the value is (unsoundly) called LoopLocal.
-    // SP1's fixtures never realize such a case (the multi-carried outer
-    // product has no enclosing loop, so it falls through to LoopCarried
-    // below); SP2, which realizes occ loops, must compare EVERY same-type
-    // carried slot, not just the first.
-    auto const carried_it =
-        std::find_if(occ.carried.begin(), occ.carried.end(), same_type);
-    if (carried_it == occ.carried.end() || !(*carried_it == ectx_it->first))
-      return LoopRole::LoopCarried;  // free / cross-iteration binding
+    // Compare EVERY same-type carried slot at this occurrence against the
+    // enclosing loop's own Index, not just the first: a value can carry TWO
+    // indices of L's space (e.g. i_3 lockstep, i_4 free) under a realized L
+    // loop, and the free slot must not be shadowed by an earlier lockstep
+    // slot. Only an occurrence whose EVERY same-type carried slot equals the
+    // enclosing loop's own Index is truly lockstep; a single mismatched slot
+    // makes the whole occurrence a free / cross-iteration read.
+    bool matched_any_same_type = false;
+    for (Index const& c : occ.carried) {
+      if (!same_type(c)) continue;
+      matched_any_same_type = true;
+      if (!(c == ectx_it->first))
+        return LoopRole::LoopCarried;  // free / cross-iteration binding
+    }
+    if (!matched_any_same_type)
+      return LoopRole::LoopCarried;  // no same-type carried slot at all
   }
   return found_enclosing ? LoopRole::LoopLocal : LoopRole::LoopCarried;
 }
@@ -226,8 +260,9 @@ struct LegalitySchedule {
 /// floor; classification/floors are re-derived and the round repeats until no
 /// floor rises. Because a home can only ever LIFT (a role only moves toward
 /// \c LoopCarried, never back), the fixpoint is monotone and terminates; the
-/// hard cap \c cells.size()+1 (each productive round lifts at least one floor)
-/// guards against a non-terminating bug via \c SEQUANT_ASSERT.
+/// hard cap \c Sum_over_cells|per_axis|+1 (each productive round demotes at
+/// least one per-axis entry) guards against a non-terminating bug via \c
+/// SEQUANT_ASSERT.
 ///
 /// \par SP2 scoping of the demotion (JUDGMENT CALL -- deferred, see report)
 /// "Used in both \c L-passes" is a property of the PASS STRUCTURE -- the
@@ -353,18 +388,20 @@ template <meta::eval_node_range R>
 
   LegalitySchedule out = build_cells();
 
-  // Monotone fixpoint. Each productive round lifts at least one home floor
-  // (demotes at least one LoopLocal axis to LoopCarried), and homes only ever
-  // lift, so at most cells.size() lifts are possible: cells.size()+1 rounds is
-  // a hard non-termination tripwire, asserted below.
-  //
-  // NOTE for SP2: this cap assumes CELL-granular progress (>= one whole cell
-  // demoted per round). Once \c derive_demotions is grown to demote a single
-  // (cell, axis) pair per round, a cell can be lifted on several axes over
-  // several rounds, so the tight bound becomes Sum_over_cells |per_axis| + 1;
-  // raise \c cap accordingly (or demote all eligible axes of a cell at once)
-  // to keep this a non-termination tripwire rather than a false trip.
-  [[maybe_unused]] std::size_t const cap = out.cells.size() + 1;
+  // Monotone fixpoint. `derive_demotions` demotes a single (cell, axis) pair
+  // per round -- SP1's is inert (returns false immediately, so the loop below
+  // runs exactly one round), but once SP2 wires it live, a cell can be lifted
+  // on several axes over several rounds, so the tight non-termination bound
+  // is Sum_over_cells |per_axis| + 1 (every productive round demotes at
+  // least one per_axis entry, and roles only ever move toward LoopCarried,
+  // never back), NOT cells.size()+1 (which only holds for CELL-granular
+  // progress, i.e. >= one whole cell demoted per round). Asserted below as a
+  // hard non-termination tripwire.
+  [[maybe_unused]] std::size_t const cap = [&] {
+    std::size_t sum = 0;
+    for (CellLegality const& cl : out.cells) sum += cl.per_axis.size();
+    return sum + 1;
+  }();
   for (std::size_t iter = 0;; ++iter) {
     SEQUANT_ASSERT(iter <= cap,
                    "analyze_legality: forced-split fixpoint did not converge");

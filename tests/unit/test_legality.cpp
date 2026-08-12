@@ -544,6 +544,105 @@ TEST_CASE(
 }
 
 // ===========================================================================
+// SP2 Task 1: classify_axis's Q2b must compare EVERY same-type carried slot
+// against the enclosing loop, not just the first. Direct unit test on
+// classify_axis with a HAND-CONSTRUCTED OccurrenceRec -- no forest/optimize
+// pipeline needed, since classify_axis is a pure function of its four
+// arguments. SP1's own fixtures never realize this case: the water-20 witness
+// has no multi-carried same-space value, and the synthetic cross-iteration
+// fixture's outer product has no enclosing loop at all (ectx empty), so it
+// falls through to the "no enclosing loop of this type" LoopCarried path
+// rather than exercising the lockstep-vs-free comparison inside the loop.
+// ===========================================================================
+TEST_CASE(
+    "classify_axis (Q2b): a value carrying TWO same-space indices, one bound "
+    "lockstep to a realized enclosing loop and one free, classifies "
+    "LoopCarried (not LoopLocal)",
+    "[legality]") {
+  using sequant::Index;
+  using sequant::container::svector;
+  using sequant::eval::classify_axis;
+  using sequant::eval::LoopRole;
+  using sequant::eval::OccurrenceRec;
+
+  auto const i_1 = Index{L"i_1"};
+  auto const i_2 = Index{L"i_2"};
+
+  // B{i_1,i_2} = A{;i_1} * A{;i_2}: an outer product carrying two DISTINCT
+  // occ indices into its own result -- exactly the multi-carried shape the
+  // Task-4 synthetic fixture uses, but here placed under a REALIZED
+  // enclosing occ loop bound to i_1 (ectx non-empty), mirroring how
+  // compute_dag_boulevard stamps `batched_here` once a loop is actually
+  // realized.
+  svector<Index> const carried{i_1, i_2};
+  svector<Index> const contracted_below{};
+
+  OccurrenceRec occ;
+  occ.point = 0;
+  occ.consumer_point = 1;
+  occ.carried = carried;
+  occ.home = {};
+  occ.ectx.push_back({i_1, {0u, 4u}});  // enclosing loop realized over i_1
+
+  svector<OccurrenceRec> const occurrences{occ};
+
+  // i_1 IS lockstep-bound to the enclosing loop, but i_2 -- the SECOND
+  // same-space carried slot -- is free at this occurrence: it is not the
+  // enclosing loop's own Index, so it is a cross-iteration read. The
+  // uncorrected classify_axis (checking only the FIRST same-type carried
+  // slot, i_1, which does match) would wrongly report LoopLocal here; the
+  // corrected version must report LoopCarried.
+  CHECK(classify_axis(carried, contracted_below, i_1, occurrences) ==
+        LoopRole::LoopCarried);
+
+  // Sanity: probing with the OTHER same-space axis Index (i_2) must agree --
+  // Q1/Q2b classify by axis SPACE TYPE (base_key()), not by which concrete
+  // Index instance is passed as `axis`.
+  CHECK(classify_axis(carried, contracted_below, i_2, occurrences) ==
+        LoopRole::LoopCarried);
+}
+
+// ===========================================================================
+// SP2 Task 1: forced_split_types groups CellLegality::forced_split_axes by
+// axis SPACE TYPE (base_key()), collapsing multiple same-space Index
+// INSTANCES (e.g. the Task-4 fixture's i_3/i_4 outer product, both
+// LoopCarried on occ) into the single loop (axis) they jointly force to
+// split.
+// ===========================================================================
+TEST_CASE(
+    "forced_split_types collapses two distinct same-space LoopCarried "
+    "indices into ONE occ-space entry",
+    "[legality]") {
+  using sequant::Index;
+  using sequant::eval::CellLegality;
+  using sequant::eval::forced_split_types;
+
+  CellLegality cl;
+  cl.hash = 0;
+  // Two DISTINCT occ Index instances, both LoopCarried on the same space --
+  // the per-instance record Task 4's synthetic B{i_3,i_4} = A{;i_3} * A{;i_4}
+  // outer product produces.
+  cl.forced_split_axes = {Index{L"i_3"}, Index{L"i_4"}};
+
+  auto const types = forced_split_types(cl);
+  REQUIRE(types.size() == 1);
+  CHECK(types.front().space().base_key() == L"i");
+
+  // A cell with no forced splits collapses to an empty list.
+  CellLegality const empty_cl;
+  CHECK(forced_split_types(empty_cl).empty());
+
+  // Two DIFFERENT-space LoopCarried axes (occ + virtual) must NOT collapse --
+  // forced_split_types groups WITHIN a space type only. ("i"/"a" are present
+  // in the default context without any scoped registry setup, unlike the DF
+  // aux space "Κ", which test_scope_schedule.cpp registers separately.)
+  CellLegality mixed_cl;
+  mixed_cl.forced_split_axes = {Index{L"i_3"}, Index{L"i_4"}, Index{L"a_1"}};
+  auto const mixed_types = forced_split_types(mixed_cl);
+  REQUIRE(mixed_types.size() == 2);
+}
+
+// ===========================================================================
 // Task 5 (SP1 acceptance): a single, explicitly-named test documenting that
 // all FOUR LoopRole values are demonstrably produced by analyze_legality /
 // classify_axis across SP1's two canonical inputs. This test does NOT
