@@ -4,8 +4,12 @@
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
+#include <SeQuant/core/eval/legality.hpp>
+#include <SeQuant/core/eval/ordered_executor.hpp>
+#include <SeQuant/core/eval/ordered_schedule.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/eval/scope_schedule.hpp>
+#include <SeQuant/core/eval/value_node_map.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <any>
@@ -23,34 +27,6 @@
 #include <vector>
 
 namespace sequant::eval {
-
-///
-/// \brief The value_id -> forest-node bridge (design integration point 1).
-///
-/// \details \c ScopeNode::homed_values are \c ValueCell::value_id's; a value's
-/// eval node is recovered through the \c ValueCell::hash it carries -- exactly
-/// the \c EvalExpr::hash_value() identity \c CacheManager dedups by. This maps
-/// every distinct forest node by that hash, so a \c value_id resolves as
-/// `map[rich.cells[value_id].hash]`. Under perfect CSE many occurrences share
-/// one hash; a single representative node (the first visited) is kept, which is
-/// all a homed value needs (every occurrence is the same value). Pure lookup
-/// construction -- no execution.
-///
-template <meta::eval_node_range R>
-[[nodiscard]] std::unordered_map<std::size_t, std::ranges::range_value_t<R>>
-build_value_node_map(R const& forest) {
-  using node_t = std::ranges::range_value_t<R>;
-  std::unordered_map<std::size_t, node_t> out;
-  auto visit = [&out](auto&& self, node_t const& n) -> void {
-    out.emplace(n->hash_value(), n);
-    if (!n.leaf()) {
-      self(self, n.left());
-      self(self, n.right());
-    }
-  };
-  for (auto const& t : forest) visit(visit, t);
-  return out;
-}
 
 ///
 /// \brief The WEIGHTED in-block use count of a homed value -- the correct
@@ -958,18 +934,43 @@ ResultPtr evaluate(Nodes const& forest, BatchPolicy const& policy,
                    CacheManager<N, FHC>& cache,
                    std::initializer_list<std::wstring> mode_order = {},
                    ScopeGuardFactory make_scope_guard = {}) {
-  if (!policy.whole_scope_execution)
-    return evaluate<EvalTrace>(forest, layout, leaf_evaluator, cache);
-
   // BatchPolicy docs: an empty batch_target_size means "no batching"; guard
   // the same way make_evaluator(policy, ...) does rather than let an empty
   // std::function throw std::bad_function_call out of compute_dag_boulevard /
-  // evaluate_whole_scope.
-  std::function<std::size_t(Index const&)> const target =
-      policy.batch_target_size
-          ? policy.batch_target_size
-          : std::function<std::size_t(Index const&)>(
-                [](Index const&) -> std::size_t { return 1; });
+  // evaluate_whole_scope / evaluate_ordered_schedule.
+  auto const target_of = [&policy]() {
+    return policy.batch_target_size
+               ? policy.batch_target_size
+               : std::function<std::size_t(Index const&)>(
+                     [](Index const&) -> std::size_t { return 1; });
+  };
+
+  // SP3 gating switch: the ORDERED executor, driven by the SP2
+  // OrderedSchedule IR (see BatchPolicy::ordered_schedule_execution's doc
+  // comment). Checked FIRST so it takes priority when both this and \c
+  // whole_scope_execution are set, and so the two pre-existing dispatch arms
+  // below are reached, byte-identically, only when this flag is false.
+  if (policy.ordered_schedule_execution) {
+    std::function<std::size_t(Index const&)> const target = target_of();
+
+    eval::dryrun::SizeRegime const regime;
+    eval::dryrun::CostModel const cm{regime};
+    eval::RichSchedule const rich =
+        eval::compute_dag_boulevard(forest, cm, target);
+    eval::LegalitySchedule const legality =
+        eval::analyze_legality(rich, forest, policy);
+    eval::OrderedSchedule const ordered =
+        eval::build_ordered_schedule(rich, legality, policy, mode_order);
+
+    return eval::evaluate_ordered_schedule<EvalTrace>(
+        forest, ordered, rich, layout, leaf_evaluator, cache, target,
+        make_scope_guard);
+  }
+
+  if (!policy.whole_scope_execution)
+    return evaluate<EvalTrace>(forest, layout, leaf_evaluator, cache);
+
+  std::function<std::size_t(Index const&)> const target = target_of();
 
   eval::dryrun::SizeRegime const regime;
   eval::dryrun::CostModel const cm{regime};

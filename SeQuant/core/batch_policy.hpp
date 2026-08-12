@@ -127,6 +127,21 @@ struct BatchPolicy {
   /// on both call sites byte-for-byte.
   bool whole_scope_execution = false;
 
+  /// SP3 gating switch (`doc/dev/specs/2026-08-05-dryrun-wetrun-schedule-
+  /// equivalence-design.md` follow-on, the ordered-scope batched-eval
+  /// design): between forest descent / whole-scope descent (both selected
+  /// above via \ref whole_scope_execution) and the new ORDERED executor
+  /// (true -- `sequant::eval::evaluate_ordered_schedule`, driven by the SP2
+  /// `eval::OrderedSchedule` IR rather than the narrow `ScopeSchedule` scope
+  /// tree). Consulted by the `sequant::evaluate(Nodes const&, BatchPolicy
+  /// const&, ...)` driver overload (`scope_executor.hpp`) BEFORE \ref
+  /// whole_scope_execution, so it takes priority when both are set (setting
+  /// both is well-defined: the ordered executor wins) and the two pre-
+  /// existing dispatch arms (forest descent / whole-scope descent) are
+  /// reached, byte-identically, only when this flag is false. Default false
+  /// reproduces today's dispatch byte-for-byte on every existing caller.
+  bool ordered_schedule_execution = false;
+
   /// Peak-memory budget in BYTES for the batched objectives. Its meaning
   /// DIFFERS between them:
   ///
