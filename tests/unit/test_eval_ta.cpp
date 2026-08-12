@@ -2266,6 +2266,148 @@ TEST_CASE("evaluate_whole_scope matches forest descent over one aux loop",
   CHECK(rel < 1e-10);
 }
 
+// SP3 Task 2 of the ordered-scope batched-eval design (the sequel to the
+// whole-scope batched DAG execution design; see ordered_schedule.hpp's own
+// doc comments for the SP2 OrderedSchedule IR and ordered_executor.hpp's
+// detail::run_ordered_contracted_block for the executor this test drives):
+// EQUIVALENCE for a realized Contracted loop block (AccumulateSum reduction).
+// Same sharing structure as the "evaluate_whole_scope matches forest descent
+// over one aux loop" test above (a shared aux-carrying composite S = g*h,
+// both roots contracting the aux batch mode x_1 AT THEIR OWN ROOT, so each
+// root itself is the block's AccumulateSum output -- "a reduction value
+// consumed by a value built after the loop", per the SP3 brief, realized here
+// as the shared per-root combine step that runs after evaluate_ordered_
+// schedule's loop-block walk closes), but driven through the SP1/SP2/SP3
+// pipeline (analyze_legality -> build_ordered_schedule -> evaluate_ordered_
+// schedule) instead of the whole-scope ScopeSchedule/walk_scope path. Real TA
+// data at a small tractable size (the DryRun backend is zero-data and cannot
+// witness a dropped/mis-accumulated batch).
+TEST_CASE(
+    "evaluate_ordered_schedule matches forest descent over one Contracted "
+    "loop block",
+    "[eval][ordered-executor]") {
+  using sequant::evaluate;
+  using sequant::eval::analyze_legality;
+  using sequant::eval::build_ordered_schedule;
+  using sequant::eval::build_value_node_map;
+  using sequant::eval::compute_dag_boulevard;
+  using sequant::eval::evaluate_ordered_schedule;
+  using sequant::eval::OrderedSchedule;
+  using sequant::eval::RichSchedule;
+  using sequant::eval::ScopeBlock;
+  using TA::TArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+
+  auto& world = TA::get_default_world();
+  // aux multi-tiled (naux 12 in tiles of 4 -> 3 tiles) so x_1 batches.
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 6, 12};
+  yield_.set_max_tile(4);
+
+  auto const aux =
+      sequant::get_default_context().index_space_registry()->retrieve(L"x");
+
+  // Two summable roots sharing S = g*h (carries aux x_1, free at the child,
+  // contracted at each root -- an AccumulateSum output of the x_1 block):
+  //   F1 = (g{a2;i1;x1} * h{i3;a2}) * (p{a3;i2;x1} * q{i4;a3})
+  //   F2 = (g{a2;i1;x1} * h{i3;a2}) * (r{a3;i2;x1} * w{i4;a3})
+  // both contract x_1 (aux-aux) -> results over {i1,i2,i3,i4}. Same forest as
+  // the whole-scope aux-only equivalence test above.
+  auto const t1 = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (p{a_3;i_2;x_1} * q{i_4;a_3})");
+  auto const t2 = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (r{a_3;i_2;x_1} * w{i_4;a_3})");
+  std::string const target = "i_1,i_2,i_3,i_4";
+  std::vector<node_t> forest{eval_node(t1), eval_node(t2)};
+
+  // Reference: unbatched forest descent (ground truth), taken BEFORE
+  // batched_here() is stamped below -- forest descent ignores it regardless
+  // (no custom evaluator installed), but this keeps the reference call
+  // manifestly independent of the annotation.
+  auto const ref = evaluate(forest, target, yield_)->get<TArrayD>();
+
+  // SP1's compute_dag_boulevard (peak_profile.hpp) builds each occurrence's
+  // enclosing-loop context (OccurrenceRec::ectx) off batched_here() during its
+  // descent -- the SAME annotation the runtime batched evaluator consults, and
+  // the one build_ordered_schedule's own fixture (test_ordered_schedule.cpp's
+  // W/{Κ} forest) stamps on the node that REALIZES the loop. Without it no
+  // occurrence has an enclosing x_1 loop, so classify_axis's LoopLocal check
+  // (bound lockstep to an enclosing loop of the SAME index) can never find
+  // one and every x_1-carrying value falls to LoopCarried (AccumulateScatter)
+  // instead of Reduction/LoopLocal -- exactly the wrong classification this
+  // test's own precondition check caught. Each root itself is the node that
+  // contracts x_1 (batch_axis finds it as the shared index between the root's
+  // two factors), so batched_here() goes there, mirroring the whole-scope
+  // aux-only equivalence test above.
+  auto accept_aux = [aux](sequant::Index const& ix) {
+    return ix.space() == aux;
+  };
+  sequant::Index x1;
+  for (auto& nd : forest) {
+    auto const ax = sequant::batch_axis(nd, accept_aux);
+    REQUIRE(ax.has_value());
+    x1 = *ax;
+    nd->set_batched_here({{*ax, sequant::BatchModeType::Contracted}});
+  }
+  REQUIRE(x1.space() == aux);
+
+  // SP1/SP2: x_1 (the aux space) is the only batchable Contracted axis; no
+  // External axis at all -- the natural fixture for a Contracted-only Task 2.
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [aux](sequant::Index const& ix) {
+    return ix.space() == aux;
+  };
+  policy.is_batchable_external_index = [](sequant::Index const&) {
+    return false;
+  };
+
+  sequant::eval::dryrun::SizeRegime const regime;
+  sequant::eval::dryrun::CostModel const cm{regime};
+  auto const block_of = [](sequant::Index const&) -> std::size_t { return 4; };
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {L"x"});
+
+  // Precondition this test exists to exercise: a realized Contracted loop
+  // block at the root, with at least one AccumulateSum output (the shared
+  // reduction each root's own build resolves to) -- the shape Task 1's own
+  // test explicitly does NOT produce.
+  ScopeBlock const* x_block = nullptr;
+  for (auto const& step : ordered.root.steps)
+    if (auto const* b = std::get_if<ScopeBlock>(&step.value)) x_block = b;
+  REQUIRE(x_block != nullptr);
+  REQUIRE(x_block->kind == sequant::BatchModeType::Contracted);
+  REQUIRE(!x_block->outputs.empty());
+  for (auto const& [vid, kind] : x_block->outputs)
+    REQUIRE(kind == sequant::eval::OutputKind::AccumulateSum);
+
+  // value_id -> node bridge: the x_1 block must home the shared composite S
+  // as a plain BuildStep (LoopLocal), exactly like the whole-scope test's
+  // n_homed > 0 check.
+  auto const vmap = build_value_node_map(forest);
+  std::size_t n_build_ids = 0;
+  for (auto const& step : x_block->steps)
+    if (std::holds_alternative<sequant::eval::BuildStep>(step.value))
+      ++n_build_ids;
+  REQUIRE(n_build_ids > 0);
+
+  // evaluate_ordered_schedule over the single x_1 loop block.
+  auto cache = sequant::CacheManager<node_t>::empty();
+  std::function<std::size_t(sequant::Index const&)> const target_batch =
+      [](sequant::Index const&) -> std::size_t { return 4; };
+  auto const got = evaluate_ordered_schedule(forest, ordered, rich, target,
+                                             yield_, cache, target_batch)
+                       ->get<TArrayD>();
+
+  // Agreement to within FP noise (the batched accumulation reorders the
+  // x_1 contraction vs the unbatched reference).
+  TArrayD diff;
+  diff(target) = got(target) - ref(target);
+  double const rel = TA::norm2(diff) / TA::norm2(ref);
+  INFO("relative L2 diff = " << rel);
+  CHECK(rel < 1e-10);
+}
+
 // Task 4 of the whole-scope batched DAG execution design
 // (doc/dev/specs/2026-08-10-whole-scope-batched-dag-execution-design.md):
 // NESTED-scope EQUIVALENCE. A two-root forest with a NESTED scope tree --
