@@ -3,6 +3,7 @@
 #include <SeQuant/core/eval/legality.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <catch2/catch_test_macros.hpp>
