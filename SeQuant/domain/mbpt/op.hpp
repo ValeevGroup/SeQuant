@@ -1167,6 +1167,17 @@ ExprPtr F(bool use_tensor = true,
 /// A general operator of rank \p K
 ExprPtr θ(std::size_t K);
 
+/// @brief Makes a replacement operator of particle rank \p rank
+///        \f$ \{ \tilde{a}^{p_1 \dots p_r}_{p_{r+1} \dots p_{2r}} \} \f$ over
+///        the complete space.
+/// @note This is a single replacer, not a sum: no amplitude tensor and no
+///       normalization.
+/// @note The indices stay free and their ordinals are fixed, so callers can
+///       rely on them: creators use `1 ... rank`, annihilators use
+///       `rank+1 ... 2*rank`.
+/// @param rank particle rank (>= 1)
+ExprPtr ã(std::size_t rank);
+
 /// Makes particle-conserving excitation operator of rank \p K
 ExprPtr t(std::size_t K);
 

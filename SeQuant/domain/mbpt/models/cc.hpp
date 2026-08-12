@@ -183,6 +183,34 @@ class CC {
   /// @return vector of left side sigma equations, element 0 is always null
   [[nodiscard]] std::vector<ExprPtr> eom_l(nₚ np, nₕ nh) const;
 
+  /// @brief derives the reduced density matrix (RDM) of particle rank @p rank
+  /// as the reference expectation value of a similarity-transformed
+  /// replacement operator, whose free-index ordinals are fixed by op::ã.
+  /// Traditional ansatz:
+  /// \f$ \gamma^{p_1 \dots p_r}_{p_{r+1} \dots p_{2r}} = \langle 0| (1 +
+  /// \hat{\Lambda}) e^{-\hat{T}} \{ \tilde{a}^{p_1 \dots p_r}_{p_{r+1} \dots
+  /// p_{2r}} \} e^{\hat{T}} |0 \rangle \f$; unitary ansatz drops \f$
+  /// \hat{\Lambda} \f$ and uses \f$ e^{-\hat{\sigma}} \dots e^{\hat{\sigma}}
+  /// \f$ with \f$ \hat{\sigma} = \hat{T} - \hat{T}^\dagger \f$.
+  /// @note Only the correlation contribution is returned: op::ã is
+  ///   normal-ordered, so the reference contractions are absent.
+  /// @note For @p rank >= 2 the result is not manifestly antisymmetric: the
+  ///   replacement operator carries no antisymmetrizer.
+  /// @note For the traditional ansatz this is the *linked* density; the
+  ///   unitary ansatz uses no connectivity.
+  /// @param rank particle rank of the RDM (1 = one-particle \f$ \gamma \f$,
+  ///   2 = two-particle \f$ \Gamma \f$, ...)
+  /// @param comm_rank maximum order of nested commutators in the
+  ///   similarity transform of the replacement operator;
+  ///   if not specified, defaults to `min(2*rank, rank + N)` for the
+  ///   traditional ansatz (where the expansion terminates exactly) and to
+  ///   `hbar_comm_rank` for the unitary ansatz (where it does not). Pass an
+  ///   explicit value to truncate earlier.
+  /// @return the RDM expression (Fermi-vacuum normal-ordered / correlation
+  /// part)
+  [[nodiscard]] ExprPtr rdm(
+      size_t rank = 1, std::optional<size_t> comm_rank = std::nullopt) const;
+
  private:
   size_t N;
   Ansatz ansatz_ = Ansatz::T;
