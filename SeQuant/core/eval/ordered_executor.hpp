@@ -71,6 +71,60 @@ template <typename node_t>
 }
 
 ///
+/// \brief Task 2 of the eager-home-release plan: a TYPE-keyed (\c
+/// IndexSpace::base_key()) block-count function over \p ordered's whole
+/// \c ScopeBlock tree -- the \c OrderedSchedule counterpart of \c
+/// walk_scope's \c nblocks_by_type (scope_executor.hpp). Walks every nested
+/// \c ScopeBlock reachable from \p ordered.root.steps (root's own axis is
+/// the sentinel default, never a real loop, so it is not itself registered);
+/// for each block's axis TYPE not yet seen, sources a carrying leaf via \c
+/// ordered_axis_leaf (the same leaf \c run_ordered_contracted_block reads
+/// \c mode_batches from) and memoizes that leaf's own \c mode_batches(...)
+/// .size() under the TYPE. The returned lambda looks up an \c Index's own
+/// TYPE in that memo, defaulting to 1 (unbatched) for any type the walk
+/// never saw as a block axis.
+///
+/// \note Mirrors the brief's reference shape exactly but for one thing: a
+/// TYPE realized as more than one nested loop (an outer block and an inner
+/// child block sharing the same axis TYPE) would still only memoize the
+/// FIRST (outermost) one's \c mode_batches().size() here, undercounting the
+/// true nested block count (which multiplies). No fixture in this repo
+/// nests the SAME axis type today, so this is not implemented -- a later
+/// task's job if/when a nested-same-type fixture goes live (the Task 5
+/// validate assert is expected to catch an undercount if this is wrong).
+///
+template <typename node_t, typename F>
+[[nodiscard]] std::function<std::size_t(Index const&)> ordered_n_blocks(
+    OrderedSchedule const& ordered, RichSchedule const& rich,
+    std::unordered_map<std::size_t, node_t> const& vmap,
+    F const& leaf_evaluator,
+    std::function<std::size_t(Index const&)> const& target) {
+  auto by_type =
+      std::make_shared<std::unordered_map<std::wstring, std::size_t>>();
+  auto const add = [&](auto&& self, ScopeBlock const& b) -> void {
+    std::wstring const bk(b.axis.space().base_key());
+    if (!by_type->count(bk)) {
+      if (auto const lf = ordered_axis_leaf<node_t>(b, b.axis, vmap, rich)) {
+        by_type->emplace(bk, leaf_evaluator(lf->first)
+                                 ->mode_batches(lf->second, target(b.axis))
+                                 .size());
+      }
+    }
+    for (Step const& s : b.steps)
+      if (auto const* child = std::get_if<ScopeBlock>(&s.value))
+        self(self, *child);
+  };
+  // Root's own axis is the sentinel default (never a real loop -- see
+  // ScopeBlock::axis's doc comment), so only its CHILD blocks are walked.
+  for (Step const& s : ordered.root.steps)
+    if (auto const* child = std::get_if<ScopeBlock>(&s.value)) add(add, *child);
+  return [by_type](Index const& m) -> std::size_t {
+    auto const it = by_type->find(std::wstring(m.space().base_key()));
+    return it == by_type->end() ? std::size_t{1} : it->second;
+  };
+}
+
+///
 /// \brief Defensive check for the single-physical-label simplification \c
 /// run_ordered_contracted_block's own doc comment (\c \\note) documents: \p
 /// node's subtree carries \p axis's TYPE (\c IndexSpace::base_key()) at some

@@ -565,6 +565,47 @@ TEST_CASE(
   REQUIRE(orderedexec_index_of_build_step(ordered.root, parent_value_id)
               .has_value());
 
+  // Task 2 (eager-home-release plan): detail::ordered_n_blocks reports > 1
+  // blocks for the batched Κ (aux) axis at target 256 (matches this test's
+  // own batch_target_size policy above), and exactly 1 for an unbatched
+  // index TYPE (never realized as a ScopeBlock axis anywhere in `ordered`).
+  {
+    std::optional<sequant::Index> kappa_index;
+    std::function<void(sequant::eval::ScopeBlock const&)> find_kappa_axis =
+        [&](sequant::eval::ScopeBlock const& b) {
+          if (kappa_index) return;
+          if (b.axis.space().base_key() == L"Κ") {
+            kappa_index = b.axis;
+            return;
+          }
+          for (auto const& s : b.steps)
+            if (auto const* child =
+                    std::get_if<sequant::eval::ScopeBlock>(&s.value))
+              find_kappa_axis(*child);
+        };
+    for (auto const& s : ordered.root.steps)
+      if (auto const* child = std::get_if<sequant::eval::ScopeBlock>(&s.value))
+        find_kappa_axis(*child);
+    REQUIRE(kappa_index.has_value());
+
+    std::optional<sequant::Index> unbatched_index;
+    for (auto const& vc : rich.cells) {
+      for (sequant::Index const& ix : vc.carried) {
+        if (ix.space().base_key() != L"Κ") {
+          unbatched_index = ix;
+          break;
+        }
+      }
+      if (unbatched_index) break;
+    }
+    REQUIRE(unbatched_index.has_value());
+
+    auto const nb = sequant::eval::detail::ordered_n_blocks(ordered, rich, vmap,
+                                                            yield, target);
+    CHECK(nb(*kappa_index) > 1);
+    CHECK(nb(*unbatched_index) == 1);
+  }
+
   std::ostringstream ord_trace;
   logger.eval.stream = &ord_trace;
   auto ordered_cache = sequant::cache_manager(forest);
