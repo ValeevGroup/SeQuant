@@ -6,6 +6,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network/v1.hpp>
@@ -689,4 +690,107 @@ TEST_CASE("braket_symmetric_half_tensor_canonicalization", "[algorithms]") {
   CHECK(canon_hash(L"X{a1;;i1}:N-S-N") == canon_hash(L"X{;a1;i1}:N-S-N"));
   // Without braket symmetry the two forms must remain distinct.
   CHECK(canon_hash(L"X{a1;;i1}:N-N-N") != canon_hash(L"X{;a1;i1}:N-N-N"));
+}
+
+TEST_CASE("csv_equivalent_tn_merge", "[algorithms][csv-canon]") {
+  // Reproducer: CSV (PNO/PNS) flavor-expansion terms that are identical up to
+  // DUMMY relabeling (large tmp-style ordinals, as minted by csv_transform)
+  // and factor order MUST canonicalize to identical expressions, or
+  // like-term merging cannot collapse the 2^N flavor Cartesian product.
+  using namespace sequant;
+  auto sr_reg = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_pao_spaces(sr_reg);  // μ̃
+  Context ctx = get_default_context();
+  ctx.set(sr_reg);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  // the invariant that matters for like-term merging: with named-index labels
+  // treated as meaningful (as Sum::canonicalize_impl and transform_sum_expr
+  // do), equivalent TNs must canonicalize to IDENTICAL expressions
+  auto canon_str = [](std::wstring s) {
+    auto e = deserialize(s);
+    REQUIRE(e);
+    canonicalize(e, CanonicalizeOptions::default_options().copy_and_set(
+                        CanonicalizeOptions::IgnoreNamedIndexLabel::No));
+    return toUtf8(to_latex(e));
+  };
+
+  auto canon_str_m = [](std::wstring s, CanonicalizationMethod m) {
+    auto e = deserialize(s);
+    REQUIRE(e);
+    canonicalize(e, CanonicalizeOptions{.method = m}.copy_and_set(
+                        CanonicalizeOptions::IgnoreNamedIndexLabel::No));
+    return toUtf8(to_latex(e));
+  };
+  const std::wstring sA =
+      L"g{i_1,i_2;μ̃_7,μ̃_8}:N-C-S"
+      L" * C{μ̃_7;a_1<i_1,i_2>}:N-C-S"
+      L" * C{μ̃_8;a_2<i_1,i_2>}:N-C-S";
+  const std::wstring sB =
+      L"C{μ̃_19;a_2<i_1,i_2>}:N-C-S"
+      L" * g{i_1,i_2;μ̃_17,μ̃_19}:N-C-S"
+      L" * C{μ̃_17;a_1<i_1,i_2>}:N-C-S";
+
+  SECTION("complete") {
+    auto A = canon_str(sA), B = canon_str(sB);
+    INFO("canon(A) = " << A);
+    INFO("canon(B) = " << B);
+    CHECK(A == B);
+  }
+  SECTION("topological only") {
+    auto A = canon_str_m(sA, CanonicalizationMethod::Topological);
+    auto B = canon_str_m(sB, CanonicalizationMethod::Topological);
+    INFO("canonT(A) = " << A);
+    INFO("canonT(B) = " << B);
+    CHECK(A == B);
+  }
+  SECTION("debug log A") {
+    sequant::Logger::instance().canonicalize = true;
+    sequant::Logger::instance().canonicalize_input_graph = true;
+    auto A = canon_str_m(sA, CanonicalizationMethod::Topological);
+    sequant::Logger::instance().canonicalize = false;
+    sequant::Logger::instance().canonicalize_input_graph = false;
+    std::cout << "FINAL_A: " << A << "\n";
+  }
+  SECTION("debug log B") {
+    sequant::Logger::instance().canonicalize = true;
+    sequant::Logger::instance().canonicalize_input_graph = true;
+    auto B = canon_str_m(sB, CanonicalizationMethod::Topological);
+    sequant::Logger::instance().canonicalize = false;
+    sequant::Logger::instance().canonicalize_input_graph = false;
+    std::cout << "FINAL_B: " << B << "\n";
+  }
+  SECTION("transform_sum_expr merges equivalent summands") {
+    auto exA = deserialize(sA), exB = deserialize(sB);
+    REQUIRE(exA);
+    REQUIRE(exB);
+    std::vector<ExprPtr> summands{exA, exB};
+    auto merged = transform_sum_expr(
+        summands, [](ExprPtr const& x) { return x->clone(); });
+    INFO("merged = " << toUtf8(to_latex(merged)));
+    // the two summands are the same TN => must collapse to 2 * (one term)
+    REQUIRE(merged->is<Product>());
+    CHECK(merged->as<Product>().scalar() == rational{2});
+  }
+  SECTION("canonical graphs equal") {
+    auto exA = deserialize(sA), exB = deserialize(sB);
+    REQUIRE(exA);
+    REQUIRE(exB);
+    TensorNetworkV3 tnA(exA), tnB(exB);
+    auto mdA = tnA.canonicalize_slots();
+    auto mdB = tnB.canonicalize_slots();
+    REQUIRE(mdA.graph);
+    REQUIRE(mdB.graph);
+    const int cmpAB = mdA.graph->cmp(*mdB.graph);
+    INFO("canonical bliss graph cmp(A,B) = " << cmpAB << " (0 = equal)");
+    CHECK(cmpAB == 0);
+  }
+  SECTION("lexicographic only") {
+    auto A = canon_str_m(sA, CanonicalizationMethod::Lexicographic);
+    auto B = canon_str_m(sB, CanonicalizationMethod::Lexicographic);
+    INFO("canonL(A) = " << A);
+    INFO("canonL(B) = " << B);
+    CHECK(A == B);
+  }
 }

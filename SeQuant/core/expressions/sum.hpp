@@ -406,7 +406,16 @@ ExprPtr transform_sum_expr(SizedRange &&rng, const UnaryMapOp &map,
     auto task_result = map(input);
     if (task_result) {
       if (canonicalize) {
-        auto bp = task_result->canonicalize();
+        // Summands are canonicalized to be MERGED across the sum, so named
+        // (external) indices must be treated as meaningful/distinct — same
+        // reasoning as Sum::canonicalize_impl. Under the label-ignoring
+        // default, same-space named indices are graph-automorphic and bliss
+        // breaks the orbit by input vertex order: equivalent summands land on
+        // DIFFERENT "canonical" forms (defeating the hash merge), and which
+        // named label sits on which slot becomes input-dependent.
+        auto bp = task_result->canonicalize(
+            CanonicalizeOptions::default_options().copy_and_set(
+                CanonicalizeOptions::IgnoreNamedIndexLabel::No));
         if (bp) {
           task_result = bp * task_result;
         }
