@@ -873,6 +873,20 @@ class CacheManager {
     return iter != cache_map_.end() && iter->second.alive();
   }
 
+  /// \return true iff @p key is alive (holding data) at THIS cache or ANY
+  ///         ancestor scope up the parent chain. Non-decrementing (unlike \c
+  ///         access_at): a pure residency probe. Used by \c
+  ///         make_batched_scratch to decide that a batch-invariant value
+  ///         already resident at its home is read from there each batch (the
+  ///         parent-chain fall-through), so it is neither registered nor
+  ///         rebuilt in the per-batch scratch.
+  [[nodiscard]] bool resident_in_chain(key_type const& key) const noexcept {
+    if (auto iter = cache_map_.find(key);
+        iter != cache_map_.end() && iter->second.alive())
+      return true;
+    return parent_ ? parent_->resident_in_chain(key) : false;
+  }
+
   /// \return true iff the key is registered for caching and classified
   ///         persistent (P: never released on access, survives reset()).
   [[nodiscard]] bool persistent(key_type const& key) const noexcept {

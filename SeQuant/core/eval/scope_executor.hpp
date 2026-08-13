@@ -60,6 +60,12 @@ namespace sequant::eval {
 /// build_scope_schedule's value->node assignment), so an occurrence that binds
 /// a loop mode under a different physical ordinal is still counted.
 ///
+/// \note Used by the whole-scope executor's homing (below). The ordered
+/// executor instead uses \c detail::ordered_home_reads (ordered_schedule.hpp),
+/// which counts exact home reads from the ORDERED schedule's realized scopes
+/// under the read-from-home discipline, rather than the boulevard occurrence
+/// ectx this reads.
+///
 /// \param cell the value whose life is computed.
 /// \param n_blocks the batch-block count of a loop mode (1 for a mode that is
 ///        not a realized loop -- an unbatched mode contributes a factor of 1).

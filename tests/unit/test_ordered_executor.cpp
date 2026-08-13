@@ -617,13 +617,78 @@ TEST_CASE(
   // executor wiring -- the install lives entirely here.
   sequant::eval::PeakMonitor ord_mon;
   ordered_cache.set_peak_monitor(&ord_mon);
+  // Task 4: the NODE-level lift of policy.is_volatile_leaf (mirrors
+  // make_evaluator's is_volatile_node lift, eval.hpp): a leaf tensor labeled
+  // "t" is volatile, every internal node non-volatile. Threaded into the
+  // ordered executor so it classifies each root-homed composite
+  // volatile-vs-persistent and eagerly releases the volatile ones -- the
+  // reclaim this witness pins.
+  std::function<bool(Node const&)> const is_volatile_node =
+      [p = policy.is_volatile_leaf](Node const& n) -> bool {
+    if (!n.leaf() || !n->is_tensor()) return false;
+    return p && p(n->as_tensor());
+  };
   ResultPtr ord_result;
   try {
     ord_result = sequant::eval::evaluate_ordered_schedule<sequant::Trace::On>(
-        forest, ordered, rich, layout, yield, ordered_cache, target);
+        forest, ordered, rich, layout, yield, ordered_cache, target, {},
+        is_volatile_node);
   } catch (std::exception const& e) {
     std::cerr << "[ordered-executor-witness-water20] ordered evaluate threw: "
               << e.what() << "\n";
+  }
+
+  // ---- Task 4 exactness gate: predicted (ordered_home_reads) == measured.
+  // A second ordered run with a NON-EVICTING home life lets us read the ACTUAL
+  // number of times each homed value's home entry is accessed (max_life - life)
+  // and compare it to the static home_reads prediction. If they differ, the
+  // static model is WRONG (an undercount rebuilds; an overcount over-retains)
+  // -- this is the ground truth the payoff must satisfy.
+  {
+    auto meas_cache = sequant::cache_manager(forest);
+    std::function<std::size_t(std::size_t)> const huge =
+        [](std::size_t) -> std::size_t { return 1000000000ull; };
+    try {
+      (void)sequant::eval::evaluate_ordered_schedule<sequant::Trace::On>(
+          forest, ordered, rich, layout, yield, meas_cache, target, {},
+          is_volatile_node, huge);
+    } catch (std::exception const&) {
+    }
+    auto const n_blocks_m = sequant::eval::detail::ordered_n_blocks<Node>(
+        ordered, rich, vmap, yield, target);
+    auto const predicted = sequant::eval::detail::ordered_home_reads<Node>(
+        ordered, rich, vmap, n_blocks_m);
+    std::size_t n_checked = 0, n_mismatch = 0;
+    for (auto const& vc : rich.cells) {
+      auto const vit = vmap.find(vc.hash);
+      if (vit == vmap.end() || vit->second.leaf()) continue;
+      if (!sequant::subtree_any(vit->second, is_volatile_node)) continue;
+      // Only ROOT-homed composites live in the root meas_cache and so are
+      // measurable post-run; a block-homed value's entry is in a transient
+      // scratch (gone by now), so measuring it against the root cache is a
+      // false 0. Restrict the exactness gate to root-level BuildSteps.
+      if (!orderedexec_index_of_build_step(ordered.root, vc.value_id)
+               .has_value())
+        continue;
+      int const ml = meas_cache.max_life(vit->second);
+      int const lf = meas_cache.life(vit->second);
+      if (ml <= 0) continue;  // never homed non-persistently (persistent path)
+      std::size_t const measured = std::size_t(ml - lf);
+      std::size_t const pred = predicted(vc.value_id);
+      ++n_checked;
+      if (pred != measured) {
+        ++n_mismatch;
+        if (std::getenv("SEQUANT_UT_T4_DIAG"))
+          std::wcerr << L"    [HRDIAG] vid=" << vc.value_id << L" predicted="
+                     << pred << L" measured=" << measured << L"\n";
+      }
+    }
+    std::wcerr << L"  home_reads exactness: checked " << n_checked
+               << L" volatile homed composites, " << n_mismatch
+               << L" mismatches\n";
+    INFO("home_reads predicted vs measured: " << n_mismatch << "/" << n_checked
+                                              << " mismatch");
+    CHECK(n_mismatch == 0);
   }
 
   // ---- (2) whole-scope executor, SAME forest/rich. ----
@@ -779,6 +844,60 @@ TEST_CASE(
   // R2 (ruling: assert vs the build-once baseline): the ordered executor's
   // build-once homing must not raise peak over forest descent's build-once CSE.
   CHECK(ord_mon.hwmark_bytes <= fd_mon.hwmark_bytes);
+
+  // ---- Task 4 (THE PAYOFF): eager release of volatile homed values.
+  //
+  // With is_volatile_node threaded in, every root-homed composite whose subtree
+  // carries a volatile ("t"-labeled) leaf is homed NON-persistent -- released
+  // at its genuine last cross-block use instead of pinned resident for the
+  // whole walk. That reclaim drops the realized ordered peak strictly below the
+  // pinned baseline (988'732'399'293 == the peak WITHOUT eager release, the
+  // number this same witness reports when is_volatile is NOT threaded), while
+  // build-once (ord_builds == 1, worst_ord == 1, asserted above) and numerical/
+  // shape equivalence (ord vs forest-descent, ord vs whole-scope, above) hold:
+  // a value is released only after its true last use, never rebuilt.
+  //
+  // Attribute the reclaim: split the root-homed composites into the volatile
+  // floor (released) and the persistent floor (held) by the SAME subtree_any
+  // classification the executor applies at its homing sites, and sum each
+  // group's modeled home footprint (cell_footprint, the peak-composition
+  // metric this file already uses elsewhere).
+  auto const foot = [&](sequant::eval::ValueCell const& vc) -> std::size_t {
+    return sequant::eval::detail::cell_footprint(vc.carried, vc.home_modes, *cm,
+                                                 block_of);
+  };
+  std::size_t vol_bytes = 0, persist_bytes = 0;
+  std::size_t vol_count = 0, persist_count = 0;
+  for (auto const& vc : rich.cells) {
+    auto const vit = vmap.find(vc.hash);
+    if (vit == vmap.end() || vit->second.leaf()) continue;
+    // only the composites the ROOT walk actually homes (root-level BuildSteps)
+    if (!orderedexec_index_of_build_step(ordered.root, vc.value_id).has_value())
+      continue;
+    if (sequant::subtree_any(vit->second, is_volatile_node)) {
+      ++vol_count;
+      vol_bytes += foot(vc);
+    } else {
+      ++persist_count;
+      persist_bytes += foot(vc);
+    }
+  }
+  std::wcerr << L"  root-homed composites: volatile = " << vol_count << L" ("
+             << vol_bytes << L" B), persistent = " << persist_count << L" ("
+             << persist_bytes << L" B)\n";
+  INFO("root-homed composites: volatile = "
+       << vol_count << " (" << vol_bytes << " B); persistent = "
+       << persist_count << " (" << persist_bytes << " B)");
+  CAPTURE(vol_count, vol_bytes, persist_count, persist_bytes);
+  // At least one composite must actually be classified volatile, else the
+  // reclaim below is vacuous and the seed is not taking effect.
+  CHECK(vol_count > 0);
+  // THE acceptance: eager release drops the realized peak strictly below the
+  // pinned no-eager-release baseline. If this FAILS at the baseline value, the
+  // seed is not wired; if peak drops but ord_builds/worst_ord break, a home
+  // value was released before its last use (a count bug to fix, NOT an
+  // assertion to weaken).
+  CHECK(ord_mon.hwmark_bytes < 988732399293ull);
 
   // ---- Step 1 (R3): test-side run-completeness cross-check, complementing
   // the SEQUANT_ASSERT inside evaluate_ordered_schedule (a no-op in this

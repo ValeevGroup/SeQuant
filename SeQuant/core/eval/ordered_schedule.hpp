@@ -12,8 +12,10 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <functional>
 #include <initializer_list>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -404,6 +406,124 @@ inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
       }
     }
   return g;
+}
+
+///
+/// \brief READ-FROM-HOME home use-count: the exact number of times a homed
+/// value's HOME cache entry is accessed during ordered-scope eval, computed
+/// from the ORDERED schedule's realized scopes (NOT the boulevard's occurrence
+/// ectx that \c weighted_use_count reads).
+///
+/// \details Under the single read-from-home access discipline (see \c
+/// make_batched_scratch: a batch-invariant home-resident operand is read from
+/// the parent chain each batch, never seeded), a consumer \c W reads operand
+/// \c V's home ONCE per batch of every loop on the path (home(V), scope(W)] --
+/// exactly \c weighted_use_count's per-batch arithmetic, but each consumer's
+/// enclosing loops come from where \c build_ordered_schedule actually PLACES
+/// it, not from \c ValueCell::occurrences (the boulevard's natural nesting,
+/// which the ordered schedule does not preserve -- the mismatch that made the
+/// occurrence-fed count undercount). So:
+/// \verbatim
+///   home_reads(V) = 1 (the build store)
+///     + Σ over DAG edges (W -> V), WITH multiplicity (V counted twice if it
+///       is BOTH operands of W): Π n_blocks(L) over loops L in scope(W) whose
+///       TYPE is not in scope(V) (the path strictly inner to V's home).
+/// \endverbatim
+/// TYPE-keyed (\c IndexSpace::base_key()) like \c weighted_use_count, and
+/// multiplicity-aware from the DAG (a value used as both operands of one
+/// contraction is two home reads), which the deduped \c consumers_of is not.
+/// The \c +1 is the homing store's own decaying access (\c CacheManager stores
+/// by access), matching the \c "+1" the seeded homing used.
+///
+template <typename node_t>
+[[nodiscard]] inline std::function<std::size_t(std::size_t)> ordered_home_reads(
+    OrderedSchedule const& ordered, RichSchedule const& rich,
+    std::unordered_map<std::size_t, node_t> const& vmap,
+    std::function<std::size_t(Index const&)> const& n_blocks) {
+  // Two scopes per value, both keyed off the ordered schedule's realized
+  // nesting:
+  //  - build_scope[vid]: the loops enclosing where vid is EVALUATED (reads its
+  //    operands). This is what charges a consumer's reads of its operand.
+  //  - home_scope[vid]: the loops enclosing where vid's cache entry LIVES.
+  // They differ for an escape output: it is BUILT inside its block (per batch,
+  // reading its operands there -- build_scope includes the block axis) but its
+  // result HOMES one level OUT (stored at the parent on close -- home_scope
+  // excludes the block axis). A plain BuildStep has build_scope == home_scope.
+  auto build_scope = std::make_shared<
+      std::unordered_map<std::size_t, container::svector<Index>>>();
+  auto home_scope = std::make_shared<
+      std::unordered_map<std::size_t, container::svector<Index>>>();
+  auto const walk = [&build_scope, &home_scope](
+                        auto&& self, ScopeBlock const& b,
+                        container::svector<Index> const& enc) -> void {
+    for (Step const& s : b.steps) {
+      if (auto const* build = std::get_if<BuildStep>(&s.value)) {
+        (*build_scope)[build->value_id] = enc;
+        (*home_scope)[build->value_id] = enc;
+      } else if (auto const* child = std::get_if<ScopeBlock>(&s.value)) {
+        container::svector<Index> inner = enc;
+        inner.push_back(child->axis);  // child's steps are inside child's loop
+        self(self, *child, inner);
+      }
+    }
+    // An escape output is BUILT inside b (build_scope == enc, reading its
+    // operands once per batch) but HOMES one level OUT (home_scope == enc minus
+    // b's own axis). Root (sentinel axis, enc=={}) has no outputs.
+    for (auto const& [vid, kind] : b.outputs) {
+      (void)kind;
+      (*build_scope)[vid] = enc;
+      container::svector<Index> out_scope = enc;
+      if (!out_scope.empty()) out_scope.pop_back();
+      (*home_scope)[vid] = out_scope;
+    }
+  };
+  walk(walk, ordered.root, {});
+
+  std::unordered_map<std::size_t, std::size_t> hash_to_vid;
+  hash_to_vid.reserve(rich.cells.size());
+  for (ValueCell const& c : rich.cells) hash_to_vid.emplace(c.hash, c.value_id);
+
+  auto const scope_of =
+      [](std::shared_ptr<std::unordered_map<
+             std::size_t, container::svector<Index>>> const& m,
+         std::size_t vid) -> container::svector<Index> {
+    auto it = m->find(vid);
+    return it == m->end() ? container::svector<Index>{} : it->second;
+  };
+  auto const type_in = [](container::svector<Index> const& s, Index const& m) {
+    for (Index const& x : s)
+      if (x.space().base_key() == m.space().base_key()) return true;
+    return false;
+  };
+
+  // Every value is cached at its scope (no min-use floor, member roots cached),
+  // so evaluate_impl always stops at a consumer's DIRECT operands: V's home is
+  // read exactly once per DIRECT parent build. Sum over V's direct DAG parents
+  // W (with multiplicity -- V as BOTH operands of W is two reads), charging
+  // each by W's build count over the path (home(V), build_scope(W)].
+  auto reads = std::make_shared<std::unordered_map<std::size_t, std::size_t>>();
+  for (ValueCell const& wc : rich.cells) {
+    auto const wit = vmap.find(wc.hash);
+    if (wit == vmap.end() || wit->second.leaf()) continue;
+    container::svector<Index> const scopeW = scope_of(build_scope, wc.value_id);
+    auto const add_edge = [&](node_t const& child) {
+      auto const cvit = hash_to_vid.find(child->hash_value());
+      if (cvit == hash_to_vid.end()) return;
+      std::size_t const cvid = cvit->second;
+      container::svector<Index> const homeC = scope_of(home_scope, cvid);
+      std::size_t prod = 1;
+      for (Index const& L : scopeW)
+        if (!type_in(homeC, L)) prod *= n_blocks(L);
+      (*reads)[cvid] += prod;
+    };
+    add_edge(wit->second.left());
+    add_edge(wit->second.right());
+  }
+
+  return [reads](std::size_t vid) -> std::size_t {
+    auto it = reads->find(vid);
+    return (it == reads->end() ? std::size_t{0} : it->second) + 1;
+  };
 }
 
 ///

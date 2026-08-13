@@ -1534,8 +1534,12 @@ template <typename Node, typename Pred>
 namespace detail {
 
 /// The scratch cache for one batched replay pass, plus the alive persistent
-/// real-cache entries to pre-seed it with (registered persistent in the
-/// scratch, so they survive the per-batch reset()).
+/// real-cache entries to pre-seed it with. In the DEFAULT (seeding) mode those
+/// seeds are registered persistent in the scratch so they survive the per-batch
+/// reset(); the caller copies their values in before the batch loop. In the
+/// \c read_from_home mode (ordered executor) there is no seed set -- a
+/// batch-invariant home-resident subnode is read straight from the parent chain
+/// each batch instead (see make_batched_scratch's \p read_from_home).
 template <typename TreeNode, bool FHC>
 struct BatchedScratch {
   CacheManager<TreeNode, FHC> cache;
@@ -1565,12 +1569,26 @@ struct BatchedScratch {
 /// Subnodes whose signature is consistently 'absent' (no leaf below carries
 /// the mode -- the mode is contracted at the member's root, so a subtree
 /// containing a mode-carrying leaf carries the mode free in its
-/// canon_indices()) have batch-invariant full values; those that are alive
-/// persistent entries of \p real are returned as seeds, and the caller copies
-/// their values into the scratch before the batch loop.
+/// canon_indices()) have batch-invariant full values; in the DEFAULT mode those
+/// that are alive persistent entries of \p real are returned as seeds and the
+/// caller copies their values into the scratch before the batch loop.
+///
+/// \param read_from_home ORDERED-executor discipline (default off --
+/// whole-scope and forest-descent keep the seeding behavior verbatim, so MPQC's
+/// current batched CC is byte-unchanged). When ON: (1) a batch-invariant
+/// subnode ALREADY RESIDENT anywhere up \p real's chain is NEITHER registered
+/// here NOR seeded -- \c evaluate_impl reads it straight from the parent chain
+/// each batch (access_at falls through an empty local entry), the single
+/// read-from-home access discipline; and (2) member ROOTS are registered too
+/// (not just their subnodes), so a member consuming another member reads it
+/// from the scratch rather than re-evaluating it. Together these remove every
+/// non-cached node class, making a homed value's home read count exactly its
+/// direct-DAG-parent count over the ordered scopes (see ordered_schedule.hpp
+/// ordered_home_reads).
 template <typename TreeNode, bool FHC, typename Members>
 [[nodiscard]] BatchedScratch<TreeNode, FHC> make_batched_scratch(
-    Members const& members, CacheManager<TreeNode, FHC> const& real) {
+    Members const& members, CacheManager<TreeNode, FHC> const& real,
+    bool read_from_home = false) {
   using Hasher = TreeNodeHasher<TreeNode, FHC>;
   using Comp = TreeNodeEqualityComparator<TreeNode>;
 
@@ -1646,10 +1664,16 @@ template <typename TreeNode, bool FHC, typename Members>
     self(self, n.right(), mode);
   };
   for (auto const& [root, mode] : members) {
-    // member roots themselves are accumulated by the caller, not cached here
     if (root->leaf()) continue;
-    visit(visit, root->left(), mode);
-    visit(visit, root->right(), mode);
+    if (read_from_home) {
+      // ordered: register the member ROOT too, so a member consuming another
+      // member reads it from the scratch instead of re-evaluating it.
+      visit(visit, *root, mode);
+    } else {
+      // default: member roots are accumulated by the caller, not cached here.
+      visit(visit, root->left(), mode);
+      visit(visit, root->right(), mode);
+    }
   }
 
   std::unordered_map<TreeNode, std::size_t, Hasher, Comp> reg;
@@ -1657,19 +1681,34 @@ template <typename TreeNode, bool FHC, typename Members>
   std::vector<TreeNode const*> seeds;
   for (auto const& [ptr, e] : meta) {
     if (!e.consistent) continue;  // ambiguous slicing: never share
-    // A node carrying ANY batched External mode has an external slice its
-    // seeded-full real-cache value would ignore -- so it is never seedable.
+    // A node carrying ANY batched External mode has an external slice a
+    // seeded/home-read full value would ignore -- so it is never
+    // shareable-full.
     bool const carries_ext =
         std::any_of(e.ext_sig.begin(), e.ext_sig.end(),
                     [](auto const& p) { return p.has_value(); });
-    bool const seedable =
-        !e.sig && !carries_ext && real.persistent(*ptr) && real.alive(*ptr);
-    if (seedable) {
-      seeds.push_back(ptr);
-      seed_keys.insert(*ptr);
-      reg.emplace(*ptr, e.count);  // count is ignored for persistent entries
-    } else if (e.count >= 2) {
-      reg.emplace(*ptr, e.count);
+    if (read_from_home) {
+      // ORDERED: a batch-invariant subnode already resident anywhere up the
+      // chain is read straight from home each batch -- neither registered here
+      // (a registered-but-reset local entry would rebuild every batch) nor
+      // copied in. Single access discipline, no seeds. See the \p
+      // read_from_home doc above.
+      if (!e.sig && !carries_ext && real.resident_in_chain(*ptr)) continue;
+      if (e.count >= 2) reg.emplace(*ptr, e.count);
+    } else {
+      // DEFAULT (whole-scope / forest-descent): seed an alive PERSISTENT
+      // batch-invariant real entry into the scratch (persistent so it survives
+      // reset()), else register a repeated subnode. Byte-identical to the
+      // pre-read-from-home behavior MPQC's batched CC relies on.
+      bool const seedable =
+          !e.sig && !carries_ext && real.persistent(*ptr) && real.alive(*ptr);
+      if (seedable) {
+        seeds.push_back(ptr);
+        seed_keys.insert(*ptr);
+        reg.emplace(*ptr, e.count);  // count ignored for persistent entries
+      } else if (e.count >= 2) {
+        reg.emplace(*ptr, e.count);
+      }
     }
   }
   auto is_persistent = [seed_keys = std::move(seed_keys)](TreeNode const& n) {

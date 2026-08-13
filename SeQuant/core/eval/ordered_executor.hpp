@@ -279,7 +279,9 @@ void run_ordered_contracted_block(
     std::function<std::size_t(Index const&)> const& target,
     typename CacheManager<N, FHC>::BatchContext const& ectx,
     container::vector<ResultPtr>& value_results, container::vector<char>& built,
-    std::function<bool(node_t const&)> const& is_volatile = {}) {
+    std::function<bool(node_t const&)> const& is_volatile = {},
+    std::function<std::size_t(Index const&)> const& n_blocks = {},
+    std::function<std::size_t(std::size_t)> const& home_reads = {}) {
   using Cache = CacheManager<N, FHC>;
   using BatchContext = typename Cache::BatchContext;
   using member_t = std::pair<node_t const*, Index>;
@@ -351,9 +353,8 @@ void run_ordered_contracted_block(
     }
   }
 
-  auto bs = sequant::detail::make_batched_scratch(members, parent_cache);
-  for (auto const* s : bs.seeds)
-    (void)bs.cache.store(*s, parent_cache.access(*s));
+  auto bs = sequant::detail::make_batched_scratch(members, parent_cache,
+                                                  /*read_from_home=*/true);
   bs.cache.set_parent(&parent_cache);
 
   auto const lf = ordered_axis_leaf<node_t>(block, block.axis, vmap, rich);
@@ -384,7 +385,7 @@ void run_ordered_contracted_block(
       } else if (auto const* child = std::get_if<ScopeBlock>(&step.value)) {
         run_ordered_contracted_block<EvalTrace>(
             *child, vmap, rich, leaf_evaluator, bs.cache, target, ctx,
-            value_results, built, is_volatile);
+            value_results, built, is_volatile, n_blocks, home_reads);
       } else {
         // R4: the Step variant has exactly BuildStep/ScopeBlock alternatives;
         // a valueless-by-exception or future third alternative is a schedule
@@ -442,7 +443,24 @@ void run_ordered_contracted_block(
     // key, so without homing the output first, a consumer used only once (not
     // a CSE candidate) would silently recompute it.
     node_t const& out_node = resolve(vid);
-    if (!out_node.leaf()) parent_cache.ensure_home_slot(out_node);
+    // Task 4: classify this homed escape output volatile-vs-persistent and set
+    // its cache life. A subtree carrying a volatile leaf (is_volatile) is
+    // NON-persistent -- released at its genuine last use (home_reads: the exact
+    // number of times its home entry is accessed under read-from-home, from the
+    // ordered schedule's realized scopes) rather than pinned resident; a
+    // persistent (invariant) composite survives reset() and is built once, its
+    // life ignored by the overload. With no volatility policy (is_volatile
+    // empty) fall back to the unconditional resident pin, the pre-Task-4
+    // behavior.
+    if (!out_node.leaf()) {
+      if (is_volatile) {
+        bool const vol = subtree_any(out_node, is_volatile);
+        std::size_t const life = home_reads ? home_reads(vid) : 1;
+        parent_cache.ensure_home_slot(out_node, life, /*persistent=*/!vol);
+      } else {
+        parent_cache.ensure_home_slot(out_node);
+      }
+    }
     (void)parent_cache.store(out_node, std::move(out));
   }
 }
@@ -513,7 +531,8 @@ ResultPtr evaluate_ordered_schedule(
     std::function<std::size_t(Index const&)> const& target,
     [[maybe_unused]] ScopeGuardFactory const& make_scope_guard = {},
     std::function<bool(std::ranges::range_value_t<Nodes> const&)> const&
-        is_volatile = {}) {
+        is_volatile = {},
+    std::function<std::size_t(std::size_t)> const& home_life_override = {}) {
   using node_t = std::ranges::range_value_t<Nodes>;
   static_assert(std::is_same_v<node_t, N>,
                 "the forest's node type and the cache's node type must match");
@@ -521,6 +540,29 @@ ResultPtr evaluate_ordered_schedule(
   // hash -> node, resolving a BuildStep's value_id (via rich.cells[vid].hash)
   // to the forest node evaluate_impl builds.
   auto const vmap = build_value_node_map(forest);
+
+  // Task 4: the block-count function over the WHOLE ScopeBlock tree, built
+  // ONCE here (Task 2's ordered_n_blocks) and threaded through the homing
+  // sites -- both the root-composite site below and, via
+  // run_ordered_contracted_block's recursion, every escape-output site. It
+  // feeds home_reads (the per-batch loop factors) below. Cheap and
+  // side-effect-free (it just sizes each realized loop axis's mode_batches
+  // once).
+  std::function<std::size_t(Index const&)> const n_blocks =
+      detail::ordered_n_blocks<node_t>(ordered, rich, vmap, leaf_evaluator,
+                                       target);
+
+  // Task 4: the EXACT home use-count for each homed value under read-from-home,
+  // computed ONCE from the ordered schedule's realized scopes + the DAG (with
+  // multiplicity) -- see detail::ordered_home_reads. This is the non-persistent
+  // life of a volatile homed value: it frees at its genuine last home access
+  // instead of being pinned resident. A test may inject home_life_override (a
+  // non-evicting life) to MEASURE the actual home reads and assert them equal
+  // to home_reads -- the "predicted == measured" gate.
+  std::function<std::size_t(std::size_t)> const home_reads =
+      home_life_override
+          ? home_life_override
+          : detail::ordered_home_reads<node_t>(ordered, rich, vmap, n_blocks);
 
   // Per-value results, indexed by value_id (== a ValueCell's own slot in
   // rich.cells -- see peak_profile.hpp's ValueCell::value_id doc comment),
@@ -564,14 +606,30 @@ ResultPtr evaluate_ordered_schedule(
       // Κ-free home={} composite (I(i,i;a,a)) build exactly once. Leaves need
       // no slot (the leaf evaluator just hands back a precomputed input), so
       // this targets only the internal-node BuildSteps the schedule homes here.
-      if (!it->second.leaf()) cache.ensure_home_slot(it->second);
+      // Task 4: classify this root-homed composite volatile-vs-persistent and
+      // seed its cache life (see the escape-output site in
+      // run_ordered_contracted_block for the same pattern). A subtree carrying
+      // a volatile leaf is NON-persistent (released at its genuine last use);
+      // an invariant composite is persistent (built once, survives reset). With
+      // no volatility policy (is_volatile empty) keep the unconditional
+      // resident pin -- the pre-Task-4 behavior every non-volatility-aware
+      // caller relies on.
+      if (!it->second.leaf()) {
+        if (is_volatile) {
+          bool const vol = subtree_any(it->second, is_volatile);
+          std::size_t const life = home_reads(vid);
+          cache.ensure_home_slot(it->second, life, /*persistent=*/!vol);
+        } else {
+          cache.ensure_home_slot(it->second);
+        }
+      }
       value_results[vid] =
           evaluate_impl<EvalTrace>(it->second, leaf_evaluator, cache);
       built[vid] = 1;  // R3: this root-scope value is produced.
     } else if (auto const* block = std::get_if<ScopeBlock>(&step.value)) {
       detail::run_ordered_contracted_block<EvalTrace>(
           *block, vmap, rich, leaf_evaluator, cache, target, root_ectx,
-          value_results, built, is_volatile);
+          value_results, built, is_volatile, n_blocks, home_reads);
     } else {
       // R4: the Step variant has exactly BuildStep/ScopeBlock alternatives; any
       // other state is a schedule this executor cannot interpret.
