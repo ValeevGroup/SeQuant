@@ -170,6 +170,18 @@ TEST_CASE("op", "[elements]") {
     REQUIRE(nopseq_empty.vacuum() != nopseq_empty_physical.vacuum());
     CHECK_FALSE(nopseq_empty == nopseq_empty_physical);
     CHECK_FALSE(expr_empty == static_cast<const Expr &>(nopseq_empty_physical));
+
+    // ... but an empty sequence takes its vacuum from the default context
+    // regardless of which constructor produced it
+    const FNOperatorSeq nopseq_empty_from_nops(
+        std::initializer_list<FNOperator>{});
+    const FNOperatorSeq nopseq_empty_from_ops(std::initializer_list<FOp>{});
+    REQUIRE(nopseq_empty_from_nops.empty());
+    REQUIRE(nopseq_empty_from_ops.empty());
+    CHECK(nopseq_empty_from_nops.vacuum() == nopseq_empty.vacuum());
+    CHECK(nopseq_empty_from_ops.vacuum() == nopseq_empty.vacuum());
+    CHECK(nopseq_empty == nopseq_empty_from_nops);
+    CHECK(nopseq_empty == nopseq_empty_from_ops);
   }
 
   SECTION("adjoint") {
