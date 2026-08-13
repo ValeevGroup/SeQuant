@@ -221,6 +221,12 @@ class rand_tensor_yield {
     max_tile_ = n;
   }
 
+  /// Forget the cached tensor for label \p lbl so the next yield regenerates a
+  /// fresh (different) random value -- models an amplitude tensor changing
+  /// between CC iterations (a "volatile" leaf), while every other leaf stays
+  /// fixed. Used to test cross-iteration cache correctness.
+  void reset_label(std::wstring const& lbl) { label_to_er_.erase(lbl); }
+
   using array_type = TA::DistArray<TA::Tensor<NumericT>, TAPolicyT>;
   using array_tot_type =
       TA::DistArray<TA::Tensor<TA::Tensor<NumericT>>, TAPolicyT>;
@@ -2406,6 +2412,460 @@ TEST_CASE(
   double const rel = TA::norm2(diff) / TA::norm2(ref);
   INFO("relative L2 diff = " << rel);
   CHECK(rel < 1e-10);
+}
+
+// Numerical equivalence of evaluate_ordered_schedule vs forest descent for an
+// UNBATCHED flat forest: NO batch axis is stamped, so build_ordered_schedule
+// emits only root-level BuildSteps and no ScopeBlock. This exercises the
+// ordered executor's pure root-walk + combine_forest_roots + homing path with
+// real TA data -- the path the water-8 CSV-CCk run diverges on even with
+// batching OFF, and which the batched flat tests above never cover. If the
+// ordered result disagrees with forest descent here, the bug is in that
+// unbatched core, not in the batched loop path or in ToT tiles.
+TEST_CASE(
+    "evaluate_ordered_schedule matches forest descent for an unbatched "
+    "flat forest",
+    "[eval][ordered-executor]") {
+  using sequant::evaluate;
+  using sequant::eval::analyze_legality;
+  using sequant::eval::build_ordered_schedule;
+  using sequant::eval::compute_dag_boulevard;
+  using sequant::eval::evaluate_ordered_schedule;
+  using sequant::eval::OrderedSchedule;
+  using sequant::eval::RichSchedule;
+  using TA::TArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+
+  auto& world = TA::get_default_world();
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 6, 12};
+  yield_.set_max_tile(4);
+
+  // Two summable roots sharing S = g*h, both contracting the aux x_1 (an
+  // aux-aux edge), results over {i1,i2,i3,i4} -- same forest as the batched
+  // Contracted test, but here NOT stamped batched_here and NOT made batchable,
+  // so the schedule is a flat sequence of BuildSteps (no loop block).
+  auto const t1 = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (p{a_3;i_2;x_1} * q{i_4;a_3})");
+  auto const t2 = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (r{a_3;i_2;x_1} * w{i_4;a_3})");
+  std::string const target = "i_1,i_2,i_3,i_4";
+  std::vector<node_t> forest{eval_node(t1), eval_node(t2)};
+
+  auto const ref = evaluate(forest, target, yield_)->get<TArrayD>();
+
+  // Empty policy: nothing is batchable, so no batched_here is consulted and the
+  // schedule has no ScopeBlock.
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](sequant::Index const&) {
+    return false;
+  };
+  policy.is_batchable_external_index = [](sequant::Index const&) {
+    return false;
+  };
+
+  sequant::eval::dryrun::SizeRegime const regime;
+  sequant::eval::dryrun::CostModel const cm{regime};
+  auto const block_of = [](sequant::Index const&) -> std::size_t { return 4; };
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {});
+
+  // Precondition: no ScopeBlock -- the schedule is flat root BuildSteps.
+  for (auto const& step : ordered.root.steps)
+    REQUIRE(!std::holds_alternative<sequant::eval::ScopeBlock>(step.value));
+
+  auto cache = sequant::CacheManager<node_t>::empty();
+  std::function<std::size_t(sequant::Index const&)> const target_batch =
+      [](sequant::Index const&) -> std::size_t { return 4; };
+  auto const got = evaluate_ordered_schedule(forest, ordered, rich, target,
+                                             yield_, cache, target_batch)
+                       ->get<TArrayD>();
+
+  TArrayD diff;
+  diff(target) = got(target) - ref(target);
+  double const rel = TA::norm2(diff) / TA::norm2(ref);
+  INFO("relative L2 diff (unbatched ordered vs forest descent) = " << rel);
+  CHECK(rel < 1e-12);
+}
+
+// Numerical equivalence of evaluate_ordered_schedule vs forest descent for a
+// ToT (Tensor-of-Tensor / composite-proto-index) forest, UNBATCHED. This is the
+// CSV-CCk tile type: composite legs C{m;a<i,j>} make the result a nested ToT.
+// The flat-tensor ordered tests (batched and unbatched) all pass, and the
+// water-8 CSV-CCk run diverges even with batching OFF, so this reproduces that
+// divergence in the fast unit suite: if the ordered ToT result disagrees with
+// forest descent, the bug is in the ordered executor's ToT path (root-walk /
+// combine_forest_roots / homing), independent of batching.
+TEST_CASE(
+    "evaluate_ordered_schedule matches forest descent for an unbatched "
+    "ToT forest",
+    "[eval][ordered-executor]") {
+  using sequant::evaluate;
+  using sequant::eval::analyze_legality;
+  using sequant::eval::build_ordered_schedule;
+  using sequant::eval::compute_dag_boulevard;
+  using sequant::eval::evaluate_ordered_schedule;
+  using sequant::eval::OrderedSchedule;
+  using sequant::eval::RichSchedule;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+  using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<double>>>;
+
+  auto& world = TA::get_default_world();
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, /*nocc=*/12,
+                                                    /*nvirt=*/4, /*naux=*/8};
+  yield_.set_max_tile(4);
+
+  // Two summable ToT roots (composite proto occ a<i_1,i_2>), sharing the g leg;
+  // both results carry the same outer occ target, so the root-combine sums
+  // them -- exercising combine_forest_roots on ToT tiles too.
+  auto const t1 = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{m_1;m_2} * C{m_2;a1<i_1,i_2>}) * C{a2<i_1,i_2>;m_1}");
+  auto const t2 = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{m_1;m_2} * D{m_2;a1<i_1,i_2>}) * D{a2<i_1,i_2>;m_1}");
+  std::vector<node_t> forest{eval_node(t1), eval_node(t2)};
+  std::string const target = forest.front()->annot();
+
+  auto const ref = evaluate(forest, target, yield_)->get<ToTArray>();
+  REQUIRE(TA::norm2(ref) > 0.0);
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](sequant::Index const&) {
+    return false;
+  };
+  policy.is_batchable_external_index = [](sequant::Index const&) {
+    return false;
+  };
+
+  sequant::eval::dryrun::SizeRegime const regime;
+  sequant::eval::dryrun::CostModel const cm{regime};
+  auto const block_of = [](sequant::Index const&) -> std::size_t { return 4; };
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {});
+  for (auto const& step : ordered.root.steps)
+    REQUIRE(!std::holds_alternative<sequant::eval::ScopeBlock>(step.value));
+
+  auto cache = sequant::CacheManager<node_t>::empty();
+  std::function<std::size_t(sequant::Index const&)> const target_batch =
+      [](sequant::Index const&) -> std::size_t { return 4; };
+  auto const got = evaluate_ordered_schedule(forest, ordered, rich, target,
+                                             yield_, cache, target_batch)
+                       ->get<ToTArray>();
+
+  ToTArray diff;
+  diff(target) = got(target) - ref(target);
+  double const rel =
+      std::sqrt(diff(target).dot(diff(target)) / ref(target).dot(ref(target)));
+  INFO("relative L2 diff (unbatched ToT ordered vs forest descent) = " << rel);
+  CHECK(rel < 1e-12);
+}
+
+// CROSS-ITERATION equivalence of evaluate_ordered_schedule vs forest descent:
+// the MPQC CC pattern -- ONE cache reused across iterations, cache.reset()
+// between them, and a "volatile" amplitude leaf ('t') that changes each
+// iteration while every other leaf (the integrals) stays fixed. The ordered
+// executor's volatile-vs-persistent homing MUST drop 't'-dependent values on
+// reset() (recompute them with the new 't') and keep the 't'-independent ones.
+// The water-8 CSV-CCk run's ordered path is correct on iteration 1 but wrong on
+// iteration 2 (energy -1.6028 == forest descent at iter 1, then diverges), so
+// this reproduces that cross-iteration divergence in the fast unit suite. If
+// the second ordered result disagrees with forest descent, the ordered homing
+// leaks stale 't'-dependent state (or mutates a persistent buffer) across
+// reset().
+TEST_CASE(
+    "evaluate_ordered_schedule matches forest descent across a reset "
+    "with a changed volatile leaf",
+    "[eval][ordered-executor]") {
+  using sequant::evaluate;
+  using sequant::eval::analyze_legality;
+  using sequant::eval::build_ordered_schedule;
+  using sequant::eval::compute_dag_boulevard;
+  using sequant::eval::evaluate_ordered_schedule;
+  using sequant::eval::OrderedSchedule;
+  using sequant::eval::RichSchedule;
+  using TA::TArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+
+  auto& world = TA::get_default_world();
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 8, 4, 8};
+  yield_.set_max_tile(4);
+
+  // Shared composite S = g*h (t-INDEPENDENT -> persistent, survives reset).
+  // Root F1 = S * t   (contains 't' -> volatile, dropped+recomputed on reset).
+  // Root F2 = S * u   (no 't'       -> persistent, kept across reset).
+  // Both results over {i_1,i_2}; the root-combine sums them.
+  auto const t1 = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{i_1;a_1} * h{a_1;i_3}) * t{i_3;i_2}");
+  auto const t2 = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{i_1;a_1} * h{a_1;i_3}) * u{i_3;i_2}");
+  std::string const target = "i_1,i_2";
+  std::vector<node_t> forest{eval_node(t1), eval_node(t2)};
+
+  // node-level volatility: leaf tensor labeled 't' (as MPQC lifts
+  // policy.is_volatile_leaf).
+  std::function<bool(node_t const&)> const is_vol = [](node_t const& n) {
+    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
+  };
+  auto const is_vol_leaf = [](node_t const& n) {
+    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
+  };
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](sequant::Index const&) {
+    return false;
+  };
+  policy.is_batchable_external_index = [](sequant::Index const&) {
+    return false;
+  };
+  sequant::eval::dryrun::SizeRegime const regime;
+  sequant::eval::dryrun::CostModel const cm{regime};
+  auto const block_of = [](sequant::Index const&) -> std::size_t { return 4; };
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {});
+
+  std::function<std::size_t(sequant::Index const&)> const target_batch =
+      [](sequant::Index const&) -> std::size_t { return 4; };
+
+  // ONE cache reused across both "iterations", persistence-classified by the
+  // SAME volatile predicate MPQC uses (shared_cache_for wraps this).
+  auto cache = sequant::cache_manager(forest, is_vol_leaf);
+
+  // ---- iteration 1 (t = A) ----
+  auto const ref1 = evaluate(forest, target, yield_)->get<TArrayD>();
+  auto const got1 =
+      evaluate_ordered_schedule(forest, ordered, rich, target, yield_, cache,
+                                target_batch, {}, is_vol)
+          ->get<TArrayD>();
+  {
+    TArrayD d;
+    d(target) = got1(target) - ref1(target);
+    double const rel1 = TA::norm2(d) / TA::norm2(ref1);
+    INFO("iter-1 relative L2 diff = " << rel1);
+    CHECK(rel1 < 1e-12);
+  }
+
+  // ---- between iterations: reset the cache and change ONLY 't' ----
+  cache.reset();
+  yield_.reset_label(L"t");
+
+  // ---- iteration 2 (t = B, integrals unchanged) ----
+  auto const ref2 = evaluate(forest, target, yield_)->get<TArrayD>();
+  auto const got2 =
+      evaluate_ordered_schedule(forest, ordered, rich, target, yield_, cache,
+                                target_batch, {}, is_vol)
+          ->get<TArrayD>();
+  TArrayD d2;
+  d2(target) = got2(target) - ref2(target);
+  double const rel2 = TA::norm2(d2) / TA::norm2(ref2);
+  INFO("iter-2 relative L2 diff (after reset + changed 't') = " << rel2);
+  CHECK(rel2 < 1e-12);
+}
+
+// Numerical equivalence of evaluate_ordered_schedule vs forest descent for a
+// BATCHED ToT forest: external-occ (spectator) batching on composite-proto ToT
+// tiles -- the CSV-CCk residual's exact shape (AccumulateScatter of a
+// loop-carried external occ over nested tiles). The flat External ordered test
+// passes and the ToT tests above are unbatched, so this is the untested
+// intersection (my read-from-home + member-root caching + ToT scatter) the
+// water-8 run may exercise. Mirrors batched_eval_external_proto_occ_scatter's
+// forest but drives it through the ORDERED executor.
+TEST_CASE(
+    "evaluate_ordered_schedule matches forest descent over a batched ToT "
+    "External occ loop",
+    "[eval][ordered-executor]") {
+  using sequant::evaluate;
+  using sequant::Index;
+  using sequant::index_position;
+  using sequant::eval::analyze_legality;
+  using sequant::eval::build_ordered_schedule;
+  using sequant::eval::compute_dag_boulevard;
+  using sequant::eval::evaluate_ordered_schedule;
+  using sequant::eval::OrderedSchedule;
+  using sequant::eval::RichSchedule;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+  using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<double>>>;
+
+  auto& world = TA::get_default_world();
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, /*nocc=*/12,
+                                                    /*nvirt=*/4, /*naux=*/8};
+  yield_.set_max_tile(4);
+
+  auto const expr = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{m_1;m_2} * C{m_2;a1<i_1,i_2>}) * C{a2<i_1,i_2>;m_1}");
+  auto rootn = eval_node(expr);
+  std::string const target = rootn->annot();
+
+  auto const occ =
+      sequant::get_default_context().index_space_registry()->retrieve(L"i");
+  auto accept_occ = [occ](Index const& ix) {
+    return ix.space() == occ && !ix.has_proto_indices();
+  };
+  Index mode;
+  for (auto const& ix : rootn->canon_indices())
+    if (accept_occ(ix)) {
+      mode = ix;
+      break;
+    }
+  REQUIRE(mode.nonnull());
+
+  // Reference: forest descent (batched_here ignored, no custom evaluator).
+  std::vector<node_t> forest{rootn};
+  auto const ref = evaluate(forest, target, yield_)->get<ToTArray>();
+  REQUIRE(TA::norm2(ref) > 0.0);
+
+  // Stamp External on every node whose result carries the occ, as the optimizer
+  // would (mirrors batched_eval_external_proto_occ_scatter).
+  rootn->set_batched_here({{mode, sequant::BatchModeType::External}});
+  auto stamp = [&](auto&& self, node_t& n) -> void {
+    if (n.leaf()) return;
+    if (&n != &rootn && index_position(n, mode).has_value())
+      n->set_batched_here({{mode, sequant::BatchModeType::External}});
+    self(self, n.left());
+    self(self, n.right());
+  };
+  stamp(stamp, rootn);
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](Index const&) { return false; };
+  policy.is_batchable_external_index = [occ](Index const& ix) {
+    return ix.space() == occ && !ix.has_proto_indices();
+  };
+  sequant::eval::dryrun::SizeRegime const regime;
+  sequant::eval::dryrun::CostModel const cm{regime};
+  auto const block_of = [](Index const&) -> std::size_t { return 4; };
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {L"i"});
+
+  // Precondition: a realized External loop block exists.
+  bool has_block = false;
+  for (auto const& step : ordered.root.steps)
+    if (std::holds_alternative<sequant::eval::ScopeBlock>(step.value))
+      has_block = true;
+  REQUIRE(has_block);
+
+  auto cache = sequant::CacheManager<node_t>::empty();
+  std::function<std::size_t(Index const&)> const target_batch =
+      [](Index const&) -> std::size_t { return 4; };
+  auto const got = evaluate_ordered_schedule(forest, ordered, rich, target,
+                                             yield_, cache, target_batch)
+                       ->get<ToTArray>();
+
+  ToTArray diff;
+  diff(target) = got(target) - ref(target);
+  double const rel =
+      std::sqrt(diff(target).dot(diff(target)) / ref(target).dot(ref(target)));
+  INFO("relative L2 diff (batched ToT External ordered vs forest descent) = "
+       << rel);
+  CHECK(rel < 1e-12);
+}
+
+// The water-8 intersection: a BATCHED (aux/Contracted) loop AND cross-iteration
+// cache reuse with a changed volatile 't'. All prior ordered tests pass; the
+// batched ones are single-eval and the cross-iteration one is unbatched, so
+// this combines them -- the untested overlap where the batched homing / scratch
+// might leak state across reset(). A shared composite S=g*h is persistent
+// (survives reset); root F1 = S*(t*q) contracts aux x_1 AND contains 't' (so
+// volatile, recomputed with the new 't'); root F2 = S*(p*q) has no 't'
+// (persistent). If ordered disagrees with forest descent on iteration 2, the
+// batched path leaks stale 't'-dependent state across reset.
+TEST_CASE(
+    "evaluate_ordered_schedule matches forest descent across a reset in "
+    "a batched Contracted loop",
+    "[eval][ordered-executor][ordered-crossiter-bug]") {
+  using sequant::evaluate;
+  using sequant::eval::analyze_legality;
+  using sequant::eval::build_ordered_schedule;
+  using sequant::eval::compute_dag_boulevard;
+  using sequant::eval::evaluate_ordered_schedule;
+  using sequant::eval::OrderedSchedule;
+  using sequant::eval::RichSchedule;
+  using TA::TArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+
+  auto& world = TA::get_default_world();
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 6, 12};
+  yield_.set_max_tile(4);
+  auto const aux =
+      sequant::get_default_context().index_space_registry()->retrieve(L"x");
+
+  auto const t1 = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (t{a_3;i_2;x_1} * q{i_4;a_3})");
+  auto const t2 = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (p{a_3;i_2;x_1} * q{i_4;a_3})");
+  std::string const target = "i_1,i_2,i_3,i_4";
+  std::vector<node_t> forest{eval_node(t1), eval_node(t2)};
+
+  // stamp aux Contracted on each root (the node that contracts x_1).
+  auto accept_aux = [aux](sequant::Index const& ix) {
+    return ix.space() == aux;
+  };
+  for (auto& nd : forest) {
+    auto const ax = sequant::batch_axis(nd, accept_aux);
+    REQUIRE(ax.has_value());
+    nd->set_batched_here({{*ax, sequant::BatchModeType::Contracted}});
+  }
+
+  std::function<bool(node_t const&)> const is_vol = [](node_t const& n) {
+    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
+  };
+  auto const is_vol_leaf = is_vol;
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [aux](sequant::Index const& ix) {
+    return ix.space() == aux;
+  };
+  policy.is_batchable_external_index = [](sequant::Index const&) {
+    return false;
+  };
+  sequant::eval::dryrun::SizeRegime const regime;
+  sequant::eval::dryrun::CostModel const cm{regime};
+  auto const block_of = [](sequant::Index const&) -> std::size_t { return 4; };
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {L"x"});
+  bool has_block = false;
+  for (auto const& step : ordered.root.steps)
+    if (std::holds_alternative<sequant::eval::ScopeBlock>(step.value))
+      has_block = true;
+  REQUIRE(has_block);
+
+  std::function<std::size_t(sequant::Index const&)> const target_batch =
+      [](sequant::Index const&) -> std::size_t { return 4; };
+  auto cache = sequant::cache_manager(forest, is_vol_leaf);
+
+  auto const ref1 = evaluate(forest, target, yield_)->get<TArrayD>();
+  auto const got1 =
+      evaluate_ordered_schedule(forest, ordered, rich, target, yield_, cache,
+                                target_batch, {}, is_vol)
+          ->get<TArrayD>();
+  {
+    TArrayD d;
+    d(target) = got1(target) - ref1(target);
+    double const r = TA::norm2(d) / TA::norm2(ref1);
+    INFO("iter-1 rel diff = " << r);
+    CHECK(r < 1e-10);
+  }
+
+  cache.reset();
+  yield_.reset_label(L"t");
+
+  auto const ref2 = evaluate(forest, target, yield_)->get<TArrayD>();
+  auto const got2 =
+      evaluate_ordered_schedule(forest, ordered, rich, target, yield_, cache,
+                                target_batch, {}, is_vol)
+          ->get<TArrayD>();
+  TArrayD d2;
+  d2(target) = got2(target) - ref2(target);
+  double const r2 = TA::norm2(d2) / TA::norm2(ref2);
+  INFO("iter-2 rel diff (batched, after reset + changed 't') = " << r2);
+  CHECK(r2 < 1e-10);
 }
 
 // SP3 Task 3 of the ordered-scope batched-eval design (the sequel to Task 2

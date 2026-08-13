@@ -367,6 +367,23 @@ void run_ordered_contracted_block(
 
   container::vector<ResultPtr> acc(block.outputs.size());
   container::vector<ResultPtr> dest(block.outputs.size());
+
+  // An escape output that is ALREADY RESIDENT at its home -- a PERSISTENT,
+  // batch-invariant output (it contracts/reduces the batch axis, so its result
+  // does not carry it) that was built in a PRIOR CC iteration and kept across
+  // cache.reset() -- must be REUSED, not re-accumulated. Re-running the batch
+  // loop for it would read its full homed value as EACH batch's "partial" (the
+  // per-batch evaluate_impl below resolves the output node from its home) and
+  // sum it N_batches-fold, corrupting the persistent entry into the next
+  // iteration. So skip such outputs here and reuse the resident value at close;
+  // the block still runs for the volatile (and first-iteration) outputs and for
+  // its loop-local Transients. On the first iteration nothing is resident yet,
+  // so every output is accumulated normally.
+  container::vector<char> reuse(block.outputs.size(), 0);
+  for (std::size_t k = 0; k != block.outputs.size(); ++k)
+    reuse[k] =
+        parent_cache.resident_in_chain(resolve(block.outputs[k].first)) ? 1 : 0;
+
   for (auto const& [e_lo, e_hi] : batches) {
     if (e_lo == e_hi) continue;
     bs.cache.reset();
@@ -396,6 +413,8 @@ void run_ordered_contracted_block(
     }
 
     for (std::size_t k = 0; k != block.outputs.size(); ++k) {
+      if (reuse[k])
+        continue;  // resident persistent output: reuse, don't re-sum
       auto const vid = block.outputs[k].first;
       auto const kind = block.outputs[k].second;
       ResultPtr part =
@@ -424,6 +443,18 @@ void run_ordered_contracted_block(
   for (std::size_t k = 0; k != block.outputs.size(); ++k) {
     auto const vid = block.outputs[k].first;
     auto const kind = block.outputs[k].second;
+    // Resident persistent output (see the reuse note above): reuse its home
+    // value untouched -- it survives reset() and is invariant across CC
+    // iterations -- rather than re-home/re-store it. It was NOT re-accumulated
+    // in the loop, so acc[k]/dest[k] are null here.
+    if (reuse[k]) {
+      value_results[vid] = parent_cache.access(resolve(vid));
+      SEQUANT_ASSERT(value_results[vid] &&
+                     "evaluate_ordered_schedule: a resident output vanished "
+                     "from its home before block close");
+      built[vid] = 1;
+      continue;
+    }
     // R4: exhaustive on OutputKind before selecting the running result to home.
     SEQUANT_ASSERT((kind == OutputKind::AccumulateSum ||
                     kind == OutputKind::AccumulateScatter) &&
