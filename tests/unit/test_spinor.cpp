@@ -3,6 +3,7 @@
 //
 
 #include <algorithm>
+#include <bit>
 #include <catch2/catch_test_macros.hpp>
 #include <complex>
 #include <numeric>
@@ -576,6 +577,55 @@ TEST_CASE("kramers_transform_bit_engine", "[orbit-transform]") {
       const auto miss = kramers_transform(
           n, groups, /*use_T=*/true, blocks[0].canonical, blocks[1].canonical);
       CHECK(!miss.has_value());
+    }
+    // (d) arbitrary re-basing: the transform between ANY two orbit members
+    // (canon = an arbitrary member, not the orbit minimum) must be
+    // value-correct. This is exactly how a consumer re-bases an orbit onto a
+    // stored representative that is not the orbit minimum (MPQC's kr_recon:
+    // spincase reps). The engine's order-preserving matching may differ from
+    // the table's composed transform by a stabilizer element, which acts
+    // trivially on a group-antisymmetric block — hence a value test, and both
+    // fold modes (with/without T) are covered.
+    for (const bool uT : {true, false}) {
+      const auto blks = kramers_external_blocks(n, gens, uT);
+      for (const auto& blk : blks) {
+        for (const auto& mA : blk.members) {
+          const auto BA = block_of(mA.config);
+          for (const auto& mB : blk.members) {
+            INFO("rebase " << mA.config << " -> " << mB.config
+                           << " use_T=" << uT);
+            const auto t =
+                kramers_transform(n, groups, uT, mA.config, mB.config);
+            REQUIRE(t.has_value());
+            const auto BB = apply(BA, t->sign, t->conj, t->perm);
+            CHECK(close(BB, block_of(mB.config)) < 1e-12);
+          }
+        }
+      }
+    }
+    // (e) the T-self-stabilizer decomposition used for the stored-rep
+    // projection: cfg is T-self-conjugate iff a direct (no-T) matching
+    // cfg -> ~cfg exists; then S = t_sign*sign_d * conj ∘ perm_d must map the
+    // block to itself (Jacobi updates need not preserve this — consumers
+    // enforce it by averaging T <- (T + S(T))/2).
+    {
+      const std::uint64_t full_mask = (std::uint64_t{1} << n) - 1;
+      std::size_t n_self = 0;
+      for (std::uint64_t cfg = 0; cfg <= full_mask; ++cfg) {
+        const std::uint64_t pre = (~cfg) & full_mask;
+        const auto md = kramers_transform(n, groups, /*use_T=*/false, cfg, pre);
+        if (!md) continue;
+        ++n_self;
+        const int t_sign = (std::popcount(pre) & 1) ? -1 : +1;
+        const auto B = block_of(cfg);
+        const auto SB = apply(B, md->sign * t_sign, true, md->perm);
+        INFO("T-self-stabilizer cfg=" << cfg);
+        CHECK(close(SB, B) < 1e-12);
+      }
+      // every config with equal per-group up/down counts is self-conjugate;
+      // rank 2 has 4 (the (ud,ud) class), rank 1 none, rank 3 none (odd group
+      // size cannot split evenly)
+      CHECK(n_self == (r == 2 ? 4u : 0u));
     }
   }
 }
