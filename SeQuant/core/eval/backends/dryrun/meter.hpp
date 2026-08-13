@@ -61,7 +61,9 @@ struct MeterReport {
 
   std::vector<HomeFidelity> home_fidelity;  ///< sorted: builds desc
 
-  bool whole_scope = false;  ///< which executor this report describes
+  BatchScheduler scheduler =
+      BatchScheduler::forest_descent;  ///< which executor this report
+                                       ///< describes
 };
 
 ///
@@ -136,16 +138,17 @@ std::unordered_map<std::size_t, bool> compute_volatility(
 /// \param forest the evaluation forest (fed to \c compute_volatility).
 /// \param is_volatile `bool(TreeNode const&)`: intrinsic volatility
 ///        predicate, as for \c compute_volatility.
-/// \param whole_scope which executor this report describes (stashed verbatim
-///        into \c MeterReport::whole_scope).
+/// \param scheduler which executor this report describes (stashed verbatim
+///        into \c MeterReport::scheduler).
 /// \return the assembled \c MeterReport.
 ///
 template <class Cache, class Forest, class IsVolatile>
 MeterReport assemble_report(Cache const& cache, PeakMonitor const& mon,
                             RichSchedule const& rich, Forest const& forest,
-                            IsVolatile const& is_volatile, bool whole_scope) {
+                            IsVolatile const& is_volatile,
+                            BatchScheduler scheduler) {
   MeterReport report;
-  report.whole_scope = whole_scope;
+  report.scheduler = scheduler;
   report.peak_bytes = static_cast<double>(mon.hwmark_bytes);
   report.peak_op_hash = mon.peak.op_hash;
 
@@ -217,16 +220,16 @@ MeterReport assemble_report(Cache const& cache, PeakMonitor const& mon,
 }
 
 ///
-/// \brief Runs the policy-selected executor (whole-scope or per-tree forest
-/// descent, per \p policy.whole_scope_execution) over \p forest through the
+/// \brief Runs the policy-selected executor (forest descent, whole-scope, or
+/// ordered, per \p policy.scheduler) over \p forest through the
 /// DryRun sizing backend, metering the replay with a fresh, \c PeakMonitor
 /// -wired, build-tallying cache, and returns the assembled \c MeterReport.
 ///
 /// Mirrors MPQC's wet dispatch: this drives the SAME Task-6 coexistence entry
 /// point (\c sequant::evaluate(Nodes const&, BatchPolicy const&, layout, F,
 /// CacheManager&, mode_order, ScopeGuardFactory), \c scope_executor.hpp) a
-/// real solve would use under \p policy -- whole-scope and forest descent are
-/// selected by the SAME flag, not two independently maintained code paths --
+/// real solve would use under \p policy -- all three executors are selected
+/// by the SAME \c policy.scheduler, not independently maintained code paths --
 /// so the metered replay is exactly the run \p policy describes, not a
 /// hand-rolled proxy of it. Non-throwing wrapper (if desired) is the
 /// caller's responsibility; an exception from the replay propagates out of
@@ -235,7 +238,7 @@ MeterReport assemble_report(Cache const& cache, PeakMonitor const& mon,
 ///
 /// \param forest the evaluation forest (a range of \c EvalNodeDryRun).
 /// \param policy the batch policy driving the coexistence entry -- in
-///        particular \c whole_scope_execution (executor selection) and
+///        particular \c scheduler (executor selection) and
 ///        \c batch_target_size (the batch-partition source; also the source
 ///        of the \c block_of function this call builds its OWN \c rich
 ///        schedule with, for \c assemble_report -- the coexistence entry
@@ -260,7 +263,7 @@ MeterReport assemble_report(Cache const& cache, PeakMonitor const& mon,
 ///        \c eval.level and the installed \c eval.node_meta).
 /// \return the assembled \c MeterReport (peak, persistent/volatile
 ///         FLOPs+time, build-vs-home fidelity), stamped with
-///         \p policy.whole_scope_execution.
+///         \p policy.scheduler.
 ///
 inline MeterReport meter(
     std::vector<EvalNodeDryRun> const& forest, BatchPolicy const& policy,
@@ -336,7 +339,7 @@ inline MeterReport meter(
   if (trace) logger.eval.stream = trace;
   logger.eval.node_meta = make_node_meta(rich);
 
-  // Forest descent (whole_scope_execution == false) needs the SAME batched
+  // Forest descent (BatchScheduler::forest_descent) needs the SAME batched
   // custom evaluator MPQC's wet forest path installs (cck.ipp's `else`
   // branch, `cache.set_custom_evaluator(sequant::make_evaluator(ctx.
   // batch_policy, yielder, make_scope_guard))`): without it, plain
@@ -345,9 +348,17 @@ inline MeterReport meter(
   // vs. the wet run this meter is supposed to mirror. Installed ONLY on
   // this branch: evaluate_impl consults cache.custom_evaluator() on every
   // non-leaf node, so installing it unconditionally would also fire on the
-  // whole-scope path's invariant-root evaluate_impl calls (evaluate_whole_
-  // scope, not the batched custom evaluator, must drive those).
-  if (!policy.whole_scope_execution)
+  // whole-scope AND ordered paths' own evaluate_impl calls too. Both
+  // whole_scope (evaluate_whole_scope) and ordered (evaluate_ordered_
+  // schedule) drive their OWN executor via the coexistence entry
+  // (sequant::evaluate(forest, policy, ...) below, which dispatches on
+  // policy.scheduler) -- installing the forest custom evaluator for ordered
+  // would silently reroute its builds through the forest evaluator instead
+  // of run_ordered_contracted_block, diverging from what the wet ordered run
+  // (which installs NO custom evaluator) actually does. That divergence was
+  // a real dry-run/wet-run fidelity bug; restricting this install to forest
+  // descent fixes it.
+  if (policy.scheduler == BatchScheduler::forest_descent)
     cache.set_custom_evaluator(
         sequant::make_evaluator(policy, yield, sequant::make_no_scope_guard{}));
 
@@ -355,7 +366,7 @@ inline MeterReport meter(
                                      cache, {}, sequant::make_no_scope_guard{});
 
   return assemble_report(cache, mon, rich, forest, is_volatile,
-                         policy.whole_scope_execution);
+                         policy.scheduler);
 }
 
 }  // namespace sequant::eval::dryrun

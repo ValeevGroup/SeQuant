@@ -10,6 +10,21 @@ namespace sequant {
 class Index;
 class Tensor;
 
+/// The three RUNTIME EXECUTION MODELS for batched evaluation (Task 6 of the
+/// whole-scope batched DAG execution design, `doc/dev/specs/2026-08-10-
+/// whole-scope-batched-dag-execution-design.md`, plus its SP3 follow-on
+/// `doc/dev/specs/2026-08-05-dryrun-wetrun-schedule-equivalence-design.md`,
+/// the ordered-scope batched-eval design):
+///   - \c forest_descent (default): one tree at a time,
+///     `sequant::evaluate(Nodes const&, ...)`, unchanged.
+///   - \c whole_scope: one fused scope-tree walk over the whole forest,
+///     `sequant::eval::evaluate_whole_scope`, so a value shared across trees
+///     is built once per home block and reused, rather than rebuilt per tree.
+///   - \c ordered: driven by the SP2 `eval::OrderedSchedule` IR rather than
+///     the narrow `ScopeSchedule` scope tree,
+///     `sequant::eval::evaluate_ordered_schedule`.
+enum class BatchScheduler { forest_descent, whole_scope, ordered };
+
 /// One batchability policy shared by the single-term optimizer and the runtime
 /// batched evaluator (make_evaluator, Task A3). All predicates default empty.
 struct BatchPolicy {
@@ -109,38 +124,17 @@ struct BatchPolicy {
   /// batchable index.
   double accumulation_factor = 0.0;
 
-  /// Coexistence switch (Task 6 of the whole-scope batched DAG execution
-  /// design, `doc/dev/specs/2026-08-10-whole-scope-batched-dag-execution-
-  /// design.md`) between the two RUNTIME EXECUTION MODELS: forest descent
-  /// (default false -- one tree at a time, `sequant::evaluate(Nodes const&,
-  /// ...)`, unchanged) and whole-scope descent (true -- one fused scope-tree
-  /// walk over the whole forest, `sequant::eval::evaluate_whole_scope`, so a
-  /// value shared across trees is built once per home block and reused,
-  /// rather than rebuilt per tree). Consulted by the `sequant::evaluate(
-  /// Nodes const&, BatchPolicy const&, ...)` driver overload
-  /// (`scope_executor.hpp`) to select the driver, and by
+  /// Selects among the three runtime execution models (\ref BatchScheduler
+  /// above). Consulted by the
+  /// `sequant::evaluate(Nodes const&, BatchPolicy const&, ...)` driver
+  /// overload (`scope_executor.hpp`) to select the driver, and by
   /// `sequant::eval::dryrun::cost_profile()` to select the matching peak
   /// model: the co-residency oracle (`peak_profile_sweep` over `home_modes`)
-  /// when true, since that model is what predicts the whole-scope realized
-  /// peak, vs the batched-scratch replay high-watermark (models forest
-  /// descent) when false. Purely additive: false reproduces today's behavior
-  /// on both call sites byte-for-byte.
-  bool whole_scope_execution = false;
-
-  /// SP3 gating switch (`doc/dev/specs/2026-08-05-dryrun-wetrun-schedule-
-  /// equivalence-design.md` follow-on, the ordered-scope batched-eval
-  /// design): between forest descent / whole-scope descent (both selected
-  /// above via \ref whole_scope_execution) and the new ORDERED executor
-  /// (true -- `sequant::eval::evaluate_ordered_schedule`, driven by the SP2
-  /// `eval::OrderedSchedule` IR rather than the narrow `ScopeSchedule` scope
-  /// tree). Consulted by the `sequant::evaluate(Nodes const&, BatchPolicy
-  /// const&, ...)` driver overload (`scope_executor.hpp`) BEFORE \ref
-  /// whole_scope_execution, so it takes priority when both are set (setting
-  /// both is well-defined: the ordered executor wins) and the two pre-
-  /// existing dispatch arms (forest descent / whole-scope descent) are
-  /// reached, byte-identically, only when this flag is false. Default false
-  /// reproduces today's dispatch byte-for-byte on every existing caller.
-  bool ordered_schedule_execution = false;
+  /// for \c whole_scope, since that model is what predicts the whole-scope
+  /// realized peak, vs the batched-scratch replay high-watermark (models
+  /// forest descent) for \c forest_descent. Default \c forest_descent
+  /// reproduces today's behavior on every existing call site byte-for-byte.
+  BatchScheduler scheduler = BatchScheduler::forest_descent;
 
   /// Peak-memory budget in BYTES for the batched objectives. Its meaning
   /// DIFFERS between them:

@@ -195,11 +195,11 @@ TEST_CASE(
   REQUIRE(result);
 
   auto const report = assemble_report(cache, mon, rich, forest, is_volatile,
-                                      /*whole_scope=*/false);
+                                      sequant::BatchScheduler::forest_descent);
 
   CHECK(report.builds_total > 0);
   CHECK_FALSE(report.home_fidelity.empty());
-  CHECK(report.whole_scope == false);
+  CHECK(report.scheduler == sequant::BatchScheduler::forest_descent);
 
   // EXEC/COST SPLIT: exec is threaded BuildRecord -> tally_build ->
   // assemble_report independently of (and not swapped with) flops -- both
@@ -232,17 +232,16 @@ TEST_CASE(
 }
 
 // Task 3: meter() drives the REAL policy-selected executor (whole-scope or
-// forest descent, chosen by BatchPolicy::whole_scope_execution) through the
-// sizing backend with its own metered cache, rather than a hand-rolled proxy
-// of one. This forest carries a genuine Contracted batch axis (a_3, the
-// "aux"-analog): with whole_scope_execution=true, the coexistence entry
+// forest descent, chosen by BatchPolicy::scheduler) through the sizing
+// backend with its own metered cache, rather than a hand-rolled proxy of one.
+// This forest carries a genuine Contracted batch axis (a_3, the "aux"-analog):
+// with scheduler == BatchScheduler::whole_scope, the coexistence entry
 // (scope_executor.hpp) rebuilds a scope tree with ONE realized batch loop
 // from that stamp and drives the executor's nested batch-scratch caches
 // (a Task-1 coverage gap -- no earlier [meter] test exercised a multi-level
-// PeakMonitor parent-chain under a real batched walk); with it false, the
-// SAME forest runs through today's unbatched per-tree descent. Both modes
-// must report a positive peak/build count and the matching `whole_scope`
-// flag.
+// PeakMonitor parent-chain under a real batched walk); with it forest_descent,
+// the SAME forest runs through today's unbatched per-tree descent. Both modes
+// must report a positive peak/build count and the matching `scheduler` value.
 TEST_CASE(
     "meter runs the policy-selected executor (whole-scope and forest) with "
     "the sizing backend and a metered cache",
@@ -293,16 +292,16 @@ TEST_CASE(
   };
 
   // ---- whole-scope: exercises the nested batch-scratch walk. ----
-  policy.whole_scope_execution = true;
+  policy.scheduler = sequant::BatchScheduler::whole_scope;
   auto const ws_report = meter(forest, policy, regime, cfg);
   CHECK(ws_report.peak_bytes > 0.0);
   CHECK(ws_report.builds_total > 0);
-  CHECK(ws_report.whole_scope == true);
+  CHECK(ws_report.scheduler == sequant::BatchScheduler::whole_scope);
 
-  // ---- forest descent: the SAME forest/policy, flag off. ----
-  policy.whole_scope_execution = false;
+  // ---- forest descent: the SAME forest/policy, scheduler reset. ----
+  policy.scheduler = sequant::BatchScheduler::forest_descent;
   auto const fd_report = meter(forest, policy, regime, cfg);
   CHECK(fd_report.peak_bytes > 0.0);
   CHECK(fd_report.builds_total > 0);
-  CHECK(fd_report.whole_scope == false);
+  CHECK(fd_report.scheduler == sequant::BatchScheduler::forest_descent);
 }

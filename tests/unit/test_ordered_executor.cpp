@@ -22,6 +22,7 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
 #include <SeQuant/core/eval/backends/dryrun/eval_expr.hpp>
+#include <SeQuant/core/eval/backends/dryrun/meter.hpp>
 #include <SeQuant/core/eval/backends/dryrun/result.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
@@ -207,12 +208,12 @@ TEST_CASE(
 
 // The same equivalence, but reached through the BatchPolicy-gated dispatch
 // entry (sequant::evaluate(Nodes const&, BatchPolicy const&, ...),
-// scope_executor.hpp) with ordered_schedule_execution set -- the actual
-// caller-facing seam SP3 Task 1 wires up, rather than calling
+// scope_executor.hpp) with policy.scheduler == BatchScheduler::ordered -- the
+// actual caller-facing seam SP3 Task 1 wires up, rather than calling
 // evaluate_ordered_schedule directly as the test above does.
 TEST_CASE(
-    "BatchPolicy::ordered_schedule_execution routes through the ordered "
-    "executor and matches forest descent",
+    "BatchPolicy::scheduler == BatchScheduler::ordered routes through the "
+    "ordered executor and matches forest descent",
     "[ordered-executor]") {
   std::vector<ScalarNode> forest{scalar_tree(L"2 * a * b - c"),
                                  scalar_tree(L"a * a + 3 * b - 2 * c")};
@@ -223,7 +224,7 @@ TEST_CASE(
   double const expected = reference->as<ResultScalar<double>>().value();
 
   sequant::BatchPolicy policy;
-  policy.ordered_schedule_execution = true;
+  policy.scheduler = sequant::BatchScheduler::ordered;
 
   auto cache = sequant::CacheManager<ScalarNode>::empty();
   ResultPtr const got = sequant::evaluate(
@@ -234,23 +235,22 @@ TEST_CASE(
   CHECK(got_val == Catch::Approx(-42.25));
 }
 
-// Flag-off byte-identical guard: with ordered_schedule_execution left at its
-// default (false) and whole_scope_execution also false, the BatchPolicy-
-// gated dispatch entry must take the FIRST pre-existing arm (an unconditional
-// forward to sequant::evaluate(Nodes const&, layout, leaf_evaluator, cache))
-// -- i.e. this task's new branch must not disturb either existing arm when
-// its own gating flag is off.
+// Flag-off byte-identical guard: with policy.scheduler left at its default
+// (BatchScheduler::forest_descent), the BatchPolicy-gated dispatch entry must
+// take the FIRST pre-existing arm (an unconditional forward to
+// sequant::evaluate(Nodes const&, layout, leaf_evaluator, cache)) -- i.e.
+// this task's new branch must not disturb either existing arm when the
+// scheduler is not set to ordered or whole_scope.
 TEST_CASE(
-    "ordered_schedule_execution defaults to false and does not disturb the "
+    "BatchScheduler defaults to forest_descent and does not disturb the "
     "pre-existing BatchPolicy dispatch arms",
     "[ordered-executor]") {
   std::vector<ScalarNode> forest{scalar_tree(L"2 * a * b - c"),
                                  scalar_tree(L"a * a + 3 * b - 2 * c")};
   ScalarLeafEvaluator const yield{{{L"a", 2.0}, {L"b", -3.5}, {L"c", 7.25}}};
 
-  sequant::BatchPolicy const policy;  // both flags default false
-  CHECK_FALSE(policy.ordered_schedule_execution);
-  CHECK_FALSE(policy.whole_scope_execution);
+  sequant::BatchPolicy const policy;  // scheduler defaults to forest_descent
+  CHECK(policy.scheduler == sequant::BatchScheduler::forest_descent);
 
   auto cache = sequant::CacheManager<ScalarNode>::empty();
   ResultPtr const got = sequant::evaluate(
@@ -955,6 +955,217 @@ TEST_CASE(
   // unsupported construct. The schedule built here is well_formed (asserted
   // above) and executed to completion.
   CHECK(sequant::eval::well_formed(ordered));
+}
+
+// ===========================================================================
+// b3 (2026-08-12 eager-home-release plan, Task b): dry == wet schedule
+// EQUIVALENCE for the ordered executor. b1 fixed a real dry-run/wet-run
+// fidelity bug in meter.hpp: the install `if (!policy.whole_scope_execution)
+// cache.set_custom_evaluator(...)` used to fire for BatchScheduler::ordered
+// too (ordered is neither whole_scope nor, under the OLD two-bool encoding,
+// distinguishable from forest_descent by that single negated check), routing
+// the dry ordered replay's root-level BuildSteps through the FOREST custom
+// evaluator instead of evaluate_ordered_schedule's own run_ordered_
+// contracted_block -- a real WET/DRY divergence, since MPQC's wet ordered
+// path (cck.ipp's `cache.set_whole_scope_driver`) installs NO custom
+// evaluator at all. This test proves the fix: meter()'s ordered replay
+// (routed through the SAME sequant::evaluate(Nodes const&, BatchPolicy
+// const&, ...) coexistence entry MPQC's wet path drives) realizes the exact
+// SAME peak as a directly-invoked evaluate_ordered_schedule call wired with
+// its own PeakMonitor -- the "wet-style" invocation the witness TEST_CASE
+// above uses. Reuses the SAME water-20 fixture (forest/policy/rich
+// construction) as that witness -- SP3 Task 4's expensive optimize+binarize
+// scaffold is not rebuilt from scratch elsewhere in this file, so it is
+// duplicated here as-is, matching the file's own stated precedent for these
+// fixtures (see the file-header note above the witness TEST_CASE).
+// ===========================================================================
+TEST_CASE(
+    "b3: meter()'s ordered replay peak equals a direct evaluate_ordered_"
+    "schedule (PeakMonitor) replay on the water-20 aux-only residual forest",
+    "[.][ordered-executor][meter]") {
+  using sequant::eval::dryrun::CacheConfig;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using sequant::eval::dryrun::meter;
+  using Node = EvalNodeDryRun;
+
+  auto ctx = sequant::get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  auto const body =
+      orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                                "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = sequant::deserialize<sequant::ExprPtr>(line);
+  REQUIRE(static_cast<bool>(expr));
+  REQUIRE(expr->is<sequant::Sum>());
+  auto const& summands = expr->as<sequant::Sum>().summands();
+  REQUIRE(!summands.empty());
+
+  std::size_t nterms = std::min<std::size_t>(summands.size(), 40);
+  if (char const* nt = std::getenv("SEQUANT_UT_DRYRUN_NTERMS"))
+    nterms = std::min<std::size_t>(summands.size(), std::atoll(nt));
+
+  auto regime = orderedexec_witness_df_regime(kOrderedExecWater20_pVDZF12);
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  // EXACT MPQC aux-only config (make_csv_batch_policy, aux_target=256), plus
+  // the b0 enum-based scheduler selection: BatchScheduler::ordered.
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  policy.is_batchable_external_index = [](sequant::Index const&) {
+    return false;
+  };
+  policy.batch_spectator_indices = false;
+  policy.batch_target_size = [](sequant::Index const&) -> std::size_t {
+    return 256;
+  };
+  policy.is_volatile_leaf = [](sequant::Tensor const& t) {
+    return t.label() == L"t";
+  };
+  policy.accumulation_factor = 1.0;
+  policy.persistent_only = false;
+  policy.peak_threshold = 1e11;
+  policy.scheduler = sequant::BatchScheduler::ordered;
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      sequant::Expr const*,
+      sequant::container::vector<sequant::NodeBatchAnnotation>>>();
+  sequant::OptimizeOptions opts;
+  opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = axes_map;
+
+  std::vector<Node> forest;
+  for (std::size_t s = 0; s < nterms; ++s) {
+    sequant::ExprPtr const term =
+        orderedexec_witness_flatten_product(summands[s]);
+    if (!term) continue;
+    sequant::ExprPtr optimized;
+    try {
+      optimized = sequant::optimize(term, opts);
+    } catch (std::exception const&) {
+      continue;
+    }
+    if (!optimized) continue;
+    sequant::BinarizationOptions bopts;
+    if (auto it = axes_map->find(optimized.get()); it != axes_map->end())
+      bopts.node_batch_axes = it->second;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    forest.push_back(sequant::binarize<EvalExprDryRun>(optimized, {}, bopts));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+  REQUIRE(!forest.empty());
+
+  // ONE forest + ONE rich shared by both replays (mirrors the witness's own
+  // R2 invariant -- meter() below builds its OWN internal rich from the SAME
+  // forest/block_of, so this local `rich` is only used to build the direct
+  // ordered schedule, not shared code with meter()).
+  auto const block_of = [](sequant::Index const&) -> std::size_t {
+    return 256;
+  };
+  auto const rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  REQUIRE(!rich.cells.empty());
+
+  using annot_t = std::remove_cvref_t<decltype(forest.front()->annot())>;
+  annot_t const layout{};
+  sequant::eval::dryrun::DryRunLeafEvaluator const yield{cm};
+  std::function<std::size_t(sequant::Index const&)> const target =
+      [](sequant::Index const&) -> std::size_t { return 256; };
+
+  std::function<bool(Node const&)> const is_volatile_node =
+      [p = policy.is_volatile_leaf](Node const& n) -> bool {
+    if (!n.leaf() || !n->is_tensor()) return false;
+    return p && p(n->as_tensor());
+  };
+
+  auto& logger = sequant::Logger::instance();
+  auto const prev_level = logger.eval.level;
+  auto* const prev_stream = logger.eval.stream;
+  logger.eval.level = 1;  // arms tally_build (DryRunOps::prod's runtime gate)
+
+  // ---- (A) direct evaluate_ordered_schedule replay, "wet-style": a fresh
+  // cache + PeakMonitor, no custom evaluator installed (MPQC's wet ordered
+  // path -- cck.ipp's set_whole_scope_driver -- never installs one either).
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  REQUIRE(legality.cells.size() == rich.cells.size());
+  auto const ordered =
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"Κ"});
+  REQUIRE(sequant::eval::well_formed(ordered));
+
+  std::ostringstream direct_trace;
+  logger.eval.stream = &direct_trace;
+  auto direct_cache = sequant::cache_manager(forest);
+  direct_cache.set_recompute_tally_enabled(true);
+  sequant::eval::PeakMonitor direct_mon;
+  direct_cache.set_peak_monitor(&direct_mon);
+  ResultPtr direct_result;
+  try {
+    direct_result =
+        sequant::eval::evaluate_ordered_schedule<sequant::Trace::On>(
+            forest, ordered, rich, layout, yield, direct_cache, target, {},
+            is_volatile_node);
+  } catch (std::exception const& e) {
+    std::cerr << "[b3-ordered-dry-wet-equivalence] direct evaluate threw: "
+              << e.what() << "\n";
+  }
+  REQUIRE(direct_result);
+
+  // ---- (B) meter()'s own ordered replay, on the SAME forest/policy/regime.
+  // meter() builds its own internal cache (persistence-aware, is_volatile
+  // matching policy.is_volatile_leaf via cfg.is_volatile below) and drives
+  // the SAME coexistence entry (sequant::evaluate(Nodes const&, BatchPolicy
+  // const&, ...), scope_executor.hpp) that MPQC's wet whole_scope/ordered
+  // path (cck.ipp's set_whole_scope_driver) drives -- the point of this test.
+  std::ostringstream meter_trace;
+  logger.eval.stream = &meter_trace;
+  CacheConfig cfg;
+  cfg.is_volatile = is_volatile_node;
+  cfg.min_repeats = 2;
+  cfg.max_footprint = 0.;  // no footprint gate, matching the direct replay
+  auto const meter_report = meter(forest, policy, regime, cfg);
+
+  logger.eval.level = prev_level;
+  logger.eval.stream = prev_stream;
+
+  std::wcerr << L"\n=== [b3-ordered-dry-wet-equivalence] water-20 aux-only, "
+             << forest.size() << L" terms ===\n"
+             << L"  direct (wet-style) evaluate_ordered_schedule peak = "
+             << direct_mon.hwmark_bytes << L" B ("
+             << (double(direct_mon.hwmark_bytes) / 1e9) << L" GB)\n"
+             << L"  meter() ordered replay peak                      = "
+             << meter_report.peak_bytes << L" B ("
+             << (meter_report.peak_bytes / 1e9) << L" GB)\n";
+  INFO("direct (wet-style) peak = " << direct_mon.hwmark_bytes
+                                    << " B; meter() peak = "
+                                    << meter_report.peak_bytes << " B");
+  CAPTURE(direct_mon.hwmark_bytes, meter_report.peak_bytes);
+
+  CHECK(direct_mon.hwmark_bytes > 0);
+  CHECK(meter_report.peak_bytes > 0.0);
+  CHECK(meter_report.scheduler == sequant::BatchScheduler::ordered);
+
+  // THE payoff: dry (meter) == wet-style (direct) peak, exactly. If these
+  // disagree, that is a REAL remaining dry/wet fidelity gap -- do not loosen
+  // this to a tolerance to force a pass; a mismatch means b1's fix is
+  // incomplete or another divergence exists.
+  CHECK(meter_report.peak_bytes ==
+        Catch::Approx(double(direct_mon.hwmark_bytes)).margin(1.0));
 }
 
 // ===========================================================================

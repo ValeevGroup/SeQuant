@@ -830,10 +830,10 @@ namespace sequant {
 /// today's per-tree forest descent (\c sequant::evaluate(Nodes const&,
 /// layout, leaf_evaluator, cache), eval.hpp:1105 -- called UNCHANGED) or the
 /// whole-scope executor (\c eval::evaluate_whole_scope, Tasks 2-5), selected
-/// by \p policy.whole_scope_execution.
+/// by \p policy.scheduler.
 ///
-/// \details Flag OFF (\p policy.whole_scope_execution == false, the default)
-/// is an unconditional, first-statement forward to the existing \c
+/// \details \p policy.scheduler == BatchScheduler::forest_descent (the
+/// default) is an unconditional, first-statement forward to the existing \c
 /// sequant::evaluate(Nodes const&, layout, leaf_evaluator, cache) overload --
 /// no schedule is built, nothing else runs on this path. Because this is an
 /// ADDITIVE new overload (distinguished by the extra \p policy argument) and
@@ -841,7 +841,8 @@ namespace sequant {
 /// today stays byte-identical; a caller opts into this driver only by
 /// supplying a \c BatchPolicy explicitly.
 ///
-/// Flag ON builds the \c eval::RichSchedule (\c eval::compute_dag_boulevard)
+/// \p policy.scheduler == BatchScheduler::whole_scope builds the \c
+/// eval::RichSchedule (\c eval::compute_dag_boulevard)
 /// and the narrow \c eval::ScopeSchedule (\c eval::build_scope_schedule) from
 /// \p forest's OWN placement -- the \c batched_here() annotations a prior
 /// factorizer pass (e.g. \c optimize() with a batched objective, or a test
@@ -886,11 +887,10 @@ ResultPtr evaluate(Nodes const& forest, BatchPolicy const& policy,
   };
 
   // SP3 gating switch: the ORDERED executor, driven by the SP2
-  // OrderedSchedule IR (see BatchPolicy::ordered_schedule_execution's doc
-  // comment). Checked FIRST so it takes priority when both this and \c
-  // whole_scope_execution are set, and so the two pre-existing dispatch arms
-  // below are reached, byte-identically, only when this flag is false.
-  if (policy.ordered_schedule_execution) {
+  // OrderedSchedule IR (see BatchPolicy::scheduler's doc comment). Checked
+  // FIRST so the two pre-existing dispatch arms below are reached,
+  // byte-identically, only when the scheduler is NOT BatchScheduler::ordered.
+  if (policy.scheduler == BatchScheduler::ordered) {
     std::function<std::size_t(Index const&)> const target = target_of();
 
     eval::dryrun::SizeRegime const regime;
@@ -918,7 +918,7 @@ ResultPtr evaluate(Nodes const& forest, BatchPolicy const& policy,
         make_scope_guard, is_volatile_node);
   }
 
-  if (!policy.whole_scope_execution)
+  if (policy.scheduler != BatchScheduler::whole_scope)
     return evaluate<EvalTrace>(forest, layout, leaf_evaluator, cache);
 
   std::function<std::size_t(Index const&)> const target = target_of();

@@ -511,7 +511,8 @@ std::size_t witness_builds_of(Tally const& tally,
 //       eliminates, i.e. the "recompute elimination vs forest descent" the
 //       brief asks to document;
 //   (c) the co-residency oracle (cost_profile() under
-//       policy.whole_scope_execution) predicts the realized whole-scope
+//       policy.scheduler == BatchScheduler::whole_scope) predicts the
+//       realized whole-scope
 //       peak, read directly off the SAME replay's own eval trace (the `hw=`
 //       high-water mark every EvalStat record -- root cache or a
 //       batch-scratch cache nested inside detail::walk_scope -- reports;
@@ -760,7 +761,7 @@ TEST_CASE(
     return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
   };
   sequant::BatchPolicy policy_ws = policy;
-  policy_ws.whole_scope_execution = true;
+  policy_ws.scheduler = sequant::BatchScheduler::whole_scope;
   auto const cp =
       sequant::eval::dryrun::cost_profile(forest, policy_ws, cfg, regime);
   double const oracle_peak_bytes = cp.peak_bytes;
@@ -838,7 +839,7 @@ TEST_CASE(
   // that would make root-homed composites build once too is out of scope
   // here.
   sequant::BatchPolicy policy_fd = policy;
-  policy_fd.whole_scope_execution = false;
+  policy_fd.scheduler = sequant::BatchScheduler::forest_descent;
 
   auto const ws_rep =
       sequant::eval::dryrun::meter(forest, policy_ws, regime, cfg);
@@ -883,8 +884,9 @@ TEST_CASE(
 
   // (3) forest-vs-whole-scope comparison, via meter()'s OWN reports this
   // time (not the separate fd_cache/ws_cache pair (a)-(d) used): meter()'s
-  // policy_fd.whole_scope_execution = false path now installs sequant::
-  // make_evaluator(policy, yield) as its internal cache's custom evaluator
+  // policy_fd.scheduler == BatchScheduler::forest_descent path now installs
+  // sequant::make_evaluator(policy, yield) as its internal cache's custom
+  // evaluator
   // before the coexistence-entry call (mirroring MPQC's wet forest path,
   // cck.ipp's `else` branch) rather than leaving that interception dark, so
   // fd_rep is the SAME per-root FRAGMENTED-but-still-BATCHED replay
@@ -1193,7 +1195,7 @@ TEST_CASE(
     return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
   };
   sequant::BatchPolicy policy_ws = policy;
-  policy_ws.whole_scope_execution = true;
+  policy_ws.scheduler = sequant::BatchScheduler::whole_scope;
   auto const cp =
       sequant::eval::dryrun::cost_profile(forest, policy_ws, cfg, regime);
   double const oracle_peak_bytes = cp.peak_bytes;

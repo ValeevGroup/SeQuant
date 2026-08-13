@@ -223,16 +223,16 @@ inline std::vector<AvoidableNode> avoidable_nodes_from_tally(
 struct CostProfile {
   /// Predicted peak working-set (bytes). Task 6 (whole-scope batched DAG
   /// execution design) makes this model SELECTED by \c
-  /// BatchPolicy::whole_scope_execution, since the two runtime drivers
+  /// BatchPolicy::scheduler, since forest descent and whole-scope descent
   /// realize different co-residency:
   ///
-  /// - \p policy.whole_scope_execution == false (default, forest descent):
-  ///   the max over summands of the batched-scratch high-watermark folded by
-  ///   the Task-3 \c PeakSink and the outer gated cache's \c
+  /// - \p policy.scheduler != BatchScheduler::whole_scope (default, forest
+  ///   descent): the max over summands of the batched-scratch high-watermark
+  ///   folded by the Task-3 \c PeakSink and the outer gated cache's \c
   ///   working_set_hwmark() -- unchanged from before this field's Task-6
   ///   selection existed. See the paragraphs below for its accounting detail.
-  /// - \p policy.whole_scope_execution == true (whole-scope descent): the
-  ///   CO-RESIDENCY oracle (\c eval::peak_profile_sweep over \c
+  /// - \p policy.scheduler == BatchScheduler::whole_scope (whole-scope
+  ///   descent): the CO-RESIDENCY oracle (\c eval::peak_profile_sweep over \c
   ///   eval::compute_dag_path's \c home_modes-based footprints), computed
   ///   ONCE over the whole fused forest rather than per-summand. Per the
   ///   design's "paradox resolved" section, this is the model that MATCHES
@@ -509,7 +509,7 @@ inline CostProfile cost_profile(
     // this replay watermark models forest descent, the co-residency oracle
     // models whole-scope descent, and the two are mutually exclusive
     // predictors, not folded together.
-    if (!policy.whole_scope_execution)
+    if (policy.scheduler != BatchScheduler::whole_scope)
       profile.peak_bytes = std::max({profile.peak_bytes, peak.load(),
                                      double(cache.working_set_hwmark())});
     // NO per-term reset. A real solve's cache spans the whole iteration (all
@@ -524,8 +524,9 @@ inline CostProfile cost_profile(
   }
 
   // Task 6 (whole-scope batched DAG execution design): under
-  // policy.whole_scope_execution, replace the per-summand replay watermark
-  // folded above (skipped, see the guard inside the loop) with the
+  // policy.scheduler == BatchScheduler::whole_scope, replace the per-summand
+  // replay watermark folded above (skipped, see the guard inside the loop)
+  // with the
   // CO-RESIDENCY oracle computed ONCE over the WHOLE fused forest -- the
   // model that matches the peak sequant::eval::evaluate_whole_scope actually
   // realizes (see CostProfile::peak_bytes's doc comment). block_of mirrors
@@ -534,7 +535,7 @@ inline CostProfile cost_profile(
   // scope_executor.hpp): policy.batch_target_size, guarded the same way
   // (empty => decline batching, size 1) so an unset policy never throws
   // std::bad_function_call out of compute_dag_path.
-  if (policy.whole_scope_execution) {
+  if (policy.scheduler == BatchScheduler::whole_scope) {
     std::function<std::size_t(Index const&)> const block_of =
         policy.batch_target_size
             ? policy.batch_target_size

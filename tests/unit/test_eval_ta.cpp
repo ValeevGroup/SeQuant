@@ -3115,7 +3115,8 @@ TEST_CASE("evaluate_whole_scope matches forest descent over nested aux+occ",
 // (doc/dev/specs/2026-08-10-whole-scope-batched-dag-execution-design.md):
 // COEXISTENCE. sequant::evaluate(forest, policy, layout, leaf, cache, ...) --
 // the driver-entry overload added by scope_executor.hpp -- must route to
-// eval::evaluate_whole_scope when policy.whole_scope_execution is true, and
+// eval::evaluate_whole_scope when policy.scheduler == BatchScheduler::
+// whole_scope, and
 // to the UNMODIFIED sequant::evaluate(Nodes const&, layout, ...) forest
 // descent (BYTE-IDENTICAL, no schedule built) when it is false. Same aux-only
 // two-root forest as the Task-3 equivalence test above (S = g*h shared,
@@ -3138,7 +3139,7 @@ TEST_CASE("evaluate_whole_scope matches forest descent over nested aux+occ",
 // for the identical, unreordered contraction) would be a routing bug.
 TEST_CASE(
     "sequant::evaluate(forest, policy, ...) routes to whole-scope vs forest "
-    "descent by BatchPolicy::whole_scope_execution",
+    "descent by BatchPolicy::scheduler",
     "[eval][scope-executor]") {
   using sequant::evaluate;
   using sequant::eval::build_scope_schedule;
@@ -3204,7 +3205,7 @@ TEST_CASE(
   {
     sequant::BatchPolicy policy_on;
     policy_on.batch_target_size = target_batch;
-    policy_on.whole_scope_execution = true;
+    policy_on.scheduler = sequant::BatchScheduler::whole_scope;
 
     auto cache_on = sequant::CacheManager<node_t>::empty();
     auto const got_on = evaluate(forest, policy_on, target, yield_, cache_on,
@@ -3233,7 +3234,7 @@ TEST_CASE(
   // a GENUINE reordering (batched summation) -- so the two remain clearly
   // distinguishable.
   {
-    sequant::BatchPolicy const policy_off;  // whole_scope_execution = false
+    sequant::BatchPolicy const policy_off;  // scheduler = forest_descent
     auto cache_off = sequant::CacheManager<node_t>::empty();
     auto const got_off =
         evaluate(forest, policy_off, target, yield_, cache_off)->get<TArrayD>();

@@ -6311,8 +6311,9 @@ TEST_CASE(
 
 // Task 6 of the whole-scope batched DAG execution design
 // (doc/dev/specs/2026-08-10-whole-scope-batched-dag-execution-design.md):
-// cost_profile()'s peak-model SELECTION. Under BatchPolicy::whole_scope_
-// execution, cost_profile() must report the CO-RESIDENCY oracle (\c
+// cost_profile()'s peak-model SELECTION. Under BatchPolicy::scheduler ==
+// BatchScheduler::whole_scope, cost_profile() must report the CO-RESIDENCY
+// oracle (\c
 // eval::peak_profile_sweep over \c eval::compute_dag_path's home_modes
 // footprints, computed ONCE over the whole fused forest) rather than the
 // batched-scratch replay high-watermark it reports when the flag is off --
@@ -6328,7 +6329,7 @@ TEST_CASE(
 // ported to zero-data DryRun (cost_profile's own domain).
 TEST_CASE(
     "cost_profile selects the co-residency peak model under "
-    "whole_scope_execution",
+    "BatchScheduler::whole_scope",
     "[dryrun][cost_profile][scope-executor]") {
   using sequant::eval::dryrun::CacheConfig;
   using sequant::eval::dryrun::cost_profile;
@@ -6374,7 +6375,7 @@ TEST_CASE(
 
   // ---- flag ON: must equal the INDEPENDENT co-residency oracle (same
   // regime/block_of), computed once over the whole forest.
-  policy.whole_scope_execution = true;
+  policy.scheduler = sequant::BatchScheduler::whole_scope;
   CostProfile const cp_on =
       cost_profile(forest, policy, cfg, regime, /*trace=*/nullptr);
 
