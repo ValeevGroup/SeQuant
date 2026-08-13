@@ -17,7 +17,7 @@
 namespace sequant::mbpt {
 
 /// Operator character relative to Fermi vacuum
-enum class OpClass { ex, deex, gen };
+enum class OpClass { Ex, Deex, Gen };
 
 /// @return the default Hermiticity for an operator of the given OpClass:
 /// general operators are matrix elements of (anti-)Hermitian operators and
@@ -26,7 +26,7 @@ enum class OpClass { ex, deex, gen };
 /// OpRegistry (e.g. to keep reference equations that assumed the legacy
 /// conjugate-symmetric amplitudes).
 inline Hermiticity default_hermiticity(OpClass cls) {
-  return cls == OpClass::gen ? Hermiticity::Hermitian
+  return cls == OpClass::Gen ? Hermiticity::Hermitian
                              : Hermiticity::NonHermitian;
 }
 

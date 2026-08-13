@@ -18,6 +18,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/external/bliss/graph.hh>
 
+#include <range/v3/algorithm/contains.hpp>
 #include <range/v3/algorithm/find.hpp>
 #include <range/v3/view/concat.hpp>
 
@@ -29,6 +30,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <cstdlib>
 #include <functional>
 #include <limits>
 #include <type_traits>
@@ -280,13 +282,15 @@ struct OptRes {
 template <typename TIdxs, typename IdxToSz>
 container::vector<double> subset_footprints(
     TensorNetwork const& network, TIdxs const& tidxs, IdxToSz&& idxsz,
-    std::function<double(Index const&, std::size_t)> const& inner_pow = {}) {
+    std::function<double(Index const&, std::size_t)> const& inner_pow = {},
+    container::vector<char> const* connected = nullptr) {
   container::vector<OptRes> results((size_t{1} << network.tensors().size()));
-  init_results(network, tidxs, results);
+  init_results(network, tidxs, results, connected);
   auto fp = footprint_counter(std::forward<IdxToSz>(idxsz), inner_pow);
   container::vector<double> S(results.size(), 0.0);
   for (size_t n = 0; n < results.size(); ++n)
-    S[n] = (n == 0) ? 0.0 : fp(results[n].indices);
+    S[n] = (n == 0 || (connected && !(*connected)[n])) ? 0.0
+                                                       : fp(results[n].indices);
   return S;
 }
 
@@ -345,7 +349,8 @@ container::vector<container::vector<double>> sliced_footprints(
     std::function<bool(Index const&)> const& is_batchable,
     std::function<std::size_t(Index const&)> const& batch_target_size,
     container::vector<Index> const& aux_list,
-    std::function<double(Index const&, std::size_t)> const& inner_pow = {}) {
+    std::function<double(Index const&, std::size_t)> const& inner_pow = {},
+    container::vector<char> const* connected = nullptr) {
   std::size_t const m = aux_list.size();
   container::vector<container::vector<double>> tables(std::size_t{1} << m);
   for (std::size_t B = 0; B < tables.size(); ++B) {
@@ -362,7 +367,7 @@ container::vector<container::vector<double>> sliced_footprints(
       }
       return e;
     };
-    tables[B] = subset_footprints(network, tidxs, extent, inner_pow);
+    tables[B] = subset_footprints(network, tidxs, extent, inner_pow, connected);
   }
   return tables;
 }
@@ -416,14 +421,22 @@ struct SubNetEqual {
 /// Singleton subsets also get their one-element \c sequence pre-populated.
 template <typename TIdxs>
 void init_results(TensorNetwork const& network, TIdxs const& tidxs,
-                  container::vector<OptRes>& results) {
+                  container::vector<OptRes>& results,
+                  container::vector<char> const* connected = nullptr) {
   using IndexContainer = decltype(OptRes::indices);
   auto tensor_indices = network.tensors()          //
                         | ranges::views::indirect  //
                         | ranges::views::transform(slots);
-  auto imed_indices = subset_target_indices(tensor_indices, tidxs);
+  auto imed_indices = subset_target_indices(tensor_indices, tidxs, connected);
   SEQUANT_ASSERT(ranges::distance(imed_indices) == ranges::distance(results));
   for (size_t i = 0; i < results.size(); ++i) {
+    // Outer-product pruning: a disconnected subset is never an intermediate the
+    // DP forms; leave the sentinel. connected[i]==1 for singletons/empty, so
+    // leaves are always computed. See outer_product_connectivity.
+    if (connected && !(*connected)[i]) {
+      results[i].ops = std::numeric_limits<decltype(OptRes::ops)>::max();
+      continue;
+    }
     results[i].indices =
         imed_indices[i] | ranges::views::move | ranges::to<IndexContainer>;
     results[i].ops = std::popcount(i) > 1
@@ -433,6 +446,100 @@ void init_results(TensorNetwork const& network, TIdxs const& tidxs,
       results[i].sequence.emplace_back(std::countr_zero(i));
     // else results[i].sequence is left uninitialized
   }
+}
+
+/// \brief Per-tensor adjacency bitmask over "contractible" shared indices.
+///
+/// `adj[i]` has bit `j` set iff tensors `i` and `j` share at least one
+/// top-level (bra/ket/aux) index that is NOT a target index (`tidxs`) -- i.e.
+/// an index that is summed somewhere in the term. Protoindices are never
+/// compared, so two composites `a<i,j>`, `b<i,j>` that share only occupied
+/// protos create no edge. A hyperedge (a contractible index on three-plus
+/// tensors) makes all its carriers mutually adjacent. A tensor is never
+/// adjacent to itself.
+template <typename TIdxs>
+inline container::vector<std::size_t> contractible_adjacency(
+    TensorNetwork const& network, TIdxs const& tidxs) {
+  std::size_t const nt = network.tensors().size();
+  container::vector<std::size_t> adj(nt, 0);
+  // carrier bitmask per contractible (non-target) top-level index
+  container::map<Index, std::size_t, Index::FullLabelCompare> carriers;
+  std::size_t i = 0;
+  for (auto&& t : network.tensors()) {
+    // Iterate the abstract-tensor slots (bra/ket/aux) directly rather than
+    // casting to Tensor: TensorNetwork stores AbstractTensorPtr (not
+    // necessarily Tensor), and slot bundles may carry null (empty) placeholder
+    // indices -- a null carrier would be shared across every tensor with an
+    // empty slot and create a spurious edge that needlessly disables pruning.
+    // Mirrors init_results, which also enumerates indices via slots().
+    for (auto&& ix : slots(*t)) {
+      if (!ix.nonnull()) continue;                // skip empty slots
+      if (ranges::contains(tidxs, ix)) continue;  // target/output: not summed
+      carriers[ix] |= (std::size_t{1} << i);
+    }
+    ++i;
+  }
+  for (auto&& [ix, cm] : carriers) {
+    if (std::popcount(cm) < 2) continue;  // appears on < 2 tensors
+    std::size_t rest = cm;
+    while (rest) {
+      std::size_t const b = static_cast<std::size_t>(std::countr_zero(rest));
+      adj[b] |= (cm & ~(std::size_t{1} << b));  // neighbors, excluding self
+      rest &= rest - 1;
+    }
+  }
+  return adj;
+}
+
+/// \brief `connected[n] == 1` iff the subgraph induced on the set bits of
+/// subset mask `n` is connected under `adjacency` (from \ref
+/// contractible_adjacency). Empty and singleton subsets are connected by
+/// definition. Size `1 << nt`.
+inline container::vector<char> connected_subsets(
+    container::vector<std::size_t> const& adjacency, std::size_t nt) {
+  container::vector<char> connected(std::size_t{1} << nt, 0);
+  for (std::size_t n = 0; n < connected.size(); ++n) {
+    if (std::popcount(n) <= 1) {
+      connected[n] = 1;
+      continue;
+    }
+    std::size_t const start = n & (~n + 1);  // lowest set bit
+    std::size_t reached = start, frontier = start;
+    while (frontier) {
+      std::size_t next = 0, f = frontier;
+      while (f) {
+        next |= adjacency[static_cast<std::size_t>(std::countr_zero(f))];
+        f &= f - 1;
+      }
+      next &= n & ~reached;
+      reached |= next;
+      frontier = next;
+    }
+    connected[n] = (reached == n) ? 1 : 0;
+  }
+  return connected;
+}
+
+/// \brief Outer-product pruning mask for a term. Returns \ref
+/// connected_subsets over \ref contractible_adjacency, EXCEPT it returns an
+/// all-connected mask when pruning is disabled (\p prune == false, or the env
+/// `SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING` force-override) or when the full
+/// network is itself disconnected (a genuine product term -- never a CC
+/// residual summand, by the linked-cluster theorem). Callers then apply one
+/// uniform `if (!mask[n]) skip` test and get unpruned behavior in those cases.
+/// \param prune Whether to prune (OptimizeOptions::prune_outer_products). When
+///        false, the returned mask is all-connected (unpruned DP).
+template <typename TIdxs>
+inline container::vector<char> outer_product_connectivity(
+    TensorNetwork const& network, TIdxs const& tidxs, bool prune = true) {
+  std::size_t const nt = network.tensors().size();
+  std::size_t const sz = std::size_t{1} << nt;
+  if (!prune || std::getenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING"))
+    return container::vector<char>(sz, 1);
+  auto mask = connected_subsets(contractible_adjacency(network, tidxs), nt);
+  if (!mask.empty() && !mask.back())  // full network disconnected: disable
+    return container::vector<char>(sz, 1);
+  return mask;
 }
 
 struct SubnetMetadata {
@@ -455,7 +562,8 @@ struct SubnetMetadata {
 ///
 /// Side effect: `results[n].indices` may be reordered by `canonicalize_slots`.
 inline SubnetMetadata build_subnet_metadata(
-    TensorNetwork const& network, container::vector<OptRes>& results) {
+    TensorNetwork const& network, container::vector<OptRes>& results,
+    container::vector<char> const& connected) {
   SubnetMetadata out;
   // Use max as sentinel for entries with popcount < 2 (singletons/empty),
   // which are skipped below and never assigned a real meta ID.
@@ -466,6 +574,7 @@ inline SubnetMetadata build_subnet_metadata(
 
   for (size_t n = 0; n < results.size(); ++n) {
     if (std::popcount(n) < 2) continue;
+    if (!connected[n]) continue;  // outer-product subset, never an intermediate
     auto ts = bits::on_bits_index(n) | bits::sieve(network.tensors());
     container::vector<ExprPtr> ts_expr;
     for (auto&& t : ts)
@@ -504,6 +613,8 @@ container::vector<std::size_t> subset_open_aux(
     container::vector<Index> const& aux_list) {
   container::vector<OptRes> results(
       (std::size_t{1} << network.tensors().size()));
+  // NOT pruned: is_spectator_axis consumes open_aux over the full subset
+  // lattice (including disconnected subsets), so every entry must be real.
   init_results(network, tidxs, results);
   container::vector<std::size_t> open_aux(results.size(), 0);
   for (std::size_t n = 0; n < results.size(); ++n) {

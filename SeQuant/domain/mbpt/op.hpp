@@ -21,6 +21,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/aggregate.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/strong.hpp>
 
@@ -95,6 +96,7 @@ inline IndexSpace make_space(const IndexSpace::Type& type) {
 ///
 /// Used with `mbpt::OpMaker` and `mbpt::Operator` classes
 struct OpParams {
+  SEQUANT_DESIGNATED_INIT_ONLY;
   std::size_t order = 0;  ///< perturbation order, limited to range [0,9]
   std::optional<size_t> nbatch = std::nullopt;  ///< number of batching indices
   container::svector<std::size_t> batch_ordinals{};
@@ -525,6 +527,7 @@ using OpConnections = std::vector<std::pair<T, T>>;
 /// parameters in here which are only meaningful at the operator level.
 template <typename T>
 struct EVOptions {
+  SEQUANT_DESIGNATED_INIT_ONLY;
   /// List of pairs of operator labels to be connected; connections are defined
   /// left-to-right, i.e., pair `{opL,opR}` declares that `opL` and `opR` are to
   /// be connected when `opR` precedes `opL`, i.e. `opL` is to the left of `opR`
@@ -1163,6 +1166,17 @@ ExprPtr F(bool use_tensor = true,
 
 /// A general operator of rank \p K
 ExprPtr θ(std::size_t K);
+
+/// @brief Makes a replacement operator of particle rank \p rank
+///        \f$ \{ \tilde{a}^{p_1 \dots p_r}_{p_{r+1} \dots p_{2r}} \} \f$ over
+///        the complete space.
+/// @note This is a single replacer, not a sum: no amplitude tensor and no
+///       normalization.
+/// @note The indices stay free and their ordinals are fixed, so callers can
+///       rely on them: creators use `1 ... rank`, annihilators use
+///       `rank+1 ... 2*rank`.
+/// @param rank particle rank (>= 1)
+ExprPtr ã(std::size_t rank);
 
 /// Makes particle-conserving excitation operator of rank \p K
 ExprPtr t(std::size_t K);

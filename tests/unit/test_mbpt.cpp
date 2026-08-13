@@ -63,24 +63,55 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
     SECTION("add-operators") {
       OpRegistry registry;
-      registry.add(L"T", OpClass::ex);
-      registry.add(L"L", OpClass::deex);
-      registry.add(L"F", OpClass::gen);
+      registry.add(L"T", OpClass::Ex);
+      registry.add(L"L", OpClass::Deex);
+      registry.add(L"F", OpClass::Gen);
 
       REQUIRE(registry.contains(L"T"));
       REQUIRE(registry.contains(L"L"));
       REQUIRE(registry.contains(L"F"));
       REQUIRE(registry.ops().size() == 3);
 
-      REQUIRE(registry.to_class(L"T") == OpClass::ex);
-      REQUIRE(registry.to_class(L"L") == OpClass::deex);
-      REQUIRE(registry.to_class(L"F") == OpClass::gen);
+      REQUIRE(registry.to_class(L"T") == OpClass::Ex);
+      REQUIRE(registry.to_class(L"L") == OpClass::Deex);
+      REQUIRE(registry.to_class(L"F") == OpClass::Gen);
+    }
+
+    SECTION("add-operators-with-hermiticity") {
+      using sequant::Hermiticity;
+
+      OpRegistry registry;
+      // no explicit Hermiticity => default_hermiticity(class)
+      registry.add(L"T", OpClass::Ex);
+      registry.add(L"F", OpClass::Gen);
+      REQUIRE(registry.hermiticity(L"T") == Hermiticity::NonHermitian);
+      REQUIRE(registry.hermiticity(L"F") == Hermiticity::Hermitian);
+
+      // explicit Hermiticity overrides the class default
+      registry.add(L"Z", OpClass::Ex, Hermiticity::Hermitian);
+      registry.add(L"G", OpClass::Gen, Hermiticity::NonHermitian);
+      REQUIRE(registry.to_class(L"Z") == OpClass::Ex);
+      REQUIRE(registry.to_class(L"G") == OpClass::Gen);
+      REQUIRE(registry.hermiticity(L"Z") == Hermiticity::Hermitian);
+      REQUIRE(registry.hermiticity(L"G") == Hermiticity::NonHermitian);
+
+      // set_hermiticity overrides after the fact, in both directions
+      registry.set_hermiticity(L"T", Hermiticity::Hermitian);
+      registry.set_hermiticity(L"Z", Hermiticity::NonHermitian);
+      REQUIRE(registry.hermiticity(L"T") == Hermiticity::Hermitian);
+      REQUIRE(registry.hermiticity(L"Z") == Hermiticity::NonHermitian);
+
+      // overrides survive cloning
+      auto cloned = registry.clone();
+      REQUIRE(cloned.hermiticity(L"Z") == Hermiticity::NonHermitian);
+      REQUIRE(cloned.hermiticity(L"G") == Hermiticity::NonHermitian);
+      REQUIRE(cloned.hermiticity(L"F") == Hermiticity::Hermitian);
     }
 
     SECTION("remove-operators") {
       OpRegistry registry;
-      registry.add(L"T", OpClass::ex);
-      registry.add(L"L", OpClass::deex);
+      registry.add(L"T", OpClass::Ex);
+      registry.add(L"L", OpClass::Deex);
 
       REQUIRE(registry.contains(L"T"));
       registry.remove(L"T");
@@ -90,8 +121,8 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
     SECTION("clone-registry") {
       OpRegistry registry;
-      registry.add(L"T", OpClass::ex);
-      registry.add(L"L", OpClass::deex);
+      registry.add(L"T", OpClass::Ex);
+      registry.add(L"L", OpClass::Deex);
 
       auto cloned = registry.clone();
       REQUIRE(cloned.contains(L"T"));
@@ -101,8 +132,8 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
     SECTION("purge-registry") {
       OpRegistry registry;
-      registry.add(L"T", OpClass::ex);
-      registry.add(L"L", OpClass::deex);
+      registry.add(L"T", OpClass::Ex);
+      registry.add(L"L", OpClass::Deex);
 
       REQUIRE_FALSE(registry.ops().empty());
       registry.purge();
@@ -114,16 +145,16 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
         OpRegistry registry;
         // should not be able to add reserved labels
         REQUIRE_THROWS(
-            registry.add(sequant::reserved::antisymm_label(), OpClass::gen));
+            registry.add(sequant::reserved::antisymm_label(), OpClass::Gen));
         REQUIRE_THROWS(
-            registry.add(sequant::reserved::symm_label(), OpClass::gen));
+            registry.add(sequant::reserved::symm_label(), OpClass::Gen));
       }
 
       SECTION("duplicate-operators") {
         OpRegistry registry;
-        registry.add(L"T", OpClass::ex);
+        registry.add(L"T", OpClass::Ex);
         // should not be able to add duplicate
-        REQUIRE_THROWS(registry.add(L"T", OpClass::deex));
+        REQUIRE_THROWS(registry.add(L"T", OpClass::Deex));
       }
     }
   }  // SECTION("registry")
@@ -167,7 +198,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
     SECTION("clone-context") {
       auto reg = std::make_shared<OpRegistry>();
-      reg->add(L"T", OpClass::ex);
+      reg->add(L"T", OpClass::Ex);
 
       auto ctx = Context({.csv = CSV::Yes, .op_registry_ptr = reg});
       auto cloned = ctx.clone();
@@ -571,7 +602,8 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE(to_latex(vev2_op) == to_latex(vev2_t));
 
       // Test screen_vac_av
-      auto hbar = mbpt::lst(H(), t(2), 4);  // CCD Hbar
+      // CCD Hbar in connected-product form
+      auto hbar = mbpt::lst(H(), t(2), 4, {.use_connected_form = true});
       auto screened_hbar = screen_vac_av(hbar);
       auto expected = h(2) * t(2);
       REQUIRE(simplify(screened_hbar - expected) == ex<Constant>(0));
@@ -599,7 +631,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
       // non-unitary, rank 3
       auto expr1 =
-          lst(H(), t(2), 3, {.unitary = false, .use_commutators = false});
+          lst(H(), t(2), 3, {.unitary = false, .use_connected_form = true});
       auto expected1 =
           H() *
           (ex<Constant>(1) + t(2) + ex<Constant>(rational{1, 2}) * t(2) * t(2) +
@@ -607,7 +639,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE(simplify(expr1 - expected1) == ex<Constant>(0));
 
       auto expr2 =
-          lst(H(), t(2), 3, {.unitary = false, .use_commutators = true});
+          lst(H(), t(2), 3, {.unitary = false, .use_connected_form = false});
       auto expected2 =
           H() + commutator(H(), t(2)) +
           ex<Constant>(rational{1, 2}) *
@@ -616,10 +648,15 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
               commutator(commutator(commutator(H(), t(2)), t(2)), t(2));
       REQUIRE(simplify(expr2 - expected2) == ex<Constant>(0));
 
+      // the default LSTOptions must produce the explicit commutator form, i.e.
+      // lst() must never assume the caller supplies operator connectivity
+      REQUIRE(simplify(lst(H(), t(2), 3) - expected2) == ex<Constant>(0));
+      REQUIRE(simplify(lst(H(), t(2), 3, {}) - expected2) == ex<Constant>(0));
+
       // unitary, rank 2
       using sequant::adjoint;
       auto expr3 =
-          lst(H(), t(2), 2, {.unitary = true, .use_commutators = false});
+          lst(H(), t(2), 2, {.unitary = true, .use_connected_form = true});
       auto expected3 =
           H() + H() * t(2) + adjoint(t(2)) * H() + adjoint(t(2)) * H() * t(2) +
           H() * ex<Constant>(rational{1, 2}) * t(2) * t(2) +
@@ -627,13 +664,18 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE(simplify(expr3 - expected3) == ex<Constant>(0));
 
       auto expr4 =
-          lst(H(), t(2), 2, {.unitary = true, .use_commutators = true});
+          lst(H(), t(2), 2, {.unitary = true, .use_connected_form = false});
       auto generator = commutator(H(), t(2)) - commutator(H(), adjoint(t(2)));
       auto expected4 =
           H() + generator +
           ex<Constant>(rational{1, 2}) * (commutator(generator, t(2)) -
                                           commutator(generator, adjoint(t(2))));
       REQUIRE(simplify(expr4 - expected4) == ex<Constant>(0));
+
+      // `unitary` must no longer select the commutator representation: it only
+      // swaps B for B - B^+, leaving use_connected_form at its default
+      REQUIRE(simplify(lst(H(), t(2), 2, {.unitary = true}) - expected4) ==
+              ex<Constant>(0));
     }  // SECTION("lst")
 
     SECTION("predefined") {
@@ -647,6 +689,37 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       // std::wcout << "theta1: " << to_latex(simplify(theta1.tensor_form()));
       REQUIRE(to_latex(simplify(theta1.tensor_form())) ==
               L"{{\\theta^{{p_2}}_{{p_1}}}{\\tilde{a}^{{p_1}}_{{p_2}}}}");
+
+      {
+        // replacement operator: label "ã", lowering yields a bare
+        // FNOperator with `rank` cre and `rank` ann over the complete space
+        auto ã_2 = ã(2)->as<op_t>();
+        REQUIRE(ã_2.label() == L"ã");
+
+        auto ã_2_tform = ã_2.tensor_form();
+        REQUIRE(ã_2_tform->is<FNOperator>());
+        const auto& ã_2_fnop = ã_2_tform->as<FNOperator>();
+        REQUIRE(ã_2_fnop.ncreators() == 2);
+        REQUIRE(ã_2_fnop.nannihilators() == 2);
+
+        const auto complete_space = get_complete_space(Spin::any);
+        for (const auto& o : ã_2_fnop.creators())
+          REQUIRE(o.index().space() == complete_space);
+        for (const auto& o : ã_2_fnop.annihilators())
+          REQUIRE(o.index().space() == complete_space);
+
+        // callers depend on this exact free-index mapping
+        REQUIRE(to_latex(ã_2_tform) ==
+                L"{\\tilde{a}^{{p_1}{p_2}}_{{p_3}{p_4}}}");
+
+        // regression: to_latex on the operator form throws if the label is
+        // missing from the registry
+        REQUIRE(to_latex(ã(1)) == L"{\\hat{\\tilde{a}}}");
+
+        // rank 0 is an assert, not a throw
+        if (sequant::assert_behavior() == sequant::AssertBehavior::Throw)
+          REQUIRE_THROWS_AS(ã(0), Exception);
+      }
 
       auto R_2 = r(2)->as<op_t>();
       //    std::wcout << "R_2: " << to_latex(simplify(R_2.tensor_form())) <<
@@ -1240,10 +1313,11 @@ SECTION("manuscript-examples") {
   /// When order > 0, returns sim. transformed perturbation operator or given
   /// order.
   auto H̅ = [](size_t order = 0) {
-    auto hbar0 = lst(op::H(), T(2), 4);
+    auto hbar0 = lst(op::H(), T(2), 4, {.use_connected_form = true});
     if (order == 0) return hbar0;
     // only one-body perturbation operator
-    auto hbar_pt = lst(op::Hʼ(/*rank*/ 1, {.order = order}), T(2), 2);
+    auto hbar_pt = lst(op::Hʼ(/*rank*/ 1, {.order = order}), T(2), 2,
+                       {.use_connected_form = true});
     return hbar_pt;
   };
 
@@ -1272,7 +1346,7 @@ SECTION("manuscript-examples") {
   SECTION("CC LR Function") {
     const int N = 2;  // CC rank
 
-    auto θ̅ = lst(θ(1), T(N), 2);
+    auto θ̅ = lst(θ(1), T(N), 2, {.use_connected_form = true});
     auto expr = (1 + Λ(N)) * θ̅ * Tʼ(N) + Λʼ(N) * θ̅;
     auto result = ref_av(expr, {.connect = {{L"θ", L"t"}, {L"θ", L"t¹"}}});
     // number of terms is verified against MPQC4 implementation
@@ -1352,14 +1426,11 @@ SECTION("manuscript-examples") {
     const auto& ann_space = get_hole_space(Spin::any);
 
     OpRegistry registry;
-    // amplitudes pinned Hermitian so the reference equations below (generated
-    // under the legacy conjugate-symmetric assumption) stay valid under the
-    // hermiticity model (see scoped_hermitian_amplitudes)
-    registry.add(L"f", OpClass::gen)
-        .add(L"g", OpClass::gen)
-        .add(L"t", OpClass::ex, Hermiticity::Hermitian)
-        .add(L"x", OpClass::ex, Hermiticity::Hermitian)
-        .add(L"y", OpClass::ex, Hermiticity::Hermitian);
+    registry.add(L"f", OpClass::Gen, Hermiticity::Hermitian)
+        .add(L"g", OpClass::Gen, Hermiticity::Hermitian)
+        .add(L"t", OpClass::Ex, Hermiticity::NonHermitian)
+        .add(L"x", OpClass::Ex, Hermiticity::NonHermitian)
+        .add(L"y", OpClass::Ex, Hermiticity::NonHermitian);
 
     // set MBPT context
     auto ctx_resetter = set_scoped_default_mbpt_context(
@@ -1376,9 +1447,9 @@ SECTION("manuscript-examples") {
     REQUIRE_THAT(
         simplify(expr),
         EquivalentTo(
-            L"1/8 f{p1;p2}:A-C-S x{a1,a2;i1,i2}:A-C-S y{a3,a4;i3}:A-C-S "
+            L"1/8 f{p1;p2}:A-C-S x{a1,a2;i1,i2}:A-N-S y{a3,a4;i3}:A-N-S "
             L"ã{p2;p1} ã{i1,i2;a1,a2} ã{i3;a3,a4} + 1/32 g{p3,p4;p1,p2}:A-C-S "
-            L"x{a1,a2;i1,i2}:A-C-S y{a3,a4;i3}:A-C-S ã{p1,p2;p3,p4} "
+            L"x{a1,a2;i1,i2}:A-N-S y{a3,a4;i3}:A-N-S ã{p1,p2;p3,p4} "
             L"ã{i1,i2;a1,a2} ã{i3;a3,a4}"));
   }
 }  // SECTION("manuscript-examples")

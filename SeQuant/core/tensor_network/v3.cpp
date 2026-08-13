@@ -791,9 +791,31 @@ TensorNetworkV3::canonicalize_slots(
             SEQUANT_ASSERT(edge_it->vertex(0).getOrigin() == Origin::Ket);
             slot_type = IndexSlotType::TensorKet;
           }
-        } else {  // if
-          SEQUANT_ASSERT(edge_it->vertex_count() == 2);
+        } else if (edge_it->vertex_count() == 2) {
+          // an internal contraction edge that is also named (e.g. a proto
+          // index on a named index) connects exactly 2 slots
           slot_type = IndexSlotType::IndexBundle;
+        } else {
+          // a high-order hyperindex: a named index shared among more than 2
+          // tensor slots (e.g. an auxiliary/batching index common to many
+          // factors, as in Laplace-transform MP2 or tensor hypercontraction).
+          // Supported only for auxiliary indices, which carry no vector-space
+          // (bra/ket) character; classify by the aux slot it occupies. A
+          // non-auxiliary high-order hyperindex has no well-defined slot type,
+          // so hard-error (in every build config, not just assertion-enabled
+          // ones) rather than silently mis-canonicalize it.
+          bool all_aux = true;
+          for (std::size_t v = 0; v != edge_it->vertex_count(); ++v)
+            if (edge_it->vertex(v).getOrigin() != Origin::Aux) {
+              all_aux = false;
+              break;
+            }
+          if (!all_aux)
+            throw Exception(
+                "TensorNetworkV3::canonicalize_slots: high-order (shared among "
+                ">2 tensor slots) non-auxiliary hyperindices are not "
+                "supported");
+          slot_type = IndexSlotType::TensorAux;
         }
       } else
         slot_type = IndexSlotType::IndexBundle;

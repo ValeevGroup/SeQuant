@@ -1,0 +1,36 @@
+# SeQuant cost analysis
+
+Sizes in MB (16 bytes/element).
+
+## R1
+
+Terms: 1; distinct intermediates: 1; reused: 0; largest: 2.3193 MB; peak storage: 7.0801 MB.
+
+Total operations (symbolic): 2*i^2a^2Κ + 2*iaΚ^2
+
+### Largest intermediates
+
+| Rank | Result | Spaces | Memory (MB) | Uses | Construction | Local ops |
+|---|---|---|---|---|---|---|
+| 1 | I(i_1,a_1,Κ_2) | OVX | 2.3193 | 1 | (B(a_1,i_1,Κ_1) * c(Κ_1,Κ_2)) | 2*iaΚ^2 |
+
+### Most expensive contractions
+
+| Rank | Result | Spaces | Uses | Construction | Operations |
+|---|---|---|---|---|---|
+| 1 | I(i_1,a_1,Κ_2) | OVX | 1 | (B(a_1,i_1,Κ_1) * c(Κ_1,Κ_2)) | 2*iaΚ^2 |
+
+### Shape census
+
+| Shape | Size (MB) | # Distinct | Total uses |
+|---|---|---|---|
+| OVX | 2.3193 | 1 | 1 |
+
+## Cache (gated, volatile leaf = "R", min_repeats = 2)
+
+| Metric | Value |
+|---|---|
+| Cached | 0 |
+| Persistent | 0 |
+| Persistent footprint (MB) | 0.0000 |
+| Total cached footprint (MB) | 0.0000 |
