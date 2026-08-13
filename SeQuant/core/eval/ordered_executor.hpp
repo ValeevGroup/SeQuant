@@ -365,6 +365,31 @@ void run_ordered_contracted_block(
   auto const batches =
       carrier_full->mode_batches(lf->second, target(block.axis));
 
+  // Loop-structure trace. The ordered executor previously emitted NO
+  // batch-execution marker (unlike scope_executor.hpp's whole-scope BatchGroup
+  // and eval.hpp's forest SCHEDULE_RUN_GROUP), so whether batching engaged was
+  // invisible. log::printing()-gated first-class marker, plus a structured
+  // SEQUANT_SCHED_DUMP line for scriptable confirmation that this path realizes
+  // batch blocks (block axis + batch count).
+  if (log::printing()) {
+    BatchContext s = ectx;
+    s.push_back({block.axis, {0, 0}});
+    log::log("BatchGroup", "Begin",
+             std::format("{} members co-evaluated over {} batches of {} {}",
+                         members.size(), batches.size(),
+                         toUtf8(block.axis.full_label()), log::scope_annot(s)));
+  }
+  {
+    static bool const sched_dump = std::getenv("SEQUANT_SCHED_DUMP") != nullptr;
+    if (sched_dump)
+      std::cerr << "ORDERED_RUN_BLOCK {\"kind\":\""
+                << (block.kind == BatchModeType::External ? "external"
+                                                          : "contracted")
+                << "\",\"mode\":\"" << toUtf8(block.axis.full_label())
+                << "\",\"blocks\":" << batches.size()
+                << ",\"members\":" << members.size() << "}\n";
+  }
+
   container::vector<ResultPtr> acc(block.outputs.size());
   container::vector<ResultPtr> dest(block.outputs.size());
 
