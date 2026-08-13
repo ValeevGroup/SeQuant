@@ -1063,7 +1063,9 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>,
 
   friend bool operator==(const NormalOperatorSequence &nopseq1,
                          const NormalOperatorSequence &nopseq2) {
-    return static_cast<base_type>(nopseq1) == static_cast<base_type>(nopseq2);
+    return nopseq1.vacuum() == nopseq2.vacuum() &&
+           static_cast<const base_type &>(nopseq1) ==
+               static_cast<const base_type &>(nopseq2);
   }
 
  private:
@@ -1089,15 +1091,7 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>,
 
   bool static_equal(const Expr &that) const override {
     const auto &that_cast = static_cast<const NormalOperatorSequence &>(that);
-    if (this->vacuum() == that_cast.vacuum()) {
-      if (this->empty()) return true;
-      if (this->hash_value() == that.hash_value())
-        return static_cast<const base_type &>(*this) ==
-               static_cast<const base_type &>(*this);
-      else
-        return false;
-    } else
-      return false;
+    return *this == that_cast;
   }
 };
 
