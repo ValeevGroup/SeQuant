@@ -39,6 +39,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -247,6 +248,37 @@ struct KramersBlock {
   std::uint64_t canonical;
   container::svector<KramersBlockMember> members;  //!< includes the canonical
 };
+
+/// @brief On-the-fly variant of kramers_external_blocks: compute the
+/// reconstruction transform block(cfg) = sign*[conj]*perm(block(canon))
+/// directly from the bit representations, with no orbit table generation.
+/// @details Rank-general. The permutation is built by order-preserving bit
+/// matching within each slot group (parity-tracked for the sign), so no
+/// generator-word composition is involved — the rank>=3 composition-order
+/// subtleties cannot arise by construction. The conj branch matches against
+/// the complement, with the global time-reversal sign (-1)^(#down of the
+/// pre-image). When both branches exist (self-conjugate orbits) the direct
+/// (conj-free) transform is returned; reconstruction through either is exact
+/// only when the stored representative respects its 𝒯 self-symmetry (enforce
+/// the stabilizer projection on such blocks).
+/// @param n number of slots (bits), <= 62
+/// @param groups the slot partition (e.g. {{0..r-1},{r..2r-1}} for a rank-r
+///        residual); permutations act within groups only, each transposition
+///        contributing sign -1 (antisymmetric groups)
+/// @param use_T include the global time-reversal (complement/conj) branch
+/// @param canon the representative configuration
+/// @param cfg the configuration to reconstruct
+/// @return the transform, or nullopt if cfg is not in canon's orbit
+std::optional<KramersBlockMember> kramers_transform(
+    std::size_t n,
+    const container::svector<container::svector<std::size_t>>& groups,
+    bool use_T, std::uint64_t canon, std::uint64_t cfg);
+
+/// @brief The slot partition for a rank-@p rank CC residual: virtual externals
+/// [0,rank) and occupied externals [rank,2*rank) — the group input of
+/// kramers_transform, consistent with kramers_external_generators.
+container::svector<container::svector<std::size_t>> kramers_external_groups(
+    std::size_t rank);
 
 // clang-format off
 /// @brief External Kramers blocks with per-member reconstruction transforms.

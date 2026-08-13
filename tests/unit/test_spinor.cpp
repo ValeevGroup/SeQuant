@@ -2,7 +2,12 @@
 // Kramers tracer (spinor.{hpp,cpp}) unit tests.
 //
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <complex>
+#include <numeric>
+#include <random>
+
 #include "catch2_sequant.hpp"
 
 #include <SeQuant/core/attr.hpp>
@@ -380,5 +385,197 @@ TEST_CASE("kramers_trace", "[spinor]") {
       }
     }
     REQUIRE(total == 16);
+  }
+}
+
+TEST_CASE("kramers_transform_bit_engine", "[orbit-transform]") {
+  // Semantic validation of the on-the-fly bit-representation transform
+  // (kramers_transform) against (a) the table generator
+  // (kramers_external_blocks) and (b) flavor blocks extracted directly from a
+  // synthetic spinor tensor that is antisymmetric within the virtual and
+  // occupied external groups and exactly T-symmetric. Rank-general: r = 1..3.
+  using namespace sequant;
+  using namespace sequant::mbpt;
+  constexpr std::size_t d = 2;       // orbitals per Kramers flavor
+  constexpr std::size_t sd = 2 * d;  // spinor slot dimension
+  using C = std::complex<double>;
+
+  for (std::size_t r : {std::size_t{1}, std::size_t{2}, std::size_t{3}}) {
+    INFO("rank r = " << r);
+    const std::size_t n = 2 * r;
+    std::size_t vol = 1;
+    for (std::size_t k = 0; k < n; ++k) vol *= sd;
+
+    std::mt19937 rng(42 + static_cast<int>(r));
+    std::uniform_real_distribution<double> u(-1, 1);
+    std::vector<C> T0(vol);
+    for (auto& x : T0) x = C{u(rng), u(rng)};
+
+    auto components = [&](std::size_t flat) {
+      std::vector<std::size_t> idx(n);
+      for (std::size_t k = 0; k < n; ++k) {
+        idx[k] = flat % sd;
+        flat /= sd;
+      }
+      return idx;
+    };
+    auto flat_of = [&](const std::vector<std::size_t>& idx) {
+      std::size_t f = 0;
+      for (std::size_t k = n; k-- > 0;) f = f * sd + idx[k];
+      return f;
+    };
+
+    // signed permutations of m elements
+    auto perms_of = [](std::size_t m) {
+      std::vector<std::pair<std::vector<std::size_t>, int>> out;
+      std::vector<std::size_t> p(m);
+      std::iota(p.begin(), p.end(), std::size_t{0});
+      do {
+        int inv = 0;
+        for (std::size_t a = 0; a < m; ++a)
+          for (std::size_t b = a + 1; b < m; ++b)
+            if (p[a] > p[b]) ++inv;
+        out.emplace_back(p, (inv % 2) ? -1 : +1);
+      } while (std::next_permutation(p.begin(), p.end()));
+      return out;
+    };
+    const auto P = perms_of(r);
+
+    // antisymmetrize within the vir group [0,r) and the occ group [r,2r)
+    std::vector<C> A(vol, C{0, 0});
+    for (std::size_t f = 0; f < vol; ++f) {
+      const auto idx = components(f);
+      for (const auto& [p1, s1] : P)
+        for (const auto& [p2, s2] : P) {
+          std::vector<std::size_t> jdx(n);
+          for (std::size_t k = 0; k < r; ++k) jdx[k] = idx[p1[k]];
+          for (std::size_t k = 0; k < r; ++k) jdx[r + k] = idx[r + p2[k]];
+          A[f] += static_cast<double>(s1 * s2) * T0[flat_of(jdx)];
+        }
+    }
+
+    // T-projection: (Theta A)[..up_o..] = -conj(A[..down_o..]),
+    //               (Theta A)[..down_o..] = +conj(A[..up_o..]); n is even so
+    // Theta^2 = +1 and (A + Theta A)/2 is the T-even projection.
+    auto theta = [&](const std::vector<C>& X) {
+      std::vector<C> Y(vol);
+      for (std::size_t f = 0; f < vol; ++f) {
+        auto idx = components(f);
+        int sgn = 1;
+        for (std::size_t k = 0; k < n; ++k) {
+          if (idx[k] < d) {
+            idx[k] += d;
+            sgn = -sgn;
+          } else {
+            idx[k] -= d;
+          }
+        }
+        Y[f] = static_cast<double>(sgn) * std::conj(X[flat_of(idx)]);
+      }
+      return Y;
+    };
+    {
+      const auto At = theta(A);
+      for (std::size_t f = 0; f < vol; ++f) A[f] = 0.5 * (A[f] + At[f]);
+      // idempotence sanity
+      const auto At2 = theta(A);
+      double dmax = 0, amax = 0;
+      for (std::size_t f = 0; f < vol; ++f) {
+        dmax = std::max(dmax, std::abs(A[f] - At2[f]));
+        amax = std::max(amax, std::abs(A[f]));
+      }
+      REQUIRE(amax > 1e-8);
+      REQUIRE(dmax < 1e-12 * std::max(1.0, amax));
+    }
+
+    // flavor-block extraction: component o_k in [0,d), spinor = o_k + d*bit_k
+    const std::size_t bvol = std::size_t(1) << n;  // d=2: d^n = 2^n
+    std::size_t bvol_full = 1;
+    for (std::size_t k = 0; k < n; ++k) bvol_full *= d;
+    REQUIRE(bvol == bvol_full);
+    auto block_of = [&](std::uint64_t cfg) {
+      std::vector<C> B(bvol_full);
+      for (std::size_t fb = 0; fb < bvol_full; ++fb) {
+        std::size_t rem = fb;
+        std::vector<std::size_t> idx(n);
+        for (std::size_t k = 0; k < n; ++k) {
+          const std::size_t o = rem % d;
+          rem /= d;
+          idx[k] = o + d * ((cfg >> k) & 1u);
+        }
+        B[fb] = A[flat_of(idx)];
+      }
+      return B;
+    };
+    auto bcomponents = [&](std::size_t fb) {
+      std::vector<std::size_t> idx(n);
+      for (std::size_t k = 0; k < n; ++k) {
+        idx[k] = fb % d;
+        fb /= d;
+      }
+      return idx;
+    };
+    auto bflat = [&](const std::vector<std::size_t>& idx) {
+      std::size_t f = 0;
+      for (std::size_t k = n; k-- > 0;) f = f * d + idx[k];
+      return f;
+    };
+    // out[idx] = sign*[conj]*in[jdx], jdx[p] = idx[perm[p]] (the einsum
+    // convention `blk(std) = rep(perm-labels)`)
+    auto apply = [&](const std::vector<C>& in, int sign, bool cnj,
+                     const container::svector<std::size_t>& perm) {
+      std::vector<C> out(bvol_full);
+      for (std::size_t fb = 0; fb < bvol_full; ++fb) {
+        const auto idx = bcomponents(fb);
+        std::vector<std::size_t> jdx(n);
+        for (std::size_t p = 0; p < n; ++p) jdx[p] = idx[perm[p]];
+        C v = in[bflat(jdx)];
+        if (cnj) v = std::conj(v);
+        out[fb] = static_cast<double>(sign) * v;
+      }
+      return out;
+    };
+    auto close = [&](const std::vector<C>& X, const std::vector<C>& Y) {
+      double dmax = 0;
+      for (std::size_t f = 0; f < bvol_full; ++f)
+        dmax = std::max(dmax, std::abs(X[f] - Y[f]));
+      return dmax;
+    };
+
+    const auto gens = kramers_external_generators(r);
+    const auto groups = kramers_external_groups(r);
+    const auto blocks = kramers_external_blocks(n, gens, /*use_T=*/true);
+    for (const auto& blk : blocks) {
+      const auto Bc = block_of(blk.canonical);
+      for (const auto& m : blk.members) {
+        INFO("canonical=" << blk.canonical << " config=" << m.config);
+        const auto Bd = block_of(m.config);
+        // (a) the table transform must reproduce the directly extracted block
+        const auto Bt = apply(Bc, m.sign, m.conj, m.perm);
+        CHECK(close(Bt, Bd) < 1e-12);
+        // (b) the on-the-fly transform must too
+        const auto t2 = kramers_transform(n, groups, /*use_T=*/true,
+                                          blk.canonical, m.config);
+        REQUIRE(t2.has_value());
+        const auto B2 = apply(Bc, t2->sign, t2->conj, t2->perm);
+        {
+          std::ostringstream oss;
+          oss << "table: sign=" << m.sign << " conj=" << m.conj << " perm=[";
+          for (auto q : m.perm) oss << q << " ";
+          oss << "]  mine: sign=" << t2->sign << " conj=" << t2->conj
+              << " perm=[";
+          for (auto q : t2->perm) oss << q << " ";
+          oss << "]";
+          INFO(oss.str());
+          CHECK(close(B2, Bd) < 1e-12);
+        }
+      }
+    }
+    // (c) configs in different orbits are rejected
+    if (blocks.size() >= 2) {
+      const auto miss = kramers_transform(
+          n, groups, /*use_T=*/true, blocks[0].canonical, blocks[1].canonical);
+      CHECK(!miss.has_value());
+    }
   }
 }

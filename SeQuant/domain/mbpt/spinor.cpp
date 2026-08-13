@@ -245,6 +245,72 @@ container::svector<KramersBlock> kramers_external_blocks(
   return blocks;
 }
 
+container::svector<container::svector<std::size_t>> kramers_external_groups(
+    std::size_t rank) {
+  container::svector<container::svector<std::size_t>> groups(2);
+  for (std::size_t s = 0; s < rank; ++s) groups[0].push_back(s);
+  for (std::size_t s = rank; s < 2 * rank; ++s) groups[1].push_back(s);
+  return groups;
+}
+
+std::optional<KramersBlockMember> kramers_transform(
+    std::size_t n,
+    const container::svector<container::svector<std::size_t>>& groups,
+    bool use_T, std::uint64_t canon, std::uint64_t cfg) {
+  SEQUANT_ASSERT(n <= 62);
+  const std::uint64_t full_mask = (std::uint64_t{1} << n) - 1;
+  container::svector<bool> in_group(n, false);
+  for (auto const& g : groups)
+    for (auto s : g) in_group[s] = true;
+
+  // Order-preserving within-group matching with dst_bit[q] = src_bit[perm[q]]
+  // (the KramersBlockMember convention: output slot q reads input slot
+  // perm[q]); sign = product of the per-group permutation parities. nullopt
+  // when a group's bit multiset differs or an ungrouped slot mismatches.
+  auto match = [&](std::uint64_t src, std::uint64_t dst)
+      -> std::optional<std::pair<int, container::svector<std::size_t>>> {
+    for (std::size_t q = 0; q < n; ++q)
+      if (!in_group[q] && (((src >> q) ^ (dst >> q)) & 1u)) return std::nullopt;
+    container::svector<std::size_t> perm(n);
+    std::iota(perm.begin(), perm.end(), std::size_t{0});
+    int sign = +1;
+    for (auto const& g : groups) {
+      container::svector<std::size_t> src1, src0, dst1, dst0;
+      for (auto s : g) (((src >> s) & 1u) ? src1 : src0).push_back(s);
+      for (auto s : g) (((dst >> s) & 1u) ? dst1 : dst0).push_back(s);
+      if (src1.size() != dst1.size()) return std::nullopt;
+      // forward slot map (the KramersBlockMember convention validated by the
+      // [orbit-transform] value test): input slot p feeds output slot perm[p]
+      for (std::size_t k = 0; k < dst1.size(); ++k) perm[src1[k]] = dst1[k];
+      for (std::size_t k = 0; k < dst0.size(); ++k) perm[src0[k]] = dst0[k];
+      // parity of perm restricted to g
+      container::svector<std::size_t> pos(n, 0);
+      for (std::size_t k = 0; k < g.size(); ++k) pos[g[k]] = k;
+      container::svector<std::size_t> seq;
+      for (auto s : g) seq.push_back(pos[perm[s]]);
+      for (std::size_t a = 0; a < seq.size(); ++a)
+        for (std::size_t b = a + 1; b < seq.size(); ++b)
+          if (seq[a] > seq[b]) sign = -sign;
+    }
+    return std::make_pair(sign, std::move(perm));
+  };
+
+  if (auto direct = match(canon, cfg))
+    return KramersBlockMember{cfg, direct->first, false,
+                              std::move(direct->second)};
+  if (use_T) {
+    // cfg = T(pre): block(cfg) = (-1)^(#down of pre) * conj(block(pre)); the
+    // canon -> pre permutation carries through unchanged (T is slot-identity).
+    const std::uint64_t pre = (~cfg) & full_mask;
+    if (auto m = match(canon, pre)) {
+      const int t_sign = (std::popcount(pre) & 1) ? -1 : +1;
+      return KramersBlockMember{cfg, m->first * t_sign, true,
+                                std::move(m->second)};
+    }
+  }
+  return std::nullopt;
+}
+
 bool has_antisymmetrizer(const ExprPtr& expr) {
   return find_antisymmetrizer(expr).has_value();
 }
