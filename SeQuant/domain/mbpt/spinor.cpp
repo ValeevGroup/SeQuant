@@ -524,6 +524,25 @@ ExprPtr closed_shell_kramers_trace(
   canonicalize(traced_input);
   rapid_simplify(traced_input);
 
+  // A SUM must be traced per summand: the configuration enumeration below
+  // runs over the indices of the traced expression, so a summand that does
+  // not use every index of the sum (a mixed-rank sum, e.g. the CCSD energy's
+  // 2-slot f.t1 next to the 4-slot g.t2) would be replicated once per
+  // configuration of the indices it does NOT carry -- 2^(n_missing) phantom
+  // duplicates (measured: the CCSD energy's f.t1 config terms appeared 4x).
+  // Tracing each summand over its own index set has no phantom bits; for
+  // uniform-rank sums (MP2/CCD energies) the result is term-for-term
+  // equivalent to the whole-sum enumeration.
+  if (traced_input->is<Sum>()) {
+    auto out = std::make_shared<Sum>();
+    for (const auto& summand : traced_input->as<Sum>().summands())
+      out->append(closed_shell_kramers_trace(summand, ext_index_groups, fold_T,
+                                             /*expand_g=*/false));
+    ExprPtr result{out};
+    flatten(result);
+    return result;
+  }
+
   // Steps 1-2: classify indices and build groups (each internal index its own
   // group; external groups appended verbatim). No Ms / rank assumptions.
   const auto all_indices =
