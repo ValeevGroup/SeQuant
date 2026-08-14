@@ -794,3 +794,103 @@ TEST_CASE("csv_equivalent_tn_merge", "[algorithms][csv-canon]") {
     CHECK(A == B);
   }
 }
+
+TEST_CASE("csv_proto_dummy_fold", "[algorithms][csv-canon][!shouldfail]") {
+  // Reproducer for the CSV/PNS term-count inflation (MPQC Kramers-traced
+  // energy): two terms identical under the dummy exchange i_1 <-> i_2 -- the
+  // symmetric proto bundle <i_1,i_2> maps onto itself, the g/t occupied legs
+  // map onto each other -- MUST canonicalize identically so like-term merging
+  // can fold them. Today they do NOT: in term A the bundle member i_1 occurs
+  // only as decoration and is promoted to a named (non-renameable) index by
+  // TensorNetworkV3::init_edges (pure-proto promotion), in term B it is i_2
+  // that gets pinned, so the canonical forms retain different labels.
+  // [!shouldfail] documents the current defect; drop the tag once bundle
+  // members rename with their legs.
+  using namespace sequant;
+  auto sr_reg = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr_reg);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  // the traced-energy pair (spin decorations dropped: the third occupied
+  // dummy i_3 plays the role of i(down)_1)
+  const std::wstring sA =
+      L"g{a_1<i_1,i_2>,a_2<i_1,i_2>;i_2,i_3}:N-C-S"
+      L" * t{i_2,i_3;a_1<i_1,i_2>,a_2<i_1,i_2>}:N-C-S";
+  const std::wstring sB =
+      L"g{a_1<i_1,i_2>,a_2<i_1,i_2>;i_1,i_3}:N-C-S"
+      L" * t{i_1,i_3;a_1<i_1,i_2>,a_2<i_1,i_2>}:N-C-S";
+
+  auto canon_str = [](std::wstring s) {
+    auto e = deserialize(s);
+    REQUIRE(e);
+    canonicalize(e, CanonicalizeOptions::default_options().copy_and_set(
+                        CanonicalizeOptions::IgnoreNamedIndexLabel::No));
+    return toUtf8(to_latex(e));
+  };
+
+  SECTION("canonical forms equal") {
+    auto A = canon_str(sA), B = canon_str(sB);
+    INFO("canon(A) = " << A);
+    INFO("canon(B) = " << B);
+    CHECK(A == B);
+  }
+  SECTION("transform_sum_expr folds the pair") {
+    auto exA = deserialize(sA), exB = deserialize(sB);
+    REQUIRE(exA);
+    REQUIRE(exB);
+    std::vector<ExprPtr> summands{exA, exB};
+    auto merged = transform_sum_expr(
+        summands, [](ExprPtr const& x) { return x->clone(); });
+    INFO("merged = " << toUtf8(to_latex(merged)));
+    REQUIRE(merged->is<Product>());
+    CHECK(merged->as<Product>().scalar() == rational{2});
+  }
+}
+
+TEST_CASE("csv_proto_dummy_fold_normalized", "[algorithms][csv-canon]") {
+  // The same pair as csv_proto_dummy_fold but with NORMALIZED proto bundles
+  // (each bundle = the tensor's own occupied legs, the reset_csv_protos
+  // invariant): no bundle member is decoration-only, so nothing is pinned by
+  // the pure-proto promotion, and folding must work with the machinery as is.
+  using namespace sequant;
+  auto sr_reg = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr_reg);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  const std::wstring sA =
+      L"g{a_1<i_2,i_3>,a_2<i_2,i_3>;i_2,i_3}:N-C-S"
+      L" * t{i_2,i_3;a_1<i_2,i_3>,a_2<i_2,i_3>}:N-C-S";
+  const std::wstring sB =
+      L"g{a_1<i_1,i_3>,a_2<i_1,i_3>;i_1,i_3}:N-C-S"
+      L" * t{i_1,i_3;a_1<i_1,i_3>,a_2<i_1,i_3>}:N-C-S";
+
+  auto canon_str = [](std::wstring s) {
+    auto e = deserialize(s);
+    REQUIRE(e);
+    canonicalize(e, CanonicalizeOptions::default_options().copy_and_set(
+                        CanonicalizeOptions::IgnoreNamedIndexLabel::No));
+    return toUtf8(to_latex(e));
+  };
+
+  SECTION("canonical forms equal") {
+    auto A = canon_str(sA), B = canon_str(sB);
+    INFO("canon(A) = " << A);
+    INFO("canon(B) = " << B);
+    CHECK(A == B);
+  }
+  SECTION("transform_sum_expr folds the pair") {
+    auto exA = deserialize(sA), exB = deserialize(sB);
+    REQUIRE(exA);
+    REQUIRE(exB);
+    std::vector<ExprPtr> summands{exA, exB};
+    auto merged = transform_sum_expr(
+        summands, [](ExprPtr const& x) { return x->clone(); });
+    INFO("merged = " << toUtf8(to_latex(merged)));
+    REQUIRE(merged->is<Product>());
+    CHECK(merged->as<Product>().scalar() == rational{2});
+  }
+}
