@@ -16,6 +16,7 @@
 #include <iostream>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace sequant {
 
@@ -103,6 +104,54 @@ ExprPtr canonicalize(ExprPtr&& expr_rv, CanonicalizeOptions opts) {
     expr_rv = byproduct * expr_rv;
   }
   return std::move(expr_rv);
+}
+
+ExprPtr fold_conjugate_pairs_of_real_sum(ExprPtr const& expr,
+                                         CanonicalizeOptions opts) {
+  if (!expr || !expr->is<Sum>()) return expr;
+  // cross-summand identity requires meaningful named (external) labels,
+  // same reasoning as Sum::canonicalize_impl
+  opts = opts.copy_and_set(CanonicalizeOptions::IgnoreNamedIndexLabel::No);
+
+  auto const& summands = expr->as<Sum>().summands();
+  const std::size_t n = summands.size();
+  std::vector<ExprPtr> canon(n), canon_adj(n);
+  for (std::size_t i = 0; i != n; ++i) {
+    canon[i] = canonicalize(summands[i]->clone(), opts);
+    auto adj = summands[i]->clone();
+    adj->adjoint();
+    canon_adj[i] = canonicalize(std::move(adj), opts);
+  }
+
+  // greedy first-match pairing: i keeps its ORIGINAL form with a doubled
+  // scalar, its adjoint partner j is dropped. Self-adjoint summands
+  // (canon == canon_adj) are manifestly real and stay untouched. Pairs are
+  // verified structurally, not by hash alone.
+  std::vector<bool> dropped(n, false), doubled(n, false);
+  for (std::size_t i = 0; i != n; ++i) {
+    if (dropped[i] || doubled[i]) continue;
+    if (canon[i]->hash_value() == canon_adj[i]->hash_value() &&
+        *canon[i] == *canon_adj[i])
+      continue;  // self-adjoint
+    for (std::size_t j = i + 1; j != n; ++j) {
+      if (dropped[j] || doubled[j]) continue;
+      if (canon[j]->hash_value() == canon_adj[i]->hash_value() &&
+          *canon[j] == *canon_adj[i]) {
+        doubled[i] = true;
+        dropped[j] = true;
+        break;
+      }
+    }
+  }
+
+  auto result = std::make_shared<Sum>();
+  for (std::size_t i = 0; i != n; ++i) {
+    if (dropped[i]) continue;
+    result->append(doubled[i] ? ex<Constant>(2) * summands[i]->clone()
+                              : summands[i]->clone());
+  }
+  if (result->summands().size() == 1) return result->summands().front();
+  return result;
 }
 
 ResultExpr& canonicalize(ResultExpr& expr, CanonicalizeOptions opts) {

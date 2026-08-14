@@ -726,3 +726,53 @@ TEST_CASE("tot_conjugate_braket_fold", "[exploit_conjugate]") {
   auto B0 = evx_noconj(L"C{μ̃_1;a_1<i_1,i_2>}:N-C-S");
   CHECK(A0.canon_conj() == B0.canon_conj());
 }
+
+TEST_CASE("fold_conjugate_pairs_of_real_sum", "[exploit_conjugate]") {
+  // Symbolic-layer counterpart of the eval-layer exploit_conjugate channel:
+  // in a sum whose VALUE the caller asserts to be real, a summand and its
+  // adjoint contribute Re(s + s*) = Re(2 s), so the pair folds into a single
+  // summand with a doubled scalar. Adjointness is detected via canonical
+  // forms, so it is robust to dummy-index renaming and factor reordering.
+  using namespace sequant;
+  auto sr_reg = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr_reg);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  // a fully-contracted (energy-like) summand of BraKetSymmetry::Conjugate
+  // tensors, and its adjoint written independently: real scalar kept,
+  // factor order reversed, bra<->ket swapped, dummies renamed
+  auto term = deserialize(L"1/2 h{i_1;a_1}:N-C-S t{a_1;i_1}:N-C-S");
+  auto term_adj = deserialize(L"1/2 t{i_2;a_2}:N-C-S h{a_2;i_2}:N-C-S");
+  // a manifestly real (self-adjoint) summand: BraKetSymmetry::Symm tensors
+  auto self_adj = deserialize(L"1/4 f{i_1;a_1}:N-S-S u{a_1;i_1}:N-S-S");
+
+  {  // a conjugate pair folds onto its first member with a doubled scalar
+    auto sum = term->clone() + term_adj->clone();
+    auto folded = fold_conjugate_pairs_of_real_sum(sum);
+    auto expected = ex<Constant>(2) * term->clone();
+    simplify(folded);
+    simplify(expected);
+    REQUIRE(folded == expected);
+  }
+
+  {  // unpaired and self-adjoint summands stay untouched (in particular the
+     // self-adjoint one must NOT be doubled)
+    auto sum = self_adj->clone() + term->clone();
+    auto folded = fold_conjugate_pairs_of_real_sum(sum);
+    auto expected = self_adj->clone() + term->clone();
+    simplify(folded);
+    simplify(expected);
+    REQUIRE(folded == expected);
+  }
+
+  {  // mixed sum: the pair folds, the self-adjoint bystander survives
+    auto sum = term->clone() + self_adj->clone() + term_adj->clone();
+    auto folded = fold_conjugate_pairs_of_real_sum(sum);
+    auto expected = ex<Constant>(2) * term->clone() + self_adj->clone();
+    simplify(folded);
+    simplify(expected);
+    REQUIRE(folded == expected);
+  }
+}
