@@ -649,7 +649,8 @@ TensorNetworkV3::canonicalize_slots(
     const container::vector<std::wstring> &cardinal_tensor_labels,
     const NamedIndexSet *named_indices_ptr,
     TensorNetworkV3::SlotCanonicalizationMetadata::named_index_compare_t
-        named_index_compare) {
+        named_index_compare,
+    bool exploit_conjugate) {
   if (!named_index_compare)
     named_index_compare = [](const auto &idxptr_slottype_1,
                              const auto &idxptr_slottype_2) -> bool {
@@ -699,7 +700,8 @@ TensorNetworkV3::canonicalize_slots(
                       Logger::instance().canonicalize_dot,
        .make_texlabels = Logger::instance().canonicalize_input_graph ||
                          Logger::instance().canonicalize_dot,
-       .make_idx_to_vertex = true});
+       .make_idx_to_vertex = true,
+       .exploit_conjugate = exploit_conjugate});
   const auto &idx_to_vertex = graph.idx_to_vertex;
 
   if (Logger::instance().canonicalize_input_graph) {
@@ -889,6 +891,49 @@ TensorNetworkV3::canonicalize_slots(
     }
   }
 
+  // Conjugation byproduct. With exploit_conjugate the bra/ket bundles of a
+  // Conjugate tensor were colored identically (create_graph above), so bliss
+  // may have canonicalized it in the bra<->ket-swapped orientation. Since
+  // T{bra;ket} = conj(T{ket;bra}) for a Conjugate tensor, that swap contributes
+  // a complex conjugation. Detect it by comparing the canonical positions of
+  // each Conjugate tensor's bra- and ket-bundle vertices -- exactly the
+  // comparison canonicalize() uses for its explicit swap
+  // (canonical_bra_ket_bundle_order, v3.cpp above). N.B. metadata.conj is a
+  // single network-level bit: rigorous for one Conjugate tensor (the
+  // proto-indexed-leaf case that eval-node identities canonicalize), the
+  // per-leaf conjugation of a multi-Conjugate-tensor network is future work.
+  if (exploit_conjugate) {
+    // canonical position of each Conjugate tensor's {bra,ket} bundle vertex;
+    // vertices are visited tensor-major (TensorCore precedes that tensor's
+    // bundle vertices, before the next TensorCore), mirroring the walk used to
+    // build canonical_bra_ket_bundle_order.
+    container::map<std::size_t, std::array<std::optional<std::size_t>, 2>>
+        bundle_pos;
+    std::size_t tensor_count = 0;
+    for (std::size_t v = 0; v < graph.vertex_types.size(); ++v) {
+      const auto vt = graph.vertex_types[v];
+      if (vt == VertexType::TensorCore) {
+        ++tensor_count;
+      } else if (vt == VertexType::TensorBraBundle ||
+                 vt == VertexType::TensorKetBundle) {
+        SEQUANT_ASSERT(tensor_count > 0);
+        const std::size_t tensor_ord = tensor_count - 1;
+        if (braket_symmetry(*tensors_[tensor_ord]) ==
+            BraKetSymmetry::Conjugate) {
+          const bool bra = vt == VertexType::TensorBraBundle;
+          bundle_pos[tensor_ord][bra ? 0 : 1] = canonize_perm[v];
+        }
+      }
+    }
+    bool conj = false;
+    for (const auto &[tensor_ord, bk] : bundle_pos) {
+      // bra bundle canonically after ket bundle => canonical form is the
+      // bra<->ket-swapped (conjugated) orientation of the input.
+      if (bk[0] && bk[1] && *bk[0] > *bk[1]) conj = !conj;
+    }
+    metadata.conj = conj;
+  }
+
   return metadata;
 }
 
@@ -1019,7 +1064,13 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     // 2-index columns
     const std::size_t num_paired_cols =
         std::max(bra_rank(tensor), ket_rank(tensor));
-    const bool is_braket_symm = braket_symmetry(tensor) == BraKetSymmetry::Symm;
+    // Symm bra/ket always fold; Conjugate bra/ket fold only when the caller
+    // opts in (exploit_conjugate) -- the fold then carries a conjugation, which
+    // canonicalize_slots records as SlotCanonicalizationMetadata::conj.
+    const bool is_braket_symm =
+        braket_symmetry(tensor) == BraKetSymmetry::Symm ||
+        (options.exploit_conjugate &&
+         braket_symmetry(tensor) == BraKetSymmetry::Conjugate);
 
     // vertices for braket bundles:
     // - antisymmetric/symmetric tensors only need 1 bundle for {bra,ket}
@@ -1091,8 +1142,8 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
         graph.vertex_types.emplace_back(bra ? VertexType::TensorBraBundle
                                             : VertexType::TensorKetBundle);
         tensor_network::VertexColor color;
-        if (is_braket_symm) {  // if have bra<->ket symmetry (not conj!),
-                               // use same color for bra and ket
+        if (is_braket_symm) {  // bra<->ket foldable (Symm, or Conjugate when
+                               // exploit_conjugate): same color for bra and ket
           color = colorizer(BraGroup{size});
         } else {
           color = bra ? colorizer(BraGroup{size}) : colorizer(KetGroup{size});
