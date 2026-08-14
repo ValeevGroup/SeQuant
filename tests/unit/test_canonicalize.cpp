@@ -894,3 +894,40 @@ TEST_CASE("csv_proto_dummy_fold_normalized", "[algorithms][csv-canon]") {
     CHECK(merged->as<Product>().scalar() == rational{2});
   }
 }
+
+TEST_CASE("tot_conjugate_braket_fold", "[algorithms][csv-canon]") {
+  // ToT analog of the flat fold_conjugate_braket channel: the two bra<->ket
+  // orientations of a proto-indexed (ToT) Conjugate leaf must land on ONE
+  // cache slot (equal EvalExpr hash), with the swapped orientation flagged
+  // for EvalOp::Adjoint service (canon_conj differs). The ToT TA Result
+  // backend already implements adjoint() (conj recurses into nested tiles).
+  using namespace sequant;
+  auto sr_reg = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_pao_spaces(sr_reg);  // μ̃
+  Context ctx = get_default_context();
+  ctx.set(sr_reg);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  auto evx = [](std::wstring s) {
+    auto e = deserialize(s);
+    REQUIRE(e);
+    return EvalExpr(e->as<Tensor>(), /*exploit_conjugate=*/true);
+  };
+
+  auto A = evx(L"C{a_1<i_1,i_2>;μ̃_1}:N-C-S");
+  auto B = evx(L"C{μ̃_1;a_1<i_1,i_2>}:N-C-S");
+  CHECK(A.hash_value() == B.hash_value());
+  CHECK(A.canon_conj() != B.canon_conj());
+
+  // without the opt-in the orientations stay distinct (no silent behavior
+  // change for exploit_conjugate == false)
+  auto evx_noconj = [](std::wstring s) {
+    auto e = deserialize(s);
+    REQUIRE(e);
+    return EvalExpr(e->as<Tensor>(), /*exploit_conjugate=*/false);
+  };
+  auto A0 = evx_noconj(L"C{a_1<i_1,i_2>;μ̃_1}:N-C-S");
+  auto B0 = evx_noconj(L"C{μ̃_1;a_1<i_1,i_2>}:N-C-S");
+  CHECK(A0.canon_conj() == B0.canon_conj());
+}
