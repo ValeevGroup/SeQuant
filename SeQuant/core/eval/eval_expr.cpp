@@ -141,9 +141,18 @@ EvalExpr::EvalExpr(Tensor const& tnsr, bool exploit_conjugate)
   if (is_tot(tnsr)) {
     ExprPtrList tlist{expr_};
     auto tn = TensorNetwork(tlist);
-    auto md =
-        tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels(),
-                              nullptr, {}, exploit_conjugate);
+    // N.B. pass default_idxptr_slottype_lesscompare{} explicitly, NOT {}: an
+    // empty named_index_compare selects canonicalize_slots' internal fallback,
+    // which orders named indices by space() ALONE, whereas the declared default
+    // (default_idxptr_slottype_lesscompare) orders by proto-index count first.
+    // The latter is what makes a proto-indexed (ToT) leaf's canon_indices
+    // put occupieds first (canonicals.hpp) -- a layout downstream
+    // coefficient-shape detectors rely on. Passing {} here silently broke
+    // that. We must pass arg 3 to reach the exploit_conjugate arg, so name
+    // it explicitly.
+    auto md = tn.canonicalize_slots(
+        TensorCanonicalizer::cardinal_tensor_labels(), nullptr,
+        default_idxptr_slottype_lesscompare{}, exploit_conjugate);
     hash_value_ = md.hash_value();
     canon_phase_ = md.phase;
     // Kept OUT of hash_value(): a Conjugate leaf and its bra<->ket-swapped
