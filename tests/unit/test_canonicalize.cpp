@@ -12,6 +12,7 @@
 #include <SeQuant/core/tensor_network/v1.hpp>
 #include <SeQuant/core/tensor_network/v2.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <SeQuant/core/bliss.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
@@ -942,5 +943,38 @@ TEST_CASE("fold_conjugate_pairs_of_real_sum", "[exploit_conjugate]") {
     simplify(folded);
     simplify(expected);
     REQUIRE(folded == expected);
+  }
+
+  {  // custom conjugate_op: a domain identity may express a summand's complex
+     // conjugate as an index RELABELING of another summand instead of the
+     // algebraic adjoint (e.g. leaves whose label-flipped blocks equal the
+     // complex conjugate). Such pairs are invisible to the default (adjoint)
+     // pairing and are recognized when the caller supplies the map.
+    auto spin_ctx = get_default_context();
+    spin_ctx.set(mbpt::make_min_sr_spaces());  // spin-annotated spaces
+    auto spin_resetter = set_scoped_default_context(spin_ctx);
+
+    auto term_up = deserialize(L"1/2 h{i↑_1;a↑_1}:N-C-S t{a↑_1;i↑_1}:N-C-S");
+    auto term_dn = deserialize(L"1/2 h{i↓_1;a↓_1}:N-C-S t{a↓_1;i↓_1}:N-C-S");
+
+    {  // default (adjoint) pairing finds nothing: the summands differ by a
+       // label flip, not by a bra<->ket swap
+      auto sum = term_up->clone() + term_dn->clone();
+      auto folded = fold_conjugate_pairs_of_real_sum(sum);
+      auto expected = term_up->clone() + term_dn->clone();
+      simplify(folded);
+      simplify(expected);
+      REQUIRE(folded == expected);
+    }
+    {  // with the label-flip map the pair folds onto the first member
+      auto sum = term_up->clone() + term_dn->clone();
+      auto folded = fold_conjugate_pairs_of_real_sum(
+          sum, CanonicalizeOptions::default_options(),
+          [](ExprPtr const& s) { return mbpt::swap_spin(s); });
+      auto expected = ex<Constant>(2) * term_up->clone();
+      simplify(folded);
+      simplify(expected);
+      REQUIRE(folded == expected);
+    }
   }
 }

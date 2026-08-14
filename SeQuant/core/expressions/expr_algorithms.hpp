@@ -13,6 +13,7 @@
 #include <range/v3/range/access.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <functional>
 #include <string>
 
 namespace sequant {
@@ -165,10 +166,18 @@ ResultExpr& canonicalize(
 /// @param[in] opts canonicalization options used to identify pairs (named
 ///            index labels are always treated as meaningful, as in
 ///            Sum::canonicalize_impl)
+/// @param[in] conjugate_op optional map from a summand to an expression the
+///            caller asserts to EQUAL the summand's complex conjugate in
+///            value. Defaults to the algebraic adjoint. Supply a custom map
+///            when a domain identity relates the conjugate to a different
+///            symbolic form than the adjoint (e.g. a symmetry of the leaf
+///            tensors expressed as an index relabeling), so conjugate pairs
+///            written in that form can be recognized.
 /// @return the folded expression
 ExprPtr fold_conjugate_pairs_of_real_sum(
     ExprPtr const& expr,
-    CanonicalizeOptions opts = CanonicalizeOptions::default_options());
+    CanonicalizeOptions opts = CanonicalizeOptions::default_options(),
+    std::function<ExprPtr(ExprPtr const&)> conjugate_op = {});
 
 /// Recursively expands products of sums
 /// @param[in,out] expr expression to be expanded

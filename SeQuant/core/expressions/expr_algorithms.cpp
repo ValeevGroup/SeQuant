@@ -106,8 +106,9 @@ ExprPtr canonicalize(ExprPtr&& expr_rv, CanonicalizeOptions opts) {
   return std::move(expr_rv);
 }
 
-ExprPtr fold_conjugate_pairs_of_real_sum(ExprPtr const& expr,
-                                         CanonicalizeOptions opts) {
+ExprPtr fold_conjugate_pairs_of_real_sum(
+    ExprPtr const& expr, CanonicalizeOptions opts,
+    std::function<ExprPtr(ExprPtr const&)> conjugate_op) {
   if (!expr || !expr->is<Sum>()) return expr;
   // cross-summand identity requires meaningful named (external) labels,
   // same reasoning as Sum::canonicalize_impl
@@ -118,8 +119,13 @@ ExprPtr fold_conjugate_pairs_of_real_sum(ExprPtr const& expr,
   std::vector<ExprPtr> canon(n), canon_adj(n);
   for (std::size_t i = 0; i != n; ++i) {
     canon[i] = canonicalize(summands[i]->clone(), opts);
-    auto adj = summands[i]->clone();
-    adj->adjoint();
+    ExprPtr adj;
+    if (conjugate_op) {
+      adj = conjugate_op(summands[i]);
+    } else {
+      adj = summands[i]->clone();
+      adj->adjoint();
+    }
     canon_adj[i] = canonicalize(std::move(adj), opts);
   }
 
