@@ -320,6 +320,25 @@ class EvalExpr {
   }
 
   ///
+  /// \brief Whether this \c Sum node's result should be accumulated in place
+  /// into its left operand rather than materialized as a fresh value. Set by
+  /// \c binarize on the accumulation-chain \c Sum nodes produced when an
+  /// N-ary \c Sum is folded into binary \c Sum nodes: for a chain
+  /// `(((t1+t2)+t3)+t4)`, every binary \c Sum's left operand is the running
+  /// accumulator (the chain seed or a prior chain \c Sum), so every chain
+  /// \c Sum is marked \c true. Never set based on the right operand.
+  /// Default \c false (OFF path, behavior-neutral).
+  ///
+  [[nodiscard]] bool accumulate_in_place() const noexcept {
+    return accumulate_in_place_;
+  }
+
+  ///
+  /// \brief Sets the in-place accumulation flag; see \c accumulate_in_place.
+  ///
+  void set_accumulate_in_place(bool v) noexcept { accumulate_in_place_ = v; }
+
+  ///
   /// \brief Emitted effective use count of this contraction node: the number of
   /// times its value is (re)referenced across the enclosing batch loops it does
   /// not carry. \c 1 (the default and the order-blind / OFF-path value) means
@@ -378,6 +397,9 @@ class EvalExpr {
 
   /// See \c batch_effective_count.
   std::size_t batch_effective_count_ = 1;
+
+  /// See \c accumulate_in_place.
+  bool accumulate_in_place_ = false;
 };
 
 struct EvalOpSetter {

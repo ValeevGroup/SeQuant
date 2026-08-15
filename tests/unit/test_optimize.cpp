@@ -2963,6 +2963,52 @@ TEST_CASE("binarize stamps per-node batch modes from optimize()",
   CHECK(aux_found);
 }
 
+// Task 1 (multiroot-single-dag-eval): binarize() must mark the
+// accumulation-chain Sum nodes produced when folding an N-ary Sum into
+// binary Sum nodes. fold_left_to_node (binary_node.hpp) always folds the
+// running accumulator in as the LEFT operand (`l` in `accumulate(rng | tail,
+// front(rng), [](l, r){ ... })`), producing a strictly left-leaning chain
+// `(((t1+t2)+t3)+t4)` for N=4 terms -- every one of the N-1 binary Sum nodes
+// therefore accumulates its left operand (the chain seed or a prior chain
+// Sum) in place.
+TEST_CASE("binarize marks accumulation Sum nodes in-place", "[binarize]") {
+  using namespace sequant;
+
+  auto sum = deserialize(L"t1{i1;a1} + t2{i1;a1} + t3{i1;a1} + t4{i1;a1}");
+  REQUIRE(sum->is<Sum>());
+  REQUIRE(sum->as<Sum>().summands().size() == 4);
+
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto node = binarize(sum);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+  std::size_t total_sum = 0, inplace = 0;
+  node.visit([&](auto const& n) {
+    if (!n->is_sum()) return;
+    ++total_sum;
+    if (n->accumulate_in_place()) ++inplace;
+  });
+  REQUIRE(total_sum == 3);        // N-1 binary sums for N=4 leaf terms
+  REQUIRE(inplace == total_sum);  // whole chain accumulates in place
+
+  // The chain is indeed left-leaning: every Sum's left child is itself a
+  // Sum, down to the innermost, whose left child is the first (private)
+  // leaf term t1 (the chain seed) -- never the right operand.
+  REQUIRE(node->is_sum());
+  REQUIRE(node.left()->is_sum());
+  REQUIRE(node.left().left()->is_sum());
+  REQUIRE_FALSE(node.left().left().left()->is_sum());  // t1: the chain seed
+
+  // A lone two-term sum (no shared operand yet) is markable too: its single
+  // Sum's left operand is the private first term t1.
+  auto sum2 = deserialize(L"t1{i1;a1} + t2{i1;a1}");
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto node2 = binarize(sum2);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(node2->is_sum());
+  REQUIRE(node2->accumulate_in_place());
+}
+
 // Task 3/4: reconstruct_batched_modes must emit BatchModeType::External entries
 // for a genuine external (external, never-contracted) mode at every node whose
 // subset carries it, gated by BOTH BatchPolicy::batch_spectator_indices AND

@@ -451,6 +451,11 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
 
   auto hvals = summands | transform([](auto&& n) { return n->hash_value(); });
 
+  // Every binary Sum produced by fold_left_to_node below folds the running
+  // accumulator (the chain seed, or a prior chain Sum) in as the LEFT
+  // operand (see fold_left_to_node in binary_node.hpp: the accumulator is
+  // always `l`), so every chain Sum node accumulates its left operand in
+  // place -- see EvalExpr::accumulate_in_place.
   auto make_sum = [i = 0,                    //
                    hs = imed_hashes(hvals),  //
                    all_tensors, &opts](EvalExpr const& left,
@@ -458,7 +463,7 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
     auto h = ranges::at(hs, ++i);
     if (all_tensors) {
       auto const& t = left.as_tensor();
-      return {
+      EvalExpr result{
           EvalOp::Sum,         //
           ResultType::Tensor,  //
           detail::make_tensor_wo_symmetries(opts, bra(t.bra()), ket(t.ket()),
@@ -467,14 +472,18 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
           1,                                                //
           h,                                                //
           nullptr};
+      result.set_accumulate_in_place(true);
+      return result;
     } else {
-      return {EvalOp::Sum,              //
-              ResultType::Scalar,       //
-              detail::make_variable(),  //
-              {},                       //
-              1,                        //
-              h,                        //
-              nullptr};
+      EvalExpr result{EvalOp::Sum,              //
+                      ResultType::Scalar,       //
+                      detail::make_variable(),  //
+                      {},                       //
+                      1,                        //
+                      h,                        //
+                      nullptr};
+      result.set_accumulate_in_place(true);
+      return result;
     }
   };
 
