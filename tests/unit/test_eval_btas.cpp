@@ -10,6 +10,7 @@
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -26,6 +27,7 @@
 #include <range/v3/view/transform.hpp>
 
 #include <complex>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -528,6 +530,148 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
     REQUIRE(norm(zero2) == Catch::Approx(0).margin(
                                100 * std::numeric_limits<double>::epsilon()));
   }
+}
+
+// Task 2 (multiroot-single-dag-eval): a Sum node marked accumulate_in_place()
+// (Task 1's binarize()-applied mark on the left-accumulator chain of a folded
+// N-ary Sum) must evaluate via Result::add_inplace() into the left operand's
+// own buffer rather than the allocating Result::sum() -- EXCEPT when its left
+// child is a leaf: a leaf's ResultPtr comes straight out of the caller's
+// leaf_evaluator (rand_tensor_yield here memoizes by label, standing in for a
+// production evaluator that reuses/caches AO integrals or amplitudes across
+// calls), so this engine cannot know whether mutating it would corrupt some
+// OTHER, unrelated read. This was found empirically: an earlier version of
+// this fix (no leaf exclusion) newly broke the pre-existing "eval_with_btas /
+// Summation" test, which reads a leaf back out of the SAME yield_ after
+// evaluating a marked Sum that used it as the chain seed -- the leaf came
+// back already mutated. So for the chain (((t1+t2)+t3)+t4), all 3 Sum nodes
+// are STILL marked (Task 1's static property, unaffected), but only the two
+// OUTER ones (whose left child is itself a Sum result, never a leaf) actually
+// evaluate in place; the innermost (t1+t2), whose left child t1 is a leaf,
+// falls back to the allocating sum() -- one bounded extra allocation for the
+// whole chain, not per term.
+//
+// Verified two ways: (1) the eval trace's per-op mode tally (a real counter,
+// via Logger::instance().eval.stream when eval.level > 0) confirms exactly
+// which 2 of the 3 marked Sum nodes actually ran the in-place path
+// (SumInplace) versus the allocating one (Sum) -- this observes the executed
+// branch directly, so it does not depend on inferring anything from pointer
+// values. Additionally, the leaf-exclusion safety fix itself is directly
+// exercised: every leaf's buffer is byte-identical before and after the
+// marked evaluation (nothing was corrupted), and the marked result's pointer
+// aliases none of the 4 leaves (no accidental leaf mutation slipped through).
+// (2) Numeric equality against an unmarked reference (the SAME chain with
+// every mark forced off, reproducing the pre-Task-2 always-allocate path).
+TEST_CASE("eval_sum_accumulate_in_place_btas", "[eval_btas]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+
+  auto norm = [](BTensorD const& tnsr) {
+    return std::sqrt(btas::dotc(tnsr, tnsr));
+  };
+
+  // Counts non-overlapping occurrences of `needle` in `haystack` -- used to
+  // tally "| Sum |" vs "| SumInplace |" trace lines. The two are
+  // distinguished unambiguously: "| SumInplace |" never matches "| Sum |"
+  // (the character right after "Sum" differs, 'I' vs ' '), so no collision.
+  auto count_substr = [](std::string const& haystack,
+                         std::string const& needle) {
+    std::size_t n = 0, pos = 0;
+    while ((pos = haystack.find(needle, pos)) != std::string::npos) {
+      ++n;
+      pos += needle.size();
+    }
+    return n;
+  };
+
+  std::srand(2024);
+  const size_t nocc = 2, nvirt = 3;
+  auto yield_ = rand_tensor_yield<BTensorD>{nocc, nvirt};
+
+  auto sum = deserialize(L"t1{i1;a1} + t2{i1;a1} + t3{i1;a1} + t4{i1;a1}");
+  REQUIRE(sum->is<Sum>());
+  auto const& summands = sum->as<Sum>().summands();
+  REQUIRE(summands.size() == 4);
+
+  // Pre-populate (and capture) every leaf's buffer BEFORE either tree is
+  // evaluated, so both evaluations below see the SAME leaf inputs and each
+  // leaf's pristine value is known ahead of time for the safety check below.
+  container::svector<ResultPtr> leaves;
+  container::svector<BTensorD> leaves_pristine;
+  for (auto const& s : summands) {
+    leaves.push_back(yield_(s->as<Tensor>()));
+    leaves_pristine.push_back(leaves.back()->get<BTensorD>());
+  }
+
+  auto marked = eval_node(sum);
+  auto unmarked = eval_node(sum);
+
+  // Sanity on the marking itself (Task 1): the whole 3-Sum chain is marked.
+  std::size_t total_sum = 0, inplace = 0;
+  marked.visit([&](auto const& n) {
+    if (!n->is_sum()) return;
+    ++total_sum;
+    if (n->accumulate_in_place()) ++inplace;
+  });
+  REQUIRE(total_sum == 3);
+  REQUIRE(inplace == 3);
+
+  // Force the SAME chain unmarked, reproducing the pre-Task-2 always-allocate
+  // sum() path, to serve as the reference. The chain is left-leaning
+  // (fold_left_to_node): unmarked = ((t1+t2)+t3)+t4, so the 3 Sum nodes are
+  // unmarked, unmarked.left(), and unmarked.left().left().
+  unmarked->set_accumulate_in_place(false);
+  unmarked.left()->set_accumulate_in_place(false);
+  unmarked.left().left()->set_accumulate_in_place(false);
+  REQUIRE_FALSE(unmarked->accumulate_in_place());
+  REQUIRE_FALSE(unmarked.left()->accumulate_in_place());
+  REQUIRE_FALSE(unmarked.left().left()->accumulate_in_place());
+
+  auto& logger = Logger::instance();
+  auto const prev_level = logger.eval.level;
+  auto* const prev_stream = logger.eval.stream;
+
+  // Evaluate the unmarked reference FIRST: sum() never mutates its operands,
+  // so this leaves every leaf's buffer untouched for the marked run below.
+  std::ostringstream trace_unmarked;
+  logger.eval.level = 1;
+  logger.eval.stream = &trace_unmarked;
+  ResultPtr const result_unmarked = evaluate<Trace::On>(unmarked, yield_);
+  logger.eval.level = prev_level;
+  logger.eval.stream = prev_stream;
+
+  REQUIRE(count_substr(trace_unmarked.str(), "| Sum |") == 3);
+  REQUIRE(count_substr(trace_unmarked.str(), "| SumInplace |") == 0);
+
+  // Now the marked run: 2 of the 3 marked Sum nodes (the two whose left
+  // child is itself a Sum result, never a leaf) accumulate in place; the
+  // innermost (t1+t2), leaf-seeded, falls back to the allocating sum().
+  std::ostringstream trace_marked;
+  logger.eval.level = 1;
+  logger.eval.stream = &trace_marked;
+  ResultPtr const result_marked = evaluate<Trace::On>(marked, yield_);
+  logger.eval.level = prev_level;
+  logger.eval.stream = prev_stream;
+
+  REQUIRE(count_substr(trace_marked.str(), "| SumInplace |") == 2);
+  REQUIRE(count_substr(trace_marked.str(), "| Sum |") == 1);
+
+  // (1a) Safety: no leaf was mutated as a side effect -- every leaf's buffer
+  // is still byte-identical to its pristine value, and the marked result
+  // does not alias any of them.
+  for (std::size_t i = 0; i < leaves.size(); ++i) {
+    BTensorD const diff = leaves[i]->get<BTensorD>() - leaves_pristine[i];
+    REQUIRE(norm(diff) == Catch::Approx(0).margin(
+                              100 * std::numeric_limits<double>::epsilon()));
+    REQUIRE(result_marked.get() != leaves[i].get());
+  }
+  REQUIRE(result_marked.get() != result_unmarked.get());
+
+  // (2) Numeric correctness: marked (in-place) equals unmarked (allocating).
+  BTensorD zero =
+      result_marked->get<BTensorD>() - result_unmarked->get<BTensorD>();
+  REQUIRE(norm(zero) == Catch::Approx(0).margin(
+                            100 * std::numeric_limits<double>::epsilon()));
 }
 
 TEST_CASE("eval_adjoint_complex_btas", "[eval_btas]") {

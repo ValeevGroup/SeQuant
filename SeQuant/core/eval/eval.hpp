@@ -991,6 +991,116 @@ ResultPtr evaluate_impl(Node const& node,         //
             f.node.left()->annot(), f.node.right()->annot(), f.node->annot()};
         ResultPtr result;
         log::Duration time;
+        // In-place accumulation is eligible only when f.left's PROVENANCE is
+        // known to be an evaluation-local, exclusively-owned buffer:
+        //  - !f.node.left().leaf(): a leaf's ResultPtr comes straight out of
+        //    the caller-supplied leaf_evaluator, whose provenance this engine
+        //    cannot see -- a memoizing evaluator (the norm for AO integrals /
+        //    amplitudes reused across calls, e.g. rand_tensor_yield in the
+        //    unit tests) can hand out the SAME buffer to unrelated callers,
+        //    so mutating it here would silently corrupt those other reads.
+        //    Only an INTERNAL node's result is guaranteed freshly built by
+        //    THIS evaluation (prod()/sum()/permute() always allocate), so
+        //    only internal nodes are safe candidates.
+        //  - !cache.chain_holds(f.left): even an internal node's result must
+        //    not be a live entry on the CacheManager's scope chain -- i.e.
+        //    not referenced again elsewhere in THIS evaluation's tree/forest
+        //    (multi-use, so some other read is pending); chain_holds() tests
+        //    that by pointer identity, release-safe (SEQUANT_ASSERT, not
+        //    TA_ASSERT/assert).
+        // A marked Sum whose left child IS a leaf (the common case for the
+        // innermost Sum of a chain, whose left is the chain seed) therefore
+        // falls back to the allocating sum() below despite being marked --
+        // one bounded extra allocation for the whole chain, not per term --
+        // and every OTHER (non-leaf-seeded) Sum in the chain still
+        // accumulates in place from there on, since each already-computed
+        // running total is a fresh, evaluation-local buffer.
+        bool const inplace_eligible = f.node->op_type() == EvalOp::Sum &&
+                                      f.node->accumulate_in_place() &&
+                                      !f.node.left().leaf();
+        if (inplace_eligible) {
+          SEQUANT_ASSERT(!cache.chain_holds(f.left));
+
+          // The accumulator (f.left) is used AS IS, in its own layout --
+          // never repermuted -- since binarize() pins a marked Sum's
+          // canon_indices_ to its LEFT operand's (see EvalExpr::binarize
+          // (Sum)'s make_sum lambda), so this node's own target layout IS
+          // f.left's layout. The right addend generally is NOT already in
+          // that layout (each summand of the original N-ary Sum
+          // canonicalizes independently), so -- exactly as the allocating
+          // sum() path below permutes BOTH operands into the result's
+          // layout (see e.g. ResultTensorBTAS::sum) -- it must be permuted
+          // into f.left's layout (ann[0]) before the raw elementwise
+          // add_inplace; skipping this for a tensor Sum silently adds
+          // mismatched layouts. Scalars carry no layout: ResultScalar::
+          // permute() is unimplemented (throws) and none is needed, since
+          // ann[0]/ann[1]/ann[2] are all trivially empty for a scalar Sum.
+          bool const needs_permute =
+              f.node->result_type() == ResultType::Tensor;
+          ResultPtr right_aligned = f.right;
+          log::Duration perm_time{};
+          if (needs_permute) {
+            perm_time = detail::timed_eval_inplace([&]() {
+              right_aligned =
+                  f.right->permute(std::array<std::any, 2>{ann[1], ann[0]});
+            });
+          }
+          if constexpr (detail::trace(EvalTrace)) {
+            if (needs_permute) {
+              // Mirrors the top-level evaluate(node, layout, ...) Permute
+              // event above: a genuine fresh allocation for the (typically
+              // much smaller, single-term) right addend, logged separately
+              // from the SumInplace event below.
+              size_t hwmark = log::bytes(cache, right_aligned).value;
+              if (!cache.chain_holds(f.right))
+                hwmark += log::bytes(f.right).value;
+              hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
+              log::eval(log::EvalStat{.mode = log::EvalMode::Permute,
+                                      .time = perm_time,
+                                      .mem_result = log::bytes(right_aligned),
+                                      .mem_alloc = log::bytes(right_aligned),
+                                      .mem_hwmark = {cache.note_working_set(
+                                          hwmark, f.node->hash_value())}},
+                        log::label(f.node, cache.batch_context()));
+            }
+          }
+
+          // Move the accumulator out of f.left (leaving it null; it is not
+          // read again below) and add the (now aligned) right addend into
+          // it: zero allocation here, unlike the fresh buffer sum() below
+          // returns.
+          time = detail::timed_eval_inplace([&]() {
+            result = std::move(f.left);
+            result->add_inplace(*right_aligned);
+          });
+
+          if constexpr (detail::trace(EvalTrace)) {
+            // Mirrors the forest-level SumInplace accounting (the
+            // Nodes-range evaluate() overload, below): bytes(cache, result)
+            // already counts the (mutated) former-accumulator buffer, since
+            // result now IS that buffer, so only the (aligned) right addend
+            // is added, and only if it is not already resident on the scope
+            // chain. mem_alloc is zero -- SumInplace itself allocates
+            // nothing (the right-alignment allocation, if any, was already
+            // logged above as its own Permute event) -- and mem_left/
+            // mem_right are left unset, matching the "SumInplace | --- |
+            // 0B" row of the EvalStat doc table above.
+            size_t hwmark = log::bytes(cache, result).value;
+            if (!cache.chain_holds(right_aligned))
+              hwmark += log::bytes(right_aligned).value;
+            hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
+            log::eval(log::EvalStat{.mode = log::EvalMode::SumInplace,
+                                    .time = time,
+                                    .mem_result = log::bytes(result),
+                                    .mem_alloc = {0},
+                                    .mem_hwmark = {cache.note_working_set(
+                                        hwmark, f.node->hash_value())}},
+                      log::label(f.node, cache.batch_context()));
+          }
+          log::release_after_op();
+          finalize(finish_phase_b(f, std::move(result)));
+          break;
+        }
         if (f.node->op_type() == EvalOp::Sum) {
           time = detail::timed_eval_inplace(
               [&]() { result = f.left->sum(*f.right, ann); });
