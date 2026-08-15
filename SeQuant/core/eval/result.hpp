@@ -421,6 +421,13 @@ class Result {
   /// @return the size of the object in bytes
   [[nodiscard]] virtual std::size_t size_in_bytes() const = 0;
 
+  /// DIAGNOSTIC (analysis-only): force any deferred/asynchronous computation
+  /// backing this result to complete. Default no-op (scalars are always ready);
+  /// distributed-array backends override to fence their world. Used to make an
+  /// otherwise lazily-executed op's wall-clock timer capture EXECUTION rather
+  /// than just dispatch, when SEQUANT_UT_FORCE_SYNC is set at the call site.
+  virtual void fence() const noexcept {}
+
  protected:
   template <typename T,
             typename = std::enable_if_t<!std::is_convertible_v<T, Result>>>

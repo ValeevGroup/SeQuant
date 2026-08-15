@@ -641,6 +641,10 @@ template <Trace EvalTrace = Trace::Default,
 ResultPtr evaluate_impl(Node const& node,         //
                         F const& leaf_evaluator,  //
                         CacheManager<N, FHC>& cache) {
+  // DIAGNOSTIC (SEQUANT_UT_EVALIMPL): split CC-eval into time inside
+  // top-level evaluate_impl (body) vs the gap between successive top-level
+  // calls (executor/call-site machinery). See EvalImplTimeline.
+  eval::EvalImplTimeline::Scope _tl_evalimpl;
   // Multiply a (possibly cached) result by its node's canonicalization phase.
   // Formerly the `mult_by_phase` lambda local to the Checked wrapper.
   auto apply_phase = [&cache](auto const& nd, ResultPtr res) -> ResultPtr {
@@ -648,8 +652,10 @@ ResultPtr evaluate_impl(Node const& node,         //
     if (phase == 1) return res;
 
     ResultPtr post;
+    auto const _ph0 = std::chrono::steady_clock::now();
     auto time =
         detail::timed_eval_inplace([&]() { post = res->mult_by_phase(phase); });
+    eval::EvalImplTimeline::note_phase(_ph0);
 
     if constexpr (detail::trace(EvalTrace)) {
       size_t hwmark = log::bytes(cache, post).value;
@@ -716,6 +722,13 @@ ResultPtr evaluate_impl(Node const& node,         //
   // pass the raw result through unchanged.
   auto finish_phase_b = [&cache, &apply_phase](Frame const& f,
                                                ResultPtr rb) -> ResultPtr {
+    // DIAGNOSTIC (SEQUANT_UT_BUILD_METER): count actual builds at this single
+    // chokepoint (non-leaf only = real contraction executions). No-op when off.
+    if (!f.node.leaf())
+      eval::BuildMeter::on_build(f.node->hash_value(),
+                                 eval::BuildMeter::enabled()
+                                     ? log::label(f.node, cache.batch_context())
+                                     : std::string{});
     // Per-op BUILD event: finish_phase_b is the single choke point every
     // freshly computed node passes through -- leaves, custom-eval subtrees, and
     // standard contractions -- so this counts EVERY build (cached or not),
@@ -992,10 +1005,18 @@ ResultPtr evaluate_impl(Node const& node,         //
           // hook is never consulted; default-empty => byte-identical behavior.
           auto const de_nest =
               f.node.left()->tot() && f.node.right()->tot() && !f.node->tot();
+          // DIAGNOSTIC (SEQUANT_UT_FORCE_SYNC): force the product's async
+          // execution to complete INSIDE the timed region so the prod() timer
+          // captures execution, not just dispatch. No-op when the gate is off.
+          static bool const force_sync =
+              std::getenv("SEQUANT_UT_FORCE_SYNC") != nullptr;
+          auto const _tp0 =
+              std::chrono::steady_clock::now();  // node-eval start
           if (auto const& hook = cache.shaped_product_hook(); hook) {
             time = detail::timed_eval_inplace([&]() {
               result =
                   hook(std::any{std::cref(f.node)}, *f.left, *f.right, ann);
+              if (force_sync && result) result->fence();
             });
           }
           if (!result) {
@@ -1010,6 +1031,7 @@ ResultPtr evaluate_impl(Node const& node,         //
             time = detail::timed_eval_inplace([&]() {
               result = f.left->prod(*f.right, ann,
                                     de_nest ? DeNest::True : DeNest::False);
+              if (force_sync && result) result->fence();
             });
             // Record this product build against f.node's IDENTITY (keyed by the
             // exact cache identity: hash-bin + Bliss, so 64-bit hash collisions
@@ -1040,6 +1062,8 @@ ResultPtr evaluate_impl(Node const& node,         //
                                 eval::detail::last_op_exec());
             }
           }
+          // node-eval done: fence + accumulate the contraction's full cost.
+          eval::EvalImplTimeline::note_prod(_tp0);
         }
 
         SEQUANT_ASSERT(result);

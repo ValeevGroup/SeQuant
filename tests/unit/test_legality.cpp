@@ -17,6 +17,7 @@
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/space_qns.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -144,7 +145,8 @@ TEST_CASE(
   ctx.set_first_dummy_index_ordinal(1000000);
   auto isr = ctx.mutable_index_space_registry();
   REQUIRE(isr != nullptr);
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_pao_spaces(
+      isr, sequant::IndexSpace::QuantumNumbers{sequant::mbpt::Spin::any});
   sequant::mbpt::add_df_spaces(isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
@@ -570,7 +572,8 @@ TEST_CASE(
   ctx.set_first_dummy_index_ordinal(1000000);
   auto isr = ctx.mutable_index_space_registry();
   REQUIRE(isr != nullptr);
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_pao_spaces(
+      isr, sequant::IndexSpace::QuantumNumbers{sequant::mbpt::Spin::any});
   sequant::mbpt::add_df_spaces(isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
@@ -892,7 +895,8 @@ TEST_CASE(
     ctx.set_first_dummy_index_ordinal(1000000);
     auto isr = ctx.mutable_index_space_registry();
     REQUIRE(isr != nullptr);
-    sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+    sequant::mbpt::add_pao_spaces(
+        isr, sequant::IndexSpace::QuantumNumbers{sequant::mbpt::Spin::any});
     sequant::mbpt::add_df_spaces(isr);
     auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 

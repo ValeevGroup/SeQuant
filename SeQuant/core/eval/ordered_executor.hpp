@@ -353,8 +353,11 @@ void run_ordered_contracted_block(
     }
   }
 
-  auto bs = sequant::detail::make_batched_scratch(members, parent_cache,
-                                                  /*read_from_home=*/true);
+  auto bs = [&]() {
+    PhaseTimer::Scope _pt("A.make_scratch");
+    return sequant::detail::make_batched_scratch(members, parent_cache,
+                                                 /*read_from_home=*/true);
+  }();
   bs.cache.set_parent(&parent_cache);
 
   auto const lf = ordered_axis_leaf<node_t>(block, block.axis, vmap, rich);
@@ -411,7 +414,10 @@ void run_ordered_contracted_block(
 
   for (auto const& [e_lo, e_hi] : batches) {
     if (e_lo == e_hi) continue;
-    bs.cache.reset();
+    {
+      PhaseTimer::Scope _pt("C.scratch_reset");
+      bs.cache.reset();
+    }
     BatchContext ctx = ectx;
     ctx.push_back({block.axis, {e_lo, e_hi}});
     bs.cache.set_batch_context(ctx);
@@ -604,9 +610,11 @@ ResultPtr evaluate_ordered_schedule(
   // feeds home_reads (the per-batch loop factors) below. Cheap and
   // side-effect-free (it just sizes each realized loop axis's mode_batches
   // once).
-  std::function<std::size_t(Index const&)> const n_blocks =
-      detail::ordered_n_blocks<node_t>(ordered, rich, vmap, leaf_evaluator,
-                                       target);
+  std::function<std::size_t(Index const&)> const n_blocks = [&]() {
+    PhaseTimer::Scope _pt("B.sched_setup");
+    return detail::ordered_n_blocks<node_t>(ordered, rich, vmap, leaf_evaluator,
+                                            target);
+  }();
 
   // Task 4: the EXACT home use-count for each homed value under read-from-home,
   // computed ONCE from the ordered schedule's realized scopes + the DAG (with
@@ -616,9 +624,62 @@ ResultPtr evaluate_ordered_schedule(
   // non-evicting life) to MEASURE the actual home reads and assert them equal
   // to home_reads -- the "predicted == measured" gate.
   std::function<std::size_t(std::size_t)> const home_reads =
-      home_life_override
-          ? home_life_override
-          : detail::ordered_home_reads<node_t>(ordered, rich, vmap, n_blocks);
+      home_life_override ? home_life_override : [&]() {
+        PhaseTimer::Scope _pt("B.sched_setup");
+        return detail::ordered_home_reads<node_t>(ordered, rich, vmap,
+                                                  n_blocks);
+      }();
+
+  // DIAGNOSTIC (SEQUANT_UT_CELL_CHECK): unbatched + unlimited budget must have
+  // exactly ONE cell and ONE producer per value hash. Report any violation.
+  if (std::getenv("SEQUANT_UT_CELL_CHECK")) {
+    std::unordered_map<std::size_t, std::size_t> cells_per_hash;
+    std::unordered_map<std::size_t, std::size_t> vid_to_hash;
+    for (auto const& c : rich.cells) {
+      ++cells_per_hash[c.hash];
+      vid_to_hash[c.value_id] = c.hash;
+    }
+    std::unordered_map<std::size_t, std::size_t> producers_per_vid;
+    auto walk = [&](auto&& self, ScopeBlock const& b) -> void {
+      for (auto const& s : b.steps) {
+        if (auto const* bs = std::get_if<BuildStep>(&s.value))
+          ++producers_per_vid[bs->value_id];
+        else if (auto const* ch = std::get_if<ScopeBlock>(&s.value))
+          self(self, *ch);
+      }
+      for (auto const& [vid, k] : b.outputs) ++producers_per_vid[vid];
+    };
+    walk(walk, ordered.root);
+    std::size_t multi_cell = 0, multi_prod = 0;
+    for (auto const& [h, n] : cells_per_hash)
+      if (n > 1) ++multi_cell;
+    std::unordered_map<std::size_t, std::size_t> producers_per_hash;
+    for (auto const& [vid, n] : producers_per_vid) {
+      auto const it = vid_to_hash.find(vid);
+      producers_per_hash[it == vid_to_hash.end() ? vid : it->second] += n;
+    }
+    for (auto const& [h, n] : producers_per_hash)
+      if (n > 1) ++multi_prod;
+    std::fprintf(stderr,
+                 "[cell-check] distinct_hashes=%zu cells=%zu num_values=%zu "
+                 "hashes_with_>1_cell=%zu hashes_with_>1_producer=%zu\n",
+                 cells_per_hash.size(), rich.cells.size(),
+                 static_cast<std::size_t>(ordered.num_values), multi_cell,
+                 multi_prod);
+    // Cross-SCHEDULE accumulation: a value that is a cell in more than one
+    // rank-schedule (both share the cache) is a >1-cell-per-value violation the
+    // per-schedule check above cannot see. Accumulate across every schedule
+    // construction and dump the running per-hash cell count to a file.
+    static auto* const seen =
+        new std::unordered_map<std::size_t, std::size_t>();
+    for (auto const& c : rich.cells) ++(*seen)[c.hash];
+    if (char const* dump = std::getenv("SEQUANT_UT_CELL_DUMP")) {
+      if (std::FILE* fp = std::fopen(dump, "w")) {
+        for (auto const& [h, n] : *seen) std::fprintf(fp, "%zu\t%zu\n", h, n);
+        std::fclose(fp);
+      }
+    }
+  }
 
   // Per-value results, indexed by value_id (== a ValueCell's own slot in
   // rich.cells -- see peak_profile.hpp's ValueCell::value_id doc comment),

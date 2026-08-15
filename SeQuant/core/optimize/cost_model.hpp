@@ -1189,8 +1189,22 @@ struct PeakBatchedModel {
       // persistence gate would only ever raise the modelled peak. Set
       // batch_persistent_only to restore the persistent-only gate (decline to
       // slice subsets that contain a volatile leaf).
+      // Revert-to-no-batching gate: an INFINITE peak_threshold is an unlimited
+      // budget -- no term can ever be over budget, so nothing should batch.
+      // Because contracted-index slicing is flops-neutral, the min-flops
+      // frontier would otherwise always keep its fully-sliced (min-peak)
+      // realization and slice unconditionally (a free peak reduction nobody
+      // asked for). Forcing contracted_here == 0 here makes the batched cost
+      // model produce the SAME schedule as the unbatched model when the budget
+      // is unlimited: one model, cleanly reverting, rather than two models that
+      // might disagree on the factorization. (No batchable axes -> ctx.m == 0
+      // -> open_modes are all 0 -> contracted_here is already 0, so that revert
+      // case needs no special handling.) A FINITE budget still enumerates
+      // slicing; whether a term actually needs it is the select_root ceiling's
+      // job.
       std::size_t const contracted_here =
-          (batch_persistent_only && (ctx.volatile_mask & n))
+          (!std::isfinite(peak_threshold) ||
+           (batch_persistent_only && (ctx.volatile_mask & n)))
               ? std::size_t{0}
               : ((ctx.open_modes[lp] | ctx.open_modes[rp]) &
                  ~ctx.open_modes[n]);

@@ -19,10 +19,13 @@
 #include <algorithm>
 #include <any>
 #include <array>
+#include <chrono>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <functional>
 #include <limits>
+#include <map>
 #include <memory>
 #include <optional>
 #include <ostream>
@@ -102,6 +105,478 @@ struct AccessClock {
     counter() = 0;
     last_access_map().clear();
   }
+};
+
+/// \brief DIAGNOSTIC (analysis-only, OFF by default): counts and times every
+///        `cache_map_.find(key)` performed by CacheManager. Each such find runs
+///        TreeNodeEqualityComparator on any bucket match -- a recursive
+///        structural compare of the whole subtree (memoized-hash O(1) per node
+///        + linear bliss ConstGraphCmp on the connectivity graph, recursed into
+///        left/right). This meter isolates the aggregate wall time that lookup
+///        costs, so a schedule that issues more read-from-home lookups
+///        (ordered) can be compared against one that inlines (forest). Env gate
+///        SEQUANT_UT_LOOKUP_METER; when unset every site is a no-op passthrough
+///        and the eval path stays byte-identical. Single-threaded runs only.
+struct LookupMeter {
+  static bool enabled() noexcept {
+    static bool const on = std::getenv("SEQUANT_UT_LOOKUP_METER") != nullptr;
+    return on;
+  }
+  static std::size_t& calls() noexcept {
+    static std::size_t c = 0;
+    return c;
+  }
+  static std::uint64_t& nanos() noexcept {
+    static std::uint64_t n = 0;
+    return n;
+  }
+  /// Time ONLY the find() call in @p f (a nullary functor returning the
+  /// iterator); accumulate count + elapsed ns; return f()'s result. Works for
+  /// const and non-const maps alike (return type is deduced).
+  template <typename F>
+  static auto timed(F&& f) {
+    if (!enabled()) return f();
+    auto const t0 = std::chrono::steady_clock::now();
+    auto r = f();
+    auto const t1 = std::chrono::steady_clock::now();
+    ++calls();
+    nanos() += static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count());
+    return r;
+  }
+  static void reset() noexcept {
+    calls() = 0;
+    nanos() = 0;
+  }
+  /// Prints the accumulated totals to stderr at program teardown when enabled.
+  struct Reporter {
+    ~Reporter() {
+      if (!enabled()) return;
+      std::fprintf(stderr,
+                   "[lookup-meter] cache_map_.find calls=%zu total_ms=%.3f "
+                   "mean_ns=%.1f\n",
+                   calls(), static_cast<double>(nanos()) / 1e6,
+                   calls() ? static_cast<double>(nanos()) / calls() : 0.0);
+    }
+  };
+  inline static Reporter reporter_{};
+};
+
+/// \brief DIAGNOSTIC (analysis-only, OFF by default): scoped wall-clock timer
+///        that accumulates elapsed time into named buckets, for locating where
+///        the (single-threaded) ordered-executor driver spends time. Times are
+///        INCLUSIVE (a region's time includes any nested regions and any TA
+///        dispatch inside it), so compare siblings and drill into the hot one.
+///        Env gate SEQUANT_UT_PHASE; inert when unset. Single-threaded only.
+struct PhaseTimer {
+  static bool enabled() noexcept {
+    static bool const on = std::getenv("SEQUANT_UT_PHASE") != nullptr;
+    return on;
+  }
+  // Backend-supplied barrier that drains all pending async work (set by the TA
+  // backend to a world fence). When present, each Scope fences at BOTH
+  // boundaries so async work cannot leak across timer regions and every
+  // region's time reflects the work it actually dispatched-and-completed.
+  static std::function<void()>& fence_hook() noexcept {
+    static std::function<void()> h;
+    return h;
+  }
+  static std::size_t& barrier_count() noexcept {
+    static std::size_t c = 0;
+    return c;
+  }
+  static std::uint64_t& barrier_ns() noexcept {
+    static std::uint64_t v = 0;
+    return v;
+  }
+  static void barrier() noexcept {
+    if (auto const& h = fence_hook()) {
+      auto const t0 = std::chrono::steady_clock::now();
+      h();
+      barrier_ns() += static_cast<std::uint64_t>(
+          std::chrono::duration_cast<std::chrono::nanoseconds>(
+              std::chrono::steady_clock::now() - t0)
+              .count());
+      ++barrier_count();
+    }
+  }
+  // name -> {total ns, call count}. Leaked so teardown Reporter can read it.
+  static std::map<std::string, std::pair<std::uint64_t, std::uint64_t>>&
+  acc() noexcept {
+    static auto* const m =
+        new std::map<std::string, std::pair<std::uint64_t, std::uint64_t>>();
+    return *m;
+  }
+  struct Scope {
+    char const* name;
+    std::chrono::steady_clock::time_point t0;
+    bool on;
+    explicit Scope(char const* n) noexcept : name(n), on(enabled()) {
+      if (on) t0 = std::chrono::steady_clock::now();
+    }
+    ~Scope() {
+      if (!on) return;
+      barrier();  // dtor-only: drain the async WE dispatched before stopping
+      auto const d = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                         std::chrono::steady_clock::now() - t0)
+                         .count();
+      auto& e = acc()[name];
+      e.first += static_cast<std::uint64_t>(d);
+      ++e.second;
+    }
+  };
+  struct Reporter {
+    ~Reporter() {
+      if (!enabled()) return;
+      std::fprintf(stderr, "[phase-timer] (inclusive wall, name: s / calls)\n");
+      for (auto const& [n, e] : acc())
+        std::fprintf(stderr, "  %-28s %8.3f s  %8llu\n", n.c_str(),
+                     e.first / 1e9, static_cast<unsigned long long>(e.second));
+    }
+  };
+  inline static Reporter reporter_{};
+};
+
+/// \brief DIAGNOSTIC (analysis-only, OFF by default): splits CC-eval wall into
+///        (a) time INSIDE top-level evaluate_impl (the "body") and (b) the GAP
+///        between successive top-level evaluate_impl calls (the ordered
+///        executor's schedule-walk / block-structure / call-site machinery).
+///        Fences at body exit (via PhaseTimer::barrier) so each call owns its
+///        async and the gap is pure between-call executor time. Depth-guarded:
+///        nested evaluate_impl re-entries (forest's custom evaluator) fold into
+///        the enclosing top-level call. Env gate SEQUANT_UT_EVALIMPL.
+struct EvalImplTimeline {
+  static bool enabled() noexcept {
+    static bool const on = std::getenv("SEQUANT_UT_EVALIMPL") != nullptr;
+    return on;
+  }
+  static int& depth() noexcept {
+    static thread_local int d = 0;
+    return d;
+  }
+  static std::uint64_t& body_ns() noexcept {
+    static std::uint64_t v = 0;
+    return v;
+  }
+  static std::uint64_t& gap_ns() noexcept {
+    static std::uint64_t v = 0;
+    return v;
+  }
+  static std::size_t& calls() noexcept {
+    static std::size_t v = 0;
+    return v;
+  }
+  static std::chrono::steady_clock::time_point& last_exit() noexcept {
+    static std::chrono::steady_clock::time_point t{};
+    return t;
+  }
+  static bool& have_last() noexcept {
+    static bool b = false;
+    return b;
+  }
+  static std::uint64_t& max_gap_ns() noexcept {
+    static std::uint64_t v = 0;
+    return v;
+  }
+  // Node-evaluation (prod / TA contraction) time INSIDE the body, fenced so it
+  // captures the contraction's full sync+async cost. body - prod == "other
+  // inside evaluate_impl" (stack machine, cache access, apply_phase, store).
+  static std::uint64_t& prod_ns() noexcept {
+    static std::uint64_t v = 0;
+    return v;
+  }
+  static void note_prod(std::chrono::steady_clock::time_point t0) noexcept {
+    if (!enabled()) return;
+    PhaseTimer::barrier();  // drain this contraction's async before stopping
+    prod_ns() += static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - t0)
+            .count());
+  }
+  // apply_phase (canonicalization-phase tensor multiply) time inside the body:
+  // node-eval-adjacent TA work that is NOT the contraction.
+  static std::uint64_t& phase_ns() noexcept {
+    static std::uint64_t v = 0;
+    return v;
+  }
+  static void note_phase(std::chrono::steady_clock::time_point t0) noexcept {
+    if (!enabled()) return;
+    PhaseTimer::barrier();
+    phase_ns() += static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - t0)
+            .count());
+  }
+  struct Scope {
+    std::chrono::steady_clock::time_point entry;
+    bool on;
+    bool top;
+    Scope() noexcept : on(enabled()), top(false) {
+      if (!on) return;
+      top = (depth() == 0);
+      ++depth();
+      if (top) {
+        entry = std::chrono::steady_clock::now();
+        if (have_last()) {
+          auto const g = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                             entry - last_exit())
+                             .count();
+          gap_ns() += static_cast<std::uint64_t>(g);
+          if (static_cast<std::uint64_t>(g) > max_gap_ns())
+            max_gap_ns() = static_cast<std::uint64_t>(g);
+        }
+      }
+    }
+    ~Scope() {
+      if (!on) return;
+      --depth();
+      if (!top) return;
+      PhaseTimer::barrier();  // drain this body's async so the gap is pure
+      auto const e = std::chrono::steady_clock::now();
+      body_ns() += static_cast<std::uint64_t>(
+          std::chrono::duration_cast<std::chrono::nanoseconds>(e - entry)
+              .count());
+      last_exit() = e;
+      have_last() = true;
+      ++calls();
+    }
+  };
+  struct Reporter {
+    ~Reporter() {
+      if (!enabled()) return;
+      std::fprintf(stderr,
+                   "[evalimpl-timeline] top_calls=%zu  body=%.3f s  "
+                   "gap(between-calls)=%.3f s  max_gap=%.1f ms\n",
+                   calls(), body_ns() / 1e9, gap_ns() / 1e9,
+                   max_gap_ns() / 1e6);
+      auto const accounted = prod_ns() + phase_ns();
+      std::fprintf(
+          stderr,
+          "[evalimpl-timeline]   of body: node-eval(prod)=%.3f s  "
+          "apply_phase=%.3f s  other-inside=%.3f s\n",
+          prod_ns() / 1e9, phase_ns() / 1e9,
+          (body_ns() > accounted ? (body_ns() - accounted) / 1e9 : 0.0));
+      std::fprintf(stderr,
+                   "[evalimpl-timeline]   instrumentation barrier(): calls=%zu "
+                   "total=%.3f s (this is fence overhead, NOT real work)\n",
+                   PhaseTimer::barrier_count(), PhaseTimer::barrier_ns() / 1e9);
+    }
+  };
+  inline static Reporter reporter_{};
+};
+
+/// \brief DIAGNOSTIC (analysis-only, OFF by default): counts ACTUAL builds at
+///        the single build chokepoint (finish_phase_b) -- every freshly
+///        computed non-leaf node, cached or not. Unlike DefUseMeter (which
+///        counts cache.store() calls, and so also counts re-home/placement
+///        stores of an already-built value), this counts real contraction
+///        executions, so build_count > iterations for a node == genuine
+///        recompute (re-run contraction), the ground truth the FLOP count
+///        reflects. Env gate SEQUANT_UT_BUILD_METER. Single-threaded only.
+struct BuildMeter {
+  static bool enabled() noexcept {
+    static bool const on = std::getenv("SEQUANT_UT_BUILD_METER") != nullptr;
+    return on;
+  }
+  static std::unordered_map<std::size_t, std::size_t>& build_count() noexcept {
+    static auto* const m = new std::unordered_map<std::size_t, std::size_t>();
+    return *m;
+  }
+  static std::size_t& total() noexcept {
+    static std::size_t t = 0;
+    return t;
+  }
+  static std::unordered_map<std::size_t, std::string>& label_of() noexcept {
+    static auto* const m = new std::unordered_map<std::size_t, std::string>();
+    return *m;
+  }
+  static std::unordered_map<std::size_t, std::size_t>& read_count() noexcept {
+    static auto* const m = new std::unordered_map<std::size_t, std::size_t>();
+    return *m;
+  }
+  static std::unordered_map<std::size_t, std::size_t>& max_life_of() noexcept {
+    static auto* const m = new std::unordered_map<std::size_t, std::size_t>();
+    return *m;
+  }
+  /// Record one genuine cache read (access_at hit) of @p hash and its entry's
+  /// @p max_life -- ground truth for "is the lifetime >= the real read count?".
+  static void on_read(std::size_t hash, std::size_t max_life) noexcept {
+    if (!enabled()) return;
+    ++read_count()[hash];
+    max_life_of()[hash] = max_life;
+  }
+  /// The one value hash to trace exact life_c events for
+  /// (SEQUANT_UT_TRACE_HASH, 0 = off). Parsed once.
+  static std::size_t trace_hash() noexcept {
+    static std::size_t const h = [] {
+      char const* e = std::getenv("SEQUANT_UT_TRACE_HASH");
+      return e ? std::strtoull(e, nullptr, 10) : std::size_t{0};
+    }();
+    return h;
+  }
+  /// Emit one ordered life_c event for the traced value.
+  static void life_event(std::size_t hash, char const* ev, bool alive_before,
+                         long life_before, long life_after,
+                         std::size_t max_life) noexcept {
+    static bool once = [&] {
+      std::fprintf(stderr,
+                   "[life-seq-dbg] trace_hash=%zu first_seen_hash=%zu\n",
+                   trace_hash(), hash);
+      return true;
+    }();
+    (void)once;
+    if (hash != trace_hash()) return;
+    std::fprintf(
+        stderr, "[life-seq] %-7s alive_before=%d life: %ld -> %ld  (max=%zu)\n",
+        ev, alive_before ? 1 : 0, life_before, life_after, max_life);
+  }
+  /// Record one fresh build of the non-leaf node @p hash (optional human
+  /// @p label, kept from the first sighting for the dump).
+  static void on_build(std::size_t hash,
+                       std::string label = std::string{}) noexcept {
+    if (!enabled()) return;
+    ++total();
+    ++build_count()[hash];
+    if (!label.empty()) label_of().try_emplace(hash, std::move(label));
+  }
+  struct Reporter {
+    ~Reporter() {
+      if (!enabled()) return;
+      std::map<std::size_t, std::size_t> hist;
+      for (auto const& [h, c] : build_count()) ++hist[c];
+      std::fprintf(stderr, "[build-meter] builds=%zu distinct=%zu", total(),
+                   build_count().size());
+      std::fprintf(stderr, " histogram(k:nodes):");
+      for (auto const& [k, n] : hist) std::fprintf(stderr, " %zu:%zu", k, n);
+      std::fprintf(stderr, "\n");
+      if (char const* dump = std::getenv("SEQUANT_UT_BUILD_DUMP")) {
+        if (std::FILE* fp = std::fopen(dump, "w")) {
+          for (auto const& [h, c] : build_count()) {
+            auto const it = label_of().find(h);
+            auto const rit = read_count().find(h);
+            auto const mit = max_life_of().find(h);
+            std::fprintf(fp, "%zu\t%zu\t%zu\t%zu\t%s\n", h, c,
+                         rit != read_count().end() ? rit->second : 0,
+                         mit != max_life_of().end() ? mit->second : 0,
+                         it != label_of().end() ? it->second.c_str() : "");
+          }
+          std::fclose(fp);
+        }
+      }
+    }
+  };
+  inline static Reporter reporter_{};
+};
+
+/// \brief DIAGNOSTIC (analysis-only, OFF by default): measures def-to-use
+///        distance -- how many production "ops" elapse between a value being
+///        stored (produced by a contraction) and each time it is consumed. A
+///        global op-clock ticks once per genuine \c store(key,data); each value
+///        records its production tick, and every \c access_at hit accumulates
+///        (current_clock - production_tick), weighted by the operand's bytes.
+///        The byte-weighted aggregate proxies CPU-cache reload pressure: a
+///        large operand that waited many ops between production and use is
+///        likely evicted from cache and must be reloaded from DRAM when finally
+///        read. Uniform across schedulers (both route produced values through
+///        store() and reads through access_at). Robust to forest's
+///        immediate-consume bypass: a distance-0 consumption contributes ~0 to
+///        the byte-weighted sum. Env gate SEQUANT_UT_DEFUSE_METER; inert when
+///        unset. Single-threaded runs only.
+struct DefUseMeter {
+  static bool enabled() noexcept {
+    static bool const on = std::getenv("SEQUANT_UT_DEFUSE_METER") != nullptr;
+    return on;
+  }
+  static std::size_t& op_clock() noexcept {
+    static std::size_t c = 0;
+    return c;
+  }
+  // Leaked (never destroyed) so the teardown Reporter can safely read them
+  // regardless of static-destruction order.
+  static std::unordered_map<std::size_t, std::size_t>& produce_at() noexcept {
+    static auto* const m = new std::unordered_map<std::size_t, std::size_t>();
+    return *m;
+  }
+  /// distinct-node -> number of store (production) events, exposing recompute:
+  /// a node stored more than (iterations) times was rebuilt while cacheable.
+  static std::unordered_map<std::size_t, std::size_t>& store_count() noexcept {
+    static auto* const m = new std::unordered_map<std::size_t, std::size_t>();
+    return *m;
+  }
+  static std::size_t& reads() noexcept {
+    static std::size_t r = 0;
+    return r;
+  }
+  static std::uint64_t& sum_dist() noexcept {
+    static std::uint64_t s = 0;
+    return s;
+  }
+  static long double& sum_dist_bytes() noexcept {
+    static long double s = 0;
+    return s;
+  }
+  static long double& sum_bytes() noexcept {
+    static long double s = 0;
+    return s;
+  }
+  static std::size_t& max_dist() noexcept {
+    static std::size_t m = 0;
+    return m;
+  }
+  /// Tick the op-clock and record this value's production time.
+  static void on_store(std::size_t hash) noexcept {
+    if (!enabled()) return;
+    produce_at()[hash] = ++op_clock();
+    ++store_count()[hash];
+  }
+  /// Accumulate the def-to-use distance for a consumption of @p hash whose
+  /// current stored size is @p bytes. Values never stored (leaves/inputs) are
+  /// skipped -- their production op is undefined.
+  static void on_read(std::size_t hash, std::size_t bytes) noexcept {
+    if (!enabled()) return;
+    auto const it = produce_at().find(hash);
+    if (it == produce_at().end()) return;
+    std::size_t const d = op_clock() - it->second;
+    ++reads();
+    sum_dist() += d;
+    sum_dist_bytes() += static_cast<long double>(d) * bytes;
+    sum_bytes() += bytes;
+    if (d > max_dist()) max_dist() = d;
+  }
+  struct Reporter {
+    ~Reporter() {
+      if (!enabled()) return;
+      double const mean =
+          reads() ? static_cast<double>(sum_dist()) / reads() : 0.0;
+      double const meanw =
+          sum_bytes() > 0 ? static_cast<double>(sum_dist_bytes() / sum_bytes())
+                          : 0.0;
+      std::fprintf(stderr,
+                   "[defuse-meter] ops=%zu distinct=%zu reads=%zu "
+                   "mean_dist=%.2f byteweighted_mean_dist=%.2f max_dist=%zu "
+                   "sum_dist=%llu sum_dist_bytes=%.4e\n",
+                   op_clock(), produce_at().size(), reads(), mean, meanw,
+                   max_dist(), static_cast<unsigned long long>(sum_dist()),
+                   static_cast<double>(sum_dist_bytes()));
+      // Store-count histogram: how many distinct nodes were stored k times.
+      // k > iterations => recompute (a cacheable node rebuilt while resident).
+      std::map<std::size_t, std::size_t> hist;
+      for (auto const& [h, c] : store_count()) ++hist[c];
+      std::fprintf(stderr, "[defuse-meter] store-count histogram (k:nodes):");
+      for (auto const& [k, n] : hist) std::fprintf(stderr, " %zu:%zu", k, n);
+      std::fprintf(stderr, "\n");
+      // Optional: dump the distinct stored-node hash set (hash store_count),
+      // one per line, so two runs' cache-membership sets can be diffed.
+      if (char const* const path = std::getenv("SEQUANT_UT_DEFUSE_DUMP")) {
+        if (std::FILE* f = std::fopen(path, "w")) {
+          for (auto const& [h, c] : store_count())
+            std::fprintf(f, "%zu %zu\n", h, c);
+          std::fclose(f);
+        }
+      }
+    }
+  };
+  inline static Reporter reporter_{};
 };
 
 }  // namespace sequant::eval
@@ -767,13 +1242,27 @@ class CacheManager {
   /// scope so the caller (Enter-stage slice-on-use) can slice it to exactly the
   /// batch loops the fetch crossed.
   [[nodiscard]] AccessResult access_at(key_type const& key) noexcept {
-    if (auto found = cache_map_.find(key); found != cache_map_.end())
+    if (auto found =
+            eval::LookupMeter::timed([&] { return cache_map_.find(key); });
+        found != cache_map_.end()) {
+      long const _lb = static_cast<long>(found->second.life_count());
       if (auto data = found->second.access(); data) {
         // DIAGNOSTIC (SEQUANT_UT_ACCESS_CLOCK): stamp this genuine local-hit
         // read into the global access clock. No-op when the gate is off.
         eval::AccessClock::stamp(found->first->hash_value());
+        eval::BuildMeter::on_read(found->first->hash_value(),
+                                  found->second.max_life_count());
+        eval::BuildMeter::life_event(
+            found->first->hash_value(), "ACCESS", true, _lb,
+            static_cast<long>(found->second.life_count()),
+            found->second.max_life_count());
+        // NB: size_in_bytes() walks the array; only pay it when metering.
+        if (eval::DefUseMeter::enabled())
+          eval::DefUseMeter::on_read(found->first->hash_value(),
+                                     found->second.size_in_bytes());
         return {data, 0};
       }
+    }
     if (!parent_) return {nullptr, 0};
     auto up = parent_->access_at(key);
     return {up.ptr, up.hops + 1};  // count the link we just crossed
@@ -802,12 +1291,19 @@ class CacheManager {
     CacheManager* c = this;
     for (std::size_t i = 0; i < hops && c; ++i) c = c->parent_;
     if (!c) return nullptr;
-    if (auto found = c->cache_map_.find(key); found != c->cache_map_.end()) {
+    if (auto found =
+            eval::LookupMeter::timed([&] { return c->cache_map_.find(key); });
+        found != c->cache_map_.end()) {
       auto data = found->second.access();
       // DIAGNOSTIC (SEQUANT_UT_ACCESS_CLOCK): stamp this genuine
       // router-directed read into the global access clock. No-op when the gate
       // is off.
-      if (data) eval::AccessClock::stamp(found->first->hash_value());
+      if (data) {
+        eval::AccessClock::stamp(found->first->hash_value());
+        if (eval::DefUseMeter::enabled())
+          eval::DefUseMeter::on_read(found->first->hash_value(),
+                                     found->second.size_in_bytes());
+      }
       return data;
     }
     return nullptr;
@@ -822,8 +1318,30 @@ class CacheManager {
   ///         this CacheManager object, stores nothing, but still returns a
   ///         valid pointer to @c data.
   [[nodiscard]] ResultPtr store(key_type const& key, ResultPtr data) noexcept {
-    if (auto found = cache_map_.find(key); found != cache_map_.end())
-      return store(found->second, std::move(data));
+    if (auto found =
+            eval::LookupMeter::timed([&] { return cache_map_.find(key); });
+        found != cache_map_.end()) {
+      // INSTRUMENTATION (SEQUANT_REBUILD_TRACE, analysis-only): a store onto an
+      // entry that is ALREADY alive means the value was still resident in cache
+      // yet got rebuilt anyway -- a hash-bypassing recompute. Emit the hash and
+      // the persistent flag so a persistent (should-never-recompute) value that
+      // is nonetheless rebuilt-while-resident is caught. No-op when the gate is
+      // off.
+      static bool const rebuild_trace =
+          std::getenv("SEQUANT_REBUILD_TRACE") != nullptr;
+      if (rebuild_trace && found->second.alive())
+        std::cerr << "REBUILD-RESIDENT persist=" << found->second.persistent()
+                  << " hash=" << key->hash_value() << "\n";
+      eval::DefUseMeter::on_store(key->hash_value());
+      bool const _alive_before = found->second.alive();
+      long const _lb = static_cast<long>(found->second.life_count());
+      std::size_t const _ml = found->second.max_life_count();
+      auto ret = store(found->second, std::move(data));
+      eval::BuildMeter::life_event(
+          key->hash_value(), "STORE", _alive_before, _lb,
+          static_cast<long>(found->second.life_count()), _ml);
+      return ret;
+    }
     return data;
   }
 
@@ -881,7 +1399,8 @@ class CacheManager {
   ///         parent-chain fall-through), so it is neither registered nor
   ///         rebuilt in the per-batch scratch.
   [[nodiscard]] bool resident_in_chain(key_type const& key) const noexcept {
-    if (auto iter = cache_map_.find(key);
+    if (auto iter =
+            eval::LookupMeter::timed([&] { return cache_map_.find(key); });
         iter != cache_map_.end() && iter->second.alive())
       return true;
     return parent_ ? parent_->resident_in_chain(key) : false;

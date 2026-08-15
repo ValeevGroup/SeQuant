@@ -365,6 +365,27 @@ inline MeterReport meter(
   (void)sequant::evaluate<Trace::On>(forest, policy, std::wstring{}, yield,
                                      cache, {}, sequant::make_no_scope_guard{});
 
+  // INSTRUMENTATION (SEQUANT_RECOMPUTE_DUMP, analysis-only): genuine,
+  // batching-aware recompute is a SINGLE (node, slice) built more than once
+  // (a value tiled over distinct batch slices has count==1 per slice -- see
+  // BuildRecord). Dump every such slice with its hash so the recompute can be
+  // localized without the batch-slice / accumulation confound.
+  if (std::getenv("SEQUANT_RECOMPUTE_DUMP")) {
+    std::size_t genuine = 0, slices_gt1 = 0;
+    for (auto const& [node, bt] : cache.recompute_tally())
+      for (auto const& [slice, rec] : bt.slices)
+        if (rec.count > 1) {
+          ++slices_gt1;
+          genuine += rec.count - 1;
+          std::cerr << "RECOMPUTE count=" << rec.count
+                    << " hash=" << node->hash_value() << " slice=[" << slice
+                    << "]\n";
+        }
+    std::cerr << "GENUINE-RECOMPUTE: distinct (node,slice) built >1 = "
+              << slices_gt1 << " ; total avoidable rebuilds = " << genuine
+              << "\n";
+  }
+
   return assemble_report(cache, mon, rich, forest, is_volatile,
                          policy.scheduler);
 }

@@ -25,6 +25,7 @@
 #include <optional>
 
 namespace {
+namespace container = sequant::container;
 
 using sequant::aux;
 using sequant::BatchModeType;

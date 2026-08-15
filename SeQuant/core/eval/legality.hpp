@@ -170,15 +170,37 @@ using DemotionSource =
 [[nodiscard]] inline container::svector<Index> build_site_of(
     meta::eval_node auto const& node, BatchPolicy const& policy) {
   container::svector<Index> result;
-  auto const batchable = policy.is_batchable_index();
   auto const add_if_new = [&](Index const& ix) {
-    if (!batchable(ix)) return;
     if (std::find(result.begin(), result.end(), ix) == result.end())
       result.push_back(ix);
   };
 
-  for (Index const& ix : node->canon_indices()) add_if_new(ix);
-  for (Index const& ix : contracted_indices(node)) add_if_new(ix);
+  // Source the build-site axes from the cost model's ACTUAL per-node decision,
+  // NOT from policy.is_batchable_index() (what COULD be batched). Using the
+  // predicate made the ordered schedule loop over every batchable axis (e.g.
+  // aux whenever batch:aux_target_size>0) at every node carrying/contracting
+  // it, regardless of whether the peak-constrained optimizer decided to slice
+  // it -- always-on batching independent of peak_threshold, and over-scoping
+  // relative to the DP even under a finite budget. The two authoritative
+  // sources are:
+  //   - a RESULT (carried) index is a build-site axis iff it slices this node's
+  //     own result slots per the cross-occurrence meet (\c sliced_modes, which
+  //     already folds in ancestor batch loops the value is variant to); and
+  //   - a CONTRACTED-at-node index iff the DP batched it here (a \c Contracted
+  //     \c batched_here stamp == the node's chosen aprime).
+  // With an infinite budget (or no batchable axis) the DP emits no stamps, so
+  // both are empty and the schedule is flat -- matching forest descent.
+  auto const& sliced = node->sliced_modes();
+  auto const& stamps = node->batched_here();
+  for (Index const& ix : node->canon_indices())
+    if (std::find(sliced.begin(), sliced.end(), ix) != sliced.end())
+      add_if_new(ix);
+  for (Index const& ix : contracted_indices(node))
+    if (std::any_of(stamps.begin(), stamps.end(), [&](auto const& p) {
+          return p.second == BatchModeType::Contracted && p.first == ix;
+        }))
+      add_if_new(ix);
+  (void)policy;
   return result;
 }
 
@@ -323,7 +345,7 @@ template <meta::eval_node_range R>
   };
   for (auto const& tree : forest) visit(visit, tree);
 
-  auto const batchable = policy.is_batchable_index();
+  (void)policy;  // build-site now sourced from the DP decision, not the policy
 
   // Monotone demotion set (the fixpoint state): hash -> the axis SPACE
   // base_keys forced from LoopLocal to LoopCarried by a prior round. Grows
@@ -357,14 +379,35 @@ template <meta::eval_node_range R>
       for (Index const& ix : contracted_indices(it->second))
         contracted_below.push_back(ix);
 
+      // Build-site axes come from the cost model's ACTUAL per-node decision,
+      // NOT policy.is_batchable_index() (what COULD be batched). Sourcing from
+      // the predicate made the ordered schedule loop over every batchable axis
+      // (e.g. aux whenever batch:aux_target_size>0) regardless of whether the
+      // peak-constrained optimizer sliced it -- always-on batching independent
+      // of peak_threshold, and over-scoping relative to the DP under a finite
+      // budget. A RESULT (carried) axis is a build-site axis iff it slices this
+      // node's own result slots per the cross-occurrence meet (sliced_modes,
+      // which folds in the ancestor batch loops the value is variant to); a
+      // CONTRACTED-at-node axis iff the DP batched it here (a Contracted
+      // batched_here stamp == the node's chosen aprime). With an infinite
+      // budget (or no batchable axis) the DP emits no stamps, so the site is
+      // empty and the schedule is flat -- identical to forest descent.
       container::svector<Index> site;
       auto const add_if_new = [&](Index const& ix) {
-        if (!batchable(ix)) return;
         if (std::find(site.begin(), site.end(), ix) == site.end())
           site.push_back(ix);
       };
-      for (Index const& ix : vc.carried) add_if_new(ix);
-      for (Index const& ix : contracted_below) add_if_new(ix);
+      auto const& dp_sliced = it->second->sliced_modes();
+      auto const& dp_stamps = it->second->batched_here();
+      for (Index const& ix : vc.carried)
+        if (std::find(dp_sliced.begin(), dp_sliced.end(), ix) !=
+            dp_sliced.end())
+          add_if_new(ix);
+      for (Index const& ix : contracted_below)
+        if (std::any_of(dp_stamps.begin(), dp_stamps.end(), [&](auto const& p) {
+              return p.second == BatchModeType::Contracted && p.first == ix;
+            }))
+          add_if_new(ix);
 
       for (Index const& axis : site) {
         AxisClass ac;
