@@ -139,17 +139,6 @@ EvalExpr::EvalExpr(Tensor const& tnsr, bool exploit_conjugate)
       expr_{tnsr.clone()} {
   SEQUANT_ASSERT(!tnsr.indices().empty());
   if (is_tot(tnsr)) {
-    // Opt-in: fold the two bra<->ket orientations of a ToT Conjugate leaf
-    // onto one canonical orientation BEFORE the network canonicalization
-    // (TNV3 does not exploit conjugate braket symmetry itself), recording
-    // the conjugation byproduct exactly like the flat-leaf branch below.
-    // The swapped orientation is served from the shared cache slot via
-    // EvalOp::Adjoint; the ToT Result backend's adjoint() conjugates the
-    // nested tiles.
-    bool leaf_conj = false;
-    if (exploit_conjugate)
-      leaf_conj =
-          TensorBlockCanonicalizer{}.fold_conjugate_braket(expr_->as<Tensor>());
     ExprPtrList tlist{expr_};
     auto tn = TensorNetwork(tlist);
     // N.B. pass default_idxptr_slottype_lesscompare{} explicitly, NOT {}: an
@@ -170,9 +159,8 @@ EvalExpr::EvalExpr(Tensor const& tnsr, bool exploit_conjugate)
     // partner canonicalize to the same graph/hash so they share a cache slot;
     // binarize(Tensor) reads this bit to wrap the swapped one in an
     // EvalOp::Adjoint node that conjugates the shared cached value on
-    // retrieval. Compose the leaf-orientation fold above with whatever the
-    // network canonicalization reports.
-    canon_conj_ = md.conj != leaf_conj;
+    // retrieval.
+    canon_conj_ = md.conj;
     canon_indices_ = md.get_indices<index_vector>();
     connectivity_ = std::move(md.graph);
   } else {
