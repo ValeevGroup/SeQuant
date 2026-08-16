@@ -527,6 +527,253 @@ void run_ordered_contracted_block(
   }
 }
 
+///
+/// \brief Task 4 (multi-root single-DAG eval): the shared CORE every ordered
+/// whole-forest entry point (\c evaluate_ordered_schedule's forest-wide SUM
+/// and \c evaluate_ordered_multiroot's per-root MAP alike) delegates to --
+/// walks \p ordered.root.steps exactly as \c evaluate_ordered_schedule always
+/// has (Tasks 1-3: a root-level \c BuildStep built directly, a root-level \c
+/// ScopeBlock realized via \c run_ordered_contracted_block) and returns each
+/// forest root's own UNPERMUTED, already-built \c value_result, aligned
+/// index-for-index with \p forest -- i.e. exactly the \c pre_results
+/// \c combine_forest_roots expects, computed but NOT yet consumed by it. Pure
+/// extraction of \c evaluate_ordered_schedule's original body (SP3 Tasks 1-4
+/// through the original's own \c pre_results loop): no upstream logic
+/// (schedule walk, \c ordered_n_blocks, \c ordered_home_reads, the
+/// run-completeness assert) is touched -- see this file's own \note on why a
+/// concatenated multi-root forest gets cross-root CSE for free from
+/// \c compute_dag_boulevard's hash-keyed \c ValueCell bucketing (built
+/// upstream of this function, in \p rich) with NO new dedup logic needed
+/// here: a value shared across two \e independent root trees is just another
+/// repeated hash, indistinguishable from a value shared across two summands
+/// of one root's own forest, which this same walk already builds once.
+///
+/// \param forest Same requirement as \c evaluate_ordered_schedule's \p
+///        forest: the roots whose results are computed by this call -- either
+///        the summand terms of ONE equation (the pre-Task-4 caller) or
+///        several INDEPENDENT equations' own root trees (Task 4's multi-root
+///        caller); this function does not care which, since it produces one
+///        unpermuted, unsummed result per element of \p forest either way.
+/// \return Each element of \p forest's own already-built result, unpermuted,
+///         same order and length as \p forest.
+///
+template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
+          typename F, typename N, bool FHC,
+          typename ScopeGuardFactory = ::sequant::make_no_scope_guard>
+  requires meta::leaf_node_evaluator<std::ranges::range_value_t<Nodes>, F>
+[[nodiscard]] container::svector<ResultPtr> run_ordered_schedule_pre_results(
+    Nodes const& forest, OrderedSchedule const& ordered,
+    RichSchedule const& rich, F const& leaf_evaluator,
+    CacheManager<N, FHC>& cache,
+    std::function<std::size_t(Index const&)> const& target,
+    [[maybe_unused]] ScopeGuardFactory const& make_scope_guard = {},
+    std::function<bool(std::ranges::range_value_t<Nodes> const&)> const&
+        is_volatile = {},
+    std::function<std::size_t(std::size_t)> const& home_life_override = {}) {
+  using node_t = std::ranges::range_value_t<Nodes>;
+  static_assert(std::is_same_v<node_t, N>,
+                "the forest's node type and the cache's node type must match");
+
+  // hash -> node, resolving a BuildStep's value_id (via rich.cells[vid].hash)
+  // to the forest node evaluate_impl builds.
+  auto const vmap = build_value_node_map(forest);
+
+  // Task 4: the block-count function over the WHOLE ScopeBlock tree, built
+  // ONCE here (Task 2's ordered_n_blocks) and threaded through the homing
+  // sites -- both the root-composite site below and, via
+  // run_ordered_contracted_block's recursion, every escape-output site. It
+  // feeds home_reads (the per-batch loop factors) below. Cheap and
+  // side-effect-free (it just sizes each realized loop axis's mode_batches
+  // once).
+  std::function<std::size_t(Index const&)> const n_blocks = [&]() {
+    PhaseTimer::Scope _pt("B.sched_setup");
+    return ordered_n_blocks<node_t>(ordered, rich, vmap, leaf_evaluator,
+                                    target);
+  }();
+
+  // Task 4: the EXACT home use-count for each homed value under read-from-home,
+  // computed ONCE from the ordered schedule's realized scopes + the DAG (with
+  // multiplicity) -- see detail::ordered_home_reads. This is the non-persistent
+  // life of a volatile homed value: it frees at its genuine last use instead
+  // of being pinned resident. A test may inject home_life_override (a
+  // non-evicting life) to MEASURE the actual home reads and assert them equal
+  // to home_reads -- the "predicted == measured" gate.
+  std::function<std::size_t(std::size_t)> const home_reads =
+      home_life_override ? home_life_override : [&]() {
+        PhaseTimer::Scope _pt("B.sched_setup");
+        return ordered_home_reads<node_t>(ordered, rich, vmap, n_blocks);
+      }();
+
+  // DIAGNOSTIC (SEQUANT_UT_CELL_CHECK): unbatched + unlimited budget must have
+  // exactly ONE cell and ONE producer per value hash. Report any violation.
+  if (std::getenv("SEQUANT_UT_CELL_CHECK")) {
+    std::unordered_map<std::size_t, std::size_t> cells_per_hash;
+    std::unordered_map<std::size_t, std::size_t> vid_to_hash;
+    for (auto const& c : rich.cells) {
+      ++cells_per_hash[c.hash];
+      vid_to_hash[c.value_id] = c.hash;
+    }
+    std::unordered_map<std::size_t, std::size_t> producers_per_vid;
+    auto walk = [&](auto&& self, ScopeBlock const& b) -> void {
+      for (auto const& s : b.steps) {
+        if (auto const* bs = std::get_if<BuildStep>(&s.value))
+          ++producers_per_vid[bs->value_id];
+        else if (auto const* ch = std::get_if<ScopeBlock>(&s.value))
+          self(self, *ch);
+      }
+      for (auto const& [vid, k] : b.outputs) ++producers_per_vid[vid];
+    };
+    walk(walk, ordered.root);
+    std::size_t multi_cell = 0, multi_prod = 0;
+    for (auto const& [h, n] : cells_per_hash)
+      if (n > 1) ++multi_cell;
+    std::unordered_map<std::size_t, std::size_t> producers_per_hash;
+    for (auto const& [vid, n] : producers_per_vid) {
+      auto const it = vid_to_hash.find(vid);
+      producers_per_hash[it == vid_to_hash.end() ? vid : it->second] += n;
+    }
+    for (auto const& [h, n] : producers_per_hash)
+      if (n > 1) ++multi_prod;
+    std::fprintf(stderr,
+                 "[cell-check] distinct_hashes=%zu cells=%zu num_values=%zu "
+                 "hashes_with_>1_cell=%zu hashes_with_>1_producer=%zu\n",
+                 cells_per_hash.size(), rich.cells.size(),
+                 static_cast<std::size_t>(ordered.num_values), multi_cell,
+                 multi_prod);
+    // Cross-SCHEDULE accumulation: a value that is a cell in more than one
+    // rank-schedule (both share the cache) is a >1-cell-per-value violation the
+    // per-schedule check above cannot see. Accumulate across every schedule
+    // construction and dump the running per-hash cell count to a file.
+    static auto* const seen =
+        new std::unordered_map<std::size_t, std::size_t>();
+    for (auto const& c : rich.cells) ++(*seen)[c.hash];
+    if (char const* dump = std::getenv("SEQUANT_UT_CELL_DUMP")) {
+      if (std::FILE* fp = std::fopen(dump, "w")) {
+        for (auto const& [h, n] : *seen) std::fprintf(fp, "%zu\t%zu\n", h, n);
+        std::fclose(fp);
+      }
+    }
+  }
+
+  // Per-value results, indexed by value_id (== a ValueCell's own slot in
+  // rich.cells -- see peak_profile.hpp's ValueCell::value_id doc comment),
+  // so the pre_results resolution below reads a forest root's own build
+  // directly rather than re-resolving it through the cache.
+  container::vector<ResultPtr> value_results(ordered.num_values);
+
+  // R3 (SP3 Task 5): executor-side run-completeness ledger. Set to 1 at the
+  // EXACT site each scheduled value is actually built -- a root-level BuildStep
+  // below, a loop-local Transient BuildStep, or a block escape output's close
+  // (see run_ordered_contracted_block). This is the true "was built" slot for
+  // the completeness assert at the tail (value_results holds only root-scope
+  // escaping values, so a loop-local Transient never lands there).
+  container::vector<char> built(ordered.num_values, 0);
+
+  // -------- Tasks 1-3: walk the root block's own steps, in order. --------
+  // A BuildStep is built directly (Task 1); a child ScopeBlock (a realized
+  // batch loop, Contracted or External alike) is run via
+  // detail::run_ordered_contracted_block (Task 2 AccumulateSum, Task 3
+  // AccumulateScatter), which mirrors its own outputs into value_results so
+  // the pre_results resolution below resolves a forest root produced inside a
+  // loop block exactly like one produced by a plain root BuildStep.
+  typename CacheManager<N, FHC>::BatchContext const root_ectx;
+  for (Step const& step : ordered.root.steps) {
+    if (auto const* build = std::get_if<BuildStep>(&step.value)) {
+      std::size_t const vid = build->value_id;
+      SEQUANT_ASSERT(vid < rich.cells.size());
+      auto const hash = rich.cells[vid].hash;
+      auto const it = vmap.find(hash);
+      SEQUANT_ASSERT(it != vmap.end() &&
+                     "evaluate_ordered_schedule: BuildStep value not found "
+                     "in the forest's value-node map");
+      // Home this root-scope value at the root cache with a RESIDENT slot
+      // (unbounded life until the per-term reset), so it is built ONCE and
+      // read whole by every later consumer -- a root-level ancestor BuildStep
+      // that would otherwise re-descend and rebuild it (the plain per-forest
+      // CSE life, if any, is drained by its unbatched use count), and a
+      // block-internal consumer reaching it up the scope chain (which reads a
+      // root-homed invariant once per batch block). Without this, each such
+      // consumer recomputes the composite; ensure_home_slot is what makes a
+      // Κ-free home={} composite (I(i,i;a,a)) build exactly once. Leaves need
+      // no slot (the leaf evaluator just hands back a precomputed input), so
+      // this targets only the internal-node BuildSteps the schedule homes here.
+      // Task 4: classify this root-homed composite volatile-vs-persistent and
+      // seed its cache life (see the escape-output site in
+      // run_ordered_contracted_block for the same pattern). A subtree carrying
+      // a volatile leaf is NON-persistent (released at its genuine last use);
+      // an invariant composite is persistent (built once, survives reset). With
+      // no volatility policy (is_volatile empty) keep the unconditional
+      // resident pin -- the pre-Task-4 behavior every non-volatility-aware
+      // caller relies on.
+      if (!it->second.leaf()) {
+        if (is_volatile) {
+          bool const vol = subtree_any(it->second, is_volatile);
+          std::size_t const life = home_reads(vid);
+          cache.ensure_home_slot(it->second, life, /*persistent=*/!vol);
+        } else {
+          cache.ensure_home_slot(it->second);
+        }
+      }
+      value_results[vid] =
+          evaluate_impl<EvalTrace>(it->second, leaf_evaluator, cache);
+      built[vid] = 1;  // R3: this root-scope value is produced.
+    } else if (auto const* block = std::get_if<ScopeBlock>(&step.value)) {
+      run_ordered_contracted_block<EvalTrace>(
+          *block, vmap, rich, leaf_evaluator, cache, target, root_ectx,
+          value_results, built, is_volatile, n_blocks, home_reads);
+    } else {
+      // R4: the Step variant has exactly BuildStep/ScopeBlock alternatives; any
+      // other state is a schedule this executor cannot interpret.
+      SEQUANT_ASSERT(false &&
+                     "evaluate_ordered_schedule: unsupported Step variant at "
+                     "root scope");
+    }
+  }
+
+  // R3: run-completeness. Every value_id the schedule PROMISES to produce --
+  // every BuildStep (root-level or loop-local Transient) and every block escape
+  // output, enumerated by collect_production_ids -- must have been actually
+  // built by the walk above. Complements well_formed's STATIC single-producer
+  // check, which checks no DUPLICATE production but NOT completeness (see
+  // ordered_schedule.hpp well_formed's \note). A gap here means the executor
+  // skipped a scheduled value: a silent under-execution to refuse, not ignore.
+  {
+    container::vector<std::size_t> production_ids;
+    collect_production_ids(ordered.root, production_ids);
+    for (std::size_t const vid : production_ids) {
+      SEQUANT_ASSERT(vid < ordered.num_values &&
+                     "evaluate_ordered_schedule: production value_id out of "
+                     "range");
+      SEQUANT_ASSERT(built[vid] &&
+                     "evaluate_ordered_schedule: a scheduled value_id was "
+                     "never produced during the run (incomplete execution)");
+    }
+  }
+
+  // hash -> value_id, to resolve each forest root's own build above into the
+  // per-root pre_results below.
+  std::unordered_map<std::size_t, std::size_t> hash_to_vid;
+  hash_to_vid.reserve(rich.cells.size());
+  for (auto const& c : rich.cells) hash_to_vid.emplace(c.hash, c.value_id);
+
+  container::svector<node_t> roots;
+  for (auto&& n : forest) roots.push_back(n);
+
+  container::svector<ResultPtr> pre_results(roots.size());
+  for (std::size_t i = 0; i != roots.size(); ++i) {
+    auto const vid_it = hash_to_vid.find(roots[i]->hash_value());
+    SEQUANT_ASSERT(vid_it != hash_to_vid.end() &&
+                   "evaluate_ordered_schedule: forest root not found in the "
+                   "schedule's value map");
+    pre_results[i] = value_results[vid_it->second];
+    SEQUANT_ASSERT(pre_results[i] &&
+                   "evaluate_ordered_schedule: forest root was never "
+                   "produced by a root BuildStep");
+  }
+
+  return pre_results;
+}
+
 }  // namespace detail
 
 ///
@@ -596,206 +843,20 @@ ResultPtr evaluate_ordered_schedule(
         is_volatile = {},
     std::function<std::size_t(std::size_t)> const& home_life_override = {}) {
   using node_t = std::ranges::range_value_t<Nodes>;
-  static_assert(std::is_same_v<node_t, N>,
-                "the forest's node type and the cache's node type must match");
 
-  // hash -> node, resolving a BuildStep's value_id (via rich.cells[vid].hash)
-  // to the forest node evaluate_impl builds.
-  auto const vmap = build_value_node_map(forest);
-
-  // Task 4: the block-count function over the WHOLE ScopeBlock tree, built
-  // ONCE here (Task 2's ordered_n_blocks) and threaded through the homing
-  // sites -- both the root-composite site below and, via
-  // run_ordered_contracted_block's recursion, every escape-output site. It
-  // feeds home_reads (the per-batch loop factors) below. Cheap and
-  // side-effect-free (it just sizes each realized loop axis's mode_batches
-  // once).
-  std::function<std::size_t(Index const&)> const n_blocks = [&]() {
-    PhaseTimer::Scope _pt("B.sched_setup");
-    return detail::ordered_n_blocks<node_t>(ordered, rich, vmap, leaf_evaluator,
-                                            target);
-  }();
-
-  // Task 4: the EXACT home use-count for each homed value under read-from-home,
-  // computed ONCE from the ordered schedule's realized scopes + the DAG (with
-  // multiplicity) -- see detail::ordered_home_reads. This is the non-persistent
-  // life of a volatile homed value: it frees at its genuine last home access
-  // instead of being pinned resident. A test may inject home_life_override (a
-  // non-evicting life) to MEASURE the actual home reads and assert them equal
-  // to home_reads -- the "predicted == measured" gate.
-  std::function<std::size_t(std::size_t)> const home_reads =
-      home_life_override ? home_life_override : [&]() {
-        PhaseTimer::Scope _pt("B.sched_setup");
-        return detail::ordered_home_reads<node_t>(ordered, rich, vmap,
-                                                  n_blocks);
-      }();
-
-  // DIAGNOSTIC (SEQUANT_UT_CELL_CHECK): unbatched + unlimited budget must have
-  // exactly ONE cell and ONE producer per value hash. Report any violation.
-  if (std::getenv("SEQUANT_UT_CELL_CHECK")) {
-    std::unordered_map<std::size_t, std::size_t> cells_per_hash;
-    std::unordered_map<std::size_t, std::size_t> vid_to_hash;
-    for (auto const& c : rich.cells) {
-      ++cells_per_hash[c.hash];
-      vid_to_hash[c.value_id] = c.hash;
-    }
-    std::unordered_map<std::size_t, std::size_t> producers_per_vid;
-    auto walk = [&](auto&& self, ScopeBlock const& b) -> void {
-      for (auto const& s : b.steps) {
-        if (auto const* bs = std::get_if<BuildStep>(&s.value))
-          ++producers_per_vid[bs->value_id];
-        else if (auto const* ch = std::get_if<ScopeBlock>(&s.value))
-          self(self, *ch);
-      }
-      for (auto const& [vid, k] : b.outputs) ++producers_per_vid[vid];
-    };
-    walk(walk, ordered.root);
-    std::size_t multi_cell = 0, multi_prod = 0;
-    for (auto const& [h, n] : cells_per_hash)
-      if (n > 1) ++multi_cell;
-    std::unordered_map<std::size_t, std::size_t> producers_per_hash;
-    for (auto const& [vid, n] : producers_per_vid) {
-      auto const it = vid_to_hash.find(vid);
-      producers_per_hash[it == vid_to_hash.end() ? vid : it->second] += n;
-    }
-    for (auto const& [h, n] : producers_per_hash)
-      if (n > 1) ++multi_prod;
-    std::fprintf(stderr,
-                 "[cell-check] distinct_hashes=%zu cells=%zu num_values=%zu "
-                 "hashes_with_>1_cell=%zu hashes_with_>1_producer=%zu\n",
-                 cells_per_hash.size(), rich.cells.size(),
-                 static_cast<std::size_t>(ordered.num_values), multi_cell,
-                 multi_prod);
-    // Cross-SCHEDULE accumulation: a value that is a cell in more than one
-    // rank-schedule (both share the cache) is a >1-cell-per-value violation the
-    // per-schedule check above cannot see. Accumulate across every schedule
-    // construction and dump the running per-hash cell count to a file.
-    static auto* const seen =
-        new std::unordered_map<std::size_t, std::size_t>();
-    for (auto const& c : rich.cells) ++(*seen)[c.hash];
-    if (char const* dump = std::getenv("SEQUANT_UT_CELL_DUMP")) {
-      if (std::FILE* fp = std::fopen(dump, "w")) {
-        for (auto const& [h, n] : *seen) std::fprintf(fp, "%zu\t%zu\n", h, n);
-        std::fclose(fp);
-      }
-    }
-  }
-
-  // Per-value results, indexed by value_id (== a ValueCell's own slot in
-  // rich.cells -- see peak_profile.hpp's ValueCell::value_id doc comment),
-  // so the root-combine step below reads a forest root's own build directly
-  // rather than re-resolving it through the cache.
-  container::vector<ResultPtr> value_results(ordered.num_values);
-
-  // R3 (SP3 Task 5): executor-side run-completeness ledger. Set to 1 at the
-  // EXACT site each scheduled value is actually built -- a root-level BuildStep
-  // below, a loop-local Transient BuildStep, or a block escape output's close
-  // (see run_ordered_contracted_block). This is the true "was built" slot for
-  // the completeness assert at the tail (value_results holds only root-scope
-  // escaping values, so a loop-local Transient never lands there).
-  container::vector<char> built(ordered.num_values, 0);
-
-  // -------- Tasks 1-3: walk the root block's own steps, in order. --------
-  // A BuildStep is built directly (Task 1); a child ScopeBlock (a realized
-  // batch loop, Contracted or External alike) is run via
-  // detail::run_ordered_contracted_block (Task 2 AccumulateSum, Task 3
-  // AccumulateScatter), which mirrors its own outputs into value_results so
-  // the root-combine below resolves a forest root produced inside a loop
-  // block exactly like one produced by a plain root BuildStep.
-  typename CacheManager<N, FHC>::BatchContext const root_ectx;
-  for (Step const& step : ordered.root.steps) {
-    if (auto const* build = std::get_if<BuildStep>(&step.value)) {
-      std::size_t const vid = build->value_id;
-      SEQUANT_ASSERT(vid < rich.cells.size());
-      auto const hash = rich.cells[vid].hash;
-      auto const it = vmap.find(hash);
-      SEQUANT_ASSERT(it != vmap.end() &&
-                     "evaluate_ordered_schedule: BuildStep value not found "
-                     "in the forest's value-node map");
-      // Home this root-scope value at the root cache with a RESIDENT slot
-      // (unbounded life until the per-term reset), so it is built ONCE and
-      // read whole by every later consumer -- a root-level ancestor BuildStep
-      // that would otherwise re-descend and rebuild it (the plain per-forest
-      // CSE life, if any, is drained by its unbatched use count), and a
-      // block-internal consumer reaching it up the scope chain (which reads a
-      // root-homed invariant once per batch block). Without this, each such
-      // consumer recomputes the composite; ensure_home_slot is what makes a
-      // Κ-free home={} composite (I(i,i;a,a)) build exactly once. Leaves need
-      // no slot (the leaf evaluator just hands back a precomputed input), so
-      // this targets only the internal-node BuildSteps the schedule homes here.
-      // Task 4: classify this root-homed composite volatile-vs-persistent and
-      // seed its cache life (see the escape-output site in
-      // run_ordered_contracted_block for the same pattern). A subtree carrying
-      // a volatile leaf is NON-persistent (released at its genuine last use);
-      // an invariant composite is persistent (built once, survives reset). With
-      // no volatility policy (is_volatile empty) keep the unconditional
-      // resident pin -- the pre-Task-4 behavior every non-volatility-aware
-      // caller relies on.
-      if (!it->second.leaf()) {
-        if (is_volatile) {
-          bool const vol = subtree_any(it->second, is_volatile);
-          std::size_t const life = home_reads(vid);
-          cache.ensure_home_slot(it->second, life, /*persistent=*/!vol);
-        } else {
-          cache.ensure_home_slot(it->second);
-        }
-      }
-      value_results[vid] =
-          evaluate_impl<EvalTrace>(it->second, leaf_evaluator, cache);
-      built[vid] = 1;  // R3: this root-scope value is produced.
-    } else if (auto const* block = std::get_if<ScopeBlock>(&step.value)) {
-      detail::run_ordered_contracted_block<EvalTrace>(
-          *block, vmap, rich, leaf_evaluator, cache, target, root_ectx,
-          value_results, built, is_volatile, n_blocks, home_reads);
-    } else {
-      // R4: the Step variant has exactly BuildStep/ScopeBlock alternatives; any
-      // other state is a schedule this executor cannot interpret.
-      SEQUANT_ASSERT(false &&
-                     "evaluate_ordered_schedule: unsupported Step variant at "
-                     "root scope");
-    }
-  }
-
-  // R3: run-completeness. Every value_id the schedule PROMISES to produce --
-  // every BuildStep (root-level or loop-local Transient) and every block escape
-  // output, enumerated by collect_production_ids -- must have been actually
-  // built by the walk above. Complements well_formed's STATIC single-producer
-  // check, which checks no DUPLICATE production but NOT completeness (see
-  // ordered_schedule.hpp well_formed's \note). A gap here means the executor
-  // skipped a scheduled value: a silent under-execution to refuse, not ignore.
-  {
-    container::vector<std::size_t> production_ids;
-    detail::collect_production_ids(ordered.root, production_ids);
-    for (std::size_t const vid : production_ids) {
-      SEQUANT_ASSERT(vid < ordered.num_values &&
-                     "evaluate_ordered_schedule: production value_id out of "
-                     "range");
-      SEQUANT_ASSERT(built[vid] &&
-                     "evaluate_ordered_schedule: a scheduled value_id was "
-                     "never produced during the run (incomplete execution)");
-    }
-  }
-
-  // hash -> value_id, to resolve each forest root's own build above into the
-  // shared combine step's per-root pre_results below.
-  std::unordered_map<std::size_t, std::size_t> hash_to_vid;
-  hash_to_vid.reserve(rich.cells.size());
-  for (auto const& c : rich.cells) hash_to_vid.emplace(c.hash, c.value_id);
+  // Task 4: the schedule walk itself (Tasks 1-3, plus the block-count/
+  // home-reads setup and the run-completeness assert) is factored into
+  // detail::run_ordered_schedule_pre_results, shared byte-for-byte with
+  // evaluate_ordered_multiroot below -- see that function's own doc comment.
+  // Nothing about the walk changes here; only what happens to its per-root
+  // pre_results output differs (summed here, mapped there).
+  container::svector<ResultPtr> pre_results =
+      detail::run_ordered_schedule_pre_results<EvalTrace>(
+          forest, ordered, rich, leaf_evaluator, cache, target,
+          make_scope_guard, is_volatile, home_life_override);
 
   container::svector<node_t> roots;
   for (auto&& n : forest) roots.push_back(n);
-
-  container::svector<ResultPtr> pre_results(roots.size());
-  for (std::size_t i = 0; i != roots.size(); ++i) {
-    auto const vid_it = hash_to_vid.find(roots[i]->hash_value());
-    SEQUANT_ASSERT(vid_it != hash_to_vid.end() &&
-                   "evaluate_ordered_schedule: forest root not found in the "
-                   "schedule's value map");
-    pre_results[i] = value_results[vid_it->second];
-    SEQUANT_ASSERT(pre_results[i] &&
-                   "evaluate_ordered_schedule: forest root was never "
-                   "produced by a root BuildStep");
-  }
 
   // -------- Shared combine: permute each root to layout and sum. --------
   // combine_forest_roots (forest_combine.hpp) is the SAME helper
@@ -803,6 +864,84 @@ ResultPtr evaluate_ordered_schedule(
   // byte-identical Term/Permute/SumInplace trace bookkeeping without a
   // hand-synced second copy.
   return combine_forest_roots<EvalTrace>(roots, pre_results, layout, cache);
+}
+
+///
+/// \brief Task 4 of the multi-root single-DAG eval plan: the MULTI-ROOT
+/// ordered entry point. Identical inputs to \c evaluate_ordered_schedule
+/// (same \p roots/\p ordered/\p rich/\p layout/\p leaf_evaluator/\p cache/
+/// \p target contract -- \p ordered and \p rich must already have been built
+/// from the SAME concatenated \p roots, e.g. via \c compute_dag_boulevard(
+/// roots, ...) + \c build_ordered_schedule, exactly as any \c
+/// evaluate_ordered_schedule caller already does for its own forest), but
+/// returns a MAP instead of a SUM: each root's own (permuted, but NOT
+/// cross-root-accumulated) result, aligned index-for-index with \p roots.
+///
+/// \details Runs the identical schedule walk \c evaluate_ordered_schedule
+/// runs (via the same \c detail::run_ordered_schedule_pre_results this
+/// function and \c evaluate_ordered_schedule both delegate to -- \c
+/// ordered_home_reads, \c ordered_n_blocks, and the run-completeness assert
+/// are UNCHANGED, exercised over the combined schedule exactly as they
+/// already are for a multi-summand forest), so a value shared across two
+/// \e independent roots is built exactly once for the identical reason a
+/// value shared across two summands of one root's own forest already is:
+/// \c compute_dag_boulevard buckets by structural hash into one \c ValueCell
+/// regardless of which root(s) reference it, and \c well_formed's static
+/// single-producer invariant (plus this walk's own run-completeness assert)
+/// guarantees the schedule realizes exactly one \c BuildStep for it. The
+/// ONLY change from \c evaluate_ordered_schedule is the tail: instead of one
+/// forest-wide \c combine_forest_roots call (which sums every root into a
+/// single \c ResultPtr), this calls \c combine_forest_roots once PER ROOT,
+/// each with a singleton \c {roots[i]}/{pre_results[i]} pair -- reusing the
+/// IDENTICAL per-root Term/Permute trace bookkeeping \c combine_forest_roots
+/// already emits for each root of a summed forest, but never reaching its
+/// cross-root \c add_inplace (a singleton call never has a second root to
+/// sum against), so no roots are summed together. For a single-root \p roots
+/// input this reduces to a singleton \c combine_forest_roots call byte-
+/// identical to what \c evaluate_ordered_schedule would run for that same
+/// one-root forest -- the regression anchor: \c evaluate_ordered_multiroot(
+/// {r}, ...) == { evaluate_ordered_schedule({r}, ...) }.
+///
+/// \return One \c ResultPtr per element of \p roots, in \p roots' own order,
+///         each permuted to \p layout -- NOT summed together.
+///
+template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
+          typename F, typename N, bool FHC,
+          typename ScopeGuardFactory = ::sequant::make_no_scope_guard>
+  requires meta::leaf_node_evaluator<std::ranges::range_value_t<Nodes>, F>
+[[nodiscard]] container::svector<ResultPtr> evaluate_ordered_multiroot(
+    Nodes const& roots, OrderedSchedule const& ordered,
+    RichSchedule const& rich, auto const& layout, F const& leaf_evaluator,
+    CacheManager<N, FHC>& cache,
+    std::function<std::size_t(Index const&)> const& target,
+    [[maybe_unused]] ScopeGuardFactory const& make_scope_guard = {},
+    std::function<bool(std::ranges::range_value_t<Nodes> const&)> const&
+        is_volatile = {},
+    std::function<std::size_t(std::size_t)> const& home_life_override = {}) {
+  using node_t = std::ranges::range_value_t<Nodes>;
+
+  container::svector<ResultPtr> pre_results =
+      detail::run_ordered_schedule_pre_results<EvalTrace>(
+          roots, ordered, rich, leaf_evaluator, cache, target, make_scope_guard,
+          is_volatile, home_life_override);
+
+  container::svector<node_t> root_nodes;
+  for (auto&& n : roots) root_nodes.push_back(n);
+  SEQUANT_ASSERT(pre_results.size() == root_nodes.size());
+
+  // Per-root combine: reuses combine_forest_roots' Term/Permute bookkeeping
+  // one root at a time (a singleton call never reaches its cross-root
+  // add_inplace), so each root is permuted to layout exactly as it would be
+  // as part of a summed forest, but no two roots are ever accumulated
+  // together -- the map, not the sum.
+  container::svector<ResultPtr> results(root_nodes.size());
+  for (std::size_t i = 0; i != root_nodes.size(); ++i) {
+    container::svector<node_t> one_root{root_nodes[i]};
+    container::svector<ResultPtr> one_pre{std::move(pre_results[i])};
+    results[i] =
+        combine_forest_roots<EvalTrace>(one_root, one_pre, layout, cache);
+  }
+  return results;
 }
 
 }  // namespace sequant::eval

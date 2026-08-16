@@ -1002,24 +1002,37 @@ ResultPtr evaluate_impl(Node const& node,         //
         //    Only an INTERNAL node's result is guaranteed freshly built by
         //    THIS evaluation (prod()/sum()/permute() always allocate), so
         //    only internal nodes are safe candidates.
-        //  - !cache.chain_holds(f.left): even an internal node's result must
-        //    not be a live entry on the CacheManager's scope chain -- i.e.
-        //    not referenced again elsewhere in THIS evaluation's tree/forest
-        //    (multi-use, so some other read is pending); chain_holds() tests
-        //    that by pointer identity, release-safe (SEQUANT_ASSERT, not
-        //    TA_ASSERT/assert).
+        //  - !cache.chain_holds_shared(f.left): even an internal node's result
+        //    must not be a live, SHARED entry on the CacheManager's scope chain
+        //    -- i.e. not referenced again elsewhere in THIS evaluation's
+        //    tree/forest (multi-use, so some other read is pending). This is a
+        //    RUNTIME condition, not merely an assert: under this Release build
+        //    SEQUANT_ASSERT expands to a no-op (SEQUANT_ASSERT_ENABLED
+        //    undefined), so a guard that only asserted would be ELIDED and the
+        //    mutation would silently corrupt a value shared across roots (see
+        //    the ordered-executor multi-root path, where a subexpression CSE'd
+        //    across two independent roots is homed resident and read by both).
+        //    chain_holds_shared() tests, by pointer identity, whether a LIVE
+        //    entry with more than one consumer (max_life > 1 -- a resident home
+        //    or a not-yet-drained multi-use CSE entry) still holds f.left; a
+        //    private single-use accumulator is NOT reported (a transient
+        //    running total is held by no entry, and a single-use CSE entry
+        //    moves its buffer out on its sole read, so it no longer holds it),
+        //    so in-place still fires for the private common case -- see
+        //    CacheManager::chain_holds_shared's own doc comment.
         // A marked Sum whose left child IS a leaf (the common case for the
-        // innermost Sum of a chain, whose left is the chain seed) therefore
-        // falls back to the allocating sum() below despite being marked --
-        // one bounded extra allocation for the whole chain, not per term --
-        // and every OTHER (non-leaf-seeded) Sum in the chain still
-        // accumulates in place from there on, since each already-computed
-        // running total is a fresh, evaluation-local buffer.
-        bool const inplace_eligible = f.node->op_type() == EvalOp::Sum &&
-                                      f.node->accumulate_in_place() &&
-                                      !f.node.left().leaf();
+        // innermost Sum of a chain, whose left is the chain seed), OR whose
+        // left operand is a shared cache-resident value, therefore falls back
+        // to the allocating sum() below despite being marked -- one bounded
+        // extra allocation, not per term -- and every OTHER (non-leaf-seeded,
+        // private) Sum in the chain still accumulates in place from there on,
+        // since each already-computed running total is a fresh,
+        // evaluation-local buffer.
+        bool const inplace_eligible =
+            f.node->op_type() == EvalOp::Sum && f.node->accumulate_in_place() &&
+            !f.node.left().leaf() && !cache.chain_holds_shared(f.left);
         if (inplace_eligible) {
-          SEQUANT_ASSERT(!cache.chain_holds(f.left));
+          SEQUANT_ASSERT(!cache.chain_holds_shared(f.left));
 
           // The accumulator (f.left) is used AS IS, in its own layout --
           // never repermuted -- since binarize() pins a marked Sum's
@@ -1398,6 +1411,66 @@ ResultPtr evaluate(Nodes const& nodes,  //
 
   static_assert(std::is_default_constructible_v<annot_type>);
   return evaluate(nodes, annot_type{}, leaf_evaluator, cache);
+}
+
+///
+/// \brief Task 4 (multi-root single-DAG eval): the multi-root dispatch entry.
+/// Mirrors the forest-range `evaluate(Nodes const&, layout, leaf_evaluator,
+/// cache)` overload's whole-scope dispatch above, but for the cache's
+/// `multiroot_driver()` (cache_manager.hpp) instead of its
+/// `whole_scope_driver()`: consults the driver and routes the WHOLE set of
+/// independent \p roots through it, returning one result PER ROOT with NO
+/// cross-root summation (a map, not a sum) -- unlike the whole-scope driver,
+/// which SUMS its forest into one `ResultPtr` (so a "not installed" caller
+/// can safely fall back to the ordinary per-tree descent), a multi-root
+/// caller has no equally-cheap per-tree fallback that would still give the
+/// cross-root CSE this entry point exists for (see `multiroot_driver_type`'s
+/// own doc comment) -- so with no driver installed this throws rather than
+/// silently degrading to N independent (non-CSE'd) evaluations. The intended
+/// driver (installed via `cache.set_multiroot_driver(...)`) is the ordered
+/// executor's `evaluate_ordered_multiroot` (ordered_executor.hpp), closed
+/// over the caller's own `OrderedSchedule`/`RichSchedule`/`target`/batching
+/// policy exactly as `whole_scope_driver_type`'s doc comment describes for
+/// the summed driver.
+///
+/// \param roots The independent root trees to evaluate; a subexpression
+///        shared across two or more of them is built exactly once by a
+///        driver that concatenates them into one schedule (the ordered
+///        executor's own contract -- see `evaluate_ordered_multiroot`).
+/// \param layout The layout each root's own result is permuted to; same
+///        meaning as the forest-range `evaluate`'s \p layout, applied
+///        per-root (not once across a cross-root sum).
+/// \param leaf_evaluator Unused when a driver is installed (its own leaf
+///        evaluator lives inside the driver's closure, exactly as
+///        `whole_scope_driver_type` documents) -- present only so this
+///        entry's own call signature matches the rest of the `evaluate`
+///        family; kept for interface symmetry, not consulted directly here
+///        (there being no per-tree fallback path to consult it on).
+/// \param cache The cache whose `multiroot_driver()` is consulted.
+/// \return One `ResultPtr` per element of \p roots, in \p roots' own order.
+/// \throws std::logic_error if `cache.multiroot_driver()` is unset -- there
+///         is no per-root fallback; a multi-root caller must explicitly
+///         install a driver that understands the cross-root CSE contract.
+///
+template <Trace EvalTrace = Trace::Default, typename node_t, typename F,
+          typename N, bool FHC>
+  requires meta::leaf_node_evaluator<node_t, F>
+container::svector<ResultPtr> evaluate_multiroot(
+    container::svector<node_t> const& roots, std::string const& layout,
+    [[maybe_unused]] F const& leaf_evaluator, CacheManager<N, FHC>& cache) {
+  static_assert(
+      std::is_same_v<node_t, N>,
+      "evaluate_multiroot: the roots' node type must match the cache's key "
+      "type");
+  auto const& drv = cache.multiroot_driver();
+  if (!drv)
+    throw std::logic_error(
+        "evaluate_multiroot: no multiroot driver installed on the cache -- "
+        "there is no per-root fallback; install one via "
+        "cache.set_multiroot_driver(...) (e.g. ordered_executor.hpp's "
+        "evaluate_ordered_multiroot, closed over an OrderedSchedule built "
+        "from the SAME roots)");
+  return drv(roots, layout, cache);
 }
 
 ///

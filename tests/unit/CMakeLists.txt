@@ -161,6 +161,7 @@ endif()
 ##########################
 set(eval_dryrun_test_sources
     "test_eval_dryrun.cpp"
+    "test_eval_ordered.cpp"
     "test_legality.cpp"
     "test_meter.cpp"
     "test_occurrence_key.cpp"
@@ -188,6 +189,16 @@ target_link_libraries(unit_tests-sequant-eval-dryrun-obj
 # silently disable the shadow-assert code this file means to exercise. Give it
 # its own TU instead.
 set_source_files_properties("test_placement_router.cpp"
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+# test_eval_ordered.cpp duplicates test_ordered_executor.cpp's own minimal
+# ScalarEvalExpr/ScalarLeafEvaluator/scalar_tree fixture inside an anonymous
+# namespace (that file's own established precedent: no shared test header
+# exists between the two, see both files' own top-of-file comments). Under a
+# Unity build every listed .cpp is concatenated into ONE translation unit, so
+# anonymous-namespace uniqueness (normally per-TU) stops distinguishing the
+# two files' identically-named symbols and they collide. Give this file its
+# own TU, the same fix test_placement_router.cpp already uses above.
+set_source_files_properties("test_eval_ordered.cpp"
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 target_compile_definitions(unit_tests-sequant-eval-dryrun-obj PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")

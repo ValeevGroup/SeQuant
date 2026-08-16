@@ -648,6 +648,28 @@ class CacheManager {
       std::function<ResultPtr(std::vector<key_type> const& forest,
                               std::string const& layout, CacheManager&)>;
 
+  /// A multi-root driver type. When set, the free function
+  /// `evaluate_multiroot(roots, layout, leaf, cache)` (eval.hpp) routes the
+  /// WHOLE set of independent \p roots through this driver instead of
+  /// evaluating each root as its own separate forest. Unlike
+  /// `whole_scope_driver_type`, which SUMS its forest's roots into one
+  /// `ResultPtr`, this driver returns a MAP: one result per root, in input
+  /// order, with NO cross-root summation -- the roots need not even be
+  /// commensurate in shape (e.g. independent CC residual equations). The
+  /// intended installer (ordered_executor.hpp) concatenates \p roots into
+  /// ONE schedule so a subexpression shared across roots is built once (the
+  /// same CSE `compute_dag_boulevard` already gives a concatenated node
+  /// list), then returns each root's own (unsummed) `value_result`. The
+  /// captured leaf evaluator and any batching policy live inside the
+  /// closure, exactly as `whole_scope_driver_type` documents. Empty
+  /// (default) => `evaluate_multiroot` throws (there is no per-root
+  /// fallback: unlike whole-scope routing, which falls back to the ordinary
+  /// per-tree descent when unset, a multi-root caller MUST explicitly wire a
+  /// driver that understands the cross-root CSE contract).
+  using multiroot_driver_type = std::function<container::svector<ResultPtr>(
+      container::svector<key_type> const& roots, std::string const& layout,
+      CacheManager&)>;
+
   /// The batch context: an ordered stack (outermost-first) of the enclosing
   /// realized batch loops, one entry per loop, `{axis K, {block_lo, block_hi}}`
   /// (element range). Set on the per-block scratch by the batched evaluator
@@ -867,6 +889,11 @@ class CacheManager {
   /// whole_scope_driver_type). Empty => no whole-scope routing.
   whole_scope_driver_type whole_scope_driver_{};
 
+  /// Optional multi-root driver consulted by evaluate_multiroot() (see
+  /// multiroot_driver_type). Empty => evaluate_multiroot() throws (no
+  /// per-root fallback).
+  multiroot_driver_type multiroot_driver_{};
+
   /// Enclosing realized batch loops for slice-on-use (see BatchContext). Empty
   /// (default) => no enclosing batch loop; the batched evaluator sets it on the
   /// per-block scratch before each re-entry. Not cleared by reset() (it is
@@ -935,6 +962,17 @@ class CacheManager {
   [[nodiscard]] whole_scope_driver_type const& whole_scope_driver()
       const noexcept {
     return whole_scope_driver_;
+  }
+
+  /// Sets the multi-root driver (see multiroot_driver_type). Pass an empty
+  /// std::function to clear it.
+  void set_multiroot_driver(multiroot_driver_type fn) noexcept {
+    multiroot_driver_ = std::move(fn);
+  }
+
+  /// \return the multi-root driver (empty if none is set).
+  [[nodiscard]] multiroot_driver_type const& multiroot_driver() const noexcept {
+    return multiroot_driver_;
   }
 
   /// Sets the batch context (see batch_context_). Pass an empty context to
@@ -1224,6 +1262,42 @@ class CacheManager {
     for (auto const& [k, e] : cache_map_)
       if (e.holds(value)) return true;
     return parent_ ? parent_->chain_holds(value) : false;
+  }
+
+  /// \return true iff some ALIVE entry on this cache or any ancestor along the
+  ///         scope chain physically holds @p value (pointer identity) AND that
+  ///         entry has MORE THAN ONE consumer (\c max_life_count() > 1) -- i.e.
+  ///         @p value is a SHARED buffer with at least one read still pending
+  ///         (or a resident/persistent home read by every consumer), so
+  ///         mutating it in place would corrupt those other reads.
+  ///
+  /// This is the runtime safety gate the in-place \c Sum accumulation
+  /// (eval.hpp) needs, and is strictly the "the accumulator is shared" test:
+  /// a PRIVATE single-use buffer is NOT reported here, so in-place still fires
+  /// for it. Two cases yield a private (unshared) accumulator, both correctly
+  /// returning false:
+  ///   - a TRANSIENT running total (freshly allocated by a prior \c sum() /
+  ///     \c prod(), never \c store'd) is held by no entry at all; and
+  ///   - a single-use CSE entry (\c max_life == 1) MOVES its buffer out on its
+  ///     sole \c entry::access() (\c decay() reaches 0 -> \c
+  ///     std::move(data_p)), so once it has been read as an operand it no
+  ///     longer \c holds() it -- and even were it somehow still alive, \c
+  ///     max_life > 1 excludes it.
+  /// A value homed RESIDENT (\c ensure_home_slot, \c max_life == SIZE_MAX) or
+  /// with a genuine multi-use count (\c max_life > 1, e.g. a subexpression
+  /// shared across two roots, or a per-batch-reread home) is never drained by
+  /// a single read, so it stays held with \c max_life > 1 and IS reported
+  /// here -- the case the elided \c SEQUANT_ASSERT could not catch at runtime.
+  /// For every state actually reachable at the \c Sum node this coincides with
+  /// \c chain_holds (a still-held entry always has \c max_life > 1); the
+  /// explicit use-count test states the intent -- "shared", not merely
+  /// "resident" -- and keeps a hypothetical held-but-single-use entry from
+  /// needlessly disabling in-place.
+  [[nodiscard]] bool chain_holds_shared(ResultPtr const& value) const noexcept {
+    if (!value) return false;
+    for (auto const& [k, e] : cache_map_)
+      if (e.holds(value) && e.max_life_count() > 1) return true;
+    return parent_ ? parent_->chain_holds_shared(value) : false;
   }
 
   ///
