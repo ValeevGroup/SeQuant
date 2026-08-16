@@ -604,57 +604,6 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
         return ordered_home_reads<node_t>(ordered, rich, vmap, n_blocks);
       }();
 
-  // DIAGNOSTIC (SEQUANT_UT_CELL_CHECK): unbatched + unlimited budget must have
-  // exactly ONE cell and ONE producer per value hash. Report any violation.
-  if (std::getenv("SEQUANT_UT_CELL_CHECK")) {
-    std::unordered_map<std::size_t, std::size_t> cells_per_hash;
-    std::unordered_map<std::size_t, std::size_t> vid_to_hash;
-    for (auto const& c : rich.cells) {
-      ++cells_per_hash[c.hash];
-      vid_to_hash[c.value_id] = c.hash;
-    }
-    std::unordered_map<std::size_t, std::size_t> producers_per_vid;
-    auto walk = [&](auto&& self, ScopeBlock const& b) -> void {
-      for (auto const& s : b.steps) {
-        if (auto const* bs = std::get_if<BuildStep>(&s.value))
-          ++producers_per_vid[bs->value_id];
-        else if (auto const* ch = std::get_if<ScopeBlock>(&s.value))
-          self(self, *ch);
-      }
-      for (auto const& [vid, k] : b.outputs) ++producers_per_vid[vid];
-    };
-    walk(walk, ordered.root);
-    std::size_t multi_cell = 0, multi_prod = 0;
-    for (auto const& [h, n] : cells_per_hash)
-      if (n > 1) ++multi_cell;
-    std::unordered_map<std::size_t, std::size_t> producers_per_hash;
-    for (auto const& [vid, n] : producers_per_vid) {
-      auto const it = vid_to_hash.find(vid);
-      producers_per_hash[it == vid_to_hash.end() ? vid : it->second] += n;
-    }
-    for (auto const& [h, n] : producers_per_hash)
-      if (n > 1) ++multi_prod;
-    std::fprintf(stderr,
-                 "[cell-check] distinct_hashes=%zu cells=%zu num_values=%zu "
-                 "hashes_with_>1_cell=%zu hashes_with_>1_producer=%zu\n",
-                 cells_per_hash.size(), rich.cells.size(),
-                 static_cast<std::size_t>(ordered.num_values), multi_cell,
-                 multi_prod);
-    // Cross-SCHEDULE accumulation: a value that is a cell in more than one
-    // rank-schedule (both share the cache) is a >1-cell-per-value violation the
-    // per-schedule check above cannot see. Accumulate across every schedule
-    // construction and dump the running per-hash cell count to a file.
-    static auto* const seen =
-        new std::unordered_map<std::size_t, std::size_t>();
-    for (auto const& c : rich.cells) ++(*seen)[c.hash];
-    if (char const* dump = std::getenv("SEQUANT_UT_CELL_DUMP")) {
-      if (std::FILE* fp = std::fopen(dump, "w")) {
-        for (auto const& [h, n] : *seen) std::fprintf(fp, "%zu\t%zu\n", h, n);
-        std::fclose(fp);
-      }
-    }
-  }
-
   // Per-value results, indexed by value_id (== a ValueCell's own slot in
   // rich.cells -- see peak_profile.hpp's ValueCell::value_id doc comment),
   // so the pre_results resolution below reads a forest root's own build

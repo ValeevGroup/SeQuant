@@ -406,31 +406,6 @@ struct BuildMeter {
     ++read_count()[hash];
     max_life_of()[hash] = max_life;
   }
-  /// The one value hash to trace exact life_c events for
-  /// (SEQUANT_UT_TRACE_HASH, 0 = off). Parsed once.
-  static std::size_t trace_hash() noexcept {
-    static std::size_t const h = [] {
-      char const* e = std::getenv("SEQUANT_UT_TRACE_HASH");
-      return e ? std::strtoull(e, nullptr, 10) : std::size_t{0};
-    }();
-    return h;
-  }
-  /// Emit one ordered life_c event for the traced value.
-  static void life_event(std::size_t hash, char const* ev, bool alive_before,
-                         long life_before, long life_after,
-                         std::size_t max_life) noexcept {
-    static bool once = [&] {
-      std::fprintf(stderr,
-                   "[life-seq-dbg] trace_hash=%zu first_seen_hash=%zu\n",
-                   trace_hash(), hash);
-      return true;
-    }();
-    (void)once;
-    if (hash != trace_hash()) return;
-    std::fprintf(
-        stderr, "[life-seq] %-7s alive_before=%d life: %ld -> %ld  (max=%zu)\n",
-        ev, alive_before ? 1 : 0, life_before, life_after, max_life);
-  }
   /// Record one fresh build of the non-leaf node @p hash (optional human
   /// @p label, kept from the first sighting for the dump).
   static void on_build(std::size_t hash,
@@ -1365,17 +1340,12 @@ class CacheManager {
     if (auto found =
             eval::LookupMeter::timed([&] { return cache_map_.find(key); });
         found != cache_map_.end()) {
-      long const _lb = static_cast<long>(found->second.life_count());
       if (auto data = found->second.access(); data) {
         // DIAGNOSTIC (SEQUANT_UT_ACCESS_CLOCK): stamp this genuine local-hit
         // read into the global access clock. No-op when the gate is off.
         eval::AccessClock::stamp(found->first->hash_value());
         eval::BuildMeter::on_read(found->first->hash_value(),
                                   found->second.max_life_count());
-        eval::BuildMeter::life_event(
-            found->first->hash_value(), "ACCESS", true, _lb,
-            static_cast<long>(found->second.life_count()),
-            found->second.max_life_count());
         // NB: size_in_bytes() walks the array; only pay it when metering.
         if (eval::DefUseMeter::enabled())
           eval::DefUseMeter::on_read(found->first->hash_value(),
@@ -1455,14 +1425,7 @@ class CacheManager {
         std::cerr << "REBUILD-RESIDENT persist=" << found->second.persistent()
                   << " hash=" << key->hash_value() << "\n";
       eval::DefUseMeter::on_store(key->hash_value());
-      bool const _alive_before = found->second.alive();
-      long const _lb = static_cast<long>(found->second.life_count());
-      std::size_t const _ml = found->second.max_life_count();
-      auto ret = store(found->second, std::move(data));
-      eval::BuildMeter::life_event(
-          key->hash_value(), "STORE", _alive_before, _lb,
-          static_cast<long>(found->second.life_count()), _ml);
-      return ret;
+      return store(found->second, std::move(data));
     }
     return data;
   }
