@@ -4,6 +4,7 @@
 
 #include <SeQuant/domain/mbpt/fwd.hpp>
 
+#include <SeQuant/core/utility/aggregate.hpp>
 #include <SeQuant/core/utility/context.hpp>
 #include <SeQuant/domain/mbpt/op_registry.hpp>
 
@@ -34,6 +35,7 @@ class Context {
   };
 
   struct Options {
+    SEQUANT_DESIGNATED_INIT_ONLY;
     /// whether to use cluster-specific virtuals
     CSV csv = Defaults::csv;
     /// shared pointer to operator registry
@@ -120,7 +122,7 @@ std::shared_ptr<OpRegistry> make_legacy_registry();
 /// context
 /// @param op the operator label
 /// @return the OpClass of the operator
-/// @note returns OpClass::gen for reserved operator labels
+/// @note returns OpClass::Gen for reserved operator labels
 OpClass to_op_class(const std::wstring& op);
 
 /// @brief returns the Hermiticity of an operator label using the default MBPT
@@ -129,7 +131,7 @@ OpClass to_op_class(const std::wstring& op);
 /// @return the operator's Hermiticity (the registry's per-operator value, or
 ///         default_hermiticity(to_op_class(op)))
 /// @note returns Hermiticity::Hermitian for reserved operator labels (they are
-///       OpClass::gen)
+///       OpClass::Gen)
 Hermiticity op_hermiticity(const std::wstring& op);
 
 }  // namespace sequant::mbpt

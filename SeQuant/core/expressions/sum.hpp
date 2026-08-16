@@ -8,6 +8,7 @@
 #include <SeQuant/core/expressions/product.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/runtime.hpp>
+#include <SeQuant/core/utility/aggregate.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/range/access.hpp>
@@ -385,6 +386,7 @@ class HashingAccumulator {
 };
 
 struct TransformSumExprOptions {
+  SEQUANT_DESIGNATED_INIT_ONLY;
   bool canonicalize = true;
   bool flatten = true;
 };

@@ -2,7 +2,9 @@
 #define SEQUANT_DOMAIN_MBPT_MODELS_CC_HPP
 
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/utility/aggregate.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
+#include <SeQuant/domain/mbpt/utils.hpp>
 #include <SeQuant/domain/mbpt/vac_av.hpp>
 
 #include <cstddef>
@@ -32,6 +34,7 @@ class CC {
 
   /// Configuration options for CC class
   struct Options {
+    SEQUANT_DESIGNATED_INIT_ONLY;
     /// type of CC ansatz. see CC::Ansatz
     Ansatz ansatz = Ansatz::T;
     /// if true, singles amplitudes are excluded from \f$ \hat{T} \f$ and \f$
@@ -90,6 +93,22 @@ class CC {
   /// the expansion; if not specified, will use the value of member
   /// `hbar_comm_rank`. If that is also not specified, will use 4 as the default
   /// value. If provided, will override all defaults.
+  /// @note For a non-unitary ansatz each commutator is represented as a
+  /// connected product, \f$ (\hat{A}\hat{B})_c \f$, equivalent to \f$
+  /// [\hat{A},\hat{B}] \f$ only once operator connectivity is supplied
+  /// downstream; this engine always supplies it, by handing `ref_av`
+  /// `default_op_connections()` or a superset thereof. A unitary ansatz uses
+  /// explicit commutators instead, and is handed empty connectivity.
+  /// @warning Because of the above, the expression returned for a non-unitary
+  /// ansatz is NOT self-contained: evaluating it with empty connectivity, e.g.
+  /// `op::ref_av(P(nₚ(2)) * cc.hbar(), {.connect = {}})`, silently retains the
+  /// disconnected terms that the commutator would have cancelled. Pass
+  /// `default_op_connections()` (which `op::ref_av`/`op::vac_av` use when the
+  /// options argument is omitted -- note that passing `{}` instead gives empty
+  /// connections), or build H̄ yourself with `mbpt::lst(..., {})` if you need
+  /// the explicit form. For a unitary ansatz the reverse holds: H̄ is already
+  /// self-contained, so connectivity must be left empty. See the "Using H̄
+  /// outside the CC class" section of the user guide.
   [[nodiscard]] ExprPtr hbar(
       std::optional<size_t> truncation_rank = std::nullopt) const;
 
@@ -164,6 +183,34 @@ class CC {
   /// @return vector of left side sigma equations, element 0 is always null
   [[nodiscard]] std::vector<ExprPtr> eom_l(nₚ np, nₕ nh) const;
 
+  /// @brief derives the reduced density matrix (RDM) of particle rank @p rank
+  /// as the reference expectation value of a similarity-transformed
+  /// replacement operator, whose free-index ordinals are fixed by op::ã.
+  /// Traditional ansatz:
+  /// \f$ \gamma^{p_1 \dots p_r}_{p_{r+1} \dots p_{2r}} = \langle 0| (1 +
+  /// \hat{\Lambda}) e^{-\hat{T}} \{ \tilde{a}^{p_1 \dots p_r}_{p_{r+1} \dots
+  /// p_{2r}} \} e^{\hat{T}} |0 \rangle \f$; unitary ansatz drops \f$
+  /// \hat{\Lambda} \f$ and uses \f$ e^{-\hat{\sigma}} \dots e^{\hat{\sigma}}
+  /// \f$ with \f$ \hat{\sigma} = \hat{T} - \hat{T}^\dagger \f$.
+  /// @note Only the correlation contribution is returned: op::ã is
+  ///   normal-ordered, so the reference contractions are absent.
+  /// @note For @p rank >= 2 the result is not manifestly antisymmetric: the
+  ///   replacement operator carries no antisymmetrizer.
+  /// @note For the traditional ansatz this is the *linked* density; the
+  ///   unitary ansatz uses no connectivity.
+  /// @param rank particle rank of the RDM (1 = one-particle \f$ \gamma \f$,
+  ///   2 = two-particle \f$ \Gamma \f$, ...)
+  /// @param comm_rank maximum order of nested commutators in the
+  ///   similarity transform of the replacement operator;
+  ///   if not specified, defaults to `min(2*rank, rank + N)` for the
+  ///   traditional ansatz (where the expansion terminates exactly) and to
+  ///   `hbar_comm_rank` for the unitary ansatz (where it does not). Pass an
+  ///   explicit value to truncate earlier.
+  /// @return the RDM expression (Fermi-vacuum normal-ordered / correlation
+  /// part)
+  [[nodiscard]] ExprPtr rdm(
+      size_t rank = 1, std::optional<size_t> comm_rank = std::nullopt) const;
+
  private:
   size_t N;
   Ansatz ansatz_ = Ansatz::T;
@@ -172,6 +219,18 @@ class CC {
   bool use_topology_ = true;
   std::optional<size_t> hbar_comm_rank_ = std::nullopt;
   std::optional<size_t> pertbar_comm_rank_ = std::nullopt;
+
+  /// @return the `LSTOptions` this engine uses for every `mbpt::lst()` call
+  /// @note The choice of commutator representation is really a question of
+  /// whether the caller supplies operator connectivity downstream; for this
+  /// engine the two coincide. Every non-unitary path hands `ref_av` a
+  /// connectivity map (`default_op_connections()`, or the λ⁺/perturbed
+  /// supersets thereof), which is what makes the cheaper connected-product
+  /// form equivalent to the explicit commutator. The unitary paths hand
+  /// `ref_av` empty connectivity and so must use explicit commutators.
+  [[nodiscard]] LSTOptions lst_options() const {
+    return {.unitary = unitary(), .use_connected_form = !unitary()};
+  }
 
   /// @brief computes reference expectation value of an expression. Dispatches
   /// to `mbpt::op::ref_av()`

@@ -6,6 +6,7 @@
 #include <SeQuant/core/eval/fwd.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/utility/aggregate.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/external/bliss/graph.hh>
 
@@ -292,6 +293,7 @@ struct EvalOpSetter {
 };
 
 struct BinarizationOptions {
+  SEQUANT_DESIGNATED_INIT_ONLY;
   /// Whether to merge indices of intermediate tensors into a single list
   /// (stored as aux indices) instead of retaining the bra, ket and aux
   /// separation
