@@ -1266,10 +1266,12 @@ class CacheManager {
 
   /// \return true iff some ALIVE entry on this cache or any ancestor along the
   ///         scope chain physically holds @p value (pointer identity) AND that
-  ///         entry has MORE THAN ONE consumer (\c max_life_count() > 1) -- i.e.
-  ///         @p value is a SHARED buffer with at least one read still pending
-  ///         (or a resident/persistent home read by every consumer), so
-  ///         mutating it in place would corrupt those other reads.
+  ///         entry is either PERSISTENT (\c persistent(), never drained --
+  ///         survives across evaluations) or has MORE THAN ONE consumer (\c
+  ///         max_life_count() > 1) -- i.e. @p value is a SHARED buffer with at
+  ///         least one read still pending (or a resident/persistent home read
+  ///         by every consumer), so mutating it in place would corrupt those
+  ///         other reads.
   ///
   /// This is the runtime safety gate the in-place \c Sum accumulation
   /// (eval.hpp) needs, and is strictly the "the accumulator is shared" test:
@@ -1286,17 +1288,22 @@ class CacheManager {
   /// A value homed RESIDENT (\c ensure_home_slot, \c max_life == SIZE_MAX) or
   /// with a genuine multi-use count (\c max_life > 1, e.g. a subexpression
   /// shared across two roots, or a per-batch-reread home) is never drained by
-  /// a single read, so it stays held with \c max_life > 1 and IS reported
-  /// here -- the case the elided \c SEQUANT_ASSERT could not catch at runtime.
-  /// For every state actually reachable at the \c Sum node this coincides with
-  /// \c chain_holds (a still-held entry always has \c max_life > 1); the
-  /// explicit use-count test states the intent -- "shared", not merely
-  /// "resident" -- and keeps a hypothetical held-but-single-use entry from
-  /// needlessly disabling in-place.
+  /// a single read, so it stays held and IS reported here -- the case the
+  /// elided \c SEQUANT_ASSERT could not catch at runtime. A PERSISTENT entry
+  /// (registered via the \c CacheManager(Iterable&&, PersistencePred) ctor,
+  /// e.g. the \c make_batched_scratch path) is ALSO reported even when its
+  /// \c max_life == 1: \c entry::access() never drains a persistent entry, so
+  /// it stays resident-forever and is shared across the batched replays --
+  /// mutating it in place would corrupt every later read. Hence the guard is
+  /// \c persistent() OR \c max_life > 1, not \c max_life alone.
+  /// A held NON-persistent single-use entry (\c max_life == 1) is NOT reported
+  /// (it drained its buffer out on its sole read, so it no longer holds it),
+  /// keeping in-place enabled for the private common case.
   [[nodiscard]] bool chain_holds_shared(ResultPtr const& value) const noexcept {
     if (!value) return false;
     for (auto const& [k, e] : cache_map_)
-      if (e.holds(value) && e.max_life_count() > 1) return true;
+      if (e.holds(value) && (e.persistent() || e.max_life_count() > 1))
+        return true;
     return parent_ ? parent_->chain_holds_shared(value) : false;
   }
 

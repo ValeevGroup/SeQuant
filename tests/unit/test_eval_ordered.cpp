@@ -41,6 +41,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <variant>
 
 namespace {
@@ -403,5 +404,43 @@ TEST_CASE(
     CHECK(sequant::evaluate(root2, yield, rc2)
               ->as<ResultScalar<double>>()
               .value() == Catch::Approx(-10.5));
+  }
+}
+
+TEST_CASE(
+    "CacheManager::chain_holds_shared treats a persistent entry as shared "
+    "even when its max_life == 1",
+    "[eval][ordered]") {
+  // Direct coverage of the runtime in-place safety gate. A PERSISTENT cache
+  // entry (registered via the CacheManager(Iterable&&, PersistencePred) ctor
+  // -- the make_batched_scratch path) is never drained by entry::access()
+  // regardless of its max_life, so with a use-count of 1 it is nonetheless
+  // resident-forever and SHARED across the batched replays. A gate keyed on
+  // max_life alone (> 1) would miss it and let the in-place Sum branch mutate
+  // it -- exactly the hazard this predicate closes. chain_holds_shared must
+  // therefore report a held persistent entry as shared irrespective of
+  // max_life; a held NON-persistent single-use entry (max_life == 1), which
+  // drains its buffer out on its sole read, must NOT be reported (so in-place
+  // stays enabled for the private common case).
+  ScalarNode const node = scalar_tree(L"a * b");
+
+  SECTION("persistent, max_life == 1 -> shared") {
+    svector<std::pair<ScalarNode, std::size_t>> const decaying{{node, 1}};
+    sequant::CacheManager<ScalarNode> cache{
+        decaying, [](ScalarNode const&) { return true; }};
+    ResultPtr const val =
+        cache.store(node, sequant::eval_result<ResultScalar<double>>(-7.0));
+    REQUIRE(val);
+    CHECK(cache.chain_holds_shared(val));
+  }
+
+  SECTION("non-persistent, max_life == 1 -> not shared (drained on read)") {
+    svector<std::pair<ScalarNode, std::size_t>> const decaying{{node, 1}};
+    sequant::CacheManager<ScalarNode> cache{
+        decaying, [](ScalarNode const&) { return false; }};
+    ResultPtr const val =
+        cache.store(node, sequant::eval_result<ResultScalar<double>>(-7.0));
+    REQUIRE(val);
+    CHECK_FALSE(cache.chain_holds_shared(val));
   }
 }
