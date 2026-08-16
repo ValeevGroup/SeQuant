@@ -511,14 +511,16 @@ EvalExprNode binarize(Tensor const& t, const BinarizationOptions& opts) {
 }
 
 EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
-                      const BinarizationOptions& opts) {
+                      const BinarizationOptions& opts,
+                      std::size_t& node_counter) {
   using ranges::views::move;
   using ranges::views::transform;
-  auto summands = sum.summands()  //
-                  | transform([&uncontract, &opts](ExprPtr const& x) {
-                      return impl::binarize(x, uncontract, opts);
-                    })  //
-                  | ranges::to_vector;
+  auto summands =
+      sum.summands()  //
+      | transform([&uncontract, &opts, &node_counter](ExprPtr const& x) {
+          return impl::binarize(x, uncontract, opts, node_counter);
+        })  //
+      | ranges::to_vector;
 
   bool const all_tensors =
       ranges::all_of(summands, [](auto&& n) { return n->is_tensor(); });
@@ -561,7 +563,8 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
 }
 
 EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
-                      const BinarizationOptions& opts) {
+                      const BinarizationOptions& opts,
+                      std::size_t& node_counter) {
   using ranges::views::filter;
   using ranges::views::move;
   using ranges::views::transform;
@@ -578,17 +581,18 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
                                                                uncontract);
   }();
 
-  auto factors =
-      prod.factors()  //
-      | transform([i = 0, &ltr_uncontr_idxs, &opts](ExprPtr const& x) mutable {
-          return impl::binarize(x, ltr_uncontr_idxs.children[i++], opts);
-        })  //
-      | ranges::to_vector;
+  auto factors = prod.factors()  //
+                 | transform([i = 0, &ltr_uncontr_idxs, &opts,
+                              &node_counter](ExprPtr const& x) mutable {
+                     return impl::binarize(x, ltr_uncontr_idxs.children[i++],
+                                           opts, node_counter);
+                   })  //
+                 | ranges::to_vector;
 
   auto hvals = factors | transform([](auto&& n) { return n->hash_value(); });
   auto const hs = imed_hashes(hvals) | ranges::to_vector;
 
-  auto make_prod = [i = 0, &hs, &ltr_uncontr_idxs, &opts](
+  auto make_prod = [i = 0, &hs, &ltr_uncontr_idxs, &opts, &node_counter](
                        EvalExprNode const& left,
                        EvalExprNode const& right) mutable -> EvalExpr {
     auto h = ranges::at(hs, ++i);
@@ -648,25 +652,42 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
           TensorCanonicalizer::cardinal_tensor_labels(), &named_indices);
       hash::combine(h, canon.hash_value());
       bool const scalar_result = canon.named_indices_canonical.empty();
-      if (scalar_result) {
-        return {EvalOp::Product,          //
-                ResultType::Scalar,       //
-                detail::make_variable(),  //
-                {},                       //
-                canon.phase,              //
-                h,
-                std::move(canon.graph)};
-      } else {
-        return {EvalOp::Product,     //
-                ResultType::Tensor,  //
-                detail::make_tensor_wo_symmetries(opts, bra(target_indices.bra),
-                                                  ket(target_indices.ket),
-                                                  aux(target_indices.aux)),
-                canon.get_indices<Index::index_vector>(),  //
-                canon.phase,                               //
-                h,
-                std::move(canon.graph)};
+      EvalExpr result =
+          scalar_result
+              ? EvalExpr{EvalOp::Product,          //
+                         ResultType::Scalar,       //
+                         detail::make_variable(),  //
+                         {},                       //
+                         canon.phase,              //
+                         h,
+                         std::move(canon.graph)}
+              : EvalExpr{EvalOp::Product,     //
+                         ResultType::Tensor,  //
+                         detail::make_tensor_wo_symmetries(
+                             opts, bra(target_indices.bra),
+                             ket(target_indices.ket), aux(target_indices.aux)),
+                         canon.get_indices<Index::index_vector>(),  //
+                         canon.phase,                               //
+                         h,
+                         std::move(canon.graph)};
+      // This is a genuine contraction (DP) node: the optimizer's
+      // node_batch_axes carries one entry per such node, in the same
+      // left-first post-order (children -- built by the recursive
+      // impl::binarize calls above, which all run before this lambda is
+      // invoked -- fully processed before this node). Stamp it if the caller
+      // supplied per-node modes; always advance node_counter regardless, so
+      // the top-level SEQUANT_ASSERT(node_counter ==
+      // opts.node_batch_axes.size()) in binarize(ExprPtr, ...) can catch a
+      // misaligned optimizer/binarize post-order.
+      if (node_counter < opts.node_batch_axes.size()) {
+        auto const& ann = opts.node_batch_axes[node_counter];
+        result.set_batched_here(ann.axes);
+        result.set_contracted_modes(ann.contracted_modes);
+        result.set_batch_order_aware(ann.order_aware);
+        result.set_batch_effective_count(ann.effective_count);
       }
+      ++node_counter;
+      return result;
     }
   };
 
@@ -699,7 +720,8 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
 namespace impl {
 
 EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract,
-                      const BinarizationOptions& opts) {
+                      const BinarizationOptions& opts,
+                      std::size_t& node_counter) {
   if (expr->is<Constant>())  //
     return binarize(expr->as<Constant>());
 
@@ -710,10 +732,10 @@ EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract,
     return binarize(expr->as<Tensor>(), opts);
 
   if (expr->is<Sum>())  //
-    return binarize(expr->as<Sum>(), uncontract, opts);
+    return binarize(expr->as<Sum>(), uncontract, opts, node_counter);
 
   if (expr->is<Product>())  //
-    return binarize(expr->as<Product>(), uncontract, opts);
+    return binarize(expr->as<Product>(), uncontract, opts, node_counter);
 
   if (expr->is<Power>())  //
     return binarize(expr->as<Power>());

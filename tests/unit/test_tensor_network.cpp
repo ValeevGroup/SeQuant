@@ -62,7 +62,7 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV1,
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
   auto isr = sequant::mbpt::make_legacy_spaces();
-  mbpt::add_pao_spaces(isr);
+  mbpt::add_pao_spaces(isr, mbpt::Spin::null);
   auto ctx = get_default_context();
   ctx.set(isr);
   ctx.set(Vacuum::SingleProduct);

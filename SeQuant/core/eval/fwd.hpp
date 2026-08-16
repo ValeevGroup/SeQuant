@@ -14,6 +14,18 @@ namespace sequant {
 /// should be "de-nested" (flattened) to a regular tensor or kept as nested.
 enum class DeNest { True, False };
 
+/// \brief Flavor of an \c EvalExpr::batched_here entry: whether the index is
+///        contracted away somewhere in the term (\c Contracted), or is an
+///        external index that survives to the term's result
+///        (\c External). See \c EvalExpr::batched_here.
+enum class BatchModeType { Contracted, External };
+
+/// \brief Per-contraction-node batch annotation; defined in
+///        \c SeQuant/core/eval/node_batch_annotation.hpp (needs a complete
+///        \c Index). Forward-declared here so headers that only name it under
+///        a pointer (e.g. OptimizeOptions::term_batch_axes) stay light.
+struct NodeBatchAnnotation;
+
 template <typename TreeNode, bool force_hash_collisions = false>
 class CacheManager;
 

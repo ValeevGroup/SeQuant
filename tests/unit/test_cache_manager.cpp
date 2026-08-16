@@ -221,6 +221,234 @@ TEST_CASE("cache_manager", "[cache_manager]") {
   }
 }
 
+TEST_CASE("cache manager scope chain fall-through", "[cache_manager]") {
+  using hasher_t = sequant::TreeNodeHasher<node_type>;
+  using comp_t = sequant::TreeNodeEqualityComparator<node_type>;
+  auto eval_result = [](int x) {
+    return sequant::eval_result<sequant::ResultScalar<int>>(x);
+  };
+
+  auto const X = make_node(L"R{a1;i1} = f{a1;i1}");
+  auto const unregistered = make_node(L"R{a1;i1} = g{a1;i1}");
+
+  // parent registers node X with use-count 3 (NP); child is empty with parent
+  // set. (Use-count 3, not 2: store() itself performs an implicit access --
+  // see the NOTE in the "Data Access" section above -- consuming one life
+  // before the fall-through access under test consumes a second, landing the
+  // post-fall-through life count at 1 for a clean assertion.)
+  std::unordered_map<node_type, size_t, hasher_t, comp_t> counts;
+  counts.emplace(X, 3);
+  auto parent = manager_type(std::move(counts));
+  auto child = manager_type::empty();
+  child.set_parent(&parent);
+
+  (void)parent.store(X, eval_result(42));
+  REQUIRE(parent.alive(X));
+
+  // child has no local entry for X, but access() falls through to the
+  // parent...
+  auto found = child.access(X);
+  REQUIRE(found != nullptr);
+  REQUIRE(found->get<int>() == 42);
+  // ...and that fall-through read decayed the parent's NP entry (3 -> 2 from
+  // store()'s own implicit access, then 2 -> 1 from the fall-through read).
+  REQUIRE(parent.life(X) == 1);
+
+  // absent-everywhere returns null; a null parent (default) is a no-op.
+  REQUIRE(child.access(unregistered) == nullptr);
+  auto lone = manager_type::empty();
+  REQUIRE(lone.access(X) == nullptr);
+}
+
+// B1 hardening target: the batched evaluator's per-iteration ("inner") cache
+// is built from a per-iteration node-repeat scan that, for a hoisted
+// loop-invariant node, may register the *same* canonical key locally too
+// (e.g. it also happens to recur within one iteration's own terms) even
+// though the value is only ever produced once, up at the ("outer") ancestor
+// level, and never stored locally. access() must not let a locally-registered
+// -but-never-stored entry shadow the parent: on a genuine local miss (no data
+// held at this level, whether or not the key is registered here) it must
+// still walk up the chain. reset() at the inner level must, symmetrically,
+// touch only its own bookkeeping and never reach into the parent.
+TEST_CASE("cache manager scope chain read-through survives local registration",
+          "[cache_manager]") {
+  using hasher_t = sequant::TreeNodeHasher<node_type>;
+  using comp_t = sequant::TreeNodeEqualityComparator<node_type>;
+  auto eval_result = [](int x) {
+    return sequant::eval_result<sequant::ResultScalar<int>>(x);
+  };
+
+  auto const X = make_node(L"R{a1;i1} = f{a1;i1}");
+  auto const Y = make_node(L"R{a1;i1} = g{a1;i1}");
+
+  // outer registers and stores X (the hoisted, loop-invariant node).
+  std::unordered_map<node_type, size_t, hasher_t, comp_t> outer_counts;
+  outer_counts.emplace(X, 3);  // 3, not 2: see the NOTE in the prior test --
+                               // store()'s implicit access (3 -> 2), the
+                               // walk-up access under test (2 -> 1), and the
+                               // post-reset ancestor-untouched check (1 -> 0)
+                               // each consume one life.
+  auto outer = manager_type(std::move(outer_counts));
+
+  // inner ALSO registers X locally (e.g. its own per-iteration scan sees it
+  // recur too) but never calls inner.store(X, ...) -- the value is meant to
+  // come from the ancestor. inner separately registers and stores Y, a node
+  // local to this scope only, to confirm reset() clears local data.
+  std::unordered_map<node_type, size_t, hasher_t, comp_t> inner_counts;
+  inner_counts.emplace(X, 5);
+  inner_counts.emplace(Y, 2);
+  auto inner = manager_type(std::move(inner_counts));
+  inner.set_parent(&outer);
+
+  (void)outer.store(X, eval_result(42));
+  REQUIRE(outer.alive(X));
+  REQUIRE(inner.exists(X));       // registered locally...
+  REQUIRE_FALSE(inner.alive(X));  // ...but never stored locally.
+
+  (void)inner.store(Y, eval_result(7));
+  REQUIRE(inner.alive(Y));
+
+  // Local miss on X (registered but no local data) must still walk up to the
+  // ancestor's stored value, not short-circuit to null.
+  auto found = inner.access(X);
+  REQUIRE(found != nullptr);
+  REQUIRE(found->get<int>() == 42);
+
+  // inner.reset() clears only inner's own bookkeeping: Y's data is dropped,
+  // but the ancestor's X entry (never touched by inner.reset()) survives with
+  // its post-walk-up life count intact.
+  inner.reset();
+  REQUIRE_FALSE(inner.alive(Y));
+  REQUIRE(inner.life(Y) == 2);
+  REQUIRE_FALSE(inner.alive(X));  // was never alive locally to begin with
+
+  auto still_there = outer.access(X);
+  REQUIRE(still_there != nullptr);
+  REQUIRE(still_there->get<int>() == 42);
+}
+
+// F2 baseline: pin the per-loop scope invariant on the already-working
+// CONTRACTED path (scope_level >= 0, i.e. an actual nested-loop chain of
+// three or more levels), not just the single parent/child link exercised
+// above. A node stored at an inner loop's ancestor (level k) must survive
+// resets of loops nested *inside* it (level > k) and be cleared only by a
+// reset() at its own level.
+TEST_CASE("cache manager scope chain per-loop storage survives inner resets",
+          "[cache_manager]") {
+  using hasher_t = sequant::TreeNodeHasher<node_type>;
+  using comp_t = sequant::TreeNodeEqualityComparator<node_type>;
+  auto eval_result = [](int x) {
+    return sequant::eval_result<sequant::ResultScalar<int>>(x);
+  };
+
+  auto const X = make_node(L"R{a1;i1} = f{a1;i1}");
+  auto const Y = make_node(L"R{a1;i1} = g{a1;i1}");
+
+  // outer -> mid -> inner: a three-level loop-nest chain. X is registered at
+  // every level (mirroring how a per-loop node-repeat scan may see the same
+  // canonical key recur at each nesting level -- see the read-through test
+  // above) but only ever *stored* at mid (the "level-1" scope).
+  std::unordered_map<node_type, size_t, hasher_t, comp_t> outer_counts;
+  outer_counts.emplace(X, 3);
+  auto outer = manager_type(std::move(outer_counts));
+
+  // 3, not 2: store()'s own implicit access (3 -> 2) and inner's fall-through
+  // walk-up access under test (2 -> 1) each consume one life, landing at 1
+  // for a clean post-walk-up alive() check.
+  std::unordered_map<node_type, size_t, hasher_t, comp_t> mid_counts;
+  mid_counts.emplace(X, 3);
+  auto mid = manager_type(std::move(mid_counts));
+  mid.set_parent(&outer);
+
+  std::unordered_map<node_type, size_t, hasher_t, comp_t> inner_counts;
+  inner_counts.emplace(X, 5);
+  inner_counts.emplace(Y, 2);
+  auto inner = manager_type(std::move(inner_counts));
+  inner.set_parent(&mid);
+
+  (void)mid.store(X, eval_result(42));
+  REQUIRE(mid.alive(X));
+
+  // inner has no local data for X (only a local registration); access()
+  // must walk up through mid (a hit) rather than stop at outer or null.
+  auto found = inner.access(X);
+  REQUIRE(found != nullptr);
+  REQUIRE(found->get<int>() == 42);
+  REQUIRE(mid.life(X) == 1);
+
+  // a distinct key Y, local to inner only, to confirm inner.reset() clears
+  // its own data while leaving ancestor levels untouched.
+  (void)inner.store(Y, eval_result(7));
+  REQUIRE(inner.alive(Y));
+
+  // inner.reset() (the innermost loop's per-iteration reset) must clear only
+  // inner's own bookkeeping: Y is dropped, but X -- stored one level up at
+  // mid -- must survive untouched.
+  inner.reset();
+  REQUIRE_FALSE(inner.alive(Y));
+  REQUIRE(inner.life(Y) == 2);
+  REQUIRE(mid.alive(X));
+  REQUIRE(mid.life(X) == 1);
+
+  // mid.reset() (its own loop-level reset) clears X, which lives at mid's
+  // own level.
+  mid.reset();
+  REQUIRE_FALSE(mid.alive(X));
+}
+
+// access_at() surfaces the value's LIFETIME SCOPE as a hop distance: the number
+// of parent (scope-chain) links crossed to reach the scope that actually holds
+// the data. This is what the Enter-stage slice-on-use needs -- a value fetched
+// `hops` scopes up does not have those `hops` innermost loops' slices baked in,
+// so exactly those loops must be sliced on use. Chain outer -> mid -> inner,
+// store X only in outer, and read it from each level.
+TEST_CASE("cache manager access_at surfaces the lifetime scope hop distance",
+          "[cache_manager]") {
+  using hasher_t = sequant::TreeNodeHasher<node_type>;
+  using comp_t = sequant::TreeNodeEqualityComparator<node_type>;
+  auto eval_result = [](int x) {
+    return sequant::eval_result<sequant::ResultScalar<int>>(x);
+  };
+
+  auto const X = make_node(L"R{a1;i1} = f{a1;i1}");
+
+  // X is registered (and stored) ONLY at outer, so mid and inner miss locally
+  // and fall through. A generous use-count keeps X alive across the reads
+  // below (each access_at decays outer's entry once).
+  std::unordered_map<node_type, size_t, hasher_t, comp_t> outer_counts;
+  outer_counts.emplace(X, 10);
+  auto outer = manager_type(std::move(outer_counts));
+  auto mid = manager_type::empty();
+  mid.set_parent(&outer);
+  auto inner = manager_type::empty();
+  inner.set_parent(&mid);
+
+  (void)outer.store(X, eval_result(42));
+  REQUIRE(outer.alive(X));
+
+  // outer: local hit, zero hops.
+  auto const a_outer = outer.access_at(X);
+  REQUIRE(a_outer.ptr != nullptr);
+  REQUIRE(a_outer.ptr->get<int>() == 42);
+  REQUIRE(a_outer.hops == 0);
+
+  // mid: one link up (mid -> outer).
+  auto const a_mid = mid.access_at(X);
+  REQUIRE(a_mid.ptr != nullptr);
+  REQUIRE(a_mid.ptr->get<int>() == 42);
+  REQUIRE(a_mid.hops == 1);
+
+  // inner: two links up (inner -> mid -> outer).
+  auto const a_inner = inner.access_at(X);
+  REQUIRE(a_inner.ptr != nullptr);
+  REQUIRE(a_inner.ptr->get<int>() == 42);
+  REQUIRE(a_inner.hops == 2);
+
+  // The ptr-only access() forwarder still resolves the same value (the path
+  // the three non-batched callers keep using).
+  REQUIRE(inner.access(X) != nullptr);
+}
+
 TEST_CASE("cache_manager_persistent", "[cache_manager]") {
   using hasher_t = sequant::TreeNodeHasher<node_type>;
   using comp_t = sequant::TreeNodeEqualityComparator<node_type>;
@@ -330,53 +558,78 @@ TEST_CASE("cache_manager_footprint_gate", "[cache_manager]") {
 TEST_CASE("cache_manager_batch_axis_veto", "[cache_manager]") {
   // R = f * g * t : the NV product (f*g) = I{a1;a3} feeds the volatile root, so
   // by default it is cached as a persistent (cross-iteration) entry. a3 is free
-  // in the frontier's result but contracted away at the root. Declaring a3 a
-  // batchable axis means the runtime slices the frontier over it and the
-  // optimizer prices it sliced, so the cache must NOT materialize it whole: the
-  // veto drops it from the cache. i1 -- carried by the root, not the frontier
-  // -- is the control: declaring it batchable must not touch the frontier.
-  auto const node = make_node(L"R{a1;i1} = f{a1;a2} * g{a2;a3} * t{a3;i1}");
+  // in the frontier's own result but contracted away at the root. The veto now
+  // reads the frontier's *own* batched_here annotation, not merely whether some
+  // is_batchable_index is free on its result: only a Contracted entry that is
+  // batchable and free on the node's result means the runtime slices the
+  // frontier over it (the optimizer prices it sliced), so caching it whole
+  // would be wrong -- veto it. An External entry on the same mode marks the
+  // frontier an external -- like gC, invariant to a batch mode actually sliced
+  // elsewhere -- and must NOT veto: it stays cached and persistent so it can
+  // become a hoist target (Task 3). No annotation at all (never_batchable's
+  // default) must also leave it cached and persistent.
+  using sequant::BatchModeType;
+
   auto is_volatile = [](node_type const& n) {
     return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
   };
-
-  // a3: in the frontier's result indices, absent from the root's (contracted).
-  // i1: in the root's result indices, absent from the frontier's.
-  auto const& root_ix = node->canon_indices();
-  auto const& frontier_ix = node.left()->canon_indices();  // the (f*g) product
   auto in = [](auto const& v, sequant::Index const& x) {
     return std::find(v.begin(), v.end(), x) != v.end();
   };
-  std::optional<sequant::Index> a3, i1;
-  for (auto const& ix : frontier_ix)
-    if (!in(root_ix, ix)) a3 = ix;
-  for (auto const& ix : root_ix)
-    if (!in(frontier_ix, ix)) i1 = ix;
-  REQUIRE(a3);
-  REQUIRE(i1);
-
-  std::function<int(node_type const&, manager_type const&)> count_persistent =
-      [&](node_type const& n, manager_type const& m) -> int {
-    if (n.leaf()) return 0;
-    return (m.persistent(n) ? 1 : 0) + count_persistent(n.left(), m) +
-           count_persistent(n.right(), m);
+  // a3: in the frontier's result indices, absent from the root's (contracted
+  // away by the time the root is formed).
+  auto find_a3 = [&](node_type const& node) -> std::optional<sequant::Index> {
+    auto const& root_ix = node->canon_indices();
+    auto const& frontier_ix = node.left()->canon_indices();
+    std::optional<sequant::Index> a3;
+    for (auto const& ix : frontier_ix)
+      if (!in(root_ix, ix)) a3 = ix;
+    return a3;
   };
 
-  // baseline: no batchable axis -> the NV/V frontier is cached and persistent.
-  auto man0 = sequant::cache_manager(std::array{node}, is_volatile);
-  REQUIRE(count_persistent(node, man0) >= 1);
+  // baseline: no batched_here annotation -> the veto is inert (matches the
+  // never_batchable default); the NV/V frontier is cached and persistent.
+  {
+    auto node = make_node(L"R{a1;i1} = f{a1;a2} * g{a2;a3} * t{a3;i1}");
+    auto const a3 = find_a3(node);
+    REQUIRE(a3);
+    auto man = sequant::cache_manager(
+        std::array{node}, is_volatile, /*min_repeats=*/2,
+        sequant::zero_footprint{}, /*max_footprint=*/0.,
+        [&](sequant::Index const& ix) { return ix == *a3; });
+    REQUIRE(man.exists(node.left()));
+    REQUIRE(man.persistent(node.left()));
+  }
 
-  // control: i1 is not carried by the frontier, so the veto leaves it cached.
-  auto man_nomatch = sequant::cache_manager(
-      std::array{node}, is_volatile, /*min_repeats=*/2,
-      sequant::zero_footprint{}, /*max_footprint=*/0.,
-      [&](sequant::Index const& ix) { return ix == *i1; });
-  REQUIRE(count_persistent(node, man_nomatch) == count_persistent(node, man0));
+  // Contracted + batchable + free on the frontier's own result -> vetoed: the
+  // frontier is not registered in the cache map at all, and reports not
+  // persistent.
+  {
+    auto node = make_node(L"R{a1;i1} = f{a1;a2} * g{a2;a3} * t{a3;i1}");
+    auto const a3 = find_a3(node);
+    REQUIRE(a3);
+    node.left()->set_batched_here({{*a3, BatchModeType::Contracted}});
+    auto man = sequant::cache_manager(
+        std::array{node}, is_volatile, /*min_repeats=*/2,
+        sequant::zero_footprint{}, /*max_footprint=*/0.,
+        [&](sequant::Index const& ix) { return ix == *a3; });
+    REQUIRE_FALSE(man.exists(node.left()));
+    REQUIRE_FALSE(man.persistent(node.left()));
+  }
 
-  // a3 is carried free by the frontier -> the veto drops it: not cached at all.
-  auto man_match = sequant::cache_manager(
-      std::array{node}, is_volatile, /*min_repeats=*/2,
-      sequant::zero_footprint{}, /*max_footprint=*/0.,
-      [&](sequant::Index const& ix) { return ix == *a3; });
-  REQUIRE(count_persistent(node, man_match) == 0);
+  // External + batchable + free on the frontier's own result (gC-like: a
+  // external index the node is invariant under, not the mode actually
+  // sliced) -> NOT vetoed: stays cached and persistent.
+  {
+    auto node = make_node(L"R{a1;i1} = f{a1;a2} * g{a2;a3} * t{a3;i1}");
+    auto const a3 = find_a3(node);
+    REQUIRE(a3);
+    node.left()->set_batched_here({{*a3, BatchModeType::External}});
+    auto man = sequant::cache_manager(
+        std::array{node}, is_volatile, /*min_repeats=*/2,
+        sequant::zero_footprint{}, /*max_footprint=*/0.,
+        [&](sequant::Index const& ix) { return ix == *a3; });
+    REQUIRE(man.exists(node.left()));
+    REQUIRE(man.persistent(node.left()));
+  }
 }

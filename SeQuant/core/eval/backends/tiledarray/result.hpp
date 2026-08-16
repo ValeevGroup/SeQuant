@@ -329,6 +329,27 @@ template <typename LArrayT, typename RArrayT>
   return TA::TiledRange(dims.begin(), dims.end());
 }
 
+/// Map a contiguous element range `[elem_lo, elem_hi)` on a mode's TiledRange1
+/// to the tile range `[tile_lo, tile_hi)` it must coincide with. A tiled
+/// backend can only cut or scatter whole tiles, so the element bounds must be
+/// in-range and fall on tile boundaries; this asserts both (mode_batches()
+/// yields exactly such tile-aligned ranges). Shared by slice_mode() (GATHER a
+/// block out) and write_into_slice() (SCATTER a block in) so both agree on the
+/// element-to-tile contract and its alignment preconditions.
+[[nodiscard]] inline std::pair<std::size_t, std::size_t> slice_bounds_to_tiles(
+    TA::TiledRange1 const& tr1, std::size_t elem_lo, std::size_t elem_hi) {
+  SEQUANT_ASSERT(elem_lo >= tr1.elements_range().first && elem_lo < elem_hi &&
+                 elem_hi <= tr1.elements_range().second);
+  std::size_t const tile_lo = tr1.element_to_tile(elem_lo);
+  SEQUANT_ASSERT(tr1.tile(tile_lo).first == elem_lo);  // lo on a tile boundary
+  std::size_t const tile_hi = (elem_hi >= tr1.elements_range().second)
+                                  ? tr1.tile_extent()
+                                  : tr1.element_to_tile(elem_hi);
+  SEQUANT_ASSERT(elem_hi >= tr1.elements_range().second ||
+                 tr1.tile(tile_hi).first == elem_hi);  // hi on a tile boundary
+  return {tile_lo, tile_hi};
+}
+
 }  // namespace detail
 
 /// TA::Tensor memory use logger
@@ -352,6 +373,14 @@ template <typename... Args>
 [[nodiscard]] TA::DistArray<Args...> slice_array_over_mode(
     TA::DistArray<Args...> const& arr, std::size_t mode, std::size_t tile_lo,
     std::size_t tile_hi);
+
+// defined below; declared here so the result classes' write_into_slice()
+// overrides can call it. The scatter inverse of slice_array_over_mode().
+template <typename... Args>
+void write_array_into_mode(TA::DistArray<Args...>& dest,
+                           TA::DistArray<Args...> const& block,
+                           std::size_t mode, std::size_t tile_lo,
+                           std::size_t tile_hi);
 
 /// Partition a TiledRange1 into contiguous, tile-aligned element-range batches,
 /// each covering at most \p target_batch_size elements: whole tiles are
@@ -434,22 +463,8 @@ class ResultTensorTA final : public Result {
 
   [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t elem_lo,
                                      std::size_t elem_hi) const override {
-    auto const& tr1 = get<ArrayT>().trange().dim(mode);
-    // slice_mode takes element bounds, but a tiled backend can only cut on tile
-    // boundaries; mode_batches() returns exactly such (tile-aligned, in-range)
-    // bounds. Assert the precondition so misuse is caught rather than silently
-    // producing an over- or under-sized slice (which would break batched sums).
-    SEQUANT_ASSERT(elem_lo >= tr1.elements_range().first && elem_lo < elem_hi &&
-                   elem_hi <= tr1.elements_range().second);
-    std::size_t const tile_lo = tr1.element_to_tile(elem_lo);
-    SEQUANT_ASSERT(tr1.tile(tile_lo).first ==
-                   elem_lo);  // lo on a tile boundary
-    std::size_t const tile_hi = (elem_hi >= tr1.elements_range().second)
-                                    ? tr1.tile_extent()
-                                    : tr1.element_to_tile(elem_hi);
-    SEQUANT_ASSERT(elem_hi >= tr1.elements_range().second ||
-                   tr1.tile(tile_hi).first ==
-                       elem_hi);  // hi on a tile boundary
+    auto const [tile_lo, tile_hi] = detail::slice_bounds_to_tiles(
+        get<ArrayT>().trange().dim(mode), elem_lo, elem_hi);
     return eval_result<this_type>(
         slice_array_over_mode(get<ArrayT>(), mode, tile_lo, tile_hi));
   }
@@ -458,6 +473,38 @@ class ResultTensorTA final : public Result {
   mode_batches(std::size_t mode, std::size_t target_batch_size) const override {
     return mode_batches_of_trange1(get<ArrayT>().trange().dim(mode),
                                    target_batch_size);
+  }
+
+  void write_into_slice(Result const& block, std::size_t mode,
+                        std::size_t block_lo, std::size_t block_hi) override {
+    SEQUANT_ASSERT(block.is<this_type>());
+    auto& dest = get<ArrayT>();
+    auto const [tile_lo, tile_hi] = detail::slice_bounds_to_tiles(
+        dest.trange().dim(mode), block_lo, block_hi);
+    write_array_into_mode(dest, block.get<ArrayT>(), mode, tile_lo, tile_hi);
+  }
+
+  [[nodiscard]] ResultPtr pre_sized_zeros_over_mode(
+      std::size_t mode, Result const& axis_src,
+      std::size_t axis_src_mode) const override {
+    SEQUANT_ASSERT(axis_src.is<this_type>());
+    auto const& self = get<ArrayT>();
+    auto const& src = axis_src.get<ArrayT>();
+    auto const rank = self.trange().rank();
+    SEQUANT_ASSERT(mode < rank);
+    SEQUANT_ASSERT(axis_src_mode < src.trange().rank());
+    // Take *this's outer trange but swap in the external axis's FULL tiling
+    // (from axis_src's mode axis_src_mode). Every other mode of a block partial
+    // is already full extent, so only the sliced axis needs widening.
+    std::vector<TA::TiledRange1> dims;
+    dims.reserve(rank);
+    for (std::size_t d = 0; d < rank; ++d) dims.push_back(self.trange().dim(d));
+    dims[mode] = src.trange().dim(axis_src_mode);
+    ArrayT dest(self.world(), TA::TiledRange(dims.begin(), dims.end()));
+    dest.fill_local(numeric_type(0));
+    dest.world().gop.fence();
+    log_ta_tensor_host_memory_use();
+    return eval_result<this_type>(std::move(dest));
   }
 
   [[nodiscard]] ResultPtr prod(Result const& other,
@@ -639,22 +686,8 @@ class ResultTensorOfTensorTA final : public Result {
 
   [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t elem_lo,
                                      std::size_t elem_hi) const override {
-    auto const& tr1 = get<ArrayT>().trange().dim(mode);
-    // slice_mode takes element bounds, but a tiled backend can only cut on tile
-    // boundaries; mode_batches() returns exactly such (tile-aligned, in-range)
-    // bounds. Assert the precondition so misuse is caught rather than silently
-    // producing an over- or under-sized slice (which would break batched sums).
-    SEQUANT_ASSERT(elem_lo >= tr1.elements_range().first && elem_lo < elem_hi &&
-                   elem_hi <= tr1.elements_range().second);
-    std::size_t const tile_lo = tr1.element_to_tile(elem_lo);
-    SEQUANT_ASSERT(tr1.tile(tile_lo).first ==
-                   elem_lo);  // lo on a tile boundary
-    std::size_t const tile_hi = (elem_hi >= tr1.elements_range().second)
-                                    ? tr1.tile_extent()
-                                    : tr1.element_to_tile(elem_hi);
-    SEQUANT_ASSERT(elem_hi >= tr1.elements_range().second ||
-                   tr1.tile(tile_hi).first ==
-                       elem_hi);  // hi on a tile boundary
+    auto const [tile_lo, tile_hi] = detail::slice_bounds_to_tiles(
+        get<ArrayT>().trange().dim(mode), elem_lo, elem_hi);
     return eval_result<this_type>(
         slice_array_over_mode(get<ArrayT>(), mode, tile_lo, tile_hi));
   }
@@ -663,6 +696,57 @@ class ResultTensorOfTensorTA final : public Result {
   mode_batches(std::size_t mode, std::size_t target_batch_size) const override {
     return mode_batches_of_trange1(get<ArrayT>().trange().dim(mode),
                                    target_batch_size);
+  }
+
+  void write_into_slice(Result const& block, std::size_t mode,
+                        std::size_t block_lo, std::size_t block_hi) override {
+    SEQUANT_ASSERT(block.is<this_type>());
+    auto& dest = get<ArrayT>();
+    auto const [tile_lo, tile_hi] = detail::slice_bounds_to_tiles(
+        dest.trange().dim(mode), block_lo, block_hi);
+    write_array_into_mode(dest, block.get<ArrayT>(), mode, tile_lo, tile_hi);
+  }
+
+  [[nodiscard]] ResultPtr pre_sized_zeros_over_mode(
+      std::size_t mode, Result const& axis_src,
+      std::size_t axis_src_mode) const override {
+    auto const& self = get<ArrayT>();
+    auto const rank = self.trange().rank();
+    SEQUANT_ASSERT(mode < rank);
+    // The axis-carrying leaf supplying K's FULL tiling for mode `mode` may be
+    // nested (this_type) or flat (that_type, e.g. an integral over the external
+    // occ index): read the widened axis TiledRange1 from whichever kind. Only
+    // this one OUTER TiledRange1 is needed; every other mode of a block partial
+    // is already at full extent, so *this's own outer tiling supplies them.
+    TA::TiledRange1 const axis_dim = [&]() -> TA::TiledRange1 {
+      if (axis_src.is<this_type>()) {
+        auto const& src = axis_src.get<ArrayT>();
+        SEQUANT_ASSERT(axis_src_mode < src.trange().rank());
+        return src.trange().dim(axis_src_mode);
+      }
+      SEQUANT_ASSERT(axis_src.is<that_type>());
+      auto const& src = axis_src.get<compatible_regular_distarray_type>();
+      SEQUANT_ASSERT(axis_src_mode < src.trange().rank());
+      return src.trange().dim(axis_src_mode);
+    }();
+    std::vector<TA::TiledRange1> dims;
+    dims.reserve(rank);
+    for (std::size_t d = 0; d < rank; ++d) dims.push_back(self.trange().dim(d));
+    dims[mode] = axis_dim;
+    // A zero ToT is represented with empty inner tiles (tot_inner_rank() == 0):
+    // build the widened OUTER trange, then give every local outer tile a
+    // well-formed (empty-inner) outer tile over its range -- exactly the zero
+    // ToT that slice_array_over_mode() emits, and a valid destination that the
+    // ToT write_array_into_mode() block-assignment overwrites per scatter. The
+    // batches tile the widened `mode` axis with no gaps, so every outer tile is
+    // subsequently overwritten by some block's real inner tensors.
+    using value_type = typename ArrayT::value_type;
+    ArrayT dest(self.world(), TA::TiledRange(dims.begin(), dims.end()));
+    for (auto it = dest.begin(); it != dest.end(); ++it)
+      if (dest.is_local(it.index())) *it = value_type{it.make_range()};
+    dest.world().gop.fence();
+    log_ta_tensor_host_memory_use();
+    return eval_result<this_type>(std::move(dest));
   }
 
   [[nodiscard]] ResultPtr prod(Result const& other,
@@ -887,6 +971,67 @@ template <typename... Args>
   out(annot) = arr(annot).block(lo, hi, TA::preserve_lobound);
   TA::DistArray<Args...>::wait_for_lazy_cleanup(arr.world());
   return out;
+}
+
+/// \brief Scatter a per-block DistArray into a contiguous tile range of one
+///        mode of a pre-sized destination -- the inverse of
+///        slice_array_over_mode().
+///
+/// Writes \p block into tiles `[tile_lo, tile_hi)` of \p dest's mode \p mode,
+/// leaving every other tile of \p dest untouched. \p dest must already be
+/// allocated over its full TiledRange (the caller sizes the whole shape), and
+/// \p block's TiledRange must equal \p dest's sub-block over `[tile_lo,
+/// tile_hi)` (as produced by slice_array_over_mode() for the same mode/range).
+/// Implemented with TA's block() on the assignment LHS, so only the addressed
+/// sub-block is written and block-sparse shape is preserved. Every mode's
+/// element lobound is preserved (via TA's `preserve_lobound`), exactly as the
+/// lobound-preserving GATHER in slice_array_over_mode(): the destination
+/// sub-block and the source share element coordinates, so a spectator index
+/// carrying a nonzero lobound (e.g. a frozen-core offset) lands at its true
+/// offset rather than being rebased to 0. Reconstructs a whole result from a
+/// disjoint, gap-free tiling of one mode: scattering each block of a partition
+/// reproduces the array `slice_array_over_mode()` would gather back out.
+template <typename... Args>
+void write_array_into_mode(TA::DistArray<Args...>& dest,
+                           TA::DistArray<Args...> const& block,
+                           std::size_t mode, std::size_t tile_lo,
+                           std::size_t tile_hi) {
+  using ranges::views::iota;
+  auto const rank = dest.trange().rank();
+  SEQUANT_ASSERT(mode < rank);
+  SEQUANT_ASSERT(tile_lo < tile_hi &&
+                 tile_hi <= dest.trange().dim(mode).tile_extent());
+  container::svector<std::size_t> lo(rank, 0), hi(rank);
+  for (std::size_t d = 0; d < rank; ++d)
+    hi[d] = dest.trange().dim(d).tile_extent();
+  lo[mode] = tile_lo;
+  hi[mode] = tile_hi;
+  // For a tensor-of-tensor array the annotation must label an inner block
+  // ("outer;inner"); a flat annotation trips DistArray's is_tot_index() check.
+  // The block() is over outer modes only, so both sides share one annotation.
+  using value_type = typename TA::DistArray<Args...>::value_type;
+  std::string annot;
+  if constexpr (TA::detail::is_tensor_of_tensor_v<value_type>) {
+    auto const inner_rank = detail::tot_inner_rank(block);
+    if (inner_rank == 0) {
+      // block has all-empty inner tiles (tot_inner_rank() == 0): it represents
+      // zero and there is no inner rank to form the ToT annotation block()
+      // needs. A zero contribution leaves the pre-sized destination slice as
+      // it was, so skip the scatter entirely -- mirroring the zero-ToT early
+      // return in slice_array_over_mode().
+      return;
+    }
+    annot = TA::detail::dummy_annotation(static_cast<unsigned int>(rank),
+                                         static_cast<unsigned int>(inner_rank));
+  } else {
+    annot = detail::ords_to_annot(iota(std::size_t{0}, rank));
+  }
+  // preserve_lobound: address the destination sub-block in its original element
+  // coordinates (keeping every mode's lobound) so it matches the source block,
+  // which slice_array_over_mode() also gathered with preserve_lobound. Plain
+  // block() would rebase the sub-block to 0 and mismatch the source trange.
+  dest(annot).block(lo, hi, TA::preserve_lobound) = block(annot);
+  TA::DistArray<Args...>::wait_for_lazy_cleanup(dest.world());
 }
 
 /// \brief Compute the result's OUTER TiledRange for a binary product from the
