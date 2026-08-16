@@ -10,6 +10,7 @@
 #include <SeQuant/core/eval/peak_monitor.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/view/filter.hpp>
@@ -751,6 +752,15 @@ class CacheManager {
     /// cleared by reset() (the default, and historical, behavior).
     bool persistent_;
 
+    /// Regression tripwire (see \c store()): true iff a NON-persistent entry
+    /// has already been \c store()'d since its last \c reset(). After the
+    /// combined single-DAG evaluation (every value built exactly once per
+    /// evaluation), a second \c store() into the same NP entry with no
+    /// intervening \c reset() means a duplicate producer survived -- a bug.
+    /// Not consulted (or set) for PERSISTENT entries, which legitimately
+    /// re-store across batch replays. Cleared by \c reset().
+    bool stored_this_eval_ = false;
+
    public:
     explicit entry(size_t count, bool persistent = false) noexcept
         : max_life{count},
@@ -768,7 +778,20 @@ class CacheManager {
       return data_p;
     }
 
-    void store(ResultPtr&& data) noexcept {
+    // NOT noexcept: SEQUANT_ASSERT below can throw (SEQUANT_ASSERT_BEHAVIOR
+    // = THROW) -- see the tripwire comment on stored_this_eval_. In every
+    // default build config (IGNORE, or Debug's ABORT) this never actually
+    // throws, so callers written against the historical noexcept contract
+    // are unaffected in practice.
+    void store(ResultPtr&& data) {
+      // Regression tripwire: a NON-persistent entry re-stored without an
+      // intervening reset() means the same value was produced twice within
+      // one evaluation (a duplicate producer). PERSISTENT entries are
+      // excluded: they legitimately re-store across batch replays.
+      if (!persistent_) {
+        SEQUANT_ASSERT(!stored_this_eval_);
+        stored_this_eval_ = true;
+      }
       data_p = std::move(data);
       size_bytes_
           .reset();  // (re)computed lazily on demand; see size_in_bytes()
@@ -776,6 +799,7 @@ class CacheManager {
 
     void reset() noexcept {
       life_c = max_life;
+      stored_this_eval_ = false;
       if (!persistent_) {  // persistent data (and its size) survives reset()
         data_p = nullptr;
         size_bytes_.reset();
@@ -783,6 +807,15 @@ class CacheManager {
     }
 
     [[nodiscard]] bool persistent() const noexcept { return persistent_; }
+
+    /// \return whether this NON-persistent entry has been \c store()'d since
+    ///         its last \c reset() -- the re-store tripwire's flag state, used
+    ///         by tests to observe the guard without depending on assert
+    ///         behavior (which is elided unless \c SEQUANT_ASSERT_ENABLED).
+    ///         Always \c false for a persistent entry (never set).
+    [[nodiscard]] bool stored_this_eval() const noexcept {
+      return stored_this_eval_;
+    }
 
     [[nodiscard]] size_t life_count() const noexcept { return life_c; }
 
@@ -844,7 +877,9 @@ class CacheManager {
 
   };  // entry
 
-  static ResultPtr store(entry& ent, ResultPtr&& data) noexcept {
+  // NOT noexcept: forwards to entry::store(), which is not noexcept (see
+  // there).
+  static ResultPtr store(entry& ent, ResultPtr&& data) {
     ent.store(std::move(data));
     return ent.access();
   }
@@ -1402,7 +1437,9 @@ class CacheManager {
   ///         entry. Passing @c key that was not present during construction of
   ///         this CacheManager object, stores nothing, but still returns a
   ///         valid pointer to @c data.
-  [[nodiscard]] ResultPtr store(key_type const& key, ResultPtr data) noexcept {
+  // NOT noexcept: forwards to entry::store(), which is not noexcept (see
+  // there).
+  [[nodiscard]] ResultPtr store(key_type const& key, ResultPtr data) {
     if (auto found =
             eval::LookupMeter::timed([&] { return cache_map_.find(key); });
         found != cache_map_.end()) {
@@ -1496,6 +1533,16 @@ class CacheManager {
   [[nodiscard]] bool persistent(key_type const& key) const noexcept {
     auto iter = cache_map_.find(key);
     return iter != cache_map_.end() && iter->second.persistent();
+  }
+
+  /// \return true iff the key is registered, NON-persistent, and has been
+  ///         \c store()'d since its last \c reset() -- the re-store
+  ///         tripwire's flag state (see \c entry::store()). Test-facing
+  ///         accessor; always \c false for a persistent key or an
+  ///         unregistered one.
+  [[nodiscard]] bool stored_this_eval(key_type const& key) const noexcept {
+    auto iter = cache_map_.find(key);
+    return iter != cache_map_.end() && iter->second.stored_this_eval();
   }
 
   /// \return size in bytes of the data currently held for @p key, or 0 if

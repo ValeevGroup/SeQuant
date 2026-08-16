@@ -2,6 +2,7 @@
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <algorithm>
 #include <iostream>
 #include <optional>
@@ -541,6 +542,81 @@ TEST_CASE("cache_manager_persistent", "[cache_manager]") {
   REQUIRE(rp);
   REQUIRE(rp->get<int>() == 20);
   REQUIRE(man.alive(p));
+}
+
+// Task 9 regression tripwire: after the combined single-DAG evaluation
+// (every value built exactly once per evaluation), a NON-persistent cache
+// entry re-store()'d with no intervening reset() means a duplicate producer
+// survived -- a bug (see entry::store() / stored_this_eval_ in
+// cache_manager.hpp).
+//
+// NOTE on build config: SEQUANT_ASSERT compiles to a no-op unless
+// SEQUANT_ASSERT_ENABLED is #defined (not the case for this project's
+// default Release config: SEQUANT_ASSERT_BEHAVIOR=IGNORE there; Debug
+// defaults to ABORT, which is also not catchable). So the PRIMARY assertion
+// here is the FLAG STATE itself (store() sets it, reset() clears it), which
+// is meaningful in every build config. The actual throw is exercised only
+// when this build happens to be configured with
+// -DSEQUANT_ASSERT_BEHAVIOR=THROW (checked at runtime via
+// sequant::assert_behavior(), following the pattern in test_macros.cpp).
+TEST_CASE("cache_manager restore tripwire", "[cache_manager]") {
+  using hasher_t = sequant::TreeNodeHasher<node_type>;
+  using comp_t = sequant::TreeNodeEqualityComparator<node_type>;
+  auto eval_result = [](int x) {
+    return sequant::eval_result<sequant::ResultScalar<int>>(x);
+  };
+
+  auto const np = make_node(L"R{a1;i1} = f{a1;i1}");  // non-persistent
+  auto const p = make_node(L"R{a1;i1} = g{a1;i1}");   // persistent
+
+  std::unordered_map<node_type, size_t, hasher_t, comp_t> counts;
+  counts.emplace(np, 3);  // enough life to survive several stores/accesses
+  counts.emplace(p, 1);
+
+  comp_t eq;
+  auto is_persistent = [&p, &eq](node_type const& k) { return eq(k, p); };
+  auto man = manager_type(std::move(counts), is_persistent);
+
+  SECTION("flag state: set on store, cleared on reset (non-persistent)") {
+    REQUIRE_FALSE(man.stored_this_eval(np));
+
+    (void)man.store(np, eval_result(1));
+    REQUIRE(man.stored_this_eval(np));
+
+    // reset() clears the flag -- a subsequent store() is the legitimate
+    // (non-flagged) case.
+    man.reset();
+    REQUIRE_FALSE(man.stored_this_eval(np));
+
+    (void)man.store(np, eval_result(2));
+    REQUIRE(man.stored_this_eval(np));
+  }
+
+  SECTION("persistent entries never set (or need) the flag") {
+    REQUIRE_FALSE(man.stored_this_eval(p));
+
+    // A persistent entry legitimately re-stores across batch replays with no
+    // intervening reset() -- this must never flag, and the flag stays false
+    // throughout (it is not even consulted for persistent entries).
+    (void)man.store(p, eval_result(10));
+    REQUIRE_FALSE(man.stored_this_eval(p));
+    (void)man.store(p, eval_result(20));  // re-store, no reset(): legitimate
+    REQUIRE_FALSE(man.stored_this_eval(p));
+    (void)man.store(p, eval_result(30));
+    REQUIRE_FALSE(man.stored_this_eval(p));
+  }
+
+  SECTION("assert-enabled + THROW: re-store without reset() throws") {
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Throw) {
+      // Default build config (Release: IGNORE: no-op; Debug: ABORT: not
+      // catchable) -- nothing to observe via REQUIRE_THROWS here. The flag-
+      // state sections above already exercise the guard's logic.
+      return;
+    }
+    (void)man.store(np,
+                    eval_result(1));  // 1st store since construction/reset: OK
+    REQUIRE_THROWS(man.store(np, eval_result(2)));  // 2nd, no reset(): flagged
+  }
 }
 
 TEST_CASE("cache_manager_volatility_frontier", "[cache_manager]") {
