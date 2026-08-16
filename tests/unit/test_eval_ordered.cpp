@@ -246,7 +246,8 @@ TEST_CASE(
       });
 
   svector<ResultPtr> const res = evaluate_ordered_multiroot(
-      roots, ordered, rich, ScalarEvalExpr::annot_t{}, yield, cache, target);
+      roots, ordered, rich, svector<std::string>(roots.size()), yield, cache,
+      target);
 
   REQUIRE(res.size() == 2);
   CHECK(a_build_count == 1);
@@ -305,8 +306,8 @@ TEST_CASE(
   // The new multi-root entry, called with exactly one root.
   auto multiroot_cache = sequant::CacheManager<ScalarNode>::empty();
   svector<ResultPtr> const multi = evaluate_ordered_multiroot(
-      roots, ordered, rich, ScalarEvalExpr::annot_t{}, yield, multiroot_cache,
-      target);
+      roots, ordered, rich, svector<std::string>(roots.size()), yield,
+      multiroot_cache, target);
 
   REQUIRE(multi.size() == 1);
   double const single_val = single->as<ResultScalar<double>>().value();
@@ -371,21 +372,34 @@ TEST_CASE(
   SECTION("no driver installed: throws, no per-root fallback") {
     auto cache = sequant::CacheManager<ScalarNode>::empty();
     CHECK_THROWS_AS(
-        sequant::evaluate_multiroot(roots, std::string{}, yield, cache),
+        sequant::evaluate_multiroot(roots, svector<std::string>(roots.size()),
+                                    yield, cache),
+        std::logic_error);
+  }
+
+  SECTION("layouts.size() != roots.size(): throws (size-mismatch guard)") {
+    // Task 7's per-root widening: a caller that supplies the wrong number
+    // of layouts (not one per root) must fail loudly rather than silently
+    // truncating/padding. Checked before the driver lookup, so this fires
+    // even with no driver installed.
+    auto cache = sequant::CacheManager<ScalarNode>::empty();
+    CHECK_THROWS_AS(
+        sequant::evaluate_multiroot(
+            roots, svector<std::string>(roots.size() - 1), yield, cache),
         std::logic_error);
   }
 
   SECTION("driver installed: routes to evaluate_ordered_multiroot") {
     auto cache = sequant::CacheManager<ScalarNode>::empty();
     cache.set_multiroot_driver(
-        [&](svector<ScalarNode> const& rs, std::string const& lay,
+        [&](svector<ScalarNode> const& rs, svector<std::string> const& lays,
             sequant::CacheManager<ScalarNode>& c) -> svector<ResultPtr> {
-          return evaluate_ordered_multiroot(rs, ordered, rich, lay, yield, c,
+          return evaluate_ordered_multiroot(rs, ordered, rich, lays, yield, c,
                                             target);
         });
 
-    svector<ResultPtr> const res =
-        sequant::evaluate_multiroot(roots, std::string{}, yield, cache);
+    svector<ResultPtr> const res = sequant::evaluate_multiroot(
+        roots, svector<std::string>(roots.size()), yield, cache);
     REQUIRE(res.size() == 2);
     // Each root reads the shared, homed A = a*b; the in-place guard keeps
     // (a*b + c)'s accumulation from mutating that shared buffer. Unguarded,

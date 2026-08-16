@@ -1437,9 +1437,12 @@ ResultPtr evaluate(Nodes const& nodes,  //
 ///        shared across two or more of them is built exactly once by a
 ///        driver that concatenates them into one schedule (the ordered
 ///        executor's own contract -- see `evaluate_ordered_multiroot`).
-/// \param layout The layout each root's own result is permuted to; same
-///        meaning as the forest-range `evaluate`'s \p layout, applied
-///        per-root (not once across a cross-root sum).
+/// \param layouts The layout each root's own result is permuted to, one
+///        entry per element of \p roots in the same order; same meaning as
+///        the forest-range `evaluate`'s \p layout, applied per-root (not
+///        once across a cross-root sum) -- this is what lets heterogeneous
+///        roots (e.g. distinct CC residual annotations) each land in their
+///        own layout.
 /// \param leaf_evaluator Unused when a driver is installed (its own leaf
 ///        evaluator lives inside the driver's closure, exactly as
 ///        `whole_scope_driver_type` documents) -- present only so this
@@ -1451,17 +1454,23 @@ ResultPtr evaluate(Nodes const& nodes,  //
 /// \throws std::logic_error if `cache.multiroot_driver()` is unset -- there
 ///         is no per-root fallback; a multi-root caller must explicitly
 ///         install a driver that understands the cross-root CSE contract.
+/// \throws std::logic_error if `layouts.size() != roots.size()`.
 ///
 template <Trace EvalTrace = Trace::Default, typename node_t, typename F,
           typename N, bool FHC>
   requires meta::leaf_node_evaluator<node_t, F>
 container::svector<ResultPtr> evaluate_multiroot(
-    container::svector<node_t> const& roots, std::string const& layout,
+    container::svector<node_t> const& roots,
+    container::svector<std::string> const& layouts,
     [[maybe_unused]] F const& leaf_evaluator, CacheManager<N, FHC>& cache) {
   static_assert(
       std::is_same_v<node_t, N>,
       "evaluate_multiroot: the roots' node type must match the cache's key "
       "type");
+  if (layouts.size() != roots.size())
+    throw std::logic_error(
+        "evaluate_multiroot: layouts.size() must equal roots.size() -- one "
+        "layout per root is required");
   auto const& drv = cache.multiroot_driver();
   if (!drv)
     throw std::logic_error(
@@ -1470,7 +1479,7 @@ container::svector<ResultPtr> evaluate_multiroot(
         "cache.set_multiroot_driver(...) (e.g. ordered_executor.hpp's "
         "evaluate_ordered_multiroot, closed over an OrderedSchedule built "
         "from the SAME roots)");
-  return drv(roots, layout, cache);
+  return drv(roots, layouts, cache);
 }
 
 ///

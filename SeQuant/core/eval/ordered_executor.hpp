@@ -869,12 +869,15 @@ ResultPtr evaluate_ordered_schedule(
 ///
 /// \brief Task 4 of the multi-root single-DAG eval plan: the MULTI-ROOT
 /// ordered entry point. Identical inputs to \c evaluate_ordered_schedule
-/// (same \p roots/\p ordered/\p rich/\p layout/\p leaf_evaluator/\p cache/
-/// \p target contract -- \p ordered and \p rich must already have been built
-/// from the SAME concatenated \p roots, e.g. via \c compute_dag_boulevard(
-/// roots, ...) + \c build_ordered_schedule, exactly as any \c
-/// evaluate_ordered_schedule caller already does for its own forest), but
-/// returns a MAP instead of a SUM: each root's own (permuted, but NOT
+/// (same \p roots/\p ordered/\p rich/\p leaf_evaluator/\p cache/\p target
+/// contract -- \p ordered and \p rich must already have been built from the
+/// SAME concatenated \p roots, e.g. via \c compute_dag_boulevard(roots, ...)
+/// + \c build_ordered_schedule, exactly as any \c evaluate_ordered_schedule
+/// caller already does for its own forest), EXCEPT \p layout widens to \p
+/// layouts, one entry per root (Task 7 of the plan): unlike a single summed
+/// forest, independent roots need not share a layout (e.g. distinct CC
+/// residual annotations R1 `{a;i}` vs R2 `{ab;ij}`). Returns a MAP instead
+/// of a SUM: each root's own (permuted to its own \p layouts entry, but NOT
 /// cross-root-accumulated) result, aligned index-for-index with \p roots.
 ///
 /// \details Runs the identical schedule walk \c evaluate_ordered_schedule
@@ -903,7 +906,7 @@ ResultPtr evaluate_ordered_schedule(
 /// {r}, ...) == { evaluate_ordered_schedule({r}, ...) }.
 ///
 /// \return One \c ResultPtr per element of \p roots, in \p roots' own order,
-///         each permuted to \p layout -- NOT summed together.
+///         each permuted to its own \p layouts entry -- NOT summed together.
 ///
 template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
           typename F, typename N, bool FHC,
@@ -911,8 +914,8 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   requires meta::leaf_node_evaluator<std::ranges::range_value_t<Nodes>, F>
 [[nodiscard]] container::svector<ResultPtr> evaluate_ordered_multiroot(
     Nodes const& roots, OrderedSchedule const& ordered,
-    RichSchedule const& rich, auto const& layout, F const& leaf_evaluator,
-    CacheManager<N, FHC>& cache,
+    RichSchedule const& rich, container::svector<std::string> const& layouts,
+    F const& leaf_evaluator, CacheManager<N, FHC>& cache,
     std::function<std::size_t(Index const&)> const& target,
     [[maybe_unused]] ScopeGuardFactory const& make_scope_guard = {},
     std::function<bool(std::ranges::range_value_t<Nodes> const&)> const&
@@ -928,18 +931,19 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   container::svector<node_t> root_nodes;
   for (auto&& n : roots) root_nodes.push_back(n);
   SEQUANT_ASSERT(pre_results.size() == root_nodes.size());
+  SEQUANT_ASSERT(layouts.size() == root_nodes.size());
 
   // Per-root combine: reuses combine_forest_roots' Term/Permute bookkeeping
   // one root at a time (a singleton call never reaches its cross-root
-  // add_inplace), so each root is permuted to layout exactly as it would be
-  // as part of a summed forest, but no two roots are ever accumulated
-  // together -- the map, not the sum.
+  // add_inplace), so each root is permuted to its OWN layouts[i] exactly as
+  // it would be as part of a summed forest, but no two roots are ever
+  // accumulated together -- the map, not the sum.
   container::svector<ResultPtr> results(root_nodes.size());
   for (std::size_t i = 0; i != root_nodes.size(); ++i) {
     container::svector<node_t> one_root{root_nodes[i]};
     container::svector<ResultPtr> one_pre{std::move(pre_results[i])};
     results[i] =
-        combine_forest_roots<EvalTrace>(one_root, one_pre, layout, cache);
+        combine_forest_roots<EvalTrace>(one_root, one_pre, layouts[i], cache);
   }
   return results;
 }

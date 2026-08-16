@@ -649,26 +649,30 @@ class CacheManager {
                               std::string const& layout, CacheManager&)>;
 
   /// A multi-root driver type. When set, the free function
-  /// `evaluate_multiroot(roots, layout, leaf, cache)` (eval.hpp) routes the
+  /// `evaluate_multiroot(roots, layouts, leaf, cache)` (eval.hpp) routes the
   /// WHOLE set of independent \p roots through this driver instead of
   /// evaluating each root as its own separate forest. Unlike
   /// `whole_scope_driver_type`, which SUMS its forest's roots into one
   /// `ResultPtr`, this driver returns a MAP: one result per root, in input
   /// order, with NO cross-root summation -- the roots need not even be
-  /// commensurate in shape (e.g. independent CC residual equations). The
-  /// intended installer (ordered_executor.hpp) concatenates \p roots into
-  /// ONE schedule so a subexpression shared across roots is built once (the
-  /// same CSE `compute_dag_boulevard` already gives a concatenated node
-  /// list), then returns each root's own (unsummed) `value_result`. The
-  /// captured leaf evaluator and any batching policy live inside the
-  /// closure, exactly as `whole_scope_driver_type` documents. Empty
-  /// (default) => `evaluate_multiroot` throws (there is no per-root
-  /// fallback: unlike whole-scope routing, which falls back to the ordinary
-  /// per-tree descent when unset, a multi-root caller MUST explicitly wire a
-  /// driver that understands the cross-root CSE contract).
+  /// commensurate in shape (e.g. independent CC residual equations). \p
+  /// layouts holds one layout string per root, in the same order as \p
+  /// roots, so heterogeneous roots (e.g. distinct CC residual annotations
+  /// like R1 `{a;i}` vs R2 `{ab;ij}`) can each be permuted to their own
+  /// result layout. The intended installer (ordered_executor.hpp)
+  /// concatenates \p roots into ONE schedule so a subexpression shared
+  /// across roots is built once (the same CSE `compute_dag_boulevard`
+  /// already gives a concatenated node list), then returns each root's own
+  /// (unsummed) `value_result`. The captured leaf evaluator and any
+  /// batching policy live inside the closure, exactly as
+  /// `whole_scope_driver_type` documents. Empty (default) =>
+  /// `evaluate_multiroot` throws (there is no per-root fallback: unlike
+  /// whole-scope routing, which falls back to the ordinary per-tree descent
+  /// when unset, a multi-root caller MUST explicitly wire a driver that
+  /// understands the cross-root CSE contract).
   using multiroot_driver_type = std::function<container::svector<ResultPtr>(
-      container::svector<key_type> const& roots, std::string const& layout,
-      CacheManager&)>;
+      container::svector<key_type> const& roots,
+      container::svector<std::string> const& layouts, CacheManager&)>;
 
   /// The batch context: an ordered stack (outermost-first) of the enclosing
   /// realized batch loops, one entry per loop, `{axis K, {block_lo, block_hi}}`
