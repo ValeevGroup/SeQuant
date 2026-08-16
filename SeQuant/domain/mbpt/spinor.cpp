@@ -315,9 +315,60 @@ bool has_antisymmetrizer(const ExprPtr& expr) {
   return find_antisymmetrizer(expr).has_value();
 }
 
-container::svector<ExprPtr> closed_shell_kramers_CC_trace(const ExprPtr& expr,
-                                                          bool expand_g,
-                                                          bool use_T) {
+namespace {
+
+/// true if @p t is a Fock tensor whose indices span BOTH Kramers labels
+bool is_mixed_kramers_fock(const Tensor& t) {
+  std::wstring label{t.label()};
+  if (has_conj_suffix(label)) label.pop_back();
+  if (label != L"f") return false;
+  bool up = false, dn = false;
+  for (const auto& ix : t.const_braket()) {
+    const auto s = to_spin(ix.space().qns());
+    if (s == Spin::alpha)
+      up = true;
+    else if (s == Spin::beta)
+      dn = true;
+  }
+  return up && dn;
+}
+
+}  // namespace
+
+ExprPtr drop_mixed_kramers_fock_terms(const ExprPtr& expr) {
+  if (!expr) return expr;
+  if (expr->is<Tensor>())
+    return is_mixed_kramers_fock(expr->as<Tensor>()) ? ex<Constant>(0) : expr;
+  if (expr->is<Product>()) {
+    const auto& p = expr->as<Product>();
+    auto result = std::make_shared<Product>();
+    result->scale(p.scalar());
+    for (const auto& factor : p) {
+      auto f = drop_mixed_kramers_fock_terms(factor);
+      // one vanishing factor kills the whole product
+      if (f->is<Constant>() && f->as<Constant>().is_zero())
+        return ex<Constant>(0);
+      result->append(1, f);
+    }
+    return result;
+  }
+  if (expr->is<Sum>()) {
+    auto result = std::make_shared<Sum>();
+    for (const auto& summand : expr->as<Sum>().summands()) {
+      auto s = drop_mixed_kramers_fock_terms(summand);
+      if (s->is<Constant>() && s->as<Constant>().is_zero()) continue;
+      result->append(s);
+    }
+    if (result->summands().empty()) return ex<Constant>(0);
+    return result;
+  }
+  // Constant / Variable / opaque wrappers (e.g. RealPart) pass through
+  return expr;
+}
+
+container::svector<ExprPtr> closed_shell_kramers_CC_trace(
+    const ExprPtr& expr, bool expand_g, bool use_T,
+    bool drop_mixed_kramers_fock) {
   // Stage 1: factor out the antisymmetrizer Â (kept, not expanded). Its bra/ket
   // are the external virtual/occupied index groups.
   auto A = find_antisymmetrizer(expr);
@@ -502,6 +553,16 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(const ExprPtr& expr,
     stage("  canonicalize done");
     proto_repeat_report(block, "post-canon");
     rapid_simplify(block);
+    if (drop_mixed_kramers_fock) {
+      auto filtered = drop_mixed_kramers_fock_terms(block);
+      // Never annihilate a whole residual block: downstream consumers derive
+      // the block's external (bra/ket) layout from its expression, and a bare
+      // Constant{0} carries none. Such a block evaluates to zero anyway — at
+      // zero cost, since its vanishing Fock leaf is a structurally empty
+      // tensor — so keep it verbatim.
+      if (!(filtered->is<Constant>() && filtered->as<Constant>().is_zero()))
+        block = std::move(filtered);
+    }
     blocks.push_back(block);
   }
   return blocks;
@@ -510,7 +571,7 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(const ExprPtr& expr,
 ExprPtr closed_shell_kramers_trace(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups,
-    bool fold_T, bool expand_g) {
+    bool fold_T, bool expand_g, bool drop_mixed_kramers_fock) {
   if (expr->is<Constant>() || expr->is<Variable>()) return expr;
 
   // Step 0/6: optionally expand the integral `g`'s antisymmetry (Kramers-free,
@@ -603,6 +664,11 @@ ExprPtr closed_shell_kramers_trace(
     ExprPtr block = append_spin(traced_input, replacements);
     canonicalize(block);  // particle-interchange (sigma) merge within the block
     rapid_simplify(block);
+    if (drop_mixed_kramers_fock) {
+      block = drop_mixed_kramers_fock_terms(block);
+      // a configuration left with nothing contributes no representative
+      if (block->is<Constant>() && block->as<Constant>().is_zero()) continue;
+    }
 
     bool merged = false;
     for (auto& [rep, mult] : reps) {

@@ -193,10 +193,14 @@ class ImagPart : public sequant::Expr {
 ///        optimization stage.)
 /// @return the Kramers-traced expression (unsimplified)
 // clang-format on
+/// @param drop_mixed_kramers_fock if true, discard every emitted term carrying
+///        a Fock element between opposite Kramers partners (see
+///        drop_mixed_kramers_fock_terms); default false.
 ExprPtr closed_shell_kramers_trace(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups = {},
-    bool fold_T = true, bool expand_g = true);
+    bool fold_T = true, bool expand_g = true,
+    bool drop_mixed_kramers_fock = false);
 
 // clang-format off
 /// @brief Orbits of the n-bit Kramers configurations under a group of bit
@@ -334,9 +338,50 @@ container::svector<KramersBlock> kramers_external_blocks(
 ///        under the external particle-interchange swaps B/K (doubles -> 9
 ///        blocks), avoiding the T (conjugation) reduction — a diagnostic to
 ///        isolate whether the residual's T-transformation is the issue.
-container::svector<ExprPtr> closed_shell_kramers_CC_trace(const ExprPtr& expr,
-                                                          bool expand_g = false,
-                                                          bool use_T = true);
+/// @param drop_mixed_kramers_fock if true, discard every emitted term that
+///        carries a Fock element between opposite Kramers partners (see
+///        drop_mixed_kramers_fock_terms). Default false: the reduction is a
+///        property of the REFERENCE, not of the algebra, so callers opt in.
+container::svector<ExprPtr> closed_shell_kramers_CC_trace(
+    const ExprPtr& expr, bool expand_g = false, bool use_T = true,
+    bool drop_mixed_kramers_fock = false);
+
+// clang-format off
+/// @brief Drop every term containing a Fock (`f`) element between opposite
+///        Kramers partners.
+/// @details For a Kramers-restricted reference the one-body Fock operator
+/// commutes with time reversal, so in a Kramers-paired basis every Fock matrix
+/// element between opposite Kramers partners vanishes *in exact arithmetic*:
+/// `f^{p↑}_{q↓} = 0`, for occupied, virtual and mixed blocks alike. Terms
+/// carrying such a factor can therefore be removed at derivation time.
+///
+/// @warning This is a property of the REFERENCE, not of the algebra: it holds
+/// only while the orbital bases stay Kramers-paired (a canonical
+/// Kramers-restricted reference, or a localizer applying the same
+/// transformation to both Kramers partners). A localizer that MIXES Kramers
+/// partners makes these blocks nonzero and this reduction wrong, which is why
+/// the tracers keep it behind an opt-in flag.
+///
+/// @note Verified numerically on HSeOH/X2C (Se, strong spin-orbit): the
+/// crossed blocks vanish with SCF convergence in lockstep with the Brillouin
+/// block ⟨i|F|a⟩, which is guaranteed zero for a converged SCF, and stay ~8x
+/// BELOW it throughout. At SCF target 1e-15, ‖f^{i↑}_{j↓}‖ ~ 2.5e-12 and
+/// ‖f^{a↑}_{b↓}‖ ~ 2.0e-12 against a diagonal of 4.7e+2, i.e. ~4e-15
+/// relative. (Measuring this requires the DF-consistent Fock: MPQC's leaf
+/// builder requests `[df]` so it receives the SCF's own converged Fock; a
+/// hand-built formula without `[df]` gets an exact-J/K Fock instead and shows
+/// a spurious ~1e-5 residual.)
+///
+/// @note Dropping these terms saves little arithmetic: at MPQC's production
+/// CSV screening threshold the crossed Fock blocks already fall below the
+/// sparse-shape cutoff and are discarded, so the terms cost almost nothing to
+/// evaluate. The benefit is a smaller derivation -- fewer terms to
+/// canonicalize, binarize, cache and step through.
+/// @param expr expression to filter
+/// @return @p expr with the offending terms removed; `Constant{0}` if that
+///         removes everything
+// clang-format on
+ExprPtr drop_mixed_kramers_fock_terms(const ExprPtr& expr);
 
 /// @brief True if @p expr contains an antisymmetrizer (Â) tensor anywhere.
 /// @details Lets a caller (e.g. the CC spintrace dispatch) tell a residual

@@ -629,3 +629,80 @@ TEST_CASE("kramers_transform_bit_engine", "[orbit-transform]") {
     }
   }
 }
+
+TEST_CASE("drop_mixed_kramers_fock_terms", "[spinor]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  auto ctx = get_default_context();
+  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto _ = set_scoped_default_context(ctx);
+  TensorCanonicalizer::register_instance(
+      std::make_shared<DefaultTensorCanonicalizer>());
+
+  // f between the two indices, each labelled with the requested Kramers spin
+  auto kr = [](std::wstring_view label, Spin s) {
+    return s == Spin::alpha ? make_spinalpha(Index{label})
+                            : make_spinbeta(Index{label});
+  };
+  auto fock = [&kr](std::wstring_view b, Spin sb, std::wstring_view k,
+                    Spin sk) {
+    return ex<Tensor>(L"f", sequant::bra{kr(b, sb)}, sequant::ket{kr(k, sk)});
+  };
+  auto g_pure = [&kr](std::wstring_view i, std::wstring_view a) {
+    return ex<Tensor>(L"g", sequant::bra{kr(i, Spin::alpha)},
+                      sequant::ket{kr(a, Spin::alpha)});
+  };
+
+  SECTION("a mixed-Kramers f kills its term, a pure one survives") {
+    auto pure = fock(L"i_1", Spin::alpha, L"i_2", Spin::alpha);
+    auto mixed_occ = fock(L"i_1", Spin::alpha, L"i_2", Spin::beta);
+    auto mixed_vir = fock(L"a_1", Spin::beta, L"a_2", Spin::alpha);
+    // occ-virt block is subject to the same rule
+    auto mixed_ov = fock(L"i_1", Spin::alpha, L"a_1", Spin::beta);
+
+    CHECK(drop_mixed_kramers_fock_terms(pure)->is<Tensor>());
+    for (const auto& mixed : {mixed_occ, mixed_vir, mixed_ov}) {
+      auto out = drop_mixed_kramers_fock_terms(mixed);
+      REQUIRE(out->is<Constant>());
+      CHECK(out->as<Constant>().is_zero());
+    }
+  }
+
+  SECTION("only the offending summands are removed") {
+    auto sum = ex<Sum>(ExprPtrList{
+        fock(L"i_1", Spin::alpha, L"i_2", Spin::alpha),  // keep
+        fock(L"i_1", Spin::alpha, L"i_2", Spin::beta),   // drop
+        g_pure(L"i_1", L"a_1"),                          // keep (g is exempt)
+        fock(L"a_1", Spin::beta, L"a_2", Spin::alpha),   // drop
+    });
+    REQUIRE(sum->size() == 4);
+    auto out = drop_mixed_kramers_fock_terms(sum);
+    REQUIRE(out->is<Sum>());
+    CHECK(out->size() == 2);
+  }
+
+  SECTION("one mixed factor annihilates a whole product") {
+    auto prod = ex<Product>(ExprPtrList{
+        g_pure(L"i_1", L"a_1"), fock(L"i_1", Spin::alpha, L"i_2", Spin::beta)});
+    auto out = drop_mixed_kramers_fock_terms(prod);
+    REQUIRE(out->is<Constant>());
+    CHECK(out->as<Constant>().is_zero());
+
+    // ... but a product of only pure factors is untouched
+    auto keep = ex<Product>(
+        ExprPtrList{g_pure(L"i_1", L"a_1"),
+                    fock(L"i_1", Spin::alpha, L"i_2", Spin::alpha)});
+    CHECK(drop_mixed_kramers_fock_terms(keep)->is<Product>());
+  }
+
+  SECTION("everything dropped yields zero") {
+    auto sum = ex<Sum>(ExprPtrList{
+        fock(L"i_1", Spin::alpha, L"i_2", Spin::beta),
+        fock(L"a_1", Spin::beta, L"a_2", Spin::alpha),
+    });
+    auto out = drop_mixed_kramers_fock_terms(sum);
+    REQUIRE(out->is<Constant>());
+    CHECK(out->as<Constant>().is_zero());
+  }
+}
