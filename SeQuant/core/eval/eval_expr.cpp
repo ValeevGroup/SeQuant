@@ -456,8 +456,8 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
   // operand (see fold_left_to_node in binary_node.hpp: the accumulator is
   // always `l`), so every chain Sum node accumulates its left operand in
   // place -- see EvalExpr::accumulate_in_place.
-  auto make_sum = [i = 0,                    //
-                   hs = imed_hashes(hvals),  //
+  auto make_sum = [i = 0,                                        //
+                   hs = imed_hashes(hvals) | ranges::to_vector,  //
                    all_tensors, &opts](EvalExpr const& left,
                                        EvalExpr const&) mutable -> EvalExpr {
     auto h = ranges::at(hs, ++i);

@@ -573,3 +573,33 @@ TEST_CASE("eval_expr_batched_here_typed", "[EvalExpr][batched-here]") {
   REQUIRE(node.batched_here()[0].second == BatchModeType::Contracted);
   REQUIRE(node.batched_here()[1].second == BatchModeType::External);
 }
+
+// Task 5 (multiroot-single-dag-eval): binarize(Sum const&, ...)'s make_sum
+// lambda used to capture its prefix-hash range (imed_hashes(hvals)) as a
+// LAZY, stateful view; ranges::at(hs, ++i) re-begin()s that view on every
+// access, which re-drives inits' internal mutable `++n` counter and
+// silently drops the LAST summand from the running hash -- so two Sums
+// differing only in their last summand collided on hash_value(). The
+// Product path in this same file already materializes its prefix-hash
+// range eagerly (`auto const hs = imed_hashes(hvals) | ranges::to_vector;`)
+// and was unaffected.
+TEST_CASE("Sum-node hash is sensitive to every summand",
+          "[eval][binarize][hash]") {
+  using namespace sequant;
+
+  auto const root = [](std::wstring_view s) {
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    return binarize(deserialize(s));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  };
+
+  auto const last_a = root(L"(a * b) + c");  // differ in LAST summand
+  auto const last_b = root(L"(a * b) - c");
+  auto const first_a = root(L"c + (a * b)");  // differ in FIRST summand
+  auto const first_b = root(L"d + (a * b)");  // (already worked pre-fix)
+
+  CHECK(last_a->hash_value() != last_b->hash_value());
+  CHECK(first_a->hash_value() != first_b->hash_value());
+  // (a*b)+c and c+(a*b) are the same multiset of summands -> same hash.
+  CHECK(last_a->hash_value() == first_a->hash_value());
+}
