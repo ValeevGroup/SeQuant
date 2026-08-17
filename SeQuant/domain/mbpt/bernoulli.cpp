@@ -300,43 +300,43 @@ ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
   const auto T = op::tensor::T(N, skip1);
   const auto sigma = simplify(T - adjoint(T));
 
+  // Applies one partition tag to an expression; 'A' is no filter. `reduced`
+  // says the input is already wick_reduce'd, which every commutator output is;
+  // the V base is not, so it takes the reducing form.
+  auto part = [&](char tag, const ExprPtr& e, bool reduced) -> ExprPtr {
+    SEQUANT_ASSERT(tag == 'A' || tag == 'N' || tag == 'R',
+                   "bernoulli::hbar: partition tag must be one of A, N, R");
+    if (tag == 'A') return e;
+    if (tag == 'N')
+      return reduced ? N_part_reduced(e, cutoff) : N_part(e, cutoff);
+    return reduced ? R_part_reduced(e, cutoff) : R_part(e, cutoff);
+  };
+
   // Every term of H̄^k is a nested commutator [[..[V_{p0},σ]_{f0}..],σ]_{f_k}
   // with a per-level N/R/A partition tag applied after each commutator ('A' =
   // no filter). nest(p0, f) evaluates such a node, memoizing every prefix
   // (key = p0 + tags applied so far): prefixes repeat both within a rank and
   // across ranks. Reuse is safe because expression composition deep-copies its
-  // operands. Commutator outputs are already wick_reduce'd, so the
-  // reduced-input N/R filters apply.
+  // operands.
   container::map<std::string, ExprPtr> memo;
   auto nest = [&](char p0, const char* f) -> ExprPtr {
-    SEQUANT_ASSERT((p0 == 'A' || p0 == 'N' || p0 == 'R') &&
-                   "bernoulli::hbar: partition tag must be one of A, N, R");
     // grow `key` in place rather than deriving it from the memo iterator:
     // container::map is a flat_map, whose insertions invalidate iterators
     std::string key{p0};
     auto it = memo.find(key);
-    if (it == memo.end()) {
-      ExprPtr base = (p0 == 'N')   ? N_part(V, cutoff)
-                     : (p0 == 'R') ? R_part(V, cutoff)
-                                   : V;
-      it = memo.emplace(key, std::move(base)).first;
-    }
-    ExprPtr op = it->second;
+    if (it == memo.end())
+      it = memo.emplace(key, part(p0, V, /*reduced=*/false)).first;
+    ExprPtr cur = it->second;
     for (int i = 0; f[i] != '\0'; ++i) {
-      SEQUANT_ASSERT((f[i] == 'A' || f[i] == 'N' || f[i] == 'R') &&
-                     "bernoulli::hbar: partition tag must be one of A, N, R");
       key += f[i];
       it = memo.find(key);
       if (it == memo.end()) {
-        auto cx = wick_commutator(op, sigma);
-        ExprPtr filtered = (f[i] == 'R')   ? R_part_reduced(cx, cutoff)
-                           : (f[i] == 'N') ? N_part_reduced(cx, cutoff)
-                                           : cx;
-        it = memo.emplace(key, std::move(filtered)).first;
+        auto cx = wick_commutator(cur, sigma);
+        it = memo.emplace(key, part(f[i], cx, /*reduced=*/true)).first;
       }
-      op = it->second;
+      cur = it->second;
     }
-    return op;
+    return cur;
   };
 
   HashingAccumulator acc;
