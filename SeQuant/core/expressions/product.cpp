@@ -1,0 +1,384 @@
+#include <SeQuant/core/expressions/abstract_tensor.hpp>
+#include <SeQuant/core/expressions/constant.hpp>
+#include <SeQuant/core/expressions/expr.hpp>
+#include <SeQuant/core/expressions/expr_ptr.hpp>
+#include <SeQuant/core/expressions/product.hpp>
+#include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/tensor_network/typedefs.hpp>
+
+#include <range/v3/all.hpp>
+
+#include <ranges>
+
+namespace sequant {
+
+Product::Product(ExprPtrList factors, Flatten flatten_tag) {
+  using std::begin;
+  using std::end;
+  for (auto it = begin(factors); it != end(factors); ++it)
+    append(1, *it, flatten_tag);
+}
+
+Product &Product::append(ExprPtr factor, Flatten flatten_tag) {
+  return this->append(1, factor, flatten_tag);
+}
+
+const Product::scalar_type &Product::scalar() const { return scalar_; }
+
+bool Product::is_zero() const { return Constant::is_zero(this->scalar()); }
+
+const Product::factors_type &Product::factors() const { return factors_; }
+Product::factors_type &Product::factors() { return factors_; }
+
+const ExprPtr &Product::factor(size_t i) const { return factors_.at(i); }
+
+bool Product::empty() const { return factors_.empty(); }
+
+bool Product::is_commutative() const {
+  bool result = true;
+  const auto nfactors = size();
+  for (size_t f = 0; f != nfactors; ++f) {
+    for (size_t s = 1; result && s != nfactors; ++s) {
+      result &= factors_[f]->commutes_with(*factors_[s]);
+    }
+  }
+  return result;
+}
+
+ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
+  // recursively canonicalize non-tensor subfactors (tensors will be
+  // canonicalized as part of the TN built of all tensor factors of this) ...
+  ranges::for_each(factors_, [this, opts](auto &factor) {
+    if (factor.template is<AbstractTensor>()) {
+      return;
+    }
+    auto bp = factor->canonicalize(opts);
+    if (bp) {
+      SEQUANT_ASSERT(bp->template is<Constant>());
+      this->scalar_ *= std::static_pointer_cast<Constant>(bp)->value();
+    }
+  });
+
+  if (Logger::instance().canonicalize) {
+    std::wcout << "Product canonicalization(" << to_wstring(opts.method)
+               << ") input: " << to_latex() << std::endl;
+  }
+
+  // pull out all scalar factors to the front
+  auto is_scalar = [](const auto &factor) { return factor->is_scalar(); };
+  auto scalars =
+      factors_ | ranges::views::filter(is_scalar) | ranges::to_vector;
+  // scalars commute, so we can reorder them freely
+  ranges::sort(scalars, [](const auto &first, const auto &second) {
+    return *first < *second;
+  });
+
+  factors_ = factors_ | ranges::views::filter([&is_scalar](const auto &factor) {
+               return !is_scalar(factor);
+             }) |
+             ranges::to<decltype(factors_)>;
+
+  // if there are no factors, insert scalars back and return
+  if (factors_.empty()) {
+    factors_.insert(factors_.begin(), scalars.begin(), scalars.end());
+    return {};
+  }
+
+  auto contains_nontensors = ranges::any_of(factors_, [](const auto &factor) {
+    return std::dynamic_pointer_cast<AbstractTensor>(factor) == nullptr;
+  });
+  if (!contains_nontensors) {  // tensor network canonization is a special case
+                               // that's done in
+                               // TensorNetwork
+    auto make_canonical_tn = [this, &opts](auto *tn_null_ptr) {
+      using TN = std::decay_t<std::remove_pointer_t<decltype(tn_null_ptr)>>;
+      ExprPtr canon_factor;
+      TN tn(this->factors_);
+      if constexpr (TN::version() == 3) {
+        canon_factor = tn.canonicalize(
+            TensorCanonicalizer::cardinal_tensor_labels(), opts);
+      } else {
+        using NamedIndexSet = tensor_network::NamedIndexSet;
+        std::shared_ptr<NamedIndexSet> named_indices =
+            !opts.named_indices
+                ? nullptr
+                : std::make_shared<NamedIndexSet>(opts.named_indices->begin(),
+                                                  opts.named_indices->end());
+        canon_factor = tn.canonicalize(
+            TensorCanonicalizer::cardinal_tensor_labels(),
+            opts.method == CanonicalizationMethod::Rapid, named_indices.get());
+      }
+      return std::pair{std::move(tn), canon_factor};
+    };
+    using TN = TensorNetwork;
+    auto [tn, canon_factor] = make_canonical_tn(static_cast<TN *>(nullptr));
+
+    const auto &tensors = tn.tensors();
+    using std::size;
+    SEQUANT_ASSERT(size(tensors) == size(factors_));
+    using std::begin;
+    using std::end;
+    std::transform(begin(tensors), end(tensors), begin(factors_),
+                   [](const auto &tptr) {
+                     auto exprptr = std::dynamic_pointer_cast<Expr>(tptr);
+                     SEQUANT_ASSERT(exprptr);
+                     return exprptr;
+                   });
+    if (canon_factor) scalar_ *= canon_factor->template as<Constant>().value();
+    this->reset_hash_value();
+  } else {  // if contains non-tensors, do commutation-checking resort
+
+    // comparer that respects cardinal tensor labels
+    auto &cardinal_tensor_labels =
+        TensorCanonicalizer::cardinal_tensor_labels();
+    auto local_compare = [&cardinal_tensor_labels](const ExprPtr &first,
+                                                   const ExprPtr &second) {
+      if (first->is<Labeled>() && second->is<Labeled>()) {
+        const auto first_label = first->as<Labeled>().label();
+        const auto second_label = second->as<Labeled>().label();
+        if (first_label == second_label) return *first < *second;
+        const auto first_is_cardinal_it = ranges::find_if(
+            cardinal_tensor_labels,
+            [&first_label](const std::wstring &l) { return l == first_label; });
+        const auto first_is_cardinal =
+            first_is_cardinal_it != ranges::end(cardinal_tensor_labels);
+        const auto second_is_cardinal_it = ranges::find_if(
+            cardinal_tensor_labels, [&second_label](const std::wstring &l) {
+              return l == second_label;
+            });
+        const auto second_is_cardinal =
+            second_is_cardinal_it != ranges::end(cardinal_tensor_labels);
+        if (first_is_cardinal && second_is_cardinal)
+          return first_is_cardinal_it < second_is_cardinal_it;
+        else if (first_is_cardinal && !second_is_cardinal)
+          return true;
+        else if (!first_is_cardinal && second_is_cardinal)
+          return false;
+        else {
+          SEQUANT_ASSERT(!first_is_cardinal && !second_is_cardinal);
+          return *first < *second;
+        }
+      } else
+        return *first < *second;
+    };
+
+    // ... then resort, respecting commutativity
+    using std::begin;
+    using std::end;
+    if (static_commutativity()) {
+      if (is_commutative()) {
+        std::stable_sort(begin(factors_), end(factors_), local_compare);
+      }
+    } else {
+      // must do bubble sort if not commuting to avoid swapping elements across
+      // a noncommuting element
+      bubble_sort(
+          begin(factors_), end(factors_),
+          [&local_compare](const ExprPtr &first, const ExprPtr &second) {
+            bool result = (first->commutes_with(*second))
+                              ? local_compare(first, second)
+                              : false;
+            return result;
+          });
+    }
+  }
+  // reinsert scalar factors at the front
+  factors_.insert(factors_.begin(), scalars.begin(), scalars.end());
+
+  // TODO evaluate product of Tensors (turn this into Products of Products)
+
+  if (Logger::instance().canonicalize)
+    std::wcout << "Product canonicalization(" << to_wstring(opts.method)
+               << ") result: " << to_latex() << std::endl;
+
+  return {};  // side effects are absorbed into the scalar_
+}
+
+void Product::adjoint() {
+  SEQUANT_ASSERT(static_commutativity() == false);  // assert no slicing
+  auto adj_scalar = conj(scalar());
+  using namespace ranges;
+  auto adj_factors =
+      factors() | views::reverse |
+      views::transform([](auto &expr) { return ::sequant::adjoint(expr); });
+  using std::swap;
+  *this =
+      Product(adj_scalar, ranges::begin(adj_factors), ranges::end(adj_factors));
+}
+
+ExprPtr Product::canonicalize(CanonicalizeOptions opt) {
+  return this->canonicalize_impl(opt);
+}
+
+ExprPtr Product::rapid_canonicalize(CanonicalizeOptions opt) {
+  SEQUANT_ASSERT(opt.method == CanonicalizationMethod::Rapid);
+  return this->canonicalize_impl(opt);
+}
+
+void CProduct::adjoint() {
+  auto adj_scalar = conj(scalar());
+  using namespace ranges;
+  // no need to reverse for commutative product
+  auto adj_factors = factors() | views::transform([](auto &&expr) {
+                       return ::sequant::adjoint(expr);
+                     });
+  *this = CProduct(adj_scalar, ranges::begin(adj_factors),
+                   ranges::end(adj_factors));
+}
+
+void NCProduct::adjoint() {
+  auto adj_scalar = conj(scalar());
+  using namespace ranges;
+  // no need to reverse for commutative product
+  auto adj_factors =
+      factors() | std::views::reverse | std::views::transform([](auto &&expr) {
+        return ::sequant::adjoint(expr);
+      });
+  *this = NCProduct(adj_scalar, ranges::begin(adj_factors),
+                    ranges::end(adj_factors));
+}
+
+bool Product::static_commutativity() const { return false; }
+
+std::wstring Product::to_latex() const { return to_latex(false); }
+
+std::wstring Product::to_latex(bool negate) const {
+  std::wstring result;
+  result = L"{";
+  if (!scalar().is_zero()) {
+    const auto scal = negate ? -scalar() : scalar();
+    if (!scal.is_identity()) {
+      // replace -1 prefactor by -
+      if (!(negate ? scalar() : -scalar()).is_identity()) {
+        result += io::latex::to_string(scal);
+      } else {
+        result += L"{-}";
+      }
+    }
+    for (const auto &i : factors()) {
+      if (i->is<Product>())
+        result += L"\\bigl(" + i->to_latex() + L"\\bigr)";
+      else
+        result += i->to_latex();
+    }
+  }
+  result += L"}";
+  return result;
+}
+
+Product::type_id_type Product::type_id() const {
+  return get_type_id<Product>();
+};
+
+/// @return an identical clone of this Product (a deep copy allocated on the
+///         heap)
+/// @note this does not flatten the product
+ExprPtr Product::clone() const { return ex<Product>(this->deep_copy()); }
+
+Product Product::deep_copy() const {
+  auto cloned_factors =
+      factors() | ranges::views::transform([](const ExprPtr &ptr) {
+        return ptr ? ptr->clone() : nullptr;
+      });
+  Product result(this->scalar(), ExprPtrList{});
+  ranges::for_each(cloned_factors, [&](const auto &cloned_factor) {
+    result.append(1, std::move(cloned_factor), Flatten::No);
+  });
+  return result;
+}
+
+Product &Product::operator*=(const Expr &that) {
+  if (!that.is<Constant>()) {
+    this->append(1, const_cast<Expr &>(that).shared_from_this());
+  } else {
+    scalar_ *= that.as<Constant>().value();
+  }
+  return *this;
+}
+
+void Product::add_identical(const Product &other) {
+  SEQUANT_ASSERT(ranges::equal(this->factors(), other.factors()));
+  scalar_ += other.scalar_;
+}
+
+void Product::add_identical(const std::shared_ptr<Product> &other) {
+  SEQUANT_ASSERT(ranges::equal(this->factors(), other->factors()));
+  scalar_ += other->scalar_;
+}
+
+void Product::add_identical(const ExprPtr &other) {
+  if (other.is<Product>()) return this->add_identical(other.as<Product>());
+
+  // only makes sense if this has a single factor
+  SEQUANT_ASSERT(this->factors_.size() == 1 && this->factors_[0] == other);
+  scalar_ += 1;
+}
+
+ExprIterator Product::begin_subexpr() {
+  if (!factors_.empty()) {
+    reset_hash_value();
+  }
+
+  return ExprIterator{factors_.data()};
+}
+
+ExprIterator Product::end_subexpr() {
+  return ExprIterator{factors_.data() + factors_.size()};
+}
+
+ConstExprIterator Product::begin_subexpr() const {
+  return ConstExprIterator{factors_.data()};
+}
+
+ConstExprIterator Product::end_subexpr() const {
+  return ConstExprIterator{factors_.data() + factors_.size()};
+}
+
+/// @return the hash of this object, by hashing only the factors,
+/// not the scalar to make possible rapid finding of Products that only
+/// differ by a factor
+/// @note this ensures that hash of a Product involving a single factor is
+/// identical to the hash of the factor itself.
+Expr::hash_type Product::memoizing_hash() const {
+  auto compute_hash = [this]() {
+    if (factors().size() == 1)
+      return factors_[0]->hash_value();
+    else {
+      auto deref_factors =
+          factors() |
+          ranges::views::transform(
+              [](const ExprPtr &ptr) -> const Expr & { return *ptr; });
+      auto value =
+          hash::range(ranges::begin(deref_factors), ranges::end(deref_factors));
+      return value;
+    }
+  };
+
+  if (!hash_value_) {
+    hash_value_ = compute_hash();
+  } else {
+    SEQUANT_ASSERT(*hash_value_ == compute_hash());
+  }
+
+  return *hash_value_;
+}
+
+bool Product::static_equal(const Expr &that) const {
+  const auto &that_cast = static_cast<const Product &>(that);
+  if (scalar() == that_cast.scalar() &&
+      factors().size() == that_cast.factors().size()) {
+    if (this->empty()) return true;
+    // compare hash values first
+    if (this->hash_value() ==
+        that.hash_value())  // hash values agree -> do full comparison
+      return std::equal(begin_subexpr(), end_subexpr(), that.begin_subexpr(),
+                        expr_ptr_comparer);
+    else
+      return false;
+  } else
+    return false;
+}
+
+}  // namespace sequant

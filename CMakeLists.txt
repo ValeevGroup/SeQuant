@@ -318,6 +318,8 @@ set(SeQuant_symb_src
         SeQuant/core/expressions/expr_range.hpp
         SeQuant/core/expressions/power.cpp
         SeQuant/core/expressions/power.hpp
+        SeQuant/core/expressions/product.cpp
+        SeQuant/core/expressions/product.hpp
         SeQuant/core/expressions/result_expr.cpp
         SeQuant/core/expressions/result_expr.hpp
         SeQuant/core/expressions/tensor.cpp
