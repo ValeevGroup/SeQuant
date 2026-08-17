@@ -1,8 +1,10 @@
 #include <SeQuant/core/expressions/abstract_tensor.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
+#include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/product.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>

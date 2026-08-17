@@ -4,17 +4,12 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
-#include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/expr_iterator.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
-#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
-#include <range/v3/algorithm/equal.hpp>
-#include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/view/filter.hpp>
-#include <range/v3/view/transform.hpp>
 
 #include <string>
 #include <type_traits>
