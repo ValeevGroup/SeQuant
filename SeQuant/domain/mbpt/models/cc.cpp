@@ -12,6 +12,7 @@
 #include <SeQuant/domain/mbpt/spin.hpp>
 #include <SeQuant/domain/mbpt/utils.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <new>
@@ -369,6 +370,7 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
 namespace {
 // EOM eigenvector operators R and L use SquareRoot normalization
 constexpr Normalization eom_norm = Normalization::SquareRoot;
+}  // namespace
 
 // Per-block-truncated EOM sigma equations. For the qUCCSD ranks see
 // 10.1063/5.0062090 Sec. II C, Eqs. (29)-(48); for the IP/EA analogues,
@@ -377,10 +379,9 @@ constexpr Normalization eom_norm = Normalization::SquareRoot;
 // Each block is the sandwich <i|H̄|j> of Eq. (7). Eq. (10) writes H̄ as
 // E_gr + a normal-ordered remainder and builds the blocks from the remainder
 // alone, so here the diagonal carries an explicit -<0|H̄|0> instead.
-std::vector<ExprPtr> eom_r_blocked(const CC& cc, nₚ np, nₕ nh,
-                                   const std::vector<size_t>& block_ranks,
-                                   size_t N) {
-  SEQUANT_ASSERT(cc.unitary(), "eom_r_blocked requires a unitary ansatz");
+std::vector<ExprPtr> CC::eom_r_blocked(
+    nₚ np, nₕ nh, const std::vector<size_t>& block_ranks) const {
+  SEQUANT_ASSERT(unitary(), "eom_r_blocked requires a unitary ansatz");
 
   std::vector<std::pair<std::int64_t, std::int64_t>> manifolds;
   for (std::int64_t rp = np, rh = nh; rp >= 0 && rh >= 0; --rp, --rh) {
@@ -393,16 +394,15 @@ std::vector<ExprPtr> eom_r_blocked(const CC& cc, nₚ np, nₕ nh,
   const auto K = manifolds.size();
   // empty means uniform truncation at hbar_comm_rank in every block
   const std::vector<size_t> ranks =
-      block_ranks.empty()
-          ? std::vector<size_t>(K * K, cc.hbar_comm_rank().value())
-          : block_ranks;
+      block_ranks.empty() ? std::vector<size_t>(K * K, hbar_comm_rank().value())
+                          : block_ranks;
   SEQUANT_ASSERT(ranks.size() == K * K,
                  "CC::eom_r: block_ranks must be a K x K row-major matrix, "
                  "K = number of projection manifolds");
 
   // Bernoulli H̄ is tensor-level, BCH H̄ operator-level; the bra/ket/vev trio
   // below must match it. Empty connectivity, as everywhere on the unitary path.
-  const bool tensor_level = cc.hbar_expansion() == CC::HbarExpansion::Bernoulli;
+  const bool tensor_level = hbar_expansion_ == HbarExpansion::Bernoulli;
 
   // One H̄ per distinct truncation order, reduced to its R part (Bernoulli
   // only: the operator-level BCH H̄ has no N/R split to take). The N part is
@@ -416,7 +416,7 @@ std::vector<ExprPtr> eom_r_blocked(const CC& cc, nₚ np, nₕ nh,
   for (const auto k : ranks) {
     auto [it, fresh] = hbars.try_emplace(k);
     if (!fresh) continue;  // deriving H̄ twice for one rank is not cheap
-    it->second = cc.hbar(k);
+    it->second = hbar(k);
     if (tensor_level) it->second = bernoulli::detail::R_part(it->second, N);
   }
   auto bra_of = [tensor_level](std::int64_t p, std::int64_t h) {
@@ -426,11 +426,11 @@ std::vector<ExprPtr> eom_r_blocked(const CC& cc, nₚ np, nₕ nh,
     return tensor_level ? op::tensor::r(nₚ(p), nₕ(h), eom_norm)
                         : op::r(nₚ(p), nₕ(h), eom_norm);
   };
-  auto vev = [tensor_level, &cc](const ExprPtr& e) {
+  auto vev = [tensor_level, this](const ExprPtr& e) {
     return tensor_level ? op::tensor::ref_av(e)
                         : op::ref_av(e, {.connect = {},
-                                         .screen = cc.screen(),
-                                         .use_topology = cc.use_topology()});
+                                         .screen = screen_,
+                                         .use_topology = use_topology_});
   };
 
   using std::min;
@@ -452,7 +452,6 @@ std::vector<ExprPtr> eom_r_blocked(const CC& cc, nₚ np, nₕ nh,
   }
   return result;
 }
-}  // namespace
 
 std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh,
                                const std::vector<size_t>& block_ranks) const {
@@ -470,7 +469,7 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh,
   // with an operator-level R, which a tensor-level H̄ cannot take part in. An
   // empty matrix there means uniform truncation at hbar_comm_rank.
   if (!block_ranks.empty() || hbar_expansion_ == HbarExpansion::Bernoulli)
-    return eom_r_blocked(*this, np, nh, block_ranks, N);
+    return eom_r_blocked(np, nh, block_ranks);
 
   // construct hbar
   const auto hbar = this->hbar();

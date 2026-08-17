@@ -245,6 +245,13 @@ class CC {
   std::optional<size_t> pertbar_comm_rank_ = std::nullopt;
   HbarExpansion hbar_expansion_ = HbarExpansion::BCH;
 
+  /// @brief `eom_r`'s per-block-truncated path, taken whenever `block_ranks` is
+  /// non-empty or the expansion is Bernoulli
+  /// @param block_ranks see `eom_r`; empty means uniform `hbar_comm_rank`
+  /// @pre a unitary ansatz
+  [[nodiscard]] std::vector<ExprPtr> eom_r_blocked(
+      nₚ np, nₕ nh, const std::vector<std::size_t>& block_ranks) const;
+
   /// @return the `LSTOptions` this engine uses for every `mbpt::lst()` call
   /// @note The choice of commutator representation is really a question of
   /// whether the caller supplies operator connectivity downstream; for this
