@@ -58,6 +58,7 @@ ExprPtr wick_commutator(const ExprPtr& A, const ExprPtr& B);
 /// quantity: the single-reference manifolds annihilate the dropped terms (see
 /// the @warning on hbar). After expansion every residual index is definite so
 /// the N/R classifier can act on it. Idempotent on block-resolved input.
+/// @pre the registry specifies both a hole and a particle space
 ExprPtr expand_to_blocks(const ExprPtr& expr);
 
 /// Block-resolved N part (O_N of 10.1063/1.5030344): the terms whose single

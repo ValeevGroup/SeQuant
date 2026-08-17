@@ -166,10 +166,10 @@ ExprPtr expand_to_blocks_reduced(const ExprPtr& expr) {
   // in those are annihilated by the single-reference projection onto the
   // hole/particle manifolds, so dropping them changes no projected quantity.
   // This keeps the expansion 2-way per index instead of 4-way, which otherwise
-  // compounds across the nested commutators. Falls back to all base spaces if
-  // the registry defines no hole/particle split.
-  const auto& hole_t = isr->hole_space(/*nulltype_ok=*/true);
-  const auto& particle_t = isr->particle_space(/*nulltype_ok=*/true);
+  // compounds across the nested commutators. Both spaces are required; the
+  // accessors throw if the registry leaves either unspecified.
+  const auto& hole_t = isr->hole_space();
+  const auto& particle_t = isr->particle_space();
   auto physical = [&](const IndexSpace& b) {
     return hole_t.includes(b.type()) || particle_t.includes(b.type());
   };
@@ -191,16 +191,15 @@ ExprPtr expand_to_blocks_reduced(const ExprPtr& expr) {
     // match (stay within the same spin sector).
     container::svector<container::svector<IndexSpace>> choices;
     for (const auto& g : gens) {
-      container::svector<IndexSpace> c, c_all;
+      container::svector<IndexSpace> c;
       for (const auto& b : bases)
-        if (b.qns() == g.space().qns() && g.space().type().includes(b.type())) {
-          c_all.push_back(b);
-          if (physical(b)) c.push_back(b);
-        }
-      choices.push_back(c.empty() ? c_all : c);
-      SEQUANT_ASSERT(!choices.back().empty(),
-                     "bernoulli: general index spans no base space with "
-                     "matching quantum numbers");
+        if (physical(b) && b.qns() == g.space().qns() &&
+            g.space().type().includes(b.type()))
+          c.push_back(b);
+      SEQUANT_ASSERT(!c.empty(),
+                     "bernoulli: general index spans no hole/particle base "
+                     "space with matching quantum numbers");
+      choices.push_back(std::move(c));
     }
     // cartesian product of assignments => sum of transformed terms;
     // accumulate via Sum::append (linear) rather than operator+, which
