@@ -157,8 +157,8 @@ void Sum::adjoint() {
 
 ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
   if (Logger::instance().canonicalize)
-    std::wcout << "Sum::canonicalize_impl: input = "
-               << to_latex_align(shared_from_this()) << std::endl;
+    std::wcout << "Sum::canonicalize_impl: input = " << to_latex_align(*this)
+               << std::endl;
 
   const auto npasses = multipass ? 2 : 1;
   for (auto pass = 0; pass != npasses; ++pass) {
@@ -192,7 +192,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
     if (Logger::instance().canonicalize)
       std::wcout << "Sum::canonicalize_impl (pass=" << pass
                  << "): after canonicalizing summands = "
-                 << to_latex_align(shared_from_this()) << std::endl;
+                 << to_latex_align(*this) << std::endl;
 
     HashingAccumulator acc;
     for (auto &summand : summands_) {
@@ -209,15 +209,15 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
 
     if (Logger::instance().canonicalize)
       std::wcout << "Sum::canonicalize_impl (pass=" << pass
-                 << "): after reducing summands = "
-                 << to_latex_align(shared_from_this()) << std::endl;
+                 << "): after reducing summands = " << to_latex_align(*this)
+                 << std::endl;
   }
 
   return {};  // side effects are absorbed into summands
 }
 
 Sum &Sum::operator+=(const Expr &that) {
-  this->append(const_cast<Expr &>(that).shared_from_this());
+  this->append(that.clone());
   return *this;
 }
 
@@ -225,8 +225,7 @@ Sum &Sum::operator-=(const Expr &that) {
   if (that.is<Constant>())
     this->append(ex<Constant>(-that.as<Constant>().value()));
   else
-    this->append(ex<Product>(
-        -1, ExprPtrList{const_cast<Expr &>(that).shared_from_this()}));
+    this->append(ex<Product>(-1, ExprPtrList{that.clone()}));
   return *this;
 }
 

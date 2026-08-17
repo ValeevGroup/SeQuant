@@ -8,6 +8,7 @@
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/product.hpp>
 
+#include <memory>
 #include <sstream>
 
 namespace sequant {
@@ -76,6 +77,22 @@ std::wstring Expr::to_latex() const {
 }
 
 ExprPtr Expr::clone() const { return unique_copy(); }
+
+std::shared_ptr<Expr> Expr::shared_from_this() {
+  return std::enable_shared_from_this<Expr>::shared_from_this();
+}
+
+std::shared_ptr<const Expr> Expr::shared_from_this() const {
+  return std::enable_shared_from_this<Expr>::shared_from_this();
+}
+
+std::weak_ptr<Expr> Expr::weak_from_this() {
+  return std::enable_shared_from_this<Expr>::weak_from_this();
+}
+
+std::weak_ptr<const Expr> Expr::weak_from_this() const {
+  return std::enable_shared_from_this<Expr>::weak_from_this();
+}
 
 bool proportional_to::operator()(const ExprPtr &expr1,
                                  const ExprPtr &expr2) const {

@@ -61,7 +61,7 @@ class Product : public Expr {
     if constexpr (rng_is_expr || rng_is_exprptr) {
       ExprPtr rng_as_exprptr;
       if constexpr (rng_is_expr) {
-        rng_as_exprptr = rng.exprptr_from_this();
+        rng_as_exprptr = rng.clone();
       } else {
         rng_as_exprptr = rng;
       }
@@ -180,10 +180,10 @@ class Product : public Expr {
             typename = std::enable_if_t<is_an_expr_v<Factor>>>
   Product &append(T scalar, Factor &&factor,
                   Flatten flatten_tag = Flatten::Yes) {
-    return this->append(scalar,
-                        std::static_pointer_cast<Expr>(
-                            std::forward<Factor>(factor).shared_from_this()),
-                        flatten_tag);
+    return this->append(
+        scalar,
+        std::static_pointer_cast<Expr>(std::forward<Factor>(factor).clone()),
+        flatten_tag);
   }
 
   /// (post-)multiplies the product by@c factor
@@ -199,9 +199,9 @@ class Product : public Expr {
   /// @warning if @p factor is a Product, it is flattened recursively
   template <typename Factor, typename = std::enable_if_t<is_an_expr_v<Factor>>>
   Product &append(Factor &&factor, Flatten flatten_tag = Flatten::Yes) {
-    return this->append(std::static_pointer_cast<Expr>(
-                            std::forward<Factor>(factor).shared_from_this()),
-                        flatten_tag);
+    return this->append(
+        std::static_pointer_cast<Expr>(std::forward<Factor>(factor).clone()),
+        flatten_tag);
   }
 
   /// (pre-)multiplies the product by @c scalar times @c factor
@@ -252,10 +252,10 @@ class Product : public Expr {
             typename = std::enable_if_t<is_an_expr_v<Factor>>>
   Product &prepend(T scalar, Factor &&factor,
                    Flatten flatten_tag = Flatten::Yes) {
-    return this->prepend(scalar,
-                         std::static_pointer_cast<Expr>(
-                             std::forward<Factor>(factor).shared_from_this()),
-                         flatten_tag);
+    return this->prepend(
+        scalar,
+        std::static_pointer_cast<Expr>(std::forward<Factor>(factor).clone()),
+        flatten_tag);
   }
 
   const scalar_type &scalar() const;
