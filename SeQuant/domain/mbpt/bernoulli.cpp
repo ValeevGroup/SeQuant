@@ -356,8 +356,10 @@ ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
 
   add(1, simplify(F + V));  // H̄⁰ = F + V   [Eq. (46)]
   if (rank >= 1) {
-    // H̄¹ = [F,σ] + ½[V,σ] + ½[V_R,σ]   [Eq. (47)]. F enters H̄ ONLY here
-    // (the F-cancellation, stated just below Eq. (50)).
+    // H̄¹ = [F,σ] + ½[V,σ] + ½[V_R,σ]   [Eq. (47)]. F-commutators enter H̄ ONLY
+    // here. This is the F-cancellation, stated just below Eq. (50) as "the
+    // terms in H̄ involving F now truncate to the first power of σ". H̄⁰ carries
+    // the bare F.
     add(1, wick_commutator(F, sigma));
     add({1, 2}, nest('A', "A"));
     add({1, 2}, nest('R', "A"));

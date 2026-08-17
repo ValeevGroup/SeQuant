@@ -240,7 +240,8 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     REQUIRE(size(ee[2]) == 21);
 
     // the same ranks drive IP: manifolds are indexed by ascending rank, so
-    // {1h, 2h1p} takes the place of {S, D} (10.1021/acs.jctc.5c01991 Table 1)
+    // {1h, 2h1p} takes the place of {S, D} (10.1021/acs.jctc.5c01991 Table 1
+    // for the block mapping, its Fig. 1 for the ranks)
     const auto ip = cc.eom_r(nₚ(1), nₕ(2), quccsd);
     REQUIRE(ip.size() == 2);
     REQUIRE(size(ip[0]) == 32);

@@ -374,7 +374,8 @@ constexpr Normalization eom_norm = Normalization::SquareRoot;
 
 // Per-block-truncated EOM sigma equations. For the qUCCSD ranks see
 // 10.1063/5.0062090 Sec. II C, Eqs. (29)-(48); for the IP/EA analogues,
-// 10.1021/acs.jctc.5c01991 Table 1.
+// 10.1021/acs.jctc.5c01991 Fig. 1 (Table 1 there maps out which H̄ components
+// enter each block, not the commutator ranks they are truncated at).
 //
 // Each block is the sandwich <i|H̄|j> of Eq. (7). Eq. (10) writes H̄ as
 // E_gr + a normal-ordered remainder and builds the blocks from the remainder

@@ -196,19 +196,20 @@ class CC {
   /// @param nh number of hole creators in R operator
   /// @param block_ranks optional per-block H̄ commutator truncation ranks: a
   ///   different H̄ in each block of the secular matrix instead of one uniform
-  ///   H̄ everywhere. For singles+doubles the matrix and its ranks are
-  ///     | H_SS  H_SD |    qUCCSD:  | 2  1 |
-  ///     | H_DS  H_DD |             | 1  0 |
+  ///   H̄ everywhere. For singles+doubles the matrix is
+  ///     | H_SS  H_SD |    e.g.  | 2  1 |
+  ///     | H_DS  H_DD |          | 1  0 |
   ///   read row by row, i.e. `{2,1,1,0}`: H_SS through the double commutator
   ///   [[V,σ],σ], H_SD and H_DS through the single [V,σ], H_DD the bare
-  ///   Hamiltonian integrals (no commutators): f (Eqs. (30),(34)) plus
-  ///   \f$ \langle ij\|kl\rangle,\ \langle ab\|cd\rangle \f$ (Eq. (48))
-  ///   (10.1063/5.0062090 Sec. II C, Eqs. (29), (41), (44), (48)).
+  ///   Hamiltonian integrals (no commutators). Those are the ranks
+  ///   10.1063/5.0062090 Sec. II C truncates qUCCSD at, Eqs. (29), (41), (44)
+  ///   and (48), which it writes UCCSD[2|2,1,0]; that section also says which
+  ///   H̄ components each block then retains.
   ///   `K` manifolds give a row-major `K`×`K` matrix ordered by ASCENDING
   ///   manifold rank, so one set of numbers serves EE, IP and EA (read S as
-  ///   1h/1p and D as 2h1p/1h2p: qUCCSD, IP-qUCCSD and EA-qUCCSD are all
-  ///   `{2,1,1,0}`, 10.1021/acs.jctc.5c01991 Table 1). Empty (the default)
-  ///   selects the uniform H̄ at `hbar_comm_rank` everywhere.
+  ///   1h/1p and D as 2h1p/1h2p; 10.1021/acs.jctc.5c01991 Table 1 maps the
+  ///   IP/EA blocks onto qUCCSD's and its Fig. 1 carries their ranks). Empty
+  ///   (the default) selects the uniform H̄ at `hbar_comm_rank` everywhere.
   /// @pre if non-empty, requires a unitary ansatz; a non-unitary H̄ is exact and
   ///   has nothing to truncate.
   /// @pre `block_ranks` is either empty or `K`×`K`
@@ -222,7 +223,8 @@ class CC {
   ///   ground-state amplitude residual) removed. See `eom_r_blocked` in cc.cpp
   ///   for why. The removed terms vanish at converged amplitudes when a block
   ///   rank equals `hbar_comm_rank`, so this changes those blocks' equations
-  ///   but not the numbers they evaluate to.
+  ///   but not the numbers they evaluate to. `BCH` has no N/R split to take,
+  ///   so it keeps them.
   /// @return vector of right side sigma equations; element 0 is null iff
   ///   `np == nh`
   // clang-format on
