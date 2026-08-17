@@ -23,6 +23,7 @@
 #include <cstdint>
 #include <cstring>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <sstream>
@@ -241,6 +242,27 @@ const Expr &Expr::operator[](const TreeIndex &idx) const {
 }
 
 ExprPtr Expr::clone() const { return unique_copy(); }
+
+std::shared_ptr<Expr> Expr::shared_from_this() {
+  return std::enable_shared_from_this<Expr>::shared_from_this();
+}
+
+std::shared_ptr<const Expr> Expr::shared_from_this() const {
+  return std::enable_shared_from_this<Expr>::shared_from_this();
+}
+
+std::weak_ptr<Expr> Expr::weak_from_this() {
+  return std::enable_shared_from_this<Expr>::weak_from_this();
+}
+
+std::weak_ptr<const Expr> Expr::weak_from_this() const {
+  return std::enable_shared_from_this<Expr>::weak_from_this();
+}
+
+ExprPtr Expr::non_owning_ptr() const {
+  // aliasing constructor with an empty owner
+  return ExprPtr(std::shared_ptr<Expr>{}, const_cast<Expr *>(this));
+}
 
 bool proportional_to::operator()(const ExprPtr &expr1,
                                  const ExprPtr &expr2) const {
