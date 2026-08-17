@@ -27,6 +27,9 @@ Constant &Constant::operator*=(const Expr &that) {
   } else {
     throw Exception("Constant::operator*=(that): not valid for that");
   }
+
+  reset_hash_value();
+
   return *this;
 }
 
@@ -36,6 +39,9 @@ Constant &Constant::operator+=(const Expr &that) {
   } else {
     throw Exception("Constant::operator+=(that): not valid for that");
   }
+
+  reset_hash_value();
+
   return *this;
 }
 
@@ -45,6 +51,9 @@ Constant &Constant::operator-=(const Expr &that) {
   } else {
     throw Exception("Constant::operator-=(that): not valid for that");
   }
+
+  reset_hash_value();
+
   return *this;
 }
 

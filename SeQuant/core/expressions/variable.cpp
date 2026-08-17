@@ -47,7 +47,10 @@ void Variable::set_label(std::wstring label) {
   reset_hash_value();
 }
 
-void Variable::conjugate() { conjugated_ = !conjugated_; }
+void Variable::conjugate() {
+  conjugated_ = !conjugated_;
+  reset_hash_value();
+}
 
 bool Variable::conjugated() const { return conjugated_; }
 
