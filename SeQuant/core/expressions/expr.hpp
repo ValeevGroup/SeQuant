@@ -75,8 +75,6 @@ class Expr : public std::enable_shared_from_this<Expr> {
   virtual std::wstring to_latex() const;
 
   /// @return a clone of this object, i.e. an object that is equal to @c this
-  /// @note - must be overridden in the derived class.
-  ///       - the default implementation throws an exception
   virtual ExprPtr clone() const = 0;
 
   /// like Expr::shared_from_this, but returns ExprPtr
@@ -228,8 +226,6 @@ class Expr : public std::enable_shared_from_this<Expr> {
   }
 
   /// @brief changes this to its adjoint
-  /// @note base implementation throws, must be reimplemented in the derived
-  /// class
   virtual void adjoint() = 0;
 
   /// Computes and returns the hash value. If default @p hasher is used then the
@@ -247,7 +243,6 @@ class Expr : public std::enable_shared_from_this<Expr> {
   }
 
   /// Computes and returns the derived type identifier
-  /// @note this function must be overridden in the derived class
   /// @sa Expr::get_type_id
   /// @return the hash value for this Expr
   virtual type_id_type type_id() const = 0;
