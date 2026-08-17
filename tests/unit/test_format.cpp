@@ -9,6 +9,7 @@
 #include <compare>
 #include <format>
 #include <initializer_list>
+#include <memory>
 #include <sstream>
 #include <string>
 
@@ -17,8 +18,8 @@ namespace {
 struct LatexOnlyExpr : sequant::Expr {
   std::wstring to_latex() const override { return L"\\mathcal{X}"; }
   type_id_type type_id() const override { return get_type_id<LatexOnlyExpr>(); }
-  sequant::ExprPtr clone() const override {
-    return sequant::ex<LatexOnlyExpr>();
+  std::unique_ptr<sequant::Expr> unique_copy() const override {
+    return std::make_unique<LatexOnlyExpr>();
   }
   void adjoint() override {}
   // stateless; operator== has already matched the type id

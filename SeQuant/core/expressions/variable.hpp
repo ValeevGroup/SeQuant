@@ -5,6 +5,7 @@
 #include <SeQuant/core/expressions/labeled.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <memory>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -57,10 +58,11 @@ class Variable : public Expr, public MutatableLabeled {
 
   bool is_scalar() const override;
 
-  ExprPtr clone() const override;
-
   /// @brief adjoint of a Variable is its complex conjugate
   virtual void adjoint() override;
+
+ protected:
+  std::unique_ptr<Expr> unique_copy() const override;
 
  private:
   std::wstring label_;

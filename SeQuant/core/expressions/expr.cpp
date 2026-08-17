@@ -240,6 +240,8 @@ const Expr &Expr::operator[](const TreeIndex &idx) const {
   return idx.select_from(*this);
 }
 
+ExprPtr Expr::clone() const { return unique_copy(); }
+
 bool proportional_to::operator()(const ExprPtr &expr1,
                                  const ExprPtr &expr2) const {
   if (expr1->type_id() !=

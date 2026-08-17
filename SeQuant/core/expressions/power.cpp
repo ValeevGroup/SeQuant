@@ -7,6 +7,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <algorithm>
+#include <memory>
 
 namespace sequant {
 
@@ -116,13 +117,6 @@ Expr::type_id_type Power::type_id() const { return get_type_id<Power>(); }
 
 bool Power::is_scalar() const { return true; }
 
-ExprPtr Power::clone() const {
-  auto cloned = ex<Power>(base_, exponent_);
-  if (conjugated_) cloned->as<Power>().conjugate();
-  cloned->as<Power>().copy_canonical_mark(*this);
-  return cloned;
-}
-
 void Power::adjoint() { conjugate(); }
 
 Power& Power::operator*=(const Expr& that) {
@@ -155,6 +149,13 @@ Power& Power::operator*=(const Expr& that) {
     return *this;
   }
   throw Exception("Power::operator*=(that): not valid for that");
+}
+
+std::unique_ptr<Expr> Power::unique_copy() const {
+  auto cloned = std::make_unique<Power>(base_, exponent_);
+  if (conjugated_) cloned->as<Power>().conjugate();
+  cloned->copy_canonical_mark(*this);
+  return cloned;
 }
 
 Expr::hash_type Power::memoizing_hash() const {

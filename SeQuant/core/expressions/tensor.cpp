@@ -123,4 +123,8 @@ ExprPtr Tensor::canonicalize(CanonicalizeOptions opts) {
   return byproduct;
 }
 
+std::unique_ptr<Expr> Tensor::unique_copy() const {
+  return std::make_unique<Tensor>(*this);
+}
+
 }  // namespace sequant

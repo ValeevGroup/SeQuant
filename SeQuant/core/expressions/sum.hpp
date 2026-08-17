@@ -17,6 +17,7 @@
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <memory>
 #include <optional>
 #include <string>
 #include <type_traits>
@@ -134,8 +135,6 @@ class Sum : public Expr {
 
   Expr::type_id_type type_id() const override;
 
-  ExprPtr clone() const override;
-
   /// @brief adjoint of a Sum is a sum of adjoints of its factors
   virtual void adjoint() override;
 
@@ -150,6 +149,9 @@ class Sum : public Expr {
   ConstExprIterator begin_subexpr() const override;
 
   ConstExprIterator end_subexpr() const override;
+
+ protected:
+  std::unique_ptr<Expr> unique_copy() const override;
 
  private:
   summands_type summands_{};

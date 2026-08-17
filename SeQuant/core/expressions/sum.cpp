@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <iterator>
+#include <memory>
 
 namespace sequant {
 
@@ -165,16 +166,6 @@ std::wstring Sum::to_latex() const {
 
 Expr::type_id_type Sum::type_id() const { return Expr::get_type_id<Sum>(); }
 
-ExprPtr Sum::clone() const {
-  auto cloned_summands =
-      summands() |
-      ranges::views::transform([](const ExprPtr &ptr) { return ptr->clone(); });
-  auto result =
-      ex<Sum>(ranges::begin(cloned_summands), ranges::end(cloned_summands));
-  result->as<Sum>().copy_canonical_mark(*this);
-  return result;
-}
-
 void Sum::adjoint() {
   using namespace ranges;
   auto adj_summands = summands() | views::transform([](auto &&expr) {
@@ -309,6 +300,16 @@ ConstExprIterator Sum::begin_subexpr() const {
 
 ConstExprIterator Sum::end_subexpr() const {
   return ConstExprIterator{summands_.data() + summands_.size()};
+}
+
+std::unique_ptr<Expr> Sum::unique_copy() const {
+  auto cloned_summands =
+      summands() |
+      ranges::views::transform([](const ExprPtr &ptr) { return ptr->clone(); });
+  auto result = std::make_unique<Sum>(ranges::begin(cloned_summands),
+                                      ranges::end(cloned_summands));
+  result->copy_canonical_mark(*this);
+  return result;
 }
 
 Expr::hash_type Sum::memoizing_hash() const {

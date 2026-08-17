@@ -41,7 +41,9 @@ struct Dummy : public sequant::Expr {
   virtual ~Dummy() = default;
   std::wstring to_latex() const override { return L"{\\text{Dummy}}"; }
   type_id_type type_id() const override { return get_type_id<Dummy>(); };
-  sequant::ExprPtr clone() const override { return sequant::ex<Dummy>(); }
+  std::unique_ptr<sequant::Expr> unique_copy() const override {
+    return std::make_unique<Dummy>();
+  }
   void adjoint() override {}
   bool static_equal(const sequant::Expr &) const override { return true; }
   std::weak_ordering static_lexicographic_compare(
@@ -136,8 +138,8 @@ struct VecExpr : public std::vector<T>, public sequant::Expr {
         });
   }
 
-  sequant::ExprPtr clone() const override {
-    return sequant::ex<VecExpr>(this->begin(), this->end());
+  std::unique_ptr<sequant::Expr> unique_copy() const override {
+    return std::make_unique<VecExpr>(this->begin(), this->end());
   }
 };
 
@@ -149,8 +151,8 @@ struct Adjointable : public sequant::Expr {
     return L"{\\text{Adjointable}{" + std::to_wstring(v) + L"}}";
   }
   type_id_type type_id() const override { return get_type_id<Adjointable>(); };
-  sequant::ExprPtr clone() const override {
-    return sequant::ex<Adjointable>(v);
+  std::unique_ptr<sequant::Expr> unique_copy() const override {
+    return std::make_unique<Adjointable>(v);
   }
   bool static_equal(const sequant::Expr &that) const override {
     return v == that.as<Adjointable>().v;
@@ -175,7 +177,9 @@ struct latex_visitor {
 template <typename Derived>
 struct MinimalExpr : public sequant::Expr {
   type_id_type type_id() const override { return get_type_id<Derived>(); };
-  sequant::ExprPtr clone() const override { return sequant::ex<Derived>(); }
+  std::unique_ptr<sequant::Expr> unique_copy() const override {
+    return std::make_unique<Derived>();
+  }
   void adjoint() override {}
   bool static_equal(const sequant::Expr &) const override { return true; }
   std::weak_ordering static_lexicographic_compare(
