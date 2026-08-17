@@ -7,6 +7,9 @@
 #include <SeQuant/core/expressions/variable.hpp>
 #include <SeQuant/core/rational.hpp>
 
+#include <memory>
+#include <string>
+
 namespace sequant {
 
 /// @brief Represents base^exponent where base is a scalar (Constant or
@@ -80,8 +83,6 @@ class Power : public Expr {
 
   bool is_scalar() const override;
 
-  ExprPtr clone() const override;
-
   /// @brief adjoint of Power: flips the conjugation flag.
   void adjoint() override;
 
@@ -94,6 +95,9 @@ class Power : public Expr {
   ///      only the fully unconjugated case combines.
   /// @throw Exception if @p that is not combinable.
   Power& operator*=(const Expr& that);
+
+ protected:
+  std::unique_ptr<Expr> unique_copy() const override;
 
  private:
   ExprPtr base_;

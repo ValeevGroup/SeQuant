@@ -8,6 +8,7 @@
 
 #include <boost/numeric/conversion/cast.hpp>
 
+#include <memory>
 #include <string>
 
 namespace sequant {
@@ -73,8 +74,6 @@ class Constant : public Expr {
 
   bool is_scalar() const override;
 
-  ExprPtr clone() const override;
-
   /// @brief adjoint of a Constant is its complex conjugate
   virtual void adjoint() override;
 
@@ -90,6 +89,9 @@ class Constant : public Expr {
 
   /// @return `Constant::is_zero(this->value())`
   bool is_zero() const final;
+
+ protected:
+  std::unique_ptr<Expr> unique_copy() const override;
 
  private:
   scalar_type value_;

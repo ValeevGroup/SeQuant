@@ -389,7 +389,10 @@ class Operator : public container::svector<Op<S>>, public Expr {
 
   type_id_type type_id() const override { return get_type_id<Operator>(); };
 
-  ExprPtr clone() const override { return std::make_shared<Operator>(*this); }
+ protected:
+  std::unique_ptr<Expr> unique_copy() const override {
+    return std::make_unique<Operator>(*this);
+  }
 
  private:
   base_type make_ops(Action action, IndexList indices) {
@@ -711,10 +714,6 @@ class NormalOperator : public Operator<S>,
     return Expr::get_type_id<NormalOperator>();
   };
 
-  ExprPtr clone() const override {
-    return std::make_shared<NormalOperator>(*this);
-  }
-
   virtual void adjoint() override {
     // same as base adjoint(), but updates extra state
     Operator<S>::adjoint();
@@ -737,6 +736,11 @@ class NormalOperator : public Operator<S>,
     });
     if (mutated) this->reset_hash_value();
     return mutated;
+  }
+
+ protected:
+  std::unique_ptr<Expr> unique_copy() const override {
+    return std::make_unique<NormalOperator>(*this);
   }
 
  private:
@@ -1068,13 +1072,16 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>,
     return Expr::get_type_id<NormalOperatorSequence>();
   };
 
-  ExprPtr clone() const override { return ex<NormalOperatorSequence>(*this); }
-
   friend bool operator==(const NormalOperatorSequence &nopseq1,
                          const NormalOperatorSequence &nopseq2) {
     return nopseq1.vacuum() == nopseq2.vacuum() &&
            static_cast<const base_type &>(nopseq1) ==
                static_cast<const base_type &>(nopseq2);
+  }
+
+ protected:
+  std::unique_ptr<Expr> unique_copy() const override {
+    return std::make_unique<NormalOperatorSequence>(*this);
   }
 
  private:

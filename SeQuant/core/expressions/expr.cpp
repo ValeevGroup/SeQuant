@@ -75,6 +75,8 @@ std::wstring Expr::to_latex() const {
   throw Exception("to_latex not implemented for " + type_name());
 }
 
+ExprPtr Expr::clone() const { return unique_copy(); }
+
 bool proportional_to::operator()(const ExprPtr &expr1,
                                  const ExprPtr &expr2) const {
   if (expr1->type_id() !=
