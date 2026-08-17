@@ -303,12 +303,6 @@ class Product : public Expr {
   /// factors, with complex-conjugated scalar
   virtual void adjoint() override;
 
- private:
-  /// @return true if commutativity is decidable statically
-  /// @sa CProduct::static_commutativity() and NCProduct::static_commutativity()
-  virtual bool static_commutativity() const;
-
- public:
   std::wstring to_latex() const override;
 
   /// just like Expr::to_latex() , but can negate before conversion
@@ -340,9 +334,22 @@ class Product : public Expr {
 
   ConstExprIterator end_subexpr() const override;
 
+  virtual ExprPtr canonicalize(
+      CanonicalizeOptions opt =
+          CanonicalizeOptions::default_options()) override;
+
+  virtual ExprPtr rapid_canonicalize(
+      CanonicalizeOptions opts =
+          CanonicalizeOptions::default_options().copy_and_set(
+              CanonicalizationMethod::Rapid)) override;
+
  private:
   scalar_type scalar_ = {1, 0};
   factors_type factors_{};
+
+  /// @return true if commutativity is decidable statically
+  /// @sa CProduct::static_commutativity() and NCProduct::static_commutativity()
+  virtual bool static_commutativity() const;
 
   /// @return the hash of this object, by hashing only the factors,
   /// not the scalar to make possible rapid finding of Products that only
@@ -353,16 +360,6 @@ class Product : public Expr {
 
   ExprPtr canonicalize_impl(CanonicalizeOptions);
 
- public:
-  virtual ExprPtr canonicalize(
-      CanonicalizeOptions opt =
-          CanonicalizeOptions::default_options()) override;
-  virtual ExprPtr rapid_canonicalize(
-      CanonicalizeOptions opts =
-          CanonicalizeOptions::default_options().copy_and_set(
-              CanonicalizationMethod::Rapid)) override;
-
- private:
   bool static_equal(const Expr &that) const override;
 };  // class Product
 
