@@ -21,12 +21,24 @@ void Constant::adjoint() {
   reset_hash_value();
 }
 
+Constant &Constant::operator*=(const Constant &that) {
+  value_ *= that.value();
+
+  reset_hash_value();
+
+  return *this;
+}
+
 Constant &Constant::operator*=(const Expr &that) {
-  if (that.is<Constant>()) {
-    value_ *= that.as<Constant>().value();
-  } else {
+  if (!that.is<Constant>()) {
     throw Exception("Constant::operator*=(that): not valid for that");
   }
+
+  return *this *= that.as<Constant>();
+}
+
+Constant &Constant::operator+=(const Constant &that) {
+  value_ += that.value();
 
   reset_hash_value();
 
@@ -34,11 +46,15 @@ Constant &Constant::operator*=(const Expr &that) {
 }
 
 Constant &Constant::operator+=(const Expr &that) {
-  if (that.is<Constant>()) {
-    value_ += that.as<Constant>().value();
-  } else {
+  if (!that.is<Constant>()) {
     throw Exception("Constant::operator+=(that): not valid for that");
   }
+
+  return *this += that.as<Constant>();
+}
+
+Constant &Constant::operator-=(const Constant &that) {
+  value_ -= that.value();
 
   reset_hash_value();
 
@@ -46,15 +62,11 @@ Constant &Constant::operator+=(const Expr &that) {
 }
 
 Constant &Constant::operator-=(const Expr &that) {
-  if (that.is<Constant>()) {
-    value_ -= that.as<Constant>().value();
-  } else {
+  if (!that.is<Constant>()) {
     throw Exception("Constant::operator-=(that): not valid for that");
   }
 
-  reset_hash_value();
-
-  return *this;
+  return *this -= that.as<Constant>();
 }
 
 bool Constant::is_zero(scalar_type v) { return v.is_zero(); }
@@ -76,6 +88,30 @@ Expr::hash_type Constant::memoizing_hash() const {
 
 bool Constant::static_equal(const Expr &that) const {
   return value() == static_cast<const Constant &>(that).value();
+}
+
+Constant operator*(const Constant &lhs, const Constant &rhs) {
+  Constant result(lhs);
+
+  result *= rhs;
+
+  return result;
+}
+
+Constant operator+(const Constant &lhs, const Constant &rhs) {
+  Constant result(lhs);
+
+  result += rhs;
+
+  return result;
+}
+
+Constant operator-(const Constant &lhs, const Constant &rhs) {
+  Constant result(lhs);
+
+  result -= rhs;
+
+  return result;
 }
 
 }  // namespace sequant
