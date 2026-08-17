@@ -322,6 +322,8 @@ set(SeQuant_symb_src
         SeQuant/core/expressions/product.hpp
         SeQuant/core/expressions/result_expr.cpp
         SeQuant/core/expressions/result_expr.hpp
+        SeQuant/core/expressions/sum.cpp
+        SeQuant/core/expressions/sum.hpp
         SeQuant/core/expressions/tensor.cpp
         SeQuant/core/expressions/tensor.hpp
         SeQuant/core/expressions/variable.cpp
