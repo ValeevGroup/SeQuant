@@ -223,6 +223,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
   }
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
   SECTION("bernoulli_quccsd_eom") {
     using namespace sequant;
     using namespace sequant::mbpt;
@@ -265,6 +266,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     REQUIRE_THAT(cc.eom_r(nₚ(2), nₕ(2)).at(1),
                  EquivalentTo(cc.eom_r(nₚ(2), nₕ(2), {2, 2, 2, 2}).at(1)));
   }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
   SECTION("energy") {
     // CC::energy() must equal the p==0 element of CC::t() for both ansätze.
