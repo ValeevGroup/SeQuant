@@ -11,6 +11,7 @@
 
 #include <range/v3/view/filter.hpp>
 
+#include <memory>
 #include <string>
 #include <type_traits>
 
@@ -306,11 +307,6 @@ class Product : public Expr {
 
   type_id_type type_id() const override;
 
-  /// @return an identical clone of this Product (a deep copy allocated on the
-  ///         heap)
-  /// @note this does not flatten the product
-  ExprPtr clone() const override;
-
   Product deep_copy() const;
 
   Product &operator*=(const Expr &that);
@@ -337,6 +333,9 @@ class Product : public Expr {
       CanonicalizeOptions opts =
           CanonicalizeOptions::default_options().copy_and_set(
               CanonicalizationMethod::Rapid)) override;
+
+ protected:
+  std::unique_ptr<Expr> unique_copy() const override;
 
  private:
   scalar_type scalar_ = {1, 0};

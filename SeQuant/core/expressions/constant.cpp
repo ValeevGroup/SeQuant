@@ -4,6 +4,8 @@
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <memory>
+
 namespace sequant {
 
 std::wstring Constant::to_latex() const {
@@ -13,8 +15,6 @@ std::wstring Constant::to_latex() const {
 Expr::type_id_type Constant::type_id() const { return get_type_id<Constant>(); }
 
 bool Constant::is_scalar() const { return true; }
-
-ExprPtr Constant::clone() const { return ex<Constant>(this->value()); }
 
 void Constant::adjoint() {
   value_ = conj(value_);
@@ -60,6 +60,10 @@ Constant &Constant::operator-=(const Expr &that) {
 bool Constant::is_zero(scalar_type v) { return v.is_zero(); }
 
 bool Constant::is_zero() const { return is_zero(this->value()); }
+
+std::unique_ptr<Expr> Constant::unique_copy() const {
+  return std::make_unique<Constant>(this->value());
+}
 
 Expr::hash_type Constant::memoizing_hash() const {
   if (!hash_value_) {

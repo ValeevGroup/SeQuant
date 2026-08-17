@@ -75,7 +75,7 @@ class Expr : public std::enable_shared_from_this<Expr> {
   virtual std::wstring to_latex() const;
 
   /// @return a clone of this object, i.e. an object that is equal to @c this
-  virtual ExprPtr clone() const = 0;
+  ExprPtr clone() const;
 
   /// like Expr::shared_from_this, but returns ExprPtr
   /// @return a shared_ptr to this object wrapped into ExprPtr, if this object
@@ -417,6 +417,8 @@ class Expr : public std::enable_shared_from_this<Expr> {
   virtual bool commutes_with_atom([[maybe_unused]] const Expr &that) const {
     return true;
   }
+
+  virtual std::unique_ptr<Expr> unique_copy() const = 0;
 
  private:
   /// @return returns next type id in the grand class list

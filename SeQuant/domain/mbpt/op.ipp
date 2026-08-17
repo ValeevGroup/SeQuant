@@ -12,6 +12,8 @@
 #include <range/v3/algorithm/is_sorted.hpp>
 #include <range/v3/view/iota.hpp>
 
+#include <memory>
+
 namespace sequant {
 namespace mbpt {
 
@@ -192,8 +194,8 @@ Expr::type_id_type Operator<QuantumNumbers, S>::type_id() const {
 };
 
 template <typename QuantumNumbers, Statistics S>
-ExprPtr Operator<QuantumNumbers, S>::clone() const {
-  return ex<this_type>(*this);
+std::unique_ptr<Expr> Operator<QuantumNumbers, S>::unique_copy() const {
+  return std::make_unique<this_type>(*this);
 }
 
 // Expresses general operators in human interpretable form. for example:

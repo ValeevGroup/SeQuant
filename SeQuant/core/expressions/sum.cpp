@@ -4,6 +4,8 @@
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <memory>
+
 namespace sequant {
 
 Sum::Sum(ExprPtrList summands) {
@@ -144,13 +146,6 @@ std::wstring Sum::to_latex() const {
 
 Expr::type_id_type Sum::type_id() const { return Expr::get_type_id<Sum>(); };
 
-ExprPtr Sum::clone() const {
-  auto cloned_summands =
-      summands() |
-      ranges::views::transform([](const ExprPtr &ptr) { return ptr->clone(); });
-  return ex<Sum>(ranges::begin(cloned_summands), ranges::end(cloned_summands));
-}
-
 void Sum::adjoint() {
   using namespace ranges;
   auto adj_summands = summands() | views::transform([](auto &&expr) {
@@ -252,6 +247,14 @@ ConstExprIterator Sum::begin_subexpr() const {
 
 ConstExprIterator Sum::end_subexpr() const {
   return ConstExprIterator{summands_.data() + summands_.size()};
+}
+
+std::unique_ptr<Expr> Sum::unique_copy() const {
+  auto cloned_summands =
+      summands() |
+      ranges::views::transform([](const ExprPtr &ptr) { return ptr->clone(); });
+  return std::make_unique<Sum>(ranges::begin(cloned_summands),
+                               ranges::end(cloned_summands));
 }
 
 Expr::hash_type Sum::memoizing_hash() const {

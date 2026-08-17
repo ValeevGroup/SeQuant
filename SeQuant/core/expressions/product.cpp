@@ -221,6 +221,10 @@ ExprPtr Product::rapid_canonicalize(CanonicalizeOptions opt) {
 
 bool Product::static_commutativity() const { return false; }
 
+std::unique_ptr<Expr> Product::unique_copy() const {
+  return std::make_unique<Product>(deep_copy());
+}
+
 std::wstring Product::to_latex() const { return to_latex(false); }
 
 std::wstring Product::to_latex(bool negate) const {
@@ -250,11 +254,6 @@ std::wstring Product::to_latex(bool negate) const {
 Product::type_id_type Product::type_id() const {
   return get_type_id<Product>();
 };
-
-/// @return an identical clone of this Product (a deep copy allocated on the
-///         heap)
-/// @note this does not flatten the product
-ExprPtr Product::clone() const { return ex<Product>(this->deep_copy()); }
 
 Product Product::deep_copy() const {
   auto cloned_factors =
