@@ -84,10 +84,13 @@ class Constant : public Expr {
   /// @brief adjoint of a Constant is its complex conjugate
   virtual void adjoint() override;
 
+  Constant &operator*=(const Constant &that);
   Constant &operator*=(const Expr &that);
 
+  Constant &operator+=(const Constant &that);
   Constant &operator+=(const Expr &that);
 
+  Constant &operator-=(const Constant &that);
   Constant &operator-=(const Expr &that);
 
   /// @param[in] v a scalar
@@ -117,6 +120,10 @@ class Constant : public Expr {
       const Expr &that, const LexicographicCompareOptions &opts) const override;
 
 };  // class Constant
+
+Constant operator*(const Constant &lhs, const Constant &rhs);
+Constant operator+(const Constant &lhs, const Constant &rhs);
+Constant operator-(const Constant &lhs, const Constant &rhs);
 
 }  // namespace sequant
 
