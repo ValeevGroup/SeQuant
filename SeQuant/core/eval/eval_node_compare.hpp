@@ -51,65 +51,83 @@ struct TreeNodeEqualityComparator {
     return (*this)(*lhs, rhs);
   }
 
-  bool operator()(const TreeNode &lhs, const TreeNode &rhs) const {
-    if (lhs.leaf() != rhs.leaf()) {
-      return false;
-    }
+  bool operator()(const TreeNode &lhs_in, const TreeNode &rhs_in) const {
+    // The left-child descent is performed iteratively (this loop, not
+    // recursion): an equation's residual/energy is kept as a single in-place
+    // Sum-tree with one node per summand, so its left spine is as deep as the
+    // number of terms -- thousands for e.g. a UCC BCH energy expansion -- and a
+    // recursive descent down that spine would overflow the call stack. Right
+    // children (individual terms) and Product operands are bounded in depth and
+    // stay recursive; only the deep spine is unwound into this loop. Aside from
+    // that unwinding this is a faithful transcription of the recursive
+    // comparison -- same per-node checks, same ordered/unordered child logic.
+    const TreeNode *lhsp = &lhs_in;
+    const TreeNode *rhsp = &rhs_in;
+    while (true) {
+      const TreeNode &lhs = *lhsp;
+      const TreeNode &rhs = *rhsp;
 
-    if (lhs.size() != rhs.size()) {
-      return false;
-    }
-
-    if (hash::value(*lhs) != hash::value(*rhs)) {
-      return false;
-    }
-
-    if (lhs->type_id() != rhs->type_id()) {
-      return false;
-    }
-
-    if (lhs->is_constant() || lhs->is_variable() || lhs->is_power()) {
-      if (*lhs->expr() != *rhs->expr()) {
+      if (lhs.leaf() != rhs.leaf()) {
         return false;
       }
-    } else if (lhs->is_tensor() && !lhs->has_connectivity_graph()) {
-      // Tensor nodes that carry a canonical connectivity graph (tensor-network
-      // intermediates and proto-indexed leaves) are compared exactly by that
-      // graph in the connectivity check below: it is the same canonical colored
-      // graph the eval-node hash is derived from, its 3-way cmp is a complete
-      // network identity, and it already folds bra<->ket orientation (the
-      // orientation was canonicalized into the graph). Block comparison here
-      // would instead compare on the stored bra/ket slot order — a partial,
-      // orientation-sensitive signature — and wrongly separate e.g. a CSV/PNO
-      // coefficient C{a;μ̃} from its equivalent C{μ̃;a}, or the two g·C
-      // intermediates from transforming a real DF factor g(μ̃,μ̃,Κ) on its bra
-      // vs its ket leg. So only graph-less tensor nodes — protoindex-free
-      // leaves (block-canonicalized in place at construction) and scalar*tensor
-      // results — are compared here by block.
-      const Tensor &lhs_tensor = lhs->as_tensor();
-      const Tensor &rhs_tensor = rhs->as_tensor();
 
-      if (!block_comparator_(lhs_tensor, rhs_tensor)) {
+      if (lhs.size() != rhs.size()) {
         return false;
       }
-    }
 
-    if (lhs->has_connectivity_graph() != rhs->has_connectivity_graph()) {
-      return false;
-    }
-
-    // Check connectivity in products / contractions
-    if (lhs->has_connectivity_graph()) {
-      SEQUANT_ASSERT(lhs->has_connectivity_graph());
-      SEQUANT_ASSERT(rhs->has_connectivity_graph());
-
-      if (bliss::ConstGraphCmp::cmp(lhs->connectivity_graph(),
-                                    rhs->connectivity_graph()) != 0) {
+      if (hash::value(*lhs) != hash::value(*rhs)) {
         return false;
       }
-    }
 
-    if (!lhs.leaf()) {
+      if (lhs->type_id() != rhs->type_id()) {
+        return false;
+      }
+
+      if (lhs->is_constant() || lhs->is_variable() || lhs->is_power()) {
+        if (*lhs->expr() != *rhs->expr()) {
+          return false;
+        }
+      } else if (lhs->is_tensor() && !lhs->has_connectivity_graph()) {
+        // Tensor nodes that carry a canonical connectivity graph
+        // (tensor-network intermediates and proto-indexed leaves) are compared
+        // exactly by that graph in the connectivity check below: it is the same
+        // canonical colored graph the eval-node hash is derived from, its 3-way
+        // cmp is a complete network identity, and it already folds bra<->ket
+        // orientation (the orientation was canonicalized into the graph). Block
+        // comparison here would instead compare on the stored bra/ket slot
+        // order — a partial, orientation-sensitive signature — and wrongly
+        // separate e.g. a CSV/PNO coefficient C{a;μ̃} from its equivalent
+        // C{μ̃;a}, or the two g·C intermediates from transforming a real DF
+        // factor g(μ̃,μ̃,Κ) on its bra vs its ket leg. So only graph-less tensor
+        // nodes — protoindex-free leaves (block-canonicalized in place at
+        // construction) and scalar*tensor results — are compared here by block.
+        const Tensor &lhs_tensor = lhs->as_tensor();
+        const Tensor &rhs_tensor = rhs->as_tensor();
+
+        if (!block_comparator_(lhs_tensor, rhs_tensor)) {
+          return false;
+        }
+      }
+
+      if (lhs->has_connectivity_graph() != rhs->has_connectivity_graph()) {
+        return false;
+      }
+
+      // Check connectivity in products / contractions
+      if (lhs->has_connectivity_graph()) {
+        SEQUANT_ASSERT(lhs->has_connectivity_graph());
+        SEQUANT_ASSERT(rhs->has_connectivity_graph());
+
+        if (bliss::ConstGraphCmp::cmp(lhs->connectivity_graph(),
+                                      rhs->connectivity_graph()) != 0) {
+          return false;
+        }
+      }
+
+      if (lhs.leaf()) {
+        return true;
+      }
+
       // A Product (contraction) is commutative: the binarizer may emit the same
       // contraction as (X,Y) in one term and (Y,X) in another, and the hash and
       // canonical connectivity graph both fold that operand order -- so the
@@ -121,12 +139,8 @@ struct TreeNodeEqualityComparator {
       // connectivity, not each factor's recursive build, so two products with
       // the same immediate graph but different sub-values must still be told
       // apart -- and are, because the unordered match fails when no child
-      // pairing is equal.
-      //
-      // Non-Product nodes keep the ordered child comparison: their left/right
-      // assignment is canonical (e.g. the in-place Sum tree is left-folded; an
-      // Adjoint's right child is a sentinel), so operand order carries meaning
-      // and an unordered match could wrongly merge distinct trees.
+      // pairing is equal. Product operand subtrees are bounded in depth (a
+      // contraction of a fixed set of factors), so they stay recursive.
       if (lhs->op_type() && *lhs->op_type() == EvalOp::Product) {
         bool const in_order = (*this)(lhs.left(), rhs.left()) &&
                               (*this)(lhs.right(), rhs.right());
@@ -135,20 +149,23 @@ struct TreeNodeEqualityComparator {
         if (!in_order && !swapped) {
           return false;
         }
-      } else {
-        // Note: We're assuming that the assignment of a subtree into left and
-        // right is made consistently (canonical) and hence we don't compare
-        // left with right
-        if (!(*this)(lhs.left(), rhs.left())) {
-          return false;
-        }
-        if (!(*this)(lhs.right(), rhs.right())) {
-          return false;
-        }
+        return true;
       }
-    }
 
-    return true;
+      // Non-Product internal node (Sum, scalar*tensor product, adjoint): its
+      // left/right assignment is canonical (e.g. the in-place Sum tree is
+      // left-folded; an Adjoint's right child is a sentinel), so operand order
+      // carries meaning and the children are compared in order. The right child
+      // (a single summand / the scalar factor / the adjoint sentinel) is
+      // bounded in depth and compared recursively; the left child is the deep
+      // spine, so rather than recurse into it we loop back to the top with it
+      // as the new (lhs, rhs) -- unwinding the spine iteratively.
+      if (!(*this)(lhs.right(), rhs.right())) {
+        return false;
+      }
+      lhsp = &lhs.left();
+      rhsp = &rhs.left();
+    }
   }
 
  private:
