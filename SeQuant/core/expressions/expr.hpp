@@ -432,12 +432,6 @@ class Expr : public std::enable_shared_from_this<Expr> {
     static type_id_type type_id = get_next_type_id();
     return type_id;
   }
-
- private:
-  /// @input[in] fn the name of function that is missing in this class
-  /// @return an Exception object containing a message describing that @p
-  /// fn is missing from this type
-  Exception not_implemented(const char *fn) const;
 };  // class Expr
 
 static_assert(std::ranges::sized_range<Expr>);
