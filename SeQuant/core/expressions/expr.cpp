@@ -2,29 +2,10 @@
 // Created by Eduard Valeyev on 2019-02-06.
 //
 
-#include <SeQuant/core/algorithm.hpp>
-#include <SeQuant/core/expressions/abstract_tensor.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
-#include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/expr_iterator.hpp>
-#include <SeQuant/core/expressions/tensor.hpp>
-#include <SeQuant/core/io/latex/latex.hpp>
-#include <SeQuant/core/logger.hpp>
-#include <SeQuant/core/runtime.hpp>
-#include <SeQuant/core/tensor_canonicalizer.hpp>
-#include <SeQuant/core/tensor_network.hpp>
-#include <SeQuant/core/tensor_network/typedefs.hpp>
-#include <SeQuant/core/utility/macros.hpp>
-
-#include <range/v3/algorithm/any_of.hpp>
-#include <range/v3/algorithm/find_if.hpp>
-#include <range/v3/algorithm/for_each.hpp>
-#include <range/v3/algorithm/sort.hpp>
-#include <range/v3/range/access.hpp>
-#include <range/v3/range/conversion.hpp>
-#include <range/v3/view/filter.hpp>
-#include <range/v3/view/reverse.hpp>
-#include <range/v3/view/transform.hpp>
+#include <SeQuant/core/expressions/expr_ptr.hpp>
+#include <SeQuant/core/expressions/product.hpp>
 
 namespace sequant {
 
