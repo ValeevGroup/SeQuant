@@ -134,6 +134,56 @@ TEST_CASE("op", "[elements]") {
          FNOperator(cre({L"i_5"}), ann({L"i_6"}))}));
   }
 
+  SECTION("equality") {
+    const FNOperatorSeq nopseq1({FNOperator(cre({L"i_1"}), ann({L"i_2"}))});
+    const FNOperatorSeq nopseq2({FNOperator(cre({L"i_3"}), ann({L"i_4"}))});
+    const FNOperatorSeq nopseq12({FNOperator(cre({L"i_1"}), ann({L"i_2"})),
+                                  FNOperator(cre({L"i_3"}), ann({L"i_4"}))});
+    const FNOperatorSeq nopseq_empty;
+
+    REQUIRE(nopseq1 ==
+            FNOperatorSeq({FNOperator(cre({L"i_1"}), ann({L"i_2"}))}));
+    REQUIRE_FALSE(nopseq1 == nopseq2);
+    REQUIRE_FALSE(nopseq1 == nopseq12);
+    REQUIRE_FALSE(nopseq1 == nopseq_empty);
+
+    // Expr-level comparison must agree with the concrete comparison, i.e. it
+    // must compare the operators, not just the vacuum
+    const Expr &expr1 = nopseq1;
+    const Expr &expr2 = nopseq2;
+    const Expr &expr12 = nopseq12;
+    const Expr &expr_empty = nopseq_empty;
+
+    CHECK(expr1 == expr1);
+    CHECK_FALSE(expr1 == expr2);
+    CHECK_FALSE(expr1 == expr12);
+    CHECK_FALSE(expr1 == expr_empty);
+    CHECK_FALSE(expr_empty == expr1);
+
+    // empty sequences differing only in vacuum are not equal
+    const FNOperatorSeq nopseq_empty_physical = [] {
+      Context ctx = get_default_context(Statistics::FermiDirac);
+      ctx.set(Vacuum::Physical);
+      auto resetter = set_scoped_default_context(ctx);
+      return FNOperatorSeq{};
+    }();
+    REQUIRE(nopseq_empty.vacuum() != nopseq_empty_physical.vacuum());
+    CHECK_FALSE(nopseq_empty == nopseq_empty_physical);
+    CHECK_FALSE(expr_empty == static_cast<const Expr &>(nopseq_empty_physical));
+
+    // ... but an empty sequence takes its vacuum from the default context
+    // regardless of which constructor produced it
+    const FNOperatorSeq nopseq_empty_from_nops(
+        std::initializer_list<FNOperator>{});
+    const FNOperatorSeq nopseq_empty_from_ops(std::initializer_list<FOp>{});
+    REQUIRE(nopseq_empty_from_nops.empty());
+    REQUIRE(nopseq_empty_from_ops.empty());
+    CHECK(nopseq_empty_from_nops.vacuum() == nopseq_empty.vacuum());
+    CHECK(nopseq_empty_from_ops.vacuum() == nopseq_empty.vacuum());
+    CHECK(nopseq_empty == nopseq_empty_from_nops);
+    CHECK(nopseq_empty == nopseq_empty_from_ops);
+  }
+
   SECTION("adjoint") {
     auto o1 = adjoint(FOp(Index(L"i_1"), Action::Create));
     REQUIRE(o1.statistics == Statistics::FermiDirac);
@@ -289,7 +339,7 @@ TEST_CASE("op", "[elements]") {
         ann({Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}},
              Index{L"a_1", {L"i_1", L"i_3"}}, Index{L"a_4"}}));
     REQUIRE_NOTHROW(nop1.hug());
-    auto& hug1 = nop1.hug();
+    auto &hug1 = nop1.hug();
     REQUIRE(hug1->num_edges() == 8);
     REQUIRE(hug1->num_groups() == 5);
     REQUIRE(hug1->num_nonempty_groups() == 5);

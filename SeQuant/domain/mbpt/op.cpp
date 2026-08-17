@@ -753,7 +753,7 @@ ExprPtr Λ(std::size_t K, bool skip1) {
   SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"λ"));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
-    result = k > 1 ? result + tensor::λ(k) : tensor::λ(k);
+    result += tensor::λ(k);
   }
   return result;
 }
@@ -974,6 +974,30 @@ ExprPtr θ(std::size_t K) {
                   });
 }
 
+ExprPtr ã(std::size_t rank) {
+  SEQUANT_ASSERT(rank > 0, "mbpt::op::ã: rank must be >= 1");
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"ã"));
+
+  // {ã^{p_1..p_r}_{p_{r+1}..p_{2r}}} over the complete space (general,
+  // particle-conserving qns).
+  return ex<op_t>([]() -> std::wstring_view { return L"ã"; },
+                  [rank]() -> ExprPtr {
+                    const auto space = get_complete_space(Spin::any);
+                    container::svector<Index> cres, anns;
+                    cres.reserve(rank);
+                    anns.reserve(rank);
+                    for (std::size_t i = 0; i < rank; ++i) {
+                      cres.emplace_back(space, i + 1);
+                      anns.emplace_back(space, rank + i + 1);
+                    }
+                    return ex<FNOperator>(cre(cres), ann(anns));
+                  },
+                  [rank](qnc_t& qns) {
+                    qnc_t op_qnc_t = general_type_qns(rank);
+                    qns = combine(op_qnc_t, qns);
+                  });
+}
+
 ExprPtr t(std::size_t K) {
   SEQUANT_ASSERT(K > 0);
   SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"t"));
@@ -1011,7 +1035,7 @@ ExprPtr Λ(std::size_t K, bool skip1) {
   SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"λ"));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
-    result = k > 1 ? result + λ(k) : λ(k);
+    result += λ(k);
   }
   return result;
 }

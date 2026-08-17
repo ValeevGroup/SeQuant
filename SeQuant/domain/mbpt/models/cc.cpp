@@ -48,12 +48,12 @@ CC::CC(size_t n, const Options& opts)
       pertbar_comm_rank_(opts.pertbar_comm_rank),
       hbar_expansion_(opts.hbar_expansion) {
   if (unitary())
-    SEQUANT_ASSERT(hbar_comm_rank_ &&
+    SEQUANT_ASSERT(hbar_comm_rank_,
                    "CC: hbar_comm_rank is required for unitary ansatz");
   if (ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU)
-    SEQUANT_ASSERT(
-        skip_singles_ &&
-        "CC: skip_singles must be true for orbital-optimized ansatz");
+    SEQUANT_ASSERT(skip_singles_,
+                   "CC: skip_singles must be true for orbital-optimized "
+                   "ansatz");
   if (hbar_expansion_ == HbarExpansion::Bernoulli) {
     SEQUANT_ASSERT(unitary(),
                    "CC: Bernoulli expansion requires a unitary ansatz");
@@ -237,6 +237,37 @@ std::vector<ExprPtr> CC::λ() const {
   return result;
 }
 
+ExprPtr CC::rdm(size_t rank, std::optional<size_t> comm_rank) const {
+  // 1. replacement operator {ã^{p_1..p_r}_{p_{r+1}..p_{2r}}} (see op::ã); its
+  // indices are free, so they become the free indices of γ.
+  auto replacer = op::ã(rank);
+
+  // 2. similarity transform e^{-σ} ã e^{σ} (σ = T for traditional and σ = T−T⁺
+  // for unitary). Traditional ansatz: the expansion terminates exactly, so the
+  // default is the largest number of T's that can survive the VEV below: each T
+  // must consume at least one of ã's 2r legs (k <= 2r), and T's 2k
+  // quasi-creators must be absorbed by ã's 2r plus Λ's 2N legs (k <= r + N).
+  // Unitary ansatz: T⁺ contracts with T, the expansion never terminates, so
+  // there is no safe default; use the engine's hbar_comm_rank (the ctor
+  // guarantees it is set). The traditional branch takes lst_options()'s
+  // connected-product form; the {ã,t} connectivity handed to ref_av below is
+  // what makes it equivalent to the explicit commutator.
+  const auto commutator_rank = comm_rank.value_or(
+      unitary() ? hbar_comm_rank_.value() : std::min(2 * rank, rank + N));
+  auto bar =
+      mbpt::lst(replacer, T(N, skip_singles()), commutator_rank, lst_options());
+
+  // 3. reference expectation value with the ansatz's left wavefunction:
+  // γ = <0|(1+Λ) e^{-σ} ã e^{σ}|0>; the unitary ansatz drops Λ.
+  auto expr = unitary() ? bar : simplify((1 + Λ(N, skip_singles())) * bar);
+  const auto connect =
+      unitary() ? mbpt::OpConnections<std::wstring>{}
+                : mbpt::OpConnections<std::wstring>{{L"ã", L"t"}, {L"t", L"ã"}};
+  auto gamma = this->ref_av(expr, connect);
+
+  return gamma;
+}
+
 std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
                             std::optional<size_t> nbatch) const {
   SEQUANT_ASSERT(order == 1 &&
@@ -245,13 +276,9 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
   SEQUANT_ASSERT(rank == 1 &&
                  "sequant::mbpt::CC::tʼ(): only one-body perturbation "
                  "operator is supported now");
-  if (unitary()) {
-    SEQUANT_ASSERT(hbar_comm_rank_ &&
-                   "hbar_comm_rank must be specified for unitary ansatz");
-    SEQUANT_ASSERT(pertbar_comm_rank_ &&
-                   "pertbar_comm_rank must be specified for unitary "
-                   "ansatz");
-  }
+  if (unitary())
+    SEQUANT_ASSERT(pertbar_comm_rank_,
+                   "pertbar_comm_rank must be specified for unitary ansatz");
   SEQUANT_ASSERT(hbar_expansion_ != HbarExpansion::Bernoulli,
                  "CC::tʼ: the Bernoulli expansion is not supported yet");
 
@@ -461,10 +488,6 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh,
     SEQUANT_ASSERT(
         get_default_context().spbasis() != SPBasis::Spinfree &&
         "spin-free basis does not yet support non particle-conserving cases");
-  if (unitary())
-    SEQUANT_ASSERT(hbar_comm_rank_ &&
-                   "hbar_comm_rank must be specified for unitary ansatz "
-                   "in CC::eom_r");
 
   // Bernoulli always takes the blocked path: the uniform one below commutes H̄
   // with an operator-level R, which a tensor-level H̄ cannot take part in. An

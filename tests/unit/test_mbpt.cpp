@@ -690,6 +690,37 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE(to_latex(simplify(theta1.tensor_form())) ==
               L"{{\\theta^{{p_2}}_{{p_1}}}{\\tilde{a}^{{p_1}}_{{p_2}}}}");
 
+      {
+        // replacement operator: label "ã", lowering yields a bare
+        // FNOperator with `rank` cre and `rank` ann over the complete space
+        auto ã_2 = ã(2)->as<op_t>();
+        REQUIRE(ã_2.label() == L"ã");
+
+        auto ã_2_tform = ã_2.tensor_form();
+        REQUIRE(ã_2_tform->is<FNOperator>());
+        const auto& ã_2_fnop = ã_2_tform->as<FNOperator>();
+        REQUIRE(ã_2_fnop.ncreators() == 2);
+        REQUIRE(ã_2_fnop.nannihilators() == 2);
+
+        const auto complete_space = get_complete_space(Spin::any);
+        for (const auto& o : ã_2_fnop.creators())
+          REQUIRE(o.index().space() == complete_space);
+        for (const auto& o : ã_2_fnop.annihilators())
+          REQUIRE(o.index().space() == complete_space);
+
+        // callers depend on this exact free-index mapping
+        REQUIRE(to_latex(ã_2_tform) ==
+                L"{\\tilde{a}^{{p_1}{p_2}}_{{p_3}{p_4}}}");
+
+        // regression: to_latex on the operator form throws if the label is
+        // missing from the registry
+        REQUIRE(to_latex(ã(1)) == L"{\\hat{\\tilde{a}}}");
+
+        // rank 0 is an assert, not a throw
+        if (sequant::assert_behavior() == sequant::AssertBehavior::Throw)
+          REQUIRE_THROWS_AS(ã(0), Exception);
+      }
+
       auto R_2 = r(2)->as<op_t>();
       //    std::wcout << "R_2: " << to_latex(simplify(R_2.tensor_form())) <<
       //    std::endl;
