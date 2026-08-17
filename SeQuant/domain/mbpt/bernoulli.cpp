@@ -60,7 +60,7 @@ const sequant::NormalOperator<sequant::Statistics::FermiDirac>* find_nop(
         // The one-residual-operator invariant is load-bearing: N/R
         // classification reads this operator alone, so a second one would be
         // silently ignored and misclassify the term.
-        SEQUANT_ASSERT(!found &&
+        SEQUANT_ASSERT(!found,
                        "find_nop: term carries >1 NormalOperator; wick_reduce "
                        "is expected to leave at most one residual operator");
         found = &f.as<NormalOperator<Statistics::FermiDirac>>();
