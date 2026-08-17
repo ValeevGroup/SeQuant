@@ -135,7 +135,8 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
     // since need to sort in both cases
     auto new_sum =
         (pass == npasses - 1) ? acc.make_canonicalized_sum() : acc.make_sum();
-    this->swap(*new_sum);
+    using std::swap;
+    swap(*this, *new_sum);
 
     if (Logger::instance().canonicalize)
       std::wcout << "Sum::canonicalize_impl (pass=" << pass

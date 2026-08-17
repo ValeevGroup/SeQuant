@@ -35,12 +35,6 @@ class Sum : public Expr {
   Sum &operator=(const Sum &) = default;
   Sum &operator=(Sum &&) = default;
 
-  void swap(Sum &other) {
-    Sum tmp = std::move(other);
-    other = std::move(*this);
-    *this = std::move(tmp);
-  }
-
   /// construct a Sum out of zero or more summands
   /// @param summands an initializer list of summands
   Sum(ExprPtrList summands) {
