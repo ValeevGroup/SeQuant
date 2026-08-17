@@ -110,14 +110,41 @@ struct TreeNodeEqualityComparator {
     }
 
     if (!lhs.leaf()) {
-      // Note: We're assuming that the assignment of a subtree into left and
-      // right is made consistently (canonical) and hence we don't compare
-      // left with right
-      if (!(*this)(lhs.left(), rhs.left())) {
-        return false;
-      }
-      if (!(*this)(lhs.right(), rhs.right())) {
-        return false;
+      // A Product (contraction) is commutative: the binarizer may emit the same
+      // contraction as (X,Y) in one term and (Y,X) in another, and the hash and
+      // canonical connectivity graph both fold that operand order -- so the
+      // child comparison must fold it too, else two swapped occurrences of the
+      // same value are wrongly split into two cache entries (built twice).
+      // Match the children as an UNORDERED pair. The recursive child comparison
+      // is still REQUIRED and is NOT redundant with the graph check above: the
+      // connectivity graph encodes only the immediate two factors'
+      // connectivity, not each factor's recursive build, so two products with
+      // the same immediate graph but different sub-values must still be told
+      // apart -- and are, because the unordered match fails when no child
+      // pairing is equal.
+      //
+      // Non-Product nodes keep the ordered child comparison: their left/right
+      // assignment is canonical (e.g. the in-place Sum tree is left-folded; an
+      // Adjoint's right child is a sentinel), so operand order carries meaning
+      // and an unordered match could wrongly merge distinct trees.
+      if (lhs->op_type() && *lhs->op_type() == EvalOp::Product) {
+        bool const in_order = (*this)(lhs.left(), rhs.left()) &&
+                              (*this)(lhs.right(), rhs.right());
+        bool const swapped = (*this)(lhs.left(), rhs.right()) &&
+                             (*this)(lhs.right(), rhs.left());
+        if (!in_order && !swapped) {
+          return false;
+        }
+      } else {
+        // Note: We're assuming that the assignment of a subtree into left and
+        // right is made consistently (canonical) and hence we don't compare
+        // left with right
+        if (!(*this)(lhs.left(), rhs.left())) {
+          return false;
+        }
+        if (!(*this)(lhs.right(), rhs.right())) {
+          return false;
+        }
       }
     }
 
