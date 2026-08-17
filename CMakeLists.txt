@@ -312,6 +312,8 @@ set(SeQuant_symb_src
         SeQuant/core/expressions/expr.hpp
         SeQuant/core/expressions/expr_algorithms.cpp
         SeQuant/core/expressions/expr_algorithms.hpp
+        SeQuant/core/expressions/expr_container.cpp
+        SeQuant/core/expressions/expr_container.hpp
         SeQuant/core/expressions/expr_operators.hpp
         SeQuant/core/expressions/expr_ptr.cpp
         SeQuant/core/expressions/expr_ptr.hpp

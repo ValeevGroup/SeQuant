@@ -1119,6 +1119,126 @@ TEST_CASE("expr", "[elements]") {
     }
   }
 
+  SECTION("ExprContainer") {
+    SECTION("Constructors") {
+      SECTION("from conrete") {
+        ExprContainer cont1(Constant(1));
+        REQUIRE(cont1->is<Constant>());
+        REQUIRE(cont1->as<Constant>() == Constant(1));
+
+        ExprContainer cont2(Variable("bla"));
+        REQUIRE(cont2->is<Variable>());
+        REQUIRE(cont2->as<Variable>() == Variable("bla"));
+
+        Product prod(ExprPtrList{ex<Variable>("bla"), ex<Constant>(2)});
+        ExprContainer cont3(prod);
+        REQUIRE(cont3->is<Product>());
+        REQUIRE(cont3->as<Product>() == prod);
+
+        Sum sum(ExprPtrList{ex<Variable>("bla"), ex<Constant>(2)});
+        ExprContainer cont4(sum);
+        REQUIRE(cont4->is<Sum>());
+        REQUIRE(cont4->as<Sum>() == sum);
+      }
+      SECTION("from  base") {
+        ExprPtr expr = ex<Constant>(42);
+
+        ExprContainer cont(*expr);
+        REQUIRE(cont->is<Constant>());
+        REQUIRE(cont->as<Constant>().value() == 42);
+      }
+      SECTION("conversion via 'assignment'") {
+        ExprContainer cont1 = Constant(1);
+        REQUIRE(cont1->is<Constant>());
+        REQUIRE(cont1->as<Constant>() == Constant(1));
+
+        ExprContainer cont2 = Variable("bla");
+        REQUIRE(cont2->is<Variable>());
+        REQUIRE(cont2->as<Variable>() == Variable("bla"));
+
+        // Note: copy-ctor is explicit so in order for this "assignment" to
+        // work, we need to assign rvalues
+        Product prod(ExprPtrList{ex<Variable>("bla"), ex<Constant>(2)});
+        ExprContainer cont3 = Product(prod);
+        REQUIRE(cont3->is<Product>());
+        REQUIRE(cont3->as<Product>() == prod);
+
+        Sum sum(ExprPtrList{ex<Variable>("bla"), ex<Constant>(2)});
+        ExprContainer cont4 = Sum(sum);
+        REQUIRE(cont4->is<Sum>());
+        REQUIRE(cont4->as<Sum>() == sum);
+      }
+    }
+    SECTION("Assignment") {
+      ExprContainer cont = Constant(1);
+      REQUIRE(cont->is<Constant>());
+      REQUIRE(cont->as<Constant>() == Constant(1));
+
+      cont = Variable("bla");
+      REQUIRE(cont->is<Variable>());
+      REQUIRE(cont->as<Variable>() == Variable("bla"));
+
+      Product prod(ExprPtrList{ex<Variable>("bla"), ex<Constant>(2)});
+      cont = Product(prod);
+      REQUIRE(cont->is<Product>());
+      REQUIRE(cont->as<Product>() == prod);
+
+      Sum sum(ExprPtrList{ex<Variable>("bla"), ex<Constant>(2)});
+      cont = Sum(sum);
+      REQUIRE(cont->is<Sum>());
+      REQUIRE(cont->as<Sum>() == sum);
+    }
+    SECTION("value semantics") {
+      ExprContainer cont = Constant(1);
+      ExprContainer copy(cont);
+      copy = Variable("test");
+
+      REQUIRE(copy->is<Variable>());
+      REQUIRE(cont->is<Constant>());
+    }
+    SECTION("conversion to Expr &") {
+      bool passed1 = false;
+
+      auto func1 = [&passed1](Expr &) { passed1 = true; };
+
+      ExprContainer expr = Constant(5);
+      func1(expr);
+
+      REQUIRE(passed1);
+
+      bool passed2 = false;
+      auto func2 = [&passed2](const Expr &) { passed2 = true; };
+
+      func2(std::as_const(expr));
+
+      REQUIRE(passed2);
+
+      bool passed3 = false;
+      auto func3 = [&passed3](Expr &&) { passed3 = true; };
+
+      func3(std::move(expr));
+
+      REQUIRE(passed3);
+    }
+    SECTION("freestanding Expr arithmetic") {
+      // This allows to use arithmetic directly on Expr & instances (instead of
+      // requiring ExprPtr or ExprContainer wrappers)
+      ExprContainer res = Constant(1) + Variable("One");
+      REQUIRE_THAT(res, EquivalentTo("1 + One"));
+
+      res = Variable("A") * Tensor("T", bra({"a1"}), ket()) - Constant(42);
+      REQUIRE_THAT(res, EquivalentTo("A * T{a1} - 42"));
+    }
+    SECTION("In-place ExprContainer arithmetic") {
+      ExprContainer res = Constant(1);
+      res += Variable("A");
+      res -= Variable("B");
+      res *= Constant(3);
+
+      REQUIRE_THAT(res, EquivalentTo("(1 + A - B) * 3"));
+    }
+  }
+
   SECTION("ResultExpr") {
     SECTION("accessors") {
       SECTION("as_variable") {
