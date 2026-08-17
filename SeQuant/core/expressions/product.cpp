@@ -217,29 +217,6 @@ ExprPtr Product::rapid_canonicalize(CanonicalizeOptions opt) {
   return this->canonicalize_impl(opt);
 }
 
-void CProduct::adjoint() {
-  auto adj_scalar = conj(scalar());
-  using namespace ranges;
-  // no need to reverse for commutative product
-  auto adj_factors = factors() | views::transform([](auto &&expr) {
-                       return ::sequant::adjoint(expr);
-                     });
-  *this = CProduct(adj_scalar, ranges::begin(adj_factors),
-                   ranges::end(adj_factors));
-}
-
-void NCProduct::adjoint() {
-  auto adj_scalar = conj(scalar());
-  using namespace ranges;
-  // no need to reverse for commutative product
-  auto adj_factors =
-      factors() | std::views::reverse | std::views::transform([](auto &&expr) {
-        return ::sequant::adjoint(expr);
-      });
-  *this = NCProduct(adj_scalar, ranges::begin(adj_factors),
-                    ranges::end(adj_factors));
-}
-
 bool Product::static_commutativity() const { return false; }
 
 std::wstring Product::to_latex() const { return to_latex(false); }
@@ -380,5 +357,42 @@ bool Product::static_equal(const Expr &that) const {
   } else
     return false;
 }
+
+CProduct::CProduct(const Product &other) : Product(other) {}
+CProduct::CProduct(Product &&other) : Product(std::move(other)) {}
+
+bool CProduct::is_commutative() const { return true; }
+
+void CProduct::adjoint() {
+  auto adj_scalar = conj(scalar());
+  using namespace ranges;
+  // no need to reverse for commutative product
+  auto adj_factors = factors() | views::transform([](auto &&expr) {
+                       return ::sequant::adjoint(expr);
+                     });
+  *this = CProduct(adj_scalar, ranges::begin(adj_factors),
+                   ranges::end(adj_factors));
+}
+
+bool CProduct::static_commutativity() const { return true; }
+
+NCProduct::NCProduct(const Product &other) : Product(other) {}
+NCProduct::NCProduct(Product &&other) : Product(std::move(other)) {}
+
+bool NCProduct::is_commutative() const { return false; }
+
+void NCProduct::adjoint() {
+  auto adj_scalar = conj(scalar());
+  using namespace ranges;
+  // no need to reverse for commutative product
+  auto adj_factors =
+      factors() | std::views::reverse | std::views::transform([](auto &&expr) {
+        return ::sequant::adjoint(expr);
+      });
+  *this = NCProduct(adj_scalar, ranges::begin(adj_factors),
+                    ranges::end(adj_factors));
+}
+
+bool NCProduct::static_commutativity() const { return true; }
 
 }  // namespace sequant

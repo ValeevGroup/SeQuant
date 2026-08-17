@@ -366,10 +366,10 @@ class Product : public Expr {
 class CProduct : public Product {
  public:
   using Product::Product;
-  CProduct(const Product &other) : Product(other) {}
-  CProduct(Product &&other) : Product(other) {}
+  CProduct(const Product &other);
+  CProduct(Product &&other);
 
-  bool is_commutative() const override { return true; }
+  bool is_commutative() const override;
 
   /// @brief adjoint of a CProduct is a product of adjoints of its factors, with
   /// complex-conjugated scalar
@@ -377,23 +377,23 @@ class CProduct : public Product {
   virtual void adjoint() override;
 
  private:
-  bool static_commutativity() const override { return true; }
+  bool static_commutativity() const override;
 };  // class CProduct
 
 class NCProduct : public Product {
  public:
   using Product::Product;
-  NCProduct(const Product &other) : Product(other) {}
-  NCProduct(Product &&other) : Product(other) {}
+  NCProduct(const Product &other);
+  NCProduct(Product &&other);
 
-  bool is_commutative() const override { return false; }
+  bool is_commutative() const override;
 
   /// @brief adjoint of a NCProduct is a reserved product of adjoints of its
   /// factors, with complex-conjugated scalar
   virtual void adjoint() override;
 
  private:
-  bool static_commutativity() const override { return true; }
+  bool static_commutativity() const override;
 };  // class NCProduct
 
 }  // namespace sequant
