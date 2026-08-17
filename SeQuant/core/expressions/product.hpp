@@ -362,7 +362,7 @@ class Product : public Expr {
     return result;
   }
 
-  virtual Product &operator*=(const Expr &that) {
+  Product &operator*=(const Expr &that) {
     if (!that.is<Constant>()) {
       this->append(1, const_cast<Expr &>(that).shared_from_this());
     } else {
