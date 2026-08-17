@@ -269,7 +269,7 @@ Product Product::deep_copy() const {
 
 Product &Product::operator*=(const Expr &that) {
   if (!that.is<Constant>()) {
-    this->append(1, const_cast<Expr &>(that).shared_from_this());
+    this->append(1, that.clone());
   } else {
     scalar_ *= that.as<Constant>().value();
   }

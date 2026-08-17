@@ -65,7 +65,7 @@ class Sum : public Expr {
     if constexpr (rng_is_expr || rng_is_exprptr) {
       ExprPtr rng_as_exprptr;
       if constexpr (rng_is_expr) {
-        rng_as_exprptr = rng.exprptr_from_this();
+        rng_as_exprptr = rng.clone();
       } else {
         rng_as_exprptr = rng;
       }
