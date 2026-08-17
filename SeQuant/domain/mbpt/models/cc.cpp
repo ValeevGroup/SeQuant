@@ -107,7 +107,7 @@ ExprPtr CC::energy(std::optional<size_t> comm_rank) const {
 
 std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) const {
   pmax = (pmax == std::numeric_limits<size_t>::max() ? N : pmax);
-  SEQUANT_ASSERT(pmax >= pmin && "pmax should be >= pmin");
+  SEQUANT_ASSERT(pmax >= pmin, "pmax should be >= pmin");
 
   // Bernoulli: the hbar expansion is at tensor level, project and call the
   // tensor level ref_av directly.
@@ -170,11 +170,11 @@ std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) const {
 }
 
 std::vector<ExprPtr> CC::λ() const {
-  SEQUANT_ASSERT(!unitary() && "there is no need for CC::λ for unitary ansatz");
+  SEQUANT_ASSERT(!unitary(), "there is no need for CC::λ for unitary ansatz");
 
   // construct hbar
   const auto commutator_rank = hbar_comm_rank_.value_or(4);
-  SEQUANT_ASSERT(commutator_rank >= 1 && "CC::λ: hbar_comm_rank must be >= 1");
+  SEQUANT_ASSERT(commutator_rank >= 1, "CC::λ: hbar_comm_rank must be >= 1");
   auto hbar = this->hbar(commutator_rank -
                          1);  // -1 because of the connection with the projector
 
@@ -270,10 +270,10 @@ ExprPtr CC::rdm(size_t rank, std::optional<size_t> comm_rank) const {
 
 std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
                             std::optional<size_t> nbatch) const {
-  SEQUANT_ASSERT(order == 1 &&
+  SEQUANT_ASSERT(order == 1,
                  "sequant::mbpt::CC::tʼ(): only first-order perturbation is "
                  "supported now");
-  SEQUANT_ASSERT(rank == 1 &&
+  SEQUANT_ASSERT(rank == 1,
                  "sequant::mbpt::CC::tʼ(): only one-body perturbation "
                  "operator is supported now");
   if (unitary())
@@ -332,15 +332,14 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
 
 std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
                             std::optional<size_t> nbatch) const {
-  SEQUANT_ASSERT(order == 1 &&
+  SEQUANT_ASSERT(order == 1,
                  "sequant::mbpt::CC::λʼ(): only first-order perturbation is "
                  "supported now");
-  SEQUANT_ASSERT(rank == 1 &&
+  SEQUANT_ASSERT(rank == 1,
                  "sequant::mbpt::CC::λʼ(): only one-body perturbation "
                  "operator is supported now");
-  SEQUANT_ASSERT(!unitary() &&
-                 "there is no need for CC::λʼ for unitary ansatz");
-  SEQUANT_ASSERT(ansatz_ == Ansatz::T &&
+  SEQUANT_ASSERT(!unitary(), "there is no need for CC::λʼ for unitary ansatz");
+  SEQUANT_ASSERT(ansatz_ == Ansatz::T,
                  "CC::λʼ: only traditional ansatz is supported");
 
   // construct hbar
@@ -483,10 +482,10 @@ std::vector<ExprPtr> CC::eom_r_blocked(
 
 std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh,
                                const std::vector<size_t>& block_ranks) const {
-  SEQUANT_ASSERT((np > 0 || nh > 0) && "Unsupported excitation order");
+  SEQUANT_ASSERT(np > 0 || nh > 0, "Unsupported excitation order");
   if (np != nh)
     SEQUANT_ASSERT(
-        get_default_context().spbasis() != SPBasis::Spinfree &&
+        get_default_context().spbasis() != SPBasis::Spinfree,
         "spin-free basis does not yet support non particle-conserving cases");
 
   // Bernoulli always takes the blocked path: the uniform one below commutes H̄
@@ -536,9 +535,9 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh,
 }
 
 std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) const {
-  SEQUANT_ASSERT(!unitary() &&
+  SEQUANT_ASSERT(!unitary(),
                  "there is no need for CC::eom_l for unitary ansatz");
-  SEQUANT_ASSERT((np > 0 || nh > 0) && "Unsupported excitation order");
+  SEQUANT_ASSERT(np > 0 || nh > 0, "Unsupported excitation order");
 
   if (np != nh)
     SEQUANT_ASSERT(
