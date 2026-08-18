@@ -287,7 +287,7 @@ TEST_CASE("expr", "[elements]") {
     const auto c2 = ex<Constant>(rational{1, 2});
     const auto vx = ex<Variable>(L"x");
 
-    {  // constructors
+    SECTION("constructors") {
       REQUIRE_NOTHROW(Power(c2, rational{1, 2}));
       REQUIRE_NOTHROW(Power(vx, rational{3, 1}));
 
@@ -308,7 +308,7 @@ TEST_CASE("expr", "[elements]") {
       }
     }
 
-    {  // accessors
+    SECTION("accessors") {
       Power p(c2, rational{1, 2});
       REQUIRE(p.base() == Constant(rational{1, 2}));
       REQUIRE(p.exponent() == rational{1, 2});
@@ -322,7 +322,7 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(!p.is_zero());
     }
 
-    {  // comparison
+    SECTION("comparison") {
       Power p1(c2, rational{1, 2});
       Power p2(c2, rational{1, 2});
       REQUIRE(p1 == p2);
@@ -341,7 +341,7 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(!(plt_a < plt_c));
     }
 
-    {  // operator*=
+    SECTION("operator*=") {
       // b^e1 *= b^e2 -> b^(e1+e2)
       Power pa(vx, rational{1, 2});
       Power pb(vx, rational{1, 3});
@@ -378,7 +378,7 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(to_latex(pe) == Constant(2).to_latex());
     }
 
-    {  // Power should NOT be absorbed into Product::scalar_
+    SECTION("Don't absorb into Product::scalar") {
       auto p = ex<Power>(vx, rational{1, 2});
       auto prod = ex<Product>(Product{});
       prod->as<Product>().append(1, p, Product::Flatten::Yes);
@@ -423,12 +423,12 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE_NOTHROW(e->adjoint());
       REQUIRE_NOTHROW(adjoint(e));  // check free-function adjoint
     }
-    {  // Constant
+    SECTION("Constant") {
       const auto e = std::make_shared<Constant>(Constant::scalar_type{1, 2});
       REQUIRE_NOTHROW(e->adjoint());
       REQUIRE(e->value() == Constant::scalar_type{1, -2});
     }
-    {  // Variable
+    SECTION("Variabkle") {
       const auto e = std::make_shared<Variable>(L"q");
       REQUIRE(e->conjugated() == false);
       REQUIRE_NOTHROW(e->adjoint());
@@ -437,7 +437,7 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE_NOTHROW(e->adjoint());
       REQUIRE(e->conjugated() == false);
     }
-    {  // Product
+    SECTION("Product") {  // Product
       const auto e = std::make_shared<Product>();
       e->append(Constant::scalar_type{2, -1}, ex<Adjointable>());
       e->append(1, ex<Adjointable>(-2));
@@ -446,7 +446,7 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(e->factors()[0]->as<Adjointable>().v == 2);
       REQUIRE(e->factors()[1]->as<Adjointable>().v == -1);
     }
-    {  // CProduct
+    SECTION("CProduct") {
       const auto e = std::make_shared<CProduct>();
       e->append(Constant::scalar_type{2, -1}, ex<Adjointable>());
       e->append(1, ex<Adjointable>(-2));
@@ -455,7 +455,7 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(e->factors()[0]->as<Adjointable>().v == -1);
       REQUIRE(e->factors()[1]->as<Adjointable>().v == 2);
     }
-    {  // NCProduct
+    SECTION("NCProduct") {
       const auto e = std::make_shared<NCProduct>();
       e->append(Constant::scalar_type{2, -1}, ex<Adjointable>());
       e->append(1, ex<Adjointable>(-2));
@@ -464,7 +464,7 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(e->factors()[0]->as<Adjointable>().v == 2);
       REQUIRE(e->factors()[1]->as<Adjointable>().v == -1);
     }
-    {  // Sum
+    SECTION("Sum") {
       const auto e = std::make_shared<Sum>();
       e->append(ex<Adjointable>());
       e->append(ex<Adjointable>(-2));
@@ -472,7 +472,8 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(e->summands()[0]->as<Adjointable>().v == -1);
       REQUIRE(e->summands()[1]->as<Adjointable>().v == 2);
     }
-    {  // Power: adjoint flips the conjugation flag; base/exponent unchanged
+    SECTION("Power") {
+      // adjoint flips the conjugation flag; base/exponent unchanged
       Power pv(ex<Variable>(L"z"), rational{1, 2});
       REQUIRE(!pv.conjugated());
       pv.adjoint();
