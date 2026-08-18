@@ -20,7 +20,9 @@ ExprContainer::ExprContainer(const ExprContainer &container)
     : ExprContainer(container->unique_copy()) {}
 
 ExprContainer::ExprContainer(std::unique_ptr<Expr> expr)
-    : expr_(std::move(expr)) {}
+    : expr_(std::move(expr)) {
+  SEQUANT_ASSERT(expr_ != nullptr);
+}
 
 ExprContainer::ExprContainer(const Expr &expr)
     : ExprContainer(expr.unique_copy()) {}
