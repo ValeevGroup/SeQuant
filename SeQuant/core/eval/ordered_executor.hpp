@@ -18,6 +18,7 @@
 #include <optional>
 #include <type_traits>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -626,6 +627,55 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // the pre_results resolution below resolves a forest root produced inside a
   // loop block exactly like one produced by a plain root BuildStep.
   typename CacheManager<N, FHC>::BatchContext const root_ectx;
+  // A forest root's ONLY reader is the pre_results combine below -- it has zero
+  // DAG consumers (else it would not be a root). That combine read is a real
+  // read of the value from its home, so it is charged here as +1 on the root's
+  // home life: with it, evaluate_impl's own production store-access drains the
+  // root to a still-live cache entry, and the combine's cache read drains it to
+  // zero -- one holder (the cache), exact use-count, roots no longer special.
+  // Without it (life == 1) the store-access drains the root immediately and the
+  // cache holds nothing, which is why the executor used to keep a PARALLEL
+  // value_results reference to every produced value -- a ref living PAST the
+  // cache node removal (it held every intermediate to end-of-iteration even
+  // after the cache drained it at its genuine last use, absent in forest
+  // descent). We no longer retain it: non-root consumers read from the cache
+  // (home_reads life), and roots read from the cache too (this +1). Escape
+  // outputs produced inside a batch block are still mirrored into value_results
+  // by run_ordered_contracted_block (their home is one scope out); pre_results
+  // prefers that mirror when present and falls back to the cache otherwise.
+  container::set<std::size_t> forest_root_hashes;
+  for (auto&& n : forest) forest_root_hashes.insert(n->hash_value());
+
+  // "Needed this iteration" gate. The schedule lists every BuildStep, but a
+  // non-persistent intermediate whose consumers are ALL persistent-and-cached
+  // is read only in iteration 1 (when those persistent consumers are built);
+  // thereafter the consumers are cache hits and never re-read it, so rebuilding
+  // it each iteration is wasted work (the reason the DAG used to over-persist
+  // it via !vol). Mirror forest descent's "stop at cache hits": BFS from the
+  // volatile roots, descending only through nodes NOT currently alive in the
+  // cache. An alive (persistent, still-holding) node is read but not rebuilt
+  // and does NOT propagate need to its children. Computed ONCE per call against
+  // the cache state at entry (persistent survivors alive, everything else
+  // drained by the per-term reset), so in iteration 1 (nothing cached) it
+  // admits every node, and in later iterations it prunes the
+  // persistent-shadowed subtrees.
+  container::set<std::size_t> needed_build;
+  {
+    container::svector<node_t> stack;
+    container::set<std::size_t> visited;
+    for (auto&& n : forest) stack.push_back(n);
+    while (!stack.empty()) {
+      node_t const n = stack.back();
+      stack.pop_back();
+      if (n.leaf()) continue;
+      if (!visited.insert(n->hash_value()).second) continue;
+      if (cache.alive(n)) continue;  // cache hit: read, not rebuilt, no descend
+      needed_build.insert(n->hash_value());
+      stack.push_back(n.left());
+      stack.push_back(n.right());
+    }
+  }
+
   for (Step const& step : ordered.root.steps) {
     if (auto const* build = std::get_if<BuildStep>(&step.value)) {
       std::size_t const vid = build->value_id;
@@ -654,17 +704,43 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
       // no volatility policy (is_volatile empty) keep the unconditional
       // resident pin -- the pre-Task-4 behavior every non-volatility-aware
       // caller relies on.
+      bool const is_root = forest_root_hashes.count(hash) != 0;
+      // Skip a BuildStep the "needed" gate pruned: its value is not read this
+      // iteration (all consumers are persistent cache hits), so rebuilding it
+      // is wasted work. Roots are always needed (volatile, never cached). A
+      // skipped value is intentionally not produced this iteration -- mark it
+      // accounted for so the completeness check does not mistake the prune for
+      // a gap.
+      if (!it->second.leaf() && !needed_build.count(hash)) {
+        built[vid] = 1;
+        continue;
+      }
       if (!it->second.leaf()) {
         if (is_volatile) {
-          bool const vol = subtree_any(it->second, is_volatile);
-          std::size_t const life = home_reads(vid);
-          cache.ensure_home_slot(it->second, life, /*persistent=*/!vol);
+          // Persistence is the shared cache's classification (non-volatile AND
+          // has a volatile DIRECT consumer), which sequant::cache_manager
+          // already computed and stamped on the entry -- NOT the local !vol,
+          // which over-enrolls a non-volatile value with no volatile consumer.
+          // With the "needed" gate above, un-persisting such a value no longer
+          // forces a rebuild: it is built once (iteration 1) and pruned after.
+          bool const persistent = cache.entry_is_persistent(it->second);
+          // +1 for the pre_results combine read of a forest root (see the block
+          // comment above); non-roots carry only their DAG consumers' reads.
+          std::size_t const life = home_reads(vid) + (is_root ? 1u : 0u);
+          cache.ensure_home_slot(it->second, life, persistent);
         } else {
+          // No volatility policy: the root-homed value is pinned resident until
+          // reset() anyway, so it is trivially still in the cache for the
+          // combine read; no life bump is needed.
           cache.ensure_home_slot(it->second);
         }
       }
-      value_results[vid] =
-          evaluate_impl<EvalTrace>(it->second, leaf_evaluator, cache);
+      // Build the value; it self-stores into its cache home (evaluate_impl's
+      // finish_phase_b). Discard the returned pointer: the cache is the single
+      // holder now -- consumers (and, for a root, the combine) read it back
+      // from the cache. Retaining it in value_results is exactly the dead
+      // reference that kept every intermediate alive past its cache drain.
+      (void)evaluate_impl<EvalTrace>(it->second, leaf_evaluator, cache);
       built[vid] = 1;  // R3: this root-scope value is produced.
     } else if (auto const* block = std::get_if<ScopeBlock>(&step.value)) {
       run_ordered_contracted_block<EvalTrace>(
@@ -714,10 +790,27 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
     SEQUANT_ASSERT(vid_it != hash_to_vid.end() &&
                    "evaluate_ordered_schedule: forest root not found in the "
                    "schedule's value map");
-    pre_results[i] = value_results[vid_it->second];
+    std::size_t const vid = vid_it->second;
+    if (value_results[vid]) {
+      // Produced inside a batch block and mirrored out by
+      // run_ordered_contracted_block (its home is one scope out of this level).
+      pre_results[i] = std::move(value_results[vid]);
+    } else {
+      // Produced by a plain root BuildStep: it lives in the cache (self-stored
+      // by evaluate_impl, kept for this combine read by the +1 on its home
+      // life). access_at drains that last read and hands back the CANONICAL
+      // stored value; orient it to this root's phase, matching evaluate_impl's
+      // own canonical->orientation return convention (apply_phase).
+      auto ptr = cache.access_at(roots[i]).ptr;
+      SEQUANT_ASSERT(ptr &&
+                     "evaluate_ordered_schedule: forest root not resident in "
+                     "the cache at the combine read");
+      auto const ph = roots[i]->canon_phase();
+      pre_results[i] = (ph == 1) ? std::move(ptr) : ptr->mult_by_phase(ph);
+    }
     SEQUANT_ASSERT(pre_results[i] &&
                    "evaluate_ordered_schedule: forest root was never "
-                   "produced by a root BuildStep");
+                   "produced");
   }
 
   return pre_results;

@@ -1139,6 +1139,23 @@ class CacheManager {
       cache_map_.try_emplace(k, entry{c, is_persistent(k)});
   }
 
+  /// \return whether @p key's cache entry (this cache or an ancestor) is
+  ///         classified PERSISTENT. The shared cache builder
+  ///         (\c sequant::cache_manager) computes the correct persistence
+  ///         predicate -- non-volatile AND has a volatile DIRECT consumer --
+  ///         and stamps it here at construction. The ordered executor's
+  ///         home-slot seeding consults this instead of re-deriving
+  ///         persistence, so it cannot over-enroll a non-volatile value that
+  ///         has no volatile consumer. \c false when the key has no entry (the
+  ///         shared cache chose not to register it, i.e. it is not persistent).
+  [[nodiscard]] bool entry_is_persistent(key_type const& key) const noexcept {
+    for (CacheManager const* c = this; c; c = c->parent_) {
+      auto const it = c->cache_map_.find(key);
+      if (it != c->cache_map_.end()) return it->second.persistent();
+    }
+    return false;
+  }
+
   ///
   /// Resets all cached data.
   ///

@@ -864,6 +864,13 @@ forced_split_demotions(RichSchedule const& rich,
     SEQUANT_ASSERT(vid_it != value_id_of.end());
     std::size_t const vid = vid_it->second;
 
+    // A forest LEAF is an input fetched on demand by its consumers, never a
+    // computed value: it must NOT be emitted as a BuildStep (doing so makes the
+    // executor evaluate it as a standalone root -- one wasted leaf fetch per
+    // iteration -- which the forest descent never does). Its consumers reach it
+    // through the leaf evaluator exactly as in forest descent.
+    if (rich.cells[vid].is_leaf) continue;
+
     std::optional<std::size_t> escape_depth;
     OutputKind escape_kind = OutputKind::Transient;  // overwritten if found
     for (AxisClass const& ac : cl.per_axis) {

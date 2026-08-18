@@ -243,6 +243,9 @@ struct OccurrenceRec {
 struct ValueCell {
   std::size_t value_id;  //!< stable index of the value group (== its slot in
                          //!< \c RichSchedule::cells)
+  bool is_leaf = false;  //!< the value is a forest LEAF (an input fetched on
+                         //!< demand), not a computed intermediate -- so it is
+                         //!< never scheduled as a BuildStep.
   std::size_t hash;      //!< the value's \c EvalExpr::hash_value() -- the CSE
                          //!< identity that folds occurrences into this cell.
                          //!< Batched-slot-BLIND; DISTINCT from the
@@ -336,6 +339,7 @@ RichSchedule compute_dag_boulevard(R const& forest,
   // point (set at construction, overwritten by the parent if any).
   struct NodeRec {
     std::size_t hash;
+    bool is_leaf;
     std::size_t point;
     std::size_t consumer_point;
     container::svector<Index> home;     // home_scope (proto-expanded)
@@ -374,6 +378,7 @@ RichSchedule compute_dag_boulevard(R const& forest,
     std::size_t const point = counter++;
     NodeRec r;
     r.hash = n->hash_value();
+    r.is_leaf = n.leaf();
     r.point = point;
     r.consumer_point = point;  // root default; overwritten by parent below
     r.home = home_scope(n);    // proto-expanded sliced_modes (empty on leaves)
@@ -464,6 +469,7 @@ RichSchedule compute_dag_boulevard(R const& forest,
     if (it == hash_to_cell.end()) {
       ValueCell c;
       c.value_id = out.cells.size();
+      c.is_leaf = r.is_leaf;
       c.hash = r.hash;  // the value's hash_value() (== the hash_to_cell key)
       c.first_use = r.point;
       c.last_use = r.consumer_point;
