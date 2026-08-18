@@ -684,6 +684,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       core_label += L"\\bar{";
     core_label += io::latex::utf_to_string(this->label());
     if ((this->symmetry() == Symmetry::Antisymm) && add_bar) core_label += L"}";
+    if (conjugated_) core_label = L"{" + core_label + L"^*}";
 
     switch (bkst) {
       case BraKetSlotTypesetting::Naive: {
@@ -737,6 +738,20 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
 
   /// @brief adjoint of a Tensor swaps its bra and ket
   virtual void adjoint() override;
+
+  /// @return whether this tensor is complex-conjugated elementwise (no slot
+  /// reordering; contrast adjoint(), which swaps bra and ket)
+  bool conjugated() const { return conjugated_; }
+
+  /// @brief complex-conjugates this tensor elementwise: toggles conjugated();
+  /// the slots are untouched. For a BraKetSymmetry::Conjugate tensor the
+  /// value identity T{q;p} = conj(T{p;q}) means a bra<->ket swap combined
+  /// with conjugate() preserves the represented value -- which is how the
+  /// canonicalizer folds the two orientations onto one spelling.
+  void conjugate() {
+    conjugated_ = !conjugated_;
+    reset_hash_value();
+  }
 
   /// Replaces indices using the index map
   /// @param index_map maps Index to Index
@@ -793,6 +808,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   // distinct canonicalization behavior yet); revisit if that changes.
   Hermiticity hermiticity_ = Hermiticity::NonHermitian;
   ColumnSymmetry column_symmetry_ = ColumnSymmetry::Nonsymm;
+  /// whether this tensor is complex-conjugated elementwise (no slot
+  /// reordering); mirrors Variable::conjugated_ / Power::conjugated_ and is
+  /// rendered as a trailing ^* on the label
+  bool conjugated_ = false;
   mutable std::optional<hash_type>
       bra_hash_value_;  // memoized byproduct of memoizing_hash()
   std::size_t bra_net_rank_;
@@ -817,7 +836,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       hash::combine(val, symmetry_);
       hash::combine(val, braket_symmetry_);
       hash::combine(val, column_symmetry_);
-      // N.B. adjointness is baked into the label
+      // N.B. adjointness is baked into the label; conjugation contributes
+      // only when set so unconjugated tensors hash identically to builds
+      // that predate conjugated_
+      if (conjugated_) hash::combine(val, conjugated_);
       return val;
     };
     if (!hash_value_) {
@@ -835,6 +857,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   bool static_equal(const Expr &that) const override {
     const auto &that_cast = static_cast<const Tensor &>(that);
     if (this->label() == that_cast.label() &&
+        this->conjugated() == that_cast.conjugated() &&
         this->symmetry() == that_cast.symmetry() &&
         this->braket_symmetry() == that_cast.braket_symmetry() &&
         this->column_symmetry() == that_cast.column_symmetry() &&
@@ -858,6 +881,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     const auto &that_cast = static_cast<const Tensor &>(that);
     if (this->label() != that_cast.label()) {
       return this->label() < that_cast.label();
+    }
+
+    if (this->conjugated() != that_cast.conjugated()) {
+      return !this->conjugated();  // T orders before conj(T)
     }
 
     if (this->bra_rank() != that_cast.bra_rank()) {

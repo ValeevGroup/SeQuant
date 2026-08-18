@@ -131,7 +131,13 @@ std::wstring serialize_scalar(const Constant::scalar_type& scalar,
 
 std::wstring to_string(Tensor const& tensor,
                        const SerializationOptions& options) {
-  return to_string(static_cast<const AbstractTensor&>(tensor), options);
+  auto serialized =
+      to_string(static_cast<const AbstractTensor&>(tensor), options);
+  // conjugation spelling matches Variable: label^*{...}
+  // TODO extend the deserializer grammar to accept it; conjugation currently
+  // arises only from canonicalization at runtime, never from parsed input
+  if (tensor.conjugated()) serialized.insert(tensor.label().size(), L"^*");
+  return serialized;
 }
 
 std::wstring to_string(const Constant& constant,
