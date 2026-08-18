@@ -12,7 +12,7 @@
 namespace sequant {
 
 ExprPtr to_expr_ptr(ExprContainer &&container) {
-  return std::shared_ptr<Expr>(std::move(container.expr_));
+  return std::move(container).take_expr();
 }
 
 ExprContainer::ExprContainer(const ExprContainer &container)
@@ -55,6 +55,8 @@ ExprContainer &ExprContainer::operator=(Expr &&expr) {
 }
 
 ExprContainer ExprContainer::copy() const { return expr_->unique_copy(); }
+
+std::unique_ptr<Expr> ExprContainer::take_expr() && { return std::move(expr_); }
 
 ExprContainer::operator const Expr &() const { return *expr_; }
 
