@@ -59,9 +59,20 @@ class ExprContainer {
 };
 
 ExprContainer operator+(const Expr &lhs, const Expr &rhs);
+ExprContainer operator+(const ExprContainer &lhs, const Expr &rhs);
+ExprContainer operator+(const Expr &lhs, const ExprContainer &rhs);
+
 ExprContainer operator-(const Expr &lhs, const Expr &rhs);
+ExprContainer operator-(const ExprContainer &lhs, const Expr &rhs);
+ExprContainer operator-(const Expr &lhs, const ExprContainer &rhs);
+
 ExprContainer operator*(const Expr &lhs, const Expr &rhs);
+ExprContainer operator*(const ExprContainer &lhs, const ExprContainer &rhs);
+ExprContainer operator*(const Expr &lhs, const Expr &rhs);
+
 ExprContainer operator^(const Expr &lhs, const Expr &rhs);
+ExprContainer operator^(const ExprContainer &lhs, const Expr &rhs);
+ExprContainer operator^(const Expr &lhs, const ExprContainer &rhs);
 
 }  // namespace sequant
 
