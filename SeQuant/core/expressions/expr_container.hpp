@@ -27,6 +27,13 @@ class ExprContainer {
 
   std::unique_ptr<Expr> take_expr() &&;
 
+  auto begin() { return expr_->begin(); }
+  auto end() { return expr_->begin(); }
+  auto begin() const { return expr_->begin(); }
+  auto end() const { return expr_->begin(); }
+  auto cbegin() const { return expr_->begin(); }
+  auto cend() const { return expr_->begin(); }
+
   operator const Expr &() const;
   operator Expr &() &;
   operator Expr &&() &&;
