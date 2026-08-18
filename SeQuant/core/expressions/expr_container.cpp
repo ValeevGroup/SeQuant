@@ -166,11 +166,27 @@ ExprContainer operator+(const Expr &lhs, const Expr &rhs) {
   return cont;
 }
 
+ExprContainer operator+(const ExprContainer &lhs, const Expr &rhs) {
+  return static_cast<const Expr &>(lhs) + rhs;
+}
+
+ExprContainer operator+(const Expr &lhs, const ExprContainer &rhs) {
+  return lhs + static_cast<const Expr &>(rhs);
+}
+
 ExprContainer operator-(const Expr &lhs, const Expr &rhs) {
   ExprContainer cont(lhs);
   cont -= rhs;
 
   return cont;
+}
+
+ExprContainer operator-(const ExprContainer &lhs, const Expr &rhs) {
+  return static_cast<const Expr &>(lhs) - rhs;
+}
+
+ExprContainer operator-(const Expr &lhs, const ExprContainer &rhs) {
+  return lhs - static_cast<const Expr &>(rhs);
 }
 
 ExprContainer operator*(const Expr &lhs, const Expr &rhs) {
@@ -180,11 +196,27 @@ ExprContainer operator*(const Expr &lhs, const Expr &rhs) {
   return cont;
 }
 
+ExprContainer operator*(const ExprContainer &lhs, const Expr &rhs) {
+  return static_cast<const Expr &>(lhs) * rhs;
+}
+
+ExprContainer operator*(const Expr &lhs, const ExprContainer &rhs) {
+  return lhs * static_cast<const Expr &>(rhs);
+}
+
 ExprContainer operator^(const Expr &lhs, const Expr &rhs) {
   ExprContainer cont(lhs);
   cont ^= rhs;
 
   return cont;
+}
+
+ExprContainer operator^(const ExprContainer &lhs, const Expr &rhs) {
+  return static_cast<const Expr &>(lhs) ^ rhs;
+}
+
+ExprContainer operator^(const Expr &lhs, const ExprContainer &rhs) {
+  return lhs ^ static_cast<const Expr &>(rhs);
 }
 
 }  // namespace sequant
