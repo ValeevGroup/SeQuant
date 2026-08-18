@@ -25,6 +25,8 @@ class ExprContainer {
 
   ExprContainer copy() const;
 
+  std::unique_ptr<Expr> take_expr() &&;
+
   operator const Expr &() const;
   operator Expr &() &;
   operator Expr &&() &&;
@@ -46,8 +48,6 @@ class ExprContainer {
   std::unique_ptr<Expr> expr_;
 
   ExprContainer(std::unique_ptr<Expr> expr);
-
-  friend ExprPtr to_expr_ptr(ExprContainer &&container);
 };
 
 ExprContainer operator+(const Expr &lhs, const Expr &rhs);
