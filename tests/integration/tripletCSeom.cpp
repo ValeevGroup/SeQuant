@@ -170,97 +170,37 @@ std::wstring coeff_to_wstring(const Product::scalar_type& c) {
   return to_latex_align(ex<Constant>(c), 1, 1);
 }
 
+// check the compact/reconstruct. If the compactness is not correct
+// report which tensor-network groups disagree
+void report_reconstruction_mismatch(const ExprPtr& diff, const ExprPtr& full,
+                                    const ExprPtr& compact) {
+  if (!diff->is<Sum>()) return;
+  container::set<std::size_t> bad_hashes;
+  for (const auto& t : *diff) {
+    if (!t->is<Product>()) continue;
+    const auto h = term_network_hash(t);
+    bad_hashes.insert(h);
+    std::wcout << L"    DIFF hash=0x" << std::hex << h << std::dec << L" coeff="
+               << coeff_to_wstring(t->as<Product>().scalar()) << L"\n";
+  }
+  const auto full_groups = group_by_hash(full->clone());
+  const auto compact_groups = group_by_hash(compact->clone());
+  for (const auto h : bad_hashes) {
+    std::wcout << L"    BAD group 0x" << std::hex << h << std::dec << L"\n";
+    if (const auto it = full_groups.find(h); it != full_groups.end())
+      for (const auto& t : it->second)
+        std::wcout << L"      full: " << t->to_latex() << L"\n";
+    if (const auto it = compact_groups.find(h); it != compact_groups.end())
+      for (const auto& t : it->second)
+        std::wcout << L"      kept: " << t->to_latex() << L"\n";
+  }
+}
+
 std::size_t expr_term_count(const ExprPtr& e) {
   if (e->is<Constant>())
     return e->as<Constant>().value() == Constant::scalar_type{0} ? 0 : 1;
   if (e->is<Sum>()) return e->size();
   return 1;
-}
-
-// Map each (scalar-stripped) product term to its real coefficient. Key is the
-// concatenated canonical latex of the non-scalar factors, so structurally
-// identical terms across expressions share a key.
-std::map<std::wstring, double> term_coeff_map(ExprPtr e) {
-  prepare_expr_for_hashing(e);
-  std::map<std::wstring, double> m;
-  auto add = [&m](const Product& p) {
-    std::wstring key;
-    for (const auto& f : p.nonscalar_factors()) key += f->to_latex();
-    m[key] += Constant(p.scalar()).value<double>();
-  };
-  if (e->is<Product>())
-    add(e->as<Product>());
-  else if (e->is<Sum>())
-    for (const auto& t : *e)
-      if (t->is<Product>()) add(t->as<Product>());
-  return m;
-}
-
-// Least-squares fit of `target` by the columns `basis` over the union of term
-// keys (solved via 4x4 normal equations, Gauss elimination). Returns the
-// coefficients and the max |residual| over all keys. residual ~ 0 means
-// `target` lies exactly in the span of `basis` (i.e. a reconstruction exists).
-struct FitResult {
-  std::vector<double> weights;
-  double max_residual = 0;
-};
-FitResult fit_in_span(const std::vector<ExprPtr>& basis,
-                      const ExprPtr& target) {
-  const std::size_t n = basis.size();
-  std::vector<std::map<std::wstring, double>> B;
-  B.reserve(n);
-  for (const auto& b : basis) B.push_back(term_coeff_map(b->clone()));
-  const auto T = term_coeff_map(target->clone());
-
-  container::set<std::wstring> keys;
-  for (const auto& bm : B)
-    for (const auto& [k, _] : bm) keys.insert(k);
-  for (const auto& [k, _] : T) keys.insert(k);
-
-  // normal equations  (BᵀB) x = Bᵀ t
-  std::vector<std::vector<double>> A(n, std::vector<double>(n + 1, 0.0));
-  for (const auto& k : keys) {
-    std::vector<double> row(n);
-    for (std::size_t j = 0; j < n; ++j) {
-      auto it = B[j].find(k);
-      row[j] = it == B[j].end() ? 0.0 : it->second;
-    }
-    double tv = 0.0;
-    if (auto it = T.find(k); it != T.end()) tv = it->second;
-    for (std::size_t i = 0; i < n; ++i) {
-      for (std::size_t j = 0; j < n; ++j) A[i][j] += row[i] * row[j];
-      A[i][n] += row[i] * tv;
-    }
-  }
-  // Gauss elimination with partial pivoting
-  for (std::size_t c = 0; c < n; ++c) {
-    std::size_t piv = c;
-    for (std::size_t r = c + 1; r < n; ++r)
-      if (std::abs(A[r][c]) > std::abs(A[piv][c])) piv = r;
-    std::swap(A[c], A[piv]);
-    if (std::abs(A[c][c]) < 1e-14) continue;
-    for (std::size_t r = 0; r < n; ++r) {
-      if (r == c) continue;
-      const double f = A[r][c] / A[c][c];
-      for (std::size_t j = c; j <= n; ++j) A[r][j] -= f * A[c][j];
-    }
-  }
-  FitResult res;
-  res.weights.resize(n, 0.0);
-  for (std::size_t i = 0; i < n; ++i)
-    res.weights[i] = std::abs(A[i][i]) < 1e-14 ? 0.0 : A[i][n] / A[i][i];
-
-  for (const auto& k : keys) {
-    double v = 0.0;
-    for (std::size_t j = 0; j < n; ++j) {
-      auto it = B[j].find(k);
-      if (it != B[j].end()) v += res.weights[j] * it->second;
-    }
-    double tv = 0.0;
-    if (auto it = T.find(k); it != T.end()) tv = it->second;
-    res.max_residual = std::max(res.max_residual, std::abs(v - tv));
-  }
-  return res;
 }
 
 void print_hash_histogram(const std::wstring& stage_label,
@@ -520,90 +460,6 @@ void analyze_group_recovery(
   }
 }
 
-ExprPtr unit_product(const ExprPtr& term) {
-  auto out = term->clone();
-  auto& p = out->as<Product>();
-  p.scale(Product::scalar_type{1} / p.scalar());
-  canonicalize(out);
-  simplify(out);
-  return out;
-}
-
-// Match a term against a pool up to scalar factor (exact product structure).
-bool term_matches_pool(const ExprPtr& term,
-                       const container::vector<ExprPtr>& pool) {
-  if (!term->is<Product>()) return false;
-  const auto term_unit = unit_product(term);
-  for (const auto& cand : pool) {
-    if (!cand->is<Product>()) continue;
-    ExprPtr diff = term_unit - unit_product(cand);
-    canonicalize(diff);
-    simplify(diff);
-    if (expr_term_count(diff) == 0) return true;
-  }
-  return false;
-}
-
-// Trace how paper combine (3V - V_ps)/16 maps V size-3 hash groups to Omega
-// size-4 groups.
-void analyze_v_to_omega_transition(
-    const ExprPtr& V, const ExprPtr& T_ref,
-    const container::map<Index, Index>& pair_swap) {
-  const auto v_groups = group_by_hash(V->clone());
-  ExprPtr V_ps = transform_expr(V, pair_swap);
-  canonicalize(V_ps);
-  simplify(V_ps);
-  const auto vps_groups = group_by_hash(V_ps->clone());
-  const auto t_groups = group_by_hash(T_ref->clone());
-
-  std::size_t n_v3_t4 = 0;
-  std::size_t n_from_v_only = 0;
-  std::size_t n_from_vps_only = 0;
-  std::size_t n_from_both = 0;
-
-  container::vector<ExprPtr> all_v_terms;
-  for (const auto& [_, terms] : v_groups)
-    for (const auto& t : terms) all_v_terms.push_back(t);
-  container::vector<ExprPtr> all_vps_terms;
-  for (const auto& [_, terms] : vps_groups)
-    for (const auto& t : terms) all_vps_terms.push_back(t);
-
-  for (const auto& [hash, t_terms] : t_groups) {
-    const auto v_it = v_groups.find(hash);
-    if (v_it != v_groups.end() && v_it->second.size() == 3 &&
-        t_terms.size() == 4)
-      ++n_v3_t4;
-
-    std::size_t n_v = 0;
-    std::size_t n_vps = 0;
-    const auto v_pool = v_it != v_groups.end() ? v_it->second : all_v_terms;
-    const auto vps_pool = [&]() -> const container::vector<ExprPtr>& {
-      const auto it = vps_groups.find(hash);
-      return it != vps_groups.end() ? it->second : all_vps_terms;
-    }();
-    for (const auto& t : t_terms) {
-      if (term_matches_pool(t, v_pool)) ++n_v;
-      if (term_matches_pool(t, vps_pool)) ++n_vps;
-    }
-    if (n_v == 4 && n_vps == 0)
-      ++n_from_v_only;
-    else if (n_v == 0 && n_vps == 4)
-      ++n_from_vps_only;
-    else if (n_v > 0 && n_vps > 0)
-      ++n_from_both;
-  }
-
-  std::wcout << L"  [V -> Omega] paper-combine transition:\n";
-  std::wcout << L"    hash groups with V size=3 and Omega size=4: " << n_v3_t4
-             << L" / " << t_groups.size() << L"\n";
-  std::wcout << L"    Omega terms traceable to V pool only: " << n_from_v_only
-             << L" groups\n";
-  std::wcout << L"    Omega terms traceable to V_ps pool only: "
-             << n_from_vps_only << L" groups\n";
-  std::wcout << L"    Omega groups with terms from both V and V_ps: "
-             << n_from_both << L" / " << t_groups.size() << L"\n";
-}
-
 container::svector<container::svector<Index>> unwrap_ext_groups(
     const container::svector<container::svector<SlottedIndex>>& ext_idxs) {
   container::svector<container::svector<Index>> ext_groups;
@@ -693,85 +549,8 @@ class compute_eomcc_closedshell_triplet {
       const auto ext_idxs = external_indices(eqvec[i]);
       const auto ext_groups = unwrap_ext_groups(ext_idxs);
 
-      // Just test ----- os_eom main path: open_shell_CC_spintrace_by_sector +
-      // sum ----- auto os_sectors =
-      // open_shell_CC_spintrace_by_sector(eqvec[i]); const size_t n_cases =
-      // os_sectors.size(); std::wcout << "number of spin cases " << n_cases <<
-      // "\n"; SEQUANT_ASSERT(n_cases >= 2);
-      //
-      // auto summed_spinfree = std::make_shared<Sum>();
-      // for (size_t sc = 0; sc < n_cases; ++sc) {
-      //   ExprPtr stripped = os_sectors[sc]->clone();
-      //   expand(stripped);
-      //   std::wcout << "sc" << sc << "\n";
-      //   std::wcout << "spin-free sector R[" << i << "] has " <<
-      //   stripped->size()
-      //              << " terms\n";
-      //   canonicalize(stripped);
-      //   summed_spinfree->append(stripped);
-      // }
-      //
-      // ExprPtr summed = summed_spinfree;
-      // simplify(summed);
-      // summed = biorthogonal_transform_pre_nnsproject(summed, ext_idxs);
-      // std::wcout << "R[" << i
-      //            << "] open-shell sum (Ŝ NOT expanded): " << summed->size()
-      //            << " terms\n";
-      //
-      // auto singlet_ref = closed_shell_CC_spintrace(
-      //     eqvec[i], {.method = BiorthogonalizationMethod::V2});
-      // simplify(singlet_ref);
-      // std::wcout << "R[" << i << "] reference closed-shell (CC spintrace): "
-      //            << singlet_ref->size() << " terms\n";
-      //
-      // ExprPtr os_singlet = summed->clone();
-      // simplify(os_singlet);
-      // ExprPtr singlet_diff = os_singlet - singlet_ref;
-      // canonicalize(singlet_diff);
-      // simplify(singlet_diff);
-      // std::wcout << "R[" << i << "] (open-shell singlet) - (closed-shell
-      // ref): "
-      //            << singlet_diff->size() << " terms\n";
-
-      // ----- os_eom independent path: spintrace_by_sector -----------------
-      // {
-      //   auto sectors = spintrace_by_sector(eqvec[i], ext_groups);
-      //   std::wcout << L"\n========== R[" << i << L"] per-sector spin trace ("
-      //              << sectors.size() << L" sectors) ==========\n";
-      //   for (auto& [label, sec] : sectors) {
-      //     std::wcout << L"  sector " << label << L": " << sec->size()
-      //                << L" terms, " << count_distinct_hashes(sec->clone())
-      //                << L" distinct hashes\n";
-      //   }
-      //
-      //   auto sector_total = std::make_shared<Sum>();
-      //   for (auto& [label, sec] : sectors)
-      //   sector_total->append(sec->clone());
-      //
-      //   ExprPtr so = eqvec[i]->clone();
-      //   so->visit(
-      //       [](ExprPtr& n) {
-      //         if (n->is<Tensor>()) n->as<Tensor>().reset_tags();
-      //       },
-      //       /*atoms_only=*/true);
-      //   ExprPtr generic =
-      //       spintrace(so, ext_groups, /*spinfree_index_spaces=*/false);
-      //   canonicalize(generic);
-      //   simplify(generic);
-      //   generic = remove_spin(generic, true);
-      //   canonicalize(generic);
-      //   simplify(generic);
-      //
-      //   ExprPtr sector_generic_diff = ExprPtr(sector_total) - generic;
-      //   canonicalize(sector_generic_diff);
-      //   simplify(sector_generic_diff);
-      //   std::wcout << L"  R[" << i << L"] (Σ sectors) - (generic) : "
-      //              << sector_generic_diff->size() << L" terms\n";
-      // }
-
-      // ----- triplet: explicitly spin-coupled basis (Hattig/Kohn/Hald) -----
-      // doubles use the T (x) E coupling; triples the T (x) E (x) E coupling
-      // (18-op perm set, tools/triplet_triples_check.py)
+      // triplet: explicitly spin-coupled basis (Hattig/Kohn/Hald + Faber
+      // paper), with a different approach
       if (N > 3 || ext_groups.size() > 3) {
         std::wcout << "R[" << i
                    << "] triplet: skipped (explicitly spin-coupled triplet "
@@ -780,144 +559,11 @@ class compute_eomcc_closedshell_triplet {
         continue;
       }
 
-      // V_mu = sum over external spin sectors weighted by the sign of the
-      // spin of external group 0 (the line carrying T = E(alpha) - E(beta))
-      auto triplet_sectors =
-          spintrace_by_sector(eqvec[i], ext_groups, /*triplet_R=*/true);
-      auto V_sum = std::make_shared<Sum>();
-      for (size_t sc = 0; sc < triplet_sectors.size(); ++sc) {
-        auto sector = triplet_sectors[sc].second->clone();
-        if (sc & 1u) sector = ex<Constant>(-1) * sector;
-        V_sum->append(sector);
-      }
-      ExprPtr V = V_sum;
-      canonicalize(V);
-      simplify(V);
-
       auto term_count = [](const ExprPtr& e) -> size_t {
         if (e->is<Constant>()) return e->as<Constant>().value() == 0 ? 0 : 1;
         if (e->is<Sum>()) return e->size();
         return 1;
       };
-
-      ExprPtr T_ref;
-      if (ext_groups.size() == 1) {
-        // singles: the rank-1 biorthogonal coefficient (1/2) coincides with
-        // the singlet one
-        T_ref = biorthogonal_transform_pre_nnsproject(V, ext_idxs);
-      } else if (ext_groups.size() == 3) {
-        // triples: P3 = (1/80)[6 V - V_ps01 - V_ps02 + 2 V_ks12] with an
-        // extra 1/2 (metric idempotency: 36 ordered labels cover the 18-op
-        // perm 2:1) -> 1/160 (tools/triplet_triples_check.py, checks 2+6)
-        const auto& g0 = ext_idxs.at(0);
-        const auto& g1 = ext_idxs.at(1);
-        const auto& g2 = ext_idxs.at(2);
-        const std::array<Index, 3> b{get_bra_idx(g0), get_bra_idx(g1),
-                                     get_bra_idx(g2)};
-        const std::array<Index, 3> k{get_ket_idx(g0), get_ket_idx(g1),
-                                     get_ket_idx(g2)};
-        auto whole_pair_swap = [&](int m, int n) {
-          return container::map<Index, Index>{
-              {b[m], b[n]}, {b[n], b[m]}, {k[m], k[n]}, {k[n], k[m]}};
-        };
-        const container::map<Index, Index> ket_swap_12{{k[1], k[2]},
-                                                       {k[2], k[1]}};
-
-        // null-space identity: the sum over the whole 18-op perm set (as the 36
-        // independent bra x ket external permutations, a 2:1 cover) vanishes
-        // -- the rank-3 analog of V + V_ps + V_bs + V_ks = 0
-        {
-          constexpr std::array<std::array<int, 3>, 6> s3{{{0, 1, 2},
-                                                          {0, 2, 1},
-                                                          {1, 0, 2},
-                                                          {1, 2, 0},
-                                                          {2, 0, 1},
-                                                          {2, 1, 0}}};
-          auto perm_sum = std::make_shared<Sum>();
-          for (const auto& pb : s3) {
-            for (const auto& pk : s3) {
-              container::map<Index, Index> m;
-              for (int n = 0; n != 3; ++n) {
-                if (pb[n] != n) m.emplace(b[n], b[pb[n]]);
-                if (pk[n] != n) m.emplace(k[n], k[pk[n]]);
-              }
-              perm_sum->append(m.empty() ? V->clone() : transform_expr(V, m));
-            }
-          }
-          ExprPtr null_check = perm_sum;
-          canonicalize(null_check);
-          simplify(null_check);
-          std::wcout << "R[" << i
-                     << "] triplet triples null-space identity (Σ 18-op "
-                        "perm set): "
-                     << term_count(null_check) << " terms (expect 0)\n";
-          runtime_assert(term_count(null_check) == 0);
-        }
-
-        ExprPtr V_ps01 = transform_expr(V, whole_pair_swap(0, 1));
-        ExprPtr V_ps02 = transform_expr(V, whole_pair_swap(0, 2));
-        ExprPtr V_ks12 = transform_expr(V, ket_swap_12);
-        T_ref =
-            ex<Constant>(ratio(1, 160)) *
-            (ex<Constant>(6) * V - V_ps01 - V_ps02 + ex<Constant>(2) * V_ks12);
-      } else {
-        // assemble the paper-native combined R2 residual (Eqs. 7-8, 1/8):
-        //   V^{(1)} = (1/8)(V + V_{pair-swap}), V^{(2)} = (1/8)(V -
-        //   V_{pair-swap}), Omega = (1/2) V^{(1)} + V^{(2)} = (3V -
-        //   V_{pair-swap})/16
-        const auto& g0 = ext_idxs.at(0);
-        const auto& g1 = ext_idxs.at(1);
-        const Index b0 = get_bra_idx(g0);
-        const Index b1 = get_bra_idx(g1);
-        const Index k0 = get_ket_idx(g0);
-        const Index k1 = get_ket_idx(g1);
-        const container::map<Index, Index> swap_pair{
-            {b0, b1}, {b1, b0}, {k0, k1}, {k1, k0}};
-        const container::map<Index, Index> swap_bra{{b0, b1}, {b1, b0}};
-        const container::map<Index, Index> swap_ket{{k0, k1}, {k1, k0}};
-
-        ExprPtr V_ps = transform_expr(V, swap_pair);
-
-        ExprPtr null_check = V->clone() + V_ps->clone() +
-                             transform_expr(V, swap_bra) +
-                             transform_expr(V, swap_ket);
-        canonicalize(null_check);
-        simplify(null_check);
-        std::wcout << "R[" << i
-                   << "] triplet null-space identity (V + V_ps + V_bs + "
-                      "V_ks): "
-                   << term_count(null_check) << " terms (expect 0)\n";
-        runtime_assert(term_count(null_check) == 0);
-
-        ExprPtr V_ch1 = ex<Constant>(ratio(1, 8)) * (V + V_ps);
-        ExprPtr V_ch2 = ex<Constant>(ratio(1, 8)) * (V - V_ps);
-        T_ref = ex<Constant>(ratio(1, 2)) * V_ch1 + V_ch2;
-      }
-      simplify(T_ref);
-      std::wcout << "R[" << i
-                 << "] triplet (reference assembly): " << term_count(T_ref)
-                 << " terms, and " << count_distinct_hashes(T_ref->clone())
-                 << " distinct hashes\n";
-
-      if (hashgroups_ && ext_groups.size() == 2) {
-        const auto& g0 = ext_idxs.at(0);
-        const auto& g1 = ext_idxs.at(1);
-        const container::map<Index, Index> pair_swap{
-            {get_bra_idx(g0), get_bra_idx(g1)},
-            {get_bra_idx(g1), get_bra_idx(g0)},
-            {get_ket_idx(g0), get_ket_idx(g1)},
-            {get_ket_idx(g1), get_ket_idx(g0)}};
-
-        std::wcout
-            << L"\n========== R[" << i
-            << L"] hash-group diagnostics (triplet doubles) ==========\n";
-        dump_hash_groups(L"V (sector sum)", V, ext_idxs, 5, 4);
-        analyze_group_recovery(L"V (sector sum)", V, ext_idxs, 3);
-
-        dump_hash_groups(L"T_ref (paper Omega)", T_ref, ext_idxs, 5, 4);
-        analyze_group_recovery(L"T_ref (paper Omega)", T_ref, ext_idxs, 4);
-        analyze_v_to_omega_transition(V, T_ref, pair_swap);
-      }
 
       try {
         const auto tstart = std::chrono::high_resolution_clock::now();
@@ -925,21 +571,12 @@ class compute_eomcc_closedshell_triplet {
             eqvec[i], {.method = BiorthogonalizationMethod::V2});
         const auto tstop = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> dt = tstop - tstart;
-
-        ExprPtr T_diff = st - T_ref;
-        canonicalize(T_diff);
-        simplify(T_diff);
         std::wcout << "R[" << i
                    << "] closed_shell_EOM_triplet_spintrace: " << st->size()
                    << " terms, and " << count_distinct_hashes(st->clone())
                    << " distinct hashes, and time: " << dt.count() << " s\n";
-        std::wcout << "R[" << i
-                   << "] (production triplet) - (reference assembly): "
-                   << term_count(T_diff) << " terms (expect 0)\n";
-        runtime_assert(term_count(T_diff) == 0);
 
-        // validated term counts of the production triplet residual; pinning
-        // `st` also pins T_ref, since the two were just asserted equal
+        // validated term counts of the production triplet residual
         const auto n_st = term_count(st);
         if (N == 2 && type == EqnType::right) {
           if (np == 2 && nh == 2) {  // triplet EOM-CCSD(2h2p)
@@ -955,36 +592,50 @@ class compute_eomcc_closedshell_triplet {
           }
         }
 
-        // compact + te/ter experiment knobs are defined for the CCSD doubles
-        // study only; in an N >= 3 theory even the doubles residual contains
-        // rank-3 R amplitudes which those knobs do not support
-        if (ext_groups.size() == 2 && N <= 2) {
-          auto compact = closed_shell_EOM_triplet_spintrace(
+        // compact residual + symbolic reconstruction
+        // defined for the rank-2 and rank-3 manifolds (doubles:
+        // the -3c member of each {c,c,c,-3c} group; triples: one
+        // scaled member per 36 slot perms). The singles residual
+        // has nothing to compact (one term per hash group, with factor 1/2).
+        ExprPtr compact;
+        if (ext_groups.size() == 2 || ext_groups.size() == 3) {
+          const auto cstart = std::chrono::high_resolution_clock::now();
+          compact = closed_shell_EOM_triplet_spintrace(
               eqvec[i], {.method = BiorthogonalizationMethod::V2,
                          .triplet_doubles_compact = true});
-          const ExprPtr recon =
-              triplet_symbolic_reconstruct(compact, ext_groups);
-          runtime_assert(recon == st);
-          if (recon == st) {
-            std::wcout << "recon == st\n";
-          }
-
+          const auto cstop = std::chrono::high_resolution_clock::now();
+          std::chrono::duration<double> cdt = cstop - cstart;
           std::wcout << "R[" << i
                      << "] triplet compact (WK factor): " << term_count(compact)
-                     << " terms\n";
+                     << " terms, and "
+                     << count_distinct_hashes(compact->clone())
+                     << " distinct hashes, and time: " << cdt.count() << " s\n";
 
-          // ===== EFV experiment: bare-TE residual =================
-          // te_only: drop the external pair-swap TE_ps -> residual = TE/4.
-          // ter_only: also drop the column-swapped R amplitude partner.
+          const ExprPtr recon =
+              triplet_symbolic_reconstruct(compact, ext_groups);
+          ExprPtr recon_diff = recon->clone() - st->clone();
+          canonicalize(recon_diff);
+          simplify(recon_diff);
+          std::wcout << "R[" << i
+                     << "] reconstruct(compact): " << term_count(recon)
+                     << " terms; reconstruct - full: " << term_count(recon_diff)
+                     << " terms (expect 0)\n";
+          if (term_count(recon_diff) > 0)
+            report_reconstruction_mismatch(recon_diff, st, compact);
+          runtime_assert(term_count(recon_diff) == 0);
+        }
+
+        // ===== EFV experiment: bare-TE residual (CCSD doubles only for now)
+        // ===== te_only is a doubles-only method for now; in an N >= 3 theory
+        // even the doubles residual contains rank-3 R amplitudes it does not
+        // support.
+        if (ext_groups.size() == 2 && N <= 2) {
+          // te_only: drop the external pair-swap TE_ps (or we can say ET)->
+          // residual = TE/4.
           auto te_a = closed_shell_EOM_triplet_spintrace(
               eqvec[i], {.method = BiorthogonalizationMethod::V2,
                          .triplet_te_only = true});
-          auto te_ab = closed_shell_EOM_triplet_spintrace(
-              eqvec[i], {.method = BiorthogonalizationMethod::V2,
-                         .triplet_te_only = true,
-                         .triplet_amp_no_swap = true});
           simplify(te_a);
-          simplify(te_ab);
 
           std::wcout << "\n----- EFV experiment (TE-only) comparison R[" << i
                      << "] -----\n";
@@ -999,22 +650,10 @@ class compute_eomcc_closedshell_triplet {
           std::wcout << "  TE-only                 : " << term_count(te_a)
                      << " terms, " << count_distinct_hashes(te_a->clone())
                      << " distinct hashes\n";
-          std::wcout << "  TE-only + no R_swap  : " << term_count(te_ab)
-                     << " terms, " << count_distinct_hashes(te_ab->clone())
-                     << " distinct hashes\n";
-          ExprPtr ab_diff = te_a->clone() - te_ab->clone();
-          canonicalize(ab_diff);
-          simplify(ab_diff);
-          std::wcout << "  te_only vs ter_only (te_a - te_ab)     : "
-                     << term_count(ab_diff)
-                     << " terms (0 => R_only is a no-op on the residual)\n";
 
-          if (hashgroups_ && ext_groups.size() == 2) {
-            std::wcout << "hashgroups for ter_only\n";
-            dump_hash_groups(L"te_ab (TE-only, no R_swap)", te_ab, ext_idxs, 5,
-                             4);
-            analyze_group_recovery(L"te_ab (TE-only, no R_swap)", te_ab,
-                                   ext_idxs, 4);
+          if (hashgroups_) {
+            dump_hash_groups(L"te_a (TE-only)", te_a, ext_idxs, 5, 4);
+            analyze_group_recovery(L"te_a (TE-only)", te_a, ext_idxs, 4);
           }
 
           // external single/pair swap maps on the projector (mu) indices
@@ -1029,22 +668,9 @@ class compute_eomcc_closedshell_triplet {
           const container::map<Index, Index> e_swap_pair{
               {b0, b1}, {b1, b0}, {k0, k1}, {k1, k0}};
 
-          // Sanity identity: Omega == TE/4 + (TE_bs + TE_ks)/16.
-          // (Uses the null-space identity TE + TE_ps + TE_bs + TE_ks = 0.)
-          ExprPtr V_bs = transform_expr(V, e_swap_bra);
-          ExprPtr V_ks = transform_expr(V, e_swap_ket);
-          ExprPtr identity_check =
-              st->clone() - (ex<Constant>(ratio(1, 4)) * V->clone() +
-                             ex<Constant>(ratio(1, 16)) * (V_bs + V_ks));
-          canonicalize(identity_check);
-          simplify(identity_check);
-          std::wcout << "  sanity: Omega - [TE/4 + (TE_bs+TE_ks)/16] = "
-                     << term_count(identity_check) << " terms (expect 0)\n";
-          runtime_assert(term_count(identity_check) == 0);
-
-          // POSTPROCESSING test (user's idea): TE-only lives in the same 135
-          // hash groups as Omega, so a Klein-four postprocessing should rebuild
-          // Omega. Since te_a == TE/4, the sanity identity becomes
+          // POSTPROCESSING test: TE-only lives in the same 135
+          // hash groups as Omega, so a postprocessing should rebuild
+          // Omega via the null-space identity TE + TE_ps + TE_bs + TE_ks = 0:
           //   Omega == te_a + (1/4)( bra_swap(te_a) + ket_swap(te_a) ).
           ExprPtr te_recon =
               te_a->clone() +
@@ -1056,42 +682,6 @@ class compute_eomcc_closedshell_triplet {
           std::wcout << "  postproc: Omega - [te_a + 1/4(bs+ks)te_a] = "
                      << term_count(te_recon_diff) << " terms (expect 0)\n";
           runtime_assert(term_count(te_recon_diff) == 0);
-
-          // ===== TER-only (te_ab, R-only) reconstructability ================
-          // Does ANY Klein-four postprocessing rebuild Omega from te_ab?
-          // Fit Omega in span{te_ab, bs te_ab, ks te_ab, ps te_ab}; residual ~0
-          // => a kernel exists (weights printed), else te_ab is NOT
-          // Klein-four-reconstructable (dropped R_swap is unrecoverable).
-          std::wcout << "\n  --- TER-only (R-only) reconstructability ---\n";
-          ExprPtr ter_naive = st->clone() - te_ab->clone();
-          canonicalize(ter_naive);
-          simplify(ter_naive);
-          std::wcout << "  raw  : Omega - te_ab            = "
-                     << term_count(ter_naive) << " terms\n";
-
-          ExprPtr ter_kA =
-              st->clone() -
-              (te_ab->clone() +
-               ex<Constant>(ratio(1, 4)) * (transform_expr(te_ab, e_swap_bra) +
-                                            transform_expr(te_ab, e_swap_ket)));
-          canonicalize(ter_kA);
-          simplify(ter_kA);
-          std::wcout << "  kА   : Omega - [te_ab+1/4(bs+ks)te_ab] = "
-                     << term_count(ter_kA) << " terms\n";
-
-          const std::vector<ExprPtr> ter_basis{
-              te_ab->clone(), transform_expr(te_ab, e_swap_bra),
-              transform_expr(te_ab, e_swap_ket),
-              transform_expr(te_ab, e_swap_pair)};
-          const auto fit = fit_in_span(ter_basis, st);
-          std::wcout << "  fit  : Omega = a*te_ab + b*bs + c*ks + d*ps, "
-                     << "weights {a,b,c,d} = {" << fit.weights.at(0) << ", "
-                     << fit.weights.at(1) << ", " << fit.weights.at(2) << ", "
-                     << fit.weights.at(3)
-                     << "}, max|resid| = " << fit.max_residual << "\n";
-          std::wcout << "  => TER-only "
-                     << (fit.max_residual < 1e-9 ? "IS" : "is NOT")
-                     << " Klein-four reconstructable\n";
 
           // What TE-only drops (raw, expected nonzero): D = Omega - TE/4.
           ExprPtr D = st->clone() - te_a->clone();
@@ -1122,7 +712,7 @@ class compute_eomcc_closedshell_triplet {
           std::wcout << "-----------------------------------------------\n";
         }
 
-        if (hashgroups_ && ext_groups.size() == 2) {
+        if (hashgroups_ && ext_groups.size() <= 3) {
           dump_hash_groups(L"st (production spintrace)", st, ext_idxs, 5, 4);
           analyze_group_recovery(L"st (production spintrace)", st, ext_idxs, 4);
         }

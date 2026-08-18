@@ -15,7 +15,7 @@ if (NOT !SEQUANT_INTERNAL_SKIP_LONG_TESTS)
         "eomcc.cpp -> 2 2h2p R|2 1h2p R|2 2h1p R|2 3h1p R|2 1h3p R|2 4h2p R|3 3h3p R"
             "os_eom.cpp"
             "singletCSeom.cpp -> 2 2h2p R"
-            "tripletCSeom.cpp -> 2 2h2p R"
+            "tripletCSeom.cpp -> 2 2h2p R|3 3h3p R"
     )
 
     if (TARGET Eigen3::Eigen)
