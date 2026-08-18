@@ -269,9 +269,9 @@ struct ResultObjectLess {
   }
 };
 
-/// Invokes @p visitor on every Tensor and Variable that is (or is the base of)
-/// the terminal expression @p leaf. If @p visitor returns a non-null ExprPtr,
-/// it replaces the visited object.
+/// Invokes @p visitor (taking a `const Expr &`) on every Tensor and Variable
+/// that is (or is the base of) the terminal expression @p leaf. If @p visitor
+/// returns a non-null ExprPtr, it replaces the visited object.
 /// @returns The (potentially new) expression representing @p leaf
 ///
 /// An adjoint-marked tensor is visited in its bare (non-adjoint) form and the
@@ -282,7 +282,7 @@ ExprPtr map_leaf_objects(const ExprPtr &leaf, Visitor &&visitor) {
     Tensor bare = leaf->as<Tensor>();
     bare.adjoint();
 
-    ExprPtr replacement = visitor(ex<Tensor>(std::move(bare)));
+    ExprPtr replacement = visitor(std::as_const(bare));
     if (!replacement) {
       return leaf;
     }
@@ -292,14 +292,14 @@ ExprPtr map_leaf_objects(const ExprPtr &leaf, Visitor &&visitor) {
   }
 
   if (leaf->is<Tensor>() || leaf->is<Variable>()) {
-    ExprPtr replacement = visitor(leaf);
+    ExprPtr replacement = visitor(std::as_const(*leaf));
     return replacement ? replacement : leaf;
   }
 
   if (leaf->is<Power>()) {
     const Power &power = leaf->as<Power>();
     if (power.base()->is<Tensor>() || power.base()->is<Variable>()) {
-      ExprPtr replacement = visitor(power.base());
+      ExprPtr replacement = visitor(*power.base());
       if (replacement) {
         auto result = ex<Power>(std::move(replacement), power.exponent());
         if (power.conjugated()) {
@@ -692,14 +692,14 @@ NameRecyclingResult recycle_intermediate_names(
     TreeBindings &current = bindings[i];
 
     (void)to_expr(tree, [&](const ExprPtr &leaf) {
-      return detail::map_leaf_objects(leaf, [&](const ExprPtr &object) {
+      return detail::map_leaf_objects(leaf, [&](const Expr &object) {
         if (auto it = current_values.find(object); it != current_values.end()) {
           Value &value = values.at(it->second);
           value.last_use =
               std::max(value.last_use, live_until(i, value.first_def));
-          current.uses.emplace(object, it->second);
+          current.uses.emplace(object.clone(), it->second);
         } else {
-          reserved.emplace(detail::result_label(*object));
+          reserved.emplace(detail::result_label(object));
         }
         return ExprPtr{};
       });
@@ -815,14 +815,14 @@ NameRecyclingResult recycle_intermediate_names(
   stats.num_names = used_names.size();
 
   // 3. Rewrite trees
-  auto rename_object = [&](const ExprPtr &object, const Value &value) {
-    if (object->is<Tensor>()) {
-      return ex<Tensor>(detail::relabeled(object->as<Tensor>(),
+  auto rename_object = [&](const Expr &object, const Value &value) {
+    if (object.is<Tensor>()) {
+      return ex<Tensor>(detail::relabeled(object.as<Tensor>(),
                                           detail::result_label(*value.renamed),
                                           value.slot_map));
     }
     return ex<Variable>(detail::relabeled(
-        object->as<Variable>(), detail::result_label(*value.renamed)));
+        object.as<Variable>(), detail::result_label(*value.renamed)));
   };
 
   auto needs_renaming = [&](std::size_t value) {
@@ -845,7 +845,7 @@ NameRecyclingResult recycle_intermediate_names(
     TreeNode &tree = tree_at(i);
 
     ExprPtr expression = to_expr(tree, [&](const ExprPtr &leaf) {
-      return detail::map_leaf_objects(leaf, [&](const ExprPtr &object) {
+      return detail::map_leaf_objects(leaf, [&](const Expr &object) {
         auto it = current.uses.find(object);
         if (it == current.uses.end() || !needs_renaming(it->second)) {
           return ExprPtr{};
@@ -856,7 +856,7 @@ NameRecyclingResult recycle_intermediate_names(
 
     ExprPtr result = tree->expr();
     if (rename_result) {
-      result = rename_object(result, values.at(*current.defines));
+      result = rename_object(*result, values.at(*current.defines));
     }
 
     TreeNode rebuilt = [&]() {
