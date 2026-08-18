@@ -1904,7 +1904,9 @@ TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
   //     peak_threshold: the default +inf would pick the min-flops schedule
   //     regardless of the gate (flops do not depend on which nodes may be
   //     sliced), masking the effect the gate is meant to demonstrate.
-  CostParams po_cost{is_t, 100.0, 0.0};
+  CostParams po_cost{.is_volatile_leaf = is_t,
+                     .volatile_weight = 100.0,
+                     .footprint_weight = 0.0};
   po_cost.peak_threshold = 1.0;  // near-zero => infeasible => min-peak fallback
   po_cost.is_batchable_contracted_index = is_batch;
   po_cost.batch_target_size = bts;
@@ -2219,7 +2221,9 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
   CHECK(tbat_w == flops_w);
   // Even with a near-zero peak budget, perf-first stays flop-optimal (threshold
   // is not a feasibility gate), unlike peak-first's min-peak fallback.
-  CostParams tight{is_t, 100.0, 0.0};
+  CostParams tight{.is_volatile_leaf = is_t,
+                   .volatile_weight = 100.0,
+                   .footprint_weight = 0.0};
   tight.peak_threshold = 1.0;
   tight.is_batchable_contracted_index = is_batch;
   tight.batch_target_size = bts;
@@ -2396,7 +2400,9 @@ TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
     // needs a near-zero peak_threshold to force the min-peak fallback path
     // (the default +inf would instead pick purely by flops, masking the
     // crossover this test demonstrates).
-    CostParams cost{{}, 1.0, 0.0, 0.0, {}, lambda};
+    CostParams cost{.volatile_weight = 1.0,
+                    .peak_flops_tolerance = 0.0,
+                    .accumulation_factor = lambda};
     cost.peak_threshold = 1.0;
     cost.is_batchable_contracted_index = is_batch;
     cost.batch_target_size = bts;
@@ -2439,7 +2445,10 @@ TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
     std::function<std::size_t(Index const&)> bts = [Kb](Index const&) {
       return Kb;
     };
-    CostParams cost{is_t, 100.0, 0.0, 0.10, {}, 0.0};
+    CostParams cost{.is_volatile_leaf = is_t,
+                    .volatile_weight = 100.0,
+                    .footprint_weight = 0.0,
+                    .peak_flops_tolerance = 0.10};
     cost.peak_threshold = 1.0;
     cost.is_batchable_contracted_index = is_batch;
     cost.batch_target_size = bts;
@@ -2541,7 +2550,9 @@ TEST_CASE(
     std::function<std::size_t(Index const&)> bts = [Kb](Index const&) {
       return Kb;
     };
-    CostParams cost{is_t, 100.0, 0.0};
+    CostParams cost{.is_volatile_leaf = is_t,
+                    .volatile_weight = 100.0,
+                    .footprint_weight = 0.0};
     cost.peak_threshold = peak_threshold;
     cost.is_batchable_contracted_index = is_batch;
     cost.batch_target_size = bts;
@@ -2575,7 +2586,9 @@ TEST_CASE(
     std::function<std::size_t(Index const&)> bts = [Kb](Index const&) {
       return Kb;
     };
-    CostParams cost{is_t, 100.0, 0.0};
+    CostParams cost{.is_volatile_leaf = is_t,
+                    .volatile_weight = 100.0,
+                    .footprint_weight = 0.0};
     cost.peak_threshold = peak_threshold;
     cost.is_batchable_contracted_index = is_batch;
     cost.batch_target_size = bts;

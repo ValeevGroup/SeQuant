@@ -700,7 +700,7 @@ TEST_CASE("csv_equivalent_tn_merge", "[algorithms][csv-canon]") {
   // like-term merging cannot collapse the 2^N flavor Cartesian product.
   using namespace sequant;
   auto sr_reg = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
-  mbpt::add_pao_spaces(sr_reg);  // μ̃
+  mbpt::add_pao_spaces(sr_reg, mbpt::Spin::any);  // μ̃
   Context ctx = get_default_context();
   ctx.set(sr_reg);
   ctx.set(AssertStrictBraKetSymmetry::No);
@@ -987,7 +987,7 @@ TEST_CASE("tot_conjugate_braket_fold", "[algorithms][csv-canon]") {
   // backend already implements adjoint() (conj recurses into nested tiles).
   using namespace sequant;
   auto sr_reg = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
-  mbpt::add_pao_spaces(sr_reg);  // μ̃
+  mbpt::add_pao_spaces(sr_reg, mbpt::Spin::any);  // μ̃
   Context ctx = get_default_context();
   ctx.set(sr_reg);
   ctx.set(AssertStrictBraKetSymmetry::No);
