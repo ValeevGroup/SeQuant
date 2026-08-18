@@ -38,6 +38,7 @@ class ExprContainer {
   ExprContainer &operator+=(const Expr &expr);
   ExprContainer &operator-=(const Expr &expr);
   ExprContainer &operator*=(const Expr &expr);
+  ExprContainer &operator^=(const Expr &expr);
 
   friend void swap(ExprContainer &, ExprContainer &);
 
@@ -52,6 +53,7 @@ class ExprContainer {
 ExprContainer operator+(const Expr &lhs, const Expr &rhs);
 ExprContainer operator-(const Expr &lhs, const Expr &rhs);
 ExprContainer operator*(const Expr &lhs, const Expr &rhs);
+ExprContainer operator^(const Expr &lhs, const Expr &rhs);
 
 }  // namespace sequant
 
