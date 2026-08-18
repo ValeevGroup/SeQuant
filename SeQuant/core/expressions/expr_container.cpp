@@ -195,4 +195,12 @@ ExprContainer operator^(const Expr &lhs, const ExprContainer &rhs) {
   return lhs ^ static_cast<const Expr &>(rhs);
 }
 
+bool operator==(const ExprContainer &lhs, const ExprPtr &rhs) {
+  return *lhs == *rhs;
+}
+
+bool operator==(const ExprPtr &lhs, const ExprContainer &rhs) {
+  return *lhs == *rhs;
+}
+
 }  // namespace sequant
