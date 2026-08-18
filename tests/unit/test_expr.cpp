@@ -1237,6 +1237,24 @@ TEST_CASE("expr", "[elements]") {
 
       REQUIRE_THAT(res, EquivalentTo("(1 + A - B) * 3"));
     }
+    SECTION("Conversion to ExprPtr") {
+      ExprContainer cont = Constant(3);
+
+      ExprPtr ptr = std::move(cont);
+      REQUIRE(ptr->is<Constant>());
+      REQUIRE(ptr->as<Constant>().value() == 3);
+
+      cont = Variable("A");
+      // Copy-conversion-ctor is explicit
+      ptr = ExprPtr(cont);
+      REQUIRE(ptr->is<Variable>());
+      REQUIRE(ptr->as<Variable>().label() == L"A");
+
+      // Ensure that ptr actually points to a copy
+      ptr->as<Variable>().set_label(L"B");
+      REQUIRE(cont->as<Variable>().label() == L"A");
+      REQUIRE(ptr->as<Variable>().label() == L"B");
+    }
   }
 
   SECTION("ResultExpr") {
