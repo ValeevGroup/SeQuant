@@ -4,6 +4,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
+#include <SeQuant/core/expressions/expr_container.hpp>
 #include <SeQuant/core/expressions/expr_iterator.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/product.hpp>
@@ -109,13 +110,13 @@ class Sum : public Expr {
   /// offset
   ExprPtr take_n(size_t offset, size_t count) const;
 
-  /// @tparam Filter a boolean predicate type, such `Filter(const ExprPtr&)`
-  /// evaluates to true
-  /// @param f an object of Filter type
-  /// Selects elements {`e`} for which `f(e)` is true
-  template <typename Filter>
+  /// @param f Boolean predicate
+  /// @returns A sum containing only the summands for which f was true.
+  template <std::predicate<const Expr &> Filter>
   ExprPtr filter(Filter &&f) const {
-    return ex<Sum>(summands_ | ranges::views::filter(f));
+    return ex<Sum>(summands_ |
+                   ranges::views::transform([](const auto &e) { return *e; }) |
+                   ranges::views::filter(f));
   }
 
   /// @return true if the number of factors is zero
