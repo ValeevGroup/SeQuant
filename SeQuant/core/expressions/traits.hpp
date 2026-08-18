@@ -4,6 +4,9 @@
 #include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/meta.hpp>
 
+#include <concepts>
+#include <type_traits>
+
 namespace sequant {
 
 template <typename T>
@@ -35,6 +38,10 @@ template <typename T>
 constexpr bool is_a_power_v = meta::is_base_of_v<Power, T>;
 template <typename T>
 constexpr bool is_power_v = meta::is_same_v<Power, T>;
+
+template <typename T>
+concept expr_holder = std::same_as<std::remove_cvref_t<T>, ExprPtr> ||
+                      std::same_as<std::remove_cvref_t<T>, ExprContainer>;
 
 }  // namespace sequant
 
