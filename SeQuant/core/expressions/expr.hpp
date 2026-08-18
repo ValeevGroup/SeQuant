@@ -98,10 +98,12 @@ class Expr : public std::enable_shared_from_this<Expr> {
   /// of this object wrapped into ExprPtr
   [[deprecated("Expr objects may no longer be managed by shared_ptr")]] ExprPtr
   exprptr_from_this() {
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     if (weak_from_this().use_count() == 0)
       return this->clone();
     else
       return static_cast<ExprPtr>(this->shared_from_this());
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   }
 
   /// like Expr::shared_from_this, but returns ExprPtr
@@ -110,11 +112,13 @@ class Expr : public std::enable_shared_from_this<Expr> {
   /// of this object wrapped into ExprPtr
   [[deprecated("Expr objects may no longer be managed by shared_ptr")]] ExprPtr
   exprptr_from_this() const {
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     if (weak_from_this().use_count() == 0)
       return this->clone();
     else
       return static_cast<const ExprPtr>(
           std::const_pointer_cast<Expr>(this->shared_from_this()));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   }
 
   /// Canonicalizes @c this and returns the byproduct of canonicalization (e.g.
