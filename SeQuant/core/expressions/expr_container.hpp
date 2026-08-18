@@ -8,6 +8,7 @@
 namespace sequant {
 
 class Expr;
+class ExprPtr;
 
 class ExprContainer {
  public:
@@ -16,6 +17,8 @@ class ExprContainer {
 
   explicit ExprContainer(const Expr &expr);
   ExprContainer(Expr &&expr);
+
+  explicit ExprContainer(const ExprPtr &ptr);
 
   ExprContainer &operator=(const ExprContainer &container);
   ExprContainer &operator=(ExprContainer &&container) = default;
