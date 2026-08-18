@@ -796,17 +796,18 @@ TEST_CASE("csv_equivalent_tn_merge", "[algorithms][csv-canon]") {
   }
 }
 
-TEST_CASE("csv_proto_dummy_fold", "[algorithms][csv-canon][!shouldfail]") {
+TEST_CASE("csv_proto_dummy_fold", "[algorithms][csv-canon]") {
   // Reproducer for the CSV/PNS term-count inflation (MPQC Kramers-traced
   // energy): two terms identical under the dummy exchange i_1 <-> i_2 -- the
   // symmetric proto bundle <i_1,i_2> maps onto itself, the g/t occupied legs
-  // map onto each other -- MUST canonicalize identically so like-term merging
-  // can fold them. Today they do NOT: in term A the bundle member i_1 occurs
-  // only as decoration and is promoted to a named (non-renameable) index by
-  // TensorNetworkV3::init_edges (pure-proto promotion), in term B it is i_2
-  // that gets pinned, so the canonical forms retain different labels.
-  // [!shouldfail] documents the current defect; drop the tag once bundle
-  // members rename with their legs.
+  // map onto each other -- must canonicalize identically so like-term merging
+  // can fold them. By default they do NOT: in term A the bundle member i_1
+  // occurs only as decoration and is promoted to a named (non-renameable)
+  // index by TensorNetworkV3::init_edges (pure-proto promotion), in term B it
+  // is i_2 that gets pinned, so the canonical forms retain different labels.
+  // That pinning is correct when a pure proto is a meaningful dependent-range
+  // parameter, so renaming bundle members with their legs is opt-in:
+  // CanonicalizeOptions::RenamePureProtoIndices::Yes.
   using namespace sequant;
   auto sr_reg = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
   Context ctx = get_default_context();
@@ -823,16 +824,20 @@ TEST_CASE("csv_proto_dummy_fold", "[algorithms][csv-canon][!shouldfail]") {
       L"g{a_1<i_1,i_2>,a_2<i_1,i_2>;i_1,i_3}:N-C-S"
       L" * t{i_1,i_3;a_1<i_1,i_2>,a_2<i_1,i_2>}:N-C-S";
 
-  auto canon_str = [](std::wstring s) {
+  const auto opts =
+      CanonicalizeOptions::default_options()
+          .copy_and_set(CanonicalizeOptions::IgnoreNamedIndexLabel::No)
+          .copy_and_set(CanonicalizeOptions::RenamePureProtoIndices::Yes);
+
+  auto canon_str = [](std::wstring s, CanonicalizeOptions o) {
     auto e = deserialize(s);
     REQUIRE(e);
-    canonicalize(e, CanonicalizeOptions::default_options().copy_and_set(
-                        CanonicalizeOptions::IgnoreNamedIndexLabel::No));
+    canonicalize(e, o);
     return toUtf8(to_latex(e));
   };
 
   SECTION("canonical forms equal") {
-    auto A = canon_str(sA), B = canon_str(sB);
+    auto A = canon_str(sA, opts), B = canon_str(sB, opts);
     INFO("canon(A) = " << A);
     INFO("canon(B) = " << B);
     CHECK(A == B);
@@ -843,10 +848,19 @@ TEST_CASE("csv_proto_dummy_fold", "[algorithms][csv-canon][!shouldfail]") {
     REQUIRE(exB);
     std::vector<ExprPtr> summands{exA, exB};
     auto merged = transform_sum_expr(
-        summands, [](ExprPtr const& x) { return x->clone(); });
+        summands, [](ExprPtr const& x) { return x->clone(); },
+        {.canonicalize_options = opts});
     INFO("merged = " << toUtf8(to_latex(merged)));
     REQUIRE(merged->is<Product>());
     CHECK(merged->as<Product>().scalar() == rational{2});
+  }
+  SECTION("default keeps dependent-range pure protos pinned") {
+    // without the opt-in the pure proto keeps its input label: pinning is
+    // load-bearing for genuine dependent-range (PNO/F12-style) usage
+    auto A = canon_str(sA, CanonicalizeOptions::default_options().copy_and_set(
+                               CanonicalizeOptions::IgnoreNamedIndexLabel::No));
+    INFO("canon_default(A) = " << A);
+    CHECK(A.find("i_1") != std::string::npos);
   }
 }
 

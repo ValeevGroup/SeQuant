@@ -472,12 +472,16 @@ class TensorNetworkV3 {
   /// @param named_indices named indices
   /// @param ignore_named_index_labels whether to ignore labels of named
   /// indices, see CanonicalizeOptions for more info
+  /// @param rename_pure_proto_indices whether pure proto indices that are
+  /// not protos of a named index are demoted to anonymous and renamed in
+  /// canonical order together with the other dummies, see
+  /// CanonicalizeOptions::RenamePureProtoIndices
   /// @return The byproduct of canonicalization
   /// @note this produces canonical representation that is invariant with
   /// respect to the renaming of named indices
   [[nodiscard]] ExprPtr canonicalize_graph(
-      const NamedIndexSet &named_indices,
-      bool ignore_named_index_labels = true);
+      const NamedIndexSet &named_indices, bool ignore_named_index_labels = true,
+      bool rename_pure_proto_indices = false);
 
   /// Canonicalizes every individual tensor for itself, taking into account only
   /// tensor blocks
