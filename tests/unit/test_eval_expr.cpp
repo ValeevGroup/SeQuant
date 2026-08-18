@@ -13,7 +13,6 @@
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <initializer_list>
-#include <iostream>
 #include <memory>
 #include <set>
 #include <string>
@@ -559,7 +558,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
   }
 }
 
-// B2: the opt-in exploit_conjugate path folds the two bra<->ket orientations of
+// The opt-in exploit_conjugate path folds the two bra<->ket orientations of
 // a BraKetSymmetry::Conjugate leaf onto one cached value, serving the
 // conjugated orientation via an EvalOp::Adjoint wrapper (pure conjugation, no
 // transpose) so the two share a cache slot. Off by default = historical

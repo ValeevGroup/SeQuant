@@ -252,15 +252,22 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV1,
         // in via exploit_conjugate. Default keeps Conjugate bra/ket distinctly
         // colored (no fold, no conj), mirroring historical behavior.
         const auto cardinal = TensorCanonicalizer::cardinal_tensor_labels();
-        auto md = [&cardinal](const std::wstring& s, bool exploit) {
+        // N.B. pass the declared-default comparator explicitly: a bare {}
+        // constructs an EMPTY std::function, which canonicalize_slots
+        // silently replaces with its space-only fallback ordering -- a
+        // different code path than real callers exercise.
+        auto canonicalize_slots_metadata = [&cardinal](const std::wstring& s,
+                                                       bool exploit) {
           TN tn(deserialize(s));
-          return tn.canonicalize_slots(cardinal, nullptr, {}, exploit);
+          return tn.canonicalize_slots(cardinal, nullptr,
+                                       default_idxptr_slottype_lesscompare{},
+                                       exploit);
         };
 
         // Conjugate, exploit OFF (default): orientations do NOT fold; no conj.
         {
-          auto a = md(L"h{a_1;i_1}:N-C-S", false);
-          auto b = md(L"h{i_1;a_1}:N-C-S", false);
+          auto a = canonicalize_slots_metadata(L"h{a_1;i_1}:N-C-S", false);
+          auto b = canonicalize_slots_metadata(L"h{i_1;a_1}:N-C-S", false);
           REQUIRE(a.graph->cmp(*b.graph) != 0);
           REQUIRE(!a.conj);
           REQUIRE(!b.conj);
@@ -269,8 +276,8 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV1,
         // Conjugate, exploit ON: orientations fold onto one canonical graph,
         // and exactly one carries the conjugation byproduct.
         {
-          auto a = md(L"h{a_1;i_1}:N-C-S", true);
-          auto b = md(L"h{i_1;a_1}:N-C-S", true);
+          auto a = canonicalize_slots_metadata(L"h{a_1;i_1}:N-C-S", true);
+          auto b = canonicalize_slots_metadata(L"h{i_1;a_1}:N-C-S", true);
           REQUIRE(a.graph->cmp(*b.graph) == 0);
           REQUIRE(a.hash_value() == b.hash_value());
           REQUIRE(a.conj != b.conj);
@@ -278,8 +285,8 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV1,
 
         // Symm braket already folds and never sets conj: exploit is a no-op.
         {
-          auto a = md(L"h{a_1;i_1}:N-S-S", true);
-          auto b = md(L"h{i_1;a_1}:N-S-S", true);
+          auto a = canonicalize_slots_metadata(L"h{a_1;i_1}:N-S-S", true);
+          auto b = canonicalize_slots_metadata(L"h{i_1;a_1}:N-S-S", true);
           REQUIRE(a.graph->cmp(*b.graph) == 0);
           REQUIRE(!a.conj);
           REQUIRE(!b.conj);

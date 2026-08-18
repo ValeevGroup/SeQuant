@@ -344,16 +344,18 @@ bool TensorBlockCanonicalizer::orient_braket_by_color(AbstractTensor& t) const {
   auto space_less = [&cmp](const Index& a, const Index& b) {
     return cmp.compare_spaces(a, b) < 0;
   };
-  auto bra = mutable_bra_range(t);
-  auto ket = mutable_ket_range(t);
+  // read-only access: the bundles are only copied for comparison; the actual
+  // reorientation below goes through _swap_bra_ket()
+  auto bra = t._bra();
+  auto ket = t._ket();
   // Compare the bundles by their space sequences *sorted by color*, so the
   // decision is independent of the within-bundle index order. Column/perm
   // symmetry can permute the bra (and ket) order without changing the tensor,
   // and a comparison over the as-given order could otherwise pick different
   // orientations for equivalent inputs.
   std::vector<Index> bra_spaces, ket_spaces;
-  for (auto&& idx : bra) bra_spaces.push_back(idx);
-  for (auto&& idx : ket) ket_spaces.push_back(idx);
+  for (const auto& idx : bra) bra_spaces.push_back(idx);
+  for (const auto& idx : ket) ket_spaces.push_back(idx);
   ranges::sort(bra_spaces, space_less);
   ranges::sort(ket_spaces, space_less);
   // canonical orientation: the bundle whose spaces are lexicographically
