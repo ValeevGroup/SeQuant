@@ -3,7 +3,9 @@
 
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
+#include <SeQuant/core/expressions/expr_container.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
+#include <SeQuant/core/expressions/traits.hpp>
 #include <SeQuant/core/expressions/variable.hpp>
 #include <SeQuant/core/rational.hpp>
 
@@ -27,25 +29,24 @@ class Power : public Expr {
 
   /// @param[in] base the base expression; must be a Constant or Variable.
   /// @param[in] exponent rational exponent
-  Power(ExprPtr base, exponent_type exponent);
+  Power(const ExprPtr& base, exponent_type exponent);
+  Power(ExprContainer base, exponent_type exponent);
 
   /// @overload constructs a `Variable` base from @p label
   template <typename L>
-    requires std::constructible_from<std::wstring, L> &&
-             (!std::convertible_to<L, ExprPtr>)
+    requires(std::constructible_from<std::wstring, L> && !expr_holder<L>)
   Power(L&& label, exponent_type exponent)
       : Power(ex<Variable>(std::forward<L>(label)), std::move(exponent)) {}
 
   /// @overload constructs a `Constant` base from scalar @p value
   template <typename V>
-    requires(!std::constructible_from<std::wstring, V> &&
-             !std::convertible_to<V, ExprPtr> &&
+    requires(!std::constructible_from<std::wstring, V> && !expr_holder<V> &&
              std::constructible_from<Constant::scalar_type, V>)
   Power(V&& value, exponent_type exponent)
       : Power(ex<Constant>(std::forward<V>(value)), std::move(exponent)) {}
 
   /// @return the base expression
-  const ExprPtr& base() const;
+  const ExprContainer& base() const;
 
   /// @return the rational exponent
   const exponent_type& exponent() const;
@@ -78,6 +79,7 @@ class Power : public Expr {
   /// case needed in practice right now). Extending to general n-th roots only
   /// requires replacing the integer-square-root step with an integer n-th-root.
   static void flatten(ExprPtr& expr);
+  static void flatten(ExprContainer& expr);
 
   type_id_type type_id() const override;
 
@@ -100,7 +102,7 @@ class Power : public Expr {
   std::unique_ptr<Expr> unique_copy() const override;
 
  private:
-  ExprPtr base_;
+  ExprContainer base_;
   exponent_type exponent_;
   bool conjugated_ = false;
 

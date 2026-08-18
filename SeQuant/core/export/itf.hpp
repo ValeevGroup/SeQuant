@@ -215,7 +215,7 @@ class ItfGenerator : public Generator<Context> {
   }
 
   std::string represent(const Power &power, const Context &ctx) const override {
-    const ExprPtr &base = power.base();
+    const ExprContainer &base = power.base();
     // ITF can only express powers of Constants
     if (!base->is<Constant>()) {
       throw Exception(

@@ -5,9 +5,7 @@
 #ifndef SEQUANT_CORE_EXPORT_UTILS_HPP
 #define SEQUANT_CORE_EXPORT_UTILS_HPP
 
-#include <SeQuant/core/expr_fwd.hpp>
-#include <SeQuant/core/expressions/expr_ptr.hpp>
-#include <SeQuant/core/expressions/power.hpp>
+#include <SeQuant/core/expr.hpp>
 
 #include <string>
 
@@ -27,7 +25,7 @@ std::string format_power_exponent(const Power::exponent_type &exponent,
 /// @param base_str @p base already rendered to a string by the caller
 /// @return @p base_str, wrapped in parens iff @p base is a Constant whose
 ///         value is a non-integer or negative real
-std::string format_power_base(const ExprPtr &base, std::string base_str);
+std::string format_power_base(const ExprContainer &base, std::string base_str);
 
 }  // namespace sequant::detail
 
