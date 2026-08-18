@@ -105,6 +105,24 @@ ExprContainer &ExprContainer::operator*=(const Expr &expr) {
   return *this;
 }
 
+ExprContainer &ExprContainer::operator^=(const Expr &other) {
+  auto this_is_product = expr_->is<Product>();
+  auto other_is_product = other.is<Product>();
+  if (!this_is_product && !other_is_product) {
+    *this =
+        NCProduct(ExprPtrList{to_expr_ptr(std::move(*this)), other.clone()});
+  } else if (this_is_product) {
+    *this = NCProduct(std::move(expr_->as<Product>()));
+    expr_->as<NCProduct>().append(1, other.clone());
+  } else {  // other_is_product
+    NCProduct result(other.clone().as<Product>());
+    result.prepend(1, to_expr_ptr(std::move(*this)));
+    *this = std::move(result);
+  }
+
+  return *this;
+}
+
 void swap(ExprContainer &lhs, ExprContainer &rhs) {
   std::swap(lhs.expr_, rhs.expr_);
 }
@@ -126,6 +144,13 @@ ExprContainer operator-(const Expr &lhs, const Expr &rhs) {
 ExprContainer operator*(const Expr &lhs, const Expr &rhs) {
   ExprContainer cont(lhs);
   cont *= rhs;
+
+  return cont;
+}
+
+ExprContainer operator^(const Expr &lhs, const Expr &rhs) {
+  ExprContainer cont(lhs);
+  cont ^= rhs;
 
   return cont;
 }
