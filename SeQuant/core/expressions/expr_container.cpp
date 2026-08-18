@@ -63,9 +63,11 @@ ExprContainer::operator const Expr &() const { return *expr_; }
 ExprContainer::operator Expr &() & { return *expr_; }
 ExprContainer::operator Expr &&() && { return std::move(*expr_); }
 
-const Expr &ExprContainer::operator*() const { return *expr_; }
+const Expr &ExprContainer::operator*() const & { return *expr_; }
 
-Expr &ExprContainer::operator*() { return *expr_; }
+Expr &ExprContainer::operator*() & { return *expr_; }
+
+Expr &&ExprContainer::operator*() && { return std::move(*expr_); }
 
 const Expr *ExprContainer::operator->() const { return expr_.get(); }
 

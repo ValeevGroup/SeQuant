@@ -31,8 +31,9 @@ class ExprContainer {
   operator Expr &() &;
   operator Expr &&() &&;
 
-  const Expr &operator*() const;
-  Expr &operator*();
+  const Expr &operator*() const &;
+  Expr &operator*() &;
+  Expr &&operator*() &&;
 
   const Expr *operator->() const;
   Expr *operator->();
