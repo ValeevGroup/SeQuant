@@ -370,9 +370,9 @@ TEST_CASE("expr", "[elements]") {
       // convenience ctors:
       REQUIRE(Power(L"x", 2) == Power(vx, rational{2}));
       REQUIRE(Power(L"x", rational{1, 2}) == Power(vx, rational{1, 2}));
-      REQUIRE(Power(2, 3) == Power(ex<Constant>(2), rational{3}));
+      REQUIRE(Power(2, 3) == Power(Constant(2), rational{3}));
       REQUIRE(Power(rational{2, 3}, 2) ==
-              Power(ex<Constant>(rational{2, 3}), rational{2}));
+              Power(Constant(rational{2, 3}), rational{2}));
       if constexpr (sequant::assert_behavior() ==
                     sequant::AssertBehavior::Throw) {
         // base must be a Constant or Variable; Power-of-Power is not allowed
@@ -380,20 +380,20 @@ TEST_CASE("expr", "[elements]") {
         REQUIRE_THROWS(Power(inner, rational{2, 3}));
 
         // 0^n is defined only for n >= 0
-        REQUIRE_THROWS(Power(ex<Constant>(0), rational{-1}));
+        REQUIRE_THROWS(Power(Constant(0), rational{-1}));
       }
     }
 
     {  // accessors
       Power p(c2, rational{1, 2});
-      REQUIRE(p.base() == ex<Constant>(rational{1, 2}));
+      REQUIRE(p.base() == Constant(rational{1, 2}));
       REQUIRE(p.exponent() == rational{1, 2});
 
       // is_zero: base == 0, exponent > 0
-      Power pz(ex<Constant>(0), rational{2});
+      Power pz(Constant(0), rational{2});
       REQUIRE(pz.is_zero());
       // 0^0 is not zero by our convention
-      Power pz2(ex<Constant>(0), rational{0});
+      Power pz2(Constant(0), rational{0});
       REQUIRE(!pz2.is_zero());
       REQUIRE(!p.is_zero());
     }
@@ -447,8 +447,8 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(pc_conj2.exponent() == rational{3, 2});
 
       // 2^{1/2} * 2^{1/2} = 2
-      Power pe(ex<Constant>(2), rational{1, 2});
-      Power pf(ex<Constant>(2), rational{1, 2});
+      Power pe(Constant(2), rational{1, 2});
+      Power pf(Constant(2), rational{1, 2});
       pe *= pf;
       REQUIRE(pe.exponent() == rational{1});
       REQUIRE(to_latex(pe) == Constant(2).to_latex());
