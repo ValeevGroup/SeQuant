@@ -1008,10 +1008,14 @@ TEST_CASE("expr", "[elements]") {
 
     REQUIRE(hash_value(ex<Constant>(1)) == hash_value(ex<Constant>(1)));
 
-    auto hasher = [](const std::shared_ptr<const Expr> &) -> unsigned int {
+    auto hasher1 = [](const std::shared_ptr<const Expr> &) -> unsigned int {
       return 0;
     };
-    REQUIRE_NOTHROW(ex<Constant>(1)->hash_value(hasher) == 0);
+    auto hasher2 = [](const Expr &) -> unsigned int { return 2; };
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    REQUIRE_NOTHROW(ex<Constant>(1)->hash_value(hasher1) == 0);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE_NOTHROW(ex<Constant>(1)->hash_value(hasher2) == 2);
 
     {  // Power
       const auto c2 = ex<Constant>(rational{1, 2});
