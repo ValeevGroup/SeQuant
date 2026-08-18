@@ -27,6 +27,9 @@ ExprContainer::ExprContainer(const Expr &expr)
 ExprContainer::ExprContainer(Expr &&expr)
     : ExprContainer(std::move(expr).unique_copy()) {}
 
+ExprContainer::ExprContainer(const ExprPtr &ptr)
+    : ExprContainer(ptr->unique_copy()) {}
+
 ExprContainer &ExprContainer::operator=(const ExprContainer &container) {
   // Copy-and-swap
   ExprContainer copy(container);

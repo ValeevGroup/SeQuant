@@ -1259,6 +1259,19 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(cont->as<Variable>().label() == L"A");
       REQUIRE(ptr->as<Variable>().label() == L"B");
     }
+    SECTION("Conversion from ExprPtr") {
+      // This conversion is always explicit as it always has to perform a copy.
+      // Even a moved-from ExpPtr might point to an object that is co-owned by
+      // another ExprPtr and thus "resource stealing" is not possible.
+      ExprPtr ptr = ex<Constant>(2);
+      ExprContainer cont(ptr);
+      REQUIRE(cont->is<Constant>());
+      REQUIRE(cont->as<Constant>().value() == 2);
+
+      ptr->as<Constant>() = Constant(3);
+      REQUIRE(ptr->as<Constant>().value() == 3);
+      REQUIRE(cont->as<Constant>().value() == 2);
+    }
   }
 
   SECTION("ResultExpr") {
