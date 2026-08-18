@@ -368,11 +368,17 @@ bool TensorBlockCanonicalizer::orient_braket_by_color(AbstractTensor& t) const {
 }
 
 bool TensorBlockCanonicalizer::fold_conjugate_braket(AbstractTensor& t) const {
-  // For a Conjugate tensor a bra<->ket swap is not free -- it introduces a
-  // conjugation -- so unlike the Symm fold in apply() the reorientation is a
-  // byproduct the caller must consume. Same color rule; report whether swapped.
+  // For a Conjugate tensor a bra<->ket swap is not free -- by the symmetry
+  // relation T{q;p} = conj(T{p;q}) the swapped spelling represents the
+  // conjugate value -- so the reorientation toggles the tensor's own
+  // elementwise-conjugation marker (_conjugate()), keeping the represented
+  // value invariant. Same color rule as the Symm fold; also reports whether
+  // it swapped (legacy byproduct channel, to be retired once every consumer
+  // reads the marker off the tensor).
   if (t._braket_symmetry() != BraKetSymmetry::Conjugate) return false;
-  return orient_braket_by_color(t);
+  const bool swapped = orient_braket_by_color(t);
+  if (swapped) t._conjugate();
+  return swapped;
 }
 
 ExprPtr TensorBlockCanonicalizer::apply(AbstractTensor& t) const {

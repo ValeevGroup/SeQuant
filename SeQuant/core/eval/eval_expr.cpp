@@ -181,7 +181,17 @@ EvalExpr::EvalExpr(Tensor const& tnsr, bool exploit_conjugate)
       canon_conj_ = TensorBlockCanonicalizer{}.fold_conjugate_braket(t);
     auto phase = TensorBlockCanonicalizer{}.apply(t);
     canon_phase_ = phase ? -1 : 1;
-    hash_value_ = hash_terminal_tensor(t);
+    // Leaf-hash invariant: the hash is always that of the UNSTARRED spelling,
+    // so the two orientations of a Conjugate tensor share one cache slot; the
+    // conjugation marker stays on expr_ (its symbolic spelling) and is served
+    // by binarize's Adjoint wrapper on retrieval.
+    if (t.conjugated()) {
+      Tensor bare{t};
+      bare.conjugate();
+      hash_value_ = hash_terminal_tensor(bare);
+    } else {
+      hash_value_ = hash_terminal_tensor(t);
+    }
     canon_indices_ = t.const_indices() | ranges::to<index_vector>;
   }
 }

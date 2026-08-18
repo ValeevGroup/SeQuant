@@ -998,6 +998,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     canonicalize_slots();
   }
 
+  void _conjugate() override final { conjugate(); }
+  bool _conjugated() const override final { return conjugated_; }
+
 };  // class Tensor
 
 static_assert(is_tensor<Tensor>,
