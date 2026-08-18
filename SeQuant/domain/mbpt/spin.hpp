@@ -420,18 +420,6 @@ std::vector<ExprPtr> open_shell_spintrace(
 // clang-format on
 std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr);
 
-// clang-format off
-/// @brief Open-shell CC spintrace via external spin sectors (2^n assignments)
-/// @details Wraps spintrace_by_sector: expand_A_op + spintrace_impl per sector,
-/// then remove_spin with collision relabeling. Summing the returned vectors
-/// equals generic
-/// spintrace; each entry matches the corresponding spintrace_by_sector sector.
-/// @param expr EOM/CC moment with antisymmetrizer Â at the front of each term
-/// @return spin-free sector expressions in sector-index order (no labels)
-/// @sa open_shell_CC_spintrace, spintrace_by_sector
-// clang-format on
-std::vector<ExprPtr> open_shell_CC_spintrace_by_sector(const ExprPtr& expr);
-
 /// @brief Transforms an expression from spin orbital to spin-free (spatial)
 /// orbital form
 /// @details Given an expression, this function extracts all indices and adds a

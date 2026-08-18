@@ -2446,28 +2446,4 @@ container::svector<std::pair<std::wstring, ExprPtr>> spintrace_by_sector(
   return sectors;
 }
 
-std::vector<ExprPtr> open_shell_CC_spintrace_by_sector(const ExprPtr& expr) {
-  SEQUANT_ASSERT(expr->is<Sum>() || expr->is<Product>());
-  Tensor A = expr.is<Sum>() ? expr->at(0)->at(0)->as<Tensor>()
-                            : expr->at(0)->as<Tensor>();
-  SEQUANT_ASSERT(A.label() == reserved::antisymm_label());
-
-  container::svector<container::svector<Index>> ext_groups;
-  for (const auto& grp : external_indices(expr)) {
-    container::svector<Index> indices;
-    indices.reserve(grp.size());
-    for (const auto& slotted : grp) indices.push_back(slotted.index());
-    ext_groups.push_back(std::move(indices));
-  }
-
-  auto sectors = spintrace_by_sector(expr, ext_groups);
-  std::vector<ExprPtr> result;
-  result.reserve(sectors.size());
-  for (auto& [label, sector] : sectors) {
-    (void)label;
-    result.push_back(std::move(sector));
-  }
-  return result;
-}
-
 }  // namespace sequant::mbpt

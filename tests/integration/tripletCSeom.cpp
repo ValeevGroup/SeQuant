@@ -718,8 +718,6 @@ class compute_eomcc_closedshell_triplet {
         }
 
         if (print) {
-          // std::wcout << "\n open-shell singlet sum:\n"
-          //            << to_latex_align(summed, 20, 1) << "\n";
           std::wcout << "\n triplet (production):\n"
                      << to_latex_align(st, 20, 1) << "\n";
         }
@@ -739,35 +737,6 @@ class compute_eomcc_closedshell_triplet {
 
     std::wcout << "\nClosed-shell triplet spintracing completed in "
                << timer_pool.read(N + 16) << " s\n";
-  }
-};
-
-class compute_all_closedshell_triplet {
-  size_t NMAX;
-  std::string manifold;
-  EqnType type;
-
- public:
-  compute_all_closedshell_triplet(size_t nmax, const std::string manifold,
-                                  EqnType t = EqnType::right)
-      : NMAX(nmax), manifold(manifold), type(t) {}
-
-  void operator()(bool print = false) {
-    for (size_t N = 1; N <= NMAX; ++N) {
-      std::vector<std::string> manifold_vec;
-      auto [Nh, Np] = parse_excitation_manifold(manifold);
-      // triplet only supports particle-conserving manifolds; collapse to the
-      // diagonal sequence (NhNp, ..., 1h1p)
-      while (Nh > 0 && Np > 0) {
-        manifold_vec.push_back(std::to_string(Nh) + "h" + std::to_string(Np) +
-                               "p");
-        Nh--;
-        Np--;
-      }
-      for (auto it = manifold_vec.rbegin(); it != manifold_vec.rend(); ++it) {
-        compute_eomcc_closedshell_triplet{N, *it, type}(print);
-      }
-    }
   }
 };
 }  // namespace
@@ -817,8 +786,6 @@ int main(int argc, char* argv[]) {
 
   Logger::instance().wick_stats = false;
 
-  // compute_all_closedshell_triplet{NMAX, exc_manifold,
-  //                                 str2type.at(eqn_type)}(print);
   compute_eomcc_closedshell_triplet{NMAX, exc_manifold, str2type.at(eqn_type),
                                     hashgroups}(print);
 }

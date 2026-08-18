@@ -134,36 +134,6 @@ class compute_eomcc_openshell {
     }
   }
 };
-
-class compute_all_openshell {
-  size_t NMAX;
-  std::string manifold;
-  EqnType type;
-
- public:
-  compute_all_openshell(size_t nmax, const std::string manifold,
-                        EqnType t = EqnType::right)
-      : NMAX(nmax), manifold(manifold), type(t) {}
-
-  void operator()(bool print = false) {
-    for (size_t N = 1; N <= NMAX; ++N) {
-      std::vector<std::string> manifold_vec;
-      auto [Nh, Np] = parse_excitation_manifold(manifold);
-      // generate all possible manifolds
-      while (Nh > 0 || Np > 0) {
-        if (Nh == 0 && Np == 0) break;
-        manifold_vec.push_back(std::to_string(Nh) + "h" + std::to_string(Np) +
-                               "p");
-        if (Nh == 0 || Np == 0) break;
-        Nh--;
-        Np--;
-      }
-      for (auto it = manifold_vec.rbegin(); it != manifold_vec.rend(); ++it) {
-        compute_eomcc_openshell{N, *it, type}(print);
-      }
-    }
-  }
-};
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -207,7 +177,5 @@ int main(int argc, char* argv[]) {
   // change to true to print stats
   Logger::instance().wick_stats = false;
 
-  // call the compute_all function here
-  // compute_all_openshell{NMAX, exc_manifold, str2type.at(eqn_type)}(print);
   compute_eomcc_openshell{NMAX, exc_manifold, str2type.at(eqn_type)}(print);
 }

@@ -162,37 +162,6 @@ class compute_eomcc_closedshell {
                << timer_pool.read(N + 16) << " s\n";
   }
 };
-
-class compute_all_closedshell {
-  size_t NMAX;
-  std::string manifold;
-  EqnType type;
-  BiorthogonalizationMethod biorth_method;
-
- public:
-  compute_all_closedshell(
-      size_t nmax, const std::string manifold, EqnType t = EqnType::right,
-      BiorthogonalizationMethod bm = BiorthogonalizationMethod::V2)
-      : NMAX(nmax), manifold(manifold), type(t), biorth_method(bm) {}
-
-  void operator()(bool print = false) {
-    for (size_t N = 1; N <= NMAX; ++N) {
-      std::vector<std::string> manifold_vec;
-      auto [Nh, Np] = parse_excitation_manifold(manifold);
-      while (Nh > 0 || Np > 0) {
-        if (Nh == 0 && Np == 0) break;
-        manifold_vec.push_back(std::to_string(Nh) + "h" + std::to_string(Np) +
-                               "p");
-        if (Nh == 0 || Np == 0) break;
-        Nh--;
-        Np--;
-      }
-      for (auto it = manifold_vec.rbegin(); it != manifold_vec.rend(); ++it) {
-        compute_eomcc_closedshell{N, *it, type, biorth_method}(print);
-      }
-    }
-  }
-};
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -250,8 +219,6 @@ int main(int argc, char* argv[]) {
 
   Logger::instance().wick_stats = false;
 
-  // compute_all_closedshell{NMAX, exc_manifold, str2type.at(eqn_type),
-  //                         biorth_method}(print);
   compute_eomcc_closedshell{NMAX, exc_manifold, str2type.at(eqn_type),
                             biorth_method}(print);
 }
