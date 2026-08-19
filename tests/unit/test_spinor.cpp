@@ -772,3 +772,92 @@ TEST_CASE("kramers_trace_csv_no_slot_duplication", "[spinor]") {
                       E_kr, CanonicalizeOptions::default_options(),
                       [](ExprPtr const& s) { return mbpt::swap_spin(s); }));
 }
+
+TEST_CASE("kramers_internal_rebase", "[korbit-rebase]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+  auto up = [](const wchar_t* l) { return make_spinalpha(Index(l)); };
+  auto dn = [](const wchar_t* l) { return make_spinbeta(Index(l)); };
+  auto T = [](const wchar_t* label, Index b, Index k) {
+    return ex<Tensor>(label, bra{std::move(b)}, ket{std::move(k)},
+                      Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
+                      ColumnSymmetry::Nonsymm);
+  };
+  auto all_up_and_marked = [](const ExprPtr& e) {
+    for (auto const& f : e->as<Product>().factors()) {
+      auto const& t = f->as<Tensor>();
+      if (!t.conjugated()) return false;
+      for (auto const& idx : t.const_indices())
+        if (to_spin(idx.space().qns()) != Spin::alpha) return false;
+    }
+    return true;
+  };
+
+  SECTION("internal down component flips up, every leaf conjugate-marked") {
+    auto term =
+        T(L"X", dn(L"i_1"), dn(L"i_2")) * T(L"Y", dn(L"i_2"), dn(L"i_1"));
+    auto out = kramers_internal_rebase(term, {});
+    REQUIRE(all_up_and_marked(out));
+  }
+
+  SECTION("up orientation is already canonical: untouched, no marks") {
+    auto term =
+        T(L"X", up(L"i_1"), up(L"i_2")) * T(L"Y", up(L"i_2"), up(L"i_1"));
+    auto out = kramers_internal_rebase(term, {});
+    REQUIRE(*out == *term);
+  }
+
+  SECTION("an external index freezes its whole component") {
+    auto term =
+        T(L"X", dn(L"i_1"), dn(L"i_2")) * T(L"Y", dn(L"i_2"), dn(L"i_1"));
+    container::set<Index> ext{dn(L"i_1")};
+    auto out = kramers_internal_rebase(term, ext);
+    REQUIRE(*out == *term);
+  }
+
+  SECTION("a dangling flavored index freezes its component") {
+    // i_3 appears once (open line): no flip even though nothing is declared
+    auto term = T(L"X", dn(L"i_1"), dn(L"i_3")) *
+                T(L"Y", dn(L"i_1"), dn(L"i_2")) *
+                T(L"Z", dn(L"i_2"), dn(L"i_4"));
+    auto out = kramers_internal_rebase(term, {});
+    REQUIRE(*out == *term);
+  }
+
+  SECTION("idempotent") {
+    auto term =
+        T(L"X", dn(L"i_1"), dn(L"i_2")) * T(L"Y", dn(L"i_2"), dn(L"i_1"));
+    auto once = kramers_internal_rebase(term, {});
+    auto twice = kramers_internal_rebase(once, {});
+    REQUIRE(*twice == *once);
+  }
+
+  SECTION("proto decoration follows its flipped referent") {
+    auto a_of_i = Index(L"a_1", {L"i_1"});
+    auto a_dn = make_spinbeta(a_of_i);  // a↓_1<i↓_1>
+    auto term = T(L"A", dn(L"i_1"), a_dn) * T(L"B", a_dn, dn(L"i_1"));
+    auto out = kramers_internal_rebase(term, {});
+    for (auto const& f : out->as<Product>().factors()) {
+      auto const& t = f->as<Tensor>();
+      REQUIRE(t.conjugated());
+      for (auto const& idx : t.const_indices()) {
+        REQUIRE(to_spin(idx.space().qns()) == Spin::alpha);
+        for (auto const& p : idx.proto_indices())
+          REQUIRE(to_spin(p.space().qns()) == Spin::alpha);
+      }
+    }
+  }
+
+  SECTION("independent components decided independently") {
+    // comp {X,Y} is all-down (flips); comp {U,V} is all-up (stays)
+    auto term =
+        T(L"X", dn(L"i_1"), dn(L"i_2")) * T(L"Y", dn(L"i_2"), dn(L"i_1")) *
+        T(L"U", up(L"i_3"), up(L"i_4")) * T(L"V", up(L"i_4"), up(L"i_3"));
+    auto out = kramers_internal_rebase(term, {});
+    int marked = 0, unmarked = 0;
+    for (auto const& f : out->as<Product>().factors())
+      (f->as<Tensor>().conjugated() ? marked : unmarked)++;
+    REQUIRE(marked == 2);
+    REQUIRE(unmarked == 2);
+  }
+}

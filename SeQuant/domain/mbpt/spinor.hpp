@@ -389,6 +389,31 @@ ExprPtr drop_mixed_kramers_fock_terms(const ExprPtr& expr);
 /// contracted scalar like the energy (no Â -> closed_shell_kramers_trace).
 bool has_antisymmetrizer(const ExprPtr& expr);
 
+// clang-format off
+/// @brief Canonicalize the internal Kramers-flavor orientation of each term
+/// (task #59, korbit rebase).
+/// @details Within a term, tensor leaves connected by shared Kramers-flavored
+/// slot indices form flip components (a whole-leaf flavor flip drags every
+/// index the leaf carries, so closure is by leaves, not lines). A component
+/// touching an external index (or a dangling index) is frozen. A fully
+/// internal component may be reoriented by global time reversal: flip the
+/// flavor of every index in it and conjugate-mark every leaf
+/// (Tensor::conjugate()); the TRS phases cancel pairwise on the component's
+/// contracted lines, so no scalar arises (same reason the tracer's closed
+/// contraction T-fold is sign-free). The pass flips a component iff its
+/// flipped fingerprint (sorted multiset of per-leaf (label, flavor bits))
+/// is lexicographically smaller, so the result is canonical and idempotent.
+/// Proto bundles are rewritten coherently wherever they reference flipped
+/// indices (decoration follows its referent); a proto never creates
+/// connectivity by itself.
+/// @param expr a Sum of flat terms (or a single term); nested Sum factors are
+///        left untouched
+/// @param externals the term-set's external (fixed-flavor) indices
+/// @return the rebased expression
+// clang-format on
+ExprPtr kramers_internal_rebase(const ExprPtr& expr,
+                                const container::set<Index>& externals);
+
 }  // namespace sequant::mbpt
 
 #endif  // SEQUANT_DOMAIN_MBPT_SPINOR_HPP

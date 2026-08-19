@@ -695,4 +695,175 @@ ExprPtr closed_shell_kramers_trace(
   return result;
 }
 
+namespace {
+
+using sequant::mbpt::Spin;
+
+// Kramers flavor of an index; Spin::any = unflavored.
+Spin kr_flavor(const Index& idx) {
+  return sequant::mbpt::to_spin(idx.space().qns());
+}
+
+// Flip the flavor of a PLAIN (proto-free) index; identity on unflavored.
+Index kr_flip_plain(const Index& idx) {
+  SEQUANT_ASSERT(!idx.has_proto_indices());
+  const Spin s = kr_flavor(idx);
+  if (s == Spin::any) return idx;
+  return s == Spin::alpha ? make_spinbeta(make_spinfree(idx))
+                          : make_spinalpha(make_spinfree(idx));
+}
+
+// Rebase one flat term (Product of Tensors/Constants/Variables, or a lone
+// Tensor). Returns the rebased term; nullptr if the term has a shape this
+// pass does not handle (caller keeps the original).
+ExprPtr kramers_rebase_term(const ExprPtr& term,
+                            const container::set<Index>& externals) {
+  // --- collect the tensor factors
+  container::svector<Tensor> leaves;
+  ExprPtr scalar_tail;  // non-tensor factors (Constants/Variables), in order
+  container::svector<std::size_t> leaf_pos;  // factor position of each leaf
+  container::svector<ExprPtr> factors;
+  if (term->is<Tensor>()) {
+    factors.push_back(term);
+  } else if (term->is<Product>()) {
+    for (auto const& f : term->as<Product>().factors()) factors.push_back(f);
+  } else {
+    return nullptr;
+  }
+  for (std::size_t i = 0; i < factors.size(); ++i) {
+    if (factors[i]->is<Tensor>()) {
+      leaves.push_back(factors[i]->as<Tensor>());
+      leaf_pos.push_back(i);
+    } else if (factors[i]->is<Constant>() || factors[i]->is<Variable>()) {
+      continue;
+    } else {
+      return nullptr;  // nested Sum etc.: leave the term untouched
+    }
+  }
+  if (leaves.empty()) return nullptr;
+
+  // --- flavored slot indices per leaf, and index -> leaves incidence
+  auto slot_indices = [](const Tensor& t) {
+    container::svector<Index> out;
+    for (auto const& idx : t.bra()) out.push_back(idx);
+    for (auto const& idx : t.ket()) out.push_back(idx);
+    for (auto const& idx : t.aux()) out.push_back(idx);
+    return out;
+  };
+  container::map<Index, container::svector<std::size_t>> incidence;
+  for (std::size_t l = 0; l < leaves.size(); ++l)
+    for (auto const& idx : slot_indices(leaves[l]))
+      if (kr_flavor(idx) != Spin::any) incidence[idx].push_back(l);
+
+  // --- union-find over leaves
+  container::svector<std::size_t> parent(leaves.size());
+  for (std::size_t l = 0; l < leaves.size(); ++l) parent[l] = l;
+  auto find = [&parent](std::size_t x) {
+    while (parent[x] != x) x = parent[x] = parent[parent[x]];
+    return x;
+  };
+  for (auto const& [idx, ls] : incidence)
+    for (std::size_t k = 1; k < ls.size(); ++k) {
+      const auto a = find(ls[0]), b = find(ls[k]);
+      if (a != b) parent[a] = b;
+    }
+
+  // --- freeze components touching externals or dangling flavored indices
+  container::set<std::size_t> frozen;
+  for (auto const& [idx, ls] : incidence) {
+    const bool ext = externals.find(idx) != externals.end();
+    const bool dangling = ls.size() == 1;
+    if (ext || dangling)
+      for (auto l : ls) frozen.insert(find(l));
+  }
+
+  // --- per component: decide the canonical orientation
+  // fingerprint entry: (label, flavor bits over the leaf's flavored slots)
+  auto leaf_print = [&](const Tensor& t, bool flipped) {
+    std::pair<std::wstring, container::svector<int>> p{std::wstring{t.label()},
+                                                       {}};
+    for (auto const& idx : slot_indices(t)) {
+      const Spin s = kr_flavor(idx);
+      if (s == Spin::any) continue;
+      const int down = (s == Spin::beta) ? 1 : 0;
+      p.second.push_back(flipped ? 1 - down : down);
+    }
+    return p;
+  };
+  container::set<std::size_t> flip_roots;
+  container::map<std::size_t, container::svector<std::size_t>> comp_leaves;
+  for (std::size_t l = 0; l < leaves.size(); ++l)
+    comp_leaves[find(l)].push_back(l);
+  for (auto const& [root, ls] : comp_leaves) {
+    if (frozen.find(root) != frozen.end()) continue;
+    std::vector<std::pair<std::wstring, container::svector<int>>> fp, fp_flip;
+    for (auto l : ls) {
+      fp.push_back(leaf_print(leaves[l], false));
+      fp_flip.push_back(leaf_print(leaves[l], true));
+    }
+    std::sort(fp.begin(), fp.end());
+    std::sort(fp_flip.begin(), fp_flip.end());
+    if (fp_flip < fp) flip_roots.insert(root);
+  }
+  if (flip_roots.empty()) return nullptr;  // nothing to do
+
+  // --- build the replacement map: every flavored slot index of a flipped
+  // component maps to its flavor-flipped spelling. Two passes: plain indices
+  // first, then composites (base flavor flipped, protos mapped through the
+  // plain entries so decoration follows its referent).
+  container::map<Index, Index> repl;
+  for (auto const& [idx, ls] : incidence) {
+    if (flip_roots.find(find(ls.front())) == flip_roots.end()) continue;
+    if (!idx.has_proto_indices()) repl.emplace(idx, kr_flip_plain(idx));
+  }
+  for (auto const& [idx, ls] : incidence) {
+    if (flip_roots.find(find(ls.front())) == flip_roots.end()) continue;
+    if (!idx.has_proto_indices()) continue;
+    Index base(idx.space(), idx.ordinal());
+    Index base_flipped = kr_flip_plain(base);
+    auto protos = idx.proto_indices();
+    for (auto& p : protos) {
+      auto it = repl.find(p);
+      if (it != repl.end()) p = it->second;
+    }
+    repl.emplace(idx,
+                 Index(base_flipped.space(), base_flipped.ordinal(), protos));
+  }
+
+  // --- apply: transform every factor's indices (decoration everywhere
+  // follows flipped referents); conjugate-mark the flipped components' leaves
+  auto result = std::make_shared<Product>();
+  if (term->is<Product>()) result->scale(term->as<Product>().scalar());
+  std::size_t li = 0;
+  for (std::size_t i = 0; i < factors.size(); ++i) {
+    if (li < leaf_pos.size() && leaf_pos[li] == i) {
+      Tensor t{leaves[li]};
+      t.transform_indices(repl);
+      if (flip_roots.find(find(li)) != flip_roots.end()) t.conjugate();
+      result->append(1, ex<Tensor>(std::move(t)), Product::Flatten::No);
+      ++li;
+    } else {
+      result->append(1, factors[i], Product::Flatten::No);
+    }
+  }
+  return result;
+}
+
+}  // namespace
+
+ExprPtr kramers_internal_rebase(const ExprPtr& expr,
+                                const container::set<Index>& externals) {
+  if (!expr) return expr;
+  if (expr->is<Sum>()) {
+    auto out = std::make_shared<Sum>();
+    for (auto const& s : expr->as<Sum>().summands()) {
+      auto r = kramers_rebase_term(s, externals);
+      out->append(r ? r : s);
+    }
+    return out;
+  }
+  auto r = kramers_rebase_term(expr, externals);
+  return r ? r : expr;
+}
+
 }  // namespace sequant::mbpt
