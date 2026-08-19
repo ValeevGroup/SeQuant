@@ -43,7 +43,9 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
 
 [[maybe_unused]] auto tensor_to_key(std::wstring_view spec) {
   return tensor_to_key(
-      sequant::deserialize(spec, {.def_perm_symm = sequant::Symmetry::Nonsymm})
+      sequant::deserialize(
+          spec, {.def_perm_symm = sequant::Symmetry::Nonsymm,
+                 .def_braket_symm = sequant::Hermiticity::NonHermitian})
           ->as<sequant::Tensor>());
 }
 
@@ -229,7 +231,9 @@ TEST_CASE("eval_with_tapp", "[eval_tapp]") {
       };
 
   auto parse_antisymm = [](auto const& xpr) {
-    return deserialize(xpr, {.def_perm_symm = sequant::Symmetry::Antisymm});
+    return deserialize(xpr,
+                       {.def_perm_symm = sequant::Symmetry::Antisymm,
+                        .def_braket_symm = sequant::Hermiticity::NonHermitian});
   };
 
   SECTION("Summation") {
@@ -525,8 +529,10 @@ TEST_CASE("evaluate consults the custom evaluator and short-circuits",
 
   // A two-tensor product binarizes to a single non-leaf (Product) root with two
   // tensor leaves.
-  auto node = eval_node(deserialize(L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i1,i2}",
-                                    {.def_perm_symm = Symmetry::Antisymm}));
+  auto node =
+      eval_node(deserialize(L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i1,i2}",
+                            {.def_perm_symm = Symmetry::Antisymm,
+                             .def_braket_symm = Hermiticity::NonHermitian}));
   REQUIRE_FALSE(node.leaf());
 
   // Leaf evaluator that counts how many leaves get evaluated.

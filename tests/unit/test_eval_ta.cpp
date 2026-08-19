@@ -2856,3 +2856,71 @@ TEST_CASE("shape_provider_denest_to_flat", "[shape-provider]") {
     REQUIRE(equal_tarrays(res, ref, "i,j"));
   }
 }
+
+TEST_CASE("ta_tot_adjoint_end_to_end", "[eval]") {
+  // END-TO-END check of the ToT conjugate-braket fold: the two bra<->ket
+  // orientations of a proto-indexed (ToT) BraKetSymmetry::Conjugate leaf share
+  // one cache slot, and the swapped one is served through an EvalOp::Adjoint
+  // node. test_canonicalize's tot_conjugate_braket_fold covers the SYMBOLIC
+  // half (equal hash, opposite conjugated() markers); nothing covered the EVAL
+  // half -- Result::adjoint() is private and reachable only through the
+  // Adjoint IR node, so the override was compile-checked but never driven
+  // with data.
+  //
+  // Here: binarize the swapped orientation, evaluate it against a yielder that
+  // only ever serves the CANONICAL orientation, and require the result to be
+  // the elementwise conjugate of what was served.
+  using namespace sequant;
+  auto& world = TA::get_default_world();
+  size_t const nocc = 2, nvirt = 3;
+  rand_tensor_yield<std::complex<double>, TA::DensePolicy> yield{world, nocc,
+                                                                 nvirt};
+  using ArrayToT = typename decltype(yield)::array_tot_type;
+
+  auto const swapped =
+      deserialize<sequant::ExprPtr>(L"t{i2,i3;a3<i2,i3>,a4<i2,i3>}");
+  auto const canonical =
+      deserialize<sequant::ExprPtr>(L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}");
+
+  EvalExpr const swapped_leaf{swapped->as<Tensor>()};
+  EvalExpr const canon_leaf{canonical->as<Tensor>()};
+
+  // symbolic precondition: one shared slot, exactly one folded onto the
+  // conjugated spelling of the canonical orientation
+  auto const is_conj = [](EvalExpr const& leaf) {
+    return leaf.expr()->as<Tensor>().conjugated();
+  };
+  REQUIRE(swapped_leaf.hash_value() == canon_leaf.hash_value());
+  REQUIRE(is_conj(swapped_leaf) != is_conj(canon_leaf));
+
+  // pick whichever orientation is the NON-canonical one; that is the leaf
+  // binarize must wrap in EvalOp::Adjoint
+  auto const& conj_side = is_conj(swapped_leaf) ? swapped : canonical;
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto const node = binarize<EvalExprTA>(conj_side);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(node->op_type().has_value());
+  CHECK(node->op_type().value() == EvalOp::Adjoint);
+  auto cache = CacheManager<FullBinaryNode<EvalExprTA>>::empty();
+  auto const res = evaluate(node, node->annot(), yield, cache);
+  auto const& got = res->get<ArrayToT>();
+  auto const& served =
+      yield(node.left()->expr()->as<Tensor>())->get<ArrayToT>();
+
+  auto it_s = served.begin();
+  auto it_g = got.begin();
+  for (; it_s != served.end(); ++it_s, ++it_g) {
+    auto const& souter = it_s->get();
+    auto const& gouter = it_g->get();
+    REQUIRE(souter.size() == gouter.size());
+    for (std::size_t o = 0; o < souter.size(); ++o) {
+      auto const& sinner = souter[o];
+      auto const& ginner = gouter[o];
+      if (sinner.empty()) continue;
+      for (std::size_t k = 0; k < sinner.size(); ++k) {
+        CHECK(ginner[k].real() == Catch::Approx(sinner[k].real()));
+        CHECK(ginner[k].imag() == Catch::Approx(-sinner[k].imag()));
+      }
+    }
+  }
+}
