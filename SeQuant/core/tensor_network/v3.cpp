@@ -924,10 +924,13 @@ TensorNetworkV3::canonicalize_slots(
   // canonicalize() uses for its explicit swap (canonical_bra_ket_bundle_order,
   // v3.cpp above). The byproduct is consumed by EvalExpr, which spells it as
   // the leaf tensor's elementwise-conjugation marker (Tensor::conjugate()).
-  // N.B. metadata.conj is a single network-level bit: rigorous for one
-  // Conjugate tensor (the proto-indexed-leaf case that eval-node identities
-  // canonicalize), the per-leaf conjugation of a multi-Conjugate-tensor
-  // network is future work.
+  // N.B. metadata.conj is the PARITY of these swaps -- a single network-level
+  // bit. Its sole consumer is EvalExpr's single-tensor (proto-indexed leaf)
+  // constructor, where the parity IS that tensor's own swap, so the bit is
+  // exact. Multi-tensor networks never consume it: there each swapped
+  // Conjugate tensor carries the conjugation on the tensor itself
+  // (Tensor::conjugated(), toggled by the symbolic canonicalizer's
+  // fold_conjugate_braket), so no network-level bit is involved.
   {
     // canonical position of each Conjugate tensor's {bra,ket} bundle vertex;
     // vertices are visited tensor-major (TensorCore precedes that tensor's
