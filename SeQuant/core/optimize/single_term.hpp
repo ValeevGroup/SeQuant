@@ -244,9 +244,23 @@ ExprPtr single_term_opt(
   using ranges::views::reverse;
 
   if (out_axes) out_axes->clear();
-  if (prod.factors().size() < 3)
+  if (prod.factors().size() < 3) {
+    // No DP needed for < 3 factors, but out_axes must still carry ONE entry per
+    // contraction node (= #tensor factors - 1), or the caller's concatenated
+    // node_batch_axes ends up one short of what binarize emits (binarize folds
+    // the tensor factors into #tensors-1 contraction nodes) and trips its
+    // node_counter == node_batch_axes.size() assertion. This mirrors
+    // run_single_term_opt_axes's nt==1 (empty) / nt==2 (one empty entry) cases;
+    // a scalar*tensor product has one tensor -> zero contraction nodes.
+    if (out_axes) {
+      auto const nt = static_cast<std::size_t>(ranges::count_if(
+          prod.factors(),
+          [](ExprPtr const& e) { return e->template is<Tensor>(); }));
+      if (nt >= 2) out_axes->assign(nt - 1, NodeBatchAnnotation{});
+    }
     return ex<Product>(Product{prod.scalar(), prod.factors().begin(),
                                prod.factors().end(), Product::Flatten::No});
+  }
   auto const tensors =
       prod | filter(&ExprPtr::template is<Tensor>) | ranges::to_vector;
   auto seq = detail::single_term_opt<Metric>(TensorNetwork{tensors},

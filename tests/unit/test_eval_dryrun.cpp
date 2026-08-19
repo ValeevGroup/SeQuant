@@ -49,6 +49,7 @@
 #include <SeQuant/core/eval/scope_executor.hpp>
 #include <SeQuant/core/eval/scope_schedule.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
@@ -447,7 +448,7 @@ TEST_CASE("optimize_result keys batch annotations onto the whole Sum",
   REQUIRE(expr->is<Sum>());
   REQUIRE(expr->as<Sum>().summands().size() > 1);
 
-  auto regime = df_regime(kC60_pVDZF12);
+  auto regime = df_regime(kWater20_pVDZF12);
   BatchPolicy policy;
   policy.is_batchable_contracted_index = [](Index const& ix) {
     return ix.space().base_key() == L"Κ";
@@ -499,10 +500,96 @@ TEST_CASE("optimize_result keys batch annotations onto the whole Sum",
     BinarizationOptions bopts;
     if (auto it = axes_map->find(res.expr.get()); it != axes_map->end())
       bopts.node_batch_axes = it->second;
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-    CHECK_NOTHROW(binarize<EvalExpr>(res.expr, {}, bopts));
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    // Binarize through the SAME head-pinned ResultExpr path MPQC's CCk uses (a
+    // CSV rank-2 residual head, make_R_template_csv): R{a_1<i_1,i_2>,
+    // a_2<i_1,i_2>; i_1, i_2}. A count mismatch trips binarize's
+    // node_counter == node_batch_axes.size() assertion (the water-20 SIGABRT on
+    // an ABORT build; a no-op under IGNORE).
+    std::vector<Index> occ{Index(L"i_1"), Index(L"i_2")};
+    std::vector<Index> vir{Index(L"a_1", occ), Index(L"a_2", occ)};
+    Tensor head(L"R", bra(vir), ket(occ), Symmetry::Nonsymm,
+                BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+    ResultExpr rexpr{head, res.expr};
+    CHECK_NOTHROW(binarize<EvalExpr>(rexpr, bopts));
   }
+}
+
+// Regression: the exact R1 (singles) summand water-20 PNO-CCSD aborted on --
+// f{mu~;i} * C{a<i>;mu~}, a 2-tensor contraction. The batched optimizer must
+// emit ONE node_axes entry (one contraction node), matching binarize; if the DP
+// network drops a tensor (nt==1 -> zero entries) while binarize keeps the
+// contraction, binarize's node_counter == node_batch_axes.size() assertion
+// aborts. Mirrors MPQC's path: DenseTimeSpaceBatched optimize + head-pinned
+// binarize with the CSV rank-1 residual head R{a<i>;i}.
+TEST_CASE("optimizer node_axes match binarize on the water-20 R1 f*C summand",
+          "[optimize][batch][r1-offbyone]") {
+  using namespace sequant;
+  auto ctx0 = get_default_context().clone();
+  ctx0.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx0.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
+
+  auto prod =
+      deserialize<ExprPtr>("f{μ̃_1094;i_1}:N-S-S * C{a_1<i_1>;μ̃_1094}:N-S-S");
+  REQUIRE(prod);
+  REQUIRE(prod->is<Product>());
+
+  auto regime = df_regime(kWater20_pVDZF12);
+  BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  policy.batch_target_size = [](Index const&) -> std::size_t { return 256; };
+  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+  policy.peak_threshold = 100e9;
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      Expr const*, container::vector<NodeBatchAnnotation>>>();
+  OptimizeOptions opts;
+  opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.reorder = ReorderSum::Reorder;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.term_batch_axes = axes_map;
+
+  auto res = optimize_result(prod, opts);
+  REQUIRE(res.expr);
+
+  BinarizationOptions bopts;
+  std::size_t na = 0;
+  if (auto it = axes_map->find(res.expr.get()); it != axes_map->end()) {
+    bopts.node_batch_axes = it->second;
+    na = it->second.size();
+  }
+
+  // binarize's tensor*tensor contraction-node count for the same expression.
+  std::function<std::size_t(FullBinaryNode<EvalExpr> const&)> cnt =
+      [&](FullBinaryNode<EvalExpr> const& n) -> std::size_t {
+    if (n.leaf()) return 0;
+    std::size_t c = cnt(n.left()) + cnt(n.right());
+    if (!n.left()->is_scalar() && !n.right()->is_scalar()) ++c;
+    return c;
+  };
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  std::size_t const bc = cnt(binarize<EvalExpr>(res.expr));
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+  // f*C is a single contraction: the optimizer MUST emit exactly one node_axes
+  // entry, matching binarize (before the fix it emitted zero -> off-by-one).
+  CHECK(bc == 1);
+  CHECK(na == bc);
+
+  // And the head-pinned binarize MPQC uses must not trip its count assertion.
+  std::vector<Index> occ{Index(L"i_1")};
+  std::vector<Index> vir{Index(L"a_1", occ)};
+  Tensor head(L"R", bra(vir), ket(occ), Symmetry::Nonsymm,
+              BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+  ResultExpr rexpr{head, res.expr};
+  CHECK_NOTHROW(binarize<EvalExpr>(rexpr, bopts));
 }
 
 // build_context, no DP solve.
