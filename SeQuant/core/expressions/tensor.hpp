@@ -1023,6 +1023,24 @@ static_assert(is_tensor<Tensor>,
 
 using TensorPtr = std::shared_ptr<Tensor>;
 
+/// @return @p t rewritten in its VALUE orientation: for a marker-conjugated
+///         BraKetSymmetry::Conjugate tensor the starred swapped spelling
+///         T^*{q;p} denotes conj(T{p;q}), so the bare unstarred spelling is
+///         returned (marker cleared, bra/ket swapped back). No-op for
+///         unstarred tensors. Any transform that reads or rebuilds a tensor
+///         from its slot layout (rather than round-tripping it unchanged)
+///         must consume this form, or it silently drops the conjugation.
+///         A '⁺'-relabeled NonHermitian adjoint is NOT unfolded: its swap is
+///         a genuine value transpose.
+[[nodiscard]] inline Tensor value_oriented(Tensor const &t) {
+  if (!t.conjugated()) return t;
+  SEQUANT_ASSERT(t.braket_symmetry() == BraKetSymmetry::Conjugate);
+  Tensor bare{t};
+  bare.conjugate();
+  bare.adjoint();  // pure bra<->ket swap for Conjugate braket symmetry
+  return bare;
+}
+
 inline ExprPtr make_overlap(const Index &bra_index, const Index &ket_index) {
   return ex<Tensor>(Tensor(reserved::overlap_label(), bra{bra_index},
                            ket{ket_index}, aux{}, Tensor::reserved_tag{}));

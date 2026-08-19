@@ -23,8 +23,12 @@ namespace sequant::mbpt {
 /// @param csv_basis the basis in terms of which the CSVs are expanded
 /// @param kramers if true, spin(Kramers)-labeled CSV indices expand over BOTH
 ///        spin flavors of the expansion dummy (see csv_transform)
-ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexSpace& csv_basis,
+ExprPtr csv_transform_impl(Tensor const& tnsr_in, const IndexSpace& csv_basis,
                            std::wstring_view coeff_tensor_label, bool kramers) {
+  // Normalize to the VALUE orientation first: a marker-conjugated (folded)
+  // tensor spells conj(bra<->ket-swapped); rebuilding from its raw slot
+  // layout would silently drop the conjugation (see sequant::value_oriented).
+  const Tensor tnsr = value_oriented(tnsr_in);
   using ranges::views::transform;
   using sequant::reserved::overlap_label;
 
