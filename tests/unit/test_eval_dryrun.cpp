@@ -58,6 +58,7 @@
 #include <SeQuant/core/optimize/single_term_detail.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/expr.hpp>  // is_valid
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
@@ -377,6 +378,44 @@ bool is_df_batchable(Index const& ix) {
 // Diagnostic ([.]): does the order-aware ordered-key DP actually ENGAGE on the
 // real C60 giant, or does build_cells' m>7 fallback (enumeration blowup guard)
 // make it inert? Prints m (# batchable indices), ordered, nCells. Fast: only
+// Regression (fast, no DP solve): is_valid must ACCEPT a CSV (proto-indexed)
+// residual Sum. is_valid's Sum check compares each summand's external indices;
+// the slot-only get_unique_indices it used ignores proto-indices, so an occ
+// index carried inside a composite virtual (a<i,j>) in some summands and
+// standalone in others was miscounted, and is_valid spuriously reported
+// "Inconsistent external indices in sum". On an MPQC_ASSERT_ABORT build that
+// aborted every CSV-CCk run at MPQC_ASSERT(is_valid(e)); the proto-aware
+// external-index comparison fixes it. This reuses the real C60 doubles residual
+// data file (a genuine proto-indexed CSV Sum).
+TEST_CASE("is_valid accepts a CSV proto-indexed residual",
+          "[utilities][is_valid][csv]") {
+  using namespace sequant;
+  auto ctx0 = get_default_context().clone();
+  ctx0.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx0.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
+
+  auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                          "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = deserialize<ExprPtr>(line);
+  REQUIRE(expr);
+  REQUIRE(expr->is<Sum>());
+  REQUIRE(expr->as<Sum>().summands().size() > 1);
+
+  std::string msg;
+  bool const valid = is_valid(expr, &msg);
+  INFO("is_valid message: " << msg);
+  CHECK(valid);
+  CHECK(msg.empty());
+}
+
 // build_context, no DP solve.
 TEST_CASE("ordered-key C60 giant: does order_aware engage (m vs cap)?",
           "[.][ordered-key-c60-m]") {

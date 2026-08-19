@@ -293,6 +293,45 @@ std::string diff(const Expr &lhs, const Expr &rhs) {
   }                                   \
   return false;
 
+namespace {
+
+/// Counts every index occurrence in @p expr, treating a proto-index of a
+/// composite (CSV) index as an occurrence of that (bare) index in addition to
+/// counting the composite index itself. The recursion descends through
+/// Products/Sums down to the Tensor leaves.
+container::map<Index, std::size_t> index_occurrence_counts(const Expr &expr) {
+  container::map<Index, std::size_t> counts;
+  auto visit = [&counts](const Expr &e, auto &self) -> void {
+    if (e.is<Tensor>()) {
+      for (const Index &ix : e.as<Tensor>().const_braketaux()) {
+        ++counts[ix];
+        for (const Index &p : ix.proto_indices()) ++counts[p];
+      }
+    } else if (!e.is_atom()) {
+      for (const ExprPtr &sub : e) self(*sub, self);
+    }
+  };
+  visit(expr, visit);
+  return counts;
+}
+
+/// The proto-aware external-index set of a term: those indices whose total
+/// occurrence count (slot appearances + proto-index appearances, see
+/// index_occurrence_counts) is odd. Unlike the slot-only get_unique_indices,
+/// this set is invariant across the summands of a proto-indexed (CSV) residual
+/// -- where a given occ index may appear standalone in one term and only inside
+/// a composite's proto-index list in another -- so comparing it does not
+/// spuriously flag "inconsistent external indices in sum".
+container::set<Index> proto_aware_externals(
+    const container::map<Index, std::size_t> &counts) {
+  container::set<Index> ext;
+  for (const auto &[ix, n] : counts)
+    if (n % 2 == 1) ext.insert(ix);
+  return ext;
+}
+
+}  // namespace
+
 bool is_valid(const ExprPtr &expr, std::string *msg) {
   if (!expr) {
     SEQUANT_EXPR_INVALID("Expression is null");
@@ -356,19 +395,38 @@ bool is_valid(const Expr &expr, std::string *msg) {
     // Verify that all summands have the same external indices
     const Sum &sum = expr.as<Sum>();
 
-    auto extractor = [](const ExprPtr &expr) {
-      return get_unique_indices(expr);
-    };
+    // A proto-indexed (CSV) summand carries occ indices both as tensor slots
+    // and inside composite indices' proto-index lists; the slot-only
+    // get_unique_indices is then not invariant across summands and
+    // false-positives here. Detect this from the reference summand and, when
+    // present, validate with the proto-aware external-index set instead.
+    const auto ref_counts = index_occurrence_counts(*sum.summand(0));
+    const bool proto_indexed = std::ranges::any_of(
+        ref_counts,
+        [](const auto &kv) { return kv.first.has_proto_indices(); });
 
-    const IndexGroups<> ref = extractor(sum.summand(0));
+    bool consistent;
+    if (proto_indexed) {
+      const container::set<Index> ref = proto_aware_externals(ref_counts);
+      consistent =
+          std::ranges::all_of(sum.summands(), [&ref](const ExprPtr &s) {
+            return proto_aware_externals(index_occurrence_counts(*s)) == ref;
+          });
+    } else {
+      auto extractor = [](const ExprPtr &expr) {
+        return get_unique_indices(expr);
+      };
 
-    auto compare = [&ref](const IndexGroups<> &grps) {
-      return std::ranges::is_permutation(ref.bra, grps.bra) &&
-             std::ranges::is_permutation(ref.ket, grps.ket) &&
-             std::ranges::is_permutation(ref.aux, grps.aux);
-    };
+      const IndexGroups<> ref = extractor(sum.summand(0));
 
-    bool consistent = std::ranges::all_of(sum.summands(), compare, extractor);
+      auto compare = [&ref](const IndexGroups<> &grps) {
+        return std::ranges::is_permutation(ref.bra, grps.bra) &&
+               std::ranges::is_permutation(ref.ket, grps.ket) &&
+               std::ranges::is_permutation(ref.aux, grps.aux);
+      };
+
+      consistent = std::ranges::all_of(sum.summands(), compare, extractor);
+    }
 
     if (!consistent) {
       SEQUANT_EXPR_INVALID("Inconsistent external indices in sum");
