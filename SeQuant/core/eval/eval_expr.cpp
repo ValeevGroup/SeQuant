@@ -42,19 +42,9 @@ bool is_tot(Tensor const& t) noexcept {
   return ranges::any_of(t.const_indices(), &Index::has_proto_indices);
 }
 
-// The value orientation of a leaf spelling: a folded Conjugate-braket tensor
-// is spelled swapped+starred (T^*{q;p} == T{p;q} by value), so slot-derived
-// metadata -- an intermediate's bra/ket partition, which fixes its
-// result-column grouping -- must be computed on the unfolded spelling.
-// No-op for unstarred tensors; a '⁺'-marked Nonsymm adjoint's swap is a
-// genuine value transpose and is left alone.
-Tensor value_oriented(Tensor const& t) {
-  if (!t.conjugated()) return t;
-  Tensor bare{t};
-  bare.conjugate();
-  bare.adjoint();  // pure bra<->ket swap for Conjugate braket symmetry
-  return bare;
-}
+// Slot-derived metadata -- an intermediate's bra/ket partition, which fixes
+// its result-column grouping -- must be computed on the unfolded spelling;
+// see sequant::value_oriented (core/expressions/tensor.hpp).
 
 }  // namespace
 
