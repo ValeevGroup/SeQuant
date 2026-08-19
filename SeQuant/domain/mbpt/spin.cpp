@@ -321,9 +321,6 @@ ExprPtr append_spin(const ExprPtr& expr,
 
 ExprPtr remove_spin(const ExprPtr& expr) {
   auto remove_spin_from_tensor = [](const Tensor& tensor) {
-    // rebuild drops the elementwise-conjugation marker; real-orbital
-    // (Field::Real) precondition means none can be present -- assert it
-    SEQUANT_ASSERT(!tensor.conjugated());
     container::svector<Index> b(tensor.bra().begin(), tensor.bra().end());
     container::svector<Index> k(tensor.ket().begin(), tensor.ket().end());
     {
@@ -331,9 +328,14 @@ ExprPtr remove_spin(const ExprPtr& expr) {
         idx = make_spinfree(idx);
       }
     }
-    return ex<Tensor>(tensor.label(), bra(std::move(b)), ket(std::move(k)),
-                      tensor.aux(), tensor.symmetry(),
-                      tensor.braket_symmetry());
+    auto result =
+        ex<Tensor>(tensor.label(), bra(std::move(b)), ket(std::move(k)),
+                   tensor.aux(), tensor.symmetry(), tensor.braket_symmetry());
+    // relabeling is slot-preserving, so it commutes with elementwise
+    // conjugation: carry the marker through the rebuild (a canonicalized
+    // input may arrive in the marker-conjugated spelling)
+    if (tensor.conjugated()) result->as<Tensor>().conjugate();
+    return result;
   };
 
   auto remove_spin_from_product =
