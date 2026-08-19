@@ -133,9 +133,8 @@ std::wstring to_string(Tensor const& tensor,
                        const SerializationOptions& options) {
   auto serialized =
       to_string(static_cast<const AbstractTensor&>(tensor), options);
-  // conjugation spelling matches Variable: label^*{...}
-  // TODO extend the deserializer grammar to accept it; conjugation currently
-  // arises only from canonicalization at runtime, never from parsed input
+  // conjugation spelling matches Variable: label^*{...}; the deserializer
+  // grammar accepts the same spelling, so the round-trip is lossless
   if (tensor.conjugated()) serialized.insert(tensor.label().size(), L"^*");
   return serialized;
 }
