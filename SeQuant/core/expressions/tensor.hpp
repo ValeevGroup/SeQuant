@@ -472,6 +472,22 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// (e.g. integrals are Hermitian, amplitudes are not).
   /// @{
 
+ private:
+  /// resolves an abstract Hermiticity against the (materialized) bra and ket
+  /// bundles; mirrors the empty-bra+ket corner of the BraKetSymmetry-optional
+  /// ctors: when both bundles are empty the bra<->ket exchange has no
+  /// physical meaning and the literal Conjugate default applies (deriving
+  /// from base_field would yield Symm and break the spintrace bookkeeping
+  /// for vacuum-aux tensors)
+  template <typename BraIdx, typename KetIdx>
+  static BraKetSymmetry resolve_braket_symmetry(Hermiticity h, BraIdx &&bra_idx,
+                                                KetIdx &&ket_idx) {
+    if (ranges::empty(bra_idx) && ranges::empty(ket_idx))
+      return BraKetSymmetry::Conjugate;
+    return to_braket_symmetry(h, sequant::base_field(bra_idx, ket_idx));
+  }
+
+ public:
   /// @param label the tensor label
   /// @param bra_indices list of bra indices
   /// @param ket_indices list of ket indices
@@ -491,9 +507,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       // again); the duplication is the cost of safe delegation, not an
       // oversight.
       : Tensor(std::forward<S>(label), bra_indices, ket_indices, s,
-               to_braket_symmetry(
-                   h, sequant::base_field(make_indices(bra_indices),
-                                          make_indices(ket_indices))),
+               resolve_braket_symmetry(h, make_indices(bra_indices),
+                                       make_indices(ket_indices)),
                ps) {
     // Overwrite after delegation to preserve the exact trait (incl.
     // AntiHermitian, which the BraKetSymmetry round-trip cannot represent).
@@ -525,9 +540,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       // again); the duplication is the cost of safe delegation, not an
       // oversight.
       : Tensor(std::forward<S>(label), bra_indices, ket_indices, aux_indices, s,
-               to_braket_symmetry(
-                   h, sequant::base_field(make_indices(bra_indices),
-                                          make_indices(ket_indices))),
+               resolve_braket_symmetry(h, make_indices(bra_indices),
+                                       make_indices(ket_indices)),
                ps) {
     // Overwrite after delegation to preserve the exact trait (incl.
     // AntiHermitian, which the BraKetSymmetry round-trip cannot represent).

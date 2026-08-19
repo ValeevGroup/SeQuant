@@ -20,6 +20,31 @@
 
 namespace sequant {
 
+class AbstractTensor;
+
+/// @return true for reserved bookkeeping operators ((anti)symmetrizer,
+///         transposition) whose bra<->ket orientation defines/extracts
+///         external indices: canonicalization must never reorient them.
+///         Their Conjugate braket symmetry is the reserved Symm->Conjugate
+///         demotion sentinel (see Tensor's constructor), not a foldable
+///         value symmetry.
+bool braket_orientation_pinned(const AbstractTensor& t);
+
+/// @return true if the canonical orientation of a braket-foldable tensor is
+///         the bra<->ket-swapped one. The decision is a pure function of the
+///         tensor's content, shared by the per-tensor
+///         (Default/TensorBlockCanonicalizer) and network (TensorNetworkV3)
+///         canonicalization routes so both spell one value one way:
+///         the space-lexicographically larger bundle belongs in the bra
+///         (historical convention, e.g. the half-tensor X{;a;x} folds into
+///         X{a;;x}); on a full space tie the label-lexicographically SMALLER
+///         bundle stays in the bra (label-ascending spellings like
+///         g{p1,p2;p3,p4} remain canonical as written). Bundles are compared
+///         sorted, so the decision is independent of within-bundle slot
+///         order; identical bundles (e.g. the diagonal trace T{p,q;p,q})
+///         never prefer the swap.
+bool prefer_swapped_braket(const AbstractTensor& t);
+
 /// @brief Base class for Tensor canonicalizers
 /// To make custom canonicalizer make a derived class and register an instance
 /// of that class with TensorCanonicalizer::register_instance
@@ -262,7 +287,7 @@ class TensorBlockCanonicalizer : public DefaultTensorCanonicalizer {
   /// Fold the two bra<->ket orientations of a flat BraKetSymmetry::Conjugate
   /// tensor onto one canonical form (the same color rule apply() uses for the
   /// Symm fold) and report the accompanying conjugation. This is the flat-leaf
-  /// analog of TensorNetworkV3::canonicalize_slots' exploit_conjugate for the
+  /// analog of TensorNetworkV3::canonicalize_slots' Conjugate fold for the
   /// ToT path: swapping the bra/ket of a Conjugate tensor introduces a
   /// conjugation (C{ket;bra} = conj(C{bra;ket})), so a reorientation is a
   /// conjugation byproduct rather than a free relabeling as it is for Symm.
