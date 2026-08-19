@@ -601,10 +601,12 @@ ExprPtr TensorNetworkV3::canonicalize(
     container::map<Index, Index> idxrepl;
 
     // Use the new order of edges as the canonical order of indices and relabel
-    // accordingly (but only anonymous indices, of course)
-    for (std::size_t i = named_indices.size(); i < edges_.size(); ++i) {
+    // accordingly (anonymous indices only; named indices are skipped per edge
+    // -- a named index need not be an edge, see the "lexicographic rewrite
+    // with named non-edge (pure proto) indices" regression test).
+    for (std::size_t i = 0; i < edges_.size(); ++i) {
       const Index &index = edges_[i].idx();
-      SEQUANT_ASSERT(is_anonymous_index(index));
+      if (!is_anonymous_index(index)) continue;
       Index replacement = idxfac.make(index);
       if (index != replacement) idxrepl.emplace(index, std::move(replacement));
     }

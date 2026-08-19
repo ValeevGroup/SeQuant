@@ -688,3 +688,48 @@ TEST_CASE("braket_symmetric_half_tensor_canonicalization", "[algorithms]") {
   // Without braket symmetry the two forms must remain distinct.
   CHECK(canon_hash(L"X{a1;;i1}:N-N-N") != canon_hash(L"X{;a1;i1}:N-N-N"));
 }
+TEST_CASE("lexicographic rewrite with named non-edge (pure proto) indices",
+          "[canonicalize][proto]") {
+  // Regression: the lexicographic dummy rewrite skipped "named" edges by
+  // POSITION (loop started at named_indices.size()). A named index that is
+  // not an edge -- e.g. a pure proto index -- shifted that cutoff onto an
+  // anonymous edge; its skipped ordinal was then handed to another edge of
+  // the same space, duplicating a slot index (both t virtuals became a_1).
+  // Exposed by the Conjugate braket fold reordering the edge sort.
+  using namespace sequant;
+
+  auto ctx = get_default_context();
+  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto resetter = set_scoped_default_context(ctx);
+
+  const Index i1{L"i_1"}, i2{L"i_2"}, i3{L"i_3"};
+  // i_2 is a PURE proto: it decorates the virtuals but is no tensor slot
+  const Index a1 = Index(L"a_1", {i2, i3});
+  const Index a2 = Index(L"a_2", {i2, i3});
+
+  auto term = ex<Tensor>(L"g", bra{i1, i3}, ket{a1, a2}, Symmetry::Antisymm,
+                         BraKetSymmetry::Conjugate, ColumnSymmetry::Symm) *
+              ex<Tensor>(L"t", bra{a1, a2}, ket{i1, i3}, Symmetry::Antisymm,
+                         BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+
+  canonicalize(term);
+
+  // no tensor may hold the same index in two slots of one bundle
+  bool duplicate = false;
+  term->visit(
+      [&](ExprPtr const& node) {
+        if (!node->is<Tensor>()) return;
+        auto const& t = node->as<Tensor>();
+        auto scan = [&](auto const& rng) {
+          std::vector<std::wstring> labels;
+          for (auto const& ix : rng) labels.emplace_back(ix.full_label());
+          std::sort(labels.begin(), labels.end());
+          if (std::adjacent_find(labels.begin(), labels.end()) != labels.end())
+            duplicate = true;
+        };
+        scan(t.bra());
+        scan(t.ket());
+      },
+      /*atoms_only=*/true);
+  CHECK(!duplicate);
+}
