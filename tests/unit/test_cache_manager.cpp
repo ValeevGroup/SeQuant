@@ -17,7 +17,8 @@ using manager_type = sequant::CacheManager<node_type>;
 
 // Helper to create distinct EvalNode keys from expressions
 node_type make_node(std::wstring_view expr_str) {
-  return sequant::binarize(sequant::deserialize<sequant::ResultExpr>(expr_str));
+  return sequant::binarize(sequant::deserialize<sequant::ResultExpr>(
+      expr_str, {.def_braket_symm = sequant::Hermiticity::NonHermitian}));
 }
 
 }  // namespace

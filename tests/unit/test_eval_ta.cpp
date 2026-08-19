@@ -164,9 +164,11 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
 }
 
 auto tensor_to_key(std::wstring_view spec) {
-  return tensor_to_key(sequant::deserialize<sequant::ExprPtr>(
-                           spec, {.def_perm_symm = sequant::Symmetry::Nonsymm})
-                           ->as<sequant::Tensor>());
+  return tensor_to_key(
+      sequant::deserialize<sequant::ExprPtr>(
+          spec, {.def_perm_symm = sequant::Symmetry::Nonsymm,
+                 .def_braket_symm = sequant::Hermiticity::NonHermitian})
+          ->as<sequant::Tensor>());
 }
 
 template <typename NumericT>
@@ -571,14 +573,16 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     // assigned by external SLOT, not by space.
     auto expr_bra_external_symm = deserialize(
         L"2 g{i_2,a_3;i_3,i_4}:N-S-S * t{a_3;i_3}:N-N-S "
-        L"* t{a_1,a_2;i_1,i_4}:N-N-S");
+        L"* t{a_1,a_2;i_1,i_4}:N-N-S",
+        {.def_braket_symm = sequant::Hermiticity::NonHermitian});
     REQUIRE(expr_bra_external_symm);
     auto [br_symm, kr_symm] =
         report(expr_bra_external_symm, "g{i_2,a_3;...}:N-S-S");
 
     auto expr_bra_external_conj = deserialize(
         L"2 g{i_2,a_3;i_3,i_4}:N-C-S * t{a_3;i_3}:N-N-S "
-        L"* t{a_1,a_2;i_1,i_4}:N-N-S");
+        L"* t{a_1,a_2;i_1,i_4}:N-N-S",
+        {.def_braket_symm = sequant::Hermiticity::NonHermitian});
     REQUIRE(expr_bra_external_conj);
     auto [br_conj, kr_conj] =
         report(expr_bra_external_conj, "g{i_2,a_3;...}:N-C-S");
@@ -591,7 +595,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     // layout — use the ResultExpr API (C) to pin it.
     auto expr_ket_external_swap = deserialize(
         L"2 g{i_3,i_4;i_2,a_3}:N-S-S * t{a_3;i_3}:N-N-S "
-        L"* t{a_1,a_2;i_1,i_4}:N-N-S");
+        L"* t{a_1,a_2;i_1,i_4}:N-N-S",
+        {.def_braket_symm = sequant::Hermiticity::NonHermitian});
     REQUIRE(expr_ket_external_swap);
     auto [br_swap, kr_swap] =
         report(expr_ket_external_swap, "g{i_3,i_4;i_2,a_3}:N-S-S (pre-swap)");
@@ -604,7 +609,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     auto res_explicit_layout = sequant::deserialize<sequant::ResultExpr>(
         L"R2{a_1,a_2;i_1,i_2}:N-N-S = "
         L"2 g{i_2,a_3;i_3,i_4}:N-S-S * t{a_3;i_3}:N-N-S "
-        L"* t{a_1,a_2;i_1,i_4}:N-N-S");
+        L"* t{a_1,a_2;i_1,i_4}:N-N-S",
+        {.def_braket_symm = sequant::Hermiticity::NonHermitian});
     auto node_explicit = eval_node(res_explicit_layout);
     auto const& head_explicit = node_explicit->as_tensor();
     std::wstring head_explicit_str = sequant::to_latex(head_explicit);
@@ -647,7 +653,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
     auto parse_antisymm = [](auto const& xpr) {
       return sequant::deserialize<sequant::ExprPtr>(
-          xpr, {.def_perm_symm = sequant::Symmetry::Antisymm});
+          xpr, {.def_perm_symm = sequant::Symmetry::Antisymm,
+                .def_braket_symm = sequant::Hermiticity::NonHermitian});
     };
 
     auto& world = TA::get_default_world();
@@ -737,7 +744,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       REQUIRE(equal_tarrays(prod2_eval, prod2_man));
 
       auto expr3 = sequant::deserialize<sequant::ExprPtr>(
-          L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
+          L"R_{a1}^{i1,i3} * f_{i3}^{i2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto prod3_eval = eval(expr3, "a_1,i_1,i_2");
       auto prod3_man = TArrayD{};
       prod3_man("a1,i1,i2") =
@@ -745,7 +753,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       REQUIRE(equal_tarrays(prod3_eval, prod3_man));
 
       auto expr4 = sequant::deserialize<sequant::ExprPtr>(
-          L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3}");
+          L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto prod4_eval = eval(expr4, "i_1,a_1,a_2");
       auto prod4_man = TArrayD{};
       prod4_man("i1,a1,a2") = 1 / 4.0 *
@@ -772,7 +781,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       auto expr2 = sequant::deserialize<sequant::ExprPtr>(
           L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3} + R_{a1,a3}^{i1} * "
-          L"f_{i2}^{a3} * t_{a2}^{i2}");
+          L"f_{i2}^{a3} * t_{a2}^{i2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto eval2 = eval(expr2, "i_1,a_1,a_2");
 
       auto man2 = TArrayD{};
@@ -1024,7 +1034,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       };
 
       auto expr1 = deserialize(
-          L"((X{a1;;x1} X{;a2;x1}) Y{;;x1,x2})(X{a3;;x2} X{;a4;x2})");
+          L"((X{a1;;x1} X{;a2;x1}) Y{;;x1,x2})(X{a3;;x2} X{;a4;x2})",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto eval1 = eval(expr1, "a_1,a_2,a_3,a_4");
       auto man1 = [&]() {
         auto X1 = yield(L"X{a1;;x1}");
@@ -1057,7 +1068,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       // (in aux of result); binarize(ResultExpr) must keep them uncontracted
       {
         auto res = deserialize<sequant::ResultExpr>(
-            L"GAM{a2;a1;i1,i2} = t{i1,i2;a1,a3} T2{a2,a3;i1,i2}");
+            L"GAM{a2;a1;i1,i2} = t{i1,i2;a1,a3} T2{a2,a3;i1,i2}",
+            {.def_braket_symm = sequant::Hermiticity::NonHermitian});
         auto node = eval_node(res);
         auto eval_rdm = evaluate(node, std::string("a_2,a_1,i_1,i_2"), yield_)
                             ->get<TA::TArrayD>();
@@ -1075,7 +1087,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                 sequant::AssertStrictBraKetSymmetry::No));
 
         // hyperindex i1 in ket slots of 3 tensors
-        auto expr2 = deserialize(L"T{a1;i1} T{a2;i1} T{a3;i1}");
+        auto expr2 = deserialize(
+            L"T{a1;i1} T{a2;i1} T{a3;i1}",
+            {.def_braket_symm = sequant::Hermiticity::NonHermitian});
         auto eval2 = eval(expr2, "a_1,a_2,a_3");
         auto man2 = [&]() {
           auto T1 = yield(L"T{a1;i1}");
@@ -1087,7 +1101,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
         REQUIRE(equal_tarrays(eval2, man2, "a1,a2,a3"));
 
         // hyperindex a1 in bra slots of 3 tensors
-        auto expr3 = deserialize(L"T{a1;i1} T{a1;i2} T{a1;i3}");
+        auto expr3 = deserialize(
+            L"T{a1;i1} T{a1;i2} T{a1;i3}",
+            {.def_braket_symm = sequant::Hermiticity::NonHermitian});
         auto eval3 = eval(expr3, "i_1,i_2,i_3");
         auto man3 = [&]() {
           auto T1 = yield(L"T{a1;i1}");
@@ -1107,7 +1123,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
          //   R{;;x1} = A{;a1;x1} B{a1;a2;x1} C{a2;;x1}
          //   R[x] = sum_{a1,a2} A[a1,x] B[a1,a2,x] C[a2,x]
         auto res = deserialize<sequant::ResultExpr>(
-            L"R{;;x1} = A{;a1;x1} B{a1;a2;x1} C{a2;;x1}");
+            L"R{;;x1} = A{;a1;x1} B{a1;a2;x1} C{a2;;x1}",
+            {.def_braket_symm = sequant::Hermiticity::NonHermitian});
         auto evalR = evaluate(eval_node(res), std::string("x_1"), yield_)
                          ->get<TA::TArrayD>();
         auto manR = [&]() {
@@ -1156,7 +1173,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     using namespace std::string_literals;
 
     SECTION("summation") {
-      auto expr1 = deserialize<sequant::ExprPtr>(L"t_{a1}^{i1} + f_{i1}^{a1}");
+      auto expr1 = deserialize<sequant::ExprPtr>(
+          L"t_{a1}^{i1} + f_{i1}^{a1}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
 
       auto sum1_eval = eval(expr1, "i_1,a_1");
 
@@ -1166,8 +1185,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       REQUIRE(equal_tarrays(sum1_eval, sum1_man));
 
-      auto expr2 =
-          deserialize<sequant::ExprPtr>(L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
+      auto expr2 = deserialize<sequant::ExprPtr>(
+          L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
 
       auto sum2_eval = eval(expr2, "i_1,a_1");
 
@@ -1181,7 +1201,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
     SECTION("product") {
       auto expr1 = deserialize<sequant::ExprPtr>(
-          L"1/2 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}");
+          L"1/2 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto prod1_eval = eval(expr1, "i_4,a_1,a_4,i_1");
 
       TArrayC prod1_man{};
@@ -1193,7 +1214,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       auto expr2 = deserialize<sequant::ExprPtr>(
           L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{ i3, "
-          L"i4}");
+          L"i4}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto prod2_eval = eval(expr2, "a_1,a_2,i_1,i_2");
 
       auto prod2_man = TArrayC{};
@@ -1205,7 +1227,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       REQUIRE(equal_tarrays(prod2_eval, prod2_man));
 
       auto expr3 = sequant::deserialize<sequant::ExprPtr>(
-          L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
+          L"R_{a1}^{i1,i3} * f_{i3}^{i2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto prod3_eval = eval(expr3, "a_1,i_1,i_2");
       auto prod3_man = TArrayC{};
       prod3_man("a1,i1,i2") =
@@ -1214,7 +1237,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       REQUIRE(equal_tarrays(prod3_eval, prod3_man));
 
       auto expr4 = sequant::deserialize<sequant::ExprPtr>(
-          L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3}");
+          L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto prod4_eval = eval(expr4, "i_1,a_1,a_2");
       auto prod4_man = TArrayC{};
       prod4_man("i1,a1,a2") = 1 / 4.0 *
@@ -1227,7 +1251,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       auto expr1 = deserialize<sequant::ExprPtr>(
           L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
           " + "
-          " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
+          " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto eval1 = eval(expr1, "a_1,a_2,i_1,i_2");
 
       auto man1 = TArrayC{};
@@ -1244,7 +1269,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       auto expr2 = sequant::deserialize<sequant::ExprPtr>(
           L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3} + R_{a1,a3}^{i1} * "
-          L"f_{i2}^{a3} * t_{a2}^{i2}");
+          L"f_{i2}^{a3} * t_{a2}^{i2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto eval2 = eval(expr2, "i_1,a_1,a_2");
 
       auto man2 = TArrayC{};
@@ -1257,7 +1283,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     }
 
     SECTION("Antisymmetrization") {
-      auto expr1 = deserialize<sequant::ExprPtr>(L"g_{i1, i2}^{a1, a2}");
+      auto expr1 = deserialize<sequant::ExprPtr>(
+          L"g_{i1, i2}^{a1, a2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto eval1 = eval_antisymm(expr1, "i_1,i_2,a_1,a_2");
       auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
 
@@ -1270,7 +1298,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       REQUIRE(equal_tarrays(eval1, man1));
 
       // odd-ranked tensor
-      auto expr2 = deserialize<sequant::ExprPtr>(L"g_{i1, i2, i3}^{a1, a2}");
+      auto expr2 = deserialize<sequant::ExprPtr>(
+          L"g_{i1, i2, i3}^{a1, a2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto eval2 = eval_antisymm(expr2, "i_1,i_2,i_3,a_1,a_2");
       auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2}");
 
@@ -1283,7 +1313,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       REQUIRE(equal_tarrays(eval2, man2));
 
-      auto expr3 = deserialize<sequant::ExprPtr>(L"R_{a1,a2}^{}");
+      auto expr3 = deserialize<sequant::ExprPtr>(
+          L"R_{a1,a2}^{}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto eval3 = eval_antisymm(expr3, "a_1,a_2");
       auto const& arr3 = yield(L"R{a1,a2;}");
       auto man3 = TArrayC{};
@@ -1294,7 +1326,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     }
 
     SECTION("Symmetrization") {
-      auto expr1 = deserialize<sequant::ExprPtr>(L"g_{i1, i2}^{a1, a2}");
+      auto expr1 = deserialize<sequant::ExprPtr>(
+          L"g_{i1, i2}^{a1, a2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto eval1 = eval_symm(expr1, "i_1,i_2,a_1,a_2");
       auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
 
@@ -1304,7 +1338,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       REQUIRE(equal_tarrays(eval1, man1));
 
-      auto expr2 = deserialize<sequant::ExprPtr>(L"g_{i1,i2,i3}^{a1,a2,a3}");
+      auto expr2 = deserialize<sequant::ExprPtr>(
+          L"g_{i1,i2,i3}^{a1,a2,a3}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
 
       auto eval2 = eval_symm(expr2, "i_1,i_2,i_3,a_1,a_2,a_3");
       auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2,a3}");
@@ -1322,7 +1358,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       auto expr1 = deserialize<sequant::ExprPtr>(
           L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
           " + "
-          " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
+          " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
 
       auto eval1 = evaluate(eval_node(expr1), "i_1,i_2,a_1,a_2"s, yield_)
                        ->get<TArrayC>();
@@ -1374,7 +1411,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           L"f{i3;i1}"
           L" * "
           L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}";
-      auto const node = eval_node(deserialize<sequant::ExprPtr>(expr_str));
+      auto const node = eval_node(deserialize<sequant::ExprPtr>(
+          expr_str, {.def_braket_symm = sequant::Hermiticity::NonHermitian}));
       std::string const target_layout{"i_1,i_2,i_3;a_3i_2i_3,a_4i_2i_3"};
       auto result = evaluate(node, target_layout, yield)->get<ArrayToT>();
       ArrayToT ref;
@@ -1395,7 +1433,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           L" * "
           L"s{a2<i1,i2>;a4<i2,i3>}";
 
-      auto const node = eval_node(deserialize<sequant::ExprPtr>(expr_str));
+      auto const node = eval_node(deserialize<sequant::ExprPtr>(
+          expr_str, {.def_braket_symm = sequant::Hermiticity::NonHermitian}));
       std::string const target_layout{"i_2,i_1;a_1i_1i_2,a_2i_1i_2"};
 
       auto result = evaluate(node, target_layout, yield)->get<ArrayToT>();
@@ -1416,7 +1455,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           L"I{a1<i1,i2>,a2<i1,i2>;i1,i2}"
           L" * "
           L"g{i1,i2;a2<i1,i2>,a1<i1,i2>}";
-      auto const node = eval_node(deserialize<sequant::ExprPtr>(expr_str));
+      auto const node = eval_node(deserialize<sequant::ExprPtr>(
+          expr_str, {.def_braket_symm = sequant::Hermiticity::NonHermitian}));
 
       auto result = evaluate(node, yield)->get<NumericT>();
 
@@ -1442,8 +1482,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       // R(j,i;b,a))
       // -- outer and inner modes permute in lockstep.
       {
-        auto const Rnode = eval_node(
-            deserialize<sequant::ExprPtr>(L"R{a1<i1,i2>,a2<i1,i2>;i1,i2}"));
+        auto const Rnode = eval_node(deserialize<sequant::ExprPtr>(
+            L"R{a1<i1,i2>,a2<i1,i2>;i1,i2}",
+            {.def_braket_symm = sequant::Hermiticity::NonHermitian}));
         auto const Rres = dyield(Rnode);
         auto const& R = Rres->get<DArrayToT>();
 
@@ -1469,7 +1510,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       // lockstep; each inner index keeps its proto-suffix "i_1i_2i_3".
       {
         auto const Rnode = eval_node(deserialize<sequant::ExprPtr>(
-            L"R{a1<i1,i2,i3>,a2<i1,i2,i3>,a3<i1,i2,i3>;i1,i2,i3}"));
+            L"R{a1<i1,i2,i3>,a2<i1,i2,i3>,a3<i1,i2,i3>;i1,i2,i3}",
+            {.def_braket_symm = sequant::Hermiticity::NonHermitian}));
         auto const Rres = dyield(Rnode);
         auto const& R = Rres->get<DArrayToT>();
 
@@ -1513,7 +1555,8 @@ TEST_CASE("eval_custom_evaluator", "[eval]") {
   // a multi-product expression: several non-leaf nodes in the eval tree.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
       L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}",
-      {.def_perm_symm = sequant::Symmetry::Antisymm});
+      {.def_perm_symm = sequant::Symmetry::Antisymm,
+       .def_braket_symm = sequant::Hermiticity::NonHermitian});
   std::string const target = "a_1,a_2,i_1,i_2";
   auto const node = eval_node(expr);
 
@@ -1559,7 +1602,8 @@ TEST_CASE("eval_batch_axis", "[eval]") {
   using sequant::contracted_indices;
 
   auto node_of = [](std::wstring_view xpr) {
-    return eval_node(sequant::deserialize<sequant::ExprPtr>(xpr));
+    return eval_node(sequant::deserialize<sequant::ExprPtr>(
+        xpr, {.def_braket_symm = sequant::Hermiticity::NonHermitian}));
   };
 
   SECTION("single contracted index") {
@@ -1842,7 +1886,8 @@ TEST_CASE("eval_batched_custom_evaluator", "[eval]") {
 
   // contracts a1,a2 (unoccupied) -> batch mode is an unoccupied index (3 tiles)
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
+      L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   std::string const target = "i_1,i_2,i_3,i_4";
   auto node = eval_node(expr);
 
@@ -1889,7 +1934,8 @@ TEST_CASE("eval_batched_custom_evaluator persistence gate", "[eval]") {
   // Contracts a1,a2 (unoccupied, 3 tiles) -> batchable over an unoccupied mode.
   // The subtree contains a "t" leaf, which we treat as volatile.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
+      L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   std::string const target = "i_1,i_2,i_3,i_4";
   auto node = eval_node(expr);
   // The runtime batches STRICTLY on the optimizer's annotations (there is no
@@ -1968,7 +2014,8 @@ TEST_CASE("eval_batched_custom_evaluator_tot", "[eval]") {
   // annotation-free ToT array operations that must emit an "outer;inner"
   // annotation rather than a flat one (else DistArray's is_tot_index() trips).
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"I{a4<i2,i3>,a1<i1,i2>;i1,i2} * s{a2<i1,i2>;a4<i2,i3>}");
+      L"I{a4<i2,i3>,a1<i1,i2>;i1,i2} * s{a2<i1,i2>;a4<i2,i3>}",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   std::string const target = "i_2,i_1;a_1i_1i_2,a_2i_1i_2";
   auto node = eval_node(expr);
   // Reference first (non-batched), so yield's random leaf arrays are generated
@@ -2023,7 +2070,9 @@ TEST_CASE("ta_tot_conj_complex", "[eval]") {
   using ArrayToT = typename decltype(yield)::array_tot_type;
 
   std::string const annot{"i_2,i_3;a_3i_2i_3,a_4i_2i_3"};
-  auto const t = deserialize<sequant::ExprPtr>(L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}");
+  auto const t = deserialize<sequant::ExprPtr>(
+      L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   auto const& src = yield(t->as<sequant::Tensor>())->get<ArrayToT>();
 
   ArrayToT conjd;
@@ -2060,7 +2109,8 @@ TEST_CASE("eval_batched_scratch", "[eval]") {
   // children, contracted at the root; an aux-aux edge, like the DF index K).
   // Every orbital contraction pairs a bra with a ket.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (g{a_3;i_2;x_1} * h{i_4;a_3})");
+      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (g{a_3;i_2;x_1} * h{i_4;a_3})",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   auto const node = eval_node(expr);
   REQUIRE_FALSE(node.leaf());
   REQUIRE_FALSE(node.left().leaf());
@@ -2092,7 +2142,8 @@ TEST_CASE("eval_batched_scratch", "[eval]") {
     // mode (an index the shared subnode does not carry) gives it signature
     // 'absent' while the first gives a position -> inconsistent -> unshared
     auto const expr2 = sequant::deserialize<sequant::ExprPtr>(
-        L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}");
+        L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}",
+        {.def_braket_symm = sequant::Hermiticity::NonHermitian});
     auto const node2 = eval_node(expr2);
     auto const bogus_axis = Index(L"i_9");
     std::vector<std::pair<node_t const*, Index>> const members{
@@ -2111,10 +2162,12 @@ TEST_CASE("eval_batched_scratch", "[eval]") {
     // sliced value. D must end up unregistered.
     auto const expr_m1 = sequant::deserialize<sequant::ExprPtr>(
         L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * u{i_5;i_3}) * "
-        L"(g{a_3;i_2;x_1} * h{i_4;a_3})");
+        L"(g{a_3;i_2;x_1} * h{i_4;a_3})",
+        {.def_braket_symm = sequant::Hermiticity::NonHermitian});
     auto const m1 = eval_node(expr_m1);
     auto const expr_m2 = sequant::deserialize<sequant::ExprPtr>(
-        L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * u{i_5;i_3}) * p{i_6;i_7;x_1}");
+        L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * u{i_5;i_3}) * p{i_6;i_7;x_1}",
+        {.def_braket_symm = sequant::Hermiticity::NonHermitian});
     auto const m2 = eval_node(expr_m2);
     // structural preconditions: m1 = X * D2, X = D * u, D2 == D == m2's X
     // child canonically
@@ -2170,7 +2223,8 @@ TEST_CASE("eval_batched_custom_evaluator dedups within-batch repeats",
   // W-analog: root contracts the aux index x_1; the two children are
   // canonically equal
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (g{a_3;i_2;x_1} * h{i_4;a_3})");
+      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (g{a_3;i_2;x_1} * h{i_4;a_3})",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   std::string const target = "i_1,i_3,i_2,i_4";
   auto node = eval_node(expr);
   // The runtime batches STRICTLY on the optimizer's annotations (there is no
@@ -2233,9 +2287,11 @@ TEST_CASE("eval_batched_custom_evaluator group replay",
   // contraction pairs a bra with a ket.
   auto const t1 = sequant::deserialize<sequant::ExprPtr>(
       L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * (g{a_3;i_2;x_1} * h{i_4;a_3}))"
-      L" * t{i_1,i_2;i_3,i_9}");
+      L" * t{i_1,i_2;i_3,i_9}",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   auto const t2 = sequant::deserialize<sequant::ExprPtr>(
-      L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}) * t{i_1;i_3}");
+      L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}) * t{i_1;i_3}",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   std::string const tgt1 = "i_4,i_9";
   std::string const tgt2 = "i_5,i_6";
   auto n1 = eval_node(t1);
@@ -2323,9 +2379,11 @@ TEST_CASE("eval_batched_custom_evaluator group replay layers nested finals",
   // carries no x_2). Every orbital contraction pairs a bra with a ket.
   auto const t_out = sequant::deserialize<sequant::ExprPtr>(
       L"((((g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}) * r{i_6;i_7;x_2})"
-      L" * q{i_7;i_8;x_2}) * t{i_1;i_3,i_9}");
+      L" * q{i_7;i_8;x_2}) * t{i_1;i_3,i_9}",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   auto const t_in = sequant::deserialize<sequant::ExprPtr>(
-      L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}) * t{i_1;i_3,i_7}");
+      L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}) * t{i_1;i_3,i_7}",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   std::string const tgt_out = "i_5,i_8,i_9";
   std::string const tgt_in = "i_5,i_6,i_7";
   auto n_out = eval_node(t_out);
@@ -2425,7 +2483,8 @@ TEST_CASE("eval_batched_custom_evaluator nests inner mode", "[eval]") {
   // written fully binary so binarize preserves the nesting.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
       L"(((u{i_1;i_2;x_1,x_2} * v{i_1;i_3;x_2}) * w{i_2;i_5;x_1})"
-      L" * p{i_3;i_6;x_1})");
+      L" * p{i_3;i_6;x_1})",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   std::string const target = "i_5,i_6";
   auto node = eval_node(expr);  // mutable: batch modes are annotated below
 
@@ -2527,7 +2586,8 @@ TEST_CASE("eval_batched_custom_evaluator nests two modes on one node",
   // leaf carries x_1 and x_2, so slicing either aux mode slices both leaves.
   // Result free indices are i_5, i_6.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{i_1;i_5;x_1,x_2} * h{i_1;i_6;x_1,x_2})");
+      L"(g{i_1;i_5;x_1,x_2} * h{i_1;i_6;x_1,x_2})",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   std::string const target = "i_5,i_6";
   auto node = eval_node(expr);  // mutable: both batch modes annotated below
 
@@ -2648,7 +2708,8 @@ TEST_CASE("eval_batched_custom_evaluator hoists loop-invariant descendant",
   // - R = M*p contracts i_3 and x_1 -> {i_5;i_6}: the x_1 batch trigger.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
       L"(((g{i_1;i_2;x_2} * h{i_1;i_3;x_2}) * w{i_2;i_5;x_1})"
-      L" * p{i_3;i_6;x_1})");
+      L" * p{i_3;i_6;x_1})",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   std::string const target = "i_5,i_6";
   auto node = eval_node(expr);
 
@@ -2771,9 +2832,13 @@ TEST_CASE(
   rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 4, 12};
   yield_.set_max_tile(4);
 
+  // NonHermitian: these structural test tensors claim no Hermiticity; the
+  // deserializer's Conjugate fallback would let the braket fold wrap swapped
+  // leaves in Adjoint nodes and break the direct tree navigation below
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
       L"(((((q{i_1;a_9;x_1} * r{a_9;i_2}) * s{;;x_1,x_2}) * h{i_1;i_3;x_2}) * "
-      L"w{i_2;i_5;x_1}) * p{i_3;i_6;x_1})");
+      L"w{i_2;i_5;x_1}) * p{i_3;i_6;x_1})",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   std::string const target = "i_5,i_6";
   auto node = eval_node(expr);
 
@@ -2919,7 +2984,8 @@ TEST_CASE("batched_eval_external_axis_scatter", "[eval][batched-external]") {
   // ExprPtr binarize would instead infer it contracted); stamping x_1 External
   // on the root and the inner node exercises the scatter branch at both levels.
   auto const res_expr = sequant::deserialize<sequant::ResultExpr>(
-      L"R{a_1;a_4;x_1} = ((g{a_1;a_2;x_1} * h{a_2;a_3;x_1}) * p{a_3;a_4;x_1})");
+      L"R{a_1;a_4;x_1} = ((g{a_1;a_2;x_1} * h{a_2;a_3;x_1}) * p{a_3;a_4;x_1})",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   auto node = eval_node(res_expr);  // mutable: External mode stamped below
   std::string const target = node->annot();
 
@@ -3057,7 +3123,8 @@ TEST_CASE(
 
   auto const res_expr = sequant::deserialize<sequant::ResultExpr>(
       L"R{a_1;a_4;x_1} = ((g{a_1;a_2;x_1} * h{a_2;a_3;x_1})"
-      L" * (u{a_3;a_5} * v{a_5;a_4}))");
+      L" * (u{a_3;a_5} * v{a_5;a_4}))",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   auto node = eval_node(res_expr);
   std::string const target = node->annot();
 
@@ -3206,7 +3273,8 @@ TEST_CASE("batched cached intermediate is sliced to the batch block on use",
   yield_.set_max_tile(4);
 
   auto const res_expr = sequant::deserialize<sequant::ResultExpr>(
-      L"R{a_1;a_4;x_1} = ((g{a_1;a_2;x_1} * h{a_2;a_3;x_1}) * p{a_3;a_4})");
+      L"R{a_1;a_4;x_1} = ((g{a_1;a_2;x_1} * h{a_2;a_3;x_1}) * p{a_3;a_4})",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   auto node = eval_node(res_expr);  // R
   std::string const target = node->annot();
 
@@ -3336,7 +3404,8 @@ TEST_CASE("batched_scratch_no_seed_external", "[eval][batched-external]") {
   // head t makes P a PERSISTENT final. P does not carry the contracted batch
   // mode played by `mu` below.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{a_2;i_1;x_1} * h{a_2;i_3}) * t{i_3;i_1}");
+      L"(g{a_2;i_1;x_1} * h{a_2;i_3}) * t{i_3;i_1}",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   auto n = eval_node(expr);
   REQUIRE_FALSE(n.leaf());
   auto const& P = n.left();  // g*h, carries x_1
@@ -3524,7 +3593,8 @@ TEST_CASE("batched_eval_external_proto_occ_scatter",
   // g is a flat (mu~) operand carrying NO occ; the two C legs are composite
   // (a<i_1,i_2>) carrying the occ only as protos.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{m_1;m_2} * C{a1<i_1,i_2>;m_2}) * C{a2<i_1,i_2>;m_1}");
+      L"(g{m_1;m_2} * C{a1<i_1,i_2>;m_2}) * C{a2<i_1,i_2>;m_1}",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   auto node = eval_node(expr);  // mutable: External mode stamped below
   std::string const target = node->annot();
 
@@ -3661,8 +3731,9 @@ TEST_CASE("batched_eval_external_two_occ", "[eval][batched-external]") {
                                                     /*nvirt=*/4};
   yield_.set_max_tile(4);
 
-  auto const expr =
-      sequant::deserialize<sequant::ExprPtr>(L"(g{i_1;a_1} * h{a_1;i_2})");
+  auto const expr = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{i_1;a_1} * h{a_1;i_2})",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   std::string const target = "i_1,i_2";
   auto node = eval_node(expr);  // mutable: batch modes stamped below
 
@@ -3796,7 +3867,8 @@ TEST_CASE("batched_eval_external_hadamard", "[eval][batched-external]") {
   yield_.set_max_tile(4);
 
   auto const res_expr = sequant::deserialize<sequant::ResultExpr>(
-      L"R{i_3;a_1,a_2} = (g{i_3;a_1} * h{i_3;a_2})");
+      L"R{i_3;a_1,a_2} = (g{i_3;a_1} * h{i_3;a_2})",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   auto node = eval_node(res_expr);  // mutable: External mode stamped below
   std::string const target = node->annot();
 
@@ -3905,7 +3977,8 @@ TEST_CASE("batched_eval_external_nested_contracted",
 
   auto const res_expr = sequant::deserialize<sequant::ResultExpr>(
       L"R{i_2;i_6;x_1} = ((u{i_1;i_2;x_1,x_2} * v{i_1;i_3;x_2})"
-      L" * p{i_3;i_6;x_1})");
+      L" * p{i_3;i_6;x_1})",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   auto node = eval_node(res_expr);  // mutable: batch modes stamped below
   std::string const target = node->annot();
 
@@ -4039,7 +4112,8 @@ TEST_CASE(
 
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
       L"(((u{i_1;i_2;x_1,x_2} * v{i_1;i_3;x_2}) * w{i_2;i_5;x_1})"
-      L" * p{i_3;i_6;x_1})");
+      L" * p{i_3;i_6;x_1})",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   std::string const target = "i_5,i_6";
   auto node = eval_node(expr);
 
@@ -4147,7 +4221,8 @@ TEST_CASE("make_evaluator BatchPolicy adapter", "[eval]") {
   // Contracts a1,a2 (unoccupied) -> batch mode is an unoccupied index (3
   // tiles). The subtree contains a "t" leaf, which the policy marks volatile.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
+      L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   std::string const target = "i_1,i_2,i_3,i_4";
   auto const node = eval_node(expr);
 
@@ -4570,7 +4645,8 @@ TEST_CASE("shape_provider_general_product", "[shape-provider]") {
       L"I{a4<i2,i3>,a1<i1,i2>;i1,i2}"
       L" * "
       L"s{a2<i1,i2>;a4<i2,i3>}";
-  auto const node = eval_node(sequant::deserialize<sequant::ExprPtr>(expr_str));
+  auto const node = eval_node(sequant::deserialize<sequant::ExprPtr>(
+      expr_str, {.def_braket_symm = sequant::Hermiticity::NonHermitian}));
   std::string const target{"i_2,i_1;a_1i_1i_2,a_2i_1i_2"};
 
   // Unshaped reference (no hook).
@@ -4679,7 +4755,8 @@ TEST_CASE("shape_provider_denest_to_flat", "[shape-provider]") {
   // a1<i1,i2>,a2<i1,i2> that fully contract (inner), leaving bare i1,i2.
   auto const res_expr = sequant::deserialize<sequant::ResultExpr>(
       L"D{i1,i2} = "
-      L"R{a1<i1,i2>,a2<i1,i2>;i1,i2} * g{i1,i2;a1<i1,i2>,a2<i1,i2>}");
+      L"R{a1<i1,i2>,a2<i1,i2>;i1,i2} * g{i1,i2;a1<i1,i2>,a2<i1,i2>}",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   auto const node = eval_node(res_expr);
   // Confirm this really is the denest (DeNest::True) path.
   REQUIRE(node.left()->tot());
