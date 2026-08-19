@@ -1532,7 +1532,10 @@ TEST_CASE("dryrun leaf yielder builds a sized token from a tensor leaf",
   auto r = backend_test_regime();
   auto cm = std::make_shared<CostModel const>(r);
 
-  auto expr = deserialize<ExprPtr>("g{i_1,i_2;a_4}");
+  // NonHermitian: a Conjugate (Hermitian) leaf in its swapped orientation
+  // would binarize to an Adjoint node over the canonical spelling, not a leaf
+  auto expr = deserialize<ExprPtr>(
+      "g{i_1,i_2;a_4}", {.def_braket_symm = Hermiticity::NonHermitian});
   bool const parsed = static_cast<bool>(expr);
   REQUIRE(parsed);
 
