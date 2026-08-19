@@ -704,13 +704,21 @@ Spin kr_flavor(const Index& idx) {
   return sequant::mbpt::to_spin(idx.space().qns());
 }
 
-// Flip the flavor of a PLAIN (proto-free) index; identity on unflavored.
-Index kr_flip_plain(const Index& idx) {
-  SEQUANT_ASSERT(!idx.has_proto_indices());
-  const Spin s = kr_flavor(idx);
-  if (s == Spin::any) return idx;
-  return s == Spin::alpha ? make_spinbeta(make_spinfree(idx))
-                          : make_spinalpha(make_spinfree(idx));
+// The flavor-flipped IndexSpace of a flavored index (registry-resolved,
+// mirroring make_index_with_spincase's space construction).
+IndexSpace kr_flipped_space(const Index& idx) {
+  const Spin s0 = kr_flavor(idx);
+  SEQUANT_ASSERT(s0 != Spin::any);
+  const Spin s = s0 == Spin::alpha ? Spin::beta : Spin::alpha;
+  auto qns = sequant::mbpt::spinannotation_remove(idx.space().qns()).unIon(s);
+  const auto label =
+      sequant::mbpt::spinannotation_replacе(idx.space().base_key(), s);
+  if (auto isr = get_default_context().index_space_registry()) {
+    auto* sp = isr->retrieve_ptr(label);
+    if (sp && sp->type() == idx.space().type() && sp->qns() == qns) return *sp;
+  }
+  return IndexSpace{label, idx.space().type(), qns,
+                    idx.space().approximate_size()};
 }
 
 // Rebase one flat term (Product of Tensors/Constants/Variables, or a lone
@@ -808,26 +816,29 @@ ExprPtr kramers_rebase_term(const ExprPtr& term,
   if (flip_roots.empty()) return nullptr;  // nothing to do
 
   // --- build the replacement map: every flavored slot index of a flipped
-  // component maps to its flavor-flipped spelling. Two passes: plain indices
-  // first, then composites (base flavor flipped, protos mapped through the
-  // plain entries so decoration follows its referent).
+  // component maps to a FRESH tmp index in the flavor-flipped space. Fresh
+  // ordinals sidestep both the reserved-tmp-ordinal ctor guard (the
+  // make_index_with_spincase replay throw on canonicalizer-minted dummies)
+  // and cross-space ordinal collisions (an a↓_k -> a↑_k in-place flip could
+  // collide with an unrelated a↑_k elsewhere in the term). Two passes: plain
+  // indices first, then composites (protos mapped through the plain entries
+  // so decoration follows its referent).
   container::map<Index, Index> repl;
   for (auto const& [idx, ls] : incidence) {
     if (flip_roots.find(find(ls.front())) == flip_roots.end()) continue;
-    if (!idx.has_proto_indices()) repl.emplace(idx, kr_flip_plain(idx));
+    if (!idx.has_proto_indices())
+      repl.emplace(idx, Index::make_tmp_index(kr_flipped_space(idx)));
   }
   for (auto const& [idx, ls] : incidence) {
     if (flip_roots.find(find(ls.front())) == flip_roots.end()) continue;
     if (!idx.has_proto_indices()) continue;
-    Index base(idx.space(), idx.ordinal());
-    Index base_flipped = kr_flip_plain(base);
     auto protos = idx.proto_indices();
     for (auto& p : protos) {
       auto it = repl.find(p);
       if (it != repl.end()) p = it->second;
     }
-    repl.emplace(idx,
-                 Index(base_flipped.space(), base_flipped.ordinal(), protos));
+    repl.emplace(
+        idx, Index::make_tmp_index(kr_flipped_space(idx), std::move(protos)));
   }
 
   // --- apply: transform every factor's indices (decoration everywhere
