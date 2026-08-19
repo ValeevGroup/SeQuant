@@ -45,7 +45,6 @@ std::wstring to_wstring(CanonicalizationMethod m);
 struct CanonicalizeOptions {
   SEQUANT_DESIGNATED_INIT_ONLY;
   enum class IgnoreNamedIndexLabel : bool { Yes = true, No = false };
-  enum class RenamePureProtoIndices : bool { Yes = true, No = false };
 
   /// TN canonicalization method
   /// @internal
@@ -67,25 +66,11 @@ struct CanonicalizeOptions {
   /// contexts where labels are meaningful, e.g. when canonicalizing sum of
   /// tensor networks and will be therefore ignored.
   IgnoreNamedIndexLabel ignore_named_index_labels = IgnoreNamedIndexLabel::Yes;
-  /// whether pure proto indices (indices appearing exclusively inside proto
-  /// bundles, never as tensor slots) that are not protos of a named index are
-  /// treated as anonymous, i.e. renamed together with the other dummies during
-  /// canonicalization. By default they are pinned (promoted to named), which
-  /// is correct when a pure proto is a meaningful dependent-range parameter
-  /// (e.g. PNO/F12 usage). Set to Yes when proto bundles are decoration keyed
-  /// by dummy summation indices (e.g. CSV/PNS Kramers-traced expressions), so
-  /// that expressions equal up to dummy renaming acquire identical canonical
-  /// forms. Protos of named (external) indices always remain pinned — they
-  /// are part of the external index identity. Only effective with
-  /// CanonicalizationMethod::Topological (index renaming happens in the
-  /// graph-canonicalization phase).
-  RenamePureProtoIndices rename_pure_proto_indices = RenamePureProtoIndices::No;
 
   static CanonicalizeOptions default_options();
   CanonicalizeOptions copy_and_set(CanonicalizationMethod) const;
   CanonicalizeOptions copy_and_set(std::optional<container::set<Index>>) const;
   CanonicalizeOptions copy_and_set(IgnoreNamedIndexLabel) const;
-  CanonicalizeOptions copy_and_set(RenamePureProtoIndices) const;
 
   friend constexpr bool operator==(const CanonicalizeOptions& a,
                                    const CanonicalizeOptions& b) {

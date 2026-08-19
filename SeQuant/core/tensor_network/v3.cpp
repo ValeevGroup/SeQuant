@@ -141,8 +141,7 @@ std::optional<std::size_t> TensorNetworkV3::Graph::vertex_to_tensor_idx(
 }
 
 ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
-                                            bool ignore_named_index_labels,
-                                            bool rename_pure_proto_indices) {
+                                            bool ignore_named_index_labels) {
   int parity = 1;
 
   if (Logger::instance().canonicalize) {
@@ -160,31 +159,8 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
     init_edges();
   }
 
-  // Opt-in (CanonicalizeOptions::RenamePureProtoIndices): demote pure proto
-  // indices to anonymous so they are renamed in canonical order with the
-  // other dummies — UNLESS they are a proto of a named index (then they are
-  // part of that index's identity and stay pinned). Without this, a
-  // decoration-only bundle member is pinned with its incidental input label
-  // and expressions equal up to dummy renaming canonicalize apart.
-  NamedIndexSet effective_named_indices_storage;
-  const NamedIndexSet *effective_named_indices = &named_indices;
-  if (rename_pure_proto_indices && !pure_proto_indices_.empty()) {
-    // protos of named indices that are themselves not pure protos stay pinned
-    NamedIndexSet pinned_protos;
-    for (const auto &idx : named_indices) {
-      if (pure_proto_indices_.contains(idx)) continue;
-      for (const auto &pidx : idx.proto_indices()) pinned_protos.emplace(pidx);
-    }
-    effective_named_indices_storage = named_indices;
-    for (const auto &pidx : pure_proto_indices_) {
-      if (!pinned_protos.contains(pidx))
-        effective_named_indices_storage.erase(pidx);
-    }
-    effective_named_indices = &effective_named_indices_storage;
-  }
-
-  const auto is_anonymous_index = [&effective_named_indices](const Index &idx) {
-    return effective_named_indices->find(idx) == effective_named_indices->end();
+  const auto is_anonymous_index = [&named_indices](const Index &idx) {
+    return named_indices.find(idx) == named_indices.end();
   };
 
   // index factory to generate anonymous indices
@@ -192,7 +168,7 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
 
   // make the graph
   Graph graph = create_graph(
-      {.named_indices = effective_named_indices,
+      {.named_indices = &named_indices,
        .distinct_named_indices = !ignore_named_index_labels,
        .make_labels = Logger::instance().canonicalize_input_graph ||
                       Logger::instance().canonicalize_dot,
@@ -373,26 +349,6 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
     if (is_named) continue;
 
     idxrepl_emplace(idx, idxfac.make(idx));
-  }
-
-  // Anonymous pure proto indices are not edges, so the loop above misses
-  // them; rename them here, in the canonical order of their graph vertices
-  // (their Index vertices follow the edge vertices, see create_graph). Their
-  // replacements' labels are deterministic given the canonical graph, so
-  // equivalent networks converge onto identical labels. Bundle rewriting on
-  // the composites they decorate is handled by apply_index_replacements
-  // (Index::transform recurses into proto indices).
-  if (rename_pure_proto_indices && !pure_proto_indices_.empty()) {
-    container::svector<std::pair<std::size_t, const Index *>> anon_pure_protos;
-    for (const auto &[i, idx] : ranges::views::enumerate(pure_proto_indices_)) {
-      if (!is_anonymous_index(idx)) continue;
-      const std::size_t vertex = index_idx_to_vertex[edges_.size() + i];
-      anon_pure_protos.emplace_back(canonize_perm[vertex], &idx);
-    }
-    ranges::sort(anon_pure_protos, {},
-                 &std::pair<std::size_t, const Index *>::first);
-    for (const auto &[ord, idx] : anon_pure_protos)
-      idxrepl_emplace(*idx, idxfac.make(*idx));
   }
 
   if (Logger::instance().canonicalize) {
@@ -602,8 +558,7 @@ ExprPtr TensorNetworkV3::canonicalize(
     // indistinguishable tensors present in the expression. Their order and
     // indexing can only be determined via this rigorous canonization.
     byproduct = canonicalize_graph(
-        named_indices, static_cast<bool>(options.ignore_named_index_labels),
-        static_cast<bool>(options.rename_pure_proto_indices));
+        named_indices, static_cast<bool>(options.ignore_named_index_labels));
   }
 
   if ((options.method & CanonicalizationMethod::Lexicographic) ==

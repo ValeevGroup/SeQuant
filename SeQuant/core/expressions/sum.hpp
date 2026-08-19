@@ -389,10 +389,6 @@ struct TransformSumExprOptions {
   SEQUANT_DESIGNATED_INIT_ONLY;
   bool canonicalize = true;
   bool flatten = true;
-  /// options for the per-summand canonicalization;
-  /// ignore_named_index_labels is always overridden to No (cross-summand
-  /// identity needs meaningful named labels, see transform_sum_expr)
-  std::optional<CanonicalizeOptions> canonicalize_options = std::nullopt;
 };
 
 /// variant of sequant::transform_reduce for eager sum reduction of Expr's
@@ -404,32 +400,31 @@ ExprPtr transform_sum_expr(SizedRange &&rng, const UnaryMapOp &map,
   HashingAccumulator result_acc;
   std::mutex result_mtx;  // serializes updates of result
 
-  auto task =
-      [&result_acc, &result_mtx, &map, canonicalize = options.canonicalize,
-       flatten = options.flatten,
-       canon_opts = options.canonicalize_options.value_or(
-           CanonicalizeOptions::default_options())](const ExprPtr &input) {
-        auto task_result = map(input);
-        if (task_result) {
-          if (canonicalize) {
-            // Summands are canonicalized to be MERGED across the sum, so named
-            // (external) indices must be treated as meaningful/distinct — same
-            // reasoning as Sum::canonicalize_impl. Under the label-ignoring
-            // default, same-space named indices are graph-automorphic and bliss
-            // breaks the orbit by input vertex order: equivalent summands land
-            // on DIFFERENT "canonical" forms (defeating the hash merge), and
-            // which named label sits on which slot becomes input-dependent.
-            auto bp = task_result->canonicalize(canon_opts.copy_and_set(
+  auto task = [&result_acc, &result_mtx, &map,
+               canonicalize = options.canonicalize,
+               flatten = options.flatten](const ExprPtr &input) {
+    auto task_result = map(input);
+    if (task_result) {
+      if (canonicalize) {
+        // Summands are canonicalized to be MERGED across the sum, so named
+        // (external) indices must be treated as meaningful/distinct — same
+        // reasoning as Sum::canonicalize_impl. Under the label-ignoring
+        // default, same-space named indices are graph-automorphic and bliss
+        // breaks the orbit by input vertex order: equivalent summands land on
+        // DIFFERENT "canonical" forms (defeating the hash merge), and which
+        // named label sits on which slot becomes input-dependent.
+        auto bp = task_result->canonicalize(
+            CanonicalizeOptions::default_options().copy_and_set(
                 CanonicalizeOptions::IgnoreNamedIndexLabel::No));
-            if (bp) {
-              task_result = bp * task_result;
-            }
-          }
-
-          std::scoped_lock<std::mutex> lock(result_mtx);
-          result_acc.append(task_result, flatten);
+        if (bp) {
+          task_result = bp * task_result;
         }
-      };
+      }
+
+      std::scoped_lock<std::mutex> lock(result_mtx);
+      result_acc.append(task_result, flatten);
+    }
+  };
   sequant::for_each(std::forward<SizedRange>(rng), task);
   return result_acc.make_expr(options.canonicalize);
 }

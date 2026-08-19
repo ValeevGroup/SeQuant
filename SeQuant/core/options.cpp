@@ -58,13 +58,6 @@ CanonicalizeOptions CanonicalizeOptions::copy_and_set(
   return result;
 }
 
-CanonicalizeOptions CanonicalizeOptions::copy_and_set(
-    RenamePureProtoIndices arg) const {
-  auto result = *this;
-  result.rename_pure_proto_indices = arg;
-  return result;
-}
-
 SimplifyOptions SimplifyOptions::default_options() {
   auto result =
       sequant::get_default_context().canonicalization_options().value_or(
