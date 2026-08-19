@@ -10,6 +10,7 @@
 #include <atomic>
 #include <memory>
 #include <optional>
+#include <ranges>
 
 #include <range/v3/range/primitives.hpp>
 #include <range/v3/view/facade.hpp>
@@ -530,6 +531,10 @@ class Expr : public std::enable_shared_from_this<Expr>,
   /// fn is missing from this type
   Exception not_implemented(const char *fn) const;
 };  // class Expr
+
+static_assert(std::ranges::sized_range<Expr>);
+static_assert(std::ranges::bidirectional_range<Expr>);
+static_assert(std::ranges::random_access_range<Expr>);
 
 template <>
 struct Expr::is_shared_ptr_of_expr<ExprPtr, void> : std::true_type {};
