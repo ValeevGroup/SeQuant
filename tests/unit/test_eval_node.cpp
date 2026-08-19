@@ -91,8 +91,15 @@ TEST_CASE("eval_node", "[EvalNode]") {
   auto L = Npos::L;
   auto R = Npos::R;
 
+  // These sections exercise eval-node MECHANICS (tree shape, to_expr,
+  // costs); the tensors are abstract stand-ins, so declare them NonHermitian
+  // to keep the Conjugate braket-orientation fold (which rewrites a leaf to
+  // its swapped+starred spelling) out of the picture. The fold itself, and
+  // its interplay with product intermediates, is covered by the dedicated
+  // "conjugate-folded factor" section below.
   auto parse_expr_antisymm = [](auto const& xpr) {
-    return deserialize(xpr, {.def_perm_symm = Symmetry::Antisymm});
+    return deserialize(xpr, {.def_perm_symm = Symmetry::Antisymm,
+                             .def_braket_symm = Hermiticity::NonHermitian});
   };
 
   SECTION("terminals") {
@@ -140,13 +147,13 @@ TEST_CASE("eval_node", "[EvalNode]") {
                  EquivalentTo("I{a1,a2;a3,a4}:N-N-N"));
 
     REQUIRE_THAT(node(node1, {L, R}).as_tensor(),
-                 EquivalentTo("t{a3,a4;i1,i2}:A"));
+                 EquivalentTo("t{a3,a4;i1,i2}:A-N-S"));
 
     REQUIRE_THAT(node(node1, {L, L, L}).as_tensor(),
-                 EquivalentTo("g{i3,i4;a3,a4}:A"));
+                 EquivalentTo("g{i3,i4;a3,a4}:A-N-S"));
 
     REQUIRE_THAT(node(node1, {L, L, R}).as_tensor(),
-                 EquivalentTo("t{a1,a2;i3,i4}:A"));
+                 EquivalentTo("t{a1,a2;i3,i4}:A-N-S"));
 
     // 1/16 * A * (B * C)
     auto node2p =
@@ -166,16 +173,60 @@ TEST_CASE("eval_node", "[EvalNode]") {
     REQUIRE(node(node2, {R}).as_constant() == Constant{rational{1, 16}});
 
     REQUIRE_THAT(node(node2, {L, L}).as_tensor(),
-                 EquivalentTo("g{i3,i4; a3,a4}:A"));
+                 EquivalentTo("g{i3,i4; a3,a4}:A-N-S"));
 
     REQUIRE_THAT(node(node2, {L, R}).as_tensor(),
                  EquivalentTo("I{a1,a2,a3,a4;i1,i2,i3,i4}:N-N-N"));
 
     REQUIRE_THAT(node(node2, {L, R, L}).as_tensor(),
-                 EquivalentTo("t{a1,a2;i3,i4}:A"));
+                 EquivalentTo("t{a1,a2;i3,i4}:A-N-S"));
 
     REQUIRE_THAT(node(node2, {L, R, R}).as_tensor(),
-                 EquivalentTo("t{a3,a4;i1,i2}:A"));
+                 EquivalentTo("t{a3,a4;i1,i2}:A-N-S"));
+  }
+
+  SECTION("conjugate-folded factor keeps intermediate partition") {
+    // A Conjugate-braket (Hermitian) factor authored in the non-canonical
+    // orientation folds to its swapped+starred spelling at the leaf
+    // (T^*{q;p} == T{p;q} by value). Intermediate bra/ket partitions must be
+    // derived from the VALUE orientation of each factor, not from the folded
+    // spelling — the partition fixes the result's column grouping downstream.
+    auto const p1 = deserialize(
+        L"1/16 "
+        L"* g{i3,i4;a3,a4}:A-C-S"
+        L"* t{a1,a2;i3,i4}:A-N-S"
+        L"* t{a3,a4;i1,i2}:A-N-S");
+    auto node1 = eval_node(p1);
+
+    // the g leaf folded: an Adjoint wrapper carrying the starred spelling
+    // over the bare (unstarred) shared-cache operand
+    auto const gnode = node(node1, {L, L, L});
+    REQUIRE(gnode.op_type() == EvalOp::Adjoint);
+    auto const& gstar = gnode.as_tensor();
+    REQUIRE(gstar.conjugated());
+    {
+      auto bare = gstar;
+      bare.conjugate();
+      REQUIRE_THAT(bare, EquivalentTo("g{a3,a4;i3,i4}:A-C-S"));
+    }
+    REQUIRE_THAT(node(node1, {L, L, L, L}).as_tensor(),
+                 EquivalentTo("g{a3,a4;i3,i4}:A-C-S"));
+
+    // ...and the intermediates keep their value-oriented bra/ket splits
+    REQUIRE_THAT(node(node1, {L, L}).as_tensor(),
+                 EquivalentTo("I{a1,a2;a3,a4}:N-N-N"));
+    REQUIRE_THAT(node(node1, {L}).as_tensor(),
+                 EquivalentTo("I{a1,a2;i1,i2}:N-N-N"));
+
+    // scalar * folded-tensor: partition likewise from the value orientation
+    auto const p2 = deserialize(L"a * t{i1;a1}:N-C-S");
+    auto const node2 = eval_node(p2);
+    REQUIRE_THAT(node(node2, {}).as_tensor(), EquivalentTo("I{i1;a1}:N-N-N"));
+
+    // sum whose first summand folds: same rule
+    auto const s1 = deserialize(L"X{i1;a1}:N-C-S + Y{i1;a1}:N-N-S");
+    auto const node3 = eval_node(s1);
+    REQUIRE_THAT(node(node3, {}).as_tensor(), EquivalentTo("I{i1;a1}:N-N-N"));
   }
 
   SECTION("sum") {
@@ -190,17 +241,17 @@ TEST_CASE("eval_node", "[EvalNode]") {
     REQUIRE_THAT(node1.left()->as_tensor(),
                  EquivalentTo("I{a1,a2;i1,i2}:N-N-N"));
     REQUIRE_THAT(node1.left().left()->as_tensor(),
-                 EquivalentTo("X{a1,a2;i1,i2}:A"));
+                 EquivalentTo("X{a1,a2;i1,i2}:A-N-S"));
     REQUIRE_THAT(node1.left().right()->as_tensor(),
-                 EquivalentTo("Y{a1,a2;i1,i2}:A"));
+                 EquivalentTo("Y{a1,a2;i1,i2}:A-N-S"));
 
     REQUIRE(node1.right()->op_type() == EvalOp::Product);
     REQUIRE_THAT(node1.right()->as_tensor(),
                  EquivalentTo("I{a1,a2;i1,i2}:N-N-N"));
     REQUIRE_THAT(node1.right().left()->as_tensor(),
-                 EquivalentTo("g{i3,a1;i1,i2}:A"));
+                 EquivalentTo("g{i3,a1;i1,i2}:A-N-S"));
     REQUIRE_THAT(node1.right().right()->as_tensor(),
-                 EquivalentTo("t{a2;i3}:A"));
+                 EquivalentTo("t{a2;i3}:A-N-S"));
   }
 
   SECTION("variable") {
@@ -230,10 +281,11 @@ TEST_CASE("eval_node", "[EvalNode]") {
     REQUIRE(node(node2, {L, R}).as_variable() == Variable{L"b"});
     REQUIRE(node(node2, {L, L}).as_variable() == Variable{L"a"});
 
-    auto prod2 = deserialize(L"a * t{i1;a1}");
+    auto prod2 = deserialize(L"a * t{i1;a1}",
+                             {.def_braket_symm = Hermiticity::NonHermitian});
     auto node3 = eval_node(prod2);
     REQUIRE_THAT(node(node3, {}).as_tensor(), EquivalentTo("I{i1;a1}:N-N-N"));
-    REQUIRE_THAT(node(node3, {R}).as_tensor(), EquivalentTo("t{i1;a1}"));
+    REQUIRE_THAT(node(node3, {R}).as_tensor(), EquivalentTo("t{i1;a1}:N-N-S"));
     REQUIRE(node(node3, {L}).as_variable() == Variable{L"a"});
   }
 
@@ -370,7 +422,9 @@ TEST_CASE("eval_node", "[EvalNode]") {
                                       .spbasis = SPBasis::Spinor});
 
       // The particle-particle ladder term
-      auto const ppl = deserialize(L"g{a3,a4;a1,a2} t{a1,a2;i1,i2}");
+      auto const ppl =
+          deserialize(L"g{a3,a4;a1,a2} t{a1,a2;i1,i2}",
+                      {.def_braket_symm = Hermiticity::NonHermitian});
       REQUIRE(sequant::asy_cost(eval_node(ppl)) ==
               occ_virt_aux_cost(2, 2, 4, 0));
       REQUIRE(sequant::asy_cost(eval_node(ppl)) == occ_virt_cost(2, 2, 4));
@@ -379,7 +433,8 @@ TEST_CASE("eval_node", "[EvalNode]") {
       // sharing an auxiliary index, g{a3,a4;a1,a2} -> B{a3;a1;Κ} B{a4;a2;Κ}.
       // (B{a4;a2;Κ} t{a1,a2;i1,i2}) B{a3;a1;Κ}.
       auto const pp_ladder_df =
-          deserialize(L"(B{a4;a2;Κ_1} t{a1,a2;i1,i2}) B{a3;a1;Κ_1}");
+          deserialize(L"(B{a4;a2;Κ_1} t{a1,a2;i1,i2}) B{a3;a1;Κ_1}",
+                      {.def_braket_symm = Hermiticity::NonHermitian});
       REQUIRE(sequant::asy_cost(eval_node(pp_ladder_df)) ==
               occ_virt_aux_cost(4, 2, 3, 1));
     }
@@ -402,15 +457,17 @@ TEST_CASE("eval_node", "[EvalNode]") {
       // is the contracted index); repeating it for every value of z1 multiplies
       // the cost by |z|. Total: a^3 · z^1. The leading 2 is the per-element
       // flop count (one multiply + one add).
-      auto const e1 = binarize(
-          deserialize<ResultExpr>(L"R{a1;a2;z1} = A{a1;a3;z1} B{a3;a2;z1}"));
+      auto const e1 = binarize(deserialize<ResultExpr>(
+          L"R{a1;a2;z1} = A{a1;a3;z1} B{a3;a2;z1}",
+          {.def_braket_symm = Hermiticity::NonHermitian}));
       REQUIRE(sequant::asy_cost(e1) ==
               AsyCost{AsyCost::ExponentMap{{a, 3}, {z, 1}}, 2});
 
       // Two batched indices z1,z2 (both in space z): the a^3 matmul is repeated
       // for every (z1,z2) pair, so the cost scales as a^3 · z^2.
       auto const e2 = binarize(deserialize<ResultExpr>(
-          L"R{a1;a2;z1,z2} = A{a1;a3;z1,z2} B{a3;a2;z1,z2}"));
+          L"R{a1;a2;z1,z2} = A{a1;a3;z1,z2} B{a3;a2;z1,z2}",
+          {.def_braket_symm = Hermiticity::NonHermitian}));
       REQUIRE(sequant::asy_cost(e2) ==
               AsyCost{AsyCost::ExponentMap{{a, 3}, {z, 2}}, 2});
     }
@@ -425,14 +482,17 @@ TEST_CASE("eval_node", "[EvalNode]") {
       auto const u = reg.retrieve(L"u");  // active
       auto const a = reg.retrieve(L"a");  // virtual
 
-      auto const n = eval_node(deserialize(L"g{u1,u2;a1,a2} t{a1,a2;u3,u4}"));
+      auto const n = eval_node(
+          deserialize(L"g{u1,u2;a1,a2} t{a1,a2;u3,u4}",
+                      {.def_braket_symm = Hermiticity::NonHermitian}));
       REQUIRE(sequant::asy_cost(n) ==
               AsyCost{AsyCost::ExponentMap{{u, 4}, {a, 2}}, 2});  // 2 * u^4 a^2
     }
   }
 
   SECTION("minimum storage") {
-    auto p1 = deserialize(L"2 * g{i2,a1;a2,a3} * t{a2,a3;i2,i1}");
+    auto p1 = deserialize(L"2 * g{i2,a1;a2,a3} * t{a2,a3;i2,i1}",
+                          {.def_braket_symm = Hermiticity::NonHermitian});
     auto const n1 = eval_node(p1);
     // evaluation happens in two steps.
     // g and t are contracted to give an intermediate I{a1;i1}
@@ -445,7 +505,8 @@ TEST_CASE("eval_node", "[EvalNode]") {
     REQUIRE(min_storage(n1) ==
             occ_virt_cost(1, 3) + occ_virt_cost(2, 2) + occ_virt_cost(1, 1));
 
-    auto p2 = deserialize(L"1/2 * (g{a1,a2; a3,a4} t{a3;i1}) t{a4;i2}");
+    auto p2 = deserialize(L"1/2 * (g{a1,a2; a3,a4} t{a3;i1}) t{a4;i2}",
+                          {.def_braket_symm = Hermiticity::NonHermitian});
     auto const n2 = eval_node(p2);
     REQUIRE(min_storage(n2) ==
             occ_virt_cost(0, 4) + occ_virt_cost(1, 3) + occ_virt_cost(1, 1));

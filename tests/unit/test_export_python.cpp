@@ -374,8 +374,10 @@ TEST_CASE("PythonEinsumGenerator - Memory Layout", "[export][python]") {
   IndexSpace virt = registry->retrieve("a");
 
   SECTION("Default layout (ColumnMajor) generates order='F'") {
-    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"});
-    Tensor T(L"T", bra{L"a_1"}, ket{L"i_1"});
+    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm);
+    Tensor T(L"T", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm);
     ResultExpr result_expr(T, F);
     auto export_tree = to_export_tree(result_expr);
 
@@ -398,8 +400,10 @@ TEST_CASE("PythonEinsumGenerator - Memory Layout", "[export][python]") {
   }
 
   SECTION("RowMajor layout generates order='C'") {
-    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"});
-    Tensor T(L"T", bra{L"a_1"}, ket{L"i_1"});
+    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm);
+    Tensor T(L"T", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm);
     ResultExpr result_expr(T, F);
     auto export_tree = to_export_tree(result_expr);
 
@@ -423,8 +427,10 @@ TEST_CASE("PythonEinsumGenerator - Memory Layout", "[export][python]") {
   }
 
   SECTION("Unspecified layout defaults to order='F'") {
-    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"});
-    Tensor T(L"T", bra{L"a_1"}, ket{L"i_1"});
+    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm);
+    Tensor T(L"T", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm);
     ResultExpr result_expr(T, F);
     auto export_tree = to_export_tree(result_expr);
 
@@ -448,8 +454,10 @@ TEST_CASE("PythonEinsumGenerator - Memory Layout", "[export][python]") {
   }
 
   SECTION("PyTorch generator has hardwired memory layout") {
-    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"});
-    Tensor T(L"T", bra{L"a_1"}, ket{L"i_1"});
+    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm);
+    Tensor T(L"T", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm);
     ResultExpr result_expr(T, F);
     auto export_tree = to_export_tree(result_expr);
 
@@ -510,9 +518,12 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
         F_tensor.contract(t_tensor, contraction_dims);
 
     // Generate Python code
-    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"});
-    auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"});
-    Tensor T(L"T", bra{L"a_1"}, ket{L"a_2"});
+    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm);
+    auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm);
+    Tensor T(L"T", bra{L"a_1"}, ket{L"a_2"}, Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm);
 
     ResultExpr result_expr(T, F * t);
     auto export_tree = to_export_tree(result_expr);
@@ -588,8 +599,10 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
         g_tensor.contract(t_tensor, contraction_dims);
 
     // Generate Python code
-    auto g = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
-    auto t = ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
+    auto g = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                        Symmetry::Nonsymm, BraKetSymmetry::Nonsymm);
+    auto t = ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                        Symmetry::Nonsymm, BraKetSymmetry::Nonsymm);
     Variable E(L"E");
 
     ResultExpr result_expr(E, g * t);
@@ -663,9 +676,12 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     }
 
     // Generate Python code for: R = g * t1 * t2 (scalar result)
-    auto g = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_3", L"a_4"});
-    auto t1 = ex<Tensor>(L"t1", bra{L"a_3"}, ket{L"i_1"});
-    auto t2 = ex<Tensor>(L"t2", bra{L"a_4"}, ket{L"i_2"});
+    auto g = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_3", L"a_4"},
+                        Symmetry::Nonsymm, BraKetSymmetry::Nonsymm);
+    auto t1 = ex<Tensor>(L"t1", bra{L"a_3"}, ket{L"i_1"}, Symmetry::Nonsymm,
+                         BraKetSymmetry::Nonsymm);
+    auto t2 = ex<Tensor>(L"t2", bra{L"a_4"}, ket{L"i_2"}, Symmetry::Nonsymm,
+                         BraKetSymmetry::Nonsymm);
     Variable R(L"R");
 
     ResultExpr result_expr(R, g * t1 * t2);
@@ -738,10 +754,14 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
         C_tensor.contract(intermediate, contract_CI);
 
     // Generate Python code matching ternary.export_test
-    auto A = ex<Tensor>(L"A", bra{L"a_2"}, ket{L"i_2"});
-    auto B = ex<Tensor>(L"B", bra{L"i_2"}, ket{L"a_1"});
-    auto C = ex<Tensor>(L"C", bra{L"i_1"}, ket{L"a_2"});
-    Tensor I(L"I", bra{L"i_1"}, ket{L"a_1"});
+    auto A = ex<Tensor>(L"A", bra{L"a_2"}, ket{L"i_2"}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm);
+    auto B = ex<Tensor>(L"B", bra{L"i_2"}, ket{L"a_1"}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm);
+    auto C = ex<Tensor>(L"C", bra{L"i_1"}, ket{L"a_2"}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm);
+    Tensor I(L"I", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm);
 
     ResultExpr result_expr(I, A * B * C);
     auto export_tree = to_export_tree(result_expr);
@@ -810,9 +830,12 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     Eigen::Tensor<double, 2> T_expected =
         0.5 * F_tensor.contract(t_tensor, contraction_dims);
 
-    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"});
-    auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"});
-    Tensor T(L"T", bra{L"a_1"}, ket{L"a_2"});
+    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm);
+    auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm);
+    Tensor T(L"T", bra{L"a_1"}, ket{L"a_2"}, Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm);
 
     ResultExpr result_expr(T, rational(1, 2) * F * t);
     auto export_tree = to_export_tree(result_expr);
@@ -883,10 +906,14 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     Eigen::Tensor<double, 2> I_expected = f_vo_tensor - contraction;
 
     // Generate Python code matching sum_unary_plus_binary.export_test
-    auto f_vo = ex<Tensor>(L"f", bra{L"a_1"}, ket{L"i_1"});
-    auto f_oo = ex<Tensor>(L"f", bra{L"i_2"}, ket{L"i_1"});
-    auto t_vo = ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_2"});
-    Tensor I(L"I", bra{L"a_1"}, ket{L"i_1"});
+    auto f_vo = ex<Tensor>(L"f", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+                           BraKetSymmetry::Nonsymm);
+    auto f_oo = ex<Tensor>(L"f", bra{L"i_2"}, ket{L"i_1"}, Symmetry::Nonsymm,
+                           BraKetSymmetry::Nonsymm);
+    auto t_vo = ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_2"}, Symmetry::Nonsymm,
+                           BraKetSymmetry::Nonsymm);
+    Tensor I(L"I", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm);
 
     ResultExpr result_expr(I, f_vo - f_oo * t_vo);
     auto export_tree = to_export_tree(result_expr);
@@ -973,8 +1000,10 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
 
     // Expression: X{a_1;;x_1} X{;a_2;x_1} Y{;;x_1,x_2} X{a_3;;x_2} X{;a_4;x_2}
     auto thc_expr = deserialize(
-        L"X{a_1;;x_1} X{;a_2;x_1} Y{;;x_1,x_2} X{a_3;;x_2} X{;a_4;x_2}");
-    Tensor I(L"I", bra{L"a_1", L"a_3"}, ket{L"a_2", L"a_4"});
+        L"X{a_1;;x_1} X{;a_2;x_1} Y{;;x_1,x_2} X{a_3;;x_2} X{;a_4;x_2}",
+        {.def_braket_symm = Hermiticity::NonHermitian});
+    Tensor I(L"I", bra{L"a_1", L"a_3"}, ket{L"a_2", L"a_4"}, Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm);
 
     ResultExpr result_expr(I, thc_expr);
     auto export_tree = to_export_tree(result_expr);
@@ -990,8 +1019,10 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     NumPyEinsumGenerator generator;
 
     // Get tensor file names via represent
-    auto X_repr = ex<Tensor>(L"X", bra{L"a_1"}, ket{}, aux{L"x_1"});
-    auto Y_repr = ex<Tensor>(L"Y", bra{}, ket{}, aux{L"x_1", L"x_2"});
+    auto X_repr = ex<Tensor>(L"X", bra{L"a_1"}, ket{}, aux{L"x_1"},
+                             Symmetry::Nonsymm, BraKetSymmetry::Nonsymm);
+    auto Y_repr = ex<Tensor>(L"Y", bra{}, ket{}, aux{L"x_1", L"x_2"},
+                             Symmetry::Nonsymm, BraKetSymmetry::Nonsymm);
     std::string X_name = generator.represent(X_repr.as<Tensor>(), ctx);
     std::string Y_name = generator.represent(Y_repr.as<Tensor>(), ctx);
     std::string I_name = generator.represent(I, ctx);
@@ -1060,9 +1091,12 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
         F_tensor.contract(t_tensor, contraction_dims);
 
     // Generate Python code with RowMajor layout
-    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"});
-    auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"});
-    Tensor T(L"T", bra{L"a_1"}, ket{L"a_2"});
+    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm);
+    auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm);
+    Tensor T(L"T", bra{L"a_1"}, ket{L"a_2"}, Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm);
 
     ResultExpr result_expr(T, F * t);
     auto export_tree = to_export_tree(result_expr);
@@ -1138,9 +1172,12 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
         F_tensor.contract(t_tensor, contraction_dims);
 
     // Generate Python code with explicit ColumnMajor layout
-    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"});
-    auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"});
-    Tensor T(L"T", bra{L"a_1"}, ket{L"a_2"});
+    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm);
+    auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm);
+    Tensor T(L"T", bra{L"a_1"}, ket{L"a_2"}, Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm);
 
     ResultExpr result_expr(T, F * t);
     auto export_tree = to_export_tree(result_expr);
@@ -1372,9 +1409,12 @@ TEST_CASE("PyTorchEinsumGenerator - Validation", "[export][python][torch]") {
         F_tensor.contract(t_tensor, contraction_dims);
 
     // Generate PyTorch code
-    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"});
-    auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"});
-    Tensor T(L"T", bra{L"a_1"}, ket{L"a_2"});
+    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm);
+    auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm);
+    Tensor T(L"T", bra{L"a_1"}, ket{L"a_2"}, Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm);
 
     ResultExpr result_expr(T, F * t);
     auto export_tree = to_export_tree(result_expr);
@@ -1452,9 +1492,12 @@ TEST_CASE("PyTorchEinsumGenerator - Validation", "[export][python][torch]") {
         F_tensor.contract(t_tensor, contraction_dims);
 
     // Generate PyTorch code with RowMajor layout
-    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"});
-    auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"});
-    Tensor T(L"T", bra{L"a_1"}, ket{L"a_2"});
+    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm);
+    auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm);
+    Tensor T(L"T", bra{L"a_1"}, ket{L"a_2"}, Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm);
 
     ResultExpr result_expr(T, F * t);
     auto export_tree = to_export_tree(result_expr);
@@ -1536,9 +1579,12 @@ TEST_CASE("PyTorchEinsumGenerator - Validation", "[export][python][torch]") {
     Eigen::Tensor<double, 2, Eigen::RowMajor> T_expected =
         F_tensor.contract(t_tensor, contraction_dims);
 
-    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"});
-    auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"});
-    Tensor T(L"T", bra{L"a_1"}, ket{L"a_2"});
+    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm);
+    auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm);
+    Tensor T(L"T", bra{L"a_1"}, ket{L"a_2"}, Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm);
 
     ResultExpr result_expr(T, F * t);
     auto export_tree = to_export_tree(result_expr);
@@ -1638,8 +1684,10 @@ TEST_CASE("PyTorchEinsumGenerator - Validation", "[export][python][torch]") {
     }
 
     auto thc_expr = deserialize(
-        L"X{a_1;;x_1} X{;a_2;x_1} Y{;;x_1,x_2} X{a_3;;x_2} X{;a_4;x_2}");
-    Tensor I(L"I", bra{L"a_1", L"a_3"}, ket{L"a_2", L"a_4"});
+        L"X{a_1;;x_1} X{;a_2;x_1} Y{;;x_1,x_2} X{a_3;;x_2} X{;a_4;x_2}",
+        {.def_braket_symm = Hermiticity::NonHermitian});
+    Tensor I(L"I", bra{L"a_1", L"a_3"}, ket{L"a_2", L"a_4"}, Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm);
 
     ResultExpr result_expr(I, thc_expr);
     auto export_tree = to_export_tree(result_expr);
@@ -1654,8 +1702,10 @@ TEST_CASE("PyTorchEinsumGenerator - Validation", "[export][python][torch]") {
 
     PyTorchEinsumGenerator generator;
 
-    auto X_repr = ex<Tensor>(L"X", bra{L"a_1"}, ket{}, aux{L"x_1"});
-    auto Y_repr = ex<Tensor>(L"Y", bra{}, ket{}, aux{L"x_1", L"x_2"});
+    auto X_repr = ex<Tensor>(L"X", bra{L"a_1"}, ket{}, aux{L"x_1"},
+                             Symmetry::Nonsymm, BraKetSymmetry::Nonsymm);
+    auto Y_repr = ex<Tensor>(L"Y", bra{}, ket{}, aux{L"x_1", L"x_2"},
+                             Symmetry::Nonsymm, BraKetSymmetry::Nonsymm);
     std::string X_name = generator.represent(X_repr.as<Tensor>(), ctx);
     std::string Y_name = generator.represent(Y_repr.as<Tensor>(), ctx);
     std::string I_name = generator.represent(I, ctx);

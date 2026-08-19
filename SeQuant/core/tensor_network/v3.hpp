@@ -286,7 +286,7 @@ class TensorNetworkV3 {
     /// antilinear byproduct of canonicalization: true if reaching canonical
     /// form required complex-conjugating the network relative to its input.
     /// Only ever set when canonicalization is asked to exploit
-    /// BraKetSymmetry::Conjugate (see canonicalize_slots' exploit_conjugate
+    /// BraKetSymmetry::Conjugate (see canonicalize_slots' Conjugate fold
     /// parameter): a Hermitian (Conjugate) tensor satisfies
     /// T{bra;ket} = conj(T{ket;bra}), so folding its two orientations onto one
     /// canonical form carries a conjugation, recorded here (cf. `phase`, which
@@ -307,19 +307,12 @@ class TensorNetworkV3 {
   /// named indices, used for coarse-grained sorting of named indices,
   /// before sorting to canonical order; the default is to sort
   /// by Index::space()
-  /// @param exploit_conjugate if true, fold the two bra<->ket orientations of
-  /// each BraKetSymmetry::Conjugate tensor onto one canonical form (they differ
-  /// by a complex conjugation) and report that conjugation via
-  /// SlotCanonicalizationMetadata::conj. Default false leaves Conjugate bra/ket
-  /// distinctly colored (historical behavior), so it is a no-op unless
-  /// requested.
   /// @return the computed canonicalization metadata
   SlotCanonicalizationMetadata canonicalize_slots(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
       const NamedIndexSet *named_indices = nullptr,
       SlotCanonicalizationMetadata::named_index_compare_t named_index_compare =
-          default_idxptr_slottype_lesscompare{},
-      bool exploit_conjugate = false);
+          default_idxptr_slottype_lesscompare{});
 
   /// Factorizes tensor network
   /// @return sequence of binary products; each element encodes the tensors to
@@ -389,15 +382,6 @@ class TensorNetworkV3 {
 
     /// if false, will not generate the Index->vertex map
     bool make_idx_to_vertex = false;
-
-    /// if true, treat BraKetSymmetry::Conjugate tensors like Symm ones when
-    /// coloring bra/ket slots, i.e. give a Conjugate tensor's bra and ket
-    /// slots the same color so bliss may swap them (both orientations fold onto
-    /// one canonical graph). The accompanying conjugation is recorded as a
-    /// byproduct by canonicalize_slots (SlotCanonicalizationMetadata::conj).
-    /// Default false: Conjugate bra/ket are kept distinctly colored (historical
-    /// behavior), so this is a no-op unless explicitly requested.
-    bool exploit_conjugate = false;
   };
   static CreateGraphOptions make_default_graph_options() { return {}; }
 

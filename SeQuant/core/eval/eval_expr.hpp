@@ -76,17 +76,16 @@ class EvalExpr {
   ///
   /// \brief Construct an EvalExpr object from a tensor.
   ///
-  /// \param tnsr The tensor to wrap as a leaf.
-  /// \param exploit_conjugate If true, a proto-indexed (ToT) leaf is
-  ///        canonicalized with the two bra<->ket orientations of a
-  ///        BraKetSymmetry::Conjugate tensor folded onto one canonical form
-  ///        (see TensorNetworkV3::canonicalize_slots). The resulting
-  ///        conjugation byproduct is recorded in canon_conj(); the leaf hash is
-  ///        unchanged by the byproduct so the two orientations share a cache
-  ///        slot (the swapped one applies conj on retrieval; see
-  ///        binarize(Tensor)). Default false is a no-op (historical behavior).
+  /// \param tnsr The tensor to wrap as a leaf. The two bra<->ket
+  ///        orientations of a BraKetSymmetry::Conjugate tensor fold onto one
+  ///        canonical spelling: expr() carries the canonical orientation with
+  ///        the elementwise-conjugation marker (Tensor::conjugated()) set when
+  ///        the input was the swapped orientation. The leaf hash is always
+  ///        that of the unconjugated spelling, so the two orientations share
+  ///        a cache slot; binarize(Tensor) serves a conjugated leaf via an
+  ///        EvalOp::Adjoint wrapper over the shared operand.
   ///
-  explicit EvalExpr(Tensor const& tnsr, bool exploit_conjugate = false);
+  explicit EvalExpr(Tensor const& tnsr);
 
   ///
   /// \brief Construct an EvalExpr object from a Constant.
@@ -264,16 +263,6 @@ class EvalExpr {
   [[nodiscard]] std::int8_t canon_phase() const noexcept;
 
   ///
-  /// \return Whether this leaf's canonical form was reached by conjugating a
-  ///         BraKetSymmetry::Conjugate tensor (bra<->ket fold). Only ever true
-  ///         when constructed with exploit_conjugate; the byproduct is kept out
-  ///         of the leaf hash so a tensor and its conjugate partner share a
-  ///         cache slot, and binarize(Tensor) turns a true bit into an
-  ///         EvalOp::Adjoint wrapper that conjugates the shared cached value.
-  ///
-  [[nodiscard]] bool canon_conj() const noexcept;
-
-  ///
   /// \return Whether this expression has a connectivity graph
   /// \see connectivity_graph
   ///
@@ -406,8 +395,6 @@ class EvalExpr {
 
   std::int8_t canon_phase_{1};
 
-  bool canon_conj_{false};
-
   size_t hash_value_;
 
   std::shared_ptr<bliss::Graph> connectivity_;
@@ -440,13 +427,6 @@ struct BinarizationOptions {
   /// separation
   bool merge_indices = false;
 
-  /// Whether to fold the two bra<->ket orientations of each
-  /// BraKetSymmetry::Conjugate leaf onto one canonical form and serve the
-  /// conjugated orientation via an EvalOp::Adjoint wrapper on retrieval (see
-  /// EvalExpr(Tensor const&, bool) and binarize(Tensor const&, ...)). Default
-  /// false leaves the historical behavior untouched (the two orientations do
-  /// not fold), so it never perturbs paths that do not opt in.
-  bool exploit_conjugate = false;
   /// Per-contraction-node sliced-sets (RPN / post-order, left-first) to stamp
   /// onto the produced tree's Product (contraction) nodes; typically set from
   /// the corresponding entry of \c OptimizeOptions::term_batch_axes for the

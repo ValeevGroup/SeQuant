@@ -153,7 +153,7 @@ ResultExpr& canonicalize(
 /// its bra<->ket-swapped orientation), so every summand pair {s, adjoint(s)}
 /// collapses to 2*s without changing the sum's (real) value. This is the
 /// symbolic-layer exploitation of conjugate braket symmetry: the eval-layer
-/// exploit_conjugate channel folds conjugate-related LEAVES onto one cache
+/// eval-layer Conjugate fold folds conjugate-related LEAVES onto one cache
 /// slot, while this folds conjugate-related TERMS out of the sum entirely.
 /// Summands whose adjoint is not present among the other summands --
 /// including self-adjoint (manifestly real) summands -- are left untouched.
