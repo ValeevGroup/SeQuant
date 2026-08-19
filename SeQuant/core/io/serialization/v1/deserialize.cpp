@@ -115,7 +115,8 @@ auto symmetry_spec_def= x3::lexeme[
                         ];
 
 auto tensor_def       = x3::lexeme[
-                            name >> x3::skip[index_groups] >> -(symmetry_spec)
+                            name >> (x3::lit('^') >> '*' >> x3::attr(true) | x3::attr(false))
+                                 >> x3::skip[index_groups] >> -(symmetry_spec)
                         ];
 
 // TODO(power): per comments on PR #513, promote `^` to a binary operator (with higher precedence than *) and then reject unsupported cases while traversing the AST.
