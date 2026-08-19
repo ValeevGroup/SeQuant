@@ -16,6 +16,7 @@
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 
 #include <algorithm>
 #include <bit>

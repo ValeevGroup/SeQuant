@@ -47,6 +47,7 @@
 #include <SeQuant/core/tensor_network/v1.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
+#include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 
 #include <SeQuant/core/utility/timer.hpp>
 #include <range/v3/range/conversion.hpp>

@@ -14,6 +14,7 @@
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 
 #include <btas/btas.h>
 #include <btas/tensor_func.h>

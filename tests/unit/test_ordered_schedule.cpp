@@ -27,6 +27,7 @@
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 
 #include <catch2/catch_test_macros.hpp>
 

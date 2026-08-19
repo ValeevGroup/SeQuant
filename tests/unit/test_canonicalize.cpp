@@ -11,6 +11,7 @@
 #include <SeQuant/core/tensor_network/v1.hpp>
 #include <SeQuant/core/tensor_network/v2.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 
 #include <SeQuant/core/bliss.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
