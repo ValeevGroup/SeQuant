@@ -667,10 +667,15 @@ ExprPtr TensorNetworkV3::canonicalize(
     container::map<Index, Index> idxrepl;
 
     // Use the new order of edges as the canonical order of indices and relabel
-    // accordingly (but only anonymous indices, of course)
-    for (std::size_t i = named_indices.size(); i < edges_.size(); ++i) {
+    // accordingly (but only anonymous indices, of course). Skip named indices
+    // by CHECKING each edge, not by starting the loop at named_indices.size():
+    // a named index that is not an edge (e.g. a pure proto index) would shift
+    // that positional cutoff onto an anonymous edge, whose skipped ordinal the
+    // factory would then hand to another same-space edge -- a non-injective
+    // rewrite that duplicates a slot index.
+    for (std::size_t i = 0; i < edges_.size(); ++i) {
       const Index &index = edges_[i].idx();
-      SEQUANT_ASSERT(is_anonymous_index(index));
+      if (!is_anonymous_index(index)) continue;
       Index replacement = idxfac.make(index);
       if (index != replacement) idxrepl.emplace(index, std::move(replacement));
     }
