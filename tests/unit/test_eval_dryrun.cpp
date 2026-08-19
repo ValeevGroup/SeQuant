@@ -416,6 +416,81 @@ TEST_CASE("is_valid accepts a CSV proto-indexed residual",
   CHECK(msg.empty());
 }
 
+// Regression: optimize_result must key each summand's per-node batch
+// annotations onto the FINAL reassembled Sum pointer, not per optimized
+// summand. The CCk residual is one Sum-tree per equation, so the consumer
+// binarizes the whole Sum and looks the annotation up by that Sum's pointer;
+// opt_pure_product keys per summand, and (under reorder) opt::reorder clones
+// the summands (Sum::append clones) while the keyed pre-clone summands are
+// destroyed. Without re-keying, the whole-Sum lookup finds nothing, every batch
+// annotation is dropped, and over-budget intermediates materialize whole -- the
+// water-20 OOM. This asserts the re-keying on the real CSV doubles residual.
+TEST_CASE("optimize_result keys batch annotations onto the whole Sum",
+          "[optimize][batch][term_batch_axes]") {
+  using namespace sequant;
+  auto ctx0 = get_default_context().clone();
+  ctx0.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx0.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
+
+  auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                          "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = deserialize<ExprPtr>(line);
+  REQUIRE(expr);
+  REQUIRE(expr->is<Sum>());
+  REQUIRE(expr->as<Sum>().summands().size() > 1);
+
+  auto regime = df_regime(kC60_pVDZF12);
+  BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  policy.batch_target_size = [](Index const&) -> std::size_t { return 256; };
+  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+  policy.peak_threshold = 100e9;
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      Expr const*, container::vector<NodeBatchAnnotation>>>();
+  OptimizeOptions opts;
+  opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.reorder = ReorderSum::Reorder;  // the production (clone-on-append) path
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = axes_map;
+
+  auto res = optimize_result(expr, opts);
+  REQUIRE(res.expr);
+  REQUIRE(res.expr->is<Sum>());
+
+  // The whole reassembled Sum is THE key -- not any per-summand pointer -- and
+  // re-keying erased the stale per-summand entries, so it is the only key.
+  CHECK(axes_map->count(res.expr.get()) == 1);
+  CHECK(axes_map->size() == 1);
+
+  // It carries real batch axes (Κ blows the 100 GB budget on this residual),
+  // and one entry per contraction node of the whole Sum-tree (what binarize's
+  // node counter consumes).
+  std::size_t nonempty = 0, total = 0;
+  if (auto it = axes_map->find(res.expr.get()); it != axes_map->end()) {
+    total = it->second.size();
+    for (auto const& a : it->second)
+      if (!a.axes.empty()) ++nonempty;
+  }
+  CHECK(total > 0);
+  CHECK(nonempty > 0);
+}
+
 // build_context, no DP solve.
 TEST_CASE("ordered-key C60 giant: does order_aware engage (m vs cap)?",
           "[.][ordered-key-c60-m]") {

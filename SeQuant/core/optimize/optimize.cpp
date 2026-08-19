@@ -250,7 +250,49 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
     }
 
     Sum new_sum(std::move(new_smands), Sum::move_only_tag{});
-    if (!reorder) return ex<Sum>(std::move(new_sum));
+
+    // Re-key the per-summand batch annotations onto the FINAL reassembled Sum.
+    // opt_pure_product keyed each summand's node_batch_axes (one entry per
+    // contraction node, left-first post-order) by that OPTIMIZED SUMMAND's
+    // Product pointer. But the caller binarizes the whole reassembled Sum in
+    // one call and looks the annotation up by the final Sum pointer -- and
+    // under reorder, opt::reorder's clone-on-append (Sum::append clones) gives
+    // the final summands NEW pointers while new_sum (which still holds the
+    // keyed pointers) is destroyed on return. So gather the per-summand vectors
+    // in the FINAL summand order into one whole-tree vector -- binarize walks
+    // the Sum-tree in that same order, one entry per contraction node, so the
+    // flat node_batch_axes stays aligned with its node counter -- and store it
+    // under the final Sum pointer, dropping the now-unreachable per-summand
+    // entries. Without this, every batch annotation is silently lost and
+    // over-budget intermediates materialize whole. `order` is a list of
+    // clusters, each a list of positions into new_sum, flattened in emission
+    // order (identity for the no-reorder path); it must match how the final Sum
+    // orders its summands.
+    auto rekey_onto =
+        [&](ExprPtr const& result,
+            container::vector<container::vector<std::size_t>> const& order) {
+          if (!opts.term_batch_axes) return;
+          container::vector<NodeBatchAnnotation> combined;
+          for (auto const& clstr : order)
+            for (auto p : clstr) {
+              auto it = opts.term_batch_axes->find(new_sum.summand(p).get());
+              if (it == opts.term_batch_axes->end()) continue;
+              combined.insert(combined.end(),
+                              std::make_move_iterator(it->second.begin()),
+                              std::make_move_iterator(it->second.end()));
+              opts.term_batch_axes->erase(it);
+            }
+          (*opts.term_batch_axes)[result.get()] = std::move(combined);
+        };
+
+    if (!reorder) {
+      container::vector<container::vector<std::size_t>> identity;
+      identity.reserve(new_sum.size());
+      for (std::size_t i = 0; i < new_sum.size(); ++i) identity.push_back({i});
+      auto result = ex<Sum>(std::move(new_sum));
+      rekey_onto(result, identity);
+      return result;
+    }
 
     // Binarize once per optimized summand and hand the nodes to reorder()
     // so they aren't re-built inside clusters(). NOTE: this runs sequentially
@@ -261,7 +303,12 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     for (auto const& s : new_sum.summands()) nodes.push_back(binarize(s));
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-    return ex<Sum>(opt::reorder(new_sum, nodes));
+    // Same (new_sum, nodes) opt::reorder consumes, so the flattened cluster
+    // order equals the final summand order the reordered Sum emits.
+    auto const order = opt::clusters(new_sum, nodes);
+    auto result = ex<Sum>(opt::reorder(new_sum, nodes));
+    rekey_onto(result, order);
+    return result;
   }
 
   return expr->clone();
