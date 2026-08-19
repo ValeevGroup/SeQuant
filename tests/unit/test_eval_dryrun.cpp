@@ -5398,12 +5398,15 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
   // tracked as an out-of-scope follow-up -- not something this witness can or
   // should force.
   // Gate-off (this witness's default; see the max_footprint note above)
-  // measures the schedule's TRUE peak. aux+occ reaches ~563 GB -- the
-  // lowest-peak arm, and BELOW the ~1431 GB the old 100 GB hold-gate reported
-  // (its evict/rebuild churn inflated the measurement). The 100 GB research
-  // target is still not met; closing it is the downstream contracted-occ /
-  // factorization question above.
-  CHECK(both.peak_gb < 600.0);         // achieved gate-off peak (~563 GB)
+  // measures the schedule's TRUE peak. aux+occ reaches ~146 GB -- the
+  // lowest-peak arm, and far BELOW the ~1431 GB the old 100 GB hold-gate
+  // reported (its evict/rebuild churn inflated the measurement). (This figure
+  // dropped from an earlier ~563 GB as the intervening factorization / peak
+  // work landed -- commutative-Product dedup and the ordered-schedule/peak
+  // stack -- not from any change in what this witness measures.) The 100 GB
+  // research target is now within ~1.5x; closing it is the downstream
+  // contracted-occ / factorization question above.
+  CHECK(both.peak_gb < 200.0);         // achieved gate-off peak (~146 GB)
   CHECK(base.peak_gb > both.peak_gb);  // batching genuinely lowers peak
 
   // AVOIDABLE recomputation, gate-off = the schedule's TRUE inherent recompute
@@ -5425,7 +5428,7 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
 
   // Perfect-CSE floor: unbatched gate-off builds every value once at full
   // extent.
-  CHECK(base.total_flops == Catch::Approx(1.5798408944778614e16).epsilon(1e-6));
+  CHECK(base.total_flops == Catch::Approx(1.5793702764908846e16).epsilon(1e-6));
 }
 
 // PATH B, TASK 1 -- the crux PROBE (doc/dev/plans/2026-08-09-remat-into-cost-
