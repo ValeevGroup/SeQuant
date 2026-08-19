@@ -27,6 +27,7 @@
 #include <cstdlib>
 #include <functional>
 #include <iostream>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -144,8 +145,21 @@ ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
         opts.term_batch_axes ? &node_axes : nullptr);
   };
   ExprPtr result = run();
-  if (opts.term_batch_axes)
+  if (opts.term_batch_axes) {
+    // optimize_impl optimizes a Sum's summands with sequant::for_each
+    // (std::execution::par_unseq), so opt_pure_product runs concurrently across
+    // summands -- and this insert into the shared term_batch_axes map is not
+    // thread-safe (std::unordered_map: concurrent inserts race even on distinct
+    // keys -- a rehash tears the structure). Serialize just the insert; the
+    // heavy DP above stays parallel. Without this the map is corrupted and the
+    // downstream whole-Sum re-key reads a wrong-sized node_batch_axes, tripping
+    // binarize's node_counter == size assertion (a nondeterministic, thread-
+    // count-dependent SIGABRT -- e.g. water-20 PNO-CCSD on Owl, absent under a
+    // sequential par_unseq fallback such as libc++).
+    static std::mutex term_batch_axes_mutex;
+    std::lock_guard<std::mutex> lock(term_batch_axes_mutex);
     (*opts.term_batch_axes)[result.get()] = std::move(node_axes);
+  }
   if (std::getenv("SEQUANT_FACTORIZER_DEBUG"))
     log_chosen_factorization(result, opts);
   return result;

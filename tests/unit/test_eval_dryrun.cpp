@@ -489,6 +489,20 @@ TEST_CASE("optimize_result keys batch annotations onto the whole Sum",
   }
   CHECK(total > 0);
   CHECK(nonempty > 0);
+
+  // The concatenated node_batch_axes must have EXACTLY one entry per
+  // contraction node of the whole reassembled Sum, or binarize aborts on its
+  // node_counter == node_batch_axes.size() check (the water-20 SIGABRT).
+  // Binarize the residual with the concatenated axes and require it does not
+  // throw/abort.
+  {
+    BinarizationOptions bopts;
+    if (auto it = axes_map->find(res.expr.get()); it != axes_map->end())
+      bopts.node_batch_axes = it->second;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    CHECK_NOTHROW(binarize<EvalExpr>(res.expr, {}, bopts));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
 }
 
 // build_context, no DP solve.
