@@ -706,3 +706,69 @@ TEST_CASE("drop_mixed_kramers_fock_terms", "[spinor]") {
     CHECK(out->as<Constant>().is_zero());
   }
 }
+
+TEST_CASE("kramers_trace_csv_no_slot_duplication", "[spinor]") {
+  // Regression for the h2o PNS-MP1 derive crash: the CSV-proto'd MP1 energy
+  // traced with fold_T=false must not produce summands with a repeated index
+  // inside one bundle (TNv3 Edge::add_vertex throws on such a tensor). Root
+  // cause was the lexicographic rewrite's positional named-edge skip meeting
+  // a pure proto (named non-edge) index under the Conjugate braket fold.
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  auto ctx = get_default_context();
+  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto _ = set_scoped_default_context(ctx);
+  TensorCanonicalizer::register_instance(
+      std::make_shared<DefaultTensorCanonicalizer>());
+
+  const Index i1{L"i_1"}, i2{L"i_2"};
+  const Index a1 = Index(L"a_1", {i1, i2});
+  const Index a2 = Index(L"a_2", {i1, i2});
+
+  const auto E = ex<Constant>(rational{1, 4}) *
+                 ex<Tensor>(L"g", bra{i1, i2}, ket{a1, a2}, Symmetry::Antisymm,
+                            BraKetSymmetry::Conjugate, ColumnSymmetry::Symm) *
+                 ex<Tensor>(L"t", bra{a1, a2}, ket{i1, i2}, Symmetry::Antisymm,
+                            BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+
+  ExprPtr E_kr;
+  REQUIRE_NOTHROW(E_kr = closed_shell_kramers_trace(E, {}, /*fold_T=*/false,
+                                                    /*expand_g=*/true, false));
+  expand(E_kr);
+  flatten(E_kr);
+
+  auto check_no_repeats = [](ExprPtr const& term) -> std::string {
+    std::string bad;
+    term->visit(
+        [&](ExprPtr const& node) {
+          if (!node->is<Tensor>()) return;
+          auto const& t = node->as<Tensor>();
+          auto scan = [&](auto const& rng) {
+            std::vector<std::wstring> labels;
+            for (auto const& ix : rng) labels.emplace_back(ix.full_label());
+            std::sort(labels.begin(), labels.end());
+            if (std::adjacent_find(labels.begin(), labels.end()) !=
+                labels.end())
+              bad = toUtf8(to_latex(node));
+          };
+          scan(t.bra());
+          scan(t.ket());
+        },
+        /*atoms_only=*/true);
+    return bad;
+  };
+
+  REQUIRE(E_kr->is<Sum>());
+  std::size_t k = 0;
+  for (auto const& term : *E_kr) {
+    INFO("summand " << k << " = " << toUtf8(to_latex(term)));
+    CHECK(check_no_repeats(term).empty());
+    ++k;
+  }
+
+  ExprPtr folded;
+  REQUIRE_NOTHROW(folded = fold_conjugate_pairs_of_real_sum(
+                      E_kr, CanonicalizeOptions::default_options(),
+                      [](ExprPtr const& s) { return mbpt::swap_spin(s); }));
+}
