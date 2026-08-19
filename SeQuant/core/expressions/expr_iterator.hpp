@@ -1,0 +1,140 @@
+#ifndef SEQUANT_EXPRESSIONS_EXPR_ITERATOR_HPP
+#define SEQUANT_EXPRESSIONS_EXPR_ITERATOR_HPP
+
+#include <SeQuant/core/utility/macros.hpp>
+
+#include <compare>
+#include <iterator>
+#include <type_traits>
+
+namespace sequant {
+
+class ExprPtr;
+
+namespace detail {
+
+template <bool is_const>
+class ExprIteratorImpl {
+ public:
+  using value_type = ExprPtr;
+  using reference = std::add_lvalue_reference_t<
+      std::conditional_t<is_const, std::add_const_t<value_type>, value_type>>;
+  using const_reference =
+      std::add_lvalue_reference_t<std::add_const_t<value_type>>;
+  using pointer = std::add_pointer_t<
+      std::conditional_t<is_const, std::add_const_t<value_type>, value_type>>;
+  using difference_type = std::ptrdiff_t;
+
+  explicit ExprIteratorImpl(pointer ptr = nullptr) : ptr_(ptr) {}
+
+  ExprIteratorImpl &operator+=(difference_type val) {
+    ptr_ += val;
+    return *this;
+  }
+
+  friend ExprIteratorImpl operator+(const ExprIteratorImpl &it,
+                                    difference_type val) {
+    return ExprIteratorImpl(it.ptr_ + val);
+  }
+
+  friend ExprIteratorImpl operator+(difference_type val,
+                                    const ExprIteratorImpl &it) {
+    return ExprIteratorImpl(it.ptr_ + val);
+  }
+
+  ExprIteratorImpl &operator++() {
+    ++ptr_;
+    return *this;
+  }
+
+  ExprIteratorImpl operator++(int) {
+    ExprIteratorImpl copy = *this;
+
+    ++ptr_;
+
+    return copy;
+  }
+
+  ExprIteratorImpl &operator-=(difference_type val) {
+    ptr_ -= val;
+    return *this;
+  }
+
+  friend ExprIteratorImpl operator-(const ExprIteratorImpl &it,
+                                    difference_type val) {
+    return ExprIteratorImpl(it.ptr_ - val);
+  }
+
+  friend ExprIteratorImpl operator-(difference_type val,
+                                    const ExprIteratorImpl &it) {
+    return ExprIteratorImpl(it.ptr_ - val);
+  }
+
+  ExprIteratorImpl &operator--() {
+    --ptr_;
+    return *this;
+  }
+
+  ExprIteratorImpl operator--(int) {
+    ExprIteratorImpl copy = *this;
+
+    --ptr_;
+
+    return copy;
+  }
+
+  reference operator*() const {
+    SEQUANT_ASSERT(ptr_);
+    return *ptr_;
+  }
+
+  pointer operator->() const {
+    SEQUANT_ASSERT(ptr_);
+    return ptr_;
+  }
+
+  difference_type operator-(const ExprIteratorImpl<is_const> &other) const {
+    return ptr_ - other.ptr_;
+  }
+  difference_type operator-(const ExprIteratorImpl<!is_const> &other) const {
+    return ptr_ - other.ptr_;
+  }
+
+  bool operator==(const ExprIteratorImpl<is_const> &other) const {
+    return ptr_ == other.ptr_;
+  }
+  bool operator==(const ExprIteratorImpl<!is_const> &other) const {
+    return ptr_ == other.ptr_;
+  }
+
+  reference operator[](difference_type offset) const {
+    SEQUANT_ASSERT(ptr_);
+    return *(ptr_ + offset);
+  }
+
+  std::strong_ordering operator<=>(
+      const ExprIteratorImpl<is_const> &other) const {
+    return ptr_ <=> other.ptr_;
+  }
+  std::strong_ordering operator<=>(
+      const ExprIteratorImpl<!is_const> &other) const {
+    return ptr_ <=> other.ptr_;
+  }
+
+ private:
+  pointer ptr_ = nullptr;
+};
+
+}  // namespace detail
+
+using ExprIterator = detail::ExprIteratorImpl<false>;
+using ConstExprIterator = detail::ExprIteratorImpl<true>;
+
+static_assert(std::bidirectional_iterator<ExprIterator>);
+static_assert(std::random_access_iterator<ExprIterator>);
+static_assert(std::bidirectional_iterator<ConstExprIterator>);
+static_assert(std::random_access_iterator<ConstExprIterator>);
+
+}  // namespace sequant
+
+#endif  // SEQUANT_EXPRESSIONS_EXPR_ITERATOR_HPP
