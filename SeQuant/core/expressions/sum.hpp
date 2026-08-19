@@ -4,6 +4,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
+#include <SeQuant/core/expressions/expr_iterator.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/product.hpp>
 #include <SeQuant/core/meta.hpp>
@@ -274,26 +275,31 @@ class Sum : public Expr {
     return *this;
   }
 
+  ExprIterator begin() override {
+    if (!summands_.empty()) {
+      reset_hash_value();
+    }
+
+    return ExprIterator{summands_.data()};
+  }
+
+  ExprIterator end() override {
+    return ExprIterator{summands_.data() + summands_.size()};
+  }
+
+  ConstExprIterator begin() const override {
+    return ConstExprIterator{summands_.data()};
+  }
+
+  ConstExprIterator end() const override {
+    return ConstExprIterator{summands_.data() + summands_.size()};
+  }
+
  private:
   summands_type summands_{};
   std::optional<size_t>
       constant_summand_idx_{};  // points to the constant summand, if any; used
                                 // to sum up constants in append/prepend
-
-  cursor begin_cursor() override {
-    return summands_.empty() ? Expr::begin_cursor() : cursor{&summands_[0]};
-  };
-  cursor end_cursor() override {
-    return summands_.empty() ? Expr::end_cursor()
-                             : cursor{&summands_[0] + summands_.size()};
-  };
-  cursor begin_cursor() const override {
-    return summands_.empty() ? Expr::begin_cursor() : cursor{&summands_[0]};
-  };
-  cursor end_cursor() const override {
-    return summands_.empty() ? Expr::end_cursor()
-                             : cursor{&summands_[0] + summands_.size()};
-  };
 
   /// @return the hash of this object
   /// @note this ensures that hash of a Sum of a single summand is
