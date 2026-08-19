@@ -234,6 +234,11 @@ ExprPtr swap_bra_ket(const ExprPtr& expr) {
 
   // Lambda for tensor
   auto tensor_swap = [](const Tensor& tensor) {
+    // this rebuild would silently drop the elementwise-conjugation marker
+    // (and a bare bra<->ket swap of a marked tensor changes its value);
+    // spintrace operates on real-orbital (Field::Real) expressions where the
+    // marker cannot arise, so assert that precondition loudly
+    SEQUANT_ASSERT(!tensor.conjugated());
     return ex<Tensor>(tensor.label(), bra(tensor.ket().value()),
                       ket(tensor.bra().value()), tensor.symmetry(),
                       tensor.braket_symmetry(), tensor.column_symmetry());
@@ -316,6 +321,9 @@ ExprPtr append_spin(const ExprPtr& expr,
 
 ExprPtr remove_spin(const ExprPtr& expr) {
   auto remove_spin_from_tensor = [](const Tensor& tensor) {
+    // rebuild drops the elementwise-conjugation marker; real-orbital
+    // (Field::Real) precondition means none can be present -- assert it
+    SEQUANT_ASSERT(!tensor.conjugated());
     container::svector<Index> b(tensor.bra().begin(), tensor.bra().end());
     container::svector<Index> k(tensor.ket().begin(), tensor.ket().end());
     {
@@ -1235,6 +1243,9 @@ ExprPtr swap_spin(const ExprPtr& expr) {
 ExprPtr merge_tensors(const Tensor& O1, const Tensor& O2) {
   SEQUANT_ASSERT(O1.label() == O2.label());
   SEQUANT_ASSERT(O1.symmetry() == O2.symmetry());
+  // the merged rebuild drops the elementwise-conjugation marker; real-orbital
+  // (Field::Real) precondition means none can be present -- assert it
+  SEQUANT_ASSERT(!O1.conjugated() && !O2.conjugated());
   auto b = ranges::views::concat(O1.bra(), O2.bra());
   auto k = ranges::views::concat(O1.ket(), O2.ket());
   auto a = ranges::views::concat(O1.aux(), O2.aux());

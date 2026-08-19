@@ -930,7 +930,7 @@ TensorNetworkV3::canonicalize_slots(
   // exact. Multi-tensor networks never consume it: there each swapped
   // Conjugate tensor carries the conjugation on the tensor itself
   // (Tensor::conjugated(), toggled by the symbolic canonicalizer's
-  // fold_conjugate_braket), so no network-level bit is involved.
+  // apply_canonical_braket_orientation), so no network-level bit is involved.
   {
     // canonical position of each Conjugate tensor's {bra,ket} bundle vertex;
     // vertices are visited tensor-major (TensorCore precedes that tensor's
@@ -947,8 +947,12 @@ TensorNetworkV3::canonicalize_slots(
                  vt == VertexType::TensorKetBundle) {
         SEQUANT_ASSERT(tensor_count > 0);
         const std::size_t tensor_ord = tensor_count - 1;
+        // same c-number guard as create_graph: an operator-valued Conjugate
+        // "tensor" (NormalOperator) has differently colored bra/ket bundles,
+        // so its bundle positions must not feed the swap parity
         if (braket_symmetry(*tensors_[tensor_ord]) ==
                 BraKetSymmetry::Conjugate &&
+            is_cnumber(*tensors_[tensor_ord]) &&
             !braket_orientation_pinned(*tensors_[tensor_ord])) {
           const bool bra = vt == VertexType::TensorBraBundle;
           bundle_pos[tensor_ord][bra ? 0 : 1] = canonize_perm[v];

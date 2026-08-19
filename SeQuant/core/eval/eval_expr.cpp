@@ -152,8 +152,7 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     // The latter is what makes a proto-indexed (ToT) leaf's canon_indices
     // put occupieds first (canonicals.hpp) -- a layout downstream
     // coefficient-shape detectors rely on. Passing {} here silently broke
-    // that, so name
-    // it explicitly.
+    // that, so name it explicitly.
     auto md =
         tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels(),
                               nullptr, default_idxptr_slottype_lesscompare{});
@@ -181,7 +180,8 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     auto& t = expr_->as<Tensor>();
     // apply() folds the two bra<->ket orientations of a flat Conjugate
     // tensor onto the canonical one, toggling the tensor's
-    // elementwise-conjugation marker when it swaps (fold_conjugate_braket);
+    // elementwise-conjugation marker when it swaps
+    // (apply_canonical_braket_orientation);
     // the hash below is that of the unconjugated spelling so both
     // orientations share a cache slot, and binarize(Tensor) serves the
     // marker via an EvalOp::Adjoint on retrieval.

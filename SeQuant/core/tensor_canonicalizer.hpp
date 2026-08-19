@@ -283,25 +283,6 @@ class TensorBlockCanonicalizer : public DefaultTensorCanonicalizer {
       : DefaultTensorCanonicalizer(external_indices) {}
 
   ExprPtr apply(AbstractTensor& t) const override;
-
-  /// Fold the two bra<->ket orientations of a flat BraKetSymmetry::Conjugate
-  /// tensor onto one canonical form (the same color rule apply() uses for the
-  /// Symm fold) and report the accompanying conjugation. This is the flat-leaf
-  /// analog of TensorNetworkV3::canonicalize_slots' Conjugate fold for the
-  /// ToT path: swapping the bra/ket of a Conjugate tensor introduces a
-  /// conjugation (C{ket;bra} = conj(C{bra;ket})), so a reorientation is a
-  /// conjugation byproduct rather than a free relabeling as it is for Symm.
-  /// @param t the tensor to (possibly) reorient in place.
-  /// @return true iff @p t is Conjugate and was reoriented (i.e. it must be
-  ///         served as the conjugate of its canonical form); false otherwise.
-  bool fold_conjugate_braket(AbstractTensor& t) const;
-
- private:
-  /// Reorient @p t's bra<->ket to the canonical orientation chosen by bundle
-  /// color (the bundle whose spaces sort lexicographically larger goes to bra),
-  /// mirroring the Symm fold in apply(). Space-based, so label-independent and
-  /// tag-independent. @return true iff a swap was performed.
-  bool orient_braket_by_color(AbstractTensor& t) const;
 };
 
 }  // namespace sequant

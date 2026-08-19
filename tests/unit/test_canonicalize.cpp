@@ -700,8 +700,8 @@ TEST_CASE("braket_symmetric_half_tensor_canonicalization", "[algorithms]") {
   // Without braket symmetry the two forms must remain distinct.
   CHECK(canon_hash(L"X{a1;;i1}:N-N-N") != canon_hash(L"X{;a1;i1}:N-N-N"));
 }
-TEST_CASE("fold_conjugate_pairs_of_real_sum", "[exploit_conjugate]") {
-  // Symbolic-layer counterpart of the eval-layer exploit_conjugate channel:
+TEST_CASE("fold_conjugate_pairs_of_real_sum", "[conjugate-fold]") {
+  // Symbolic-layer counterpart of the eval-layer Conjugate leaf fold:
   // in a sum whose VALUE the caller asserts to be real, a summand and its
   // adjoint contribute Re(s + s*) = Re(2 s), so the pair folds into a single
   // summand with a doubled scalar. Adjointness is detected via canonical
@@ -784,7 +784,8 @@ TEST_CASE("fold_conjugate_pairs_of_real_sum", "[exploit_conjugate]") {
 }
 
 TEST_CASE("tot_conjugate_braket_fold", "[algorithms][csv-canon]") {
-  // ToT analog of the flat fold_conjugate_braket channel: the two bra<->ket
+  // ToT analog of the flat Conjugate-braket fold
+  // (apply_canonical_braket_orientation): the two bra<->ket
   // orientations of a proto-indexed (ToT) Conjugate leaf land on ONE cache
   // slot (equal EvalExpr hash) by default, the swapped orientation carrying
   // the elementwise-conjugation marker for EvalOp::Adjoint service. The ToT
