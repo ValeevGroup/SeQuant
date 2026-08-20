@@ -1405,9 +1405,22 @@ struct PeakBatchedModel {
             (pbest < 0 || better(i, pbest)))
           pbest = i;
       bool const fit = pbest >= 0;  // a schedule met the ceiling
-      if (!fit)  // nothing fits the budget: perf-first best effort
+      if (!fit) {
+        // Nothing fits the budget: best-effort MIN FLOPS, ties by MIN PEAK (the
+        // most-sliced realization). NOT min nsl -- the nsl "don't slice below
+        // the ceiling" tiebreak in `better` applies ONLY among feasible points;
+        // for an over-budget term it must be INVERTED, or the least-sliced
+        // (max-peak) schedule is chosen and blows the budget by the most (a
+        // giant unbatched integral -> OOM, e.g. the water-20 2.6 TB composite).
+        // This restores the pre-nsl fallback: min flops, then min peak.
+        auto const better_peak = [&](int i, int j) {
+          return rootf[i].flops < rootf[j].flops ||
+                 (rootf[i].flops == rootf[j].flops &&
+                  rootf[i].peak < rootf[j].peak);
+        };
         for (int i = 0; i < static_cast<int>(rootf.size()); ++i)
-          if (pbest < 0 || better(i, pbest)) pbest = i;
+          if (pbest < 0 || better_peak(i, pbest)) pbest = i;
+      }
       // DIAGNOSTIC (gated): same fields as the peak-first branch below, plus
       // `fit` = whether the ceiling was met (0 => the budget was below even the
       // min-peak schedule, so this fell back to global min-flops). Use the

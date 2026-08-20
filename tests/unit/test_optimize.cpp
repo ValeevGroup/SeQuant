@@ -2955,6 +2955,18 @@ TEST_CASE("perf-first peak_threshold gates contracted aux slicing",
   auto const [peak_lo, stamps_lo] = run(unsliced_peak * 0.9);
   CHECK(stamps_lo >= 1u);
   CHECK(peak_lo < unsliced_peak);
+
+  // An INFEASIBLE budget below even the fully-sliced floor must NOT fall back
+  // to the unsliced (max-peak) realization: with nothing feasible the perf-
+  // first fallback keeps min-flops but breaks ties by MIN PEAK (most sliced),
+  // best-effort. The nsl "don't slice below the ceiling" tiebreak applies ONLY
+  // among feasible points; inverting it in the fallback (min nsl) would leave a
+  // giant over-budget integral UNBATCHED -- the w20 OOM. So a near-zero budget
+  // must still emit the maximally-sliced schedule.
+  auto const [peak_min, stamps_min] = run(1.0);
+  CHECK(stamps_min >= 1u);
+  CHECK(peak_min < unsliced_peak);
+  CHECK(peak_min <= peak_lo);  // fallback is the min-peak realization
 }
 
 // Task 3.3: binarize() must stamp EvalExpr::batched_here() from the optimizer's
