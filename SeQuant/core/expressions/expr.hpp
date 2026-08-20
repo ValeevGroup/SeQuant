@@ -502,6 +502,7 @@ struct proportional_to {
   /// @param[in] expr1
   /// @param[in] expr2
   /// @return true if @p expr1 is proportional to @p expr2
+  bool operator()(const Expr &expr1, const Expr &expr2) const;
   bool operator()(const ExprPtr &expr1, const ExprPtr &expr2) const;
 };
 
