@@ -1,13 +1,13 @@
 #ifndef SEQUANT_EXPRESSIONS_EXPR_CONTAINER_HPP
 #define SEQUANT_EXPRESSIONS_EXPR_CONTAINER_HPP
 
-#include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/expr_iterator.hpp>
 
 #include <memory>
 
 namespace sequant {
 
+class Expr;
 class ExprPtr;
 
 class ExprContainer {
