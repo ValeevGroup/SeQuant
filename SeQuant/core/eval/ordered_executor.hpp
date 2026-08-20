@@ -290,7 +290,8 @@ void run_ordered_contracted_block(
     container::vector<ResultPtr>& value_results, container::vector<char>& built,
     std::function<bool(node_t const&)> const& is_volatile = {},
     std::function<std::size_t(Index const&)> const& n_blocks = {},
-    std::function<std::size_t(std::size_t)> const& home_reads = {}) {
+    std::function<std::size_t(std::size_t)> const& home_reads = {},
+    container::set<std::size_t> const* needed_build = nullptr) {
   using Cache = CacheManager<N, FHC>;
   using BatchContext = typename Cache::BatchContext;
   using member_t = std::pair<node_t const*, Index>;
@@ -452,6 +453,21 @@ void run_ordered_contracted_block(
 
     for (Step const& step : block.steps) {
       if (auto const* build = std::get_if<BuildStep>(&step.value)) {
+        // Cache-halt: skip a dead loop-local Transient -- one whose value is
+        // not read this iteration because its only (transitive) consumers are
+        // persistent nodes already resident in the cache. This is the SAME gate
+        // the top-level scope applies to its BuildSteps (see
+        // run_ordered_schedule_pre_results): the needed_build set is the forest
+        // BFS that halts at cache-alive nodes, so a resident composite's
+        // batch-loop prerequisites are absent from it after iteration 1 and are
+        // not re-formed. built[] is marked so the R3 completeness check
+        // accounts for the intentional skip. Without a gate (needed_build ==
+        // nullptr) the step runs unconditionally -- byte-identical to before.
+        if (needed_build &&
+            !needed_build->count(rich.cells[build->value_id].hash)) {
+          built[build->value_id] = 1;
+          continue;
+        }
         (void)evaluate_impl<EvalTrace>(resolve(build->value_id), leaf_evaluator,
                                        bs.cache);
         // R3: record this loop-local Transient as produced (it is built fresh
@@ -461,7 +477,8 @@ void run_ordered_contracted_block(
       } else if (auto const* child = std::get_if<ScopeBlock>(&step.value)) {
         run_ordered_contracted_block<EvalTrace>(
             *child, vmap, rich, leaf_evaluator, bs.cache, target, ctx,
-            value_results, built, is_volatile, n_blocks, home_reads);
+            value_results, built, is_volatile, n_blocks, home_reads,
+            needed_build);
       } else {
         // R4: the Step variant has exactly BuildStep/ScopeBlock alternatives;
         // a valueless-by-exception or future third alternative is a schedule
@@ -772,7 +789,8 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
     } else if (auto const* block = std::get_if<ScopeBlock>(&step.value)) {
       run_ordered_contracted_block<EvalTrace>(
           *block, vmap, rich, leaf_evaluator, cache, target, root_ectx,
-          value_results, built, is_volatile, n_blocks, home_reads);
+          value_results, built, is_volatile, n_blocks, home_reads,
+          &needed_build);
     } else {
       // R4: the Step variant has exactly BuildStep/ScopeBlock alternatives; any
       // other state is a schedule this executor cannot interpret.

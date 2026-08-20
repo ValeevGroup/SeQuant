@@ -958,6 +958,247 @@ TEST_CASE(
 }
 
 // ===========================================================================
+// Cache-halt across CC iterations: a Κ-free PERSISTENT composite (I(i,i;a,a),
+// e.g. the 4-PNO-2-occ integral) built by contracting Κ between Κ-carrying
+// prerequisites must be built ONCE (iteration 1) and reused thereafter, AND
+// its Κ-carrying prerequisites (loop-local Transients of the {Κ} batch block
+// that forms it) must NOT be re-formed on later iterations -- their only
+// consumer, the composite, is already resident. This mirrors forest descent's
+// "descent halts at a cache hit". The ordered executor's top-level needed_build
+// gate already halts at resident nodes (excluding the prerequisites), but it
+// was not threaded into run_ordered_contracted_block, so the batch block re-ran
+// its Transients every iteration. Reuses the SAME water-20 fixture as the
+// witness above.
+// ===========================================================================
+TEST_CASE(
+    "ordered executor: cache-halt gate does not re-form a resident persistent "
+    "composite, and skips its dead batch-block prerequisites when present",
+    "[ordered][cache-halt]") {
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using Node = EvalNodeDryRun;
+
+  auto ctx = sequant::get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  auto const body =
+      orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                                "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string firstline = body;
+  if (auto nl = firstline.find('\n'); nl != std::string::npos)
+    firstline = firstline.substr(0, nl);
+  auto expr = sequant::deserialize<sequant::ExprPtr>(firstline);
+  REQUIRE(static_cast<bool>(expr));
+  REQUIRE(expr->is<sequant::Sum>());
+  auto const& summands = expr->as<sequant::Sum>().summands();
+  REQUIRE(!summands.empty());
+  std::size_t nterms = std::min<std::size_t>(summands.size(), 40);
+  if (char const* nt = std::getenv("SEQUANT_UT_DRYRUN_NTERMS"))
+    nterms = std::min<std::size_t>(summands.size(), std::atoll(nt));
+
+  auto regime = orderedexec_witness_df_regime(kOrderedExecWater20_pVDZF12);
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  policy.is_batchable_external_index = [](sequant::Index const&) {
+    return false;
+  };
+  policy.batch_spectator_indices = false;
+  policy.batch_target_size = [](sequant::Index const&) -> std::size_t {
+    return 256;
+  };
+  policy.is_volatile_leaf = [](sequant::Tensor const& t) {
+    return t.label() == L"t";
+  };
+  policy.accumulation_factor = 1.0;
+  policy.persistent_only = false;
+  policy.peak_threshold = 1e11;
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      sequant::Expr const*,
+      sequant::container::vector<sequant::NodeBatchAnnotation>>>();
+  sequant::OptimizeOptions opts;
+  opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = axes_map;
+
+  std::vector<Node> forest;
+  for (std::size_t s = 0; s < nterms; ++s) {
+    sequant::ExprPtr const term =
+        orderedexec_witness_flatten_product(summands[s]);
+    if (!term) continue;
+    sequant::ExprPtr optimized;
+    try {
+      optimized = sequant::optimize(term, opts);
+    } catch (std::exception const&) {
+      continue;
+    }
+    if (!optimized) continue;
+    sequant::BinarizationOptions bopts;
+    if (auto it = axes_map->find(optimized.get()); it != axes_map->end())
+      bopts.node_batch_axes = it->second;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    forest.push_back(sequant::binarize<EvalExprDryRun>(optimized, {}, bopts));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+  REQUIRE(!forest.empty());
+
+  auto const block_of = [](sequant::Index const&) -> std::size_t {
+    return 256;
+  };
+  auto const rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  REQUIRE(!rich.cells.empty());
+  auto const vmap = sequant::eval::build_value_node_map(forest);
+
+  using annot_t = std::remove_cvref_t<decltype(forest.front()->annot())>;
+  annot_t const layout{};
+  sequant::eval::dryrun::DryRunLeafEvaluator const yield{cm};
+  std::function<std::size_t(sequant::Index const&)> const target =
+      [](sequant::Index const&) -> std::size_t { return 256; };
+
+  auto& logger = sequant::Logger::instance();
+  auto const prev_level = logger.eval.level;
+  auto* const prev_stream = logger.eval.stream;
+  logger.eval.level = 1;  // arms tally_build
+  std::ostringstream sink;
+  logger.eval.stream = &sink;
+
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  auto const ordered =
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"Κ"});
+  REQUIRE(sequant::eval::well_formed(ordered));
+
+  std::function<bool(Node const&)> const is_volatile_node =
+      [p = policy.is_volatile_leaf](Node const& n) -> bool {
+    if (!n.leaf() || !n->is_tensor()) return false;
+    return p && p(n->as_tensor());
+  };
+
+  // The volatility-aware overload stamps the persistence classification the
+  // executor reads when homing (MPQC's build_cache_manager path).
+  auto cache = sequant::cache_manager(forest, is_volatile_node, 2);
+  cache.set_recompute_tally_enabled(true);
+
+  auto run_iter = [&]() {
+    try {
+      (void)sequant::eval::evaluate_ordered_schedule<sequant::Trace::On>(
+          forest, ordered, rich, layout, yield, cache, target, {},
+          is_volatile_node);
+    } catch (std::exception const& e) {
+      FAIL("ordered evaluate threw: " << e.what());
+    }
+  };
+
+  // Iteration 1 builds everything and homes persistent (Κ-invariant)
+  // composites.
+  run_iter();
+
+  // Collect the composites the executor homed PERSISTENT and their iter-1 build
+  // counts. The cache-halt gate must not cause any of them to be rebuilt in
+  // iteration 2 (they survive reset() and are read, not re-formed).
+  std::vector<std::pair<Node, std::size_t>> persistent_b1;
+  for (auto const& vc : rich.cells) {
+    auto const it = vmap.find(vc.hash);
+    if (it == vmap.end() || it->second.leaf()) continue;
+    if (cache.entry_is_persistent(it->second))
+      persistent_b1.emplace_back(
+          it->second,
+          orderedexec_builds_of(cache.recompute_tally(), it->second));
+  }
+  REQUIRE(
+      !persistent_b1.empty());  // fixture actually has persistent composites
+
+  cache.reset();
+
+  // Replicate the executor's needed_build gate: BFS from the volatile roots,
+  // halting at cache-alive (resident persistent) nodes. A NON-LEAF BuildStep
+  // inside a {Κ} ScopeBlock whose node is NOT in this set is a DEAD
+  // prerequisite
+  // -- the cache-halt fix must not re-form it in iteration 2.
+  sequant::container::set<std::size_t> needed;
+  {
+    sequant::container::svector<Node> stack;
+    sequant::container::set<std::size_t> visited;
+    for (auto&& n : forest) stack.push_back(n);
+    while (!stack.empty()) {
+      Node const n = stack.back();
+      stack.pop_back();
+      if (n.leaf()) continue;
+      if (!visited.insert(n->hash_value()).second) continue;
+      if (cache.alive(n)) continue;  // resident: read, do not descend
+      needed.insert(n->hash_value());
+      stack.push_back(n.left());
+      stack.push_back(n.right());
+    }
+  }
+  std::optional<Node> dead_transient;  // a dead {Κ}-block Transient, if any
+  std::size_t n_Kblocks = 0;
+  {
+    std::function<void(sequant::eval::ScopeBlock const&, bool)> scan =
+        [&](sequant::eval::ScopeBlock const& b, bool inK) {
+          bool const here = inK || b.axis.space().base_key() == L"Κ";
+          if (b.axis.space().base_key() == L"Κ") ++n_Kblocks;
+          if (here)
+            for (auto const& s : b.steps)
+              if (auto const* bs =
+                      std::get_if<sequant::eval::BuildStep>(&s.value)) {
+                auto const it2 = vmap.find(rich.cells[bs->value_id].hash);
+                if (it2 != vmap.end() && !it2->second.leaf() &&
+                    !needed.count(rich.cells[bs->value_id].hash) &&
+                    !dead_transient)
+                  dead_transient = it2->second;
+              }
+          for (auto const& s : b.steps)
+            if (auto const* ch =
+                    std::get_if<sequant::eval::ScopeBlock>(&s.value))
+              scan(*ch, here);
+        };
+    scan(ordered.root, false);
+  }
+  std::size_t const b1_dead =
+      dead_transient
+          ? orderedexec_builds_of(cache.recompute_tally(), *dead_transient)
+          : 0;
+
+  // Iteration 2: resident persistents are reused; dead prerequisites skipped.
+  run_iter();
+
+  logger.eval.level = prev_level;
+  logger.eval.stream = prev_stream;
+
+  // SAFETY invariant (guards the fix): no persistent composite is re-formed in
+  // iteration 2 -- its build count is frozen at the iteration-1 value.
+  for (auto const& [node, b1] : persistent_b1) {
+    std::size_t const b2 = orderedexec_builds_of(cache.recompute_tally(), node);
+    CHECK(b2 == b1);
+  }
+
+  WARN("Kblocks=" << n_Kblocks
+                  << " dead_transient_found=" << dead_transient.has_value());
+  if (dead_transient) {
+    // IMPROVEMENT invariant: a batch-block prerequisite that feeds only a
+    // now-resident persistent composite is NOT re-formed in iteration 2.
+    std::size_t const b2_dead =
+        orderedexec_builds_of(cache.recompute_tally(), *dead_transient);
+    CHECK(b2_dead == b1_dead);
+  }
+}
+
+// ===========================================================================
 // b3 (2026-08-12 eager-home-release plan, Task b): dry == wet schedule
 // EQUIVALENCE for the ordered executor. b1 fixed a real dry-run/wet-run
 // fidelity bug in meter.hpp: the install `if (!policy.whole_scope_execution)
