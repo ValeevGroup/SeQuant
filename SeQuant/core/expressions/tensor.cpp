@@ -45,4 +45,8 @@ ExprPtr Tensor::canonicalize(CanonicalizeOptions) {
   return canonicalizer_ptr ? canonicalizer_ptr->apply(*this) : ExprPtr{};
 }
 
+std::unique_ptr<Expr> Tensor::unique_copy() const {
+  return std::make_unique<Tensor>(*this);
+}
+
 }  // namespace sequant

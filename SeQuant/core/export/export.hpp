@@ -539,10 +539,10 @@ void track_usage(const EvalNode<T> &node, PreprocessResult &result) {
     handle_variable(expr.as<Variable>());
   } else if (expr.is<Power>()) {
     const Power &power = expr.as<Power>();
-    if (power.base().is<Tensor>()) {
-      handle_tensor(power.base().as<Tensor>());
-    } else if (power.base().is<Variable>()) {
-      handle_variable(power.base().as<Variable>());
+    if (power.base()->is<Tensor>()) {
+      handle_tensor(power.base()->as<Tensor>());
+    } else if (power.base()->is<Variable>()) {
+      handle_variable(power.base()->as<Variable>());
     }
   }
 }
@@ -762,10 +762,10 @@ class PreprocessVisitor {
       handle_variable(node.left()->as_variable());
     } else if (node.left()->is_power()) {
       const Power &power = node.left()->as_power();
-      if (power.base().is<Tensor>()) {
-        handle_tensor(power.base().as<Tensor>());
-      } else if (power.base().is<Variable>()) {
-        handle_variable(power.base().as<Variable>());
+      if (power.base()->is<Tensor>()) {
+        handle_tensor(power.base()->as<Tensor>());
+      } else if (power.base()->is<Variable>()) {
+        handle_variable(power.base()->as<Variable>());
       }
     }
 
@@ -775,10 +775,10 @@ class PreprocessVisitor {
       handle_variable(node.right()->as_variable());
     } else if (node.right()->is_power()) {
       const Power &power = node.right()->as_power();
-      if (power.base().is<Tensor>()) {
-        handle_tensor(power.base().as<Tensor>());
-      } else if (power.base().is<Variable>()) {
-        handle_variable(power.base().as<Variable>());
+      if (power.base()->is<Tensor>()) {
+        handle_tensor(power.base()->as<Tensor>());
+      } else if (power.base()->is<Variable>()) {
+        handle_variable(power.base()->as<Variable>());
       }
     }
   }

@@ -14,175 +14,89 @@
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <concepts>
-#include <memory>
 
 namespace sequant {
 
-inline bool operator==(const ExprPtr &left, const ExprPtr &right) {
-  return *left == *right;
-}
-
-inline ExprPtr operator*(const ExprPtr &left, const ExprPtr &right) {
-  if (left.is<Constant>() && right.is<Constant>()) {
-    auto c_ = left->clone();
-    auto &c = c_.as<Constant>();
-    c *= right.as<Constant>();
-    return c_;
-  }
-
-  auto left_is_product = left->is<Product>();
-  auto right_is_product = right->is<Product>();
-  if (!left_is_product && !right_is_product) {
-    return ex<Product>(ExprPtrList{left, right});
-  } else if (left_is_product) {
-    auto result = std::static_pointer_cast<Product>(left->clone());
-    result->append(1, right);
-    return result;
-  } else {  // right_is_product
-    auto result = std::static_pointer_cast<Product>(right->clone());
-    result->prepend(1, left);
-    return result;
-  }
-
-  SEQUANT_UNREACHABLE;
-}
-
-/// Unlike @code operator*(const ExprPtr&, const ExprPtr&) @endcode this
-/// produces a non-commutative product (i.e. NCProduct)
-inline ExprPtr operator^(const ExprPtr &left, const ExprPtr &right) {
-  auto left_is_product = left->is<Product>();
-  auto right_is_product = right->is<Product>();
-  if (!left_is_product && !right_is_product) {
-    return ex<NCProduct>(ExprPtrList{left, right});
-  } else if (left_is_product) {
-    auto result = std::make_shared<NCProduct>(left->clone().as<Product>());
-    result->append(1, right);
-    return result;
-  } else {  // right_is_product
-    auto result = std::make_shared<NCProduct>(right->clone().as<Product>());
-    result->prepend(1, left);
-    return result;
-  }
-
-  SEQUANT_UNREACHABLE;
-}
-
-inline ExprPtr operator+(const ExprPtr &left, const ExprPtr &right) {
-  auto left_is_sum = left->is<Sum>();
-  auto right_is_sum = right->is<Sum>();
-  if (!left_is_sum && !right_is_sum) {
-    return ex<Sum>(ExprPtrList{left, right});
-  } else if (left_is_sum) {
-    auto result = std::static_pointer_cast<Sum>(left->clone());
-    result->append(right);
-    return result;
-  } else {  // right_is_sum
-    auto result = std::static_pointer_cast<Sum>(right->clone());
-    result->prepend(left);
-    return result;
-  }
-
-  SEQUANT_UNREACHABLE;
-}
-
-inline ExprPtr operator-(const ExprPtr &left, const ExprPtr &right) {
-  auto left_is_sum = left->is<Sum>();
-  if (!left_is_sum) {
-    return ex<Sum>(ExprPtrList{
-        left,
-        (right->is<Constant>() ? ex<Constant>(-right->as<Constant>().value())
-                               : ex<Product>(-1, ExprPtrList{right}))});
-  } else if (left_is_sum) {
-    auto result = std::static_pointer_cast<Sum>(left->clone());
-    if (right->is<Constant>())
-      result->append(ex<Constant>(-right->as<Constant>().value()));
-    else
-      result->append(ex<Product>(-1, ExprPtrList{right}));
-    return result;
-  }
-
-  SEQUANT_UNREACHABLE;
-}
-
 template <typename T>
   requires(std::constructible_from<Constant, T>)
-ExprPtr operator+(const ExprPtr &lhs, T &&rhs) {
+ExprPtr operator+(const std::same_as<ExprPtr> auto &lhs, T &&rhs) {
   return lhs + ex<Constant>(std::forward<T>(rhs));
 }
 
 template <typename T>
   requires(std::constructible_from<Constant, T>)
-ExprPtr operator+(T &&lhs, const ExprPtr &rhs) {
+ExprPtr operator+(T &&lhs, const std::same_as<ExprPtr> auto &rhs) {
   return ex<Constant>(std::forward<T>(lhs)) + rhs;
 }
 
 template <typename T>
   requires(std::constructible_from<Constant, T>)
-ExprPtr operator-(const ExprPtr &lhs, T &&rhs) {
+ExprPtr operator-(const std::same_as<ExprPtr> auto &lhs, T &&rhs) {
   return lhs - ex<Constant>(std::forward<T>(rhs));
 }
 
 template <typename T>
   requires(std::constructible_from<Constant, T>)
-ExprPtr operator-(T &&lhs, const ExprPtr &rhs) {
+ExprPtr operator-(T &&lhs, const std::same_as<ExprPtr> auto &rhs) {
   return ex<Constant>(std::forward<T>(lhs)) - rhs;
 }
 
 template <typename T>
   requires(std::constructible_from<Constant, T>)
-ExprPtr operator*(const ExprPtr &lhs, T &&rhs) {
+ExprPtr operator*(const std::same_as<ExprPtr> auto &lhs, T &&rhs) {
   return lhs * ex<Constant>(std::forward<T>(rhs));
 }
 
 template <typename T>
   requires(std::constructible_from<Constant, T>)
-ExprPtr operator*(T &&lhs, const ExprPtr &rhs) {
+ExprPtr operator*(T &&lhs, const std::same_as<ExprPtr> auto &rhs) {
   return ex<Constant>(std::forward<T>(lhs)) * rhs;
 }
 
 template <typename T>
   requires(std::is_arithmetic_v<T>)
-ExprPtr operator/(const ExprPtr &lhs, T &&rhs) {
+ExprPtr operator/(const std::same_as<ExprPtr> auto &lhs, T &&rhs) {
   return lhs * ex<Constant>(rational(1, std::forward<T>(rhs)));
 }
 
-inline ExprPtr operator/(const ExprPtr &lhs, const Constant &rhs) {
+inline ExprPtr operator/(const std::same_as<ExprPtr> auto &lhs,
+                         const Constant &rhs) {
   return lhs * ex<Constant>(1.0 / rhs.value());
 }
 
 template <typename T>
   requires(std::constructible_from<Variable, T>)
-ExprPtr operator+(T &&lhs, const ExprPtr &rhs) {
+ExprPtr operator+(T &&lhs, const std::same_as<ExprPtr> auto &rhs) {
   return ex<Variable>(std::forward<T>(lhs)) + rhs;
 }
 
 template <typename T>
   requires(std::constructible_from<Variable, T>)
-ExprPtr operator+(const ExprPtr &lhs, T &&rhs) {
+ExprPtr operator+(const std::same_as<ExprPtr> auto &lhs, T &&rhs) {
   return lhs + ex<Variable>(std::forward<T>(rhs));
 }
 
 template <typename T>
   requires(std::constructible_from<Variable, T>)
-ExprPtr operator-(T &&lhs, const ExprPtr &rhs) {
+ExprPtr operator-(T &&lhs, const std::same_as<ExprPtr> auto &rhs) {
   return ex<Variable>(std::forward<T>(lhs)) - rhs;
 }
 
 template <typename T>
   requires(std::constructible_from<Variable, T>)
-ExprPtr operator-(const ExprPtr &lhs, T &&rhs) {
+ExprPtr operator-(const std::same_as<ExprPtr> auto &lhs, T &&rhs) {
   return lhs - ex<Variable>(std::forward<T>(rhs));
 }
 
 template <typename T>
   requires(std::constructible_from<Variable, T>)
-ExprPtr operator*(T &&lhs, const ExprPtr &rhs) {
+ExprPtr operator*(T &&lhs, const std::same_as<ExprPtr> auto &rhs) {
   return ex<Variable>(std::forward<T>(lhs)) * rhs;
 }
 
 template <typename T>
   requires(std::constructible_from<Variable, T>)
-ExprPtr operator*(const ExprPtr &lhs, T &&rhs) {
+ExprPtr operator*(const std::same_as<ExprPtr> auto &lhs, T &&rhs) {
   return lhs * ex<Variable>(std::forward<T>(rhs));
 }
 

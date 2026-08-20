@@ -10,6 +10,8 @@
 
 namespace sequant {
 
+class ExprContainer;
+
 /// @brief ExprPtr is a multiple-owner smart pointer to Expr
 
 /// It can be used mostly interchangeably with `std::shared_ptr<Expr>`, but
@@ -23,6 +25,8 @@ class ExprPtr : public std::shared_ptr<Expr> {
   ExprPtr() = default;
   ExprPtr(const ExprPtr &) = default;
   ExprPtr(ExprPtr &&) = default;
+  explicit ExprPtr(const ExprContainer &container);
+  ExprPtr(ExprContainer &&container);
   template <typename E, typename = std::enable_if_t<
                             std::is_same_v<std::remove_const_t<E>, Expr> ||
                             std::is_base_of_v<Expr, std::remove_const_t<E>>>>
@@ -156,6 +160,15 @@ using ExprPtrVector = container::svector<ExprPtr>;
 /// @param[in] expr an Expr object
 /// @return the adjoint of @p expr
 ExprPtr adjoint(const ExprPtr &expr);
+
+ExprPtr operator*(const ExprPtr &left, const ExprPtr &right);
+
+/// Unlike @code operator*(const ExprPtr&, const ExprPtr&) @endcode this
+/// produces a non-commutative product (i.e. NCProduct)
+ExprPtr operator^(const ExprPtr &left, const ExprPtr &right);
+
+ExprPtr operator+(const ExprPtr &left, const ExprPtr &right);
+ExprPtr operator-(const ExprPtr &left, const ExprPtr &right);
 
 }  // namespace sequant
 

@@ -198,7 +198,7 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
   }
 
   std::string represent(const Power &power, const Context &ctx) const override {
-    const ExprPtr &base = power.base();
+    const ExprContainer &base = power.base();
     std::string base_str = stringify_scalar(*base, ctx);
     if (base->is<Variable>() && base->as<Variable>().conjugated()) {
       base_str = wrap_conj(std::move(base_str));

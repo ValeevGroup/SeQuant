@@ -4,8 +4,7 @@
 
 #include <SeQuant/core/export/utils.hpp>
 
-#include <SeQuant/core/expressions/constant.hpp>
-#include <SeQuant/core/expressions/expr.hpp>
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/rational.hpp>
 
 #include <sstream>
@@ -30,7 +29,7 @@ std::string format_power_exponent(const Power::exponent_type &exponent,
   return ss.str();
 }
 
-std::string format_power_base(const ExprPtr &base, std::string base_str) {
+std::string format_power_base(const ExprContainer &base, std::string base_str) {
   if (base->is<Constant>()) {
     const auto &v = base->as<Constant>().value();
     if (v.imag() == 0 &&

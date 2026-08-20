@@ -831,7 +831,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
             nopseq->push_back(factor->template as<NormalOperator<S>>());
           } else {
             SEQUANT_ASSERT(factor->is_cnumber());
-            *prefactor *= *factor;
+            prefactor.as<Product>() *= *factor;
           }
         }
         init_input(nopseq);

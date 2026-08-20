@@ -754,8 +754,6 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
 
   type_id_type type_id() const override { return get_type_id<Tensor>(); };
 
-  ExprPtr clone() const override { return ex<Tensor>(*this); }
-
   void reset_tags() const {
     ranges::for_each(slots(), [](const auto &idx) { idx.reset_tag(); });
   }
@@ -774,6 +772,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     } else
       return false;  // TODO do we compare typeid? labels? probably the latter
   }
+
+ protected:
+  std::unique_ptr<Expr> unique_copy() const override;
 
  private:
   std::wstring label_{};

@@ -59,6 +59,8 @@ static const wchar_t adjoint_label = L'\u207A';
 /// @endcode
 class Expr : public std::enable_shared_from_this<Expr> {
  public:
+  friend class ExprContainer;
+
   using hash_type = std::size_t;
   using type_id_type = int;  // to speed up comparisons
 
@@ -75,31 +77,48 @@ class Expr : public std::enable_shared_from_this<Expr> {
   virtual std::wstring to_latex() const;
 
   /// @return a clone of this object, i.e. an object that is equal to @c this
-  /// @note - must be overridden in the derived class.
-  ///       - the default implementation throws an exception
-  virtual ExprPtr clone() const;
+  ExprPtr clone() const;
+
+  [[deprecated("Expr objects may no longer be managed by shared_ptr")]] std::
+      shared_ptr<Expr>
+      shared_from_this();
+  [[deprecated("Expr objects may no longer be managed by shared_ptr")]] std::
+      shared_ptr<const Expr>
+      shared_from_this() const;
+  [[deprecated("Expr objects may no longer be managed by shared_ptr")]] std::
+      weak_ptr<Expr>
+      weak_from_this();
+  [[deprecated("Expr objects may no longer be managed by shared_ptr")]] std::
+      weak_ptr<const Expr>
+      weak_from_this() const;
 
   /// like Expr::shared_from_this, but returns ExprPtr
   /// @return a shared_ptr to this object wrapped into ExprPtr, if this object
   /// is already managed by a shared_ptr, else returns a shared_ptr to a clone
   /// of this object wrapped into ExprPtr
-  ExprPtr exprptr_from_this() {
+  [[deprecated("Expr objects may no longer be managed by shared_ptr")]] ExprPtr
+  exprptr_from_this() {
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     if (weak_from_this().use_count() == 0)
       return this->clone();
     else
       return static_cast<ExprPtr>(this->shared_from_this());
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   }
 
   /// like Expr::shared_from_this, but returns ExprPtr
   /// @return a shared_ptr to this object wrapped into ExprPtr, if this object
   /// is already managed by a shared_ptr, else returns a shared_ptr to a clone
   /// of this object wrapped into ExprPtr
-  ExprPtr exprptr_from_this() const {
+  [[deprecated("Expr objects may no longer be managed by shared_ptr")]] ExprPtr
+  exprptr_from_this() const {
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     if (weak_from_this().use_count() == 0)
       return this->clone();
     else
       return static_cast<const ExprPtr>(
           std::const_pointer_cast<Expr>(this->shared_from_this()));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   }
 
   /// Canonicalizes @c this and returns the byproduct of canonicalization (e.g.
@@ -228,9 +247,7 @@ class Expr : public std::enable_shared_from_this<Expr> {
   }
 
   /// @brief changes this to its adjoint
-  /// @note base implementation throws, must be reimplemented in the derived
-  /// class
-  virtual void adjoint();
+  virtual void adjoint() = 0;
 
   /// Computes and returns the hash value. If default @p hasher is used then the
   /// value will be memoized, otherwise @p hasher will be used to compute the
@@ -241,23 +258,22 @@ class Expr : public std::enable_shared_from_this<Expr> {
   /// Expr::memoizing_hash
   /// @return the hash value for this Expr
   hash_type hash_value(
-      std::function<hash_type(const std::shared_ptr<const Expr> &)> hasher = {})
-      const {
-    return hasher ? hasher(shared_from_this()) : memoizing_hash();
+      std::function<hash_type(const Expr &)> hasher = {}) const {
+    return hasher ? hasher(*this) : memoizing_hash();
+  }
+
+  [[deprecated(
+      "Use a hashing function that takes a const Expr & instead of "
+      "shared_ptr")]] hash_type
+  hash_value(std::function<hash_type(const std::shared_ptr<const Expr> &)>
+                 hasher) const {
+    return hasher ? hasher(this->clone()) : memoizing_hash();
   }
 
   /// Computes and returns the derived type identifier
-  /// @note this function must be overridden in the derived class
   /// @sa Expr::get_type_id
   /// @return the hash value for this Expr
-  virtual type_id_type type_id() const
-#if __GNUG__
-  {
-    abort();
-  }
-#else
-      = 0;
-#endif
+  virtual type_id_type type_id() const = 0;
 
   friend inline bool operator==(const Expr &a, const Expr &b);
 
@@ -330,38 +346,6 @@ class Expr : public std::enable_shared_from_this<Expr> {
     return boost::core::demangle(typeid(*this).name());
   }
 
-  /** @name in-place arithmetic operators
-   *  Virtual in-place arithmetic operators to be overridden in expressions for
-   * which these make sense.
-   */
-  ///@{
-
-  /// @brief in-place multiply @c *this by @c that
-  /// @return reference to @c *this
-  /// @throw Exception if not implemented for this class, or cannot be
-  /// implemented for the particular @c that
-  virtual Expr &operator*=(const Expr &that);
-
-  /// @brief in-place non-commutatively-multiply @c *this by @c that
-  /// @return reference to @c *this
-  /// @throw Exception if not implemented for this class, or cannot be
-  /// implemented for the particular @c that
-  virtual Expr &operator^=(const Expr &that);
-
-  /// @brief in-place add @c that to @c *this
-  /// @return reference to @c *this
-  /// @throw Exception if not implemented for this class, or cannot be
-  /// implemented for the particular @c that
-  virtual Expr &operator+=(const Expr &that);
-
-  /// @brief in-place subtract @c that from @c *this
-  /// @return reference to @c *this
-  /// @throw Exception if not implemented for this class, or cannot be
-  /// implemented for the particular @c that
-  virtual Expr &operator-=(const Expr &that);
-
-  ///@}
-
   ExprIterator begin();
   ExprIterator end();
   ConstExprIterator begin() const;
@@ -395,9 +379,10 @@ class Expr : public std::enable_shared_from_this<Expr> {
       typename E, typename Visitor,
       typename = std::enable_if_t<std::is_same_v<std::remove_cvref_t<E>, Expr>>>
   static bool visit_impl(E &&expr, Visitor &&visitor, const bool atoms_only) {
-    if (expr.weak_from_this().use_count() == 0)
-      throw Exception(
-          "Expr::visit: cannot visit expressions not managed by shared_ptr");
+    constexpr bool visitor_uses_exprptr =
+        std::is_invocable_r_v<void, std::remove_reference_t<Visitor>,
+                              ExprPtr &>;
+
     for (auto &subexpr_ptr : expr.expr()) {
       const auto subexpr_is_an_atom = subexpr_ptr->is_atom();
       const auto need_to_visit_subexpr = !atoms_only || subexpr_is_an_atom;
@@ -406,18 +391,32 @@ class Expr : public std::enable_shared_from_this<Expr> {
         visited = visit_impl(*subexpr_ptr, std::forward<Visitor>(visitor),
                              atoms_only);
       // call on the subexpression itself, if not yet done so
-      if (need_to_visit_subexpr && !visited) visitor(subexpr_ptr);
+      if (need_to_visit_subexpr && !visited) {
+        if constexpr (visitor_uses_exprptr) {
+          visitor(subexpr_ptr);
+        } else {
+          visitor(*subexpr_ptr);
+        }
+      }
     }
+
     // N.B. can only visit itself if visitor is nonmutating!
     bool this_visited = false;
     if constexpr (std::is_invocable_r_v<void, std::remove_reference_t<Visitor>,
                                         const ExprPtr &>) {
       if (!atoms_only || expr.is_atom()) {
-        const ExprPtr this_exprptr = expr.exprptr_from_this();
-        visitor(this_exprptr);
+        visitor(expr.clone());
+        this_visited = true;
+      }
+    } else if constexpr (std::is_invocable_r_v<void,
+                                               std::remove_reference_t<Visitor>,
+                                               const Expr &>) {
+      if (!atoms_only || expr.is_atom()) {
+        visitor(std::as_const(expr));
         this_visited = true;
       }
     }
+
     return this_visited;
   }
 
@@ -441,14 +440,7 @@ class Expr : public std::enable_shared_from_this<Expr> {
   /// @note @c that is guaranteed to be of same type as @c *this, hence can be
   /// statically cast
   /// @return true if @c that is equivalent to *this
-  virtual bool static_equal([[maybe_unused]] const Expr &that) const
-#if __GNUG__
-  {
-    abort();
-  }
-#else
-      = 0;
-#endif
+  virtual bool static_equal(const Expr &that) const = 0;
 
   /// @param that an Expr object
   /// @note @c that is guaranteed to be of same type as @c *this, hence can be
@@ -469,6 +461,8 @@ class Expr : public std::enable_shared_from_this<Expr> {
     return true;
   }
 
+  virtual std::unique_ptr<Expr> unique_copy() const = 0;
+
  private:
   /// @return returns next type id in the grand class list
   static type_id_type get_next_type_id() {
@@ -483,12 +477,6 @@ class Expr : public std::enable_shared_from_this<Expr> {
     static type_id_type type_id = get_next_type_id();
     return type_id;
   }
-
- private:
-  /// @input[in] fn the name of function that is missing in this class
-  /// @return an Exception object containing a message describing that @p
-  /// fn is missing from this type
-  Exception not_implemented(const char *fn) const;
 };  // class Expr
 
 static_assert(std::ranges::sized_range<Expr>);
@@ -514,6 +502,7 @@ struct proportional_to {
   /// @param[in] expr1
   /// @param[in] expr2
   /// @return true if @p expr1 is proportional to @p expr2
+  bool operator()(const Expr &expr1, const Expr &expr2) const;
   bool operator()(const ExprPtr &expr1, const ExprPtr &expr2) const;
 };
 
