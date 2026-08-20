@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/expressions/expr_iterator.hpp>
 
+#include <initializer_list>
 #include <memory>
 
 namespace sequant {
@@ -62,6 +63,8 @@ class ExprContainer {
 
   ExprContainer(std::unique_ptr<Expr> expr);
 };
+
+using ExprContainerList = std::initializer_list<ExprContainer>;
 
 ExprContainer operator+(const Expr &lhs, const Expr &rhs);
 ExprContainer operator+(const ExprContainer &lhs, const Expr &rhs);
