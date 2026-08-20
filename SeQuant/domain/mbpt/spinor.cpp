@@ -738,17 +738,39 @@ ExprPtr kramers_rebase_term(const ExprPtr& term,
   } else {
     return nullptr;
   }
+  container::svector<std::size_t> sum_pos;  // nested Sum factor positions
   for (std::size_t i = 0; i < factors.size(); ++i) {
     if (factors[i]->is<Tensor>()) {
       leaves.push_back(factors[i]->as<Tensor>());
       leaf_pos.push_back(i);
     } else if (factors[i]->is<Constant>() || factors[i]->is<Variable>()) {
       continue;
+    } else if (factors[i]->is<Sum>()) {
+      sum_pos.push_back(i);  // recursion scope, handled below
     } else {
-      return nullptr;  // nested Sum etc.: leave the term untouched
+      return nullptr;  // unknown factor shape: leave the term untouched
     }
   }
-  if (leaves.empty()) return nullptr;
+  if (leaves.empty() && sum_pos.empty()) return nullptr;
+
+  // flavored indices of a subexpression (slots only, protos excluded)
+  auto flavored_of = [](auto&& self, const ExprPtr& e,
+                        container::set<Index>& out) -> void {
+    if (e->is<Tensor>()) {
+      auto const& tt = e->as<Tensor>();
+      for (auto const& idx : tt.const_indices())
+        if (kr_flavor(idx) != Spin::any) out.insert(idx);
+    } else if (e->is<Product>()) {
+      for (auto const& f : e->as<Product>().factors()) self(self, f, out);
+    } else if (e->is<Sum>()) {
+      for (auto const& s : e->as<Sum>().summands()) self(self, s, out);
+    }
+  };
+  // a nested Sum's boundary indices are frozen for the OUTER analysis, and
+  // the outer factors' indices (plus the term externals) are frozen for the
+  // NESTED analysis: flips never cross a Sum boundary.
+  container::set<Index> ext_outer = externals;
+  for (auto sp : sum_pos) flavored_of(flavored_of, factors[sp], ext_outer);
 
   // --- flavored slot indices per leaf, and index -> leaves incidence
   auto slot_indices = [](const Tensor& t) {
@@ -779,7 +801,7 @@ ExprPtr kramers_rebase_term(const ExprPtr& term,
   // --- freeze components touching externals or dangling flavored indices
   container::set<std::size_t> frozen;
   for (auto const& [idx, ls] : incidence) {
-    const bool ext = externals.find(idx) != externals.end();
+    const bool ext = ext_outer.find(idx) != ext_outer.end();
     const bool dangling = ls.size() == 1;
     if (ext || dangling)
       for (auto l : ls) frozen.insert(find(l));
@@ -813,7 +835,7 @@ ExprPtr kramers_rebase_term(const ExprPtr& term,
     std::sort(fp_flip.begin(), fp_flip.end());
     if (fp_flip < fp) flip_roots.insert(root);
   }
-  if (flip_roots.empty()) return nullptr;  // nothing to do
+  if (flip_roots.empty() && sum_pos.empty()) return nullptr;  // nothing to do
 
   // --- build the replacement map: every flavored slot index of a flipped
   // component maps to a FRESH tmp index in the flavor-flipped space. Fresh
@@ -845,6 +867,9 @@ ExprPtr kramers_rebase_term(const ExprPtr& term,
   // follows flipped referents); conjugate-mark the flipped components' leaves
   auto result = std::make_shared<Product>();
   if (term->is<Product>()) result->scale(term->as<Product>().scalar());
+  container::set<Index> ext_nested = externals;
+  for (std::size_t l = 0; l < leaves.size(); ++l)
+    flavored_of(flavored_of, ex<Tensor>(leaves[l]), ext_nested);
   std::size_t li = 0;
   for (std::size_t i = 0; i < factors.size(); ++i) {
     if (li < leaf_pos.size() && leaf_pos[li] == i) {
@@ -853,6 +878,9 @@ ExprPtr kramers_rebase_term(const ExprPtr& term,
       if (flip_roots.find(find(li)) != flip_roots.end()) t.conjugate();
       result->append(1, ex<Tensor>(std::move(t)), Product::Flatten::No);
       ++li;
+    } else if (std::find(sum_pos.begin(), sum_pos.end(), i) != sum_pos.end()) {
+      result->append(1, kramers_internal_rebase(factors[i], ext_nested),
+                     Product::Flatten::No);
     } else {
       result->append(1, factors[i], Product::Flatten::No);
     }
