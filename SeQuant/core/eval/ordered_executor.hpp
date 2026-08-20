@@ -6,6 +6,7 @@
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/forest_combine.hpp>
+#include <SeQuant/core/eval/member_axis.hpp>
 #include <SeQuant/core/eval/ordered_schedule.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
 #include <SeQuant/core/eval/result.hpp>
@@ -51,16 +52,23 @@ template <typename node_t>
     auto const it = vmap.find(hash);
     return it == vmap.end() ? nullptr : &it->second;
   };
+  // Source the tiling by the axis's SPACE (base_key), not its exact label: the
+  // batch loop is a DAG-scope loop over the aux space, so any leaf carrying
+  // that space gives the same mode tiling. A block bucketed by type may carry
+  // the space under several physical labels, none of which need equal `axis`; a
+  // TYPE-keyed leaf search finds one regardless. Single-label blocks find the
+  // same (only) aux leaf either way -- byte-identical.
+  auto const base = std::wstring(axis.space().base_key());
   for (Step const& step : block.steps) {
     if (auto const* build = std::get_if<BuildStep>(&step.value)) {
       if (auto const* n = resolve(build->value_id))
-        if (auto found = find_leaf_carrying(*n, axis)) return found;
+        if (auto found = find_leaf_carrying_type(*n, base)) return found;
     }
   }
   for (auto const& [vid, kind] : block.outputs) {
     (void)kind;
     if (auto const* n = resolve(vid))
-      if (auto found = find_leaf_carrying(*n, axis)) return found;
+      if (auto found = find_leaf_carrying_type(*n, base)) return found;
   }
   for (Step const& step : block.steps) {
     if (auto const* child = std::get_if<ScopeBlock>(&step.value)) {
@@ -317,24 +325,38 @@ void run_ordered_contracted_block(
   // (\note) documents: see ordered_axis_label_mismatch's doc comment for why
   // a silent skip here would otherwise be a silently N-fold-inflated
   // reduction, not a crash.
+  // Map the block's DAG-scope axis (a SPACE) to each member's OWN physical mode
+  // (member_axis.hpp). Index labels are tree-local, so a member is sliced /
+  // scattered on the physical label IT carries for the space, never the block's
+  // canonical representative reused across members. A Contracted member (and an
+  // AccumulateSum output, which reduces the space away) reads it off its own
+  // batched_here()/carrying leaf (member_contracted_axis, leaf-side); an
+  // External member (and an AccumulateScatter output, which carries the space
+  // FREE on its result) reads it off its result (member_external_axis). Falling
+  // back to block.axis when the member carries no mode of the space leaves a
+  // space-invariant member unsliced (correct). This replaces the former
+  // ordered_axis_label_mismatch assert: the multi-label case it guarded against
+  // is now HANDLED (per-member remap), not rejected.
+  auto const base = std::wstring(block.axis.space().base_key());
+  bool const block_external = block.kind == BatchModeType::External;
+  auto const member_axis = [&](node_t const& nd, bool external) -> Index {
+    auto const ax = external ? member_external_axis(nd, base)
+                             : member_contracted_axis(nd, base);
+    return ax.value_or(block.axis);
+  };
+
   std::vector<member_t> members;
   for (Step const& step : block.steps)
     if (auto const* build = std::get_if<BuildStep>(&step.value)) {
       node_t const& nd = resolve(build->value_id);
-      SEQUANT_ASSERT(
-          !ordered_axis_label_mismatch(nd, block.axis) &&
-          "evaluate_ordered_schedule: multi-physical-label axis in one "
-          "block not yet supported");
-      members.push_back({&nd, block.axis});
+      members.push_back({&nd, member_axis(nd, block_external)});
     }
 
-  // dm[k]: for an AccumulateScatter output, the position of block.axis on
-  // ITS OWN result (computed once here, outside the batch loop, since a
-  // value's structural mode order is the same across every batch) -- the
-  // scatter mode walk_scope's External branch resolves per member via
-  // index_position(*m, axis). Left at nullopt (and unused) for an
-  // AccumulateSum output, which reduces block.axis away at its own node and
-  // so never carries it on its own result.
+  // dm[k]: for an AccumulateScatter output, the position of its OWN escape axis
+  // on ITS OWN result (computed once here, outside the batch loop, since a
+  // value's structural mode order is the same across every batch). Left at
+  // nullopt (and unused) for an AccumulateSum output, which reduces its space
+  // away at its own node and so never carries it on its own result.
   container::vector<std::optional<std::size_t>> dm(block.outputs.size());
   for (std::size_t k = 0; k != block.outputs.size(); ++k) {
     auto const vid = block.outputs[k].first;
@@ -342,12 +364,11 @@ void run_ordered_contracted_block(
     SEQUANT_ASSERT(kind == OutputKind::AccumulateSum ||
                    kind == OutputKind::AccumulateScatter);
     node_t const& nd = resolve(vid);
-    SEQUANT_ASSERT(!ordered_axis_label_mismatch(nd, block.axis) &&
-                   "evaluate_ordered_schedule: multi-physical-label axis in "
-                   "one block not yet supported");
-    members.push_back({&nd, block.axis});
-    if (kind == OutputKind::AccumulateScatter) {
-      dm[k] = index_position(nd, block.axis);
+    bool const scatter = kind == OutputKind::AccumulateScatter;
+    Index const mx = member_axis(nd, scatter);
+    members.push_back({&nd, mx});
+    if (scatter) {
+      dm[k] = index_position(nd, mx);
       SEQUANT_ASSERT(dm[k] &&
                      "evaluate_ordered_schedule: an AccumulateScatter output "
                      "does not carry its own escape axis on its result");
@@ -360,6 +381,12 @@ void run_ordered_contracted_block(
                                                  /*read_from_home=*/true);
   }();
   bs.cache.set_parent(&parent_cache);
+  // This block co-evaluates a whole type-bucketed group under ONE canonical
+  // block.axis; a member binding the axis space under a different physical
+  // label must be sliced on its own mode (member_axis.hpp). Ask slice-on-use to
+  // SPACE-map its axes on this scratch (and every nested child block's, which
+  // inherit this flag through their own make_batched_scratch off this cache).
+  bs.cache.set_space_mapped_slicing(true);
 
   auto const lf = ordered_axis_leaf<node_t>(block, block.axis, vmap, rich);
   SEQUANT_ASSERT(lf &&

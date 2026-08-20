@@ -36,6 +36,7 @@
 #include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
 #include <SeQuant/core/eval/backends/dryrun/cost_profile.hpp>
 #include <SeQuant/core/eval/backends/dryrun/eval_expr.hpp>
+#include <SeQuant/core/eval/backends/dryrun/meter.hpp>  // ordered dry-run replay
 #include <SeQuant/core/eval/backends/dryrun/result.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
 
@@ -590,6 +591,203 @@ TEST_CASE("optimizer node_axes match binarize on the water-20 R1 f*C summand",
               BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
   ResultExpr rexpr{head, res.expr};
   CHECK_NOTHROW(binarize<EvalExpr>(rexpr, bopts));
+}
+
+// Dry-run/wet-run equivalence guard: replay the CSV residual forest through the
+// SAME remat placement router the wet eval builds (build_remat_router), so the
+// dry-run cost_profile exercises the router's occurrence_key path -- the ONLY
+// input the wet eval had that the default dry-run (router == nullptr) did not.
+// occurrence_key builds a TensorNetwork from a node's leaf tensors and
+// canonicalizes it; a CSV intermediate with an aux (Κ) hyperindex must not trip
+// create_graph's strict-braket assertion. This reproduces the water-20 abort
+// with NO MPQC/HF/PNO-MP2 -- purely from the serialized residual + a size
+// regime. (Under SEQUANT_ASSERT_BEHAVIOR=THROW the assertion surfaces as a
+// throw; under IGNORE it is a silent no-op, so build the tests with asserts
+// on.)
+TEST_CASE("dry-run remat router occurrence_key survives CSV aux hyperindex",
+          "[dryrun][remat][occurrence-key]") {
+  using namespace sequant;
+  using namespace sequant::eval::dryrun;  // EvalNodeDryRun, EvalExprDryRun
+  namespace ev = sequant::eval;
+  auto ctx0 = get_default_context().clone();
+  ctx0.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx0.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
+
+  auto flatten_product = [](ExprPtr const& e) -> ExprPtr {
+    if (!e->is<Product>()) return e;
+    auto const& p = e->as<Product>();
+    return ex<Product>(p.scalar(), p.factors(), Product::Flatten::Yes);
+  };
+
+  // Regime built EXACTLY as MPQC's dryrun_size_regime (sequant.h): base extents
+  // are set ONLY for the non-proto leaf spaces actually present in the forest
+  // (μ̃/i/Κ, each = idx_to_extent = space approximate_size); CSV composites
+  // ("a") get NO base extent and are sized purely through the moment path
+  // (csv_pno_moment). The old df_regime() preset an "a"=mu_tilde base extent
+  // that does not exist in the wet model -- that stale entry rehomed different
+  // giants and diverged the schedule from the wet run.
+  SizeRegime regime;
+  regime.space_extent = {
+      {L"i", kWater20_pVDZF12.i_occ},
+      {L"μ̃", kWater20_pVDZF12.mu_tilde},
+      {L"Κ", kWater20_pVDZF12.aux},
+  };
+  regime.csv_pno_moment = kWater20_pVDZF12.pno_M;
+  regime.csv_osv_moment = kWater20_pVDZF12.osv_M;
+  BatchPolicy policy;  // aux-only, matching the water-20 batch config
+  policy.is_batchable_contracted_index = [](Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  // make_csv_batch_policy: pao(μ̃)->pao_target(0), occ(i)->occ_target(0),
+  // everything else (incl. aux Κ)->aux_target(256). 0 == never sliced.
+  policy.batch_target_size = [](Index const& ix) -> std::size_t {
+    auto const bk = ix.space().base_key();
+    if (bk == L"μ̃" || bk == L"i") return std::size_t{0};
+    return std::size_t{256};
+  };
+  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+  policy.peak_threshold = 100e9;
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      Expr const*, container::vector<NodeBatchAnnotation>>>();
+  // MPQC's EXACT idx_to_extent (cck.ipp): a CSV composite is sized by its PNO
+  // domain ceil(max(2, M_1)) -- NOT its base PAO space extent (which is what
+  // SizeRegime::extent returns for every index). Getting this wrong sizes
+  // composites at ~896 instead of ~23 and yields a completely different
+  // factorization/schedule. Non-proto indices use the flat space extent.
+  auto mpqc_idx_to_extent = [&regime](Index const& idx) -> std::size_t {
+    if (idx.has_proto_indices())
+      return static_cast<std::size_t>(
+          std::ceil(std::max(2.0, regime.inner_pow(idx, 1))));
+    return regime.extent(idx);
+  };
+
+  OptimizeOptions opts;
+  opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.reorder =
+      ReorderSum::Reorder;  // MPQC's setting; drives the whole-Sum re-key
+  opts.idx_to_extent = mpqc_idx_to_extent;
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = axes_map;
+  (void)flatten_product;
+
+  // CSV residual head, exactly as MPQC's make_R_template_csv: rank 0 -> scalar
+  // E; rank r -> R{a_1<i_1..i_r> .. a_r<..>; i_1 .. i_r}.
+  auto make_head = [](std::size_t rank) -> Tensor {
+    std::vector<Index> occ, vir;
+    for (std::size_t k = 1; k <= rank; ++k)
+      occ.emplace_back(L"i_" + std::to_wstring(k));
+    for (std::size_t k = 1; k <= rank; ++k)
+      vir.emplace_back(L"a_" + std::to_wstring(k), occ);
+    return Tensor(rank == 0 ? L"E" : L"R", bra(vir), ket(occ),
+                  Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
+                  ColumnSymmetry::Symm);
+  };
+
+  // The FULL residual multiroot the wet eval runs -- energy(0) + singles R1(1)
+  // + doubles R2(2) -- ONE node per equation (optimize_result on the whole Sum
+  // + head-pinned binarize, exactly as MPQC's process_for_evaluation/to_node),
+  // one shared forest/cache/router. The offending node is on R1, so R2 alone
+  // did not reproduce.
+  struct Eqn {
+    char const* file;
+    std::size_t rank;
+  };
+  std::vector<EvalNodeDryRun> forest;
+  for (Eqn const& eq : {Eqn{"/data/csv_ccsd_energy_df.txt", 0u},
+                        Eqn{"/data/csv_ccsd_singles_residual_df.txt", 1u},
+                        Eqn{"/data/csv_ccsd_doubles_residual_df.txt", 2u}}) {
+    auto const body =
+        slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) + eq.file);
+    REQUIRE(!body.empty());
+    std::string line = body;
+    if (auto nl = line.find('\n'); nl != std::string::npos)
+      line = line.substr(0, nl);
+    auto sum = deserialize<ExprPtr>(line);
+    REQUIRE(sum);
+    REQUIRE(sum->is<Sum>());
+    auto res = optimize_result(sum, opts);
+    REQUIRE(res.expr);
+    BinarizationOptions bopts;
+    if (auto it = axes_map->find(res.expr.get()); it != axes_map->end())
+      bopts.node_batch_axes = it->second;
+    ResultExpr rexpr{make_head(eq.rank), res.expr};
+    forest.push_back(binarize<EvalExprDryRun>(rexpr, bopts));
+  }
+  REQUIRE(!forest.empty());
+
+  // occurrence_key's PRECONDITION: it flattens a node's subtree leaves into a
+  // single TensorNetwork, which is only well-defined for a tensorial
+  // (contraction) subtree. A Sum node is NOT a tensor network -- its summands
+  // reuse dummy labels independently, so unioning their leaves glues unrelated
+  // terms and makes an index connect to >1 bra/ket slot. Before the guard this
+  // aborted DEEP in create_graph with a cryptic strict-braket message (the wet
+  // water-20 crash on Owl, all 8 ranks, eval.hpp:818 router consult); now it
+  // fails fast at occurrence_key itself. A PRODUCT (pure contraction) node --
+  // even one carrying a rank-2 doubles amplitude -- is a valid TN and MUST NOT
+  // throw. Verify both, per op, over the whole forest.
+  for (auto const& root : forest)
+    root.visit([&](auto const& n) {
+      if (n->is_sum())
+        CHECK_THROWS(ev::occurrence_key(n, container::svector<Index>{}));
+      else  // leaf tensor or a pure-contraction product: a valid TN
+        CHECK_NOTHROW(ev::occurrence_key(n, container::svector<Index>{}));
+    });
+
+  // Now the point of the whole exercise: with the router-consult moved()-gate
+  // (eval.hpp), occurrence_key is only computed for values the remat pass
+  // actually moved (all tensorial), so it is never handed a Sum node; AND the
+  // ordered executor maps its DAG-scope (space-keyed) batch axis to each
+  // member's own physical label (member_axis.hpp), so a type-bucketed
+  // multi-physical-label aux block (Κ_1 block with a Κ_2 member -- the w20
+  // case) evaluates without the old ordered_executor.hpp multi-label abort. The
+  // dry run must RUN THROUGH the ordered executor. This replays the SAME
+  // schedule the wet run drives (dryrun::meter, ordered scheduler, WITH the
+  // remat router).
+  //
+  // Exclude the rank-0 scalar observable (energy, forest[0]) from the dry-run
+  // forest, exactly as MPQC does (it keeps the scalar observable out of the
+  // dry-run cost-profile forest and the shared residual cache): the dry-run's
+  // zero-data backend models a per-aux-block scalar reduction as a tensor
+  // (dryrun/result.hpp: a full contraction is a scalar ONLY when its output
+  // annotation is empty), which the real backend collapses to a genuine scalar
+  // -- a dry-run-only modeling gap that never reaches the residuals the dry run
+  // actually prices. The residual roots (R1, R2) are the batched,
+  // memory-driving forest.
+  std::vector<EvalNodeDryRun> residual_forest(forest.begin() + 1, forest.end());
+  REQUIRE(residual_forest.size() == 2u);
+
+  ev::dryrun::CostModel const model{regime};
+  auto block_of = [&](Index const& m) -> std::size_t {
+    std::size_t const full = mpqc_idx_to_extent(m);  // MPQC's ctx.idx_to_extent
+    std::size_t const tgt =
+        policy.batch_target_size ? policy.batch_target_size(m) : 0;
+    if (tgt == 0) return full;
+    return full ? std::min(full, tgt) : tgt;
+  };
+  ev::RematInput const in = ev::remat_cells(residual_forest, model, block_of);
+  ev::RematResult const res = ev::rematerialize_to_budget(
+      in.cells, model, block_of, in.num_points, policy.peak_threshold);
+  auto router = ev::remat_to_router(in.cells, res.cells, residual_forest);
+  REQUIRE_FALSE(router.empty());  // batching engaged (finite 100 GB budget)
+
+  BatchPolicy meter_policy = policy;
+  meter_policy.scheduler = BatchScheduler::ordered;  // the wet-run scheduler
+  ev::dryrun::CacheConfig cfg;
+  cfg.min_repeats = 1;
+  cfg.is_volatile = [](EvalNodeDryRun const& n) {
+    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
+  };
+  CHECK_NOTHROW(ev::dryrun::meter(residual_forest, meter_policy, regime, cfg,
+                                  &router, nullptr));
 }
 
 // build_context, no DP solve.

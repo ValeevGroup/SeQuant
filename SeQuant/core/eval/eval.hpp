@@ -7,6 +7,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
+#include <SeQuant/core/eval/member_axis.hpp>
 #include <SeQuant/core/eval/occurrence_key.hpp>
 #include <SeQuant/core/eval/placement_router.hpp>
 #include <SeQuant/core/eval/result.hpp>
@@ -696,8 +697,20 @@ ResultPtr evaluate_impl(Node const& node,         //
     SEQUANT_ASSERT(hops <= d);
     for (std::size_t i = d - hops; i < d; ++i) {
       auto const& [axis, blk] = ctx[i];
-      if (auto const p = index_position(nd, axis))
-        value = value->slice_mode(*p, blk.first, blk.second);
+      // A batch context entry names a DAG-scope axis by a single canonical
+      // Index. When the cache asks for SPACE-mapped slicing (only the ordered
+      // executor, which co-evaluates a whole type-bucketed block under ONE
+      // canonical block.axis), a node that does not carry the exact axis is
+      // sliced on its OWN physical mode of the axis's space (member_axis.hpp)
+      // -- else, for the whole-scope evaluator that pushes each member's own
+      // exact axis, exact-match precision is kept (a same-space index that is
+      // not this level's loop must stay unsliced). Default (exact-only) is
+      // byte-identical to before the space-map flag.
+      auto p = index_position(nd, axis);
+      if (!p && cache.space_mapped_slicing())
+        p = eval::detail::result_position_type(
+            nd, std::wstring(axis.space().base_key()));
+      if (p) value = value->slice_mode(*p, blk.first, blk.second);
     }
     return value;
   };
@@ -810,8 +823,17 @@ ResultPtr evaluate_impl(Node const& node,         //
           //     and byte-identical behavior (the `routed` flag stays false,
           //     and the default path immediately below is untouched). ---
           bool routed = false;
+          // Only a value the remat pass actually MOVED can have a router
+          // override -- and the build keys occurrence_key ONLY for such nodes
+          // (placement_remat.hpp). Gate on moved() first: it is a hash-set
+          // lookup (no occurrence_key), so a non-moved node route()-misses
+          // exactly as before (byte-identical), but we never compute an
+          // occurrence_key for a node the router could not have keyed. This
+          // also keeps occurrence_key off Sum (and other non-tensorial) nodes,
+          // which are never moved and are not tensor networks.
           if (auto const* router = cache.placement_router();
-              router && !router->empty()) {
+              router && !router->empty() &&
+              router->moved(f.node->hash_value())) {
             auto const& ctx = cache.batch_context();
             container::svector<Index> ctx_modes;
             for (auto const& e : ctx) ctx_modes.push_back(e.first);
@@ -2221,24 +2243,32 @@ template <typename F, typename IndexPredicate = accept_any_index,
             // untouched. Empty/null router (Phase 2 default) => branch never
             // taken => rl is exactly the value computed above =>
             // byte-identical.
+            // Gate on moved() FIRST (a hash-set lookup, no occurrence_key):
+            // only a moved value can have an override here, and the build keys
+            // occurrence_key only for moved nodes -- so this never computes an
+            // occurrence_key for a node the router could not have keyed (incl.
+            // non-tensorial Sum nodes, which are never moved and are not tensor
+            // networks). Byte-identical: a non-moved d route()-missed and fell
+            // through before, and it falls through (skips this block) now.
             if (auto const* router = parent_cache.placement_router();
-                router && !router->empty()) {
+                router && !router->empty() && router->moved(d->hash_value())) {
               container::svector<Index> ectx_modes;
               for (auto const& e : ectx) ectx_modes.push_back(e.first);
               auto const key = eval::occurrence_key(d, ectx_modes);
               auto const* home = router->route(key);
               if (home) {
                 rl = static_cast<int>(router->home_depth(*home, ectx, key)) - 1;
-              } else if (router->moved(d->hash_value())) {
-                // d is remat-demoted to a DEEPER context than this hoist is
-                // inside: its per-occurrence override is keyed at that context
-                // and so route() MISSED here. Do NOT build it full at this
-                // (outer) home -- defer to the deeper hoist where route() hits
-                // and it is built per-block. occurrence_key is context-
-                // dependent, so the outer query cannot see the deeper override;
-                // the context-invariant moved() flag is what lets us skip.
-                // Without this, the eager outer full build wins and the
-                // alive()-skip below blocks the intended per-block rebuild.
+              } else {
+                // d is moved but route() MISSED here: it is remat-demoted to a
+                // DEEPER context than this hoist is inside, so its
+                // per-occurrence override is keyed at that context. Do NOT
+                // build it full at this (outer) home -- defer to the deeper
+                // hoist where route() hits and it is built per-block.
+                // occurrence_key is context- dependent, so the outer query
+                // cannot see the deeper override; the context-invariant moved()
+                // flag is what lets us skip. Without this, the eager outer full
+                // build wins and the alive()-skip below blocks the intended
+                // per-block rebuild.
                 continue;
               }
             }

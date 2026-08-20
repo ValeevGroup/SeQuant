@@ -6,6 +6,7 @@
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/forest_combine.hpp>
 #include <SeQuant/core/eval/legality.hpp>
+#include <SeQuant/core/eval/member_axis.hpp>
 #include <SeQuant/core/eval/ordered_executor.hpp>
 #include <SeQuant/core/eval/ordered_schedule.hpp>
 #include <SeQuant/core/eval/result.hpp>
@@ -91,79 +92,12 @@ namespace sequant::eval {
 
 namespace detail {
 
-/// \return the position of the first canonical result mode of \p n whose index
-///         TYPE (\c IndexSpace::base_key()) equals \p base, or nullopt.
-///
-/// \details TYPE-keyed counterpart of \c sequant::index_position (which matches
-/// an exact \c Index -- space AND ordinal). Task 4 drives membership /
-/// scatter-slot placement off the index TYPE the scope tree is keyed by, so a
-/// root binding the mode type under a different physical ordinal is neither
-/// misclassified nor mis-sliced (design integration point 3).
-template <meta::eval_node node_t>
-[[nodiscard]] std::optional<std::size_t> result_position_type(
-    node_t const& n, std::wstring const& base) {
-  auto const& idxs = n->canon_indices();
-  for (std::size_t p = 0; p < idxs.size(); ++p)
-    if (idxs[p].space().base_key() == base) return p;
-  return std::nullopt;
-}
-
-/// \return (leaf, position) of the first leaf below \p n (or \p n itself) that
-///         carries an index of TYPE \p base, or nullopt. TYPE-keyed counterpart
-///         of \c sequant::find_leaf_carrying.
-template <meta::eval_node node_t>
-[[nodiscard]] std::optional<std::pair<node_t, std::size_t>>
-find_leaf_carrying_type(node_t const& n, std::wstring const& base) {
-  if (n.leaf()) {
-    if (auto const p = result_position_type(n, base)) return std::pair{n, *p};
-    return std::nullopt;
-  }
-  if (auto l = find_leaf_carrying_type(n.left(), base)) return l;
-  return find_leaf_carrying_type(n.right(), base);
-}
-
-/// \return the PHYSICAL index \p root batches as an External (spectator) mode
-/// of
-///         TYPE \p base at its own root (from \c batched_here()), or nullopt.
-///         An External loop is realized per-member over the member's own
-///         physical index, so scatter uses this (not the schedule's canonical
-///         representative) -- the schedule's mode only names the TYPE.
-template <meta::eval_node node_t>
-[[nodiscard]] std::optional<Index> member_external_axis(
-    node_t const& root, std::wstring const& base) {
-  if (root.leaf()) return std::nullopt;
-  for (auto const& [ix, knd] : root->batched_here())
-    if (knd == BatchModeType::External && ix.space().base_key() == base)
-      return ix;
-  return std::nullopt;
-}
-
-/// \return the PHYSICAL index \p root batches as a Contracted mode of TYPE \p
-///         base (from \c batched_here() -- the authoritative source of WHICH
-///         physical index is batched), or, failing that, the physical label a
-///         leaf below \p root carries for that type.
-///
-/// \details Index labels are meaningful only within a single tree, so the
-/// schedule's canonical scope mode (\c ScopeNode::mode) must be MAPPED to each
-/// member's OWN physical axis before it is pushed into that member's batch
-/// context / used to slice it -- exactly as \c member_external_axis does for
-/// the external path. Reusing the schedule's canonical mode for every member
-/// would (silently, since each tree today binds a single aux label) fail to
-/// slice a member that binds the contracted mode under a different physical
-/// label, building it full and mis-accumulating it. A contracted mode is summed
-/// away below the root (never on its result), so this reads it off \c
-/// batched_here() or a carrying leaf, not the root's own \c canon_indices.
-template <meta::eval_node node_t>
-[[nodiscard]] std::optional<Index> member_contracted_axis(
-    node_t const& root, std::wstring const& base) {
-  if (!root.leaf())
-    for (auto const& [ix, knd] : root->batched_here())
-      if (knd == BatchModeType::Contracted && ix.space().base_key() == base)
-        return ix;
-  if (auto const lf = find_leaf_carrying_type(root, base))
-    return lf->first->canon_indices()[lf->second];
-  return std::nullopt;
-}
+// result_position_type / find_leaf_carrying_type / member_external_axis /
+// member_contracted_axis -- the DAG-space -> node-physical-mode map -- were
+// hoisted to member_axis.hpp so ordered_executor.hpp can apply the identical
+// map (a circular include otherwise: scope_executor.hpp includes
+// ordered_executor.hpp). Still sequant::eval::detail, so all uses below are
+// unchanged.
 
 ///
 /// \brief The recursive scope-tree walk (Task 4): realizes one batch loop per

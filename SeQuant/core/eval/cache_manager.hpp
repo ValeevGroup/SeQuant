@@ -914,6 +914,21 @@ class CacheManager {
   /// per-loop-iteration structural, re-set each block by the evaluator).
   BatchContext batch_context_{};
 
+  /// When true, slice-on-use (\c evaluate_impl) maps a batch-context entry's
+  /// axis by its SPACE (base_key) rather than its exact Index: if a fetched
+  /// node does not carry the entry's exact axis it is sliced on its OWN
+  /// physical mode of that space (see \c result_position_type). ONLY the
+  /// ordered executor
+  /// (\c run_ordered_contracted_block) sets this -- it co-evaluates a whole
+  /// type-bucketed block under ONE canonical block.axis, so a member binding
+  /// the space under a different physical label must be space-mapped. The
+  /// whole-scope
+  /// (\c walk_scope) evaluator instead pushes each member's OWN exact axis and
+  /// relies on exact-match precision, so it leaves this false (a same-space
+  /// index that is NOT this level's loop must stay unsliced there). Default
+  /// false => exact-match only => byte-identical to before this flag.
+  bool space_mapped_slicing_ = false;
+
   /// Non-owning placement router (see \c placement_router.hpp). Null
   /// (default) => no override wired; \c placement_router() falls through to
   /// \c parent_ (only the root cache is wired in practice). The pointee must
@@ -998,6 +1013,15 @@ class CacheManager {
   /// \return the batch context (empty if none is set).
   [[nodiscard]] BatchContext const& batch_context() const noexcept {
     return batch_context_;
+  }
+
+  /// Enable/disable space-mapped slice-on-use (see space_mapped_slicing_).
+  void set_space_mapped_slicing(bool v) noexcept { space_mapped_slicing_ = v; }
+
+  /// \return whether slice-on-use space-maps its axes (see
+  ///         space_mapped_slicing_).
+  [[nodiscard]] bool space_mapped_slicing() const noexcept {
+    return space_mapped_slicing_;
   }
 
   /// Sets the scope-chain parent (see parent_). Pass nullptr to detach.
