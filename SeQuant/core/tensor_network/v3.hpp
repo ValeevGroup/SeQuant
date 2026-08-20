@@ -182,6 +182,20 @@ class TensorNetworkV3 {
 
   TensorNetworkV3(const Expr &expr) {
     if (expr.size() > 0) {
+      // PRECONDITION: the subexpressions are iterated as the FACTORS of a
+      // single tensor network, which is only meaningful for a Product. Any
+      // other aggregate (a Sum, whose summands are independent terms that reuse
+      // dummy labels; a Power; etc.) is NOT a tensor network -- treating its
+      // subexpressions as factors would glue unrelated tensors together. Reject
+      // up front with a clear diagnostic rather than deep inside create_graph.
+      if (!expr.is<Product>()) {
+        throw Exception(
+            "TensorNetworkV3::TensorNetworkV3: cannot construct a tensor "
+            "network "
+            "from a non-Product expression -- only a Product (network of "
+            "tensor "
+            "factors) or a single tensor is a tensor network");
+      }
       for (const ExprPtr &subexpr : expr) {
         add_expr(*subexpr);
       }

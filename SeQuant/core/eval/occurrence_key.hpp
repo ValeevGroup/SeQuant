@@ -104,6 +104,22 @@ TensorNetwork::SlotCanonicalizationMetadata occurrence_key(
       if (n->is_tensor()) leaves.emplace_back(n->as_tensor().clone());
       return;
     }
+    // PRECONDITION: occurrence_key flattens the subtree's leaves into a single
+    // TensorNetwork, which is only well-defined for a tensorial (contraction)
+    // subtree. A Sum node -- anywhere in the subtree -- is NOT a tensor
+    // network: its summands reuse the same dummy labels independently, so
+    // unioning their leaves glues unrelated terms together (an index would
+    // connect to >1 bra/ket slot, which create_graph then rejects with a
+    // cryptic strict-braket abort). A Sum-bearing occurrence needs a structural
+    // (op-over-child-identities) key, not a flattened TN (see the hybrid design
+    // discussion); until that exists, fail fast with a clear diagnostic here
+    // rather than deep inside create_graph.
+    SEQUANT_ASSERT(
+        !n->is_sum() &&
+        "occurrence_key: cannot key a subtree containing a Sum node -- a Sum "
+        "is "
+        "not a tensor network; only tensorial (contraction) subtrees have a "
+        "well-defined occurrence key");
     self(self, n.left());
     self(self, n.right());
   };
