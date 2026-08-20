@@ -281,6 +281,37 @@ void pareto_insert(container::vector<FP>& f, FP p) {
   f.push_back(p);
 }
 
+/// \brief Slice-count-aware Pareto insert for the perf-first batched frontier.
+///
+/// With \p use_nsl == false this is byte-identical to \ref pareto_insert (plain
+/// (peak, flops) domination; \c FP::nsl is not consulted). With
+/// \p use_nsl == true (perf-first + a FINITE peak_threshold) the cumulative
+/// sliced-mode count \c FP::nsl becomes a THIRD Pareto objective, so a point
+/// dominates only when it is no worse in peak, flops, AND slice count. Because
+/// contracted slicing is flops-neutral, the unsliced realization (higher peak,
+/// \c nsl == 0) and a sliced one (lower peak, \c nsl > 0) are then Pareto-
+/// INCOMPARABLE: both survive on the frontier, all the way to the root, so an
+/// ancestor that needs the lower-peak (sliced) subtree still has it AND the
+/// root selection still has the unsliced one to pick when it fits the budget.
+/// \ref select_root then chooses the LEAST-sliced feasible schedule -- no free
+/// slicing below the ceiling. (A per-flops peak/nsl trade-off keeps at most one
+/// point per distinct slice count, so the frontier stays bounded: slicing more
+/// modes monotonically lowers peak.) The peak-first path passes false and is
+/// unchanged.
+template <typename FP>
+void pareto_insert_ceiling(container::vector<FP>& f, FP p, bool use_nsl) {
+  auto const dominates = [use_nsl](FP const& e, FP const& q) {
+    if (!use_nsl) return e.peak <= q.peak && e.flops <= q.flops;
+    return e.peak <= q.peak && e.flops <= q.flops && e.nsl <= q.nsl;
+  };
+  for (auto const& e : f)
+    if (dominates(e, p)) return;  // p dominated -> skip
+  f.erase(std::remove_if(f.begin(), f.end(),
+                         [&](FP const& e) { return dominates(p, e); }),
+          f.end());
+  f.push_back(p);
+}
+
 /// \brief Index of the lexicographic (peak, then flops) optimum on a frontier.
 template <typename FP>
 int pareto_best(container::vector<FP> const& f) {
@@ -701,6 +732,14 @@ struct PeakBatchedModel {
     std::size_t aprime = 0;
     int lp_idx = -1;
     int rp_idx = -1;
+    /// Cumulative count of batchable modes sliced anywhere in this realization
+    /// (this node's \c aprime popcount plus both children's \c nsl). Used ONLY
+    /// by the perf-first ceiling's threshold-aware frontier domination
+    /// (\ref pareto_insert_ceiling) to break peak-below-budget ties toward the
+    /// LEAST-sliced realization, so the unsliced schedule survives whenever it
+    /// fits the budget. Zero for leaves and for the unbatched / peak-first
+    /// paths, where it is never consulted.
+    std::size_t nsl = 0;
   };
 
   /// Per-subset DP cell: a \c [B]-vector (size \c nB = 2^m) of Pareto
@@ -1162,6 +1201,14 @@ struct PeakBatchedModel {
                     : ctx.flops_of(ctx.idx[lp], ctx.idx[rp], ctx.idx[n]),
                 ctx.sz(lp, 0) + ctx.sz(rp, 0) + ctx.sz(n, 0), machine_balance,
                 fast_mem_elems, block_tiles, block_prefactor);
+    // Perf-first ceiling gate: under a FINITE budget, peak below the budget is
+    // free, so flops-neutral contracted slicing must not be applied merely to
+    // lower a sub-budget peak. Enabling nsl as a third Pareto objective keeps
+    // the unsliced realization incomparable-to (hence co-resident with) the
+    // sliced ones on the frontier; select_root then declines to slice below the
+    // ceiling. Off for peak-first, or for a +inf budget where relax already
+    // forces contracted_here == 0 (nothing to slice): byte-identical.
+    bool const ceiling_nsl = perf_first && std::isfinite(peak_threshold);
     for (std::size_t B = 0; B < ctx.nCells; ++B) {
       // Batch recomputation charge: this node sits inside the ancestor batch
       // loops over the modes in B. For each b in B whose mode this node's
@@ -1246,11 +1293,20 @@ struct PeakBatchedModel {
                   std::max({Lrp + pl + res, szlp + prr + res, both});
               double const rpf =
                   std::max({Llp + prr + res, szrp + pl + res, both});
-              pareto_insert(
-                  acc[B], BFrontPoint{std::min(lpf, rpf),
-                                      lp_st[C][li].flops + rp_st[C][ri].flops +
-                                          cflops_B,
-                                      lp, rp, lpf <= rpf, Ap, li, ri});
+              // Cumulative sliced-mode count of this realization: the modes
+              // sliced at THIS node (popcount Ap) plus both children's. Fed to
+              // the perf-first ceiling's threshold-aware domination so the
+              // unsliced realization survives when it fits the budget.
+              std::size_t const nsl =
+                  lp_st[C][li].nsl + rp_st[C][ri].nsl +
+                  static_cast<std::size_t>(std::popcount(Ap));
+              pareto_insert_ceiling(
+                  acc[B],
+                  BFrontPoint{
+                      std::min(lpf, rpf),
+                      lp_st[C][li].flops + rp_st[C][ri].flops + cflops_B, lp,
+                      rp, lpf <= rpf, Ap, li, ri, nsl},
+                  ceiling_nsl);
             }
         }  // C != SIZE_MAX
         if (Ap == 0) break;
@@ -1329,10 +1385,19 @@ struct PeakBatchedModel {
       // peak_threshold == +inf (the default when no budget is set) makes every
       // point feasible, reducing this to the pure min-flops selection --
       // byte-identical to before this ceiling existed.
+      // Among the feasible frontier, min flops; ties broken toward the
+      // LEAST-sliced realization (fewer nsl), then lower peak. The nsl tiebreak
+      // is what realizes the ceiling's intent: when the unsliced and a sliced
+      // schedule both fit the budget at equal flops (kept distinct by
+      // pareto_insert_ceiling), pick the unsliced one -- no free slicing below
+      // the ceiling. With +inf / peak-first the frontier carries a single point
+      // per flops, so nsl never discriminates: byte-identical.
       auto better = [&](int i, int j) {
         return rootf[i].flops < rootf[j].flops ||
                (rootf[i].flops == rootf[j].flops &&
-                rootf[i].peak < rootf[j].peak);
+                (rootf[i].nsl < rootf[j].nsl ||
+                 (rootf[i].nsl == rootf[j].nsl &&
+                  rootf[i].peak < rootf[j].peak)));
       };
       int pbest = -1;
       for (int i = 0; i < static_cast<int>(rootf.size()); ++i)

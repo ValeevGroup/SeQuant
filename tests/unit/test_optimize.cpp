@@ -2884,6 +2884,79 @@ TEST_CASE("phase-2 places an external mode on an over-budget node",
   CHECK(peak_on < peak_off);
 }
 
+// peak_threshold must GATE contracted (aux) batching under perf-first: a
+// FINITE budget far above the unsliced peak must NOT slice (flops-neutral aux
+// slicing is a free peak reduction the ceiling should decline), while a budget
+// below the unsliced peak must slice to fit. Before the ceiling fix the
+// perf-first frontier pruned the unsliced realization (Pareto-dominated on
+// peak at equal flops), so select_root was forced to slice at ANY finite
+// threshold -- only a literal +inf reverted. This test pins the gate: a large
+// FINITE budget must behave like +inf.
+TEST_CASE("perf-first peak_threshold gates contracted aux slicing",
+          "[optimize][threshold][gate]") {
+  using namespace sequant;
+  namespace o = sequant::opt::detail;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  mbpt::add_df_spaces(reg);
+  for (auto&& [k, v] :
+       std::initializer_list<std::pair<std::wstring_view, size_t>>{
+           {L"i", 30}, {L"a", 30}, {L"Κ", 500}}) {
+    reg->retrieve_ptr(k)->approximate_size(v);
+  }
+  auto aux = reg->retrieve(L"Κ");
+  auto idxsz = [](Index const& ix) -> std::size_t {
+    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+  };
+  auto is_batch = [aux](Index const& ix) { return ix.space() == aux; };
+  auto batch_fn = [](Index const&) -> std::size_t { return 20; };
+
+  // Κ_1 shared between the two g's is the only batchable contraction.
+  std::vector<ExprPtr> ts;
+  for (auto s :
+       {L"g{a_1;i_1;Κ_1}", L"g{a_2;i_2;Κ_1}", L"f{i_1;i_3}", L"f{i_2;i_4}"})
+    ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
+  TensorNetwork net{ts};
+  container::svector<Index> targets;
+
+  auto run = [&](double peak_threshold) -> std::pair<double, std::size_t> {
+    o::PeakBatchedModel model{idxsz, batch_fn, {}};
+    model.is_batchable_contracted_index = is_batch;
+    model.order_aware_recompute = true;
+    model.perf_first = true;
+    model.peak_threshold = peak_threshold;
+    auto ctx = model.build_context(net, targets);
+    REQUIRE(ctx.m == 1);  // only Κ is batchable
+    auto st = o::solve_single_term(model, net, targets, ctx);
+    double peak_bytes = 0.0;
+    auto emitted =
+        model.reconstruct_batched_modes(ctx, st, net, targets, &peak_bytes);
+    std::size_t contracted = 0;
+    for (auto const& modes : emitted.second)
+      for (auto const& [ix, knd] : modes.axes)
+        if (knd == BatchModeType::Contracted) ++contracted;
+    return {peak_bytes, contracted};
+  };
+
+  double const inf = std::numeric_limits<double>::infinity();
+  // Reference: +inf reverts to no-enumeration => unsliced peak, no stamps.
+  auto const [unsliced_peak, stamps_inf] = run(inf);
+  CHECK(stamps_inf == 0u);
+  CHECK(unsliced_peak > 0.0);
+
+  // A FINITE budget far above the unsliced peak must ALSO not slice: the
+  // unsliced realization fits, so the ceiling declines the free peak cut.
+  auto const [peak_hi, stamps_hi] = run(unsliced_peak * 10.0);
+  CHECK(peak_hi == Catch::Approx(unsliced_peak));
+  CHECK(stamps_hi == 0u);
+
+  // A budget just BELOW the unsliced peak (but above the sliceable floor -- the
+  // Κ-free contracted result is unsliceable) must slice Κ to fit.
+  auto const [peak_lo, stamps_lo] = run(unsliced_peak * 0.9);
+  CHECK(stamps_lo >= 1u);
+  CHECK(peak_lo < unsliced_peak);
+}
+
 // Task 3.3: binarize() must stamp EvalExpr::batched_here() from the optimizer's
 // per-node sliced-sets (OptimizeOptions::term_batch_axes ->
 // BinarizationOptions::node_batch_axes), and the two post-orders (the
