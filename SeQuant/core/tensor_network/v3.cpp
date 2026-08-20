@@ -924,10 +924,13 @@ TensorNetworkV3::canonicalize_slots(
   // canonicalize() uses for its explicit swap (canonical_bra_ket_bundle_order,
   // v3.cpp above). The byproduct is consumed by EvalExpr, which spells it as
   // the leaf tensor's elementwise-conjugation marker (Tensor::conjugate()).
-  // N.B. metadata.conj is a single network-level bit: rigorous for one
-  // Conjugate tensor (the proto-indexed-leaf case that eval-node identities
-  // canonicalize), the per-leaf conjugation of a multi-Conjugate-tensor
-  // network is future work.
+  // N.B. metadata.conj is the PARITY of these swaps -- a single network-level
+  // bit. Its sole consumer is EvalExpr's single-tensor (proto-indexed leaf)
+  // constructor, where the parity IS that tensor's own swap, so the bit is
+  // exact. Multi-tensor networks never consume it: there each swapped
+  // Conjugate tensor carries the conjugation on the tensor itself
+  // (Tensor::conjugated(), toggled by the symbolic canonicalizer's
+  // apply_canonical_braket_orientation), so no network-level bit is involved.
   {
     // canonical position of each Conjugate tensor's {bra,ket} bundle vertex;
     // vertices are visited tensor-major (TensorCore precedes that tensor's
@@ -944,8 +947,12 @@ TensorNetworkV3::canonicalize_slots(
                  vt == VertexType::TensorKetBundle) {
         SEQUANT_ASSERT(tensor_count > 0);
         const std::size_t tensor_ord = tensor_count - 1;
+        // same c-number guard as create_graph: an operator-valued Conjugate
+        // "tensor" (NormalOperator) has differently colored bra/ket bundles,
+        // so its bundle positions must not feed the swap parity
         if (braket_symmetry(*tensors_[tensor_ord]) ==
                 BraKetSymmetry::Conjugate &&
+            is_cnumber(*tensors_[tensor_ord]) &&
             !braket_orientation_pinned(*tensors_[tensor_ord])) {
           const bool bra = vt == VertexType::TensorBraBundle;
           bundle_pos[tensor_ord][bra ? 0 : 1] = canonize_perm[v];
@@ -1359,8 +1366,8 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     if constexpr (assert_enabled()) {
       if (get_default_context().assert_strict_braket_symmetry()) {
         // dummy (anonymous) edges to
-        // - involve at most 2 bra and/or ket indices (if BraKetSymmetry::Symm)
-        // or 1 bra and 1 ket index
+        // - involve at most 2 bra and/or ket indices if some incident tensor's
+        // bra<->ket orientation is interchangeable, else 1 bra and 1 ket index
         // - can involve any number of aux indices
         if (current_edge.vertex_count() > 1) {
           // ignore if named index
@@ -1368,7 +1375,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
             [[maybe_unused]] std::size_t nbra = 0;
             [[maybe_unused]] std::size_t nket = 0;
             [[maybe_unused]] std::size_t naux = 0;
-            [[maybe_unused]] BraKetSymmetry symm = BraKetSymmetry::Nonsymm;
+            [[maybe_unused]] bool orientation_free = false;
             for (std::size_t v = 0; v < current_edge.vertex_count(); ++v) {
               const Vertex &vertex = current_edge.vertex(v);
               switch (vertex.getOrigin()) {
@@ -1385,20 +1392,26 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
                   SEQUANT_UNREACHABLE;
               }
 
-              if (symm != BraKetSymmetry::Symm) {
-                // We only care if at least one of the vertices has symmetric
-                // braket symm
-                symm = braket_symmetry(*tensors_[vertex.getTerminalIndex()]);
+              if (!orientation_free) {
+                // bra/ket slots are interchangeable on a braket-Symm tensor
+                // and on a foldable Conjugate tensor: the canonical braket
+                // orientation fold (apply_canonical_braket_orientation /
+                // canonicalize_graph) may spell such a tensor bra<->ket
+                // swapped (for Conjugate carrying the conjugation on the
+                // tensor), so a dummy may legally connect bra-bra or ket-ket.
+                const AbstractTensor &t = *tensors_[vertex.getTerminalIndex()];
+                const auto bks = braket_symmetry(t);
+                orientation_free =
+                    (bks == BraKetSymmetry::Symm ||
+                     (bks == BraKetSymmetry::Conjugate && is_cnumber(t) &&
+                      !braket_orientation_pinned(t)));
               }
             }
 
-            // if braket symmetry == BraKetSymmetry::Symm there is no
-            // distinction between bra and ket, but still can have at most 2 of
-            // them total if braket symmetry != BraKetSymmetry::Symm at most 1
-            // bra and 1 ket can connect to aux
-            SEQUANT_ASSERT(symm == BraKetSymmetry::Symm
-                               ? (nbra + nket <= 2)
-                               : (nbra <= 1 && nket <= 1));
+            // an orientation-free incident tensor permits any bra/ket mix of
+            // up to 2 slots; rigid orientations allow at most 1 bra and 1 ket
+            SEQUANT_ASSERT(orientation_free ? (nbra + nket <= 2)
+                                            : (nbra <= 1 && nket <= 1));
           }
         }
       }

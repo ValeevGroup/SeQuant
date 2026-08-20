@@ -573,7 +573,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 // the swapped orientation, the leaf hash is always that of the unconjugated
 // spelling (one shared cache slot), and binarize serves a conjugated leaf
 // via an EvalOp::Adjoint wrapper (pure conjugation, no transpose).
-TEST_CASE("conjugate eval fold", "[eval_expr][exploit_conjugate]") {
+TEST_CASE("conjugate eval fold", "[eval_expr][conjugate-fold]") {
   using namespace sequant;
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
@@ -641,8 +641,9 @@ TEST_CASE("conjugate eval fold", "[eval_expr][exploit_conjugate]") {
   SECTION("flat (block-canon) Conjugate leaf folds too") {
     // A flat (protoindex-free) Conjugate leaf takes the block-canonicalization
     // branch, not canonicalize_slots. Its bra/ket spaces differ, so the fold
-    // engages there as well (TensorBlockCanonicalizer::fold_conjugate_braket)
-    // -- this is the path the flat Kramers t/g take.
+    // engages there as well (apply_canonical_braket_orientation inside
+    // TensorBlockCanonicalizer::apply) -- the path flat complex-field
+    // Conjugate leaves take.
     auto F = deserialize(L"C{a_1;i_1}:N-C-S")->as<Tensor>();
     REQUIRE_FALSE(ranges::any_of(F.const_indices(), &Index::has_proto_indices));
     auto F_swap = F;

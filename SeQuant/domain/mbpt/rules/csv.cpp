@@ -143,13 +143,13 @@ ExprPtr csv_transform_impl(Tensor const& tnsr_in, const IndexSpace& csv_basis,
   // The CSV coefficient's bra<->ket exchange is a complex conjugation (C_μ^{a}
   // vs C^μ_{a}), so mark it BraKetSymmetry::Conjugate rather than letting the
   // ctor derive it from the (over a complex/Kramers field, unreliable)
-  // CSV-basis index field. This lets eval-time exploit_conjugate fold the two
-  // orientations onto one cached value and serve conj(C) via an Adjoint
-  // (elementwise conj) on retrieval; without it a conj(C) leaf is silently
-  // served as bare C, biasing a complex (Kramers) result with a spurious
-  // imaginary part. No-op over a real field (conjugation is the identity and
-  // exploit_conjugate is off); Conjugate is a no-swap symmetry to the
-  // canonicalizer, like the previous default.
+  // CSV-basis index field. This lets the always-on braket orientation fold
+  // spell the two orientations onto one cached value and serve conj(C) via an
+  // Adjoint (elementwise conj) on retrieval; without it a conj(C) leaf is
+  // silently served as bare C, biasing a complex (Kramers) result with a
+  // spurious imaginary part. No-op over a real field (conjugation is the
+  // identity); Conjugate is a no-swap symmetry to the canonicalizer, like the
+  // previous default.
   auto csv_coeff = [&](Index a, Index b) {
     return ex<Tensor>(coeff_tensor_label, bra({std::move(a)}),
                       ket({std::move(b)}), aux({}), Symmetry::Nonsymm,

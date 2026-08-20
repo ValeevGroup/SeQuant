@@ -406,40 +406,6 @@ template <typename Callable, typename... Args>
 using suitable_call_operator =
     decltype(std::declval<Callable>()(std::declval<Args>()...));
 
-bool TensorBlockCanonicalizer::orient_braket_by_color(AbstractTensor& t) const {
-  // The canonical orientation is a pure function of the tensor's content
-  // (prefer_swapped_braket: sorted-bundle lexicographic comparison over full
-  // Index values -- space, then label), shared with the bundle swap in
-  // TensorNetworkV3::canonicalize_graph so the per-tensor and network
-  // canonicalization routes spell one value one way. E.g. a half-tensor
-  // X{;a;x} folds into X{a;;x}, and same-space bundles tie-break on the
-  // (final, for a lone tensor: all-named) index labels.
-  if (prefer_swapped_braket(t)) {
-    t._swap_bra_ket();
-    return true;
-  }
-  return false;
-}
-
-bool TensorBlockCanonicalizer::fold_conjugate_braket(AbstractTensor& t) const {
-  // For a Conjugate tensor a bra<->ket swap is not free -- by the symmetry
-  // relation T{q;p} = conj(T{p;q}) the swapped spelling represents the
-  // conjugate value -- so the reorientation toggles the tensor's own
-  // elementwise-conjugation marker (_conjugate()), keeping the represented
-  // value invariant. Same color rule as the Symm fold; also reports whether
-  // it swapped (legacy byproduct channel, to be retired once every consumer
-  // reads the marker off the tensor).
-  if (t._braket_symmetry() != BraKetSymmetry::Conjugate) return false;
-  // value identity only holds for c-number tensors (an operator-valued
-  // tensor's bra<->ket swap exchanges creators and annihilators)
-  if (!t._is_cnumber()) return false;
-  // reserved bookkeeping operators must keep their orientation
-  if (braket_orientation_pinned(t)) return false;
-  const bool swapped = orient_braket_by_color(t);
-  if (swapped) t._conjugate();
-  return swapped;
-}
-
 ExprPtr TensorBlockCanonicalizer::apply(AbstractTensor& t) const {
   tag_indices(t);
 

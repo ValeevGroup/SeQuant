@@ -1609,11 +1609,23 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       auto t1_x_t2_p_t2 = t1 * (t2 + t2);  // can only use a flat tensor product
       REQUIRE_THROWS_AS(TN(*t1_x_t2_p_t2), Exception);
 
-      // must be covariant: no bra to bra or ket to ket
+      // dummies may connect bra-to-bra / ket-to-ket when the braket
+      // orientation fold can reorient an incident tensor: a braket-Conjugate
+      // c-number tensor spelled adjoint folds back to its covariant form
+      t2->adjoint();
+      auto t1_x_t2_adjoint = t1 * t2;
+      REQUIRE_NOTHROW(TN(t1_x_t2_adjoint).create_graph());
+
+      // ... but a braket-Nonsymm (rigid) tensor cannot be reoriented, so for
+      // it the covariance check still rejects bra-to-bra / ket-to-ket
       if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
-        t2->adjoint();
-        auto t1_x_t2_adjoint = t1 * t2;
-        REQUIRE_THROWS_AS(TN(t1_x_t2_adjoint).create_graph(), Exception);
+        auto r1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"}, Symmetry::Nonsymm,
+                             BraKetSymmetry::Nonsymm);
+        auto r2 = ex<Tensor>(L"t", bra{L"i_2"}, ket{L"i_1"}, Symmetry::Nonsymm,
+                             BraKetSymmetry::Nonsymm);
+        r2->adjoint();
+        auto r1_x_r2_adjoint = r1 * r2;
+        REQUIRE_THROWS_AS(TN(r1_x_r2_adjoint).create_graph(), Exception);
       }
 
       // can use hyperedges with aux indices

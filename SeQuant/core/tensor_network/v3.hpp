@@ -283,14 +283,15 @@ class TensorNetworkV3 {
     /// input order
     std::int8_t phase = +1;  // +1 or -1
 
-    /// antilinear byproduct of canonicalization: true if reaching canonical
-    /// form required complex-conjugating the network relative to its input.
-    /// Only ever set when canonicalization is asked to exploit
-    /// BraKetSymmetry::Conjugate (see canonicalize_slots' Conjugate fold
-    /// parameter): a Hermitian (Conjugate) tensor satisfies
-    /// T{bra;ket} = conj(T{ket;bra}), so folding its two orientations onto one
-    /// canonical form carries a conjugation, recorded here (cf. `phase`, which
-    /// carries the ±1 linear byproduct of antisymmetric slot reorderings).
+    /// antilinear byproduct of canonicalization: the PARITY of the
+    /// bra<->ket-bundle swaps the canonical labeling applied to the network's
+    /// BraKetSymmetry::Conjugate tensors. A Hermitian (Conjugate) tensor
+    /// satisfies T{bra;ket} = conj(T{ket;bra}), so each such swap carries a
+    /// conjugation (cf. `phase`, which carries the ±1 linear byproduct of
+    /// antisymmetric slot reorderings). A single bit is exact only when at
+    /// most one tensor can have swapped; its sole consumer is EvalExpr's
+    /// single-tensor leaf constructor -- see the invariant note at the
+    /// detection site in canonicalize_slots (v3.cpp).
     bool conj = false;
   };
 
