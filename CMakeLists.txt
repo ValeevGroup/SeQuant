@@ -306,16 +306,28 @@ set(SeQuant_symb_src
         SeQuant/core/context.hpp
         SeQuant/core/expressions/abstract_tensor.cpp
         SeQuant/core/expressions/abstract_tensor.hpp
+        SeQuant/core/expressions/constant.cpp
+        SeQuant/core/expressions/constant.hpp
         SeQuant/core/expressions/expr.cpp
         SeQuant/core/expressions/expr.hpp
         SeQuant/core/expressions/expr_algorithms.cpp
         SeQuant/core/expressions/expr_algorithms.hpp
         SeQuant/core/expressions/expr_operators.hpp
+        SeQuant/core/expressions/expr_ptr.cpp
+        SeQuant/core/expressions/expr_ptr.hpp
         SeQuant/core/expressions/expr_range.hpp
+        SeQuant/core/expressions/power.cpp
+        SeQuant/core/expressions/power.hpp
+        SeQuant/core/expressions/product.cpp
+        SeQuant/core/expressions/product.hpp
         SeQuant/core/expressions/result_expr.cpp
         SeQuant/core/expressions/result_expr.hpp
+        SeQuant/core/expressions/sum.cpp
+        SeQuant/core/expressions/sum.hpp
         SeQuant/core/expressions/tensor.cpp
         SeQuant/core/expressions/tensor.hpp
+        SeQuant/core/expressions/variable.cpp
+        SeQuant/core/expressions/variable.hpp
         SeQuant/core/hash.cpp
         SeQuant/core/hash.hpp
         SeQuant/core/hugenholtz.hpp

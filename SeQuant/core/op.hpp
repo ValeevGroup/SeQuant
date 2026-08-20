@@ -955,6 +955,13 @@ class NormalOperator : public Operator<S>,
   }
 };
 
+template <>
+const container::svector<std::wstring> &
+NormalOperator<Statistics::BoseEinstein>::labels();
+template <>
+const container::svector<std::wstring> &
+NormalOperator<Statistics::FermiDirac>::labels();
+
 static_assert(
     is_tensor<NormalOperator<Statistics::FermiDirac>>,
     "The NormalOperator<Statistics::FermiDirac> class does not fulfill the "
@@ -1060,6 +1067,8 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>,
   Expr::type_id_type type_id() const override {
     return Expr::get_type_id<NormalOperatorSequence>();
   };
+
+  ExprPtr clone() const override { return ex<NormalOperatorSequence>(*this); }
 
   friend bool operator==(const NormalOperatorSequence &nopseq1,
                          const NormalOperatorSequence &nopseq2) {
