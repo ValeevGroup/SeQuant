@@ -264,17 +264,16 @@ ExprPtr Expr::non_owning_ptr() const {
   return ExprPtr(std::shared_ptr<Expr>{}, const_cast<Expr *>(this));
 }
 
-bool proportional_to::operator()(const ExprPtr &expr1,
-                                 const ExprPtr &expr2) const {
-  if (expr1->type_id() !=
-      expr2->type_id()) {  // if expr1 is a Product with single factor == expr2,
-                           // or vice versa
+bool proportional_to::operator()(const Expr &expr1, const Expr &expr2) const {
+  if (expr1.type_id() != expr2.type_id()) {
+    // if expr1 is a Product with single factor == expr2,
+    // or vice versa
     if (expr1.is<Product>()) {
       return expr1.as<Product>().factors().size() == 1 &&
-             expr1.as<Product>().factors().front() == expr2;
+             *expr1.as<Product>().factors().front() == expr2;
     } else if (expr2.is<Product>()) {
       return expr2.as<Product>().factors().size() == 1 &&
-             expr2.as<Product>().factors().front() == expr1;
+             *expr2.as<Product>().factors().front() == expr1;
     } else
       return false;
   }
@@ -285,10 +284,15 @@ bool proportional_to::operator()(const ExprPtr &expr1,
     return true;
   }
   if (expr1.is<Product>()) {
-    return expr1->hash_value() == expr2->hash_value() &&
+    return expr1.hash_value() == expr2.hash_value() &&
            expr1.as<Product>().factors() == expr2.as<Product>().factors();
   }
   return expr1 == expr2;
+}
+
+bool proportional_to::operator()(const ExprPtr &expr1,
+                                 const ExprPtr &expr2) const {
+  return (*this)(*expr1, *expr2);
 }
 
 }  // namespace sequant
