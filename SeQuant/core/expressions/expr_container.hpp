@@ -85,6 +85,8 @@ ExprContainer operator^(const Expr &lhs, const ExprContainer &rhs);
 bool operator==(const ExprContainer &lhs, const ExprPtr &rhs);
 bool operator==(const ExprPtr &lhs, const ExprContainer &rhs);
 
+ExprContainer adjoint(const ExprContainer &expr);
+
 }  // namespace sequant
 
 #endif  // SEQUANT_EXPRESSIONS_EXPR_CONTAINER_HPP
