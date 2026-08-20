@@ -748,6 +748,15 @@ class CacheManager {
       if (persistent_) return data_p;  // never drain a persistent entry
       if (decay() == 0) {              // last use: release the data
         size_bytes_.reset();
+        // The value has now been fully consumed and released, so a later
+        // store() of this key is a fresh RE-PRODUCTION (e.g. the CCk energy
+        // observable, evaluated on the residual's cache, recomputing a volatile
+        // whose residual-side lifetime just drained), not a duplicate producer
+        // within one eval. Clear the re-store tripwire so that legitimate
+        // re-production is allowed; a true duplicate (two store()s with no
+        // access draining the value in between) leaves the flag set and still
+        // trips.
+        stored_this_eval_ = false;
         return std::move(data_p);
       }
       return data_p;
