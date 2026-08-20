@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1log_1af21f4fee5db9234b047edc3b251823f0:
+
+Function sequant::log::label
+============================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::log::label(meta::eval_node auto const&)
+   :project: SeQuant

@@ -1,0 +1,50 @@
+
+.. _program_listing_file_SeQuant_core_export_compute_selection.cpp:
+
+Program Listing for File compute_selection.cpp
+==============================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_export_compute_selection.cpp>` (``SeQuant/core/export/compute_selection.cpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #include <SeQuant/core/export/compute_selection.hpp>
+   
+   #include <type_traits>
+   
+   namespace sequant {
+   
+   ComputeSelection operator|(ComputeSelection lhs, ComputeSelection rhs) {
+     using underlying_type = std::underlying_type_t<ComputeSelection>;
+   
+     return static_cast<ComputeSelection>(static_cast<underlying_type>(lhs) |
+                                          static_cast<underlying_type>(rhs));
+   }
+   
+   ComputeSelection operator&(ComputeSelection lhs, ComputeSelection rhs) {
+     using underlying_type = std::underlying_type_t<ComputeSelection>;
+   
+     return static_cast<ComputeSelection>(static_cast<underlying_type>(lhs) &
+                                          static_cast<underlying_type>(rhs));
+   }
+   
+   ComputeSelection &operator|=(ComputeSelection &lhs, ComputeSelection rhs) {
+     lhs = lhs | rhs;
+     return lhs;
+   }
+   
+   ComputeSelection &operator&=(ComputeSelection &lhs, ComputeSelection rhs) {
+     lhs = lhs & rhs;
+     return lhs;
+   }
+   
+   ComputeSelection operator~(ComputeSelection selection) {
+     using underlying_type = std::underlying_type_t<ComputeSelection>;
+   
+     return static_cast<ComputeSelection>(
+         ~static_cast<underlying_type>(selection));
+   }
+   
+   }  // namespace sequant

@@ -1,0 +1,14 @@
+.. _exhale_define_string_8hpp_1a81ef57fa6b2d82eee3006de055773a34:
+
+Define SQ_STRLIT
+================
+
+- Defined in :ref:`file_SeQuant_core_utility_string.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SQ_STRLIT
+   :project: SeQuant

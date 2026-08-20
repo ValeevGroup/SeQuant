@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1a0fadce31ac418d3db96ae312d962b455:
+
+Typedef sequant::EmptyInitializerList
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_utility_overloads.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::EmptyInitializerList
+   :project: SeQuant

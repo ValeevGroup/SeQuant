@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a89c1a5a9ae96434a872d2211898ecaad:
+
+Function sequant::to_wstring(const rational&)
+=============================================
+
+- Defined in :ref:`file_SeQuant_core_rational.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_wstring(const rational&)
+   :project: SeQuant

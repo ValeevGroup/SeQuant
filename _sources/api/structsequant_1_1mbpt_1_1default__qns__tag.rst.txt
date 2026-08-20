@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1mbpt_1_1default__qns__tag:
+
+Struct default_qns_tag
+======================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::mbpt::default_qns_tag
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

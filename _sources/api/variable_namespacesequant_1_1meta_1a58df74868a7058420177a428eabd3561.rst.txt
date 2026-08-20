@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1meta_1a58df74868a7058420177a428eabd3561:
+
+Variable sequant::meta::is_wstring_convertible_v
+================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_string.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::meta::is_wstring_convertible_v
+   :project: SeQuant

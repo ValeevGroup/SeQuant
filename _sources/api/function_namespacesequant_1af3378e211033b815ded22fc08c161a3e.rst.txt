@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1af3378e211033b815ded22fc08c161a3e:
+
+Template Function sequant::get_unique_indices(const ExprPtr&)
+=============================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_indices.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::get_unique_indices(const ExprPtr&)
+   :project: SeQuant

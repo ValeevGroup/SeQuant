@@ -1,0 +1,558 @@
+
+.. _program_listing_file_SeQuant_core_export_itf.hpp:
+
+Program Listing for File itf.hpp
+================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_export_itf.hpp>` (``SeQuant/core/export/itf.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_EXPORT_ITF_HPP
+   #define SEQUANT_CORE_EXPORT_ITF_HPP
+   
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/export/context.hpp>
+   #include <SeQuant/core/export/reordering_context.hpp>
+   #include <SeQuant/core/export/text_generator.hpp>
+   #include <SeQuant/core/export/utils.hpp>
+   #include <SeQuant/core/expr.hpp>
+   #include <SeQuant/core/index.hpp>
+   #include <SeQuant/core/space.hpp>
+   #include <SeQuant/core/utility/macros.hpp>
+   #include <SeQuant/core/utility/string.hpp>
+   #include <SeQuant/core/utility/tensor.hpp>
+   
+   #include <algorithm>
+   #include <optional>
+   #include <ranges>
+   #include <span>
+   #include <sstream>
+   #include <string>
+   #include <string_view>
+   #include <vector>
+   
+   namespace sequant {
+   
+   class ItfContext : public ReorderingContext {
+    public:
+     using TagMap = container::map<IndexSpace, std::string>;
+     using NameMap = container::map<IndexSpace, std::string>;
+     using TensorImportMap =
+         container::map<Tensor, std::string, TensorBlockLessThanComparator>;
+     using VariableImportMap = container::map<Variable, std::string>;
+   
+     ItfContext() : ReorderingContext(MemoryLayout::ColumnMajor){};
+     ~ItfContext() = default;
+   
+     virtual std::string index_name(const IndexSpace &space,
+                                    std::size_t ordinal) const;
+   
+     virtual std::string get_name(const IndexSpace &space) const;
+   
+     virtual std::string get_tag(const IndexSpace &space) const;
+   
+     virtual std::optional<std::string> import_name(const Tensor &tensor) const;
+     virtual std::optional<std::string> import_name(
+         const Variable &variable) const;
+   
+     virtual void set_name(const IndexSpace &space, std::string name);
+   
+     virtual void set_tag(const IndexSpace &space, std::string tag);
+   
+     virtual void set_import_name(const Tensor &tensor, std::string name);
+     virtual void set_import_name(const Variable &variable, std::string name);
+   
+     virtual const std::wstring two_electron_integral_label() const {
+       return m_integral_label;
+     }
+     virtual void set_two_electron_integral_label(std::wstring label) {
+       m_integral_label = std::move(label);
+     }
+   
+     bool rewrite(Tensor &tensor) const override;
+   
+     virtual std::size_t index_id_offset() const;
+     virtual void set_index_id_offset(std::size_t offset);
+   
+     void set_batch_indices(std::vector<Index> indices,
+                            std::optional<std::size_t> id = {});
+     std::vector<Index> batch_indices(
+         std::optional<std::size_t> id = {}) const override;
+     bool is_batched(std::optional<std::size_t> = {}) const;
+     bool is_index_batched(const Index &idx,
+                           std::optional<std::size_t> = {}) const;
+   
+    private:
+     NameMap m_space_names;
+     TagMap m_tags;
+     TensorImportMap m_tensor_imports;
+     VariableImportMap m_variable_imports;
+     container::map<IndexSpace, char> m_index_label_limits;
+     std::wstring m_integral_label = L"g";
+     std::size_t m_idx_offset = 0;
+     std::map<std::size_t, std::vector<Index>> m_batch_indices;
+   
+    protected:
+     bool is_exceptional_J(std::span<Index> bra, std::span<Index> ket) const;
+   };
+   
+   template <typename Context = ItfContext>
+   class ItfGenerator : public Generator<Context> {
+    public:
+     ItfGenerator() = default;
+     ~ItfGenerator() = default;
+   
+     std::string get_format_name() const override { return "ITF"; }
+   
+     bool supports_named_sections() const override { return true; }
+   
+     bool requires_named_sections() const override { return true; }
+   
+     bool supports_index_batching() const override { return true; }
+   
+     DeclarationScope index_declaration_scope() const override {
+       return DeclarationScope::Global;
+     }
+   
+     DeclarationScope variable_declaration_scope() const override {
+       return DeclarationScope::Global;
+     }
+   
+     DeclarationScope tensor_declaration_scope() const override {
+       return DeclarationScope::Global;
+     }
+   
+     PrunableScalars prunable_scalars() const override {
+       return PrunableScalars::Constants;
+     }
+   
+     std::string represent(const Index &idx, const Context &ctx) const override {
+       if (idx.has_proto_indices()) {
+         throw Exception("ITF doesn't support proto indices");
+       }
+   
+       const std::size_t ordinal = idx.ordinal().value();
+   
+       std::string name = ctx.index_name(idx.space(), ordinal);
+       SEQUANT_ASSERT(!name.empty());
+   
+       if (name.size() > 1) {
+         name = "{" + name + "}";
+       }
+   
+       return name;
+     }
+   
+     std::string get_name(const Tensor &tensor, const Context &ctx) const {
+       std::string name = toUtf8(tensor.label());
+   
+       if (tensor.num_indices() > 0) {
+         name += ":";
+         for (const Index &idx : tensor.const_indices()) {
+           name += ctx.get_tag(idx.space());
+         }
+   
+         if (name.back() == ':') {
+           // all tags have been empty -> remove colon and leave tensor untagged
+           name.erase(name.size() - 1);
+         }
+       }
+   
+       return name;
+     }
+   
+     std::string represent(const Tensor &tensor,
+                           const Context &ctx) const override {
+       std::string representation = get_name(tensor, ctx);
+   
+       representation += "[";
+   
+       for (const Index &idx : tensor.indices()) {
+         representation += represent(idx, ctx);
+       }
+   
+       representation += "]";
+   
+       return representation;
+     }
+   
+     std::string represent(const Variable &variable,
+                           const Context &) const override {
+       return toUtf8(variable.label()) + "[]";
+     }
+   
+     std::string represent(const Constant &constant,
+                           const Context &) const override {
+       std::stringstream sstream;
+       if (constant.value().imag() != 0) {
+         sstream << "(" << constant.value().real();
+         if (constant.value().imag() < 0) {
+           sstream << " - j" << (-1 * constant.value().imag());
+         } else {
+           sstream << " + j" << constant.value().imag();
+         }
+         sstream << ")";
+       } else {
+         sstream << constant.value().real();
+       }
+       return sstream.str();
+     }
+   
+     std::string represent(const Power &power, const Context &ctx) const override {
+       const ExprPtr &base = power.base();
+       // ITF can only express powers of Constants
+       if (!base->is<Constant>()) {
+         throw Exception(
+             "ITF only supports Power with a Constant base; got base of type " +
+             base->type_name());
+       }
+       auto s =
+           detail::format_power_base(base, represent(base->as<Constant>(), ctx)) +
+           "**" +
+           detail::format_power_exponent(power.exponent(),
+                                         /*double_slash*/ false);
+       if (power.conjugated() && (base->as<Constant>().value().imag() != 0 ||
+                                  power.exponent().imag() != 0)) {
+         s = "(" + s + ").conjugate()";
+       }
+       return s;
+     }
+   
+     void create(const Tensor &tensor, bool zero_init,
+                 const Context &ctx) override {
+       if (!zero_init) {
+         throw Exception("Can't create ITF tensor without setting it to zero");
+       }
+   
+       append_line("alloc " + represent(tensor, ctx));
+     }
+   
+     void load(const Tensor &tensor, bool set_to_zero,
+               const Context &ctx) override {
+       if (set_to_zero) {
+         create(tensor, true, ctx);
+         return;
+       }
+   
+       append_line("load " + represent(tensor, ctx));
+     }
+   
+     void set_to_zero(const Tensor &tensor, const Context &ctx) override {
+       append_line("." + represent(tensor, ctx) + " := 0 * One[]");
+     }
+   
+     void unload(const Tensor &tensor, const Context &ctx) override {
+       append_line("drop " + represent(tensor, ctx));
+     }
+   
+     void destroy(const Tensor &tensor, const Context &ctx) override {
+       // There exists no real notion of deleting/destroying a given tensor
+       unload(tensor, ctx);
+     }
+   
+     void persist(const Tensor &tensor, const Context &ctx) override {
+       append_line("store " + represent(tensor, ctx));
+     }
+   
+     void create(const Variable &variable, bool zero_init,
+                 const Context &ctx) override {
+       if (!zero_init) {
+         throw Exception("Can't create ITF variable without setting it to zero");
+       }
+   
+       append_line("alloc " + represent(variable, ctx));
+     }
+   
+     void load(const Variable &variable, bool set_to_zero,
+               const Context &ctx) override {
+       append_line("load " + represent(variable, ctx));
+   
+       if (set_to_zero) {
+         this->set_to_zero(variable, ctx);
+       }
+     }
+   
+     void set_to_zero(const Variable &variable, const Context &ctx) override {
+       append_line("." + represent(variable, ctx) + " := 0 * One[]");
+     }
+   
+     void unload(const Variable &variable, const Context &ctx) override {
+       append_line("drop " + represent(variable, ctx));
+     }
+   
+     void destroy(const Variable &variable, const Context &ctx) override {
+       // There exists no real notion of deleting/destroying a given variable
+       unload(variable, ctx);
+     }
+   
+     void persist(const Variable &variable, const Context &ctx) override {
+       append_line("store " + represent(variable, ctx));
+     }
+   
+     void compute(const Expr &expression, const Variable &result,
+                  const Context &ctx) override {
+       append_line("." + represent(result, ctx) +
+                   " += " + stringify(expression, ctx));
+     }
+   
+     void compute(const Expr &expression, const Tensor &result,
+                  const Context &ctx) override {
+       append_line("." + represent(result, ctx) +
+                   " += " + stringify(expression, ctx));
+     }
+   
+     void declare(const Index &idx, const Context &ctx) override {
+       append_line("index-space: " + represent(idx, ctx) + ", " +
+                   ctx.get_name(idx.space()) + ", " + ctx.get_tag(idx.space()));
+     }
+   
+     void declare(const Variable &variable, UsageSet usage,
+                  const Context &ctx) override {
+       append("tensor: " + represent(variable, ctx) + ", ");
+   
+       std::optional<std::string> import_name = ctx.import_name(variable);
+       bool needs_import = import_name.has_value() || usage == Usage::Terminal ||
+                           usage == Usage::Result;
+   
+       if (needs_import) {
+         if (import_name.has_value()) {
+           append(import_name.value());
+         } else {
+           append(toUtf8(variable.label()));
+         }
+       } else {
+         append("!Create{type:scalar}");
+       }
+   
+       append_line();
+     }
+   
+     void declare(const Tensor &tensor, UsageSet usage,
+                  const Context &ctx) override {
+       append("tensor: " + represent(tensor, ctx) + ", ");
+   
+       std::optional<std::string> import_name = ctx.import_name(tensor);
+       bool needs_import = import_name.has_value() || usage == Usage::Terminal ||
+                           usage == Usage::Result;
+   
+       if (needs_import) {
+         if (import_name.has_value()) {
+           append(import_name.value());
+         } else {
+           append(get_name(tensor, ctx));
+         }
+       } else if (usage == Usage::Intermediate) {
+         append("!Create{type:plain}");
+       } else {
+         append("!Create{type:disk}");
+       }
+   
+       append_line();
+     }
+   
+     void all_indices_declared(std::size_t amount, const Context &) override {
+       if (amount > 0) {
+         append_line();
+       }
+     }
+   
+     void all_variables_declared(std::size_t amount, const Context &) override {
+       if (amount > 0) {
+         append_line();
+       }
+     }
+   
+     void all_tensors_declared(std::size_t amount, const Context &) override {
+       if (amount > 0) {
+         append_line();
+       }
+     }
+   
+     void begin_declarations(DeclarationScope scope, const Context &) override {
+       if (scope == DeclarationScope::Global) {
+         append_line("---- decl");
+       }
+     }
+   
+     void end_declarations(DeclarationScope scope, const Context &) override {
+       if (scope == DeclarationScope::Global) {
+         append_line();
+       }
+     }
+   
+     void insert_comment(const std::string &comment, const Context &) override {
+       append_line("// " + comment);
+     }
+   
+     void begin_named_section(std::string_view name, const Context &) override {
+       append_line("---- code(\"" + std::string(name) + "\")");
+     }
+   
+     void end_named_section(std::string_view /*name*/, const Context &) override {
+       end_batching();
+   
+       append_line();
+       append_line();
+     }
+   
+     void begin_expression(const Context &ctx) override {
+       if (!m_generated.empty() && !m_generated.ends_with("\n\n") &&
+           !m_generated.ends_with(")\n")) {
+         append_line();
+       }
+   
+       if (ctx.is_batched(ctx.current_expression_id())) {
+         std::vector<Index> batchIndices =
+             ctx.batch_indices(ctx.current_expression_id());
+   
+         SEQUANT_ASSERT(std::ranges::is_sorted(
+             batchIndices, std::greater<>{},
+             [](const Index &idx) { return idx.space().approximate_size(); }));
+   
+         std::size_t num_shared = 0;
+         for (std::size_t i = 0;
+              i < std::min(m_currentBatchIndices.size(), batchIndices.size());
+              ++i) {
+           if (batchIndices[i] != m_currentBatchIndices[i]) {
+             break;
+           }
+           ++num_shared;
+         }
+   
+         // ITF is able to fuse index batching for indices of the same space
+         std::size_t num_fuseable = std::ranges::distance(
+             batchIndices.begin(),
+             std::ranges::partition_point(
+                 batchIndices, [&batchIndices](const Index &idx) {
+                   return idx.space() == batchIndices.front().space();
+                 }));
+   
+         if (num_shared >= num_fuseable &&
+             num_shared == m_currentBatchIndices.size()) {
+           // "Reuse" previously started batch loop
+           if (batchIndices.size() == num_shared) {
+             return;
+           }
+         } else {
+           // Drop previous loop and start a fresh one
+           end_batching();
+           num_shared = 0;
+         }
+   
+         append("for [");
+         for (std::size_t i = num_shared; i < batchIndices.size(); ++i) {
+           append(represent(batchIndices[i], ctx));
+           if (i + 1 < batchIndices.size()) {
+             append(", ");
+           }
+         }
+         append_line("]:");
+         m_indent_level += 1;
+         m_currentBatchIndices = std::move(batchIndices);
+       } else {
+         end_batching();
+       }
+     }
+   
+     void end_expression(const Context &) override {}
+   
+     void begin_export(const Context &) override { m_generated.clear(); }
+   
+     void end_export(const Context &) override {
+       end_batching();
+   
+       append_line("---- end");
+     }
+   
+     std::string get_generated_code() const override { return m_generated; }
+   
+    private:
+     std::string m_generated;
+     std::size_t m_indent_level = 0;
+     std::vector<Index> m_currentBatchIndices;
+   
+     std::string stringify(const Expr &expr, const Context &ctx) const {
+       if (expr.is<Tensor>()) {
+         return represent(expr.as<Tensor>(), ctx);
+       } else if (expr.is<Variable>()) {
+         return represent(expr.as<Variable>(), ctx);
+       } else if (expr.is<Constant>()) {
+         return represent(expr.as<Constant>(), ctx);
+       } else if (expr.is<Power>()) {
+         return represent(expr.as<Power>(), ctx);
+       } else if (expr.is<Product>()) {
+         const Product &product = expr.as<Product>();
+   
+         if (product.factors().size() > 2) {
+           throw Exception("ITF can only handle binary contractions");
+         }
+   
+         std::string repr;
+   
+         if (!product.scalar().is_identity()) {
+           repr += represent(Constant(product.scalar()), ctx) + " * ";
+         }
+   
+         for (std::size_t i = 0; i < product.size(); ++i) {
+           repr += stringify(*product.factor(i), ctx);
+   
+           if (i + 1 < product.size()) {
+             repr += " ";
+           }
+         }
+   
+         return repr;
+       } else if (expr.is<Sum>()) {
+         // TODO: Handle on-the-fly antisymmetrization (K[abij] - K[baij])
+         throw Exception("ITF doesn't support explicit summation");
+       }
+   
+       throw Exception("Unsupported expression type in ItfGenerator::compute");
+     }
+   
+     void append(const std::string &snippet) {
+       if (snippet.empty()) {
+         return;
+       }
+   
+       std::string indent = std::string(m_indent_level, '\t');
+   
+       if (m_generated.empty() || m_generated.back() == '\n') {
+         m_generated += indent;
+       }
+   
+       std::size_t offset = 0;
+       while (offset != std::string::npos) {
+         std::size_t idx = snippet.find('\n', offset);
+         if (idx == std::string::npos) {
+           m_generated.append(snippet.data() + offset,
+                              snippet.data() + snippet.size());
+         } else {
+           idx += 1;
+           m_generated.append(snippet.data() + offset, snippet.data() + idx);
+         }
+   
+         offset = idx;
+       }
+     }
+   
+     void append_line(const std::string &snippet = {}) {
+       append(snippet);
+       m_generated += "\n";
+     }
+   
+     void end_batching() {
+       if (!m_currentBatchIndices.empty()) {
+         m_currentBatchIndices.clear();
+         SEQUANT_ASSERT(m_indent_level > 0);
+         m_indent_level = 0;
+       }
+     }
+   };
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_CORE_EXPORT_ITF_HPP

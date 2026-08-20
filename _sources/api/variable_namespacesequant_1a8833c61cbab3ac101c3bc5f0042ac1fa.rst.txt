@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1a8833c61cbab3ac101c3bc5f0042ac1fa:
+
+Variable sequant::is_a_sum_v
+============================
+
+- Defined in :ref:`file_SeQuant_core_expressions_traits.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::is_a_sum_v
+   :project: SeQuant

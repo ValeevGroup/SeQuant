@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1details_1ac93993b44146cff3e257a034b52b83d9:
+
+Function sequant::io::serialization::v1::details::serialize_scalar
+==================================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_serialize.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::io::serialization::v1::details::serialize_scalar(const Constant::scalar_type&, const SerializationOptions&)
+   :project: SeQuant

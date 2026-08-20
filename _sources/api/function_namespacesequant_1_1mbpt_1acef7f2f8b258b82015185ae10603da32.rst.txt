@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1acef7f2f8b258b82015185ae10603da32:
+
+Function sequant::mbpt::open_shell_spintrace(const ExprPtr&, const container::svector<container::svector<Index>>&, const std::optional<int>&)
+=============================================================================================================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::open_shell_spintrace(const ExprPtr&, const container::svector<container::svector<Index>>&, const std::optional<int>&)
+   :project: SeQuant

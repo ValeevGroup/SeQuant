@@ -1,0 +1,26 @@
+.. _exhale_class_classsequant_1_1_itf_context:
+
+Class ItfContext
+================
+
+- Defined in :ref:`file_SeQuant_core_export_itf.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public sequant::ReorderingContext`` (:ref:`exhale_class_classsequant_1_1_reordering_context`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::ItfContext
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

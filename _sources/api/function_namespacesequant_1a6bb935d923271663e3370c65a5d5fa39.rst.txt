@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a6bb935d923271663e3370c65a5d5fa39:
+
+Function sequant::tensors_commute
+=================================
+
+- Defined in :ref:`file_SeQuant_core_tensor_network_utils.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::tensors_commute(const AbstractTensor&, const AbstractTensor&)
+   :project: SeQuant

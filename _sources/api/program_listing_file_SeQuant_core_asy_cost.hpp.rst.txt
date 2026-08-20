@@ -1,0 +1,144 @@
+
+.. _program_listing_file_SeQuant_core_asy_cost.hpp:
+
+Program Listing for File asy_cost.hpp
+=====================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_asy_cost.hpp>` (``SeQuant/core/asy_cost.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_ASY_COST_HPP
+   #define SEQUANT_ASY_COST_HPP
+   
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/rational.hpp>
+   #include <SeQuant/core/space.hpp>
+   
+   #include <cstddef>
+   #include <string>
+   
+   namespace sequant {
+   
+   class AsyCost {
+    public:
+     using ExponentMap = container::map<IndexSpace, std::size_t>;
+     using ExtentMap = container::map<IndexSpace, std::size_t>;
+   
+    private:
+     class AsyCostEntry {
+       ExponentMap exponents_;       // space -> power; zero exponents not stored
+       mutable rational prefactor_;  // rational multiplier
+       bool is_max_ = false;         // true for the AsyCost::max() sentinel
+   
+      public:
+       static std::ostream &stream_out_rational(std::ostream &os,
+                                                rational const &r);
+   
+       static AsyCostEntry max();
+   
+       static AsyCostEntry const &zero();
+   
+       AsyCostEntry();
+   
+       AsyCostEntry(AsyCostEntry const &) = default;
+   
+       AsyCostEntry(AsyCostEntry &&) = default;
+   
+       AsyCostEntry(ExponentMap exponents, rational prefactor);
+   
+       AsyCostEntry &operator=(AsyCostEntry const &) = default;
+   
+       AsyCostEntry &operator=(AsyCostEntry &&) = default;
+   
+       [[nodiscard]] ExponentMap const &exponents() const;
+   
+       [[nodiscard]] rational prefactor() const;
+   
+       void set_prefactor(rational n) const;
+   
+       [[nodiscard]] bool is_zero() const;
+   
+       [[nodiscard]] bool is_max() const;
+   
+       bool operator<(AsyCostEntry const &rhs) const;
+   
+       bool operator==(AsyCostEntry const &rhs) const;
+   
+       bool operator!=(AsyCostEntry const &rhs) const;
+   
+       [[nodiscard]] std::string text() const;
+   
+       [[nodiscard]] std::string to_latex() const;
+     };
+   
+    private:
+     container::set<AsyCostEntry> cost_;
+   
+     explicit AsyCost(AsyCostEntry);
+   
+    public:
+     static AsyCost const &max();
+   
+     static AsyCost const &zero();
+   
+     AsyCost();
+   
+     explicit AsyCost(ExponentMap exponents, rational prefactor = 1);
+   
+     AsyCost(AsyCost const &) = default;
+   
+     AsyCost(AsyCost &&) = default;
+   
+     AsyCost &operator=(AsyCost const &) = default;
+   
+     AsyCost &operator=(AsyCost &&) = default;
+   
+     [[nodiscard]] double ops(ExtentMap const &extents = {}) const;
+   
+     [[nodiscard]] std::wstring to_latex() const;
+   
+     [[nodiscard]] std::string text() const;
+   
+     AsyCost &operator+=(AsyCost const &);
+   
+     AsyCost &operator-=(AsyCost const &);
+   
+     friend AsyCost operator+(AsyCost const &lhs, AsyCost const &rhs);
+   
+     friend AsyCost operator*(AsyCost const &lhs, rational scale);
+   
+     friend AsyCost operator*(rational scale, AsyCost const &lhs);
+   
+     friend bool operator<(AsyCost const &lhs, AsyCost const &rhs);
+   
+     friend bool operator==(AsyCost const &lhs, AsyCost const &rhs);
+   
+     friend bool operator<=(AsyCost const &lhs, AsyCost const &rhs);
+   
+     friend bool operator>=(AsyCost const &lhs, AsyCost const &rhs);
+   };
+   
+   AsyCost operator+(AsyCost const &lhs, AsyCost const &rhs);
+   
+   AsyCost operator-(AsyCost const &lhs, AsyCost const &rhs);
+   
+   AsyCost operator*(AsyCost const &cost, rational scale);
+   
+   AsyCost operator*(rational scale, AsyCost const &cost);
+   
+   AsyCost operator/(AsyCost const &cost, rational scale);
+   
+   bool operator==(AsyCost const &lhs, AsyCost const &rhs);
+   
+   bool operator!=(AsyCost const &lhs, AsyCost const &rhs);
+   
+   bool operator<(AsyCost const &lhs, AsyCost const &rhs);
+   
+   bool operator>(AsyCost const &lhs, AsyCost const &rhs);
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_ASY_COST_HPP

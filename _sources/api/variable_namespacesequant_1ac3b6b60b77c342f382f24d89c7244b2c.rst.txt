@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1ac3b6b60b77c342f382f24d89c7244b2c:
+
+Variable sequant::is_an_expr_v
+==============================
+
+- Defined in :ref:`file_SeQuant_core_expressions_traits.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::is_an_expr_v
+   :project: SeQuant

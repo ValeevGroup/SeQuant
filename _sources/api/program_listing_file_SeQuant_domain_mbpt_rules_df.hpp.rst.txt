@@ -1,0 +1,33 @@
+
+.. _program_listing_file_SeQuant_domain_mbpt_rules_df.hpp:
+
+Program Listing for File df.hpp
+===============================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_domain_mbpt_rules_df.hpp>` (``SeQuant/domain/mbpt/rules/df.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Eduard Valeyev on 3/8/25.
+   //
+   
+   #ifndef SEQUANT_DOMAIN_MBPT_RULES_DF_HPP
+   #define SEQUANT_DOMAIN_MBPT_RULES_DF_HPP
+   
+   #include <SeQuant/core/expr_fwd.hpp>
+   #include <SeQuant/core/space.hpp>
+   
+   #include <string_view>
+   
+   namespace sequant::mbpt {
+   
+   [[nodiscard]] ExprPtr density_fit(ExprPtr const& expr, IndexSpace aux_space,
+                                     std::wstring_view tensor_label,
+                                     std::wstring_view factor_label);
+   
+   }  // namespace sequant::mbpt
+   
+   #endif  // SEQUANT_DOMAIN_MBPT_RULES_DF_HPP

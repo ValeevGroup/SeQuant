@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a67ac20ee2db4c0899846815b06ae69cd:
+
+Function sequant::io::serialization::v1::to_string< Statistics::FermiDirac >
+============================================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_serialize.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::io::serialization::v1::to_string< Statistics::FermiDirac >(NormalOperator<Statistics::FermiDirac> const&, const SerializationOptions&)
+   :project: SeQuant

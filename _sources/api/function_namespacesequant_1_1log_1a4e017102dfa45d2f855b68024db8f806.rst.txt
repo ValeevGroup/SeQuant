@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1log_1a4e017102dfa45d2f855b68024db8f806:
+
+Function sequant::log::term
+===========================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::log::term(TermMode, std::string_view)
+   :project: SeQuant

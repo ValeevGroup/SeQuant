@@ -1,0 +1,14 @@
+.. _exhale_function_ast_8hpp_1a12e748dace75c00ff58df38b68f44671:
+
+Function BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Number, numerator, denominator)
+=======================================================================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_ast.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Number, numerator, denominator)
+   :project: SeQuant

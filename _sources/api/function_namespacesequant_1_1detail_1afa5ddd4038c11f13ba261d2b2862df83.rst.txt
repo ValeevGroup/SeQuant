@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1afa5ddd4038c11f13ba261d2b2862df83:
+
+Template Function sequant::detail::implicit_context_instance
+============================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_context.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::implicit_context_instance()
+   :project: SeQuant

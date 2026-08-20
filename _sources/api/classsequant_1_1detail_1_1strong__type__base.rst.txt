@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1detail_1_1strong__type__base:
+
+Template Class strong_type_base
+===============================
+
+- Defined in :ref:`file_SeQuant_core_utility_strong.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::detail::strong_type_base
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

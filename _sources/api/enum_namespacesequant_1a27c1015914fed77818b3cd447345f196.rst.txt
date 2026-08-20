@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1a27c1015914fed77818b3cd447345f196:
+
+Enum Vacuum
+===========
+
+- Defined in :ref:`file_SeQuant_core_attr.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::Vacuum
+   :project: SeQuant

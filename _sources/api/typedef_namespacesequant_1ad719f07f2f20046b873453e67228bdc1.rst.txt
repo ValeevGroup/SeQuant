@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1ad719f07f2f20046b873453e67228bdc1:
+
+Typedef sequant::get_support
+============================
+
+- Defined in :ref:`file_SeQuant_core_tensor_canonicalizer.cpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::get_support
+   :project: SeQuant

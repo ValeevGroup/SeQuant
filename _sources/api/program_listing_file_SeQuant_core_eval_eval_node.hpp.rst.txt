@@ -1,0 +1,243 @@
+
+.. _program_listing_file_SeQuant_core_eval_eval_node.hpp:
+
+Program Listing for File eval_node.hpp
+======================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_eval_node.hpp>` (``SeQuant/core/eval/eval_node.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Bimal Gaudel on 5/24/21.
+   //
+   
+   #ifndef SEQUANT_EVAL_EVAL_NODE_HPP
+   #define SEQUANT_EVAL_EVAL_NODE_HPP
+   
+   #include <SeQuant/core/asy_cost.hpp>
+   #include <SeQuant/core/binary_node.hpp>
+   #include <SeQuant/core/eval/eval_expr.hpp>
+   #include <SeQuant/core/expr.hpp>
+   #include <SeQuant/core/math.hpp>
+   #include <SeQuant/core/space.hpp>
+   #include <SeQuant/core/utility/macros.hpp>
+   
+   #include <range/v3/algorithm/count_if.hpp>
+   
+   namespace sequant {
+   
+   template <meta::eval_node Node>
+   ExprPtr linearize_eval_node(Node const& node) {
+     if (node.leaf()) return to_expr(node);
+   
+     // Adjoint is unary: round-trip back to the marker-bearing tensor stored in
+     // the node's own ExprPtr — that's the symbolic form a Sum/Product parent
+     // would see — and ignore the Constant(1) sentinel right child.
+     if (node->op_type() == EvalOp::Adjoint) return to_expr(node);
+   
+     ExprPtr lres = linearize_eval_node(node.left());
+     ExprPtr rres = linearize_eval_node(node.right());
+   
+     SEQUANT_ASSERT(lres);
+     SEQUANT_ASSERT(rres);
+   
+     if (node->op_type() == EvalOp::Sum) return ex<Sum>(ExprPtrList{lres, rres});
+     SEQUANT_ASSERT(node->op_type() == EvalOp::Product);
+     return ex<Product>(
+         Product{1, ExprPtrList{lres, rres}, Product::Flatten::Yes});
+   }
+   
+   // implementation details of eval-node cost analysis; prefer sequant::detail
+   // over an unnamed namespace in a header (see CppCoreGuidelines SF.21)
+   namespace detail {
+   
+   enum NodePos { Left = 0, Right, This };
+   
+   inline AsyCost::ExponentMap space_counts(Tensor const& t) {
+     AsyCost::ExponentMap counts;
+     for (auto const& idx : t.const_braketaux_indices()) ++counts[idx.space()];
+     return counts;
+   }
+   
+   class ContractedIndexCount {
+    public:
+     using Counts = AsyCost::ExponentMap;
+   
+     explicit ContractedIndexCount(meta::eval_node auto const& n) {
+       auto const L = NodePos::Left;
+       auto const R = NodePos::Right;
+       auto const T = NodePos::This;
+   
+       SEQUANT_ASSERT(n->is_tensor() && n.left()->is_tensor() &&
+                      n.right()->is_tensor());
+   
+       // For the result and both operands, record the tensor's rank and collect
+       // every index into `distinct`. The set dedupes indices shared across
+       // tensors (a contracted index appears in both operands; a batched index in
+       // all three), so each is counted exactly once below.
+       container::set<Index> distinct;
+       for (auto p : {L, R, T}) {
+         auto const& t = (p == L ? n.left() : p == R ? n.right() : n)->as_tensor();
+         auto const counts = space_counts(t);
+         ranks_[p] = 0;
+         for (auto const& [_, c] : counts) ranks_[p] += c;
+         for (auto const& idx : t.const_braketaux_indices()) distinct.insert(idx);
+       }
+   
+       // An outer product contracts nothing, so the result keeps all operand
+       // indices and the ranks add up exactly.
+       is_outerprod_ = ranks_[L] + ranks_[R] == ranks_[T];
+   
+       // Cost exponent per space = number of distinct indices touching that space.
+       for (auto const& idx : distinct) ++unique_[idx.space()];
+     }
+   
+     [[nodiscard]] bool is_outerprod() const noexcept { return is_outerprod_; }
+   
+     [[nodiscard]] Counts const& unique_counts() const { return unique_; }
+   
+    private:
+     Counts unique_;
+     std::array<size_t, 3> ranks_{0, 0, 0};
+     bool is_outerprod_ = false;
+   };
+   }  // namespace detail
+   
+   struct Flops {
+     [[nodiscard]] AsyCost operator()(meta::eval_node auto const& n) const {
+       using detail::space_counts;
+       if (n.leaf()) return AsyCost::zero();
+       if (n->op_type() == EvalOp::Product  //
+           && n.left()->is_tensor()         //
+           && n.right()->is_tensor()) {
+         if (n->is_tensor()) {
+           auto const idx_count = detail::ContractedIndexCount{n};
+           auto c = AsyCost{idx_count.unique_counts()};
+           return idx_count.is_outerprod() ? c : 2 * c;
+         } else {  // full contraction to scalar
+           SEQUANT_ASSERT(n->is_scalar());
+           SEQUANT_ASSERT(space_counts(n.left()->as_tensor()) ==
+                          space_counts(n.right()->as_tensor()));
+           return 2 * AsyCost{space_counts(n.left()->as_tensor())};
+         }
+       } else if (n->is_tensor()) {
+         // scalar times a tensor
+         // or a tensor plus a tensor
+         return AsyCost{space_counts(n->as_tensor())};
+       } else /* scalar (+|*) scalar */
+         return AsyCost::zero();
+     }
+   };
+   
+   struct Memory {
+     [[nodiscard]] AsyCost operator()(meta::eval_node auto const& n) const {
+       AsyCost result;
+       auto add_cost = [&result](ExprPtr const& expr) {
+         result += expr.is<Tensor>()
+                       ? AsyCost{detail::space_counts(expr.as<Tensor>())}
+                       : AsyCost::zero();
+       };
+   
+       // Adjoint is unary — the right child is the Constant(1) sentinel (zero
+       // cost). But the backend materializes the permuted/conjugated result into
+       // a fresh array, so the bare-leaf operand (left) and the adjoint result
+       // (node) are both live at peak — two tensors' worth, not one.
+       if (n->op_type() == EvalOp::Adjoint) {
+         add_cost(n.left()->expr());
+         add_cost(n->expr());
+         return result;
+       }
+   
+       add_cost(n.left()->expr());
+       add_cost(n.right()->expr());
+       add_cost(n->expr());
+       return result;
+     }
+   };
+   
+   struct FlopsWithSymm {
+     [[nodiscard]] AsyCost operator()(meta::eval_node auto const& n) const {
+       auto cost = Flops{}(n);
+       // Adjoint is unary (right is Constant(1) sentinel) and does no
+       // symmetry-driven reduction — return Flops's permute-style cost as-is.
+       if (n.leaf() || n->op_type() == EvalOp::Adjoint ||
+           !(n->is_tensor()            //
+             && n.left()->is_tensor()  //
+             && n.right()->is_tensor()))
+         return cost;
+   
+       // confirmed:
+       // left, right and this node
+       // all have tensor expression
+       auto const& t = n->as_tensor();
+       auto const tsymm = t.symmetry();
+       //
+   
+       // ------
+       // the rules of cost reduction are taken from
+       //   doi:10.1016/j.procs.2012.04.044
+       // ------
+       if (tsymm == Symmetry::Symm || tsymm == Symmetry::Antisymm) {
+         auto const op = n->op_type();
+         auto const tbrank = t.bra_rank();
+         auto const tkrank = t.ket_rank();
+         if (op == EvalOp::Sum)
+           cost = tsymm == Symmetry::Symm
+                      ? cost / (factorial(tbrank) * factorial(tkrank))
+                      : cost / factorial(tbrank);
+         else if (op == EvalOp::Product) {
+           auto const lsymm = n.left()->as_tensor().symmetry();
+           auto const rsymm = n.right()->as_tensor().symmetry();
+           cost = (lsymm == rsymm && lsymm == Symmetry::Nonsymm)
+                      ? cost / factorial(tbrank)
+                      : cost / (factorial(tbrank) * factorial(tkrank));
+         } else
+           SEQUANT_ASSERT(false &&
+                          "Unsupported evaluation operation for asymptotic cost "
+                          "computation.");
+       }
+       return cost;
+     }
+   };
+   
+   template <meta::eval_node Node, typename F = Flops>
+     requires requires(F const& fn, Node const& n) {
+       { fn(n) } -> std::same_as<AsyCost>;
+     }
+   AsyCost asy_cost(Node const& node, F const& cost_fn = {}) {
+     return node.leaf() ? cost_fn(node)
+                        : asy_cost(node.left(), cost_fn) +
+                              asy_cost(node.right(), cost_fn) + cost_fn(node);
+   }
+   
+   AsyCost min_storage(meta::eval_node auto const& node) {
+     using detail::space_counts;
+     auto result = AsyCost::zero();
+     auto visitor = [&result](meta::eval_node auto const& n) {
+       auto cost = AsyCost::zero();
+       if (n.leaf() && n->is_tensor())
+         cost = AsyCost{space_counts(n->as_tensor())};
+       else if (!n.leaf()) {
+         cost +=
+             (n.left()->is_tensor() ? AsyCost{space_counts(n.left()->as_tensor())}
+                                    : AsyCost::zero());
+         cost += (n.right()->is_tensor()
+                      ? AsyCost{space_counts(n.right()->as_tensor())}
+                      : AsyCost::zero());
+         cost += (n->is_tensor() ? AsyCost{space_counts(n->as_tensor())}
+                                 : AsyCost::zero());
+       } else {
+         // do nothing
+       }
+       result = std::max(result, cost);
+     };
+     node.visit(visitor);
+     return result;
+   }
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_EVAL_EVAL_NODE_HPP

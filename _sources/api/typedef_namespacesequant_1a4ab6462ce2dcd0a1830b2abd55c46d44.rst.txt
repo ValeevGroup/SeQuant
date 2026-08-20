@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1a4ab6462ce2dcd0a1830b2abd55c46d44:
+
+Typedef sequant::IndexVec
+=========================
+
+- Defined in :ref:`file_SeQuant_core_index.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::IndexVec
+   :project: SeQuant

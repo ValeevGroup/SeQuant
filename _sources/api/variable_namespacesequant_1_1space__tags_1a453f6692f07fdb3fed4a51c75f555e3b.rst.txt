@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1space__tags_1a453f6692f07fdb3fed4a51c75f555e3b:
+
+Variable sequant::space_tags::is_particle
+=========================================
+
+- Defined in :ref:`file_SeQuant_core_index_space_registry.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::space_tags::is_particle
+   :project: SeQuant

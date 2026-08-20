@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1bits_1aad5c205eac6212ff9e3a04085d20d163:
+
+Function sequant::bits::subsets_ascending
+=========================================
+
+- Defined in :ref:`file_SeQuant_core_algorithm.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::bits::subsets_ascending(std::unsigned_integral auto)
+   :project: SeQuant

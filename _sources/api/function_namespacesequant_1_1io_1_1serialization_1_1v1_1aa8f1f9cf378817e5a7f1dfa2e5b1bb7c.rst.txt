@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1aa8f1f9cf378817e5a7f1dfa2e5b1bb7c:
+
+Function sequant::io::serialization::v1::to_string< Statistics::BoseEinstein >
+==============================================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_serialize.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::io::serialization::v1::to_string< Statistics::BoseEinstein >(NormalOperator<Statistics::BoseEinstein> const&, const SerializationOptions&)
+   :project: SeQuant

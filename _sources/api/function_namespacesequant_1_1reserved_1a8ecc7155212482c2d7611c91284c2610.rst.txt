@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1reserved_1a8ecc7155212482c2d7611c91284c2610:
+
+Function sequant::reserved::is_nonreserved
+==========================================
+
+- Defined in :ref:`file_SeQuant_core_reserved.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::reserved::is_nonreserved(const std::wstring&)
+   :project: SeQuant

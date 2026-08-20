@@ -1,0 +1,14 @@
+.. _exhale_define_op_8ipp_1a2e6f73bd9e3f8efd80ec9a91d2783d6e:
+
+Define SEQUANT_DOMAIN_MBPT_OP_IPP
+=================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.ipp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SEQUANT_DOMAIN_MBPT_OP_IPP
+   :project: SeQuant

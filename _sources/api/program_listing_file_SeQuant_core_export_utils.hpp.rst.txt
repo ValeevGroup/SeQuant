@@ -1,0 +1,35 @@
+
+.. _program_listing_file_SeQuant_core_export_utils.hpp:
+
+Program Listing for File utils.hpp
+==================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_export_utils.hpp>` (``SeQuant/core/export/utils.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Ajay Melekamburath on 4/27/26.
+   //
+   
+   #ifndef SEQUANT_CORE_EXPORT_UTILS_HPP
+   #define SEQUANT_CORE_EXPORT_UTILS_HPP
+   
+   #include <SeQuant/core/expr_fwd.hpp>
+   #include <SeQuant/core/expressions/expr_ptr.hpp>
+   #include <SeQuant/core/expressions/power.hpp>
+   
+   #include <string>
+   
+   namespace sequant::detail {
+   
+   std::string format_power_exponent(const Power::exponent_type &exponent,
+                                     bool double_slash);
+   
+   std::string format_power_base(const ExprPtr &base, std::string base_str);
+   
+   }  // namespace sequant::detail
+   
+   #endif  // SEQUANT_CORE_EXPORT_UTILS_HPP

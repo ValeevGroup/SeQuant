@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1a379e7e1e7b69980caeaaadd479a986f9:
+
+Function sequant::mbpt::biorthogonal_transform_pre_nnsproject(ExprPtr&, const container::svector<container::svector<Index>>&, bool)
+===================================================================================================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_biorthogonalization.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::biorthogonal_transform_pre_nnsproject(ExprPtr&, const container::svector<container::svector<Index>>&, bool)
+   :project: SeQuant

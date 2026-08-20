@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_tensor_block_index_comparer:
+
+Struct TensorBlockIndexComparer
+===============================
+
+- Defined in :ref:`file_SeQuant_core_tensor_canonicalizer.cpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::TensorBlockIndexComparer
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:
