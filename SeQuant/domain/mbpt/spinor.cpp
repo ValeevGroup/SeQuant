@@ -1,5 +1,4 @@
 #include <SeQuant/domain/mbpt/spinor.hpp>
-#include <regex>
 
 #include <SeQuant/domain/mbpt/spin.hpp>
 
@@ -403,16 +402,9 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(
   // With ḡ still antisymmetric here, the driver Â[ḡ] reduces to ḡ: the bra!ket!
   // signed permutations of an antisymmetric tensor sum to bra!ket!·ḡ,
   // cancelling expand_A_op's 1/(bra!ket!) normalization.
-  const bool kram_stage = std::getenv("MPQC_KRAM_PROTO_CHECK") != nullptr;
-  auto stage = [&](const char* s) {
-    if (kram_stage) std::wcout << L"[kram-stage] " << s << L"\n" << std::flush;
-  };
   ExprPtr inner = expand_A_op(expr);
-  stage("A-expand done");
   expand(inner);
-  stage("expand done");
   rapid_simplify(inner);
-  stage("rapid_simplify(inner) done -> entering block loop");
 
   // Optional g-expansion (AFTER A-expand, while still Kramers-FREE so
   // expand_antisymm's Ms-conserving guard keeps every permutation): replace
@@ -465,12 +457,8 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(
           Index(kv.second.space(), kv.second.ordinal(), std::move(proto));
     }
   };
-  std::size_t block_idx = 0;
   for (const auto& orbit : orbits) {
     const std::uint64_t cfg = orbit.front();  // canonical (orbit-min)
-    stage((std::string("block ") + std::to_string(block_idx++) +
-           " start (cfg=" + std::to_string(cfg) + ")")
-              .c_str());
 
     // Stage 2a: label the external indices for this block.
     container::map<Index, Index> ext_repl;
@@ -525,33 +513,7 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(
       block = fold_term(block);
     }
 
-    // Diagnostic (MPQC_KRAM_PROTO_CHECK): detect any index whose proto-index
-    // bundle contains a repeated index (e.g. a↑_1^{i↑_2 i↑_2}), which trips
-    // TensorNetworkV3 during canonicalize. Reports whether the repeat is
-    // present BEFORE canonicalize (from append_spin/fold) or introduced BY
-    // canonicalize.
-    auto proto_repeat_report = [](const ExprPtr& e, const char* when) {
-      if (!std::getenv("MPQC_KRAM_PROTO_CHECK")) return;
-      // String-based scan of the latex (robust vs LabelCompare dedup): look for
-      // any tensor index whose proto-bundle repeats an index, i.e. `^{{X}{X}}`.
-      const std::wstring tex = to_latex(e);
-      static const std::wregex re(LR"(\^\{\{([^}]+)\}\{([^}]+)\}\})");
-      for (auto it = std::wsregex_iterator(tex.begin(), tex.end(), re);
-           it != std::wsregex_iterator(); ++it)
-        if ((*it)[1].str() == (*it)[2].str())
-          std::wcout << L"[proto-check " << when << L"] repeated proto bundle {"
-                     << (*it)[1].str() << L"}{" << (*it)[2].str() << L"}\n";
-    };
-    proto_repeat_report(block, "pre-canon");
-    if (std::getenv("MPQC_KRAM_BLOCK_DUMP"))
-      std::wcout << L"[kram-block] block " << (block_idx - 1)
-                 << L" pre-canon:\n"
-                 << to_latex(block) << L"\n"
-                 << std::flush;
-    stage("  pre-canon check done, calling canonicalize");
     canonicalize(block);  // sigma merge + dummy canonicalization
-    stage("  canonicalize done");
-    proto_repeat_report(block, "post-canon");
     rapid_simplify(block);
     if (drop_mixed_kramers_fock) {
       auto filtered = drop_mixed_kramers_fock_terms(block);
