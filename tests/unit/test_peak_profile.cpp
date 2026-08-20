@@ -632,7 +632,7 @@ TEST_CASE(
   // the outer contracts X with another leaf. Deliberately CSE-free so the
   // runtime cache holds a single monotone working set.
   auto expr =
-      deserialize<ExprPtr>("(g{i_1,i_2;a_1,a_2} * t{a_1;i_3}) * u{a_2;i_3}");
+      deserialize<ExprPtr>("(g{i_1,i_2;a_1,a_2} * t{a_1,i_3;}) * u{a_2;i_3}");
   REQUIRE(static_cast<bool>(expr));
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   auto node = binarize<EvalExprDryRun>(expr);

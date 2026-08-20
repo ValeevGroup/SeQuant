@@ -4904,9 +4904,15 @@ TEST_CASE("hoist splits a divergently-sliced CSE value under a router",
   auto const r = backend_test_regime();  // i extent 10, a extent 20
 
   Index const i3{L"i_3"}, i4{L"i_4"}, K{L"a_50"};
+  // BraKetSymmetry::Symm: these synthetic legs are contracted over a SHARED
+  // index that sits in the SAME (bra) slot of both identical legs (the g.C leg
+  // pattern -- legA and legB must stay canonically EQUAL for the CSE fold). A
+  // Nonsymm index cannot be contracted same-side; a braket-symmetric one can,
+  // so the shared slot is declared Symm (leaving the leaves particle-valid).
   auto mk = [](std::wstring const& label, Index const& ix) {
     return ex<Tensor>(label, bra(container::svector<Index>{ix}), ket{},
-                      Symmetry::Nonsymm, std::nullopt, ColumnSymmetry::Nonsymm);
+                      Symmetry::Nonsymm, BraKetSymmetry::Symm,
+                      ColumnSymmetry::Nonsymm);
   };
   // legA = X(i_3)*P(a), legB = X(i_4)*P(a): canonically EQUAL (X(occ)*P(a)),
   // binding a DIFFERENT occ (i_3 vs i_4) -- the g.C legs' shape. R contracts
@@ -6615,9 +6621,12 @@ TEST_CASE(
     return binarize<EvalExprDryRun>(deserialize<ExprPtr>(s));
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   };
+  // r_k carries μ̃_1 in KET (p carries it in bra) so the shared μ̃ contraction is
+  // particle-conserving (bra<->ket); the shared sub-intermediate T = p*q is
+  // unchanged, so the CSE the test exercises is preserved.
   std::vector<EvalNodeDryRun> forest{
-      mk(L"(p{μ̃_1;a_1;Κ_1} * q{a_1;i_1}) * r1{μ̃_1;a_2;Κ_1}"),
-      mk(L"(p{μ̃_1;a_1;Κ_1} * q{a_1;i_1}) * r2{μ̃_1;a_2;Κ_1}")};
+      mk(L"(p{μ̃_1;a_1;Κ_1} * q{a_1;i_1}) * r1{a_2;μ̃_1;Κ_1}"),
+      mk(L"(p{μ̃_1;a_1;Κ_1} * q{a_1;i_1}) * r2{a_2;μ̃_1;Κ_1}")};
   Index const K1{L"Κ_1"};
   Index const mu1{L"μ̃_1"};
   for (auto& nd : forest) {
@@ -7398,13 +7407,13 @@ TEST_CASE("canon_indices preserves distinct composite proto pairs",
   CHECK(distinct_protos.size() == 3);
   CHECK(pairs[0] != pairs[1]);
 
-  // Binary contraction: A{a1<i_1,i_2>; i_4} * B{a2<i_2,i_3>; i_4} contracts
-  // i_4, so the RESULT carries a1<i_1,i_2> and a2<i_2,i_3> -- composites on
-  // distinct pairs, spanning 3 occ. This is the (binary) node whose
-  // canon_indices the static cost walk sizes; check IT preserves the distinct
-  // pairs too.
+  // Binary contraction: A{a1<i_1,i_2>,i_4;} * B{a2<i_2,i_3>; i_4} contracts
+  // i_4 (bra of A, ket of B -- particle-conserving), so the RESULT carries
+  // a1<i_1,i_2> and a2<i_2,i_3> -- composites on distinct pairs, spanning 3
+  // occ. This is the (binary) node whose canon_indices the static cost walk
+  // sizes; check IT preserves the distinct pairs too.
   Index const i4{L"i_4"};
-  Tensor const A(L"A", bra{a1}, ket{i4}, Symmetry::Nonsymm);
+  Tensor const A(L"A", bra{a1, i4}, ket{}, Symmetry::Nonsymm);
   Tensor const B(L"B", bra{a2}, ket{i4}, Symmetry::Nonsymm);
   auto const prod = ex<Product>(ExprPtrList{ex<Tensor>(A), ex<Tensor>(B)});
   auto const node = binarize(prod);

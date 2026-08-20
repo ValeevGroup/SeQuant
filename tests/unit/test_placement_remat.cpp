@@ -344,7 +344,7 @@ TEST_CASE(
 
   SECTION("plain two-contraction forest, no batching") {
     auto expr = deserialize<ExprPtr>(
-        "(g{i_1,i_2;a_1,a_2} * t{a_1;i_3}) * "
+        "(g{i_1,i_2;a_1,a_2} * t{a_1,i_3;}) * "
         "u{a_2;i_3}");
     REQUIRE(static_cast<bool>(expr));
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN

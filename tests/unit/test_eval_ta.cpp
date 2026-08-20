@@ -5929,8 +5929,13 @@ TEST_CASE("node_level_external_placement_correctness",
   // unfactorized => no batch annotations). The optimizer factorizes it. i_2,i_6
   // are occ externals (free on the result, carried across internal nodes);
   // x_1,x_2 are contracted aux.
+  // Particle-conserving ladder: virtuals alternate bra<->ket down the chain
+  // (a_1: g ket / h bra, a_2: h ket / w bra, a_3: w ket / p bra) and the
+  // contracted aux x_1,x_2 sit in the AUX slot (3-slot bra;ket;aux ->
+  // Aux-origin, exempt from the strict-braket check). Topology, externals
+  // (i_2,i_6) and per-space sizes are unchanged.
   std::string const expr_str =
-      "g{i_2,a_1;x_1} * h{a_1,a_2;x_1} * w{a_2,a_3;x_2} * p{a_3,i_6;x_2}";
+      "g{i_2;a_1;x_1} * h{a_1;a_2;x_1} * w{a_2;a_3;x_2} * p{a_3;i_6;x_2}";
   std::string const target = "i_2,i_6";
 
   auto const is_occ = [occ](Index const& ix) { return ix.space() == occ; };
