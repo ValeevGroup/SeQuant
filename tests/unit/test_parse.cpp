@@ -289,6 +289,22 @@ TEST_CASE("serialization", "[serialization]") {
       REQUIRE(deserialize<ExprPtr>(L"b^*")->as<Variable>().label() == L"b");
     }
 
+    SECTION("Conjugated tensor") {
+      // a tensor label followed by ^* carries the elementwise-conjugation
+      // marker (same spelling the serializer emits for Tensor::conjugated())
+      auto tstar = deserialize<ExprPtr>(L"t^*{i_1;a_1}");
+      REQUIRE(tstar->is<Tensor>());
+      REQUIRE(tstar->as<Tensor>().conjugated());
+      REQUIRE(tstar->as<Tensor>().label() == L"t");
+      {  // round-trip through the serializer
+        auto respelled = deserialize<ExprPtr>(serialize(tstar));
+        REQUIRE(respelled->as<Tensor>().conjugated());
+        REQUIRE(*respelled == *tstar);
+      }
+      // unstarred spelling parses without the marker
+      REQUIRE(!deserialize<ExprPtr>(L"t{i_1;a_1}")->as<Tensor>().conjugated());
+    }
+
     SECTION("Power") {
       auto half = deserialize<ExprPtr>(L"2^(1/2)");
       REQUIRE(half->is<Power>());

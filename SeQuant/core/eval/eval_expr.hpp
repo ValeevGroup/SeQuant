@@ -74,6 +74,15 @@ class EvalExpr {
   ///
   /// \brief Construct an EvalExpr object from a tensor.
   ///
+  /// \param tnsr The tensor to wrap as a leaf. The two bra<->ket
+  ///        orientations of a BraKetSymmetry::Conjugate tensor fold onto one
+  ///        canonical spelling: expr() carries the canonical orientation with
+  ///        the elementwise-conjugation marker (Tensor::conjugated()) set when
+  ///        the input was the swapped orientation. The leaf hash is always
+  ///        that of the unconjugated spelling, so the two orientations share
+  ///        a cache slot; binarize(Tensor) serves a conjugated leaf via an
+  ///        EvalOp::Adjoint wrapper over the shared operand.
+  ///
   explicit EvalExpr(Tensor const& tnsr);
 
   ///

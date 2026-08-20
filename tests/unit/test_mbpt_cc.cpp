@@ -113,10 +113,13 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
       // 94 terms is not worth spelling out, so check number of terms and
       // external indices
       const auto ext = get_unique_indices(G);
+      // the braket-orientation fold may spell a Conjugate δ with its external
+      // in either slot, so only the SET of externals is canonical, not their
+      // bra/ket membership
+      container::svector<Index> ext_all(ext.bra.begin(), ext.bra.end());
+      ext_all.insert(ext_all.end(), ext.ket.begin(), ext.ket.end());
       REQUIRE(std::ranges::is_permutation(
-          ext.ket, container::svector<Index>{L"p_1", L"p_2"}));
-      REQUIRE(std::ranges::is_permutation(
-          ext.bra, container::svector<Index>{L"p_3", L"p_4"}));
+          ext_all, container::svector<Index>{L"p_1", L"p_2", L"p_3", L"p_4"}));
       REQUIRE(ext.aux.empty());
       // an explicit comm_rank truncates early: cutting Γ at the 2nd nested
       // commutator drops the terms the default (4th, exact) picks up

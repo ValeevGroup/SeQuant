@@ -182,28 +182,33 @@ ExprVar to_expression(T &&expression) {
   using std::begin;
   using std::end;
 
+  // Braket fallback: Hermitian resolved over the ambient field — identical to
+  // the programmatic ex<Tensor>(label, bra, ket) default. Under a complex
+  // field this is Conjugate (the deserializer's own hard-coded fallback), so
+  // this is a no-op for complex-context tests; under a real field it yields
+  // Symm, keeping string fixtures coherent with ctor-built tensors.
+  const sequant::io::serialization::DeserializationOptions opts{
+      .def_perm_symm = sequant::Symmetry::Nonsymm,
+      .def_braket_symm = sequant::Hermiticity::Hermitian};
+
   if constexpr (std::is_convertible_v<T, std::string>) {
     std::wstring string = sequant::toUtf16(std::forward<T>(expression));
 
     if (std::find(begin(string), end(string), L'=') != end(string)) {
       return sequant::deserialize<sequant::ResultExpr>(
-          std::string(std::forward<T>(expression)),
-          {.def_perm_symm = sequant::Symmetry::Nonsymm});
+          std::string(std::forward<T>(expression)), opts);
     } else {
       return sequant::deserialize<sequant::ExprPtr>(
-          std::string(std::forward<T>(expression)),
-          {.def_perm_symm = sequant::Symmetry::Nonsymm});
+          std::string(std::forward<T>(expression)), opts);
     }
   } else if constexpr (std::is_convertible_v<T, std::wstring>) {
     if (std::find(begin(expression), end(expression), L'=') !=
         end(expression)) {
       return sequant::deserialize<sequant::ResultExpr>(
-          std::wstring(std::forward<T>(expression)),
-          {.def_perm_symm = sequant::Symmetry::Nonsymm});
+          std::wstring(std::forward<T>(expression)), opts);
     } else {
       return sequant::deserialize<sequant::ExprPtr>(
-          std::wstring(std::forward<T>(expression)),
-          {.def_perm_symm = sequant::Symmetry::Nonsymm});
+          std::wstring(std::forward<T>(expression)), opts);
     }
   } else if constexpr (std::is_convertible_v<T, sequant::ResultExpr>) {
     return expression;
