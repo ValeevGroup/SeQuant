@@ -39,52 +39,6 @@ ConstExprIterator Expr::begin_subexpr() const { return ConstExprIterator{}; }
 
 ConstExprIterator Expr::end_subexpr() const { return ConstExprIterator{}; }
 
-ExprIterator Expr::begin() { return begin_subexpr(); }
-
-ExprIterator Expr::end() { return end_subexpr(); }
-
-ConstExprIterator Expr::begin() const { return begin_subexpr(); }
-
-ConstExprIterator Expr::end() const { return end_subexpr(); }
-
-ConstExprIterator Expr::cbegin() const { return begin_subexpr(); }
-
-ConstExprIterator Expr::cend() const { return end_subexpr(); }
-
-std::size_t Expr::size() const {
-  return static_cast<std::size_t>(end_subexpr() - begin_subexpr());
-}
-
-bool Expr::empty() const { return begin_subexpr() == end_subexpr(); }
-
-ExprPtr &Expr::operator[](std::size_t idx) {
-  SEQUANT_ASSERT(idx < size());
-  return begin_subexpr()[static_cast<std::ptrdiff_t>(idx)];
-}
-
-const ExprPtr &Expr::operator[](std::size_t idx) const {
-  SEQUANT_ASSERT(idx < size());
-  return begin_subexpr()[static_cast<std::ptrdiff_t>(idx)];
-}
-
-ExprPtr &Expr::at(std::size_t idx) {
-  if (idx >= size()) throw_out_of_range(idx);
-  return begin_subexpr()[static_cast<std::ptrdiff_t>(idx)];
-}
-
-const ExprPtr &Expr::at(std::size_t idx) const {
-  if (idx >= size()) throw_out_of_range(idx);
-  return begin_subexpr()[static_cast<std::ptrdiff_t>(idx)];
-}
-
-ExprPtr &Expr::front() { return at(0); }
-
-const ExprPtr &Expr::front() const { return at(0); }
-
-ExprPtr &Expr::back() { return at(size() - 1); }
-
-const ExprPtr &Expr::back() const { return at(size() - 1); }
-
 void Expr::throw_out_of_range(std::size_t idx) const {
   std::ostringstream oss;
   oss << "Expr::at(" << idx << "): index out of range (size=" << size()
