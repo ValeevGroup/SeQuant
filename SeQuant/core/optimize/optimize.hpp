@@ -2,9 +2,18 @@
 #define SEQUANT_OPTIMIZE_OPTIMIZE_HPP
 
 #include <SeQuant/core/expr_fwd.hpp>
+#include <SeQuant/core/index.hpp>
 #include <SeQuant/core/optimize/options.hpp>
 
+#include <cstddef>
+#include <optional>
+
 namespace sequant {
+
+/// Result of \ref optimize_result: the optimized expression.
+struct OptimizeResult {
+  ExprPtr expr;
+};
 
 /// Optimize the expression for lower evaluation cost.
 ///
@@ -15,6 +24,11 @@ namespace sequant {
 ///              are reordered to cluster terms that share intermediates.
 /// \return Optimized expression.
 ExprPtr optimize(ExprPtr const& expr, OptimizeOptions opts = {});
+
+/// \copydoc optimize(ExprPtr const&, OptimizeOptions)
+///
+/// \return The optimized expression, wrapped in \ref OptimizeResult.
+OptimizeResult optimize_result(ExprPtr const& expr, OptimizeOptions opts = {});
 
 /// \copydoc optimize(ExprPtr const&, OptimizeOptions)
 ResultExpr& optimize(ResultExpr& expr, OptimizeOptions opts = {});

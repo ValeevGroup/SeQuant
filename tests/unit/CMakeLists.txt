@@ -41,6 +41,7 @@ target_compile_definitions(unit_tests-sequant-symb-obj PRIVATE
 set(eval_test_sources
     "test_eval_expr.cpp"
     "test_eval_node.cpp"
+    "test_lifetime_mask.cpp"
 )
 add_library(unit_tests-sequant-eval-obj OBJECT ${eval_test_sources})
 set_target_properties(unit_tests-sequant-eval-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
@@ -90,6 +91,7 @@ set(mbpt_test_sources
     "test_mbpt.cpp"
     "test_mbpt_cc.cpp"
     "test_spin.cpp"
+    "test_spinor.cpp"
 )
 
 add_library(unit_tests-sequant-mbpt-obj OBJECT ${mbpt_test_sources})
@@ -156,6 +158,18 @@ if (SEQUANT_HAS_TAPP)
 endif()
 
 ##########################
+# OBJECT library: DryRun backend tests
+##########################
+set(eval_dryrun_test_sources "test_eval_dryrun.cpp")
+add_library(unit_tests-sequant-eval-dryrun-obj OBJECT ${eval_dryrun_test_sources})
+set_target_properties(unit_tests-sequant-eval-dryrun-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
+target_link_libraries(unit_tests-sequant-eval-dryrun-obj
+    PUBLIC SeQuant::eval SeQuant::optimize SeQuant::bliss SeQuant::mbpt
+    PRIVATE Catch2::Catch2 dtl::dtl)
+target_compile_definitions(unit_tests-sequant-eval-dryrun-obj PRIVATE
+    SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+
+##########################
 # Single executable combining all OBJECT libraries
 # NB linking OBJECT libraries (since CMake 3.21) both includes their object
 # files AND propagates their PUBLIC/INTERFACE usage requirements, so the
@@ -171,6 +185,7 @@ target_link_libraries(unit_tests-sequant PRIVATE
     unit_tests-sequant-optimize-obj
     unit_tests-sequant-export-obj
     unit_tests-sequant-mbpt-obj
+    unit_tests-sequant-eval-dryrun-obj
     Catch2::Catch2
     dtl::dtl)
 if (SEQUANT_HAS_TILEDARRAY)

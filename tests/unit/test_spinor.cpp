@@ -1,0 +1,863 @@
+//
+// Kramers tracer (spinor.{hpp,cpp}) unit tests.
+//
+
+#include <algorithm>
+#include <bit>
+#include <catch2/catch_test_macros.hpp>
+#include <complex>
+#include <numeric>
+#include <random>
+
+#include "catch2_sequant.hpp"
+
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/expr_algorithms.hpp>
+#include <SeQuant/core/expressions/tensor.hpp>
+#include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/string.hpp>
+#include <SeQuant/domain/mbpt/spin.hpp>
+#include <SeQuant/domain/mbpt/spinor.hpp>
+
+#include <cstddef>
+#include <memory>
+
+TEST_CASE("kramers_trace", "[spinor]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  auto ctx = get_default_context();
+  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto _ = set_scoped_default_context(ctx);
+  TensorCanonicalizer::register_instance(
+      std::make_shared<DefaultTensorCanonicalizer>());
+
+  // counts RealPart nodes anywhere in the expression tree
+  auto count_realparts = [](const ExprPtr& expr) {
+    std::size_t n = 0;
+    expr->visit(
+        [&n](const ExprPtr& current) {
+          if (current->is<RealPart>()) ++n;
+        },
+        /* atoms_only = */ false);
+    return n;
+  };
+
+  SECTION("MP2 energy") {
+    // E = 1/4 g-bar^{a1 a2}_{i1 i2} t-bar^{i1 i2}_{a1 a2}  (Kramers-free)
+    const auto E = ex<Constant>(rational{1, 4}) *
+                   ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                              Symmetry::Antisymm) *
+                   ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                              Symmetry::Antisymm);
+
+    ExprPtr result;
+    REQUIRE_NOTHROW(result = closed_shell_kramers_trace(E));
+    REQUIRE(result);
+
+    INFO("closed_shell_kramers_trace(E_MP2) =\n" << toUtf8(to_latex(result)));
+
+    REQUIRE(result->is<Sum>());
+
+    // Each summand is `c * Re[1/2 g . t-bar]`, one per TRS-canonical Kramers
+    // representative. With the global-T (whole-config) fold and sigma handled
+    // by canonicalize — but the internal-T-reach (self-complementary block
+    // fold) deferred — the MP2 energy yields 7 representatives: the 6-term form
+    // plus the unfolded self-complementary pair (g^{a^ a_} and -g^{a_ a^}).
+    REQUIRE(result->size() == 7);
+    REQUIRE(count_realparts(result) == 7);
+
+    // Coefficient bookkeeping: every summand is `Constant * RealPart`, and the
+    // outer coefficients sum to 2^n = 16 (all Kramers configurations accounted
+    // for: T-fold contributes x2, sigma multiplicity the rest).
+    Constant::scalar_type coeff_sum = 0;
+    for (const auto& term : *result) {
+      REQUIRE(term->is<Product>());
+      coeff_sum += term->as<Product>().scalar();
+    }
+    REQUIRE(coeff_sum == Constant::scalar_type{16});
+  }
+
+  SECTION("kramers_config_orbits: doubles external + direct folds") {
+    using Perm = container::svector<std::size_t>;
+    // bit layout (KR-MP2 notes): s_i=bit3, s_j=bit2, s_a=bit1, s_b=bit0.
+    const Perm P_ij = {0, 1, 3, 2};   // swap occ pair (bits 3<->2)
+    const Perm P_ab = {1, 0, 2, 3};   // swap virt pair (bits 1<->0)
+    const Perm SIGMA = {1, 0, 3, 2};  // particle interchange (both pairs)
+
+    auto canon_set = [](const auto& orbits) {
+      container::set<std::uint64_t> c;
+      for (const auto& o : orbits) c.insert(o.front());  // front = orbit-min
+      return c;
+    };
+    auto total_members = [](const auto& orbits) {
+      std::size_t n = 0;
+      for (const auto& o : orbits) n += o.size();
+      return n;
+    };
+
+    // External / R2 antisymmetry: <P_ab, P_ij, T> -> exactly 5 blocks
+    // {0,15},{3,12},{1,2,13,14},{4,7,8,11},{5,6,9,10} (canonicals 0,1,3,4,5).
+    auto ext = kramers_config_orbits(4, {P_ab, P_ij}, /*use_T=*/true);
+    REQUIRE(ext.size() == 5);
+    REQUIRE(total_members(ext) == 16);
+    REQUIRE(canon_set(ext) == container::set<std::uint64_t>{0, 1, 3, 4, 5});
+
+    // MP2 direct: Klein-four <sigma, T> -> 6 orbits.
+    auto direct = kramers_config_orbits(4, {SIGMA}, /*use_T=*/true);
+    REQUIRE(direct.size() == 6);
+    REQUIRE(total_members(direct) == 16);
+
+    // Sanity: no folding (no generators, no T) -> 16 singleton orbits.
+    auto none = kramers_config_orbits(4, {}, /*use_T=*/false);
+    REQUIRE(none.size() == 16);
+  }
+
+  SECTION("kramers_config_orbits: rank-general external fold (1/2/3)") {
+    using Perm = container::svector<std::size_t>;
+    // The helper makes no rank assumption: external blocks = orbits of
+    // (#down-occ, #down-virt) in {0..k}^2 under T -> singles 2, doubles 5,
+    // triples 8. Generators are the S_k transpositions of each external group.
+
+    // Singles (rank-1): n=2 (a,i), no within-group swap, just T -> 2.
+    REQUIRE(kramers_config_orbits(2, {}, /*use_T=*/true).size() == 2);
+    REQUIRE(kramers_config_orbits(2, {}, /*use_T=*/false).size() == 4);
+
+    // Triples (rank-3): n=6, S_3 on the virtual triple (bits 5,4,3) and on the
+    // occupied triple (bits 2,1,0) via adjacent transpositions, plus T -> 8.
+    const Perm v_54 = {0, 1, 2, 3, 5, 4};
+    const Perm v_43 = {0, 1, 2, 4, 3, 5};
+    const Perm o_21 = {0, 2, 1, 3, 4, 5};
+    const Perm o_10 = {1, 0, 2, 3, 4, 5};
+    auto triples =
+        kramers_config_orbits(6, {v_54, v_43, o_21, o_10}, /*use_T=*/true);
+    std::size_t triples_members = 0;
+    for (const auto& o : triples) triples_members += o.size();
+    REQUIRE(triples_members == 64);
+    REQUIRE(triples.size() == 8);
+  }
+
+  SECTION("CC external fold: CCD R2 driver -> 5 labeled blocks") {
+    using sequant::reserved::antisymm_label;
+    // driver:  Â^{a1 a2}_{i1 i2} * g-bar^{a1 a2}_{i1 i2}  (all indices
+    // external)
+    auto A = ex<Tensor>(antisymm_label(), bra{L"a_1", L"a_2"},
+                        ket{L"i_1", L"i_2"}, Symmetry::Antisymm);
+    auto g = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                        Symmetry::Antisymm);
+    auto driver = A * g;
+
+    container::svector<ExprPtr> blocks;
+    REQUIRE_NOTHROW(blocks = closed_shell_kramers_CC_trace(driver));
+
+    INFO("CCD driver external blocks:");
+    for (const auto& b : blocks) INFO("  " << toUtf8(to_latex(b)));
+
+    // doubles external antisymmetry + T -> 5 symmetry-unique blocks
+    REQUIRE(blocks.size() == 5);
+
+    // Â is factored out; each block's remaining tensors carry fully
+    // Kramers-labeled indices (every index has an up/down spin annotation)
+    auto all_labeled = [](const ExprPtr& b) {
+      bool ok = true;
+      b->visit(
+          [&ok](const ExprPtr& cur) {
+            if (!cur->is<Tensor>()) return;
+            const auto& t = cur->as<Tensor>();
+            auto check = [&ok](const Index& idx) {
+              const auto s = mbpt::to_spin(idx.space().qns());
+              if (s != mbpt::Spin::alpha && s != mbpt::Spin::beta) ok = false;
+            };
+            for (const auto& idx : t.bra()) check(idx);
+            for (const auto& idx : t.ket()) check(idx);
+          },
+          /* atoms_only = */ true);
+      return ok;
+    };
+    for (const auto& b : blocks) REQUIRE(all_labeled(b));
+  }
+
+  SECTION("CC internal fold: CCD pp-ladder -> 5 blocks, internal classes") {
+    using sequant::reserved::antisymm_label;
+    // pp-ladder:  1/2 Â^{a1a2}_{i1i2} * g-bar^{a1a2}_{a3a4} *
+    // t-bar^{a3a4}_{i1i2}
+    //   external a1,a2 (virt), i1,i2 (occ); internal (contracted) a3,a4 (virt).
+    auto A = ex<Tensor>(antisymm_label(), bra{L"a_1", L"a_2"},
+                        ket{L"i_1", L"i_2"}, Symmetry::Antisymm);
+    auto g = ex<Tensor>(L"g", bra{L"a_1", L"a_2"}, ket{L"a_3", L"a_4"},
+                        Symmetry::Antisymm);
+    auto t = ex<Tensor>(L"t", bra{L"a_3", L"a_4"}, ket{L"i_1", L"i_2"},
+                        Symmetry::Antisymm);
+    auto ppladder = ex<Constant>(rational{1, 2}) * A * g * t;
+
+    container::svector<ExprPtr> blocks;
+    REQUIRE_NOTHROW(blocks = closed_shell_kramers_CC_trace(ppladder));
+
+    // external fold is universal -> still 5 blocks
+    REQUIRE(blocks.size() == 5);
+
+    // each block sums the internal Kramers configs of (c1,c2); every index
+    // (external + internal) is Kramers-labeled, and the block is non-empty.
+    auto term_count = [](const ExprPtr& b) -> std::size_t {
+      return b->is<Sum>() ? b->as<Sum>().size() : 1;
+    };
+    for (const auto& b : blocks) {
+      REQUIRE(b);
+      INFO("pp-ladder block (" << term_count(b)
+                               << " terms): " << toUtf8(to_latex(b)));
+      REQUIRE(term_count(b) >= 1);
+      bool labeled = true;
+      b->visit(
+          [&labeled](const ExprPtr& cur) {
+            if (!cur->is<Tensor>()) return;
+            const auto& tt = cur->as<Tensor>();
+            for (const auto& idx : tt.bra())
+              if (mbpt::to_spin(idx.space().qns()) == mbpt::Spin::any)
+                labeled = false;
+            for (const auto& idx : tt.ket())
+              if (mbpt::to_spin(idx.space().qns()) == mbpt::Spin::any)
+                labeled = false;
+          },
+          /* atoms_only = */ true);
+      REQUIRE(labeled);
+    }
+  }
+
+  SECTION("CC internal fold: heterogeneous contraction (ring) -> 4 classes") {
+    using sequant::reserved::antisymm_label;
+    // A heterogeneous internal pair (one virtual a3, one occupied i3) is
+    // contracted between g and t. sigma = swap(a3,i3) maps virt<->occ, so it is
+    // NOT a symmetry (canonicalize won't merge) -> 4 internal classes in a
+    // generic external block, vs the pp-ladder's 3 (homogeneous pair).
+    auto A = ex<Tensor>(antisymm_label(), bra{L"a_1", L"a_2"},
+                        ket{L"i_1", L"i_2"}, Symmetry::Antisymm);
+    auto g = ex<Tensor>(L"g", bra{L"a_1", L"a_2"}, ket{L"a_3", L"i_3"},
+                        Symmetry::Nonsymm);
+    auto t = ex<Tensor>(L"t", bra{L"a_3", L"i_3"}, ket{L"i_1", L"i_2"},
+                        Symmetry::Nonsymm);
+    auto ring = A * g * t;
+
+    container::svector<ExprPtr> blocks;
+    REQUIRE_NOTHROW(blocks = closed_shell_kramers_CC_trace(ring));
+    REQUIRE(blocks.size() == 5);
+
+    auto term_count = [](const ExprPtr& b) -> std::size_t {
+      return b->is<Sum>() ? b->as<Sum>().size() : 1;
+    };
+    // generic external blocks: 4 internal classes (no sigma fold);
+    // at least one block must show all 4 distinct internal configs.
+    std::size_t max_terms = 0;
+    for (const auto& b : blocks) {
+      INFO("ring block (" << term_count(b) << " terms)");
+      max_terms = std::max(max_terms, term_count(b));
+    }
+    REQUIRE(max_terms == 4);
+  }
+
+  SECTION("CC internal fold: separable T2^2 quad -> 10 classes (9-vs-10)") {
+    using sequant::reserved::antisymm_label;
+    // separable quad: 1/4 Â g-bar^{a3a4}_{i3i4} t-bar^{a3a4}_{i1i2}
+    //                       t-bar^{a1a2}_{i3i4}
+    //   two homogeneous internal pairs (a3,a4 virt; i3,i4 occ). The surviving
+    //   internal symmetry is the COMBINED sigma=(i3 i4)(a3 a4) -> 10 classes;
+    //   two independent swaps would (wrongly) give 9. canonicalize must merge
+    //   only via valid same-Kramers dummy relabels.
+    auto A = ex<Tensor>(antisymm_label(), bra{L"a_1", L"a_2"},
+                        ket{L"i_1", L"i_2"}, Symmetry::Antisymm);
+    auto g = ex<Tensor>(L"g", bra{L"i_3", L"i_4"}, ket{L"a_3", L"a_4"},
+                        Symmetry::Antisymm);
+    auto t1 = ex<Tensor>(L"t", bra{L"a_3", L"a_4"}, ket{L"i_1", L"i_2"},
+                         Symmetry::Antisymm);
+    auto t2 = ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_3", L"i_4"},
+                         Symmetry::Antisymm);
+    auto quad = ex<Constant>(rational{1, 4}) * A * g * t1 * t2;
+
+    container::svector<ExprPtr> blocks;
+    REQUIRE_NOTHROW(blocks = closed_shell_kramers_CC_trace(quad));
+    REQUIRE(blocks.size() == 5);
+
+    auto term_count = [](const ExprPtr& b) -> std::size_t {
+      return b->is<Sum>() ? b->as<Sum>().size() : 1;
+    };
+    std::size_t max_terms = 0;
+    for (const auto& b : blocks) {
+      INFO("quad block (" << term_count(b) << " terms)");
+      max_terms = std::max(max_terms, term_count(b));
+    }
+    // The notes' emit-and-reconstruct strategy counts 10 internal classes under
+    // the COMBINED sigma=(i3i4)(a3a4) (independent swaps excluded for a single
+    // signed config). This tracer instead sums all 16 internal configs and lets
+    // canonicalize merge: for the SUMMED contraction each independent
+    // homogeneous-pair swap IS a symmetry (the double antisymmetry of g and the
+    // amplitude cancels the two signs), so canonicalize folds under the full
+    // Klein-4 -> 9. canonicalize only merges provably-equal terms and the
+    // 16-config sum is value-exact, so 9 is value-preserving (the 9-vs-10
+    // hazard only affects external reconstruction, which is eval-time). The
+    // definitive value check is the numeric CCk validation.
+    REQUIRE(max_terms == 9);
+  }
+
+  SECTION("kramers_external_blocks: doubles reconstruction transforms") {
+    using Perm = container::svector<std::size_t>;
+    const Perm P_ab = {1, 0, 2, 3};  // swap virt bits 0,1
+    const Perm P_ij = {0, 1, 3, 2};  // swap occ bits 2,3
+    auto blocks = kramers_external_blocks(4, {P_ab, P_ij}, /*use_T=*/true);
+    REQUIRE(blocks.size() == 5);
+
+    auto apply_perm = [](const Perm& p, std::uint64_t m) {
+      std::uint64_t out = 0;
+      for (std::size_t k = 0; k < p.size(); ++k)
+        if ((m >> k) & 1u) out |= (std::uint64_t{1} << p[k]);
+      return out;
+    };
+    const std::uint64_t full = 15;
+
+    std::size_t total = 0;
+    for (const auto& b : blocks) {
+      total += b.members.size();
+      bool found_canonical = false;
+      for (const auto& mem : b.members) {
+        // perm/conj must reproduce the member's config from the canonical:
+        // bit-permutation commutes with complement, so the config is
+        // apply_perm(perm, canonical), complemented iff conj (an odd # of T's).
+        const auto pc = apply_perm(mem.perm, b.canonical);
+        const auto expected = mem.conj ? ((~pc) & full) : pc;
+        REQUIRE(mem.config == expected);
+        if (mem.config == b.canonical) {
+          found_canonical = true;
+          REQUIRE(mem.sign == 1);
+          REQUIRE(!mem.conj);
+        }
+      }
+      REQUIRE(found_canonical);
+    }
+    REQUIRE(total == 16);
+
+    // unambiguous T-pair members: block(complement) = +conj(block(canonical))
+    // for canonicals 0000 (#down 0) and 0011 (#down 2), both even -> sign +1.
+    auto find_member = [&](std::uint64_t canon,
+                           std::uint64_t cfg) -> const KramersBlockMember* {
+      for (const auto& b : blocks)
+        if (b.canonical == canon)
+          for (const auto& m : b.members)
+            if (m.config == cfg) return &m;
+      return nullptr;
+    };
+    const auto* m15 = find_member(0, 15);
+    REQUIRE(m15);
+    REQUIRE(m15->conj);
+    REQUIRE(m15->sign == 1);
+    const auto* m12 = find_member(3, 12);
+    REQUIRE(m12);
+    REQUIRE(m12->conj);
+    REQUIRE(m12->sign == 1);
+  }
+
+  SECTION("kramers_external_blocks: symmetric (raw g) generators") {
+    using Perm = container::svector<std::size_t>;
+    // A raw, non-antisymmetrized integral g^{ab}_{ij} folds under particle
+    // interchange sigma (swap BOTH pairs, sign +1) and T -> 6 blocks (vs the
+    // antisymmetrized ḡ[as]'s 5). sigma is passed as a symm_perm (sign +1).
+    const Perm SIGMA = {1, 0, 3, 2};  // swap virt pair AND occ pair
+    auto blocks =
+        kramers_external_blocks(4, /*antisym=*/{}, /*use_T=*/true, {SIGMA});
+    REQUIRE(blocks.size() == 6);
+
+    auto apply_perm = [](const Perm& p, std::uint64_t m) {
+      std::uint64_t out = 0;
+      for (std::size_t k = 0; k < p.size(); ++k)
+        if ((m >> k) & 1u) out |= (std::uint64_t{1} << p[k]);
+      return out;
+    };
+    const std::uint64_t full = 15;
+
+    std::size_t total = 0;
+    for (const auto& b : blocks) {
+      total += b.members.size();
+      for (const auto& mem : b.members) {
+        // same perm/conj <-> config invariant as the antisymm case.
+        const auto pc = apply_perm(mem.perm, b.canonical);
+        REQUIRE(mem.config == (mem.conj ? ((~pc) & full) : pc));
+        // a pure-sigma member (no T, i.e. conj=false, non-identity perm) must
+        // carry sign +1 (sigma is a symmetry, not an antisymmetry).
+        if (!mem.conj && mem.config != b.canonical) REQUIRE(mem.sign == 1);
+      }
+    }
+    REQUIRE(total == 16);
+  }
+}
+
+TEST_CASE("kramers_transform_bit_engine", "[orbit-transform]") {
+  // Semantic validation of the on-the-fly bit-representation transform
+  // (kramers_transform) against (a) the table generator
+  // (kramers_external_blocks) and (b) flavor blocks extracted directly from a
+  // synthetic spinor tensor that is antisymmetric within the virtual and
+  // occupied external groups and exactly T-symmetric. Rank-general: r = 1..3.
+  using namespace sequant;
+  using namespace sequant::mbpt;
+  constexpr std::size_t d = 2;       // orbitals per Kramers flavor
+  constexpr std::size_t sd = 2 * d;  // spinor slot dimension
+  using C = std::complex<double>;
+
+  for (std::size_t r : {std::size_t{1}, std::size_t{2}, std::size_t{3}}) {
+    INFO("rank r = " << r);
+    const std::size_t n = 2 * r;
+    std::size_t vol = 1;
+    for (std::size_t k = 0; k < n; ++k) vol *= sd;
+
+    std::mt19937 rng(42 + static_cast<int>(r));
+    std::uniform_real_distribution<double> u(-1, 1);
+    std::vector<C> T0(vol);
+    for (auto& x : T0) x = C{u(rng), u(rng)};
+
+    auto components = [&](std::size_t flat) {
+      std::vector<std::size_t> idx(n);
+      for (std::size_t k = 0; k < n; ++k) {
+        idx[k] = flat % sd;
+        flat /= sd;
+      }
+      return idx;
+    };
+    auto flat_of = [&](const std::vector<std::size_t>& idx) {
+      std::size_t f = 0;
+      for (std::size_t k = n; k-- > 0;) f = f * sd + idx[k];
+      return f;
+    };
+
+    // signed permutations of m elements
+    auto perms_of = [](std::size_t m) {
+      std::vector<std::pair<std::vector<std::size_t>, int>> out;
+      std::vector<std::size_t> p(m);
+      std::iota(p.begin(), p.end(), std::size_t{0});
+      do {
+        int inv = 0;
+        for (std::size_t a = 0; a < m; ++a)
+          for (std::size_t b = a + 1; b < m; ++b)
+            if (p[a] > p[b]) ++inv;
+        out.emplace_back(p, (inv % 2) ? -1 : +1);
+      } while (std::next_permutation(p.begin(), p.end()));
+      return out;
+    };
+    const auto P = perms_of(r);
+
+    // antisymmetrize within the vir group [0,r) and the occ group [r,2r)
+    std::vector<C> A(vol, C{0, 0});
+    for (std::size_t f = 0; f < vol; ++f) {
+      const auto idx = components(f);
+      for (const auto& [p1, s1] : P)
+        for (const auto& [p2, s2] : P) {
+          std::vector<std::size_t> jdx(n);
+          for (std::size_t k = 0; k < r; ++k) jdx[k] = idx[p1[k]];
+          for (std::size_t k = 0; k < r; ++k) jdx[r + k] = idx[r + p2[k]];
+          A[f] += static_cast<double>(s1 * s2) * T0[flat_of(jdx)];
+        }
+    }
+
+    // T-projection: (Theta A)[..up_o..] = -conj(A[..down_o..]),
+    //               (Theta A)[..down_o..] = +conj(A[..up_o..]); n is even so
+    // Theta^2 = +1 and (A + Theta A)/2 is the T-even projection.
+    auto theta = [&](const std::vector<C>& X) {
+      std::vector<C> Y(vol);
+      for (std::size_t f = 0; f < vol; ++f) {
+        auto idx = components(f);
+        int sgn = 1;
+        for (std::size_t k = 0; k < n; ++k) {
+          if (idx[k] < d) {
+            idx[k] += d;
+            sgn = -sgn;
+          } else {
+            idx[k] -= d;
+          }
+        }
+        Y[f] = static_cast<double>(sgn) * std::conj(X[flat_of(idx)]);
+      }
+      return Y;
+    };
+    {
+      const auto At = theta(A);
+      for (std::size_t f = 0; f < vol; ++f) A[f] = 0.5 * (A[f] + At[f]);
+      // idempotence sanity
+      const auto At2 = theta(A);
+      double dmax = 0, amax = 0;
+      for (std::size_t f = 0; f < vol; ++f) {
+        dmax = std::max(dmax, std::abs(A[f] - At2[f]));
+        amax = std::max(amax, std::abs(A[f]));
+      }
+      REQUIRE(amax > 1e-8);
+      REQUIRE(dmax < 1e-12 * std::max(1.0, amax));
+    }
+
+    // flavor-block extraction: component o_k in [0,d), spinor = o_k + d*bit_k
+    const std::size_t bvol = std::size_t(1) << n;  // d=2: d^n = 2^n
+    std::size_t bvol_full = 1;
+    for (std::size_t k = 0; k < n; ++k) bvol_full *= d;
+    REQUIRE(bvol == bvol_full);
+    auto block_of = [&](std::uint64_t cfg) {
+      std::vector<C> B(bvol_full);
+      for (std::size_t fb = 0; fb < bvol_full; ++fb) {
+        std::size_t rem = fb;
+        std::vector<std::size_t> idx(n);
+        for (std::size_t k = 0; k < n; ++k) {
+          const std::size_t o = rem % d;
+          rem /= d;
+          idx[k] = o + d * ((cfg >> k) & 1u);
+        }
+        B[fb] = A[flat_of(idx)];
+      }
+      return B;
+    };
+    auto bcomponents = [&](std::size_t fb) {
+      std::vector<std::size_t> idx(n);
+      for (std::size_t k = 0; k < n; ++k) {
+        idx[k] = fb % d;
+        fb /= d;
+      }
+      return idx;
+    };
+    auto bflat = [&](const std::vector<std::size_t>& idx) {
+      std::size_t f = 0;
+      for (std::size_t k = n; k-- > 0;) f = f * d + idx[k];
+      return f;
+    };
+    // out[idx] = sign*[conj]*in[jdx], jdx[p] = idx[perm[p]] (the einsum
+    // convention `blk(std) = rep(perm-labels)`)
+    auto apply = [&](const std::vector<C>& in, int sign, bool cnj,
+                     const container::svector<std::size_t>& perm) {
+      std::vector<C> out(bvol_full);
+      for (std::size_t fb = 0; fb < bvol_full; ++fb) {
+        const auto idx = bcomponents(fb);
+        std::vector<std::size_t> jdx(n);
+        for (std::size_t p = 0; p < n; ++p) jdx[p] = idx[perm[p]];
+        C v = in[bflat(jdx)];
+        if (cnj) v = std::conj(v);
+        out[fb] = static_cast<double>(sign) * v;
+      }
+      return out;
+    };
+    auto close = [&](const std::vector<C>& X, const std::vector<C>& Y) {
+      double dmax = 0;
+      for (std::size_t f = 0; f < bvol_full; ++f)
+        dmax = std::max(dmax, std::abs(X[f] - Y[f]));
+      return dmax;
+    };
+
+    const auto gens = kramers_external_generators(r);
+    const auto groups = kramers_external_groups(r);
+    const auto blocks = kramers_external_blocks(n, gens, /*use_T=*/true);
+    for (const auto& blk : blocks) {
+      const auto Bc = block_of(blk.canonical);
+      for (const auto& m : blk.members) {
+        INFO("canonical=" << blk.canonical << " config=" << m.config);
+        const auto Bd = block_of(m.config);
+        // (a) the table transform must reproduce the directly extracted block
+        const auto Bt = apply(Bc, m.sign, m.conj, m.perm);
+        CHECK(close(Bt, Bd) < 1e-12);
+        // (b) the on-the-fly transform must too
+        const auto t2 = kramers_transform(n, groups, /*use_T=*/true,
+                                          blk.canonical, m.config);
+        REQUIRE(t2.has_value());
+        const auto B2 = apply(Bc, t2->sign, t2->conj, t2->perm);
+        {
+          std::ostringstream oss;
+          oss << "table: sign=" << m.sign << " conj=" << m.conj << " perm=[";
+          for (auto q : m.perm) oss << q << " ";
+          oss << "]  mine: sign=" << t2->sign << " conj=" << t2->conj
+              << " perm=[";
+          for (auto q : t2->perm) oss << q << " ";
+          oss << "]";
+          INFO(oss.str());
+          CHECK(close(B2, Bd) < 1e-12);
+        }
+      }
+    }
+    // (c) configs in different orbits are rejected
+    if (blocks.size() >= 2) {
+      const auto miss = kramers_transform(
+          n, groups, /*use_T=*/true, blocks[0].canonical, blocks[1].canonical);
+      CHECK(!miss.has_value());
+    }
+    // (d) arbitrary re-basing: the transform between ANY two orbit members
+    // (canon = an arbitrary member, not the orbit minimum) must be
+    // value-correct. This is exactly how a consumer re-bases an orbit onto a
+    // stored representative that is not the orbit minimum (MPQC's kr_recon:
+    // spincase reps). The engine's order-preserving matching may differ from
+    // the table's composed transform by a stabilizer element, which acts
+    // trivially on a group-antisymmetric block — hence a value test, and both
+    // fold modes (with/without T) are covered.
+    for (const bool uT : {true, false}) {
+      const auto blks = kramers_external_blocks(n, gens, uT);
+      for (const auto& blk : blks) {
+        for (const auto& mA : blk.members) {
+          const auto BA = block_of(mA.config);
+          for (const auto& mB : blk.members) {
+            INFO("rebase " << mA.config << " -> " << mB.config
+                           << " use_T=" << uT);
+            const auto t =
+                kramers_transform(n, groups, uT, mA.config, mB.config);
+            REQUIRE(t.has_value());
+            const auto BB = apply(BA, t->sign, t->conj, t->perm);
+            CHECK(close(BB, block_of(mB.config)) < 1e-12);
+          }
+        }
+      }
+    }
+    // (e) the T-self-stabilizer decomposition used for the stored-rep
+    // projection: cfg is T-self-conjugate iff a direct (no-T) matching
+    // cfg -> ~cfg exists; then S = t_sign*sign_d * conj ∘ perm_d must map the
+    // block to itself (Jacobi updates need not preserve this — consumers
+    // enforce it by averaging T <- (T + S(T))/2).
+    {
+      const std::uint64_t full_mask = (std::uint64_t{1} << n) - 1;
+      std::size_t n_self = 0;
+      for (std::uint64_t cfg = 0; cfg <= full_mask; ++cfg) {
+        const std::uint64_t pre = (~cfg) & full_mask;
+        const auto md = kramers_transform(n, groups, /*use_T=*/false, cfg, pre);
+        if (!md) continue;
+        ++n_self;
+        const int t_sign = (std::popcount(pre) & 1) ? -1 : +1;
+        const auto B = block_of(cfg);
+        const auto SB = apply(B, md->sign * t_sign, true, md->perm);
+        INFO("T-self-stabilizer cfg=" << cfg);
+        CHECK(close(SB, B) < 1e-12);
+      }
+      // every config with equal per-group up/down counts is self-conjugate;
+      // rank 2 has 4 (the (ud,ud) class), rank 1 none, rank 3 none (odd group
+      // size cannot split evenly)
+      CHECK(n_self == (r == 2 ? 4u : 0u));
+    }
+  }
+}
+
+TEST_CASE("drop_mixed_kramers_fock_terms", "[spinor]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  auto ctx = get_default_context();
+  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto _ = set_scoped_default_context(ctx);
+  TensorCanonicalizer::register_instance(
+      std::make_shared<DefaultTensorCanonicalizer>());
+
+  // f between the two indices, each labelled with the requested Kramers spin
+  auto kr = [](std::wstring_view label, Spin s) {
+    return s == Spin::alpha ? make_spinalpha(Index{label})
+                            : make_spinbeta(Index{label});
+  };
+  auto fock = [&kr](std::wstring_view b, Spin sb, std::wstring_view k,
+                    Spin sk) {
+    return ex<Tensor>(L"f", sequant::bra{kr(b, sb)}, sequant::ket{kr(k, sk)});
+  };
+  auto g_pure = [&kr](std::wstring_view i, std::wstring_view a) {
+    return ex<Tensor>(L"g", sequant::bra{kr(i, Spin::alpha)},
+                      sequant::ket{kr(a, Spin::alpha)});
+  };
+
+  SECTION("a mixed-Kramers f kills its term, a pure one survives") {
+    auto pure = fock(L"i_1", Spin::alpha, L"i_2", Spin::alpha);
+    auto mixed_occ = fock(L"i_1", Spin::alpha, L"i_2", Spin::beta);
+    auto mixed_vir = fock(L"a_1", Spin::beta, L"a_2", Spin::alpha);
+    // occ-virt block is subject to the same rule
+    auto mixed_ov = fock(L"i_1", Spin::alpha, L"a_1", Spin::beta);
+
+    CHECK(drop_mixed_kramers_fock_terms(pure)->is<Tensor>());
+    for (const auto& mixed : {mixed_occ, mixed_vir, mixed_ov}) {
+      auto out = drop_mixed_kramers_fock_terms(mixed);
+      REQUIRE(out->is<Constant>());
+      CHECK(out->as<Constant>().is_zero());
+    }
+  }
+
+  SECTION("only the offending summands are removed") {
+    auto sum = ex<Sum>(ExprPtrList{
+        fock(L"i_1", Spin::alpha, L"i_2", Spin::alpha),  // keep
+        fock(L"i_1", Spin::alpha, L"i_2", Spin::beta),   // drop
+        g_pure(L"i_1", L"a_1"),                          // keep (g is exempt)
+        fock(L"a_1", Spin::beta, L"a_2", Spin::alpha),   // drop
+    });
+    REQUIRE(sum->size() == 4);
+    auto out = drop_mixed_kramers_fock_terms(sum);
+    REQUIRE(out->is<Sum>());
+    CHECK(out->size() == 2);
+  }
+
+  SECTION("one mixed factor annihilates a whole product") {
+    auto prod = ex<Product>(ExprPtrList{
+        g_pure(L"i_1", L"a_1"), fock(L"i_1", Spin::alpha, L"i_2", Spin::beta)});
+    auto out = drop_mixed_kramers_fock_terms(prod);
+    REQUIRE(out->is<Constant>());
+    CHECK(out->as<Constant>().is_zero());
+
+    // ... but a product of only pure factors is untouched
+    auto keep = ex<Product>(
+        ExprPtrList{g_pure(L"i_1", L"a_1"),
+                    fock(L"i_1", Spin::alpha, L"i_2", Spin::alpha)});
+    CHECK(drop_mixed_kramers_fock_terms(keep)->is<Product>());
+  }
+
+  SECTION("everything dropped yields zero") {
+    auto sum = ex<Sum>(ExprPtrList{
+        fock(L"i_1", Spin::alpha, L"i_2", Spin::beta),
+        fock(L"a_1", Spin::beta, L"a_2", Spin::alpha),
+    });
+    auto out = drop_mixed_kramers_fock_terms(sum);
+    REQUIRE(out->is<Constant>());
+    CHECK(out->as<Constant>().is_zero());
+  }
+}
+
+TEST_CASE("kramers_trace_csv_no_slot_duplication", "[spinor]") {
+  // Regression for the h2o PNS-MP1 derive crash: the CSV-proto'd MP1 energy
+  // traced with fold_T=false must not produce summands with a repeated index
+  // inside one bundle (TNv3 Edge::add_vertex throws on such a tensor). Root
+  // cause was the lexicographic rewrite's positional named-edge skip meeting
+  // a pure proto (named non-edge) index under the Conjugate braket fold.
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  auto ctx = get_default_context();
+  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto _ = set_scoped_default_context(ctx);
+  TensorCanonicalizer::register_instance(
+      std::make_shared<DefaultTensorCanonicalizer>());
+
+  const Index i1{L"i_1"}, i2{L"i_2"};
+  const Index a1 = Index(L"a_1", {i1, i2});
+  const Index a2 = Index(L"a_2", {i1, i2});
+
+  const auto E = ex<Constant>(rational{1, 4}) *
+                 ex<Tensor>(L"g", bra{i1, i2}, ket{a1, a2}, Symmetry::Antisymm,
+                            BraKetSymmetry::Conjugate, ColumnSymmetry::Symm) *
+                 ex<Tensor>(L"t", bra{a1, a2}, ket{i1, i2}, Symmetry::Antisymm,
+                            BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+
+  ExprPtr E_kr;
+  REQUIRE_NOTHROW(E_kr = closed_shell_kramers_trace(E, {}, /*fold_T=*/false,
+                                                    /*expand_g=*/true, false));
+  expand(E_kr);
+  flatten(E_kr);
+
+  auto check_no_repeats = [](ExprPtr const& term) -> std::string {
+    std::string bad;
+    term->visit(
+        [&](ExprPtr const& node) {
+          if (!node->is<Tensor>()) return;
+          auto const& t = node->as<Tensor>();
+          auto scan = [&](auto const& rng) {
+            std::vector<std::wstring> labels;
+            for (auto const& ix : rng) labels.emplace_back(ix.full_label());
+            std::sort(labels.begin(), labels.end());
+            if (std::adjacent_find(labels.begin(), labels.end()) !=
+                labels.end())
+              bad = toUtf8(to_latex(node));
+          };
+          scan(t.bra());
+          scan(t.ket());
+        },
+        /*atoms_only=*/true);
+    return bad;
+  };
+
+  REQUIRE(E_kr->is<Sum>());
+  std::size_t k = 0;
+  for (auto const& term : *E_kr) {
+    INFO("summand " << k << " = " << toUtf8(to_latex(term)));
+    CHECK(check_no_repeats(term).empty());
+    ++k;
+  }
+
+  ExprPtr folded;
+  REQUIRE_NOTHROW(folded = fold_conjugate_pairs_of_real_sum(
+                      E_kr, CanonicalizeOptions::default_options(),
+                      [](ExprPtr const& s) { return mbpt::swap_spin(s); }));
+}
+
+TEST_CASE("kramers_internal_rebase", "[korbit-rebase]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+  auto up = [](const wchar_t* l) { return make_spinalpha(Index(l)); };
+  auto dn = [](const wchar_t* l) { return make_spinbeta(Index(l)); };
+  auto T = [](const wchar_t* label, Index b, Index k) {
+    return ex<Tensor>(label, bra{std::move(b)}, ket{std::move(k)},
+                      Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
+                      ColumnSymmetry::Nonsymm);
+  };
+  auto all_up_and_marked = [](const ExprPtr& e) {
+    for (auto const& f : e->as<Product>().factors()) {
+      auto const& t = f->as<Tensor>();
+      if (!t.conjugated()) return false;
+      for (auto const& idx : t.const_indices())
+        if (to_spin(idx.space().qns()) != Spin::alpha) return false;
+    }
+    return true;
+  };
+
+  SECTION("internal down component flips up, every leaf conjugate-marked") {
+    auto term =
+        T(L"X", dn(L"i_1"), dn(L"i_2")) * T(L"Y", dn(L"i_2"), dn(L"i_1"));
+    auto out = kramers_internal_rebase(term, {});
+    REQUIRE(all_up_and_marked(out));
+  }
+
+  SECTION("up orientation is already canonical: untouched, no marks") {
+    auto term =
+        T(L"X", up(L"i_1"), up(L"i_2")) * T(L"Y", up(L"i_2"), up(L"i_1"));
+    auto out = kramers_internal_rebase(term, {});
+    REQUIRE(*out == *term);
+  }
+
+  SECTION("an external index freezes its whole component") {
+    auto term =
+        T(L"X", dn(L"i_1"), dn(L"i_2")) * T(L"Y", dn(L"i_2"), dn(L"i_1"));
+    container::set<Index> ext{dn(L"i_1")};
+    auto out = kramers_internal_rebase(term, ext);
+    REQUIRE(*out == *term);
+  }
+
+  SECTION("a dangling flavored index freezes its component") {
+    // i_3 appears once (open line): no flip even though nothing is declared
+    auto term = T(L"X", dn(L"i_1"), dn(L"i_3")) *
+                T(L"Y", dn(L"i_1"), dn(L"i_2")) *
+                T(L"Z", dn(L"i_2"), dn(L"i_4"));
+    auto out = kramers_internal_rebase(term, {});
+    REQUIRE(*out == *term);
+  }
+
+  SECTION("idempotent") {
+    auto term =
+        T(L"X", dn(L"i_1"), dn(L"i_2")) * T(L"Y", dn(L"i_2"), dn(L"i_1"));
+    auto once = kramers_internal_rebase(term, {});
+    auto twice = kramers_internal_rebase(once, {});
+    REQUIRE(*twice == *once);
+  }
+
+  SECTION("proto decoration follows its flipped referent") {
+    auto a_of_i = Index(L"a_1", {L"i_1"});
+    auto a_dn = make_spinbeta(a_of_i);  // a↓_1<i↓_1>
+    auto term = T(L"A", dn(L"i_1"), a_dn) * T(L"B", a_dn, dn(L"i_1"));
+    auto out = kramers_internal_rebase(term, {});
+    for (auto const& f : out->as<Product>().factors()) {
+      auto const& t = f->as<Tensor>();
+      REQUIRE(t.conjugated());
+      for (auto const& idx : t.const_indices()) {
+        REQUIRE(to_spin(idx.space().qns()) == Spin::alpha);
+        for (auto const& p : idx.proto_indices())
+          REQUIRE(to_spin(p.space().qns()) == Spin::alpha);
+      }
+    }
+  }
+
+  SECTION("independent components decided independently") {
+    // comp {X,Y} is all-down (flips); comp {U,V} is all-up (stays)
+    auto term =
+        T(L"X", dn(L"i_1"), dn(L"i_2")) * T(L"Y", dn(L"i_2"), dn(L"i_1")) *
+        T(L"U", up(L"i_3"), up(L"i_4")) * T(L"V", up(L"i_4"), up(L"i_3"));
+    auto out = kramers_internal_rebase(term, {});
+    int marked = 0, unmarked = 0;
+    for (auto const& f : out->as<Product>().factors())
+      (f->as<Tensor>().conjugated() ? marked : unmarked)++;
+    REQUIRE(marked == 2);
+    REQUIRE(unmarked == 2);
+  }
+}

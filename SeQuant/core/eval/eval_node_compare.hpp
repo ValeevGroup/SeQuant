@@ -68,6 +68,17 @@ struct TreeNodeEqualityComparator {
       return false;
     }
 
+    // canon_phase (+1/-1) is part of the node's value identity: two nodes with
+    // the same canonical graph/leaf but opposite antisymmetric-reorder parity
+    // evaluate to negatives of each other (+T vs -T) and must not share a CSE
+    // cache slot. It is already folded into hash_value() (so cross-phase pairs
+    // normally hash apart and fail the check above), which is a no-op for real
+    // closed-shell paths where every phase is +1; this guards the residual case
+    // of a hash collision, mirroring how the graph is both hashed and compared.
+    if (lhs->canon_phase() != rhs->canon_phase()) {
+      return false;
+    }
+
     if (lhs->is_constant() || lhs->is_variable() || lhs->is_power()) {
       if (*lhs->expr() != *rhs->expr()) {
         return false;
