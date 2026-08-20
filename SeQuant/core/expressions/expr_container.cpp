@@ -230,4 +230,10 @@ bool operator==(const ExprPtr &lhs, const ExprContainer &rhs) {
   return *lhs == *rhs;
 }
 
+ExprContainer adjoint(const ExprContainer &cont) {
+  ExprContainer copy = cont.copy();
+  copy->adjoint();
+  return copy;
+}
+
 }  // namespace sequant
