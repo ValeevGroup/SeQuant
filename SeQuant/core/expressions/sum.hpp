@@ -284,6 +284,13 @@ class Sum : public Expr {
   }
 
   ExprIterator end_subexpr() override {
+    // N.B. handing out a mutable iterator into summands_ invalidates the
+    // memoized hash, regardless of which end of the range it points at
+    // (`*(--end())` mutates just as `*begin()` does)
+    if (!summands_.empty()) {
+      reset_hash_value();
+    }
+
     return ExprIterator{summands_.data() + summands_.size()};
   }
 
