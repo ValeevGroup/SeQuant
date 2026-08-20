@@ -6,6 +6,7 @@
 #include <SeQuant/core/expressions/abstract_tensor.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
+#include <SeQuant/core/expressions/expr_iterator.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/logger.hpp>
@@ -29,6 +30,52 @@
 #include <vector>
 
 namespace sequant {
+
+ExprIterator Expr::begin() { return begin_subexpr(); }
+
+ExprIterator Expr::end() { return end_subexpr(); }
+
+ConstExprIterator Expr::begin() const { return begin_subexpr(); }
+
+ConstExprIterator Expr::end() const { return end_subexpr(); }
+
+ConstExprIterator Expr::cbegin() const { return begin_subexpr(); }
+
+ConstExprIterator Expr::cend() const { return end_subexpr(); }
+
+ExprIterator Expr::begin_subexpr() { return ExprIterator{}; }
+
+ExprIterator Expr::end_subexpr() { return ExprIterator{}; }
+
+ConstExprIterator Expr::begin_subexpr() const { return ConstExprIterator{}; }
+
+ConstExprIterator Expr::end_subexpr() const { return ConstExprIterator{}; }
+
+std::size_t Expr::size() const { return end() - begin(); }
+
+bool Expr::empty() const { return size() == 0; }
+
+ExprPtr &Expr::operator[](std::size_t idx) {
+  SEQUANT_ASSERT(idx < size());
+  return begin()[idx];
+}
+
+const ExprPtr &Expr::operator[](std::size_t idx) const {
+  SEQUANT_ASSERT(idx < size());
+  return begin()[idx];
+}
+
+ExprPtr &Expr::at(std::size_t idx) { return (*this)[idx]; }
+
+const ExprPtr &Expr::at(std::size_t idx) const { return (*this)[idx]; }
+
+ExprPtr &Expr::front() { return at(0); }
+
+const ExprPtr &Expr::front() const { return at(0); }
+
+ExprPtr &Expr::back() { return at(size() - 1); }
+
+const ExprPtr &Expr::back() const { return at(size() - 1); }
 
 ExprPtr ExprPtr::clone() const & {
   if (!*this) return {};

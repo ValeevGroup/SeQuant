@@ -69,30 +69,39 @@ struct VecExpr : public std::vector<T>, public sequant::Expr {
 
   type_id_type type_id() const override { return get_type_id<VecExpr<T>>(); };
 
- private:
-  cursor begin_cursor() const override {
+  sequant::ConstExprIterator begin_subexpr() const override {
     if constexpr (sequant::Expr::is_shared_ptr_of_expr<T>::value) {
-      return base_type::empty() ? Expr::begin_cursor()
-                                : cursor{&base_type::at(0)};
+      return sequant::ConstExprIterator{base_type::data()};
     } else {
-      return Expr::begin_cursor();
+      return Expr::begin_subexpr();
     }
-  };
-  cursor end_cursor() const override {
+  }
+
+  sequant::ConstExprIterator end_subexpr() const override {
     if constexpr (sequant::Expr::is_shared_ptr_of_expr<T>::value) {
-      return base_type::empty() ? Expr::end_cursor()
-                                : cursor{&base_type::at(0) + base_type::size()};
+      return sequant::ConstExprIterator{base_type::data() + base_type::size()};
     } else {
-      return Expr::end_cursor();
+      return Expr::end_subexpr();
     }
-  };
-  cursor begin_cursor() override {
-    return const_cast<const VecExpr &>(*this).begin_cursor();
-  };
-  cursor end_cursor() override {
-    return const_cast<const VecExpr &>(*this).end_cursor();
+  }
+
+  sequant::ExprIterator begin_subexpr() override {
+    if constexpr (sequant::Expr::is_shared_ptr_of_expr<T>::value) {
+      return sequant::ExprIterator{base_type::data()};
+    } else {
+      return Expr::begin_subexpr();
+    }
+  }
+
+  sequant::ExprIterator end_subexpr() override {
+    if constexpr (sequant::Expr::is_shared_ptr_of_expr<T>::value) {
+      return sequant::ExprIterator{base_type::data() + base_type::size()};
+    } else {
+      return Expr::end_subexpr();
+    }
   };
 
+ private:
   bool static_equal(const sequant::Expr &that) const override {
     return static_cast<const base_type &>(*this) ==
            static_cast<const base_type &>(static_cast<const VecExpr &>(that));

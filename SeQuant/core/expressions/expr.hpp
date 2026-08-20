@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EXPRESSIONS_EXPR_HPP
 #define SEQUANT_EXPRESSIONS_EXPR_HPP
 
+#include <SeQuant/core/expressions/expr_iterator.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/options.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -10,9 +11,7 @@
 #include <atomic>
 #include <memory>
 #include <optional>
-
-#include <range/v3/range/primitives.hpp>
-#include <range/v3/view/facade.hpp>
+#include <ranges>
 
 namespace sequant {
 
@@ -58,10 +57,8 @@ static const wchar_t adjoint_label = L'\u207A';
 ///    for(const auto& e: c.expr()) {  // iterates over subexpressions
 ///    }
 /// @endcode
-class Expr : public std::enable_shared_from_this<Expr>,
-             public ranges::view_facade<Expr> {
+class Expr : public std::enable_shared_from_this<Expr> {
  public:
-  using range_type = ranges::view_facade<Expr>;
   using hash_type = std::size_t;
   using type_id_type = int;  // to speed up comparisons
 
@@ -69,7 +66,7 @@ class Expr : public std::enable_shared_from_this<Expr>,
   virtual ~Expr() = default;
 
   /// @return true if this is a leaf
-  bool is_atom() const { return ranges::empty(*this); }
+  bool is_atom() const { return empty(); }
 
   /// @return true if this is zero
   virtual bool is_zero() const { return false; }
@@ -149,14 +146,6 @@ class Expr : public std::enable_shared_from_this<Expr>,
     return visit_impl(*this, std::forward<Visitor>(visitor), atoms_only);
   }
 
-  auto begin_subexpr() { return range_type::begin(); }
-
-  auto end_subexpr() { return range_type::end(); }
-
-  auto begin_subexpr() const { return range_type::begin(); }
-
-  auto end_subexpr() const { return range_type::end(); }
-
   Expr &expr() { return *this; }
   const Expr &expr() const { return *this; }
 
@@ -180,7 +169,7 @@ class Expr : public std::enable_shared_from_this<Expr>,
   /// overridden for scalar leaf types.
   virtual bool is_scalar() const {
     if (is_atom()) return false;
-    for (auto it = begin_subexpr(); it != end_subexpr(); ++it) {
+    for (auto it = begin(); it != end(); ++it) {
       if (!(*it)->is_scalar()) return false;
     }
     return true;
@@ -199,7 +188,7 @@ class Expr : public std::enable_shared_from_this<Expr>,
       return true;
     else {
       bool result = true;
-      for (auto it = begin_subexpr(); result && it != end_subexpr(); ++it) {
+      for (auto it = begin(); result && it != end(); ++it) {
         result &= (*it)->is_cnumber();
       }
       return result;
@@ -226,14 +215,12 @@ class Expr : public std::enable_shared_from_this<Expr>,
           this->is_cnumber() || that.is_cnumber() || commutes_with_atom(that);
     } else if (this_is_atom) {
       if (!this->is_cnumber()) {
-        for (auto it = that.begin_subexpr(); result && it != that.end_subexpr();
-             ++it) {
+        for (auto it = that.begin(); result && it != that.end(); ++it) {
           result &= this->commutes_with(**it);
         }
       }
     } else {
-      for (auto it = this->begin_subexpr(); result && it != this->end_subexpr();
-           ++it) {
+      for (auto it = this->begin(); result && it != this->end(); ++it) {
         result &= (*it)->commutes_with(that);
       }
     }
@@ -375,9 +362,35 @@ class Expr : public std::enable_shared_from_this<Expr>,
 
   ///@}
 
- private:
-  friend ranges::range_access;
+  ExprIterator begin();
+  ExprIterator end();
+  ConstExprIterator begin() const;
+  ConstExprIterator end() const;
+  ConstExprIterator cbegin() const;
+  ConstExprIterator cend() const;
 
+  virtual ExprIterator begin_subexpr();
+  virtual ExprIterator end_subexpr();
+  virtual ConstExprIterator begin_subexpr() const;
+  virtual ConstExprIterator end_subexpr() const;
+
+  std::size_t size() const;
+
+  bool empty() const;
+
+  ExprPtr &operator[](std::size_t idx);
+  const ExprPtr &operator[](std::size_t idx) const;
+
+  ExprPtr &at(std::size_t idx);
+  const ExprPtr &at(std::size_t idx) const;
+
+  ExprPtr &front();
+  const ExprPtr &front() const;
+
+  ExprPtr &back();
+  const ExprPtr &back() const;
+
+ private:
   template <
       typename E, typename Visitor,
       typename = std::enable_if_t<std::is_same_v<std::remove_cvref_t<E>, Expr>>>
@@ -413,59 +426,6 @@ class Expr : public std::enable_shared_from_this<Expr>,
   Expr(const Expr &) = default;
   Expr &operator=(Expr &&) = default;
   Expr &operator=(const Expr &) = default;
-
-  struct cursor {
-    using value_type = ExprPtr;
-
-    cursor() = default;
-    constexpr explicit cursor(ExprPtr *subexpr_ptr) noexcept
-        : ptr_{subexpr_ptr} {}
-    /// when take const ptr note runtime const flag
-    constexpr explicit cursor(const ExprPtr *subexpr_ptr) noexcept
-        : ptr_{const_cast<ExprPtr *>(subexpr_ptr)}, const_{true} {}
-    bool equal(const cursor &that) const { return ptr_ == that.ptr_; }
-    void next() { ++ptr_; }
-    void prev() { --ptr_; }
-    // TODO figure out why can't return const here if want to be able to assign
-    // to *begin(Expr&)
-    ExprPtr &read() const {
-      RANGES_EXPECT(ptr_);
-      return *ptr_;
-    }
-    ExprPtr &read() {
-      RANGES_EXPECT(const_ == false);
-      RANGES_EXPECT(ptr_);
-      return *ptr_;
-    }
-    void assign(const ExprPtr &that_ptr) {
-      RANGES_EXPECT(ptr_);
-      *ptr_ = that_ptr;
-    }
-    std::ptrdiff_t distance_to(cursor const &that) const {
-      return that.ptr_ - ptr_;
-    }
-    void advance(std::ptrdiff_t n) { ptr_ += n; }
-
-   private:
-    ExprPtr *ptr_ =
-        nullptr;  // both begin and end will be represented by this, so Expr
-                  // without subexpressions begin() equals end() automatically
-    bool const_ = false;  // assert in nonconst ops
-  };
-
-  /// @return the cursor for the beginning of the range (must override in a
-  /// derived Expr that has subexpressions)
-  virtual cursor begin_cursor() { return cursor{}; }
-  /// @return the cursor for the end of the range (must override in a derived
-  /// Expr that has subexpressions)
-  virtual cursor end_cursor() { return cursor{}; }
-
-  /// @return the cursor for the beginning of the range (must override in a
-  /// derived Expr that has subexpressions)
-  virtual cursor begin_cursor() const { return cursor{}; }
-  /// @return the cursor for the end of the range (must override in a derived
-  /// Expr that has subexpressions)
-  virtual cursor end_cursor() const { return cursor{}; }
 
   mutable std::optional<hash_type> hash_value_;  // not initialized by default
   virtual hash_type memoizing_hash() const {
@@ -530,6 +490,10 @@ class Expr : public std::enable_shared_from_this<Expr>,
   /// fn is missing from this type
   Exception not_implemented(const char *fn) const;
 };  // class Expr
+
+static_assert(std::ranges::sized_range<Expr>);
+static_assert(std::ranges::bidirectional_range<Expr>);
+static_assert(std::ranges::random_access_range<Expr>);
 
 template <>
 struct Expr::is_shared_ptr_of_expr<ExprPtr, void> : std::true_type {};

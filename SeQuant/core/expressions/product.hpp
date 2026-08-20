@@ -5,6 +5,7 @@
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
+#include <SeQuant/core/expressions/expr_iterator.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/meta.hpp>
@@ -388,34 +389,29 @@ class Product : public Expr {
     scalar_ += 1;
   }
 
+  ExprIterator begin_subexpr() override {
+    if (!factors_.empty()) {
+      reset_hash_value();
+    }
+
+    return ExprIterator{factors_.data()};
+  }
+
+  ExprIterator end_subexpr() override {
+    return ExprIterator{factors_.data() + factors_.size()};
+  }
+
+  ConstExprIterator begin_subexpr() const override {
+    return ConstExprIterator{factors_.data()};
+  }
+
+  ConstExprIterator end_subexpr() const override {
+    return ConstExprIterator{factors_.data() + factors_.size()};
+  }
+
  private:
   scalar_type scalar_ = {1, 0};
   container::svector<ExprPtr, 2> factors_{};
-
-  cursor begin_cursor() override {
-    if (factors_.empty()) {
-      return Expr::begin_cursor();
-    } else {
-      reset_hash_value();
-      return cursor{&factors_[0]};
-    }
-  };
-  cursor end_cursor() override {
-    if (factors_.empty()) {
-      return Expr::begin_cursor();
-    } else {
-      reset_hash_value();
-      return cursor{&factors_[0] + factors_.size()};
-    }
-  };
-
-  cursor begin_cursor() const override {
-    return factors_.empty() ? Expr::begin_cursor() : cursor{&factors_[0]};
-  };
-  cursor end_cursor() const override {
-    return factors_.empty() ? Expr::end_cursor()
-                            : cursor{&factors_[0] + factors_.size()};
-  };
 
   /// @return the hash of this object, by hashing only the factors,
   /// not the scalar to make possible rapid finding of Products that only
