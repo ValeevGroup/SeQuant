@@ -2,6 +2,7 @@
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/expr_container.hpp>
+#include <SeQuant/core/expressions/expr_iterator.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/product.hpp>
 #include <SeQuant/core/expressions/sum.hpp>
@@ -63,6 +64,30 @@ ExprContainer &ExprContainer::operator=(Expr &&expr) {
 ExprContainer ExprContainer::copy() const { return expr_->unique_copy(); }
 
 std::unique_ptr<Expr> ExprContainer::take_expr() && { return std::move(expr_); }
+
+ExprIterator ExprContainer::begin() {
+  SEQUANT_ASSERT(expr_);
+  return expr_->begin();
+}
+
+ExprIterator ExprContainer::end() {
+  SEQUANT_ASSERT(expr_);
+  return expr_->end();
+}
+
+ConstExprIterator ExprContainer::begin() const {
+  SEQUANT_ASSERT(expr_);
+  return std::as_const(*expr_).begin();
+}
+
+ConstExprIterator ExprContainer::end() const {
+  SEQUANT_ASSERT(expr_);
+  return std::as_const(*expr_).end();
+}
+
+ConstExprIterator ExprContainer::cbegin() const { return begin(); }
+
+ConstExprIterator ExprContainer::cend() const { return end(); }
 
 ExprContainer::operator const Expr &() const { return *expr_; }
 

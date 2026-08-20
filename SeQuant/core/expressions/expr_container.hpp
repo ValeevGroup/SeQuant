@@ -2,6 +2,7 @@
 #define SEQUANT_EXPRESSIONS_EXPR_CONTAINER_HPP
 
 #include <SeQuant/core/expressions/expr.hpp>
+#include <SeQuant/core/expressions/expr_iterator.hpp>
 
 #include <memory>
 
@@ -31,12 +32,12 @@ class ExprContainer {
 
   std::unique_ptr<Expr> take_expr() &&;
 
-  auto begin() { return expr_->begin(); }
-  auto end() { return expr_->begin(); }
-  auto begin() const { return expr_->begin(); }
-  auto end() const { return expr_->begin(); }
-  auto cbegin() const { return expr_->begin(); }
-  auto cend() const { return expr_->begin(); }
+  ExprIterator begin();
+  ExprIterator end();
+  ConstExprIterator begin() const;
+  ConstExprIterator end() const;
+  ConstExprIterator cbegin() const;
+  ConstExprIterator cend() const;
 
   operator const Expr &() const;
   operator Expr &() &;
