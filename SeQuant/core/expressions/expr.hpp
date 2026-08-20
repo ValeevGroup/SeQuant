@@ -362,17 +362,17 @@ class Expr : public std::enable_shared_from_this<Expr> {
 
   ///@}
 
-  virtual ExprIterator begin();
-  virtual ExprIterator end();
-  virtual ConstExprIterator begin() const;
-  virtual ConstExprIterator end() const;
+  ExprIterator begin();
+  ExprIterator end();
+  ConstExprIterator begin() const;
+  ConstExprIterator end() const;
   ConstExprIterator cbegin() const;
   ConstExprIterator cend() const;
 
-  ExprIterator begin_subexpr();
-  ExprIterator end_subexpr();
-  ConstExprIterator begin_subexpr() const;
-  ConstExprIterator end_subexpr() const;
+  virtual ExprIterator begin_subexpr();
+  virtual ExprIterator end_subexpr();
+  virtual ConstExprIterator begin_subexpr() const;
+  virtual ConstExprIterator end_subexpr() const;
 
   std::size_t size() const;
 

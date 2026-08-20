@@ -31,25 +31,25 @@
 
 namespace sequant {
 
-ExprIterator Expr::begin() { return ExprIterator{}; }
+ExprIterator Expr::begin() { return begin_subexpr(); }
 
-ExprIterator Expr::end() { return ExprIterator{}; }
+ExprIterator Expr::end() { return end_subexpr(); }
 
-ConstExprIterator Expr::begin() const { return ConstExprIterator{}; }
+ConstExprIterator Expr::begin() const { return begin_subexpr(); }
 
-ConstExprIterator Expr::end() const { return ConstExprIterator{}; }
+ConstExprIterator Expr::end() const { return end_subexpr(); }
 
-ConstExprIterator Expr::cbegin() const { return begin(); }
+ConstExprIterator Expr::cbegin() const { return begin_subexpr(); }
 
-ConstExprIterator Expr::cend() const { return end(); }
+ConstExprIterator Expr::cend() const { return end_subexpr(); }
 
-ExprIterator Expr::begin_subexpr() { return begin(); }
+ExprIterator Expr::begin_subexpr() { return ExprIterator{}; }
 
-ExprIterator Expr::end_subexpr() { return end(); }
+ExprIterator Expr::end_subexpr() { return ExprIterator{}; }
 
-ConstExprIterator Expr::begin_subexpr() const { return begin(); }
+ConstExprIterator Expr::begin_subexpr() const { return ConstExprIterator{}; }
 
-ConstExprIterator Expr::end_subexpr() const { return end(); }
+ConstExprIterator Expr::end_subexpr() const { return ConstExprIterator{}; }
 
 std::size_t Expr::size() const { return end() - begin(); }
 

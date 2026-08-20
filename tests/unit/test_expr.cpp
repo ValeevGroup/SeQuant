@@ -41,22 +41,19 @@ struct Dummy : public sequant::Expr {
   bool static_equal(const sequant::Expr &) const override { return true; }
 };
 
-// Note: we have to use template specialization in order to conditionally
-// provide custom begin/end implementations as virtual functions aren't allowed
-// to be shadowed in the child class via explicit implementations.
-template <typename T, bool = false>
-struct VecExprImpl : public std::vector<T>, public sequant::Expr {
+template <typename T>
+struct VecExpr : public std::vector<T>, public sequant::Expr {
   using base_type = std::vector<T>;
   using base_type::begin;
   using base_type::end;
   using base_type::size;
 
-  VecExprImpl() = default;
+  VecExpr() = default;
   template <typename U>
-  VecExprImpl(std::initializer_list<U> elements) : std::vector<T>(elements) {}
+  VecExpr(std::initializer_list<U> elements) : std::vector<T>(elements) {}
   template <typename Iter>
-  VecExprImpl(Iter begin, Iter end) : std::vector<T>(begin, end) {}
-  virtual ~VecExprImpl() = default;
+  VecExpr(Iter begin, Iter end) : std::vector<T>(begin, end) {}
+  virtual ~VecExpr() = default;
   std::wstring to_latex() const override {
     std::wstring result = L"{\\text{VecExpr}\\{";
     for (const auto &e : *this) {
@@ -70,80 +67,50 @@ struct VecExprImpl : public std::vector<T>, public sequant::Expr {
     return result;
   }
 
-  type_id_type type_id() const override {
-    return get_type_id<VecExprImpl<T>>();
-  };
+  type_id_type type_id() const override { return get_type_id<VecExpr<T>>(); };
 
- private:
-  bool static_equal(const sequant::Expr &that) const override {
-    return static_cast<const base_type &>(*this) ==
-           static_cast<const base_type &>(
-               static_cast<const VecExprImpl &>(that));
-  }
-
-  sequant::ExprPtr clone() const override {
-    return sequant::ex<VecExprImpl>(this->begin(), this->end());
-  }
-};
-
-template <typename T>
-struct VecExprImpl<T, true> : public std::vector<T>, public sequant::Expr {
-  using base_type = std::vector<T>;
-  using sequant::Expr::size;
-
-  VecExprImpl() = default;
-  template <typename U>
-  VecExprImpl(std::initializer_list<U> elements) : std::vector<T>(elements) {}
-  template <typename Iter>
-  VecExprImpl(Iter begin, Iter end) : std::vector<T>(begin, end) {}
-  virtual ~VecExprImpl() = default;
-  std::wstring to_latex() const override {
-    std::wstring result = L"{\\text{VecExpr}\\{";
-    for (const auto &e : *this) {
-      if constexpr (sequant::Expr::is_shared_ptr_of_expr_or_derived<T>::value) {
-        result += e->to_latex() + L" ";
-      } else {
-        result += std::to_wstring(e) + L" ";
-      }
+  sequant::ConstExprIterator begin_subexpr() const override {
+    if constexpr (sequant::Expr::is_shared_ptr_of_expr<T>::value) {
+      return sequant::ConstExprIterator{base_type::data()};
+    } else {
+      return Expr::begin_subexpr();
     }
-    result += L"\\}}";
-    return result;
   }
 
-  type_id_type type_id() const override {
-    return get_type_id<VecExprImpl<T>>();
+  sequant::ConstExprIterator end_subexpr() const override {
+    if constexpr (sequant::Expr::is_shared_ptr_of_expr<T>::value) {
+      return sequant::ConstExprIterator{base_type::data() + base_type::size()};
+    } else {
+      return Expr::end_subexpr();
+    }
+  }
+
+  sequant::ExprIterator begin_subexpr() override {
+    if constexpr (sequant::Expr::is_shared_ptr_of_expr<T>::value) {
+      return sequant::ExprIterator{base_type::data()};
+    } else {
+      return Expr::begin_subexpr();
+    }
+  }
+
+  sequant::ExprIterator end_subexpr() override {
+    if constexpr (sequant::Expr::is_shared_ptr_of_expr<T>::value) {
+      return sequant::ExprIterator{base_type::data() + base_type::size()};
+    } else {
+      return Expr::end_subexpr();
+    }
   };
-
-  sequant::ExprIterator begin() override {
-    return sequant::ExprIterator{base_type::data()};
-  }
-
-  sequant::ExprIterator end() override {
-    return sequant::ExprIterator{base_type::data() + base_type::size()};
-  }
-
-  sequant::ConstExprIterator begin() const override {
-    return sequant::ConstExprIterator{base_type::data()};
-  }
-
-  sequant::ConstExprIterator end() const override {
-    return sequant::ConstExprIterator{base_type::data() + base_type::size()};
-  }
 
  private:
   bool static_equal(const sequant::Expr &that) const override {
     return static_cast<const base_type &>(*this) ==
-           static_cast<const base_type &>(
-               static_cast<const VecExprImpl &>(that));
+           static_cast<const base_type &>(static_cast<const VecExpr &>(that));
   }
 
   sequant::ExprPtr clone() const override {
-    return sequant::ex<VecExprImpl>(this->begin(), this->end());
+    return sequant::ex<VecExpr>(this->begin(), this->end());
   }
 };
-
-template <typename T>
-using VecExpr = VecExprImpl<T, sequant::Expr::is_shared_ptr_of_expr<T>::value>;
 
 struct Adjointable : public sequant::Expr {
   Adjointable() = default;

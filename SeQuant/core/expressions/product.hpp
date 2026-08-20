@@ -389,7 +389,7 @@ class Product : public Expr {
     scalar_ += 1;
   }
 
-  ExprIterator begin() override {
+  ExprIterator begin_subexpr() override {
     if (!factors_.empty()) {
       reset_hash_value();
     }
@@ -397,15 +397,15 @@ class Product : public Expr {
     return ExprIterator{factors_.data()};
   }
 
-  ExprIterator end() override {
+  ExprIterator end_subexpr() override {
     return ExprIterator{factors_.data() + factors_.size()};
   }
 
-  ConstExprIterator begin() const override {
+  ConstExprIterator begin_subexpr() const override {
     return ConstExprIterator{factors_.data()};
   }
 
-  ConstExprIterator end() const override {
+  ConstExprIterator end_subexpr() const override {
     return ConstExprIterator{factors_.data() + factors_.size()};
   }
 
