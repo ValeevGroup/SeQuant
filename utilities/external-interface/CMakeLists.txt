@@ -21,6 +21,7 @@ add_executable(external_interface
     read_input_step.cpp
     simplify_step.cpp
     spintracing_step.cpp
+    to_export_tree_step.cpp
     validate_step.cpp
 )
 set_target_properties(external_interface PROPERTIES CXX_SCAN_FOR_MODULES OFF)

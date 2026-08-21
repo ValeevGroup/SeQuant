@@ -2,10 +2,11 @@
 #define SEQUANT_EXTERNAL_INTERFACE_PROCESSINGDATA_HPP
 
 #include <SeQuant/core/export/export_node.hpp>
-#include <SeQuant/core/expr_fwd.hpp>
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 
+#include <optional>
 #include <string_view>
 #include <type_traits>
 #include <variant>
@@ -22,7 +23,15 @@ struct ExpressionData {
 struct ExportTreeData {
   static constexpr std::string_view name{"ExportTreeData"};
 
-  std::vector<ExportNode<>> trees;
+  struct Entry {
+    ExportNode<> tree;
+    /// The result the current tree contributes to _after symmetrizing_ over the
+    /// external indices. This implies that if this is set, symmetrization is
+    /// required.
+    std::optional<Tensor> symm_contribution_target;
+  };
+
+  std::vector<Entry> entries;
 };
 
 using ProcessingData = std::variant<ExpressionData, ExportTreeData>;

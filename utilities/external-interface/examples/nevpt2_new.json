@@ -107,7 +107,8 @@
 			]
 		},
 		{
-			"kind": "output",
+			"id": "treeify",
+			"kind": "to_export_tree",
 			"inputs": "opt"
 		}
 	]
