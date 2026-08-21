@@ -440,8 +440,10 @@ std::vector<ExprPtr> CC::eom_r_blocked(
   // at the amplitude rank, so a block truncated below that rank would keep it.
   // The diagonal is untouched either way: an N operator of rank r shifts the
   // manifold rank by r, so it never lands on a diagonal block, and it has no
-  // reference expectation value. Off the diagonal the equations do change,
-  // though not what they evaluate to at converged amplitudes.
+  // reference expectation value. Off the diagonal removing it is a no-op only
+  // where the block rank equals hbar_comm_rank; below that rank the terms are
+  // off-shell, so the numbers change too. That is the point: Eqs. (41)-(47) of
+  // 10.1063/5.0062090 carry no such intermediate.
   container::map<size_t, ExprPtr> hbars;
   for (const auto k : ranks) {
     auto [it, fresh] = hbars.try_emplace(k);
