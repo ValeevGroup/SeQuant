@@ -91,10 +91,6 @@
 			}
 		},
 		{
-			"kind": "output",
-			"inputs": "traced.res1"
-		},
-		{
 			"id": "biorth",
 			"kind": "project",
 			"inputs": "traced.res",
@@ -103,8 +99,16 @@
 			}
 		},
 		{
+			"id": "opt",
+			"kind": "optimize",
+			"inputs": [
+				"traced.en",
+				"biorth"
+			]
+		},
+		{
 			"kind": "output",
-			"inputs": "biorth.res1"
+			"inputs": "opt"
 		}
 	]
 }
