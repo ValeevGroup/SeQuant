@@ -16,6 +16,7 @@
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/legality.hpp>
+#include <SeQuant/core/eval/lifetime_mask.hpp>
 #include <SeQuant/core/eval/ordered_schedule.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
 #include <SeQuant/core/eval/scope_executor.hpp>
@@ -861,6 +862,118 @@ TEST_CASE(
   REQUIRE(prod_pos.has_value());
   REQUIRE(cons_pos.has_value());
   CHECK(*prod_pos < *cons_pos);
+}
+
+// SP2 non-innermost forced split (phase 3 gate): a 2-axis fixture with occ
+// OUTER and aux INNER. B{;i_3,i_4} = A{;i_3} * A{;i_4} forces the occ split
+// (the outer product reads each A across occ-blocks); each A{;i} is itself
+// formed by an aux (Κ) contraction, so it is LoopCarried on occ AND Reduction
+// on aux -- the multi-level escape (aux sum, occ scatter) plus the
+// non-innermost split. Axes are realized by hand-stamping (set_sliced_modes for
+// the external occ, set_batched_here Contracted for aux), the same way the
+// aux-only fixtures above stamp Κ -- no optimize() run.
+namespace {
+// Stamp occ as EXTERNAL and aux (Κ) as Contracted in batched_here, sourcing the
+// Index identities from the node's OWN canon/contracted indices. sliced_modes
+// is then DERIVED by stamp_lifetime_masks (the cross-occurrence meet), never
+// hand-set -- that is how the real optimize()->binarize path realizes an axis.
+void orderedsched_stamp_2axis(sequant::EvalNode<sequant::EvalExpr>& n) {
+  using sequant::BatchModeType;
+  sequant::container::svector<std::pair<Index, BatchModeType>> stamps;
+  for (auto const& ix : n->canon_indices())
+    if (ix.space().base_key() == L"i")
+      stamps.push_back({ix, BatchModeType::External});
+  for (auto const& ix : sequant::contracted_indices(n))
+    if (ix.space().base_key() == L"Κ")
+      stamps.push_back({ix, BatchModeType::Contracted});
+  if (!stamps.empty()) n->set_batched_here(stamps);
+}
+
+// Post-order walk stamping every node.
+void orderedsched_stamp_all(sequant::EvalNode<sequant::EvalExpr>& n) {
+  if (!n.leaf()) {
+    orderedsched_stamp_all(n.left());
+    orderedsched_stamp_all(n.right());
+  }
+  orderedsched_stamp_2axis(n);
+}
+
+sequant::EvalNode<sequant::EvalExpr> orderedsched_2axis_forest_root() {
+  auto P3 = orderedsched_leaf("P{Κ_1;i_3}");
+  auto Q1 = orderedsched_leaf("Q{;Κ_1}");
+  auto A3 =
+      orderedsched_inode("A{;i_3}", P3, Q1);  // contracts Κ_1, carries i_3
+
+  auto P4 = orderedsched_leaf("P{Κ_2;i_4}");
+  auto Q2 = orderedsched_leaf("Q{;Κ_2}");
+  auto A4 =
+      orderedsched_inode("A{;i_4}", P4, Q2);  // contracts Κ_2, carries i_4
+
+  auto B = orderedsched_inode("B{;i_3,i_4}", A3, A4);  // outer product on occ
+  orderedsched_stamp_all(B);
+  return B;
+}
+}  // namespace
+
+TEST_CASE(
+    "build_ordered_schedule: a 2-axis occ-outer/aux-inner term realizes occ as "
+    "the outer forced split (phase-3 gate)",
+    "[ordered-schedule][sp2-noninner]") {
+  auto ctx = sequant::get_default_context().clone();
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_df_spaces(isr);  // Κ (DF aux)
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  auto B = orderedsched_2axis_forest_root();
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  policy.is_batchable_external_index = [](Index const& ix) {
+    return ix.space().base_key() == L"i";
+  };
+  policy.batch_spectator_indices = true;
+  policy.node_level_placement = true;
+
+  sequant::eval::dryrun::SizeRegime regime;
+  regime.space_extent = {{L"i", 8u}, {L"Κ", 6u}};
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  std::vector<sequant::EvalNode<sequant::EvalExpr>> forest{B};
+  // Derive sliced_modes from the batched_here stamps (the cross-occurrence
+  // meet), realizing occ (External) + aux (Contracted) as loop axes.
+  sequant::stamp_lifetime_masks(forest);
+  auto const block_of = [](Index const&) -> std::size_t { return 4; };
+  auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  REQUIRE(!rich.cells.empty());
+
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  REQUIRE(legality.cells.size() == rich.cells.size());
+
+  // Realization precondition: occ is realized as a LoopCarried axis (which
+  // forces a split) and aux as a Reduction axis -- both must be present for the
+  // 2-axis occ-outer/aux-inner nest.
+  bool occ_carried = false, aux_reduction = false;
+  for (auto const& cl : legality.cells)
+    for (auto const& ac : cl.per_axis) {
+      if (ac.axis.space().base_key() == L"i" &&
+          ac.role == sequant::eval::LoopRole::LoopCarried)
+        occ_carried = true;
+      if (ac.axis.space().base_key() == L"Κ" &&
+          ac.role == sequant::eval::LoopRole::Reduction)
+        aux_reduction = true;
+    }
+  CHECK(occ_carried);
+  CHECK(aux_reduction);
+
+  // PRE-WIRING (phase 3 pending): occ is the OUTER forced-split axis with aux
+  // nested inside, so build_ordered_schedule reaches the non-innermost deferral
+  // and throws. When the split emission lands, replace this with the full
+  // two-sibling-block + multi-level-escape assertions.
+  CHECK_THROWS(
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {}));
 }
 
 // ===========================================================================
