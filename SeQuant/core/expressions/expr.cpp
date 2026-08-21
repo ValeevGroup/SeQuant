@@ -14,6 +14,7 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network/typedefs.hpp>
+#include <SeQuant/core/tree_index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/algorithm/any_of.hpp>
@@ -63,6 +64,14 @@ ExprPtr &Expr::operator[](std::size_t idx) {
 const ExprPtr &Expr::operator[](std::size_t idx) const {
   SEQUANT_ASSERT(idx < size());
   return begin()[idx];
+}
+
+ExprPtr &ExprPtr::operator[](const TreeIndex &idx) {
+  return idx.select_from(*this);
+}
+
+const ExprPtr &ExprPtr::operator[](const TreeIndex &idx) const {
+  return idx.select_from(*this);
 }
 
 ExprPtr &Expr::at(std::size_t idx) { return (*this)[idx]; }
@@ -182,6 +191,12 @@ Expr &Expr::operator^=(const Expr &) { throw not_implemented("operator^="); }
 Expr &Expr::operator+=(const Expr &) { throw not_implemented("operator+="); }
 
 Expr &Expr::operator-=(const Expr &) { throw not_implemented("operator-="); }
+
+Expr &Expr::operator[](const TreeIndex &idx) { return idx.select_from(*this); }
+
+const Expr &Expr::operator[](const TreeIndex &idx) const {
+  return idx.select_from(*this);
+}
 
 ExprPtr adjoint(const ExprPtr &expr) {
   auto result = expr->clone();

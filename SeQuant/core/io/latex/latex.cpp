@@ -5,12 +5,15 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/power.hpp>
+#include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <map>
 #include <optional>
+#include <sstream>
+#include <string>
 #include <vector>
 
 namespace sequant::io::latex {
@@ -62,6 +65,19 @@ std::wstring to_string(const Power& power) {
   }
   if (power.conjugated()) result = L"{" + result + L"^*}";
   return result;
+}
+
+std::wstring to_string(const ResultExpr& expr) {
+  std::wstringstream stream;
+  if (expr.produces_tensor()) {
+    stream << to_string(expr.result_as_tensor());
+  } else {
+    stream << to_string(expr.result_as_variable());
+  }
+
+  stream << " = " << to_string(expr.expression());
+
+  return stream.str();
 }
 
 namespace detail {

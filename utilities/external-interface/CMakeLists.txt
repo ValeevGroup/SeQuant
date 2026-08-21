@@ -8,6 +8,22 @@ add_executable(external_interface
     external_interface.cpp
     processing.cpp
     utils.cpp
+
+    canonicalize_step.cpp
+    density_fitting_step.cpp
+    execution_context.cpp
+    executor.cpp
+    export_step.cpp
+    optimization_step.cpp
+    output_step.cpp
+    processing_step.cpp
+    processing_step_factory.cpp
+    projection_step.cpp
+    read_input_step.cpp
+    simplify_step.cpp
+    spintracing_step.cpp
+    to_export_tree_step.cpp
+    validate_step.cpp
 )
 set_target_properties(external_interface PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 

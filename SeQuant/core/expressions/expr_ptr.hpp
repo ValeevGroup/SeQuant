@@ -4,6 +4,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/expressions/traits.hpp>
+#include <SeQuant/core/tree_index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <memory>
@@ -110,6 +111,10 @@ class ExprPtr : public std::shared_ptr<Expr> {
   /// @param other expression to add to this
   /// @return reference to @c *this
   ExprPtr &operator*=(const ExprPtr &);
+
+  /// @return The subexpression identified by the given index
+  ExprPtr &operator[](const TreeIndex &idx);
+  const ExprPtr &operator[](const TreeIndex &idx) const;
 
   /// @tparam T an Expr type
   /// @return true if this object is of type @c T

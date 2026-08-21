@@ -10,7 +10,6 @@
 #include <SeQuant/core/utility/string.hpp>
 
 #include <algorithm>
-#include <cassert>
 #include <optional>
 
 #include <range/v3/view/zip.hpp>

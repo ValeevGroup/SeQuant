@@ -1,3 +1,4 @@
+#include "executor.hpp"
 #include "format_support.hpp"
 #include "processing.hpp"
 #include "utils.hpp"
@@ -36,21 +37,24 @@
 #include <fstream>
 #include <iterator>
 #include <limits>
+#include <memory>
 #include <ranges>
 #include <string>
 #include <string_view>
 #include <unordered_set>
 #include <variant>
+#include <vector>
 
 using nlohmann::json;
-using namespace sequant;
 
 template <>
-struct std::hash<Tensor> {
-  std::size_t operator()(const Tensor &tensor) const {
+struct std::hash<sequant::Tensor> {
+  std::size_t operator()(const sequant::Tensor &tensor) const {
     return tensor.hash_value();
   }
 };
+
+namespace sequant::util::extint {
 
 class ItfExportContext : public ItfContext {
  public:
@@ -604,7 +608,8 @@ void generateCode(const json &details, const IndexSpaceMeta &spaceMeta) {
   }
 }
 
-void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta) {
+void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta,
+                         std::size_t version) {
   IndexSpaceRegistry &registry =
       *get_default_context().mutable_index_space_registry();
 
@@ -621,8 +626,13 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta) {
     }
 
     IndexSpaceMeta::Entry entry;
-    entry.name = current.at("name").get<std::string>();
-    entry.tag = current.at("tag").get<std::string>();
+    if (version == 1) {
+      entry.name = current.at("name").get<std::string>();
+      entry.tag = current.at("tag").get<std::string>();
+    } else {
+      entry.name = current.at("meta").at("name").get<std::string>();
+      entry.tag = current.at("meta").at("tag").get<std::string>();
+    }
 
     std::wstring label = toUtf16(current.at("label").get<std::string>());
     Field field =
@@ -649,12 +659,34 @@ void process(const json &driver, IndexSpaceMeta &spaceMeta) {
     throw Exception("Missing index_spaces definition");
   }
 
-  registerIndexSpaces(driver.at("index_spaces"), spaceMeta);
+  std::size_t version = 1;
+  if (driver.contains("driver_format_version")) {
+    version = driver.at("driver_format_version").get<std::size_t>();
+  }
 
-  if (driver.contains("code_generation")) {
-    const json &details = driver.at("code_generation");
+  if (version == 0) {
+    throw Exception("driver_format_version has a minimum value of 1");
+  }
 
-    generateCode(details, spaceMeta);
+  registerIndexSpaces(driver.at("index_spaces"), spaceMeta, version);
+
+  if (version == 1) {
+    if (driver.contains("code_generation")) {
+      const json &details = driver.at("code_generation");
+
+      generateCode(details, spaceMeta);
+    }
+  } else if (version == 2) {
+    if (!driver.contains("steps")) {
+      throw Exception("Missing steps specification");
+    }
+
+    Executor executor;
+    executor.execute(driver.at("steps"));
+  } else {
+    throw Exception(
+        "Requested driver_format_version too recent for this implementation: " +
+        std::to_string(version));
   }
 }
 
@@ -663,7 +695,10 @@ void generalSetup() {
       mbpt::cardinal_tensor_labels());
 }
 
+}  // namespace sequant::util::extint
+
 int main(int argc, char **argv) {
+  using namespace sequant;
   set_locale();
   Context ctx({.index_space_registry = IndexSpaceRegistry(),
                .vacuum = Vacuum::SingleProduct});
@@ -674,7 +709,7 @@ int main(int argc, char **argv) {
   // to use the new names.
   ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
   set_default_context(ctx);
-  generalSetup();
+  util::extint::generalSetup();
 
   CLI::App app(
       "Interface for reading in equations generated outside of SeQuant");
@@ -717,7 +752,7 @@ int main(int argc, char **argv) {
         json::parse(in, /*callback*/ nullptr, /*allow_exceptions*/ true,
                     /*skip_comments*/ true);
 
-    process(driver_info, spaceMeta);
+    util::extint::process(driver_info, spaceMeta);
   } catch (const std::exception &e) {
     spdlog::error("Unexpected error: {}", e.what());
     return 1;
