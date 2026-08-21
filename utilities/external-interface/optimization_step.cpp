@@ -1,6 +1,7 @@
 #include "optimization_step.hpp"
 #include "processing_data.hpp"
 #include "processing_step_factory.hpp"
+#include "utils.hpp"
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
@@ -95,7 +96,17 @@ std::size_t OptimizationStep::process(std::string_view id_prefix,
   for (const ResultExpr &input : data.expressions) {
     result.expressions.emplace_back(input.clone());
 
+    std::optional<ExprPtr> symmetrizer =
+        pop_symmetrizer(result.expressions.back());
+
     optimize(result.expressions.back(), options_);
+
+    if (symmetrizer.has_value()) {
+      result.expressions.back().expression() = ex<Product>(
+          ExprPtrList{std::move(symmetrizer.value()),
+                      std::move(result.expressions.back().expression())},
+          Product::Flatten::No);
+    }
   }
 
   ctx.set_data(id_prefix, id_start, std::move(result));
