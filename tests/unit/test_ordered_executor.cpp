@@ -1258,25 +1258,34 @@ TEST_CASE(
       system == "c60" ? kOrderedExecC60_pVDZF12 : kOrderedExecWater20_pVDZF12);
   auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
 
-  // BATCH mode (SEQUANT_UT_DRYRUN_BATCH = none | aux [default] | aux_occ).
+  // BATCH mode (SEQUANT_UT_DRYRUN_BATCH = none | aux [default] | aux_occ |
+  // pao | aux_pao | aux_pao_occ). "pao" adds the μ̃ (PAO) contracted axis --
+  // the lever that lets the factorizer contract K in the compact PAO basis and
+  // slice μ̃, avoiding the aux-free 4-occ/2-PNO integrals entirely.
   std::string batch = "aux";
   if (char const* b = std::getenv("SEQUANT_UT_DRYRUN_BATCH")) batch = b;
-  bool const batch_aux = (batch == "aux" || batch == "aux_occ");
-  bool const batch_occ = (batch == "aux_occ");
-  constexpr std::size_t kAuxBlock = 256, kOccBlock = 8;
+  bool const batch_aux = (batch == "aux" || batch == "aux_occ" ||
+                          batch == "aux_pao" || batch == "aux_pao_occ");
+  bool const batch_pao =
+      (batch == "pao" || batch == "aux_pao" || batch == "aux_pao_occ");
+  bool const batch_occ = (batch == "aux_occ" || batch == "aux_pao_occ");
+  constexpr std::size_t kAuxBlock = 256, kOccBlock = 8, kPaoBlock = 256;
 
   sequant::BatchPolicy policy;
-  policy.is_batchable_contracted_index = [batch_aux](sequant::Index const& ix) {
-    return batch_aux && ix.space().base_key() == L"Κ";
+  policy.is_batchable_contracted_index = [batch_aux,
+                                          batch_pao](sequant::Index const& ix) {
+    return (batch_aux && ix.space().base_key() == L"Κ") ||
+           (batch_pao && ix.space().base_key() == L"μ̃");
   };
   policy.is_batchable_external_index = [batch_occ](sequant::Index const& ix) {
     return batch_occ && ix.space().base_key() == L"i";
   };
   policy.batch_spectator_indices = batch_occ;
   policy.node_level_placement = batch_occ;  // occ external placement needs it
-  policy.batch_target_size =
-      [batch_aux, batch_occ](sequant::Index const& ix) -> std::size_t {
+  policy.batch_target_size = [batch_aux, batch_pao, batch_occ](
+                                 sequant::Index const& ix) -> std::size_t {
     if (batch_aux && ix.space().base_key() == L"Κ") return kAuxBlock;
+    if (batch_pao && ix.space().base_key() == L"μ̃") return kPaoBlock;
     if (batch_occ && ix.space().base_key() == L"i") return kOccBlock;
     return 1;
   };
@@ -1348,16 +1357,15 @@ TEST_CASE(
   // note still print.
   std::optional<sequant::eval::OrderedSchedule> ordered_opt;
   try {
-    if (batch_occ)
-      // Empty mode_order matches production (cck.ipp); base-key sort nests occ
-      // (i) outside Κ. (Non-innermost occ forced split is still unimplemented,
-      // so the ordered aux_occ build asserts -- caught gracefully below.)
-      ordered_opt =
-          sequant::eval::build_ordered_schedule(rich, legality, policy, {});
-    else if (batch_aux)
+    if (batch_aux && !batch_pao && !batch_occ)
+      // Pure aux: Κ is the sole (hence innermost) axis.
       ordered_opt =
           sequant::eval::build_ordered_schedule(rich, legality, policy, {L"Κ"});
     else
+      // Empty mode_order matches production (cck.ipp); base-key sort nests the
+      // realized axes by base_key. Contracted axes (Κ, μ̃) nest cleanly; an
+      // external occ (i) nests OUTERMOST and forces a non-innermost split that
+      // is still unimplemented -- so any *_occ build asserts, caught below.
       ordered_opt =
           sequant::eval::build_ordered_schedule(rich, legality, policy, {});
   } catch (std::exception const& e) {
