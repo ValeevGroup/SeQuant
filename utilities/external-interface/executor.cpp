@@ -4,6 +4,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include <chrono>
+#include <iostream>
 #include <string>
 #include <string_view>
 
@@ -62,8 +64,27 @@ void Executor::execute(const nlohmann::json &steps) {
       throw Exception("Duplicate step ID '" + step_id + "'");
     }
 
+    std::cout << "Executing '" << step_id << "' (" << kind << ")... ";
+    std::cout.flush();
+
+    std::chrono::steady_clock::time_point start =
+        std::chrono::steady_clock::now();
+
     const std::size_t produced_outputs =
         proc_step->run(step_id, context_, inputs);
+
+    std::chrono::steady_clock::duration delta =
+        std::chrono::steady_clock::now() - start;
+    if (delta > std::chrono::minutes(1)) {
+      std::cout << std::chrono::duration_cast<std::chrono::minutes>(delta)
+                << std::endl;
+    } else if (delta > std::chrono::seconds(1)) {
+      std::cout << std::chrono::duration_cast<std::chrono::seconds>(delta)
+                << std::endl;
+    } else {
+      std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(delta)
+                << std::endl;
+    }
 
     num_outputs_.emplace(step_id, produced_outputs);
 
