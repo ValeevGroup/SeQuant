@@ -10,6 +10,7 @@
 #include <SeQuant/core/export/expression_group.hpp>
 #include <SeQuant/core/export/generator.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
@@ -798,7 +799,8 @@ void preprocess_and_maybe_log(ExportNode<T> &tree, PreprocessResult &result,
     std::cout << "Tree before preprocessing:\n"
               << tree.tikz(
                      [](const ExportNode<T> &node) {
-                       return "$" + toUtf8(to_latex(node->expr())) + "$";
+                       return "$" + toUtf8(io::latex::to_string(node->expr())) +
+                              "$";
                      },
                      [](const ExportNode<T>) -> std::string { return ""; })
               << "\n";
@@ -811,7 +813,8 @@ void preprocess_and_maybe_log(ExportNode<T> &tree, PreprocessResult &result,
     std::cout << "Tree after pre-processing:\n"
               << tree.tikz(
                      [](const ExportNode<T> &node) {
-                       return "$" + toUtf8(to_latex(node->expr())) + "$";
+                       return "$" + toUtf8(io::latex::to_string(node->expr())) +
+                              "$";
                      },
                      [](const ExportNode<T>) -> std::string { return ""; })
               << "\n";
