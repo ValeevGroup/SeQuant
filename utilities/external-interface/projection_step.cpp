@@ -69,6 +69,8 @@ std::size_t ProjectionStep::process(std::string_view id_prefix,
                                   std::move(transformed.at(i).expression())},
                       Product::Flatten::No);
     }
+
+    simplify(transformed.at(i));
   }
 
   ExpressionData data_obj;
