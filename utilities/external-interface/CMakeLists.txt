@@ -18,9 +18,9 @@ add_executable(external_interface
     processing_step.cpp
     processing_step_factory.cpp
     projection_step.cpp
+    read_input_step.cpp
     simplify_step.cpp
     spintracing_step.cpp
-    read_input_step.cpp
     validate_step.cpp
 )
 set_target_properties(external_interface PROPERTIES CXX_SCAN_FOR_MODULES OFF)
