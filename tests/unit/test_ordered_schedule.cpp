@@ -170,6 +170,63 @@ TEST_CASE("fork_subchain drops the empty side of a one-sided nested loop",
   CHECK(forked.consumer.empty());  // empty side dropped, no stranded output
 }
 
+// SP2 multi-level escape chain: a value that reduces an inner axis AND is
+// carried on an outer one escapes at BOTH -- AccumulateSum at the inner block,
+// AccumulateScatter at the outer block. well_formed accepts the same value_id
+// escaping at two blocks WHEN they nest (inner is a descendant of outer).
+TEST_CASE("well_formed accepts a nested multi-level escape chain",
+          "[ordered-schedule][escape-chain]") {
+  Index const outer{L"i_1"};
+  Index const inner{L"i_2"};
+
+  // value_id 2 escapes: AccumulateSum on the inner block's close (partial ->
+  // accumulator), then AccumulateScatter on the outer block's close (-> full).
+  ScopeBlock inner_block;
+  inner_block.axis = inner;
+  inner_block.ordinal = 0;
+  inner_block.steps.push_back(Step{BuildStep{1}});  // per-iteration partial
+  inner_block.outputs.push_back({2, OutputKind::AccumulateSum});
+
+  ScopeBlock outer_block;
+  outer_block.axis = outer;
+  outer_block.ordinal = 0;
+  outer_block.steps.push_back(Step{std::move(inner_block)});
+  outer_block.outputs.push_back({2, OutputKind::AccumulateScatter});
+
+  OrderedSchedule sched;
+  sched.root.steps.push_back(Step{std::move(outer_block)});
+  sched.num_values = 3;
+
+  CHECK(well_formed(sched));
+}
+
+// The same value escaping at two UNRELATED (sibling) blocks is NOT a chain --
+// it is duplicate production, rejected.
+TEST_CASE("well_formed rejects the same escape in two sibling blocks",
+          "[ordered-schedule][escape-chain]") {
+  Index const ax{L"i_2"};
+
+  ScopeBlock a;
+  a.axis = ax;
+  a.ordinal = 0;
+  a.steps.push_back(Step{BuildStep{1}});
+  a.outputs.push_back({2, OutputKind::AccumulateSum});
+
+  ScopeBlock b;
+  b.axis = ax;
+  b.ordinal =
+      1;  // distinct ordinal: passes the same-axis-sibling ordinal check
+  b.steps.push_back(Step{BuildStep{3}});
+  b.outputs.push_back({2, OutputKind::AccumulateScatter});  // same value_id 2
+
+  OrderedSchedule sched;
+  sched.root.steps.push_back(Step{std::move(a)});
+  sched.root.steps.push_back(Step{std::move(b)});
+  sched.num_values = 4;
+
+  CHECK_FALSE(well_formed(sched));
+}
+
 TEST_CASE("well_formed rejects an out-of-range BuildStep::value_id",
           "[ordered-schedule]") {
   OrderedSchedule sched;

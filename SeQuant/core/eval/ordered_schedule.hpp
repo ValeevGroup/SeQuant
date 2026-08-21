@@ -207,6 +207,41 @@ inline void collect_production_ids(ScopeBlock const& block,
   }
 }
 
+///
+/// \brief A single escape (output) site: a value_id and the root-to-block PATH
+/// at which it escapes. Feeds \c well_formed's multi-level escape-chain check
+/// (a value carried on an outer axis AND reduced on an inner one escapes at
+/// BOTH -- see \c build_ordered_schedule's escape emission).
+///
+struct OutputSite {
+  std::size_t value_id;
+  container::svector<ScopeBlock const*>
+      path;  //!< root .. this block, inclusive
+};
+
+///
+/// \brief Collect every \c BuildStep value_id into \p builds and every output
+/// escape site (value_id + its root-to-block path) into \p sites.
+///
+inline void collect_productions(ScopeBlock const& block,
+                                container::svector<ScopeBlock const*>& path,
+                                container::vector<std::size_t>& builds,
+                                container::vector<OutputSite>& sites) {
+  path.push_back(&block);
+  for (Step const& step : block.steps) {
+    if (auto const* b = std::get_if<BuildStep>(&step.value))
+      builds.push_back(b->value_id);
+    else
+      collect_productions(std::get<ScopeBlock>(step.value), path, builds,
+                          sites);
+  }
+  for (auto const& [value_id, kind] : block.outputs) {
+    (void)kind;
+    sites.push_back(OutputSite{value_id, path});
+  }
+  path.pop_back();
+}
+
 }  // namespace detail
 
 ///
@@ -215,11 +250,14 @@ inline void collect_production_ids(ScopeBlock const& block,
 ///   - ordinals are unique among same-axis (\c IndexSpace::base_key())
 ///     sibling blocks within a parent;
 ///   - every \c ScopeBlock::outputs value_id is < \c sched.num_values;
-///   - SINGLE-PRODUCER (SSA-like): across the WHOLE schedule, no value_id
-///     appears more than once total among every \c BuildStep and every
-///     block's \c outputs entries combined -- a value built directly must
-///     not also be a loop output, a loop-accumulated value must not also be
-///     built directly, and no value may be produced twice.
+///   - SINGLE-PRODUCER (SSA-like), with the multi-level escape chain allowed:
+///     no value_id is built (\c BuildStep) more than once; no value_id is both
+///     built AND escaped; and a value_id may escape (\c outputs) at MORE than
+///     one block ONLY when those blocks lie on a single root-to-node nesting
+///     path (distinct depths, each shallower one an ancestor of the deepest) --
+///     the inner-sum / outer-scatter escape chain of \c build_ordered_schedule.
+///     Escapes in unrelated (sibling) blocks, or two escapes at one depth, are
+///     rejected as duplicate production.
 ///
 /// \note This checks single-producer (no DUPLICATE production) but NOT
 /// completeness (no value_id GAPS -- that every id in `[0, num_values)` is
@@ -231,11 +269,48 @@ inline void collect_production_ids(ScopeBlock const& block,
   if (!detail::ordered_schedule_block_well_formed(sched.root, sched.num_values))
     return false;
 
-  container::vector<std::size_t> production_ids;
-  detail::collect_production_ids(sched.root, production_ids);
-  std::sort(production_ids.begin(), production_ids.end());
-  return std::adjacent_find(production_ids.begin(), production_ids.end()) ==
-         production_ids.end();
+  container::svector<ScopeBlock const*> path;
+  container::vector<std::size_t> builds;
+  container::vector<detail::OutputSite> sites;
+  detail::collect_productions(sched.root, path, builds, sites);
+
+  // (a) no value_id built more than once.
+  {
+    container::vector<std::size_t> b = builds;
+    std::sort(b.begin(), b.end());
+    if (std::adjacent_find(b.begin(), b.end()) != b.end()) return false;
+  }
+  // (b) no value_id both built and escaped.
+  {
+    std::unordered_set<std::size_t> const build_set(builds.begin(),
+                                                    builds.end());
+    for (auto const& s : sites)
+      if (build_set.count(s.value_id)) return false;
+  }
+  // (c) a value_id's escape sites (>1 => a multi-level chain) must lie on ONE
+  // root-to-node nesting path: distinct depths, and every shorter path a
+  // prefix of the deepest (so each is an ancestor of the next).
+  {
+    std::unordered_map<std::size_t,
+                       container::svector<detail::OutputSite const*>>
+        by_vid;
+    for (auto const& s : sites) by_vid[s.value_id].push_back(&s);
+    for (auto const& [vid, ss] : by_vid) {
+      (void)vid;
+      if (ss.size() == 1) continue;
+      detail::OutputSite const* deepest = ss.front();
+      for (auto const* s : ss)
+        if (s->path.size() > deepest->path.size()) deepest = s;
+      std::unordered_set<std::size_t> depths;
+      for (auto const* s : ss) {
+        if (!depths.insert(s->path.size()).second) return false;  // same depth
+        if (s->path.size() > deepest->path.size()) return false;
+        for (std::size_t k = 0; k < s->path.size(); ++k)
+          if (s->path[k] != deepest->path[k]) return false;  // not an ancestor
+      }
+    }
+  }
+  return true;
 }
 
 namespace detail {
@@ -932,22 +1007,36 @@ forced_split_demotions(RichSchedule const& rich,
     // through the leaf evaluator exactly as in forest descent.
     if (rich.cells[vid].is_leaf) continue;
 
-    std::optional<std::size_t> escape_depth;
-    OutputKind escape_kind = OutputKind::Transient;  // overwritten if found
+    // Emit an escape at EVERY non-local axis DEPTH (the multi-level escape
+    // CHAIN, SP2 non-innermost split): a value that reduces an inner axis AND
+    // is carried on an outer one escapes at BOTH -- AccumulateSum at the inner
+    // (into the accumulator one level out) then AccumulateScatter at the outer
+    // (that accumulator to full). The bottom-up assembly materializes them
+    // inner -> outer. A value non-local on a SINGLE axis keeps exactly one
+    // escape, unchanged. Same-depth axis-classes (e.g. two carried occ indices,
+    // or a same-type reduce+carry pair) collapse to ONE escape at that depth,
+    // with LoopCarried (AccumulateScatter) dominating Reduction: a carried axis
+    // must materialize to full even if a same-type index reduces.
+    container::svector<std::pair<std::size_t, OutputKind>> escapes;
     for (AxisClass const& ac : cl.per_axis) {
       if (ac.role == LoopRole::LoopLocal) continue;
       auto const d = depth_of_type(ac.axis);
       SEQUANT_ASSERT(d.has_value());  // types was built from this same union
-      if (!escape_depth || *d > *escape_depth) {
-        escape_depth = d;
-        escape_kind = (ac.role == LoopRole::Reduction)
-                          ? OutputKind::AccumulateSum
-                          : OutputKind::AccumulateScatter;  // LoopCarried
-      }
+      OutputKind const kind =
+          (ac.role == LoopRole::Reduction)
+              ? OutputKind::AccumulateSum
+              : OutputKind::AccumulateScatter;  // LoopCarried
+      auto it = std::find_if(escapes.begin(), escapes.end(),
+                             [&](auto const& e) { return e.first == *d; });
+      if (it == escapes.end())
+        escapes.push_back({*d, kind});
+      else if (kind == OutputKind::AccumulateScatter)
+        it->second = OutputKind::AccumulateScatter;
     }
 
-    if (escape_depth) {
-      buckets[*escape_depth].outputs.push_back({vid, escape_kind});
+    if (!escapes.empty()) {
+      for (auto const& [d, kind] : escapes)
+        buckets[d].outputs.push_back({vid, kind});
       continue;
     }
 
