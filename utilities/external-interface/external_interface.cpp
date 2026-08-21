@@ -611,7 +611,8 @@ void generateCode(const json &details, const IndexSpaceMeta &spaceMeta) {
   }
 }
 
-void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta) {
+void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta,
+                         std::size_t version) {
   IndexSpaceRegistry &registry =
       *get_default_context().mutable_index_space_registry();
 
@@ -628,8 +629,13 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta) {
     }
 
     IndexSpaceMeta::Entry entry;
-    entry.name = current.at("meta").at("name").get<std::string>();
-    entry.tag = current.at("meta").at("tag").get<std::string>();
+    if (version == 1) {
+      entry.name = current.at("name").get<std::string>();
+      entry.tag = current.at("tag").get<std::string>();
+    } else {
+      entry.name = current.at("meta").at("name").get<std::string>();
+      entry.tag = current.at("meta").at("tag").get<std::string>();
+    }
 
     std::wstring label = toUtf16(current.at("label").get<std::string>());
     Field field =
@@ -656,14 +662,35 @@ void process(const json &driver, IndexSpaceMeta &spaceMeta) {
     throw Exception("Missing index_spaces definition");
   }
 
-  registerIndexSpaces(driver.at("index_spaces"), spaceMeta);
-
-  if (!driver.contains("steps")) {
-    throw Exception("Missing steps specification");
+  std::size_t version = 1;
+  if (driver.contains("driver_format_version")) {
+    version = driver.at("driver_format_version").get<std::size_t>();
   }
 
-  Executor executor;
-  executor.execute(driver.at("steps"));
+  if (version == 0) {
+    throw Exception("driver_format_version has a minimum value of 1");
+  }
+
+  registerIndexSpaces(driver.at("index_spaces"), spaceMeta, version);
+
+  if (version == 1) {
+    if (driver.contains("code_generation")) {
+      const json &details = driver.at("code_generation");
+
+      generateCode(details, spaceMeta);
+    }
+  } else if (version == 2) {
+    if (!driver.contains("steps")) {
+      throw Exception("Missing steps specification");
+    }
+
+    Executor executor;
+    executor.execute(driver.at("steps"));
+  } else {
+    throw Exception(
+        "Requested driver_format_version too recent for this implementation: " +
+        std::to_string(version));
+  }
 }
 
 void generalSetup() {
