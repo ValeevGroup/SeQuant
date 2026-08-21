@@ -5,8 +5,6 @@
 #include "processing_data.hpp"
 #include "processing_step.hpp"
 
-#include <SeQuant/core/space.hpp>
-
 #include <nlohmann/json_fwd.hpp>
 
 #include <string>
