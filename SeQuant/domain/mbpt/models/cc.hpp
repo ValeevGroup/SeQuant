@@ -35,7 +35,7 @@ class CC {
   enum class HbarExpansion {
     /// standard Baker-Campbell-Hausdorff commutator expansion
     BCH,
-    /// Bernoulli expansion, 10.1063/1.5030344 (unitary ansatz only)
+    /// Bernoulli expansion, 10.1063/1.5030344 (U ansatz only)
     Bernoulli
   };
 

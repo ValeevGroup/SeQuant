@@ -55,8 +55,8 @@ CC::CC(size_t n, const Options& opts)
                    "CC: skip_singles must be true for orbital-optimized "
                    "ansatz");
   if (hbar_expansion_ == HbarExpansion::Bernoulli) {
-    SEQUANT_ASSERT(unitary(),
-                   "CC: Bernoulli expansion requires a unitary ansatz");
+    SEQUANT_ASSERT(ansatz_ == Ansatz::U,
+                   "CC: Bernoulli expansion requires the U ansatz");
     SEQUANT_ASSERT(hbar_comm_rank_,
                    "CC: Bernoulli expansion requires hbar_comm_rank");
   }
@@ -238,6 +238,9 @@ std::vector<ExprPtr> CC::λ() const {
 }
 
 ExprPtr CC::rdm(size_t rank, std::optional<size_t> comm_rank) const {
+  SEQUANT_ASSERT(hbar_expansion_ != HbarExpansion::Bernoulli,
+                 "CC::rdm: the Bernoulli expansion is not supported yet");
+
   // 1. replacement operator {ã^{p_1..p_r}_{p_{r+1}..p_{2r}}} (see op::ã); its
   // indices are free, so they become the free indices of γ.
   auto replacer = op::ã(rank);
