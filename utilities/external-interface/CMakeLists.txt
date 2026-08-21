@@ -10,9 +10,7 @@ add_executable(external_interface
     utils.cpp
 
     canonicalize_step.cpp
-    canonicalize_step.hpp
     density_fitting_step.cpp
-    density_fitting_step.hpp
     execution_context.cpp
     executor.cpp
     optimization_step.cpp
@@ -20,11 +18,8 @@ add_executable(external_interface
     processing_step.cpp
     processing_step_factory.cpp
     projection_step.cpp
-    projection_step.hpp
     simplify_step.cpp
-    simplify_step.hpp
     spintracing_step.cpp
-    spintracing_step.hpp
     read_input_step.cpp
     validate_step.cpp
 )
