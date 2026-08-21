@@ -31,7 +31,9 @@ class ProcessingStepFactory {
 
 #define SEQUANT_EXTINT_REGISTER_STEP_TYPE(class_name, type_string)         \
   namespace {                                                              \
-  static const bool SEQUANT_CONCAT(registered_step_type_, __LINE__) =      \
+  static const bool SEQUANT_CONCAT(SEQUANT_CONCAT(registered_step_type_,   \
+                                                  class_name),             \
+                                   __LINE__) =                             \
       ProcessingStepFactory::instance().register_class(type_string, []() { \
         return std::make_unique<class_name>();                             \
       });                                                                  \
