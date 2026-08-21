@@ -398,6 +398,13 @@ class Product : public Expr {
   }
 
   ExprIterator end_subexpr() override {
+    // N.B. handing out a mutable iterator into factors_ invalidates the
+    // memoized hash, regardless of which end of the range it points at
+    // (`*(--end())` mutates just as `*begin()` does)
+    if (!factors_.empty()) {
+      reset_hash_value();
+    }
+
     return ExprIterator{factors_.data() + factors_.size()};
   }
 

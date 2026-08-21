@@ -362,35 +362,69 @@ class Expr : public std::enable_shared_from_this<Expr> {
 
   ///@}
 
-  ExprIterator begin();
-  ExprIterator end();
-  ConstExprIterator begin() const;
-  ConstExprIterator end() const;
-  ConstExprIterator cbegin() const;
-  ConstExprIterator cend() const;
+  // N.B. these are deliberately defined inline: they sit on the hottest paths
+  // in the library (Expr::is_atom(), Expr::visit(), canonicalization, ...) and
+  // out-of-line definitions would turn each of them into a non-inlinable
+  // cross-TU call on top of the virtual dispatch they already pay for
+  ExprIterator begin() { return begin_subexpr(); }
+  ExprIterator end() { return end_subexpr(); }
+  ConstExprIterator begin() const { return begin_subexpr(); }
+  ConstExprIterator end() const { return end_subexpr(); }
+  ConstExprIterator cbegin() const { return begin_subexpr(); }
+  ConstExprIterator cend() const { return end_subexpr(); }
 
   virtual ExprIterator begin_subexpr();
   virtual ExprIterator end_subexpr();
   virtual ConstExprIterator begin_subexpr() const;
   virtual ConstExprIterator end_subexpr() const;
 
-  std::size_t size() const;
+  std::size_t size() const {
+    return static_cast<std::size_t>(end_subexpr() - begin_subexpr());
+  }
 
-  bool empty() const;
+  bool empty() const { return begin_subexpr() == end_subexpr(); }
 
-  ExprPtr &operator[](std::size_t idx);
-  const ExprPtr &operator[](std::size_t idx) const;
+  /// unchecked element access
+  /// @note the bounds check is only performed if `SEQUANT_ASSERT_ENABLED` is
+  ///       #defined; use at() for a bounds check that is always performed
+  ExprPtr &operator[](std::size_t idx) {
+    SEQUANT_ASSERT(idx < size());
+    return begin_subexpr()[static_cast<std::ptrdiff_t>(idx)];
+  }
+  /// @copydoc operator[](std::size_t)
+  const ExprPtr &operator[](std::size_t idx) const {
+    SEQUANT_ASSERT(idx < size());
+    return begin_subexpr()[static_cast<std::ptrdiff_t>(idx)];
+  }
 
-  ExprPtr &at(std::size_t idx);
-  const ExprPtr &at(std::size_t idx) const;
+  /// checked element access
+  /// @throw Exception if @p idx is not less than size()
+  ExprPtr &at(std::size_t idx) {
+    if (idx >= size()) throw_out_of_range(idx);
+    return begin_subexpr()[static_cast<std::ptrdiff_t>(idx)];
+  }
+  /// @copydoc at(std::size_t)
+  const ExprPtr &at(std::size_t idx) const {
+    if (idx >= size()) throw_out_of_range(idx);
+    return begin_subexpr()[static_cast<std::ptrdiff_t>(idx)];
+  }
 
-  ExprPtr &front();
-  const ExprPtr &front() const;
+  /// @throw Exception if this Expr is empty (e.g. is an atom)
+  ExprPtr &front() { return at(0); }
+  /// @copydoc front()
+  const ExprPtr &front() const { return at(0); }
 
-  ExprPtr &back();
-  const ExprPtr &back() const;
+  /// @throw Exception if this Expr is empty (e.g. is an atom)
+  ExprPtr &back() { return at(size() - 1); }
+  /// @copydoc back()
+  const ExprPtr &back() const { return at(size() - 1); }
 
  private:
+  /// reports an out-of-range access by at()/front()/back()
+  /// @note deliberately out-of-line so that the (cold) throwing path does not
+  ///       bloat the inlined callers
+  [[noreturn]] void throw_out_of_range(std::size_t idx) const;
+
   template <
       typename E, typename Visitor,
       typename = std::enable_if_t<std::is_same_v<std::remove_cvref_t<E>, Expr>>>
