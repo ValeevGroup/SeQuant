@@ -26,6 +26,7 @@
 #include <range/v3/view/reverse.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <sstream>
 #include <thread>
 #include <vector>
 
