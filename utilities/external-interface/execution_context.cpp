@@ -171,6 +171,10 @@ bool ExecutionContext::is_valid_id(std::string_view id, bool allow_selectors) {
     return true;
   };
 
+  if (id.empty()) {
+    return false;
+  }
+
   std::string_view::size_type bracket_begin = 0;
   std::string_view::size_type prev_pos = 0;
   do {
