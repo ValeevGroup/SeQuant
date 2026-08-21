@@ -38,10 +38,10 @@ using ProcessingData = std::variant<ExpressionData, ExportTreeData>;
 
 template <typename Target, typename Input>
   requires(std::is_assignable_v<std::remove_cvref_t<Input>, Target>)
-auto convert_data(Input &&input) {
+decltype(auto) convert_data(Input &&input) {
   using RetType = decltype(meta::forward_like<Input>(std::declval<Target>()));
 
-  auto res = std::visit(
+  return std::visit(
       [](auto &&inp) -> RetType {
         using Current = std::remove_cvref_t<decltype(inp)>;
         if constexpr (std::is_same_v<Target, Current>) {
@@ -52,8 +52,6 @@ auto convert_data(Input &&input) {
                         std::string(Target::name));
       },
       std::forward<Input>(input));
-
-  return res;
 }
 
 }  // namespace sequant::util::extint
