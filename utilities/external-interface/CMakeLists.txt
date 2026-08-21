@@ -13,6 +13,7 @@ add_executable(external_interface
     density_fitting_step.cpp
     execution_context.cpp
     executor.cpp
+    export_step.cpp
     optimization_step.cpp
     output_step.cpp
     processing_step.cpp
