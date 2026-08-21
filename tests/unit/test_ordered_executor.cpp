@@ -322,6 +322,17 @@ inline constexpr OrderedExecWater20ProblemSize kOrderedExecWater20_pVDZF12{
     {1.0, 58.987499999999997, 59.289227520688783, 59.584437469011633,
      59.872014818179686}};
 
+// C60 pVDZ-F12 problem size (copied from test_eval_dryrun.cpp's kC60_pVDZF12).
+inline constexpr OrderedExecWater20ProblemSize kOrderedExecC60_pVDZF12{
+    /*mu_tilde=*/1800u,
+    /*aux=*/4320u,
+    /*i_occ=*/120u,
+    /*pno_M=*/
+    {1.0, 42.029069767441861, 46.039206412923569, 49.766252354482994,
+     53.151291880343109},
+    /*osv_M=*/
+    {1.0, 148.25, 155.04434849422921, 161.33527408797721, 166.85553430303926}};
+
 sequant::eval::dryrun::SizeRegime orderedexec_witness_df_regime(
     OrderedExecWater20ProblemSize const& p) {
   sequant::eval::dryrun::SizeRegime r;
@@ -1196,6 +1207,413 @@ TEST_CASE(
         orderedexec_builds_of(cache.recompute_tally(), *dead_transient);
     CHECK(b2_dead == b1_dead);
   }
+}
+
+// ===========================================================================
+// [.][dryrun-2iter-report] (hidden report, not a strict gate): a 2-ITERATION
+// dry-run cost report -- iter 1 (cold cache) vs iter 2 (warm cache: persistent
+// composites resident + the needed_build cache-halt active) -- of builds /
+// FLOPs / peak, for BOTH forest descent and the ordered/DAG executor, at w20
+// residual scale (ALL terms by default). Locally predicts the cache-halt fix's
+// steady-state benefit without an Owl run.
+// ===========================================================================
+TEST_CASE(
+    "dry-run 2-iteration report: forest vs ordered, cold vs warm cache "
+    "(builds/FLOPs/peak) at w20 residual scale",
+    "[.][dryrun-2iter-report]") {
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using Node = EvalNodeDryRun;
+
+  auto ctx = sequant::get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  auto const body =
+      orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                                "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string firstline = body;
+  if (auto nl = firstline.find('\n'); nl != std::string::npos)
+    firstline = firstline.substr(0, nl);
+  auto expr = sequant::deserialize<sequant::ExprPtr>(firstline);
+  REQUIRE(static_cast<bool>(expr));
+  REQUIRE(expr->is<sequant::Sum>());
+  auto const& summands = expr->as<sequant::Sum>().summands();
+  REQUIRE(!summands.empty());
+  // DEFAULT: ALL terms (no 40 cap) so the batched persistent-composite
+  // structure has the best chance to appear.
+  std::size_t nterms = summands.size();
+  if (char const* nt = std::getenv("SEQUANT_UT_DRYRUN_NTERMS"))
+    nterms = std::min<std::size_t>(summands.size(), std::atoll(nt));
+
+  // SYSTEM selection (SEQUANT_UT_DRYRUN_SYSTEM = water20 [default] | c60).
+  std::string system = "water20";
+  if (char const* s = std::getenv("SEQUANT_UT_DRYRUN_SYSTEM")) system = s;
+  auto const regime = orderedexec_witness_df_regime(
+      system == "c60" ? kOrderedExecC60_pVDZF12 : kOrderedExecWater20_pVDZF12);
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  // BATCH mode (SEQUANT_UT_DRYRUN_BATCH = none | aux [default] | aux_occ).
+  std::string batch = "aux";
+  if (char const* b = std::getenv("SEQUANT_UT_DRYRUN_BATCH")) batch = b;
+  bool const batch_aux = (batch == "aux" || batch == "aux_occ");
+  bool const batch_occ = (batch == "aux_occ");
+  constexpr std::size_t kAuxBlock = 256, kOccBlock = 8;
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [batch_aux](sequant::Index const& ix) {
+    return batch_aux && ix.space().base_key() == L"Κ";
+  };
+  policy.is_batchable_external_index = [batch_occ](sequant::Index const& ix) {
+    return batch_occ && ix.space().base_key() == L"i";
+  };
+  policy.batch_spectator_indices = batch_occ;
+  policy.node_level_placement = batch_occ;  // occ external placement needs it
+  policy.batch_target_size =
+      [batch_aux, batch_occ](sequant::Index const& ix) -> std::size_t {
+    if (batch_aux && ix.space().base_key() == L"Κ") return kAuxBlock;
+    if (batch_occ && ix.space().base_key() == L"i") return kOccBlock;
+    return 1;
+  };
+  policy.is_volatile_leaf = [](sequant::Tensor const& t) {
+    return t.label() == L"t";
+  };
+  policy.accumulation_factor = 1.0;
+  policy.persistent_only = false;
+  policy.peak_threshold = 1e11;
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      sequant::Expr const*,
+      sequant::container::vector<sequant::NodeBatchAnnotation>>>();
+  sequant::OptimizeOptions opts;
+  opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = axes_map;
+
+  std::vector<Node> forest;
+  for (std::size_t s = 0; s < nterms; ++s) {
+    sequant::ExprPtr const term =
+        orderedexec_witness_flatten_product(summands[s]);
+    if (!term) continue;
+    sequant::ExprPtr optimized;
+    try {
+      optimized = sequant::optimize(term, opts);
+    } catch (std::exception const&) {
+      continue;
+    }
+    if (!optimized) continue;
+    sequant::BinarizationOptions bopts;
+    if (auto it = axes_map->find(optimized.get()); it != axes_map->end())
+      bopts.node_batch_axes = it->second;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    forest.push_back(sequant::binarize<EvalExprDryRun>(optimized, {}, bopts));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+  REQUIRE(!forest.empty());
+
+  auto const block_of = [](sequant::Index const&) -> std::size_t {
+    return 256;
+  };
+  auto const rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  REQUIRE(!rich.cells.empty());
+  auto const vmap = sequant::eval::build_value_node_map(forest);
+
+  using annot_t = std::remove_cvref_t<decltype(forest.front()->annot())>;
+  annot_t const layout{};
+  sequant::eval::dryrun::DryRunLeafEvaluator const yield{cm};
+  std::function<std::size_t(sequant::Index const&)> const target =
+      [](sequant::Index const&) -> std::size_t { return 256; };
+
+  auto& logger = sequant::Logger::instance();
+  auto const prev_level = logger.eval.level;
+  auto* const prev_stream = logger.eval.stream;
+  std::ostringstream sink_os;
+  logger.eval.level = 2;  // arms tally_build AND working_set_hwmark/PeakMonitor
+  logger.eval.stream = &sink_os;
+
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  // Seed batch axes: {} none, {Κ} aux, {Κ,i} aux_occ. The ordered-schedule
+  // builder may throw on some batch shapes (e.g. the occ+aux nested-batch-group
+  // path has a known topo-sort assert); tolerate it so the FOREST rows and the
+  // note still print.
+  std::optional<sequant::eval::OrderedSchedule> ordered_opt;
+  try {
+    if (batch_occ)
+      // Empty mode_order matches production (cck.ipp); base-key sort nests occ
+      // (i) outside Κ. (Non-innermost occ forced split is still unimplemented,
+      // so the ordered aux_occ build asserts -- caught gracefully below.)
+      ordered_opt =
+          sequant::eval::build_ordered_schedule(rich, legality, policy, {});
+    else if (batch_aux)
+      ordered_opt =
+          sequant::eval::build_ordered_schedule(rich, legality, policy, {L"Κ"});
+    else
+      ordered_opt =
+          sequant::eval::build_ordered_schedule(rich, legality, policy, {});
+  } catch (std::exception const& e) {
+    WARN("build_ordered_schedule failed for BATCH=" << batch << ": "
+                                                    << e.what());
+  }
+  bool const ordered_ok = ordered_opt.has_value();
+  if (ordered_ok) REQUIRE(sequant::eval::well_formed(*ordered_opt));
+
+  std::function<bool(Node const&)> const is_volatile_node =
+      [p = policy.is_volatile_leaf](Node const& n) -> bool {
+    if (!n.leaf() || !n->is_tensor()) return false;
+    return p && p(n->as_tensor());
+  };
+
+  // # of {Κ} ScopeBlocks the ordered schedule realized.
+  std::size_t n_Kblocks = 0;
+  {
+    std::function<void(sequant::eval::ScopeBlock const&)> cnt =
+        [&](sequant::eval::ScopeBlock const& b) {
+          if (b.axis.space().base_key() == L"Κ") ++n_Kblocks;
+          for (auto const& s : b.steps)
+            if (auto const* ch =
+                    std::get_if<sequant::eval::ScopeBlock>(&s.value))
+              cnt(*ch);
+        };
+    if (ordered_ok) cnt(ordered_opt->root);
+  }
+
+  auto const total_builds = [](auto const& tally) -> std::size_t {
+    std::size_t b = 0;
+    for (auto const& [n, t] : tally)
+      for (auto const& [sig, bc] : t.slices) b += bc.count;
+    return b;
+  };
+
+  // ONE CostSink on the shared model; per-iteration FLOPs = its delta.
+  sequant::eval::dryrun::CostSink sink;
+  cm->set_cost_sink(&sink);
+
+  struct Row {
+    std::size_t builds = 0;
+    double flops = 0;
+    std::size_t peak = 0;
+  };
+  Row f1, f2, o1, o2;
+
+  // Optional peak-liveset dump (SEQUANT_UT_PEAK_LIVESET) of the ordered COLD
+  // run: what set of co-resident values realizes the peak, labeled by node-kind
+  // and carried-index signature, flagging whether each carries Κ. Answers
+  // whether the aux-only peak is dominated by aux-FREE (unsliceable) values.
+  bool const dump_liveset = std::getenv("SEQUANT_UT_PEAK_LIVESET") != nullptr;
+  // hash -> rich.cells index, for labeling a live entry by its carried
+  // signature.
+  std::unordered_map<std::size_t, std::size_t> hash_to_cell;
+  for (std::size_t i = 0; i < rich.cells.size(); ++i)
+    hash_to_cell.emplace(rich.cells[i].hash, i);
+  auto const space_sig =
+      [](sequant::container::svector<sequant::Index> const& v) -> std::wstring {
+    std::wstring s;
+    for (std::size_t i = 0; i < v.size(); ++i) {
+      if (i) s += L",";
+      s += std::wstring(v[i].space().base_key());
+    }
+    return s;
+  };
+  auto const node_kind = [&](std::size_t hash) -> std::wstring {
+    auto it = vmap.find(hash);
+    if (it == vmap.end()) return L"<?>";
+    if (it->second.leaf()) return L"leaf";
+    return L"I";
+  };
+
+  // ---------- ORDERED / DAG executor, 2 iterations ----------
+  if (ordered_ok) {
+    auto cache = sequant::cache_manager(forest, is_volatile_node, 2);
+    cache.set_recompute_tally_enabled(true);
+    sequant::eval::PeakMonitor mon;
+    std::vector<sequant::eval::PeakLiveEntry> peak_live;
+    std::size_t peak_total = 0;
+    mon.on_peak_liveset =
+        [&](std::size_t total,
+            std::vector<sequant::eval::PeakLiveEntry> const& live) {
+          if (total >= peak_total) {  // keep the largest-total co-resident set
+            peak_total = total;
+            peak_live = live;
+          }
+        };
+    cache.set_peak_monitor(&mon);
+    auto run = [&](Row& r) {
+      double const f0 = sink.flops.load();
+      std::size_t const b0 = total_builds(cache.recompute_tally());
+      mon.hwmark_bytes = 0;
+      try {
+        (void)sequant::eval::evaluate_ordered_schedule<sequant::Trace::On>(
+            forest, *ordered_opt, rich, layout, yield, cache, target, {},
+            is_volatile_node);
+      } catch (std::exception const& e) {
+        WARN("ordered evaluate threw: " << e.what());
+      }
+      r.flops = sink.flops.load() - f0;
+      r.builds = total_builds(cache.recompute_tally()) - b0;
+      r.peak = mon.hwmark_bytes;
+    };
+    run(o1);  // COLD
+
+    if (dump_liveset) {
+      // Label each co-resident entry; flag carriesΚ via its carried signature.
+      struct LE {
+        std::size_t bytes;
+        bool carriesK;
+        std::wstring label;
+      };
+      std::vector<LE> rows;
+      std::size_t all_sum = 0, auxfree_sum = 0;
+      for (auto const& e : peak_live) {
+        std::wstring sig, kind = node_kind(e.hash);
+        bool carriesK = false;
+        if (auto hc = hash_to_cell.find(e.hash); hc != hash_to_cell.end()) {
+          auto const& carried = rich.cells[hc->second].carried;
+          sig = space_sig(carried);
+          carriesK = sig.find(L"Κ") != std::wstring::npos;
+        }
+        all_sum += e.bytes;
+        if (!carriesK) auxfree_sum += e.bytes;
+        rows.push_back({e.bytes, carriesK, kind + L"{" + sig + L"}"});
+      }
+      std::sort(rows.begin(), rows.end(),
+                [](LE const& a, LE const& b) { return a.bytes > b.bytes; });
+      auto const GB = [](std::size_t b) { return double(b) / 1e9; };
+      std::wcerr << L"\n--- [peak-liveset] ordered COLD peak co-resident set, "
+                 << L"entries > 0.1 GB (peak_total=" << GB(peak_total)
+                 << L" GB) ---\n";
+      for (auto const& r : rows)
+        if (GB(r.bytes) > 0.1)
+          std::wcerr << L"  " << GB(r.bytes) << L" GB  carriesΚ="
+                     << (r.carriesK ? L"yes" : L"no ") << L"  " << r.label
+                     << L"\n";
+      std::wcerr << L"  TOTAL co-resident = " << GB(all_sum)
+                 << L" GB;  aux-FREE (no-Κ, aux-batching-immune) floor = "
+                 << GB(auxfree_sum) << L" GB\n";
+    }
+
+    cache.reset();
+    run(o2);  // WARM
+  }
+
+  // Warm-iter needed_build skip count: replicate the executor's gate (BFS from
+  // volatile roots halting at cache-alive) on a fresh warm cache, then count
+  // the non-leaf BuildSteps inside {Κ} blocks that the gate would skip.
+  std::size_t warm_skipped = 0;
+  if (ordered_ok) {
+    auto cache = sequant::cache_manager(forest, is_volatile_node, 2);
+    // prime persistents by one cold run, then reset (persistents stay resident)
+    logger.eval.stream = &sink_os;
+    try {
+      (void)sequant::eval::evaluate_ordered_schedule<sequant::Trace::On>(
+          forest, *ordered_opt, rich, layout, yield, cache, target, {},
+          is_volatile_node);
+    } catch (std::exception const&) {
+    }
+    cache.reset();
+    sequant::container::set<std::size_t> needed;
+    sequant::container::svector<Node> stack;
+    sequant::container::set<std::size_t> visited;
+    for (auto&& n : forest) stack.push_back(n);
+    while (!stack.empty()) {
+      Node const n = stack.back();
+      stack.pop_back();
+      if (n.leaf()) continue;
+      if (!visited.insert(n->hash_value()).second) continue;
+      if (cache.alive(n)) continue;
+      needed.insert(n->hash_value());
+      stack.push_back(n.left());
+      stack.push_back(n.right());
+    }
+    std::function<void(sequant::eval::ScopeBlock const&, bool)> sc =
+        [&](sequant::eval::ScopeBlock const& b, bool inK) {
+          bool const here = inK || b.axis.space().base_key() == L"Κ";
+          if (here)
+            for (auto const& s : b.steps)
+              if (auto const* bs =
+                      std::get_if<sequant::eval::BuildStep>(&s.value)) {
+                auto const it = vmap.find(rich.cells[bs->value_id].hash);
+                if (it != vmap.end() && !it->second.leaf() &&
+                    !needed.count(rich.cells[bs->value_id].hash))
+                  ++warm_skipped;
+              }
+          for (auto const& s : b.steps)
+            if (auto const* ch =
+                    std::get_if<sequant::eval::ScopeBlock>(&s.value))
+              sc(*ch, here);
+        };
+    sc(ordered_opt->root, false);
+  }
+
+  // ---------- FOREST descent, 2 iterations ----------
+  {
+    auto cache = sequant::cache_manager(forest, is_volatile_node, 2);
+    cache.set_recompute_tally_enabled(true);
+    sequant::eval::PeakMonitor mon;
+    cache.set_peak_monitor(&mon);
+    auto run = [&](Row& r) {
+      double const f0 = sink.flops.load();
+      std::size_t const b0 = total_builds(cache.recompute_tally());
+      mon.hwmark_bytes = 0;
+      std::atomic<double> peak{0.0};
+      for (auto const& root : forest) {
+        cache.set_custom_evaluator(sequant::make_evaluator(
+            policy, yield, sequant::make_no_scope_guard{}, &peak));
+        try {
+          (void)sequant::evaluate<sequant::Trace::On>(root, yield, cache);
+        } catch (std::exception const&) {
+        }
+      }
+      r.flops = sink.flops.load() - f0;
+      r.builds = total_builds(cache.recompute_tally()) - b0;
+      r.peak = std::max<std::size_t>(
+          mon.hwmark_bytes,
+          std::max<std::size_t>(cache.working_set_hwmark(),
+                                static_cast<std::size_t>(peak.load())));
+    };
+    run(f1);
+    cache.reset();
+    run(f2);
+  }
+
+  cm->set_cost_sink(nullptr);
+  logger.eval.level = prev_level;
+  logger.eval.stream = prev_stream;
+
+  auto pr = [](wchar_t const* tag, Row const& r) {
+    std::wcerr << L"  " << tag << L"  builds=" << r.builds << L"  FLOPs="
+               << std::scientific << r.flops << L"  peak_bytes=" << r.peak
+               << L"\n";
+  };
+  std::wcerr << L"\n=== [dryrun-2iter-report] SYSTEM="
+             << std::wstring(system.begin(), system.end()) << L" BATCH="
+             << std::wstring(batch.begin(), batch.end()) << L", "
+             << forest.size() << L" terms, n_Kblocks=" << n_Kblocks
+             << L", warm-iter needed_build-skipped {Κ}-block BuildSteps="
+             << warm_skipped << L" ===\n";
+  pr(L"forest  iter1 (cold)", f1);
+  pr(L"forest  iter2 (warm)", f2);
+  if (ordered_ok) {
+    pr(L"ordered iter1 (cold)", o1);
+    pr(L"ordered iter2 (warm)", o2);
+  } else {
+    std::wcerr << L"  ordered: SCHEDULE BUILD FAILED for this batch mode "
+                  L"(pre-existing build_ordered_schedule assert) -- forest "
+                  L"rows only\n";
+  }
+
+  // Light sanity: warm iter never builds MORE than the cold iter.
+  CHECK(f2.builds <= f1.builds);
+  if (ordered_ok) CHECK(o2.builds <= o1.builds);
 }
 
 // ===========================================================================
