@@ -579,6 +579,67 @@ inline ForcedSplitPasses forced_split_passes(std::wstring const& axis_key,
   return r;
 }
 
+///
+/// \brief The producer-side and consumer-side copies of a forked inner
+/// sub-chain (see \c fork_subchain).
+///
+struct ForkedSubchain {
+  container::vector<Step> producer;  //!< steps whose values are producer-side
+  container::vector<Step> consumer;  //!< steps whose values are consumer-side
+};
+
+///
+/// \brief Fork an already-built inner sub-chain (an ORDERED list of \c Step)
+/// into a producer-side copy and a consumer-side copy, for a forced loop split
+/// at a NON-innermost axis (\c build_ordered_schedule). \p
+/// in_consumer(value_id) decides each value's side (true => the consumer pass).
+///
+/// \details A \c BuildStep goes wholly to one side by \p in_consumer of its
+/// value. A nested \c ScopeBlock (an inner loop) is recursively forked; each
+/// side that has surviving steps is rebuilt as a per-side copy of the loop
+/// (same \c axis / \c ordinal / \c kind) carrying only that side's steps and
+/// the escape \c outputs whose value lands on that side; a side with no
+/// surviving steps is dropped (an empty loop is never emitted, and — since an
+/// escape output's value is produced by a step in the same block on the same
+/// side — that side then has no escape outputs to strand either).
+///
+/// The relative order of the surviving steps is preserved. The input list is
+/// already topologically valid (every \c ScopeBlock was built through \c
+/// ordered_schedule_topo_sort_steps), and a subsequence of a valid order is
+/// itself valid, so no re-sort is needed and no per-step meta is recomputed.
+/// This makes the fork a pure structural transform of the \c Step tree.
+///
+inline ForkedSubchain fork_subchain(
+    container::vector<Step> const& steps,
+    std::function<bool(std::size_t)> const& in_consumer) {
+  ForkedSubchain out;
+  for (Step const& step : steps) {
+    if (auto const* build = std::get_if<BuildStep>(&step.value)) {
+      (in_consumer(build->value_id) ? out.consumer : out.producer)
+          .push_back(Step{BuildStep{build->value_id}});
+      continue;
+    }
+    auto const& block = std::get<ScopeBlock>(step.value);
+    ForkedSubchain sub = fork_subchain(block.steps, in_consumer);
+    auto const make_side = [&](container::vector<Step>&& side_steps,
+                               bool consumer_side) {
+      if (side_steps.empty()) return;  // no steps => no escape outputs either
+      ScopeBlock fb;
+      fb.axis = block.axis;
+      fb.ordinal = block.ordinal;
+      fb.kind = block.kind;
+      fb.steps = std::move(side_steps);
+      for (auto const& o : block.outputs)
+        if (in_consumer(o.first) == consumer_side) fb.outputs.push_back(o);
+      (consumer_side ? out.consumer : out.producer)
+          .push_back(Step{std::move(fb)});
+    };
+    make_side(std::move(sub.producer), /*consumer_side=*/false);
+    make_side(std::move(sub.consumer), /*consumer_side=*/true);
+  }
+  return out;
+}
+
 }  // namespace detail
 
 ///

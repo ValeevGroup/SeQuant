@@ -79,6 +79,97 @@ TEST_CASE(
   CHECK(well_formed(sched));
 }
 
+// SP2 non-innermost forced split: fork_subchain partitions an already-built
+// inner sub-chain into a producer-side and a consumer-side copy by an
+// in_consumer(value_id) predicate. A BuildStep goes wholly to one side; a
+// nested loop block is forked (duplicated across both sides when its steps
+// straddle the partition), with its steps and escape outputs partitioned and a
+// side kept only when it has surviving steps.
+TEST_CASE("fork_subchain forks an inner sub-chain by consumer-pass membership",
+          "[ordered-schedule][fork]") {
+  Index const ax{L"i_1"};
+
+  // Inner sub-chain: BuildStep{0}, a nested Κ-loop whose two builds straddle
+  // the split (1 producer, 2 consumer) and whose two AccumulateSum outputs
+  // likewise straddle it (3 producer, 4 consumer), then BuildStep{5}.
+  ScopeBlock inner;
+  inner.axis = ax;
+  inner.ordinal = 0;
+  inner.kind = sequant::BatchModeType::Contracted;
+  inner.steps.push_back(Step{BuildStep{1}});
+  inner.steps.push_back(Step{BuildStep{2}});
+  inner.outputs.push_back({3, OutputKind::AccumulateSum});
+  inner.outputs.push_back({4, OutputKind::AccumulateSum});
+
+  sequant::container::vector<Step> steps;
+  steps.push_back(Step{BuildStep{0}});
+  steps.push_back(Step{std::move(inner)});
+  steps.push_back(Step{BuildStep{5}});
+
+  // consumer side = {2, 4, 5}; producer side = {0, 1, 3}.
+  std::function<bool(std::size_t)> const in_consumer = [](std::size_t v) {
+    return v == 2 || v == 4 || v == 5;
+  };
+
+  auto const forked = sequant::eval::detail::fork_subchain(steps, in_consumer);
+
+  auto const build_id = [](Step const& s) {
+    return std::get<BuildStep>(s.value).value_id;
+  };
+
+  // Producer: BuildStep{0}, then a Κ-loop copy holding only BuildStep{1} and
+  // its AccumulateSum output {3}.
+  REQUIRE(forked.producer.size() == 2);
+  CHECK(build_id(forked.producer[0]) == 0);
+  auto const& p_loop = std::get<ScopeBlock>(forked.producer[1].value);
+  CHECK(p_loop.axis == ax);
+  CHECK(p_loop.ordinal == 0);
+  REQUIRE(p_loop.steps.size() == 1);
+  CHECK(build_id(p_loop.steps[0]) == 1);
+  REQUIRE(p_loop.outputs.size() == 1);
+  CHECK(p_loop.outputs[0].first == 3);
+
+  // Consumer: a Κ-loop copy holding only BuildStep{2} and its output {4}, then
+  // BuildStep{5}. Order among the surviving steps is preserved.
+  REQUIRE(forked.consumer.size() == 2);
+  auto const& c_loop = std::get<ScopeBlock>(forked.consumer[0].value);
+  CHECK(c_loop.axis == ax);
+  REQUIRE(c_loop.steps.size() == 1);
+  CHECK(build_id(c_loop.steps[0]) == 2);
+  REQUIRE(c_loop.outputs.size() == 1);
+  CHECK(c_loop.outputs[0].first == 4);
+  CHECK(build_id(forked.consumer[1]) == 5);
+}
+
+// A nested loop that lands entirely on one side is copied whole to that side
+// and NOT emitted (empty) on the other.
+TEST_CASE("fork_subchain drops the empty side of a one-sided nested loop",
+          "[ordered-schedule][fork]") {
+  Index const ax{L"i_1"};
+
+  ScopeBlock inner;
+  inner.axis = ax;
+  inner.steps.push_back(Step{BuildStep{1}});
+  inner.steps.push_back(Step{BuildStep{2}});
+  inner.outputs.push_back({3, OutputKind::AccumulateSum});
+
+  sequant::container::vector<Step> steps;
+  steps.push_back(Step{std::move(inner)});
+
+  // Whole nested loop is producer-side.
+  std::function<bool(std::size_t)> const in_consumer = [](std::size_t) {
+    return false;
+  };
+
+  auto const forked = sequant::eval::detail::fork_subchain(steps, in_consumer);
+
+  REQUIRE(forked.producer.size() == 1);
+  auto const& p_loop = std::get<ScopeBlock>(forked.producer[0].value);
+  CHECK(p_loop.steps.size() == 2);
+  CHECK(p_loop.outputs.size() == 1);
+  CHECK(forked.consumer.empty());  // empty side dropped, no stranded output
+}
+
 TEST_CASE("well_formed rejects an out-of-range BuildStep::value_id",
           "[ordered-schedule]") {
   OrderedSchedule sched;
