@@ -509,6 +509,27 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(e->label() == e_clone.as<Variable>().label());
       REQUIRE(e->conjugated() == e_clone.as<Variable>().conjugated());
     }
+    {  // CProduct must not be sliced down to Product by clone(): a plain
+       // Product reverses its factors in adjoint(), a CProduct does not
+      const auto e = std::make_shared<CProduct>();
+      e->append(1, ex<Adjointable>());
+      e->append(1, ex<Adjointable>(-2));
+      const auto e_adj = adjoint(e);  // free adjoint() == clone() + adjoint()
+      REQUIRE(e_adj.as<Product>().factors()[0]->as<Adjointable>().v == -1);
+      REQUIRE(e_adj.as<Product>().factors()[1]->as<Adjointable>().v == 2);
+      // the original is left untouched
+      REQUIRE(e->factors()[0]->as<Adjointable>().v == 1);
+    }
+    {  // NCProduct must not be sliced down to Product by clone(): a plain
+       // Product decides commutativity by a recursive pairwise check, which
+       // for c-number factors reports the product as commutative
+      const auto e = std::make_shared<NCProduct>();
+      e->append(1, ex<Adjointable>());
+      e->append(1, ex<Adjointable>(-2));
+      REQUIRE_FALSE(e->is_commutative());
+      const auto e_clone = e->clone();
+      REQUIRE_FALSE(e_clone.as<Product>().is_commutative());
+    }
   }  // SECTION("clone")
 
   SECTION("latex") {

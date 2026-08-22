@@ -365,6 +365,8 @@ CProduct::CProduct(Product &&other) : Product(std::move(other)) {}
 
 bool CProduct::is_commutative() const { return true; }
 
+ExprPtr CProduct::clone() const { return ex<CProduct>(this->deep_copy()); }
+
 void CProduct::adjoint() {
   auto adj_scalar = conj(scalar());
   using namespace ranges;
@@ -382,6 +384,8 @@ NCProduct::NCProduct(const Product &other) : Product(other) {}
 NCProduct::NCProduct(Product &&other) : Product(std::move(other)) {}
 
 bool NCProduct::is_commutative() const { return false; }
+
+ExprPtr NCProduct::clone() const { return ex<NCProduct>(this->deep_copy()); }
 
 void NCProduct::adjoint() {
   auto adj_scalar = conj(scalar());

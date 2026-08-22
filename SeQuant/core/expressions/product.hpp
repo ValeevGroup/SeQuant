@@ -366,6 +366,12 @@ class CProduct : public Product {
 
   bool is_commutative() const override;
 
+  /// @return an identical clone of this CProduct
+  /// @note without this override Product::clone() would slice this down to a
+  ///       plain Product, whose adjoint() reverses the factors and whose
+  ///       commutativity is only decided by a recursive pairwise check
+  ExprPtr clone() const override;
+
   /// @brief adjoint of a CProduct is a product of adjoints of its factors, with
   /// complex-conjugated scalar
   /// @note factors are not reversed since the factors commute
@@ -383,7 +389,13 @@ class NCProduct : public Product {
 
   bool is_commutative() const override;
 
-  /// @brief adjoint of a NCProduct is a reserved product of adjoints of its
+  /// @return an identical clone of this NCProduct
+  /// @note without this override Product::clone() would slice this down to a
+  ///       plain Product, which is no longer unconditionally non-commutative
+  ///       and hence may have its factors reordered by canonicalization
+  ExprPtr clone() const override;
+
+  /// @brief adjoint of a NCProduct is a reversed product of adjoints of its
   /// factors, with complex-conjugated scalar
   virtual void adjoint() override;
 
