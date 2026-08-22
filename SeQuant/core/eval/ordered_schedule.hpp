@@ -1091,49 +1091,44 @@ forced_split_demotions(RichSchedule const& rich,
   // general split forks the whole enclosed sub-chain, and no current fixture
   // (nor any consumer -- SP3's executor does not yet read this IR) exercises
   // it, so a sound conservative single block beats an unsound partial fork.
+  // FORCED LOOP SPLIT detection (Task 4, generalized to any depth). Find the
+  // OUTERMOST realized axis forced to split (some cell LoopCarried on it) whose
+  // split is GENUINE -- both a pure producer (a carried value read only in a
+  // later pass) and a consumer (a strict ancestor of a carried value). The
+  // split is realized at that depth d*; when d* is not the innermost axis the
+  // enclosed inner sub-chain is FORKED across the two passes (fork_subchain).
+  // At most one forced axis is expected in practice (only an external axis is
+  // LoopCarried; contracted axes are Reduction) -- a second, nested forced
+  // split is a distinct feature and is rejected loudly rather than mis-emitted.
+  std::optional<std::size_t> split_depth;
   std::optional<detail::ForcedSplitPasses> split_passes;
-  if (n > 0) {
-    std::wstring const inner_key{types[n - 1].space().base_key()};
-    bool const inner_forced =
-        std::any_of(legality.cells.begin(), legality.cells.end(),
-                    [&](CellLegality const& cl) {
-                      for (Index const& ix : forced_split_types(cl))
-                        if (ix.space().base_key() == inner_key) return true;
-                      return false;
-                    });
-    if (inner_forced) {
-      auto passes = detail::forced_split_passes(inner_key, legality, g);
-      bool has_prod = false, has_cons = false;
-      auto const tally = [&](std::size_t vid) {
-        (passes.consumer_pass.count(vid) ? has_cons : has_prod) = true;
-      };
-      for (std::size_t v : buckets[n - 1].build_ids) tally(v);
-      for (auto const& o : buckets[n - 1].outputs) tally(o.first);
-      if (has_prod && has_cons) split_passes = std::move(passes);
+  {
+    std::size_t forced_count = 0;
+    for (std::size_t d = 0; d < n; ++d) {
+      std::wstring const key{types[d].space().base_key()};
+      bool const forced =
+          std::any_of(legality.cells.begin(), legality.cells.end(),
+                      [&](CellLegality const& cl) {
+                        for (Index const& ix : forced_split_types(cl))
+                          if (ix.space().base_key() == key) return true;
+                        return false;
+                      });
+      if (!forced) continue;
+      auto passes = detail::forced_split_passes(key, legality, g);
+      bool const has_cons = !passes.consumer_pass.empty();
+      bool const has_prod = std::any_of(
+          passes.carried.begin(), passes.carried.end(),
+          [&](std::size_t v) { return !passes.consumer_pass.count(v); });
+      if (!has_prod || !has_cons) continue;  // LoopCarried but no split needed
+      ++forced_count;
+      if (!split_depth) {  // outermost genuine split
+        split_depth = d;
+        split_passes = std::move(passes);
+      }
     }
-  }
-
-  // Fail-safe for the non-innermost deferral above. The split fires ONLY at the
-  // innermost realized axis (d == n-1); an OUTER realized axis (d < n-1) that
-  // is genuinely forced to split would fall through to a single unbroken block
-  // -- NOT a safe conservative choice but a SILENTLY WRONG cross-iteration
-  // schedule (the loop is never actually split). No current input reaches here
-  // (no multi-axis forced split exists), so this assert is inert today; it
-  // turns that future silent mis-schedule into a loud failure the moment SP3 or
-  // a later change introduces one. (n <= 1 skips the loop: the sole axis is by
-  // definition the innermost.)
-  for (std::size_t d = 0; d + 1 < n; ++d) {
-    std::wstring const outer_key{types[d].space().base_key()};
-    bool const outer_forced =
-        std::any_of(legality.cells.begin(), legality.cells.end(),
-                    [&](CellLegality const& cl) {
-                      for (Index const& ix : forced_split_types(cl))
-                        if (ix.space().base_key() == outer_key) return true;
-                      return false;
-                    });
-    SEQUANT_ASSERT(!outer_forced,
-                   "build_ordered_schedule: non-innermost forced split not yet "
-                   "supported (SP2 deferral)");
+    SEQUANT_ASSERT(forced_count <= 1,
+                   "build_ordered_schedule: multiple forced-split axes at "
+                   "different depths (nested splits) not supported");
   }
 
   // Small helpers shared by the (usual) single-block path and the split path.
@@ -1232,24 +1227,76 @@ forced_split_demotions(RichSchedule const& rich,
     container::vector<Step> next_steps;
     container::vector<detail::OrderedScheduleStepMeta> next_metas;
 
-    if (split_passes && d == n - 1) {
-      // Innermost split: partition this bucket's homed BuildSteps and escape
+    if (split_passes && d == *split_depth) {
+      // Split at depth d*: partition this bucket's homed BuildSteps and escape
       // outputs into the producer (ordinal 0) and consumer (ordinal 1) passes
-      // by consumer_pass membership. d == n-1 => no pending child blocks to
-      // fork. The consumer block reads the producer block's escaped (now-full)
-      // outputs, so its `requires_` names them and the outer topo-sort orders
-      // the producer pass first.
+      // by consumer_pass membership, and FORK the enclosed inner sub-chain
+      // (pending_steps) across the two passes. At the innermost axis pending is
+      // empty and fork_subchain returns two empty inner lists, reducing to the
+      // original childless two-block emission (byte-identical). The consumer
+      // block reads the producer block's escaped (now-full) outputs, so its
+      // `requires_` names them and the outer topo-sort orders producer first.
       auto const in_consumer = [&](std::size_t vid) {
         return split_passes->consumer_pass.count(vid) != 0;
       };
+
+      detail::ForkedSubchain forked =
+          detail::fork_subchain(pending_steps, in_consumer);
+
+      // Recursive value_ids a forked child Step produces (builds + escape
+      // outputs, through nested blocks), for its `requires_`/`tie_key` meta.
+      std::function<void(ScopeBlock const&, container::svector<std::size_t>&)>
+          collect_rec =
+              [&](ScopeBlock const& blk, container::svector<std::size_t>& out) {
+                for (Step const& s : blk.steps) {
+                  if (auto const* b = std::get_if<BuildStep>(&s.value))
+                    out.push_back(b->value_id);
+                  else
+                    collect_rec(std::get<ScopeBlock>(s.value), out);
+                }
+                for (auto const& o : blk.outputs) out.push_back(o.first);
+              };
+      auto const meta_for = [&](container::vector<Step> const& steps)
+          -> container::vector<detail::OrderedScheduleStepMeta> {
+        container::vector<detail::OrderedScheduleStepMeta> metas;
+        for (Step const& s : steps) {
+          detail::OrderedScheduleStepMeta m;
+          if (auto const* b = std::get_if<BuildStep>(&s.value)) {
+            m.produced.push_back(b->value_id);
+            m.requires_.assign(requires_of(b->value_id).begin(),
+                               requires_of(b->value_id).end());
+            m.tie_key = rich.cells[b->value_id].first_use;
+          } else {
+            auto const& blk = std::get<ScopeBlock>(s.value);
+            container::svector<std::size_t> rec;
+            collect_rec(blk, rec);
+            for (auto const& o : blk.outputs) m.produced.push_back(o.first);
+            m.requires_ = external_needs(rec);
+            m.tie_key = min_first_use(rec);
+          }
+          metas.push_back(std::move(m));
+        }
+        return metas;
+      };
+
       auto const emit_pass =
           [&](int ordinal, container::svector<std::size_t> const& builds,
               container::svector<std::pair<std::size_t, OutputKind>> const&
-                  outs) {
+                  outs,
+              container::vector<Step>&& child_steps,
+              container::vector<detail::OrderedScheduleStepMeta>&&
+                  child_metas) {
             container::svector<std::size_t> pass_produced = builds;
             for (auto const& o : outs) pass_produced.push_back(o.first);
-            next_steps.push_back(
-                Step{make_block(types[d], ordinal, builds, outs, {}, {})});
+            for (Step const& s : child_steps) {
+              if (auto const* b = std::get_if<BuildStep>(&s.value))
+                pass_produced.push_back(b->value_id);
+              else
+                collect_rec(std::get<ScopeBlock>(s.value), pass_produced);
+            }
+            next_steps.push_back(Step{make_block(types[d], ordinal, builds,
+                                                 outs, std::move(child_steps),
+                                                 std::move(child_metas))});
             detail::OrderedScheduleStepMeta m;
             for (auto const& o : outs) m.produced.push_back(o.first);
             m.requires_ = external_needs(pass_produced);
@@ -1265,8 +1312,12 @@ forced_split_demotions(RichSchedule const& rich,
       for (auto const& o : bucket.outputs)
         (in_consumer(o.first) ? cons_outs : prod_outs).push_back(o);
 
-      emit_pass(0, prod_builds, prod_outs);
-      emit_pass(1, cons_builds, cons_outs);
+      auto prod_metas = meta_for(forked.producer);
+      auto cons_metas = meta_for(forked.consumer);
+      emit_pass(0, prod_builds, prod_outs, std::move(forked.producer),
+                std::move(prod_metas));
+      emit_pass(1, cons_builds, cons_outs, std::move(forked.consumer),
+                std::move(cons_metas));
     } else {
       ScopeBlock block =
           make_block(types[d], 0, bucket.build_ids, bucket.outputs,

@@ -968,12 +968,46 @@ TEST_CASE(
   CHECK(occ_carried);
   CHECK(aux_reduction);
 
-  // PRE-WIRING (phase 3 pending): occ is the OUTER forced-split axis with aux
-  // nested inside, so build_ordered_schedule reaches the non-innermost deferral
-  // and throws. When the split emission lands, replace this with the full
-  // two-sibling-block + multi-level-escape assertions.
-  CHECK_THROWS(
-      sequant::eval::build_ordered_schedule(rich, legality, policy, {}));
+  // The generalized detection must NOT spuriously assert on an occ-OUTER axis
+  // (the old code did); it builds a correct occ-outer / aux-inner NESTED
+  // schedule. (This forest's single occ-carried value is the forest root, read
+  // by nothing, so no cross-iteration read forces a two-pass split -- the split
+  // EMISSION is exercised at C60 aux_occ, where the forcing is real. Here we
+  // pin the nesting + the multi-level escape placement.)
+  auto const sched =
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {});
+  REQUIRE(well_formed(sched));
+  CHECK(sched.num_values == rich.cells.size());
+
+  // Exactly ONE occ ("i") block at root, enclosing an aux ("Κ") block:
+  // occ-outer, aux-inner.
+  std::vector<ScopeBlock const*> occ_blocks;
+  for (auto const& step : sched.root.steps)
+    if (auto const* c = std::get_if<ScopeBlock>(&step.value))
+      if (c->axis.space().base_key() == L"i") occ_blocks.push_back(c);
+  REQUIRE(occ_blocks.size() == 1);
+  ScopeBlock const& occ = *occ_blocks.front();
+  bool aux_inside = false;
+  for (auto const& s : occ.steps)
+    if (auto const* c = std::get_if<ScopeBlock>(&s.value))
+      if (c->axis.space().base_key() == L"Κ") aux_inside = true;
+  CHECK(aux_inside);
+
+  // The outer-product root B (carried on occ) is an AccumulateScatter output of
+  // the occ block; the aux-contracted A is an AccumulateSum output of the aux
+  // block (the reduction escapes inner, the carry escapes outer).
+  auto const b_hash = B->hash_value();
+  auto const b_it =
+      std::find_if(rich.cells.begin(), rich.cells.end(),
+                   [&](auto const& vc) { return vc.hash == b_hash; });
+  REQUIRE(b_it != rich.cells.end());
+  std::size_t const b_id = b_it->value_id;
+  bool b_scatter_at_occ = false;
+  for (auto const& [v, k] : occ.outputs)
+    if (v == b_id && k == OutputKind::AccumulateScatter)
+      b_scatter_at_occ = true;
+  CHECK(b_scatter_at_occ);
+  CHECK_FALSE(orderedsched_index_of_build_step(sched.root, b_id).has_value());
 }
 
 // ===========================================================================
