@@ -71,7 +71,7 @@ function(target_set_optimization_flags TARGET)
 	include(CheckCXXCompilerFlag)
 	include(CheckIPOSupported)
 
-	check_ipo_supported(RESULT COMPILER_SUPPORTS_IPO)
+	check_ipo_supported(RESULT COMPILER_SUPPORTS_IPO LANGUAGES CXX)
 
     __check_gnu_like_compiler()
 
