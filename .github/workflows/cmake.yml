@@ -137,7 +137,7 @@ jobs:
       run: ctest --output-on-failure -R "^sequant"
 
     - name: Ensure benchmarks not broken
-      if: ${{ !matrix.valgrind }}
+      if: ${{ !matrix.valgrind && !matrix.sanitize }}
       working-directory: ${{github.workspace}}/build
       shell: bash
       run: ./benchmarks/sequant_benchmarks --benchmark_dry_run=true
