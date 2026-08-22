@@ -13,7 +13,11 @@
 using namespace sequant;
 using namespace sequant::mbpt;
 
+#ifdef SEQUANT_BENCH_MAX_WICK_INPUTS
+static constexpr std::size_t nInputs = SEQUANT_BENCH_MAX_WICK_INPUTS;
+#else
 static constexpr std::size_t nInputs = 5;
+#endif
 
 template <Statistics stats>
 ExprPtr get_op_sequence(std::size_t i) {
