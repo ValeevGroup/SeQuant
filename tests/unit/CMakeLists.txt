@@ -28,6 +28,7 @@ set(symb_test_sources
 )
 
 add_library(unit_tests-sequant-symb-obj OBJECT ${symb_test_sources})
+target_set_warning_flags(unit_tests-sequant-symb-obj)
 set_target_properties(unit_tests-sequant-symb-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 target_link_libraries(unit_tests-sequant-symb-obj
     PUBLIC SeQuant::symb SeQuant::bliss
@@ -43,6 +44,7 @@ set(eval_test_sources
     "test_eval_node.cpp"
 )
 add_library(unit_tests-sequant-eval-obj OBJECT ${eval_test_sources})
+target_set_warning_flags(unit_tests-sequant-eval-obj)
 set_target_properties(unit_tests-sequant-eval-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 target_link_libraries(unit_tests-sequant-eval-obj
     PUBLIC SeQuant::eval
@@ -59,6 +61,7 @@ set(optimize_test_sources
     "test_optimize.cpp"
 )
 add_library(unit_tests-sequant-optimize-obj OBJECT ${optimize_test_sources})
+target_set_warning_flags(unit_tests-sequant-optimize-obj)
 set_target_properties(unit_tests-sequant-optimize-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 target_link_libraries(unit_tests-sequant-optimize-obj
     PUBLIC SeQuant::optimize SeQuant::bliss
@@ -75,6 +78,7 @@ set(export_test_sources
     "test_export_python.cpp"
 )
 add_library(unit_tests-sequant-export-obj OBJECT ${export_test_sources})
+target_set_warning_flags(unit_tests-sequant-export-obj)
 set_target_properties(unit_tests-sequant-export-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 target_link_libraries(unit_tests-sequant-export-obj
     PUBLIC SeQuant::export SeQuant::optimize
@@ -93,6 +97,7 @@ set(mbpt_test_sources
 )
 
 add_library(unit_tests-sequant-mbpt-obj OBJECT ${mbpt_test_sources})
+target_set_warning_flags(unit_tests-sequant-mbpt-obj)
 set_target_properties(unit_tests-sequant-mbpt-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 target_link_libraries(unit_tests-sequant-mbpt-obj
     PUBLIC SeQuant::mbpt
@@ -109,6 +114,7 @@ if (SEQUANT_HAS_TILEDARRAY)
         "test_cache_manager.cpp"
     )
     add_library(unit_tests-sequant-eval-ta-obj OBJECT ${eval_ta_test_sources})
+	target_set_warning_flags(unit_tests-sequant-eval-ta-obj)
     set_target_properties(unit_tests-sequant-eval-ta-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
     target_link_libraries(unit_tests-sequant-eval-ta-obj
         PUBLIC SeQuant::eval::ta SeQuant::mbpt
@@ -129,6 +135,7 @@ if (SEQUANT_HAS_BTAS)
         list(APPEND eval_btas_test_sources "test_cache_manager.cpp")
     endif()
     add_library(unit_tests-sequant-eval-btas-obj OBJECT ${eval_btas_test_sources})
+	target_set_warning_flags(unit_tests-sequant-eval-btas-obj)
     set_target_properties(unit_tests-sequant-eval-btas-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
     target_link_libraries(unit_tests-sequant-eval-btas-obj
         PUBLIC SeQuant::eval::btas SeQuant::mbpt
@@ -145,6 +152,7 @@ endif()
 if (SEQUANT_HAS_TAPP)
     set(eval_tapp_test_sources "test_eval_tapp.cpp")
     add_library(unit_tests-sequant-eval-tapp-obj OBJECT ${eval_tapp_test_sources})
+	target_set_warning_flags(unit_tests-sequant-eval-tapp-obj)
     set_target_properties(unit_tests-sequant-eval-tapp-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
     target_link_libraries(unit_tests-sequant-eval-tapp-obj
         PUBLIC SeQuant::eval::tapp SeQuant::mbpt
