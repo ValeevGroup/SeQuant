@@ -142,7 +142,7 @@ if (SEQUANT_HAS_BTAS)
     endif()
     add_library(unit_tests-sequant-eval-btas-obj OBJECT ${eval_btas_test_sources})
     target_set_warning_flags(unit_tests-sequant-eval-btas-obj)
-    target_set_optimization_flags(unit_tests-sequant-btas-ta-obj)
+    target_set_optimization_flags(unit_tests-sequant-eval-btas-obj)
     set_target_properties(unit_tests-sequant-eval-btas-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
     target_link_libraries(unit_tests-sequant-eval-btas-obj
         PUBLIC SeQuant::eval::btas SeQuant::mbpt
@@ -160,7 +160,7 @@ if (SEQUANT_HAS_TAPP)
     set(eval_tapp_test_sources "test_eval_tapp.cpp")
     add_library(unit_tests-sequant-eval-tapp-obj OBJECT ${eval_tapp_test_sources})
     target_set_warning_flags(unit_tests-sequant-eval-tapp-obj)
-    target_set_optimization_flags(unit_tests-sequant-tapp-ta-obj)
+    target_set_optimization_flags(unit_tests-sequant-eval-tapp-obj)
     set_target_properties(unit_tests-sequant-eval-tapp-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
     target_link_libraries(unit_tests-sequant-eval-tapp-obj
         PUBLIC SeQuant::eval::tapp SeQuant::mbpt
