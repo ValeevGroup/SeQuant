@@ -1,3 +1,4 @@
+#include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/expressions/abstract_tensor.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
@@ -10,9 +11,21 @@
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network/typedefs.hpp>
 
-#include <range/v3/all.hpp>
+#include <range/v3/algorithm/any_of.hpp>
+#include <range/v3/algorithm/equal.hpp>
+#include <range/v3/algorithm/find_if.hpp>
+#include <range/v3/algorithm/for_each.hpp>
+#include <range/v3/algorithm/sort.hpp>
+#include <range/v3/range/access.hpp>
+#include <range/v3/range/conversion.hpp>
+#include <range/v3/view/filter.hpp>
+#include <range/v3/view/reverse.hpp>
+#include <range/v3/view/transform.hpp>
 
-#include <ranges>
+#include <algorithm>
+#include <memory>
+#include <type_traits>
+#include <utility>
 
 namespace sequant {
 
