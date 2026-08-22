@@ -218,7 +218,6 @@ void Product::adjoint() {
   auto adj_factors =
       factors() | views::reverse |
       views::transform([](auto &expr) { return ::sequant::adjoint(expr); });
-  using std::swap;
   *this =
       Product(adj_scalar, ranges::begin(adj_factors), ranges::end(adj_factors));
 }
@@ -262,7 +261,7 @@ std::wstring Product::to_latex(bool negate) const {
 
 Product::type_id_type Product::type_id() const {
   return get_type_id<Product>();
-};
+}
 
 /// @return an identical clone of this Product (a deep copy allocated on the
 ///         heap)

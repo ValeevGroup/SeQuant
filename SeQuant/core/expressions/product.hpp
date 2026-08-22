@@ -290,7 +290,7 @@ class Product : public Expr {
 
   /// @brief checks commutativity recursively
   /// @return true if definitely commutative, false definitely not commutative
-  /// @note this is memoizing
+  /// @note this is recomputed on every call
   /// @sa CProduct::is_commutative() and NCProduct::is_commutative()
   virtual bool is_commutative() const;
 

@@ -142,7 +142,7 @@ std::wstring Sum::to_latex() const {
   return result;
 }
 
-Expr::type_id_type Sum::type_id() const { return Expr::get_type_id<Sum>(); };
+Expr::type_id_type Sum::type_id() const { return Expr::get_type_id<Sum>(); }
 
 ExprPtr Sum::clone() const {
   auto cloned_summands =
