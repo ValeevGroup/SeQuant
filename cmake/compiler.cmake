@@ -62,21 +62,25 @@ function(target_set_warning_flags TARGET)
 endfunction()
 
 
-include(CheckIPOSupported)
-
-check_ipo_supported(RESULT COMPILER_SUPPORTS_IPO)
 
 function(target_set_optimization_flags TARGET)
 	if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 		return()
 	endif()
 
+	include(CheckCXXCompilerFlag)
+	include(CheckIPOSupported)
+
+	check_ipo_supported(RESULT COMPILER_SUPPORTS_IPO)
+
     __check_gnu_like_compiler()
 
 	if (COMPILER_SUPPORTS_IPO AND (NOT DEFINED SEQUANT_LTO OR SEQUANT_LTO))
 		set_target_properties("${TARGET}" PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON)
 
-		if (IS_GNU_LIKE_COMPILER)
+		check_cxx_compiler_flag("-ffat-lto-objects" FAT_LTO_SUPPORTED)
+
+		if (FAT_LTO_SUPPORTED)
 			# This (should) ensures that the object files can still be linked without LTO
 			target_compile_options("${TARGET}" PRIVATE -ffat-lto-objects)
 		endif()
