@@ -390,11 +390,10 @@ ExprPtr NCProduct::clone() const { return ex<NCProduct>(this->deep_copy()); }
 void NCProduct::adjoint() {
   auto adj_scalar = conj(scalar());
   using namespace ranges;
-  // no need to reverse for commutative product
+  // factors must be reversed since they do not commute
   auto adj_factors =
-      factors() | std::views::reverse | std::views::transform([](auto &&expr) {
-        return ::sequant::adjoint(expr);
-      });
+      factors() | views::reverse |
+      views::transform([](auto &&expr) { return ::sequant::adjoint(expr); });
   *this = NCProduct(adj_scalar, ranges::begin(adj_factors),
                     ranges::end(adj_factors));
 }
