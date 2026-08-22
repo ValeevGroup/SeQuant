@@ -8,6 +8,7 @@ set_target_properties(cost_analysis PROPERTIES
 target_link_libraries(cost_analysis PRIVATE
     SeQuant::mbpt nlohmann_json::nlohmann_json CLI11::CLI11)
 target_set_warning_flags(cost_analysis)
+target_set_optimization_flags(cost_analysis)
 
 # The tool writes its report (and any dump-tree file) next to the driver, so
 # the tests run against a build-tree copy of examples/ rather than the source

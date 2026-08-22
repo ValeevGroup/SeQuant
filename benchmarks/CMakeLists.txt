@@ -11,6 +11,9 @@ add_executable(sequant_benchmarks
         "wick.cpp"
 )
 
+target_set_warning_flags(sequant_benchmarks)
+target_set_optimization_flags(sequant_benchmarks)
+
 set_target_properties(sequant_benchmarks PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 
 option(SEQUANT_QUICK_BENCHMARKS "Whether to exclude computational expensive benchmarks" OFF)

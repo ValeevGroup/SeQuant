@@ -95,6 +95,7 @@ macro(sequant_add_library _module)
     get_target_property(_type SeQuant-${_module} TYPE)
     if (NOT _type STREQUAL "INTERFACE_LIBRARY")
         target_set_warning_flags(SeQuant-${_module})
+        target_set_optimization_flags(SeQuant-${_module})
     endif()
 endmacro()
 
