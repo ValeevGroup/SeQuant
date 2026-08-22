@@ -56,6 +56,7 @@ foreach(current IN LISTS TEST_CASES)
     endif()
 
     target_set_warning_flags("${test_name}")
+    target_set_optimization_flags("${test_name}")
 
     set(variant_names "")
 

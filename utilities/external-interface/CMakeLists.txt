@@ -22,6 +22,7 @@ target_link_libraries(external_interface
 )
 
 target_set_warning_flags(external_interface)
+target_set_optimization_flags(external_interface)
 
 foreach(DRIVER IN ITEMS "ccsd" "nevpt2")
     add_test(
