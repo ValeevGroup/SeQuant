@@ -6,6 +6,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/meta.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <optional>
 #include <utility>
@@ -41,6 +42,28 @@ template <meta::eval_node node_t>
   auto const& idxs = n->canon_indices();
   for (std::size_t p = 0; p < idxs.size(); ++p)
     if (idxs[p].space().base_key() == base) return p;
+  return std::nullopt;
+}
+
+/// \return the position on \p n's own result of the first index of TYPE \p base
+///         (\c IndexSpace::base_key()) that is ALSO one of \p n's STAMPED
+///         sliced modes (\c sliced_modes(), the cross-occurrence batch meet),
+///         or nullopt. Unlike \c result_position_type -- which matches ANY
+///         same-space index and so would slice an index the optimizer never
+///         batched (e.g. an internal / contracted occ that merely shares the
+///         external occ's space) -- this honors the stamp: a space-mapped slice
+///         must never touch a mode outside the batched set. Keeps the runtime
+///         index-generic rather than space-generic (see the space-map fallback
+///         in \c slice_to_use, eval.hpp).
+template <meta::eval_node node_t>
+[[nodiscard]] std::optional<std::size_t> sliced_result_position_type(
+    node_t const& n, std::wstring const& base) {
+  auto const& idxs = n->canon_indices();
+  auto const& sliced = n->sliced_modes();
+  for (std::size_t p = 0; p < idxs.size(); ++p)
+    if (idxs[p].space().base_key() == base &&
+        std::find(sliced.begin(), sliced.end(), idxs[p]) != sliced.end())
+      return p;
   return std::nullopt;
 }
 

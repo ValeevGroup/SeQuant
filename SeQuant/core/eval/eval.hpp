@@ -708,7 +708,16 @@ ResultPtr evaluate_impl(Node const& node,         //
       // byte-identical to before the space-map flag.
       auto p = index_position(nd, axis);
       if (!p && cache.space_mapped_slicing())
-        p = eval::detail::result_position_type(
+        // Space-map fallback (ordered executor): slice the node on its OWN mode
+        // of the axis's space -- but ONLY a mode the optimizer actually batched
+        // (in the node's sliced_modes()), never an un-stamped same-space index.
+        // Occ is the first space carrying MIXED roles (external spectator +
+        // internal contracted), and slicing the internal contracted occ would
+        // ask the runtime to realize a reduction the batch never emitted -> the
+        // contraction waits forever for full-mode tiles. Honoring the stamp
+        // keeps this index-generic, not space-generic. (Aux/PAO spaces carry
+        // only contracted indices, all batched, so this is a no-op there.)
+        p = eval::detail::sliced_result_position_type(
             nd, std::wstring(axis.space().base_key()));
       if (p) value = value->slice_mode(*p, blk.first, blk.second);
     }
