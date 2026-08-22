@@ -1,5 +1,6 @@
 #include <benchmark/benchmark.h>
 
+#include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 
 static constexpr std::size_t maxRank = 10;
@@ -9,6 +10,8 @@ using namespace sequant::mbpt;
 
 static void cc_full_derivation(benchmark::State &state) {
   const std::size_t rank = state.range(0);
+
+  set_default_mbpt_context({.op_registry_ptr = make_minimal_registry()});
 
   for (auto _ : state) {
     CC cc(rank);
