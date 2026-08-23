@@ -7,6 +7,7 @@
 #include <SeQuant/core/expressions/expr_iterator.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/product.hpp>
+#include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/utility/aggregate.hpp>
