@@ -732,10 +732,13 @@ ResultPtr evaluate_impl(Node const& node,         //
       // node->mode_to_level map must agree with the exact match wherever the
       // old path did NOT need the space fallback; where it DID need the
       // fallback, the map is the CORRECTION (the over-slice bug this whole
-      // change fixes) -- log it, do not assert. Debug-only cross-check; the
-      // map is never used to slice here (that's Task 7). Inert (no-op) when
-      // the seam is unwired (forest / whole-scope / hand-built contexts).
-      if (auto const* m2l = cache.mode_to_level_of(nd->hash_value())) {
+      // change fixes) -- log it, do not assert. Transitional check (Task 9
+      // deletes it, together with the space-fallback above, once the flip
+      // below is trusted). Inert (no-op) when the seam is unwired (forest /
+      // whole-scope / hand-built contexts). `m2l` is reused below (Task 7) to
+      // resolve the ordered path's ACTUAL slice mode.
+      auto const* m2l = cache.mode_to_level_of(nd->hash_value());
+      if (m2l) {
         std::optional<std::size_t> const p_map = m2l->mode_of(ctx[i].level);
         if (exact) {
           SEQUANT_ASSERT(p_map == p &&
@@ -754,7 +757,22 @@ ResultPtr evaluate_impl(Node const& node,         //
         // else: neither exact nor fallback found a slot for this axis on this
         // node -- both leave it unsliced (full); nothing to cross-check.
       }
-      if (p) value = value->slice_mode(*p, blk.first, blk.second);
+      // p_new (Task 7): the ACTUAL DAG-scope resolution this entry slices by,
+      // per path -- `exact_axis` present (forest / whole-scope, which push
+      // each member's own physical axis) => the same intra-tree exact match
+      // as old `p` (exact_axis == axis on those paths, so this is byte-
+      // identical to before); else (ordered, which pushes one canonical
+      // block.axis per type-bucketed loop) => the schedule's node->level map,
+      // replacing the space-fallback guess above. If the ordered path's seam
+      // is unwired, p_new stays nullopt (full/unsliced) -- the ordered
+      // executor always wires the seam in practice, so this is a defensive
+      // no-op, not a silent behavior path.
+      std::optional<std::size_t> p_new;
+      if (ctx[i].exact_axis)
+        p_new = index_position(nd, *ctx[i].exact_axis);
+      else if (m2l)
+        p_new = m2l->mode_of(ctx[i].level);
+      if (p_new) value = value->slice_mode(*p_new, blk.first, blk.second);
     }
     return value;
   };

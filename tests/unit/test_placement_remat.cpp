@@ -127,16 +127,20 @@ void stamp_ext_remat(EvalNode<EvalExpr>& n, Index ix) {
 }
 
 // Builds one BatchContext entry for these placement_remat unit tests. \p
-// depth is a placeholder DAG-scope nest position (Task 6 plumbing only --
-// these tests exercise the OLD, exact-axis resolution these entries' \c
-// .axis / \c .range fields still drive; \c .level is not consulted here).
+// depth is a placeholder DAG-scope nest position. These tests exercise the
+// exact-axis resolution (forest / whole-scope style: exact_axis == axis),
+// which slice_to_use's ordered-path flip (Task 7) still resolves via
+// index_position(nd, *exact_axis) -- byte-identical to the pre-Task-7
+// .axis / .range -driven path these tests were written against; .level (the
+// map-based resolution) is exercised only by the ORDERED executor's own
+// entries (exact_axis == nullopt), not by these hand-built ones.
 BatchContextEntry remat_test_ctx_entry(Index const& ax, std::size_t lo,
                                        std::size_t hi, std::size_t depth) {
   return BatchContextEntry{
       ax,
       DagScopeLevel{depth, std::wstring(ax.space().base_key()), 0},
       {lo, hi},
-      std::nullopt};
+      ax};
 }
 
 // Stamp TWO External batch loop modes at a node, outer first: realizes a

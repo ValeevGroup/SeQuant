@@ -17,9 +17,11 @@
 #include <functional>
 #include <initializer_list>
 #include <limits>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -1418,6 +1420,105 @@ inline void populate_build_scope_walk(
   }
 }
 
+/// \brief Debug safety net (routed from the Task-4-fix review): \c
+/// populate_cell_mode_to_level's map-based position resolution (\c
+/// ModeToLevel::mode_of, consulted by Task 7's \c slice_to_use) leans on
+/// \c (level.depth, level.space, level.ordinal) being unique GLOBALLY across
+/// the whole realized tree -- i.e. any two blocks sharing that triple must
+/// also share the same representative \c axis, or \c mode_of could resolve a
+/// level onto the wrong physical index. \c well_formed only checks ordinal
+/// uniqueness among a block's OWN same-axis DIRECT children (sibling-local,
+/// see \c ordered_schedule_block_well_formed above) -- it says nothing about
+/// two blocks at the same (depth, space, ordinal) that are NOT siblings (say,
+/// nested under different parents). Walk every block in the tree and assert
+/// the stronger, global invariant loudly: a violation means the scheduler
+/// emitted two structurally-distinct loops the level map cannot tell apart,
+/// which would make Task 7's map-based slicing silently mis-resolve. Debug-
+/// only insurance; expected to never fire on any fixture.
+inline void assert_global_level_axis_uniqueness(
+    ScopeBlock const& block,
+    std::map<std::tuple<std::size_t, std::wstring, int>, Index>& seen) {
+  for (Step const& step : block.steps) {
+    auto const* child = std::get_if<ScopeBlock>(&step.value);
+    if (!child) continue;
+    auto const key = std::make_tuple(child->level.depth, child->level.space,
+                                     child->level.ordinal);
+    auto const [it, inserted] = seen.try_emplace(key, child->axis);
+    SEQUANT_ASSERT(
+        (inserted || it->second == child->axis) &&
+        "populate_cell_mode_to_level: two blocks at the same DAG-scope level "
+        "(depth, space, ordinal) realize DIFFERENT representative axes -- "
+        "mode_to_level's position resolution assumes this triple names one "
+        "axis globally, not just among a block's own direct siblings");
+    assert_global_level_axis_uniqueness(*child, seen);
+  }
+}
+
+/// \brief The CORE of \c populate_cell_mode_to_level (construction steps 1-3
+/// of its doc comment), factored out so it can run against a const \p rich --
+/// needed by \c run_ordered_schedule_pre_results (ordered_executor.hpp),
+/// which only has a \c RichSchedule const& in hand and must self-wire the
+/// node->ModeToLevel seam regardless of whether its caller already did (see
+/// that function's own doc comment). Returns one \c ModeToLevel per \p
+/// rich.cells element, in the SAME order (indexed by value_id) -- \c
+/// populate_cell_mode_to_level copies this back into \p rich.cells for
+/// callers/tests that inspect \c ValueCell::mode_to_level directly (e.g.
+/// test_ordered_schedule.cpp); the executor-side self-wiring below builds its
+/// hash-keyed seam map straight from this return value, touching \p rich not
+/// at all.
+inline container::svector<ModeToLevel> compute_cell_mode_to_level(
+    OrderedSchedule const& ordered, RichSchedule const& rich) {
+  // Debug safety net: the global (depth, space, ordinal) -> axis uniqueness
+  // this construction relies on (see assert_global_level_axis_uniqueness's
+  // doc comment above) -- cheap, and expected to never fire.
+  {
+    std::map<std::tuple<std::size_t, std::wstring, int>, Index> seen;
+    assert_global_level_axis_uniqueness(ordered.root, seen);
+  }
+
+  // (1) fetch/eval scope of every produced or escaped value: enclosing blocks
+  // (axis + level), read off the realized block tree.
+  std::unordered_map<std::size_t, container::svector<ScopeBlockAxisLevel>>
+      build_scope;
+  populate_build_scope_walk(ordered.root, {}, build_scope);
+
+  // (2) operand edges (leaves included).
+  OrderedScheduleDepGraph const g = ordered_schedule_dep_graph(rich);
+
+  // Initialize every cell's map to its carried rank, all-unmapped.
+  container::svector<ModeToLevel> result(rich.cells.size());
+  for (std::size_t i = 0; i < rich.cells.size(); ++i)
+    result[i].by_mode.assign(rich.cells[i].carried.size(), std::nullopt);
+
+  // (3) for each consumer P and operand W of P, stamp P's enclosing blocks
+  // onto W's carried modes (exact Index match against the block's axis).
+  for (auto const& [parent_vid, operands] : g.depends_on) {
+    auto const sit = build_scope.find(parent_vid);
+    if (sit == build_scope.end()) continue;  // parent has no enclosing loop
+    container::svector<ScopeBlockAxisLevel> const& scope = sit->second;
+    if (scope.empty()) continue;
+    for (std::size_t w_vid : operands) {
+      ValueCell const& w = rich.cells[w_vid];
+      for (ScopeBlockAxisLevel const& blk : scope) {
+        for (std::size_t p = 0; p < w.carried.size(); ++p) {
+          if (!(w.carried[p] == blk.axis)) continue;
+          std::optional<DagScopeLevel>& slot = result[w_vid].by_mode[p];
+          if (!slot) {
+            slot = blk.level;
+          } else {
+            SEQUANT_ASSERT(
+                *slot == blk.level &&
+                "compute_cell_mode_to_level: divergent mode_to_level across "
+                "fetch sites -- the value should have been split");
+          }
+          break;  // a block axis is one Index -> at most one carried position
+        }
+      }
+    }
+  }
+  return result;
+}
+
 }  // namespace detail
 
 ///
@@ -1483,48 +1584,11 @@ inline void populate_build_scope_walk(
 ///
 inline void populate_cell_mode_to_level(OrderedSchedule const& ordered,
                                         RichSchedule& rich) {
-  // (1) fetch/eval scope of every produced or escaped value: enclosing blocks
-  // (axis + level), read off the realized block tree.
-  std::unordered_map<std::size_t,
-                     container::svector<detail::ScopeBlockAxisLevel>>
-      build_scope;
-  detail::populate_build_scope_walk(ordered.root, {}, build_scope);
-
-  // (2) operand edges (leaves included).
-  detail::OrderedScheduleDepGraph const g =
-      detail::ordered_schedule_dep_graph(rich);
-
-  // Initialize every cell's map to its carried rank, all-unmapped.
-  for (ValueCell& cell : rich.cells) {
-    cell.mode_to_level.by_mode.assign(cell.carried.size(), std::nullopt);
-  }
-
-  // (3) for each consumer P and operand W of P, stamp P's enclosing blocks
-  // onto W's carried modes (exact Index match against the block's axis).
-  for (auto const& [parent_vid, operands] : g.depends_on) {
-    auto const sit = build_scope.find(parent_vid);
-    if (sit == build_scope.end()) continue;  // parent has no enclosing loop
-    container::svector<detail::ScopeBlockAxisLevel> const& scope = sit->second;
-    if (scope.empty()) continue;
-    for (std::size_t w_vid : operands) {
-      ValueCell& w = rich.cells[w_vid];
-      for (detail::ScopeBlockAxisLevel const& blk : scope) {
-        for (std::size_t p = 0; p < w.carried.size(); ++p) {
-          if (!(w.carried[p] == blk.axis)) continue;
-          std::optional<DagScopeLevel>& slot = w.mode_to_level.by_mode[p];
-          if (!slot) {
-            slot = blk.level;
-          } else {
-            SEQUANT_ASSERT(
-                *slot == blk.level &&
-                "populate_cell_mode_to_level: divergent mode_to_level across "
-                "fetch sites -- the value should have been split");
-          }
-          break;  // a block axis is one Index -> at most one carried position
-        }
-      }
-    }
-  }
+  container::svector<ModeToLevel> const per_cell =
+      detail::compute_cell_mode_to_level(ordered, rich);
+  SEQUANT_ASSERT(per_cell.size() == rich.cells.size());
+  for (std::size_t i = 0; i < rich.cells.size(); ++i)
+    rich.cells[i].mode_to_level = per_cell[i];
 }
 
 }  // namespace sequant::eval

@@ -4440,14 +4440,16 @@ TEST_CASE("batched cached intermediate is sliced to the batch block on use",
 
   auto inner = cache_t::empty();
   inner.set_parent(&outer);
-  // DAG-scope level is a placeholder (Task 6 plumbing only -- this test
-  // exercises the OLD, exact-axis resolution, which reads `.axis` / `.range`,
-  // not `.level`).
+  // DAG-scope level is a placeholder. This test exercises the exact-axis
+  // resolution (forest / whole-scope style: exact_axis == axis), which
+  // slice_to_use's ordered-path flip (Task 7) still resolves via
+  // index_position(nd, *exact_axis) -- byte-identical to the pre-Task-7
+  // `.axis` / `.range`-driven path this test was written against.
   inner.set_batch_context(
       {{mode,
         sequant::DagScopeLevel{1, std::wstring(mode.space().base_key()), 0},
         {blk_lo, blk_hi},
-        std::nullopt}});
+        mode}});
 
   gh_evals = 0;  // count only the slice-on-use run
   auto const res =

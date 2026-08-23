@@ -79,16 +79,21 @@ EvalNodeDryRun router_test_leaf_node(ExprPtr const& t) {
 }
 
 /// Builds one BatchContext entry for these router unit tests. \p depth is a
-/// placeholder DAG-scope nest position (Task 6 plumbing only -- these tests
-/// exercise the OLD, exact-axis resolution these entries' \c .axis / \c
-/// .range fields still drive; \c .level is not consulted here).
+/// placeholder DAG-scope nest position. These tests exercise the exact-axis
+/// resolution (forest / whole-scope style: \c exact_axis == \c axis), which
+/// \c slice_to_use's ordered-path flip (Task 7) still resolves via
+/// \c index_position(nd, *exact_axis) -- byte-identical to the pre-Task-7
+/// \c .axis / \c .range -driven path these tests were written against; \c
+/// .level (the map-based resolution) is exercised only by the ORDERED
+/// executor's own entries (\c exact_axis == nullopt), not by these hand-built
+/// ones.
 BatchContextEntry router_test_ctx_entry(Index const& ax, std::size_t lo,
                                         std::size_t hi, std::size_t depth) {
   return BatchContextEntry{
       ax,
       DagScopeLevel{depth, std::wstring(ax.space().base_key()), 0},
       {lo, hi},
-      std::nullopt};
+      ax};
 }
 
 }  // namespace

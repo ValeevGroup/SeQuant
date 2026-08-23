@@ -845,37 +845,18 @@ ResultPtr evaluate(Nodes const& forest, BatchPolicy const& policy,
 
     eval::dryrun::SizeRegime const regime;
     eval::dryrun::CostModel const cm{regime};
-    // NOT const: populate_cell_mode_to_level (below) fills in each cell's
-    // mode_to_level from the ordered schedule build_ordered_schedule returns.
-    // build_ordered_schedule itself only reads rich (const&), so this
-    // reordering is safe; rich is passed on to evaluate_ordered_schedule as
-    // const& below, exactly as before.
-    eval::RichSchedule rich = eval::compute_dag_boulevard(forest, cm, target);
+    eval::RichSchedule const rich =
+        eval::compute_dag_boulevard(forest, cm, target);
     eval::LegalitySchedule const legality =
         eval::analyze_legality(rich, forest, policy);
     eval::OrderedSchedule const ordered =
         eval::build_ordered_schedule(rich, legality, policy, mode_order);
-    eval::populate_cell_mode_to_level(ordered, rich);
-
-    // Task 6 (dag-scope-runtime-slicing plan): the node->ModeToLevel cache
-    // seam (cache_manager.hpp), built here from rich.cells (each cell's hash
-    // -> its just-populated mode_to_level) and wired onto `cache` for the
-    // duration of this call. PLUMBING ONLY: nothing reads this seam yet (a
-    // later task's slice_to_use will); this just makes it available on the
-    // cache chain, mirroring how array_ops_/placement_router_ are wired.
-    // RAII-restored on every exit (incl. exceptions) so `cache` -- typically
-    // the caller's persistent, cross-iteration cache -- never keeps a stale
-    // pointer to `cell_mode_to_level_map`, which is local to this call.
-    std::unordered_map<std::size_t, ModeToLevel> cell_mode_to_level_map;
-    cell_mode_to_level_map.reserve(rich.cells.size());
-    for (auto const& cell : rich.cells)
-      cell_mode_to_level_map.emplace(cell.hash, cell.mode_to_level);
-    struct CellModeToLevelGuard {
-      CacheManager<N, FHC>& c;
-      std::unordered_map<std::size_t, ModeToLevel> const* prev;
-      ~CellModeToLevelGuard() { c.set_cell_mode_to_level(prev); }
-    } cell_mode_to_level_guard{cache, cache.cell_mode_to_level()};
-    cache.set_cell_mode_to_level(&cell_mode_to_level_map);
+    // Task 7 (dag-scope-runtime-slicing plan): the node->ModeToLevel cache
+    // seam (cache_manager.hpp) that slice_to_use's ordered-path resolution
+    // (eval.hpp) consults is now self-wired INSIDE
+    // detail::run_ordered_schedule_pre_results (ordered_executor.hpp) --
+    // the shared core evaluate_ordered_schedule below delegates to -- so it
+    // is correctly built and wired regardless of caller. Nothing to do here.
 
     // NODE-level lift of policy.is_volatile_leaf, exactly as make_evaluator's
     // own is_volatile_node lift (eval.hpp) computes it -- threaded into the

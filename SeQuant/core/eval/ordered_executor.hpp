@@ -587,6 +587,40 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   static_assert(std::is_same_v<node_t, N>,
                 "the forest's node type and the cache's node type must match");
 
+  // Task 7 (dag-scope-runtime-slicing plan): self-wire the node->ModeToLevel
+  // cache seam HERE, not only at the eval::evaluate dispatch wrapper
+  // (scope_executor.hpp), which wires an equivalent map before calling
+  // evaluate_ordered_schedule but is bypassed by any caller that invokes
+  // evaluate_ordered_schedule / evaluate_ordered_multiroot directly (this
+  // function is the shared core both delegate to) -- notably many unit tests
+  // exercising the ordered executor at this level. slice_to_use's ordered-
+  // path resolution (eval.hpp) now REQUIRES this map for the ordered push
+  // style (BatchContextEntry::exact_axis == nullopt): with the old space-
+  // fallback removed from that arm, an unwired seam would silently leave
+  // such an entry unsliced rather than mis-slice it, so this is a
+  // correctness dependency, not an optional convenience. Built from
+  // `ordered`/`rich` -- already in hand -- via the same
+  // detail::compute_cell_mode_to_level core populate_cell_mode_to_level uses
+  // (that function additionally mirrors the result into each
+  // ValueCell::mode_to_level for direct inspection by its own callers/tests;
+  // this call site only needs the hash-keyed seam map). RAII-restored on
+  // every exit (incl. exceptions), mirroring the wrapper's own
+  // CellModeToLevelGuard so a caller's persistent, cross-iteration `cache`
+  // never keeps a stale pointer into a map local to this call.
+  container::svector<ModeToLevel> const per_cell_mode_to_level =
+      compute_cell_mode_to_level(ordered, rich);
+  std::unordered_map<std::size_t, ModeToLevel> cell_mode_to_level_map;
+  cell_mode_to_level_map.reserve(rich.cells.size());
+  for (std::size_t i = 0; i < rich.cells.size(); ++i)
+    cell_mode_to_level_map.emplace(rich.cells[i].hash,
+                                   per_cell_mode_to_level[i]);
+  struct CellModeToLevelGuard {
+    CacheManager<N, FHC>& c;
+    std::unordered_map<std::size_t, ModeToLevel> const* prev;
+    ~CellModeToLevelGuard() { c.set_cell_mode_to_level(prev); }
+  } cell_mode_to_level_guard{cache, cache.cell_mode_to_level()};
+  cache.set_cell_mode_to_level(&cell_mode_to_level_map);
+
   // hash -> node, resolving a BuildStep's value_id (via rich.cells[vid].hash)
   // to the forest node evaluate_impl builds.
   auto const vmap = build_value_node_map(forest);
