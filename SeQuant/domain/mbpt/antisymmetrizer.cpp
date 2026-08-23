@@ -85,8 +85,7 @@ antisymm_element::antisymm_element(ExprPtr ex_) {
             new_kets.push_back(unique_kets_list[j].second[index_label_pos]);
             index_label_pos++;
           }
-          // mbpt tensors are particle (column) symmetric; the programmatic
-          // Tensor default is column-Nonsymm, so request Symm explicitly
+          // mbpt tensors are particle (column) symmetric
           auto new_tensor = ex<Tensor>(
               label, bra(std::move(new_bras)), ket(std::move(new_kets)),
               Symmetry::Nonsymm, std::nullopt, ColumnSymmetry::Symm);

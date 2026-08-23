@@ -323,11 +323,8 @@ struct Transformer {
                             ann(std::move(braIndices)), vac);
     }
 
-    // Force the defining symmetry of each reserved (anti)symmetrization
-    // operator (overriding the parsed/default one). The two differ by design:
-    // the antisymmetrizer Â antisymmetrizes within bra and within ket (a
-    // permutational #Symmetry), whereas the symmetrizer Ŝ symmetrizes the
-    // {bra,ket} particle columns (a #ColumnSymmetry).
+    // Force the defining symmetries of the reserved (anti)symmetrization
+    // operators; see sequant::{anti,}symmetrizer_symmetries.
     const bool is_reserved_symmetrizer =
         tensor.name == reserved::antisymm_label() ||
         tensor.name == reserved::symm_label();
@@ -335,17 +332,15 @@ struct Transformer {
       perm_symm = Symmetry::Antisymm;
     }
     if (is_reserved_symmetrizer) {
-      // both act on indistinguishable particles, hence are column-symmetric
-      // (for Â this also follows from its Antisymm perm symmetry). Force it
-      // rather than passing the Context's column default through, which the
-      // Tensor ctor would reject as a contradicting *explicit* request.
+      // force it rather than passing the Context's column default through,
+      // which the Tensor ctor would reject as a contradicting *explicit*
+      // request
       column_symm = ColumnSymmetry::Symm;
     }
-    // (Anti)symmetrization operators are always braket-Nonsymm. When no braket
-    // symmetry is spelled out, force Nonsymm rather than letting them inherit
-    // the Context's default Hermiticity (which could derive a non-Nonsymm
-    // braket and make a plain "Ŝ{...}"/"Â{...}" fail to construct). An explicit
-    // braket spec is left untouched so the Tensor ctor still rejects it.
+    // likewise, force braket-Nonsymm rather than inheriting the Context's
+    // default Hermiticity, which could derive a non-Nonsymm braket and make a
+    // plain "Ŝ{...}"/"Â{...}" fail to construct; an explicit braket spec is
+    // left untouched so that the Tensor ctor still rejects it
     if (is_reserved_symmetrizer &&
         (!tensor.symmetry.has_value() ||
          tensor.symmetry.value().braket_symm == ast::SymmetrySpec::unspecified))

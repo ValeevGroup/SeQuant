@@ -609,10 +609,8 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
         [this, opsymm_opt, full_label, op_herm](
             const auto& creidxs, const auto& annidxs, const auto& batchidxs,
             Symmetry opsymm) {
-          // mbpt operators act on indistinguishable particles, so they are
-          // particle (column) symmetric; the programmatic Tensor default is
-          // Nonsymm, so request Symm explicitly (harmless/redundant when opsymm
-          // is (Anti)symm, which already implies column symmetry).
+          // mbpt operators act on indistinguishable particles, hence are
+          // particle (column) symmetric
           return ex<Tensor>(full_label, bra(creidxs), ket(annidxs),
                             aux(batchidxs), opsymm_opt ? *opsymm_opt : opsymm,
                             op_herm, ColumnSymmetry::Symm);
@@ -624,9 +622,8 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
       cre_spaces_, ann_spaces_,
       [this, opsymm_opt, full_label, op_herm](
           const auto& creidxs, const auto& annidxs, Symmetry opsymm) {
-        // mbpt operators act on indistinguishable particles, so they are
-        // particle (column) symmetric; request Symm explicitly (the
-        // programmatic Tensor default is Nonsymm).
+        // mbpt operators act on indistinguishable particles, hence are
+        // particle (column) symmetric
         return ex<Tensor>(full_label, bra(creidxs), ket(annidxs),
                           opsymm_opt ? *opsymm_opt : opsymm, op_herm,
                           ColumnSymmetry::Symm);
@@ -710,9 +707,9 @@ ExprPtr F(bool use_tensor, const IndexSpace& reference_occupied) {
               auto ketidxs_K = ketidxs;
               using std::begin;
               ketidxs_K.emplace(begin(ketidxs_K), m2);
-              // g is a 2-particle integral over indistinguishable particles ->
-              // particle (column) symmetric; the Antisymm branch above gets
-              // this implicitly, but Nonsymm perm does not, so request it.
+              // g is an integral over indistinguishable particles, hence is
+              // particle (column) symmetric (which the Antisymm branch above
+              // gets implicitly, but Nonsymm perm does not)
               return (ex<Tensor>(L"g", bra(std::move(braidx_J)),
                                  ket(std::move(ketidxs_J)), Symmetry::Nonsymm,
                                  std::nullopt, ColumnSymmetry::Symm) -
@@ -1355,8 +1352,7 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
             ketidxs.size());  // need to handle particle # violating case?
         const auto rank = braidxs.size();
         // an RDM over indistinguishable particles is particle (column)
-        // symmetric; the Antisymm (spinor) branch implies it, the Nonsymm
-        // (spin-free) branch needs it requested explicitly.
+        // symmetric (which the Antisymm branch implies, but Nonsymm does not)
         return ex<Tensor>(
             rdm_label, bra(std::move(braidxs)), ket(std::move(ketidxs)),
             rank > 1 && spinor ? Symmetry::Antisymm : Symmetry::Nonsymm,

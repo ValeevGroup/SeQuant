@@ -58,15 +58,10 @@ class Context {
     constexpr static auto braket_typesetting = BraKetTypesetting::ContraSub;
     constexpr static auto braket_slot_typesetting =
         BraKetSlotTypesetting::TensorPackage;
-    // default symmetries used when *deserializing* a tensor whose symmetry is
-    // under-specified in the input; the library defaults are the *safest* (most
-    // general) possible, and applications can fine-tune them via Context for
-    // ergonomics (e.g. mbpt assumes particle-symmetric tensors). These do NOT
-    // affect the programmatic Tensor ctors, whose defaults are fixed and
-    // independent of the ambient Context. Note that there is no braket-symmetry
-    // default: braket symmetry is a *derived* property of a tensor (from its
-    // #Hermiticity and #base_field), so #hermiticity is the knob instead (cf.
-    // removal of Context::braket_symmetry).
+    // default symmetries of a *deserialized* tensor whose symmetry is
+    // under-specified in the input; the programmatic Tensor ctors are not
+    // affected (see Tensor::Defaults). There is no braket-symmetry default
+    // since braket symmetry is derived from #hermiticity and #base_field.
     constexpr static auto symmetry = Symmetry::Nonsymm;
     constexpr static auto hermiticity = Hermiticity::NonHermitian;
     constexpr static auto column_symmetry = ColumnSymmetry::Nonsymm;

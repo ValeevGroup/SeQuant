@@ -247,10 +247,8 @@ AST parse(const StartRule &start, std::wstring_view input,
 
 transform::DefaultSymmetries to_default_symms(
     const DeserializationOptions &options) {
-  // unspecified symmetries default to the active Context's tensor-symmetry
-  // defaults; braket symmetry is seeded as the Context's Hermiticity, which is
-  // resolved against each tensor's base_field downstream (matching the
-  // programmatic Tensor ctor). Per-call DeserializationOptions still override.
+  // unspecified symmetries default to the active Context's; the Hermiticity is
+  // resolved against each tensor's base_field downstream, as in the Tensor ctor
   const Context &ctx = get_default_context();
   transform::DefaultSymmetries symms{ctx.symmetry(), ctx.hermiticity(),
                                      ctx.column_symmetry()};

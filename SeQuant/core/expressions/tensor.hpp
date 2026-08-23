@@ -57,14 +57,13 @@ DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(aux);
 /// @brief named-parameter pack of a Tensor's symmetry attributes
 ///
 /// Passed to the Tensor constructors as a single argument (the named-parameter
-/// idiom via designated initializers) instead of the positional
-/// `Symmetry`/`BraKetSymmetry`/`ColumnSymmetry` arguments, sidestepping their
-/// order strictness. Each field is optional: a field left unset falls back to
-/// the *fixed* library default when the Tensor is constructed (see
-/// Tensor::resolve_symmetries), exactly as an omitted positional argument
-/// would. This makes it easy to define one symmetry pack for a translation unit
-/// (e.g. `constexpr TensorSymmetries particle_symmetric{.column =
-/// ColumnSymmetry::Symm};`) and reuse it at every construction site.
+/// idiom via designated initializers) instead of the order-sensitive positional
+/// `Symmetry`/`BraKetSymmetry`/`ColumnSymmetry` arguments. Each field is
+/// optional; an unset one falls back to the *fixed* library default (see
+/// Tensor::resolve_symmetries). This makes it easy to define one symmetry pack
+/// for a translation unit (e.g. `constexpr TensorSymmetries
+/// particle_symmetric{.column = ColumnSymmetry::Symm};`) and reuse it at every
+/// construction site.
 ///
 /// @note #braket and #hermiticity are two ways to specify the same underlying
 ///       trait: if #braket is set it is used directly (and, unless #hermiticity
@@ -93,10 +92,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// symmetry argument (or an unset TensorSymmetries field) against these; see
   /// resolve_symmetries(). They are *independent of the active
   /// sequant::Context* -- unlike deserialization, whose corresponding defaults
-  /// come from Context. There is deliberately no BraKetSymmetry default: the
-  /// braket symmetry is never a free default but is *derived* from #hermiticity
-  /// and the tensor's #base_field via to_braket_symmetry() (so the default
-  /// Hermiticity #NonHermitian yields a #Nonsymm braket over any field).
+  /// come from Context. There is deliberately no BraKetSymmetry default: it is
+  /// *derived* from #hermiticity and the tensor's #base_field via
+  /// to_braket_symmetry().
   struct Defaults {
     /// default bra/ket permutational Symmetry
     static constexpr Symmetry symmetry = Symmetry::Nonsymm;
@@ -307,15 +305,13 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
 
   /// the four symmetry attributes of a Tensor, fully resolved (no defaulting
   /// left to do)
-  struct resolved_symmetries {
+  struct ResolvedSymmetries {
     Symmetry symmetry;
     BraKetSymmetry braket_symmetry;
     Hermiticity hermiticity;
     ColumnSymmetry column_symmetry;
-    /// whether #column_symmetry was spelled out by the caller (rather than
-    /// defaulted); check_symmetries() rejects an explicit column symmetry that
-    /// contradicts a reserved label's defining symmetry, but silently supplies
-    /// the correct one when it was merely left unspecified
+    /// whether #column_symmetry was spelled out by the caller rather than
+    /// defaulted; see check_symmetries()
     bool column_symmetry_specified;
   };
 
@@ -336,23 +332,18 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   ///       the boundary that turns under-specified external input into tensors;
   ///       domains that need a different programmatic default (e.g. mbpt, whose
   ///       tensors are particle/column-symmetric) pass it explicitly.
-  static resolved_symmetries resolve_symmetries(const TensorSymmetries &syms,
-                                                Field base_fld) {
-    // unspecified attributes fall back to the single source of truth
+  static ResolvedSymmetries resolve_symmetries(const TensorSymmetries &syms,
+                                               Field base_fld) {
     const Symmetry s_resolved = syms.perm.value_or(Defaults::symmetry);
     const ColumnSymmetry ps_resolved =
         syms.column.value_or(Defaults::column_symmetry);
     const Hermiticity h_resolved =
         syms.hermiticity.value_or(Defaults::hermiticity);
-    // braket symmetry is derived from the explicit-or-default Hermiticity and
-    // the base field unless it was given explicitly
     const BraKetSymmetry bks_resolved =
         syms.braket.has_value() ? *syms.braket
                                 : to_braket_symmetry(h_resolved, base_fld);
-    // report the exact #Hermiticity trait (incl. AntiHermitian, which the
-    // BraKetSymmetry round-trip cannot represent) when Hermiticity was given;
-    // otherwise, if only BraKetSymmetry was given, back-fill Hermiticity from
-    // it; otherwise use the (default) Hermiticity that already fed bks_resolved
+    // an explicit Hermiticity is reported verbatim, to preserve traits that
+    // the BraKetSymmetry round-trip cannot represent (e.g. AntiHermitian)
     const Hermiticity hermiticity_resolved =
         syms.hermiticity.has_value()
             ? *syms.hermiticity
@@ -369,7 +360,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   Tensor(S &&label, const bra<IndexRange1> &bra_indices,
          const ket<IndexRange2> &ket_indices,
          const aux<IndexRange3> &aux_indices, reserved_tag,
-         resolved_symmetries rsym)
+         ResolvedSymmetries rsym)
       : label_(toUtf16(std::forward<S>(label))),
         bra_(make_indices(bra_indices)),
         ket_(make_indices(ket_indices)),
@@ -392,7 +383,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   Tensor(S &&label, bra<index_container_type> &&bra_indices,
          ket<index_container_type> &&ket_indices,
          aux<index_container_type> &&aux_indices, reserved_tag,
-         resolved_symmetries rsym)
+         ResolvedSymmetries rsym)
       : label_(toUtf16(std::forward<S>(label))),
         bra_(std::move(bra_indices)),
         ket_(std::move(ket_indices)),
@@ -410,8 +401,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     canonicalize_slots();
   }
 
-  // defaulting reserved-tag ctor (range form): resolves unspecified symmetries
-  // against fixed library defaults, then delegates to the resolved terminal
+  // defaulting reserved-tag ctor (range form)
   template <basic_string_convertible S, range_of_castables_to_index IndexRange1,
             range_of_castables_to_index IndexRange2,
             range_of_castables_to_index IndexRange3>
@@ -431,9 +421,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
          ket<index_container_type> &&ket_indices,
          aux<index_container_type> &&aux_indices, reserved_tag,
          const TensorSymmetries &syms = {})
-      // base_field(bra_indices, ket_indices) is read during argument
-      // evaluation, before the delegated ctor moves the indices out -- safe
-      // regardless of argument evaluation order
+      // base_field() takes its arguments by value and the indices are moved
+      // only in the delegated ctor's member-init list, so this reads them
+      // intact
       : Tensor(std::forward<S>(label), std::move(bra_indices),
                std::move(ket_indices), std::move(aux_indices), reserved_tag{},
                resolve_symmetries(
@@ -589,10 +579,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   Tensor(S &&label, const bra<IndexRange1> &bra_indices,
          const ket<IndexRange2> &ket_indices, Symmetry s, Hermiticity h,
          std::optional<ColumnSymmetry> ps = std::nullopt)
-      // pass the Hermiticity through to the reserved-tag ctor, which derives
-      // braket_symmetry_ from it and base_field() before canonicalize_slots()
-      // runs (the latter keys off braket_symmetry_), and preserves the exact
-      // trait (incl. AntiHermitian) in hermiticity_.
+      // braket_symmetry_ must be derived from h before canonicalize_slots()
+      // runs, so let the reserved-tag ctor do it
       : Tensor(std::forward<S>(label), bra_indices, ket_indices, sequant::aux{},
                reserved_tag{},
                TensorSymmetries{.perm = s, .hermiticity = h, .column = ps}) {
@@ -616,10 +604,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
          const ket<IndexRange2> &ket_indices,
          const aux<IndexRange3> &aux_indices, Symmetry s, Hermiticity h,
          std::optional<ColumnSymmetry> ps = std::nullopt)
-      // pass the Hermiticity through to the reserved-tag ctor, which derives
-      // braket_symmetry_ from it and base_field() before canonicalize_slots()
-      // runs (the latter keys off braket_symmetry_), and preserves the exact
-      // trait (incl. AntiHermitian) in hermiticity_.
+      // braket_symmetry_ must be derived from h before canonicalize_slots()
+      // runs, so let the reserved-tag ctor do it
       : Tensor(std::forward<S>(label), bra_indices, ket_indices, aux_indices,
                reserved_tag{},
                TensorSymmetries{.perm = s, .hermiticity = h, .column = ps}) {
@@ -960,9 +946,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   void check_symmetries(bool column_symmetry_specified) {
     if (symmetry_ == Symmetry::Symm || symmetry_ == Symmetry::Antisymm) {
       // (Anti)symmetry in bra and ket indices automatically implies column
-      // symmetry. N.B. this promotion runs first so that the reserved-label
-      // check below sees the implied column symmetry (the antisymmetrizer Â is
-      // Antisymm, hence column-symmetric by implication alone).
+      // symmetry. N.B. must run before the reserved-label check below, which
+      // would otherwise report the (Antisymm) antisymmetrizer as contradicting.
       column_symmetry_ = ColumnSymmetry::Symm;
     }
 
@@ -976,15 +961,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       if (braket_symmetry_ != BraKetSymmetry::Nonsymm)
         throw Exception(
             "(Anti)symmetrization operators must not have braket symmetry");
-      // (Anti)symmetrization operators act on indistinguishable particles, so
-      // they are always particle- (column-) symmetric; this is a defining
-      // property, not a free parameter, so reject a contradicting explicit
-      // request (like the braket symmetry above) and supply the correct value
-      // when none was given. The latter makes a (anti)symmetrizer identical
-      // however it was built -- programmatically, where the column-symmetry
-      // default is the Context-independent Nonsymm, or by deserialization --
-      // since a mismatch would silently prevent otherwise-equal terms from
-      // cancelling.
+      // (Anti)symmetrization operators act on indistinguishable particles,
+      // hence are always column-symmetric; supplying it when unspecified makes
+      // them compare equal however they were built (a mismatch would silently
+      // prevent otherwise-equal terms from cancelling).
       if (column_symmetry_specified && column_symmetry_ != ColumnSymmetry::Symm)
         throw Exception(
             "(Anti)symmetrization operators must be column (particle) "
@@ -1168,10 +1148,8 @@ static_assert(is_tensor<Tensor>,
 using TensorPtr = std::shared_ptr<Tensor>;
 
 inline ExprPtr make_overlap(const Index &bra_index, const Index &ket_index) {
-  // metric/overlap tensors are particle (column) symmetric by convention, and
-  // must compare equal to the same overlap parsed from text (which the
-  // deserializer builds Symm under an mbpt Context); the programmatic column
-  // default is Nonsymm, so request Symm explicitly.
+  // overlap tensors are particle (column) symmetric by convention, and must
+  // compare equal to the same overlap obtained by deserialization
   return ex<Tensor>(Tensor(reserved::overlap_label(), bra{bra_index},
                            ket{ket_index}, aux{}, Tensor::reserved_tag{},
                            TensorSymmetries{.perm = Symmetry::Nonsymm,
@@ -1179,7 +1157,7 @@ inline ExprPtr make_overlap(const Index &bra_index, const Index &ket_index) {
 }
 
 inline ExprPtr make_kronecker(const Index &bra_index, const Index &ket_index) {
-  // see make_overlap: a Kronecker delta is likewise particle (column) symmetric
+  // as in make_overlap, a Kronecker delta is particle (column) symmetric
   return ex<Tensor>(Tensor(reserved::kronecker_label(), bra{bra_index},
                            ket{ket_index}, aux{}, Tensor::reserved_tag{},
                            TensorSymmetries{.perm = Symmetry::Nonsymm,

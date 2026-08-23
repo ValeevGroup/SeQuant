@@ -15,10 +15,8 @@
 
 namespace sequant::mbpt {
 
-// THC/DF factor and central tensors live in the particle-indistinguishable
-// MBPT domain, so they are particle- (column-) symmetric; programmatic Tensor
-// construction is Context-independent (see Tensor::Defaults), so spell that
-// default out here and feed it at every factor construction site.
+// THC/DF factor and central tensors act on indistinguishable particles, hence
+// are particle (column) symmetric
 namespace {
 constexpr TensorSymmetries particle_symmetric{.column = ColumnSymmetry::Symm};
 }  // namespace
