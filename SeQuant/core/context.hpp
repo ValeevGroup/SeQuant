@@ -22,13 +22,11 @@ namespace sequant {
 /// orthonormal to their dual (bra) counterparts
 ///   (`IndexSpaceMetric::Unit`) or not (`IndexSpaceMetric::General`);
 ///    this affects the value of Wick contractions.
-/// - `braket_symmetry`: whether the primal (ket) and dual (bra) vector space
-/// _bases_
-///    are "equivalent" (homogenous to each other; `BraKetSymmetry::Symm`),
-///    "conjugate to each other" (<a
-///    href="https://en.wikipedia.org/wiki/Antilinear_map">conjugate-homogenous</a>
-///    to each other; `BraKetSymmetry::Conjugate`) or are "nonequivalent" (not
-///    homogeneous; `BraKetSymmetry::Nonsymm`)
+/// - `symmetry`, `hermiticity`, `column_symmetry`: the symmetries given to a
+///    *deserialized* tensor that does not specify them; the programmatic
+///    Tensor ctors are unaffected (see Tensor::Defaults). There is no
+///    `braket_symmetry` knob: a tensor's BraKetSymmetry is derived from its
+///    `hermiticity` and base field.
 /// - `spbasis`: whether the bra/ket bases are spinor (`SPBasis::Spinor`) or
 /// spin-free (`SPBasis::Spinfree`).
 /// - `first_dummy_index_ordinal`: during its operation SeQuant will generate
@@ -58,10 +56,6 @@ class Context {
     constexpr static auto braket_typesetting = BraKetTypesetting::ContraSub;
     constexpr static auto braket_slot_typesetting =
         BraKetSlotTypesetting::TensorPackage;
-    // default symmetries of a *deserialized* tensor whose symmetry is
-    // under-specified in the input; the programmatic Tensor ctors are not
-    // affected (see Tensor::Defaults). There is no braket-symmetry default
-    // since braket symmetry is derived from #hermiticity and #base_field.
     constexpr static auto symmetry = Symmetry::Nonsymm;
     constexpr static auto hermiticity = Hermiticity::NonHermitian;
     constexpr static auto column_symmetry = ColumnSymmetry::Nonsymm;

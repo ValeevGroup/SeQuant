@@ -545,6 +545,24 @@ TEST_CASE("serialization", "[serialization]") {
         }
       }
 
+      SECTION("(anti)symmetrization operators have fixed perm symmetry") {
+        // the defining bra/ket permutational symmetry of a reserved
+        // (anti)symmetrizer is not a free parameter either, so it must not be
+        // inherited from the Context; a parsed operator must match the one
+        // built by make_(anti)symmetrizer()
+        auto ctx = get_default_context();
+        ctx.set(Symmetry::Antisymm);
+        auto resetter = set_scoped_default_context(ctx);
+        const auto S = deserialize<ExprPtr>(L"Ŝ{i1,i2;a1,a2}");
+        REQUIRE(S->as<Tensor>().symmetry() == Symmetry::Nonsymm);
+        REQUIRE(S == make_symmetrizer(bra{Index(L"i_1"), Index(L"i_2")},
+                                      ket{Index(L"a_1"), Index(L"a_2")}));
+        const auto A = deserialize<ExprPtr>(L"Â{i1,i2;a1,a2}");
+        REQUIRE(A->as<Tensor>().symmetry() == Symmetry::Antisymm);
+        REQUIRE(A == make_antisymmetrizer(bra{Index(L"i_1"), Index(L"i_2")},
+                                          ket{Index(L"a_1"), Index(L"a_2")}));
+      }
+
       SECTION("(anti)symmetrization operators are always column symmetric") {
         // ... including under a Context whose column default is the library
         // default Nonsymm: the deserializer must force Symm rather than pass

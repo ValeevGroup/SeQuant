@@ -329,7 +329,11 @@ struct Transformer {
         tensor.name == reserved::antisymm_label() ||
         tensor.name == reserved::symm_label();
     if (tensor.name == reserved::antisymm_label()) {
+      // Â antisymmetrizes within bra and within ket, Ŝ only across the
+      // {bra,ket} particle columns (i.e. it is perm-Nonsymm)
       perm_symm = Symmetry::Antisymm;
+    } else if (tensor.name == reserved::symm_label()) {
+      perm_symm = Symmetry::Nonsymm;
     }
     if (is_reserved_symmetrizer) {
       // force it rather than passing the Context's column default through,
