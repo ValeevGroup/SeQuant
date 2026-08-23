@@ -4,6 +4,7 @@
 #include <SeQuant/core/asy_cost.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/backend_array_ops.hpp>
+#include <SeQuant/core/eval/dag_scope.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/eval/eval_node_compare.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
@@ -560,6 +561,44 @@ struct DefUseMeter {
 
 namespace sequant {
 
+/// \brief One entry of a \c CacheManager::BatchContext: the enclosing realized
+///        batch loop's axis, DAG-scope nest position, and element range.
+///
+/// \details A free (non-template) type -- like \c DagScopeLevel / \c
+/// ModeToLevel (\c dag_scope.hpp), which it embeds -- since none of its
+/// fields depend on the owning \c CacheManager's \c TreeNode /
+/// \c force_hash_collisions template parameters.
+///
+/// \c axis is the KEPT field: the OLD resolution path (\c evaluate_impl's
+/// Enter-stage \c slice_to_use, \c PlacementRouter::home_depth /
+/// \c home_resolution_consistent) still looks a fetched node's mode up by
+/// this exact \c Index (via \c index_position(nd, axis), with a
+/// space-mapped fallback for the ordered executor) -- unchanged by this
+/// struct's introduction. \c level is the NEW DAG-scope nest position a later
+/// task (Task 7) will resolve against instead. \c range is the loop's current
+/// element block (renamed from the old pair's \c second, same meaning).
+/// \c exact_axis is NEW: the ordered executor (which co-evaluates a whole
+/// type-bucketed block under one canonical \c block.axis) leaves it
+/// \c nullopt, while the forest / whole-scope evaluator (which pushes each
+/// member's own physical axis) fills it with that same axis -- redundant with
+/// \c axis today, but keeping the two fields separate lets Task 7 tell the two
+/// resolution strategies apart without re-deriving which one produced this
+/// entry.
+///
+/// Purely ADDITIVE relative to the old `std::pair<Index,
+/// std::pair<std::size_t, std::size_t>>`: every existing reader that used to
+/// destructure `{axis, {lo, hi}}` continues to compile once updated to name
+/// `.axis` / `.range` instead of `.first` / `.second` (a mechanical rename;
+/// see the callers this task updates), and every writer still populates
+/// exactly the same `{axis, {lo, hi}}` pair, now alongside `level` and
+/// `exact_axis`.
+struct BatchContextEntry {
+  Index axis;
+  DagScopeLevel level{};
+  std::pair<std::size_t, std::size_t> range{};
+  std::optional<Index> exact_axis{};
+};
+
 ///
 /// This class implements a cache manager useful for the cases when the number
 /// of times the cached objects will be accessed is known.
@@ -652,15 +691,15 @@ class CacheManager {
       container::svector<std::string> const& layouts, CacheManager&)>;
 
   /// The batch context: an ordered stack (outermost-first) of the enclosing
-  /// realized batch loops, one entry per loop, `{axis K, {block_lo, block_hi}}`
-  /// (element range). Set on the per-block scratch by the batched evaluator
-  /// before it re-enters evaluate(); read by the Enter-stage slice-on-use so a
-  /// cached intermediate fetched from an ancestor scope is sliced to the modes
-  /// of the loops the fetch crossed (see eval.hpp). Empty (default) => no
-  /// enclosing batch loop, so slice-on-use is inert and behavior is
-  /// byte-identical to the pre-slice-on-use path.
-  using BatchContext =
-      container::svector<std::pair<Index, std::pair<std::size_t, std::size_t>>>;
+  /// realized batch loops, one entry per loop (see \c BatchContextEntry: axis
+  /// K, its DAG-scope level, and the current `{block_lo, block_hi}` element
+  /// range). Set on the per-block scratch by the batched evaluator before it
+  /// re-enters evaluate(); read by the Enter-stage slice-on-use so a cached
+  /// intermediate fetched from an ancestor scope is sliced to the modes of the
+  /// loops the fetch crossed (see eval.hpp). Empty (default) => no enclosing
+  /// batch loop, so slice-on-use is inert and behavior is byte-identical to
+  /// the pre-slice-on-use path.
+  using BatchContext = container::svector<BatchContextEntry>;
 
   /// Result of access_at(): the fetched pointer plus the hop distance (number
   /// of parent links crossed) to the scope that held it. hops == 0 means a
@@ -903,6 +942,20 @@ class CacheManager {
   /// pointee must outlive this cache.
   BackendArrayOps const* array_ops_ = nullptr;
 
+  /// Non-owning node->ModeToLevel cache seam (see \c dag_scope.hpp), keyed by
+  /// a value's \c EvalExpr::hash_value() (the same identity \c
+  /// ValueCell::hash / \c RichSchedule::cells use). Populated by the ordered
+  /// executor's entry point from \c RichSchedule::cells (each cell's
+  /// \c mode_to_level), for a later task's runtime slicing resolution to
+  /// consult instead of the exact-\c Index axis walk. Inherited from
+  /// \c parent_ (only the root cache is wired in practice), mirroring \c
+  /// array_ops_ / \c placement_router_. Null (default) => no seam wired;
+  /// PLUMBING ONLY here -- nothing reads this yet (see \c mode_to_level_of),
+  /// so behavior is byte-identical. Non-owning; the pointee must outlive this
+  /// cache.
+  std::unordered_map<std::size_t, ModeToLevel> const* cell_mode_to_level_ =
+      nullptr;
+
   /// Running high-water mark (bytes) of the eval engine's live working set,
   /// updated by note_working_set() and cleared by reset(). Held here rather
   /// than in the recursive evaluate() so it persists across the whole
@@ -1110,6 +1163,34 @@ class CacheManager {
   ///         none is wired anywhere along the chain. Non-owning.
   [[nodiscard]] BackendArrayOps const* array_ops() const noexcept {
     return array_ops_ ? array_ops_ : parent_ ? parent_->array_ops() : nullptr;
+  }
+
+  /// Sets the node->ModeToLevel cache seam (see cell_mode_to_level_). Pass
+  /// nullptr to detach. Non-owning; the pointee must outlive this cache.
+  void set_cell_mode_to_level(
+      std::unordered_map<std::size_t, ModeToLevel> const* m) noexcept {
+    cell_mode_to_level_ = m;
+  }
+
+  /// \return the local node->ModeToLevel map if set, else the one inherited
+  ///         from \c parent_ (only the root cache is wired in practice);
+  ///         nullptr if none is wired anywhere along the chain. Non-owning.
+  [[nodiscard]] std::unordered_map<std::size_t, ModeToLevel> const*
+  cell_mode_to_level() const noexcept {
+    return cell_mode_to_level_ ? cell_mode_to_level_
+           : parent_           ? parent_->cell_mode_to_level()
+                               : nullptr;
+  }
+
+  /// Convenience: \p hash's \c ModeToLevel from the seam (see
+  /// cell_mode_to_level()), or nullptr if the seam is unwired or \p hash is
+  /// not a key of the wired map.
+  [[nodiscard]] ModeToLevel const* mode_to_level_of(
+      std::size_t hash) const noexcept {
+    auto const* m = cell_mode_to_level();
+    if (!m) return nullptr;
+    auto const it = m->find(hash);
+    return it == m->end() ? nullptr : &it->second;
   }
 
   /// Ensure a scope-hoist slot exists for @p key so a loop-invariant

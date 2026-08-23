@@ -360,7 +360,7 @@ void run_ordered_contracted_block(
   // batch blocks (block axis + batch count).
   if (log::printing()) {
     BatchContext s = ectx;
-    s.push_back({block.axis, {0, 0}});
+    s.push_back({block.axis, block.level, {0, 0}, std::nullopt});
     log::log("BatchGroup", "Begin",
              std::format("{} members co-evaluated over {} batches of {} {}",
                          members.size(), batches.size(),
@@ -403,7 +403,7 @@ void run_ordered_contracted_block(
       bs.cache.reset();
     }
     BatchContext ctx = ectx;
-    ctx.push_back({block.axis, {e_lo, e_hi}});
+    ctx.push_back({block.axis, block.level, {e_lo, e_hi}, std::nullopt});
     bs.cache.set_batch_context(ctx);
 
     for (Step const& step : block.steps) {
@@ -423,6 +423,10 @@ void run_ordered_contracted_block(
           built[build->value_id] = 1;
           continue;
         }
+        if (std::getenv("SEQUANT_UT_BLOCK_DIAG"))
+          std::cerr << "[BLOCK] axis=" << toUtf8(block.axis.full_label())
+                    << " batch=[" << e_lo << "," << e_hi
+                    << ") BUILD vid=" << build->value_id << std::endl;
         (void)evaluate_impl<EvalTrace>(resolve(build->value_id), leaf_evaluator,
                                        bs.cache);
         // R3: record this loop-local Transient as produced (it is built fresh
@@ -448,6 +452,14 @@ void run_ordered_contracted_block(
         continue;  // resident persistent output: reuse, don't re-sum
       auto const vid = block.outputs[k].first;
       auto const kind = block.outputs[k].second;
+      if (std::getenv("SEQUANT_UT_BLOCK_DIAG"))
+        std::cerr << "[BLOCK] axis=" << toUtf8(block.axis.full_label())
+                  << " batch=[" << e_lo << "," << e_hi << ") OUTPUT vid=" << vid
+                  << " kind="
+                  << (kind == OutputKind::AccumulateSum       ? "SUM"
+                      : kind == OutputKind::AccumulateScatter ? "SCATTER"
+                                                              : "?")
+                  << std::endl;
       ResultPtr part =
           evaluate_impl<EvalTrace>(resolve(vid), leaf_evaluator, bs.cache);
       if (kind == OutputKind::AccumulateSum) {

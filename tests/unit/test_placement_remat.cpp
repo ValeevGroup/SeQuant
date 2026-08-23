@@ -37,9 +37,11 @@
 
 namespace {
 
+using sequant::BatchContextEntry;
 using sequant::BatchModeType;
 using sequant::BatchPolicy;
 using sequant::binarize;
+using sequant::DagScopeLevel;
 using sequant::deserialize;
 using sequant::EvalExpr;
 using sequant::EvalNode;
@@ -122,6 +124,19 @@ EvalNode<EvalExpr> inode_remat(std::string_view result, EvalNode<EvalExpr> l,
 // Stamp a single External batch loop mode at a node.
 void stamp_ext_remat(EvalNode<EvalExpr>& n, Index ix) {
   n->set_batched_here({{std::move(ix), BatchModeType::External}});
+}
+
+// Builds one BatchContext entry for these placement_remat unit tests. \p
+// depth is a placeholder DAG-scope nest position (Task 6 plumbing only --
+// these tests exercise the OLD, exact-axis resolution these entries' \c
+// .axis / \c .range fields still drive; \c .level is not consulted here).
+BatchContextEntry remat_test_ctx_entry(Index const& ax, std::size_t lo,
+                                       std::size_t hi, std::size_t depth) {
+  return BatchContextEntry{
+      ax,
+      DagScopeLevel{depth, std::wstring(ax.space().base_key()), 0},
+      {lo, hi},
+      std::nullopt};
 }
 
 // Stamp TWO External batch loop modes at a node, outer first: realizes a
@@ -854,7 +869,8 @@ TEST_CASE(
   // --- Occurrence 1: V under P1, live loops {i_1 (outer), i_2 (inner)} ---
   // Replicate the runtime store seam: build the live BatchContext, derive its
   // modes, key the node, route, and resolve the home depth.
-  BatchContext const ectx1{{Index{L"i_1"}, {0, 2}}, {Index{L"i_2"}, {0, 2}}};
+  BatchContext const ectx1{remat_test_ctx_entry(Index{L"i_1"}, 0, 2, 1),
+                           remat_test_ctx_entry(Index{L"i_2"}, 0, 2, 2)};
   svector<Index> const ectx1_modes{Index{L"i_1"}, Index{L"i_2"}};
   auto const key1 = occurrence_key(forest[0].left(), ectx1_modes);  // V/P1
   HomeTarget const* home1 = router.route(key1);
@@ -869,7 +885,7 @@ TEST_CASE(
   CHECK(router.home_depth(*home1, ectx1, key1) == 2);
 
   // --- Occurrence 2: V under P2, only the i_1 loop is live ---
-  BatchContext const ectx2{{Index{L"i_1"}, {0, 2}}};
+  BatchContext const ectx2{remat_test_ctx_entry(Index{L"i_1"}, 0, 2, 1)};
   svector<Index> const ectx2_modes{Index{L"i_1"}};
   auto const key2 = occurrence_key(forest[1].left(), ectx2_modes);  // V/P2
   HomeTarget const* home2 = router.route(key2);

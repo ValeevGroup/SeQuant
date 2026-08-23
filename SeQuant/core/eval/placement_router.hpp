@@ -132,7 +132,7 @@ class PlacementRouter {
       for (auto const& ix : phys) {
         if (!(ix.space() == space)) continue;
         for (std::size_t i = 0; i < ctx.size(); ++i)
-          if (ctx[i].first == ix && i + 1 > deepest) deepest = i + 1;
+          if (ctx[i].axis == ix && i + 1 > deepest) deepest = i + 1;
       }
     return deepest;
   }
@@ -161,7 +161,7 @@ class PlacementRouter {
                                                 Key const& key) const {
     if (hd == 0) return true;
     if (hd > ctx.size()) return false;
-    Index const& hm = ctx[hd - 1].first;
+    Index const& hm = ctx[hd - 1].axis;
     auto const phys = key.template get_indices<container::svector<Index>>();
     if (std::find(phys.begin(), phys.end(), hm) == phys.end()) return false;
     for (auto const& space : home.dag_scope)

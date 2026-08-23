@@ -153,6 +153,19 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
   using BatchContext = typename Cache::BatchContext;
   using member_t = std::pair<node_t const*, Index>;
 
+  // Synthesized DAG-scope level for a forest/whole-scope push: this function
+  // realizes exactly ONE loop per invocation (over `ectx`, its own enclosing
+  // context), so every push site here shares the same depth (`ectx.size() +
+  // 1`, matching build_ordered_schedule's `d + 1` convention -- see
+  // DagScopeLevel's doc comment) and differs only in the pushed axis's space.
+  // Plumbing only (Task 6): nothing resolves by `level` yet on this path --
+  // the whole-scope evaluator's OLD resolution is exact-axis (`exact_axis`,
+  // filled at each push site below), which Task 7 will consult instead.
+  auto const synth_level = [&ectx](Index const& ax) -> DagScopeLevel {
+    return DagScopeLevel{ectx.size() + 1, std::wstring(ax.space().base_key()),
+                         0};
+  };
+
   container::svector<ResultPtr> out(members.size());
   ScopeNode const* const child =
       node.children.empty() ? nullptr : &node.children.front();
@@ -220,7 +233,7 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
       // env-gated.
       auto const scatter_scope = [&] {
         BatchContext s = ectx;
-        s.push_back({axis, {0, 0}});
+        s.push_back({axis, synth_level(axis), {0, 0}, axis});
         return log::scope_annot(s);
       };
       if (log::printing()) {
@@ -242,7 +255,7 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
         if (e_lo == e_hi) continue;
         bs.cache.reset();
         BatchContext ctx = ectx;
-        ctx.push_back({axis, {e_lo, e_hi}});
+        ctx.push_back({axis, synth_level(axis), {e_lo, e_hi}, axis});
         bs.cache.set_batch_context(ctx);
         ResultPtr part =
             child ? recurse(*child, container::svector<node_t const*>{m}, ctx,
@@ -294,7 +307,7 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
     // log::printing()-gated, first-class -- not env-gated).
     auto const con_scope = [&] {
       BatchContext s = ectx;
-      s.push_back({K, {0, 0}});
+      s.push_back({K, synth_level(K), {0, 0}, K});
       return log::scope_annot(s);
     };
     if (log::printing()) {
@@ -318,7 +331,7 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
         // Slice each member on ITS OWN physical axis; the element range is the
         // same across members (one global aux tiling), only the label differs.
         BatchContext ctx = ectx;
-        ctx.push_back({axes[m], {e_lo, e_hi}});
+        ctx.push_back({axes[m], synth_level(axes[m]), {e_lo, e_hi}, axes[m]});
         bs.cache.set_batch_context(ctx);
         ResultPtr part =
             evaluate_impl<EvalTrace>(*members[m], leaf_evaluator, bs.cache);
@@ -447,7 +460,7 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
   // their own Begin/End via the child recursion, so depth distinguishes levels.
   auto const nested_scope = [&] {
     BatchContext s = ectx;
-    s.push_back({K, {0, 0}});
+    s.push_back({K, synth_level(K), {0, 0}, K});
     return log::scope_annot(s);
   };
   if (log::printing()) {
@@ -476,8 +489,8 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
     for (auto const& hv : homed) {
       if (outer.alive(hv)) continue;  // shared: already built this block
       BatchContext hctx = ectx;
-      hctx.push_back(
-          {member_contracted_axis(hv, base).value_or(K), {e_lo, e_hi}});
+      Index const hax = member_contracted_axis(hv, base).value_or(K);
+      hctx.push_back({hax, synth_level(hax), {e_lo, e_hi}, hax});
       outer.set_batch_context(hctx);
       (void)evaluate_impl<EvalTrace>(hv, leaf_evaluator, outer);
     }
@@ -490,13 +503,16 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
     container::svector<ResultPtr> block(members.size());
     for (auto p : direct_pos) {
       BatchContext mctx = ectx;
-      mctx.push_back({axes[p], {e_lo, e_hi}});
+      mctx.push_back({axes[p], synth_level(axes[p]), {e_lo, e_hi}, axes[p]});
       outer.set_batch_context(mctx);
       block[p] = evaluate_impl<EvalTrace>(*members[p], leaf_evaluator, outer);
     }
     for (std::size_t g = 0; g != inner_groups.size(); ++g) {
       BatchContext gctx = ectx;
-      gctx.push_back({inner_group_axis[g], {e_lo, e_hi}});
+      gctx.push_back({inner_group_axis[g],
+                      synth_level(inner_group_axis[g]),
+                      {e_lo, e_hi},
+                      inner_group_axis[g]});
       container::svector<node_t const*> gmembers;
       gmembers.reserve(inner_groups[g].size());
       for (auto p : inner_groups[g]) gmembers.push_back(members[p]);
@@ -840,6 +856,26 @@ ResultPtr evaluate(Nodes const& forest, BatchPolicy const& policy,
     eval::OrderedSchedule const ordered =
         eval::build_ordered_schedule(rich, legality, policy, mode_order);
     eval::populate_cell_mode_to_level(ordered, rich);
+
+    // Task 6 (dag-scope-runtime-slicing plan): the node->ModeToLevel cache
+    // seam (cache_manager.hpp), built here from rich.cells (each cell's hash
+    // -> its just-populated mode_to_level) and wired onto `cache` for the
+    // duration of this call. PLUMBING ONLY: nothing reads this seam yet (a
+    // later task's slice_to_use will); this just makes it available on the
+    // cache chain, mirroring how array_ops_/placement_router_ are wired.
+    // RAII-restored on every exit (incl. exceptions) so `cache` -- typically
+    // the caller's persistent, cross-iteration cache -- never keeps a stale
+    // pointer to `cell_mode_to_level_map`, which is local to this call.
+    std::unordered_map<std::size_t, ModeToLevel> cell_mode_to_level_map;
+    cell_mode_to_level_map.reserve(rich.cells.size());
+    for (auto const& cell : rich.cells)
+      cell_mode_to_level_map.emplace(cell.hash, cell.mode_to_level);
+    struct CellModeToLevelGuard {
+      CacheManager<N, FHC>& c;
+      std::unordered_map<std::size_t, ModeToLevel> const* prev;
+      ~CellModeToLevelGuard() { c.set_cell_mode_to_level(prev); }
+    } cell_mode_to_level_guard{cache, cache.cell_mode_to_level()};
+    cache.set_cell_mode_to_level(&cell_mode_to_level_map);
 
     // NODE-level lift of policy.is_volatile_leaf, exactly as make_evaluator's
     // own is_volatile_node lift (eval.hpp) computes it -- threaded into the

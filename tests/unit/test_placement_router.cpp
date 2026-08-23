@@ -38,9 +38,11 @@
 
 namespace {
 
+using sequant::BatchContextEntry;
 using sequant::bra;
 using sequant::CacheManager;
 using sequant::ColumnSymmetry;
+using sequant::DagScopeLevel;
 using sequant::ex;
 using sequant::ExprPtr;
 using sequant::Index;
@@ -76,6 +78,19 @@ EvalNodeDryRun router_test_leaf_node(ExprPtr const& t) {
   return node;
 }
 
+/// Builds one BatchContext entry for these router unit tests. \p depth is a
+/// placeholder DAG-scope nest position (Task 6 plumbing only -- these tests
+/// exercise the OLD, exact-axis resolution these entries' \c .axis / \c
+/// .range fields still drive; \c .level is not consulted here).
+BatchContextEntry router_test_ctx_entry(Index const& ax, std::size_t lo,
+                                        std::size_t hi, std::size_t depth) {
+  return BatchContextEntry{
+      ax,
+      DagScopeLevel{depth, std::wstring(ax.space().base_key()), 0},
+      {lo, hi},
+      std::nullopt};
+}
+
 }  // namespace
 
 TEST_CASE("placement_router: home_depth resolves the deepest matching scope",
@@ -94,7 +109,8 @@ TEST_CASE("placement_router: home_depth resolves the deepest matching scope",
   auto node = router_test_leaf_node(t);
   auto const key = occurrence_key(node, svector<Index>{J, V});
 
-  ctx_type ctx{{J, {0, 1}}, {V, {0, 1}}};
+  ctx_type ctx{router_test_ctx_entry(J, 0, 1, 1),
+               router_test_ctx_entry(V, 0, 1, 2)};
 
   router_type router;
 
@@ -139,7 +155,8 @@ TEST_CASE(
 
   // Nested batch context: i_3 outer (index 0), i_4 inner (index 1). A is in
   // scope only for i_3; B only for i_4.
-  ctx_type ctx{{i3, {0, 1}}, {i4, {0, 1}}};
+  ctx_type ctx{router_test_ctx_entry(i3, 0, 1, 1),
+               router_test_ctx_entry(i4, 0, 1, 2)};
   auto const key_A = occurrence_key(A, svector<Index>{i3});
   auto const key_B = occurrence_key(B, svector<Index>{i4});
 
@@ -277,8 +294,9 @@ TEST_CASE(
   Cache inner = Cache::empty();
   inner.set_parent(&mid);
 
-  Cache::BatchContext const mid_ctx{{J, {0, 10}}};
-  Cache::BatchContext const inner_ctx{{J, {0, 10}}, {K, {0, 10}}};
+  Cache::BatchContext const mid_ctx{router_test_ctx_entry(J, 0, 10, 1)};
+  Cache::BatchContext const inner_ctx{router_test_ctx_entry(J, 0, 10, 1),
+                                      router_test_ctx_entry(K, 0, 10, 2)};
   mid.set_batch_context(mid_ctx);
   inner.set_batch_context(inner_ctx);
 
@@ -298,7 +316,8 @@ TEST_CASE(
     std::size_t const d = ctx.size();
     REQUIRE(hops <= d);
     for (std::size_t i = d - hops; i < d; ++i) {
-      auto const& [axis, blk] = ctx[i];
+      auto const& axis = ctx[i].axis;
+      auto const& blk = ctx[i].range;
       if (auto const p = index_position(nd, axis))
         value = value->slice_mode(*p, blk.first, blk.second);
     }

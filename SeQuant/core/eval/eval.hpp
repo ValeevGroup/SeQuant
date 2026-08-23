@@ -405,7 +405,7 @@ std::string scope_annot(BatchContext const& active) {
   std::string scope;
   for (auto const& e : active) {
     if (!scope.empty()) scope += ",";
-    scope += toUtf8(e.first.space().base_key());
+    scope += toUtf8(e.axis.space().base_key());
   }
   return std::format("scope={{{}}}", scope);
 }
@@ -432,7 +432,7 @@ std::string slice_home_annot(Node const& node, BatchContext const& active) {
   for (std::size_t p = 0; p < idxs.size(); ++p) {
     auto const bk = idxs[p].space().base_key();
     for (auto const& e : active)
-      if (e.first.space().base_key() == bk) {
+      if (e.axis.space().base_key() == bk) {
         sliced += std::format("{}:{} ", p, toUtf8(std::wstring(bk)));
         break;
       }
@@ -696,7 +696,8 @@ ResultPtr evaluate_impl(Node const& node,         //
     // `d - hops` and silently UNDER-slice (oversized result); assert loudly.
     SEQUANT_ASSERT(hops <= d);
     for (std::size_t i = d - hops; i < d; ++i) {
-      auto const& [axis, blk] = ctx[i];
+      auto const& axis = ctx[i].axis;
+      auto const& blk = ctx[i].range;
       // A batch context entry names a DAG-scope axis by a single canonical
       // Index. When the cache asks for SPACE-mapped slicing (only the ordered
       // executor, which co-evaluates a whole type-bucketed block under ONE
@@ -707,6 +708,7 @@ ResultPtr evaluate_impl(Node const& node,         //
       // not this level's loop must stay unsliced). Default (exact-only) is
       // byte-identical to before the space-map flag.
       auto p = index_position(nd, axis);
+      bool const exact = p.has_value();
       if (!p && cache.space_mapped_slicing())
         // Space-map fallback (ordered executor): slice the node on its OWN mode
         // of the axis's space -- but ONLY a mode the optimizer actually batched
@@ -719,6 +721,13 @@ ResultPtr evaluate_impl(Node const& node,         //
         // only contracted indices, all batched, so this is a no-op there.)
         p = eval::detail::sliced_result_position_type(
             nd, std::wstring(axis.space().base_key()));
+      if (p && std::getenv("SEQUANT_UT_SLICE_DIAG"))
+        std::cerr << "[SLICE] node#" << (nd->hash_value() % 100000u)
+                  << " space=" << toUtf8(axis.space().base_key())
+                  << " pmode=" << *p
+                  << " via=" << (exact ? "exact" : "fallback") << " idx@pmode="
+                  << toUtf8(nd->canon_indices()[*p].full_label()) << " slice=["
+                  << blk.first << "," << blk.second << ")" << std::endl;
       if (p) value = value->slice_mode(*p, blk.first, blk.second);
     }
     return value;
@@ -783,7 +792,9 @@ ResultPtr evaluate_impl(Node const& node,         //
       if (!f.node.leaf()) os << ",\"flops\":" << eval::detail::last_op_flops();
       os << ",\"ctx\":[";
       bool first = true;
-      for (auto const& [ix, blk] : cache.batch_context()) {
+      for (auto const& entry : cache.batch_context()) {
+        Index const& ix = entry.axis;
+        auto const& blk = entry.range;
         // dep = does the node's subtree carry this loop mode (free or
         // contracted below)? If not, the node is INVARIANT to it and rebuilding
         // per block of it is avoidable recompute. find_leaf_carrying works in
@@ -845,7 +856,7 @@ ResultPtr evaluate_impl(Node const& node,         //
               router->moved(f.node->hash_value())) {
             auto const& ctx = cache.batch_context();
             container::svector<Index> ctx_modes;
-            for (auto const& e : ctx) ctx_modes.push_back(e.first);
+            for (auto const& e : ctx) ctx_modes.push_back(e.axis);
             auto const key = eval::occurrence_key(f.node, ctx_modes);
             if (auto const* home = router->route(key)) {
               std::size_t const use_depth = ctx.size();
@@ -1204,13 +1215,16 @@ ResultPtr evaluate_impl(Node const& node,         //
             // path.
             if (eval::detail::last_op_flops() >= 0.0) {
               std::string slice_sig;
-              for (auto const& [ix, blk] : cache.batch_context())
+              for (auto const& entry : cache.batch_context()) {
+                Index const& ix = entry.axis;
+                auto const& blk = entry.range;
                 if (find_leaf_carrying(f.node, ix).has_value()) {
                   slice_sig += toUtf8(ix.full_label());
                   slice_sig += ':';
                   slice_sig += std::to_string(blk.first);
                   slice_sig += ';';
                 }
+              }
               cache.tally_build(f.node, slice_sig,
                                 eval::detail::last_op_flops(),
                                 eval::detail::last_op_exec());
@@ -2010,7 +2024,8 @@ template <typename F, typename IndexPredicate = accept_any_index,
       // underflow `d - hops` and silently UNDER-slice.
       SEQUANT_ASSERT(hops <= d);
       for (std::size_t i = d - hops; i < d; ++i) {
-        auto const& [axis, blk] = ctx[i];
+        auto const& axis = ctx[i].axis;
+        auto const& blk = ctx[i].range;
         if (auto const p = index_position(nd, axis))
           value = value->slice_mode(*p, blk.first, blk.second);
       }
@@ -2028,6 +2043,19 @@ template <typename F, typename IndexPredicate = accept_any_index,
     // slice_to_use slice, which reproduces le_g exactly on that path.
     auto sliced_leaf = [&](auto const& ln) -> ResultPtr {
       return slice_to_use(leaf_evaluator(ln), ln, cache.batch_context().size());
+    };
+    // Synthesized DAG-scope level for a forest-evaluator push: this firing
+    // realizes exactly ONE loop over `cache`'s own enclosing context, so every
+    // push site below shares the same depth (`cache.batch_context().size() +
+    // 1`, matching build_ordered_schedule's `d + 1` convention -- see
+    // DagScopeLevel's doc comment) and differs only in the pushed axis's
+    // space. Plumbing only (Task 6): nothing resolves by `level` yet on this
+    // path -- the forest evaluator's OLD resolution is exact-axis
+    // (`exact_axis`, filled at each push site below), which Task 7 will
+    // consult instead.
+    auto const synth_level = [&cache](Index const& ax) -> DagScopeLevel {
+      return DagScopeLevel{cache.batch_context().size() + 1,
+                           std::wstring(ax.space().base_key()), 0};
     };
     // Mode selection is SLICEABILITY-AWARE and realizes the optimizer's
     // multi-mode nesting one mode per depth level. candidate_axes lists this
@@ -2070,8 +2098,8 @@ template <typename F, typename IndexPredicate = accept_any_index,
       // yields a single batch" probe, which needed mode_batches.
       auto already_sliced = [&](Index const& ix) {
         for (auto const& e : ectx)
-          if (e.first == ix ||
-              (smap && e.first.space().base_key() == ix.space().base_key()))
+          if (e.axis == ix ||
+              (smap && e.axis.space().base_key() == ix.space().base_key()))
             return true;
         return false;
       };
@@ -2179,7 +2207,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
           auto const& ectx = parent_cache.batch_context();  // enclosing loops
           auto in_ectx = [&ectx](Index const& m) -> bool {
             for (auto const& e : ectx)
-              if (e.first == m) return true;
+              if (e.axis == m) return true;
             return false;
           };
           auto residency_all_outer = [&in_ectx](node_t const& n) -> bool {
@@ -2213,7 +2241,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
           // sharing is safe, so the split is gated on a live router to keep
           // every no-router path byte-identical.
           container::svector<Index> ectx_modes_sig;
-          for (auto const& e : ectx) ectx_modes_sig.push_back(e.first);
+          for (auto const& e : ectx) ectx_modes_sig.push_back(e.axis);
           bool const split_aware = parent_cache.placement_router() &&
                                    !parent_cache.placement_router()->empty();
           std::vector<node_t const*> targets;
@@ -2254,7 +2282,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
             // (chain root).
             int rl = -1;
             for (int i = static_cast<int>(ectx.size()) - 1; i >= 0; --i)
-              if (in_residency(d, ectx[i].first)) {
+              if (in_residency(d, ectx[i].axis)) {
                 rl = i;
                 break;
               }
@@ -2274,7 +2302,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
             if (auto const* router = parent_cache.placement_router();
                 router && !router->empty() && router->moved(d->hash_value())) {
               container::svector<Index> ectx_modes;
-              for (auto const& e : ectx) ectx_modes.push_back(e.first);
+              for (auto const& e : ectx) ectx_modes.push_back(e.axis);
               auto const key = eval::occurrence_key(d, ectx_modes);
               auto const* home = router->route(key);
               if (home) {
@@ -2347,7 +2375,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
         res += " ";
       }
       auto scope_ctx = cache.batch_context();
-      scope_ctx.push_back({K, {0, 0}});
+      scope_ctx.push_back({K, synth_level(K), {0, 0}, K});
       log::log(
           "BatchAxes",
           std::format("depth={} picked={}:{} nbatches={} annot=[{}] "
@@ -2389,6 +2417,8 @@ template <typename F, typename IndexPredicate = accept_any_index,
       std::vector<member_t> solo{{&node, K}};
       auto bs = detail::make_batched_scratch(solo, cache);
       bs.cache.set_array_ops(cache.array_ops());  // inherit backend ops
+      bs.cache.set_cell_mode_to_level(
+          cache.cell_mode_to_level());  // inherit the node->level seam
       for (auto const* s : bs.seeds) (void)bs.cache.store(*s, cache.access(*s));
       place_at_this_level(bs.cache, cache, std::vector<node_t const*>{&node});
 
@@ -2421,7 +2451,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
         // from an ancestor scope (the slice-on-use fix). The raw leaf_evaluator
         // is threaded down; the Enter stage does the slicing.
         auto ctx = cache.batch_context();
-        ctx.push_back({K, {e_lo, e_hi}});
+        ctx.push_back({K, synth_level(K), {e_lo, e_hi}, K});
         bs.cache.set_batch_context(std::move(ctx));
         bs.cache.set_custom_evaluator(make_batched_custom_evaluator(
             std::function<ResultPtr(node_t const&)>{leaf_evaluator},
@@ -2516,7 +2546,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
       std::size_t n_members = 0;
       for (auto const& layer : layers) n_members += layer.size();
       auto scope_ctx = cache.batch_context();
-      scope_ctx.push_back({K, {0, 0}});
+      scope_ctx.push_back({K, synth_level(K), {0, 0}, K});
       log::log(
           "BatchGroup", "Begin",
           std::format("{} members co-evaluated over {} aux batches {}",
@@ -2576,6 +2606,8 @@ template <typename F, typename IndexPredicate = accept_any_index,
       // persistent entries (registered persistent in the scratch) survive.
       auto bs = detail::make_batched_scratch(layer, cache);
       bs.cache.set_array_ops(cache.array_ops());  // inherit backend ops
+      bs.cache.set_cell_mode_to_level(
+          cache.cell_mode_to_level());  // inherit the node->level seam
       for (auto const* s : bs.seeds) (void)bs.cache.store(*s, cache.access(*s));
       {
         std::vector<node_t const*> roots;
@@ -2611,7 +2643,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
           // type is std::function at every deeper level); the Enter stage does
           // the slicing.
           auto ctx = cache.batch_context();
-          ctx.push_back({Km, {e_lo, e_hi}});
+          ctx.push_back({Km, synth_level(Km), {e_lo, e_hi}, Km});
           bs.cache.set_batch_context(std::move(ctx));
           bs.cache.set_custom_evaluator(make_batched_custom_evaluator(
               std::function<ResultPtr(node_t const&)>{leaf_evaluator},
@@ -2659,7 +2691,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
     }
     if (log::printing()) {
       auto scope_ctx = cache.batch_context();
-      scope_ctx.push_back({K, {0, 0}});
+      scope_ctx.push_back({K, synth_level(K), {0, 0}, K});
       log::log("BatchGroup", "End", log::scope_annot(scope_ctx));
     }
     SEQUANT_ASSERT(trigger_result);
