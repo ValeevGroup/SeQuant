@@ -2,10 +2,13 @@
 #define SEQUANT_EVAL_SLICING_SIGNATURE_HPP
 
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval/dag_scope.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
+#include <cstddef>
 #include <optional>
 #include <utility>
 
@@ -60,6 +63,29 @@ template <typename Range>
       return false;
   }
   return true;
+}
+
+/// \brief Zips a \c slicing_signature (one entry per loop axis, in nest
+///        order) with the matching \p levels (same order) into a
+///        \c ModeToLevel sized to the node's \p rank -- the single point
+///        turning "positions of loop axes on a node" into "mode->level".
+///
+/// \param rank the node's result rank (i.e. \c node->canon_indices().size()),
+///        used to size \c ModeToLevel::by_mode.
+/// \param sig a slicing signature (as returned by \c slicing_signature): one
+///        optional mode-position per loop axis.
+/// \param levels the DAG-scope loop level of each loop axis in \p sig, same
+///        size and order as \p sig.
+/// \pre \c sig.size() == levels.size()
+[[nodiscard]] inline ModeToLevel mode_to_level_from_signature(
+    std::size_t rank, container::svector<std::optional<std::size_t>> const& sig,
+    container::svector<DagScopeLevel> const& levels) {
+  SEQUANT_ASSERT(sig.size() == levels.size());
+  ModeToLevel m2l;
+  m2l.by_mode.resize(rank);
+  for (std::size_t i = 0; i < sig.size(); ++i)
+    if (sig[i]) m2l.by_mode[*sig[i]] = levels[i];
+  return m2l;
 }
 
 }  // namespace sequant
