@@ -323,12 +323,32 @@ struct Transformer {
                             ann(std::move(braIndices)), vac);
     }
 
-    // Set required symmetries for symmetrization operators
+    // Force the defining symmetries of the reserved (anti)symmetrization
+    // operators; see sequant::{anti,}symmetrizer_symmetries.
+    const bool is_reserved_symmetrizer =
+        tensor.name == reserved::antisymm_label() ||
+        tensor.name == reserved::symm_label();
     if (tensor.name == reserved::antisymm_label()) {
+      // Â antisymmetrizes within bra and within ket, Ŝ only across the
+      // {bra,ket} particle columns (i.e. it is perm-Nonsymm)
       perm_symm = Symmetry::Antisymm;
     } else if (tensor.name == reserved::symm_label()) {
+      perm_symm = Symmetry::Nonsymm;
+    }
+    if (is_reserved_symmetrizer) {
+      // force it rather than passing the Context's column default through,
+      // which the Tensor ctor would reject as a contradicting *explicit*
+      // request
       column_symm = ColumnSymmetry::Symm;
     }
+    // likewise, force braket-Nonsymm rather than inheriting the Context's
+    // default Hermiticity, which could derive a non-Nonsymm braket and make a
+    // plain "Ŝ{...}"/"Â{...}" fail to construct; an explicit braket spec is
+    // left untouched so that the Tensor ctor still rejects it
+    if (is_reserved_symmetrizer &&
+        (!tensor.symmetry.has_value() ||
+         tensor.symmetry.value().braket_symm == ast::SymmetrySpec::unspecified))
+      braket_symm = BraKetSymmetry::Nonsymm;
 
     // Dispatch to correct Tensor constructor (taking either BraKetSymmetry or
     // Hermiticity)

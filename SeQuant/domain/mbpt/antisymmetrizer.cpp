@@ -85,8 +85,10 @@ antisymm_element::antisymm_element(ExprPtr ex_) {
             new_kets.push_back(unique_kets_list[j].second[index_label_pos]);
             index_label_pos++;
           }
-          auto new_tensor = ex<Tensor>(label, bra(std::move(new_bras)),
-                                       ket(std::move(new_kets)));
+          // mbpt tensors are particle (column) symmetric
+          auto new_tensor = ex<Tensor>(
+              label, bra(std::move(new_bras)), ket(std::move(new_kets)),
+              Symmetry::Nonsymm, std::nullopt, ColumnSymmetry::Symm);
           new_product = new_tensor * new_product;
           new_product->canonicalize();
         }
@@ -344,9 +346,11 @@ ExprPtr max_similarity(const std::vector<Index>& original_upper,
           }
         }
         if (new_pairs > og_pairs) {
-          factor = ex<Constant>(-1) * ex<Tensor>(factor->as<Tensor>().label(),
-                                                 bra(std::move(current_lower)),
-                                                 ket(std::move(current_upper)));
+          factor = ex<Constant>(-1) *
+                   ex<Tensor>(factor->as<Tensor>().label(),
+                              bra(std::move(current_lower)),
+                              ket(std::move(current_upper)), Symmetry::Nonsymm,
+                              std::nullopt, ColumnSymmetry::Symm);
         }
       } else if (factor->is<FNOperator>()) {
         std::vector<Index> current_upper;
@@ -422,7 +426,8 @@ ExprPtr spin_sum(std::vector<Index> original_upper,
             new_lower.push_back(factor->as<Tensor>().bra()[i]);
           }
           factor = ex<Tensor>(L"Γ", factor->as<Tensor>().bra(),
-                              factor->as<Tensor>().ket());
+                              factor->as<Tensor>().ket(), Symmetry::Nonsymm,
+                              std::nullopt, ColumnSymmetry::Symm);
         } else if (factor->is<FNOperator>()) {
           // prefactor = ex<Constant>(-0.5) *
           // ex<Constant>(factor->as<Tensor>().rank()) * prefactor;

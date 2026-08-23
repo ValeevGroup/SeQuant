@@ -22,13 +22,11 @@ namespace sequant {
 /// orthonormal to their dual (bra) counterparts
 ///   (`IndexSpaceMetric::Unit`) or not (`IndexSpaceMetric::General`);
 ///    this affects the value of Wick contractions.
-/// - `braket_symmetry`: whether the primal (ket) and dual (bra) vector space
-/// _bases_
-///    are "equivalent" (homogenous to each other; `BraKetSymmetry::Symm`),
-///    "conjugate to each other" (<a
-///    href="https://en.wikipedia.org/wiki/Antilinear_map">conjugate-homogenous</a>
-///    to each other; `BraKetSymmetry::Conjugate`) or are "nonequivalent" (not
-///    homogeneous; `BraKetSymmetry::Nonsymm`)
+/// - `symmetry`, `hermiticity`, `column_symmetry`: the symmetries given to a
+///    *deserialized* tensor that does not specify them; the programmatic
+///    Tensor ctors are unaffected (see Tensor::Defaults). There is no
+///    `braket_symmetry` knob: a tensor's BraKetSymmetry is derived from its
+///    `hermiticity` and base field.
 /// - `spbasis`: whether the bra/ket bases are spinor (`SPBasis::Spinor`) or
 /// spin-free (`SPBasis::Spinfree`).
 /// - `first_dummy_index_ordinal`: during its operation SeQuant will generate
@@ -58,6 +56,9 @@ class Context {
     constexpr static auto braket_typesetting = BraKetTypesetting::ContraSub;
     constexpr static auto braket_slot_typesetting =
         BraKetSlotTypesetting::TensorPackage;
+    constexpr static auto symmetry = Symmetry::Nonsymm;
+    constexpr static auto hermiticity = Hermiticity::NonHermitian;
+    constexpr static auto column_symmetry = ColumnSymmetry::Nonsymm;
   };
 
   /// helper for the named-parameter constructor of Context
@@ -86,6 +87,14 @@ class Context {
       /// the BraKetSlotTypesetting object
       BraKetSlotTypesetting braket_slot_typesetting =
         Defaults::braket_slot_typesetting;
+      /// the default bra/ket permutational Symmetry for deserialized tensors
+      Symmetry symmetry = Defaults::symmetry;
+      /// the default Hermiticity for deserialized tensors; the braket symmetry
+      /// of a deserialized tensor is *derived* from this and its #base_field
+      Hermiticity hermiticity = Defaults::hermiticity;
+      /// the default ColumnSymmetry (particle-permutation symmetry) for
+      /// deserialized tensors
+      ColumnSymmetry column_symmetry = Defaults::column_symmetry;
   };
   static Options make_default_options() { return {}; }
 
@@ -155,6 +164,15 @@ class Context {
   /// \return BraKetSlotTypesetting of this context; see BraKetSlotTypesetting
   /// for the meaning of the possible values
   BraKetSlotTypesetting braket_slot_typesetting() const;
+  /// \return the default bra/ket permutational Symmetry for deserialized tensors
+  Symmetry symmetry() const;
+  /// \return the default Hermiticity for deserialized tensors; the braket
+  /// symmetry of a deserialized tensor is *derived* from this and its
+  /// #base_field
+  Hermiticity hermiticity() const;
+  /// \return the default ColumnSymmetry (particle-permutation symmetry) for
+  /// deserialized tensors
+  ColumnSymmetry column_symmetry() const;
 
   /// Sets the Vacuum for this context, convenient for chaining
   /// \param vacuum Vacuum
@@ -195,6 +213,16 @@ class Context {
   /// \param braket_slot_typeset BraKetSlotTypesetting
   /// \return ref to `*this`, for chaining
   Context& set(BraKetSlotTypesetting braket_slot_typeset);
+  /// Sets the default bra/ket permutational Symmetry for deserialized tensors
+  /// \return ref to `*this`, for chaining
+  Context& set(Symmetry symmetry);
+  /// Sets the default Hermiticity for deserialized tensors (the braket symmetry
+  /// of a deserialized tensor is derived from this and its base field)
+  /// \return ref to `*this`, for chaining
+  Context& set(Hermiticity hermiticity);
+  /// Sets the default ColumnSymmetry for deserialized tensors
+  /// \return ref to `*this`, for chaining
+  Context& set(ColumnSymmetry column_symmetry);
 
  private:
   std::shared_ptr<IndexSpaceRegistry> idx_space_reg_ = nullptr;
@@ -207,6 +235,9 @@ class Context {
   BraKetTypesetting braket_typesetting_ = Defaults::braket_typesetting;
   BraKetSlotTypesetting braket_slot_typesetting_ =
       Defaults::braket_slot_typesetting;
+  Symmetry symmetry_ = Defaults::symmetry;
+  Hermiticity hermiticity_ = Defaults::hermiticity;
+  ColumnSymmetry column_symmetry_ = Defaults::column_symmetry;
 };
 
 /// Context object equality comparison
