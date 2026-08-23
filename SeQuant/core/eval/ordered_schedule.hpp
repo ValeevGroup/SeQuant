@@ -1789,6 +1789,270 @@ inline void populate_cell_mode_to_level(OrderedSchedule const& ordered,
     rich.cells[i].mode_to_level = per_cell[i];
 }
 
+///
+/// \brief Task 3 of the sliced-value canonical layout / loop-coloring design
+/// (\c doc/dev/specs/2026-08-23-sliced-value-canonical-layout-loop-coloring-
+/// design.md): a stable identifier for one DAG-scope loop realized by \c
+/// build_ordered_schedule -- an index into \c SlicedModeAssignment::levels,
+/// the schedule's own canonical (deterministic pre-order) enumeration of
+/// every non-root \c ScopeBlock's \c DagScopeLevel. Two blocks that are
+/// STRUCTURALLY the same loop (identical \c (depth, space, ordinal)) always
+/// share one \c LoopId; two blocks that differ in ANY of those three --
+/// including two forced-split SIBLING passes, which differ only in \c
+/// ordinal -- get DISTINCT ids by construction (see the design's "Loop
+/// identity is a slot color" section: producer/consumer passes must be
+/// distinguishable colors, not folded).
+using LoopId = std::size_t;
+
+///
+/// \brief The per-(value, sliced-mode) -> DAG-scope-loop ASSIGNMENT: the
+/// coloring input Task 5 feeds to \c canonicalize_slots's \c
+/// NamedIndexColorMap. Unlike the per-cell \c ModeToLevel this deliberately
+/// supersedes (see \c compute_cell_mode_to_level and the design doc's
+/// migration section), this is plain DATA keyed by the value's OWN physical
+/// \c Index label for each mode it is sliced on -- not a per-cell position
+/// map -- so a relabeled CSE participant (Task 4's regime-2 case) is keyed by
+/// its own label, and a symmetric value's two occurrence-bound physical slots
+/// are both recoverable (one entry per distinct (value, Index) pair actually
+/// sliced).
+struct SlicedModeAssignment {
+  /// Every DISTINCT DAG-scope loop realized anywhere in the schedule, in
+  /// canonical (deterministic pre-order over the block tree) order; a
+  /// value's assigned \c LoopId is its position in this list. The root block
+  /// itself (sentinel axis, outside every loop) is NEVER an entry here.
+  container::vector<DagScopeLevel> levels;
+
+  /// value_id -> the list of (this value's OWN sliced-mode Index, the LoopId
+  /// that slices it) pairs actually recorded for that value. A value with no
+  /// entry here (or whose list omits some Index it carries) is NOT sliced by
+  /// any loop on that mode -- participation is respected exactly as \c
+  /// compute_cell_mode_to_level's built-within gate and ectx-participant test
+  /// already establish (a value built INSIDE a loop, or one that does not
+  /// itself carry that loop's occurrence label, is left unstamped).
+  std::unordered_map<std::size_t, container::svector<std::pair<Index, LoopId>>>
+      by_value;
+
+  /// \return the \c LoopId slicing \p value_id's own \p mode, or \c
+  /// std::nullopt if \p mode is not one of \p value_id's sliced modes.
+  [[nodiscard]] std::optional<LoopId> loop_of(std::size_t value_id,
+                                              Index const& mode) const {
+    auto const it = by_value.find(value_id);
+    if (it == by_value.end()) return std::nullopt;
+    for (auto const& [ix, lid] : it->second)
+      if (ix == mode) return lid;
+    return std::nullopt;
+  }
+
+  /// \return the realized \c DagScopeLevel a \p loop_id names (the inverse of
+  /// the canonical enumeration \c levels holds).
+  [[nodiscard]] DagScopeLevel const& level_of(LoopId loop_id) const {
+    return levels.at(loop_id);
+  }
+};
+
+namespace detail {
+
+///
+/// \brief Pre-order walk collecting every non-root \c ScopeBlock's \c
+/// DagScopeLevel into \p out, in schedule (structural) order -- the canonical
+/// enumeration \c SlicedModeAssignment::levels holds. Deterministic given a
+/// fixed \p block (the same \c OrderedSchedule always yields the same
+/// sequence), and duplicate-free by construction: distinct \c ScopeBlock
+/// objects in the tree are, per \c assert_global_level_axis_uniqueness's
+/// invariant (consulted by \c compute_sliced_mode_assignment before this
+/// runs), each other's only witness for a given \c (depth, space, ordinal) --
+/// i.e. no two DIFFERENT blocks visited here ever carry an equal \c level.
+///
+inline void enumerate_realized_levels(ScopeBlock const& block,
+                                      container::vector<DagScopeLevel>& out) {
+  for (Step const& step : block.steps) {
+    auto const* child = std::get_if<ScopeBlock>(&step.value);
+    if (!child) continue;
+    out.push_back(child->level);
+    enumerate_realized_levels(*child, out);
+  }
+}
+
+}  // namespace detail
+
+///
+/// \brief Task 3 (sliced-value canonical layout / loop-coloring design):
+/// build the per-(value, sliced-mode) -> DAG-scope-loop \c
+/// SlicedModeAssignment from an already-built \p ordered (must be \c
+/// build_ordered_schedule(rich, ...)'s return value for this SAME \p rich,
+/// exactly as \c populate_cell_mode_to_level requires).
+///
+/// \details Reuses the SAME two-pass fetch-site walk \c
+/// compute_cell_mode_to_level uses (\c populate_build_scope_walk for the
+/// enclosing-loop scope of every produced/escaped value, and \c
+/// ordered_schedule_dep_graph for the operand edges, leaves included) --
+/// see that function's own doc comment for the exact-match / regime-2-relabel
+/// / built-within-participation reasoning, which is IDENTICAL here -- but
+/// records the raw facts differently: keyed by the value's OWN \c Index
+/// label (not a \c ValueCell::carried POSITION), consistency-checked the same
+/// way (two fetch sites disagreeing on one value's mode's level is a
+/// scheduler bug, never resolved by averaging or last-write-wins), then
+/// remapped through the canonical \c LoopId enumeration (\c
+/// detail::enumerate_realized_levels) instead of storing the \c
+/// DagScopeLevel directly -- this is what makes forced-split siblings
+/// (same depth/space, different ordinal) come out as DISTINCT colors: they
+/// are distinct entries in the canonical \c levels list by construction.
+///
+[[nodiscard]] inline SlicedModeAssignment compute_sliced_mode_assignment(
+    OrderedSchedule const& ordered, RichSchedule const& rich) {
+  // Debug safety net shared with compute_cell_mode_to_level: the global
+  // (depth, space, ordinal) -> axis uniqueness this construction (and the
+  // canonical level enumeration below) relies on.
+  {
+    std::map<std::tuple<std::size_t, std::wstring, int>, Index> seen;
+    detail::assert_global_level_axis_uniqueness(ordered.root, seen);
+  }
+
+  SlicedModeAssignment result;
+  detail::enumerate_realized_levels(ordered.root, result.levels);
+
+  std::map<std::tuple<std::size_t, std::wstring, int>, LoopId> level_id;
+  for (std::size_t i = 0; i < result.levels.size(); ++i) {
+    DagScopeLevel const& L = result.levels[i];
+    level_id.emplace(std::make_tuple(L.depth, L.space, L.ordinal), i);
+  }
+  auto const id_of = [&](DagScopeLevel const& L) -> LoopId {
+    auto const it = level_id.find(std::make_tuple(L.depth, L.space, L.ordinal));
+    SEQUANT_ASSERT(it != level_id.end());
+    return it->second;
+  };
+
+  // (1) fetch/eval scope of every produced or escaped value: enclosing blocks
+  // (axis + level), read off the realized block tree -- identical to
+  // compute_cell_mode_to_level's step (1).
+  std::unordered_map<std::size_t,
+                     container::svector<detail::ScopeBlockAxisLevel>>
+      build_scope;
+  detail::populate_build_scope_walk(ordered.root, {}, build_scope);
+
+  // (2) operand edges (leaves included) -- identical to
+  // compute_cell_mode_to_level's step (2).
+  detail::OrderedScheduleDepGraph const g =
+      detail::ordered_schedule_dep_graph(rich);
+
+  // Consistency-checked write of one (value, OWN Index) -> level fact: two
+  // fetch sites disagreeing on the level for the SAME (value, mode) pair is a
+  // scheduler bug (the value should have been split), exactly as \c
+  // compute_cell_mode_to_level's own \c stamp asserts. Recorded as raw \c
+  // DagScopeLevel facts first (this is the datum that must agree across
+  // fetch sites); the fold to \c LoopId happens once, at the end.
+  std::unordered_map<std::size_t,
+                     container::svector<std::pair<Index, DagScopeLevel>>>
+      raw_facts;
+  auto const stamp_raw = [&raw_facts](std::size_t w_vid, Index const& mode,
+                                      DagScopeLevel const& level) {
+    auto& facts = raw_facts[w_vid];
+    for (auto& [ix, lvl] : facts) {
+      if (!(ix == mode)) continue;
+      SEQUANT_ASSERT(
+          lvl == level &&
+          "compute_sliced_mode_assignment: divergent (value, mode) -> level "
+          "across fetch sites -- the value should have been split");
+      return;
+    }
+    facts.push_back({mode, level});
+  };
+
+  // (3) EXACT pass: for each consumer P and operand W of P, stamp P's
+  // enclosing blocks (axis, level) onto W's carried mode that EXACTLY equals
+  // that block's representative axis, if any -- identical selection logic to
+  // compute_cell_mode_to_level's step (3), recording the Index instead of a
+  // carried position.
+  for (auto const& [parent_vid, operands] : g.depends_on) {
+    auto const sit = build_scope.find(parent_vid);
+    if (sit == build_scope.end()) continue;  // parent has no enclosing loop
+    container::svector<detail::ScopeBlockAxisLevel> const& scope = sit->second;
+    if (scope.empty()) continue;
+    for (std::size_t w_vid : operands) {
+      ValueCell const& w = rich.cells[w_vid];
+      for (detail::ScopeBlockAxisLevel const& blk : scope) {
+        for (Index const& carried_ix : w.carried) {
+          if (!(carried_ix == blk.axis)) continue;
+          stamp_raw(w_vid, carried_ix, blk.level);
+          break;  // a block axis is one Index -> at most one carried match
+        }
+      }
+    }
+  }
+
+  // (4) REGIME-2 RELABEL pass (occurrence-driven), identical reasoning to
+  // compute_cell_mode_to_level's step (4): recover a CSE value's OWN-labeled
+  // sliced mode from its occurrences when it was canonicalized independently
+  // of the block's representative axis (the SAME physical loop, relabeled).
+  std::unordered_map<std::size_t, std::size_t> point_owner;
+  for (ValueCell const& vc : rich.cells)
+    for (OccurrenceRec const& occ : vc.occurrences)
+      point_owner[occ.point] = vc.value_id;
+
+  for (ValueCell const& w : rich.cells) {
+    std::size_t const w_vid = w.value_id;
+    for (OccurrenceRec const& occ : w.occurrences) {
+      if (occ.consumer_point == occ.point) continue;  // forest root
+      auto const oit = point_owner.find(occ.consumer_point);
+      if (oit == point_owner.end()) continue;  // defensive
+      auto const sit = build_scope.find(oit->second);
+      if (sit == build_scope.end()) continue;  // consumer has no enclosing loop
+      container::svector<detail::ScopeBlockAxisLevel> const& scope =
+          sit->second;
+      if (scope.empty()) continue;
+      for (Index const& m : w.carried) {
+        std::wstring const space(m.space().base_key());
+        // participant? m must be an enclosing batched loop at this occurrence
+        // (i.e. appear in the occurrence's ectx -- see
+        // compute_cell_mode_to_level's step (4) for the full reasoning).
+        bool participant = false;
+        for (auto const& e : occ.ectx)
+          if (e.first == m) {
+            participant = true;
+            break;
+          }
+        if (!participant) continue;
+        // the realized same-space block in the consumer's scope (unique for
+        // the one-occ-loop / occ+aux regime; a genuinely ambiguous nest --
+        // two same-space blocks -- is left unstamped, not guessed).
+        DagScopeLevel const* level = nullptr;
+        std::size_t nsame = 0;
+        for (detail::ScopeBlockAxisLevel const& blk : scope)
+          if (std::wstring(blk.axis.space().base_key()) == space) {
+            level = &blk.level;
+            ++nsame;
+          }
+        if (nsame != 1) continue;
+        // Skip when m's loop is NOT strictly outer to W's own build scope
+        // (W is home-resident INSIDE the loop, not fetched across it) --
+        // identical built-within gate to compute_cell_mode_to_level's step
+        // (4).
+        auto const wsit = build_scope.find(w_vid);
+        bool built_within = false;
+        if (wsit != build_scope.end())
+          for (detail::ScopeBlockAxisLevel const& b : wsit->second)
+            if (b.level == *level) {
+              built_within = true;
+              break;
+            }
+        if (built_within) continue;
+        stamp_raw(w_vid, m, *level);
+      }
+    }
+  }
+
+  // Fold raw (value, Index) -> DagScopeLevel facts through the canonical
+  // LoopId enumeration.
+  for (auto const& [vid, facts] : raw_facts) {
+    auto& out_list = result.by_value[vid];
+    out_list.clear();
+    for (auto const& [ix, level] : facts)
+      out_list.push_back({ix, id_of(level)});
+  }
+
+  return result;
+}
+
 }  // namespace sequant::eval
 
 #endif  // SEQUANT_EVAL_ORDERED_SCHEDULE_HPP

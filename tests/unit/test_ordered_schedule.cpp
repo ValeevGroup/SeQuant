@@ -1669,3 +1669,177 @@ TEST_CASE(
     }
   }
 }
+
+// ===========================================================================
+// Task 3 of the sliced-value canonical layout / loop-coloring plan (doc/dev/
+// specs/2026-08-23-sliced-value-canonical-layout-loop-coloring-design.md):
+// prove build_ordered_schedule's realized nest yields a per-(value,
+// sliced-mode) -> DAG-scope-loop ASSIGNMENT (compute_sliced_mode_assignment /
+// SlicedModeAssignment) -- plain DATA, not a per-cell mode_to_level lookup --
+// the coloring input Task 5 feeds to canonicalize_slots.
+//
+// Reuses [sp2-noninner]'s occ-outer/aux-inner fixture, built inline here so
+// this test keeps handles on the DF-leaves P3{Κ_1;i_3} and P4{Κ_2;i_4}: each
+// carries BOTH an aux mode and an occ mode, fetched (as an operand of A3/A4
+// resp.) under the SAME single realized occ block and the SAME single
+// realized aux block nested inside it. This is exactly the shape that must
+// map two DIFFERENT physical Index labels (Κ_1 vs Κ_2; i_3 vs i_4) to the
+// SAME two loop ids (stability), while Y{;i_5} -- built INSIDE that same occ
+// block but carrying a DIFFERENT physical occ index no enclosing loop of ITS
+// OWN pushes onto it from outside -- gets NO entry for either loop
+// (participation).
+// ===========================================================================
+TEST_CASE(
+    "compute_sliced_mode_assignment: a DF-leaf's aux+occ modes map to the "
+    "realized aux/occ loop ids; participation is respected; the SAME "
+    "physical loop yields the SAME id across DIFFERENT values (Task 3, "
+    "sliced-value canonical layout / loop coloring)",
+    "[ordered-schedule][sp2-noninner]") {
+  auto ctx = sequant::get_default_context().clone();
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_df_spaces(isr);  // Κ (DF aux)
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  // Same 2-axis occ-outer/aux-inner shape as orderedsched_2axis_forest_root,
+  // built inline so this test keeps a handle on the DF-leaf P3. NOTE: P3/P4
+  // (and A3/A4) are the SAME abstract tensor "P"/"A" up to occ-index
+  // relabeling, so compute_dag_boulevard CSE-folds them to ONE ValueCell --
+  // there is genuinely only ONE DF-leaf VALUE here (P3 and P4 are two
+  // handles onto it), which is exactly why the fixture's own doc comment
+  // says "B{;i_3,i_4} = A3 x A4 ... reads each A across occ-blocks": ONE
+  // shared A/P, fetched from two structural positions.
+  auto P3 = orderedsched_leaf("P{Κ_1;i_3}");
+  auto Q1 = orderedsched_leaf("Q{;Κ_1}");
+  auto A3 =
+      orderedsched_inode("A{;i_3}", P3, Q1);  // contracts Κ_1, carries i_3
+
+  auto P4 = orderedsched_leaf("P{Κ_2;i_4}");
+  auto Q2 = orderedsched_leaf("Q{;Κ_2}");
+  auto A4 =
+      orderedsched_inode("A{;i_4}", P4, Q2);  // contracts Κ_2, carries i_4
+
+  auto B = orderedsched_inode("B{;i_3,i_4}", A3, A4);  // outer product on occ
+  orderedsched_stamp_all(B);
+
+  // A SECOND, structurally UNRELATED value (M3, tensor labels La/Lb/M3/Lc --
+  // none shared with P/Q/A/B) that happens to carry the SAME physical occ
+  // Index i_3 as the DF-leaf/A-node above (matching the occ block's own
+  // representative axis exactly): the genuine cross-VALUE stability witness
+  // -- P and M3 are unrelated cells that must still resolve i_3 to the SAME
+  // occ loop id. Wrapped in forest root C (see the [sp2-noninner]
+  // populate_cell_mode_to_level TEST_CASE above for why the wrapper matters:
+  // a forest root always escapes in full, keeping M3 itself a genuine
+  // per-iteration Transient BuildStep inside the occ block).
+  auto La = orderedsched_leaf("La{;i_3}");
+  auto Lb = orderedsched_leaf("Lb{;i_3}");
+  auto M3 = orderedsched_inode("M3{;i_3}", La, Lb);
+  auto Lc = orderedsched_leaf("Lc{;i_3}");
+  auto C = orderedsched_inode("C{;i_3}", M3, Lc);
+  orderedsched_stamp_all(C);
+
+  // A per-iteration Transient (Y) carrying a DIFFERENT physical occ index
+  // than any DF-leaf/A-node/M3 above, wrapped in a further forest root Z:
+  // the negative "no entry" (participation) fixture.
+  auto Ya = orderedsched_leaf("Ya{;i_5}");
+  auto Yb = orderedsched_leaf("Yb{;i_5}");
+  auto Y = orderedsched_inode("Y{;i_5}", Ya, Yb);
+  auto Yd = orderedsched_leaf("Yd{;i_5}");
+  auto Z = orderedsched_inode("Z{;i_5}", Y, Yd);
+  orderedsched_stamp_all(Z);
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  policy.is_batchable_external_index = [](Index const& ix) {
+    return ix.space().base_key() == L"i";
+  };
+  policy.batch_spectator_indices = true;
+  policy.node_level_placement = true;
+
+  sequant::eval::dryrun::SizeRegime regime;
+  regime.space_extent = {{L"i", 8u}, {L"Κ", 6u}};
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  std::vector<sequant::EvalNode<sequant::EvalExpr>> forest{B, C, Z};
+  sequant::stamp_lifetime_masks(forest);
+  auto const block_of = [](Index const&) -> std::size_t { return 4; };
+  auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  REQUIRE(!rich.cells.empty());
+
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  auto const sched =
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {});
+  REQUIRE(well_formed(sched));
+
+  // Exactly ONE occ ("i") block at root, enclosing exactly ONE aux ("Κ")
+  // block -- the [sp2-noninner] shape; no split forced by this forest.
+  std::vector<ScopeBlock const*> occ_blocks;
+  for (auto const& step : sched.root.steps)
+    if (auto const* c = std::get_if<ScopeBlock>(&step.value))
+      if (c->axis.space().base_key() == L"i") occ_blocks.push_back(c);
+  REQUIRE(occ_blocks.size() == 1);
+  ScopeBlock const& occ = *occ_blocks.front();
+
+  std::vector<ScopeBlock const*> aux_blocks;
+  for (auto const& s : occ.steps)
+    if (auto const* c = std::get_if<ScopeBlock>(&s.value))
+      if (c->axis.space().base_key() == L"Κ") aux_blocks.push_back(c);
+  REQUIRE(aux_blocks.size() == 1);
+  ScopeBlock const& aux = *aux_blocks.front();
+
+  auto const cell_of = [&](sequant::EvalNode<sequant::EvalExpr> const& n)
+      -> sequant::eval::ValueCell const& {
+    auto const h = n->hash_value();
+    auto const it = std::find_if(rich.cells.begin(), rich.cells.end(),
+                                 [&](auto const& vc) { return vc.hash == h; });
+    REQUIRE(it != rich.cells.end());
+    return *it;
+  };
+  auto const& p_cell = cell_of(P3);  // == cell_of(P4): the ONE shared DF-leaf
+  auto const& m3_cell = cell_of(M3);
+  auto const& y_cell = cell_of(Y);
+
+  // Preconditions: P3 and P4 really are the SAME folded value (this is what
+  // makes the stability check below meaningful rather than vacuous), M3 is a
+  // genuinely DIFFERENT value sharing physical index i_3, and Y is a plain
+  // BuildStep directly inside `occ` carrying a different physical occ index
+  // (mirrors the [sp2-noninner] populate_cell_mode_to_level TEST_CASE above).
+  REQUIRE(p_cell.value_id == cell_of(P4).value_id);
+  CHECK(p_cell.value_id != m3_cell.value_id);
+  REQUIRE(orderedsched_index_of_build_step(occ, m3_cell.value_id).has_value());
+  REQUIRE(orderedsched_index_of_build_step(occ, y_cell.value_id).has_value());
+  REQUIRE(m3_cell.carried == sequant::container::svector<Index>{Index{L"i_3"}});
+  REQUIRE(y_cell.carried == sequant::container::svector<Index>{Index{L"i_5"}});
+
+  auto const assignment =
+      sequant::eval::compute_sliced_mode_assignment(sched, rich);
+
+  Index const K1{L"Κ_1"}, i3{L"i_3"}, i5{L"i_5"};
+
+  // GREEN: the DF-leaf's OWN aux mode maps to the aux loop id, and its OWN
+  // participating occ mode maps to the occ loop id.
+  auto const p_aux = assignment.loop_of(p_cell.value_id, K1);
+  auto const p_occ = assignment.loop_of(p_cell.value_id, i3);
+  REQUIRE(p_aux.has_value());
+  REQUIRE(p_occ.has_value());
+
+  // Correct DagScopeLevel identity, read off the realized nest.
+  CHECK(assignment.level_of(*p_aux) == aux.level);
+  CHECK(assignment.level_of(*p_occ) == occ.level);
+
+  // STABILITY: the SAME physical occ loop yields the SAME id across TWO
+  // DIFFERENT, structurally-unrelated values (the DF-leaf P and M3) that
+  // both happen to carry its physical Index i_3.
+  auto const m3_occ = assignment.loop_of(m3_cell.value_id, i3);
+  REQUIRE(m3_occ.has_value());
+  CHECK(*m3_occ == *p_occ);
+
+  // PARTICIPATION: Y carries i_5 (a DIFFERENT physical occ index than the
+  // DF-leaf/A-node/M3 above) and is built INSIDE the occ block itself (not
+  // fetched across it) -- it gets NO entry for any mode.
+  CHECK_FALSE(assignment.loop_of(y_cell.value_id, i5).has_value());
+  CHECK_FALSE(assignment.loop_of(y_cell.value_id, K1).has_value());
+  CHECK_FALSE(assignment.loop_of(y_cell.value_id, i3).has_value());
+}
