@@ -160,6 +160,7 @@ endif()
 # OBJECT library: DryRun backend tests
 ##########################
 set(eval_dryrun_test_sources
+    "test_dag_scope.cpp"
     "test_eval_dryrun.cpp"
     "test_eval_ordered.cpp"
     "test_legality.cpp"
