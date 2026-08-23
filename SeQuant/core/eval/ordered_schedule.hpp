@@ -6,6 +6,7 @@
 #include <SeQuant/core/eval/dag_scope.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
 #include <SeQuant/core/eval/legality.hpp>
+#include <SeQuant/core/eval/occurrence_key.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
 #include <SeQuant/core/eval/scope_schedule.hpp>
 #include <SeQuant/core/eval/slicing_signature.hpp>
@@ -1849,6 +1850,80 @@ struct SlicedModeAssignment {
     return levels.at(loop_id);
   }
 };
+
+///
+/// \brief Task 5 (sliced-value canonical layout / loop-coloring design): build
+/// \p node's LOOP-COLORED value id -- BOTH the value's batched-cache identity
+/// and its canonical storage layout -- by feeding Task 3's per-(value,
+/// sliced-mode) -> loop \p assignment into \c occurrence_key's coloring knob.
+///
+/// \details Constructs the \c tensor_network::NamedIndexColorMap from exactly
+/// the indices \c occurrence_key nominates as \c named
+/// (\c in_scope_batched_on_node(node, ctx_modes) -- the proto-expanded physical
+/// slots that actually live on \p node), coloring each by the \c LoopId that
+/// \p assignment records for \c (value_id, that Index). This satisfies the
+/// design's constraint 1 (the color-map keys are the SAME physical \c Index
+/// objects \c occurrence_key passes as \c named, so the color attaches) BY
+/// CONSTRUCTION: every key inserted below is an element of \c named. A value's
+/// mode that \p assignment does not record (an unsliced mode, or a mode sliced
+/// by a loop this occurrence does not carry) is left uncolored -- space-only,
+/// as today.
+///
+/// EMPTY-SLICED-SET REDUCTION (the design's #1 anchor): if \p value_id has no
+/// recorded sliced mode on any of \p node's named slots, the color map is EMPTY
+/// and this dispatches through \c occurrence_key's null path -- BYTE-IDENTICAL
+/// to today's slot-blind occurrence key. There is no sliced/unsliced branch in
+/// the value-id rule; unsliced is the degenerate empty-color case.
+///
+/// The returned metadata carries both roles the design assigns the loop-colored
+/// form: its canonical colored \c graph is the batched-cache IDENTITY (compare
+/// with \c RouterKeyEqual, hash with \c RouterKeyHash), and its
+/// \c named_indices_canonical (see \c loop_colored_layout) is the per-value
+/// canonical sliced-slot LAYOUT.
+///
+/// \param node the value's node (a tensorial/contraction subtree).
+/// \param ctx_modes the ambient batch-loop modes in scope at the call site
+///        (same argument \c occurrence_key takes).
+/// \param value_id the value's stable id (its \c ValueCell slot), used to look
+///        up \p assignment.
+/// \param assignment Task 3's \c compute_sliced_mode_assignment output.
+/// \return the loop-colored canonicalization metadata.
+///
+template <meta::eval_node Node>
+[[nodiscard]] TensorNetwork::SlotCanonicalizationMetadata loop_colored_id(
+    Node const& node, container::svector<Index> const& ctx_modes,
+    std::size_t value_id, SlicedModeAssignment const& assignment) {
+  // Key the color map by the EXACT indices occurrence_key nominates as named
+  // (constraint 1): in_scope_batched_on_node is the single source of both the
+  // named set occurrence_key canonicalizes with AND the color-map keys here, so
+  // a color can never fail to attach for a slot that is in scope.
+  TensorNetwork::NamedIndexSet const named =
+      eval::in_scope_batched_on_node(node, ctx_modes);
+  tensor_network::NamedIndexColorMap colors;
+  for (Index const& ix : named)
+    if (std::optional<LoopId> const lid = assignment.loop_of(value_id, ix))
+      colors.emplace(ix, *lid);
+  // Empty map => occurrence_key's null (byte-identical) path (reduction).
+  return eval::occurrence_key(node, ctx_modes,
+                              colors.empty() ? nullptr : &colors);
+}
+
+///
+/// \brief The per-value canonical storage LAYOUT extracted from a loop-colored
+/// id: the value's named (sliced) indices in canonical (loop-colored) slot
+/// order -- what \c ValueCell::canonical_layout stores.
+///
+/// \details This is the byproduct \c canonicalize_slots already computes
+/// (\c SlotCanonicalizationMetadata::named_indices_canonical, exposed as an
+/// index view). Storing it per value gives the value one designated stored
+/// order for its sliced slots regardless of which physical label a given
+/// occurrence used; each occurrence's permutation onto it is a separate
+/// per-occurrence datum (design sec.3, Task 7).
+///
+[[nodiscard]] inline container::svector<Index> loop_colored_layout(
+    TensorNetwork::SlotCanonicalizationMetadata const& id) {
+  return id.get_indices<container::svector<Index>>();
+}
 
 namespace detail {
 

@@ -37,6 +37,7 @@
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/occurrence_key.hpp>
+#include <SeQuant/core/eval/ordered_schedule.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/eval/slicing_signature.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -76,9 +77,14 @@ using sequant::TensorCanonicalizer;
 using sequant::TensorNetwork;
 using sequant::container::svector;
 using LoopColorMap = sequant::tensor_network::NamedIndexColorMap;
+using sequant::eval::in_scope_batched_on_node;
+using sequant::eval::loop_colored_id;
+using sequant::eval::loop_colored_layout;
+using sequant::eval::LoopId;
 using sequant::eval::occurrence_key;
 using sequant::eval::RouterKeyEqual;
 using sequant::eval::RouterKeyHash;
+using sequant::eval::SlicedModeAssignment;
 using sequant::eval::dryrun::EvalExprDryRun;
 using sequant::eval::dryrun::EvalNodeDryRun;
 
@@ -472,4 +478,154 @@ TEST_CASE(
   REQUIRE(fetchC);
   CHECK(fetchC.get() == canonical.get());
   CHECK(fetchC->as<ResultDryRun>().indices() == canon_order);
+}
+
+// ===========================================================================
+// Task 5: the loop_colored_id PRODUCER on REAL eval nodes.
+//
+// The canon()-based probes above exercise the coloring KNOB
+// (canonicalize_slots' NamedIndexColorMap) on bare tensors. These cases
+// exercise the producer `loop_colored_id(node, ctx_modes, value_id,
+// assignment)`, which (a) draws the color-map keys from EXACTLY the indices
+// occurrence_key nominates as named (in_scope_batched_on_node -- constraint 1),
+// (b) colors each by the LoopId Task 3's assignment records for that (value,
+// Index), and (c) dispatches through occurrence_key -- reducing to today's key
+// byte-for-byte when nothing is colored (constraint 2). The assignment is
+// hand-built plain data (loop_of only reads by_value; a real
+// build_ordered_schedule is unnecessary to test the producer).
+// ===========================================================================
+namespace {
+
+/// Builds the two symmetric-CSE use-site leaf nodes from the baseline probe:
+/// I(i_1,i_2) symmetric, contracted at use-site A over i_1 (loop survivor
+/// i_2, I's slot 1) and at use-site B over i_2 (loop survivor i_1, I's slot
+/// 0). Returns the two whole product nodes; each I-leaf is `.left()`.
+struct SymmProbe {
+  EvalNodeDryRun nodeA, nodeB;
+};
+SymmProbe make_symm_probe(Index const& i1, Index const& i2) {
+  auto const I = [&] {
+    return ex<Tensor>(L"I", bra(svector<Index>{i1, i2}), ket{}, Symmetry::Symm);
+  };
+  auto const Y =
+      ex<Tensor>(L"Y", bra(svector<Index>{i1}), ket{}, Symmetry::Nonsymm);
+  auto const Z =
+      ex<Tensor>(L"Z", bra(svector<Index>{i2}), ket{}, Symmetry::Nonsymm);
+  return SymmProbe{
+      probe_binarize(ex<Product>(ExprPtrList{I(), Y}), IndexSet{i2}),
+      probe_binarize(ex<Product>(ExprPtrList{I(), Z}), IndexSet{i1})};
+}
+
+/// A SlicedModeAssignment with a single (value_id -> {(mode, loop)}) fact.
+/// `levels` is left empty: loop_colored_id consults only `loop_of` (by_value).
+SlicedModeAssignment one_fact(std::size_t vid, Index const& mode, LoopId loop) {
+  SlicedModeAssignment a;
+  a.by_value[vid].push_back({mode, loop});
+  return a;
+}
+
+}  // namespace
+
+// (5-FOLD) The two symmetric-value occurrences bind the loop to DIFFERENT
+// physical slots (i_2 at A, i_1 at B) yet, once each is colored by the SAME
+// LoopId, loop_colored_id yields the SAME id -- one batched-cache entry, no
+// duplication (design sec.2). This is the exact w8 pattern (pos1 in some
+// fetches, pos0 in others) folded by loop-binding-structure.
+TEST_CASE(
+    "loop_colored_id fold: symmetric value, loop bound to different physical "
+    "slots, same LoopId -> same id",
+    "[sliced-layout]") {
+  Context ctx = get_default_context();
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto const ctx_resetter = set_scoped_default_context(ctx);
+
+  Index i1{L"i_1"}, i2{L"i_2"};
+  auto const probe = make_symm_probe(i1, i2);
+  EvalNodeDryRun const& iA = probe.nodeA.left();  // I as consumed at A
+  EvalNodeDryRun const& iB = probe.nodeB.left();  // same I, consumed at B
+  constexpr LoopId loop = 7;
+
+  // Value A's own loop is i_2; value B's own loop is i_1 -- both -> LoopId 7.
+  auto const asgA = one_fact(/*vid=*/0, i2, loop);
+  auto const asgB = one_fact(/*vid=*/1, i1, loop);
+
+  auto const kA = loop_colored_id(iA, svector<Index>{i2}, /*vid=*/0, asgA);
+  auto const kB = loop_colored_id(iB, svector<Index>{i1}, /*vid=*/1, asgB);
+
+  CHECK(graphs_equal(kA, kB));
+  CHECK(RouterKeyHash{}(kA) == RouterKeyHash{}(kB));
+
+  // Constraint 1 (color actually attaches): the color-map key i_2 is exactly
+  // one of the indices occurrence_key nominates as named for iA, so coloring
+  // it MOVES the id off the uncolored one (had the key not matched the named
+  // Index object, the color would silently no-op and the two would be equal).
+  auto const uncoloredA = occurrence_key(iA, svector<Index>{i2});
+  CHECK(in_scope_batched_on_node(iA, svector<Index>{i2}).count(i2) == 1);
+  CHECK_FALSE(graphs_equal(kA, uncoloredA));
+}
+
+// (5-DISTINGUISH) A NON-symmetric value with both occ modes sliced by two
+// DIFFERENT loops must NOT fold when the loop<->slot binding is swapped:
+// binding loop 1 to the bra vs to the ket is a genuinely different sliced
+// result and must be a DISTINCT cache entry (design sec.2, the `for i1: for i2:
+// I(i1,i2)` case). The bra/ket-distinct slots make the binding observable; the
+// loop color is what pulls the two orderings apart (space-only they would
+// fold).
+TEST_CASE(
+    "loop_colored_id distinguish: non-symmetric value, swapped loop-bindings "
+    "-> different ids",
+    "[sliced-layout]") {
+  Context ctx = get_default_context();
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto const ctx_resetter = set_scoped_default_context(ctx);
+
+  Index i1{L"i_1"}, i2{L"i_2"};
+  constexpr LoopId loop1 = 1, loop2 = 2;
+
+  auto const J = ex<Tensor>(L"J", bra(svector<Index>{i1}),
+                            ket(svector<Index>{i2}), Symmetry::Nonsymm);
+  auto const nodeJ = probe_binarize(J, IndexSet{i1, i2});  // leaf, both named
+
+  // Both modes are this one value's own sliced modes; only the loop binding
+  // differs between the two assignments.
+  SlicedModeAssignment asg1, asg2;
+  asg1.by_value[0] = {{i1, loop1}, {i2, loop2}};
+  asg2.by_value[0] = {{i1, loop2}, {i2, loop1}};  // swapped
+
+  auto const k1 = loop_colored_id(nodeJ, svector<Index>{i1, i2}, 0, asg1);
+  auto const k2 = loop_colored_id(nodeJ, svector<Index>{i1, i2}, 0, asg2);
+
+  CHECK_FALSE(graphs_equal(k1, k2));
+
+  // The canonical layout is a real per-value artifact (both slots are named).
+  CHECK(loop_colored_layout(k1).size() == 2);
+}
+
+// (5-REDUCE) The plan's #1 anchor: an UNSLICED value (no assignment entry) must
+// produce EXACTLY today's occurrence_key -- byte-for-byte, graph and hash. An
+// empty color map dispatches through occurrence_key's null path; there is no
+// sliced/unsliced branch in the value-id rule.
+TEST_CASE(
+    "loop_colored_id reduce: an unsliced value's id equals today's "
+    "occurrence_key byte-for-byte",
+    "[sliced-layout]") {
+  Context ctx = get_default_context();
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto const ctx_resetter = set_scoped_default_context(ctx);
+
+  Index i1{L"i_1"}, i2{L"i_2"};
+  auto const probe = make_symm_probe(i1, i2);
+  EvalNodeDryRun const& iA = probe.nodeA.left();
+
+  SlicedModeAssignment const empty;  // no by_value entries: nothing sliced
+  auto const reduced =
+      loop_colored_id(iA, svector<Index>{i2}, /*vid=*/0, empty);
+  auto const today = occurrence_key(iA, svector<Index>{i2});
+
+  CHECK(graphs_equal(reduced, today));
+  CHECK(reduced.hash_value() == today.hash_value());
+
+  // The extracted layout is identical to today's too (the reduction is total:
+  // graph, hash, AND canonical slot order all match the pre-coloring key).
+  CHECK(loop_colored_layout(reduced) == loop_colored_layout(today));
 }

@@ -283,10 +283,21 @@ struct ValueCell {
                     //!< re-derive each split cell's subset-local records).
                     //!< A split cell (one occurrence subset) keeps only its
                     //!< subset here.
-  ModeToLevel mode_to_level{};  //!< NEW (Task 4 fills this in): for each mode
-                                //!< of \c carried, the \c DagScopeLevel of
-                                //!< the DAG-scope loop it runs under, if any.
-                                //!< Left default-empty here.
+  ModeToLevel mode_to_level{};  //!< DEAD (superseded by \c canonical_layout /
+                                //!< the loop-colored id; its populators are
+                                //!< removed in Task 8): for each mode of \c
+                                //!< carried, the \c DagScopeLevel of the
+                                //!< DAG-scope loop it runs under, if any. Left
+                                //!< default-empty here.
+  container::svector<Index>
+      canonical_layout;  //!< NEW (Task 5, sliced-value canonical-layout /
+                         //!< loop-coloring design): this value's named (sliced)
+                         //!< indices in canonical LOOP-COLORED slot order --
+                         //!< the per-value storage layout, the byproduct of
+                         //!< \c loop_colored_id (\c loop_colored_layout,
+                         //!< ordered_schedule.hpp). EMPTY for an unsliced value
+                         //!< (no loop-colored sliced modes) -- the empty case
+                         //!< reduces to today's identity.
 };
 
 ///

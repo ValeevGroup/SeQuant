@@ -8,6 +8,8 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/tensor_network/canonicals.hpp>
+#include <SeQuant/core/tensor_network/typedefs.hpp>
 #include <SeQuant/external/bliss/graph.hh>
 
 #include <algorithm>
@@ -91,13 +93,29 @@ TensorNetwork::NamedIndexSet in_scope_batched_on_node(
 /// (\c single_term_detail.hpp) exactly, applied to a node's own leaves rather
 /// than a DP subset.
 ///
+/// \par Loop coloring (sliced-value canonical-layout design, Task 5). When
+/// \p named_index_colors is non-null the in-scope batched (named) indices are
+/// colored not merely by space but by the DAG-scope LOOP that slices each --
+/// see \c tensor_network::NamedIndexColorMap and \c loop_colored_id
+/// (ordered_schedule.hpp), which builds the map from
+/// \c compute_sliced_mode_assignment. Two same-space named slots bound to
+/// DIFFERENT loops then receive DIFFERENT graph colors (no longer
+/// interchangeable), and same-loop bindings still fold. A null (the default,
+/// and every unsliced/production consult) or empty map leaves the key
+/// BYTE-IDENTICAL to today's space-only named coloring -- the empty-sliced-set
+/// reduction the design pins as its #1 non-regression anchor: the null path
+/// below is literally the pre-coloring two-argument \c canonicalize_slots call.
+///
 /// \param node the node whose sub-expression is keyed.
 /// \param ctx_modes the ambient batch-loop modes in scope at the call site.
+/// \param named_index_colors optional per-named-index loop-color map (default
+///        null => today's space-only coloring, byte-identical).
 /// \return the canonicalization metadata; compare with \c RouterKeyEqual,
 ///         hash with \c RouterKeyHash.
 template <meta::eval_node Node>
 TensorNetwork::SlotCanonicalizationMetadata occurrence_key(
-    Node const& node, container::svector<Index> const& ctx_modes) {
+    Node const& node, container::svector<Index> const& ctx_modes,
+    tensor_network::NamedIndexColorMap const* named_index_colors = nullptr) {
   container::vector<ExprPtr> leaves;
   auto collect = [&](auto&& self, Node const& n) -> void {
     if (n.leaf()) {
@@ -127,8 +145,19 @@ TensorNetwork::SlotCanonicalizationMetadata occurrence_key(
 
   auto named = in_scope_batched_on_node(node, ctx_modes);
   auto tn = TensorNetwork{leaves};
+  // REDUCTION anchor: with no loop colors this is exactly the pre-coloring
+  // two-argument call (default named_index_compare, no color map) -- keep it a
+  // distinct branch so the null path stays byte-identical rather than relying
+  // on `{}` matching the default comparator (it does NOT: an empty
+  // named_index_compare falls back to space-only, whereas the two-arg default
+  // is default_idxptr_slottype_lesscompare, which also orders by proto-arity
+  // and slot type -- see canonicals.hpp).
+  if (!named_index_colors)
+    return tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels(),
+                                 &named);
   return tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels(),
-                               &named);
+                               &named, default_idxptr_slottype_lesscompare{},
+                               named_index_colors);
 }
 
 /// \brief Hasher for \c TensorNetwork::SlotCanonicalizationMetadata, for use
