@@ -565,6 +565,8 @@ TEST_CASE(
   auto* const prev_stream = logger.eval.stream;
   logger.eval.level = 1;  // arms tally_build (DryRunOps::prod's runtime gate)
 
+  auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+
   // ---- (1) ordered executor. ----
   auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
   REQUIRE(legality.cells.size() == rich.cells.size());
@@ -611,8 +613,8 @@ TEST_CASE(
     }
     REQUIRE(unbatched_index.has_value());
 
-    auto const nb = sequant::eval::detail::ordered_n_blocks(ordered, rich, vmap,
-                                                            yield, target);
+    auto const nb = sequant::eval::detail::ordered_n_blocks(
+        ordered, rich, vmap, yield, target, /*aops=*/&aops);
     CHECK(nb(*kappa_index) > 1);
     CHECK(nb(*unbatched_index) == 1);
   }
@@ -620,6 +622,7 @@ TEST_CASE(
   std::ostringstream ord_trace;
   logger.eval.stream = &ord_trace;
   auto ordered_cache = sequant::cache_manager(forest);
+  ordered_cache.set_array_ops(&aops);
   ordered_cache.set_recompute_tally_enabled(true);
   // R1/R2: install the hierarchy-wide PeakMonitor on the ROOT cache only; it
   // propagates to every per-batch scratch via peak_monitor()'s parent_
@@ -657,6 +660,7 @@ TEST_CASE(
   // -- this is the ground truth the payoff must satisfy.
   {
     auto meas_cache = sequant::cache_manager(forest);
+    meas_cache.set_array_ops(&aops);
     std::function<std::size_t(std::size_t)> const huge =
         [](std::size_t) -> std::size_t { return 1000000000ull; };
     try {
@@ -666,7 +670,7 @@ TEST_CASE(
     } catch (std::exception const&) {
     }
     auto const n_blocks_m = sequant::eval::detail::ordered_n_blocks<Node>(
-        ordered, rich, vmap, yield, target);
+        ordered, rich, vmap, yield, target, /*aops=*/&aops);
     auto const predicted = sequant::eval::detail::ordered_home_reads<Node>(
         ordered, rich, vmap, n_blocks_m);
     std::size_t n_checked = 0, n_mismatch = 0;
@@ -708,6 +712,7 @@ TEST_CASE(
   auto const sched =
       sequant::eval::build_scope_schedule<std::wstring>(rich, {L"Κ"});
   auto ws_cache = sequant::cache_manager(forest);
+  ws_cache.set_array_ops(&aops);
   ws_cache.set_recompute_tally_enabled(true);
   // R2: same measurement on the whole-scope executor's own root cache, so the
   // ordered-vs-whole-scope peak comparison below is apples-to-apples (both
@@ -1102,6 +1107,8 @@ TEST_CASE(
   // The volatility-aware overload stamps the persistence classification the
   // executor reads when homing (MPQC's build_cache_manager path).
   auto cache = sequant::cache_manager(forest, is_volatile_node, 2);
+  auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+  cache.set_array_ops(&aops);
   cache.set_recompute_tally_enabled(true);
 
   auto run_iter = [&]() {
@@ -1442,6 +1449,8 @@ TEST_CASE(
   // ---------- ORDERED / DAG executor, 2 iterations ----------
   if (ordered_ok) {
     auto cache = sequant::cache_manager(forest, is_volatile_node, 2);
+    auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+    cache.set_array_ops(&aops);
     cache.set_recompute_tally_enabled(true);
     sequant::eval::PeakMonitor mon;
     std::vector<sequant::eval::PeakLiveEntry> peak_live;
@@ -1519,6 +1528,8 @@ TEST_CASE(
   std::size_t warm_skipped = 0;
   if (ordered_ok) {
     auto cache = sequant::cache_manager(forest, is_volatile_node, 2);
+    auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+    cache.set_array_ops(&aops);
     // prime persistents by one cold run, then reset (persistents stay resident)
     logger.eval.stream = &sink_os;
     try {
@@ -1565,6 +1576,8 @@ TEST_CASE(
   // ---------- FOREST descent, 2 iterations ----------
   {
     auto cache = sequant::cache_manager(forest, is_volatile_node, 2);
+    auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+    cache.set_array_ops(&aops);
     cache.set_recompute_tally_enabled(true);
     sequant::eval::PeakMonitor mon;
     cache.set_peak_monitor(&mon);
@@ -1778,6 +1791,8 @@ TEST_CASE(
   std::ostringstream direct_trace;
   logger.eval.stream = &direct_trace;
   auto direct_cache = sequant::cache_manager(forest);
+  auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+  direct_cache.set_array_ops(&aops);
   direct_cache.set_recompute_tally_enabled(true);
   sequant::eval::PeakMonitor direct_mon;
   direct_cache.set_peak_monitor(&direct_mon);
@@ -2054,6 +2069,8 @@ TEST_CASE("w20 peak composition: tier-A/tier-B decomposition at realized peak",
   logger.eval.stream = &sink;
 
   auto ordered_cache = sequant::cache_manager(forest);
+  auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+  ordered_cache.set_array_ops(&aops);
   sequant::eval::PeakMonitor mon;
   std::size_t peak_total_snapshot = 0;
   std::size_t peak_clock = 0;

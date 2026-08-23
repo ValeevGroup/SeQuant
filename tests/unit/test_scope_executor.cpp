@@ -664,10 +664,11 @@ TEST_CASE(
   auto const target = [](sequant::Index const&) -> std::size_t { return 256; };
 
   // n_blocks from any Κ-carrying leaf's realized partition.
+  auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
   std::size_t n_blocks = 0;
   for (auto const& root : forest)
     if (auto lf = sequant::find_leaf_carrying(root, K)) {
-      n_blocks = yield(lf->first)->mode_batches(lf->second, 256).size();
+      n_blocks = aops.axis_batches(K, 256).size();
       break;
     }
   REQUIRE(n_blocks > 1);
@@ -691,6 +692,7 @@ TEST_CASE(
   logger.eval.level = 1;
   logger.eval.stream = &ws_trace;
   auto ws_cache = sequant::cache_manager(forest);
+  ws_cache.set_array_ops(&aops);
   ws_cache.set_recompute_tally_enabled(true);
   ResultPtr ws_result;
   try {
@@ -724,6 +726,7 @@ TEST_CASE(
   std::ostringstream fd_trace;
   logger.eval.stream = &fd_trace;
   auto fd_cache = sequant::cache_manager(forest);
+  fd_cache.set_array_ops(&aops);
   fd_cache.set_custom_evaluator(sequant::make_evaluator(policy, yield));
   fd_cache.set_recompute_tally_enabled(true);
   // The forest descent does NOT go through evaluate_whole_scope, so install the
@@ -1112,10 +1115,11 @@ TEST_CASE(
     return ix.space().base_key() == L"Κ" ? std::size_t{256} : std::size_t{8};
   };
 
+  auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
   std::size_t n_kappa = 0;
   for (auto const& root : forest)
     if (auto lf = sequant::find_leaf_carrying(root, K)) {
-      n_kappa = yield(lf->first)->mode_batches(lf->second, 256).size();
+      n_kappa = aops.axis_batches(K, 256).size();
       break;
     }
   REQUIRE(n_kappa > 1);
@@ -1137,6 +1141,7 @@ TEST_CASE(
   logger.eval.level = 1;
   logger.eval.stream = &ws_trace;
   auto ws_cache = sequant::cache_manager(forest);
+  ws_cache.set_array_ops(&aops);
   ws_cache.set_recompute_tally_enabled(true);
   ResultPtr ws_result;
   try {
@@ -1167,6 +1172,7 @@ TEST_CASE(
   std::ostringstream fd_trace;
   logger.eval.stream = &fd_trace;
   auto fd_cache = sequant::cache_manager(forest);
+  fd_cache.set_array_ops(&aops);
   fd_cache.set_custom_evaluator(sequant::make_evaluator(policy, yield));
   fd_cache.set_recompute_tally_enabled(true);
   ResultPtr fd_result;

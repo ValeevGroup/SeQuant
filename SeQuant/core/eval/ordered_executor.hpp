@@ -2,6 +2,7 @@
 #define SEQUANT_EVAL_ORDERED_EXECUTOR_HPP
 
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval/backend_array_ops.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
@@ -107,17 +108,19 @@ template <typename node_t, typename F>
     OrderedSchedule const& ordered, RichSchedule const& rich,
     std::unordered_map<std::size_t, node_t> const& vmap,
     F const& leaf_evaluator,
-    std::function<std::size_t(Index const&)> const& target) {
+    std::function<std::size_t(Index const&)> const& target,
+    BackendArrayOps const* aops) {
   auto by_type =
       std::make_shared<std::unordered_map<std::wstring, std::size_t>>();
   auto const add = [&](auto&& self, ScopeBlock const& b) -> void {
     std::wstring const bk(b.axis.space().base_key());
     if (!by_type->count(bk)) {
-      if (auto const lf = ordered_axis_leaf<node_t>(b, b.axis, vmap, rich)) {
-        by_type->emplace(bk, leaf_evaluator(lf->first)
-                                 ->mode_batches(lf->second, target(b.axis))
-                                 .size());
-      }
+      // Single source of truth with the actual batch loop: the block COUNT is
+      // the size of the SAME axis_batches the executor iterates (per-space).
+      SEQUANT_ASSERT(aops &&
+                     "ordered_n_blocks: batched schedule requires backend "
+                     "array-ops (CacheManager::set_array_ops)");
+      by_type->emplace(bk, aops->axis_batches(b.axis, target(b.axis)).size());
     }
     for (Step const& s : b.steps)
       if (auto const* child = std::get_if<ScopeBlock>(&s.value))
@@ -295,6 +298,13 @@ void run_ordered_contracted_block(
   using Cache = CacheManager<N, FHC>;
   using BatchContext = typename Cache::BatchContext;
   using member_t = std::pair<node_t const*, Index>;
+  // Backend array-ops (zero destination + axis chunking), sourced from the
+  // cache chain (the backend -- mpqc's registries or a test's leaf source --
+  // wires the root cache). A batched block cannot be realized without it.
+  BackendArrayOps const* const aops = parent_cache.array_ops();
+  SEQUANT_ASSERT(aops &&
+                 "evaluate_ordered_schedule: batched eval requires backend "
+                 "array-ops (CacheManager::set_array_ops)");
 
   // R4 (SP3 Task 5): loud guard on this block's batch-mode kind. The batch-loop
   // primitive below realizes Contracted and External blocks UNIFORMLY (their
@@ -389,13 +399,10 @@ void run_ordered_contracted_block(
   // inherit this flag through their own make_batched_scratch off this cache).
   bs.cache.set_space_mapped_slicing(true);
 
-  auto const lf = ordered_axis_leaf<node_t>(block, block.axis, vmap, rich);
-  SEQUANT_ASSERT(lf &&
-                 "evaluate_ordered_schedule: no leaf below this loop block "
-                 "carries its own axis -- cannot source mode_batches");
-  ResultPtr const carrier_full = leaf_evaluator(lf->first);
-  auto const batches =
-      carrier_full->mode_batches(lf->second, target(block.axis));
+  // Batch chunks over the loop axis, sourced per-space by the backend (no
+  // carrier array is consulted).
+  container::svector<std::pair<std::size_t, std::size_t>> const batches =
+      aops->axis_batches(block.axis, target(block.axis));
 
   // Loop-structure trace. The ordered executor previously emitted NO
   // batch-execution marker (unlike scope_executor.hpp's whole-scope BatchGroup
@@ -501,9 +508,10 @@ void run_ordered_contracted_block(
         else
           acc[k]->add_inplace(*part);
       } else if (kind == OutputKind::AccumulateScatter) {
-        if (!dest[k])
-          dest[k] = part->pre_sized_zeros_over_mode(*dm[k], *carrier_full,
-                                                    lf->second);
+        // The full-extent zero destination is shaped by the node's own
+        // (unsliced) index list; the backend realizes it from the spaces alone
+        // -- no carrier, no Result-type reconciliation.
+        if (!dest[k]) dest[k] = aops->make_zeros(resolve(vid)->canon_indices());
         dest[k]->write_into_slice(*part, *dm[k], e_lo, e_hi);
       } else {
         // R4: an escape output is AccumulateSum or AccumulateScatter (a
@@ -632,8 +640,8 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // once).
   std::function<std::size_t(Index const&)> const n_blocks = [&]() {
     PhaseTimer::Scope _pt("B.sched_setup");
-    return ordered_n_blocks<node_t>(ordered, rich, vmap, leaf_evaluator,
-                                    target);
+    return ordered_n_blocks<node_t>(ordered, rich, vmap, leaf_evaluator, target,
+                                    cache.array_ops());
   }();
 
   // Task 4: the EXACT home use-count for each homed value under read-from-home,

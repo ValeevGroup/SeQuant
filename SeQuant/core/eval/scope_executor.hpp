@@ -158,6 +158,12 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
       node.children.empty() ? nullptr : &node.children.front();
   std::wstring const base(node.mode.space().base_key());
 
+  // Backend array-ops (zero destination + axis chunking), sourced from the
+  // cache chain -- the SAME source the ordered (DAG) executor reads, so both
+  // build identical arrays. nullptr (no backend wired, e.g. a raw unit test)
+  // takes the legacy carrier path below.
+  BackendArrayOps const* const aops = parent_cache.array_ops();
+
   // Recurse into the child loop for one member subset, forwarding all context.
   auto recurse = [&](ScopeNode const& c,
                      container::svector<node_t const*> const& subset,
@@ -191,12 +197,13 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
       auto const dm = index_position(*m, axis);  // exact: the member's own axis
       SEQUANT_ASSERT(dm &&
                      "external batch mode is not free on the member's result");
-      auto const carrier = find_leaf_carrying(*m, axis);
-      SEQUANT_ASSERT(carrier && "no leaf carries the member's external mode");
-      ResultPtr const carrier_full = leaf_evaluator(carrier->first);
-      auto const batches =
-          leaf_evaluator(carrier->first)
-              ->mode_batches(carrier->second, target_batch_size(axis));
+      // Batch chunks over the member's own axis, sourced per-space by the
+      // backend (no carrier array is consulted).
+      SEQUANT_ASSERT(aops &&
+                     "batched whole-scope eval requires backend array-ops "
+                     "(CacheManager::set_array_ops)");
+      container::svector<std::pair<std::size_t, std::size_t>> const batches =
+          aops->axis_batches(axis, target_batch_size(axis));
 
       // A solo scratch (an external mode is not a shared-final mode): dedups
       // repeats WITHIN the member subtree only. Reuses the same primitive the
@@ -242,9 +249,7 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
                             bs.cache)
                         .front()
                   : evaluate_impl<EvalTrace>(*m, leaf_evaluator, bs.cache);
-        if (!dest)
-          dest = part->pre_sized_zeros_over_mode(*dm, *carrier_full,
-                                                 carrier->second);
+        if (!dest) dest = aops->make_zeros((*m)->canon_indices());
         dest->write_into_slice(*part, *dm, e_lo, e_hi);
       }
       SEQUANT_ASSERT(dest);
@@ -279,13 +284,11 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
       (void)bs.cache.store(*s, parent_cache.access(*s));
     bs.cache.set_parent(&parent_cache);
 
-    container::svector<std::pair<std::size_t, std::size_t>> batches;
-    {
-      auto const lf = find_leaf_carrying_type(*members.front(), base);
-      SEQUANT_ASSERT(lf);
-      batches = leaf_evaluator(lf->first)->mode_batches(lf->second,
-                                                        target_batch_size(K));
-    }
+    SEQUANT_ASSERT(aops &&
+                   "batched whole-scope eval requires backend array-ops "
+                   "(CacheManager::set_array_ops)");
+    container::svector<std::pair<std::size_t, std::size_t>> const batches =
+        aops->axis_batches(K, target_batch_size(K));
 
     // Loop-structure trace (mirrors eval.hpp's forest BatchGroup markers;
     // log::printing()-gated, first-class -- not env-gated).
@@ -380,14 +383,13 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
     auto add_scope = [&](auto&& self, ScopeNode const& sn) -> void {
       std::wstring const bk(sn.mode.space().base_key());
       if (!nblocks_by_type.count(bk)) {
-        for (auto const* mm : members)
-          if (auto const lf = find_leaf_carrying_type(*mm, bk)) {
-            nblocks_by_type.emplace(
-                bk, leaf_evaluator(lf->first)
-                        ->mode_batches(lf->second, target_batch_size(sn.mode))
-                        .size());
-            break;
-          }
+        // Single source of truth with the actual batch loop (same
+        // axis_batches).
+        SEQUANT_ASSERT(aops &&
+                       "batched whole-scope eval requires backend array-ops "
+                       "(CacheManager::set_array_ops)");
+        nblocks_by_type.emplace(
+            bk, aops->axis_batches(sn.mode, target_batch_size(sn.mode)).size());
       }
       for (auto const& c : sn.children) self(self, c);
     };
@@ -434,13 +436,11 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
   Cache outer{std::move(homed_life)};
   outer.set_parent(&parent_cache);
 
-  container::svector<std::pair<std::size_t, std::size_t>> batches;
-  {
-    auto const lf = find_leaf_carrying_type(*members.front(), base);
-    SEQUANT_ASSERT(lf);
-    batches = leaf_evaluator(lf->first)->mode_batches(lf->second,
-                                                      target_batch_size(K));
-  }
+  SEQUANT_ASSERT(aops &&
+                 "batched whole-scope eval requires backend array-ops "
+                 "(CacheManager::set_array_ops)");
+  container::svector<std::pair<std::size_t, std::size_t>> const batches =
+      aops->axis_batches(K, target_batch_size(K));
 
   // Loop-structure trace (mirrors eval.hpp's forest BatchGroup markers;
   // log::printing()-gated, first-class -- not env-gated). Nested loops emit

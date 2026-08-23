@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/asy_cost.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval/backend_array_ops.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/eval/eval_node_compare.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
@@ -896,6 +897,12 @@ class CacheManager {
   /// outlive this cache.
   CacheManager* parent_ = nullptr;
 
+  /// Backend realizations of external-axis batching's array ops (zero
+  /// destination + axis chunking); see \c BackendArrayOps. Inherited from
+  /// \c parent_ (only the root cache is wired in practice). Non-owning; the
+  /// pointee must outlive this cache.
+  BackendArrayOps const* array_ops_ = nullptr;
+
   /// Running high-water mark (bytes) of the eval engine's live working set,
   /// updated by note_working_set() and cleared by reset(). Held here rather
   /// than in the recursive evaluate() so it persists across the whole
@@ -1091,6 +1098,18 @@ class CacheManager {
     return schedule_sink_ ? schedule_sink_
            : parent_      ? parent_->schedule_sink()
                           : nullptr;
+  }
+
+  /// Sets the backend array-ops (see BackendArrayOps). Non-owning; the pointee
+  /// must outlive this cache. Absent (nullptr) anywhere along the chain means a
+  /// batched external-axis scatter has no way to build its destination.
+  void set_array_ops(BackendArrayOps const* a) noexcept { array_ops_ = a; }
+
+  /// \return the local array-ops if set, else the one inherited from
+  ///         \c parent_ (only the root cache is wired in practice); nullptr if
+  ///         none is wired anywhere along the chain. Non-owning.
+  [[nodiscard]] BackendArrayOps const* array_ops() const noexcept {
+    return array_ops_ ? array_ops_ : parent_ ? parent_->array_ops() : nullptr;
   }
 
   /// Ensure a scope-hoist slot exists for @p key so a loop-invariant

@@ -1783,61 +1783,44 @@ TEST_CASE("dryrun flat result slice_mode shrinks the sliced mode",
   CHECK(sliced->size_in_bytes() == full / 4);
 }
 
-TEST_CASE("dryrun flat result mode_batches tiles the mode extent",
+TEST_CASE("dryrun axis_batches tiles the axis space extent",
           "[dryrun-result]") {
   auto r = backend_test_regime();
   auto cm = std::make_shared<CostModel const>(r);
-  ResultDryRun t{{Index{L"a_3"}, Index{L"i_2"}}, cm};
-  Result const& rt = t;
-  auto batches = rt.mode_batches(0, 5);  // 20 / 5 = 4 batches
+  auto const aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+  auto batches = aops.axis_batches(Index{L"a_3"}, 5);  // 20 / 5 = 4 batches
   CHECK(batches.size() == 4);
   CHECK(batches.front().first == 0);
   CHECK(batches.back().second == 20);
 }
 
-TEST_CASE(
-    "dryrun flat result pre_sized_zeros_over_mode widens to the mode "
-    "source's full extent",
-    "[dryrun-result][pre-sized]") {
-  // D3.1 (Task 6 witness): the runtime scatter branch
-  // (make_batched_custom_evaluator, BatchModeType::External) presizes its
-  // destination from a BLOCK PARTIAL (a result whose batch mode has been
-  // slice_mode()'d down to one block) via
-  // part->pre_sized_zeros_over_mode(dest_mode, carrier_full, carrier_mode).
-  // The dry-run analogue of the TA backend's ResultTensorTA::
-  // pre_sized_zeros_over_mode (which swaps in axis_src's FULL
-  // TiledRange1): the returned token's mode-0 extent (queryable immediately
-  // via size_in_bytes(), a structural fact, BEFORE any write_into_slice()
-  // call) must be the mode source's full extent (10, from
-  // backend_test_regime), not the block's narrower extent (4).
+TEST_CASE("dryrun make_zeros builds a full-extent flat scatter destination",
+          "[dryrun-result][pre-sized]") {
+  // The runtime External-mode scatter builds its destination from the node's
+  // OWN (unsliced) index list via BackendArrayOps::make_zeros -- every mode at
+  // its space's FULL extent (a structural fact queryable immediately via
+  // size_in_bytes()). Replaces the old carrier-widening
+  // pre_sized_zeros_over_mode: no block partial, no carrier.
   auto r = backend_test_regime();
   auto cm = std::make_shared<CostModel const>(r);
   Index i1{L"i_1"}, a3{L"a_3"};
   container::svector<Index> idx{i1, a3};  // i_1 extent 10, a_3 extent 20
 
-  ResultDryRun full{idx, cm};  // the unsliced carrier leaf's token
-  Result const& full_r = full;
-  auto const full_bytes = full_r.size_in_bytes();
+  ResultDryRun full{idx, cm};  // reference: the fully-realized token
+  auto const full_bytes = static_cast<Result const&>(full).size_in_bytes();
 
-  auto const block = full_r.slice_mode(0, 0, 4);  // one block: i_1 in [0,4)
-  REQUIRE(block);
-  CHECK(block->size_in_bytes() == full_bytes * 4 / 10);
-
-  auto dest = block->pre_sized_zeros_over_mode(/*mode=*/0, full_r,
-                                               /*axis_src_mode=*/0);
+  auto const aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+  auto dest = aops.make_zeros(container::vector<Index>(idx.begin(), idx.end()));
   REQUIRE(dest);
   CHECK(dest->is<ResultDryRun>());
-  // Widened back to the FULL i_1 extent (10), not the block's 4.
   CHECK(dest->size_in_bytes() == full_bytes);
 }
 
-TEST_CASE(
-    "dryrun nested result pre_sized_zeros_over_mode widens to the mode "
-    "source's full extent",
-    "[dryrun-result][pre-sized]") {
+TEST_CASE("dryrun make_zeros builds a full-extent nested scatter destination",
+          "[dryrun-result][pre-sized]") {
   // ToT analogue of the flat case above -- CSV/PNO residuals carry
-  // ResultDryRunNested tokens, so the External-mode scatter's presize must
-  // also widen a nested token's outer batch mode.
+  // ResultDryRunNested tokens, so make_zeros must build a nested full-extent
+  // destination when the descriptor carries a proto-indexed (composite) leg.
   auto r = backend_test_regime();
   auto cm = std::make_shared<CostModel const>(r);
   Index i1{L"i_1"}, i2{L"i_2"}, a3{L"a_3"};
@@ -1847,15 +1830,11 @@ TEST_CASE(
   container::svector<Index> canon{i1, a3, a_pno};
 
   ResultDryRunNested full{outer, inner, cm, {}, canon};
-  Result const& full_r = full;
-  auto const full_bytes = full_r.size_in_bytes();
+  auto const full_bytes = static_cast<Result const&>(full).size_in_bytes();
 
-  auto const block = full_r.slice_mode(0, 0, 5);  // i_1 in [0,5), half of 10
-  REQUIRE(block);
-  CHECK(block->size_in_bytes() == full_bytes / 2);
-
-  auto dest = block->pre_sized_zeros_over_mode(/*mode=*/0, full_r,
-                                               /*axis_src_mode=*/0);
+  auto const aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+  auto dest =
+      aops.make_zeros(container::vector<Index>(canon.begin(), canon.end()));
   REQUIRE(dest);
   CHECK(dest->is<ResultDryRunNested>());
   CHECK(dest->size_in_bytes() == full_bytes);
@@ -2080,6 +2059,8 @@ TEST_CASE(
   };
 
   auto cache = sequant::CacheManager<node_t>::empty();
+  auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+  cache.set_array_ops(&aops);
   cache.set_custom_evaluator(make_batched_custom_evaluator(
       yield, [](Index const&) -> std::size_t { return 4; }, accept_occ, spy,
       never_volatile{}));
@@ -2271,6 +2252,8 @@ TEST_CASE(
   REQUIRE(giant_nominal_bytes > 0.0);
 
   auto cache = sequant::cache_manager(std::vector<EvalNodeDryRun>{node});
+  auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+  cache.set_array_ops(&aops);
   cache.set_custom_evaluator(
       sequant::make_evaluator(policy, DryRunLeafEvaluator{cm}));
 
@@ -4333,6 +4316,8 @@ TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
   // make_evaluator so each per-batch scratch cache's working_set_hwmark folds
   // into `peak`.
   auto cache = sequant::cache_manager(std::vector<EvalNodeDryRun>{node});
+  auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+  cache.set_array_ops(&aops);
   std::atomic<double> peak{0.0};
   cache.set_custom_evaluator(sequant::make_evaluator(
       policy, DryRunLeafEvaluator{cm}, sequant::make_no_scope_guard{}, &peak));
@@ -4472,6 +4457,8 @@ TEST_CASE("dryrun peak is co-resident sum", "[dryrun][cost_profile]") {
   // consulted (parent() == nullptr short-circuits the added term to 0 at
   // every one of the 7 fixed sites).
   auto scratch_isolated = sequant::CacheManager<node_t>::empty();
+  auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+  scratch_isolated.set_array_ops(&aops);
   scratch_isolated.set_custom_evaluator(
       make_batched_custom_evaluator(yield, target_batch_size, accept_occ,
                                     make_no_scope_guard{}, never_volatile{}));
@@ -4488,6 +4475,7 @@ TEST_CASE("dryrun peak is co-resident sum", "[dryrun][cost_profile]") {
   // cache.
   auto scratch_chained = sequant::CacheManager<node_t>::empty();
   scratch_chained.set_parent(&outer);
+  scratch_chained.set_array_ops(&aops);
   scratch_chained.set_custom_evaluator(
       make_batched_custom_evaluator(yield, target_batch_size, accept_occ,
                                     make_no_scope_guard{}, never_volatile{}));
@@ -6318,10 +6306,11 @@ TEST_CASE("whole-scope executor builds shared aux composites once per block",
   auto const target = [](Index const&) -> std::size_t { return 256; };
 
   // n_blocks from any aux carrier's realized partition.
+  auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
   std::size_t n_blocks = 0;
   for (auto const& root : forest)
     if (auto lf = sequant::find_leaf_carrying(root, K)) {
-      n_blocks = yield(lf->first)->mode_batches(lf->second, 256).size();
+      n_blocks = aops.axis_batches(K, 256).size();
       break;
     }
   REQUIRE(n_blocks > 1);
@@ -6352,6 +6341,7 @@ TEST_CASE("whole-scope executor builds shared aux composites once per block",
 
   // (1) WHOLE-SCOPE: drive the single-K loop; count builds.
   auto ws_cache = sequant::cache_manager(forest);
+  ws_cache.set_array_ops(&aops);
   ws_cache.set_recompute_tally_enabled(true);
   try {
     (void)sequant::eval::evaluate_whole_scope<Trace::On>(
@@ -6366,6 +6356,7 @@ TEST_CASE("whole-scope executor builds shared aux composites once per block",
 
   // (2) forest descent + batched custom evaluator (the fragmenting path).
   auto fd_cache = sequant::cache_manager(forest);
+  fd_cache.set_array_ops(&aops);
   fd_cache.set_custom_evaluator(sequant::make_evaluator(policy, yield));
   fd_cache.set_recompute_tally_enabled(true);
   try {
@@ -6508,14 +6499,15 @@ TEST_CASE(
   };
 
   // n_Κ_blocks (aux partition) and n_occ_blocks (occ partition).
+  auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
   std::size_t n_kappa = 0, n_occ = 0;
   for (auto const& root : forest) {
     if (!n_kappa)
       if (auto lf = sequant::find_leaf_carrying(root, K))
-        n_kappa = yield(lf->first)->mode_batches(lf->second, 256).size();
+        n_kappa = aops.axis_batches(K, 256).size();
     if (!n_occ)
       if (auto lf = sequant::eval::detail::find_leaf_carrying_type(root, L"i"))
-        n_occ = yield(lf->first)->mode_batches(lf->second, 16).size();
+        n_occ = aops.axis_batches(i1, 16).size();
   }
   REQUIRE(n_kappa > 1);
   REQUIRE(n_occ > 1);
@@ -6548,6 +6540,7 @@ TEST_CASE(
 
   // (1) WHOLE-SCOPE: drive the NESTED Κ->i loop nest; count builds.
   auto ws_cache = sequant::cache_manager(forest);
+  ws_cache.set_array_ops(&aops);
   ws_cache.set_recompute_tally_enabled(true);
   try {
     (void)sequant::eval::evaluate_whole_scope<Trace::On>(
@@ -6666,14 +6659,15 @@ TEST_CASE(
   DryRunLeafEvaluator yield{cm};
   auto const target = [](Index const&) -> std::size_t { return 256; };
 
+  auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
   std::size_t n_kappa = 0, n_mu = 0;
   for (auto const& root : forest) {
     if (!n_kappa)
       if (auto lf = sequant::find_leaf_carrying(root, K))
-        n_kappa = yield(lf->first)->mode_batches(lf->second, 256).size();
+        n_kappa = aops.axis_batches(K, 256).size();
     if (!n_mu)
       if (auto lf = sequant::eval::detail::find_leaf_carrying_type(root, L"μ̃"))
-        n_mu = yield(lf->first)->mode_batches(lf->second, 256).size();
+        n_mu = aops.axis_batches(mu1, 256).size();
   }
   REQUIRE(n_kappa > 1);
   REQUIRE(n_mu > 1);
@@ -6703,6 +6697,7 @@ TEST_CASE(
   logger.eval.stream = &trace_sink;
 
   auto ws_cache = sequant::cache_manager(forest);
+  ws_cache.set_array_ops(&aops);
   ws_cache.set_recompute_tally_enabled(true);
   try {
     (void)sequant::eval::evaluate_whole_scope<Trace::On>(

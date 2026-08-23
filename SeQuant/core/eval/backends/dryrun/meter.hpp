@@ -303,6 +303,14 @@ inline MeterReport meter(
   PeakMonitor mon;
   cache.set_peak_monitor(&mon);
 
+  // Backend array-ops for the dry-run backend: the batched executors build a
+  // scatter destination / enumerate axis batches through this seam (the SAME
+  // one the wet run uses), so the dry replay realizes the same scatter
+  // footprint and batch count. Sourced from the shared CostModel -- no array in
+  // the DAG is consulted. Must outlive the replay below (it is a local here).
+  auto const dry_aops = make_dryrun_array_ops(cm);
+  cache.set_array_ops(&dry_aops);
+
   // The SAME block_of source the coexistence entry itself derives from
   // policy.batch_target_size (scope_executor.hpp's evaluate(Nodes const&,
   // BatchPolicy const&, ...)) -- an empty batch_target_size means "no

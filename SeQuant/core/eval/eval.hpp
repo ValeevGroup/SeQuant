@@ -2060,15 +2060,27 @@ template <typename F, typename IndexPredicate = accept_any_index,
     auto pick_sliceable = [&](auto const& n)
         -> std::optional<std::pair<
             Index, container::svector<std::pair<std::size_t, std::size_t>>>> {
+      BackendArrayOps const* const aops = cache.array_ops();
+      auto const& ectx = cache.batch_context();
+      bool const smap = cache.space_mapped_slicing();
+      // Is ix's mode already sliced by an enclosing block, so it must not be
+      // re-picked? Mirrors slice_to_use exactly: an EXACT context axis slices
+      // ix, and (only under space-mapped slicing) so does any context axis of
+      // ix's SPACE. This replaces the old "slice the carrier leaf and see if it
+      // yields a single batch" probe, which needed mode_batches.
+      auto already_sliced = [&](Index const& ix) {
+        for (auto const& e : ectx)
+          if (e.first == ix ||
+              (smap && e.first.space().base_key() == ix.space().base_key()))
+            return true;
+        return false;
+      };
       for (Index const& ix : candidate_axes(n)) {
-        auto const lf = find_leaf_carrying(n, ix);
-        if (!lf) continue;
-        // sliced_leaf (not the raw evaluator): at depth > 0 the carrier leaf
-        // must be sliced to the enclosing blocks so an already-outer-sliced
-        // mode yields a SINGLE batch and is skipped -- the "K is not re-picked"
-        // invariant. At depth 0 (empty enclosing context) this is the raw leaf.
-        auto b = sliced_leaf(lf->first)->mode_batches(lf->second,
-                                                      target_batch_size(ix));
+        if (already_sliced(ix)) continue;
+        SEQUANT_ASSERT(aops &&
+                       "batched forest eval requires backend array-ops "
+                       "(CacheManager::set_array_ops)");
+        auto b = aops->axis_batches(ix, target_batch_size(ix));
         if (b.size() > 1) return std::make_pair(ix, std::move(b));
       }
       return std::nullopt;
@@ -2362,14 +2374,13 @@ template <typename F, typename IndexPredicate = accept_any_index,
       auto const dest_mode = index_position(node, K);
       SEQUANT_ASSERT(dest_mode &&
                      "external batch mode is not free on the node's result");
-      auto const carrier = find_leaf_carrying(node, K);
-      SEQUANT_ASSERT(carrier && "no leaf carries the external batch mode");
-      // The carrier leaf supplies K's tiling for pre-sizing. sliced_leaf (not
-      // the raw evaluator): at depth 0 this is the FULL carrier (empty
-      // enclosing context), but at depth > 0 it must be sliced to the OUTER
-      // enclosing blocks so the scatter dest is pre-sized within the outer
-      // block, not at the full outer extent.
-      ResultPtr const carrier_full = sliced_leaf(carrier->first);
+      // Backend array-ops from the cache chain -- the SAME source the ordered
+      // (DAG) executor reads, so forest and DAG build identical scatter
+      // destinations from the node's own (unsliced) index list.
+      BackendArrayOps const* const aops = cache.array_ops();
+      SEQUANT_ASSERT(aops &&
+                     "batched external-mode scatter requires backend array-ops "
+                     "(CacheManager::set_array_ops)");
 
       // A single-node scratch: an external mode is not a
       // persistent-final sharing mode, so the group/replay machinery (which
@@ -2377,6 +2388,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
       // this node. The scratch still dedups repeats WITHIN the node's subtree.
       std::vector<member_t> solo{{&node, K}};
       auto bs = detail::make_batched_scratch(solo, cache);
+      bs.cache.set_array_ops(cache.array_ops());  // inherit backend ops
       for (auto const* s : bs.seeds) (void)bs.cache.store(*s, cache.access(*s));
       place_at_this_level(bs.cache, cache, std::vector<node_t const*>{&node});
 
@@ -2416,11 +2428,10 @@ template <typename F, typename IndexPredicate = accept_any_index,
             target_batch_size, accept, make_scope_guard, is_volatile,
             persistent_only, depth + 1, peak));
         ResultPtr part = evaluate_impl(node, leaf_evaluator, bs.cache);
-        // Pre-size on the first block (learns the result's non-mode extents and
-        // kind from the block partial; the external mode is widened to full).
-        if (!dest)
-          dest = part->pre_sized_zeros_over_mode(*dest_mode, *carrier_full,
-                                                 carrier->second);
+        // Pre-size the full-extent zero destination from the node's own
+        // (unsliced) index list on the first block; the backend realizes it
+        // (flat or nested) with no array in the DAG consulted.
+        if (!dest) dest = aops->make_zeros(node->canon_indices());
         dest->write_into_slice(*part, *dest_mode, e_lo, e_hi);
 
         if (peak) {
@@ -2564,6 +2575,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
       // batches drops the previous batch's partials, while pre-seeded alive
       // persistent entries (registered persistent in the scratch) survive.
       auto bs = detail::make_batched_scratch(layer, cache);
+      bs.cache.set_array_ops(cache.array_ops());  // inherit backend ops
       for (auto const* s : bs.seeds) (void)bs.cache.store(*s, cache.access(*s));
       {
         std::vector<node_t const*> roots;

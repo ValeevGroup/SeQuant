@@ -6,6 +6,7 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
+#include <SeQuant/core/eval/backends/tiledarray/array_ops.hpp>
 #include <SeQuant/core/eval/backends/tiledarray/eval_context.hpp>
 #include <SeQuant/core/eval/backends/tiledarray/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/tiledarray/result.hpp>
@@ -237,6 +238,30 @@ class rand_tensor_yield {
 
   rand_tensor_yield(TA::World& world_, size_t nocc, size_t nvirt, size_t naux)
       : world{world_}, nocc_{nocc}, nvirt_{nvirt}, naux_{naux} {}
+
+  /// Backend array-ops (zero destination + axis chunking) for a batched eval
+  /// driven by this yield, built from THIS yield's OWN per-space tranges (i ->
+  /// nocc, a/m -> nvirt, x -> naux, tiled in blocks of max_tile_). Nothing is
+  /// read out of the eval DAG; the leaf source owns the tilings, exactly as
+  /// mpqc's registries do in production. \tparam ToTArray the nested array type
+  /// when a scatter destination is nested (defaults to flat).
+  template <typename ToTArray = array_type>
+  sequant::BackendArrayOps array_ops() const {
+    auto make_tr1 = [this](size_t e) {
+      sequant::container::svector<size_t> b;
+      for (size_t x = 0; x < e; x += max_tile_) b.push_back(x);
+      b.push_back(e);
+      return TA::TiledRange1(b.begin(), b.end());
+    };
+    auto isr = sequant::get_default_context().index_space_registry();
+    std::map<std::wstring, TA::TiledRange1> m;
+    m[std::wstring(isr->retrieve(L"i").base_key())] = make_tr1(nocc_);
+    m[std::wstring(isr->retrieve(L"a").base_key())] = make_tr1(nvirt_);
+    m[std::wstring(isr->retrieve(L"x").base_key())] = make_tr1(naux_);
+    m[std::wstring(isr->retrieve(L"m").base_key())] = make_tr1(nvirt_);
+    return sequant::make_ta_array_ops<array_type, ToTArray>(std::move(m),
+                                                            world);
+  }
 
   sequant::ResultPtr operator()(sequant::Variable const& var) const {
     using result_t = sequant::ResultScalar<NumericT>;
@@ -1694,31 +1719,37 @@ TEST_CASE("eval_slice_array_over_mode", "[eval]") {
     REQUIRE(equal_tarrays(via_result, direct));
   }
 
-  SECTION("Result::mode_batches partitions a mode into element ranges") {
+  SECTION("mode_batches_of_trange1 partitions a mode into element ranges") {
     using batches_t = sequant::container::svector<std::pair<size_t, size_t>>;
-    sequant::ResultPtr const r =
-        sequant::eval_result<sequant::ResultTensorTA<TA::TArrayD>>(arr);
-    // mode 1 (b) has 3 tiles of 3 elements each (extent 9). target_batch_size
-    // is an UPPER BOUND: each batch is the largest whole-tile group whose total
-    // size does not exceed the target, with a floor of one tile (so a target
-    // below the tile size still yields one tile per batch). A batch must never
-    // exceed the target except via that one-tile floor.
+    // The TA realization of axis_batches: partition a TiledRange1 into tile-
+    // grouped element ranges. mode 1 (b) has 3 tiles of 3 elements each (extent
+    // 9). target_batch_size is an UPPER BOUND: each batch is the largest whole-
+    // tile group whose total size does not exceed the target, with a floor of
+    // one tile (so a target below the tile size still yields one tile per
+    // batch). A batch must never exceed the target except via that one-tile
+    // floor.
+    auto const tr1 = arr.trange().dim(1);
     // (extra parens: compare as a single bool so Catch2 needn't stringify
     // pairs) target >= extent -> a single batch (whole mode).
-    REQUIRE((r->mode_batches(1, 100) == batches_t{{0, 9}}));
+    REQUIRE((sequant::mode_batches_of_trange1(tr1, 100) == batches_t{{0, 9}}));
     // target == 2 tiles -> two-tile batches (6 <= 6).
-    REQUIRE((r->mode_batches(1, 6) == batches_t{{0, 6}, {6, 9}}));
+    REQUIRE((sequant::mode_batches_of_trange1(tr1, 6) ==
+             batches_t{{0, 6}, {6, 9}}));
     // target just above the tile size (but below 2 tiles) -> ONE tile per
     // batch: a 2-tile batch (6) would exceed the target. Regression: the old
     // `acc >= target` rule rounded UP to a 2-tile batch, so any target a hair
     // above the tile size doubled the realized batch -- the aux_target_size
     // 236->243 crash (236-wide K tiles, 243 target -> 472-wide batch).
-    REQUIRE((r->mode_batches(1, 5) == batches_t{{0, 3}, {3, 6}, {6, 9}}));
-    REQUIRE((r->mode_batches(1, 4) == batches_t{{0, 3}, {3, 6}, {6, 9}}));
+    REQUIRE((sequant::mode_batches_of_trange1(tr1, 5) ==
+             batches_t{{0, 3}, {3, 6}, {6, 9}}));
+    REQUIRE((sequant::mode_batches_of_trange1(tr1, 4) ==
+             batches_t{{0, 3}, {3, 6}, {6, 9}}));
     // target == tile size -> one tile per batch.
-    REQUIRE((r->mode_batches(1, 3) == batches_t{{0, 3}, {3, 6}, {6, 9}}));
+    REQUIRE((sequant::mode_batches_of_trange1(tr1, 3) ==
+             batches_t{{0, 3}, {3, 6}, {6, 9}}));
     // target below the tile size -> still one tile per batch (the floor).
-    REQUIRE((r->mode_batches(1, 1) == batches_t{{0, 3}, {3, 6}, {6, 9}}));
+    REQUIRE((sequant::mode_batches_of_trange1(tr1, 1) ==
+             batches_t{{0, 3}, {3, 6}, {6, 9}}));
   }
 }
 
@@ -1886,6 +1917,8 @@ TEST_CASE("eval_batched_custom_evaluator", "[eval]") {
   for (std::size_t target_batch_size :
        {std::size_t{100}, std::size_t{8}, std::size_t{4}, std::size_t{1}}) {
     auto cache = cache_t::empty();
+    auto aops = yield_.array_ops();
+    cache.set_array_ops(&aops);
     cache.set_custom_evaluator(make_batched_custom_evaluator(
         yield_, [target_batch_size](sequant::Index const&) -> std::size_t {
           return target_batch_size;
@@ -1937,6 +1970,8 @@ TEST_CASE("eval_batched_custom_evaluator persistence gate", "[eval]") {
       return sequant::no_scope_guard{};
     };
     auto cache = cache_t::empty();
+    auto aops = yield_.array_ops();
+    cache.set_array_ops(&aops);
     cache.set_custom_evaluator(make_batched_custom_evaluator(
         yield_,
         [](sequant::Index const&) -> std::size_t { return std::size_t{4}; },
@@ -1956,6 +1991,8 @@ TEST_CASE("eval_batched_custom_evaluator persistence gate", "[eval]") {
       return sequant::no_scope_guard{};
     };
     auto cache = cache_t::empty();
+    auto aops = yield_.array_ops();
+    cache.set_array_ops(&aops);
     cache.set_custom_evaluator(make_batched_custom_evaluator(
         yield_,
         [](sequant::Index const&) -> std::size_t { return std::size_t{4}; },
@@ -2020,6 +2057,8 @@ TEST_CASE("eval_batched_custom_evaluator_tot", "[eval]") {
   for (std::size_t target_batch_size :
        {std::size_t{100}, std::size_t{4}, std::size_t{1}}) {
     auto cache = cache_t::empty();
+    auto aops = yield.array_ops();
+    cache.set_array_ops(&aops);
     cache.set_custom_evaluator(make_batched_custom_evaluator(
         yield,
         [target_batch_size](sequant::Index const&) -> std::size_t {
@@ -2255,6 +2294,8 @@ TEST_CASE("evaluate_whole_scope matches forest descent over one aux loop",
 
   // Whole-scope evaluation over the single aux loop.
   auto ws_cache = sequant::CacheManager<node_t>::empty();
+  auto aops = yield_.array_ops();
+  ws_cache.set_array_ops(&aops);
   auto const target_batch = [](sequant::Index const&) -> std::size_t {
     return 4;
   };
@@ -2399,6 +2440,8 @@ TEST_CASE(
 
   // evaluate_ordered_schedule over the single x_1 loop block.
   auto cache = sequant::CacheManager<node_t>::empty();
+  auto aops = yield_.array_ops();
+  cache.set_array_ops(&aops);
   std::function<std::size_t(sequant::Index const&)> const target_batch =
       [](sequant::Index const&) -> std::size_t { return 4; };
   auto const got = evaluate_ordered_schedule(forest, ordered, rich, target,
@@ -2839,6 +2882,8 @@ TEST_CASE(
   std::function<std::size_t(sequant::Index const&)> const target_batch =
       [](sequant::Index const&) -> std::size_t { return 4; };
   auto cache = sequant::cache_manager(forest, is_vol_leaf);
+  auto aops = yield_.array_ops();
+  cache.set_array_ops(&aops);
 
   auto const ref1 = evaluate(forest, target, yield_)->get<TArrayD>();
   auto const got1 =
@@ -2997,6 +3042,8 @@ TEST_CASE(
 
   // evaluate_ordered_schedule over the single i_1 loop block.
   auto cache = sequant::CacheManager<node_t>::empty();
+  auto aops = yield_.array_ops();
+  cache.set_array_ops(&aops);
   std::function<std::size_t(sequant::Index const&)> const target_batch =
       [](sequant::Index const&) -> std::size_t { return 4; };
   auto const got = evaluate_ordered_schedule(forest, ordered, rich, target,
@@ -3095,6 +3142,8 @@ TEST_CASE("evaluate_whole_scope matches forest descent over nested aux+occ",
 
   // Whole-scope evaluation over the nested aux+occ loop nest.
   auto ws_cache = sequant::CacheManager<node_t>::empty();
+  auto aops = yield_.array_ops();
+  ws_cache.set_array_ops(&aops);
   auto const target_batch = [](sequant::Index const&) -> std::size_t {
     return 4;
   };
@@ -3192,6 +3241,8 @@ TEST_CASE(
       rich, {std::wstring(x1.space().base_key())});
   REQUIRE(sched.root.children.size() == 1);
   auto ws_ref_cache = sequant::CacheManager<node_t>::empty();
+  auto aops = yield_.array_ops();
+  ws_ref_cache.set_array_ops(&aops);
   auto const direct_ws =
       evaluate_whole_scope(forest, sched, rich, target, yield_, ws_ref_cache,
                            target_batch)
@@ -3208,6 +3259,7 @@ TEST_CASE(
     policy_on.scheduler = sequant::BatchScheduler::whole_scope;
 
     auto cache_on = sequant::CacheManager<node_t>::empty();
+    cache_on.set_array_ops(&aops);
     auto const got_on = evaluate(forest, policy_on, target, yield_, cache_on,
                                  {std::wstring(x1.space().base_key())})
                             ->get<TArrayD>();
@@ -3568,6 +3620,8 @@ TEST_CASE("eval_batched_custom_evaluator nests inner mode", "[eval]") {
   };
 
   auto cache = cache_t::empty();
+  auto aops = yield_.array_ops();
+  cache.set_array_ops(&aops);
   cache.set_custom_evaluator(make_batched_custom_evaluator(
       yield_,
       [](sequant::Index const&) -> std::size_t { return std::size_t{4}; },
@@ -3682,6 +3736,8 @@ TEST_CASE("eval_batched_custom_evaluator nests two modes on one node",
   };
 
   auto cache = cache_t::empty();
+  auto aops = yield_.array_ops();
+  cache.set_array_ops(&aops);
   cache.set_custom_evaluator(make_batched_custom_evaluator(
       yield_, target_batch_size, accept_aux, make_tracking_guard,
       sequant::never_volatile{}));
@@ -3797,6 +3853,8 @@ TEST_CASE("eval_batched_custom_evaluator hoists loop-invariant descendant",
   };
 
   auto cache = cache_t::empty();
+  auto aops = yield_.array_ops();
+  cache.set_array_ops(&aops);
   cache.set_custom_evaluator(make_batched_custom_evaluator(
       counting_yield,
       [](sequant::Index const&) -> std::size_t { return std::size_t{4}; },
@@ -3943,6 +4001,8 @@ TEST_CASE(
   };
 
   auto cache = cache_t::empty();
+  auto aops = yield_.array_ops();
+  cache.set_array_ops(&aops);
   cache.set_custom_evaluator(make_batched_custom_evaluator(
       counting_yield,
       [](sequant::Index const&) -> std::size_t { return std::size_t{4}; },
@@ -4070,6 +4130,8 @@ TEST_CASE("batched_eval_external_axis_scatter", "[eval][batched-external]") {
   for (std::size_t const target_batch_size : {std::size_t{4}, std::size_t{8}}) {
     guard_calls.clear();
     auto cache = cache_t::empty();
+    auto aops = yield_.array_ops();
+    cache.set_array_ops(&aops);
     cache.set_custom_evaluator(make_batched_custom_evaluator(
         yield_,
         [target_batch_size](sequant::Index const&) -> std::size_t {
@@ -4234,6 +4296,8 @@ TEST_CASE(
     };
 
     auto cache = cache_t::empty();
+    auto aops = yield_.array_ops();
+    cache.set_array_ops(&aops);
     cache.set_custom_evaluator(make_batched_custom_evaluator(
         counting_yield,
         [target_batch_size](sequant::Index const&) -> std::size_t {
@@ -4548,15 +4612,17 @@ TEST_CASE("batched_scratch_tot_presize_scatter", "[eval][batched-external]") {
   auto const b0 = slice_array_over_mode(R, 0, 0, 1);  // outer elements [0,3)
   auto const b1 = slice_array_over_mode(R, 0, 1, 2);  // outer elements [3,6)
 
-  // PRE-SIZE from the FIRST block partial: widen its OUTER mode 0 (sliced to
-  // [0,3)) to the carrier's full mode-0 tiling. R itself is a ToT carrier of
-  // the full external mode (axis_src.is<this_type>() branch); axis_src_mode =
-  // 0.
-  sequant::ResultPtr const first = eval_result<ResultToT>(b0);
-  sequant::ResultPtr const carrier = eval_result<ResultToT>(R);
-  auto rdest = first->pre_sized_zeros_over_mode(/*mode=*/0, *carrier,
-                                                /*axis_src_mode=*/0);
-  // the pre-sized destination spans the FULL external mode (mode 0: {0,3,6})
+  // Build the full-extent zero ToT destination directly from the carrier R's
+  // trange -- exactly the empty-inner zero ToT the scatter branch's make_zeros
+  // produces (every outer tile a well-formed empty-inner tensor, overwritten by
+  // the scattered blocks below).
+  ToTArray dest_arr{world, R.trange()};
+  for (auto it = dest_arr.begin(); it != dest_arr.end(); ++it)
+    if (dest_arr.is_local(it.index()))
+      *it = ToTArray::value_type{it.make_range()};
+  world.gop.fence();
+  sequant::ResultPtr const rdest = eval_result<ResultToT>(dest_arr);
+  // the destination spans the FULL external mode (mode 0: {0,3,6})
   REQUIRE(rdest->get<ToTArray>().trange().dim(0).tile_extent() == 2);
   REQUIRE(rdest->get<ToTArray>().trange().dim(1).tile_extent() == 1);
 
@@ -4703,6 +4769,8 @@ TEST_CASE("batched_eval_external_proto_occ_scatter",
   };
 
   auto cache = cache_t::empty();
+  auto aops = yield_.array_ops<decltype(yield_)::array_tot_type>();
+  cache.set_array_ops(&aops);
   cache.set_custom_evaluator(make_batched_custom_evaluator(
       yield_, [](Index const&) -> std::size_t { return 4; }, accept_occ, spy,
       sequant::never_volatile{}));
@@ -4823,6 +4891,8 @@ TEST_CASE("batched_eval_external_two_occ", "[eval][batched-external]") {
   };
 
   auto cache = cache_t::empty();
+  auto aops = yield_.array_ops();
+  cache.set_array_ops(&aops);
   cache.set_custom_evaluator(make_batched_custom_evaluator(
       yield_, target_batch_size, accept_occ, make_tracking_guard,
       sequant::never_volatile{}));
@@ -4935,6 +5005,8 @@ TEST_CASE("batched_eval_external_hadamard", "[eval][batched-external]") {
   for (std::size_t const target_batch_size : {std::size_t{4}, std::size_t{8}}) {
     guard_calls.clear();
     auto cache = cache_t::empty();
+    auto aops = yield_.array_ops();
+    cache.set_array_ops(&aops);
     cache.set_custom_evaluator(make_batched_custom_evaluator(
         yield_,
         [target_batch_size](sequant::Index const&) -> std::size_t {
@@ -5064,6 +5136,8 @@ TEST_CASE("batched_eval_external_nested_contracted",
   };
 
   auto cache = cache_t::empty();
+  auto aops = yield_.array_ops();
+  cache.set_array_ops(&aops);
   cache.set_custom_evaluator(make_batched_custom_evaluator(
       yield_, target_batch_size, accept_aux, spy, sequant::never_volatile{}));
   auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
@@ -5194,6 +5268,8 @@ TEST_CASE(
   };
 
   auto cache = cache_t::empty();
+  auto aops = yield_.array_ops();
+  cache.set_array_ops(&aops);
   cache.set_custom_evaluator(make_batched_custom_evaluator(
       yield_,
       [](sequant::Index const&) -> std::size_t { return std::size_t{4}; },
@@ -6020,6 +6096,8 @@ TEST_CASE("node_level_external_placement_correctness",
 
     auto accept = opts.batch_policy.is_batchable_index();
     auto cache = cache_t::empty();
+    auto aops = yield_.array_ops();
+    cache.set_array_ops(&aops);
     cache.set_custom_evaluator(make_batched_custom_evaluator(
         yield_, bts, accept, make_no_scope_guard{}, never_volatile{}));
     return evaluate(ta_node, target, yield_, cache)->get<TArrayD>();

@@ -544,12 +544,6 @@ class ResultTensorTA final : public Result {
     return r;
   }
 
-  [[nodiscard]] container::svector<std::pair<std::size_t, std::size_t>>
-  mode_batches(std::size_t mode, std::size_t target_batch_size) const override {
-    return mode_batches_of_trange1(get<ArrayT>().trange().dim(mode),
-                                   target_batch_size);
-  }
-
   void write_into_slice(Result const& block, std::size_t mode,
                         std::size_t block_lo, std::size_t block_hi) override {
     SEQUANT_ASSERT(block.is<this_type>());
@@ -557,30 +551,6 @@ class ResultTensorTA final : public Result {
     auto const [tile_lo, tile_hi] = detail::slice_bounds_to_tiles(
         dest.trange().dim(mode), block_lo, block_hi);
     write_array_into_mode(dest, block.get<ArrayT>(), mode, tile_lo, tile_hi);
-  }
-
-  [[nodiscard]] ResultPtr pre_sized_zeros_over_mode(
-      std::size_t mode, Result const& axis_src,
-      std::size_t axis_src_mode) const override {
-    SEQUANT_ASSERT(axis_src.is<this_type>());
-    auto const& self = get<ArrayT>();
-    auto const& src = axis_src.get<ArrayT>();
-    auto const rank = self.trange().rank();
-    SEQUANT_ASSERT(mode < rank);
-    SEQUANT_ASSERT(axis_src_mode < src.trange().rank());
-    // Take *this's outer trange but swap in the external axis's FULL tiling
-    // (from axis_src's mode axis_src_mode). Every other mode of a block partial
-    // is already full extent, so only the sliced axis needs widening.
-    std::vector<TA::TiledRange1> dims;
-    dims.reserve(rank);
-    for (std::size_t d = 0; d < rank; ++d) dims.push_back(self.trange().dim(d));
-    dims[mode] = src.trange().dim(axis_src_mode);
-    ArrayT dest(self.world(), TA::TiledRange(dims.begin(), dims.end()));
-    dest.fill_local(numeric_type(0));
-    dest.world().gop.fence();
-    ::sequant::detail::note_fence();
-    log_ta_tensor_host_memory_use();
-    return eval_result<this_type>(std::move(dest));
   }
 
   [[nodiscard]] ResultPtr prod(Result const& other,
@@ -786,12 +756,6 @@ class ResultTensorOfTensorTA final : public Result {
         slice_array_over_mode(get<ArrayT>(), mode, tile_lo, tile_hi));
   }
 
-  [[nodiscard]] container::svector<std::pair<std::size_t, std::size_t>>
-  mode_batches(std::size_t mode, std::size_t target_batch_size) const override {
-    return mode_batches_of_trange1(get<ArrayT>().trange().dim(mode),
-                                   target_batch_size);
-  }
-
   void write_into_slice(Result const& block, std::size_t mode,
                         std::size_t block_lo, std::size_t block_hi) override {
     SEQUANT_ASSERT(block.is<this_type>());
@@ -799,49 +763,6 @@ class ResultTensorOfTensorTA final : public Result {
     auto const [tile_lo, tile_hi] = detail::slice_bounds_to_tiles(
         dest.trange().dim(mode), block_lo, block_hi);
     write_array_into_mode(dest, block.get<ArrayT>(), mode, tile_lo, tile_hi);
-  }
-
-  [[nodiscard]] ResultPtr pre_sized_zeros_over_mode(
-      std::size_t mode, Result const& axis_src,
-      std::size_t axis_src_mode) const override {
-    auto const& self = get<ArrayT>();
-    auto const rank = self.trange().rank();
-    SEQUANT_ASSERT(mode < rank);
-    // The axis-carrying leaf supplying K's FULL tiling for mode `mode` may be
-    // nested (this_type) or flat (that_type, e.g. an integral over the external
-    // occ index): read the widened axis TiledRange1 from whichever kind. Only
-    // this one OUTER TiledRange1 is needed; every other mode of a block partial
-    // is already at full extent, so *this's own outer tiling supplies them.
-    TA::TiledRange1 const axis_dim = [&]() -> TA::TiledRange1 {
-      if (axis_src.is<this_type>()) {
-        auto const& src = axis_src.get<ArrayT>();
-        SEQUANT_ASSERT(axis_src_mode < src.trange().rank());
-        return src.trange().dim(axis_src_mode);
-      }
-      SEQUANT_ASSERT(axis_src.is<that_type>());
-      auto const& src = axis_src.get<compatible_regular_distarray_type>();
-      SEQUANT_ASSERT(axis_src_mode < src.trange().rank());
-      return src.trange().dim(axis_src_mode);
-    }();
-    std::vector<TA::TiledRange1> dims;
-    dims.reserve(rank);
-    for (std::size_t d = 0; d < rank; ++d) dims.push_back(self.trange().dim(d));
-    dims[mode] = axis_dim;
-    // A zero ToT is represented with empty inner tiles (tot_inner_rank() == 0):
-    // build the widened OUTER trange, then give every local outer tile a
-    // well-formed (empty-inner) outer tile over its range -- exactly the zero
-    // ToT that slice_array_over_mode() emits, and a valid destination that the
-    // ToT write_array_into_mode() block-assignment overwrites per scatter. The
-    // batches tile the widened `mode` axis with no gaps, so every outer tile is
-    // subsequently overwritten by some block's real inner tensors.
-    using value_type = typename ArrayT::value_type;
-    ArrayT dest(self.world(), TA::TiledRange(dims.begin(), dims.end()));
-    for (auto it = dest.begin(); it != dest.end(); ++it)
-      if (dest.is_local(it.index())) *it = value_type{it.make_range()};
-    dest.world().gop.fence();
-    ::sequant::detail::note_fence();
-    log_ta_tensor_host_memory_use();
-    return eval_result<this_type>(std::move(dest));
   }
 
   [[nodiscard]] ResultPtr prod(Result const& other,

@@ -2,6 +2,7 @@
 #define SEQUANT_CORE_EVAL_BACKENDS_DRYRUN_RESULT_HPP
 
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval/backend_array_ops.hpp>
 #include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/index.hpp>
@@ -476,23 +477,10 @@ class ResultDryRun final : public Result {
                                          elem_lo, elem_hi);
   }
 
-  [[nodiscard]] container::svector<std::pair<std::size_t, std::size_t>>
-  mode_batches(std::size_t mode, std::size_t target_batch_size) const override {
-    return detail::DryRunOps::mode_batches(indices_, overrides_, cm_, mode,
-                                           target_batch_size);
-  }
-
   void write_into_slice(Result const& block, std::size_t mode,
                         std::size_t block_lo, std::size_t block_hi) override {
     detail::DryRunOps::write_into_slice(indices_, overrides_, assembled_, cm_,
                                         block, mode, block_lo, block_hi);
-  }
-
-  [[nodiscard]] ResultPtr pre_sized_zeros_over_mode(
-      std::size_t mode, Result const& axis_src,
-      std::size_t axis_src_mode) const override {
-    return detail::DryRunOps::pre_sized_zeros_over_mode(
-        indices_, overrides_, cm_, mode, axis_src, axis_src_mode);
   }
 
   void add_inplace(Result const& other) override {
@@ -626,23 +614,10 @@ class ResultDryRunNested final : public Result {
                                          elem_lo, elem_hi);
   }
 
-  [[nodiscard]] container::svector<std::pair<std::size_t, std::size_t>>
-  mode_batches(std::size_t mode, std::size_t target_batch_size) const override {
-    return detail::DryRunOps::mode_batches(indices_, overrides_, cm_, mode,
-                                           target_batch_size);
-  }
-
   void write_into_slice(Result const& block, std::size_t mode,
                         std::size_t block_lo, std::size_t block_hi) override {
     detail::DryRunOps::write_into_slice(indices_, overrides_, assembled_, cm_,
                                         block, mode, block_lo, block_hi);
-  }
-
-  [[nodiscard]] ResultPtr pre_sized_zeros_over_mode(
-      std::size_t mode, Result const& axis_src,
-      std::size_t axis_src_mode) const override {
-    return detail::DryRunOps::pre_sized_zeros_over_mode(
-        indices_, overrides_, cm_, mode, axis_src, axis_src_mode);
   }
 
   void add_inplace(Result const& other) override {
@@ -707,6 +682,33 @@ namespace detail {
 }
 
 }  // namespace detail
+
+/// \brief Build a \c BackendArrayOps for the dry-run cost backend.
+///
+/// \details The dry-run analogue of \c make_ta_array_ops: \c make_zeros returns
+/// a full-extent dry-run token shaped by the descriptor (every mode at its
+/// space's natural CostModel extent -- the same all-full result the old
+/// \c DryRunOps::pre_sized_zeros_over_mode produced once the scatter axis was
+/// widened), and \c axis_batches partitions an axis's FULL space extent exactly
+/// as \c DryRunOps::mode_batches does for an unsliced, override-free
+/// single-mode token (so the dry run realizes the same batch COUNT the wet
+/// backend does, via the shared \c SizeRegime::space_slice_extents partition).
+/// Install it on the eval cache (\c CacheManager::set_array_ops) for a dry-run
+/// batched eval.
+[[nodiscard]] inline BackendArrayOps make_dryrun_array_ops(
+    std::shared_ptr<CostModel const> cm) {
+  BackendArrayOps aops;
+  aops.axis_batches = [cm](Index const& axis, std::size_t target_batch_size) {
+    return detail::DryRunOps::mode_batches(container::svector<Index>{axis}, {},
+                                           cm, /*mode=*/0, target_batch_size);
+  };
+  aops.make_zeros =
+      [cm](container::vector<Index> const& descriptor) -> ResultPtr {
+    return make_dryrun_result(
+        container::svector<Index>(descriptor.begin(), descriptor.end()), cm);
+  };
+  return aops;
+}
 
 }  // namespace sequant::eval::dryrun
 
