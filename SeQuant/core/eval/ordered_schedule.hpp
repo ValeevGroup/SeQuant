@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval/dag_scope.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
 #include <SeQuant/core/eval/legality.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
@@ -78,6 +79,10 @@ struct ScopeBlock {
   int ordinal = 0;  //!< disambiguates recurring sibling blocks realizing the
                     //!< same axis (e.g. two disjoint passes over the same
                     //!< axis TYPE at one nesting level).
+  DagScopeLevel level{};  //!< this block's DAG-scope nest position (mirrors
+                          //!< \c axis/\c ordinal; see \c DagScopeLevel's doc
+                          //!< comment). Default-valued (depth 0, empty
+                          //!< space, ordinal 0) on the root block.
   BatchModeType kind =
       BatchModeType::Contracted;    //!< Contracted (accumulate on block exit)
                                     //!< or External (scatter on block exit);
@@ -702,6 +707,7 @@ inline ForkedSubchain fork_subchain(
       ScopeBlock fb;
       fb.axis = block.axis;
       fb.ordinal = block.ordinal;
+      fb.level = block.level;
       fb.kind = block.kind;
       fb.steps = std::move(side_steps);
       for (auto const& o : block.outputs)
@@ -1153,7 +1159,7 @@ forced_split_demotions(RichSchedule const& rich,
     return k == std::numeric_limits<std::size_t>::max() ? std::size_t{0} : k;
   };
   auto const make_block =
-      [&](Index const& axis, int ordinal,
+      [&](Index const& axis, int ordinal, std::size_t depth,
           container::svector<std::size_t> const& build_ids,
           container::svector<std::pair<std::size_t, OutputKind>> const& outputs,
           container::vector<Step>&& child_steps,
@@ -1176,6 +1182,8 @@ forced_split_demotions(RichSchedule const& rich,
     ScopeBlock block;
     block.axis = axis;
     block.ordinal = ordinal;
+    block.level =
+        DagScopeLevel{depth, std::wstring{axis.space().base_key()}, ordinal};
     block.kind = detail::mode_is_external(rich, axis)
                      ? BatchModeType::External
                      : BatchModeType::Contracted;
@@ -1294,9 +1302,9 @@ forced_split_demotions(RichSchedule const& rich,
               else
                 collect_rec(std::get<ScopeBlock>(s.value), pass_produced);
             }
-            next_steps.push_back(Step{make_block(types[d], ordinal, builds,
-                                                 outs, std::move(child_steps),
-                                                 std::move(child_metas))});
+            next_steps.push_back(Step{
+                make_block(types[d], ordinal, d + 1, builds, outs,
+                           std::move(child_steps), std::move(child_metas))});
             detail::OrderedScheduleStepMeta m;
             for (auto const& o : outs) m.produced.push_back(o.first);
             m.requires_ = external_needs(pass_produced);
@@ -1320,7 +1328,7 @@ forced_split_demotions(RichSchedule const& rich,
                 std::move(cons_metas));
     } else {
       ScopeBlock block =
-          make_block(types[d], 0, bucket.build_ids, bucket.outputs,
+          make_block(types[d], 0, d + 1, bucket.build_ids, bucket.outputs,
                      std::move(pending_steps), std::move(pending_metas));
       next_steps.push_back(Step{std::move(block)});
       detail::OrderedScheduleStepMeta m;

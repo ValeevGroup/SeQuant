@@ -1010,6 +1010,89 @@ TEST_CASE(
   CHECK_FALSE(orderedsched_index_of_build_step(sched.root, b_id).has_value());
 }
 
+namespace {
+///
+/// \brief Task 3 (SP3): recurse through every non-root \c ScopeBlock reachable
+/// from \p steps (which start at \p depth, the nesting depth of \p steps'
+/// OWN blocks -- 1 for the root's direct children, 2 for their children,
+/// etc.), asserting each block's \c level mirrors its \c axis/\c ordinal at
+/// the correct nesting depth.
+///
+void orderedsched_check_levels(
+    sequant::container::vector<sequant::eval::Step> const& steps,
+    std::size_t depth) {
+  for (auto const& step : steps) {
+    auto const* block = std::get_if<ScopeBlock>(&step.value);
+    if (!block) continue;
+    CHECK(block->level.space == block->axis.space().base_key());
+    CHECK(block->level.ordinal == block->ordinal);
+    CHECK(block->level.depth == depth);
+    orderedsched_check_levels(block->steps, depth + 1);
+  }
+}
+}  // namespace
+
+TEST_CASE(
+    "build_ordered_schedule: ScopeBlock::level mirrors axis/ordinal at the "
+    "correct nesting depth (Task 3, DAG-scope runtime slicing)",
+    "[ordered-schedule][sp2-noninner]") {
+  auto ctx = sequant::get_default_context().clone();
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_df_spaces(isr);  // Κ (DF aux)
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  auto B = orderedsched_2axis_forest_root();
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  policy.is_batchable_external_index = [](Index const& ix) {
+    return ix.space().base_key() == L"i";
+  };
+  policy.batch_spectator_indices = true;
+  policy.node_level_placement = true;
+
+  sequant::eval::dryrun::SizeRegime regime;
+  regime.space_extent = {{L"i", 8u}, {L"Κ", 6u}};
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  std::vector<sequant::EvalNode<sequant::EvalExpr>> forest{B};
+  sequant::stamp_lifetime_masks(forest);
+  auto const block_of = [](Index const&) -> std::size_t { return 4; };
+  auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  REQUIRE(!rich.cells.empty());
+
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  REQUIRE(legality.cells.size() == rich.cells.size());
+
+  auto const sched =
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {});
+  REQUIRE(well_formed(sched));
+
+  // The root block itself is the sentinel (default level{}) -- only its
+  // reachable non-root descendants (starting at depth 1) are asserted.
+  orderedsched_check_levels(sched.root.steps, /*depth=*/1);
+
+  // Sanity: this fixture actually exercises TWO nesting depths (occ outer at
+  // depth 1, aux inner at depth 2) -- confirm the recursion isn't vacuous.
+  bool saw_depth_1 = false, saw_depth_2 = false;
+  std::function<void(sequant::container::vector<sequant::eval::Step> const&)>
+      scan = [&](sequant::container::vector<sequant::eval::Step> const& steps) {
+        for (auto const& step : steps) {
+          auto const* block = std::get_if<ScopeBlock>(&step.value);
+          if (!block) continue;
+          if (block->level.depth == 1) saw_depth_1 = true;
+          if (block->level.depth == 2) saw_depth_2 = true;
+          scan(block->steps);
+        }
+      };
+  scan(sched.root.steps);
+  CHECK(saw_depth_1);
+  CHECK(saw_depth_2);
+}
+
 // ===========================================================================
 // Task 4 (Fix round 1): the demotion trigger in forced_split_demotions is
 // SINGLE-SIDED -- a producer-homed LoopLocal value V (V itself NOT in
