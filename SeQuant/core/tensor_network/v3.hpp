@@ -10,6 +10,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/tensor_network/canonicals.hpp>
 #include <SeQuant/core/tensor_network/slot.hpp>
+#include <SeQuant/core/tensor_network/typedefs.hpp>
 #include <SeQuant/core/tensor_network/vertex.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
@@ -310,12 +311,19 @@ class TensorNetworkV3 {
   /// named indices, used for coarse-grained sorting of named indices,
   /// before sorting to canonical order; the default is to sort
   /// by Index::space()
+  /// @param named_index_colors optional per-named-index loop-color map; when
+  /// non-null, a named index found here has its DAG-scope loop-color folded
+  /// into its graph vertex color so that same-space named indices bound to
+  /// different loops are no longer interchangeable. A null (default) or empty
+  /// map leaves the canonicalization byte-identical to today's space-only
+  /// named coloring.
   /// @return the computed canonicalization metadata
   SlotCanonicalizationMetadata canonicalize_slots(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
       const NamedIndexSet *named_indices = nullptr,
       SlotCanonicalizationMetadata::named_index_compare_t named_index_compare =
-          default_idxptr_slottype_lesscompare{});
+          default_idxptr_slottype_lesscompare{},
+      const tensor_network::NamedIndexColorMap *named_index_colors = nullptr);
 
   /// Factorizes tensor network
   /// @return sequence of binary products; each element encodes the tensors to
@@ -351,6 +359,14 @@ class TensorNetworkV3 {
     /// default is nullptr, which means use all external indices for
     /// named indices
     const NamedIndexSet *named_indices = nullptr;
+
+    /// optional per-named-index loop-color map: when non-null, a named index
+    /// found here has its DAG-scope loop-color folded into its vertex color so
+    /// that same-space named indices bound to different loops become
+    /// distinguishable (used by sliced-value canonical-layout coloring).
+    /// A null (default) or empty map leaves coloring byte-identical to the
+    /// space-only named coloring.
+    const tensor_network::NamedIndexColorMap *named_index_colors = nullptr;
 
     /// if false, will use same color for all
     /// named indices that have same Index::color(). This is needed to

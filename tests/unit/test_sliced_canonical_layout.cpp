@@ -38,7 +38,11 @@
 #include <SeQuant/core/expressions/product.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/tensor_network/typedefs.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/external/bliss/graph.hh>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -59,7 +63,10 @@ using sequant::Product;
 using sequant::set_scoped_default_context;
 using sequant::Symmetry;
 using sequant::Tensor;
+using sequant::TensorCanonicalizer;
+using sequant::TensorNetwork;
 using sequant::container::svector;
+using LoopColorMap = sequant::tensor_network::NamedIndexColorMap;
 using sequant::eval::occurrence_key;
 using sequant::eval::RouterKeyEqual;
 using sequant::eval::RouterKeyHash;
@@ -174,4 +181,131 @@ TEST_CASE(
   // not an artifact of one occurrence missing a mode).
   CHECK(index_position(iA, i1).has_value());
   CHECK(index_position(iB, i2).has_value());
+}
+
+namespace {
+
+/// Canonicalize a single-tensor network's slots with the given named (batched)
+/// indices and (optional) per-index loop colors. Mirrors occurrence_key's
+/// canonicalize_slots call, but exposes the loop-color knob directly so the
+/// fold/distinguish/reduce probes need no eval scaffolding.
+TensorNetwork::SlotCanonicalizationMetadata canon(
+    ExprPtr const& tensor, IndexSet const& named,
+    LoopColorMap const* colors = nullptr) {
+  TensorNetwork tn{ExprPtrList{tensor}};
+  return tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels(),
+                               &named, {}, colors);
+}
+
+bool graphs_equal(TensorNetwork::SlotCanonicalizationMetadata const& a,
+                  TensorNetwork::SlotCanonicalizationMetadata const& b) {
+  return bliss::ConstGraphCmp::cmp(*a.graph, *b.graph) == 0;
+}
+
+}  // namespace
+
+// (2a) FOLD: a symmetric intermediate I whose loop is bound to i_1 in one
+// occurrence and to i_2 in the other still canonicalizes to ONE form once the
+// loop is colored. The two physical layouts are related by I's own i_1<->i_2
+// automorphism, so coloring "the loop" (whichever physical slot it occupies)
+// the same in both must NOT break the fold.
+TEST_CASE(
+    "sliced-canonical-layout fold: symmetric I with same loop-binding folds "
+    "under loop coloring",
+    "[sliced-layout]") {
+  Context ctx = get_default_context();
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto const ctx_resetter = set_scoped_default_context(ctx);
+
+  Index i1{L"i_1"}, i2{L"i_2"};
+  constexpr std::size_t loopA = 1;
+
+  auto const I = [&](Index const& a, Index const& b) {
+    return ex<Tensor>(L"I", bra(svector<Index>{a, b}), ket{}, Symmetry::Symm);
+  };
+
+  // Occurrence A: physical layout I(i_1,i_2); its loop is i_1.
+  LoopColorMap colorsA;
+  colorsA[i1] = loopA;
+  auto const kA = canon(I(i1, i2), IndexSet{i1}, &colorsA);
+
+  // Occurrence B: physical layout I(i_2,i_1); its loop is i_2.
+  LoopColorMap colorsB;
+  colorsB[i2] = loopA;
+  auto const kB = canon(I(i2, i1), IndexSet{i2}, &colorsB);
+
+  // Same loop-binding-structure (loop=A at "a symm slot", free at the other)
+  // -> one canonical form. The fold survives coloring.
+  CHECK(graphs_equal(kA, kB));
+}
+
+// (2b) DISTINGUISH: a NON-symmetric I with both occ modes sliced, colored by
+// two DIFFERENT loops, must NOT fold: binding loop A to slot 0 vs slot 1 is a
+// genuinely different sliced result. To make the two slots structurally
+// distinguishable (so the loop<->slot binding is observable) the two occ modes
+// sit in the bra and the ket of a non-braket-symmetric I -- the natural
+// non-symmetric rank-2 layout of the spec's `for i1: for i2: I(i1,i2)` case.
+// Without loop coloring i_1 and i_2 are same-space and interchangeable, so the
+// two orderings fold (space-only) -- it is precisely the loop color that must
+// pull them apart.
+TEST_CASE(
+    "sliced-canonical-layout distinguish: non-symmetric I with swapped "
+    "loop-bindings does not fold",
+    "[sliced-layout]") {
+  Context ctx = get_default_context();
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto const ctx_resetter = set_scoped_default_context(ctx);
+
+  Index i1{L"i_1"}, i2{L"i_2"};
+  constexpr std::size_t loopA = 1;
+  constexpr std::size_t loopB = 2;
+
+  // I(i_1; i_2): bra slot vs ket slot -- structurally distinct slots.
+  auto const I = [&] {
+    return ex<Tensor>(L"I", bra(svector<Index>{i1}), ket(svector<Index>{i2}),
+                      Symmetry::Nonsymm);
+  };
+
+  // Layout 1: bra (i_1) sliced by loop A, ket (i_2) by loop B.
+  LoopColorMap colors1;
+  colors1[i1] = loopA;
+  colors1[i2] = loopB;
+  auto const k1 = canon(I(), IndexSet{i1, i2}, &colors1);
+
+  // Layout 2: bra (i_1) sliced by loop B, ket (i_2) by loop A -- the
+  // loop<->slot binding is swapped.
+  LoopColorMap colors2;
+  colors2[i1] = loopB;
+  colors2[i2] = loopA;
+  auto const k2 = canon(I(), IndexSet{i1, i2}, &colors2);
+
+  CHECK_FALSE(graphs_equal(k1, k2));
+}
+
+// (2c) REDUCE (the plan's #1 non-regression anchor): with NO loop colors, the
+// loop-colored path must be byte-identical to today's canonicalization. An
+// empty color map and a null color map must both reproduce the no-color result
+// exactly (same graph, same hash).
+TEST_CASE(
+    "sliced-canonical-layout reduce: empty loop-color map is byte-identical to "
+    "today's canonicalization",
+    "[sliced-layout]") {
+  Context ctx = get_default_context();
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto const ctx_resetter = set_scoped_default_context(ctx);
+
+  Index i1{L"i_1"}, i2{L"i_2"};
+
+  // A control tensor with both indices named but no loop colors supplied.
+  auto const T = [&] {
+    return ex<Tensor>(L"I", bra(svector<Index>{i1, i2}), ket{}, Symmetry::Symm);
+  };
+  IndexSet named{i1, i2};
+
+  auto const k_null = canon(T(), named, nullptr);  // today's path
+  LoopColorMap empty;
+  auto const k_empty = canon(T(), named, &empty);  // reduction path
+
+  CHECK(graphs_equal(k_null, k_empty));
+  CHECK(k_null.hash_value() == k_empty.hash_value());
 }

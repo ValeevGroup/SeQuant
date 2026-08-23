@@ -649,7 +649,8 @@ TensorNetworkV3::canonicalize_slots(
     const container::vector<std::wstring> &cardinal_tensor_labels,
     const NamedIndexSet *named_indices_ptr,
     TensorNetworkV3::SlotCanonicalizationMetadata::named_index_compare_t
-        named_index_compare) {
+        named_index_compare,
+    const tensor_network::NamedIndexColorMap *named_index_colors) {
   if (!named_index_compare)
     named_index_compare = [](const auto &idxptr_slottype_1,
                              const auto &idxptr_slottype_2) -> bool {
@@ -694,6 +695,7 @@ TensorNetworkV3::canonicalize_slots(
   // distinct_named_indices = false
   Graph graph = create_graph(
       {.named_indices = &named_indices,
+       .named_index_colors = named_index_colors,
        .distinct_named_indices = false,
        .make_labels = Logger::instance().canonicalize_input_graph ||
                       Logger::instance().canonicalize_dot,
@@ -902,7 +904,8 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
                                            : *(options.named_indices);
 
   VertexPainter<TensorNetworkV3> colorizer(named_indices,
-                                           options.distinct_named_indices);
+                                           options.distinct_named_indices,
+                                           options.named_index_colors);
 
   // results
   Graph graph;

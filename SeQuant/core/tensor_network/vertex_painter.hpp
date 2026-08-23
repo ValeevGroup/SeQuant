@@ -4,8 +4,11 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expressions/abstract_tensor.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/tensor_network/typedefs.hpp>
 #include <SeQuant/core/tensor_network/v2.hpp>
 
+#include <cstddef>
+#include <optional>
 #include <utility>
 #include <variant>
 
@@ -50,6 +53,7 @@ class VertexPainterImpl {
  public:
   using Color = tensor_network::VertexColor;
   using NamedIndexSet = tensor_network::NamedIndexSet;
+  using NamedIndexColorMap = tensor_network::NamedIndexColorMap;
   using VertexData =
       std::variant<const AbstractTensor *, Index, const ProtoBundle *, BraGroup,
                    KetGroup, AuxGroup, ColumnGroup>;
@@ -59,8 +63,14 @@ class VertexPainterImpl {
   /// their Index::color() \param distinct_named_indices if false, will use same
   /// color for all named indices that have same Index::color(), else will use
   /// distinct color for each named_index
+  /// \param named_index_colors optional per-named-index loop-color map; when
+  /// non-null, a named index found here has its loop-color folded into its
+  /// vertex color so that same-space named indices bound to different loops
+  /// become distinguishable. A null (default) or empty map leaves coloring
+  /// byte-identical to space-only named coloring.
   VertexPainterImpl(const NamedIndexSet &named_indices,
-                    bool distinct_named_indices = true);
+                    bool distinct_named_indices = true,
+                    const NamedIndexColorMap *named_index_colors = nullptr);
 
   const ColorMap &used_colors() const;
 
@@ -88,7 +98,17 @@ class VertexPainterImpl {
   ColorMap used_colors_;
   const NamedIndexSet &named_indices_;
   bool distinct_named_indices_ = true;
+  const NamedIndexColorMap *named_index_colors_ = nullptr;
   std::optional<std::size_t> salt_;
+
+  /// @return the loop-color of @p idx if a color map was supplied and contains
+  /// it, else std::nullopt (i.e. "no loop color" -- the byte-identical default)
+  std::optional<std::size_t> loop_color_of(const Index &idx) const {
+    if (!named_index_colors_) return std::nullopt;
+    auto it = named_index_colors_->find(idx);
+    if (it == named_index_colors_->end()) return std::nullopt;
+    return it->second;
+  }
 
   /// @return the salt value used for hashing; if not set by apply_shade use
   /// default_salt_
