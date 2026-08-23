@@ -75,9 +75,7 @@ class Expr : public std::enable_shared_from_this<Expr> {
   virtual std::wstring to_latex() const;
 
   /// @return a clone of this object, i.e. an object that is equal to @c this
-  /// @note - must be overridden in the derived class.
-  ///       - the default implementation throws an exception
-  virtual ExprPtr clone() const;
+  virtual ExprPtr clone() const = 0;
 
   /// like Expr::shared_from_this, but returns ExprPtr
   /// @return a shared_ptr to this object wrapped into ExprPtr, if this object
@@ -228,9 +226,7 @@ class Expr : public std::enable_shared_from_this<Expr> {
   }
 
   /// @brief changes this to its adjoint
-  /// @note base implementation throws, must be reimplemented in the derived
-  /// class
-  virtual void adjoint();
+  virtual void adjoint() = 0;
 
   /// Computes and returns the hash value. If default @p hasher is used then the
   /// value will be memoized, otherwise @p hasher will be used to compute the
@@ -247,17 +243,9 @@ class Expr : public std::enable_shared_from_this<Expr> {
   }
 
   /// Computes and returns the derived type identifier
-  /// @note this function must be overridden in the derived class
   /// @sa Expr::get_type_id
   /// @return the hash value for this Expr
-  virtual type_id_type type_id() const
-#if __GNUG__
-  {
-    abort();
-  }
-#else
-      = 0;
-#endif
+  virtual type_id_type type_id() const = 0;
 
   friend inline bool operator==(const Expr &a, const Expr &b);
 
@@ -329,38 +317,6 @@ class Expr : public std::enable_shared_from_this<Expr> {
   std::string type_name() const {
     return boost::core::demangle(typeid(*this).name());
   }
-
-  /** @name in-place arithmetic operators
-   *  Virtual in-place arithmetic operators to be overridden in expressions for
-   * which these make sense.
-   */
-  ///@{
-
-  /// @brief in-place multiply @c *this by @c that
-  /// @return reference to @c *this
-  /// @throw Exception if not implemented for this class, or cannot be
-  /// implemented for the particular @c that
-  virtual Expr &operator*=(const Expr &that);
-
-  /// @brief in-place non-commutatively-multiply @c *this by @c that
-  /// @return reference to @c *this
-  /// @throw Exception if not implemented for this class, or cannot be
-  /// implemented for the particular @c that
-  virtual Expr &operator^=(const Expr &that);
-
-  /// @brief in-place add @c that to @c *this
-  /// @return reference to @c *this
-  /// @throw Exception if not implemented for this class, or cannot be
-  /// implemented for the particular @c that
-  virtual Expr &operator+=(const Expr &that);
-
-  /// @brief in-place subtract @c that from @c *this
-  /// @return reference to @c *this
-  /// @throw Exception if not implemented for this class, or cannot be
-  /// implemented for the particular @c that
-  virtual Expr &operator-=(const Expr &that);
-
-  ///@}
 
   ExprIterator begin();
   ExprIterator end();
@@ -441,14 +397,7 @@ class Expr : public std::enable_shared_from_this<Expr> {
   /// @note @c that is guaranteed to be of same type as @c *this, hence can be
   /// statically cast
   /// @return true if @c that is equivalent to *this
-  virtual bool static_equal([[maybe_unused]] const Expr &that) const
-#if __GNUG__
-  {
-    abort();
-  }
-#else
-      = 0;
-#endif
+  virtual bool static_equal(const Expr &that) const = 0;
 
   /// @param that an Expr object
   /// @note @c that is guaranteed to be of same type as @c *this, hence can be
@@ -483,12 +432,6 @@ class Expr : public std::enable_shared_from_this<Expr> {
     static type_id_type type_id = get_next_type_id();
     return type_id;
   }
-
- private:
-  /// @input[in] fn the name of function that is missing in this class
-  /// @return an Exception object containing a message describing that @p
-  /// fn is missing from this type
-  Exception not_implemented(const char *fn) const;
 };  // class Expr
 
 static_assert(std::ranges::sized_range<Expr>);

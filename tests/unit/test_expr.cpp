@@ -38,6 +38,7 @@ struct Dummy : public sequant::Expr {
   std::wstring to_latex() const override { return L"{\\text{Dummy}}"; }
   type_id_type type_id() const override { return get_type_id<Dummy>(); };
   sequant::ExprPtr clone() const override { return sequant::ex<Dummy>(); }
+  void adjoint() override {}
   bool static_equal(const sequant::Expr &) const override { return true; }
 };
 
@@ -68,6 +69,8 @@ struct VecExpr : public std::vector<T>, public sequant::Expr {
   }
 
   type_id_type type_id() const override { return get_type_id<VecExpr<T>>(); };
+
+  void adjoint() override {}
 
   sequant::ConstExprIterator begin_subexpr() const override {
     if constexpr (sequant::Expr::is_shared_ptr_of_expr<T>::value) {
@@ -413,10 +416,6 @@ TEST_CASE("expr", "[elements]") {
   }
 
   SECTION("adjoint") {
-    {  // not implemented by default
-      const auto e = std::make_shared<Dummy>();
-      REQUIRE_THROWS_AS(e->adjoint(), Exception);
-    }
     {  // implemented in Adjointable
       const auto e = std::make_shared<Adjointable>();
       REQUIRE_NOTHROW(e->adjoint());
@@ -509,6 +508,27 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(e_clone.is<Variable>());
       REQUIRE(e->label() == e_clone.as<Variable>().label());
       REQUIRE(e->conjugated() == e_clone.as<Variable>().conjugated());
+    }
+    {  // CProduct must not be sliced down to Product by clone(): a plain
+       // Product reverses its factors in adjoint(), a CProduct does not
+      const auto e = std::make_shared<CProduct>();
+      e->append(1, ex<Adjointable>());
+      e->append(1, ex<Adjointable>(-2));
+      const auto e_adj = adjoint(e);  // free adjoint() == clone() + adjoint()
+      REQUIRE(e_adj.as<Product>().factors()[0]->as<Adjointable>().v == -1);
+      REQUIRE(e_adj.as<Product>().factors()[1]->as<Adjointable>().v == 2);
+      // the original is left untouched
+      REQUIRE(e->factors()[0]->as<Adjointable>().v == 1);
+    }
+    {  // NCProduct must not be sliced down to Product by clone(): a plain
+       // Product decides commutativity by a recursive pairwise check, which
+       // for c-number factors reports the product as commutative
+      const auto e = std::make_shared<NCProduct>();
+      e->append(1, ex<Adjointable>());
+      e->append(1, ex<Adjointable>(-2));
+      REQUIRE_FALSE(e->is_commutative());
+      const auto e_clone = e->clone();
+      REQUIRE_FALSE(e_clone.as<Product>().is_commutative());
     }
   }  // SECTION("clone")
 

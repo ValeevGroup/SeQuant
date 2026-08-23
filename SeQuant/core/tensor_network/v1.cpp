@@ -458,7 +458,7 @@ ExprPtr TensorNetworkV1::canonicalize(
           nondefault_canonizer_ptr ? nondefault_canonizer_ptr.get()
                                    : &default_tensor_canonizer;
       auto bp = tensor_canonizer->apply(*tensor);
-      if (bp) *canon_byproduct *= *bp;
+      if (bp) canon_byproduct.as<Constant>() *= *bp;
     }
   }
   edges_.clear();
