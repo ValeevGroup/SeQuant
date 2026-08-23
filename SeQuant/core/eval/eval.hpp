@@ -728,6 +728,32 @@ ResultPtr evaluate_impl(Node const& node,         //
                   << " via=" << (exact ? "exact" : "fallback") << " idx@pmode="
                   << toUtf8(nd->canon_indices()[*p].full_label()) << " slice=["
                   << blk.first << "," << blk.second << ")" << std::endl;
+      // EQUIVALENCE GATE (Task 5, migration step): the DAG-scope
+      // node->mode_to_level map must agree with the exact match wherever the
+      // old path did NOT need the space fallback; where it DID need the
+      // fallback, the map is the CORRECTION (the over-slice bug this whole
+      // change fixes) -- log it, do not assert. Debug-only cross-check; the
+      // map is never used to slice here (that's Task 7). Inert (no-op) when
+      // the seam is unwired (forest / whole-scope / hand-built contexts).
+      if (auto const* m2l = cache.mode_to_level_of(nd->hash_value())) {
+        std::optional<std::size_t> const p_map = m2l->mode_of(ctx[i].level);
+        if (exact) {
+          SEQUANT_ASSERT(p_map == p &&
+                         "mode_to_level disagrees with exact index_position");
+        } else if (p) {
+          // the buggy slot: the map corrects the space-fallback guess.
+          if (std::getenv("SEQUANT_UT_SLICE_DIAG"))
+            std::cerr << "[SLICE-CORRECTION] node#"
+                      << (nd->hash_value() % 100000u)
+                      << " fallback_pmode=" << *p << " map_pmode="
+                      << (p_map ? std::to_string(*p_map) : std::string("none"))
+                      << " level.depth=" << ctx[i].level.depth
+                      << " level.space=" << toUtf8(ctx[i].level.space)
+                      << std::endl;
+        }
+        // else: neither exact nor fallback found a slot for this axis on this
+        // node -- both leave it unsliced (full); nothing to cross-check.
+      }
       if (p) value = value->slice_mode(*p, blk.first, blk.second);
     }
     return value;
