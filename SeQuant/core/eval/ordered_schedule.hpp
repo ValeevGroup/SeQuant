@@ -8,6 +8,7 @@
 #include <SeQuant/core/eval/legality.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
 #include <SeQuant/core/eval/scope_schedule.hpp>
+#include <SeQuant/core/eval/slicing_signature.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
@@ -1367,6 +1368,138 @@ forced_split_demotions(RichSchedule const& rich,
 
   SEQUANT_ASSERT(well_formed(out));
   return out;
+}
+
+namespace detail {
+
+///
+/// \brief \c populate_cell_mode_to_level's recursive walk: descend \p
+/// block's whole steps tree carrying the root-to-block \p path (mirrors \c
+/// collect_productions), and for every \c BuildStep{value_id v} reached,
+/// compute \c v's \c ModeToLevel from the NON-ROOT blocks on \p path (their
+/// \c axis gives the ordered loop axes in root..home order, their \c level
+/// the matching \c DagScopeLevel) and \c rich.cells[v].carried (the cell's
+/// canonical result indices -- see \c ValueCell::carried's own doc comment),
+/// via the SAME substrate \c slicing_signature / \c index_position use
+/// (position-in-carried, by exact \c Index identity -- see \c
+/// populate_cell_mode_to_level's own doc comment for why exact identity,
+/// not just axis TYPE, is the right comparison), and writes the result into
+/// \p rich.cells[v].mode_to_level.
+///
+/// A value_id reached through more than one \c BuildStep site must agree on
+/// the SAME \c ModeToLevel every time -- see \c populate_cell_mode_to_level's
+/// own doc comment for why a mismatch is a scheduler bug, not a case to
+/// resolve here -- tracked via \p first_seen.
+///
+inline void populate_cell_mode_to_level_walk(
+    ScopeBlock const& block, container::svector<ScopeBlock const*>& path,
+    RichSchedule& rich,
+    std::unordered_map<std::size_t, ModeToLevel>& first_seen) {
+  path.push_back(&block);
+  for (Step const& step : block.steps) {
+    if (auto const* build = std::get_if<BuildStep>(&step.value)) {
+      std::size_t const v = build->value_id;
+
+      // v's nest: the NON-ROOT blocks on the root-to-here path (path[0] is
+      // always the root sentinel -- skip it).
+      container::svector<Index> ordered_axes;
+      container::svector<DagScopeLevel> levels;
+      for (std::size_t i = 1; i < path.size(); ++i) {
+        ordered_axes.push_back(path[i]->axis);
+        levels.push_back(path[i]->level);
+      }
+
+      ValueCell& cell = rich.cells[v];
+      // sig[i] = position of ordered_axes[i] in cell.carried, else nullopt --
+      // the same substrate slicing_signature/index_position use (exact Index
+      // equality), applied directly to the cell's carried (== canon_indices)
+      // rather than through a node (there is no node here, only the cell).
+      container::svector<std::optional<std::size_t>> sig;
+      sig.reserve(ordered_axes.size());
+      for (Index const& ax : ordered_axes) {
+        std::optional<std::size_t> pos;
+        for (std::size_t p = 0; p < cell.carried.size(); ++p)
+          if (cell.carried[p] == ax) {
+            pos = p;
+            break;
+          }
+        sig.push_back(pos);
+      }
+      ModeToLevel const m2l =
+          mode_to_level_from_signature(cell.carried.size(), sig, levels);
+
+      auto const it = first_seen.find(v);
+      if (it == first_seen.end()) {
+        first_seen.emplace(v, m2l);
+        cell.mode_to_level = m2l;
+      } else {
+        SEQUANT_ASSERT(
+            it->second.by_mode == m2l.by_mode &&
+            "populate_cell_mode_to_level: divergent mode_to_level across "
+            "BuildStep sites -- the value should have been split");
+      }
+    } else {
+      populate_cell_mode_to_level_walk(std::get<ScopeBlock>(step.value), path,
+                                       rich, first_seen);
+    }
+  }
+  path.pop_back();
+}
+
+}  // namespace detail
+
+///
+/// \brief Task 4 (DAG-scope runtime slicing): populate every \c
+/// ValueCell::mode_to_level in \p rich from \p ordered's realized \c
+/// ScopeBlock nest -- the map runtime slicing reads to decide, for a
+/// home-resident value read under some enclosing batch loop, WHICH mode (if
+/// any) of its cached result corresponds to that loop's axis.
+///
+/// \details \p ordered must have been built from \p rich (i.e. \p ordered is
+/// \c build_ordered_schedule(rich, ...)'s return value for this SAME \p
+/// rich); \p rich is taken non-const so this function can write its result
+/// back into \p rich.cells. Walks \p ordered.root's block tree (mirroring \c
+/// detail::collect_productions) and, for each \c BuildStep it reaches,
+/// derives the value's \c ModeToLevel from the enclosing NON-ROOT blocks on
+/// its root-to-block path -- their \c axis gives the ordered loop axes (in
+/// root..home order), their \c level the matching \c DagScopeLevel -- via \c
+/// mode_to_level_from_signature, using the cell's own \c carried (==
+/// canon_indices) as the substrate \c slicing_signature / \c index_position
+/// would use on a node (see \c make_batched_scratch's \c ext_sig
+/// construction in eval.hpp, the pattern this mirrors).
+///
+/// Matching is by EXACT \c Index identity, not merely axis TYPE (\c
+/// IndexSpace::base_key()): a \c ScopeBlock realizes one axis TYPE with ONE
+/// representative \c Index (\c build_ordered_schedule's canonical chain), but
+/// distinct cells may carry DIFFERENT physical indices of that same TYPE
+/// (e.g. one cell's own external mode is literally \c i_1, another's is
+/// literally \c i_2). A cell enclosed by that block whose own carried mode is
+/// a DIFFERENT physical index of the same type gets NO level for it -- this
+/// is the exact fact whose absence in an ad hoc space-keyed fallback caused
+/// an over-slice bug (a water-8 DF leaf carrying \c i_1 but not \c i_2 must
+/// not be sliced on an enclosing \c i_2 loop it does not carry).
+///
+/// Only \c BuildStep sites are consulted: an escaped (\c ScopeBlock::outputs)
+/// value is evaluated inline at its escape site, never through a \c
+/// BuildStep, and a forest LEAF is never scheduled at all (see \c
+/// build_ordered_schedule's own doc comment) -- both stay at \c
+/// ValueCell::mode_to_level's default-empty value, which is correct: neither
+/// is ever read as a home-resident operand the way a \c BuildStep value is.
+///
+/// A value_id reached via more than one \c BuildStep site (an escape/re-home
+/// path revisited) must agree on the SAME \c ModeToLevel every time (\c
+/// SEQUANT_ASSERT): a real mismatch would mean one cell is shared across
+/// physically-divergent bindings that the scheduler failed to \c SPLIT into
+/// separate cells (see \c ValueCell::divergent_modes and \c apply_split) --
+/// a wrong, silently-inconsistent slice truth, not a case to resolve by
+/// averaging or last-write-wins.
+///
+inline void populate_cell_mode_to_level(OrderedSchedule const& ordered,
+                                        RichSchedule& rich) {
+  container::svector<ScopeBlock const*> path;
+  std::unordered_map<std::size_t, ModeToLevel> first_seen;
+  detail::populate_cell_mode_to_level_walk(ordered.root, path, rich,
+                                           first_seen);
 }
 
 }  // namespace sequant::eval

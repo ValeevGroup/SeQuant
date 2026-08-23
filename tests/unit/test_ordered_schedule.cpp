@@ -1010,6 +1010,134 @@ TEST_CASE(
   CHECK_FALSE(orderedsched_index_of_build_step(sched.root, b_id).has_value());
 }
 
+// Task 4 (DAG-scope runtime slicing plan): populate_cell_mode_to_level.
+//
+// Extends the 2-axis occ-outer/aux-inner [sp2-noninner] fixture (B{;i_3,i_4},
+// same setup as the TEST_CASEs above) with two more forest roots, C and Z,
+// each a trivial LOCAL wrapper around an intermediate (M3, Y resp.) that
+// itself carries exactly ONE occ mode and has no aux dependence at all --
+// M3{;i_3} = M3(La{;i_3}, Lb{;i_3}) uses the SAME physical index (i_3)
+// build_ordered_schedule's canonical chain picks as the occ block's own
+// representative axis (see the "occ-outer/aux-inner" TEST_CASE above, whose
+// dump confirms this); Y{;i_5} = Y(Ya{;i_5}, Yb{;i_5}) uses a DIFFERENT
+// physical occ index. Wrapping each in a further root (C{;i_3} = C(M3,
+// Lc{;i_3}); Z{;i_5} = Z(Y, Yd{;i_5})) matters: a forest ROOT is always
+// forced to materialize in full (an AccumulateScatter escape, never a plain
+// BuildStep -- a root without a further consumer, like B in the
+// "occ-outer/aux-inner" TEST_CASE, is exactly why THAT fixture alone has no
+// BuildStep to test against), so M3 and Y -- each read exactly once, by C/Z
+// resp., within the SAME occ iteration -- stay genuine per-iteration
+// Transients: plain BuildSteps homed directly inside the occ ScopeBlock.
+//
+// This reproduces the plan's motivating water-8 DF-leaf structure (a value
+// enclosed by an occ-type loop realized via a DIFFERENT physical index than
+// the one it carries) at [sp2-noninner]'s own occ+aux setup: TWO cells (M3,
+// Y) enclosed by the EXACT SAME ScopeBlock, one whose carried mode IS that
+// block's representative Index, one whose carried mode is a different
+// physical index of the same axis TYPE.
+TEST_CASE(
+    "populate_cell_mode_to_level: a BuildStep cell maps its own carried mode "
+    "to the enclosing loop's DagScopeLevel; a DIFFERENT physical occ index "
+    "enclosed by the SAME loop gets no level (Task 4, DAG-scope runtime "
+    "slicing)",
+    "[ordered-schedule][sp2-noninner]") {
+  auto ctx = sequant::get_default_context().clone();
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_df_spaces(isr);  // Κ (DF aux)
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  auto B = orderedsched_2axis_forest_root();
+
+  auto La = orderedsched_leaf("La{;i_3}");
+  auto Lb = orderedsched_leaf("Lb{;i_3}");
+  auto M3 = orderedsched_inode("M3{;i_3}", La, Lb);
+  auto Lc = orderedsched_leaf("Lc{;i_3}");
+  auto C = orderedsched_inode("C{;i_3}", M3, Lc);
+  orderedsched_stamp_all(C);
+
+  auto Ya = orderedsched_leaf("Ya{;i_5}");
+  auto Yb = orderedsched_leaf("Yb{;i_5}");
+  auto Y = orderedsched_inode("Y{;i_5}", Ya, Yb);
+  auto Yd = orderedsched_leaf("Yd{;i_5}");
+  auto Z = orderedsched_inode("Z{;i_5}", Y, Yd);
+  orderedsched_stamp_all(Z);
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  policy.is_batchable_external_index = [](Index const& ix) {
+    return ix.space().base_key() == L"i";
+  };
+  policy.batch_spectator_indices = true;
+  policy.node_level_placement = true;
+
+  sequant::eval::dryrun::SizeRegime regime;
+  regime.space_extent = {{L"i", 8u}, {L"Κ", 6u}};
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  std::vector<sequant::EvalNode<sequant::EvalExpr>> forest{B, C, Z};
+  sequant::stamp_lifetime_masks(forest);
+  auto const block_of = [](Index const&) -> std::size_t { return 4; };
+  // NOT const: populate_cell_mode_to_level writes each cell's mode_to_level
+  // back into rich, mirroring scope_executor.hpp's own wiring.
+  auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  auto const sched =
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {});
+  REQUIRE(well_formed(sched));
+
+  // Exactly ONE occ ("i") block at root (same shape as the
+  // "occ-outer/aux-inner" TEST_CASE above).
+  std::vector<ScopeBlock const*> occ_blocks;
+  for (auto const& step : sched.root.steps)
+    if (auto const* c = std::get_if<ScopeBlock>(&step.value))
+      if (c->axis.space().base_key() == L"i") occ_blocks.push_back(c);
+  REQUIRE(occ_blocks.size() == 1);
+  ScopeBlock const& occ = *occ_blocks.front();
+  auto const occ_level = occ.level;
+
+  auto const cell_of = [&](sequant::EvalNode<sequant::EvalExpr> const& n)
+      -> sequant::eval::ValueCell const& {
+    auto const h = n->hash_value();
+    auto const it = std::find_if(rich.cells.begin(), rich.cells.end(),
+                                 [&](auto const& vc) { return vc.hash == h; });
+    REQUIRE(it != rich.cells.end());
+    return *it;
+  };
+  sequant::eval::ValueCell const& m3_cell = cell_of(M3);
+  sequant::eval::ValueCell const& y_cell = cell_of(Y);
+
+  // Precondition: M3 and Y are each a plain BuildStep directly inside `occ`
+  // (not an escape output, not root-level) -- i.e. this test actually
+  // exercises the BuildStep-only path populate_cell_mode_to_level consults.
+  REQUIRE(orderedsched_index_of_build_step(occ, m3_cell.value_id).has_value());
+  REQUIRE(orderedsched_index_of_build_step(occ, y_cell.value_id).has_value());
+  REQUIRE(m3_cell.carried == sequant::container::svector<Index>{Index{L"i_3"}});
+  REQUIRE(y_cell.carried == sequant::container::svector<Index>{Index{L"i_5"}});
+
+  // RED (pre-implementation): mode_to_level is default-empty on every cell
+  // until populate_cell_mode_to_level runs.
+  CHECK(m3_cell.mode_to_level.by_mode.empty());
+  CHECK(y_cell.mode_to_level.by_mode.empty());
+
+  sequant::eval::populate_cell_mode_to_level(sched, rich);
+
+  // GREEN: M3 carries i_3 -- the SAME physical Index the occ block uses as
+  // its own representative axis -- so mode 0 (its only mode) maps to the occ
+  // block's DagScopeLevel.
+  REQUIRE(m3_cell.mode_to_level.mode_of(occ_level).has_value());
+  CHECK(*m3_cell.mode_to_level.mode_of(occ_level) == 0u);
+
+  // Y carries i_5 -- a DIFFERENT physical occ index -- even though Y is a
+  // BuildStep directly inside the EXACT SAME occ ScopeBlock as M3, it gets NO
+  // level for it: the exact fact whose absence caused the over-slice bug
+  // (the plan's water-8 DF-leaf example: carries i_1, but no level for an
+  // enclosing i_2 loop it does not carry).
+  CHECK_FALSE(y_cell.mode_to_level.mode_of(occ_level).has_value());
+}
+
 namespace {
 ///
 /// \brief Task 3 (SP3): recurse through every non-root \c ScopeBlock reachable

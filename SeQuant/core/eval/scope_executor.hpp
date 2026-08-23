@@ -829,12 +829,17 @@ ResultPtr evaluate(Nodes const& forest, BatchPolicy const& policy,
 
     eval::dryrun::SizeRegime const regime;
     eval::dryrun::CostModel const cm{regime};
-    eval::RichSchedule const rich =
-        eval::compute_dag_boulevard(forest, cm, target);
+    // NOT const: populate_cell_mode_to_level (below) fills in each cell's
+    // mode_to_level from the ordered schedule build_ordered_schedule returns.
+    // build_ordered_schedule itself only reads rich (const&), so this
+    // reordering is safe; rich is passed on to evaluate_ordered_schedule as
+    // const& below, exactly as before.
+    eval::RichSchedule rich = eval::compute_dag_boulevard(forest, cm, target);
     eval::LegalitySchedule const legality =
         eval::analyze_legality(rich, forest, policy);
     eval::OrderedSchedule const ordered =
         eval::build_ordered_schedule(rich, legality, policy, mode_order);
+    eval::populate_cell_mode_to_level(ordered, rich);
 
     // NODE-level lift of policy.is_volatile_leaf, exactly as make_evaluator's
     // own is_volatile_node lift (eval.hpp) computes it -- threaded into the
