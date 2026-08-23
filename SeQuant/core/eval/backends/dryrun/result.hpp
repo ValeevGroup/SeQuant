@@ -308,43 +308,6 @@ struct DryRunOps {
     ov[mode] = lohi.second - lohi.first;  // positional: dest mode `mode`
   }
 
-  /// Build a zero-data destination shaped like \p idx but with mode \p mode's
-  /// index widened to \p axis_src's FULL (unsliced) extent at \p
-  /// axis_src_mode -- the dry-run analogue of \c ResultTensorTA:: and \c
-  /// ResultTensorOfTensorTA::pre_sized_zeros_over_mode's outer-\c
-  /// TiledRange1 swap. \p axis_src is the unsliced carrier leaf's token (its
-  /// OWN recorded override for the axis index, if any, else the CostModel
-  /// regime's natural extent, is the "full" extent -- mirroring how the TA
-  /// backend reads the swapped-in dimension straight off \p axis_src rather
-  /// than assuming a fixed default). The width recorded here is a structural
-  /// (shape) fact, queryable via \c size_in_bytes()/overrides() immediately
-  /// -- exactly as the TA test \c batched_scratch_tot_presize_scatter checks
-  /// \c trange().dim(mode) right after presizing, before any block is
-  /// written. Once the scatter loop's \c write_into_slice() calls begin, the
-  /// AssembledCoverage bookkeeping there takes over the mode's reported
-  /// extent (the REALIZED/assembled width so far); by the time every
-  /// disjoint block has been written the assembled width converges back to
-  /// this same full extent.
-  [[nodiscard]] static ResultPtr pre_sized_zeros_over_mode(
-      container::svector<Index> const& idx, ExtentOverrides const& ov,
-      std::shared_ptr<CostModel const> const& cm, std::size_t mode,
-      Result const& axis_src, std::size_t axis_src_mode) {
-    SEQUANT_ASSERT(mode < idx.size());
-    auto const src_idx = indices_of(axis_src);
-    SEQUANT_ASSERT(axis_src_mode < src_idx.size());
-    Index const& axis_ix = src_idx[axis_src_mode];
-    auto const src_ov = overrides_of(axis_src);
-    std::size_t const full_extent = [&] {
-      // src_ov is positional against axis_src's own index list (src_idx).
-      if (auto it = src_ov.find(axis_src_mode); it != src_ov.end())
-        return it->second;
-      return cm->regime().extent(axis_ix);
-    }();
-    auto merged = ov;
-    merged[mode] = full_extent;  // positional: dest mode `mode`
-    return make_dryrun_result(idx, cm, std::move(merged));
-  }
-
   [[nodiscard]] static container::svector<std::pair<std::size_t, std::size_t>>
   mode_batches(container::svector<Index> const& idx, ExtentOverrides const& ov,
                std::shared_ptr<CostModel const> const& cm, std::size_t mode,

@@ -30,69 +30,17 @@ namespace sequant::eval {
 namespace detail {
 
 ///
-/// \brief \c find_leaf_carrying (eval.hpp), but resolving \p axis against
-/// whichever of \p block's OWN production sites (its direct \c BuildStep
-/// values first, then its own \c outputs values, then -- if neither carries
-/// it -- recursing into its nested child \c ScopeBlock's own production
-/// sites) actually carries it below. Used to source \c mode_batches: an
-/// \c AccumulateSum output's own node does NOT carry the axis free (it is
-/// summed away AT that node -- see \c LoopRole::Reduction), but \c
-/// find_leaf_carrying still finds a carrying LEAF further down its subtree,
-/// so trying every production site in turn (rather than requiring one
-/// specific site) is what makes this work uniformly for both \c BuildStep
-/// (LoopLocal, carries the axis at its own node) and \c outputs
-/// (Reduction/AccumulateSum, carries it only below).
-///
-template <typename node_t>
-[[nodiscard]] std::optional<std::pair<node_t, std::size_t>> ordered_axis_leaf(
-    ScopeBlock const& block, Index const& axis,
-    std::unordered_map<std::size_t, node_t> const& vmap,
-    RichSchedule const& rich) {
-  auto const resolve = [&](std::size_t vid) -> node_t const* {
-    auto const hash = rich.cells[vid].hash;
-    auto const it = vmap.find(hash);
-    return it == vmap.end() ? nullptr : &it->second;
-  };
-  // Source the tiling by the axis's SPACE (base_key), not its exact label: the
-  // batch loop is a DAG-scope loop over the aux space, so any leaf carrying
-  // that space gives the same mode tiling. A block bucketed by type may carry
-  // the space under several physical labels, none of which need equal `axis`; a
-  // TYPE-keyed leaf search finds one regardless. Single-label blocks find the
-  // same (only) aux leaf either way -- byte-identical.
-  auto const base = std::wstring(axis.space().base_key());
-  for (Step const& step : block.steps) {
-    if (auto const* build = std::get_if<BuildStep>(&step.value)) {
-      if (auto const* n = resolve(build->value_id))
-        if (auto found = find_leaf_carrying_type(*n, base)) return found;
-    }
-  }
-  for (auto const& [vid, kind] : block.outputs) {
-    (void)kind;
-    if (auto const* n = resolve(vid))
-      if (auto found = find_leaf_carrying_type(*n, base)) return found;
-  }
-  for (Step const& step : block.steps) {
-    if (auto const* child = std::get_if<ScopeBlock>(&step.value)) {
-      if (auto found = ordered_axis_leaf<node_t>(*child, axis, vmap, rich))
-        return found;
-    }
-  }
-  return std::nullopt;
-}
-
-///
 /// \brief Task 2 of the eager-home-release plan: a TYPE-keyed (\c
 /// IndexSpace::base_key()) block-count function over \p ordered's whole
 /// \c ScopeBlock tree -- the \c OrderedSchedule counterpart of \c
 /// walk_scope's \c nblocks_by_type (scope_executor.hpp). Walks every nested
 /// \c ScopeBlock reachable from \p ordered.root.steps (root's own axis is
 /// the sentinel default, never a real loop, so it is not itself registered);
-/// for each block's axis TYPE not yet seen, sources a carrying leaf via \c
-/// ordered_axis_leaf (the same leaf \c run_ordered_contracted_block reads
-/// \c mode_batches from) and memoizes that leaf's own \c mode_batches(...)
-/// .size() under the TYPE. The returned lambda looks up an \c Index's own
-/// TYPE in that memo, defaulting to 1 (unbatched) for any type the walk
-/// never saw as a block axis.
+/// for each block's axis TYPE not yet seen, memoizes the count of the SAME
+/// backend \c axis_batches \c run_ordered_contracted_block iterates over that
+/// axis. The returned lambda looks up an \c Index's own TYPE in that memo,
+/// defaulting to 1 (unbatched) for any type the walk never saw as a block
+/// axis.
 ///
 /// \note Mirrors the brief's reference shape exactly but for one thing: a
 /// TYPE realized as more than one nested loop (an outer block and an inner
