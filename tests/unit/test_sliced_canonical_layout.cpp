@@ -30,9 +30,14 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
+#include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
 #include <SeQuant/core/eval/backends/dryrun/eval_expr.hpp>
+#include <SeQuant/core/eval/backends/dryrun/result.hpp>
+#include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
+#include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/occurrence_key.hpp>
+#include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/eval/slicing_signature.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/product.hpp>
@@ -45,6 +50,10 @@
 #include <SeQuant/external/bliss/graph.hh>
 
 #include <catch2/catch_test_macros.hpp>
+
+#include <any>
+#include <array>
+#include <memory>
 
 namespace {
 
@@ -308,4 +317,159 @@ TEST_CASE(
 
   CHECK(graphs_equal(k_null, k_empty));
   CHECK(k_null.hash_value() == k_empty.hash_value());
+}
+
+// ===========================================================================
+// Task 4: store-canonical / serve-permuted, at the CACHE granularity.
+//
+// The above probes (Task 1-3) establish the IDENTITY/layout side: a
+// loop-colored canonicalize_slots gives one value a single canonical form.
+// This section proves the other load-bearing assumption the design leans on
+// (spec "Load-bearing assumptions" #1): that `CacheManager` can hold that one
+// canonical-layout value ONCE and that the runtime can serve each of several
+// occurrences its OWN slot order from that single resident buffer, via
+// `Result::permute`. This is the exact API Task 7's executor will use:
+//   - store:  `CacheManager::ensure_home_slot(key)` (or the bounded-use-count
+//             overload) + `CacheManager::store(key, data)` -- `data` is built
+//             once, in the value's canonical annot order (`node->annot()`).
+//   - serve permuted: `CacheManager::access(key)` (or `access_at`/
+//             `access_at_hops`) fetches the SAME resident buffer for every
+//             occurrence; each occurrence then calls
+//             `Result::permute(std::array<std::any, 2>{canonical_annot,
+//             occurrence_annot})` to obtain ITS OWN distinct, correctly
+//             reordered buffer. This mirrors exactly what the top-level
+//             `sequant::evaluate(node, layout, leaf, cache)` overload already
+//             does today (eval.hpp, the `result.pre->permute({node->annot(),
+//             layout})` call) -- Task 7 only needs to supply a
+//             PER-OCCURRENCE `layout` instead of one root-result layout.
+// ===========================================================================
+namespace {
+
+using sequant::CacheManager;
+using sequant::ResultPtr;
+using sequant::eval::dryrun::CostModel;
+using sequant::eval::dryrun::ExtentOverrides;
+using sequant::eval::dryrun::ResultDryRun;
+using sequant::eval::dryrun::SizeRegime;
+
+/// A minimal one-space regime: the probe's assertions are about SLOT ORDER
+/// and slice-width tracking through `permute()`, not about distinguishing
+/// modes by extent, so a single named space suffices.
+SizeRegime cache_probe_regime() {
+  SizeRegime r;
+  r.space_extent = {{L"i", 10}};
+  return r;
+}
+
+}  // namespace
+
+TEST_CASE(
+    "sliced-canonical-layout cache: a value stored ONCE is served to two "
+    "occurrences in two DIFFERENT permuted slot orders from the SAME "
+    "resident buffer",
+    "[sliced-layout]") {
+  Index i1{L"i_1"}, i2{L"i_2"}, i3{L"i_3"};
+
+  // The value's own node identity (a leaf -- the network-canonicalization
+  // machinery probed above is orthogonal to this cache-granularity probe;
+  // any stable TreeNode key works). Nonsymm so its own bra order is not
+  // reshuffled by TensorCanonicalizer -- the raw i_1,i_2,i_3 order is
+  // preserved as this node's `annot()`.
+  auto const I = ex<Tensor>(L"I", bra(svector<Index>{i1, i2, i3}), ket{},
+                            Symmetry::Nonsymm);
+  auto const key = probe_binarize(I, IndexSet{});
+  auto const canon_order = key->annot();  // this value's OWN canonical layout
+  REQUIRE(canon_order.size() == 3);
+
+  auto const cm = std::make_shared<CostModel const>(cache_probe_regime());
+
+  // The canonical-layout value, ALREADY narrowed on its first canonical mode
+  // (as it would be if it were a batch-sliced resident value, e.g. one block
+  // of an enclosing loop) -- proves the narrowed width is a per-LABEL fact
+  // that must travel with its index through permute(), not a bare position.
+  ExtentOverrides narrowed;
+  narrowed[0] = 3;  // canon_order[0]'s width narrowed from 10 to 3
+  ResultPtr const canonical =
+      sequant::eval_result<ResultDryRun>(canon_order, cm, narrowed);
+  auto const full_bytes = cm->memsize(canon_order);  // unsliced: 10^3
+  auto const narrowed_bytes = cm->memsize(canon_order, narrowed);  // 3*10*10
+  REQUIRE(narrowed_bytes < full_bytes);
+  REQUIRE(canonical->size_in_bytes() == narrowed_bytes);
+
+  // --- STORE: the value is produced and homed ONCE, resident (unbounded,
+  // never drained on access -- exactly `ensure_home_slot`'s contract, used by
+  // the ordered executor to home a root-scope value read by every consumer).
+  auto cache = CacheManager<EvalNodeDryRun>::empty();
+  cache.ensure_home_slot(key);
+  auto const stored = cache.store(key, canonical);
+  REQUIRE(stored);
+  CHECK(stored.get() == canonical.get());  // store() is an implicit access
+
+  // --- SERVE (canonical fetch): two INDEPENDENT occurrences each fetch the
+  // resident value. Because the slot is resident (unbounded life), BOTH
+  // fetches return the exact SAME buffer -- the cache stores once.
+  auto const fetchA = cache.access(key);
+  auto const fetchB = cache.access(key);
+  REQUIRE(fetchA);
+  REQUIRE(fetchB);
+  CHECK(fetchA.get() == canonical.get());
+  CHECK(fetchB.get() == canonical.get());
+  CHECK(fetchA.get() == fetchB.get());  // same resident buffer, both reads
+
+  // --- SERVE PERMUTED: occurrence A wants canon_order with its first two
+  // slots swapped (canon_order[0] -- the NARROWED mode -- moves to
+  // position 1); occurrence B wants a DIFFERENT permutation, its last two
+  // slots swapped (the narrowed mode stays at position 0 this time).
+  svector<Index> const layoutA{canon_order[1], canon_order[0], canon_order[2]};
+  svector<Index> const layoutB{canon_order[0], canon_order[2], canon_order[1]};
+  REQUIRE_FALSE(layoutA == canon_order);
+  REQUIRE_FALSE(layoutB == canon_order);
+  REQUIRE_FALSE(layoutA == layoutB);
+
+  ResultPtr const readA = fetchA->permute(
+      std::array<std::any, 2>{std::any{canon_order}, std::any{layoutA}});
+  ResultPtr const readB = fetchB->permute(
+      std::array<std::any, 2>{std::any{canon_order}, std::any{layoutB}});
+  REQUIRE(readA);
+  REQUIRE(readB);
+
+  // Each permuted read is a DISTINCT buffer -- from the canonical resident
+  // value AND from each other's read (this is the property `entry::holds`'s
+  // doc comment at cache_manager.hpp asserts: "a sliced/permuted/phase-
+  // shifted read of this entry is a DISTINCT buffer").
+  CHECK(readA.get() != canonical.get());
+  CHECK(readB.get() != canonical.get());
+  CHECK(readA.get() != readB.get());
+
+  // Each read's own slot order is EXACTLY its own requested layout (label
+  // identity, not just a permutation count) --
+  CHECK(readA->as<ResultDryRun>().indices() == layoutA);
+  CHECK(readB->as<ResultDryRun>().indices() == layoutB);
+
+  // -- and the narrowed mode's width followed ITS OWN label to its new
+  // position in each occurrence's layout: canon_order[0] (width 3) is at
+  // position 1 in A's layout, position 0 in B's layout. A read that got this
+  // wrong (e.g. leaving the override at position 0 regardless of the actual
+  // permutation) would report the WRONG occurrence's byte count here.
+  auto const& ovA = readA->as<ResultDryRun>().overrides();
+  auto const& ovB = readB->as<ResultDryRun>().overrides();
+  REQUIRE(ovA.count(1) == 1);
+  CHECK(ovA.at(1) == 3);
+  CHECK(ovA.count(0) == 0);
+  REQUIRE(ovB.count(0) == 1);
+  CHECK(ovB.at(0) == 3);
+  CHECK(ovB.count(1) == 0);
+
+  // Both reads still report the SAME total (narrowed) size -- permutation
+  // reorders modes, it does not change the value's realized volume.
+  CHECK(readA->size_in_bytes() == narrowed_bytes);
+  CHECK(readB->size_in_bytes() == narrowed_bytes);
+
+  // The resident entry itself is untouched by either occurrence's permuted
+  // read: a THIRD fetch still returns the one canonical buffer, unsliced-
+  // layout, unpermuted.
+  auto const fetchC = cache.access(key);
+  REQUIRE(fetchC);
+  CHECK(fetchC.get() == canonical.get());
+  CHECK(fetchC->as<ResultDryRun>().indices() == canon_order);
 }
