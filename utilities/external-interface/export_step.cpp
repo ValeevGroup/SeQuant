@@ -123,18 +123,16 @@ struct ExportTreeDataCompare {
 
 std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
                             const std::vector<std::string_view> &inputs) {
-  std::vector<
-      std::reference_wrapper<const ExecutionContext::Data<ProcessingData>>>
-      data;
+  std::vector<ExecutionContext::Data<ProcessingData>> data;
   for (std::string_view current_input : inputs) {
-    for (const ExecutionContext::Data<ProcessingData> &current :
+    for (ExecutionContext::Data<ProcessingData> current :
          exctx.get_data(current_input)) {
-      data.push_back(std::cref(current));
+      data.push_back(std::move(current));
     }
   }
 
   auto to_export_data = [&](std::size_t idx) {
-    return convert_data<ExportTreeData>(data.at(idx).get().data.get());
+    return convert_data<ExportTreeData>(data.at(idx).data.get());
   };
 
   std::vector<std::size_t> access_order(data.size());
