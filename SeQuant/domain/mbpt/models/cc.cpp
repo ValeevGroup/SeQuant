@@ -420,12 +420,14 @@ container::svector<std::pair<std::int64_t, std::int64_t>> eom_manifolds(nₚ np,
 // 10.1063/5.0062090 Sec. II C, Eqs. (29)-(48); for IP/EA,
 // 10.1021/acs.jctc.5c01991 Fig. 1.
 //
-// Each block is <i|H̄|j>, Eq. (7). Eq. (10) instead splits off
-// E_gr and builds the blocks from the remainder, so here the diagonal carries
-// an explicit -<0|H̄|0>.
+// Eq. (10) splits the single physical E_gr from the normal-ordered components
+// that build the blocks of Eq. (7). Each cumulative H̄^(k) used below still
+// carries its rank-dependent scalar part, so remove that same scalar on the
+// diagonal before assembling the separately truncated components.
 std::vector<ExprPtr> CC::eom_r_blocked(
     nₚ np, nₕ nh, const std::vector<size_t>& block_ranks) const {
-  SEQUANT_ASSERT(unitary(), "eom_r_blocked requires a unitary ansatz");
+  if (!unitary())
+    throw Exception("CC::eom_r: block_ranks require a unitary ansatz");
 
   const auto manifolds = eom_manifolds(np, nh);
   const auto K = manifolds.size();
@@ -434,9 +436,10 @@ std::vector<ExprPtr> CC::eom_r_blocked(
   const std::vector<size_t> ranks =
       block_ranks.empty() ? std::vector<size_t>(K * K, hbar_comm_rank().value())
                           : block_ranks;
-  SEQUANT_ASSERT(ranks.size() == K * K,
-                 "CC::eom_r: block_ranks must be a K x K row-major matrix, "
-                 "K = number of projection manifolds");
+  if (ranks.size() != K * K)
+    throw Exception(
+        "CC::eom_r: block_ranks must be a K x K row-major matrix, "
+        "K = number of projection manifolds");
 
   // Bernoulli H̄ is tensor-level, BCH H̄ operator-level; the bra/ket/vev trio
   // below must match it. Connectivity is empty either way, as everywhere on the
@@ -482,9 +485,11 @@ std::vector<ExprPtr> CC::eom_r_blocked(
       const auto& hbar_ij = hbars.at(ranks.at(i * K + j));
       const auto ket = ket_of(kp, kh);
       acc->append(vev(bra * hbar_ij * ket));
-      // -<0|H̄^(k_ii)|0>: the E_gr of Eq. (10), at this block's rank. Written
-      // as <i|r_i H̄|0> so Wick keeps its summed indices disjoint from the
-      // block's external ones.
+      // Remove the scalar part of this block's temporary H̄^(k_ii). This is
+      // not a block-dependent physical E_gr: it leaves the normal-ordered
+      // coefficients selected for this block in Eq. (10). Written as
+      // <i|r_i H̄|0> so Wick keeps its summed indices disjoint from the block's
+      // external ones.
       if (i == j) acc->append(ex<Constant>(-1) * vev(bra * ket * hbar_ij));
     }
     result.at(static_cast<size_t>(min(bp, bh))) = simplify(ExprPtr{acc});

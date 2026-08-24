@@ -207,13 +207,19 @@ class CC {
   ///   `K` manifolds give a row-major `K`×`K` matrix ordered by ASCENDING
   ///   manifold rank, so one set of numbers serves EE, IP and EA (read S as
   ///   1h/1p and D as 2h1p/1h2p; 10.1021/acs.jctc.5c01991 Fig. 1 carries the
-  ///   IP/EA ranks). Empty (the default) selects the uniform H̄ at
-  ///   `hbar_comm_rank` everywhere.
+  ///   IP/EA ranks). Empty (the default) fills every block with
+  ///   `hbar_comm_rank`. Which form gets built depends on the expansion:
+  ///   `Bernoulli` always uses the blocked form, `BCH` uses it only when a
+  ///   matrix is given and builds a commutator otherwise. The BCH forms differ
+  ///   by off-diagonal amplitude-residual terms unless those residuals vanish.
   /// @pre if non-empty, requires a unitary ansatz; a non-unitary H̄ terminates
   ///   and has nothing to truncate.
   /// @pre `block_ranks` is either empty or `K`×`K`
-  /// @return \f$ (\bar{H}-E)\hat{R} \f$, one element per projection manifold;
-  ///   element 0 is null iff `np == nh`
+  /// @return projected sigma equations, one element per projection manifold.
+  ///   With per-block truncation, each diagonal subtracts the scalar carried by
+  ///   the same temporary \f$ \bar{H}^{(k)} \f$ used for that block. This leaves
+  ///   the blockwise normal-ordered components of Eq. (10), not distinct
+  ///   physical energy zeros. Element 0 is null iff `np == nh`
   // clang-format on
   [[nodiscard]] std::vector<ExprPtr> eom_r(
       nₚ np, nₕ nh, const std::vector<std::size_t>& block_ranks = {}) const;

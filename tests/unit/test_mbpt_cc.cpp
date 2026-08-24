@@ -266,16 +266,19 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     REQUIRE_THAT(bch.eom_r(nₚ(1), nₕ(1), {2}).at(1),
                  EquivalentTo(bch.eom_r(nₚ(1), nₕ(1)).at(1)));
 
-    if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
-      // block_ranks must be a K x K matrix over the manifolds ...
-      REQUIRE_THROWS_AS(cc.eom_r(nₚ(2), nₕ(2), {2, 1, 0}), Exception);
-      // ... and the ansatz must be unitary
-      REQUIRE_THROWS_AS(CC(2).eom_r(nₚ(2), nₕ(2), quccsd), Exception);
-    }
+    // block_ranks must be exactly a K x K matrix over the manifolds ...
+    REQUIRE_THROWS_AS(cc.eom_r(nₚ(2), nₕ(2), {2, 1, 0}), Exception);
+    REQUIRE_THROWS_AS(cc.eom_r(nₚ(2), nₕ(2), {2, 1, 1, 0, 2}), Exception);
+    // ... and the ansatz must be unitary
+    REQUIRE_THROWS_AS(CC(2).eom_r(nₚ(2), nₕ(2), quccsd), Exception);
 
-    // no matrix means uniform truncation at hbar_comm_rank
-    REQUIRE_THAT(cc.eom_r(nₚ(2), nₕ(2)).at(1),
-                 EquivalentTo(cc.eom_r(nₚ(2), nₕ(2), {2, 2, 2, 2}).at(1)));
+    // Public API contract: under Bernoulli these are the same blocked request.
+    // Check both returned manifolds; this does not claim BCH equivalence, since
+    // no matrix takes the commutator path instead.
+    const auto uniform = cc.eom_r(nₚ(2), nₕ(2));
+    const auto block = cc.eom_r(nₚ(2), nₕ(2), {2, 2, 2, 2});
+    REQUIRE_THAT(uniform.at(1), EquivalentTo(block.at(1)));
+    REQUIRE_THAT(uniform.at(2), EquivalentTo(block.at(2)));
   }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
