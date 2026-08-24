@@ -251,8 +251,10 @@ ExprPtr N_part(const ExprPtr& expr, std::size_t cutoff, std::size_t min_rank) {
   return keep_N_terms(expand_to_blocks(expr), cutoff, min_rank);
 }
 
-// expand_to_blocks is an identity, so subtracting the block-resolved N from the
-// compact expr gives the same remainder, on far fewer terms.
+// For the supported single-reference projections, expand_to_blocks preserves
+// the projected expression. Subtracting its block-resolved N part from the
+// compact expression therefore gives the same projected remainder with fewer
+// terms.
 ExprPtr R_part(const ExprPtr& expr, std::size_t cutoff, std::size_t min_rank) {
   auto reduced = wick_reduce(expr);
   return R_part_reduced(reduced, cutoff, min_rank);

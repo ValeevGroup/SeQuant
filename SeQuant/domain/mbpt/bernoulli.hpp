@@ -16,8 +16,9 @@ namespace sequant::mbpt::bernoulli {
 /// @warning Single-reference only, and nothing checks for it. The N/R split
 /// expands general indices over the hole and particle spaces alone (see
 /// detail::expand_to_blocks) and classifies each one as wholly occupied or
-/// wholly unoccupied. An active space, as in make_mr_spaces(), is neither, so
-/// no term touching an active index can ever be classified N.
+/// wholly unoccupied relative to the single-product vacuum. That classification
+/// does not represent multireference excitation semantics; for example, the
+/// active space in make_mr_spaces() is vacuum-unoccupied.
 ///
 /// @pre an HF reference: F is taken to have no occupied-virtual block, which
 /// keeps F out of H̄² and higher (see the F-cancellation in bernoulli.cpp)

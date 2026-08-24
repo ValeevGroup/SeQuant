@@ -396,7 +396,7 @@ namespace {
 constexpr Normalization eom_norm = Normalization::SquareRoot;
 
 /// Projection manifolds for an EOM operator with @p np particle and @p nh hole
-/// creators, lowest rank first. Descends (np, nh) together, stopping before the
+/// counts, lowest rank first. Descends (np, nh) together, stopping before the
 /// reference and, for IP/EA, once either count reaches zero.
 container::svector<std::pair<std::int64_t, std::int64_t>> eom_manifolds(nₚ np,
                                                                         nₕ nh) {

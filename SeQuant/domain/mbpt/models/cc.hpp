@@ -217,7 +217,8 @@ class CC {
   /// @pre if non-empty, requires a unitary ansatz; a non-unitary H̄ terminates
   ///   and has nothing to truncate.
   /// @pre `block_ranks` is either empty or `K`×`K`
-  /// @return projected sigma equations, one element per projection manifold.
+  /// @return projected sigma equations in a vector of size `min(np, nh) + 1`,
+  ///   indexed by the smaller particle/hole count of each projection manifold.
   ///   With per-block truncation, each diagonal subtracts the scalar carried by
   ///   the same temporary \f$ \bar{H}^{(k)} \f$ used for that block. This leaves
   ///   the blockwise normal-ordered components of Eq. (10), not distinct
