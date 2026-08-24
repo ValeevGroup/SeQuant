@@ -399,6 +399,21 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
 namespace {
 // EOM eigenvector operators R and L use SquareRoot normalization
 constexpr Normalization eom_norm = Normalization::SquareRoot;
+
+/// Projection manifolds for an EOM operator with @p np particle and @p nh hole
+/// creators, lowest rank first. Descends (np, nh) together, stopping before the
+/// reference and, for IP/EA, once either count reaches zero.
+container::svector<std::pair<std::int64_t, std::int64_t>> eom_manifolds(nₚ np,
+                                                                        nₕ nh) {
+  container::svector<std::pair<std::int64_t, std::int64_t>> manifolds;
+  for (std::int64_t rp = np, rh = nh; rp >= 0 && rh >= 0; --rp, --rh) {
+    if (rp == 0 && rh == 0) break;
+    manifolds.emplace_back(rp, rh);
+    if (rp == 0 || rh == 0) break;
+  }
+  std::ranges::reverse(manifolds);
+  return manifolds;
+}
 }  // namespace
 
 // Per-block-truncated EOM sigma equations. For the qUCCSD ranks see
@@ -412,16 +427,10 @@ std::vector<ExprPtr> CC::eom_r_blocked(
     nₚ np, nₕ nh, const std::vector<size_t>& block_ranks) const {
   SEQUANT_ASSERT(unitary(), "eom_r_blocked requires a unitary ansatz");
 
-  std::vector<std::pair<std::int64_t, std::int64_t>> manifolds;
-  for (std::int64_t rp = np, rh = nh; rp >= 0 && rh >= 0; --rp, --rh) {
-    if (rp == 0 && rh == 0) break;
-    manifolds.emplace_back(rp, rh);
-    if (rp == 0 || rh == 0) break;
-  }
-
-  std::ranges::reverse(manifolds);
+  const auto manifolds = eom_manifolds(np, nh);
   const auto K = manifolds.size();
-  // empty means uniform truncation at hbar_comm_rank in every block
+  // `block_ranks` is read at i * K + j, so the ascending order above is what
+  // makes `{2,1,1,0}` mean SS, SD, DS, DD; empty means uniform hbar_comm_rank
   const std::vector<size_t> ranks =
       block_ranks.empty() ? std::vector<size_t>(K * K, hbar_comm_rank().value())
                           : block_ranks;
@@ -514,22 +523,12 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh,
     op_connect = concat(default_op_connections(),
                         {{L"h", L"R"}, {L"f", L"R"}, {L"g", L"R"}});
   }
-  // initialize result vector
-  std::vector<ExprPtr> result;
   using std::min;
-  result.resize(min(np, nh) + 1);  // for EE first element will be empty
-
-  std::int64_t rp = np, rh = nh;
-  while (rp >= 0 && rh >= 0) {
-    if (rp == 0 && rh == 0) break;
-    // project with <rp, rh| (i.e., multiply δl(rp, rh)) and compute VEV
-    // use δl for consistent normalization
+  std::vector<ExprPtr> result(min(np, nh) + 1);  // for EE element 0 stays null
+  // project with <rp, rh| (δl for consistent normalization) and compute VEV
+  for (const auto& [rp, rh] : eom_manifolds(np, nh))
     result.at(min(rp, rh)) =
         this->ref_av(δl(nₚ(rp), nₕ(rh)) * hbar_R, op_connect);
-    if (rp == 0 || rh == 0) break;
-    rp--;
-    rh--;
-  }
 
   return result;
 }
@@ -559,21 +558,12 @@ std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) const {
                                                             {L"f", symm},
                                                             {L"g", symm}});
 
-  // initialize result vector
-  std::vector<ExprPtr> result;
   using std::min;
-  result.resize(min(nh, np) + 1);  // for EE first element will be empty
-
-  std::int64_t rp = np, rh = nh;
-  while (rp >= 0 && rh >= 0) {
-    if (rp == 0 && rh == 0) break;
-    // right project with |rp,rh> (i.e., multiply δr(rp, rh)) and compute VEV
+  std::vector<ExprPtr> result(min(np, nh) + 1);  // for EE element 0 stays null
+  // right project with |rp,rh> (i.e., multiply δr(rp, rh)) and compute VEV
+  for (const auto& [rp, rh] : eom_manifolds(np, nh))
     result.at(min(rp, rh)) =
         this->ref_av(L_hbar * δr(nₚ(rp), nₕ(rh)), op_connect);
-    if (rp == 0 || rh == 0) break;
-    rp--;
-    rh--;
-  }
 
   return result;
 }
