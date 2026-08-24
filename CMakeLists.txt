@@ -273,6 +273,7 @@ add_library(SeQuant-bliss
 set_target_properties(SeQuant-bliss PROPERTIES EXPORT_NAME bliss)
 set_target_properties(SeQuant-bliss PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 add_library(SeQuant::bliss ALIAS SeQuant-bliss)
+target_set_optimization_flags(SeQuant-bliss)
 target_link_libraries(SeQuant-bliss PUBLIC range-v3::range-v3 Boost::headers)
 if (SEQUANT_USE_SYSTEM_BOOST_HASH)
     target_compile_definitions(SeQuant-bliss PUBLIC SEQUANT_USE_SYSTEM_BOOST_HASH=1)
