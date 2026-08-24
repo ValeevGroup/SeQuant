@@ -74,6 +74,8 @@ class CC {
   /// @brief constructs CC engine with custom options
   /// @param n coupled cluster excitation rank
   /// @param opts configuration options @see CC::Options
+  /// @throw Exception if a unitary ansatz has no `hbar_comm_rank`, or if the
+  /// Bernoulli expansion is requested with an ansatz other than `Ansatz::U`
   explicit CC(size_t n, const Options& opts);
 
   /// @return the type of ansatz

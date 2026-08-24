@@ -7,6 +7,7 @@
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/domain/mbpt/bernoulli.hpp>
+#include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 
@@ -180,8 +181,16 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
   SECTION("bernoulli_config_validation") {
     using namespace sequant;
     using namespace sequant::mbpt;
+    REQUIRE_THROWS_AS(CC(2, {.hbar_comm_rank = 2,
+                             .hbar_expansion = CC::HbarExpansion::Bernoulli}),
+                      Exception);
     // only ranks 0..4 are implemented.
     REQUIRE_THROWS_AS(bernoulli::hbar(2, 5, false), Exception);
+
+    auto resetter = set_scoped_default_mbpt_context(
+        mbpt::Context::Options{.csv = CSV::Yes});
+    // Partial Wick contractions do not yet support CSV index dependencies.
+    REQUIRE_THROWS_AS(bernoulli::hbar(2, 0, false), Exception);
   }
 
   SECTION("bernoulli_quccsd") {
@@ -305,9 +314,8 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
                 .hbar_comm_rank() == 2);
     // rank 0 is a valid truncation (H̄ = H); only CC::λ rejects it, since it
     // derives at rank - 1
+    REQUIRE_THROWS_AS(CC(N, {.ansatz = CC::Ansatz::U}), Exception);
     if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
-      // the ctor is the only check
-      REQUIRE_THROWS_AS(CC(N, {.ansatz = CC::Ansatz::U}), Exception);
       REQUIRE_THROWS_AS(CC(N, {.hbar_comm_rank = 0}).λ(), Exception);
     }
   }  // SECTION("hbar_comm_rank")

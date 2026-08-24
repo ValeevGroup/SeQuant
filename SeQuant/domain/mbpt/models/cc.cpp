@@ -47,19 +47,14 @@ CC::CC(size_t n, const Options& opts)
       hbar_comm_rank_(opts.hbar_comm_rank),
       pertbar_comm_rank_(opts.pertbar_comm_rank),
       hbar_expansion_(opts.hbar_expansion) {
-  if (unitary())
-    SEQUANT_ASSERT(hbar_comm_rank_,
-                   "CC: hbar_comm_rank is required for unitary ansatz");
+  if (hbar_expansion_ == HbarExpansion::Bernoulli && ansatz_ != Ansatz::U)
+    throw Exception("CC: Bernoulli expansion requires the U ansatz");
+  if (unitary() && !hbar_comm_rank_)
+    throw Exception("CC: hbar_comm_rank is required for unitary ansatz");
   if (ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU)
     SEQUANT_ASSERT(skip_singles_,
                    "CC: skip_singles must be true for orbital-optimized "
                    "ansatz");
-  if (hbar_expansion_ == HbarExpansion::Bernoulli) {
-    SEQUANT_ASSERT(ansatz_ == Ansatz::U,
-                   "CC: Bernoulli expansion requires the U ansatz");
-    SEQUANT_ASSERT(hbar_comm_rank_,
-                   "CC: Bernoulli expansion requires hbar_comm_rank");
-  }
 }
 
 CC::Ansatz CC::ansatz() const { return ansatz_; }

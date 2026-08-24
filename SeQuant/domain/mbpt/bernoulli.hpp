@@ -25,7 +25,7 @@ namespace sequant::mbpt::bernoulli {
 /// @param N cluster/excitation rank (also the N/R rank cutoff)
 /// @param rank highest Bernoulli order H̄^k to include (0..4)
 /// @param skip1 exclude singles from T
-/// @throw Exception if @p rank > 4
+/// @throw Exception if CSV is enabled or @p rank > 4
 ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1);
 
 namespace detail {

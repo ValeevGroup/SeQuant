@@ -10,6 +10,7 @@
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/wick.hpp>
+#include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 
 #include <range/v3/algorithm/all_of.hpp>
@@ -39,8 +40,8 @@
 
 namespace {
 
-/// Returns the single residual fermionic NormalOperator carried by @p term, or
-/// nullptr when it has none (a pure scalar / fully-contracted term).
+/// Returns the residual fermionic NormalOperator in @p term, if any.
+/// @throws Exception if @p term contains more than one.
 const sequant::NormalOperator<sequant::Statistics::FermiDirac>* find_nop(
     const sequant::ExprPtr& term) {
   using namespace sequant;
@@ -51,9 +52,8 @@ const sequant::NormalOperator<sequant::Statistics::FermiDirac>* find_nop(
     const NormalOperator<Statistics::FermiDirac>* found = nullptr;
     for (const auto& f : term.as<Product>().factors())
       if (f.is<NormalOperator<Statistics::FermiDirac>>()) {
-        SEQUANT_ASSERT(!found,
-                       "find_nop: term carries >1 NormalOperator; wick_reduce "
-                       "is expected to leave at most one residual operator");
+        if (found)
+          throw Exception("find_nop: term contains multiple NormalOperators");
         found = &f.as<NormalOperator<Statistics::FermiDirac>>();
       }
 
@@ -263,6 +263,8 @@ ExprPtr R_part(const ExprPtr& expr, std::size_t cutoff, std::size_t min_rank) {
 // Each H̄^k below transcribes its equation. A subscript R/N means "take that
 // part of the commutator before the next nesting".
 ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
+  if (get_default_mbpt_context().csv() == CSV::Yes)
+    throw Exception("bernoulli::hbar: CSV is not supported");
   if (rank > 4)
     throw Exception("bernoulli::hbar: only ranks [0,4] are implemented");
 
