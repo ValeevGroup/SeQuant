@@ -81,9 +81,9 @@ function(target_set_optimization_flags TARGET)
 	check_ipo_supported(RESULT CMAKE_SUPPORTS_COMPILER_LTO LANGUAGES CXX)
 
 	set(CMAKE_TRY_COMPILE_TARGET_TYPE "STATIC_LIBRARY")
-	check_cxx_compiler_flag("-flto" LTO_FLAG_SUPPORTED)
-	check_cxx_compiler_flag("-flto=auto" LTO_AUTO_SUPPORTED)
-	check_cxx_compiler_flag("-flto;-ffat-lto-objects" FAT_LTO_FLAG_SUPPORTED)
+	check_cxx_compiler_flag("-flto" SEQUANT_LTO_FLAG_SUPPORTED)
+	check_cxx_compiler_flag("-flto=auto" SEQUANT_LTO_AUTO_SUPPORTED)
+	check_cxx_compiler_flag("-flto;-ffat-lto-objects" SEQUANT_FAT_LTO_FLAG_SUPPORTED)
 
 	if (DEFINED SEQUANT_LTO)
 		# Always honor explicit user choice
@@ -92,22 +92,22 @@ function(target_set_optimization_flags TARGET)
 		# For static/object libraries we only want to enable LTO by default, if we can create
 		# "fat" object files. Those can still be linked without LTO and hence shouldn't
 		# break any downstream use.
-		set(ENABLE_LTO ${FAT_LTO_FLAG_SUPPORTED})
-	elseif(LTO_FLAG_SUPPORTED OR CMAKE_SUPPORTS_COMPILER_LTO)
+		set(ENABLE_LTO ${SEQUANT_FAT_LTO_FLAG_SUPPORTED})
+	elseif(SEQUANT_LTO_FLAG_SUPPORTED OR CMAKE_SUPPORTS_COMPILER_LTO)
 		# Anything but static/object libraries is also linked by us and
 		# hence enabling LTO doesn't affect downstream compatibility
 		set(ENABLE_LTO ON)
 	endif()
 
 	if (ENABLE_LTO)
-		if (LTO_FLAG_SUPPORTED)
+		if (SEQUANT_LTO_FLAG_SUPPORTED)
 			# We prefer to manually set the LTO flag(s) rather than CMake doing it for us
 			# due to https://gitlab.kitware.com/cmake/cmake/-/work_items/23136
 			# On some compilers, the thin LTO type requested by CMake is incompatible
 			# with explicitly asking for fat LTO object files.
 			# Besides, it seems like full LTO achieves quite a bit better optimizations
 			# with Clang.
-			if (LTO_AUTO_SUPPORTED)
+			if (SEQUANT_LTO_AUTO_SUPPORTED)
 				target_compile_options("${TARGET}" PRIVATE -flto=auto)
 				target_link_options("${TARGET}" PRIVATE -flto=auto)
 			else()
@@ -115,7 +115,7 @@ function(target_set_optimization_flags TARGET)
 				target_link_options("${TARGET}" PRIVATE -flto)
 			endif()
 
-			if (FAT_LTO_FLAG_SUPPORTED)
+			if (SEQUANT_FAT_LTO_FLAG_SUPPORTED)
 				target_compile_options("${TARGET}" PRIVATE -ffat-lto-objects)
 			endif()
 		else()
