@@ -2,12 +2,13 @@
 #define SEQUANT_EXTERNAL_INTERFACE_EXPORTSTEP_HPP
 
 #include "execution_context.hpp"
-#include "processing_data.hpp"
 #include "processing_step.hpp"
 
 #include <nlohmann/json_fwd.hpp>
 
 #include <filesystem>
+#include <functional>
+#include <map>
 #include <string>
 #include <string_view>
 
@@ -28,6 +29,7 @@ class ExportStep : public ProcessingStep {
   std::string language_;
   bool optimize_ = true;
   std::filesystem::path filepath_;
+  std::map<std::string, std::string, std::less<>> group_assoc_;
 };
 
 }  // namespace sequant::util::extint

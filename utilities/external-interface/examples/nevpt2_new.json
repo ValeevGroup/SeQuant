@@ -110,6 +110,20 @@
 			"id": "treeify",
 			"kind": "to_export_tree",
 			"inputs": "opt"
+		},
+		{
+			"kind": "export",
+			"inputs": "treeify",
+			"options": {
+				"language": "itf",
+				"optimize": true,
+				"output": "nevpt2_new.itfaa",
+				"grouping": {
+					"Energy0": "ecc0",
+					"Energy": "ecc",
+					"Residual": "res"
+				}
+			}
 		}
 	]
 }

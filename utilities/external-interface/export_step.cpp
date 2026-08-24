@@ -12,6 +12,8 @@
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <range/v3/view/concat.hpp>
+
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
@@ -61,6 +63,19 @@ void ExportStep::set_options(const nlohmann::json &options) {
       }
 
       filepath_ = value.get<std::string>();
+    } else if (key == "grouping") {
+      if (!value.is_object()) {
+        throw Exception("Value for " + kind() + " option '" + key +
+                        "' must be an object");
+        for (const auto &[name, ids] : value.items()) {
+          if (!ids.is_string()) {
+            throw Exception("Expected IDs for group '" + name +
+                            "' to be given as a string");
+          }
+
+          group_assoc_.emplace(ids.get<std::string>(), name);
+        }
+      }
     } else {
       throw Exception("Unknown option key for " + kind() + ": '" + key + "'");
     }
@@ -146,17 +161,18 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
   for (std::size_t idx : access_order) {
     const ExportTreeData &current_data = to_export_data(idx);
 
-    if (std::ranges::any_of(current_data.entries, [&](const auto &entry) {
-          return !ExportTreeDataCompare{}.equal(entry,
-                                                current_data.entries.front());
-        })) {
-      throw Exception(
-          "Expected all entries in an ExportTreeData object to contribute to "
-          "the same result");
-    }
+    std::string name = [&]() -> std::string {
+      for (std::string_view current :
+           ranges::views::concat(data.at(idx).associated_ids,
+                                 data.at(idx).associated_group_ids)) {
+        auto it = group_assoc_.find(current);
+        if (it != group_assoc_.end()) {
+          return it->second;
+        }
+      }
 
-    // TODO: determine group name from metadata
-    std::string name = "We'll see";
+      return "Default";
+    }();
 
     auto it =
         std::ranges::find_if(groups, [&name](const ExpressionGroup<> &group) {
