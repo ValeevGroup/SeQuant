@@ -956,6 +956,20 @@ class CacheManager {
   std::unordered_map<std::size_t, ModeToLevel> const* cell_mode_to_level_ =
       nullptr;
 
+  /// Non-owning loop-colored slice seam (see \c LoopColoredSliceSeam,
+  /// dag_scope.hpp): the per-value (hash-keyed) sliced-mode -> loop assignment
+  /// \c slice_to_use (eval.hpp) reads to resolve a fetched value's physical
+  /// slice mode off the loop-colored canonical layout, SUPERSEDING the
+  /// \c cell_mode_to_level_ map above as the ordered-path slice-mode source.
+  /// Populated by the ordered executor's shared core
+  /// (\c run_ordered_schedule_pre_results) from the \c OrderedSchedule's
+  /// \c compute_sliced_mode_assignment, and inherited from \c parent_ (only
+  /// the root cache is wired in practice), mirroring \c cell_mode_to_level_.
+  /// Null (default) => no seam wired => the ordered arm leaves the fetch
+  /// unsliced (byte-identical, as with an unwired \c cell_mode_to_level_).
+  /// Non-owning; the pointee must outlive this cache.
+  LoopColoredSliceSeam const* loop_colored_slice_seam_ = nullptr;
+
   /// Running high-water mark (bytes) of the eval engine's live working set,
   /// updated by note_working_set() and cleared by reset(). Held here rather
   /// than in the recursive evaluate() so it persists across the whole
@@ -1191,6 +1205,22 @@ class CacheManager {
     if (!m) return nullptr;
     auto const it = m->find(hash);
     return it == m->end() ? nullptr : &it->second;
+  }
+
+  /// Sets the loop-colored slice seam (see loop_colored_slice_seam_). Pass
+  /// nullptr to detach. Non-owning; the pointee must outlive this cache.
+  void set_loop_colored_slice_seam(LoopColoredSliceSeam const* s) noexcept {
+    loop_colored_slice_seam_ = s;
+  }
+
+  /// \return the local loop-colored slice seam if set, else the one inherited
+  ///         from \c parent_ (only the root cache is wired in practice);
+  ///         nullptr if none is wired anywhere along the chain. Non-owning.
+  [[nodiscard]] LoopColoredSliceSeam const* loop_colored_slice_seam()
+      const noexcept {
+    return loop_colored_slice_seam_ ? loop_colored_slice_seam_
+           : parent_                ? parent_->loop_colored_slice_seam()
+                                    : nullptr;
   }
 
   /// Ensure a scope-hoist slot exists for @p key so a loop-invariant

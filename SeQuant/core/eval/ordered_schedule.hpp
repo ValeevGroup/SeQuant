@@ -1803,7 +1803,12 @@ inline void populate_cell_mode_to_level(OrderedSchedule const& ordered,
 /// ordinal -- get DISTINCT ids by construction (see the design's "Loop
 /// identity is a slot color" section: producer/consumer passes must be
 /// distinguishable colors, not folded).
-using LoopId = std::size_t;
+///
+/// \note Defined in \c dag_scope.hpp so the low-level \c LoopColoredSliceSeam
+/// (the executor's runtime consumption view, consumed by \c CacheManager) can
+/// name it without depending on this schedule header; re-exported here for the
+/// schedule-side code that has always referred to \c eval::LoopId.
+using sequant::LoopId;
 
 ///
 /// \brief The per-(value, sliced-mode) -> DAG-scope-loop ASSIGNMENT: the
@@ -1968,6 +1973,31 @@ void populate_occurrence_canonical_layout(
     Node const& node, container::svector<Index> const& ctx_modes,
     SlicedModeAssignment const& assignment, ValueCell& cell,
     OccurrenceRec& occ) {
+  // A value whose subtree contains a Sum node has NO tensor-network
+  // occurrence key (occurrence_key -- which loop_colored_id calls -- requires
+  // a tensorial contraction subtree; a Sum unions unrelated terms and is not a
+  // TN) and thus no loop-colored sliced layout. Leave both the occurrence's
+  // permutation and (if this is the seeding occurrence) the value's layout
+  // EMPTY -- the same degenerate result as an unsliced value. Without this a
+  // real forest whose residual head is a Sum would abort here; the runtime
+  // slice path does not consult these fields (it reads the hash-keyed
+  // LoopColoredSliceSeam, which the schedule builds from the SAME assignment),
+  // so a Sum-bearing value is simply never sliced-canonical-laid-out.
+  bool subtree_has_sum = false;
+  auto scan = [&subtree_has_sum](auto&& self, Node const& x) -> void {
+    if (subtree_has_sum) return;
+    if (x->is_sum()) {
+      subtree_has_sum = true;
+      return;
+    }
+    if (!x.leaf()) {
+      self(self, x.left());
+      self(self, x.right());
+    }
+  };
+  scan(scan, node);
+  if (subtree_has_sum) return;
+
   TensorNetwork::SlotCanonicalizationMetadata const id =
       loop_colored_id(node, ctx_modes, cell.value_id, assignment);
   occ.perm_to_canonical = loop_colored_layout(id);

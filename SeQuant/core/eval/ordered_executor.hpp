@@ -621,6 +621,34 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   } cell_mode_to_level_guard{cache, cache.cell_mode_to_level()};
   cache.set_cell_mode_to_level(&cell_mode_to_level_map);
 
+  // Task 7 (sliced-value canonical-layout / loop-coloring design): the
+  // loop-colored slice seam slice_to_use (eval.hpp) reads to resolve a
+  // fetched value's physical slice mode off the loop-colored canonical layout
+  // -- the SUCCESSOR to the mode_to_level seam above as the ordered path's
+  // slice-mode source (sec.4). Built HERE, alongside that seam and from the
+  // SAME already-in-hand `ordered`/`rich`, so every direct caller of the
+  // shared ordered core (not only the eval::evaluate dispatch wrapper) gets
+  // it. The per-(value,sliced-mode)->loop facts come from
+  // compute_sliced_mode_assignment (value_id-keyed); projected here onto the
+  // value hash slice_to_use has in hand at a fetch. RAII-restored on every
+  // exit, mirroring the mode_to_level guard.
+  SlicedModeAssignment const sliced_mode_assignment =
+      compute_sliced_mode_assignment(ordered, rich);
+  LoopColoredSliceSeam loop_colored_slice_seam;
+  loop_colored_slice_seam.levels = sliced_mode_assignment.levels;
+  loop_colored_slice_seam.by_hash.reserve(rich.cells.size());
+  for (ValueCell const& c : rich.cells) {
+    auto const it = sliced_mode_assignment.by_value.find(c.value_id);
+    if (it != sliced_mode_assignment.by_value.end())
+      loop_colored_slice_seam.by_hash.emplace(c.hash, it->second);
+  }
+  struct LoopColoredSliceSeamGuard {
+    CacheManager<N, FHC>& c;
+    LoopColoredSliceSeam const* prev;
+    ~LoopColoredSliceSeamGuard() { c.set_loop_colored_slice_seam(prev); }
+  } loop_colored_slice_seam_guard{cache, cache.loop_colored_slice_seam()};
+  cache.set_loop_colored_slice_seam(&loop_colored_slice_seam);
+
   // hash -> node, resolving a BuildStep's value_id (via rich.cells[vid].hash)
   // to the forest node evaluate_impl builds.
   auto const vmap = build_value_node_map(forest);

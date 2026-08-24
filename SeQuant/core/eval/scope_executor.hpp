@@ -845,18 +845,25 @@ ResultPtr evaluate(Nodes const& forest, BatchPolicy const& policy,
 
     eval::dryrun::SizeRegime const regime;
     eval::dryrun::CostModel const cm{regime};
-    eval::RichSchedule const rich =
-        eval::compute_dag_boulevard(forest, cm, target);
+    eval::RichSchedule rich = eval::compute_dag_boulevard(forest, cm, target);
     eval::LegalitySchedule const legality =
         eval::analyze_legality(rich, forest, policy);
     eval::OrderedSchedule const ordered =
         eval::build_ordered_schedule(rich, legality, policy, mode_order);
-    // Task 7 (dag-scope-runtime-slicing plan): the node->ModeToLevel cache
-    // seam (cache_manager.hpp) that slice_to_use's ordered-path resolution
-    // (eval.hpp) consults is now self-wired INSIDE
-    // detail::run_ordered_schedule_pre_results (ordered_executor.hpp) --
-    // the shared core evaluate_ordered_schedule below delegates to -- so it
-    // is correctly built and wired regardless of caller. Nothing to do here.
+    // Task 7 (sliced-value canonical-layout / loop-coloring design): the
+    // loop-colored canonical layout the ordered executor's runtime slice
+    // resolution reads is delivered as the hash-keyed LoopColoredSliceSeam
+    // self-wired inside detail::run_ordered_schedule_pre_results (the shared
+    // ordered core evaluate_ordered_schedule below delegates to), built from
+    // this same schedule's compute_sliced_mode_assignment -- so it is
+    // correctly built and wired regardless of caller. The materialized
+    // per-value/per-occurrence ValueCell::canonical_layout /
+    // OccurrenceRec::perm_to_canonical (populate_canonical_layouts) are the
+    // schedule-side inspection view of that SAME assignment and are exercised
+    // by the [sliced-layout] integration tests; they are NOT on the runtime
+    // slice path and are not populated here (populate_canonical_layouts walks
+    // EVERY forest node including the residual-head Sum, which has no
+    // occurrence key -- a schedule-analysis co-pass, not a hot-path step).
 
     // NODE-level lift of policy.is_volatile_leaf, exactly as make_evaluator's
     // own is_volatile_node lift (eval.hpp) computes it -- threaded into the

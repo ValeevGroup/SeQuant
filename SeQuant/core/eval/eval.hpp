@@ -757,21 +757,49 @@ ResultPtr evaluate_impl(Node const& node,         //
         // else: neither exact nor fallback found a slot for this axis on this
         // node -- both leave it unsliced (full); nothing to cross-check.
       }
-      // p_new (Task 7): the ACTUAL DAG-scope resolution this entry slices by,
-      // per path -- `exact_axis` present (forest / whole-scope, which push
-      // each member's own physical axis) => the same intra-tree exact match
-      // as old `p` (exact_axis == axis on those paths, so this is byte-
-      // identical to before); else (ordered, which pushes one canonical
-      // block.axis per type-bucketed loop) => the schedule's node->level map,
-      // replacing the space-fallback guess above. If the ordered path's seam
-      // is unwired, p_new stays nullopt (full/unsliced) -- the ordered
-      // executor always wires the seam in practice, so this is a defensive
-      // no-op, not a silent behavior path.
+      // p_new (Task 7, sliced-value canonical-layout / loop-coloring design):
+      // the ACTUAL slice mode this entry resolves to, per path.
+      //  - `exact_axis` present (forest / whole-scope, which push each
+      //    member's OWN physical axis): the same intra-tree exact match as old
+      //    `p` (exact_axis == axis on those paths), byte-identical to before.
+      //  - else (the ordered executor, which pushes ONE canonical block.axis
+      //    per type-bucketed loop): resolve OFF THE LOOP-COLORED CANONICAL
+      //    LAYOUT (design sec.4) rather than the per-cell mode_to_level map --
+      //    the loop-colored slice seam maps this loop (ctx[i].level) to the
+      //    fetched value's OWN sliced-mode Index, whose physical slot on `nd`
+      //    is then read directly (index_position), or, when a CSE-folded
+      //    occurrence binds the space under a relabeled physical index the
+      //    seam's designated label does not literally match, space-mapped onto
+      //    nd's own mode of that space -- the SAME space fallback the map path
+      //    used. A value with no seam entry for this loop (an unsliced value,
+      //    or one built inside this loop -- the built-within participation
+      //    gate) leaves p_new nullopt => full/unsliced. If the seam is unwired
+      //    (a direct caller that did not set it) p_new likewise stays nullopt;
+      //    the ordered executor always wires it in practice.
       std::optional<std::size_t> p_new;
-      if (ctx[i].exact_axis)
+      if (ctx[i].exact_axis) {
         p_new = index_position(nd, *ctx[i].exact_axis);
-      else if (m2l)
-        p_new = m2l->mode_of(ctx[i].level);
+      } else if (auto const* seam = cache.loop_colored_slice_seam()) {
+        if (std::optional<LoopId> const loop =
+                seam->loop_of_level(ctx[i].level))
+          if (std::optional<Index> const m =
+                  seam->mode_of(nd->hash_value(), *loop)) {
+            p_new = index_position(nd, *m);
+            if (!p_new && cache.space_mapped_slicing())
+              p_new = eval::detail::sliced_result_position_type(
+                  nd, std::wstring(m->space().base_key()));
+          }
+      }
+      // Transitional equivalence (this migration only; the mode_to_level map
+      // and its populators are removed in Task 8): where the superseded map is
+      // still wired, the loop-colored resolution above must agree with it on
+      // the ordered path -- a divergence is a coloring/assignment bug, caught
+      // here rather than as a silent mis-slice. Inert (map unwired) on the
+      // forest / whole-scope / hand-built-context paths.
+      if (m2l && !ctx[i].exact_axis)
+        SEQUANT_ASSERT(
+            p_new == m2l->mode_of(ctx[i].level) &&
+            "loop-colored slice resolution disagrees with mode_to_level");
       if (p_new) value = value->slice_mode(*p_new, blk.first, blk.second);
     }
     return value;

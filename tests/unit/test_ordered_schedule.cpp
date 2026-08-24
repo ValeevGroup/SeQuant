@@ -1843,3 +1843,142 @@ TEST_CASE(
   CHECK_FALSE(assignment.loop_of(y_cell.value_id, K1).has_value());
   CHECK_FALSE(assignment.loop_of(y_cell.value_id, i3).has_value());
 }
+
+// ===========================================================================
+// Task 7 (sliced-value canonical layout / loop-coloring): the INTEGRATION
+// co-pass on a REAL scheduled + sliced forest. Closes the Task-6 gap the
+// driver test (test_sliced_canonical_layout.cpp) leaves open: that one runs
+// populate_canonical_layouts with an EMPTY assignment (degenerate), so it
+// never materializes a NON-empty layout. Here the occ-outer/aux-inner
+// [sp2-noninner] fixture has genuine batched_here()/sliced modes, so the
+// DF-leaf P (CSE-folded across two occurrences, each carrying an aux + an occ
+// mode) gets a real 2-slot canonical_layout and two per-occurrence
+// permutations -- and the SAME hash-keyed LoopColoredSliceSeam the ordered
+// executor builds resolves each sliced mode to the realized aux/occ loop.
+// ===========================================================================
+TEST_CASE(
+    "populate_canonical_layouts + LoopColoredSliceSeam on the sp2-noninner "
+    "occ/aux forest: real per-value layout, per-occurrence permutations, and "
+    "loop-resolved slice modes (Task 7)",
+    "[ordered-schedule][sp2-noninner][sliced-layout]") {
+  // occurrence_key canonicalizes the rank-2 DF-leaf tensors; scope the
+  // strict-braket assertion off exactly as the [sliced-layout] probes do.
+  auto ctx = sequant::get_default_context().clone();
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_df_spaces(isr);  // Κ (DF aux)
+  ctx.set(sequant::AssertStrictBraKetSymmetry::No);
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  // Same occ-outer/aux-inner shape as the compute_sliced_mode_assignment test
+  // above: B{;i_3,i_4} = A3 x A4, each A contracting its own DF aux mode; P3
+  // and P4 are two handles onto the SAME CSE-folded DF-leaf value.
+  auto P3 = orderedsched_leaf("P{Κ_1;i_3}");
+  auto Q1 = orderedsched_leaf("Q{;Κ_1}");
+  auto A3 = orderedsched_inode("A{;i_3}", P3, Q1);
+  auto P4 = orderedsched_leaf("P{Κ_2;i_4}");
+  auto Q2 = orderedsched_leaf("Q{;Κ_2}");
+  auto A4 = orderedsched_inode("A{;i_4}", P4, Q2);
+  auto B = orderedsched_inode("B{;i_3,i_4}", A3, A4);
+  orderedsched_stamp_all(B);
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  policy.is_batchable_external_index = [](Index const& ix) {
+    return ix.space().base_key() == L"i";
+  };
+  policy.batch_spectator_indices = true;
+  policy.node_level_placement = true;
+
+  sequant::eval::dryrun::SizeRegime regime;
+  regime.space_extent = {{L"i", 8u}, {L"Κ", 6u}};
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  std::vector<sequant::EvalNode<sequant::EvalExpr>> forest{B};
+  sequant::stamp_lifetime_masks(forest);
+  auto const block_of = [](Index const&) -> std::size_t { return 4; };
+  auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  REQUIRE(!rich.cells.empty());
+
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  auto const sched =
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {});
+  REQUIRE(well_formed(sched));
+
+  auto const assignment =
+      sequant::eval::compute_sliced_mode_assignment(sched, rich);
+
+  // Locate the ONE CSE-folded DF-leaf cell (P3 == P4) -- it must carry two
+  // occurrences, exactly the "one value, two use-sites" shape the layout
+  // reconciles.
+  auto const p_hash = P3->hash_value();
+  REQUIRE(p_hash == P4->hash_value());
+  auto const p_it =
+      std::find_if(rich.cells.begin(), rich.cells.end(),
+                   [&](auto const& vc) { return vc.hash == p_hash; });
+  REQUIRE(p_it != rich.cells.end());
+  REQUIRE(p_it->occurrences.size() == 2);
+  auto const p_vid = p_it->value_id;
+
+  // Precondition: every occurrence's layout is empty BEFORE the co-pass.
+  for (auto const& c : rich.cells)
+    for (auto const& o : c.occurrences) REQUIRE(o.perm_to_canonical.empty());
+
+  // --- THE CO-PASS: materialize canonical_layout + perm_to_canonical. ---
+  sequant::eval::populate_canonical_layouts(forest, rich, assignment);
+
+  auto const& p_cell = rich.cells[p_vid];
+
+  // (1) The DF-leaf carries a genuine 2-slot canonical layout (its aux Κ mode
+  // and its occ i mode are both sliced), NON-empty -- the real per-value fact
+  // the degenerate driver test could not produce.
+  REQUIRE(p_cell.canonical_layout.size() == 2);
+
+  // (2) Both occurrences carry a per-occurrence permutation, each aligned with
+  // (same slot count as) the value's canonical layout and expressed in THAT
+  // occurrence's OWN physical labels (P3: Κ_1/i_3; P4: Κ_2/i_4).
+  for (auto const& occ : p_cell.occurrences) {
+    REQUIRE(occ.perm_to_canonical.size() == p_cell.canonical_layout.size());
+    for (Index const& ix : occ.perm_to_canonical)
+      CHECK(std::find(occ.carried.begin(), occ.carried.end(), ix) !=
+            occ.carried.end());
+  }
+
+  // (3) The two occurrences bind the loops to DIFFERENT physical labels: their
+  // permutations are NOT identical (P3's slots name Κ_1/i_3, P4's Κ_2/i_4) --
+  // the reconciliation the design's per-occurrence permutation exists for.
+  CHECK(p_cell.occurrences[0].perm_to_canonical !=
+        p_cell.occurrences[1].perm_to_canonical);
+
+  // --- THE SEAM: build it exactly as run_ordered_schedule_pre_results does,
+  // and confirm the ordered executor's runtime resolution reaches the right
+  // loop for each of the DF-leaf's own sliced modes. ---
+  sequant::LoopColoredSliceSeam seam;
+  seam.levels = assignment.levels;
+  for (auto const& c : rich.cells) {
+    auto const it = assignment.by_value.find(c.value_id);
+    if (it != assignment.by_value.end())
+      seam.by_hash.emplace(c.hash, it->second);
+  }
+
+  Index const K1{L"Κ_1"}, i3{L"i_3"};
+  auto const aux_loop = assignment.loop_of(p_vid, K1);
+  auto const occ_loop = assignment.loop_of(p_vid, i3);
+  REQUIRE(aux_loop.has_value());
+  REQUIRE(occ_loop.has_value());
+
+  // loop_of_level inverts the level enumeration, and mode_of recovers P's own
+  // sliced Index for that loop from the hash-keyed seam -- the exact two-step
+  // slice_to_use performs per fetch (ordered arm).
+  auto const aux_level = assignment.level_of(*aux_loop);
+  auto const occ_level = assignment.level_of(*occ_loop);
+  REQUIRE(seam.loop_of_level(aux_level) == aux_loop);
+  REQUIRE(seam.loop_of_level(occ_level) == occ_loop);
+  CHECK(seam.mode_of(p_hash, *aux_loop) == std::optional<Index>{K1});
+  CHECK(seam.mode_of(p_hash, *occ_loop) == std::optional<Index>{i3});
+
+  // A value hash the seam does not know leaves the fetch unsliced (nullopt).
+  CHECK_FALSE(seam.mode_of(p_hash + 987654321u, *aux_loop).has_value());
+}
