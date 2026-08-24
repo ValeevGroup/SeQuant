@@ -4,16 +4,12 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
-#include <SeQuant/core/expressions/expr_algorithms.hpp>
+#include <SeQuant/core/expressions/expr_iterator.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
-#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
-#include <range/v3/algorithm/equal.hpp>
-#include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/view/filter.hpp>
-#include <range/v3/view/transform.hpp>
 
 #include <string>
 #include <type_traits>
@@ -34,6 +30,7 @@ class Product : public Expr {
   enum class Flatten { Once, Recursively, Yes = Recursively, No };
 
   using scalar_type = Constant::scalar_type;
+  using factors_type = container::svector<ExprPtr, 2>;
 
   Product() = default;
   virtual ~Product() = default;
@@ -45,12 +42,7 @@ class Product : public Expr {
   /// construct a Product out of zero or more factors (multiplied by 1)
   /// @param factors the factors
   /// @param flatten_tag if Flatten::Yes, flatten the factors
-  Product(ExprPtrList factors, Flatten flatten_tag = Flatten::Yes) {
-    using std::begin;
-    using std::end;
-    for (auto it = begin(factors); it != end(factors); ++it)
-      append(1, *it, flatten_tag);
-  }
+  Product(ExprPtrList factors, Flatten flatten_tag = Flatten::Yes);
 
   /// construct a Product out of zero or more factors (multiplied by 1)
   /// @param rng a range of factors; if rng is a Product, it will be flattened
@@ -197,9 +189,7 @@ class Product : public Expr {
   /// @param factor a factor by which to multiply the product
   /// @param flatten_tag specifies whether (and how) to flatten the argument(s)
   /// @return @c *this
-  Product &append(ExprPtr factor, Flatten flatten_tag = Flatten::Yes) {
-    return this->append(1, factor, flatten_tag);
-  }
+  Product &append(ExprPtr factor, Flatten flatten_tag = Flatten::Yes);
 
   /// (post-)multiplies the product by @c factor
   /// @param factor a factor by which to multiply the product
@@ -267,13 +257,13 @@ class Product : public Expr {
                          flatten_tag);
   }
 
-  const auto &scalar() const { return scalar_; }
+  const scalar_type &scalar() const;
 
   /// @return `Constant::is_zero(this->scalar())`
-  bool is_zero() const override { return Constant::is_zero(this->scalar()); }
+  bool is_zero() const override;
 
-  const auto &factors() const { return factors_; }
-  auto &factors() { return factors_; }
+  const factors_type &factors() const;
+  factors_type &factors();
 
   /// @brief View view of factors that are scalars (anything for which
   ///        Expr::is_scalar() returns true).
@@ -293,14 +283,14 @@ class Product : public Expr {
   /// Factor accessor
   /// @param i factor index
   /// @return ith factor
-  const ExprPtr &factor(size_t i) const { return factors_.at(i); }
+  const ExprPtr &factor(size_t i) const;
 
   /// @return true if the number of factors is zero
-  bool empty() const { return factors_.empty(); }
+  bool empty() const;
 
   /// @brief checks commutativity recursively
   /// @return true if definitely commutative, false definitely not commutative
-  /// @note this is memoizing
+  /// @note this is recomputed on every call
   /// @sa CProduct::is_commutative() and NCProduct::is_commutative()
   virtual bool is_commutative() const;
 
@@ -308,180 +298,79 @@ class Product : public Expr {
   /// factors, with complex-conjugated scalar
   virtual void adjoint() override;
 
- private:
-  /// @return true if commutativity is decidable statically
-  /// @sa CProduct::static_commutativity() and NCProduct::static_commutativity()
-  virtual bool static_commutativity() const { return false; }
-
- public:
-  std::wstring to_latex() const override { return to_latex(false); }
+  std::wstring to_latex() const override;
 
   /// just like Expr::to_latex() , but can negate before conversion
   /// @param[in] negate if true, scalar will be before conversion
-  std::wstring to_latex(bool negate) const {
-    std::wstring result;
-    result = L"{";
-    if (!scalar().is_zero()) {
-      const auto scal = negate ? -scalar() : scalar();
-      if (!scal.is_identity()) {
-        // replace -1 prefactor by -
-        if (!(negate ? scalar() : -scalar()).is_identity()) {
-          result += io::latex::to_string(scal);
-        } else {
-          result += L"{-}";
-        }
-      }
-      for (const auto &i : factors()) {
-        if (i->is<Product>())
-          result += L"\\bigl(" + i->to_latex() + L"\\bigr)";
-        else
-          result += i->to_latex();
-      }
-    }
-    result += L"}";
-    return result;
-  }
+  std::wstring to_latex(bool negate) const;
 
-  type_id_type type_id() const override { return get_type_id<Product>(); };
+  type_id_type type_id() const override;
 
   /// @return an identical clone of this Product (a deep copy allocated on the
   ///         heap)
   /// @note this does not flatten the product
-  ExprPtr clone() const override { return ex<Product>(this->deep_copy()); }
+  ExprPtr clone() const override;
 
-  Product deep_copy() const {
-    auto cloned_factors =
-        factors() | ranges::views::transform([](const ExprPtr &ptr) {
-          return ptr ? ptr->clone() : nullptr;
-        });
-    Product result(this->scalar(), ExprPtrList{});
-    ranges::for_each(cloned_factors, [&](const auto &cloned_factor) {
-      result.append(1, std::move(cloned_factor), Flatten::No);
-    });
-    return result;
-  }
+  Product deep_copy() const;
 
-  virtual Expr &operator*=(const Expr &that) override {
-    if (!that.is<Constant>()) {
-      this->append(1, const_cast<Expr &>(that).shared_from_this());
-    } else {
-      scalar_ *= that.as<Constant>().value();
-    }
-    return *this;
-  }
+  Product &operator*=(const Expr &that);
 
-  void add_identical(const Product &other) {
-    SEQUANT_ASSERT(ranges::equal(this->factors(), other.factors()));
-    scalar_ += other.scalar_;
-  }
+  void add_identical(const Product &other);
 
-  void add_identical(const std::shared_ptr<Product> &other) {
-    SEQUANT_ASSERT(ranges::equal(this->factors(), other->factors()));
-    scalar_ += other->scalar_;
-  }
+  void add_identical(const std::shared_ptr<Product> &other);
 
-  void add_identical(const ExprPtr &other) {
-    if (other.is<Product>()) return this->add_identical(other.as<Product>());
+  void add_identical(const ExprPtr &other);
 
-    // only makes sense if this has a single factor
-    SEQUANT_ASSERT(this->factors_.size() == 1 && this->factors_[0] == other);
-    scalar_ += 1;
-  }
+  ExprIterator begin_subexpr() override;
 
- private:
-  scalar_type scalar_ = {1, 0};
-  container::svector<ExprPtr, 2> factors_{};
+  ExprIterator end_subexpr() override;
 
-  cursor begin_cursor() override {
-    if (factors_.empty()) {
-      return Expr::begin_cursor();
-    } else {
-      reset_hash_value();
-      return cursor{&factors_[0]};
-    }
-  };
-  cursor end_cursor() override {
-    if (factors_.empty()) {
-      return Expr::begin_cursor();
-    } else {
-      reset_hash_value();
-      return cursor{&factors_[0] + factors_.size()};
-    }
-  };
+  ConstExprIterator begin_subexpr() const override;
 
-  cursor begin_cursor() const override {
-    return factors_.empty() ? Expr::begin_cursor() : cursor{&factors_[0]};
-  };
-  cursor end_cursor() const override {
-    return factors_.empty() ? Expr::end_cursor()
-                            : cursor{&factors_[0] + factors_.size()};
-  };
+  ConstExprIterator end_subexpr() const override;
 
-  /// @return the hash of this object, by hashing only the factors,
-  /// not the scalar to make possible rapid finding of Products that only
-  /// differ by a factor
-  /// @note this ensures that hash of a Product involving a single factor is
-  /// identical to the hash of the factor itself.
-  hash_type memoizing_hash() const override {
-    auto compute_hash = [this]() {
-      if (factors().size() == 1)
-        return factors_[0]->hash_value();
-      else {
-        auto deref_factors =
-            factors() |
-            ranges::views::transform(
-                [](const ExprPtr &ptr) -> const Expr & { return *ptr; });
-        auto value = hash::range(ranges::begin(deref_factors),
-                                 ranges::end(deref_factors));
-        return value;
-      }
-    };
-
-    if (!hash_value_) {
-      hash_value_ = compute_hash();
-    } else {
-      SEQUANT_ASSERT(*hash_value_ == compute_hash());
-    }
-
-    return *hash_value_;
-  }
-
-  ExprPtr canonicalize_impl(CanonicalizeOptions);
-
- public:
   virtual ExprPtr canonicalize(
       CanonicalizeOptions opt =
           CanonicalizeOptions::default_options()) override;
+
   virtual ExprPtr rapid_canonicalize(
       CanonicalizeOptions opts =
           CanonicalizeOptions::default_options().copy_and_set(
               CanonicalizationMethod::Rapid)) override;
 
  private:
-  bool static_equal(const Expr &that) const override {
-    const auto &that_cast = static_cast<const Product &>(that);
-    if (scalar() == that_cast.scalar() &&
-        factors().size() == that_cast.factors().size()) {
-      if (this->empty()) return true;
-      // compare hash values first
-      if (this->hash_value() ==
-          that.hash_value())  // hash values agree -> do full comparison
-        return std::equal(begin_subexpr(), end_subexpr(), that.begin_subexpr(),
-                          expr_ptr_comparer);
-      else
-        return false;
-    } else
-      return false;
-  }
+  scalar_type scalar_ = {1, 0};
+  factors_type factors_{};
+
+  /// @return true if commutativity is decidable statically
+  /// @sa CProduct::static_commutativity() and NCProduct::static_commutativity()
+  virtual bool static_commutativity() const;
+
+  /// @return the hash of this object, by hashing only the factors,
+  /// not the scalar to make possible rapid finding of Products that only
+  /// differ by a factor
+  /// @note this ensures that hash of a Product involving a single factor is
+  /// identical to the hash of the factor itself.
+  hash_type memoizing_hash() const override;
+
+  ExprPtr canonicalize_impl(CanonicalizeOptions);
+
+  bool static_equal(const Expr &that) const override;
 };  // class Product
 
 class CProduct : public Product {
  public:
   using Product::Product;
-  CProduct(const Product &other) : Product(other) {}
-  CProduct(Product &&other) : Product(other) {}
+  CProduct(const Product &other);
+  CProduct(Product &&other);
 
-  bool is_commutative() const override { return true; }
+  bool is_commutative() const override;
+
+  /// @return an identical clone of this CProduct
+  /// @note without this override Product::clone() would slice this down to a
+  ///       plain Product, whose adjoint() reverses the factors and whose
+  ///       commutativity is only decided by a recursive pairwise check
+  ExprPtr clone() const override;
 
   /// @brief adjoint of a CProduct is a product of adjoints of its factors, with
   /// complex-conjugated scalar
@@ -489,23 +378,29 @@ class CProduct : public Product {
   virtual void adjoint() override;
 
  private:
-  bool static_commutativity() const override { return true; }
+  bool static_commutativity() const override;
 };  // class CProduct
 
 class NCProduct : public Product {
  public:
   using Product::Product;
-  NCProduct(const Product &other) : Product(other) {}
-  NCProduct(Product &&other) : Product(other) {}
+  NCProduct(const Product &other);
+  NCProduct(Product &&other);
 
-  bool is_commutative() const override { return false; }
+  bool is_commutative() const override;
 
-  /// @brief adjoint of a NCProduct is a reserved product of adjoints of its
+  /// @return an identical clone of this NCProduct
+  /// @note without this override Product::clone() would slice this down to a
+  ///       plain Product, which is no longer unconditionally non-commutative
+  ///       and hence may have its factors reordered by canonicalization
+  ExprPtr clone() const override;
+
+  /// @brief adjoint of a NCProduct is a reversed product of adjoints of its
   /// factors, with complex-conjugated scalar
   virtual void adjoint() override;
 
  private:
-  bool static_commutativity() const override { return true; }
+  bool static_commutativity() const override;
 };  // class NCProduct
 
 }  // namespace sequant

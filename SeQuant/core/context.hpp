@@ -4,6 +4,7 @@
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/index_space_registry.hpp>
 #include <SeQuant/core/options.hpp>
+#include <SeQuant/core/utility/aggregate.hpp>
 #include <SeQuant/core/utility/context.hpp>
 
 namespace sequant {
@@ -65,6 +66,7 @@ class Context {
 
   /// see the Context documentation for detailed description
   struct Options {
+    SEQUANT_DESIGNATED_INIT_ONLY;
       /// a shared_ptr to an IndexSpaceRegistry object
       std::shared_ptr<IndexSpaceRegistry> index_space_registry_shared_ptr = nullptr;
       /// an IndexSpaceRegistry object; used if index_space_registry_shared_ptr is null and it is nonnull

@@ -3,8 +3,6 @@
 
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
-#include <SeQuant/core/expressions/expr_ptr.hpp>
-#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
@@ -13,6 +11,8 @@
 #include <string>
 
 namespace sequant {
+
+class ExprPtr;
 
 // implementation details of Constant; prefer sequant::detail over an unnamed
 // namespace in a header (see CppCoreGuidelines SF.21)
@@ -67,68 +67,37 @@ class Constant : public Expr {
       throw Exception("Constant::value<T>: cannot convert value to type T");
   }
 
-  std::wstring to_latex() const override {
-    return L"{" + io::latex::to_string(value()) + L"}";
-  }
+  std::wstring to_latex() const override;
 
-  type_id_type type_id() const override { return get_type_id<Constant>(); }
+  type_id_type type_id() const override;
 
-  bool is_scalar() const override { return true; }
+  bool is_scalar() const override;
 
-  ExprPtr clone() const override { return ex<Constant>(this->value()); }
+  ExprPtr clone() const override;
 
   /// @brief adjoint of a Constant is its complex conjugate
   virtual void adjoint() override;
 
-  virtual Expr &operator*=(const Expr &that) override {
-    if (that.is<Constant>()) {
-      value_ *= that.as<Constant>().value();
-    } else {
-      throw Exception("Constant::operator*=(that): not valid for that");
-    }
-    return *this;
-  }
+  Constant &operator*=(const Expr &that);
 
-  virtual Expr &operator+=(const Expr &that) override {
-    if (that.is<Constant>()) {
-      value_ += that.as<Constant>().value();
-    } else {
-      throw Exception("Constant::operator+=(that): not valid for that");
-    }
-    return *this;
-  }
+  Constant &operator+=(const Expr &that);
 
-  virtual Expr &operator-=(const Expr &that) override {
-    if (that.is<Constant>()) {
-      value_ -= that.as<Constant>().value();
-    } else {
-      throw Exception("Constant::operator-=(that): not valid for that");
-    }
-    return *this;
-  }
+  Constant &operator-=(const Expr &that);
 
   /// @param[in] v a scalar
   /// @return true if this is zero
-  static bool is_zero(scalar_type v) { return v.is_zero(); }
+  static bool is_zero(scalar_type v);
 
   /// @return `Constant::is_zero(this->value())`
-  bool is_zero() const final { return is_zero(this->value()); }
+  bool is_zero() const final;
 
  private:
   scalar_type value_;
 
-  hash_type memoizing_hash() const override {
-    if (!hash_value_) {
-      hash_value_ = hash::value(value_);
-    } else {
-      SEQUANT_ASSERT(*hash_value_ == hash::value(value_));
-    }
-    return *hash_value_;
-  }
+  hash_type memoizing_hash() const override;
 
-  bool static_equal(const Expr &that) const override {
-    return value() == static_cast<const Constant &>(that).value();
-  }
+  bool static_equal(const Expr &that) const override;
+
 };  // class Constant
 
 }  // namespace sequant

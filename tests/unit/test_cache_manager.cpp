@@ -2,7 +2,9 @@
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <algorithm>
 #include <iostream>
+#include <optional>
 #include <range/v3/view/zip.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -323,4 +325,58 @@ TEST_CASE("cache_manager_footprint_gate", "[cache_manager]") {
   auto man_lo = sequant::cache_manager(std::array{node}, is_volatile,
                                        /*min_repeats=*/2, footprint_of, 1.5);
   REQUIRE(count_persistent(node, man_lo) == 0);
+}
+
+TEST_CASE("cache_manager_batch_axis_veto", "[cache_manager]") {
+  // R = f * g * t : the NV product (f*g) = I{a1;a3} feeds the volatile root, so
+  // by default it is cached as a persistent (cross-iteration) entry. a3 is free
+  // in the frontier's result but contracted away at the root. Declaring a3 a
+  // batchable axis means the runtime slices the frontier over it and the
+  // optimizer prices it sliced, so the cache must NOT materialize it whole: the
+  // veto drops it from the cache. i1 -- carried by the root, not the frontier
+  // -- is the control: declaring it batchable must not touch the frontier.
+  auto const node = make_node(L"R{a1;i1} = f{a1;a2} * g{a2;a3} * t{a3;i1}");
+  auto is_volatile = [](node_type const& n) {
+    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
+  };
+
+  // a3: in the frontier's result indices, absent from the root's (contracted).
+  // i1: in the root's result indices, absent from the frontier's.
+  auto const& root_ix = node->canon_indices();
+  auto const& frontier_ix = node.left()->canon_indices();  // the (f*g) product
+  auto in = [](auto const& v, sequant::Index const& x) {
+    return std::find(v.begin(), v.end(), x) != v.end();
+  };
+  std::optional<sequant::Index> a3, i1;
+  for (auto const& ix : frontier_ix)
+    if (!in(root_ix, ix)) a3 = ix;
+  for (auto const& ix : root_ix)
+    if (!in(frontier_ix, ix)) i1 = ix;
+  REQUIRE(a3);
+  REQUIRE(i1);
+
+  std::function<int(node_type const&, manager_type const&)> count_persistent =
+      [&](node_type const& n, manager_type const& m) -> int {
+    if (n.leaf()) return 0;
+    return (m.persistent(n) ? 1 : 0) + count_persistent(n.left(), m) +
+           count_persistent(n.right(), m);
+  };
+
+  // baseline: no batchable axis -> the NV/V frontier is cached and persistent.
+  auto man0 = sequant::cache_manager(std::array{node}, is_volatile);
+  REQUIRE(count_persistent(node, man0) >= 1);
+
+  // control: i1 is not carried by the frontier, so the veto leaves it cached.
+  auto man_nomatch = sequant::cache_manager(
+      std::array{node}, is_volatile, /*min_repeats=*/2,
+      sequant::zero_footprint{}, /*max_footprint=*/0.,
+      [&](sequant::Index const& ix) { return ix == *i1; });
+  REQUIRE(count_persistent(node, man_nomatch) == count_persistent(node, man0));
+
+  // a3 is carried free by the frontier -> the veto drops it: not cached at all.
+  auto man_match = sequant::cache_manager(
+      std::array{node}, is_volatile, /*min_repeats=*/2,
+      sequant::zero_footprint{}, /*max_footprint=*/0.,
+      [&](sequant::Index const& ix) { return ix == *a3; });
+  REQUIRE(count_persistent(node, man_match) == 0);
 }

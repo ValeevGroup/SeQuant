@@ -12,3 +12,4 @@ foreach(current IN LISTS EXECUTABLE_SOURCES)
 endforeach()
 
 add_subdirectory(external-interface)
+add_subdirectory(cost_analysis)

@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/eval/fwd.hpp>
 
+#include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
@@ -19,6 +20,7 @@
 #include <algorithm>
 #include <any>
 #include <chrono>
+#include <deque>
 #include <iostream>
 #include <optional>
 #include <stdexcept>
@@ -272,7 +274,14 @@ auto eval(EvalStat const& stat, Args const&... args) {
   auto const result_s = std::format("result={}", to_string(stat.mem_result));
   auto const alloc_s = std::format("alloc={}", to_string(stat.mem_alloc));
   auto const hw_s = std::format("hw={}", to_string(stat.mem_hwmark));
-  auto const rss_s = std::format("rss={}", to_string(rss()));
+  // Reduce this rank's RSS to the value to report (e.g. sum over ranks = true
+  // total app memory). This runs on every rank (printing() is level>0,
+  // identical across ranks), so an injected collective reducer is matched.
+  auto const rss_local = process_rss_bytes();
+  auto const& rss_reduce = Logger::instance().eval.rss_reduce;
+  auto const rss_s = std::format(
+      "rss={}",
+      to_string(Bytes{rss_reduce ? rss_reduce(rss_local) : rss_local}));
   if (stat.mem_left) {
     SEQUANT_ASSERT(stat.mem_right);
     log("Eval",                                               //
@@ -486,9 +495,20 @@ template <typename Node>
 /// \tparam EvalTrace If Trace::On, trace is written to the logger's stream.
 ///                   Default is to follow Trace::Default, which is itself
 ///                   equal to Trace::On or Trace::Off.
-/// \tparam Cache If CacheCache::Checked (default) the \p cache will be
-///               checked before evaluating. It is used to detect the base case
-///               for recursion to prevent infinite recursion.
+/// \tparam Cache If CacheCache::Checked (default) the root \p node is looked up
+///               in \p cache before evaluating; a hit short-circuits it. Child
+///               nodes are always evaluated Checked. Unchecked skips the lookup
+///               for the root only.
+///
+/// \note The traversal is iterative: it maintains its own explicit work stack
+///       (a `std::deque` of frames) rather than recursing, so evaluation depth
+///       is bounded by the heap, not the C++ call stack. This keeps deep trees
+///       (e.g. a Sum or product chain with thousands of operands) stack-safe.
+///       Custom-evaluator interception is preserved exactly: it is consulted
+///       when a frame is first visited and a non-null result short-circuits the
+///       subtree (its children are never pushed), so subtree pruning -- the
+///       mechanism batched eval relies on -- is unaffected.
+///
 /// \param node A node that can be evaluated using \p le as the leaf
 ///             evaluator.
 /// \param le The leaf evaluator that satisfies
@@ -503,154 +523,245 @@ template <Trace EvalTrace = Trace::Default,
 ResultPtr evaluate(Node const& node,  //
                    F const& le,       //
                    CacheManager<N, FHC>& cache) {
-  if constexpr (Cache == detail::CacheCheck::Checked) {  // return from cache if
-                                                         // found
+  // Multiply a (possibly cached) result by its node's canonicalization phase.
+  // Formerly the `mult_by_phase` lambda local to the Checked wrapper.
+  auto apply_phase = [&cache](auto const& nd, ResultPtr res) -> ResultPtr {
+    auto phase = nd->canon_phase();
+    if (phase == 1) return res;
 
-    auto mult_by_phase = [&node, &cache](ResultPtr res) {
-      auto phase = node->canon_phase();
-      if (phase == 1) return res;
+    ResultPtr post;
+    auto time =
+        detail::timed_eval_inplace([&]() { post = res->mult_by_phase(phase); });
 
-      ResultPtr post;
-      auto time = detail::timed_eval_inplace(
-          [&]() { post = res->mult_by_phase(phase); });
-
-      if constexpr (detail::trace(EvalTrace)) {
-        size_t hwmark = log::bytes(cache, post).value;
-        if (!cache.alive(node)) hwmark += log::bytes(res).value;
-        auto stat =
-            log::EvalStat{.mode = log::EvalMode::MultByPhase,
-                          .time = time,
-                          .mem_result = log::bytes(post),
-                          .mem_alloc = log::bytes(post),
-                          .mem_hwmark = {cache.note_working_set(hwmark)}};
-        log::eval(stat, std::format("{} * {}", phase, node->label()));
-      }
-      return post;
-    };
-
-    if (auto ptr = cache.access(node); ptr) {
-      if constexpr (detail::trace(EvalTrace))
-        log::cache(node, cache, log::label(node));
-
-      return mult_by_phase(ptr);
-    } else if (cache.exists(node)) {
-      auto ptr = cache.store(
-          node,
-          mult_by_phase(evaluate<EvalTrace, detail::CacheCheck::Unchecked>(
-              node, le, cache)));
-      if constexpr (detail::trace(EvalTrace))
-        log::cache(node, cache, log::label(node));
-
-      return mult_by_phase(ptr);
-    } else {
-      // do nothing
+    if constexpr (detail::trace(EvalTrace)) {
+      size_t hwmark = log::bytes(cache, post).value;
+      if (!cache.alive(nd)) hwmark += log::bytes(res).value;
+      auto stat = log::EvalStat{.mode = log::EvalMode::MultByPhase,
+                                .time = time,
+                                .mem_result = log::bytes(post),
+                                .mem_alloc = log::bytes(post),
+                                .mem_hwmark = {cache.note_working_set(hwmark)}};
+      log::eval(stat, std::format("{} * {}", phase, nd->label()));
     }
-  }
+    return post;
+  };
 
-  ResultPtr result;
-  ResultPtr left;
-  ResultPtr right;
+  // One entry of the explicit evaluation stack. `stage` records how far a node
+  // has progressed; `left`/`right` hold its evaluated operands; `store_after`
+  // marks a Checked node that exists in the cache map but has not been stored
+  // yet, so its computed result must be cached (this replaces the recursive
+  // wrapper's `evaluate<..., Unchecked>` re-entry).
+  enum class Stage { Enter, NeedLeft, NeedRight, NeedLeftAdj };
+  struct Frame {
+    Node node;
+    bool checked;
+    Stage stage = Stage::Enter;
+    bool store_after = false;
+    ResultPtr left, right;
+  };
 
-  log::Duration time;
+  // Finalize a freshly computed Phase-B result: if this Checked node needs
+  // storing, cache it (phase-applied) and hand back the phase-applied cached
+  // pointer -- exactly the recursive Checked wrapper's store path. Otherwise
+  // pass the raw result through unchanged.
+  auto finish_phase_b = [&cache, &apply_phase](Frame const& f,
+                                               ResultPtr rb) -> ResultPtr {
+    if (!f.store_after) return rb;
+    auto ptr = cache.store(f.node, apply_phase(f.node, std::move(rb)));
+    if constexpr (detail::trace(EvalTrace))
+      log::cache(f.node, cache, log::label(f.node));
+    return apply_phase(f.node, ptr);
+  };
 
-  // Custom-evaluator interception: before the standard scheme, a non-leaf node
-  // may be evaluated by the cache's custom evaluator (e.g. blocked over a
-  // contracted index to bound peak memory). A non-null result is used (and
-  // cached by the Checked wrapper) as-is; null declines to the standard scheme
-  // below. See CacheManager::custom_evaluator_type.
-  if (!node.leaf()) {
-    if (auto const& custom_eval = cache.custom_evaluator(); custom_eval) {
-      ResultPtr intercepted;
-      time = detail::timed_eval_inplace(
-          [&]() { intercepted = custom_eval(node, cache); });
-      if (intercepted) {
-        if constexpr (detail::trace(EvalTrace)) {
-          log::eval(log::EvalStat{.mode = log::eval_mode(node),
+  // A `std::deque` is used so that a reference to the top frame stays valid
+  // across push_back (which reallocates a `std::vector`).
+  std::deque<Frame> stk;
+  stk.push_back(
+      Frame{.node = node, .checked = (Cache == detail::CacheCheck::Checked)});
+
+  ResultPtr ret;  // result handed up by the frame that most recently finalized
+
+  // Deliver `r` to the parent frame and pop the just-completed frame.
+  auto finalize = [&stk, &ret](ResultPtr r) {
+    ret = std::move(r);
+    stk.pop_back();
+  };
+
+  while (!stk.empty()) {
+    Frame& f = stk.back();
+
+    switch (f.stage) {
+      case Stage::Enter: {
+        // --- Checked cache wrapper: a hit returns directly; a miss on a node
+        //     that exists in the map schedules a store once computed. ---
+        if (f.checked) {
+          if (auto ptr = cache.access(f.node); ptr) {
+            if constexpr (detail::trace(EvalTrace))
+              log::cache(f.node, cache, log::label(f.node));
+            finalize(apply_phase(f.node, ptr));
+            break;
+          }
+          f.store_after = cache.exists(f.node);
+        }
+
+        // --- Custom-evaluator interception (non-leaf only): a non-null result
+        //     short-circuits the subtree -- children are never pushed. This is
+        //     the subtree pruning batched eval relies on; see the class note. A
+        //     null return declines to the standard scheme below. ---
+        if (!f.node.leaf()) {
+          if (auto const& custom_eval = cache.custom_evaluator(); custom_eval) {
+            ResultPtr intercepted;
+            auto time = detail::timed_eval_inplace(
+                [&]() { intercepted = custom_eval(f.node, cache); });
+            if (intercepted) {
+              if constexpr (detail::trace(EvalTrace)) {
+                log::eval(
+                    log::EvalStat{.mode = log::eval_mode(f.node),
                                   .time = time,
                                   .mem_result = log::bytes(intercepted),
                                   .mem_alloc = log::bytes(intercepted),
                                   .mem_hwmark = {cache.note_working_set(
                                       log::bytes(cache, intercepted).value)}},
-                    log::label(node));
+                    log::label(f.node));
+              }
+              finalize(finish_phase_b(f, std::move(intercepted)));
+              break;
+            }
+          }
         }
-        return intercepted;
+
+        // --- Leaf. ---
+        if (f.node.leaf()) {
+          ResultPtr result;
+          auto time =
+              detail::timed_eval_inplace([&]() { result = le(f.node); });
+          if constexpr (detail::trace(EvalTrace)) {
+            log::eval(log::EvalStat{.mode = log::eval_mode(f.node),
+                                    .time = time,
+                                    .mem_result = log::bytes(result),
+                                    .mem_alloc = log::bytes(result),
+                                    .mem_hwmark = {cache.note_working_set(
+                                        log::bytes(cache, result).value)}},
+                      log::label(f.node));
+          }
+          finalize(finish_phase_b(f, std::move(result)));
+          break;
+        }
+
+        // --- Internal node: request the left operand (always Checked). The
+        //     stage must advance before the push (push may grow the deque). ---
+        f.stage = (f.node->op_type() == EvalOp::Adjoint) ? Stage::NeedLeftAdj
+                                                         : Stage::NeedLeft;
+        stk.push_back(Frame{.node = f.node.left(), .checked = true});
+        break;
+      }
+
+      case Stage::NeedLeftAdj: {
+        // Unary IR op (Adjoint): only the left operand is evaluated; the right
+        // child is the Constant(1) sentinel kept to preserve FullBinaryNode's
+        // invariant, and is intentionally never pushed.
+        f.left = std::move(ret);
+        SEQUANT_ASSERT(f.left);
+        std::array<std::any, 2> const adj_ann{f.node.left()->annot(),
+                                              f.node->annot()};
+        ResultPtr result;
+        auto time = detail::timed_eval_inplace(
+            [&]() { result = f.left->adjoint(adj_ann); });
+
+        if constexpr (detail::trace(EvalTrace)) {
+          // `right` is null here (see log::bytes() null tolerance).
+          size_t hwmark = log::bytes(cache, result).value;
+          if (!cache.alive(f.node.left()) || f.node.left()->canon_phase() != 1)
+            hwmark += log::bytes(f.left).value;
+          log::eval(
+              log::EvalStat{.mode = log::eval_mode(f.node),
+                            .time = time,
+                            .mem_result = log::bytes(result),
+                            .mem_alloc = log::bytes(result),
+                            .mem_hwmark = {cache.note_working_set(hwmark)},
+                            .mem_left = log::bytes(f.left),
+                            .mem_right = log::bytes(f.right)},
+              log::label(f.node));
+        }
+        finalize(finish_phase_b(f, std::move(result)));
+        break;
+      }
+
+      case Stage::NeedLeft: {
+        f.left = std::move(ret);
+        SEQUANT_ASSERT(f.left);
+        f.stage = Stage::NeedRight;
+        stk.push_back(Frame{.node = f.node.right(), .checked = true});
+        break;
+      }
+
+      case Stage::NeedRight: {
+        f.right = std::move(ret);
+        SEQUANT_ASSERT(f.left);
+        SEQUANT_ASSERT(f.right);
+
+        std::array<std::any, 3> const ann{
+            f.node.left()->annot(), f.node.right()->annot(), f.node->annot()};
+        ResultPtr result;
+        log::Duration time;
+        if (f.node->op_type() == EvalOp::Sum) {
+          time = detail::timed_eval_inplace(
+              [&]() { result = f.left->sum(*f.right, ann); });
+        } else {
+          SEQUANT_ASSERT(f.node->op_type() == EvalOp::Product);
+          // Consult the shaped-product hook (if set) before evaluating the
+          // product. The hook receives the node (wrapped in a std::any as a
+          // std::reference_wrapper so the full IR node is inspectable) plus the
+          // evaluated operands and annotations; a non-null return *replaces*
+          // the normal product (e.g. a shape-constrained emission of it), a
+          // null return declines and the standard prod() below runs. An empty
+          // hook is never consulted; default-empty => byte-identical behavior.
+          auto const de_nest =
+              f.node.left()->tot() && f.node.right()->tot() && !f.node->tot();
+          if (auto const& hook = cache.shaped_product_hook(); hook) {
+            time = detail::timed_eval_inplace([&]() {
+              result =
+                  hook(std::any{std::cref(f.node)}, *f.left, *f.right, ann);
+            });
+          }
+          if (!result) {
+            time = detail::timed_eval_inplace([&]() {
+              result = f.left->prod(*f.right, ann,
+                                    de_nest ? DeNest::True : DeNest::False);
+            });
+          }
+        }
+
+        SEQUANT_ASSERT(result);
+
+        if constexpr (detail::trace(EvalTrace)) {
+          // A cached child is *distinct* from the local left/right when its
+          // canon_phase != 1, because apply_phase allocates a fresh buffer
+          // while the cache still holds the pre-phase data. So only skip the
+          // local's bytes when the cache aliases the same buffer (phase == 1).
+          size_t hwmark = log::bytes(cache, result).value;
+          if (!cache.alive(f.node.left()) || f.node.left()->canon_phase() != 1)
+            hwmark += log::bytes(f.left).value;
+          if (f.right && (!cache.alive(f.node.right()) ||
+                          f.node.right()->canon_phase() != 1))
+            hwmark += log::bytes(f.right).value;
+          log::eval(
+              log::EvalStat{.mode = log::eval_mode(f.node),
+                            .time = time,
+                            .mem_result = log::bytes(result),
+                            .mem_alloc = log::bytes(result),
+                            .mem_hwmark = {cache.note_working_set(hwmark)},
+                            .mem_left = log::bytes(f.left),
+                            .mem_right = log::bytes(f.right)},
+              log::label(f.node));
+        }
+        finalize(finish_phase_b(f, std::move(result)));
+        break;
       }
     }
   }
 
-  if (node.leaf()) {
-    time = detail::timed_eval_inplace([&]() { result = le(node); });
-  } else if (node->op_type() == EvalOp::Adjoint) {
-    // Unary IR op: dispatch on left operand only; right is the Constant(1)
-    // sentinel kept around to preserve FullBinaryNode's invariant. We
-    // intentionally skip evaluating the sentinel — leaf evaluators that
-    // can't manufacture scalar constants (rare in practice but possible)
-    // would otherwise be invoked needlessly.
-    left = evaluate<EvalTrace>(node.left(), le, cache);
-    SEQUANT_ASSERT(left);
-    std::array<std::any, 2> const adj_ann{node.left()->annot(), node->annot()};
-    time =
-        detail::timed_eval_inplace([&]() { result = left->adjoint(adj_ann); });
-  } else {
-    left = evaluate<EvalTrace>(node.left(), le, cache);
-    right = evaluate<EvalTrace>(node.right(), le, cache);
-    SEQUANT_ASSERT(left);
-    SEQUANT_ASSERT(right);
-
-    std::array<std::any, 3> const ann{node.left()->annot(),
-                                      node.right()->annot(), node->annot()};
-    if (node->op_type() == EvalOp::Sum) {
-      time = detail::timed_eval_inplace(
-          [&]() { result = left->sum(*right, ann); });
-    } else {
-      SEQUANT_ASSERT(node->op_type() == EvalOp::Product);
-      auto const de_nest =
-          node.left()->tot() && node.right()->tot() && !node->tot();
-      time = detail::timed_eval_inplace([&]() {
-        result =
-            left->prod(*right, ann, de_nest ? DeNest::True : DeNest::False);
-      });
-    }
-  }
-
-  SEQUANT_ASSERT(result);
-
-  // logging
-  if constexpr (detail::trace(EvalTrace)) {
-    if (node.leaf()) {
-      log::eval(log::EvalStat{.mode = log::eval_mode(node),
-                              .time = time,
-                              .mem_result = log::bytes(result),
-                              .mem_alloc = log::bytes(result),
-                              .mem_hwmark = {cache.note_working_set(
-                                  log::bytes(cache, result).value)}},
-                log::label(node));
-    } else {
-      // A cached child is *distinct* from the local left/right when its
-      // canon_phase != 1, because mult_by_phase allocates a fresh buffer
-      // while the cache still holds the pre-phase data. So only skip the
-      // local's bytes when the cache aliases the same buffer (phase == 1).
-      // Adjoint nodes evaluate only the left operand (the right child is the
-      // sentinel Constant(1) — see the Adjoint branch above), so `right` is
-      // null; log::bytes() tolerates a null shared_ptr for that reason.
-      size_t hwmark = log::bytes(cache, result).value;
-      if (!cache.alive(node.left()) || node.left()->canon_phase() != 1)
-        hwmark += log::bytes(left).value;
-      if (right &&
-          (!cache.alive(node.right()) || node.right()->canon_phase() != 1))
-        hwmark += log::bytes(right).value;
-      log::eval(log::EvalStat{.mode = log::eval_mode(node),
-                              .time = time,
-                              .mem_result = log::bytes(result),
-                              .mem_alloc = log::bytes(result),
-                              .mem_hwmark = {cache.note_working_set(hwmark)},
-                              .mem_left = log::bytes(left),
-                              .mem_right = log::bytes(right)},
-                log::label(node));
-    }
-  }
-
-  return result;
+  return ret;
 }
 
 ///
@@ -901,10 +1012,10 @@ ResultPtr evaluate_antisymm(Args&&... args) {
 ///
 /// For each node it is consulted on, the returned evaluator chooses a batch
 /// axis \c K via `batch_axis(node, accept)` (declining if none). It asks the
-/// backend to partition \c K into contiguous element-range batches of about
-/// \p target_batch_size elements each (Result::mode_batches); if that yields at
-/// most one batch it declines (so small / unselected indices are left to the
-/// standard scheme).
+/// backend to partition \c K into contiguous, whole-tile element-range batches
+/// of at most \p target_batch_size(K) elements each -- the target is an upper
+/// bound, not a goal (Result::mode_batches); if that yields at most one batch
+/// it declines (so small / unselected indices are left to the standard scheme).
 ///
 /// Otherwise it *replays the build of every compatible persistent final* in
 /// the same batch passes: the group is the trigger node plus every key of
@@ -941,11 +1052,13 @@ ResultPtr evaluate_antisymm(Args&&... args) {
 /// rather than full intermediate peak memory).
 ///
 /// \param le the leaf evaluator (captured).
-/// \param target_batch_size the desired size of each batch *in elements* (a
-///        user knob; no memory model is assumed). Backend-neutral: a tiled
-///        backend rounds batch boundaries to tile boundaries, so realized
-///        batches are uneven and each covers at least this many elements where
-///        possible.
+/// \param target_batch_size per-index function
+///        `std::function<std::size_t(Index const&)>` returning the per-batch
+///        slice size (in elements) for a given (batch-axis) index -- an UPPER
+///        BOUND, not a goal. Backend-neutral: a tiled backend rounds batch
+///        boundaries to tile boundaries (down to a tile multiple), so realized
+///        batches are uneven and each covers at most this many elements, except
+///        the one-tile floor (a lone tile larger than the target).
 /// \param accept predicate selecting which contracted indices may be batched
 ///        (e.g. only those in the auxiliary/RI IndexSpace). Defaults to any.
 /// \param make_scope_guard factory, called with the batch count, returning an
@@ -1113,27 +1226,39 @@ template <typename F, typename IndexPredicate = accept_any_index,
           typename ScopeGuardFactory = make_no_scope_guard,
           typename IsVolatile = never_volatile>
 [[nodiscard]] auto make_batched_custom_evaluator(
-    F le, std::size_t target_batch_size, IndexPredicate accept = {},
-    ScopeGuardFactory make_scope_guard = {}, IsVolatile is_volatile = {}) {
-  return [le = std::move(le), target_batch_size, accept, is_volatile,
+    F le, std::function<std::size_t(Index const&)> target_batch_size,
+    IndexPredicate accept = {}, ScopeGuardFactory make_scope_guard = {},
+    IsVolatile is_volatile = {}, bool persistent_only = false) {
+  return [le = std::move(le), target_batch_size = std::move(target_batch_size),
+          accept, is_volatile, persistent_only,
           make_scope_guard](auto const& node, auto& cache) -> ResultPtr {
     auto const K = batch_axis(node, accept);
-    if (!K) return nullptr;
+    if (!K) {
+      return nullptr;
+    }
 
-    // Persistence gate: only stream subtrees that are amplitude-independent
-    // (built once). If the subtree contains a volatile leaf it is rebuilt on
-    // every evaluation, so batching pays the partition + relaxed-screening cost
-    // each pass for no lasting memory benefit -- decline to the standard
-    // scheme. Default never_volatile => no gating (original behavior).
-    if (subtree_any(node, is_volatile)) return nullptr;
+    // Persistence gate (opt-in via persistent_only): when set, decline to batch
+    // any subtree containing a volatile leaf -- such a subtree is rebuilt every
+    // evaluation, so batching pays the partition + relaxed-screening cost each
+    // pass to amortize over nothing. By default (persistent_only == false) we
+    // batch ACROSS THE BOARD: slicing the batch axis reduces the footprint of
+    // any axis-carrying intermediate regardless of volatility, and the cost
+    // model credits it accordingly, so the runtime must realize it too. (When
+    // is_volatile is never_volatile the gate is moot either way.)
+    if (persistent_only && subtree_any(node, is_volatile)) {
+      return nullptr;
+    }
 
     auto const leaf = find_leaf_carrying(node, *K);
-    if (!leaf) return nullptr;
+    if (!leaf) {
+      return nullptr;
+    }
     auto const batches =
-        le(leaf->first)->mode_batches(leaf->second, target_batch_size);
+        le(leaf->first)->mode_batches(leaf->second, target_batch_size(*K));
 
-    if (batches.size() <= 1)
+    if (batches.size() <= 1) {
       return nullptr;  // nothing to gain (or unbatchable)
+    }
 
     using node_t = std::remove_cvref_t<decltype(node)>;
     using member_t = std::pair<node_t const*, Index>;
@@ -1158,7 +1283,8 @@ template <typename F, typename IndexPredicate = accept_any_index,
       if (subtree_any(k, is_volatile)) return;  // defensive: P implies NV
       auto const lk = find_leaf_carrying(k, *Kk);
       if (!lk) return;
-      if (le(lk->first)->mode_batches(lk->second, target_batch_size) != batches)
+      if (le(lk->first)->mode_batches(lk->second, target_batch_size(*Kk)) !=
+          batches)
         return;
       group.emplace_back(&k, *Kk);
     });
@@ -1192,6 +1318,28 @@ template <typename F, typename IndexPredicate = accept_any_index,
         layers.push_back(std::move(layer));
         remaining = std::move(rest);
       }
+    }
+
+    // Trace: the batched path co-evaluates a GROUP -- the trigger plus any
+    // cross-term persistent finals that slice over the same aux partition --
+    // streaming them together over the aux batches in one pass (so a
+    // sub-intermediate shared between members is computed once per batch, not
+    // once per consumer). The members are SIBLINGS computed alongside each
+    // other, NOT a term hierarchy; the per-op Eval lines below interleave
+    // across members and batches. Bracket the group and list its members so
+    // those ops can be attributed. Distinct "BatchGroup"/"BatchMember" labels
+    // (not Term|Begin/End) to avoid implying nesting; the top-level evaluate
+    // still emits the enclosing per-term Term markers.
+    if (log::printing()) {
+      std::size_t n_members = 0;
+      for (auto const& layer : layers) n_members += layer.size();
+      log::log("BatchGroup", "Begin",
+               std::format("{} members co-evaluated over {} aux batches",
+                           n_members, batches.size()));
+      for (auto const& layer : layers)
+        for (auto const& mk : layer)
+          log::log("BatchMember",
+                   toUtf8(io::serialization::to_string(to_expr(*mk.first))));
     }
 
     // RAII scope for the batched partial contractions; a backend-supplied
@@ -1254,9 +1402,52 @@ template <typename F, typename IndexPredicate = accept_any_index,
         (void)cache.store(*mem, std::move(v));
       }
     }
+    if (log::printing()) log::log("BatchGroup", "End");
     SEQUANT_ASSERT(trigger_result);
     return trigger_result;
   };
+}
+
+/// \brief Builds a batched custom evaluator (see make_batched_custom_evaluator)
+/// from a \p policy object, lifting the policy's canonical Tensor-based
+/// volatile-leaf predicate to the EvalNode predicate the batched evaluator
+/// expects.
+///
+/// Exactly equivalent to calling make_batched_custom_evaluator with:
+///   - target_batch_size = policy.batch_target_size
+///   - accept           = policy.is_batchable_index
+///   - make_scope_guard = make_scope_guard (forwarded)
+///   - is_volatile      = EvalNode lift of policy.is_volatile_leaf:
+///       n.leaf() && n->is_tensor() && policy.is_volatile_leaf(n->as_tensor())
+///     (when policy.is_volatile_leaf is empty, no node is volatile)
+///
+/// \param policy       BatchPolicy carrying the three batchability predicates.
+/// \param yielder      The leaf evaluator (captured and forwarded).
+/// \param make_scope_guard  Optional scope-guard factory (same semantics as in
+///        make_batched_custom_evaluator; defaults to make_no_scope_guard).
+template <class F, class ScopeGuardFactory = make_no_scope_guard>
+[[nodiscard]] auto make_evaluator(BatchPolicy const& policy, F yielder,
+                                  ScopeGuardFactory make_scope_guard = {}) {
+  auto is_volatile_node = [p = policy.is_volatile_leaf](auto const& n) -> bool {
+    if (!n.leaf() || !n->is_tensor()) return false;
+    return p && p(n->as_tensor());
+  };
+  // BatchPolicy docs: an empty is_batchable_index or batch_target_size means
+  // "no batching". Forwarding an empty std::function would instead throw
+  // std::bad_function_call from batch_axis()/target_batch_size() at evaluation
+  // time, so when either is unset, substitute predicates that decline batching
+  // (accept nothing => batch_axis returns nullopt => target_batch_size is never
+  // called) rather than partially-filled ones.
+  std::function<bool(Index const&)> accept = policy.is_batchable_index;
+  std::function<std::size_t(Index const&)> target = policy.batch_target_size;
+  if (!accept || !target) {
+    accept = [](Index const&) { return false; };
+    target = [](Index const&) -> std::size_t { return 0; };
+  }
+  return make_batched_custom_evaluator(
+      std::move(yielder), std::move(target), std::move(accept),
+      std::move(make_scope_guard), std::move(is_volatile_node),
+      policy.persistent_only);
 }
 
 }  // namespace sequant

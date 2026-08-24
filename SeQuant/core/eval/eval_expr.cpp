@@ -531,7 +531,7 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
           detail::make_tensor_wo_symmetries(opts, bra(t.bra()), ket(t.ket()),
                                             aux(t.aux())),  //
           tl->canon_indices(),                              //
-          1,                                                //
+          tl->canon_phase(),                                //
           h,
           nullptr};
     } else {
@@ -607,7 +607,7 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
                            type,                   //
                            expr,                   //
                            left->canon_indices(),  //
-                           1,                      //
+                           left->canon_phase(),    //
                            h,                      //
                            nullptr};
 

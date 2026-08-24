@@ -14,6 +14,7 @@
 #include <SeQuant/core/optimize/common_subexpression_elimination.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -30,10 +31,12 @@
 
 #include <boost/algorithm/string.hpp>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
-#include <stdexcept>
+#include <limits>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <unordered_set>
@@ -85,8 +88,7 @@ ProcessingOptions extractProcessingOptions(
     } else if (spintrace == "rigorous") {
       options.spintrace = SpinTracing::Rigorous;
     } else {
-      throw std::runtime_error("Invalid spintracing option '" + spintrace +
-                               "'");
+      throw Exception("Invalid spintracing option '" + spintrace + "'");
     }
   }
 
@@ -98,8 +100,7 @@ ProcessingOptions extractProcessingOptions(
     } else if (projection == "biorthogonal") {
       options.transform = ProjectionTransformation::Biorthogonal;
     } else {
-      throw std::runtime_error("Invalid projection option '" + projection +
-                               "'");
+      throw Exception("Invalid projection option '" + projection + "'");
     }
   }
 
@@ -125,34 +126,125 @@ ProcessingOptions extractProcessingOptions(
         details.at("min_cse_usage_count").get<std::size_t>();
   }
 
+  if (details.contains("index_batching")) {
+    const nlohmann::json &batch = details.at("index_batching");
+    auto handle_strategy = [&options](std::string_view strategy) {
+      if (strategy == "None" || strategy == "none") {
+        options.batching = IndexBatching::None;
+      } else if (strategy == "Fastest" || strategy == "fastest") {
+        options.batching = IndexBatching::Fastest;
+      } else if (strategy == "Slowest" || strategy == "slowest") {
+        options.batching = IndexBatching::Slowest;
+      } else {
+        std::vector<Index> indices;
+        for (auto current : strategy | std::ranges::views::split(',')) {
+          indices.emplace_back(std::string(current.begin(), current.end()));
+        }
+        options.batching = std::move(indices);
+
+        // If an explicit index list is given, we intend to use it and that's it
+        options.min_unbatched_indices = 0;
+      }
+    };
+
+    if (batch.is_object()) {
+      if (batch.contains("batch")) {
+        handle_strategy(batch.at("batch").get<std::string_view>());
+      }
+      if (batch.contains("min_unbatched")) {
+        options.min_unbatched_indices =
+            batch.at("min_unbatched").get<std::size_t>();
+      }
+      if (batch.contains("max_batched")) {
+        options.max_batched_indices =
+            batch.at("max_batched").get<std::size_t>();
+      }
+      if ((options.min_unbatched_indices > 0 ||
+           options.max_batched_indices <
+               std::numeric_limits<std::size_t>::max()) &&
+          std::holds_alternative<std::vector<Index>>(options.batching)) {
+        throw Exception(
+            "Can't use the min_unbatched option in combination with an "
+            "explicit list of batching indices");
+      }
+    } else {
+      handle_strategy(batch.get<std::string_view>());
+    }
+  }
+
   return options;
 }
 
+struct ExportOptions {
+  bool importResult = false;
+  bool createResult = false;
+  std::variant<IndexBatching, std::vector<Index>> batching = {};
+  std::size_t min_unbatched_indices = 2;
+  std::size_t max_batched = std::numeric_limits<std::size_t>::max();
+};
+
 ExportNode<> prepareForExport(const ResultExpr &result,
                               const ItfGenerator<ItfExportContext> &generator,
-                              ItfExportContext &ctx, bool importResult,
-                              bool createResult) {
+                              ItfExportContext &ctx,
+                              const ExportOptions &opts) {
   ExportNode<> tree = to_export_tree(result);
 
   if (result.produces_tensor()) {
     SEQUANT_ASSERT(result.has_label());
     Tensor result_tensor = result.result_as_tensor();
     ctx.rewrite(result_tensor);
-    if (importResult) {
+    if (opts.importResult) {
       ctx.set_import_name(result_tensor,
                           generator.get_name(result_tensor, ctx));
     }
-    if (createResult) {
+    if (opts.createResult) {
       ctx.setLoadStrategy(result_tensor, LoadStrategy::Create, tree->id());
     } else {
       ctx.setLoadStrategy(result_tensor, LoadStrategy::Load, tree->id());
     }
+
+    std::vector<Index> batchIndices;
+    if (std::holds_alternative<IndexBatching>(opts.batching)) {
+      switch (std::get<IndexBatching>(opts.batching)) {
+        case IndexBatching::None:
+          break;
+        case IndexBatching::Fastest: {
+          // In ITF the fastest (aka: contiguous) indices are the first ones
+          // (row-major)
+          auto indices = result_tensor.const_indices() |
+                         std::ranges::views::reverse |
+                         std::ranges::views::drop(opts.min_unbatched_indices);
+          batchIndices.insert(batchIndices.end(), indices.begin(),
+                              indices.end());
+          break;
+        }
+        case IndexBatching::Slowest: {
+          auto indices = result_tensor.const_indices() |
+                         std::ranges::views::drop(opts.min_unbatched_indices);
+          batchIndices.insert(batchIndices.end(), indices.begin(),
+                              indices.end());
+          break;
+        }
+      }
+    } else {
+      batchIndices = std::get<decltype(batchIndices)>(opts.batching);
+    }
+
+    std::size_t num_batched = batchIndices.size();
+    ctx.set_batch_indices(std::move(batchIndices), tree->id());
+
+    if (num_batched > opts.max_batched) {
+      // Ctx might sort batch indices in a preferential way
+      batchIndices = ctx.batch_indices(tree->id());
+      batchIndices.resize(opts.max_batched);
+      ctx.set_batch_indices(std::move(batchIndices), tree->id());
+    }
   } else {
-    if (importResult) {
+    if (opts.importResult) {
       SEQUANT_ASSERT(result.has_label());
       ctx.set_import_name(result.result_as_variable(), toUtf8(result.label()));
     }
-    if (createResult) {
+    if (opts.createResult) {
       ctx.setLoadStrategy(result.result_as_variable(), LoadStrategy::Create,
                           tree->id());
     } else {
@@ -201,6 +293,9 @@ void generateITF(const json &blocks, std::string_view out_file,
   for (const json &current_block : blocks) {
     const std::string block_name = current_block.at("name");
 
+    const ProcessingOptions block_options =
+        extractProcessingOptions(current_block, defaults);
+
     spdlog::debug("Processing ITF code block '{}'", block_name);
 
     container::svector<ExportNode<>> results;
@@ -215,8 +310,8 @@ void generateITF(const json &blocks, std::string_view out_file,
                     result_name);
 
       if (!std::filesystem::exists(input_file)) {
-        throw std::runtime_error("Specified input file '" + input_file +
-                                 "' does not exist");
+        throw Exception("Specified input file '" + input_file +
+                        "' does not exist");
       }
 
       // Read input file
@@ -250,28 +345,28 @@ void generateITF(const json &blocks, std::string_view out_file,
           } else if (equality_method == "block") {
             replace<TensorBlockEqualComparator>(result, target, replacement);
           } else {
-            throw std::runtime_error("Unknown tensor_equality choice '" +
-                                     equality_method + "'");
+            throw Exception("Unknown tensor_equality choice '" +
+                            equality_method + "'");
           }
         }
       }
 
-      // SeQuant processing often assumes fully expanded/simplified expressions
-      // so at least for now, we start out with exactly that
+      // SeQuant processing often assumes fully expanded/simplified
+      // expressions so at least for now, we start out with exactly that
       rapid_simplify(result);
 
       spdlog::debug("Initial (mildly simplified) equation is:\n{}", result);
 
       if (std::string msg; !is_valid(result, &msg)) {
-        throw std::runtime_error("Input equation is invalid: " + msg);
+        throw Exception("Input equation is invalid: " + msg);
       }
 
-      ProcessingOptions options =
-          extractProcessingOptions(current_result, defaults);
+      const ProcessingOptions result_options =
+          extractProcessingOptions(current_result, block_options);
 
       std::vector<ResultExpr> resultParts =
-          options.term_by_term ? splitContributions(result)
-                               : std::vector<ResultExpr>{result};
+          result_options.term_by_term ? splitContributions(result)
+                                      : std::vector<ResultExpr>{result};
 
       std::unordered_set<Tensor> tensorsToSymmetrize;
 
@@ -280,7 +375,7 @@ void generateITF(const json &blocks, std::string_view out_file,
           spdlog::debug("Current contribution:\n{}", contribution);
         }
 
-        for (ResultExpr &current : postProcess(contribution, options)) {
+        for (ResultExpr &current : postProcess(contribution, result_options)) {
           spdlog::debug("Fully processed equation is:\n{}", current);
 
           if (*current.expression() == Constant(0)) {
@@ -320,12 +415,21 @@ void generateITF(const json &blocks, std::string_view out_file,
 
             spdlog::debug("After popping S tensor:\n{}", current);
 
-            results.push_back(prepareForExport(current, itfgen, context, false,
-                                               createResult));
+            results.push_back(prepareForExport(
+                current, itfgen, context,
+                {.importResult = false,
+                 .createResult = createResult,
+                 .batching = result_options.batching,
+                 .min_unbatched_indices = result_options.min_unbatched_indices,
+                 .max_batched = result_options.max_batched_indices}));
           } else {
             results.push_back(prepareForExport(
-                current, itfgen, context, current_result.value("import", true),
-                createResult));
+                current, itfgen, context,
+                {.importResult = current_result.value("import", true),
+                 .createResult = createResult,
+                 .batching = result_options.batching,
+                 .min_unbatched_indices = result_options.min_unbatched_indices,
+                 .max_batched = result_options.max_batched_indices}));
           }
         }
       }
@@ -338,47 +442,138 @@ void generateITF(const json &blocks, std::string_view out_file,
 
         spdlog::debug("Result symmetrization via\n{}", symmetrizedResult);
 
-        results.push_back(prepareForExport(symmetrizedResult, itfgen, context,
-                                           current_result.value("import", true),
-                                           true));
+        results.push_back(prepareForExport(
+            symmetrizedResult, itfgen, context,
+            {.importResult = current_result.value("import", true),
+             .createResult = true,
+             .batching = result_options.batching,
+             .min_unbatched_indices = result_options.min_unbatched_indices,
+             .max_batched = result_options.max_batched_indices}));
       }
     }
 
-    if (current_block.value("subexpression_elimination",
-                            defaults.subexpression_elimination)) {
-      const std::size_t min_usage =
-          current_block.value("min_cse_usage_count", defaults.min_cse_usage);
+    if (block_options.subexpression_elimination) {
+      const std::size_t min_usage = block_options.min_cse_usage;
 
-      opt::eliminate_common_subexpressions(
-          results,
-          [](const auto &expr) {
-            // Note: the lambda is needed to make the callable usable for
-            // ExprPtr as well as ResultExpr objects
-            return to_export_tree(expr);
-          },
-          [min_usage](const ExportNode<> &tree, std::size_t usage_count) {
-            if (usage_count < min_usage) {
-              return false;
+      opt::CSEOptions<ExportNode<>> opts;
+      opts.filter_predicate = [min_usage](const ExportNode<> &tree,
+                                          std::size_t usage_count) {
+        if (usage_count < min_usage) {
+          return false;
+        }
+
+        std::size_t num_tensors = 0;
+        tree.visit_leaf([&num_tensors](const ExportNode<> &node) {
+          num_tensors += node->is_tensor();
+        });
+
+        if (num_tensors < 2) {
+          // A subexpression that contains less than two tensors is not
+          // worth the hassle of creating, storing and reusing it.
+          // Specifically, this avoids CSE in symmetrization expressions
+          // such as
+          // 1/2 * R2u:eecc[abij] + 1/2 * R2u:eecc[baji]
+          // where 1/2 * R2u:eecc would be the kind of subexpression we
+          // don't want)
+          return false;
+        }
+
+        return true;
+      };
+
+      // Temporary buffer to facilitate batch-wise processing of CSEs
+      // We reverse the order to allow reversed order processing below
+      container::svector<ExportNode<>> tmp;
+      tmp.reserve(results.size());
+      tmp.insert(tmp.end(), std::make_move_iterator(results.rbegin()),
+                 std::make_move_iterator(results.rend()));
+      results.clear();
+
+      container::svector<ExportNode<>> current_buff;
+      while (!tmp.empty()) {
+        opts.batch_indices = context.batch_indices(tmp.back()->id());
+
+        current_buff.clear();
+
+        // Create batch of expressions that are batched over the same indices
+        while (!tmp.empty() &&
+               context.batch_indices(tmp.back()->id()) == opts.batch_indices) {
+          current_buff.emplace_back(std::move(tmp.back()));
+          tmp.pop_back();
+        }
+
+        std::vector<std::size_t> cse_positions =
+            opt::eliminate_common_subexpressions(
+                current_buff,
+                [](const auto &expr) {
+                  // Note: the lambda is needed to make the callable usable for
+                  // ExprPtr as well as ResultExpr objects
+                  return to_export_tree(expr);
+                },
+                opts);
+
+        if (!opts.batch_indices.empty()) {
+          // Configure batching indices for determined CSEs
+          for (std::size_t pos : cse_positions) {
+            const ExportNode<> &node = current_buff.at(pos);
+            if (!node->is_tensor()) {
+              continue;
             }
 
-            std::size_t num_tensors = 0;
-            tree.visit_leaf([&num_tensors](const ExportNode<> &node) {
-              num_tensors += node->is_tensor();
-            });
+            // Only batch over indices actually part of the result
+            auto current_indices = node->as_tensor().const_indices();
+            std::vector<Index> indices;
+            std::ranges::copy_if(
+                opts.batch_indices, std::back_inserter(indices),
+                [&current_indices](const Index &idx) {
+                  return std::ranges::find(current_indices, idx) !=
+                         current_indices.end();
+                });
 
-            if (num_tensors < 2) {
-              // A subexpression that contains less than two tensors is not
-              // worth the hassle of creating, storing and reusing it.
-              // Specifically, this avoids CSE in symmetrization expressions
-              // such as
-              // 1/2 * R2u:eecc[abij] + 1/2 * R2u:eecc[baji]
-              // where 1/2 * R2u:eecc would be the kind of subexpression we
-              // don't want)
-              return false;
+            if (indices.empty()) {
+              continue;
             }
 
-            return true;
-          });
+            context.set_batch_indices(std::move(indices), node->id());
+          }
+
+          // Sort by how many of the batched indices are contained in any given
+          // expression
+          // Since all non-CSEs are chose to have the same batching indices,
+          // their relative order remains unchanged. And since CSEs can't depend
+          // on each other (due to the way we determine them), their order is
+          // irrelevant as long as they are computed before they are used, which
+          // is guaranteed because the CSE can at most have as many batched
+          // indices as the associated main expression and hence they compare
+          // equivalent with the used comparator (and stable_sort guarantees
+          // retained relative order of equivalent elements).
+          std::ranges::stable_sort(
+              current_buff,
+              [&opts](const ExportNode<> &lhs, const ExportNode<> &rhs) {
+                if (!lhs->is_tensor() || !rhs->is_tensor()) {
+                  return rhs->is_tensor();
+                }
+                auto lhs_indices = lhs->as_tensor().const_indices();
+                auto rhs_indices = rhs->as_tensor().const_indices();
+
+                for (const Index &idx : opts.batch_indices) {
+                  const bool lhs_contains =
+                      std::ranges::find(lhs_indices, idx) != lhs_indices.end();
+                  const bool rhs_contains =
+                      std::ranges::find(rhs_indices, idx) != rhs_indices.end();
+
+                  if (lhs_contains != rhs_contains) {
+                    return rhs_contains;
+                  }
+                }
+                return false;
+              });
+        }
+
+        results.insert(results.end(),
+                       std::make_move_iterator(current_buff.begin()),
+                       std::make_move_iterator(current_buff.end()));
+      }
     }
 
     groups.emplace_back(std::move(results),
@@ -404,8 +599,8 @@ void generateCode(const json &details, const IndexSpaceMeta &spaceMeta) {
   if (boost::iequals(format, "itf")) {
     generateITF(details.at("code_blocks"), out_path, defaultOptions, spaceMeta);
   } else {
-    throw std::runtime_error("Unknown code generation target format '" +
-                             std::string(format) + "'");
+    throw Exception("Unknown code generation target format '" +
+                    std::string(format) + "'");
   }
 }
 
@@ -422,7 +617,7 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta) {
     const int size = current.at("size");
 
     if (size <= 0) {
-      throw std::runtime_error("Index space sizes must be > 0");
+      throw Exception("Index space sizes must be > 0");
     }
 
     IndexSpaceMeta::Entry entry;
@@ -451,7 +646,7 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta) {
 
 void process(const json &driver, IndexSpaceMeta &spaceMeta) {
   if (!driver.contains("index_spaces")) {
-    throw std::runtime_error("Missing index_spaces definition");
+    throw Exception("Missing index_spaces definition");
   }
 
   registerIndexSpaces(driver.at("index_spaces"), spaceMeta);
@@ -495,11 +690,11 @@ int main(int argc, char **argv) {
   CLI11_PARSE(app, argc, argv);
 
   if (!std::filesystem::exists(driver)) {
-    throw std::runtime_error("Specified driver file '" + driver.string() +
-                             "' does not exist");
+    throw Exception("Specified driver file '" + driver.string() +
+                    "' does not exist");
   } else if (!std::filesystem::is_regular_file(driver)) {
-    throw std::runtime_error("Specified driver file '" + driver.string() +
-                             "' is not a file");
+    throw Exception("Specified driver file '" + driver.string() +
+                    "' is not a file");
   }
 
   // Change directory to where the driver file is located so that all relative

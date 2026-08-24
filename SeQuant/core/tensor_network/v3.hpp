@@ -11,6 +11,7 @@
 #include <SeQuant/core/tensor_network/canonicals.hpp>
 #include <SeQuant/core/tensor_network/slot.hpp>
 #include <SeQuant/core/tensor_network/vertex.hpp>
+#include <SeQuant/core/utility/aggregate.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/algorithm/for_each.hpp>
@@ -332,6 +333,7 @@ class TensorNetworkV3 {
 
   /// options for generating Graph from an object of this type
   struct CreateGraphOptions {
+    SEQUANT_DESIGNATED_INIT_ONLY;
     /// pointer to the set of named indices (ordinarily,
     /// this includes all external indices);
     /// default is nullptr, which means use all external indices for

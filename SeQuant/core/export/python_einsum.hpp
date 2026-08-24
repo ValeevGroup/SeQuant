@@ -126,6 +126,8 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
 
   bool requires_named_sections() const override { return false; }
 
+  bool supports_index_batching() const override { return false; }
+
   DeclarationScope index_declaration_scope() const override {
     return DeclarationScope::Global;
   }
@@ -206,10 +208,6 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
                                            /*double_slash*/ false);
     if (power.conjugated()) s = wrap_conj(std::move(s));
     return s;
-  }
-
-  std::string wrap_conj(std::string s) const override {
-    return module_prefix() + "conj(" + std::move(s) + ")";
   }
 
   void unload(const Tensor &tensor, const Context &ctx) override {
@@ -623,6 +621,10 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
     }
 
     throw Exception("Unsupported expression type for Python scalar expression");
+  }
+
+  std::string wrap_conj(std::string s) const {
+    return module_prefix() + "conj(" + std::move(s) + ")";
   }
 };
 

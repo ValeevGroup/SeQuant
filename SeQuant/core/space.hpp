@@ -478,21 +478,53 @@ class IndexSpace {
   }
 
   const std::wstring &base_key() const { return base_key_; }
-  static std::wstring_view reduce_key(std::wstring_view key) {
-    const auto underscore_position = key.rfind(L'_');
-    if (underscore_position != std::wstring::npos) {  // key can be reduced
-      return key.substr(0, underscore_position);
-    } else {
-      return key;
+
+  template <std::ranges::contiguous_range View>
+    requires(std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
+                          char> ||
+             std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
+                          wchar_t>)
+  static auto reduce_key(View &&key) {
+    using std::ranges::begin;
+    using std::ranges::end;
+    using CharT = std::remove_cvref_t<std::ranges::range_value_t<View>>;
+
+    auto to_return = [](auto &&range) {
+      std::basic_string_view<CharT> view(&(*begin(range)),
+                                         std::ranges::size(range));
+
+      if constexpr (std::same_as<CharT, char>) {
+        return toUtf16(view);
+      } else {
+        return view;
+      }
+    };
+
+    const auto underscore_pos = std::ranges::find(key, static_cast<CharT>('_'));
+    if (underscore_pos != end(key)) {
+      // base key ends at underscore
+      return to_return(std::ranges::subrange(begin(key), underscore_pos));
     }
+
+    const auto digit_pos = std::ranges::find_if(key, [](CharT c) {
+      if constexpr (std::same_as<CharT, char>) {
+        return std::isdigit(c);
+      }
+      return std::iswdigit(c);
+    });
+
+    if (digit_pos != end(key) && digit_pos != begin(key)) {
+      // base key ends at first digit (unless the digit is the first character)
+      return to_return(std::ranges::subrange(begin(key), digit_pos));
+    }
+
+    // No ordinal to separate from key -> entire key is base key (reduced key)
+    return to_return(key);
   }
-  static std::wstring reduce_key(std::string_view key) {
-    const auto underscore_position = key.rfind(L'_');
-    if (underscore_position != std::string::npos) {  // key can be reduced
-      return toUtf16(key.substr(0, underscore_position));
-    } else {
-      return toUtf16(key);
-    }
+
+  template <typename CharT>
+  static auto reduce_key(const CharT *key) {
+    return reduce_key(std::basic_string_view<CharT>(key));
   }
 
   /// @return approximate size of a space

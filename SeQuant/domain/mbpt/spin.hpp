@@ -12,6 +12,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/utility/aggregate.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/overloads.hpp>
@@ -257,6 +258,7 @@ enum class BiorthogonalizationMethod {
 
 /// controls behavior of biorthogonal closed-shell spin-tracing
 struct ClosedShellCCSpintraceOptions {
+  SEQUANT_DESIGNATED_INIT_ONLY;
   BiorthogonalizationMethod method = BiorthogonalizationMethod::V2;
   /// set to true to use sequant::spintrace which does not assume closed-shell
   /// (spin-free) basis and thus has an exponential cost;

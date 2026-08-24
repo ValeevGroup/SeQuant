@@ -21,6 +21,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/aggregate.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/strong.hpp>
 
@@ -95,6 +96,7 @@ inline IndexSpace make_space(const IndexSpace::Type& type) {
 ///
 /// Used with `mbpt::OpMaker` and `mbpt::Operator` classes
 struct OpParams {
+  SEQUANT_DESIGNATED_INIT_ONLY;
   std::size_t order = 0;  ///< perturbation order, limited to range [0,9]
   std::optional<size_t> nbatch = std::nullopt;  ///< number of batching indices
   container::svector<std::size_t> batch_ordinals{};
@@ -525,6 +527,7 @@ using OpConnections = std::vector<std::pair<T, T>>;
 /// parameters in here which are only meaningful at the operator level.
 template <typename T>
 struct EVOptions {
+  SEQUANT_DESIGNATED_INIT_ONLY;
   /// List of pairs of operator labels to be connected; connections are defined
   /// left-to-right, i.e., pair `{opL,opR}` declares that `opL` and `opR` are to
   /// be connected when `opR` precedes `opL`, i.e. `opL` is to the left of `opR`
@@ -566,6 +569,17 @@ ExprPtr vac_av(ExprPtr expr, EVOptions<int> opts = {});
 mbpt::qns_t adjoint(mbpt::qns_t qns);
 
 namespace mbpt {
+
+/// @brief Normalization convention used in MBPT Operators
+/// An Op of rank {c,a}, where `c`/`a` are the number of creators/annihilators
+/// by default includes a normalization factor of 1/(c! a!).
+/// For some cases, we want to change that.
+enum class Normalization {
+  Default,    /// Include 1/(c! a!) prefactor
+  Implicit,   /// No prefactor, used for Â and Ŝ since their definition
+              /// includes the normalization
+  SquareRoot  /// Include sqrt(1/c! a!) prefactor
+};
 
 // clang-format off
 /// @brief makes a tensor-level many-body operator
@@ -641,12 +655,6 @@ class OpMaker {
     None
   };
 
-  /// Op of e.g. rank {c,a} by default includes normalization factor
-  /// of 1/(c! a!) ... sometimes we want to change normalization, e.g.
-  /// A and S include normalization factor in their definition,
-  /// so no need to include it explicitly
-  enum class Normalization { Default, Implicit };
-
   /// struct to hold the information about the operator
   struct OpInfo {
     container::svector<Index> creidxs;  //!< creator indices
@@ -666,9 +674,11 @@ class OpMaker {
   /// @param[in] opsymm_opt if given, controls whether (anti)symmetric
   /// tensor is returned; if \p opsymm_opt is not given then the default is
   /// determined by the MBPT context.
+  /// @param[in] normalization if given, controls the normalization behavior, else uses internal defaults. @see Normalization
   // clang-format on
   ExprPtr operator()(std::optional<UseDepIdx> dep_opt = {},
-                     std::optional<Symmetry> opsymm_opt = {}) const;
+                     std::optional<Symmetry> opsymm_opt = {},
+                     std::optional<Normalization> normalization = {}) const;
 
   /// @brief Creates an OpInfo struct containing creator and annihilator
   /// indices, normalization factor, symmetry, and dependency information.
@@ -683,7 +693,7 @@ class OpMaker {
                               const IndexSpaceContainer& ann_spaces,
                               UseDepIdx dep = UseDepIdx::None) {
     const bool symm = get_default_context().spbasis() ==
-                      SPBasis::Spinor;  // antisymmetrize if spin-orbital basis
+                      SPBasis::Spinor;  // antisymmetrize if spinor basis
     const auto dep_bra = dep == UseDepIdx::Bra;
     const auto dep_ket = dep == UseDepIdx::Ket;
 
@@ -729,6 +739,24 @@ class OpMaker {
     return OpInfo{creidxs, annidxs, mult, opsymm, dep};
   }
 
+  /// @brief Applies the prefactor implied by \p normalization (a function of
+  /// the normalization factor \p mult) to \p expr.
+  /// @see Normalization
+  static ExprPtr apply_normalization(ExprPtr expr, Normalization normalization,
+                                     sequant::intmax_t mult) {
+    switch (normalization) {
+      case Normalization::Default:
+        return ex<Constant>(rational{1, mult}) * expr;
+      case Normalization::Implicit:
+        return expr;
+      case Normalization::SquareRoot:
+        return ex<Power>(ex<Constant>(rational{1, mult}), rational{1, 2}) *
+               expr;
+      default:
+        SEQUANT_ABORT("unknown normalization option");
+    }
+  }
+
   /// @tparam TensorGenerator callable with signature
   /// `TensorGenerator(range<Index>, range<Index>, Symmetry)` that returns a
   /// Tensor with the respective bra/cre and ket/ann indices and of the given
@@ -751,16 +779,7 @@ class OpMaker {
     auto result =
         t * ex<NormalOperator<S>>(cre(op_info.creidxs), ann(op_info.annidxs),
                                   get_default_context().vacuum());
-    switch (normalization) {
-      case Normalization::Default:
-        result = ex<Constant>(rational{1, op_info.mult}) * result;
-        break;
-      case Normalization::Implicit:
-        break;
-      default:
-        abort();
-    }
-    return result;
+    return apply_normalization(result, normalization, op_info.mult);
   }
 
   /// @tparam TensorGenerator callable with signature
@@ -818,16 +837,7 @@ class OpMaker {
     auto result =
         t * ex<NormalOperator<S>>(cre(op_info.creidxs), ann(op_info.annidxs),
                                   get_default_context().vacuum());
-    switch (normalization) {
-      case Normalization::Default:
-        result = ex<Constant>(rational{1, op_info.mult}) * result;
-        break;
-      case Normalization::Implicit:
-        break;
-      default:
-        abort();
-    }
-    return result;
+    return apply_normalization(result, normalization, op_info.mult);
   }
 
   /// @tparam TensorGenerator callable with signature
@@ -1014,14 +1024,17 @@ ExprPtr Λ(std::size_t K, bool skip1 = false);
 /// @param nc number of creators
 /// @param cre_space IndexSpace on which creators act
 /// @param ann_space IndexSpace on which annihilators act
+/// @param norm normalization convention, see Normalization
 ExprPtr r(nann na, ncre nc,
           const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
-          const ann<IndexSpace>& ann_space = ann(get_hole_space(Spin::any)));
+          const ann<IndexSpace>& ann_space = ann(get_hole_space(Spin::any)),
+          Normalization norm = Normalization::Default);
 
 /// @brief Makes generic excitation operator
 /// @param np number of particle creators
 /// @param nh number of hole creators
-ExprPtr r(nₚ np, nₕ nh);
+/// @param norm normalization convention, see Normalization
+ExprPtr r(nₚ np, nₕ nh, Normalization norm = Normalization::Default);
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(r);
 
 /// @brief Makes generic left-hand replacement operator
@@ -1029,25 +1042,28 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(r);
 /// @param nc number of creators
 /// @param cre_space IndexSpace on which creators act
 /// @param ann_space IndexSpace on which annihilators act
-ExprPtr l(
-    nann na, ncre nc,
-    const cre<IndexSpace>& cre_space = cre(get_hole_space(Spin::any)),
-    const ann<IndexSpace>& ann_space = ann(get_particle_space(Spin::any)));
+/// @param norm normalization convention, see Normalization
+ExprPtr l(nann na, ncre nc,
+          const cre<IndexSpace>& cre_space = cre(get_hole_space(Spin::any)),
+          const ann<IndexSpace>& ann_space = ann(get_particle_space(Spin::any)),
+          Normalization norm = Normalization::Default);
 
 /// @brief Makes generic deexcitation operator
 /// @param np number of particle annihilators
 /// @param nh number of hole annihilators
-ExprPtr l(nₚ np, nₕ nh);
+/// @param norm normalization convention, see Normalization
+ExprPtr l(nₚ np, nₕ nh, Normalization norm = Normalization::Default);
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(l);
 
 // clang-format off
 /// makes projector onto excited bra (if \p np > 0 && \p nh > 0) or ket (if \p np < 0 && \p nh <0) manifold
 /// @param np number of particle creators (if > 0) or annihilators (< 0)
 /// @param nh number of hole creators (if > 0) or annihilators (< 0); if omitted, will use \p np
+/// @param norm normalization convention; if unset, uses the intrinsic Implicit normalization. @see Normalization
 /// @note if using spin-free basis, only supports particle-symmetric operators `K = Kh = Kp`, returns `S(-K)`
 /// else supports particle non-conserving operators and returns `A(-np, -nh)`
 // clang-format on
-ExprPtr P(nₚ np, nₕ nh);
+ExprPtr P(nₚ np, nₕ nh, std::optional<Normalization> norm = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(P);
 
 // clang-format off
@@ -1055,14 +1071,17 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(P);
 /// @param np number of particle creators (if > 0) or annihilators (< 0)
 /// @param nh number of hole creators (if > 0) or annihilators (< 0); if omitted, will use \p np
 /// (default is to set \p np to \p nh)
+/// @param norm normalization convention; if unset, uses the intrinsic Implicit normalization. @see Normalization
 /// @note supports particle non-conserving operators
 // clang-format on
-ExprPtr A(nₚ np, nₕ nh);
+ExprPtr A(nₚ np, nₕ nh, std::optional<Normalization> norm = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(A);
 
 /// @brief makes generic particle-symmetric excitation (if \p K > 0) or
 /// deexcitation (if \p K < 0) operator of rank `|K|`
-ExprPtr S(std::int64_t K);
+/// @param norm normalization convention; if unset, uses the intrinsic Implicit
+/// normalization. @see Normalization
+ExprPtr S(std::int64_t K, std::optional<Normalization> norm = {});
 
 /// @brief Makes perturbation operator
 /// @param R rank of the perturbation operator
@@ -1102,6 +1121,27 @@ ExprPtr λʼ(std::size_t K, const OpParams& params = {.order = 1});
 /// @pre If batching is used, ISR must contain batching space
 ExprPtr Λʼ(std::size_t K,
            const OpParams& params = {.order = 1, .skip1 = false});
+
+// clang-format off
+/// @brief Makes projector 1/√(np! nh!) A_{a1 a2 ... a_np}^{i1 i2 ... i_nh} a_{i1 i2 ... i_nh}^{a1 a2 ... a_np} (excitation operator).
+/// Unlike P, uses SquareRoot normalization (in the spin-orbital basis includes the 1/√(np! nh!) prefactor).
+/// @param np number of particle creators
+/// @param nh number of hole annihilators
+/// @note if using spin-free basis, only supports particle-number-conserving operators (\p np == \p nh), and the prefactor is 1/√(np!) (= 1/√(K!) with K = np = nh)
+// clang-format on
+ExprPtr δr(nₚ np, nₕ nh);
+DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(δr);
+
+// clang-format off
+/// @brief Makes projector 1/√(np! nh!) A^{a1 a2 ... a_np}_{i1 i2 ... i_nh} a^{i1 i2 ... i_nh}_{a1 a2 ... a_np} (deexcitation operator).
+/// Unlike P, uses SquareRoot normalization (in the spin-orbital basis includes the 1/√(np! nh!) prefactor).
+/// @param np number of particle annihilators
+/// @param nh number of hole creators
+/// @note if using spin-free basis, only supports particle-number-conserving operators (\p np == \p nh), and the prefactor is 1/√(np!) (= 1/√(K!) with K = np = nh)
+// clang-format on
+ExprPtr δl(nₚ np, nₕ nh);
+DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(δl);
+
 }  // namespace tensor
 }  // namespace op
 
@@ -1127,6 +1167,17 @@ ExprPtr F(bool use_tensor = true,
 /// A general operator of rank \p K
 ExprPtr θ(std::size_t K);
 
+/// @brief Makes a replacement operator of particle rank \p rank
+///        \f$ \{ \tilde{a}^{p_1 \dots p_r}_{p_{r+1} \dots p_{2r}} \} \f$ over
+///        the complete space.
+/// @note This is a single replacer, not a sum: no amplitude tensor and no
+///       normalization.
+/// @note The indices stay free and their ordinals are fixed, so callers can
+///       rely on them: creators use `1 ... rank`, annihilators use
+///       `rank+1 ... 2*rank`.
+/// @param rank particle rank (>= 1)
+ExprPtr ã(std::size_t rank);
+
 /// Makes particle-conserving excitation operator of rank \p K
 ExprPtr t(std::size_t K);
 
@@ -1146,14 +1197,17 @@ ExprPtr Λ(std::size_t K, bool skip1 = false);
 /// @param nc number of creators
 /// @param cre_space IndexSpace on which creators act
 /// @param ann_space IndexSpace on which annihilators act
+/// @param norm normalization convention, see Normalization
 ExprPtr r(nann na, ncre nc,
           const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
-          const ann<IndexSpace>& ann_space = ann(get_hole_space(Spin::any)));
+          const ann<IndexSpace>& ann_space = ann(get_hole_space(Spin::any)),
+          Normalization norm = Normalization::Default);
 
 /// @brief Makes generic excitation operator
 /// @param np number of particle creators
 /// @param nh number of hole creators
-ExprPtr r(nₚ np, nₕ nh);
+/// @param norm normalization convention, see Normalization
+ExprPtr r(nₚ np, nₕ nh, Normalization norm = Normalization::Default);
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(r);
 
 /// @brief Makes generic deexcitation operator
@@ -1161,15 +1215,17 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(r);
 /// @param nc number of creators
 /// @param cre_space IndexSpace on which creators act
 /// @param ann_space IndexSpace on which annihilators act
-ExprPtr l(
-    nann na, ncre nc,
-    const cre<IndexSpace>& cre_space = cre(get_hole_space(Spin::any)),
-    const ann<IndexSpace>& ann_space = ann(get_particle_space(Spin::any)));
+/// @param norm normalization convention, see Normalization
+ExprPtr l(nann na, ncre nc,
+          const cre<IndexSpace>& cre_space = cre(get_hole_space(Spin::any)),
+          const ann<IndexSpace>& ann_space = ann(get_particle_space(Spin::any)),
+          Normalization norm = Normalization::Default);
 
 /// @brief Makes generic deexcitation operator
 /// @param np number of particle annihilators
 /// @param nh number of hole annihilators
-ExprPtr l(nₚ np, nₕ nh);
+/// @param norm normalization convention, see Normalization
+ExprPtr l(nₚ np, nₕ nh, Normalization norm = Normalization::Default);
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(l);
 
 /// @brief Makes sum of generic right-hand replacement operators up to max rank
@@ -1177,16 +1233,19 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(l);
 /// @param nc number of creators
 /// @param cre_space IndexSpace on which creators act
 /// @param ann_space IndexSpace on which annihilators act
+/// @param norm normalization convention, see Normalization
 /// @return `r(na,nc) + r(na-1,nc-1) + ...`
 ExprPtr R(nann na, ncre nc,
           const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
-          const ann<IndexSpace>& ann_space = ann(get_hole_space(Spin::any)));
+          const ann<IndexSpace>& ann_space = ann(get_hole_space(Spin::any)),
+          Normalization norm = Normalization::Default);
 
 /// @brief Makes sum of generic excitation operators up to max rank
 /// @param np max number of particle creators
 /// @param nh max number of hole creators
+/// @param norm normalization convention, see Normalization
 /// @return `r(np,nh) + r(np-1,nh-1) + ...`
-ExprPtr R(nₚ np, nₕ nh);
+ExprPtr R(nₚ np, nₕ nh, Normalization norm = Normalization::Default);
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(R);
 
 /// @brief Makes sum of generic "left-hand" replacement operators up to max rank
@@ -1194,41 +1253,47 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(R);
 /// @param nc number of creators
 /// @param cre_space IndexSpace on which creators act
 /// @param ann_space IndexSpace on which annihilators act
+/// @param norm normalization convention, see Normalization
 /// @return `l(na,nc) + l(na-1,nc-1) + ...`
-ExprPtr L(
-    nann na, ncre nc,
-    const cre<IndexSpace>& cre_space = cre(get_hole_space(Spin::any)),
-    const ann<IndexSpace>& ann_space = ann(get_particle_space(Spin::any)));
+ExprPtr L(nann na, ncre nc,
+          const cre<IndexSpace>& cre_space = cre(get_hole_space(Spin::any)),
+          const ann<IndexSpace>& ann_space = ann(get_particle_space(Spin::any)),
+          Normalization norm = Normalization::Default);
 
 /// @brief Makes sum of deexcitation operators up to max rank
 /// @param np max number of particle annihilators
 /// @param nh max number of hole annihilators
+/// @param norm normalization convention, see Normalization
 /// @return `l(np,nh) + l(np-1,nh-1) + ...`
-ExprPtr L(nₚ np, nₕ nh);
+ExprPtr L(nₚ np, nₕ nh, Normalization norm = Normalization::Default);
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(L);
 
 // clang-format off
 /// makes projector onto excited bra (if \p np > 0 && \p nh > 0) or ket (if \p np < 0 && \p nh <0) manifold
 /// @param np number of particle creators (if > 0) or annihilators (< 0)
 /// @param nh number of hole creators (if > 0) or annihilators (< 0); if omitted, will use \p np
+/// @param norm normalization convention; if unset, uses the intrinsic Implicit normalization. @see Normalization
 /// @note if using spin-free basis, only supports particle-symmetric operators `K = Kh = Kp`, returns `S(-K)`
 /// else supports particle non-conserving operators and returns `A(-np, -nh)`
 // clang-format on
-ExprPtr P(nₚ np, nₕ nh);
+ExprPtr P(nₚ np, nₕ nh, std::optional<Normalization> norm = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(P);
 
 // clang-format off
 /// @brief makes generic bra/ket-antisymmetric excitation (if \p nh > 0 && \p np > 0) or deexcitation (if \p nh < 0 && \p np < 0) operator
 /// @param np number of particle creators (if > 0) or annihilators (< 0)
 /// @param nh number of hole creators (if > 0) or annihilators (< 0); if omitted, will use \p np
+/// @param norm normalization convention; if unset, uses the intrinsic Implicit normalization. @see Normalization
 /// @note supports particle non-conserving operators
 // clang-format on
-ExprPtr A(nₚ np, nₕ nh);
+ExprPtr A(nₚ np, nₕ nh, std::optional<Normalization> norm = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(A);
 
 /// @brief makes generic particle-symmetric excitation (if \p K > 0) or
 /// deexcitation (if \p K < 0) operator of rank `|K|`
-ExprPtr S(std::int64_t K);
+/// @param norm normalization convention; if unset, uses the intrinsic Implicit
+/// normalization. @see Normalization
+ExprPtr S(std::int64_t K, std::optional<Normalization> norm = {});
 
 /// @brief Makes perturbation operator
 /// @param R rank of the perturbation operator
@@ -1268,6 +1333,26 @@ ExprPtr λʼ(std::size_t K, const OpParams& params = {.order = 1});
 /// @pre If batching is used, ISR must contain batching space
 ExprPtr Λʼ(std::size_t K,
            const OpParams& params = {.order = 1, .skip1 = false});
+
+// clang-format off
+/// @brief Makes projector with tensor form 1/√(np! nh!) A_{a1 a2 ... a_np}^{i1 i2 ... i_nh} a_{i1 i2 ... i_nh}^{a1 a2 ... a_np} (excitation operator).
+/// Unlike P, uses SquareRoot normalization (in the spin-orbital basis includes the 1/√(np! nh!) prefactor).
+/// @param np number of particle creators
+/// @param nh number of hole annihilators
+/// @note if using spin-free basis, only supports particle-number-conserving operators (\p np == \p nh), and the prefactor is 1/√(np!) (= 1/√(K!) with K = np = nh)
+// clang-format on
+ExprPtr δr(nₚ np, nₕ nh);
+DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(δr);
+
+// clang-format off
+/// @brief Makes projector with tensor form 1/√(np! nh!) A^{a1 a2 ... a_np}_{i1 i2 ... i_nh} a^{i1 i2 ... i_nh}_{a1 a2 ... a_np} (deexcitation operator).
+/// Unlike P, uses SquareRoot normalization (in the spin-orbital basis includes the 1/√(np! nh!) prefactor).
+/// @param np number of particle annihilators
+/// @param nh number of hole creators
+/// @note if using spin-free basis, only supports particle-number-conserving operators (\p np == \p nh), and the prefactor is 1/√(np!) (= 1/√(K!) with K = np = nh)
+// clang-format on
+ExprPtr δl(nₚ np, nₕ nh);
+DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(δl);
 
 /// @brief computes the quantum number change effected by a given Operator or
 /// Operator Product when applied to the vacuum state

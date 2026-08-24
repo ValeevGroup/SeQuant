@@ -12,6 +12,7 @@
 #include <SeQuant/core/tensor_network/canonicals.hpp>
 #include <SeQuant/core/tensor_network/slot.hpp>
 #include <SeQuant/core/tensor_network/vertex.hpp>
+#include <SeQuant/core/utility/aggregate.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/view/indirect.hpp>
@@ -463,6 +464,7 @@ class TensorNetworkV1 {
 
   /// options for generating bliss Graph
   struct BlissGraphOptions {
+    SEQUANT_DESIGNATED_INIT_ONLY;
     /// pointer to the set of named indices (ordinarily,
     /// this includes all external indices);
     ///            default is nullptr, which means use all external indices for

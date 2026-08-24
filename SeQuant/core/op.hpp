@@ -955,6 +955,13 @@ class NormalOperator : public Operator<S>,
   }
 };
 
+template <>
+const container::svector<std::wstring> &
+NormalOperator<Statistics::BoseEinstein>::labels();
+template <>
+const container::svector<std::wstring> &
+NormalOperator<Statistics::FermiDirac>::labels();
+
 static_assert(
     is_tensor<NormalOperator<Statistics::FermiDirac>>,
     "The NormalOperator<Statistics::FermiDirac> class does not fulfill the "
@@ -1001,7 +1008,7 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>,
   using base_type::operator[];
 
   /// constructs an empty sequence
-  NormalOperatorSequence() : vacuum_(get_default_context(S).vacuum()) {}
+  NormalOperatorSequence() { check_vacuum(); }
 
   /// constructs from a parameter pack
   template <typename... NOps,
@@ -1061,14 +1068,22 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>,
     return Expr::get_type_id<NormalOperatorSequence>();
   };
 
+  ExprPtr clone() const override { return ex<NormalOperatorSequence>(*this); }
+
   friend bool operator==(const NormalOperatorSequence &nopseq1,
                          const NormalOperatorSequence &nopseq2) {
-    return static_cast<base_type>(nopseq1) == static_cast<base_type>(nopseq2);
+    return nopseq1.vacuum() == nopseq2.vacuum() &&
+           static_cast<const base_type &>(nopseq1) ==
+               static_cast<const base_type &>(nopseq2);
   }
 
  private:
   Vacuum vacuum_ = Vacuum::Physical;
   /// ensures that all operators use same vacuum, and sets vacuum_
+  /// @note an empty sequence has no constituent operator to take the vacuum
+  ///       from, hence it uses the default context's vacuum; every constructor
+  ///       must call this so that empty sequences agree on their vacuum, which
+  ///       is their only distinguishing state (@sa operator==)
   void check_vacuum() {
     const bool all_same_vaccum =
         std::ranges::adjacent_find(*this, std::ranges::not_equal_to{},
@@ -1082,22 +1097,13 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>,
           "NormalOperator objects to use same vacuum");
     }
 
-    if (size() > 0) {
-      vacuum_ = this->cbegin()->vacuum();
-    }
+    vacuum_ =
+        size() > 0 ? this->cbegin()->vacuum() : get_default_context(S).vacuum();
   }
 
   bool static_equal(const Expr &that) const override {
     const auto &that_cast = static_cast<const NormalOperatorSequence &>(that);
-    if (this->vacuum() == that_cast.vacuum()) {
-      if (this->empty()) return true;
-      if (this->hash_value() == that.hash_value())
-        return static_cast<const base_type &>(*this) ==
-               static_cast<const base_type &>(*this);
-      else
-        return false;
-    } else
-      return false;
+    return *this == that_cast;
   }
 };
 

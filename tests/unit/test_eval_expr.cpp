@@ -200,6 +200,30 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
                    TensorSymmetries{.column = ColumnSymmetry::Symm}));
   }
 
+  SECTION(
+      "scalar * tensor product node inherits the tensor operand canon_phase") {
+    // Regression: binarize(Product) hardcoded canon_phase=1 for scalar*tensor
+    // nodes instead of inheriting the tensor operand's real phase.
+    // Subexpression reuse relies on that phase to reconcile sign-differing
+    // duplicates, so the wrong phase silently produced a wrong result.
+    auto check_phase_inheritance = [](std::wstring_view expr_str) {
+      auto res = deserialize<ResultExpr>(
+          std::wstring{L"Result{a3;i1,i2} = "} + std::wstring{expr_str},
+          {.def_perm_symm = Symmetry::Antisymm});
+      auto root = binarize(res);
+      auto const& tensor_operand =
+          root.left()->is_tensor() ? root.left() : root.right();
+      // Sanity: this contraction must exercise phase=-1, else the CHECK
+      // below would pass trivially even with the bug reintroduced.
+      REQUIRE((int)tensor_operand->canon_phase() == -1);
+      CHECK((int)root->canon_phase() == (int)tensor_operand->canon_phase());
+    };
+    check_phase_inheritance(
+        L"1/2 R{a2;i1,i3} g{i3,a3;i2,a2}");  // numeric scalar
+    check_phase_inheritance(
+        L"R{a2;i1,i3} g{i3,a3;i2,a2} λ");  // Variable scalar
+  }
+
   SECTION("Adjoint op") {
     // A Nonsymm-braket tensor's adjoint() relabels its label with U+207A '⁺'
     // (Tensor::adjoint() at expressions/tensor.cpp:25-41). When that leaf
