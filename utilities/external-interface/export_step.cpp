@@ -139,7 +139,8 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
   std::iota(access_order.begin(), access_order.end(), 0);
 
   // Sort inputs in partitions of contributions to the same result
-  std::ranges::sort(access_order, ExportTreeDataCompare{}, to_export_data);
+  std::ranges::stable_sort(access_order, ExportTreeDataCompare{},
+                           to_export_data);
 
   std::vector<ExpressionGroup<>> groups;
   for (std::size_t idx : access_order) {
