@@ -92,7 +92,7 @@ function(target_set_optimization_flags TARGET)
 		# For static/object libraries we only want to enable LTO by default, if we can create
 		# "fat" object files. Those can still be linked without LTO and hence shouldn't
 		# break any downstream use.
-		set(ENABLE_LTO ${LTO_FLAG_SUPPORTED})
+		set(ENABLE_LTO ${FAT_LTO_FLAG_SUPPORTED})
 	elseif(LTO_FLAG_SUPPORTED OR CMAKE_SUPPORTS_COMPILER_LTO)
 		# Anything but static/object libraries is also linked by us and
 		# hence enabling LTO doesn't affect downstream compatibility
