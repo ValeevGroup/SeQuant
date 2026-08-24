@@ -1186,8 +1186,10 @@ SECTION("MRSO") {
     const Index p{L"p_1"};  // complete space (spans core + active + virtual)
     const Index q{L"p_2"};
     // creator index (p) -> tensor bra, annihilator index (q) -> tensor ket
+    // column symmetry is spelled out to match how mbpt::OpMaker builds h
+    // everywhere else; the programmatic default is the conservative Nonsymm
     auto H1 = ex<Tensor>(L"h", bra{p}, ket{q}, Symmetry::Nonsymm,
-                         BraKetSymmetry::Conjugate) *
+                         BraKetSymmetry::Conjugate, ColumnSymmetry::Symm) *
               fcrex(p) * fannx(q);
     ExprPtr result;
     REQUIRE_NOTHROW(result = t::ref_av(H1));

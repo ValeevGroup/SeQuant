@@ -350,6 +350,17 @@ struct Transformer {
          tensor.symmetry.value().braket_symm == ast::SymmetrySpec::unspecified))
       braket_symm = BraKetSymmetry::Nonsymm;
 
+    // the reserved metric and Kronecker tensors are Hermitian by definition;
+    // force that rather than inheriting the Context's default Hermiticity, so
+    // that a deserialized s/δ equals the one make_overlap()/make_kronecker()
+    // builds (they participate in the tensor hash, so a mismatch would keep
+    // otherwise-equal terms from merging)
+    if ((tensor.name == reserved::overlap_label() ||
+         tensor.name == reserved::kronecker_label()) &&
+        (!tensor.symmetry.has_value() ||
+         tensor.symmetry.value().braket_symm == ast::SymmetrySpec::unspecified))
+      braket_symm = Hermiticity::Hermitian;
+
     // Dispatch to correct Tensor constructor (taking either BraKetSymmetry or
     // Hermiticity)
     return std::visit(

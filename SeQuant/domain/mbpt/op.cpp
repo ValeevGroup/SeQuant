@@ -1423,12 +1423,13 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
             braidxs.size() ==
             ketidxs.size());  // need to handle particle # violating case?
         const auto rank = braidxs.size();
-        // an RDM over indistinguishable particles is particle (column)
-        // symmetric (which the Antisymm branch implies, but Nonsymm does not)
+        // an RDM is Hermitian, and is particle (column) symmetric since it
+        // is over indistinguishable particles (which the Antisymm branch
+        // implies, but Nonsymm does not)
         return ex<Tensor>(
             rdm_label, bra(std::move(braidxs)), ket(std::move(ketidxs)),
             rank > 1 && spinor ? Symmetry::Antisymm : Symmetry::Nonsymm,
-            std::nullopt, ColumnSymmetry::Symm);
+            Hermiticity::Hermitian, ColumnSymmetry::Symm);
       };
 
       if (exptr.template is<FNOperator>()) {

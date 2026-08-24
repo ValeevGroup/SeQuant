@@ -1148,20 +1148,26 @@ static_assert(is_tensor<Tensor>,
 using TensorPtr = std::shared_ptr<Tensor>;
 
 inline ExprPtr make_overlap(const Index &bra_index, const Index &ket_index) {
-  // overlap tensors are particle (column) symmetric by convention, and must
-  // compare equal to the same overlap obtained by deserialization
-  return ex<Tensor>(Tensor(reserved::overlap_label(), bra{bra_index},
-                           ket{ket_index}, aux{}, Tensor::reserved_tag{},
-                           TensorSymmetries{.perm = Symmetry::Nonsymm,
-                                            .column = ColumnSymmetry::Symm}));
+  // an overlap is Hermitian and particle (column) symmetric by definition;
+  // both are stated here so that it compares equal to the same overlap
+  // obtained by deserialization
+  return ex<Tensor>(
+      Tensor(reserved::overlap_label(), bra{bra_index}, ket{ket_index}, aux{},
+             Tensor::reserved_tag{},
+             TensorSymmetries{.perm = Symmetry::Nonsymm,
+                              .hermiticity = Hermiticity::Hermitian,
+                              .column = ColumnSymmetry::Symm}));
 }
 
 inline ExprPtr make_kronecker(const Index &bra_index, const Index &ket_index) {
-  // as in make_overlap, a Kronecker delta is particle (column) symmetric
-  return ex<Tensor>(Tensor(reserved::kronecker_label(), bra{bra_index},
-                           ket{ket_index}, aux{}, Tensor::reserved_tag{},
-                           TensorSymmetries{.perm = Symmetry::Nonsymm,
-                                            .column = ColumnSymmetry::Symm}));
+  // as in make_overlap, a Kronecker delta is Hermitian and particle (column)
+  // symmetric
+  return ex<Tensor>(
+      Tensor(reserved::kronecker_label(), bra{bra_index}, ket{ket_index}, aux{},
+             Tensor::reserved_tag{},
+             TensorSymmetries{.perm = Symmetry::Nonsymm,
+                              .hermiticity = Hermiticity::Hermitian,
+                              .column = ColumnSymmetry::Symm}));
 }
 
 /// @name (anti)symmetrization operator factories
