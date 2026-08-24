@@ -18,6 +18,7 @@
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
@@ -416,10 +417,12 @@ std::string scope_annot(BatchContext const& active) {
 ///   scope={..}
 /// - canon = node->canon_indices() full_labels: THIS occurrence's array layout
 ///   (labels are valid here -- they identify the layout the ordinals index).
-/// - sliced = for each canon-index POSITION p whose space().base_key() matches
-///   an open batch loop in \p active, `p:base_key`. Ordinal:base-space-key
-///   ONLY -- never a bare label (labels are tree-scoped; ordinals are
-///   DAG-safe).
+/// - sliced = this node's OWN batched modes -- its \c sliced_modes() stamp --
+///   as `p:base_key` at each stamped mode's canonical POSITION p.
+///   Ordinal:base-space-key ONLY -- never a bare label (labels are tree-scoped;
+///   ordinals are DAG-safe). This is the value's truthful batched set, NOT a
+///   space-match against the open loops (which would misleadingly flag every
+///   same-space mode, e.g. a spectator's contracted occ under an occ loop).
 /// - scope = the open loops, outer..inner (see scope_annot).
 template <meta::eval_node Node, typename BatchContext>
 std::string slice_home_annot(Node const& node, BatchContext const& active) {
@@ -429,14 +432,15 @@ std::string slice_home_annot(Node const& node, BatchContext const& active) {
     canon += toUtf8(ix.full_label());
     canon += " ";
   }
-  for (std::size_t p = 0; p < idxs.size(); ++p) {
-    auto const bk = idxs[p].space().base_key();
-    for (auto const& e : active)
-      if (e.axis.space().base_key() == bk) {
-        sliced += std::format("{}:{} ", p, toUtf8(std::wstring(bk)));
-        break;
-      }
-  }
+  container::svector<std::size_t> spos;
+  for (auto const& sm : node->sliced_modes())
+    if (auto const p = index_position(node, sm);
+        p && std::find(spos.begin(), spos.end(), *p) == spos.end())
+      spos.push_back(*p);
+  std::sort(spos.begin(), spos.end());
+  for (auto const p : spos)
+    sliced += std::format("{}:{} ", p,
+                          toUtf8(std::wstring(idxs[p].space().base_key())));
   auto annot = std::format("canon=[{}] sliced=[{}] {}", canon, sliced,
                            scope_annot(active));
   // Append any schedule-derived per-node metadata (e.g. the value's remat
@@ -695,32 +699,30 @@ ResultPtr evaluate_impl(Node const& node,         //
     // one parent link, so hops <= d always. A violation would underflow
     // `d - hops` and silently UNDER-slice (oversized result); assert loudly.
     SEQUANT_ASSERT(hops <= d);
+    bool const _home_diag = std::getenv("SEQUANT_UT_HOME_DIAG") != nullptr;
+    if (_home_diag && d > 0) {
+      std::cerr << "[HOME] node#" << (nd->hash_value() % 100000u)
+                << " use_d=" << d << " hops=" << hops
+                << " home_d=" << (d - hops) << " scope=[";
+      for (std::size_t j = 0; j < d; ++j)
+        std::cerr << toUtf8(std::wstring(ctx[j].axis.space().base_key()))
+                  << "@o" << ctx[j].level.ordinal
+                  << (j < d - hops ? "(home) " : "(x) ");
+      std::cerr << "] canon=[";
+      for (auto const& ix : nd->canon_indices())
+        std::cerr << toUtf8(ix.full_label()) << " ";
+      std::cerr << "]" << std::endl;
+    }
     for (std::size_t i = d - hops; i < d; ++i) {
       auto const& axis = ctx[i].axis;
       auto const& blk = ctx[i].range;
-      // A batch context entry names a DAG-scope axis by a single canonical
-      // Index. When the cache asks for SPACE-mapped slicing (only the ordered
-      // executor, which co-evaluates a whole type-bucketed block under ONE
-      // canonical block.axis), a node that does not carry the exact axis is
-      // sliced on its OWN physical mode of the axis's space (member_axis.hpp)
-      // -- else, for the whole-scope evaluator that pushes each member's own
-      // exact axis, exact-match precision is kept (a same-space index that is
-      // not this level's loop must stay unsliced). Default (exact-only) is
-      // byte-identical to before the space-map flag.
+      // Diagnostic-only exact match of this batch-context axis on nd (feeds the
+      // [SLICE] trace below). The ACTUAL slice mode is p_new, resolved off the
+      // loop-colored seam further down -- eval never deduces a slice mode from
+      // an index's space, so a node that does not carry the exact axis simply
+      // does not match here.
       auto p = index_position(nd, axis);
       bool const exact = p.has_value();
-      if (!p && cache.space_mapped_slicing())
-        // Space-map fallback (ordered executor): slice the node on its OWN mode
-        // of the axis's space -- but ONLY a mode the optimizer actually batched
-        // (in the node's sliced_modes()), never an un-stamped same-space index.
-        // Occ is the first space carrying MIXED roles (external spectator +
-        // internal contracted), and slicing the internal contracted occ would
-        // ask the runtime to realize a reduction the batch never emitted -> the
-        // contraction waits forever for full-mode tiles. Honoring the stamp
-        // keeps this index-generic, not space-generic. (Aux/PAO spaces carry
-        // only contracted indices, all batched, so this is a no-op there.)
-        p = eval::detail::sliced_result_position_type(
-            nd, std::wstring(axis.space().base_key()));
       if (p && std::getenv("SEQUANT_UT_SLICE_DIAG"))
         std::cerr << "[SLICE] node#" << (nd->hash_value() % 100000u)
                   << " space=" << toUtf8(axis.space().base_key())
@@ -738,11 +740,10 @@ ResultPtr evaluate_impl(Node const& node,         //
       //    LAYOUT (design sec.4) rather than the per-cell mode_to_level map --
       //    the loop-colored slice seam maps this loop (ctx[i].level) to the
       //    fetched value's OWN sliced-mode Index, whose physical slot on `nd`
-      //    is then read directly (index_position), or, when a CSE-folded
-      //    occurrence binds the space under a relabeled physical index the
-      //    seam's designated label does not literally match, space-mapped onto
-      //    nd's own mode of that space -- the SAME space fallback the map path
-      //    used. A value with no seam entry for this loop (an unsliced value,
+      //    is then read directly (index_position). The seam returns the mode
+      //    nd actually carries for this loop; there is NO space-deduction
+      //    fallback -- eval never guesses a slice mode. A value with no seam
+      //    entry for this loop (an unsliced value,
       //    or one built inside this loop -- the built-within participation
       //    gate) leaves p_new nullopt => full/unsliced. If the seam is unwired
       //    (a direct caller that did not set it) p_new likewise stays nullopt;
@@ -753,20 +754,14 @@ ResultPtr evaluate_impl(Node const& node,         //
       } else if (auto const* seam = cache.loop_colored_slice_seam()) {
         if (std::optional<LoopId> const loop =
                 seam->loop_of_level(ctx[i].level))
-          // PILLAR 2 (consumer-aware slice-mode binding): pass the current
-          // consumer so a SYMMETRIC shared value -- whose two free occ modes
-          // are BOTH stamped under this one occ loop -- is bound to THIS
-          // use-site's own mode, not the consumer-blind first match (design
-          // sec.2, the w8 fix). For every single-mode-per-loop value (aux and
-          // all non-symmetric values) mode_of ignores the consumer and returns
-          // the one mode, so those fetches stay byte-identical.
-          if (std::optional<Index> const m = seam->mode_of(
-                  nd->hash_value(), *loop, cache.current_consumer())) {
-            p_new = index_position(nd, *m);
-            if (!p_new && cache.space_mapped_slicing())
-              p_new = eval::detail::sliced_result_position_type(
-                  nd, std::wstring(m->space().base_key()));
-          }
+          // FRAME-CORRECT (2026-08-24 slot-slicing design): mode_of returns the
+          // sliced mode's PHYSICAL POSITION, computed at schedule time in the
+          // fetched value's OWN index-frame -- per-occurrence via the consumer
+          // for a divergent (relabeled) or symmetric value. It is used directly
+          // as the slice mode here: NO index_position, and NO re-matching a
+          // canonical Index label against this (differently-framed) node.
+          p_new =
+              seam->mode_of(nd->hash_value(), *loop, cache.current_consumer());
       }
       // Task 7-part-2 / Task 8: the transitional equivalence assert this used
       // to cross-check against the old per-cell mode_to_level map is RETIRED,
@@ -774,6 +769,14 @@ ResultPtr evaluate_impl(Node const& node,         //
       // With per-consumer binding, the loop-colored resolution
       // INTENTIONALLY diverges from what the old consumer-blind map would
       // have given for the symmetric case -- that divergence IS the fix.
+      if (_home_diag)
+        std::cerr << "  [HOME-SLICE] node#" << (nd->hash_value() % 100000u)
+                  << " crossed-axis="
+                  << toUtf8(std::wstring(ctx[i].axis.space().base_key()))
+                  << "@o" << ctx[i].level.ordinal
+                  << " -> p_new=" << (p_new ? std::to_string(*p_new) : "none")
+                  << " blk=[" << blk.first << "," << blk.second << ")"
+                  << std::endl;
       if (p_new) {
         // Test-only witness of the consumer-aware slice decision (PILLAR 2):
         // no-op unless an observer is installed.
@@ -968,6 +971,26 @@ ResultPtr evaluate_impl(Node const& node,         //
             // no-op, so this stays byte-identical to apply_phase() alone there.
             finalize(slice_to_use(apply_phase(f.node, m.ptr), f.node, m.hops));
             break;
+          }
+          // Resident-reads invariant (read-from-home ordered scratches): a
+          // non-leaf value other than this call's own top node MUST already be
+          // resident -- it was statically scheduled and built by a prior step.
+          // A miss here means it vanished (premature eviction / under-predicted
+          // use count in ordered_home_reads), which must be a hard error, never
+          // a silent recompute or empty-array serve that hangs a downstream
+          // contraction. Leaves (evaluated fresh) and the top node (being built
+          // now) legitimately miss.
+          if (cache.require_resident_reads() && !f.node.leaf() &&
+              f.node->hash_value() != node->hash_value()) {
+            std::string lbl;
+            for (auto const& ix : f.node->canon_indices())
+              lbl += toUtf8(ix.full_label()) + " ";
+            throw Exception(
+                "evaluate_impl: a read-from-home value vanished before use "
+                "(premature eviction -- likely an under-predicted use count in "
+                "ordered_home_reads); a missing value must never be served as "
+                "an empty array. canon=[" +
+                lbl + "]");
           }
           f.store_after = cache.exists(f.node);
         }
@@ -1228,6 +1251,16 @@ ResultPtr evaluate_impl(Node const& node,         //
           // captures execution, not just dispatch. No-op when the gate is off.
           static bool const force_sync =
               std::getenv("SEQUANT_UT_FORCE_SYNC") != nullptr;
+          // DIAGNOSTIC (SEQUANT_UT_PROD_TR): log operand tiled ranges BEFORE
+          // the contraction, so a product that DEADLOCKS inside the backend
+          // einsum (a sliced-vs-unsliced mode mismatch whose TA_ASSERT is
+          // elided in Release) still surfaces its operands -- the post-prod
+          // trace never fires for it because prod() never returns.
+          if (std::getenv("SEQUANT_UT_PROD_TR"))
+            std::cerr << "[PROD-PRE] " << toUtf8(f.node->label()) << "\n    L."
+                      << f.left->trange_annot() << "\n    R."
+                      << (f.right ? f.right->trange_annot() : std::string{})
+                      << std::endl;
           auto const _tp0 =
               std::chrono::steady_clock::now();  // node-eval start
           if (auto const& hook = cache.shaped_product_hook(); hook) {
@@ -1301,15 +1334,19 @@ ResultPtr evaluate_impl(Node const& node,         //
           if (f.right && !cache.chain_holds(f.right))
             hwmark += log::bytes(f.right).value;
           hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
-          log::eval(log::EvalStat{.mode = log::eval_mode(f.node),
-                                  .time = time,
-                                  .mem_result = log::bytes(result),
-                                  .mem_alloc = log::bytes(result),
-                                  .mem_hwmark = {cache.note_working_set(
-                                      hwmark, f.node->hash_value())},
-                                  .mem_left = log::bytes(f.left),
-                                  .mem_right = log::bytes(f.right)},
-                    log::label(f.node, cache.batch_context()));
+          log::eval(
+              log::EvalStat{.mode = log::eval_mode(f.node),
+                            .time = time,
+                            .mem_result = log::bytes(result),
+                            .mem_alloc = log::bytes(result),
+                            .mem_hwmark = {cache.note_working_set(
+                                hwmark, f.node->hash_value())},
+                            .mem_left = log::bytes(f.left),
+                            .mem_right = log::bytes(f.right)},
+              log::label(f.node, cache.batch_context()) + " | L." +
+                  f.left->trange_annot() +
+                  (f.right ? " R." + f.right->trange_annot() : std::string{}) +
+                  " O." + result->trange_annot());
         }
         log::release_after_op();
         finalize(finish_phase_b(f, std::move(result)));
@@ -2029,6 +2066,12 @@ template <typename TreeNode, bool FHC, typename Members>
     return seed_keys.contains(n);
   };
   CacheManager<TreeNode, FHC> scratch{std::move(reg), std::move(is_persistent)};
+  // Read-from-home scratches statically pre-schedule every value and read
+  // batch-invariant operands from home each batch (no seeding); a miss on such
+  // an operand is a real defect (premature eviction / under-predicted use
+  // count), so require it to surface as a hard error rather than an empty-array
+  // hang. Seeded scratches (read_from_home=false) keep miss=>compute.
+  if (read_from_home) scratch.set_require_resident_reads(true);
   return {std::move(scratch), std::move(seeds)};
 }
 
@@ -2143,17 +2186,13 @@ template <typename F, typename IndexPredicate = accept_any_index,
             Index, container::svector<std::pair<std::size_t, std::size_t>>>> {
       BackendArrayOps const* const aops = cache.array_ops();
       auto const& ectx = cache.batch_context();
-      bool const smap = cache.space_mapped_slicing();
       // Is ix's mode already sliced by an enclosing block, so it must not be
       // re-picked? Mirrors slice_to_use exactly: an EXACT context axis slices
-      // ix, and (only under space-mapped slicing) so does any context axis of
-      // ix's SPACE. This replaces the old "slice the carrier leaf and see if it
-      // yields a single batch" probe, which needed mode_batches.
+      // ix. This replaces the old "slice the carrier leaf and see if it yields
+      // a single batch" probe, which needed mode_batches.
       auto already_sliced = [&](Index const& ix) {
         for (auto const& e : ectx)
-          if (e.axis == ix ||
-              (smap && e.axis.space().base_key() == ix.space().base_key()))
-            return true;
+          if (e.axis == ix) return true;
         return false;
       };
       for (Index const& ix : candidate_axes(n)) {

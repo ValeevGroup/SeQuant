@@ -3,6 +3,8 @@
 
 #ifdef SEQUANT_HAS_TILEDARRAY
 
+#include <sstream>
+
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/math.hpp>
@@ -495,6 +497,12 @@ class ResultTensorTA final : public Result {
 
   explicit ResultTensorTA(ArrayT arr) : Result{std::move(arr)} {}
 
+  [[nodiscard]] std::string trange_annot() const override {
+    std::ostringstream oss;
+    oss << get<ArrayT>().trange();
+    return oss.str();
+  }
+
  private:
   using this_type = ResultTensorTA<ArrayT>;
   using annot_wrap = Annot<std::string>;
@@ -701,6 +709,12 @@ class ResultTensorOfTensorTA final : public Result {
 
   explicit ResultTensorOfTensorTA(ArrayT arr) : Result{std::move(arr)} {}
 
+  [[nodiscard]] std::string trange_annot() const override {
+    std::ostringstream oss;
+    oss << get<ArrayT>().trange();
+    return oss.str();
+  }
+
  private:
   using this_type = ResultTensorOfTensorTA<ArrayT>;
   using annot_wrap = Annot<std::string>;
@@ -799,6 +813,58 @@ class ResultTensorOfTensorTA final : public Result {
     }
 
     detail::log_ta(a.lannot, " * ", a.rannot, " = ", a.this_annot, "\n");
+
+    if (std::getenv("SEQUANT_UT_PROD_DIAG")) {
+      auto ext = [](auto const& tr) {
+        std::string s = "[";
+        for (std::size_t d = 0; d < tr.rank(); ++d)
+          s += (d ? "," : "") + std::to_string(tr.dim(d).extent());
+        return s + "]";
+      };
+      // Per-mode outer-extent map keyed by the outer annotation labels, so the
+      // shared (Hadamard) occ index extent on each operand is directly
+      // readable.
+      auto labeled = [&ext](std::string const& annot, auto const& tr) {
+        // annot is "outer;inner"; take the outer part before ';'
+        std::string outer = annot.substr(0, annot.find(';'));
+        std::string s = "{";
+        std::size_t pos = 0, d = 0;
+        while (pos < outer.size() && d < tr.rank()) {
+          auto comma = outer.find(',', pos);
+          std::string lbl = outer.substr(pos, comma - pos);
+          // trim spaces
+          while (!lbl.empty() && lbl.front() == ' ') lbl.erase(lbl.begin());
+          while (!lbl.empty() && lbl.back() == ' ') lbl.pop_back();
+          s += (d ? "," : "") + lbl + ":" + std::to_string(tr.dim(d).extent());
+          ++d;
+          if (comma == std::string::npos) break;
+          pos = comma + 1;
+        }
+        return s + "}";
+      };
+      std::string kind;
+      if (other.is<that_type>())
+        kind = "ToTxT";
+      else if (other.is<this_type>())
+        kind = (DeNestFlag == DeNest::True) ? "ToTxToT->T" : "ToTxToT";
+      else
+        kind = "?";
+      std::cerr << "[PROD:" << kind << "] L(" << a.lannot << ")x R(" << a.rannot
+                << ")=(" << a.this_annot
+                << ") Lo=" << ext(get<ArrayT>().trange())
+                << " Lmap=" << labeled(a.lannot, get<ArrayT>().trange());
+      if (other.is<that_type>()) {
+        auto const& rtr =
+            other.get<compatible_regular_distarray_type>().trange();
+        std::cerr << " Ro=" << ext(rtr) << " Rmap=" << labeled(a.rannot, rtr);
+      } else if (other.is<this_type>()) {
+        auto const& rtr = other.get<ArrayT>().trange();
+        std::cerr << " Ro=" << ext(rtr) << " Rmap=" << labeled(a.rannot, rtr);
+      } else {
+        std::cerr << " Ro=?";
+      }
+      std::cerr << std::endl;
+    }
 
     if (other.is<that_type>()) {
       // ToT * T -> ToT

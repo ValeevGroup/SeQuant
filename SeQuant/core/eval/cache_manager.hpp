@@ -1006,20 +1006,17 @@ class CacheManager {
   /// per-loop-iteration structural, re-set each block by the evaluator).
   BatchContext batch_context_{};
 
-  /// When true, slice-on-use (\c evaluate_impl) maps a batch-context entry's
-  /// axis by its SPACE (base_key) rather than its exact Index: if a fetched
-  /// node does not carry the entry's exact axis it is sliced on its OWN
-  /// physical mode of that space (see \c result_position_type). ONLY the
-  /// ordered executor
-  /// (\c run_ordered_contracted_block) sets this -- it co-evaluates a whole
-  /// type-bucketed block under ONE canonical block.axis, so a member binding
-  /// the space under a different physical label must be space-mapped. The
-  /// whole-scope
-  /// (\c walk_scope) evaluator instead pushes each member's OWN exact axis and
-  /// relies on exact-match precision, so it leaves this false (a same-space
-  /// index that is NOT this level's loop must stay unsliced there). Default
-  /// false => exact-match only => byte-identical to before this flag.
-  bool space_mapped_slicing_ = false;
+  /// When true, \c evaluate_impl treats a cache MISS on a non-leaf, non-top
+  /// node as a hard error (\c sequant::Exception) instead of silently
+  /// recomputing or serving an empty/unfilled array. The ordered read-from-home
+  /// discipline statically pre-schedules every value, so a vanished operand
+  /// (premature eviction -- e.g. an under-predicted use count in \c
+  /// ordered_home_reads) is a real defect that must surface loudly, never hang
+  /// a downstream contraction waiting on tiles that will never be produced.
+  /// Set on every read-from-home scratch (see \c make_batched_scratch);
+  /// parent-inheriting so nested scratches enforce the same invariant. Default
+  /// false => forest/recursive evaluation (miss => compute) is unchanged.
+  bool require_resident_reads_ = false;
 
   /// Non-owning placement router (see \c placement_router.hpp). Null
   /// (default) => no override wired; \c placement_router() falls through to
@@ -1107,13 +1104,18 @@ class CacheManager {
     return batch_context_;
   }
 
-  /// Enable/disable space-mapped slice-on-use (see space_mapped_slicing_).
-  void set_space_mapped_slicing(bool v) noexcept { space_mapped_slicing_ = v; }
+  /// Enable/disable the resident-reads invariant (see \c
+  /// require_resident_reads_). Set true on read-from-home scratches.
+  void set_require_resident_reads(bool v) noexcept {
+    require_resident_reads_ = v;
+  }
 
-  /// \return whether slice-on-use space-maps its axes (see
-  ///         space_mapped_slicing_).
-  [[nodiscard]] bool space_mapped_slicing() const noexcept {
-    return space_mapped_slicing_;
+  /// \return whether a non-leaf, non-top cache miss must be a hard error --
+  ///         this cache's own flag, else inherited from the parent chain.
+  [[nodiscard]] bool require_resident_reads() const noexcept {
+    return require_resident_reads_
+               ? true
+               : (parent_ ? parent_->require_resident_reads() : false);
   }
 
   /// Sets the scope-chain parent (see parent_). Pass nullptr to detach.

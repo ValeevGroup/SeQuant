@@ -1523,7 +1523,12 @@ struct SlicedModeAssignment {
   /// the w8-symmetric case (one value, one loop, two free modes bound by two
   /// different consumers); \c by_value alone cannot express "pos0 here, pos1
   /// there" because it folds away which occurrence bound which mode.
-  container::svector<std::tuple<std::size_t, Index, LoopId, std::size_t>>
+  /// (value_id, this occurrence's own sliced-mode PHYSICAL POSITION -- its
+  /// index in occ.carried, computed in THAT occurrence's own index-frame,
+  /// LoopId, CONSUMER value_id). The position (not an Index label) is what the
+  /// executor projects onto \c LoopColoredSliceSeam::by_hash_consumer, so the
+  /// runtime never re-matches a label across index-frames.
+  container::svector<std::tuple<std::size_t, std::size_t, LoopId, std::size_t>>
       occ_facts;
 
   /// \return the \c LoopId slicing \p value_id's own \p mode, or \c
@@ -1857,6 +1862,16 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
   SlicedModeAssignment result;
   detail::enumerate_realized_levels(ordered.root, result.levels);
 
+  // DIAGNOSTIC (SEQUANT_UT_SMA_DIAG): trace EXACT + REGIME-2 stamping decisions
+  // for two specific values (the w8 occ+aux deadlock's L and R) so it is
+  // visible WHY one operand's occ mode is sliced and the other's is not. Keyed
+  // by node hash (== ValueCell::hash == runtime cache key).
+  bool const _sma_diag = std::getenv("SEQUANT_UT_SMA_DIAG") != nullptr;
+  auto const _sma_tgt = [](std::size_t h) {
+    return h == 10093600710104183845ull || h == 16093998410023806020ull ||
+           h == 8273140793442622171ull || h == 9043826704086923374ull;
+  };
+
   std::map<std::tuple<std::size_t, std::wstring, int>, LoopId> level_id;
   for (std::size_t i = 0; i < result.levels.size(); ++i) {
     DagScopeLevel const& L = result.levels[i];
@@ -1914,11 +1929,20 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
     for (std::size_t w_vid : operands) {
       ValueCell const& w = rich.cells[w_vid];
       for (detail::ScopeBlockAxisLevel const& blk : scope) {
+        Index const* matched = nullptr;
         for (Index const& carried_ix : w.carried) {
           if (!(carried_ix == blk.axis)) continue;
           stamp_raw(w_vid, carried_ix, blk.level);
+          matched = &carried_ix;
           break;  // a block axis is one Index -> at most one carried match
         }
+        if (_sma_diag && _sma_tgt(w.hash))
+          std::cerr << "[SMA-EXACT] W#" << (w.hash % 100000) << " consumer#"
+                    << (rich.cells[parent_vid].hash % 100000)
+                    << " block.axis=" << toUtf8(blk.axis.full_label()) << " -> "
+                    << (matched ? "MATCH " + toUtf8(matched->full_label())
+                                : std::string("nomatch"))
+                    << std::endl;
       }
     }
   }
@@ -1943,7 +1967,17 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
       container::svector<detail::ScopeBlockAxisLevel> const& scope =
           sit->second;
       if (scope.empty()) continue;
-      for (Index const& m : w.carried) {
+      // Iterate THIS occurrence's OWN labels (occ.carried), not the value's
+      // first-occurrence frame (w.carried). For a divergent (relabeled) CSE
+      // occurrence -- carrying i_3 where the seeding occurrence carries i_2 --
+      // w.carried names labels this occurrence does not have, so its own
+      // participant slot never gets stamped and its canonical layout comes out
+      // under-colored (a different slot count than its siblings). occ.carried
+      // and occ.ectx are in the SAME (this occurrence's) index-frame, so the
+      // participant test and the stamp below stay in one frame. This is the
+      // frame the pass's doc already intends ("the value's OWN-labeled sliced
+      // mode from its occurrences").
+      for (Index const& m : occ.carried) {
         std::wstring const space(m.space().base_key());
         // participant? m must be an enclosing batched loop at this occurrence
         // (i.e. appear in the occurrence's ectx -- see the REGIME-2 RELABEL
@@ -1954,7 +1988,6 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
             participant = true;
             break;
           }
-        if (!participant) continue;
         // the realized same-space block in the consumer's scope (unique for
         // the one-occ-loop / occ+aux regime; a genuinely ambiguous nest --
         // two same-space blocks -- is left unstamped, not guessed).
@@ -1965,28 +1998,41 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
             level = &blk.level;
             ++nsame;
           }
-        if (nsame != 1) continue;
         // Skip when m's loop is NOT strictly outer to W's own build scope
         // (W is home-resident INSIDE the loop, not fetched across it) -- the
         // built-within gate for the REGIME-2 RELABEL pass above.
-        auto const wsit = build_scope.find(w_vid);
         bool built_within = false;
-        if (wsit != build_scope.end())
-          for (detail::ScopeBlockAxisLevel const& b : wsit->second)
-            if (b.level == *level) {
-              built_within = true;
-              break;
-            }
-        if (built_within) continue;
+        if (participant && nsame == 1) {
+          auto const wsit = build_scope.find(w_vid);
+          if (wsit != build_scope.end())
+            for (detail::ScopeBlockAxisLevel const& b : wsit->second)
+              if (b.level == *level) {
+                built_within = true;
+                break;
+              }
+        }
+        bool const will_stamp = participant && nsame == 1 && !built_within;
+        if (_sma_diag && _sma_tgt(w.hash))
+          std::cerr << "[SMA-REGIME2] W#" << (w.hash % 100000) << " consumer#"
+                    << (rich.cells[oit->second].hash % 100000)
+                    << " mode=" << toUtf8(m.full_label())
+                    << " participant=" << participant << " nsame=" << nsame
+                    << " built_within=" << built_within << " -> "
+                    << (will_stamp ? "STAMP" : "skip") << std::endl;
+        if (!will_stamp) continue;
         stamp_raw(w_vid, m, *level);
         // PILLAR 2: attribute this stamp to the consuming use-site
         // (oit->second == the value_id owning occ.consumer_point) so the
         // executor can tell apart two symmetric occurrences that bind the SAME
-        // loop to DIFFERENT free modes. Deduplicated at seam-build; recorded
-        // here even when redundant with by_value (single-mode values simply
-        // never trigger the by_hash_consumer path at runtime).
+        // loop to DIFFERENT free modes. Record this occurrence's own PHYSICAL
+        // POSITION for the sliced mode -- m's index in occ.carried, computed
+        // HERE in the occurrence's own index-frame -- so the runtime uses it
+        // directly and never re-matches m against a differently-framed node.
+        std::size_t const occ_pos = static_cast<std::size_t>(
+            std::find(occ.carried.begin(), occ.carried.end(), m) -
+            occ.carried.begin());
         result.occ_facts.push_back(
-            std::make_tuple(w_vid, m, id_of(*level), oit->second));
+            std::make_tuple(w_vid, occ_pos, id_of(*level), oit->second));
       }
     }
   }

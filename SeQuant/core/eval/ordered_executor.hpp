@@ -349,12 +349,6 @@ void run_ordered_contracted_block(
                                                  /*read_from_home=*/true);
   }();
   bs.cache.set_parent(&parent_cache);
-  // This block co-evaluates a whole type-bucketed group under ONE canonical
-  // block.axis; a member binding the axis space under a different physical
-  // label must be sliced on its own mode (member_axis.hpp). Ask slice-on-use to
-  // SPACE-map its axes on this scratch (and every nested child block's, which
-  // inherit this flag through their own make_batched_scratch off this cache).
-  bs.cache.set_space_mapped_slicing(true);
 
   // Batch chunks over the loop axis, sourced per-space by the backend (no
   // carrier array is consulted).
@@ -373,7 +367,8 @@ void run_ordered_contracted_block(
     log::log("BatchGroup", "Begin",
              std::format("{} members co-evaluated over {} batches of {} {}",
                          members.size(), batches.size(),
-                         toUtf8(block.axis.full_label()), log::scope_annot(s)));
+                         toUtf8(std::wstring(block.axis.space().base_key())),
+                         log::scope_annot(s)));
   }
   {
     static bool const sched_dump = std::getenv("SEQUANT_SCHED_DUMP") != nullptr;
@@ -524,9 +519,11 @@ void run_ordered_contracted_block(
     // in the loop, so acc[k]/dest[k] are null here.
     if (reuse[k]) {
       value_results[vid] = parent_cache.access(resolve(vid));
-      SEQUANT_ASSERT(value_results[vid] &&
-                     "evaluate_ordered_schedule: a resident output vanished "
-                     "from its home before block close");
+      if (!value_results[vid])
+        throw Exception(
+            "evaluate_ordered_schedule: a resident output vanished from its "
+            "home before block close (premature eviction / under-predicted use "
+            "count in ordered_home_reads)");
       built[vid] = 1;
       continue;
     }
@@ -568,6 +565,15 @@ void run_ordered_contracted_block(
       }
     }
     (void)parent_cache.store(out_node, std::move(out));
+    // Escape-output homing stores directly through CacheManager::store (not
+    // evaluate_impl's store_after path), so without this it would land in the
+    // top-level cache with NO Cache|... trace line -- making a homed value look
+    // like it was never stored. Emit the same structured event here so a homed
+    // escape output is visible in the trace like any other cache store.
+    if constexpr (::sequant::detail::trace(EvalTrace))
+      log::cache(
+          out_node, parent_cache,
+          log::label(out_node, parent_cache.batch_context()) + " [homed]");
   }
 }
 
@@ -644,8 +650,22 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   loop_colored_slice_seam.by_hash.reserve(rich.cells.size());
   for (ValueCell const& c : rich.cells) {
     auto const it = sliced_mode_assignment.by_value.find(c.value_id);
-    if (it != sliced_mode_assignment.by_value.end())
-      loop_colored_slice_seam.by_hash.emplace(c.hash, it->second);
+    if (it == sliced_mode_assignment.by_value.end()) continue;
+    // Project each (own sliced-mode Index, LoopId) to a PHYSICAL POSITION in
+    // this value's own carried (first-occurrence) frame -- so the runtime uses
+    // the position directly, never re-matching the Index against a
+    // differently-framed fetched node. A value whose occurrences physically
+    // diverge is resolved per-occurrence via by_hash_consumer (below); this
+    // per-value map is correct for the non-divergent majority.
+    container::svector<std::pair<std::size_t, LoopId>> pos_pairs;
+    for (auto const& [ix, lid] : it->second) {
+      auto const pit = std::find(c.carried.begin(), c.carried.end(), ix);
+      if (pit != c.carried.end())
+        pos_pairs.push_back(
+            {static_cast<std::size_t>(pit - c.carried.begin()), lid});
+    }
+    if (!pos_pairs.empty())
+      loop_colored_slice_seam.by_hash.emplace(c.hash, std::move(pos_pairs));
   }
   // PILLAR 2: project the per-occurrence (value, mode, loop, consumer) facts
   // onto the hash-keyed consumer-disambiguation map. value_id -> hash for both
@@ -656,11 +676,11 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // the w8 case, where the consumer use-site is itself the evaluated output).
   // Only values with >1 mode under one loop ever consult this at runtime, so
   // recording every fact (single-mode values included) is harmless.
-  for (auto const& [vid, mode, loop, consumer_vid] :
+  for (auto const& [vid, pos, loop, consumer_vid] :
        sliced_mode_assignment.occ_facts) {
     SEQUANT_ASSERT(vid < rich.cells.size() && consumer_vid < rich.cells.size());
     loop_colored_slice_seam.by_hash_consumer[rich.cells[vid].hash].push_back(
-        std::make_tuple(mode, loop, rich.cells[consumer_vid].hash));
+        std::make_tuple(pos, loop, rich.cells[consumer_vid].hash));
   }
   struct LoopColoredSliceSeamGuard {
     CacheManager<N, FHC>& c;
@@ -897,15 +917,17 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
       // stored value; orient it to this root's phase, matching evaluate_impl's
       // own canonical->orientation return convention (apply_phase).
       auto ptr = cache.access_at(roots[i]).ptr;
-      SEQUANT_ASSERT(ptr &&
-                     "evaluate_ordered_schedule: forest root not resident in "
-                     "the cache at the combine read");
+      if (!ptr)
+        throw Exception(
+            "evaluate_ordered_schedule: forest root not resident in the cache "
+            "at the combine read (premature eviction / under-predicted use "
+            "count in ordered_home_reads)");
       auto const ph = roots[i]->canon_phase();
       pre_results[i] = (ph == 1) ? std::move(ptr) : ptr->mult_by_phase(ph);
     }
-    SEQUANT_ASSERT(pre_results[i] &&
-                   "evaluate_ordered_schedule: forest root was never "
-                   "produced");
+    if (!pre_results[i])
+      throw Exception(
+          "evaluate_ordered_schedule: forest root was never produced");
   }
 
   return pre_results;

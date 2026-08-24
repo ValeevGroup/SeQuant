@@ -87,8 +87,16 @@ struct LoopColoredSliceSeam {
   /// \c SlicedModeAssignment::levels): a \c LoopId indexes this list.
   container::vector<DagScopeLevel> levels;
 
-  /// value hash -> that value's (own sliced-mode Index, slicing LoopId) pairs.
-  std::unordered_map<std::size_t, container::svector<std::pair<Index, LoopId>>>
+  /// value hash -> (this value's own sliced-mode PHYSICAL POSITION, slicing
+  /// LoopId) pairs. The position is the mode's index in the value's own carried
+  /// (canon_indices) order -- computed at schedule time IN THE VALUE'S OWN
+  /// index-frame, so it is used at runtime directly, never by re-matching a
+  /// label against the fetched node (which is a different index-frame). This is
+  /// the per-value (first-occurrence / non-divergent) map; a value whose
+  /// occurrences physically differ (divergent CSE) is resolved per-occurrence
+  /// via \c by_hash_consumer below.
+  std::unordered_map<std::size_t,
+                     container::svector<std::pair<std::size_t, LoopId>>>
       by_hash;
 
   /// CONSUMER-DISAMBIGUATED sliced-mode facts (sliced-value canonical-layout /
@@ -105,8 +113,17 @@ struct LoopColoredSliceSeam {
   /// loop; a value with a single mode per loop (aux, and every non-symmetric
   /// value) never reaches this map, keeping those fetches BYTE-IDENTICAL to the
   /// consumer-blind resolution.
-  std::unordered_map<std::size_t,
-                     container::svector<std::tuple<Index, LoopId, std::size_t>>>
+  /// value hash -> (this occurrence's own sliced-mode PHYSICAL POSITION,
+  /// slicing LoopId, CONSUMER node hash) triples. The position is computed at
+  /// schedule time in THAT occurrence's own index-frame (index of the mode in
+  /// occ.carried), so the runtime uses it directly for the fetch attributed to
+  /// that consumer -- no cross-frame label match. This is the frame-correct
+  /// resolution for a divergent (relabeled) CSE occurrence and for the
+  /// symmetric case (one value's two free occ modes bound by two different
+  /// consumers, at two different positions).
+  std::unordered_map<
+      std::size_t,
+      container::svector<std::tuple<std::size_t, LoopId, std::size_t>>>
       by_hash_consumer;
 
   /// \return the \c LoopId whose realized \c DagScopeLevel equals \p level, or
@@ -134,28 +151,38 @@ struct LoopColoredSliceSeam {
   /// \c by_hash_consumer. If \p consumer is null or has no recorded fact (a
   /// fetch outside any tracked consumer), the resolution falls back to the same
   /// deterministic first-match as before -- never a hard failure.
-  [[nodiscard]] std::optional<Index> mode_of(
+  [[nodiscard]] std::optional<std::size_t> mode_of(
       std::size_t hash, LoopId loop,
       std::optional<std::size_t> consumer = std::nullopt) const {
-    auto const it = by_hash.find(hash);
-    if (it == by_hash.end()) return std::nullopt;
-    std::optional<Index> first;
-    std::size_t nmatch = 0;
-    for (auto const& [ix, lid] : it->second)
-      if (lid == loop) {
-        if (nmatch == 0) first = ix;
-        ++nmatch;
-      }
-    if (nmatch == 0) return std::nullopt;
-    if (nmatch == 1) return first;  // byte-identical: consumer is irrelevant
-    // Ambiguous (>1 mode under this loop): the consumer picks its own mode.
+    // A consumer-attributed PER-OCCURRENCE fact is the frame-correct answer and
+    // takes precedence: it is the sliced mode's physical POSITION in THIS
+    // fetch's own occurrence frame, so it is correct for a divergent
+    // (relabeled) occurrence and disambiguates the symmetric case (two
+    // consumers binding one loop to two different positions).
     if (consumer) {
       auto const cit = by_hash_consumer.find(hash);
       if (cit != by_hash_consumer.end())
-        for (auto const& [ix, lid, ch] : cit->second)
-          if (lid == loop && ch == *consumer) return ix;
+        for (auto const& [pos, lid, ch] : cit->second)
+          if (lid == loop && ch == *consumer) return pos;
     }
-    return first;  // no consumer match: deterministic first-match fallback
+    // Otherwise the per-value position (valid when the value's occurrences do
+    // not physically diverge -- one position per loop). If MORE than one
+    // position is recorded under this loop the value is ambiguous WITHOUT a
+    // matching consumer fact: do NOT guess a position -- leave the fetch
+    // unsliced (nullopt). A genuinely sliced fetch reaching this is a scheduler
+    // gap that must be fixed by recording the occurrence fact, never papered
+    // over with a first-match.
+    auto const it = by_hash.find(hash);
+    if (it == by_hash.end()) return std::nullopt;
+    std::optional<std::size_t> first;
+    std::size_t nmatch = 0;
+    for (auto const& [pos, lid] : it->second)
+      if (lid == loop) {
+        if (nmatch == 0) first = pos;
+        ++nmatch;
+      }
+    if (nmatch == 1) return first;
+    return std::nullopt;  // 0 -> unsliced; >1 -> ambiguous, never guessed
   }
 };
 

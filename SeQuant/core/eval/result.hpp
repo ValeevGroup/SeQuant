@@ -231,6 +231,13 @@ class Result {
 
   virtual ~Result() noexcept = default;
 
+  /// \return a compact, human-readable rendering of the backing tensor's
+  ///         tiled range (for eval traces -- lets a reader spot a
+  ///         sliced-vs-unsliced mode mismatch that a release build's elided
+  ///         TA_ASSERT would otherwise let deadlock). Default empty for
+  ///         backends with no tiled range (e.g. DryRun).
+  [[nodiscard]] virtual std::string trange_annot() const { return {}; }
+
   ///
   /// \return Returns true if the concrete type of the object is T.
   ///
