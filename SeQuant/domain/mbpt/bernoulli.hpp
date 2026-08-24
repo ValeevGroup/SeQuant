@@ -7,27 +7,20 @@
 namespace sequant::mbpt::bernoulli {
 
 /// Tensor-level H̄ = Σ_{k=0..rank} H̄^k in the Bernoulli expansion, for
-/// σ = T−T† of rank N.
+/// σ = T−T† of rank N. H̄⁰..H̄⁴ are Eqs. (46)-(50) of 10.1063/1.5030344.
 ///
-/// The Bernoulli expansion rewrites the non-terminating UCC
-/// similarity-transform series so that Bernoulli numbers appear as the
-/// expansion coefficients; the rank-by-rank operators H̄⁰..H̄⁴ are Eqs. (46)-(50)
-/// of 10.1063/1.5030344.
+/// The result is coefficient tensors times normal-ordered operators, not
+/// `mbpt::op` operators, and nothing is screened out of it, so the caller
+/// projects every term.
 ///
-/// @warning Single-reference only. The N/R split expands general indices over
-/// the hole and particle spaces alone (see detail::expand_to_blocks), dropping
-/// any other base space the registry defines. That is harmless only because the
-/// single-reference projection manifolds annihilate the dropped terms. Under a
-/// multireference registry they contribute, and both the N and the R part come
-/// out wrong. Nothing checks for this.
-///
-/// The result is a tensor-level expression: coefficient tensors times
-/// normal-ordered operators, not `mbpt::op` operators. Nothing is screened out
-/// of it, so the caller projects every term.
+/// @warning Single-reference only, and nothing checks for it. The N/R split
+/// expands general indices over the hole and particle spaces alone (see
+/// detail::expand_to_blocks) and classifies each one as wholly occupied or
+/// wholly unoccupied. An active space, as in make_mr_spaces(), is neither, so
+/// no term touching an active index can ever be classified N.
 ///
 /// @pre an HF reference: F is taken to have no occupied-virtual block, which
-/// is what keeps F out of H̄² and higher. The f_ov terms of H̄⁰ and H̄¹ are
-/// carried symbolically and vanish only on substitution.
+/// keeps F out of H̄² and higher (see the F-cancellation in bernoulli.cpp)
 ///
 /// @param N cluster/excitation rank (also the N/R rank cutoff)
 /// @param rank highest Bernoulli order H̄^k to include (0..4)
@@ -48,16 +41,15 @@ ExprPtr wick_reduce(const ExprPtr& expr);
 /// Normal-ordered commutator [A, B] = wick_reduce(A·B − B·A). NOT the bare
 /// algebraic commutator: the operator product is Wick-reduced, so contractions
 /// between A and B generate the lower-rank terms the Bernoulli expansion relies
-/// on. B's summed indices are reindexed to fresh temporaries first, making them
+/// on. Every index of B is reindexed to a fresh temporary first, making them
 /// disjoint from A's.
 ExprPtr wick_commutator(const ExprPtr& A, const ExprPtr& B);
 
 /// Rewrites every general (non-base) index of the residual NormalOperator as
-/// the sum over the hole/particle base spaces it spans (occupied/virtual). The
-/// registry's other base spaces are dropped, which changes no projected
-/// quantity: the single-reference manifolds annihilate the dropped terms (see
-/// the @warning on hbar). After expansion every residual index is definite so
-/// the N/R classifier can act on it. Idempotent on block-resolved input.
+/// the sum over the hole/particle base spaces it spans, so that every residual
+/// index is definite and the N/R classifier can act on it. The registry's other
+/// base spaces are dropped (see the @warning on hbar). Idempotent on
+/// block-resolved input.
 /// @pre the registry specifies both a hole and a particle space
 ExprPtr expand_to_blocks(const ExprPtr& expr);
 

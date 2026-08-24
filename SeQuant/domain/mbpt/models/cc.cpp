@@ -402,13 +402,12 @@ constexpr Normalization eom_norm = Normalization::SquareRoot;
 }  // namespace
 
 // Per-block-truncated EOM sigma equations. For the qUCCSD ranks see
-// 10.1063/5.0062090 Sec. II C, Eqs. (29)-(48); for the IP/EA analogues,
-// 10.1021/acs.jctc.5c01991 Fig. 1 (Table 1 there maps out which H̄ components
-// enter each block, not the commutator ranks they are truncated at).
+// 10.1063/5.0062090 Sec. II C, Eqs. (29)-(48); for IP/EA,
+// 10.1021/acs.jctc.5c01991 Fig. 1.
 //
-// Each block is the sandwich <i|H̄|j> of Eq. (7). Eq. (10) writes H̄ as
-// E_gr + a normal-ordered remainder and builds the blocks from the remainder
-// alone, so here the diagonal carries an explicit -<0|H̄|0> instead.
+// Each block is <i|H̄|j>, Eq. (7). Eq. (10) instead splits off
+// E_gr and builds the blocks from the remainder, so here the diagonal carries
+// an explicit -<0|H̄|0>.
 std::vector<ExprPtr> CC::eom_r_blocked(
     nₚ np, nₕ nh, const std::vector<size_t>& block_ranks) const {
   SEQUANT_ASSERT(unitary(), "eom_r_blocked requires a unitary ansatz");
@@ -431,19 +430,15 @@ std::vector<ExprPtr> CC::eom_r_blocked(
                  "K = number of projection manifolds");
 
   // Bernoulli H̄ is tensor-level, BCH H̄ operator-level; the bra/ket/vev trio
-  // below must match it. Empty connectivity, as everywhere on the unitary path.
+  // below must match it. Connectivity is empty either way, as everywhere on the
+  // unitary path; only the operator-level vev forwards screen/use_topology.
   const bool tensor_level = hbar_expansion_ == HbarExpansion::Bernoulli;
 
-  // One H̄ per distinct truncation order, reduced to its R part (Bernoulli
-  // only: the operator-level BCH H̄ has no N/R split to take). The N part is
-  // the ground-state amplitude residual <Φl|H̄|Φ0>, which Eq. (6) zeroes only
-  // at the amplitude rank, so a block truncated below that rank would keep it.
-  // The diagonal is untouched either way: an N operator of rank r shifts the
-  // manifold rank by r, so it never lands on a diagonal block, and it has no
-  // reference expectation value. Off the diagonal removing it is a no-op only
-  // where the block rank equals hbar_comm_rank; below that rank the terms are
-  // off-shell, so the numbers change too. That is the point: Eqs. (41)-(47) of
-  // 10.1063/5.0062090 carry no such intermediate.
+  // One H̄ per distinct truncation order, reduced to its R part (Bernoulli only;
+  // BCH H̄ is operator-level and has no N/R split). The N part is the amplitude
+  // residual <Φl|H̄|Φ0>, which Eq. (6) zeroes only at the amplitude rank and
+  // Eqs. (41)-(47) carry nowhere. It shifts the manifold rank, so removing it
+  // leaves diagonal blocks untouched.
   container::map<size_t, ExprPtr> hbars;
   for (const auto k : ranks) {
     auto [it, fresh] = hbars.try_emplace(k);
@@ -476,8 +471,9 @@ std::vector<ExprPtr> CC::eom_r_blocked(
       const auto& hbar_ij = hbars.at(ranks.at(i * K + j));
       const auto ket = ket_of(kp, kh);
       acc->append(vev(bra * hbar_ij * ket));
-      // -<0|H̄^(k_ii)|0>, written as <i|r_i H̄|0> so Wick keeps E's summed
-      // indices disjoint from the block's external ones.
+      // -<0|H̄^(k_ii)|0>: the E_gr of Eq. (10), at this block's rank. Written
+      // as <i|r_i H̄|0> so Wick keeps its summed indices disjoint from the
+      // block's external ones.
       if (i == j) acc->append(ex<Constant>(-1) * vev(bra * ket * hbar_ij));
     }
     result.at(static_cast<size_t>(min(bp, bh))) = simplify(ExprPtr{acc});
@@ -494,8 +490,7 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh,
         "spin-free basis does not yet support non particle-conserving cases");
 
   // Bernoulli always takes the blocked path: the uniform one below commutes H̄
-  // with an operator-level R, which a tensor-level H̄ cannot take part in. An
-  // empty matrix there means uniform truncation at hbar_comm_rank.
+  // with an operator-level R, which a tensor-level H̄ cannot take part in.
   if (!block_ranks.empty() || hbar_expansion_ == HbarExpansion::Bernoulli)
     return eom_r_blocked(np, nh, block_ranks);
 

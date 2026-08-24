@@ -1071,10 +1071,9 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>,
  private:
   Vacuum vacuum_ = Vacuum::Physical;
   /// ensures that all operators use same vacuum, and sets vacuum_
-  /// @note an empty sequence has no constituent operator to take the vacuum
-  ///       from, hence it uses the default context's vacuum; every constructor
-  ///       must call this so that empty sequences agree on their vacuum, which
-  ///       is their only distinguishing state (@sa operator==)
+  /// @note an empty sequence takes the default context's vacuum, its only
+  ///       distinguishing state (@sa operator==), so every constructor must
+  ///       call this
   void check_vacuum() {
     const bool all_same_vaccum =
         std::ranges::adjacent_find(*this, std::ranges::not_equal_to{},

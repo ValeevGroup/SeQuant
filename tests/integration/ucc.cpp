@@ -73,6 +73,8 @@ const std::vector<TermCounts> pins = {
     // clang-format on
 };
 
+/// Compares against the pin for this combination, if there is one. A
+/// combination absent from `pins` is not checked at all.
 void check(Hbar expansion, std::size_t n, std::size_t rank, std::size_t r,
            std::size_t nterms) {
   for (const auto& p : pins)

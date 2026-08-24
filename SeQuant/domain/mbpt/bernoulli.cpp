@@ -24,29 +24,23 @@
 // Bernoulli expansion of the unitary-CC similarity-transformed Hamiltonian
 // H̄ = e^{−σ} H e^{σ}, σ = T − T† (anti-Hermitian). For UCC the plain BCH
 // series does not terminate, because σ mixes excitation and de-excitation.
-// This file implements the Bernoulli-number resummation of 10.1063/1.5030344
-// that fixes that. H splits as F (Fock) + V (fluctuation potential); every
-// operator O splits into O_N (its pure excitation/de-excitation part) and
+// This file implements the expansion of 10.1063/1.5030344 for finite
+// truncation. H splits as F (Fock) + V (fluctuation potential);
+// every operator O splits into O_N (its pure excitation/de-excitation part) and
 // O_R = O − O_N.
 //
-// Equation numbers below are all from 10.1063/1.5030344, Sec. III B:
-// superoperator inversion Eqs. (36)-(39); Bernoulli numbers B₁=−1/2, B₂=1/12,
-// B₃=0, B₄=−1/720, Eq. (40), i.e. Bₙ/n! in the textbook normalization; the N/R
-// split and the UCC amplitude condition V̄_N = 0, above and at Eq. (43); the H̄
-// recursion, Eq. (44); the sum
-// H̄ = Σ_k H̄^k, Eq. (45); H̄⁰..H̄⁴, Eqs. (46)-(50).
+// Equation numbers below are all from 10.1063/1.5030344, Sec. II B.
 //
 // The F-cancellation: at an HF reference F has no occupied-virtual block
 // (Brillouin, Eq. (32)), so H̄² and higher contain no F (stated just below
-// Eq. (50)). H̄⁰ and H̄¹ do, and they are built from the full one-body operator,
-// so their f_ov terms survive symbolically and vanish only on substitution.
+// Eq. (50)). H̄⁰ and H̄¹ do. They use the general one-body operator, so terms
+// like f{a_1;i_1} stay in the derived equations; they are zero only once HF
+// Fock elements are substituted for them.
 
 namespace {
 
 /// Returns the single residual fermionic NormalOperator carried by @p term, or
-/// nullptr when it has none (a pure scalar / fully-contracted term). Every term
-/// produced by wick_reduce is either a bare NormalOperator or a Product with at
-/// most one NormalOperator factor times tensor coefficients.
+/// nullptr when it has none (a pure scalar / fully-contracted term).
 const sequant::NormalOperator<sequant::Statistics::FermiDirac>* find_nop(
     const sequant::ExprPtr& term) {
   using namespace sequant;
@@ -57,9 +51,6 @@ const sequant::NormalOperator<sequant::Statistics::FermiDirac>* find_nop(
     const NormalOperator<Statistics::FermiDirac>* found = nullptr;
     for (const auto& f : term.as<Product>().factors())
       if (f.is<NormalOperator<Statistics::FermiDirac>>()) {
-        // The one-residual-operator invariant is load-bearing: N/R
-        // classification reads this operator alone, so a second one would be
-        // silently ignored and misclassify the term.
         SEQUANT_ASSERT(!found,
                        "find_nop: term carries >1 NormalOperator; wick_reduce "
                        "is expected to leave at most one residual operator");
@@ -75,14 +66,11 @@ const sequant::NormalOperator<sequant::Statistics::FermiDirac>* find_nop(
 /// Eq. (43) of 10.1063/1.5030344. A term is N iff its single residual
 /// NormalOperator is a pure excitation (all creators pure-unoccupied AND all
 /// annihilators pure-occupied) or a pure de-excitation (the reverse), with
-/// rank ≤ @p cutoff. A term with no residual NormalOperator is rank-preserving,
-/// hence R.
+/// rank ≤ @p cutoff, rank being the larger of its creator and annihilator
+/// counts. A term with no residual NormalOperator is rank-preserving, hence R.
 ///
-/// Rank > @p cutoff falls to R rather than being dropped. The R filter drops a
-/// term only because the amplitude condition V̄_N = 0 (Eq. (43)) makes it
-/// zero, and that condition holds for rank ≤ N only, since σ here is
-/// truncated at rank N. Eq. (43) itself states O_N with no rank limit,
-/// because there σ carries every rank.
+/// Rank > @p cutoff falls to R rather than being dropped: dropping is justified
+/// only by V̄_N = 0 (Eq. (43)), which holds up to rank N once σ truncates there.
 bool is_N_term(const sequant::ExprPtr& term, std::size_t cutoff) {
   using namespace sequant;
   auto isr = get_default_context().index_space_registry();
@@ -123,11 +111,9 @@ ExprPtr wick_reduce(const ExprPtr& expr_in) {
   auto expr = expr_in->clone();
   simplify(expr);
   FWickTheorem wick{expr};
-  // use_topology defaults to ON, so it must be turned off explicitly. It keeps
-  // one representative per symmetry-equivalent contraction class and multiplies
-  // by the class size, weight bookkeeping that holds only on the
-  // fully-contracted path. On this partial-contraction path it silently
-  // rescales the terms carrying a symmetric amplitude pair.
+  // use_topology is on by default but only correct when every operator is
+  // contracted; here we want partial contractions, and it would silently
+  // rescale terms.
   wick.use_topology(false).full_contractions(false);
   auto result = wick.compute(/*count_only=*/false,
                              /*skip_input_canonicalization=*/true);
@@ -148,10 +134,8 @@ ExprPtr wick_commutator(const ExprPtr& A, const ExprPtr& B) {
 
 namespace {
 
-/// Core of expand_to_blocks for input already in wick_reduce'd form. Skipping
-/// the reduction is an identity: wick_reduce is idempotent (terms with a single
-/// residual NormalOperator admit no further contractions). @p expr is not
-/// mutated.
+/// Core of expand_to_blocks for input already in wick_reduce'd form; reducing
+/// again would be an identity. @p expr is not mutated.
 ExprPtr expand_to_blocks_reduced(const ExprPtr& expr) {
   auto isr = get_default_context().index_space_registry();
   const auto& bases = isr->base_spaces();
@@ -160,14 +144,9 @@ ExprPtr expand_to_blocks_reduced(const ExprPtr& expr) {
     return ranges::any_of(bases, [&](const auto& b) { return b == sp; });
   };
 
-  // Split each general index over the hole and particle base spaces only. A
-  // general index also spans the registry's other base spaces (under the SR
-  // convention the frozen-core "o" and inactive-virtual "g"), but terms landing
-  // in those are annihilated by the single-reference projection onto the
-  // hole/particle manifolds, so dropping them changes no projected quantity.
-  // This keeps the expansion 2-way per index instead of 4-way, which otherwise
-  // compounds across the nested commutators. Both spaces are required; the
-  // accessors throw if the registry leaves either unspecified.
+  // Split each general index over the hole and particle base spaces only; see
+  // the @warning on hbar for the others. 2-way per index instead of 4-way,
+  // which compounds across the nested commutators.
   const auto& hole_t = isr->hole_space();
   const auto& particle_t = isr->particle_space();
   auto physical = [&](const IndexSpace& b) {
@@ -186,9 +165,8 @@ ExprPtr expand_to_blocks_reduced(const ExprPtr& expr) {
         gens.push_back(op.index());
     }
     if (gens.empty()) return term->clone();
-    // candidate base spaces per general index: base b is a sub-block of the
-    // general space iff its type bits are included and its quantum numbers
-    // match (stay within the same spin sector).
+    // candidate base spaces per general index: a hole/particle base b qualifies
+    // when g's type bits include b's and their quantum numbers match.
     container::svector<container::svector<IndexSpace>> choices;
     for (const auto& g : gens) {
       container::svector<IndexSpace> c;
@@ -201,17 +179,15 @@ ExprPtr expand_to_blocks_reduced(const ExprPtr& expr) {
                      "space with matching quantum numbers");
       choices.push_back(std::move(c));
     }
-    // cartesian product of assignments => sum of transformed terms;
-    // accumulate via Sum::append (linear) rather than operator+, which
-    // deep-copies the accumulated Sum on every call (quadratic)
+    // cartesian product of assignments => sum of transformed terms. Sum::append
+    // is linear; operator+ would deep-copy the accumulated Sum on every call.
     auto sum = std::make_shared<Sum>();
     container::svector<std::size_t> idx(gens.size(), 0);
     for (;;) {
       container::map<Index, Index> repl;
       for (std::size_t k = 0; k < gens.size(); ++k)
-        // fresh ordinal (not gens[k].ordinal()): reusing it would collide with
-        // a definite index of the same base space already in the term, e.g.
-        // one an amplitude brought in. Canonicalization restores tidy labels.
+        // fresh ordinal: reusing gens[k]'s would collide with a definite index
+        // of the same base space already in the term, e.g. from an amplitude
         repl.emplace(gens[k], Index::make_tmp_index(choices[k][idx[k]]));
       sum->append(transform_expr(term, repl));
       // increment mixed-radix counter over the assignments
@@ -259,25 +235,16 @@ ExprPtr R_part_reduced(const ExprPtr& reduced, std::size_t cutoff) {
 
 }  // namespace
 
-/// Identity expansion of every general index into its base sub-blocks (see
-/// header): after expansion every residual index is definite, so the N/R
-/// classifier can act on it.
 ExprPtr expand_to_blocks(const ExprPtr& expr_in) {
   return expand_to_blocks_reduced(wick_reduce(expr_in));
 }
 
-/// N part of @p expr at truncation @p cutoff (see header): block-resolve, then
-/// keep only the pure excitation / de-excitation terms.
 ExprPtr N_part(const ExprPtr& expr, std::size_t cutoff) {
   return keep_N_terms(expand_to_blocks(expr), cutoff);
 }
 
-/// R part of @p expr at truncation @p cutoff (see header): the reduced operator
-/// minus its N part. Because expand_to_blocks is an identity
-/// (N ⊎ R = expr as operators), R = expr − N holds exactly while expr stays in
-/// its compact (general-index) form. Only N is block-resolved. The result
-/// equals the fully block-resolved remainder, and the compact expr makes the
-/// nested commutators that consume R operate on far fewer terms.
+// expand_to_blocks is an identity, so subtracting the block-resolved N from the
+// compact expr gives the same remainder, on far fewer terms.
 ExprPtr R_part(const ExprPtr& expr, std::size_t cutoff) {
   auto reduced = wick_reduce(expr);
   return R_part_reduced(reduced, cutoff);
@@ -285,10 +252,8 @@ ExprPtr R_part(const ExprPtr& expr, std::size_t cutoff) {
 
 }  // namespace detail
 
-/// Assembles H̄ order by order (see header), summing H̄⁰..H̄^rank of Eq. (45).
-/// Each H̄^k below is a direct transcription of its equation. A subscript R/N on
-/// a commutator means "form the commutator, then keep only its R/N part before
-/// the next nesting".
+// Each H̄^k below transcribes its equation. A subscript R/N means "take that
+// part of the commutator before the next nesting".
 ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
   if (rank > 4)
     throw Exception("bernoulli::hbar: only ranks [0,4] are implemented");
@@ -300,9 +265,8 @@ ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
   const auto T = op::tensor::T(N, skip1);
   const auto sigma = simplify(T - adjoint(T));
 
-  // Applies one partition tag to an expression; 'A' is no filter. `reduced`
-  // says the input is already wick_reduce'd, which every commutator output is;
-  // the V base is not, so it takes the reducing form.
+  // Applies one partition tag; 'A' is no filter. `reduced` skips the
+  // wick_reduce inside N_part/R_part, which commutator output has had already.
   auto part = [&](char tag, const ExprPtr& e, bool reduced) -> ExprPtr {
     SEQUANT_ASSERT(tag == 'A' || tag == 'N' || tag == 'R',
                    "bernoulli::hbar: partition tag must be one of A, N, R");
@@ -312,12 +276,9 @@ ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
     return reduced ? R_part_reduced(e, cutoff) : R_part(e, cutoff);
   };
 
-  // Every term of H̄^k is a nested commutator [[..[V_{p0},σ]_{f0}..],σ]_{f_k}
-  // with a per-level N/R/A partition tag applied after each commutator ('A' =
-  // no filter). nest(p0, f) evaluates such a node, memoizing every prefix
-  // (key = p0 + tags applied so far): prefixes repeat both within a rank and
-  // across ranks. Reuse is safe because expression composition deep-copies its
-  // operands.
+  // Every term of H̄^k is a nested commutator [[..[V_{p0},σ]_{f0}..],σ]_{f_k},
+  // one partition tag per level. nest memoizes each prefix (key = p0 + tags so
+  // far); prefixes repeat within a rank and across ranks.
   container::map<std::string, ExprPtr> memo;
   auto nest = [&](char p0, const char* f) -> ExprPtr {
     // grow `key` in place rather than deriving it from the memo iterator:
@@ -356,10 +317,8 @@ ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
 
   add(1, simplify(F + V));  // H̄⁰ = F + V   [Eq. (46)]
   if (rank >= 1) {
-    // H̄¹ = [F,σ] + ½[V,σ] + ½[V_R,σ]   [Eq. (47)]. F-commutators enter H̄ ONLY
-    // here. This is the F-cancellation, stated just below Eq. (50) as "the
-    // terms in H̄ involving F now truncate to the first power of σ". H̄⁰ carries
-    // the bare F.
+    // H̄¹ = [F,σ] + ½[V,σ] + ½[V_R,σ]   [Eq. (47)]. The only F commutator in H̄;
+    // H̄⁰ carries the bare F. See the F-cancellation at the top of this file.
     add(1, wick_commutator(F, sigma));
     add({1, 2}, nest('A', "A"));
     add({1, 2}, nest('R', "A"));
@@ -380,10 +339,8 @@ ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
     add({-1, 24}, nest('R', "RAA"));
   }
   if (rank >= 4) {
-    // H̄⁴ = Eq. (50), the nine order-4 terms produced by the recursion Eq. (44),
-    // V̄^{k+1} = σ̂F + X̂⁻¹(σ̂)e^{σ̂}V − Σ_{n≠0} B_n σ̂^n V̄_R^{k}. F is absent here
-    // (the F-cancellation). Listed in the paper's order; the outermost tag is
-    // always A.
+    // H̄⁴ = Eq. (50), nine terms, no F. Listed in the paper's order; the
+    // outermost tag is always A.
     add({1, 16}, nest('R', "RRRA"));
     add({1, 16}, nest('A', "RRRA"));
     add({1, 48}, nest('N', "ARRA"));

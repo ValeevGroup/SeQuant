@@ -130,9 +130,9 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
   SECTION("bernoulli_hbar_structure") {
     using namespace sequant;
     using namespace sequant::mbpt;
-    // Equation references are to 10.1063/1.5030344, Sec. III B.
-    // The F-cancellation: F appears only in H̄¹, so rank r − rank r−1 is
-    // F-free for r ≥ 2.
+    // Equation references are to 10.1063/1.5030344, Sec. II B.
+    // The F-cancellation: the only F commutator is in H̄¹, so H̄ at rank r minus
+    // H̄ at rank r−1 is F-free for r ≥ 2.
     auto h0 = bernoulli::hbar(2, 0, false);
     auto h1 = bernoulli::hbar(2, 1, false);
     auto h2 = bernoulli::hbar(2, 2, false);
@@ -151,7 +151,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     const auto E2_contrib = simplify(E2 - E1);
 
     // <0|H̄¹|0>: g-content is exactly 1/8 <ij||ab> σ_ij^ab + h.c.; the remainder
-    // is the [F,σ] Brillouin terms, which vanish at RHF.
+    // is the [F,σ] Brillouin terms, which vanish at an HF reference.
     const auto E1_g_closed = deserialize(
         L"1/8 t{a_1,a_2;i_1,i_2}:A-N-S * g{i_1,i_2;a_1,a_2}:A-C-S "
         L"+ 1/8 t⁺{i_1,i_2;a_1,a_2}:A-N-S * g{a_1,a_2;i_1,i_2}:A-C-S");
@@ -191,9 +191,9 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     REQUIRE(size(amps[1]) == 32);
     REQUIRE(size(amps[2]) == 38);
 
-    // one projected equation pinned in full: term counts are blind to the
-    // coefficients, which is where a mis-weighted Wick reduction shows up.
-    // Doubles at H̄¹, the smallest such equation.
+    // one equation pinned in full: term counts are blind to the coefficients,
+    // where a mis-weighted Wick reduction shows up. Doubles at H̄¹ is the
+    // smallest such equation.
     const auto R2_h1 = CC(2, {.ansatz = CC::Ansatz::U,
                               .hbar_comm_rank = 1,
                               .hbar_expansion = CC::HbarExpansion::Bernoulli})
@@ -249,9 +249,9 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     REQUIRE(size(ip[0]) == 32);
     REQUIRE(size(ip[1]) == 11);
 
-    // one manifold means one block, whose sandwich minus shift is the
-    // commutator the uniform path builds; that path shares no code with
-    // eom_r_blocked, so this pins the block construction against it
+    // one manifold means one block, whose <i|H̄|i> minus <0|H̄|0> is exactly the
+    // commutator the uniform path builds; the two assemble blocks by
+    // independent code, so this pins one against the other
     const CC bch(2, {.ansatz = CC::Ansatz::U, .hbar_comm_rank = 2});
     REQUIRE_THAT(bch.eom_r(nₚ(1), nₕ(1), {2}).at(1),
                  EquivalentTo(bch.eom_r(nₚ(1), nₕ(1)).at(1)));

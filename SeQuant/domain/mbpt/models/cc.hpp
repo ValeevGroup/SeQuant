@@ -61,11 +61,8 @@ class CC {
     /// perturbation operator; must be specified if unitary ansatz is used in
     /// perturbed amplitude derivation
     std::optional<size_t> pertbar_comm_rank = std::nullopt;
-    /// choice of H̄ expansion; Bernoulli requires a unitary ansatz.
-    /// @note the Bernoulli H̄ is assembled at the tensor level and does not go
-    /// through CC::ref_av(), which is what forwards `screen` and
-    /// `use_topology`; it calls `op::tensor::ref_av()` with that function's own
-    /// defaults instead
+    /// choice of H̄ expansion; Bernoulli requires the U ansatz, not merely a
+    /// unitary one, and ignores `screen` and `use_topology`, see `hbar()`
     HbarExpansion hbar_expansion = HbarExpansion::BCH;
   };
 
@@ -127,7 +124,8 @@ class CC {
   /// outside the CC class" section of the user guide.
   /// @note Under `HbarExpansion::Bernoulli` the result is tensor-level, so it
   /// takes `op::tensor` projectors and `op::tensor::ref_av`, not their `op`
-  /// counterparts, and it is unscreened: `screen` has no effect there.
+  /// counterparts. That path never reaches `CC::ref_av`, so `screen` and
+  /// `use_topology` have no effect on it.
   [[nodiscard]] ExprPtr hbar(
       std::optional<size_t> truncation_rank = std::nullopt) const;
 
@@ -200,33 +198,22 @@ class CC {
   ///     | H_SS  H_SD |    e.g.  | 2  1 |
   ///     | H_DS  H_DD |          | 1  0 |
   ///   read row by row, i.e. `{2,1,1,0}`: H_SS through the double commutator
-  ///   [[V,σ],σ], H_SD and H_DS through the single [V,σ], H_DD the bare
-  ///   Hamiltonian integrals (no commutators). Those are the ranks
-  ///   10.1063/5.0062090 Sec. II C truncates qUCCSD at, Eqs. (29), (41), (44)
-  ///   and (48), which it writes UCCSD[2|2,1,0]; that section also says which
-  ///   H̄ components each block then retains.
+  ///   [[H,σ],σ], H_SD and H_DS through the single [H,σ], H_DD the bare
+  ///   Hamiltonian integrals (no commutators). Under `Bernoulli` a rank is the
+  ///   Bernoulli order H̄^k instead, whose commutators are in V alone. These are
+  ///   that paper's Bernoulli qUCCSD ranks, UCCSD[2|2,1,0] of 10.1063/5.0062090
+  ///   Eqs. (29), (41), (44), (48); its BCH scheme instead needs F one rank
+  ///   above V, which one number per block cannot express.
   ///   `K` manifolds give a row-major `K`×`K` matrix ordered by ASCENDING
   ///   manifold rank, so one set of numbers serves EE, IP and EA (read S as
-  ///   1h/1p and D as 2h1p/1h2p; 10.1021/acs.jctc.5c01991 Table 1 maps the
-  ///   IP/EA blocks onto qUCCSD's and its Fig. 1 carries their ranks). Empty
-  ///   (the default) selects the uniform H̄ at `hbar_comm_rank` everywhere.
-  /// @pre if non-empty, requires a unitary ansatz; a non-unitary H̄ is exact and
-  ///   has nothing to truncate.
+  ///   1h/1p and D as 2h1p/1h2p; 10.1021/acs.jctc.5c01991 Fig. 1 carries the
+  ///   IP/EA ranks). Empty (the default) selects the uniform H̄ at
+  ///   `hbar_comm_rank` everywhere.
+  /// @pre if non-empty, requires a unitary ansatz; a non-unitary H̄ terminates
+  ///   and has nothing to truncate.
   /// @pre `block_ranks` is either empty or `K`×`K`
-  /// @note each block is the sandwich \f$ \langle i|\bar{H}|j \rangle \f$
-  ///   (Eq. (7) of 10.1063/5.0062090) plus an explicit \f$ -E \f$ shift on the
-  ///   diagonal, taken at the block's own truncation rank. Eq. (10) there
-  ///   instead splits \f$ \bar{H} = E_{gr} + {} \f$ a normal-ordered remainder
-  ///   and forms the blocks from the remainder. The returned object is
-  ///   \f$ (\bar{H}-E)\hat{R} \f$.
-  /// @note under the Bernoulli expansion each block's H̄ has its N part (the
-  ///   ground-state amplitude residual) removed. See `eom_r_blocked` in cc.cpp
-  ///   for why. The removed terms vanish at converged amplitudes when a block
-  ///   rank equals `hbar_comm_rank`, so this changes those blocks' equations
-  ///   but not the numbers they evaluate to. `BCH` has no N/R split to take,
-  ///   so it keeps them.
-  /// @return vector of right side sigma equations; element 0 is null iff
-  ///   `np == nh`
+  /// @return \f$ (\bar{H}-E)\hat{R} \f$, one element per projection manifold;
+  ///   element 0 is null iff `np == nh`
   // clang-format on
   [[nodiscard]] std::vector<ExprPtr> eom_r(
       nₚ np, nₕ nh, const std::vector<std::size_t>& block_ranks = {}) const;
@@ -279,6 +266,10 @@ class CC {
   /// non-empty or the expansion is Bernoulli
   /// @param block_ranks see `eom_r`; empty means uniform `hbar_comm_rank`
   /// @pre a unitary ansatz
+  /// @note under the Bernoulli expansion each block's H̄ has its N part removed.
+  ///   Where a block's rank equals `hbar_comm_rank` the removed terms vanish at
+  ///   converged amplitudes, so its equations change but its values do not;
+  ///   below that rank the values change too. `BCH` keeps them.
   [[nodiscard]] std::vector<ExprPtr> eom_r_blocked(
       nₚ np, nₕ nh, const std::vector<std::size_t>& block_ranks) const;
 
