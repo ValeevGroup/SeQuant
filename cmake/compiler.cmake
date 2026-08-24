@@ -68,21 +68,57 @@ function(target_set_optimization_flags TARGET)
 		return()
 	endif()
 
+	get_target_property(TARGET_TYPE "${TARGET}" TYPE)
+
+	if (TARGET_TYPE STREQUAL "INTERFACE_LIBRARY")
+		message(WARNING "target_set_optimization_flags is not intended to be used on interface targets")
+		return()
+	endif()
+
 	include(CheckCXXCompilerFlag)
 	include(CheckIPOSupported)
 
-	check_ipo_supported(RESULT COMPILER_SUPPORTS_IPO LANGUAGES CXX)
+	check_ipo_supported(RESULT CMAKE_SUPPORTS_COMPILER_LTO LANGUAGES CXX)
 
-    __check_gnu_like_compiler()
+	check_cxx_compiler_flag("-flto" LTO_FLAG_SUPPORTED)
+	check_cxx_compiler_flag("-flto=auto" LTO_AUTO_SUPPORTED)
+	check_cxx_compiler_flag("-flto;-ffat-lto-objects" FAT_LTO_FLAG_SUPPORTED)
 
-	if (COMPILER_SUPPORTS_IPO AND (NOT DEFINED SEQUANT_LTO OR SEQUANT_LTO))
-		set_target_properties("${TARGET}" PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON)
+	if (DEFINED SEQUANT_LTO)
+		# Always honor explicit user choice
+		set(ENABLE_LTO ${SEQUANT_LTO})
+	elseif(TARGET_TYPE STREQUAL "STATIC_LIBRARY" OR TARGET_TYPE STREQUAL "OBJECT_LIBRARY")
+		# For static/object libraries we only want to enable LTO by default, if we can create
+		# "fat" object files. Those can still be linked without LTO and hence shouldn't
+		# break any downstream use.
+		set(ENABLE_LTO ${LTO_FLAG_SUPPORTED})
+	elseif(LTO_FLAG_SUPPORTED OR CMAKE_SUPPORTS_COMPILER_LTO)
+		# Anything but static/object libraries is also linked by us and
+		# hence enabling LTO doesn't affect downstream compatibility
+		set(ENABLE_LTO ON)
+	endif()
 
-		check_cxx_compiler_flag("-ffat-lto-objects" FAT_LTO_SUPPORTED)
+	if (ENABLE_LTO)
+		if (LTO_FLAG_SUPPORTED)
+			# We prefer to manually set the LTO flag(s) rather than CMake doing it for us
+			# due to https://gitlab.kitware.com/cmake/cmake/-/work_items/23136
+			# On some compilers, the thin LTO type requested by CMake is incompatible
+			# with explicitly asking for fat LTO object files.
+			# Besides, it seems like full LTO achieves quite a bit better optimizations
+			# with Clang.
+			if (LTO_AUTO_SUPPORTED)
+				target_compile_options("${TARGET}" PRIVATE -flto=auto)
+				target_link_options("${TARGET}" PRIVATE -flto=auto)
+			else()
+				target_compile_options("${TARGET}" PRIVATE -flto)
+				target_link_options("${TARGET}" PRIVATE -flto)
+			endif()
 
-		if (FAT_LTO_SUPPORTED)
-			# This (should) ensures that the object files can still be linked without LTO
-			target_compile_options("${TARGET}" PRIVATE -ffat-lto-objects)
+			if (FAT_LTO_FLAG_SUPPORTED)
+				target_compile_options("${TARGET}" PRIVATE -ffat-lto-objects)
+			endif()
+		else()
+			set_target_properties("${TARGET}" PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON)
 		endif()
 	endif()
 endfunction()
