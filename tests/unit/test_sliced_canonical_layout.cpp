@@ -629,3 +629,183 @@ TEST_CASE(
   // graph, hash, AND canonical slot order all match the pre-coloring key).
   CHECK(loop_colored_layout(reduced) == loop_colored_layout(today));
 }
+
+// ===========================================================================
+// Task 6: populate ValueCell::canonical_layout and OccurrenceRec::
+// perm_to_canonical -- the reconciliation datum. This is the exact w8
+// pattern (the symmetric probe's two use-sites) turned into a per-value /
+// per-occurrence STORAGE fact: the value is stored ONCE, in a canonical
+// layout designated from ONE occurrence, and every occurrence (including
+// that seeding one) carries its OWN version of that layout in its OWN
+// physical labels so Task 7's executor can permute a resident read into
+// whichever occurrence's slot order it needs.
+// ===========================================================================
+
+using sequant::eval::OccurrenceRec;
+using sequant::eval::populate_canonical_layouts;
+using sequant::eval::populate_occurrence_canonical_layout;
+using sequant::eval::RichSchedule;
+using sequant::eval::ValueCell;
+
+// (6-FOLD) The symmetric probe's two use-sites, populated onto ONE ValueCell
+// with two OccurrenceRecs: the SAME shared loop (one LoopId) binds to i_2 at
+// occurrence A and to i_1 at occurrence B -- exactly the water-8 "pos0 here,
+// pos1 there" pattern, now recorded as a genuine per-value fact (by_value[0]
+// legitimately carries BOTH (i_2,loop) and (i_1,loop): one loop, two
+// physical bindings across occurrences of the one folded value).
+TEST_CASE(
+    "populate_occurrence_canonical_layout: symmetric probe's two "
+    "occurrences store canonical_layout once and a distinct per-occurrence "
+    "permutation each",
+    "[sliced-layout]") {
+  Context ctx = get_default_context();
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto const ctx_resetter = set_scoped_default_context(ctx);
+
+  Index i1{L"i_1"}, i2{L"i_2"};
+  auto const probe = make_symm_probe(i1, i2);
+  EvalNodeDryRun const& iA = probe.nodeA.left();  // I as consumed at A
+  EvalNodeDryRun const& iB = probe.nodeB.left();  // same I, consumed at B
+  constexpr LoopId loop = 42;
+
+  // ONE value, ONE shared loop -- both physical bindings recorded under the
+  // SAME value_id (unlike the Task-5 fold test, which used two vids purely
+  // to demonstrate the graph-level fold in isolation).
+  SlicedModeAssignment assignment;
+  assignment.by_value[0] = {{i2, loop}, {i1, loop}};
+
+  ValueCell cell;
+  cell.value_id = 0;
+  REQUIRE(cell.canonical_layout.empty());  // precondition: nothing yet
+
+  OccurrenceRec occA;
+  occA.point = 0;
+  occA.carried = svector<Index>{i1, i2};  // I's own full slot set
+  OccurrenceRec occB;
+  occB.point = 1;
+  occB.carried = svector<Index>{i1, i2};
+
+  populate_occurrence_canonical_layout(iA, svector<Index>{i2}, assignment, cell,
+                                       occA);
+  populate_occurrence_canonical_layout(iB, svector<Index>{i1}, assignment, cell,
+                                       occB);
+
+  // The value's canonical_layout is populated exactly once, from the FIRST
+  // occurrence visited (A) -- a real per-value artifact.
+  REQUIRE_FALSE(cell.canonical_layout.empty());
+  CHECK(cell.canonical_layout == svector<Index>{i2});
+
+  // Occurrence A's own permutation IS the canonical layout verbatim -- the
+  // "identity-ish" site (it seeded canonical_layout, so applying it is a
+  // no-op).
+  CHECK(occA.perm_to_canonical == cell.canonical_layout);
+  CHECK(occA.perm_to_canonical == svector<Index>{i2});
+
+  // Occurrence B's own permutation is the SWAP: a DIFFERENT physical label
+  // (i_1, not i_2) at the SAME canonical slot -- occurrence-specific, not a
+  // copy of A's.
+  CHECK(occB.perm_to_canonical == svector<Index>{i1});
+  CHECK_FALSE(occB.perm_to_canonical == occA.perm_to_canonical);
+  CHECK_FALSE(occB.perm_to_canonical == cell.canonical_layout);
+
+  // Both occurrences' own permutations are expressed in THEIR OWN physical
+  // labels -- each is a genuine subset of that occurrence's own carried set,
+  // not a stray label from the other occurrence.
+  CHECK(std::find(occA.carried.begin(), occA.carried.end(),
+                  occA.perm_to_canonical.at(0)) != occA.carried.end());
+  CHECK(std::find(occB.carried.begin(), occB.carried.end(),
+                  occB.perm_to_canonical.at(0)) != occB.carried.end());
+
+  // Sanity: the two occurrences' own loop-colored ids still FOLD (one value,
+  // per Task 5) even though their stored permutations differ in content --
+  // the fold is a graph-level fact, the permutation a label-level one.
+  auto const kA = loop_colored_id(iA, svector<Index>{i2}, 0, assignment);
+  auto const kB = loop_colored_id(iB, svector<Index>{i1}, 0, assignment);
+  CHECK(graphs_equal(kA, kB));
+}
+
+// (6-REDUCE) The degenerate unsliced case: a rank-1 value with its one mode
+// passed as ctx_modes (all of carried is named) but an EMPTY assignment (no
+// (value,mode)->loop fact recorded anywhere -- nothing is sliced). The
+// coloring reduces to today's null path (Task 5's #1 anchor), and since the
+// value's single named mode is also its whole carried set, the resulting
+// canonical_layout equals carried exactly and the "permutation" is the
+// identity -- unambiguously, with no multi-index canonical-ordering
+// tie-break to worry about.
+TEST_CASE(
+    "populate_occurrence_canonical_layout reduce: unsliced value's "
+    "canonical_layout equals carried, permutation is identity",
+    "[sliced-layout]") {
+  Context ctx = get_default_context();
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto const ctx_resetter = set_scoped_default_context(ctx);
+
+  Index i1{L"i_1"};
+  auto const J =
+      ex<Tensor>(L"J", bra(svector<Index>{i1}), ket{}, Symmetry::Nonsymm);
+  auto const nodeJ = probe_binarize(J, IndexSet{i1});  // leaf, i1 named
+
+  SlicedModeAssignment const empty;  // nothing sliced, for any value
+
+  ValueCell cell;
+  cell.value_id = 0;
+  OccurrenceRec occ;
+  occ.point = 0;
+  occ.carried = svector<Index>{i1};
+
+  populate_occurrence_canonical_layout(nodeJ, svector<Index>{i1}, empty, cell,
+                                       occ);
+
+  REQUIRE_FALSE(cell.canonical_layout.empty());
+  CHECK(cell.canonical_layout == occ.carried);  // canonical == carried
+  CHECK(occ.perm_to_canonical == cell.canonical_layout);  // identity
+  CHECK(occ.perm_to_canonical == svector<Index>{i1});
+}
+
+namespace {
+
+/// A trivial per-mode block size for compute_dag_boulevard's ectx-range
+/// bookkeeping -- irrelevant to this driver test (only Index identity, not
+/// extent, matters here).
+std::size_t const_block_of(Index const&) { return std::size_t{1}; }
+
+}  // namespace
+
+// (6-DRIVER) The forest-walking co-pass, `populate_canonical_layouts`, wires
+// point-matching correctly: re-walking the SAME two-leaf forest that built
+// `rich` (via `compute_dag_boulevard`) reproduces the identical point
+// sequence (the SEQUANT_ASSERT in populate_canonical_layouts would fire on a
+// mismatch), and -- with an empty assignment (nothing sliced anywhere) --
+// leaves every cell's canonical_layout and every occurrence's
+// perm_to_canonical empty, the degenerate case at the DRIVER granularity
+// (not just the low-level function tested above).
+TEST_CASE(
+    "populate_canonical_layouts: forest re-walk point-matches rich without "
+    "assignment entries -> everything stays empty",
+    "[sliced-layout]") {
+  Index i1{L"i_1"}, i2{L"i_2"};
+
+  auto const J1 =
+      ex<Tensor>(L"J1", bra(svector<Index>{i1}), ket{}, Symmetry::Nonsymm);
+  auto const J2 =
+      ex<Tensor>(L"J2", bra(svector<Index>{i2}), ket{}, Symmetry::Nonsymm);
+  auto const nodeJ1 = probe_binarize(J1, IndexSet{i1});
+  auto const nodeJ2 = probe_binarize(J2, IndexSet{i2});
+
+  svector<EvalNodeDryRun> const forest{nodeJ1, nodeJ2};
+  auto const cm = std::make_shared<sequant::eval::dryrun::CostModel const>(
+      cache_probe_regime());
+
+  RichSchedule rich =
+      sequant::eval::compute_dag_boulevard(forest, *cm, const_block_of);
+  REQUIRE(rich.cells.size() == 2);
+
+  SlicedModeAssignment const empty;
+  populate_canonical_layouts(forest, rich, empty);
+
+  for (ValueCell const& c : rich.cells) {
+    CHECK(c.canonical_layout.empty());
+    for (OccurrenceRec const& o : c.occurrences)
+      CHECK(o.perm_to_canonical.empty());
+  }
+}

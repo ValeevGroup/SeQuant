@@ -1918,11 +1918,135 @@ template <meta::eval_node Node>
 /// index view). Storing it per value gives the value one designated stored
 /// order for its sliced slots regardless of which physical label a given
 /// occurrence used; each occurrence's permutation onto it is a separate
-/// per-occurrence datum (design sec.3, Task 7).
+/// per-occurrence datum (design sec.3, Task 6 --
+/// \c populate_canonical_layouts / \c populate_occurrence_canonical_layout,
+/// below).
 ///
 [[nodiscard]] inline container::svector<Index> loop_colored_layout(
     TensorNetwork::SlotCanonicalizationMetadata const& id) {
   return id.get_indices<container::svector<Index>>();
+}
+
+///
+/// \brief Task 6 (sliced-value canonical layout / loop-coloring design):
+/// populate ONE occurrence's \c OccurrenceRec::perm_to_canonical -- and, the
+/// first time this is called for \p cell with a non-empty result, its owning
+/// \c ValueCell::canonical_layout too -- from \p node, the REAL eval node
+/// this occurrence reads/produces its value at.
+///
+/// \details Computes \p node's loop-colored id (\c loop_colored_id) and
+/// extracts its layout (\c loop_colored_layout): this occurrence's OWN
+/// physical labels, canonically slot-ordered exactly as \c ValueCell::
+/// canonical_layout is (same construction -- \c canonicalize_slots' canonical
+/// order depends only on the colored graph, not on which concrete labels
+/// happen to fill it, so two occurrences whose colored graphs fold equal
+/// necessarily agree on WHICH slot each entry occupies, only possibly
+/// disagreeing on the physical label at that slot). Stored on \p occ
+/// verbatim; the first occurrence (in whatever order the caller visits them)
+/// to produce a non-empty layout designates \p cell's canonical_layout --
+/// an arbitrary but deterministic choice among occurrences that all agree by
+/// construction (the design's "one designated stored layout... regardless of
+/// which physical label a given occurrence used", sec.2). An UNSLICED
+/// occurrence (no named modes recorded in \p assignment for \p cell's
+/// value_id on \p node's own slots) produces an EMPTY layout -- the
+/// degenerate reduction, matching \c ValueCell::canonical_layout's own empty
+/// case.
+///
+/// \param node this occurrence's own node -- \c RichSchedule / \c
+///        OccurrenceRec are deliberately Node-erased (backend-agnostic), so
+///        this datum can only be produced with access to the original
+///        forest; see \c populate_canonical_layouts for the driver that
+///        supplies it.
+/// \param ctx_modes the ambient batch-loop modes in scope at \p node (the
+///        Index projection of \p occ's own \c ectx).
+/// \param assignment Task 3's \c compute_sliced_mode_assignment output.
+/// \param cell the value's cell (mutated: \c canonical_layout, at most once).
+/// \param occ this occurrence's record (mutated: \c perm_to_canonical).
+///
+template <meta::eval_node Node>
+void populate_occurrence_canonical_layout(
+    Node const& node, container::svector<Index> const& ctx_modes,
+    SlicedModeAssignment const& assignment, ValueCell& cell,
+    OccurrenceRec& occ) {
+  TensorNetwork::SlotCanonicalizationMetadata const id =
+      loop_colored_id(node, ctx_modes, cell.value_id, assignment);
+  occ.perm_to_canonical = loop_colored_layout(id);
+  if (cell.canonical_layout.empty() && !occ.perm_to_canonical.empty())
+    cell.canonical_layout = occ.perm_to_canonical;
+}
+
+///
+/// \brief Task 6: populate \c ValueCell::canonical_layout and every \c
+/// OccurrenceRec::perm_to_canonical in \p rich, by re-walking \p forest --
+/// the SAME range, in the SAME order, originally passed to \c
+/// compute_dag_boulevard to build \p rich -- to recover, for every
+/// occurrence, the REAL eval node and its ambient loop-modes context (\c
+/// ectx) that \c populate_occurrence_canonical_layout needs.
+///
+/// \details Mirrors \c compute_dag_boulevard's own post-order walk (the same
+/// \c batched_here()-driven ambient-context threading, proto-expanded the
+/// same way -- see that function's doc comment) but does NOT re-derive value
+/// identity from scratch: \p rich already assigns every occurrence a stable
+/// \c point (its production static point), so this walk reconstructs the
+/// SAME point sequence -- post-order over the SAME forest is deterministic
+/// regardless of any later hash-grouping -- and looks each one up in a
+/// \c point -> (value_id, occurrence-index) map built from \p rich, rather
+/// than regrouping by hash itself.
+///
+/// \param forest PRECONDITION: the exact same range (same nodes, same order)
+///        passed to the \c compute_dag_boulevard call that produced \p rich.
+///        Passing a different forest silently mismatches occurrences to the
+///        wrong points; the point-owner lookup below asserts every produced
+///        point resolves, which is the load-bearing check for this
+///        precondition.
+/// \param rich mutated in place (see \c populate_occurrence_canonical_layout).
+/// \param assignment \c compute_sliced_mode_assignment's output for an \c
+///        OrderedSchedule built from this SAME \p rich (as that function
+///        itself requires).
+///
+template <meta::eval_node_range R>
+void populate_canonical_layouts(R const& forest, RichSchedule& rich,
+                                SlicedModeAssignment const& assignment) {
+  using Node = std::ranges::range_value_t<R>;
+
+  // point -> (value_id, occurrence index within that cell's occurrences).
+  std::unordered_map<std::size_t, std::pair<std::size_t, std::size_t>>
+      point_owner;
+  for (ValueCell const& c : rich.cells)
+    for (std::size_t k = 0; k < c.occurrences.size(); ++k)
+      point_owner.emplace(c.occurrences[k].point,
+                          std::make_pair(c.value_id, k));
+
+  std::size_t counter = 0;
+  auto visit = [&](auto&& self, Node const& n,
+                   container::svector<Index> const& ctx_modes) -> void {
+    container::svector<Index> child_ctx_modes = ctx_modes;
+    for (auto const& [ix, kind] : n->batched_here()) {
+      (void)kind;
+      container::svector<Index> expanded;
+      sequant::detail::proto_expand_into(expanded, ix);
+      for (auto const& m : expanded) child_ctx_modes.push_back(m);
+    }
+
+    if (!n.leaf()) {
+      self(self, n.left(), child_ctx_modes);
+      self(self, n.right(), child_ctx_modes);
+    }
+
+    std::size_t const point = counter++;
+    auto const it = point_owner.find(point);
+    SEQUANT_ASSERT(
+        it != point_owner.end() &&
+        "populate_canonical_layouts: a point produced by re-walking forest "
+        "has no owning occurrence in rich -- forest must be the SAME range "
+        "(same order) that built rich via compute_dag_boulevard");
+    auto const [value_id, occ_idx] = it->second;
+    ValueCell& cell = rich.cells[value_id];
+    OccurrenceRec& occ = cell.occurrences[occ_idx];
+    populate_occurrence_canonical_layout(n, ctx_modes, assignment, cell, occ);
+  };
+
+  for (auto const& tree : forest) visit(visit, tree, {});
 }
 
 namespace detail {

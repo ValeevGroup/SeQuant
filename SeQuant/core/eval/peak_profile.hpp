@@ -231,6 +231,25 @@ struct OccurrenceRec {
   container::svector<Index> carried;  //!< this occurrence's canon_indices
   container::svector<Index> home;     //!< proto-expanded home_scope
   detail::BatchContext ectx;  //!< ENCLOSING loops (excludes this node's own)
+  container::svector<Index>
+      perm_to_canonical;  //!< NEW (Task 6, sliced-value canonical-layout /
+                          //!< loop-coloring design): THIS occurrence's own
+                          //!< loop-colored sliced-slot layout -- the \c
+                          //!< loop_colored_layout byproduct computed AT this
+                          //!< occurrence's own node/ctx_modes (see \c
+                          //!< populate_canonical_layouts,
+                          //!< ordered_schedule.hpp). Same canonical
+                          //!< CONSTRUCTION as (and slot-position-aligned
+                          //!< with) the owning \c ValueCell::canonical_layout,
+                          //!< but expressed in THIS occurrence's own physical
+                          //!< \c Index labels -- identical to
+                          //!< \c canonical_layout when this occurrence is the
+                          //!< one that seeded it, a relabeling of it
+                          //!< (design's per-occurrence permutation, sec.3)
+                          //!< when a symmetric/CSE-folded sibling occurrence
+                          //!< bound the same loop to a different physical
+                          //!< slot. EMPTY for an unsliced occurrence (mirrors
+                          //!< the value's empty \c canonical_layout).
 };
 
 ///
@@ -290,12 +309,19 @@ struct ValueCell {
                                 //!< DAG-scope loop it runs under, if any. Left
                                 //!< default-empty here.
   container::svector<Index>
-      canonical_layout;  //!< NEW (Task 5, sliced-value canonical-layout /
-                         //!< loop-coloring design): this value's named (sliced)
-                         //!< indices in canonical LOOP-COLORED slot order --
-                         //!< the per-value storage layout, the byproduct of
+      canonical_layout;  //!< Sliced-value canonical-layout / loop-coloring
+                         //!< design: this value's named (sliced) indices in
+                         //!< canonical LOOP-COLORED slot order -- the
+                         //!< per-value storage layout, the byproduct of
                          //!< \c loop_colored_id (\c loop_colored_layout,
-                         //!< ordered_schedule.hpp). EMPTY for an unsliced value
+                         //!< ordered_schedule.hpp). Populated (Task 6, \c
+                         //!< populate_canonical_layouts) from the FIRST
+                         //!< occurrence to be visited -- an arbitrary but
+                         //!< deterministic choice of designated physical
+                         //!< labels for the value's stored layout; every
+                         //!< occurrence's own version lives on its \c
+                         //!< OccurrenceRec::perm_to_canonical, slot-position-
+                         //!< aligned with this. EMPTY for an unsliced value
                          //!< (no loop-colored sliced modes) -- the empty case
                          //!< reduces to today's identity.
 };
