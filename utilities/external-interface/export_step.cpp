@@ -64,14 +64,14 @@ void ExportStep::set_options(const nlohmann::json &options) {
     } else {
       throw Exception("Unknown option key for " + kind() + ": '" + key + "'");
     }
+  }
 
-    if (language_.empty()) {
-      throw Exception("The 'language' option for " + kind() + " is mandatory");
-    }
+  if (language_.empty()) {
+    throw Exception("The 'language' option for " + kind() + " is mandatory");
+  }
 
-    if (filepath_.empty()) {
-      throw Exception("The 'output' option for " + kind() + " is mandatory");
-    }
+  if (filepath_.empty()) {
+    throw Exception("The 'output' option for " + kind() + " is mandatory");
   }
 }
 
@@ -188,7 +188,7 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
   {
     // TODO: setup load/store/create/import strategies
 
-	// TODO: handle index batching
+    // TODO: handle index batching
 
     export_groups(groups, generator, genctx);
 
