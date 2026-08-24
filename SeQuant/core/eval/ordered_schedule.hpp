@@ -1389,13 +1389,13 @@ struct ScopeBlockAxisLevel {
   DagScopeLevel level;
 };
 
-/// \brief \c populate_cell_mode_to_level's block-tree walk: record, for every
-/// value PRODUCED (a \c BuildStep) or ESCAPED (a block \c outputs entry), the
-/// ordered list of enclosing loop blocks (\c axis + \c level) it is EVALUATED
-/// under -- i.e. the loops whose batch it reads its operands inside. This is
-/// exactly \c ordered_home_reads' \c build_scope, but keeping each block's
-/// \c DagScopeLevel (not just its axis) so the map can name the runtime
-/// \c BatchContextEntry::level.
+/// \brief \c compute_sliced_mode_assignment's block-tree walk: record, for
+/// every value PRODUCED (a \c BuildStep) or ESCAPED (a block \c outputs
+/// entry), the ordered list of enclosing loop blocks (\c axis + \c level) it
+/// is EVALUATED under -- i.e. the loops whose batch it reads its operands
+/// inside. This is exactly \c ordered_home_reads' \c build_scope, but keeping
+/// each block's \c DagScopeLevel (not just its axis) so the map can name the
+/// runtime \c BatchContextEntry::level.
 ///
 /// \p enc is the root-to-\p block path INCLUDING \p block's own (axis, level)
 /// -- a value built or escaping inside \p block reads its operands inside
@@ -1425,21 +1425,22 @@ inline void populate_build_scope_walk(
   }
 }
 
-/// \brief Debug safety net (routed from the Task-4-fix review): \c
-/// populate_cell_mode_to_level's map-based position resolution (\c
-/// ModeToLevel::mode_of, consulted by Task 7's \c slice_to_use) leans on
-/// \c (level.depth, level.space, level.ordinal) being unique GLOBALLY across
-/// the whole realized tree -- i.e. any two blocks sharing that triple must
-/// also share the same representative \c axis, or \c mode_of could resolve a
-/// level onto the wrong physical index. \c well_formed only checks ordinal
-/// uniqueness among a block's OWN same-axis DIRECT children (sibling-local,
-/// see \c ordered_schedule_block_well_formed above) -- it says nothing about
-/// two blocks at the same (depth, space, ordinal) that are NOT siblings (say,
+/// \brief Debug safety net: \c compute_sliced_mode_assignment's canonical
+/// level enumeration (\c enumerate_realized_levels, which folds every
+/// realized \c ScopeBlock's \c DagScopeLevel into one \c LoopId per DISTINCT
+/// level) leans on \c (level.depth, level.space, level.ordinal) being unique
+/// GLOBALLY across the whole realized tree -- i.e. any two blocks sharing
+/// that triple must also share the same representative \c axis, or the
+/// enumeration could fold two structurally-different loops onto one \c
+/// LoopId. \c well_formed only checks ordinal uniqueness among a block's OWN
+/// same-axis DIRECT children (sibling-local, see \c
+/// ordered_schedule_block_well_formed above) -- it says nothing about two
+/// blocks at the same (depth, space, ordinal) that are NOT siblings (say,
 /// nested under different parents). Walk every block in the tree and assert
 /// the stronger, global invariant loudly: a violation means the scheduler
-/// emitted two structurally-distinct loops the level map cannot tell apart,
-/// which would make Task 7's map-based slicing silently mis-resolve. Debug-
-/// only insurance; expected to never fire on any fixture.
+/// emitted two structurally-distinct loops the level-to-\c LoopId mapping
+/// cannot tell apart. Debug-only insurance; expected to never fire on any
+/// fixture.
 inline void assert_global_level_axis_uniqueness(
     ScopeBlock const& block,
     std::map<std::tuple<std::size_t, std::wstring, int>, Index>& seen) {
@@ -1451,344 +1452,16 @@ inline void assert_global_level_axis_uniqueness(
     auto const [it, inserted] = seen.try_emplace(key, child->axis);
     SEQUANT_ASSERT(
         (inserted || it->second == child->axis) &&
-        "populate_cell_mode_to_level: two blocks at the same DAG-scope level "
-        "(depth, space, ordinal) realize DIFFERENT representative axes -- "
-        "mode_to_level's position resolution assumes this triple names one "
-        "axis globally, not just among a block's own direct siblings");
+        "assert_global_level_axis_uniqueness: two blocks at the same "
+        "DAG-scope level (depth, space, ordinal) realize DIFFERENT "
+        "representative axes -- the canonical level enumeration assumes "
+        "this triple names one axis globally, not just among a block's own "
+        "direct siblings");
     assert_global_level_axis_uniqueness(*child, seen);
   }
 }
 
-/// \brief The CORE of \c populate_cell_mode_to_level (construction steps 1-3
-/// of its doc comment), factored out so it can run against a const \p rich --
-/// needed by \c run_ordered_schedule_pre_results (ordered_executor.hpp),
-/// which only has a \c RichSchedule const& in hand and must self-wire the
-/// node->ModeToLevel seam regardless of whether its caller already did (see
-/// that function's own doc comment). Returns one \c ModeToLevel per \p
-/// rich.cells element, in the SAME order (indexed by value_id) -- \c
-/// populate_cell_mode_to_level copies this back into \p rich.cells for
-/// callers/tests that inspect \c ValueCell::mode_to_level directly (e.g.
-/// test_ordered_schedule.cpp); the executor-side self-wiring below builds its
-/// hash-keyed seam map straight from this return value, touching \p rich not
-/// at all.
-inline container::svector<ModeToLevel> compute_cell_mode_to_level(
-    OrderedSchedule const& ordered, RichSchedule const& rich) {
-  // Debug safety net: the global (depth, space, ordinal) -> axis uniqueness
-  // this construction relies on (see assert_global_level_axis_uniqueness's
-  // doc comment above) -- cheap, and expected to never fire.
-  {
-    std::map<std::tuple<std::size_t, std::wstring, int>, Index> seen;
-    assert_global_level_axis_uniqueness(ordered.root, seen);
-  }
-
-  // (1) fetch/eval scope of every produced or escaped value: enclosing blocks
-  // (axis + level), read off the realized block tree.
-  std::unordered_map<std::size_t, container::svector<ScopeBlockAxisLevel>>
-      build_scope;
-  populate_build_scope_walk(ordered.root, {}, build_scope);
-
-  // (2) operand edges (leaves included).
-  OrderedScheduleDepGraph const g = ordered_schedule_dep_graph(rich);
-
-  // Initialize every cell's map to its carried rank, all-unmapped.
-  container::svector<ModeToLevel> result(rich.cells.size());
-  for (std::size_t i = 0; i < rich.cells.size(); ++i)
-    result[i].by_mode.assign(rich.cells[i].carried.size(), std::nullopt);
-
-  // Consistency-checked write of one (value, carried position) -> level fact.
-  // Two fetch sites mapping the SAME carried position to DIFFERENT levels means
-  // the value is shared across physically-divergent bindings the scheduler
-  // failed to SPLIT -- a wrong, silently-inconsistent slice truth, flagged
-  // loudly, never resolved by averaging or last-write-wins.
-  auto const stamp = [&result](std::size_t w_vid, std::size_t p,
-                               DagScopeLevel const& level) {
-    std::optional<DagScopeLevel>& slot = result[w_vid].by_mode[p];
-    if (!slot) {
-      slot = level;
-    } else {
-      SEQUANT_ASSERT(
-          *slot == level &&
-          "compute_cell_mode_to_level: divergent mode_to_level across "
-          "fetch sites -- the value should have been split");
-    }
-  };
-
-  // (3) for each consumer P and operand W of P, stamp P's enclosing blocks
-  // onto W's carried modes by EXACT Index match against the block's
-  // representative axis. This covers every value whose OWN canonical label for
-  // an enclosing loop equals that loop's representative axis (all aux/PAO
-  // values, and non-relabeled occ values).
-  for (auto const& [parent_vid, operands] : g.depends_on) {
-    auto const sit = build_scope.find(parent_vid);
-    if (sit == build_scope.end()) continue;  // parent has no enclosing loop
-    container::svector<ScopeBlockAxisLevel> const& scope = sit->second;
-    if (scope.empty()) continue;
-    for (std::size_t w_vid : operands) {
-      ValueCell const& w = rich.cells[w_vid];
-      for (ScopeBlockAxisLevel const& blk : scope) {
-        for (std::size_t p = 0; p < w.carried.size(); ++p) {
-          if (!(w.carried[p] == blk.axis)) continue;
-          stamp(w_vid, p, blk.level);
-          break;  // a block axis is one Index -> at most one carried position
-        }
-      }
-    }
-  }
-
-  // (4) REGIME-2 RELABEL RECOVERY (occurrence-driven). Step (3)'s exact match
-  // against the block's single representative axis MISSES a CSE value
-  // canonicalized independently of that representative: e.g. a water-8 occ
-  // intermediate carrying \c i_3 fetched under an occ loop whose representative
-  // block axis is \c i_2 -- the SAME physical loop, relabeled. Left unstamped,
-  // \c slice_to_use delivers it UNSLICED (full \c i_3 = 32 against a sliced
-  // sibling's 16), an extent mismatch that deadlocks the ToT x ToT einsum.
-  //
-  // Recover the mode from the CELL'S OWN label using its \c occurrences: within
-  // one occurrence the enclosing-loop axes (\c OccurrenceRec::ectx) and the
-  // value's carried indices (\c OccurrenceRec::carried == the cell's \c carried
-  // for a non-divergent cell) are in the SAME single-tree canonicalization, so
-  // an ectx loop the value actually CARRIES names the sliced mode by the
-  // value's OWN label (\c i_3 here). The LEVEL is read off the realized block
-  // tree -- \c build_scope of the fetch's structural consumer -- so a split
-  // sibling's \c ordinal is the REAL one the runtime pushes, never synthesized.
-  //
-  // Safety (the exact over-slice hazard commit \c f6be0a242 addressed): a mode
-  // is stamped ONLY when the value literally carries the loop's own occurrence
-  // label. A spectator DF leaf carrying \c i_1 fetched under an \c i_2 occ loop
-  // has ectx label \c i_2, which is NOT in its carried set, so it stays
-  // unsliced -- exactly "honor the stamp, not the space" (a node's own realized
-  // loops are pushed onto its CHILDREN's ectx, so `carried contains the ectx
-  // label` IS the batched-here participation test, index-generic not
-  // space-generic). Aux ectx entries are proto-EXPANDED (composite protos
-  // split), so they do not match the composite aux index a value carries and
-  // are left to step (3)'s exact match -- this pass adds occ relabel stamps
-  // only, and is inert in regime 1 (aux-only: no occ loops in any ectx).
-  std::unordered_map<std::size_t, std::size_t> point_owner;
-  for (ValueCell const& vc : rich.cells)
-    for (OccurrenceRec const& occ : vc.occurrences)
-      point_owner[occ.point] = vc.value_id;
-
-  bool const m2l_diag = std::getenv("SEQUANT_UT_M2L_DIAG") != nullptr;
-  for (ValueCell const& w : rich.cells) {
-    std::size_t const w_vid = w.value_id;
-    if (m2l_diag) {
-      std::cerr << "[M2L-CELL] hash=" << w.hash << " vid=" << w_vid
-                << " leaf=" << w.is_leaf << " nocc=" << w.occurrences.size()
-                << " carried=[";
-      for (auto const& c : w.carried)
-        std::cerr << toUtf8(c.full_label()) << " ";
-      std::cerr << "]" << std::endl;
-    }
-    for (OccurrenceRec const& occ : w.occurrences) {
-      if (occ.consumer_point == occ.point) {
-        if (m2l_diag)
-          std::cerr << "[M2L-OCC] hash=" << w.hash << " SKIP=root" << std::endl;
-        continue;  // forest root: not fetched
-      }
-      auto const oit = point_owner.find(occ.consumer_point);
-      if (oit == point_owner.end()) {
-        if (m2l_diag)
-          std::cerr << "[M2L-OCC] hash=" << w.hash << " SKIP=no_owner"
-                    << std::endl;
-        continue;  // defensive
-      }
-      auto const sit = build_scope.find(oit->second);
-      if (sit == build_scope.end()) {
-        if (m2l_diag)
-          std::cerr << "[M2L-OCC] hash=" << w.hash
-                    << " SKIP=consumer_no_buildscope cvid=" << oit->second
-                    << std::endl;
-        continue;  // consumer has no enclosing loop
-      }
-      container::svector<ScopeBlockAxisLevel> const& scope = sit->second;
-      if (m2l_diag) {
-        std::cerr << "[M2L-OCC] hash=" << w.hash << " cvid=" << oit->second
-                  << " scope=[";
-        for (auto const& b : scope)
-          std::cerr << toUtf8(b.axis.space().base_key()) << ":d"
-                    << b.level.depth << "o" << b.level.ordinal << " ";
-        std::cerr << "] ectx=[";
-        for (auto const& e : occ.ectx)
-          std::cerr << toUtf8(e.first.full_label()) << " ";
-        std::cerr << "]" << std::endl;
-      }
-      if (scope.empty()) continue;
-      // Stamp each carried mode m of W that is an ENCLOSING BATCHED LOOP at
-      // this occurrence (m appears in \c occ.ectx -- a node's own realized
-      // loops are pushed onto its CHILDREN's ectx, so ectx membership IS the
-      // batched-here participation test, in W's OWN single-tree labeling). A
-      // carried mode NOT in ectx is W's own free/contracted mode, never sliced
-      // (R's i_4, i_3); this is the over-slice safety (a spectator carrying i_1
-      // under an i_2 loop has ectx i_2, not carried, and is skipped by the same
-      // rule from the opposite side). We do NOT rank-correlate ectx to the
-      // realized nest: the boulevard's natural ectx nesting is DEEP (R's ectx
-      // repeats i_2/i_1 over seven ancestor loops) while \c
-      // build_ordered_schedule collapses them to ONE realized block per space
-      // (see \c ordered_home_reads' doc comment: "the boulevard's natural
-      // nesting, which the ordered schedule does not preserve"). The realized
-      // LEVEL is therefore the same-space block in the consumer's OWN scope;
-      // for water-8 occ+aux each consumer sits in exactly one occ block (a
-      // forced split places it in one sibling, not both) and one aux block, so
-      // the same-space block is unique.
-      for (std::size_t p = 0; p < w.carried.size(); ++p) {
-        Index const& m = w.carried[p];
-        std::wstring const space(m.space().base_key());
-        // participant? m must be an enclosing batched loop at this occurrence.
-        bool participant = false;
-        for (auto const& e : occ.ectx)
-          if (e.first == m) {
-            participant = true;
-            break;
-          }
-        if (!participant) continue;
-        // the realized same-space block in the consumer's scope (unique for the
-        // one-occ-loop / occ+aux regime; if genuinely ambiguous -- two nested
-        // loops of one space -- do NOT guess).
-        DagScopeLevel const* level = nullptr;
-        std::size_t nsame = 0;
-        for (ScopeBlockAxisLevel const& blk : scope)
-          if (std::wstring(blk.axis.space().base_key()) == space) {
-            level = &blk.level;
-            ++nsame;
-          }
-        if (nsame != 1)
-          continue;  // no / ambiguous realized block -> do not guess
-        // Slicing-on-fetch applies ONLY when the loop is strictly OUTER to
-        // where W is itself evaluated: a value is never sliced by a loop
-        // enclosing its OWN build (its result already accounts for that loop --
-        // per-batch for a co-scoped member, accumulated for an escape's own
-        // loop). If W's own eval scope already contains this level, W is
-        // home-resident INSIDE the loop, not fetched across it -- do not stamp.
-        // This is the discriminator between a relabeled cross-scope value R
-        // (built at ROOT scope={}, carries i_1, fetched-and-sliced by the inner
-        // occ loop) and a co-scoped member Y (built INSIDE the occ block,
-        // carries a DIFFERENT physical occ index, must stay unstamped; see
-        // test_ordered_schedule.cpp [sp2-noninner]).
-        auto const wsit = build_scope.find(w_vid);
-        bool built_within = false;
-        if (wsit != build_scope.end())
-          for (ScopeBlockAxisLevel const& b : wsit->second)
-            if (b.level == *level) {
-              built_within = true;
-              break;
-            }
-        if (m2l_diag) {
-          std::cerr << "[M2L] hash=" << w.hash << " leaf=" << w.is_leaf
-                    << " carried=[";
-          for (auto const& c : w.carried)
-            std::cerr << toUtf8(c.full_label()) << " ";
-          std::cerr << "] mode=" << toUtf8(m.full_label()) << " p=" << p
-                    << " level{d=" << level->depth
-                    << ",s=" << toUtf8(level->space) << ",o=" << level->ordinal
-                    << "} built_within=" << built_within
-                    << " consumer_vid=" << oit->second << " wbuild=[";
-          if (wsit != build_scope.end())
-            for (auto const& b : wsit->second)
-              std::cerr << toUtf8(b.axis.space().base_key()) << ":d"
-                        << b.level.depth << "o" << b.level.ordinal << " ";
-          std::cerr << "]" << (built_within ? " SKIP" : " STAMP") << std::endl;
-        }
-        if (built_within) continue;
-        stamp(w_vid, p, *level);
-      }
-    }
-  }
-  return result;
-}
-
 }  // namespace detail
-
-///
-/// \brief Task 4 (DAG-scope runtime slicing): populate every \c
-/// ValueCell::mode_to_level in \p rich from \p ordered's realized \c
-/// ScopeBlock nest -- the map runtime slicing reads to decide, for a value
-/// FETCHED under some enclosing batch loop, WHICH mode (if any) of its cached
-/// result corresponds to that loop's axis.
-///
-/// \details \p ordered must have been built from \p rich (i.e. \p ordered is
-/// \c build_ordered_schedule(rich, ...)'s return value for this SAME \p
-/// rich); \p rich is taken non-const so this function can write its result
-/// back into \p rich.cells.
-///
-/// A value V is sliced at runtime by an enclosing batch loop L (see \c
-/// slice_to_use in eval.hpp) exactly when V is FETCHED as an operand inside
-/// L's block AND V's canonical result carries L's block axis. So V's map must
-/// cover EVERY loop that slices it, over ALL of V's fetch sites -- not merely
-/// the loops enclosing where V is BUILT. The previous BuildStep-only home-path
-/// walk missed two whole classes of sliced value: forest LEAVES (an input DF
-/// tensor, never a \c BuildStep, but fetched under -- and sliced by -- the aux
-/// loop it carries) and ESCAPED values (\c ScopeBlock::outputs, evaluated
-/// inline, never a \c BuildStep). Both ARE read as home-resident operands and
-/// both ARE sliced; leaving their map empty made the equivalence gate in \c
-/// slice_to_use fire (an exact \c index_position match with no map entry).
-///
-/// Construction (fetch-site + occurrence-driven):
-///  1. \c detail::populate_build_scope_walk records, for every value PRODUCED
-///     or ESCAPED, the enclosing loop blocks (\c axis + \c level) it is
-///     evaluated -- i.e. reads its operands -- inside. The \c level is read
-///     straight off \c ordered's block tree, so a forced-split sibling's \c
-///     ordinal is the REAL one the runtime pushes (\c
-///     BatchContextEntry::level), never a guessed one.
-///  2. \c ordered_schedule_dep_graph gives \c depends_on (every operand edge,
-///     leaves included).
-///  3. EXACT pass: for each consumer P and each operand W of P, W is fetched
-///     under P's eval scope: stamp each of P's enclosing blocks (axis, level)
-///     onto W's carried mode that EXACTLY equals that block's representative
-///     axis (\c Index identity), if any. This covers every value whose OWN
-///     canonical label for an enclosing loop equals that loop's representative
-///     axis -- all aux/PAO values and non-relabeled occ values.
-///  4. RELABEL pass (regime-2, occurrence-driven): a CSE value canonicalized
-///     INDEPENDENTLY of the block's representative axis (e.g. a water-8 occ
-///     intermediate carrying \c i_3 fetched under an occ loop whose
-///     representative block axis is \c i_2 -- the SAME physical loop,
-///     relabeled) is MISSED by step 3, left unstamped, and delivered UNSLICED
-///     at runtime (full \c i_3 = 32 against a sliced sibling's 16 -- an extent
-///     mismatch that deadlocks the ToT x ToT einsum). Recover the mode from the
-///     cell's OWN label via its \c occurrences: a carried mode m of W that also
-///     appears in \c OccurrenceRec::ectx is an enclosing BATCHED loop in W's
-///     own single-tree labeling (a node's own realized loops are pushed onto
-///     its CHILDREN's ectx, so ectx membership IS the batched-here
-///     participation test). Each such participant m is stamped with the
-///     same-space realized block in the fetch's consumer scope from step 1 --
-///     read off \c ordered's block tree, never synthesized. The ectx is NOT
-///     rank-correlated to the realized nest: the boulevard's natural ectx
-///     nesting is DEEP (R's ectx repeats i_2/i_1 over seven ancestor loops)
-///     while \c build_ordered_schedule collapses it to ONE realized block per
-///     space (see
-///     \c ordered_home_reads' doc comment: "the boulevard's natural nesting,
-///     which the ordered schedule does not preserve"), so the same-space block
-///     -- unique in the one-occ-loop / occ+aux regime -- is the level; a
-///     genuinely ambiguous nest (two same-space blocks) is left unstamped, not
-///     guessed. Additionally the stamp is skipped when the loop is NOT strictly
-///     outer to W's own build (W's own eval scope already contains the level):
-///     such a value is home-resident INSIDE the loop (per-batch), not fetched
-///     across it -- the discriminator between a cross-scope R (built at root)
-///     and a co-scoped member Y (built inside the occ block).
-///
-/// The RELABEL pass honors the batched-here STAMP, not the space: ectx
-/// membership requires W to actually carry the enclosing loop's own label, so a
-/// spectator DF leaf carrying \c i_1 fetched under an \c i_2 occ loop (ectx
-/// label \c i_2, NOT carried) is left unsliced -- exactly the over-slice hazard
-/// commit \c f6be0a242 addressed. Aux ectx entries are proto-EXPANDED
-/// (composite protos split), so they never match the composite aux index a
-/// value carries; aux is therefore handled solely by step 3's exact match and
-/// the RELABEL pass adds occ relabel stamps only (inert in regime 1: no occ
-/// loops in any ectx).
-///
-/// If two fetch sites map the SAME carried position to DIFFERENT levels, the
-/// value is shared across physically-divergent bindings the scheduler failed
-/// to \c SPLIT (see \c ValueCell::divergent_modes and \c apply_split) -- a
-/// wrong, silently-inconsistent slice truth, flagged with \c SEQUANT_ASSERT,
-/// never resolved by averaging or last-write-wins.
-///
-inline void populate_cell_mode_to_level(OrderedSchedule const& ordered,
-                                        RichSchedule& rich) {
-  container::svector<ModeToLevel> const per_cell =
-      detail::compute_cell_mode_to_level(ordered, rich);
-  SEQUANT_ASSERT(per_cell.size() == rich.cells.size());
-  for (std::size_t i = 0; i < rich.cells.size(); ++i)
-    rich.cells[i].mode_to_level = per_cell[i];
-}
 
 ///
 /// \brief Task 3 of the sliced-value canonical layout / loop-coloring design
@@ -1813,8 +1486,8 @@ using sequant::LoopId;
 ///
 /// \brief The per-(value, sliced-mode) -> DAG-scope-loop ASSIGNMENT: the
 /// coloring input Task 5 feeds to \c canonicalize_slots's \c
-/// NamedIndexColorMap. Unlike the per-cell \c ModeToLevel this deliberately
-/// supersedes (see \c compute_cell_mode_to_level and the design doc's
+/// NamedIndexColorMap. Unlike the per-cell \c ModeToLevel map this
+/// deliberately superseded (removed by Task 8; see the design doc's
 /// migration section), this is plain DATA keyed by the value's OWN physical
 /// \c Index label for each mode it is sliced on -- not a per-cell position
 /// map -- so a relabeled CSE participant (Task 4's regime-2 case) is keyed by
@@ -1831,10 +1504,11 @@ struct SlicedModeAssignment {
   /// value_id -> the list of (this value's OWN sliced-mode Index, the LoopId
   /// that slices it) pairs actually recorded for that value. A value with no
   /// entry here (or whose list omits some Index it carries) is NOT sliced by
-  /// any loop on that mode -- participation is respected exactly as \c
-  /// compute_cell_mode_to_level's built-within gate and ectx-participant test
-  /// already establish (a value built INSIDE a loop, or one that does not
-  /// itself carry that loop's occurrence label, is left unstamped).
+  /// any loop on that mode -- participation is respected via the same
+  /// built-within gate and ectx-participant test
+  /// \c compute_sliced_mode_assignment implements below (a value built
+  /// INSIDE a loop, or one that does not itself carry that loop's occurrence
+  /// label, is left unstamped).
   std::unordered_map<std::size_t, container::svector<std::pair<Index, LoopId>>>
       by_value;
 
@@ -2152,30 +1826,29 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
 /// \brief Task 3 (sliced-value canonical layout / loop-coloring design):
 /// build the per-(value, sliced-mode) -> DAG-scope-loop \c
 /// SlicedModeAssignment from an already-built \p ordered (must be \c
-/// build_ordered_schedule(rich, ...)'s return value for this SAME \p rich,
-/// exactly as \c populate_cell_mode_to_level requires).
+/// build_ordered_schedule(rich, ...)'s return value for this SAME \p rich).
 ///
-/// \details Reuses the SAME two-pass fetch-site walk \c
-/// compute_cell_mode_to_level uses (\c populate_build_scope_walk for the
-/// enclosing-loop scope of every produced/escaped value, and \c
-/// ordered_schedule_dep_graph for the operand edges, leaves included) --
-/// see that function's own doc comment for the exact-match / regime-2-relabel
-/// / built-within-participation reasoning, which is IDENTICAL here -- but
-/// records the raw facts differently: keyed by the value's OWN \c Index
-/// label (not a \c ValueCell::carried POSITION), consistency-checked the same
-/// way (two fetch sites disagreeing on one value's mode's level is a
-/// scheduler bug, never resolved by averaging or last-write-wins), then
-/// remapped through the canonical \c LoopId enumeration (\c
-/// detail::enumerate_realized_levels) instead of storing the \c
-/// DagScopeLevel directly -- this is what makes forced-split siblings
+/// \details Uses a two-pass fetch-site walk (\c populate_build_scope_walk
+/// for the enclosing-loop scope of every produced/escaped value, and \c
+/// ordered_schedule_dep_graph for the operand edges, leaves included): an
+/// EXACT pass matching a block's representative axis against a value's own
+/// carried \c Index (step (3) below), then a REGIME-2 RELABEL pass (step (4)
+/// below) recovering a CSE value's own label from its occurrences when it
+/// was canonicalized independently of the block's representative axis (the
+/// SAME physical loop, relabeled) -- but records the raw facts keyed by the
+/// value's OWN \c Index label (not a \c ValueCell::carried POSITION),
+/// consistency-checked the same way (two fetch sites disagreeing on one
+/// value's mode's level is a scheduler bug, never resolved by averaging or
+/// last-write-wins), then remapped through the canonical \c LoopId
+/// enumeration (\c detail::enumerate_realized_levels) instead of storing the
+/// \c DagScopeLevel directly -- this is what makes forced-split siblings
 /// (same depth/space, different ordinal) come out as DISTINCT colors: they
 /// are distinct entries in the canonical \c levels list by construction.
 ///
 [[nodiscard]] inline SlicedModeAssignment compute_sliced_mode_assignment(
     OrderedSchedule const& ordered, RichSchedule const& rich) {
-  // Debug safety net shared with compute_cell_mode_to_level: the global
-  // (depth, space, ordinal) -> axis uniqueness this construction (and the
-  // canonical level enumeration below) relies on.
+  // Debug safety net: the global (depth, space, ordinal) -> axis uniqueness
+  // this construction (and the canonical level enumeration below) relies on.
   {
     std::map<std::tuple<std::size_t, std::wstring, int>, Index> seen;
     detail::assert_global_level_axis_uniqueness(ordered.root, seen);
@@ -2196,24 +1869,22 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
   };
 
   // (1) fetch/eval scope of every produced or escaped value: enclosing blocks
-  // (axis + level), read off the realized block tree -- identical to
-  // compute_cell_mode_to_level's step (1).
+  // (axis + level), read off the realized block tree.
   std::unordered_map<std::size_t,
                      container::svector<detail::ScopeBlockAxisLevel>>
       build_scope;
   detail::populate_build_scope_walk(ordered.root, {}, build_scope);
 
-  // (2) operand edges (leaves included) -- identical to
-  // compute_cell_mode_to_level's step (2).
+  // (2) operand edges (leaves included).
   detail::OrderedScheduleDepGraph const g =
       detail::ordered_schedule_dep_graph(rich);
 
   // Consistency-checked write of one (value, OWN Index) -> level fact: two
   // fetch sites disagreeing on the level for the SAME (value, mode) pair is a
-  // scheduler bug (the value should have been split), exactly as \c
-  // compute_cell_mode_to_level's own \c stamp asserts. Recorded as raw \c
-  // DagScopeLevel facts first (this is the datum that must agree across
-  // fetch sites); the fold to \c LoopId happens once, at the end.
+  // scheduler bug (the value should have been split), enforced by this
+  // \c stamp_raw assert. Recorded as raw \c DagScopeLevel facts first (this
+  // is the datum that must agree across fetch sites); the fold to \c LoopId
+  // happens once, at the end.
   std::unordered_map<std::size_t,
                      container::svector<std::pair<Index, DagScopeLevel>>>
       raw_facts;
@@ -2233,9 +1904,8 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
 
   // (3) EXACT pass: for each consumer P and operand W of P, stamp P's
   // enclosing blocks (axis, level) onto W's carried mode that EXACTLY equals
-  // that block's representative axis, if any -- identical selection logic to
-  // compute_cell_mode_to_level's step (3), recording the Index instead of a
-  // carried position.
+  // that block's representative axis, if any (recording the Index itself,
+  // not a carried position).
   for (auto const& [parent_vid, operands] : g.depends_on) {
     auto const sit = build_scope.find(parent_vid);
     if (sit == build_scope.end()) continue;  // parent has no enclosing loop
@@ -2253,10 +1923,10 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
     }
   }
 
-  // (4) REGIME-2 RELABEL pass (occurrence-driven), identical reasoning to
-  // compute_cell_mode_to_level's step (4): recover a CSE value's OWN-labeled
-  // sliced mode from its occurrences when it was canonicalized independently
-  // of the block's representative axis (the SAME physical loop, relabeled).
+  // (4) REGIME-2 RELABEL pass (occurrence-driven): recover a CSE value's
+  // OWN-labeled sliced mode from its occurrences when it was canonicalized
+  // independently of the block's representative axis (the SAME physical
+  // loop, relabeled).
   std::unordered_map<std::size_t, std::size_t> point_owner;
   for (ValueCell const& vc : rich.cells)
     for (OccurrenceRec const& occ : vc.occurrences)
@@ -2276,8 +1946,8 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
       for (Index const& m : w.carried) {
         std::wstring const space(m.space().base_key());
         // participant? m must be an enclosing batched loop at this occurrence
-        // (i.e. appear in the occurrence's ectx -- see
-        // compute_cell_mode_to_level's step (4) for the full reasoning).
+        // (i.e. appear in the occurrence's ectx -- see the REGIME-2 RELABEL
+        // pass doc above for the full reasoning).
         bool participant = false;
         for (auto const& e : occ.ectx)
           if (e.first == m) {
@@ -2297,9 +1967,8 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
           }
         if (nsame != 1) continue;
         // Skip when m's loop is NOT strictly outer to W's own build scope
-        // (W is home-resident INSIDE the loop, not fetched across it) --
-        // identical built-within gate to compute_cell_mode_to_level's step
-        // (4).
+        // (W is home-resident INSIDE the loop, not fetched across it) -- the
+        // built-within gate for the REGIME-2 RELABEL pass above.
         auto const wsit = build_scope.find(w_vid);
         bool built_within = false;
         if (wsit != build_scope.end())

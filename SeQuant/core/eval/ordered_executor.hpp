@@ -246,6 +246,15 @@ void run_ordered_contracted_block(
   using Cache = CacheManager<N, FHC>;
   using BatchContext = typename Cache::BatchContext;
   using member_t = std::pair<node_t const*, Index>;
+  // PILLAR 2 (current_consumer save/restore): RAII wrapper around
+  // Cache::set_current_consumer -- restores the prior consumer in its
+  // destructor so a throwing evaluate_impl cannot leak a stale consumer
+  // (see the two call sites below).
+  struct CurrentConsumerGuard {
+    Cache& c;
+    std::optional<std::size_t> prev;
+    ~CurrentConsumerGuard() { c.set_current_consumer(prev); }
+  };
   // Backend array-ops (zero destination + axis chunking), sourced from the
   // cache chain (the backend -- mpqc's registries or a test's leaf source --
   // wires the root cache). A batched block cannot be realized without it.
@@ -429,11 +438,15 @@ void run_ordered_contracted_block(
                     << ") BUILD vid=" << build->value_id << std::endl;
         // PILLAR 2: mark the use-site currently fetching values so
         // slice_to_use can disambiguate a shared symmetric value's free mode.
+        // RAII-restored (CurrentConsumerGuard) so a throwing evaluate_impl
+        // does not leak a stale consumer into the rest of this schedule.
         node_t const& build_node = resolve(build->value_id);
-        auto const prev_consumer = bs.cache.current_consumer();
-        bs.cache.set_current_consumer(build_node->hash_value());
-        (void)evaluate_impl<EvalTrace>(build_node, leaf_evaluator, bs.cache);
-        bs.cache.set_current_consumer(prev_consumer);
+        {
+          CurrentConsumerGuard const consumer_guard{
+              bs.cache, bs.cache.current_consumer()};
+          bs.cache.set_current_consumer(build_node->hash_value());
+          (void)evaluate_impl<EvalTrace>(build_node, leaf_evaluator, bs.cache);
+        }
         // R3: record this loop-local Transient as produced (it is built fresh
         // every batch on the scratch and never lands in value_results, so the
         // built ledger is the only faithful "was built" slot for it).
@@ -468,14 +481,18 @@ void run_ordered_contracted_block(
       // PILLAR 2: this output is the use-site fetching (and slicing) shared
       // values this iteration -- name it as the current consumer so
       // slice_to_use binds a symmetric value's free mode to THIS output's own
-      // mode (design sec.2). RAII-restored so a sibling output's fetch is not
-      // mis-attributed.
+      // mode (design sec.2). RAII-restored (CurrentConsumerGuard) so a
+      // sibling output's fetch is not mis-attributed, including on a
+      // throwing evaluate_impl.
       node_t const& out_eval_node = resolve(vid);
-      auto const prev_consumer = bs.cache.current_consumer();
-      bs.cache.set_current_consumer(out_eval_node->hash_value());
-      ResultPtr part =
-          evaluate_impl<EvalTrace>(out_eval_node, leaf_evaluator, bs.cache);
-      bs.cache.set_current_consumer(prev_consumer);
+      ResultPtr part;
+      {
+        CurrentConsumerGuard const consumer_guard{bs.cache,
+                                                  bs.cache.current_consumer()};
+        bs.cache.set_current_consumer(out_eval_node->hash_value());
+        part =
+            evaluate_impl<EvalTrace>(out_eval_node, leaf_evaluator, bs.cache);
+      }
       if (kind == OutputKind::AccumulateSum) {
         if (!acc[k])
           acc[k] = std::move(part);
@@ -601,51 +618,25 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   static_assert(std::is_same_v<node_t, N>,
                 "the forest's node type and the cache's node type must match");
 
-  // Task 7 (dag-scope-runtime-slicing plan): self-wire the node->ModeToLevel
-  // cache seam HERE, not only at the eval::evaluate dispatch wrapper
-  // (scope_executor.hpp), which wires an equivalent map before calling
-  // evaluate_ordered_schedule but is bypassed by any caller that invokes
-  // evaluate_ordered_schedule / evaluate_ordered_multiroot directly (this
-  // function is the shared core both delegate to) -- notably many unit tests
-  // exercising the ordered executor at this level. slice_to_use's ordered-
-  // path resolution (eval.hpp) now REQUIRES this map for the ordered push
-  // style (BatchContextEntry::exact_axis == nullopt): with the old space-
-  // fallback removed from that arm, an unwired seam would silently leave
-  // such an entry unsliced rather than mis-slice it, so this is a
-  // correctness dependency, not an optional convenience. Built from
-  // `ordered`/`rich` -- already in hand -- via the same
-  // detail::compute_cell_mode_to_level core populate_cell_mode_to_level uses
-  // (that function additionally mirrors the result into each
-  // ValueCell::mode_to_level for direct inspection by its own callers/tests;
-  // this call site only needs the hash-keyed seam map). RAII-restored on
-  // every exit (incl. exceptions), mirroring the wrapper's own
-  // CellModeToLevelGuard so a caller's persistent, cross-iteration `cache`
-  // never keeps a stale pointer into a map local to this call.
-  container::svector<ModeToLevel> const per_cell_mode_to_level =
-      compute_cell_mode_to_level(ordered, rich);
-  std::unordered_map<std::size_t, ModeToLevel> cell_mode_to_level_map;
-  cell_mode_to_level_map.reserve(rich.cells.size());
-  for (std::size_t i = 0; i < rich.cells.size(); ++i)
-    cell_mode_to_level_map.emplace(rich.cells[i].hash,
-                                   per_cell_mode_to_level[i]);
-  struct CellModeToLevelGuard {
-    CacheManager<N, FHC>& c;
-    std::unordered_map<std::size_t, ModeToLevel> const* prev;
-    ~CellModeToLevelGuard() { c.set_cell_mode_to_level(prev); }
-  } cell_mode_to_level_guard{cache, cache.cell_mode_to_level()};
-  cache.set_cell_mode_to_level(&cell_mode_to_level_map);
-
-  // Task 7 (sliced-value canonical-layout / loop-coloring design): the
-  // loop-colored slice seam slice_to_use (eval.hpp) reads to resolve a
+  // Task 7 (sliced-value canonical-layout / loop-coloring design): self-wire
+  // the loop-colored slice seam slice_to_use (eval.hpp) reads to resolve a
   // fetched value's physical slice mode off the loop-colored canonical layout
-  // -- the SUCCESSOR to the mode_to_level seam above as the ordered path's
-  // slice-mode source (sec.4). Built HERE, alongside that seam and from the
-  // SAME already-in-hand `ordered`/`rich`, so every direct caller of the
-  // shared ordered core (not only the eval::evaluate dispatch wrapper) gets
-  // it. The per-(value,sliced-mode)->loop facts come from
-  // compute_sliced_mode_assignment (value_id-keyed); projected here onto the
-  // value hash slice_to_use has in hand at a fetch. RAII-restored on every
-  // exit, mirroring the mode_to_level guard.
+  // -- the ordered path's slice-mode source (sec.4) -- HERE, not only at the
+  // eval::evaluate dispatch wrapper (scope_executor.hpp), which wires an
+  // equivalent seam before calling evaluate_ordered_schedule but is bypassed
+  // by any caller that invokes evaluate_ordered_schedule /
+  // evaluate_ordered_multiroot directly (this function is the shared core
+  // both delegate to) -- notably many unit tests exercising the ordered
+  // executor at this level. slice_to_use's ordered-path resolution requires
+  // this seam: with the old space-fallback removed from that arm, an unwired
+  // seam would silently leave a fetch unsliced rather than mis-slice it, so
+  // this is a correctness dependency, not an optional convenience. Built HERE
+  // from the SAME already-in-hand `ordered`/`rich`. The per-(value,sliced-
+  // mode)->loop facts come from compute_sliced_mode_assignment
+  // (value_id-keyed); projected here onto the value hash slice_to_use has in
+  // hand at a fetch. RAII-restored on every exit (incl. exceptions), so a
+  // caller's persistent, cross-iteration `cache` never keeps a stale pointer
+  // into a seam local to this call.
   SlicedModeAssignment const sliced_mode_assignment =
       compute_sliced_mode_assignment(ordered, rich);
   LoopColoredSliceSeam loop_colored_slice_seam;

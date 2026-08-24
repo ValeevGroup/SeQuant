@@ -728,35 +728,6 @@ ResultPtr evaluate_impl(Node const& node,         //
                   << " via=" << (exact ? "exact" : "fallback") << " idx@pmode="
                   << toUtf8(nd->canon_indices()[*p].full_label()) << " slice=["
                   << blk.first << "," << blk.second << ")" << std::endl;
-      // EQUIVALENCE GATE (Task 5, migration step): the DAG-scope
-      // node->mode_to_level map must agree with the exact match wherever the
-      // old path did NOT need the space fallback; where it DID need the
-      // fallback, the map is the CORRECTION (the over-slice bug this whole
-      // change fixes) -- log it, do not assert. Transitional check (Task 9
-      // deletes it, together with the space-fallback above, once the flip
-      // below is trusted). Inert (no-op) when the seam is unwired (forest /
-      // whole-scope / hand-built contexts). `m2l` is reused below (Task 7) to
-      // resolve the ordered path's ACTUAL slice mode.
-      auto const* m2l = cache.mode_to_level_of(nd->hash_value());
-      if (m2l) {
-        std::optional<std::size_t> const p_map = m2l->mode_of(ctx[i].level);
-        if (exact) {
-          SEQUANT_ASSERT(p_map == p &&
-                         "mode_to_level disagrees with exact index_position");
-        } else if (p) {
-          // the buggy slot: the map corrects the space-fallback guess.
-          if (std::getenv("SEQUANT_UT_SLICE_DIAG"))
-            std::cerr << "[SLICE-CORRECTION] node#"
-                      << (nd->hash_value() % 100000u)
-                      << " fallback_pmode=" << *p << " map_pmode="
-                      << (p_map ? std::to_string(*p_map) : std::string("none"))
-                      << " level.depth=" << ctx[i].level.depth
-                      << " level.space=" << toUtf8(ctx[i].level.space)
-                      << std::endl;
-        }
-        // else: neither exact nor fallback found a slot for this axis on this
-        // node -- both leave it unsliced (full); nothing to cross-check.
-      }
       // p_new (Task 7, sliced-value canonical-layout / loop-coloring design):
       // the ACTUAL slice mode this entry resolves to, per path.
       //  - `exact_axis` present (forest / whole-scope, which push each
@@ -797,13 +768,12 @@ ResultPtr evaluate_impl(Node const& node,         //
                   nd, std::wstring(m->space().base_key()));
           }
       }
-      // Task 7-part-2: the transitional equivalence assert (p_new ==
-      // m2l->mode_of(level)) is RETIRED. With per-consumer binding the
-      // loop-colored resolution INTENTIONALLY diverges from the consumer-blind
-      // mode_to_level map for the symmetric case -- that divergence IS the fix.
-      // The `m2l` seam and its populators are kept (Task 8 deletes them) but no
-      // longer cross-checked here. (m2l is still read above as an optional
-      // space-fallback diagnostic on the exact path.)
+      // Task 7-part-2 / Task 8: the transitional equivalence assert this used
+      // to cross-check against the old per-cell mode_to_level map is RETIRED,
+      // and that map and its populators are now deleted entirely (Task 8).
+      // With per-consumer binding, the loop-colored resolution
+      // INTENTIONALLY diverges from what the old consumer-blind map would
+      // have given for the symmetric case -- that divergence IS the fix.
       if (p_new) {
         // Test-only witness of the consumer-aware slice decision (PILLAR 2):
         // no-op unless an observer is installed.
@@ -2500,8 +2470,6 @@ template <typename F, typename IndexPredicate = accept_any_index,
       std::vector<member_t> solo{{&node, K}};
       auto bs = detail::make_batched_scratch(solo, cache);
       bs.cache.set_array_ops(cache.array_ops());  // inherit backend ops
-      bs.cache.set_cell_mode_to_level(
-          cache.cell_mode_to_level());  // inherit the node->level seam
       for (auto const* s : bs.seeds) (void)bs.cache.store(*s, cache.access(*s));
       place_at_this_level(bs.cache, cache, std::vector<node_t const*>{&node});
 
@@ -2689,8 +2657,6 @@ template <typename F, typename IndexPredicate = accept_any_index,
       // persistent entries (registered persistent in the scratch) survive.
       auto bs = detail::make_batched_scratch(layer, cache);
       bs.cache.set_array_ops(cache.array_ops());  // inherit backend ops
-      bs.cache.set_cell_mode_to_level(
-          cache.cell_mode_to_level());  // inherit the node->level seam
       for (auto const* s : bs.seeds) (void)bs.cache.store(*s, cache.access(*s));
       {
         std::vector<node_t const*> roots;

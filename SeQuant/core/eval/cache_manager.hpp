@@ -942,32 +942,17 @@ class CacheManager {
   /// pointee must outlive this cache.
   BackendArrayOps const* array_ops_ = nullptr;
 
-  /// Non-owning node->ModeToLevel cache seam (see \c dag_scope.hpp), keyed by
-  /// a value's \c EvalExpr::hash_value() (the same identity \c
-  /// ValueCell::hash / \c RichSchedule::cells use). Populated by the ordered
-  /// executor's entry point from \c RichSchedule::cells (each cell's
-  /// \c mode_to_level), for a later task's runtime slicing resolution to
-  /// consult instead of the exact-\c Index axis walk. Inherited from
-  /// \c parent_ (only the root cache is wired in practice), mirroring \c
-  /// array_ops_ / \c placement_router_. Null (default) => no seam wired;
-  /// PLUMBING ONLY here -- nothing reads this yet (see \c mode_to_level_of),
-  /// so behavior is byte-identical. Non-owning; the pointee must outlive this
-  /// cache.
-  std::unordered_map<std::size_t, ModeToLevel> const* cell_mode_to_level_ =
-      nullptr;
-
   /// Non-owning loop-colored slice seam (see \c LoopColoredSliceSeam,
   /// dag_scope.hpp): the per-value (hash-keyed) sliced-mode -> loop assignment
   /// \c slice_to_use (eval.hpp) reads to resolve a fetched value's physical
-  /// slice mode off the loop-colored canonical layout, SUPERSEDING the
-  /// \c cell_mode_to_level_ map above as the ordered-path slice-mode source.
-  /// Populated by the ordered executor's shared core
+  /// slice mode off the loop-colored canonical layout -- the ordered path's
+  /// sole slice-mode source. Populated by the ordered executor's shared core
   /// (\c run_ordered_schedule_pre_results) from the \c OrderedSchedule's
   /// \c compute_sliced_mode_assignment, and inherited from \c parent_ (only
-  /// the root cache is wired in practice), mirroring \c cell_mode_to_level_.
-  /// Null (default) => no seam wired => the ordered arm leaves the fetch
-  /// unsliced (byte-identical, as with an unwired \c cell_mode_to_level_).
-  /// Non-owning; the pointee must outlive this cache.
+  /// the root cache is wired in practice), mirroring \c array_ops_ / \c
+  /// placement_router_. Null (default) => no seam wired => the ordered arm
+  /// leaves the fetch unsliced (byte-identical). Non-owning; the pointee
+  /// must outlive this cache.
   LoopColoredSliceSeam const* loop_colored_slice_seam_ = nullptr;
 
   /// The CONSUMER identity (an eval-node hash) currently fetching values under
@@ -1201,34 +1186,6 @@ class CacheManager {
   ///         none is wired anywhere along the chain. Non-owning.
   [[nodiscard]] BackendArrayOps const* array_ops() const noexcept {
     return array_ops_ ? array_ops_ : parent_ ? parent_->array_ops() : nullptr;
-  }
-
-  /// Sets the node->ModeToLevel cache seam (see cell_mode_to_level_). Pass
-  /// nullptr to detach. Non-owning; the pointee must outlive this cache.
-  void set_cell_mode_to_level(
-      std::unordered_map<std::size_t, ModeToLevel> const* m) noexcept {
-    cell_mode_to_level_ = m;
-  }
-
-  /// \return the local node->ModeToLevel map if set, else the one inherited
-  ///         from \c parent_ (only the root cache is wired in practice);
-  ///         nullptr if none is wired anywhere along the chain. Non-owning.
-  [[nodiscard]] std::unordered_map<std::size_t, ModeToLevel> const*
-  cell_mode_to_level() const noexcept {
-    return cell_mode_to_level_ ? cell_mode_to_level_
-           : parent_           ? parent_->cell_mode_to_level()
-                               : nullptr;
-  }
-
-  /// Convenience: \p hash's \c ModeToLevel from the seam (see
-  /// cell_mode_to_level()), or nullptr if the seam is unwired or \p hash is
-  /// not a key of the wired map.
-  [[nodiscard]] ModeToLevel const* mode_to_level_of(
-      std::size_t hash) const noexcept {
-    auto const* m = cell_mode_to_level();
-    if (!m) return nullptr;
-    auto const it = m->find(hash);
-    return it == m->end() ? nullptr : &it->second;
   }
 
   /// Sets the loop-colored slice seam (see loop_colored_slice_seam_). Pass

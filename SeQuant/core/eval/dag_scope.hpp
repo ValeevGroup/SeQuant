@@ -21,9 +21,9 @@ namespace sequant {
 ///        in the schedule machinery.
 using LoopId = std::size_t;
 
-/// \brief A DAG-scope loop's nest position, keyed by \c mode_to_level to
-///        answer "which loop (if any) does mode m of this node's result run
-///        under".
+/// \brief A DAG-scope loop's nest position, the value a \c ModeToLevel map
+///        keys by mode to answer "which loop (if any) does mode m of this
+///        node's result run under".
 ///
 /// \details Mirrors \c ScopeBlock{axis.space, ordinal}: \c depth is the
 /// nest position (outer loops have smaller \c depth), \c space is the

@@ -3,7 +3,6 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
-#include <SeQuant/core/eval/dag_scope.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/lifetime_mask.hpp>
 #include <SeQuant/core/index.hpp>
@@ -302,12 +301,6 @@ struct ValueCell {
                     //!< re-derive each split cell's subset-local records).
                     //!< A split cell (one occurrence subset) keeps only its
                     //!< subset here.
-  ModeToLevel mode_to_level{};  //!< DEAD (superseded by \c canonical_layout /
-                                //!< the loop-colored id; its populators are
-                                //!< removed in Task 8): for each mode of \c
-                                //!< carried, the \c DagScopeLevel of the
-                                //!< DAG-scope loop it runs under, if any. Left
-                                //!< default-empty here.
   container::svector<Index>
       canonical_layout;  //!< Sliced-value canonical-layout / loop-coloring
                          //!< design: this value's named (sliced) indices in
