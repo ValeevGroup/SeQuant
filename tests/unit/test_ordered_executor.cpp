@@ -26,6 +26,7 @@
 #include <SeQuant/core/eval/backends/dryrun/result.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
+#include <SeQuant/core/eval/dag_scope.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/legality.hpp>
@@ -37,6 +38,7 @@
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/eval/scope_executor.hpp>
 #include <SeQuant/core/eval/scope_schedule.hpp>
+#include <SeQuant/core/eval/slicing_signature.hpp>
 #include <SeQuant/core/eval/value_node_map.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
@@ -62,6 +64,7 @@
 #include <iostream>
 #include <map>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -2511,4 +2514,195 @@ TEST_CASE(
                                    // if stale)
   cache4.reset();
   CHECK(cache4.access_at(n).ptr);  // survives reset() too
+}
+
+// ===========================================================================
+// PILLAR 2 (sliced-value canonical-layout / loop-coloring design, task 7
+// part 2): the SYMMETRIC-shared-value end-to-end proof of the water-8 fix.
+//
+// ONE homed-full intermediate S{;i_1,i_2} is fetched by TWO member roots under
+// the SAME external-occ loop, each binding the loop to a DIFFERENT free occ
+// mode (R1 keeps i_1 / contracts i_2; R2 keeps i_2 / contracts i_1). The
+// consumer-blind seam returned S's FIRST stamped mode to BOTH consumers (the
+// bug: "pos0 here, pos0 there"); the consumer-aware slice_to_use binds each
+// consumer to its OWN mode. A slice_observer witnesses both fetches and proves
+// the two consumers slice DIFFERENT physical modes of the shared value.
+// ===========================================================================
+namespace {
+
+sequant::eval::dryrun::EvalNodeDryRun symslice_leaf(std::string_view tensor) {
+  auto expr = sequant::deserialize<sequant::ExprPtr>(std::string(tensor));
+  REQUIRE(static_cast<bool>(expr));
+  return sequant::eval::dryrun::EvalNodeDryRun{
+      sequant::eval::dryrun::EvalExprDryRun{expr->as<sequant::Tensor>()}};
+}
+
+sequant::eval::dryrun::EvalNodeDryRun symslice_inode(
+    std::string_view result, sequant::eval::dryrun::EvalNodeDryRun l,
+    sequant::eval::dryrun::EvalNodeDryRun r) {
+  auto expr = sequant::deserialize<sequant::ExprPtr>(std::string(result));
+  REQUIRE(static_cast<bool>(expr));
+  sequant::eval::dryrun::EvalExprDryRun data{expr->as<sequant::Tensor>()};
+  sequant::EvalOpSetter{}.set(data, sequant::EvalOp::Product);
+  return sequant::eval::dryrun::EvalNodeDryRun{std::move(data), std::move(l),
+                                               std::move(r)};
+}
+
+// Stamp every occ ("i") index carried by n as an EXTERNAL batched axis.
+void symslice_stamp_ext_occ(sequant::eval::dryrun::EvalNodeDryRun& n) {
+  using sequant::BatchModeType;
+  sequant::container::svector<std::pair<Index, BatchModeType>> stamps;
+  for (auto const& ix : n->canon_indices())
+    if (ix.space().base_key() == L"i")
+      stamps.push_back({ix, BatchModeType::External});
+  if (!stamps.empty()) n->set_batched_here(stamps);
+}
+
+}  // namespace
+
+TEST_CASE(
+    "consumer-aware slice_to_use: two member roots slice one homed symmetric "
+    "shared value on DIFFERENT free modes under the same occ loop (w8 fix)",
+    "[ordered-executor][sliced-layout]") {
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using Node = EvalNodeDryRun;
+
+  auto ctx = sequant::get_default_context().clone();
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  ctx.set(sequant::AssertStrictBraKetSymmetry::No);
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  // S{;i_1,i_2} = X{a_1;i_1} * Y{a_1;i_2} (contract virtual a_1) -- an occ-occ
+  // intermediate, homed full (no batched_here stamp). Two roots share it.
+  auto X = symslice_leaf("X{a_1;i_1}");
+  auto Y = symslice_leaf("Y{a_1;i_2}");
+  auto S = symslice_inode("S{;i_1,i_2}", X, Y);
+  auto T = symslice_leaf("T{;i_2}");
+  auto U = symslice_leaf("U{;i_1}");
+  auto R1 = symslice_inode("R1{;i_1}", S, T);  // contract i_2, external i_1
+  auto R2 = symslice_inode("R2{;i_2}", S, U);  // contract i_1, external i_2
+  symslice_stamp_ext_occ(R1);
+  symslice_stamp_ext_occ(R2);
+
+  std::vector<Node> forest{R1, R2};
+  sequant::stamp_lifetime_masks(forest);
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_external_index = [](Index const& ix) {
+    return ix.space().base_key() == L"i";
+  };
+  policy.is_batchable_contracted_index = [](Index const&) { return false; };
+  policy.batch_spectator_indices = true;
+  policy.node_level_placement = true;
+
+  sequant::eval::dryrun::SizeRegime regime;
+  regime.space_extent = {{L"i", 8u}, {L"a", 4u}};
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  auto const block_of = [](Index const&) -> std::size_t { return 4; };
+  auto rich = compute_dag_boulevard(forest, *cm, block_of);
+  REQUIRE(!rich.cells.empty());
+
+  auto const legality = analyze_legality(rich, forest, policy);
+  auto const ordered = build_ordered_schedule(rich, legality, policy, {L"i"});
+  REQUIRE(sequant::eval::well_formed(ordered));
+
+  auto const assignment =
+      sequant::eval::compute_sliced_mode_assignment(ordered, rich);
+
+  // Locate S's cell + hash; both its occ modes are stamped under the ONE occ
+  // loop -- the symmetric ambiguity the fix resolves.
+  auto const s_hash = S->hash_value();
+  auto const s_it =
+      std::find_if(rich.cells.begin(), rich.cells.end(),
+                   [&](auto const& vc) { return vc.hash == s_hash; });
+  REQUIRE(s_it != rich.cells.end());
+  REQUIRE(s_it->occurrences.size() == 2);  // shared by R1 and R2
+  REQUIRE(s_it->carried.size() == 2);      // carries both i_1 and i_2
+  REQUIRE(assignment.levels.size() == 1);  // exactly ONE realized occ loop
+  auto const by = assignment.by_value.find(s_it->value_id);
+  REQUIRE(by != assignment.by_value.end());
+  // Both of S's occ modes are sliced by the SAME loop 0 -- the consumer-blind
+  // "one value, one loop, two modes" hole this fix closes.
+  REQUIRE(by->second.size() == 2);
+  CHECK(by->second[0].second == by->second[1].second);  // same LoopId
+  CHECK(by->second[0].first != by->second[1].first);    // different modes
+  // The per-occurrence facts carry the consumer attribution.
+  REQUIRE(assignment.occ_facts.size() == 2);
+
+  auto const r1h = R1->hash_value();
+  auto const r2h = R2->hash_value();
+
+  // ---- The seam (built exactly as the executor builds it): consumer-blind
+  // vs consumer-aware resolution. ----
+  sequant::LoopColoredSliceSeam seam;
+  seam.levels = assignment.levels;
+  for (auto const& c : rich.cells) {
+    auto const it = assignment.by_value.find(c.value_id);
+    if (it != assignment.by_value.end())
+      seam.by_hash.emplace(c.hash, it->second);
+  }
+  for (auto const& [vid, mode, loop, cvid] : assignment.occ_facts)
+    seam.by_hash_consumer[rich.cells[vid].hash].push_back(
+        std::make_tuple(mode, loop, rich.cells[cvid].hash));
+
+  std::size_t const occ_loop = 0;
+  // Consumer-BLIND (2-arg) returns the SAME mode regardless of consumer -- the
+  // bug: it would serve one occurrence its sibling's slice.
+  auto const blind = seam.mode_of(s_hash, occ_loop);
+  REQUIRE(blind.has_value());
+  // Consumer-AWARE: each use-site gets its OWN mode, and they DIFFER.
+  auto const for_r1 = seam.mode_of(s_hash, occ_loop, r1h);
+  auto const for_r2 = seam.mode_of(s_hash, occ_loop, r2h);
+  REQUIRE(for_r1.has_value());
+  REQUIRE(for_r2.has_value());
+  CHECK(*for_r1 != *for_r2);  // THE FIX: the two consumers bind different modes
+  // The blind resolution collapses onto exactly one of the two -- proving the
+  // consumer-aware step is load-bearing (without it, one consumer mis-slices).
+  bool const blind_is_r1 = (blind == for_r1);
+  bool const blind_is_r2 = (blind == for_r2);
+  CHECK((blind_is_r1 || blind_is_r2));
+  CHECK((blind_is_r1 != blind_is_r2));
+
+  // ---- END-TO-END: evaluate through the ordered executor's shared core (the
+  // full batched schedule walk -- homing + per-read slicing) with a slice
+  // observer, and confirm each consumer's FETCH of S slices its own mode. ----
+  sequant::eval::dryrun::DryRunLeafEvaluator const yield{cm};
+  std::function<std::size_t(Index const&)> const target =
+      [](Index const&) -> std::size_t { return 4; };
+
+  auto& logger = sequant::Logger::instance();
+  auto const prev_level = logger.eval.level;
+  logger.eval.level = 1;
+  auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+  auto cache = sequant::cache_manager(forest);
+  cache.set_array_ops(&aops);
+
+  // (node_hash, consumer) -> set of physical slice positions witnessed.
+  std::map<std::pair<std::size_t, std::size_t>, std::set<std::size_t>> seen;
+  cache.set_slice_observer([&](std::size_t node_hash,
+                               std::optional<std::size_t> consumer,
+                               std::size_t pmode, int) {
+    if (consumer) seen[{node_hash, *consumer}].insert(pmode);
+  });
+
+  auto const pre_results =
+      sequant::eval::detail::run_ordered_schedule_pre_results<
+          sequant::Trace::On>(forest, ordered, rich, yield, cache, target);
+  logger.eval.level = prev_level;
+  REQUIRE(pre_results.size() == 2);
+
+  // Each consumer sliced S at exactly ONE physical mode, and the two consumers
+  // sliced DIFFERENT modes (the runtime witness of the w8 fix). The consumer-
+  // blind executor would have sliced the same physical mode for both.
+  auto const& s_by_r1 = seen[{s_hash, r1h}];
+  auto const& s_by_r2 = seen[{s_hash, r2h}];
+  REQUIRE(s_by_r1.size() == 1);
+  REQUIRE(s_by_r2.size() == 1);
+  CHECK(*s_by_r1.begin() != *s_by_r2.begin());
+  // And each matches its seam-resolved mode's physical slot on S.
+  CHECK(*s_by_r1.begin() == sequant::index_position(S, *for_r1).value());
+  CHECK(*s_by_r2.begin() == sequant::index_position(S, *for_r2).value());
 }

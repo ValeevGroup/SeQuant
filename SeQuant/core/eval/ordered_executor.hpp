@@ -427,8 +427,13 @@ void run_ordered_contracted_block(
           std::cerr << "[BLOCK] axis=" << toUtf8(block.axis.full_label())
                     << " batch=[" << e_lo << "," << e_hi
                     << ") BUILD vid=" << build->value_id << std::endl;
-        (void)evaluate_impl<EvalTrace>(resolve(build->value_id), leaf_evaluator,
-                                       bs.cache);
+        // PILLAR 2: mark the use-site currently fetching values so
+        // slice_to_use can disambiguate a shared symmetric value's free mode.
+        node_t const& build_node = resolve(build->value_id);
+        auto const prev_consumer = bs.cache.current_consumer();
+        bs.cache.set_current_consumer(build_node->hash_value());
+        (void)evaluate_impl<EvalTrace>(build_node, leaf_evaluator, bs.cache);
+        bs.cache.set_current_consumer(prev_consumer);
         // R3: record this loop-local Transient as produced (it is built fresh
         // every batch on the scratch and never lands in value_results, so the
         // built ledger is the only faithful "was built" slot for it).
@@ -460,8 +465,17 @@ void run_ordered_contracted_block(
                       : kind == OutputKind::AccumulateScatter ? "SCATTER"
                                                               : "?")
                   << std::endl;
+      // PILLAR 2: this output is the use-site fetching (and slicing) shared
+      // values this iteration -- name it as the current consumer so
+      // slice_to_use binds a symmetric value's free mode to THIS output's own
+      // mode (design sec.2). RAII-restored so a sibling output's fetch is not
+      // mis-attributed.
+      node_t const& out_eval_node = resolve(vid);
+      auto const prev_consumer = bs.cache.current_consumer();
+      bs.cache.set_current_consumer(out_eval_node->hash_value());
       ResultPtr part =
-          evaluate_impl<EvalTrace>(resolve(vid), leaf_evaluator, bs.cache);
+          evaluate_impl<EvalTrace>(out_eval_node, leaf_evaluator, bs.cache);
+      bs.cache.set_current_consumer(prev_consumer);
       if (kind == OutputKind::AccumulateSum) {
         if (!acc[k])
           acc[k] = std::move(part);
@@ -641,6 +655,21 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
     auto const it = sliced_mode_assignment.by_value.find(c.value_id);
     if (it != sliced_mode_assignment.by_value.end())
       loop_colored_slice_seam.by_hash.emplace(c.hash, it->second);
+  }
+  // PILLAR 2: project the per-occurrence (value, mode, loop, consumer) facts
+  // onto the hash-keyed consumer-disambiguation map. value_id -> hash for both
+  // the fetched value and the consumer use-site: at runtime slice_to_use has
+  // the fetched node's hash (nd->hash_value()) and the current consumer's node
+  // hash (CacheManager::current_consumer, set by this executor around each
+  // evaluate_impl -- rich.cells[consumer_vid].hash IS that same node's hash for
+  // the w8 case, where the consumer use-site is itself the evaluated output).
+  // Only values with >1 mode under one loop ever consult this at runtime, so
+  // recording every fact (single-mode values included) is harmless.
+  for (auto const& [vid, mode, loop, consumer_vid] :
+       sliced_mode_assignment.occ_facts) {
+    SEQUANT_ASSERT(vid < rich.cells.size() && consumer_vid < rich.cells.size());
+    loop_colored_slice_seam.by_hash_consumer[rich.cells[vid].hash].push_back(
+        std::make_tuple(mode, loop, rich.cells[consumer_vid].hash));
   }
   struct LoopColoredSliceSeamGuard {
     CacheManager<N, FHC>& c;

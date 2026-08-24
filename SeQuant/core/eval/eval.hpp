@@ -782,25 +782,36 @@ ResultPtr evaluate_impl(Node const& node,         //
       } else if (auto const* seam = cache.loop_colored_slice_seam()) {
         if (std::optional<LoopId> const loop =
                 seam->loop_of_level(ctx[i].level))
-          if (std::optional<Index> const m =
-                  seam->mode_of(nd->hash_value(), *loop)) {
+          // PILLAR 2 (consumer-aware slice-mode binding): pass the current
+          // consumer so a SYMMETRIC shared value -- whose two free occ modes
+          // are BOTH stamped under this one occ loop -- is bound to THIS
+          // use-site's own mode, not the consumer-blind first match (design
+          // sec.2, the w8 fix). For every single-mode-per-loop value (aux and
+          // all non-symmetric values) mode_of ignores the consumer and returns
+          // the one mode, so those fetches stay byte-identical.
+          if (std::optional<Index> const m = seam->mode_of(
+                  nd->hash_value(), *loop, cache.current_consumer())) {
             p_new = index_position(nd, *m);
             if (!p_new && cache.space_mapped_slicing())
               p_new = eval::detail::sliced_result_position_type(
                   nd, std::wstring(m->space().base_key()));
           }
       }
-      // Transitional equivalence (this migration only; the mode_to_level map
-      // and its populators are removed in Task 8): where the superseded map is
-      // still wired, the loop-colored resolution above must agree with it on
-      // the ordered path -- a divergence is a coloring/assignment bug, caught
-      // here rather than as a silent mis-slice. Inert (map unwired) on the
-      // forest / whole-scope / hand-built-context paths.
-      if (m2l && !ctx[i].exact_axis)
-        SEQUANT_ASSERT(
-            p_new == m2l->mode_of(ctx[i].level) &&
-            "loop-colored slice resolution disagrees with mode_to_level");
-      if (p_new) value = value->slice_mode(*p_new, blk.first, blk.second);
+      // Task 7-part-2: the transitional equivalence assert (p_new ==
+      // m2l->mode_of(level)) is RETIRED. With per-consumer binding the
+      // loop-colored resolution INTENTIONALLY diverges from the consumer-blind
+      // mode_to_level map for the symmetric case -- that divergence IS the fix.
+      // The `m2l` seam and its populators are kept (Task 8 deletes them) but no
+      // longer cross-checked here. (m2l is still read above as an optional
+      // space-fallback diagnostic on the exact path.)
+      if (p_new) {
+        // Test-only witness of the consumer-aware slice decision (PILLAR 2):
+        // no-op unless an observer is installed.
+        if (auto const& obs = cache.slice_observer(); obs)
+          obs(nd->hash_value(), cache.current_consumer(), *p_new,
+              ctx[i].level.ordinal);
+        value = value->slice_mode(*p_new, blk.first, blk.second);
+      }
     }
     return value;
   };

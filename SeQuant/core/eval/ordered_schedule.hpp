@@ -1838,6 +1838,20 @@ struct SlicedModeAssignment {
   std::unordered_map<std::size_t, container::svector<std::pair<Index, LoopId>>>
       by_value;
 
+  /// CONSUMER-attributed per-occurrence sliced-mode facts (sliced-value
+  /// canonical-layout / loop-coloring design, PILLAR 2): each entry is
+  /// (value_id, this occurrence's own sliced-mode Index, the slicing LoopId,
+  /// the CONSUMER value_id -- the use-site whose fetch of \c value_id binds the
+  /// loop to that Index). Recorded ONLY by the regime-2 (occurrence-driven)
+  /// pass, the one pass that can attribute a stamp to a specific occurrence and
+  /// hence to a specific consumer. This is the raw material the executor
+  /// projects onto \c LoopColoredSliceSeam::by_hash_consumer to disambiguate
+  /// the w8-symmetric case (one value, one loop, two free modes bound by two
+  /// different consumers); \c by_value alone cannot express "pos0 here, pos1
+  /// there" because it folds away which occurrence bound which mode.
+  container::svector<std::tuple<std::size_t, Index, LoopId, std::size_t>>
+      occ_facts;
+
   /// \return the \c LoopId slicing \p value_id's own \p mode, or \c
   /// std::nullopt if \p mode is not one of \p value_id's sliced modes.
   [[nodiscard]] std::optional<LoopId> loop_of(std::size_t value_id,
@@ -2296,6 +2310,14 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
             }
         if (built_within) continue;
         stamp_raw(w_vid, m, *level);
+        // PILLAR 2: attribute this stamp to the consuming use-site
+        // (oit->second == the value_id owning occ.consumer_point) so the
+        // executor can tell apart two symmetric occurrences that bind the SAME
+        // loop to DIFFERENT free modes. Deduplicated at seam-build; recorded
+        // here even when redundant with by_value (single-mode values simply
+        // never trigger the by_hash_consumer path at runtime).
+        result.occ_facts.push_back(
+            std::make_tuple(w_vid, m, id_of(*level), oit->second));
       }
     }
   }

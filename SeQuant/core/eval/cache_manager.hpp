@@ -970,6 +970,30 @@ class CacheManager {
   /// Non-owning; the pointee must outlive this cache.
   LoopColoredSliceSeam const* loop_colored_slice_seam_ = nullptr;
 
+  /// The CONSUMER identity (an eval-node hash) currently fetching values under
+  /// this cache (sliced-value canonical-layout / loop-coloring design, PILLAR
+  /// 2). The ordered executor sets this to the hash of the member-root / output
+  /// it is about to \c evaluate_impl (ordered_executor.hpp), bracketing each
+  /// such call, so \c slice_to_use (eval.hpp) can disambiguate WHICH use-site
+  /// is fetching a shared symmetric value -- the datum \c
+  /// LoopColoredSliceSeam::by_hash_consumer needs to bind each occurrence to
+  /// its own free mode. Nullopt (default) => no consumer tracked => the seam
+  /// falls back to its consumer-blind first-match (byte-identical). Inherited
+  /// from \c parent_ so a per-block child scratch sees the enclosing consumer.
+  std::optional<std::size_t> current_consumer_{};
+
+  /// TEST-ONLY observer of every slice_to_use decision (sliced-value
+  /// canonical-layout / loop-coloring design, PILLAR 2): invoked -- only when
+  /// set -- with (fetched value hash, current consumer, resolved physical slice
+  /// position, loop level ordinal) just before the slice is applied. Lets a
+  /// unit test witness that two consumers of one symmetric shared value slice
+  /// DIFFERENT physical modes (the w8 fix), which is otherwise internal to the
+  /// per-batch fetch and invisible in the final accumulated result. Unset
+  /// (default) => zero cost, byte-identical. Inherited from \c parent_ so the
+  /// per-block scratch reports through the root cache's observer.
+  std::function<void(std::size_t, std::optional<std::size_t>, std::size_t, int)>
+      slice_observer_{};
+
   /// Running high-water mark (bytes) of the eval engine's live working set,
   /// updated by note_working_set() and cleared by reset(). Held here rather
   /// than in the recursive evaluate() so it persists across the whole
@@ -1221,6 +1245,42 @@ class CacheManager {
     return loop_colored_slice_seam_ ? loop_colored_slice_seam_
            : parent_                ? parent_->loop_colored_slice_seam()
                                     : nullptr;
+  }
+
+  /// Sets the current consumer identity (see current_consumer_). Pass nullopt
+  /// to clear. Cheap value set; the ordered executor RAII-restores it around
+  /// each member-root evaluate_impl.
+  void set_current_consumer(std::optional<std::size_t> consumer) noexcept {
+    current_consumer_ = consumer;
+  }
+
+  /// \return the consumer identity set on this cache, else the one inherited
+  ///         from \c parent_ (a per-block child scratch defers to its enclosing
+  ///         scope's consumer); nullopt if none is set anywhere along the
+  ///         chain.
+  [[nodiscard]] std::optional<std::size_t> current_consumer() const noexcept {
+    return current_consumer_ ? current_consumer_
+           : parent_         ? parent_->current_consumer()
+                             : std::nullopt;
+  }
+
+  /// Sets the TEST-ONLY slice observer (see slice_observer_). Pass an empty
+  /// function to clear.
+  void set_slice_observer(
+      std::function<void(std::size_t, std::optional<std::size_t>, std::size_t,
+                         int)>
+          obs) {
+    slice_observer_ = std::move(obs);
+  }
+
+  /// \return the slice observer set on this cache, else the one inherited from
+  ///         \c parent_; an empty function if none is set along the chain.
+  [[nodiscard]] std::function<void(std::size_t, std::optional<std::size_t>,
+                                   std::size_t, int)> const&
+  slice_observer() const noexcept {
+    if (slice_observer_) return slice_observer_;
+    if (parent_) return parent_->slice_observer();
+    return slice_observer_;  // empty
   }
 
   /// Ensure a scope-hoist slot exists for @p key so a loop-invariant
