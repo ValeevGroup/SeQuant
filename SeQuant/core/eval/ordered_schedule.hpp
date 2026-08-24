@@ -1971,8 +1971,38 @@ void populate_occurrence_canonical_layout(
   TensorNetwork::SlotCanonicalizationMetadata const id =
       loop_colored_id(node, ctx_modes, cell.value_id, assignment);
   occ.perm_to_canonical = loop_colored_layout(id);
-  if (cell.canonical_layout.empty() && !occ.perm_to_canonical.empty())
+
+  // Modes-agree-modulo-permutation invariant (design's non-negotiable
+  // framing #1): the layout just produced must be a genuine REORDERING of
+  // this occurrence's own carried modes, never a set divergence. A mode in
+  // perm_to_canonical that is NOT in occ.carried would mean node's own named
+  // slots disagree with the occurrence record's canon_indices -- a
+  // (node, ctx_modes) mismatched to the WRONG occurrence, or a scheduler bug
+  // that should have forced a SPLIT (see ValueCell::divergent_modes)
+  // upstream instead of silently reaching here. Fail loud, never drop.
+  for (Index const& ix : occ.perm_to_canonical)
+    SEQUANT_ASSERT(
+        std::find(occ.carried.begin(), occ.carried.end(), ix) !=
+            occ.carried.end() &&
+        "populate_occurrence_canonical_layout: perm_to_canonical modes must "
+        "be a subset of the occurrence's carried indices (modes agree "
+        "modulo permutation)");
+
+  if (cell.canonical_layout.empty() && !occ.perm_to_canonical.empty()) {
     cell.canonical_layout = occ.perm_to_canonical;
+  } else if (!cell.canonical_layout.empty()) {
+    // Same invariant, at the VALUE granularity: every occurrence's own
+    // layout must name the SAME NUMBER of sliced slots as the value's
+    // already-designated canonical_layout -- a size mismatch means this
+    // occurrence disagrees with its siblings on how many of the value's
+    // modes are sliced, which is exactly the set-divergence the design
+    // requires a SPLIT (not a silent per-cell map entry) to resolve.
+    SEQUANT_ASSERT(
+        occ.perm_to_canonical.size() == cell.canonical_layout.size() &&
+        "populate_occurrence_canonical_layout: perm_to_canonical modes must "
+        "be a subset of the occurrence's carried indices (modes agree "
+        "modulo permutation)");
+  }
 }
 
 ///
