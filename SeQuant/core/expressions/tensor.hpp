@@ -313,6 +313,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     /// whether #column_symmetry was spelled out by the caller rather than
     /// defaulted; see check_symmetries()
     bool column_symmetry_specified;
+    /// whether #symmetry was spelled out by the caller rather than defaulted;
+    /// see check_symmetries()
+    bool symmetry_specified;
   };
 
   /// Resolves the (possibly unspecified) symmetry attributes of a tensor.
@@ -342,6 +345,15 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     const BraKetSymmetry bks_resolved =
         syms.braket.has_value() ? *syms.braket
                                 : to_braket_symmetry(h_resolved, base_fld);
+    // #braket and #hermiticity spell the same underlying trait, so a caller
+    // that gives both must give a consistent pair. N.B. the comparison is on
+    // the *derived* braket symmetry, so pinning AntiHermitian (which
+    // BraKetSymmetry cannot represent) alongside its Nonsymm braket is legal.
+    if (syms.braket.has_value() && syms.hermiticity.has_value() &&
+        to_braket_symmetry(*syms.hermiticity, base_fld) != *syms.braket)
+      throw Exception(
+          "Tensor: the given BraKetSymmetry and Hermiticity contradict each "
+          "other");
     // an explicit Hermiticity is reported verbatim, to preserve traits that
     // the BraKetSymmetry round-trip cannot represent (e.g. AntiHermitian)
     const Hermiticity hermiticity_resolved =
@@ -349,8 +361,12 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
             ? *syms.hermiticity
             : (syms.braket.has_value() ? to_hermiticity(*syms.braket)
                                        : h_resolved);
-    return {s_resolved, bks_resolved, hermiticity_resolved, ps_resolved,
-            syms.column.has_value()};
+    return {s_resolved,
+            bks_resolved,
+            hermiticity_resolved,
+            ps_resolved,
+            syms.column.has_value(),
+            syms.perm.has_value()};
   }
 
   // fully-resolved terminal ctor (range form)
@@ -374,7 +390,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         ket_net_rank_(ranges::count_if(
             ket_, [](const Index &idx) { return static_cast<bool>(idx); })) {
     validate_indices();
-    check_symmetries(rsym.column_symmetry_specified);
+    check_symmetries(rsym.column_symmetry_specified, rsym.symmetry_specified);
     canonicalize_slots();
   }
 
@@ -397,7 +413,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         ket_net_rank_(ranges::count_if(
             ket_, [](const Index &idx) { return static_cast<bool>(idx); })) {
     validate_indices();
-    check_symmetries(rsym.column_symmetry_specified);
+    check_symmetries(rsym.column_symmetry_specified, rsym.symmetry_specified);
     canonicalize_slots();
   }
 
@@ -943,7 +959,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   ///        contradicts a reserved label's defining symmetry is an error, an
   ///        unspecified one is simply replaced by the correct value
   /// @sa make_symmetrizer(), make_antisymmetrizer()
-  void check_symmetries(bool column_symmetry_specified) {
+  void check_symmetries(bool column_symmetry_specified,
+                        bool symmetry_specified) {
     if (symmetry_ == Symmetry::Symm || symmetry_ == Symmetry::Antisymm) {
       // (Anti)symmetry in bra and ket indices automatically implies column
       // symmetry. N.B. must run before the reserved-label check below, which
@@ -961,6 +978,18 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       if (braket_symmetry_ != BraKetSymmetry::Nonsymm)
         throw Exception(
             "(Anti)symmetrization operators must not have braket symmetry");
+      // the defining bra/ket permutational symmetry is not a free parameter
+      // either: Â antisymmetrizes within bra and within ket, Ŝ only across the
+      // {bra,ket} particle columns. As for the column symmetry below, reject a
+      // contradicting *specified* value and supply the correct one otherwise.
+      const Symmetry defining_symmetry = label_ == reserved::antisymm_label()
+                                             ? Symmetry::Antisymm
+                                             : Symmetry::Nonsymm;
+      if (symmetry_specified && symmetry_ != defining_symmetry)
+        throw Exception(
+            "(Anti)symmetrization operators must have their defining bra/ket "
+            "permutational symmetry");
+      symmetry_ = defining_symmetry;
       // (Anti)symmetrization operators act on indistinguishable particles,
       // hence are always column-symmetric; supplying it when unspecified makes
       // them compare equal however they were built (a mismatch would silently

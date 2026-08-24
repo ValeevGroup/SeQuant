@@ -328,13 +328,16 @@ struct Transformer {
     const bool is_reserved_symmetrizer =
         tensor.name == reserved::antisymm_label() ||
         tensor.name == reserved::symm_label();
-    if (tensor.name == reserved::antisymm_label()) {
-      // Â antisymmetrizes within bra and within ket, Ŝ only across the
-      // {bra,ket} particle columns (i.e. it is perm-Nonsymm)
-      perm_symm = Symmetry::Antisymm;
-    } else if (tensor.name == reserved::symm_label()) {
-      perm_symm = Symmetry::Nonsymm;
-    }
+    // Â antisymmetrizes within bra and within ket, Ŝ only across the
+    // {bra,ket} particle columns (i.e. it is perm-Nonsymm). Supply the
+    // defining value only when none was spelled out, so that a contradicting
+    // explicit spec reaches the Tensor ctor and is rejected there rather than
+    // silently overwritten here.
+    if (is_reserved_symmetrizer &&
+        (!tensor.symmetry.has_value() ||
+         tensor.symmetry.value().perm_symm == ast::SymmetrySpec::unspecified))
+      perm_symm = tensor.name == reserved::antisymm_label() ? Symmetry::Antisymm
+                                                            : Symmetry::Nonsymm;
     if (is_reserved_symmetrizer) {
       // force it rather than passing the Context's column default through,
       // which the Tensor ctor would reject as a contradicting *explicit*

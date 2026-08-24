@@ -545,6 +545,17 @@ TEST_CASE("serialization", "[serialization]") {
         }
       }
 
+      SECTION("(anti)symmetrization operators reject contradicting perm") {
+        // an explicitly spelled perm symmetry that contradicts the reserved
+        // label's defining one is rejected rather than silently overwritten,
+        // as for the braket and column specs
+        REQUIRE_THROWS(deserialize<ExprPtr>(L"Ŝ{i1,i2;a1,a2}:A-N-S"));
+        REQUIRE_THROWS(deserialize<ExprPtr>(L"Â{i1,i2;a1,a2}:N-N-S"));
+        // the matching spellings stay accepted
+        REQUIRE_NOTHROW(deserialize<ExprPtr>(L"Ŝ{i1,i2;a1,a2}:N-N-S"));
+        REQUIRE_NOTHROW(deserialize<ExprPtr>(L"Â{i1,i2;a1,a2}:A-N-S"));
+      }
+
       SECTION("(anti)symmetrization operators have fixed perm symmetry") {
         // the defining bra/ket permutational symmetry of a reserved
         // (anti)symmetrizer is not a free parameter either, so it must not be

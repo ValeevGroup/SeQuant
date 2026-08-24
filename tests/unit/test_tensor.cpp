@@ -576,6 +576,22 @@ TEST_CASE("tensor_hermiticity", "[elements]") {
     REQUIRE_FALSE(make_diff(Field::Complex) == ex<Constant>(0));
   }
 
+  SECTION("braket and hermiticity must agree when both are given") {
+    // the two spell the same underlying trait, so a contradicting pair is a
+    // caller error rather than something to silently resolve one way
+    REQUIRE_THROWS_AS(
+        Tensor(L"g", bra{L"i_1"}, ket{L"a_1"},
+               TensorSymmetries{.braket = BraKetSymmetry::Symm,
+                                .hermiticity = Hermiticity::NonHermitian}),
+        Exception);
+    // AntiHermitian is the one trait BraKetSymmetry cannot represent, so
+    // pinning it alongside its (Nonsymm) braket must stay legal
+    REQUIRE_NOTHROW(
+        Tensor(L"g", bra{L"i_1"}, ket{L"a_1"},
+               TensorSymmetries{.braket = BraKetSymmetry::Nonsymm,
+                                .hermiticity = Hermiticity::AntiHermitian}));
+  }
+
   SECTION("programmatic ctor defaults are Context-independent") {
     // The Context's default symmetries govern *deserialization* only (see
     // test_parse). A programmatic Tensor ctor always resolves unspecified
@@ -656,6 +672,22 @@ TEST_CASE("(anti)symmetrizer factories", "[elements]") {
                TensorSymmetries{.perm = Symmetry::Nonsymm,
                                 .column = ColumnSymmetry::Nonsymm}),
         Exception);
+
+    // the defining bra/ket permutational symmetry is likewise not a free
+    // parameter: Ŝ symmetrizes the {bra,ket} columns (so it is perm-Nonsymm),
+    // Â additionally antisymmetrizes within bra and within ket
+    REQUIRE_THROWS_AS(
+        Tensor(reserved::symm_label(), bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+               TensorSymmetries{.perm = Symmetry::Antisymm}),
+        Exception);
+    REQUIRE_THROWS_AS(
+        Tensor(reserved::antisymm_label(), bra{L"i_1", L"i_2"},
+               ket{L"a_1", L"a_2"}, TensorSymmetries{.perm = Symmetry::Symm}),
+        Exception);
+    // an unspecified perm symmetry is supplied, as for column symmetry
+    REQUIRE(Tensor(reserved::antisymm_label(), bra{L"i_1", L"i_2"},
+                   ket{L"a_1", L"a_2"})
+                .symmetry() == Symmetry::Antisymm);
 
     // an *unspecified* column symmetry is silently supplied, so that the
     // library's Context-independent column default (Nonsymm) does not produce
