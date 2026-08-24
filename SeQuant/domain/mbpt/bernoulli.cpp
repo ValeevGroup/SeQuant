@@ -66,12 +66,16 @@ const sequant::NormalOperator<sequant::Statistics::FermiDirac>* find_nop(
 /// Eq. (43) of 10.1063/1.5030344. A term is N iff its single residual
 /// NormalOperator is a pure excitation (all creators pure-unoccupied AND all
 /// annihilators pure-occupied) or a pure de-excitation (the reverse), with
-/// rank ≤ @p cutoff, rank being the larger of its creator and annihilator
-/// counts. A term with no residual NormalOperator is rank-preserving, hence R.
+/// rank in [@p min_rank, @p cutoff], rank being the larger of its creator and
+/// annihilator counts. A term with no residual NormalOperator is
+/// rank-preserving, hence R.
 ///
-/// Rank > @p cutoff falls to R rather than being dropped: dropping is justified
-/// only by V̄_N = 0 (Eq. (43)), which holds up to rank N once σ truncates there.
-bool is_N_term(const sequant::ExprPtr& term, std::size_t cutoff) {
+/// Rank outside the range falls to R rather than being dropped: dropping is
+/// justified only by V̄_N = 0 (Eq. (43)), which holds exactly over the ranks σ
+/// carries. Above @p cutoff σ is truncated; below @p min_rank, as with skipped
+/// singles, there is no amplitude to solve for.
+bool is_N_term(const sequant::ExprPtr& term, std::size_t cutoff,
+               std::size_t min_rank) {
   using namespace sequant;
   auto isr = get_default_context().index_space_registry();
 
@@ -80,7 +84,8 @@ bool is_N_term(const sequant::ExprPtr& term, std::size_t cutoff) {
 
   const auto ncre = ranges::distance(nop->creators());
   const auto nann = ranges::distance(nop->annihilators());
-  if (static_cast<std::size_t>(std::max(ncre, nann)) > cutoff) return false;
+  const auto rank = static_cast<std::size_t>(std::max(ncre, nann));
+  if (rank > cutoff || rank < min_rank) return false;
 
   auto all_unocc = [&](auto&& ops) {
     return ranges::all_of(ops, [&](const auto& o) {
@@ -213,24 +218,27 @@ ExprPtr expand_to_blocks_reduced(const ExprPtr& expr) {
 
 /// Keeps only the N terms of block-resolved @p bx (shared tail of N_part and
 /// N_part_reduced).
-ExprPtr keep_N_terms(const ExprPtr& bx, std::size_t cutoff) {
+ExprPtr keep_N_terms(const ExprPtr& bx, std::size_t cutoff,
+                     std::size_t min_rank) {
   if (bx.is<Sum>()) {
     auto out = std::make_shared<Sum>();
     for (const auto& t : bx.as<Sum>())
-      if (is_N_term(t, cutoff)) out->append(t);
+      if (is_N_term(t, cutoff, min_rank)) out->append(t);
     return out->empty() ? ex<Constant>(0) : simplify(ExprPtr{out});
   }
-  return is_N_term(bx, cutoff) ? bx : ex<Constant>(0);
+  return is_N_term(bx, cutoff, min_rank) ? bx : ex<Constant>(0);
 }
 
 /// N_part for input already in wick_reduce'd form.
-ExprPtr N_part_reduced(const ExprPtr& reduced, std::size_t cutoff) {
-  return keep_N_terms(expand_to_blocks_reduced(reduced), cutoff);
+ExprPtr N_part_reduced(const ExprPtr& reduced, std::size_t cutoff,
+                       std::size_t min_rank) {
+  return keep_N_terms(expand_to_blocks_reduced(reduced), cutoff, min_rank);
 }
 
 /// R_part for input already in wick_reduce'd form.
-ExprPtr R_part_reduced(const ExprPtr& reduced, std::size_t cutoff) {
-  return simplify(reduced - N_part_reduced(reduced, cutoff));
+ExprPtr R_part_reduced(const ExprPtr& reduced, std::size_t cutoff,
+                       std::size_t min_rank) {
+  return simplify(reduced - N_part_reduced(reduced, cutoff, min_rank));
 }
 
 }  // namespace
@@ -239,15 +247,15 @@ ExprPtr expand_to_blocks(const ExprPtr& expr_in) {
   return expand_to_blocks_reduced(wick_reduce(expr_in));
 }
 
-ExprPtr N_part(const ExprPtr& expr, std::size_t cutoff) {
-  return keep_N_terms(expand_to_blocks(expr), cutoff);
+ExprPtr N_part(const ExprPtr& expr, std::size_t cutoff, std::size_t min_rank) {
+  return keep_N_terms(expand_to_blocks(expr), cutoff, min_rank);
 }
 
 // expand_to_blocks is an identity, so subtracting the block-resolved N from the
 // compact expr gives the same remainder, on far fewer terms.
-ExprPtr R_part(const ExprPtr& expr, std::size_t cutoff) {
+ExprPtr R_part(const ExprPtr& expr, std::size_t cutoff, std::size_t min_rank) {
   auto reduced = wick_reduce(expr);
-  return R_part_reduced(reduced, cutoff);
+  return R_part_reduced(reduced, cutoff, min_rank);
 }
 
 }  // namespace detail
@@ -259,7 +267,9 @@ ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
     throw Exception("bernoulli::hbar: only ranks [0,4] are implemented");
 
   using namespace detail;
+  // σ carries ranks [min_rank, cutoff]; V̄_N = 0 holds over exactly that range
   const auto cutoff = N;
+  const std::size_t min_rank = skip1 ? 2 : 1;
   const auto F = op::tensor::F();
   const auto V = op::tensor::h(2);
   const auto T = op::tensor::T(N, skip1);
@@ -272,8 +282,10 @@ ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
                    "bernoulli::hbar: partition tag must be one of A, N, R");
     if (tag == 'A') return e;
     if (tag == 'N')
-      return reduced ? N_part_reduced(e, cutoff) : N_part(e, cutoff);
-    return reduced ? R_part_reduced(e, cutoff) : R_part(e, cutoff);
+      return reduced ? N_part_reduced(e, cutoff, min_rank)
+                     : N_part(e, cutoff, min_rank);
+    return reduced ? R_part_reduced(e, cutoff, min_rank)
+                   : R_part(e, cutoff, min_rank);
   };
 
   // Every term of H̄^k is a nested commutator [[..[V_{p0},σ]_{f0}..],σ]_{f_k},

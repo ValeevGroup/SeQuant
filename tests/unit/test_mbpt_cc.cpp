@@ -125,6 +125,16 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     REQUIRE_THAT(bernoulli::detail::N_part(Vn, 2), EquivalentTo(Vn));
     REQUIRE_THAT(bernoulli::detail::N_part(Vr, 2),
                  EquivalentTo(ex<Constant>(0)));
+
+    // min_rank tracks the lowest rank σ carries. F's occupied-virtual blocks
+    // are rank-1 pure excitations, so they are N only while σ has singles;
+    // under skip_singles there is no rank-1 amplitude, V̄_N = 0 does not hold
+    // there, and they must stay in R.
+    const auto F = op::tensor::F();
+    REQUIRE_THAT(bernoulli::detail::N_part(F, 2),
+                 !EquivalentTo(ex<Constant>(0)));
+    REQUIRE_THAT(bernoulli::detail::N_part(F, 2, /*min_rank=*/2),
+                 EquivalentTo(ex<Constant>(0)));
   }
 
   SECTION("bernoulli_hbar_structure") {

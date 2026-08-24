@@ -453,7 +453,9 @@ std::vector<ExprPtr> CC::eom_r_blocked(
     auto [it, fresh] = hbars.try_emplace(k);
     if (!fresh) continue;  // deriving H̄ twice for one rank is not cheap
     it->second = hbar(k);
-    if (tensor_level) it->second = bernoulli::detail::R_part(it->second, N);
+    if (tensor_level)
+      it->second =
+          bernoulli::detail::R_part(it->second, N, skip_singles() ? 2 : 1);
   }
   auto bra_of = [tensor_level](std::int64_t p, std::int64_t h) {
     return tensor_level ? op::tensor::δl(nₚ(p), nₕ(h)) : op::δl(nₚ(p), nₕ(h));

@@ -54,14 +54,19 @@ ExprPtr wick_commutator(const ExprPtr& A, const ExprPtr& B);
 ExprPtr expand_to_blocks(const ExprPtr& expr);
 
 /// Block-resolved N part (O_N of 10.1063/1.5030344): the terms whose single
-/// residual NormalOperator is a pure excitation or pure de-excitation of rank ≤
-/// @p cutoff. Applies expand_to_blocks first.
-ExprPtr N_part(const ExprPtr& expr, std::size_t cutoff);
+/// residual NormalOperator is a pure excitation or pure de-excitation of rank
+/// in [@p min_rank, @p cutoff]. Applies expand_to_blocks first.
+/// @param min_rank lowest rank σ carries, so 2 when singles are skipped. Below
+/// it there is no amplitude and the condition V̄_N = 0 that justifies calling a
+/// term N does not hold.
+ExprPtr N_part(const ExprPtr& expr, std::size_t cutoff,
+               std::size_t min_rank = 1);
 
 /// R part (O_R of 10.1063/1.5030344: expr minus its N part). Unlike N_part
 /// the result is NOT block-resolved; it stays in compact general-index form,
 /// which is much cheaper for the nested commutators that consume R.
-ExprPtr R_part(const ExprPtr& expr, std::size_t cutoff);
+ExprPtr R_part(const ExprPtr& expr, std::size_t cutoff,
+               std::size_t min_rank = 1);
 
 }  // namespace detail
 
