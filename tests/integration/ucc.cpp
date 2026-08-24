@@ -12,12 +12,12 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 
+#include <array>
 #include <cstddef>
-#include <map>
 #include <sstream>
 #include <stdexcept>
 #include <string>
-#include <vector>
+#include <string_view>
 
 // Unitary CC (UCC) equation derivation: the srcc.cpp analogue for the unitary
 // ansatz, covering both H̄ expansions: the standard BCH commutator series and
@@ -48,8 +48,11 @@ TimerPool<32> tpool;
 
 using Hbar = CC::HbarExpansion;
 
-const std::map<std::string, Hbar> str2expansion = {
-    {"bch", Hbar::BCH}, {"bernoulli", Hbar::Bernoulli}};
+constexpr Hbar to_expansion(std::string_view s) {
+  if (s == "bch") return Hbar::BCH;
+  if (s == "bernoulli") return Hbar::Bernoulli;
+  throw std::runtime_error("ucc: expansion must be bch or bernoulli");
+}
 
 /// pinned term count of one equation
 struct TermCounts {
@@ -61,7 +64,7 @@ struct TermCounts {
 };
 
 // Regression pins, not independent references
-const std::vector<TermCounts> pins = {
+constexpr std::array<TermCounts, 18> pins = {{
     // clang-format off
     // expansion,        N, rank, R, terms
     {Hbar::BCH,          2, 2,    0,   20}, {Hbar::BCH,       2, 2, 1,   44}, {Hbar::BCH,       2, 2, 2,   42},
@@ -71,7 +74,7 @@ const std::vector<TermCounts> pins = {
     {Hbar::Bernoulli,    2, 3,    0,   46}, {Hbar::Bernoulli, 2, 3, 1,  141}, {Hbar::Bernoulli, 2, 3, 2,  191},
     {Hbar::Bernoulli,    2, 4,    0,  203}, {Hbar::Bernoulli, 2, 4, 1,  722}, {Hbar::Bernoulli, 2, 4, 2, 1044},
     // clang-format on
-};
+}};
 
 /// Compares against the pin for this combination, if there is one. A
 /// combination absent from `pins` is not checked at all.
@@ -95,7 +98,7 @@ int main(int argc, char* argv[]) {
 
   const std::size_t N = argc > 1 ? string_to<std::size_t>(argv[1]) : 2;
   const std::string expansion_str = argc > 2 ? argv[2] : "bch";
-  const auto expansion = str2expansion.at(expansion_str);
+  const auto expansion = to_expansion(expansion_str);
   const std::size_t RANK = argc > 3 ? string_to<std::size_t>(argv[3]) : 2;
   const bool print = argc > 4 && std::string(argv[4]) == "print";
 
