@@ -80,6 +80,7 @@ function(target_set_optimization_flags TARGET)
 
 	check_ipo_supported(RESULT CMAKE_SUPPORTS_COMPILER_LTO LANGUAGES CXX)
 
+	set(CMAKE_TRY_COMPILE_TARGET_TYPE "STATIC_LIBRARY")
 	check_cxx_compiler_flag("-flto" LTO_FLAG_SUPPORTED)
 	check_cxx_compiler_flag("-flto=auto" LTO_AUTO_SUPPORTED)
 	check_cxx_compiler_flag("-flto;-ffat-lto-objects" FAT_LTO_FLAG_SUPPORTED)
