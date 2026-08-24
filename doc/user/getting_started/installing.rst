@@ -110,6 +110,9 @@ Useful CMake Variables
      - ``ABORT`` in ``Debug`` mode, ``IGNORE`` otherwise
      - Controls how assertions within SeQuant's code are handled. Valid options are ``ABORT``, ``THROW`` and ``IGNORE``. The latter disables
        assertions, whereas the former keep them active and either abort the program or throw an exception on violation respectively.
+   * - SEQUANT_LTO
+     - `ON` if the compiler supportes "fat" LTO objects, `OFF` otherwise
+     - Controls whether SeQuant will be built with link-time optimizations (LTO)
 
 
 Configuring and Building
