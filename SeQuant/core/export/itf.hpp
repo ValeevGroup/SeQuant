@@ -77,6 +77,7 @@ class ItfContext : public ReorderingContext {
     m_integral_label = std::move(label);
   }
 
+  using ReorderingContext::rewrite;
   bool rewrite(Tensor &tensor) const override;
 
   /// @returns The offset index ordinals are using. All index ordinals are
