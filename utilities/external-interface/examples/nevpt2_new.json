@@ -4,38 +4,22 @@
 		{
 			"label": "a",
 			"size": 1000,
-			"real_valued": true,
-			"meta": {
-				"name": "External",
-				"tag": "e"
-			}
+			"real_valued": true
 		},
 		{
 			"label": "u",
 			"size": 5,
-			"real_valued": true,
-			"meta": {
-				"name": "Active",
-				"tag": "a"
-			}
+			"real_valued": true
 		},
 		{
 			"label": "i",
 			"size": 80,
-			"real_valued": true,
-			"meta": {
-				"name": "Closed",
-				"tag": "c"
-			}
+			"real_valued": true
 		},
 		{
 			"label": "F",
 			"size": 100,
-			"real_valued": true,
-			"meta": {
-				"name": "Auxiliary",
-				"tag": "F"
-			}
+			"real_valued": true
 		}
 	],
 	"steps": [
@@ -122,6 +106,26 @@
 					"Energy0": "ecc0",
 					"Energy": "ecc",
 					"Residual": "res"
+				},
+				"meta": {
+					"index_spaces": {
+						"a": {
+							"name": "External",
+							"tag": "e"
+						},
+						"u": {
+							"name": "Active",
+							"tag": "a"
+						},
+						"i": {
+							"name": "Closed",
+							"tag": "c"
+						},
+						"F": {
+							"name": "BasisMp2Fit",
+							"tag": "F"
+						}
+					}
 				}
 			}
 		}

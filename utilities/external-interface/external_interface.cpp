@@ -628,26 +628,21 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta,
       throw Exception("Index space sizes must be > 0");
     }
 
-    IndexSpaceMeta::Entry entry;
-    if (version == 1) {
-      entry.name = current.at("name").get<std::string>();
-      entry.tag = current.at("tag").get<std::string>();
-    } else {
-      entry.name = current.at("meta").at("name").get<std::string>();
-      entry.tag = current.at("meta").at("tag").get<std::string>();
-    }
-
     std::wstring label = toUtf16(current.at("label").get<std::string>());
     Field field =
         current.value("real_valued", false) ? Field::Real : Field::Complex;
     registry.add(label, type, size, field,
                  IndexSpace::QuantumNumbers{mbpt::Spin::any});
 
-    spdlog::debug(
-        "Registered index space '{}' with label '{}', tag '{}' and size {}",
-        entry.name, toUtf8(label), entry.tag, size);
+    spdlog::debug("Registered index '{}' with size {}", toUtf8(label), size);
 
-    spaceList.push_back(std::make_pair(std::move(label), std::move(entry)));
+    if (version == 1) {
+      IndexSpaceMeta::Entry entry;
+      entry.name = current.at("name").get<std::string>();
+      entry.tag = current.at("tag").get<std::string>();
+
+      spaceList.push_back(std::make_pair(std::move(label), std::move(entry)));
+    }
   }
 
   mbpt::add_fermi_spin(registry);

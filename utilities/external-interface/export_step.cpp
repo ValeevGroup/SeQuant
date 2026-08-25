@@ -10,6 +10,7 @@
 #include <SeQuant/core/export/itf.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/view/concat.hpp>
@@ -27,6 +28,34 @@
 #include <vector>
 
 namespace sequant::util::extint {
+
+class MetaAwareIftContext : public ItfContext {
+ public:
+  MetaAwareIftContext(const ExportStep::ItfMeta &meta) : meta_(&meta) {}
+
+  std::string get_tag(const IndexSpace &space) const override {
+    SEQUANT_ASSERT(meta_);
+    auto it = meta_->index_spaces.find(space);
+    if (it == meta_->index_spaces.end()) {
+      return ItfContext::get_name(space);
+    }
+
+    return it->second.tag;
+  }
+
+  std::string get_name(const IndexSpace &space) const override {
+    SEQUANT_ASSERT(meta_);
+    auto it = meta_->index_spaces.find(space);
+    if (it == meta_->index_spaces.end()) {
+      return ItfContext::get_tag(space);
+    }
+
+    return it->second.name;
+  }
+
+ private:
+  const ExportStep::ItfMeta *meta_ = nullptr;
+};
 
 SEQUANT_EXTINT_REGISTER_STEP_TYPE(ExportStep, "export");
 
@@ -75,8 +104,6 @@ void ExportStep::set_options(const nlohmann::json &options) {
                           "' to be given as a string");
         }
 
-        std::cout << "Storing " << ids.get<std::string>() << " -> " << name
-                  << "\n";
         group_assoc_.emplace(ids.get<std::string>(), name);
       }
     } else if (key == "meta") {
@@ -93,6 +120,10 @@ void ExportStep::set_options(const nlohmann::json &options) {
 
   if (filepath_.empty()) {
     throw Exception("The 'output' option for " + kind() + " is mandatory");
+  }
+
+  if (options.contains("meta")) {
+    meta_ = parse_meta(language_, options.at("meta"));
   }
 }
 
@@ -171,6 +202,13 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
       for (std::string_view current :
            ranges::views::concat(data.at(idx).associated_ids,
                                  data.at(idx).associated_group_ids)) {
+        auto pos = current.find('.');
+        if (pos != std::string_view::npos) {
+          // Strip step name from ID to allow referencing e.g. 'res' instead of
+          // 'step5.res'
+          current = current.substr(pos + 1);
+        }
+
         auto it = group_assoc_.find(current);
         if (it != group_assoc_.end()) {
           return it->second;
@@ -219,8 +257,8 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
   std::string generated;
 
   if (language_ == "itf") {
-    ItfGenerator<ItfContext> generator;
-    ItfContext genctx;
+    ItfGenerator<MetaAwareIftContext> generator;
+    MetaAwareIftContext genctx(std::get<ItfMeta>(meta_));
 
     if (optimize_) {
       generated = perform_export(
@@ -239,6 +277,42 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
   stream << generated;
 
   return 0;
+}
+
+ExportStep::meta_type ExportStep::parse_meta(std::string_view language,
+                                             const nlohmann::json &meta) {
+  if (language == "itf") {
+    ItfMeta data;
+
+    for (const auto &[key, value] : meta.items()) {
+      if (key == "index_spaces") {
+        if (!value.is_object()) {
+          throw Exception("Expected '" + key + "' to be an object");
+        }
+
+        for (const auto &[space_label, info] : value.items()) {
+          IndexSpace space(space_label);
+
+          data.index_spaces.emplace(
+              std::move(space),
+              ItfMeta::IndexSpaceMeta{.name = info.value("name", std::string{}),
+                                      .tag = info.value("tag", std::string{})});
+        }
+      } else {
+        throw Exception("Unknown meta data type '" + key + "' for language '" +
+                        std::string(language) + "'");
+      }
+    }
+
+    return data;
+  } else {
+    if (!meta.empty()) {
+      throw Exception("Exporting to '" + std::string(language) +
+                      "' does not accept meta data");
+    }
+
+    return {};
+  }
 }
 
 }  // namespace sequant::util::extint
