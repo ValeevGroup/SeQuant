@@ -215,3 +215,82 @@ TEST_CASE(
   auto named = in_scope_batched_on_node(n, ctx);
   CHECK(named.find(i1) != named.end());
 }
+
+// ---------------------------------------------------------------------------
+// Pillar 1 (value identity): the loop-COLORED occurrence_key (3-arg
+// NamedIndexColorMap) is the value-id substrate. These pin that the depth
+// coloring DISTINGUISHES which slot a loop slices for a non-symmetric tensor,
+// FOLDS it for a symmetric one, and that an empty color map is byte-identical
+// to the 2-arg (space-only) key.
+// ---------------------------------------------------------------------------
+
+TEST_CASE(
+    "value-id: depth coloring distinguishes two sliced slots on a "
+    "non-symmetric tensor",
+    "[occurrence_key][value-id]") {
+  // B(i1,i2), both occ slots sliced but under loops at DIFFERENT depths. The
+  // two depth assignments (i1@d0,i2@d1) vs (i1@d1,i2@d0) are genuinely
+  // different sliced values for a positionally-rigid (Nonsymm) B and MUST get
+  // distinct colored keys -- the space-only 2-arg key, blind to depth, cannot
+  // express the difference.
+  Index i1{L"i_1"}, i2{L"i_2"};
+  auto t = ex<sequant::Tensor>(
+      L"B", bra(sequant::container::svector<Index>{i1, i2}), ket{},
+      Symmetry::Nonsymm, std::nullopt, ColumnSymmetry::Nonsymm);
+  auto n = leaf_node(t);
+  sequant::container::svector<Index> ctx{i1, i2};
+
+  sequant::tensor_network::NamedIndexColorMap c1;
+  c1.emplace(i1, 0);
+  c1.emplace(i2, 1);
+  sequant::tensor_network::NamedIndexColorMap c2;
+  c2.emplace(i1, 1);
+  c2.emplace(i2, 0);
+
+  auto k1 = occurrence_key(n, ctx, &c1);
+  auto k2 = occurrence_key(n, ctx, &c2);
+  CHECK_FALSE(RouterKeyEqual{}(k1, k2));  // depth distinguishes the slicing
+}
+
+TEST_CASE("value-id: symmetric tensor folds the two depth assignments",
+          "[occurrence_key][value-id]") {
+  // Same as above but B is bra-symmetric: swapping the two slots is a symmetry,
+  // so (i1@d0,i2@d1) and (i1@d1,i2@d0) are the SAME sliced value -- the colored
+  // canonicalization must FOLD them to one key (no duplication).
+  Index i1{L"i_1"}, i2{L"i_2"};
+  auto t = ex<sequant::Tensor>(
+      L"B", bra(sequant::container::svector<Index>{i1, i2}), ket{},
+      Symmetry::Symm, std::nullopt, ColumnSymmetry::Symm);
+  auto n = leaf_node(t);
+  sequant::container::svector<Index> ctx{i1, i2};
+
+  sequant::tensor_network::NamedIndexColorMap c1;
+  c1.emplace(i1, 0);
+  c1.emplace(i2, 1);
+  sequant::tensor_network::NamedIndexColorMap c2;
+  c2.emplace(i1, 1);
+  c2.emplace(i2, 0);
+
+  auto k1 = occurrence_key(n, ctx, &c1);
+  auto k2 = occurrence_key(n, ctx, &c2);
+  CHECK(RouterKeyEqual{}(k1, k2));  // symmetry folds
+}
+
+TEST_CASE("value-id: empty color map is byte-identical to the 2-arg key",
+          "[occurrence_key][value-id]") {
+  // The #1 non-regression anchor: an EMPTY (but non-null) color map must
+  // canonicalize identically to the space-only 2-arg key -- so an unsliced
+  // value's id is unchanged.
+  Index i1{L"i_1"}, i2{L"i_2"};
+  auto t = ex<sequant::Tensor>(
+      L"B", bra(sequant::container::svector<Index>{i1, i2}), ket{},
+      Symmetry::Nonsymm, std::nullopt, ColumnSymmetry::Nonsymm);
+  auto n = leaf_node(t);
+  sequant::container::svector<Index> ctx{i1};
+
+  sequant::tensor_network::NamedIndexColorMap empty;
+  auto k_colored_empty = occurrence_key(n, ctx, &empty);
+  auto k_2arg = occurrence_key(n, ctx);
+  CHECK(RouterKeyEqual{}(k_colored_empty, k_2arg));
+  CHECK(RouterKeyHash{}(k_colored_empty) == RouterKeyHash{}(k_2arg));
+}
