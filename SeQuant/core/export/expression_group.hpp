@@ -58,6 +58,15 @@ class ExpressionGroup {
   [[nodiscard]] const_iterator cbegin() const { return m_expressions.cbegin(); }
   [[nodiscard]] const_iterator cend() const { return m_expressions.cend(); }
 
+  [[nodiscard]] ExportNode<T> &front() { return m_expressions.front(); }
+  [[nodiscard]] const ExportNode<T> &front() const {
+    return m_expressions.front();
+  }
+  [[nodiscard]] ExportNode<T> &back() { return m_expressions.back(); }
+  [[nodiscard]] const ExportNode<T> &back() const {
+    return m_expressions.back();
+  }
+
   [[nodiscard]] std::size_t size() const { return m_expressions.size(); }
 
   void add(ExportNode<T> expr) { m_expressions.emplace_back(std::move(expr)); }
