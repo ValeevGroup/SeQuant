@@ -30,6 +30,51 @@ bool ExecutionContext::has_data(std::string_view id) const {
   return id_to_data_indices_.find(id) != id_to_data_indices_.end();
 }
 
+template <std::ranges::range ID2DataIdxMap>
+std::vector<std::size_t> get_data_indices(
+    ID2DataIdxMap &&id2dataidx, std::string_view id,
+    bool *contained_unknown_id = nullptr) {
+  if (!ExecutionContext::is_valid_id(id, true)) {
+    throw Exception("Invalid id '" + std::string(id) + "'");
+  }
+
+  if (contained_unknown_id) {
+    *contained_unknown_id = false;
+  }
+
+  std::vector<std::size_t> indices;
+
+  for (const std::string_view current : ExecutionContext::expand_id(id)) {
+    auto it = id2dataidx.find(current);
+
+    if (it == std::ranges::end(id2dataidx)) {
+      if (contained_unknown_id) {
+        *contained_unknown_id = true;
+      } else {
+        throw Exception("No data available for ID '" + std::string(current) +
+                        "'");
+      }
+
+      continue;
+    }
+
+    std::ranges::copy_if(
+        it->second, std::back_inserter(indices), [&](std::size_t idx) {
+          return std::ranges::find(indices, idx) == std::ranges::end(indices);
+        });
+  }
+
+  std::ranges::sort(indices);
+
+  return indices;
+}
+
+bool ExecutionContext::ids_are_equivalent(std::string_view lhs,
+                                          std::string_view rhs) const {
+  return get_data_indices(id_to_data_indices_, lhs) ==
+         get_data_indices(id_to_data_indices_, rhs);
+}
+
 std::size_t ExecutionContext::dataset_size(std::string_view id) const {
   if (!is_valid_id(id, false)) {
     throw Exception("Invalid ID '" + std::string(id) + "'");
@@ -54,55 +99,46 @@ get_data_impl(DataVec &&data, ID2DataIdxMap &&id2dataidx,
 
   std::vector<ExecutionContext::Data<RefT>> selected_data;
 
-  for (const std::string_view current : ExecutionContext::expand_id(id)) {
-    auto it = id2dataidx.find(current);
+  for (std::size_t idx : get_data_indices(id2dataidx, id)) {
+    ExecutionContext::Data<RefT> ret_data{.data = data.at(idx)};
 
-    if (it == id2dataidx.end()) {
-      throw Exception("No data available for ID '" + std::string(current) +
-                      "'");
-    }
-
-    for (std::size_t idx : it->second) {
-      ExecutionContext::Data<RefT> ret_data{.data = data.at(idx)};
-
-      for (std::string_view alias : dataidx2id.at(idx)) {
+    for (std::string_view alias : dataidx2id.at(idx)) {
 #if defined(__cpp_lib_associative_heterogeneous_insertion) && \
     __cpp_lib_associative_heterogeneous_insertion >= 202311L
-        if (id2dataidx.at(alias).size() > 1) {
+      if (id2dataidx.at(alias).size() > 1) {
 #else
-        // No heterogenous lookup overload for at() until C++26
-        if (id2dataidx.at(std::string(alias)).size() > 1) {
+      // No heterogenous lookup overload for at() until C++26
+      if (id2dataidx.at(std::string(alias)).size() > 1) {
 #endif
-          ret_data.associated_group_ids.emplace_back(std::move(alias));
-        } else {
-          ret_data.associated_ids.emplace_back(std::move(alias));
-        }
+        ret_data.associated_group_ids.emplace_back(std::move(alias));
+      } else {
+        ret_data.associated_ids.emplace_back(std::move(alias));
+      }
+    }
+
+    // Ensure that we order the IDs such that the generic index-IDs come after
+    // potentially manually assigned (that will have more meaningful names)
+    auto not_ends_with_num = [](std::string_view id) -> bool {
+      SEQUANT_ASSERT(!id.empty());
+      if (id.empty()) {
+        return false;
       }
 
-      // Ensure that we order the IDs such that the generic index-IDs come after
-      // potentially manually assigned (that will have more meaningful names)
-      auto not_ends_with_num = [](std::string_view id) -> bool {
-        SEQUANT_ASSERT(!id.empty());
-        if (id.empty()) {
-          return false;
-        }
+      auto it = id.rfind('.');
+      if (it == std::string_view::npos) {
+        // The generic number-IDs always contain a period
+        return true;
+      }
 
-        auto it = id.rfind('.');
-        if (it == std::string_view::npos) {
-          // The generic number-IDs always contain a period
-          return true;
-        }
+      std::string_view suffix = id.substr(it + 1);
+      return suffix.find_first_not_of("0123456789") != std::string_view::npos;
+    };
 
-        std::string_view suffix = id.substr(it + 1);
-        return suffix.find_first_not_of("0123456789") != std::string_view::npos;
-      };
+    std::ranges::stable_partition(ret_data.associated_ids, not_ends_with_num);
+    std::ranges::stable_partition(ret_data.associated_group_ids,
+                                  not_ends_with_num);
 
-      std::ranges::stable_partition(ret_data.associated_ids, not_ends_with_num);
-      std::ranges::stable_partition(ret_data.associated_group_ids,
-                                    not_ends_with_num);
-
-      selected_data.emplace_back(std::move(ret_data));
-    }
+    selected_data.emplace_back(std::move(ret_data));
   }
 
   return selected_data;

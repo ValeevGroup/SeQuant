@@ -105,6 +105,8 @@ class ExecutionContext {
 
   bool has_data(std::string_view id) const;
 
+  bool ids_are_equivalent(std::string_view lhs, std::string_view rhs) const;
+
   std::size_t dataset_size(std::string_view id) const;
 
   std::vector<Data<const ProcessingData>> get_data(std::string_view id) const;
