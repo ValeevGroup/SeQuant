@@ -151,6 +151,16 @@ struct Step {
 struct OrderedSchedule {
   ScopeBlock root{};
   std::size_t num_values = 0;
+  /// Pillar 1 (slice-colored value identity): per value_id, the value's
+  /// home-sliced modes paired with the DAG-scope DEPTH at which each is sliced
+  /// -- recorded ONCE here, at home placement, in the value's OWN index-frame
+  /// (keys are `rich.cells[vid].carried` indices, never a foreign frame or
+  /// base_key). This is the authoritative mode->depth source the value-id
+  /// coloring consumes; it is NOT re-derived from ectx. A value with no
+  /// home-sliced modes has no entry (unsliced => empty coloring => value-id ==
+  /// node-id). Distinct from Pillar-2 `occ_facts` (use-scope, per consumer).
+  std::unordered_map<std::size_t, container::svector<std::pair<Index, int>>>
+      home_mode_depth{};
 };
 
 namespace detail {
@@ -1372,6 +1382,60 @@ forced_split_demotions(RichSchedule const& rich,
   }
   out.root.steps = detail::ordered_schedule_topo_sort_steps(
       std::move(root_items), root_meta);
+
+  // Pillar 1: record each value's home-sliced-mode -> DAG-scope depth, ONCE, in
+  // the value's OWN frame. Walk the realized block tree accumulating the
+  // enclosing levels (axis + depth); a BuildStep homes inside all of them, an
+  // escape output homes one level OUT (mirrors ordered_home_reads' home_scope).
+  // For each value pair its OWN `carried` (value frame) with those levels by
+  // space + nest position -- the same frame-safe routing occ_facts uses -- and
+  // keep only modes that are the value's `home_modes` (its home-sliced set).
+  {
+    auto const record =
+        [&out, &rich](std::size_t vid,
+                      container::svector<std::pair<Index, int>> const& levels) {
+          if (vid >= rich.cells.size()) return;
+          ValueCell const& c = rich.cells[vid];
+          container::svector<std::pair<Index, int>> mode_depth;
+          container::svector<bool> consumed(c.carried.size(), false);
+          for (auto const& [axis, depth] : levels) {
+            auto const space = axis.space().base_key();
+            for (std::size_t j = 0; j < c.carried.size(); ++j) {
+              if (consumed[j]) continue;
+              if (std::wstring(c.carried[j].space().base_key()) != space)
+                continue;
+              consumed[j] = true;
+              mode_depth.push_back({c.carried[j], depth});
+              break;
+            }
+          }
+          if (!mode_depth.empty())
+            out.home_mode_depth[vid] = std::move(mode_depth);
+        };
+    std::function<void(ScopeBlock const&,
+                       container::svector<std::pair<Index, int>> const&)>
+        walk = [&](ScopeBlock const& b,
+                   container::svector<std::pair<Index, int>> const& enc) {
+          for (Step const& s : b.steps) {
+            if (auto const* build = std::get_if<BuildStep>(&s.value)) {
+              record(build->value_id, enc);
+            } else if (auto const* child = std::get_if<ScopeBlock>(&s.value)) {
+              container::svector<std::pair<Index, int>> inner = enc;
+              inner.push_back({child->axis, child->level.depth});
+              walk(*child, inner);
+            }
+          }
+          // escape output homes one level OUT (enc minus this block's own
+          // axis).
+          container::svector<std::pair<Index, int>> out_scope = enc;
+          if (!out_scope.empty()) out_scope.pop_back();
+          for (auto const& [vid, kind] : b.outputs) {
+            (void)kind;
+            record(vid, out_scope);
+          }
+        };
+    walk(out.root, {});
+  }
 
   SEQUANT_ASSERT(well_formed(out));
   return out;

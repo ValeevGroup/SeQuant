@@ -20,6 +20,7 @@
 #include <SeQuant/core/eval/ordered_schedule.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
 #include <SeQuant/core/eval/scope_executor.hpp>
+#include <SeQuant/core/eval/value_id.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
@@ -1897,3 +1898,55 @@ TEST_CASE(
   CHECK_FALSE(seam.mode_of(p_hash + 987654321u, *aux_loop).has_value());
 }
 #endif  // loop-open-vs-sliced-mask Task 4 rewrite pending
+
+// Pillar 1 (value identity): build_ordered_schedule records, per value homed
+// below the top scope, its home-sliced-mode -> DAG depth in the value's OWN
+// frame (keys are the cell's carried indices). This pins the recording exists
+// and is frame-correct (the load-bearing constraint).
+TEST_CASE("build_ordered_schedule records home_mode_depth in the value frame",
+          "[ordered-schedule][value-id]") {
+  auto ctx = sequant::get_default_context().clone();
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  auto B = orderedsched_2axis_forest_root();
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](Index const& ix) {
+    return ix.space().base_key() == L"\x39a";  // Kappa
+  };
+  policy.is_batchable_external_index = [](Index const& ix) {
+    return ix.space().base_key() == L"i";
+  };
+  policy.batch_spectator_indices = true;
+  policy.node_level_placement = true;
+
+  sequant::eval::dryrun::SizeRegime regime;
+  regime.space_extent = {{L"i", 8u}, {L"\x39a", 6u}};
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  std::vector<sequant::EvalNode<sequant::EvalExpr>> forest{B};
+  sequant::stamp_lifetime_masks(forest);
+  auto const block_of = [](Index const&) -> std::size_t { return 4; };
+  auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  REQUIRE(!rich.cells.empty());
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  auto const sched =
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"});
+
+  // At least one value is homed below scope with a sliced mode.
+  REQUIRE(!sched.home_mode_depth.empty());
+  for (auto const& [vid, md] : sched.home_mode_depth) {
+    REQUIRE(vid < rich.cells.size());
+    auto const& carried = rich.cells[vid].carried;
+    for (auto const& [m, d] : md) {
+      // FRAME (hard, the load-bearing constraint): every recorded key is an
+      // index in the value's OWN carried (canonical) frame -- never a foreign
+      // frame or a base_key representative.
+      CHECK(std::find(carried.begin(), carried.end(), m) != carried.end());
+      CHECK(d >= 0);
+    }
+  }
+}
