@@ -67,15 +67,21 @@ void ExportStep::set_options(const nlohmann::json &options) {
       if (!value.is_object()) {
         throw Exception("Value for " + kind() + " option '" + key +
                         "' must be an object");
-        for (const auto &[name, ids] : value.items()) {
-          if (!ids.is_string()) {
-            throw Exception("Expected IDs for group '" + name +
-                            "' to be given as a string");
-          }
-
-          group_assoc_.emplace(ids.get<std::string>(), name);
-        }
       }
+
+      for (const auto &[name, ids] : value.items()) {
+        if (!ids.is_string()) {
+          throw Exception("Expected IDs for group '" + name +
+                          "' to be given as a string");
+        }
+
+        std::cout << "Storing " << ids.get<std::string>() << " -> " << name
+                  << "\n";
+        group_assoc_.emplace(ids.get<std::string>(), name);
+      }
+    } else if (key == "meta") {
+      // Processing happens later as we need to ensure we know the target
+      // language beforehand
     } else {
       throw Exception("Unknown option key for " + kind() + ": '" + key + "'");
     }
