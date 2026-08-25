@@ -50,7 +50,8 @@ std::partial_ordering ExprMatcher::compare(const Expr &other) const {
   }
 
   bool is_less = false;
-  if (opts_.tensor_cmp == TensorComparison::Block && other.is<Tensor>()) {
+  if (opts_.tensor_cmp == TensorComparison::Block && expr_->is<Tensor>() &&
+      other.is<Tensor>()) {
     TensorBlockLessThanComparator cmp;
 
     is_less = cmp(expr_->as<Tensor>(), other.as<Tensor>());

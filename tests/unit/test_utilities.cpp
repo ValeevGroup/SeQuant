@@ -409,11 +409,14 @@ TEST_CASE("utilities", "[utilities]") {
         REQUIRE(c2 > c1_matcher);
       }
       SECTION("cross_type") {
+        Tensor t("t", bra({"a1"}), ket({"i1"}));
         Variable var("a");
         const bool var_is_less = var < c1;
+        const bool tensor_is_less = t < c1;
         REQUIRE((var < c2) == var_is_less);
 
-        ExprMatcher m1(c1, {.cross_comparisons = true});
+        ExprMatcher m1(c1, {.tensor_cmp = TensorComparison::Block,
+                            .cross_comparisons = true});
         ExprMatcher m2(c1, {.cross_comparisons = false});
 
         REQUIRE((var <=> m1) == (var_is_less ? std::partial_ordering::less
@@ -422,6 +425,14 @@ TEST_CASE("utilities", "[utilities]") {
                                              : std::partial_ordering::less));
         REQUIRE((var <=> m2) == std::partial_ordering::unordered);
         REQUIRE((m2 <=> var) == std::partial_ordering::unordered);
+
+        REQUIRE((t <=> m1) == (tensor_is_less
+                                   ? std::partial_ordering::less
+                                   : std::partial_ordering::greater));
+        REQUIRE((m1 <=> t) == (tensor_is_less ? std::partial_ordering::greater
+                                              : std::partial_ordering::less));
+        REQUIRE((t <=> m2) == std::partial_ordering::unordered);
+        REQUIRE((m2 <=> t) == std::partial_ordering::unordered);
 
         REQUIRE(m1 != var);
         REQUIRE(m1 == c1);
@@ -447,7 +458,8 @@ TEST_CASE("utilities", "[utilities]") {
       Tensor t1 = deserialize("T{a1;i1}")->as<Tensor>();
       Tensor t2 = deserialize("T{a2;i2}")->as<Tensor>();
 
-      ExprMatcher m1(t1, {.tensor_cmp = TensorComparison::Identity});
+      ExprMatcher m1(t1, {.tensor_cmp = TensorComparison::Identity,
+                          .cross_comparisons = false});
 
       REQUIRE(t1 == m1);
       REQUIRE(m1 == t1);
@@ -470,6 +482,15 @@ TEST_CASE("utilities", "[utilities]") {
       REQUIRE_FALSE(m2 < t2);
       REQUIRE_FALSE(t2 > m2);
       REQUIRE_FALSE(m2 > t2);
+
+      Variable var("a");
+      REQUIRE(m1 != var);
+      REQUIRE(var != m1);
+      REQUIRE_FALSE(m1 < var);
+      REQUIRE_FALSE(m1 <= var);
+      REQUIRE_FALSE(m1 > var);
+      REQUIRE_FALSE(m1 >= var);
+      REQUIRE(var != m1);
     }
   }
 
