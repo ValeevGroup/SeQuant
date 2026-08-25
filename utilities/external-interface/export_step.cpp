@@ -10,6 +10,7 @@
 #include <SeQuant/core/export/generator.hpp>
 #include <SeQuant/core/export/itf.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -25,6 +26,7 @@
 #include <functional>
 #include <limits>
 #include <numeric>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -124,6 +126,23 @@ void ExportStep::set_options(const nlohmann::json &options) {
         }
 
         relative_order_.emplace_back(current.get<std::string>());
+      }
+    } else if (key == "imports") {
+      if (!value.is_object()) {
+        throw Exception("Value for " + kind() + " option '" + key +
+                        "' must be an object");
+      }
+
+      for (const auto &[tensor, name] : value.items()) {
+        if (!name.is_string()) {
+          throw Exception("Expected import name for '" + tensor +
+                          "' to be a string");
+        }
+
+        import_names_.emplace(
+            ExprMatcher(*io::serialization::from_string<ExprPtr>(tensor),
+                        {.tensor_cmp = TensorComparison::Block}),
+            name.get<std::string>());
       }
     } else {
       throw Exception("Unknown option key for " + kind() + ": '" + key + "'");
@@ -228,14 +247,63 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
                             const std::vector<std::string_view> &inputs) {
   std::vector<ExpressionGroup<>> groups = prepare_expressions(exctx, inputs);
 
-  auto perform_export = [&](auto &&generator, const auto &genctx)
+  auto perform_export = [&](auto &&generator, auto &&genctx)
     requires(
         std::derived_from<std::remove_cvref_t<decltype(genctx)>,
                           ExportContext> &&
         std::derived_from<std::remove_cvref_t<decltype(generator)>,
                           Generator<std::remove_cvref_t<decltype(genctx)>>>)
   {
-    // TODO: setup load/store/create/import strategies
+    // Setup load/store/create/import strategies
+    for (const ExpressionGroup<> &current_group : groups) {
+      std::set<Tensor> created_tensors;
+      std::set<Variable> created_variables;
+
+      for (const ExportNode<> &current_node : current_group) {
+        std::string import_name;
+        if (auto it = import_names_.find(current_node->expr());
+            it != import_names_.end()) {
+          import_name = it->second;
+        }
+
+        if (current_node->is_tensor()) {
+          Tensor result = current_node->as_tensor();
+          genctx.rewrite(result);
+
+          if (!import_name.empty()) {
+            genctx.set_import_name(result, import_name);
+          }
+
+          if (created_tensors.find(result) == created_tensors.end()) {
+            genctx.setLoadStrategy(result, LoadStrategy::Create,
+                                   current_node->id());
+
+            created_tensors.emplace(std::move(result));
+          } else {
+            genctx.setLoadStrategy(result, LoadStrategy::Load,
+                                   current_node->id());
+          }
+        } else {
+          SEQUANT_ASSERT(current_node->is_variable());
+          Variable result = current_node->as_variable();
+          genctx.rewrite(result);
+
+          if (!import_name.empty()) {
+            genctx.set_import_name(result, import_name);
+          }
+
+          if (created_variables.find(result) == created_variables.end()) {
+            genctx.setLoadStrategy(result, LoadStrategy::Create,
+                                   current_node->id());
+
+            created_variables.emplace(std::move(result));
+          } else {
+            genctx.setLoadStrategy(result, LoadStrategy::Load,
+                                   current_node->id());
+          }
+        }
+      }
+    }
 
     // TODO: handle index batching
 

@@ -6,6 +6,7 @@
 
 #include <SeQuant/core/export/expression_group.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/expr_matcher.hpp>
 
 #include <nlohmann/json_fwd.hpp>
 
@@ -47,6 +48,7 @@ class ExportStep : public ProcessingStep {
   std::map<std::string, std::string, std::less<>> group_assoc_;
   meta_type meta_;
   std::vector<std::string> relative_order_;
+  std::map<ExprMatcher, std::string, std::less<>> import_names_;
 
   static meta_type parse_meta(std::string_view language,
                               const nlohmann::json &meta);

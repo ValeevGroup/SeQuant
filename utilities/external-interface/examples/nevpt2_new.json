@@ -113,6 +113,9 @@
 					"res2_s1_singles",
 					"res1_s1"
 				],
+				"imports": {
+					"R2{a1;i1}": "TestImport"
+				},
 				"meta": {
 					"index_spaces": {
 						"a": {
