@@ -121,8 +121,19 @@ class OneByOneProcessingStep
                 continue;
               }
 
-              ctx.add_data_alias(created_outputs,
-                                 std::string(step_id) + std::string(assoc_id));
+              std::string alias = std::string(step_id) + std::string(assoc_id);
+
+              if (ctx.has_data(alias)) {
+                if (!ctx.ids_are_equivalent(created_outputs, alias)) {
+                  throw Exception("Duplicate ID name '" +
+                                  std::string(assoc_id) +
+                                  "' leading to ambiguity for '" + alias + "'");
+                }
+
+                continue;
+              }
+
+              ctx.add_data_alias(created_outputs, std::move(alias));
             }
 
             for (std::string_view group_id : current.associated_group_ids) {
@@ -149,6 +160,16 @@ class OneByOneProcessingStep
               std::string(step_id) + std::string(group_id.substr(pos));
         } else {
           out_group_id = std::string(step_id) + "." + std::string(group_id);
+        }
+
+        if (ctx.has_data(out_group_id)) {
+          if (!ctx.ids_are_equivalent(assoc_outputs, out_group_id)) {
+            throw Exception(
+                "Duplicate group ID name '" + std::string(group_id) +
+                "' leading to ambiguity for '" + out_group_id + "'");
+          }
+
+          continue;
         }
 
         ctx.add_data_alias(assoc_outputs, std::move(out_group_id));
