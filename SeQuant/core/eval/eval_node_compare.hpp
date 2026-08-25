@@ -7,15 +7,28 @@
 #include <SeQuant/external/bliss/graph.hh>
 
 #include <cstddef>
+#include <functional>
+#include <optional>
 #include <unordered_map>
 
 namespace sequant {
 
-/// Functor to compute the hash of a given (evaluation) tree node
+/// Functor to compute the hash of a given (evaluation) tree node.
+///
+/// Pillar 1 (slice-colored value identity): an optional \c id_override lets a
+/// sub-top cache key by the home-slice-colored VALUE-id instead of the plain
+/// node-id. When set, it returns the value-id hash (\c
+/// eval::value_id_hash) -- which is byte-identical to \c hash::value for an
+/// unsliced value, so the override is safe to install everywhere; the main
+/// (top-level) cache leaves it null for zero hot-path cost. Injected from
+/// \c cache_manager.hpp so this low-level header does not depend on the
+/// tensor-network coloring machinery.
 template <typename TreeNode, bool force_hash_collisions = false>
 struct TreeNodeHasher {
   /// Trait used by the C++ STL allowing heterogenous lookups
   using is_transparent = void;
+
+  std::function<std::size_t(const TreeNode &)> id_override{};
 
   std::size_t operator()(const TreeNode *node) const { return (*this)(*node); }
 
@@ -23,7 +36,7 @@ struct TreeNodeHasher {
     if constexpr (force_hash_collisions) {
       return 0;
     }
-
+    if (id_override) return id_override(node);
     return hash::value(*node);
   }
 };
@@ -39,6 +52,16 @@ struct TreeNodeEqualityComparator {
   TreeNodeEqualityComparator(std::vector<Index> indices)
       : block_comparator_(std::move(indices)) {}
 
+  /// Pillar 1: optional slice-colored equality. When set, it is consulted FIRST
+  /// on the top-level (lhs, rhs) compare: a returned value is the identity
+  /// answer (two values sliced on different slots compare UNEQUAL even though
+  /// their node structure is identical; symmetric slicings fold), and \c
+  /// nullopt means "not slice-relevant -- use the structural comparison below"
+  /// (both values unsliced), keeping the null/unsliced path byte-identical.
+  /// Injected from \c cache_manager.hpp.
+  std::function<std::optional<bool>(const TreeNode &, const TreeNode &)>
+      colored_eq_override{};
+
   bool operator()(const TreeNode *lhs, const TreeNode *rhs) const {
     return (*this)(*lhs, *rhs);
   }
@@ -52,6 +75,13 @@ struct TreeNodeEqualityComparator {
   }
 
   bool operator()(const TreeNode &lhs_in, const TreeNode &rhs_in) const {
+    // Pillar 1: a slice-colored identity decision (if any) wins on the
+    // top-level compare -- it distinguishes values sliced on different slots
+    // that are structurally identical. nullopt => not slice-relevant, fall
+    // through to the byte-identical structural comparison below.
+    if (colored_eq_override)
+      if (auto const c = colored_eq_override(lhs_in, rhs_in); c.has_value())
+        return *c;
     // The left-child descent is performed iteratively (this loop, not
     // recursion): an equation's residual/energy is kept as a single in-place
     // Sum-tree with one node per summand, so its left spine is as deep as the

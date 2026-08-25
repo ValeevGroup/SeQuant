@@ -13,10 +13,13 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/backends/dryrun/eval_expr.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
+#include <SeQuant/core/eval/eval_node_compare.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
 #include <SeQuant/core/eval/occurrence_key.hpp>
+#include <SeQuant/core/eval/value_id.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
+#include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
@@ -293,4 +296,60 @@ TEST_CASE("value-id: empty color map is byte-identical to the 2-arg key",
   auto k_2arg = occurrence_key(n, ctx);
   CHECK(RouterKeyEqual{}(k_colored_empty, k_2arg));
   CHECK(RouterKeyHash{}(k_colored_empty) == RouterKeyHash{}(k_2arg));
+}
+
+// Pillar 1 (value identity), Task 3: value_id_hash distinguishes which slot
+// carries the loop var (I(i,_) vs I(_,i)) via ONE per-scope coloring, and its
+// unsliced path is byte-identical to the plain node-id (hash::value) that
+// TreeNodeHasher uses -- so the coloring-aware hasher is safe to install.
+TEST_CASE("value-id: value_id_hash distinguishes slot slicing; null == node-id",
+          "[value-id][cache]") {
+  using node_t = sequant::eval::dryrun::EvalNodeDryRun;
+  auto mk = [](Index const& a, Index const& b) {
+    return ex<sequant::Tensor>(
+        L"B", bra(sequant::container::svector<Index>{a, b}), ket{},
+        Symmetry::Nonsymm, std::nullopt, ColumnSymmetry::Nonsymm);
+  };
+  Index i1{L"i_1"}, i2{L"i_2"};
+  node_t nA = leaf_node(mk(i1, i2));  // loop var i_1 in slot 0
+  node_t nB = leaf_node(mk(i2, i1));  // loop var i_1 in slot 1
+
+  // ONE per-scope coloring: the loop var i_1 sliced at depth 0.
+  sequant::eval::ValueIdColoring col;
+  col.ctx_modes = sequant::container::svector<Index>{i1};
+  col.colors.emplace(i1, 0);
+
+  // Colored: nA and nB differ (i_1 in a different slot) -- distinct cache keys.
+  CHECK(sequant::eval::value_id_hash(nA, &col) !=
+        sequant::eval::value_id_hash(nB, &col));
+
+  // Null coloring: byte-identical to the plain node-id TreeNodeHasher uses.
+  CHECK(sequant::eval::value_id_hash(nA, nullptr) == sequant::hash::value(*nA));
+  CHECK(sequant::eval::value_id_hash(nB, nullptr) == sequant::hash::value(*nB));
+
+  // The coloring-aware TreeNodeHasher honours the id_override.
+  sequant::TreeNodeHasher<node_t> h;
+  CHECK(h(nA) == sequant::hash::value(*nA));  // null override => node-id
+  h.id_override = [&](node_t const& n) {
+    return sequant::eval::value_id_hash(n, &col);
+  };
+  CHECK(h(nA) == sequant::eval::value_id_hash(nA, &col));
+  CHECK(h(nA) != h(nB));
+
+  // The comparator's colored override distinguishes them (both sliced ->
+  // unequal by colored graph), and returns nullopt (=> structural) when neither
+  // is.
+  sequant::TreeNodeEqualityComparator<node_t> eq;
+  eq.colored_eq_override = [&](node_t const& a,
+                               node_t const& b) -> std::optional<bool> {
+    bool const as =
+        !sequant::eval::in_scope_batched_on_node(a, col.ctx_modes).empty();
+    bool const bs =
+        !sequant::eval::in_scope_batched_on_node(b, col.ctx_modes).empty();
+    if (!as && !bs) return std::nullopt;
+    if (as != bs) return false;
+    return RouterKeyEqual{}(occurrence_key(a, col.ctx_modes, &col.colors),
+                            occurrence_key(b, col.ctx_modes, &col.colors));
+  };
+  CHECK_FALSE(eq(nA, nB));  // sliced on different slots -> unequal
 }
