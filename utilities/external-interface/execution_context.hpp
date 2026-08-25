@@ -107,6 +107,32 @@ class ExecutionContext {
 
   bool ids_are_equivalent(std::string_view lhs, std::string_view rhs) const;
 
+  template <std::ranges::range LhsIDs, std::ranges::range RhsIDs>
+    requires(std::convertible_to<std::ranges::range_value_t<LhsIDs>,
+                                 std::string_view> &&
+             std::convertible_to<std::ranges::range_value_t<RhsIDs>,
+                                 std::string_view>)
+  bool ids_are_equivalent(LhsIDs &&lhs, RhsIDs &&rhs) {
+    return get_data_indices(std::forward<LhsIDs>(lhs)) ==
+           get_data_indices(std::forward<RhsIDs>(rhs));
+  }
+
+  template <std::ranges::range IDs>
+    requires(
+        std::convertible_to<std::ranges::range_value_t<IDs>, std::string_view>)
+  bool ids_are_equivalent(IDs &&lhs, std::string_view rhs) {
+    return ids_are_equivalent(std::forward<IDs>(lhs),
+                              std::ranges::single_view(rhs));
+  }
+
+  template <std::ranges::range IDs>
+    requires(
+        std::convertible_to<std::ranges::range_value_t<IDs>, std::string_view>)
+  bool ids_are_equivalent(std::string_view lhs, IDs &&rhs) {
+    return ids_are_equivalent(std::ranges::single_view(lhs),
+                              std::forward<IDs>(rhs));
+  }
+
   std::size_t dataset_size(std::string_view id) const;
 
   std::vector<Data<const ProcessingData>> get_data(std::string_view id) const;
@@ -133,6 +159,49 @@ class ExecutionContext {
         data_idx_to_ids_[idx].emplace_back(id);
       }
     }
+  }
+
+  template <std::ranges::range IDs>
+    requires(
+        std::convertible_to<std::ranges::range_value_t<IDs>, std::string_view>)
+  std::vector<std::size_t> get_data_indices(
+      IDs &&ids, bool *contained_unknown_id = nullptr) const {
+    std::vector<std::size_t> indices;
+
+    if (contained_unknown_id) {
+      *contained_unknown_id = false;
+    }
+
+    for (std::string_view id : ids) {
+      if (!ExecutionContext::is_valid_id(id, true)) {
+        throw Exception("Invalid id '" + std::string(id) + "'");
+      }
+
+      for (const std::string_view current : ExecutionContext::expand_id(id)) {
+        auto it = id_to_data_indices_.find(current);
+
+        if (it == std::ranges::end(id_to_data_indices_)) {
+          if (contained_unknown_id) {
+            *contained_unknown_id = true;
+          } else {
+            throw Exception("No data available for ID '" +
+                            std::string(current) + "'");
+          }
+
+          continue;
+        }
+
+        std::ranges::copy_if(it->second, std::back_inserter(indices),
+                             [&](std::size_t idx) {
+                               return std::ranges::find(indices, idx) ==
+                                      std::ranges::end(indices);
+                             });
+      }
+    }
+
+    std::ranges::sort(indices);
+
+    return indices;
   }
 };
 

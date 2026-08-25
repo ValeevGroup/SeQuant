@@ -30,49 +30,10 @@ bool ExecutionContext::has_data(std::string_view id) const {
   return id_to_data_indices_.find(id) != id_to_data_indices_.end();
 }
 
-template <std::ranges::range ID2DataIdxMap>
-std::vector<std::size_t> get_data_indices(
-    ID2DataIdxMap &&id2dataidx, std::string_view id,
-    bool *contained_unknown_id = nullptr) {
-  if (!ExecutionContext::is_valid_id(id, true)) {
-    throw Exception("Invalid id '" + std::string(id) + "'");
-  }
-
-  if (contained_unknown_id) {
-    *contained_unknown_id = false;
-  }
-
-  std::vector<std::size_t> indices;
-
-  for (const std::string_view current : ExecutionContext::expand_id(id)) {
-    auto it = id2dataidx.find(current);
-
-    if (it == std::ranges::end(id2dataidx)) {
-      if (contained_unknown_id) {
-        *contained_unknown_id = true;
-      } else {
-        throw Exception("No data available for ID '" + std::string(current) +
-                        "'");
-      }
-
-      continue;
-    }
-
-    std::ranges::copy_if(
-        it->second, std::back_inserter(indices), [&](std::size_t idx) {
-          return std::ranges::find(indices, idx) == std::ranges::end(indices);
-        });
-  }
-
-  std::ranges::sort(indices);
-
-  return indices;
-}
-
 bool ExecutionContext::ids_are_equivalent(std::string_view lhs,
                                           std::string_view rhs) const {
-  return get_data_indices(id_to_data_indices_, lhs) ==
-         get_data_indices(id_to_data_indices_, rhs);
+  return get_data_indices(std::ranges::single_view(lhs)) ==
+         get_data_indices(std::ranges::single_view(rhs));
 }
 
 std::size_t ExecutionContext::dataset_size(std::string_view id) const {
@@ -80,7 +41,7 @@ std::size_t ExecutionContext::dataset_size(std::string_view id) const {
     throw Exception("Invalid ID '" + std::string(id) + "'");
   }
 
-  return get_data_indices(id_to_data_indices_, id).size();
+  return get_data_indices(std::ranges::single_view(id)).size();
 }
 
 template <std::ranges::random_access_range DataVec,
@@ -88,16 +49,13 @@ template <std::ranges::random_access_range DataVec,
 std::vector<
     ExecutionContext::Data<meta::mimic_constness_t<DataVec, ProcessingData>>>
 get_data_impl(DataVec &&data, ID2DataIdxMap &&id2dataidx,
-              DataIdx2IDMap &&dataidx2id, std::string_view id) {
-  if (!ExecutionContext::is_valid_id(id, true)) {
-    throw Exception("Invalid id '" + std::string(id) + "'");
-  }
-
+              DataIdx2IDMap &&dataidx2id,
+              const std::vector<std::size_t> &indices) {
   using RefT = meta::mimic_constness_t<DataVec, ProcessingData>;
 
   std::vector<ExecutionContext::Data<RefT>> selected_data;
 
-  for (std::size_t idx : get_data_indices(id2dataidx, id)) {
+  for (std::size_t idx : indices) {
     ExecutionContext::Data<RefT> ret_data{.data = data.at(idx)};
 
     for (std::string_view alias : dataidx2id.at(idx)) {
@@ -144,12 +102,14 @@ get_data_impl(DataVec &&data, ID2DataIdxMap &&id2dataidx,
 
 std::vector<ExecutionContext::Data<const ProcessingData>>
 ExecutionContext::get_data(std::string_view id) const {
-  return get_data_impl(data_, id_to_data_indices_, data_idx_to_ids_, id);
+  return get_data_impl(data_, id_to_data_indices_, data_idx_to_ids_,
+                       get_data_indices(std::ranges::single_view(id)));
 }
 
 std::vector<ExecutionContext::Data<ProcessingData>> ExecutionContext::get_data(
     std::string_view id) {
-  return get_data_impl(data_, id_to_data_indices_, data_idx_to_ids_, id);
+  return get_data_impl(data_, id_to_data_indices_, data_idx_to_ids_,
+                       get_data_indices(std::ranges::single_view(id)));
 }
 
 bool ExecutionContext::is_valid_id(std::string_view id, bool allow_selectors) {
