@@ -22,6 +22,7 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <limits>
 #include <numeric>
 #include <string>
 #include <string_view>
@@ -109,6 +110,20 @@ void ExportStep::set_options(const nlohmann::json &options) {
     } else if (key == "meta") {
       // Processing happens later as we need to ensure we know the target
       // language beforehand
+    } else if (key == "relative_order") {
+      if (!value.is_array()) {
+        throw Exception("Value for " + kind() + " option '" + key +
+                        "' must be an array");
+      }
+
+      for (const nlohmann::json &current : value) {
+        if (!current.is_string()) {
+          throw Exception("Entries in " + kind() + "." + key +
+                          " are expected to be strings");
+        }
+
+        relative_order_.emplace_back(current.get<std::string>());
+      }
     } else {
       throw Exception("Unknown option key for " + kind() + ": '" + key + "'");
     }
@@ -128,6 +143,39 @@ void ExportStep::set_options(const nlohmann::json &options) {
 }
 
 struct ExportTreeDataCompare {
+  std::size_t min_order(const ExecutionContext::Data<ProcessingData> entry) {
+    std::size_t order = std::numeric_limits<std::size_t>::max();
+
+    for (std::string_view current : ranges::views::concat(
+             entry.associated_ids, entry.associated_group_ids)) {
+      auto pos = current.find('.');
+      if (pos != std::string_view::npos) {
+        // Strip step name from ID to allow referencing e.g. 'res' instead of
+        // 'step5.res'
+        current = current.substr(pos + 1);
+      }
+
+      auto it = std::ranges::find(rel_order, current);
+      order = std::min(order, static_cast<std::size_t>(std::ranges::distance(
+                                  rel_order.begin(), it)));
+    }
+
+    return order;
+  }
+
+  bool operator()(const ExecutionContext::Data<ProcessingData> &lhs,
+                  const ExecutionContext::Data<ProcessingData> &rhs) {
+    const std::size_t lhs_order = min_order(lhs);
+    const std::size_t rhs_order = min_order(rhs);
+
+    if (lhs_order != rhs_order) {
+      return lhs_order < rhs_order;
+    }
+
+    return (*this)(convert_data<ExportTreeData>(lhs.data.get()),
+                   convert_data<ExportTreeData>(rhs.data.get()));
+  }
+
   bool operator()(const ExportTreeData &lhs, const ExportTreeData &rhs) const {
     if (lhs.entries.size() != rhs.entries.size()) {
       return lhs.entries.size() < rhs.entries.size();
@@ -171,6 +219,8 @@ struct ExportTreeDataCompare {
                ? lhs.tree->as_tensor() < rhs.tree->as_tensor()
                : lhs.tree->as_variable() < rhs.tree->as_variable();
   }
+
+  const std::vector<std::string> &rel_order;
 };
 
 std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
@@ -183,16 +233,17 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
     }
   }
 
+  auto to_data_entry = [&](std::size_t idx) { return data.at(idx); };
   auto to_export_data = [&](std::size_t idx) {
-    return convert_data<ExportTreeData>(data.at(idx).data.get());
+    return convert_data<ExportTreeData>(to_data_entry(idx).data.get());
   };
 
   std::vector<std::size_t> access_order(data.size());
   std::iota(access_order.begin(), access_order.end(), 0);
 
   // Sort inputs in partitions of contributions to the same result
-  std::ranges::stable_sort(access_order, ExportTreeDataCompare{},
-                           to_export_data);
+  std::ranges::stable_sort(access_order, ExportTreeDataCompare{relative_order_},
+                           to_data_entry);
 
   std::vector<ExpressionGroup<>> groups;
   for (std::size_t idx : access_order) {

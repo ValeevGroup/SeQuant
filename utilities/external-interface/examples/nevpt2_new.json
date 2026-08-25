@@ -50,6 +50,8 @@
 				"ecc": "1",
 				"en": "0-1",
 				"res1": "2-5",
+				"res1_s1": "5",
+				"res2_s1_singles": "4",
 				"res2": "6-11",
 				"res": "2-11"
 			}
@@ -107,6 +109,10 @@
 					"Energy": "ecc",
 					"Residual": "res"
 				},
+				"relative_order": [
+					"res2_s1_singles",
+					"res1_s1"
+				],
 				"meta": {
 					"index_spaces": {
 						"a": {

@@ -45,6 +45,7 @@ class ExportStep : public ProcessingStep {
   std::filesystem::path filepath_;
   std::map<std::string, std::string, std::less<>> group_assoc_;
   meta_type meta_;
+  std::vector<std::string> relative_order_;
 
   static meta_type parse_meta(std::string_view language,
                               const nlohmann::json &meta);
