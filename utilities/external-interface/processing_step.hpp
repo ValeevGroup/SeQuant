@@ -50,6 +50,13 @@ class OBOProcessFunctionMember<void> {
 
 }  // namespace detail
 
+/// The main point of this wrapper is to
+/// 1) Hide the loop over inputs from steps that only process one input at a
+///    time without needing access to the other inputs while doing so
+/// 2) Propagate output aliases. That is, if the inputs are aliased as
+///   'input.bla', we want the associated outputs to be aliased to
+///   'output.bla' to allow easy referencing in the driver. This applies to
+///   individual as well as group aliases.
 template <typename DataType>
 class OneByOneProcessingStep
     : public ProcessingStep,
