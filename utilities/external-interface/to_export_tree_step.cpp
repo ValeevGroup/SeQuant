@@ -55,8 +55,7 @@ std::size_t ToExportTreeStep::process(std::string_view id_prefix,
 
       symmetrized_result = copy.result_as_tensor();
 
-      copy.result_as_tensor().set_label(
-          std::wstring(symmetrized_result->label()) + L"u");
+      copy.set_label(std::wstring(copy.label()) + L"u");
 
       return to_export_tree(copy);
     }();
