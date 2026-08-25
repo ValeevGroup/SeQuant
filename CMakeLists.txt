@@ -388,6 +388,8 @@ set(SeQuant_symb_src
         SeQuant/core/utility/exception.hpp
         SeQuant/core/utility/expr.cpp
         SeQuant/core/utility/expr.hpp
+        SeQuant/core/utility/expr_matcher.cpp
+        SeQuant/core/utility/expr_matcher.hpp
         SeQuant/core/utility/indices.hpp
         SeQuant/core/utility/macros.cpp
         SeQuant/core/utility/macros.hpp

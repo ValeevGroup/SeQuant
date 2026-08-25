@@ -12,6 +12,7 @@
 #include <SeQuant/core/utility/conversion.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
+#include <SeQuant/core/utility/expr_matcher.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/singleton.hpp>
@@ -20,6 +21,7 @@
 
 #include <range/v3/view/transform.hpp>
 
+#include <compare>
 #include <limits>
 #include <ranges>
 #include <string>
@@ -377,6 +379,97 @@ TEST_CASE("utilities", "[utilities]") {
           REQUIRE(cmp(rhs_tensor, lhs_tensor) == !less);
         }
       }
+    }
+  }
+
+  SECTION("ExprMatcher") {
+    SECTION("composite") {
+      // Composite expressions not yet supported
+      REQUIRE_THROWS_AS(ExprMatcher(*deserialize("A + B")), Exception);
+      REQUIRE_THROWS_AS(ExprMatcher(*deserialize("A * B")), Exception);
+    }
+    SECTION("non-tensor") {
+      Constant c1(1);
+      Constant c2(2);
+
+      REQUIRE(c1 < c2);
+
+      SECTION("same_type") {
+        ExprMatcher c1_matcher(c1);
+
+        REQUIRE(c1_matcher == c1);
+        REQUIRE(c1 == c1_matcher);
+        REQUIRE(c1_matcher != c2);
+        REQUIRE(c2 != c1_matcher);
+        REQUIRE(c1_matcher <= c1);
+        REQUIRE(c1 <= c1_matcher);
+        REQUIRE(c1_matcher >= c1);
+        REQUIRE(c1 >= c1_matcher);
+        REQUIRE(c1_matcher < c2);
+        REQUIRE(c2 > c1_matcher);
+      }
+      SECTION("cross_type") {
+        Variable var("a");
+        const bool var_is_less = var < c1;
+        REQUIRE((var < c2) == var_is_less);
+
+        ExprMatcher m1(c1, {.cross_comparisons = true});
+        ExprMatcher m2(c1, {.cross_comparisons = false});
+
+        REQUIRE((var <=> m1) == (var_is_less ? std::partial_ordering::less
+                                             : std::partial_ordering::greater));
+        REQUIRE((m1 <=> var) == (var_is_less ? std::partial_ordering::greater
+                                             : std::partial_ordering::less));
+        REQUIRE((var <=> m2) == std::partial_ordering::unordered);
+        REQUIRE((m2 <=> var) == std::partial_ordering::unordered);
+
+        REQUIRE(m1 != var);
+        REQUIRE(m1 == c1);
+        REQUIRE(m1 != c2);
+        REQUIRE((m1 < var) == !var_is_less);
+        REQUIRE((m1 > var) == var_is_less);
+        REQUIRE((var < m1) <= !var_is_less);
+        REQUIRE((var > m1) >= var_is_less);
+
+        REQUIRE(m2 != var);
+        REQUIRE_FALSE(m2 == var);
+        REQUIRE(m2 == c1);
+        REQUIRE(m2 != c2);
+        REQUIRE_FALSE(m2 < var);
+        REQUIRE_FALSE(m2 > var);
+        REQUIRE_FALSE(var < m2);
+        REQUIRE_FALSE(var > m2);
+        REQUIRE_FALSE(m2 <= var);
+        REQUIRE_FALSE(m2 >= var);
+      }
+    }
+    SECTION("tensor") {
+      Tensor t1 = deserialize("T{a1;i1}")->as<Tensor>();
+      Tensor t2 = deserialize("T{a2;i2}")->as<Tensor>();
+
+      ExprMatcher m1(t1, {.tensor_cmp = TensorComparison::Identity});
+
+      REQUIRE(t1 == m1);
+      REQUIRE(m1 == t1);
+      REQUIRE(t1 >= m1);
+      REQUIRE(m1 <= t1);
+      REQUIRE(t2 != m1);
+      REQUIRE(m1 != t2);
+      REQUIRE(t2 > m1);
+      REQUIRE(m1 < t2);
+
+      ExprMatcher m2(t1, {.tensor_cmp = TensorComparison::Block});
+
+      REQUIRE(t1 == m2);
+      REQUIRE(m2 == t1);
+      REQUIRE(t1 >= m2);
+      REQUIRE(m2 <= t1);
+      REQUIRE(t2 == m2);
+      REQUIRE(m2 == t2);
+      REQUIRE_FALSE(t2 < m2);
+      REQUIRE_FALSE(m2 < t2);
+      REQUIRE_FALSE(t2 > m2);
+      REQUIRE_FALSE(m2 > t2);
     }
   }
 
