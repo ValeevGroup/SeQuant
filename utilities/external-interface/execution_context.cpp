@@ -76,13 +76,11 @@ bool ExecutionContext::ids_are_equivalent(std::string_view lhs,
 }
 
 std::size_t ExecutionContext::dataset_size(std::string_view id) const {
-  if (!is_valid_id(id, false)) {
+  if (!is_valid_id(id, true)) {
     throw Exception("Invalid ID '" + std::string(id) + "'");
   }
 
-  auto it = id_to_data_indices_.find(id);
-
-  return it == id_to_data_indices_.end() ? 0 : it->second.size();
+  return get_data_indices(id_to_data_indices_, id).size();
 }
 
 template <std::ranges::random_access_range DataVec,
