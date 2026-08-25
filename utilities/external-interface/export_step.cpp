@@ -226,6 +226,88 @@ struct ExportTreeDataCompare {
 
 std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
                             const std::vector<std::string_view> &inputs) {
+  std::vector<ExpressionGroup<>> groups = prepare_expressions(exctx, inputs);
+
+  auto perform_export = [&](auto &&generator, const auto &genctx)
+    requires(
+        std::derived_from<std::remove_cvref_t<decltype(genctx)>,
+                          ExportContext> &&
+        std::derived_from<std::remove_cvref_t<decltype(generator)>,
+                          Generator<std::remove_cvref_t<decltype(genctx)>>>)
+  {
+    // TODO: setup load/store/create/import strategies
+
+    // TODO: handle index batching
+
+    export_groups(groups, generator, genctx);
+
+    return generator.get_generated_code();
+  };
+
+  std::string generated;
+
+  if (language_ == "itf") {
+    ItfGenerator<MetaAwareIftContext> generator;
+    MetaAwareIftContext genctx(std::get<ItfMeta>(meta_));
+
+    if (optimize_) {
+      generated = perform_export(
+          GenerationOptimizer<decltype(generator)>(std::move(generator)),
+          genctx);
+    } else {
+      generated = perform_export(generator, genctx);
+    }
+  } else {
+    throw Exception("Unsupported export language '" + language_ + "'");
+  }
+
+  SEQUANT_ASSERT(!generated.empty());
+
+  std::ofstream stream(filepath_);
+  stream << generated;
+
+  return 0;
+}
+
+ExportStep::meta_type ExportStep::parse_meta(std::string_view language,
+                                             const nlohmann::json &meta) {
+  if (language == "itf") {
+    ItfMeta data;
+
+    for (const auto &[key, value] : meta.items()) {
+      if (key == "index_spaces") {
+        if (!value.is_object()) {
+          throw Exception("Expected '" + key + "' to be an object");
+        }
+
+        for (const auto &[space_label, info] : value.items()) {
+          IndexSpace space(space_label);
+
+          data.index_spaces.emplace(
+              std::move(space),
+              ItfMeta::IndexSpaceMeta{.name = info.value("name", std::string{}),
+                                      .tag = info.value("tag", std::string{})});
+        }
+      } else {
+        throw Exception("Unknown meta data type '" + key + "' for language '" +
+                        std::string(language) + "'");
+      }
+    }
+
+    return data;
+  } else {
+    if (!meta.empty()) {
+      throw Exception("Exporting to '" + std::string(language) +
+                      "' does not accept meta data");
+    }
+
+    return {};
+  }
+}
+
+std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
+    ExecutionContext &exctx,
+    const std::vector<std::string_view> &inputs) const {
   std::vector<ExecutionContext::Data<ProcessingData>> data;
   for (std::string_view current_input : inputs) {
     for (ExecutionContext::Data<ProcessingData> current :
@@ -322,81 +404,7 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
     }
   }
 
-  auto perform_export = [&](auto &&generator, const auto &genctx)
-    requires(
-        std::derived_from<std::remove_cvref_t<decltype(genctx)>,
-                          ExportContext> &&
-        std::derived_from<std::remove_cvref_t<decltype(generator)>,
-                          Generator<std::remove_cvref_t<decltype(genctx)>>>)
-  {
-    // TODO: setup load/store/create/import strategies
-
-    // TODO: handle index batching
-
-    export_groups(groups, generator, genctx);
-
-    return generator.get_generated_code();
-  };
-
-  std::string generated;
-
-  if (language_ == "itf") {
-    ItfGenerator<MetaAwareIftContext> generator;
-    MetaAwareIftContext genctx(std::get<ItfMeta>(meta_));
-
-    if (optimize_) {
-      generated = perform_export(
-          GenerationOptimizer<decltype(generator)>(std::move(generator)),
-          genctx);
-    } else {
-      generated = perform_export(generator, genctx);
-    }
-  } else {
-    throw Exception("Unsupported export language '" + language_ + "'");
-  }
-
-  SEQUANT_ASSERT(!generated.empty());
-
-  std::ofstream stream(filepath_);
-  stream << generated;
-
-  return 0;
-}
-
-ExportStep::meta_type ExportStep::parse_meta(std::string_view language,
-                                             const nlohmann::json &meta) {
-  if (language == "itf") {
-    ItfMeta data;
-
-    for (const auto &[key, value] : meta.items()) {
-      if (key == "index_spaces") {
-        if (!value.is_object()) {
-          throw Exception("Expected '" + key + "' to be an object");
-        }
-
-        for (const auto &[space_label, info] : value.items()) {
-          IndexSpace space(space_label);
-
-          data.index_spaces.emplace(
-              std::move(space),
-              ItfMeta::IndexSpaceMeta{.name = info.value("name", std::string{}),
-                                      .tag = info.value("tag", std::string{})});
-        }
-      } else {
-        throw Exception("Unknown meta data type '" + key + "' for language '" +
-                        std::string(language) + "'");
-      }
-    }
-
-    return data;
-  } else {
-    if (!meta.empty()) {
-      throw Exception("Exporting to '" + std::string(language) +
-                      "' does not accept meta data");
-    }
-
-    return {};
-  }
+  return groups;
 }
 
 }  // namespace sequant::util::extint

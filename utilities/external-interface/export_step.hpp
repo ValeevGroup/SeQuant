@@ -4,6 +4,7 @@
 #include "execution_context.hpp"
 #include "processing_step.hpp"
 
+#include <SeQuant/core/export/expression_group.hpp>
 #include <SeQuant/core/space.hpp>
 
 #include <nlohmann/json_fwd.hpp>
@@ -49,6 +50,9 @@ class ExportStep : public ProcessingStep {
 
   static meta_type parse_meta(std::string_view language,
                               const nlohmann::json &meta);
+
+  std::vector<ExpressionGroup<>> prepare_expressions(
+      ExecutionContext &ctx, const std::vector<std::string_view> &inputs) const;
 
   friend class MetaAwareIftContext;
 };
