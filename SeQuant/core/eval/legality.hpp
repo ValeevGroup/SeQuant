@@ -187,11 +187,11 @@ using DemotionSource =
   //     own result slots per the cross-occurrence meet (\c sliced_modes, which
   //     already folds in ancestor batch loops the value is variant to); and
   //   - a CONTRACTED-at-node index iff the DP batched it here (a \c Contracted
-  //     \c batched_here stamp == the node's chosen aprime).
+  //     \c node_slice_mask stamp == the node's chosen aprime).
   // With an infinite budget (or no batchable axis) the DP emits no stamps, so
   // both are empty and the schedule is flat -- matching forest descent.
   auto const& sliced = node->sliced_modes();
-  auto const& stamps = node->batched_here();
+  auto const& stamps = node->node_slice_mask();
   for (Index const& ix : node->canon_indices())
     if (std::find(sliced.begin(), sliced.end(), ix) != sliced.end())
       add_if_new(ix);
@@ -389,7 +389,7 @@ template <meta::eval_node_range R>
       // node's own result slots per the cross-occurrence meet (sliced_modes,
       // which folds in the ancestor batch loops the value is variant to); a
       // CONTRACTED-at-node axis iff the DP batched it here (a Contracted
-      // batched_here stamp == the node's chosen aprime). With an infinite
+      // node_slice_mask stamp == the node's chosen aprime). With an infinite
       // budget (or no batchable axis) the DP emits no stamps, so the site is
       // empty and the schedule is flat -- identical to forest descent.
       container::svector<Index> site;
@@ -398,7 +398,7 @@ template <meta::eval_node_range R>
           site.push_back(ix);
       };
       auto const& dp_sliced = it->second->sliced_modes();
-      auto const& dp_stamps = it->second->batched_here();
+      auto const& dp_stamps = it->second->node_slice_mask();
       for (Index const& ix : vc.carried)
         if (std::find(dp_sliced.begin(), dp_sliced.end(), ix) !=
             dp_sliced.end())

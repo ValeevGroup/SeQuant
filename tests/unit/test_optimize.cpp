@@ -2969,8 +2969,8 @@ TEST_CASE("perf-first peak_threshold gates contracted aux slicing",
   CHECK(peak_min <= peak_lo);  // fallback is the min-peak realization
 }
 
-// Task 3.3: binarize() must stamp EvalExpr::batched_here() from the optimizer's
-// per-node sliced-sets (OptimizeOptions::term_batch_axes ->
+// Task 3.3: binarize() must stamp EvalExpr::node_slice_mask() from the
+// optimizer's per-node sliced-sets (OptimizeOptions::term_batch_axes ->
 // BinarizationOptions::node_batch_axes), and the two post-orders (the
 // optimizer's DP reconstruction and binarize's Product recursion) must line
 // up exactly -- this round-trips a real optimize() -> binarize() call and
@@ -3036,9 +3036,9 @@ TEST_CASE("binarize stamps per-node batch modes from optimize()",
   bool any_annotated = false;
   bool aux_found = false;
   node.visit([&](auto const& n) {
-    if (n->batched_here().empty()) return;
+    if (n->node_slice_mask().empty()) return;
     any_annotated = true;
-    for (auto const& entry : n->batched_here())
+    for (auto const& entry : n->node_slice_mask())
       if (entry.first.space() == aux) aux_found = true;
   });
   // The essential assertion: the round-trip actually annotated a node. If the
@@ -3051,7 +3051,7 @@ TEST_CASE("binarize stamps per-node batch modes from optimize()",
 
 // Loop-open vs sliced-mask (2026-08-25, Task 1): binarize() must apply
 // NodeBatchAnnotation::opened_here onto EvalExpr::batch_loops_opened_here(),
-// independently of batched_here() (axes). Hand-build node_batch_axes so the
+// independently of node_slice_mask() (axes). Hand-build node_batch_axes so the
 // single contraction node's opened_here carries one External mode while a leaf
 // stays empty -- isolates the binarize wiring from the DP emit (Task 2).
 TEST_CASE("binarize applies batch_loops_opened_here from node annotation",
@@ -3090,10 +3090,10 @@ TEST_CASE("binarize applies batch_loops_opened_here from node annotation",
     if (opened.size() == 1 && opened.front().first == kappa &&
         opened.front().second == BatchModeType::External)
       root_open = true;
-    // opened_here is INDEPENDENT of batched_here(): axes carried Contracted,
+    // opened_here is INDEPENDENT of node_slice_mask(): axes carried Contracted,
     // opened_here carried External -- they must not be conflated.
-    CHECK(n->batched_here().size() == 1);
-    CHECK(n->batched_here().front().second == BatchModeType::Contracted);
+    CHECK(n->node_slice_mask().size() == 1);
+    CHECK(n->node_slice_mask().front().second == BatchModeType::Contracted);
   });
   CHECK(root_open);
   CHECK(leaves_with_open == 0);
@@ -4218,8 +4218,8 @@ TEST_CASE("loop-tree emit: per-node effective_count", "[.][loop-tree]") {
 // walk historically stamped `placed_at_node` ONLY at that ancestor -- the
 // (tiny) residual root -- while the giant DESCENDANTS that carry the external
 // mode FREE were left `(none)`. The runtime slices a node ONLY from that node's
-// OWN `batched_here()` External stamp, so those descendants were never sliced
-// and materialized/cached at full extent (the C60 4-occ giants). The fix
+// OWN `node_slice_mask()` External stamp, so those descendants were never
+// sliced and materialized/cached at full extent (the C60 4-occ giants). The fix
 // propagates the adopted placement DOWN to every descendant carrying the mode.
 //
 // Same network idiom as the neighbouring [.][loop-tree] tests: R{i1,i2} chain
@@ -4228,8 +4228,8 @@ TEST_CASE("loop-tree emit: per-node effective_count", "[.][loop-tree]") {
 // peak_threshold forcing over-budget, an external mode is adopted at the root
 // and an interior carrier node (e.g. {g,h} carrying i1 free) is a descendant of
 // that root carrying the external mode. RED pre-fix: the descendant's emitted
-// `batched_here()` (axes) has NO External entry. GREEN post-fix: it carries an
-// External entry for the adopted mode.
+// `node_slice_mask()` (axes) has NO External entry. GREEN post-fix: it carries
+// an External entry for the adopted mode.
 TEST_CASE(
     "loop-tree emit: external placement propagates to carrying descendants",
     "[.][loop-tree]") {

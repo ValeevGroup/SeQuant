@@ -298,7 +298,7 @@ void run_ordered_contracted_block(
   // scattered on the physical label IT carries for the space, never the block's
   // canonical representative reused across members. A Contracted member (and an
   // AccumulateSum output, which reduces the space away) reads it off its own
-  // batched_here()/carrying leaf (member_contracted_axis, leaf-side); an
+  // node_slice_mask()/carrying leaf (member_contracted_axis, leaf-side); an
   // External member (and an AccumulateScatter output, which carries the space
   // FREE on its result) reads it off its result (member_external_axis). Falling
   // back to block.axis when the member carries no mode of the space leaves a

@@ -1742,11 +1742,12 @@ ResultPtr evaluate_antisymm(Args&&... args) {
 ///
 /// For each node it is consulted on, the returned evaluator chooses a batch
 /// mode \c K from the modes the optimizer annotated at that node
-/// (\c EvalExpr::batched_here; see the \c pick_sliceable lambda); it declines
-/// if the node carries no accepted annotation. Annotations are authoritative --
-/// there is no heuristic fallback, so a node the peak-constrained optimizer did
-/// not ask to batch is never batched. It asks the backend to
-/// partition \c K into contiguous, whole-tile element-range batches of at most
+/// (\c EvalExpr::node_slice_mask; see the \c pick_sliceable lambda); it
+/// declines if the node carries no accepted annotation. Annotations are
+/// authoritative -- there is no heuristic fallback, so a node the
+/// peak-constrained optimizer did not ask to batch is never batched. It asks
+/// the backend to partition \c K into contiguous, whole-tile element-range
+/// batches of at most
 /// \p target_batch_size(K) elements each -- the target is an upper bound, not a
 /// goal (Result::mode_batches). Mode selection is sliceability-aware: it takes
 /// the first accepted mode that actually partitions into more than one batch in
@@ -1962,22 +1963,23 @@ template <typename TreeNode, bool FHC, typename Members>
   using Comp = TreeNodeEqualityComparator<TreeNode>;
 
   // The batch's EXTERNAL modes: obtained exactly as the evaluator obtains them
-  // (partition each member root's batched_here() by BatchModeType). An External
-  // mode is an external that survives FREE onto a node's result, so a node
-  // carrying one is NOT batch-invariant under that mode -- its value depends on
-  // the external slice. When the caller nests an External mode OUTSIDE a
-  // Contracted one (the External mode is sliced by an outer re-entry, then this
-  // scratch batches an inner Contracted mode), a persistent intermediate that
-  // carries the External mode but not the Contracted `mode` would look seedable
-  // under `mode` alone -- yet seeding its full (unsliced-external) value would
-  // be wrong under the outer slice. Tracking the External modes in the
-  // signature (below) forbids seeding/sharing such nodes. When there is no
-  // External mode this list is empty and every External-derived test is a
-  // no-op, keeping the Contracted-only behavior byte-identical.
+  // (partition each member root's node_slice_mask() by BatchModeType). An
+  // External mode is an external that survives FREE onto a node's result, so a
+  // node carrying one is NOT batch-invariant under that mode -- its value
+  // depends on the external slice. When the caller nests an External mode
+  // OUTSIDE a Contracted one (the External mode is sliced by an outer re-entry,
+  // then this scratch batches an inner Contracted mode), a persistent
+  // intermediate that carries the External mode but not the Contracted `mode`
+  // would look seedable under `mode` alone -- yet seeding its full
+  // (unsliced-external) value would be wrong under the outer slice. Tracking
+  // the External modes in the signature (below) forbids seeding/sharing such
+  // nodes. When there is no External mode this list is empty and every
+  // External-derived test is a no-op, keeping the Contracted-only behavior
+  // byte-identical.
   container::svector<Index> ext_axes;
   for (auto const& [root, mode] : members) {
     if (root->leaf()) continue;
-    for (auto const& [ix, knd] : (*root)->batched_here())
+    for (auto const& [ix, knd] : (*root)->node_slice_mask())
       if (knd == BatchModeType::External &&
           std::find(ext_axes.begin(), ext_axes.end(), ix) == ext_axes.end())
         ext_axes.push_back(ix);
@@ -2174,7 +2176,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
     // Mode selection is SLICEABILITY-AWARE and realizes the optimizer's
     // multi-mode nesting one mode per depth level. candidate_axes lists this
     // node's batch modes in the optimizer's annotated order (see
-    // EvalExpr::batched_here), keeping the accepted annotations.
+    // EvalExpr::node_slice_mask), keeping the accepted annotations.
     //
     // The optimizer's annotations are AUTHORITATIVE at every depth: a node
     // carrying no accepted annotation means "do not batch this node", and is
@@ -2187,7 +2189,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
     auto candidate_axes =
         [&accept](auto const& n) -> container::svector<Index> {
       container::svector<Index> out;
-      for (auto const& entry : n->batched_here())
+      for (auto const& entry : n->node_slice_mask())
         if (accept(entry.first)) out.push_back(entry.first);
       return out;
     };
@@ -2252,11 +2254,11 @@ template <typename F, typename IndexPredicate = accept_any_index,
     // ACCUMULATE) or EXTERNAL (an external index free on the node's result ->
     // block partials are DISJOINT slices, SCATTERED into a pre-sized result).
     // The depth-0 heuristic fallback only ever yields a contracted index, so an
-    // mode absent from batched_here() is Contracted -- keeping the
+    // mode absent from node_slice_mask() is Contracted -- keeping the
     // Contracted-only path (no External entry) byte-identical to before this
     // branch existed.
     BatchModeType picked_kind = BatchModeType::Contracted;
-    for (auto const& [ix, knd] : node->batched_here())
+    for (auto const& [ix, knd] : node->node_slice_mask())
       if (ix == K) {
         picked_kind = knd;
         break;
@@ -2327,7 +2329,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
           };
           // Phase 4b-3 runtime cutover: the demotion veto that used to force a
           // MEET-DEMOTED external carrier (a node carrying an EXTERNAL
-          // batched_here() stamp absent from its sliced_modes) to DESCEND is
+          // node_slice_mask() stamp absent from its sliced_modes) to DESCEND is
           // gone. Placement is now purely router-override-or-seed: an
           // order-aware, residency-all-outer node is hoisted to its seed home
           // (FULL on any demoted mode) UNLESS the remat router (populated by
@@ -2471,11 +2473,11 @@ template <typename F, typename IndexPredicate = accept_any_index,
         };
 
     // DEBUG (behavior-neutral): log the trigger's depth, picked mode + kind,
-    // and its full batched_here() annotation + result indices, to diagnose
+    // and its full node_slice_mask() annotation + result indices, to diagnose
     // nested re-batching of a single aux mode. Emitted only when tracing is on.
     if (log::printing()) {
       std::string annot;
-      for (auto const& [ix, knd] : node->batched_here()) {
+      for (auto const& [ix, knd] : node->node_slice_mask()) {
         annot += toUtf8(ix.full_label());
         annot += (knd == BatchModeType::External ? ":ext " : ":con ");
       }

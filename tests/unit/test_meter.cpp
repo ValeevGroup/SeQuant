@@ -151,10 +151,10 @@ TEST_CASE(
   REQUIRE(sequant::index_position(node, mode).has_value());
   REQUIRE(sequant::index_position(node.left(), mode).has_value());
   // Stamp the ROOT's own External loop over i_1. Plain (non-scope)
-  // evaluate() ignores batched_here without a custom evaluator (see
+  // evaluate() ignores node_slice_mask without a custom evaluator (see
   // test_eval_dryrun.cpp's equivalent stamping), so this only feeds
   // compute_dag_boulevard's home/ectx bookkeeping below, not the replay.
-  node->set_batched_here({{mode, sequant::BatchModeType::External}});
+  node->set_node_slice_mask({{mode, sequant::BatchModeType::External}});
 
   std::vector<EvalNodeDryRun> const forest{node};
 
@@ -268,7 +268,7 @@ TEST_CASE(
   // root's one Contracted batch axis (no optimize() involved, matching
   // test_eval_dryrun.cpp's hand-built batch-annotation recipe): the
   // coexistence entry rebuilds its schedule from the forest's OWN
-  // batched_here() stamps, not from BatchPolicy predicates, so this alone is
+  // node_slice_mask() stamps, not from BatchPolicy predicates, so this alone is
   // enough for it to realize a non-root-only scope tree.
   auto expr =
       sequant::deserialize<sequant::ExprPtr>(L"g{i_1;a_3} * h{a_3;i_1}");
@@ -280,7 +280,7 @@ TEST_CASE(
   REQUIRE_FALSE(node.leaf());
 
   Index const a3{L"a_3"};
-  node->set_batched_here({{a3, BatchModeType::Contracted}});
+  node->set_node_slice_mask({{a3, BatchModeType::Contracted}});
 
   std::vector<EvalNodeDryRun> const forest{node};
 

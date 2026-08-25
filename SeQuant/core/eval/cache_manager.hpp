@@ -1875,7 +1875,7 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
   // builder instead of a per-caller obligation: every caller of this overload
   // (SeQuant's build_dryrun_cache, mpqc's build_cache_manager) is covered
   // uniformly. Unconditional and idempotent; a no-op when the forest carries
-  // no External batched_here() stamps (every mask stays empty/all-full), so
+  // no External node_slice_mask() stamps (every mask stays empty/all-full), so
   // this never changes behavior on the OFF path.
   sequant::stamp_lifetime_masks(nodes);
 
@@ -1932,8 +1932,8 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
   // if it slices nothing itself.
   // A node that is invariant to every batched mode is NOT vetoed and stays
   // cacheable at run scope -- this is where a hoisted loop-invariant
-  // intermediate (all-full mask; or an External-only / no batched_here entry,
-  // e.g. gC) lands. OFF path (no order-aware annotations, hence no \c
+  // intermediate (all-full mask; or an External-only / no node_slice_mask
+  // entry, e.g. gC) lands. OFF path (no order-aware annotations, hence no \c
   // stamp_lifetime_masks External stamps): every mask is empty (all-full,
   // \c EvalExpr::sliced_modes_ default-constructed), so the veto never fires
   // and admits exactly what it did before -- byte-identical.

@@ -589,7 +589,7 @@ template <meta::eval_node_range R>
     // Children see this node's OWN realized loops on top of ctx_modes; the node
     // itself is keyed with the enclosing ctx_modes (excludes its own loops).
     container::svector<Index> child_ctx = ctx_modes;
-    for (auto const& [ix, kind] : n->batched_here()) {
+    for (auto const& [ix, kind] : n->node_slice_mask()) {
       container::svector<Index> expanded;
       sequant::detail::proto_expand_into(expanded, ix);
       for (auto const& m : expanded) child_ctx.push_back(m);

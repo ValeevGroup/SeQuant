@@ -351,7 +351,7 @@ inline MeterReport meter(
   // custom evaluator MPQC's wet forest path installs (cck.ipp's `else`
   // branch, `cache.set_custom_evaluator(sequant::make_evaluator(ctx.
   // batch_policy, yielder, make_scope_guard))`): without it, plain
-  // sequant::evaluate(Nodes const&, ...) ignores every batched_here()
+  // sequant::evaluate(Nodes const&, ...) ignores every node_slice_mask()
   // stamp and runs an unbatched, no-schedule single pass -- an infidelity
   // vs. the wet run this meter is supposed to mirror. Installed ONLY on
   // this branch: evaluate_impl consults cache.custom_evaluator() on every

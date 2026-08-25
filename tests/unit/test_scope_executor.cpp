@@ -147,7 +147,7 @@ ScalarNode scalar_tree(std::wstring_view spec) {
 /// \brief The shared unbatched, two-root test forest + its Task-1
 /// ScopeSchedule + leaf evaluator, built via the real pipeline
 /// (compute_dag_boulevard -> build_scope_schedule): no node ever calls
-/// set_batched_here(), so the resulting scope tree must be root-only. Reused
+/// set_node_slice_mask(), so the resulting scope tree must be root-only. Reused
 /// by both the numeric-equivalence test and the trace-fidelity (fix round 1)
 /// test below so the two exercise the identical forest.
 ///
@@ -946,7 +946,7 @@ TEST_CASE(
 // `build_scope_schedule` never nests an i child under it, unlike the
 // HAND-BUILT synthetic forest test_eval_dryrun.cpp's "outer-homed aux
 // composites... across occ blocks" test uses to exercise that nesting.
-// Reading why: occ-veto's own per-NODE `batched_here()` tally does show
+// Reading why: occ-veto's own per-NODE `node_slice_mask()` tally does show
 // External-occ stamps (>0, confirmed separately), but every Κ-carrying
 // shared composite in this residual (the gC-class DF integrals) ALSO
 // carries occ as a proto index of its own CSV/PNO domain (the composite's

@@ -61,22 +61,23 @@ find_leaf_carrying_type(node_t const& n, std::wstring const& base) {
 
 /// \return the PHYSICAL index \p root batches as an External (spectator) mode
 /// of
-///         TYPE \p base at its own root (from \c batched_here()), or nullopt.
-///         An External loop is realized per-member over the member's own
-///         physical index, so scatter uses this (not the schedule's canonical
-///         representative) -- the schedule's mode only names the TYPE.
+///         TYPE \p base at its own root (from \c node_slice_mask()), or
+///         nullopt. An External loop is realized per-member over the member's
+///         own physical index, so scatter uses this (not the schedule's
+///         canonical representative) -- the schedule's mode only names the
+///         TYPE.
 template <meta::eval_node node_t>
 [[nodiscard]] std::optional<Index> member_external_axis(
     node_t const& root, std::wstring const& base) {
   if (root.leaf()) return std::nullopt;
-  for (auto const& [ix, knd] : root->batched_here())
+  for (auto const& [ix, knd] : root->node_slice_mask())
     if (knd == BatchModeType::External && ix.space().base_key() == base)
       return ix;
   return std::nullopt;
 }
 
 /// \return the PHYSICAL index \p root batches as a Contracted mode of TYPE \p
-///         base (from \c batched_here() -- the authoritative source of WHICH
+///         base (from \c node_slice_mask() -- the authoritative source of WHICH
 ///         physical index is batched), or, failing that, the physical label a
 ///         leaf below \p root carries for that type.
 ///
@@ -89,12 +90,12 @@ template <meta::eval_node node_t>
 /// slice a member that binds the contracted mode under a different physical
 /// label, building it full and mis-accumulating it. A contracted mode is summed
 /// away below the root (never on its result), so this reads it off \c
-/// batched_here() or a carrying leaf, not the root's own \c canon_indices.
+/// node_slice_mask() or a carrying leaf, not the root's own \c canon_indices.
 template <meta::eval_node node_t>
 [[nodiscard]] std::optional<Index> member_contracted_axis(
     node_t const& root, std::wstring const& base) {
   if (!root.leaf())
-    for (auto const& [ix, knd] : root->batched_here())
+    for (auto const& [ix, knd] : root->node_slice_mask())
       if (knd == BatchModeType::Contracted && ix.space().base_key() == base)
         return ix;
   if (auto const lf = find_leaf_carrying_type(root, base))

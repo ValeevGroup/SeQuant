@@ -2555,7 +2555,7 @@ void symslice_stamp_ext_occ(sequant::eval::dryrun::EvalNodeDryRun& n) {
   for (auto const& ix : n->canon_indices())
     if (ix.space().base_key() == L"i")
       stamps.push_back({ix, BatchModeType::External});
-  if (!stamps.empty()) n->set_batched_here(stamps);
+  if (!stamps.empty()) n->set_node_slice_mask(stamps);
 }
 
 }  // namespace
@@ -2581,7 +2581,7 @@ TEST_CASE(
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   // S{;i_1,i_2} = X{a_1;i_1} * Y{a_1;i_2} (contract virtual a_1) -- an occ-occ
-  // intermediate, homed full (no batched_here stamp). Two roots share it.
+  // intermediate, homed full (no node_slice_mask stamp). Two roots share it.
   auto X = symslice_leaf("X{a_1;i_1}");
   auto Y = symslice_leaf("Y{a_1;i_2}");
   auto S = symslice_inode("S{;i_1,i_2}", X, Y);

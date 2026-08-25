@@ -778,7 +778,7 @@ TEST_CASE(
   // occ indices into its own result -- exactly the multi-carried shape the
   // Task-4 synthetic fixture uses, but here placed under a REALIZED
   // enclosing occ loop bound to i_1 (ectx non-empty), mirroring how
-  // compute_dag_boulevard stamps `batched_here` once a loop is actually
+  // compute_dag_boulevard stamps `node_slice_mask` once a loop is actually
   // realized.
   svector<Index> const carried{i_1, i_2};
   svector<Index> const contracted_below{};

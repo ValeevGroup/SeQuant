@@ -2,7 +2,7 @@
 // Per-term schedule-record emitter (JSON) for the batched-evaluation
 // visualizer. Two producers share this schema:
 //   * IR side (this header): schedule_ir_json() walks an annotated eval tree
-//     and emits the factorizer's INTENDED schedule -- batched_here loops,
+//     and emits the factorizer's INTENDED schedule -- node_slice_mask loops,
 //     sliced/contracted modes, order-aware gate, effective (replay) count.
 //   * Runtime side (eval.hpp): the evaluator emits the SAME node-keyed schema
 //     with the ACTUAL lifetimes (life/max_life), hoist placement, replay, and
@@ -116,10 +116,10 @@ void schedule_ir_json_node(Node const& n, std::ostream& os) {
   os << ",\"leaf\":" << (n.leaf() ? "true" : "false")
      << ",\"order_aware\":" << (n->batch_order_aware() ? "true" : "false")
      << ",\"effective_count\":" << n->batch_effective_count()
-     << ",\"batched_here\":[";
+     << ",\"node_slice_mask\":[";
   {
     bool first = true;
-    for (auto const& [ix, knd] : n->batched_here()) {
+    for (auto const& [ix, knd] : n->node_slice_mask()) {
       if (!first) os << ',';
       first = false;
       os << "{\"index\":\""

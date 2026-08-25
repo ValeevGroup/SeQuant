@@ -116,9 +116,9 @@ void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
 /// consumes to home each value. A mode slices a canonical node iff it slices
 /// EVERY occurrence of that node in \p forest (a *meet* / set-intersection over
 /// occurrences). A node's occurrence-local sliced set is the union of ALL
-/// \c batched_here() stamps -- any \c BatchModeType, External or Contracted --
-/// of the node and all its ancestors, expanded proto-aware: a batched composite
-/// index contributes its \c proto_indices() (a PNO/composite index is
+/// \c node_slice_mask() stamps -- any \c BatchModeType, External or Contracted
+/// -- of the node and all its ancestors, expanded proto-aware: a batched
+/// composite index contributes its \c proto_indices() (a PNO/composite index is
 /// domain-tied to its occ pair, so slicing the pair slices it too). That union
 /// is then filtered to the modes that slice one of the node's OWN canonical
 /// slots (\c canon_indices(), proto-expanded on the slot side): a mode belongs
@@ -140,8 +140,9 @@ void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
 /// while a block-agnostic node (e.g. \c s*C) whose occurrences bind disjoint
 /// concrete modes intersects to empty (all-full).
 ///
-/// Idempotent; a no-op on the OFF path: with no \c batched_here() stamps every
-/// occurrence set is empty, so every meet is empty and every mask is all-full
+/// Idempotent; a no-op on the OFF path: with no \c node_slice_mask() stamps
+/// every occurrence set is empty, so every meet is empty and every mask is
+/// all-full
 /// (\c EvalExpr::sliced_modes_ is default-empty), leaving runtime behavior
 /// unchanged.
 template <meta::eval_node_range R>
@@ -155,7 +156,7 @@ void stamp_lifetime_masks(R const& forest) noexcept {
   // place_at_this_level consumes, and the value \c home_scope returns.
   auto all_batched_modes_of = [](Node const& n) {
     container::svector<Index> v;
-    for (auto const& [ix, kind] : n->batched_here())
+    for (auto const& [ix, kind] : n->node_slice_mask())
       detail::proto_expand_into(v, ix);
     return v;
   };

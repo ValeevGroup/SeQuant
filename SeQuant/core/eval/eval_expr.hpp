@@ -281,26 +281,26 @@ class EvalExpr {
   /// at this node.
   ///
   [[nodiscard]] container::svector<std::pair<Index, BatchModeType>> const&
-  batched_here() const noexcept {
-    return batch_axes_;
+  node_slice_mask() const noexcept {
+    return node_slice_mask_;
   }
 
   ///
-  /// \brief Sets the batch modes for this node; see \c batched_here.
+  /// \brief Sets the batch modes for this node; see \c node_slice_mask.
   ///
-  void set_batched_here(
+  void set_node_slice_mask(
       container::svector<std::pair<Index, BatchModeType>> modes) noexcept {
-    batch_axes_ = std::move(modes);
+    node_slice_mask_ = std::move(modes);
   }
 
   ///
-  /// \brief Batch loops OPENED at this node: the subset of \c batched_here()
+  /// \brief Batch loops OPENED at this node: the subset of \c node_slice_mask()
   /// for which this node is the loop-open site (the outermost node introducing
   /// the physical batch loop), as opposed to a deeper node that only carries
   /// the sliced mode. Empty unless set by \c binarize from
-  /// \c NodeBatchAnnotation::opened_here. Unlike \c batched_here() -- which the
-  /// runtime consults per node to slice that node's operands, and which the DP
-  /// stamps on EVERY carrying node -- this names each physical loop exactly
+  /// \c NodeBatchAnnotation::opened_here. Unlike \c node_slice_mask() -- which
+  /// the runtime consults per node to slice that node's operands, and which the
+  /// DP stamps on EVERY carrying node -- this names each physical loop exactly
   /// ONCE, so a consumer reconstructing the enclosing-loop NEST (e.g.
   /// \c peak_profile's \c OccurrenceRec::ectx) does not multi-count one loop as
   /// one-per-carrying-node.
@@ -412,8 +412,8 @@ class EvalExpr {
 
   std::shared_ptr<bliss::Graph> connectivity_;
 
-  /// See \c batched_here.
-  container::svector<std::pair<Index, BatchModeType>> batch_axes_{};
+  /// See \c node_slice_mask.
+  container::svector<std::pair<Index, BatchModeType>> node_slice_mask_{};
 
   /// See \c batch_loops_opened_here.
   container::svector<std::pair<Index, BatchModeType>>
@@ -447,7 +447,7 @@ struct BinarizationOptions {
   /// onto the produced tree's Product (contraction) nodes; typically set from
   /// the corresponding entry of \c OptimizeOptions::term_batch_axes for the
   /// summand being binarized. Empty (default) => no stamping, no behavior
-  /// change. See \c EvalExpr::batched_here.
+  /// change. See \c EvalExpr::node_slice_mask.
   container::vector<NodeBatchAnnotation> node_batch_axes = {};
 };
 

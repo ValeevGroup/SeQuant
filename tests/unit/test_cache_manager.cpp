@@ -725,8 +725,8 @@ TEST_CASE("cache_manager_batch_axis_veto", "[cache_manager]") {
     return a3;
   };
 
-  // baseline: no batched_here annotation -> all-full mask, veto inert; the NV/V
-  // frontier is cached and persistent.
+  // baseline: no node_slice_mask annotation -> all-full mask, veto inert; the
+  // NV/V frontier is cached and persistent.
   {
     auto node = make_node(L"R{a1;i1} = f{a1;a2} * g{a2;a3} * t{a3;i1}");
     auto const a3 = find_a3(node);
@@ -748,7 +748,7 @@ TEST_CASE("cache_manager_batch_axis_veto", "[cache_manager]") {
     auto node = make_node(L"R{a1;i1} = f{a1;a2} * g{a2;a3} * t{a3;i1}");
     auto const a3 = find_a3(node);
     REQUIRE(a3);
-    node.left()->set_batched_here({{*a3, BatchModeType::External}});
+    node.left()->set_node_slice_mask({{*a3, BatchModeType::External}});
     auto man = sequant::cache_manager(std::array{node}, is_volatile,
                                       /*min_repeats=*/2);
     REQUIRE_FALSE(man.exists(node.left()));

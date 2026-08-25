@@ -794,7 +794,7 @@ namespace sequant {
 /// \p policy.scheduler == BatchScheduler::whole_scope builds the \c
 /// eval::RichSchedule (\c eval::compute_dag_boulevard)
 /// and the narrow \c eval::ScopeSchedule (\c eval::build_scope_schedule) from
-/// \p forest's OWN placement -- the \c batched_here() annotations a prior
+/// \p forest's OWN placement -- the \c node_slice_mask() annotations a prior
 /// factorizer pass (e.g. \c optimize() with a batched objective, or a test
 /// that stamps them directly) already recorded on \p forest's nodes -- then
 /// drives \c eval::evaluate_whole_scope with \p policy.batch_target_size as

@@ -1903,7 +1903,7 @@ TEST_CASE("eval_batched_custom_evaluator", "[eval]") {
   // batch_axis() picks exactly what the removed depth-0 heuristic used to pick.
   auto const ax = sequant::batch_axis(node);
   REQUIRE(ax.has_value());
-  node->set_batched_here({{*ax, sequant::BatchModeType::Contracted}});
+  node->set_node_slice_mask({{*ax, sequant::BatchModeType::Contracted}});
 
   // Reference first, so yield_'s (random) leaf arrays are generated and cached;
   // the batched evaluator below copies yield_ and thus reuses the same arrays.
@@ -1951,7 +1951,7 @@ TEST_CASE("eval_batched_custom_evaluator persistence gate", "[eval]") {
   // batch_axis() picks exactly what the removed depth-0 heuristic used to pick.
   auto const ax = sequant::batch_axis(node);
   REQUIRE(ax.has_value());
-  node->set_batched_here({{*ax, sequant::BatchModeType::Contracted}});
+  node->set_node_slice_mask({{*ax, sequant::BatchModeType::Contracted}});
   auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
 
   // Volatile-leaf predicate: the amplitude "t".
@@ -2044,7 +2044,7 @@ TEST_CASE("eval_batched_custom_evaluator_tot", "[eval]") {
   // batch_axis() picks exactly what the removed depth-0 heuristic used to pick.
   auto const ax = sequant::batch_axis(node, accept_occ);
   REQUIRE(ax.has_value());
-  node->set_batched_here({{*ax, sequant::BatchModeType::Contracted}});
+  node->set_node_slice_mask({{*ax, sequant::BatchModeType::Contracted}});
 
   // TA::norm2 is unsupported for tensor-of-tensor tiles, so compare via the
   // self-dot of each array (a scalar norm^2); reordering the contraction over
@@ -2210,11 +2210,12 @@ TEST_CASE("eval_batched_scratch", "[eval]") {
 // heuristic fallback, which has been removed (annotations are now
 // authoritative). Re-pointing it at an explicit annotation is NOT
 // behaviour-preserving: cache_manager vetoes caching for a node whose own
-// batched_here() carries a sliced batchable mode, and the heuristic never set
-// batched_here() -- so the same mode batched by the two routes gives different
-// CSE. The correct expectations depend on Phase B replacing that veto with
-// per-context (per-slice) caching. Re-enable and re-derive the counts then;
-// do not "fix" the numbers against veto behaviour that is about to be deleted.
+// node_slice_mask() carries a sliced batchable mode, and the heuristic never
+// set node_slice_mask() -- so the same mode batched by the two routes gives
+// different CSE. The correct expectations depend on Phase B replacing that veto
+// with per-context (per-slice) caching. Re-enable and re-derive the counts
+// then; do not "fix" the numbers against veto behaviour that is about to be
+// deleted.
 
 // Task 3 of the whole-scope batched DAG execution design
 // (doc/dev/specs/2026-08-10-whole-scope-batched-dag-execution-design.md):
@@ -2265,13 +2266,13 @@ TEST_CASE("evaluate_whole_scope matches forest descent over one aux loop",
     auto const ax = sequant::batch_axis(nd, accept_aux);
     REQUIRE(ax.has_value());
     x1 = *ax;
-    nd->set_batched_here({{*ax, sequant::BatchModeType::Contracted}});
+    nd->set_node_slice_mask({{*ax, sequant::BatchModeType::Contracted}});
     nd->set_batch_order_aware(true);
   }
   REQUIRE(x1.space() == aux);
 
   // Reference: unbatched forest descent (ground truth). Without a custom
-  // evaluator batched_here is ignored, so this is the exact F1 + F2.
+  // evaluator node_slice_mask is ignored, so this is the exact F1 + F2.
   auto const ref = evaluate(forest, target, yield_)->get<TArrayD>();
 
   // Scope schedule: x_1 is the single realized batch loop.
@@ -2367,24 +2368,24 @@ TEST_CASE(
   std::vector<node_t> forest{eval_node(t1), eval_node(t2)};
 
   // Reference: unbatched forest descent (ground truth), taken BEFORE
-  // batched_here() is stamped below -- forest descent ignores it regardless
+  // node_slice_mask() is stamped below -- forest descent ignores it regardless
   // (no custom evaluator installed), but this keeps the reference call
   // manifestly independent of the annotation.
   auto const ref = evaluate(forest, target, yield_)->get<TArrayD>();
 
   // SP1's compute_dag_boulevard (peak_profile.hpp) builds each occurrence's
-  // enclosing-loop context (OccurrenceRec::ectx) off batched_here() during its
-  // descent -- the SAME annotation the runtime batched evaluator consults, and
-  // the one build_ordered_schedule's own fixture (test_ordered_schedule.cpp's
-  // W/{Κ} forest) stamps on the node that REALIZES the loop. Without it no
-  // occurrence has an enclosing x_1 loop, so classify_axis's LoopLocal check
-  // (bound lockstep to an enclosing loop of the SAME index) can never find
-  // one and every x_1-carrying value falls to LoopCarried (AccumulateScatter)
-  // instead of Reduction/LoopLocal -- exactly the wrong classification this
-  // test's own precondition check caught. Each root itself is the node that
-  // contracts x_1 (batch_axis finds it as the shared index between the root's
-  // two factors), so batched_here() goes there, mirroring the whole-scope
-  // aux-only equivalence test above.
+  // enclosing-loop context (OccurrenceRec::ectx) off node_slice_mask() during
+  // its descent -- the SAME annotation the runtime batched evaluator consults,
+  // and the one build_ordered_schedule's own fixture
+  // (test_ordered_schedule.cpp's W/{Κ} forest) stamps on the node that REALIZES
+  // the loop. Without it no occurrence has an enclosing x_1 loop, so
+  // classify_axis's LoopLocal check (bound lockstep to an enclosing loop of the
+  // SAME index) can never find one and every x_1-carrying value falls to
+  // LoopCarried (AccumulateScatter) instead of Reduction/LoopLocal -- exactly
+  // the wrong classification this test's own precondition check caught. Each
+  // root itself is the node that contracts x_1 (batch_axis finds it as the
+  // shared index between the root's two factors), so node_slice_mask() goes
+  // there, mirroring the whole-scope aux-only equivalence test above.
   auto accept_aux = [aux](sequant::Index const& ix) {
     return ix.space() == aux;
   };
@@ -2393,9 +2394,9 @@ TEST_CASE(
     auto const ax = sequant::batch_axis(nd, accept_aux);
     REQUIRE(ax.has_value());
     x1 = *ax;
-    nd->set_batched_here({{*ax, sequant::BatchModeType::Contracted}});
+    nd->set_node_slice_mask({{*ax, sequant::BatchModeType::Contracted}});
     // This node realizes (opens) the loop, so mirror the DP: peak_profile's
-    // ectx is now built from batch_loops_opened_here, not batched_here.
+    // ectx is now built from batch_loops_opened_here, not node_slice_mask.
     nd->set_batch_loops_opened_here(
         {{*ax, sequant::BatchModeType::Contracted}});
   }
@@ -2489,8 +2490,9 @@ TEST_CASE(
 
   // Two summable roots sharing S = g*h, both contracting the aux x_1 (an
   // aux-aux edge), results over {i1,i2,i3,i4} -- same forest as the batched
-  // Contracted test, but here NOT stamped batched_here and NOT made batchable,
-  // so the schedule is a flat sequence of BuildSteps (no loop block).
+  // Contracted test, but here NOT stamped node_slice_mask and NOT made
+  // batchable, so the schedule is a flat sequence of BuildSteps (no loop
+  // block).
   auto const t1 = sequant::deserialize<sequant::ExprPtr>(
       L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (p{a_3;i_2;x_1} * q{i_4;a_3})");
   auto const t2 = sequant::deserialize<sequant::ExprPtr>(
@@ -2500,8 +2502,8 @@ TEST_CASE(
 
   auto const ref = evaluate(forest, target, yield_)->get<TArrayD>();
 
-  // Empty policy: nothing is batchable, so no batched_here is consulted and the
-  // schedule has no ScopeBlock.
+  // Empty policy: nothing is batchable, so no node_slice_mask is consulted and
+  // the schedule has no ScopeBlock.
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](sequant::Index const&) {
     return false;
@@ -2759,7 +2761,7 @@ TEST_CASE(
     }
   REQUIRE(mode.nonnull());
 
-  // Reference: forest descent (batched_here ignored, no custom evaluator).
+  // Reference: forest descent (node_slice_mask ignored, no custom evaluator).
   std::vector<node_t> forest{rootn};
   auto const ref = evaluate(forest, target, yield_)->get<ToTArray>();
   REQUIRE(TA::norm2(ref) > 0.0);
@@ -2768,13 +2770,13 @@ TEST_CASE(
   // would (mirrors batched_eval_external_proto_occ_scatter). The external loop
   // OPENS once, at the root (an external mode is on the final result, so the
   // root is its outermost carrier) -- ectx is built from opens (peak_profile).
-  rootn->set_batched_here({{mode, sequant::BatchModeType::External}});
+  rootn->set_node_slice_mask({{mode, sequant::BatchModeType::External}});
   rootn->set_batch_loops_opened_here(
       {{mode, sequant::BatchModeType::External}});
   auto stamp = [&](auto&& self, node_t& n) -> void {
     if (n.leaf()) return;
     if (&n != &rootn && index_position(n, mode).has_value())
-      n->set_batched_here({{mode, sequant::BatchModeType::External}});
+      n->set_node_slice_mask({{mode, sequant::BatchModeType::External}});
     self(self, n.left());
     self(self, n.right());
   };
@@ -2859,7 +2861,7 @@ TEST_CASE(
   for (auto& nd : forest) {
     auto const ax = sequant::batch_axis(nd, accept_aux);
     REQUIRE(ax.has_value());
-    nd->set_batched_here({{*ax, sequant::BatchModeType::Contracted}});
+    nd->set_node_slice_mask({{*ax, sequant::BatchModeType::Contracted}});
     // realizer node opens the loop; ectx is built from opens (peak_profile).
     nd->set_batch_loops_opened_here(
         {{*ax, sequant::BatchModeType::Contracted}});
@@ -2989,16 +2991,16 @@ TEST_CASE(
   std::vector<node_t> forest{eval_node(t1), eval_node(t2)};
 
   // Reference: unbatched forest descent (ground truth), taken BEFORE
-  // batched_here() is stamped below -- forest descent ignores it regardless
+  // node_slice_mask() is stamped below -- forest descent ignores it regardless
   // (no custom evaluator installed), but this keeps the reference call
   // manifestly independent of the annotation.
   auto const ref = evaluate(forest, target, yield_)->get<TArrayD>();
 
   // SP1's compute_dag_boulevard (peak_profile.hpp) builds each occurrence's
-  // enclosing-loop context (OccurrenceRec::ectx) off batched_here() during
+  // enclosing-loop context (OccurrenceRec::ectx) off node_slice_mask() during
   // its descent (see the Task-2 test's own comment for the full mechanics).
   // Both roots themselves realize the i_1 loop (mirroring the Task-2 test's
-  // own precedent of stamping batched_here directly on each forest root):
+  // own precedent of stamping node_slice_mask directly on each forest root):
   // descendants below them (S, g, h) see an enclosing i_1 loop and lock-step
   // to it (LoopLocal); the roots' OWN occurrences have no enclosing loop at
   // all (nothing wraps a forest root) and still carry i_1 on their own
@@ -3006,7 +3008,7 @@ TEST_CASE(
   // test exists to exercise.
   sequant::Index const i1{L"i_1"};
   for (auto& nd : forest) {
-    nd->set_batched_here({{i1, sequant::BatchModeType::External}});
+    nd->set_node_slice_mask({{i1, sequant::BatchModeType::External}});
     // each root realizes (opens) the i_1 loop; ectx is built from opens.
     nd->set_batch_loops_opened_here({{i1, sequant::BatchModeType::External}});
   }
@@ -3121,13 +3123,13 @@ TEST_CASE("evaluate_whole_scope matches forest descent over nested aux+occ",
   sequant::Index const x1{L"x_1"};
   sequant::Index const i1{L"i_1"};
   for (auto& nd : forest) {
-    nd->set_batched_here({{x1, sequant::BatchModeType::Contracted},
-                          {i1, sequant::BatchModeType::External}});
+    nd->set_node_slice_mask({{x1, sequant::BatchModeType::Contracted},
+                             {i1, sequant::BatchModeType::External}});
     nd->set_batch_order_aware(true);
   }
 
   // Reference: unbatched forest descent (ground truth). Without a custom
-  // evaluator batched_here is ignored, so this is the exact F1 + F2.
+  // evaluator node_slice_mask is ignored, so this is the exact F1 + F2.
   auto const ref = evaluate(forest, target, yield_)->get<TArrayD>();
 
   // Scope schedule: aux x_1 outer (contracted), occ i_1 inner (external).
@@ -3186,7 +3188,7 @@ TEST_CASE("evaluate_whole_scope matches forest descent over nested aux+occ",
 // contracts x_1 at each root).
 //
 // Discriminator: without a custom evaluator, plain forest descent ignores
-// batched_here entirely, so a NAIVE numeric-equivalence-to-reference check
+// node_slice_mask entirely, so a NAIVE numeric-equivalence-to-reference check
 // alone cannot tell "routed to whole-scope" apart from "silently fell through
 // to forest descent" -- both would land close to the unbatched reference. The
 // flag-ON branch is instead cross-checked against an INDEPENDENT direct call
@@ -3233,7 +3235,7 @@ TEST_CASE(
     auto const ax = sequant::batch_axis(nd, accept_aux);
     REQUIRE(ax.has_value());
     x1 = *ax;
-    nd->set_batched_here({{*ax, sequant::BatchModeType::Contracted}});
+    nd->set_node_slice_mask({{*ax, sequant::BatchModeType::Contracted}});
     nd->set_batch_order_aware(true);
   }
   REQUIRE(x1.space() == aux);
@@ -3335,7 +3337,7 @@ TEST_CASE("eval_batched_custom_evaluator dedups within-batch repeats",
   // batch_axis() picks exactly what the removed depth-0 heuristic used to pick.
   auto const ax = sequant::batch_axis(node);
   REQUIRE(ax.has_value());
-  node->set_batched_here({{*ax, sequant::BatchModeType::Contracted}});
+  node->set_node_slice_mask({{*ax, sequant::BatchModeType::Contracted}});
   auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
 
   std::map<std::wstring, int> n_yield;
@@ -3366,11 +3368,12 @@ TEST_CASE("eval_batched_custom_evaluator dedups within-batch repeats",
 // heuristic fallback, which has been removed (annotations are now
 // authoritative). Re-pointing it at an explicit annotation is NOT
 // behaviour-preserving: cache_manager vetoes caching for a node whose own
-// batched_here() carries a sliced batchable mode, and the heuristic never set
-// batched_here() -- so the same mode batched by the two routes gives different
-// CSE. The correct expectations depend on Phase B replacing that veto with
-// per-context (per-slice) caching. Re-enable and re-derive the counts then;
-// do not "fix" the numbers against veto behaviour that is about to be deleted.
+// node_slice_mask() carries a sliced batchable mode, and the heuristic never
+// set node_slice_mask() -- so the same mode batched by the two routes gives
+// different CSE. The correct expectations depend on Phase B replacing that veto
+// with per-context (per-slice) caching. Re-enable and re-derive the counts
+// then; do not "fix" the numbers against veto behaviour that is about to be
+// deleted.
 TEST_CASE("eval_batched_custom_evaluator group replay",
           "[.][blocked-on-per-context-caching]") {
   using sequant::evaluate;
@@ -3404,7 +3407,7 @@ TEST_CASE("eval_batched_custom_evaluator group replay",
   for (auto* nd : {&n1, &n2}) {
     auto const ax = sequant::batch_axis(*nd);
     REQUIRE(ax.has_value());
-    (*nd)->set_batched_here({{*ax, sequant::BatchModeType::Contracted}});
+    (*nd)->set_node_slice_mask({{*ax, sequant::BatchModeType::Contracted}});
   }
 
   auto is_volatile_t = [](node_t const& n) {
@@ -3457,11 +3460,12 @@ TEST_CASE("eval_batched_custom_evaluator group replay",
 // heuristic fallback, which has been removed (annotations are now
 // authoritative). Re-pointing it at an explicit annotation is NOT
 // behaviour-preserving: cache_manager vetoes caching for a node whose own
-// batched_here() carries a sliced batchable mode, and the heuristic never set
-// batched_here() -- so the same mode batched by the two routes gives different
-// CSE. The correct expectations depend on Phase B replacing that veto with
-// per-context (per-slice) caching. Re-enable and re-derive the counts then;
-// do not "fix" the numbers against veto behaviour that is about to be deleted.
+// node_slice_mask() carries a sliced batchable mode, and the heuristic never
+// set node_slice_mask() -- so the same mode batched by the two routes gives
+// different CSE. The correct expectations depend on Phase B replacing that veto
+// with per-context (per-slice) caching. Re-enable and re-derive the counts
+// then; do not "fix" the numbers against veto behaviour that is about to be
+// deleted.
 TEST_CASE("eval_batched_custom_evaluator group replay layers nested finals",
           "[.][blocked-on-per-context-caching]") {
   using sequant::evaluate;
@@ -3523,7 +3527,7 @@ TEST_CASE("eval_batched_custom_evaluator group replay layers nested finals",
   for (auto* nd : {&n_out, &n_in}) {
     auto const ax = sequant::batch_axis(*nd, accept_aux);
     REQUIRE(ax.has_value());
-    (*nd)->set_batched_here({{*ax, sequant::BatchModeType::Contracted}});
+    (*nd)->set_node_slice_mask({{*ax, sequant::BatchModeType::Contracted}});
   }
 
   cache.set_custom_evaluator(make_batched_custom_evaluator(
@@ -3597,7 +3601,7 @@ TEST_CASE("eval_batched_custom_evaluator nests inner mode", "[eval]") {
   // contracted aux mode keeps this robust to binarize's operand ordering.
   auto const root_axis = sequant::batch_axis(node, accept_aux);
   REQUIRE(root_axis.has_value());
-  node->set_batched_here({{*root_axis, sequant::BatchModeType::Contracted}});
+  node->set_node_slice_mask({{*root_axis, sequant::BatchModeType::Contracted}});
 
   node_t* inner = nullptr;
   std::optional<sequant::Index> inner_axis;
@@ -3616,7 +3620,7 @@ TEST_CASE("eval_batched_custom_evaluator nests inner mode", "[eval]") {
   REQUIRE(inner != nullptr);
   REQUIRE(inner_axis.has_value());
   REQUIRE(*inner_axis != *root_axis);  // the two nested modes differ
-  (*inner)->set_batched_here(
+  (*inner)->set_node_slice_mask(
       {{*inner_axis, sequant::BatchModeType::Contracted}});
 
   // Reference: plain (unbatched) evaluation. Computed first so yield_'s random
@@ -3662,7 +3666,7 @@ TEST_CASE("eval_batched_custom_evaluator nests two modes on one node",
   // Finding N2 regression gate: the single-term-opt DP can stamp MORE THAN ONE
   // batch mode on a SINGLE eval node (aprime is a bitmask;
   // reconstruct_batched_modes pushes one Index per set bit into that node's
-  // batched_here()). The runtime must slice ALL of them by nesting -- `for
+  // node_slice_mask()). The runtime must slice ALL of them by nesting -- `for
   // K-batch: for mu1-batch: replay` at the SAME node -- otherwise the modeled
   // peak (which priced BOTH modes sliced) is a lie. Here ONE product node
   // carries two aux batch modes x_1 and x_2, both present on both leaves; the
@@ -3707,7 +3711,7 @@ TEST_CASE("eval_batched_custom_evaluator nests two modes on one node",
       two_axes_typed;
   for (sequant::Index const& ix : two_axes)
     two_axes_typed.push_back({ix, sequant::BatchModeType::Contracted});
-  node->set_batched_here(two_axes_typed);
+  node->set_node_slice_mask(two_axes_typed);
 
   // Reference: plain (unbatched) evaluation; also generates yield_'s random
   // leaf arrays that the batched evaluator reuses.
@@ -3823,7 +3827,7 @@ TEST_CASE("eval_batched_custom_evaluator hoists loop-invariant descendant",
   // scope_level is irrelevant (the trigger is never hoisted); leave it unset.
   auto const root_axis = sequant::batch_axis(node, accept_aux);
   REQUIRE(root_axis.has_value());
-  node->set_batched_here({{*root_axis, sequant::BatchModeType::Contracted}});
+  node->set_node_slice_mask({{*root_axis, sequant::BatchModeType::Contracted}});
 
   // Locate I2 = the unique NON-root node that contracts an aux mode (x_2).
   node_t* i2 = nullptr;
@@ -3849,7 +3853,7 @@ TEST_CASE("eval_batched_custom_evaluator hoists loop-invariant descendant",
   // (root) cache and builds it once. This drives the post-hoist_invariants
   // residency signals (batch_order_aware + sliced_modes), not a per-node scalar
   // placement level.
-  (*i2)->set_batched_here({{*i2_axis, sequant::BatchModeType::Contracted}});
+  (*i2)->set_node_slice_mask({{*i2_axis, sequant::BatchModeType::Contracted}});
   (*i2)->set_batch_order_aware(true);
 
   // Reference: plain (unbatched) evaluation; also fills yield_'s leaf cache.
@@ -3950,7 +3954,7 @@ TEST_CASE(
   // Root's own aux mode (x_1, the OUTER trigger).
   auto const root_axis = sequant::batch_axis(node, accept_aux);
   REQUIRE(root_axis.has_value());
-  node->set_batched_here({{*root_axis, sequant::BatchModeType::Contracted}});
+  node->set_node_slice_mask({{*root_axis, sequant::BatchModeType::Contracted}});
 
   // T = the unique non-root node contracting an aux mode different from
   // root's (x_2, the INNER trigger). Located via batch_axis (robust to
@@ -3972,7 +3976,7 @@ TEST_CASE(
   REQUIRE(t != nullptr);
   REQUIRE(t_axis.has_value());
   REQUIRE(*t_axis != *root_axis);
-  (*t)->set_batched_here({{*t_axis, sequant::BatchModeType::Contracted}});
+  (*t)->set_node_slice_mask({{*t_axis, sequant::BatchModeType::Contracted}});
 
   // D2 = T's grandchild (T.left().left()), the q*r product. Reached by
   // direct structural navigation (confirmed empirically for this exact
@@ -3990,7 +3994,7 @@ TEST_CASE(
 
   // Annotate D2: order-aware, with NON-EMPTY sliced_modes = {x_1} (the signal
   // under test -- the all-batched-modes meet carries the enclosing aux mode
-  // x_1 that D2 holds free on its result) and no External batched_here stamp
+  // x_1 that D2 holds free on its result) and no External node_slice_mask stamp
   // (so it is not demoted). Its residency is {x_1} only -- present at T's
   // firing (ectx = [x_1]) but NOT at root's own (ectx = []) -- so it is
   // correctly skipped at the outer pre-loop placement call and collected at
@@ -4110,7 +4114,7 @@ TEST_CASE("batched_eval_external_axis_scatter", "[eval][batched-external]") {
 
   // Stamp External on the root AND the inner node (the mode appears free at
   // both levels).
-  node->set_batched_here({{mode, sequant::BatchModeType::External}});
+  node->set_node_slice_mask({{mode, sequant::BatchModeType::External}});
   node_t* inner = nullptr;
   auto find_inner = [&](auto&& self, node_t& n) -> void {
     if (n.leaf()) return;
@@ -4121,10 +4125,10 @@ TEST_CASE("batched_eval_external_axis_scatter", "[eval][batched-external]") {
   find_inner(find_inner, node);
   REQUIRE(inner != nullptr);
   REQUIRE(sequant::index_position(*inner, mode).has_value());
-  (*inner)->set_batched_here({{mode, sequant::BatchModeType::External}});
+  (*inner)->set_node_slice_mask({{mode, sequant::BatchModeType::External}});
 
-  // Reference: plain unbatched evaluation (batched_here are ignored without a
-  // custom evaluator). Computed first so yield_'s random leaves are generated
+  // Reference: plain unbatched evaluation (node_slice_mask are ignored without
+  // a custom evaluator). Computed first so yield_'s random leaves are generated
   // and cached, then reused by the batched run below.
   auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
   REQUIRE(TA::norm2(ref) > 0.0);  // guard: reference is nontrivially nonzero
@@ -4175,7 +4179,7 @@ TEST_CASE(
   // Phase 4b-3 T1 re-baseline. This test used to pin the `has_demoted_external`
   // demotion veto: in an external SCATTER over a mode e, a DESCENDANT
   // intermediate M that itself CARRIES e free onto its result (an External
-  // `batched_here()` stamp absent from `sliced_modes()` -- a meet-demoted
+  // `node_slice_mask()` stamp absent from `sliced_modes()` -- a meet-demoted
   // carrier, the cross-pair giants in the C60 story) was NEVER hoisted, so it
   // was rebuilt SLICED once per e-block (h requested nblocks times). The veto
   // is now DELETED: placement is purely router-override-or-seed, so with an
@@ -4205,9 +4209,9 @@ TEST_CASE(
   //    the earlier version of this test used, so R's own shape is unchanged).
   //  - R = M*INV contracts a_3 -> {a_1;a_4;x_1}: the x_1 scatter trigger.
   // M is stamped External on x_1 + order_aware(true), with sliced_modes left
-  // empty (default). INV is stamped order_aware(true) only -- no batched_here
-  // entries at all. Both are collected + hoisted to the term/root cache (built
-  // once, regardless of e-blocks).
+  // empty (default). INV is stamped order_aware(true) only -- no
+  // node_slice_mask entries at all. Both are collected + hoisted to the
+  // term/root cache (built once, regardless of e-blocks).
   using sequant::evaluate;
   using sequant::make_batched_custom_evaluator;
   using TA::TArrayD;
@@ -4245,7 +4249,7 @@ TEST_CASE(
   REQUIRE(sequant::index_position(node, mode).has_value());  // free on R
 
   // Stamp External on the root R (the scatter trigger over x_1).
-  node->set_batched_here({{mode, sequant::BatchModeType::External}});
+  node->set_node_slice_mask({{mode, sequant::BatchModeType::External}});
 
   // Locate M (carries x_1 free) and INV (the sibling that does not) -- the
   // only two non-root, non-leaf nodes in this network.
@@ -4274,10 +4278,10 @@ TEST_CASE(
   // meet-demoted external carrier. With the veto deleted, M is collected +
   // hoisted to its seed home (the chain root, since its residency is empty),
   // built exactly once; slice-on-use slices the hoisted-full M per e-block.
-  (*m)->set_batched_here({{mode, sequant::BatchModeType::External}});
+  (*m)->set_node_slice_mask({{mode, sequant::BatchModeType::External}});
   (*m)->set_batch_order_aware(true);
 
-  // INV: order-aware, no batched_here entries at all (no External stamp) ->
+  // INV: order-aware, no node_slice_mask entries at all (no External stamp) ->
   // collected + hoisted to the term/root cache, built exactly once (as before
   // -- INV was never demoted).
   (*inv)->set_batch_order_aware(true);
@@ -4532,7 +4536,7 @@ TEST_CASE("batched_scratch_no_seed_external", "[eval][batched-external]") {
 
   // real cache: P classifies persistent (volatile head t); store a value so it
   // is ALIVE (the state that makes a node a seed candidate). Built with n's
-  // batched_here() still empty (no External stamp anywhere yet), so the
+  // node_slice_mask() still empty (no External stamp anywhere yet), so the
   // gated cache_manager()'s own internal stamp_lifetime_masks() call (Task 2:
   // it stamps every caller's forest, not just build_dryrun_cache's) sees no
   // External mode and leaves every mask all-full -- the mask veto stays inert
@@ -4548,11 +4552,11 @@ TEST_CASE("batched_scratch_no_seed_external", "[eval][batched-external]") {
   // NOW stamp x_ext External on the member root, as the optimizer would; this
   // is the batch's External-mode set that make_batched_scratch partitions
   // out below. This is a DIFFERENT mechanism from the cache's lifetime mask
-  // (make_batched_scratch reads batched_here() directly, never the mask), and
-  // is applied only after `real` is built so it does not also feed the
+  // (make_batched_scratch reads node_slice_mask() directly, never the mask),
+  // and is applied only after `real` is built so it does not also feed the
   // cache's own veto -- keeping this test isolated to the seed-decision guard
   // under test.
-  n->set_batched_here({{x_ext, sequant::BatchModeType::External}});
+  n->set_node_slice_mask({{x_ext, sequant::BatchModeType::External}});
 
   // member mode = a contracted mode P does NOT carry (mu-analog): its per-node
   // signature over P is 'absent', so on the contracted mode alone P looks
@@ -4577,7 +4581,7 @@ TEST_CASE("batched_scratch_no_seed_external", "[eval][batched-external]") {
   // Control: with NO External mode stamped (a purely contracted batch), the
   // SAME invariant persistent P IS seeded -- proving the exclusion is driven by
   // the External stamp and that the contracted-only path is byte-identical.
-  n->set_batched_here({});
+  n->set_node_slice_mask({});
   auto const bs2 = sequant::detail::make_batched_scratch(members, real);
   REQUIRE(seeds_P(bs2));
 }
@@ -4762,17 +4766,17 @@ TEST_CASE("batched_eval_external_proto_occ_scatter",
   // Stamp External on every node whose result carries the occ (the root and the
   // inner g*C product), as the optimizer would for a forest-level external
   // mode.
-  node->set_batched_here({{mode, sequant::BatchModeType::External}});
+  node->set_node_slice_mask({{mode, sequant::BatchModeType::External}});
   auto stamp_carriers = [&](auto&& self, node_t& n) -> void {
     if (n.leaf()) return;
     if (&n != &node && index_position(n, mode).has_value())
-      n->set_batched_here({{mode, sequant::BatchModeType::External}});
+      n->set_node_slice_mask({{mode, sequant::BatchModeType::External}});
     self(self, n.left());
     self(self, n.right());
   };
   stamp_carriers(stamp_carriers, node);
 
-  // Reference: plain unbatched evaluation (batched_here ignored without a
+  // Reference: plain unbatched evaluation (node_slice_mask ignored without a
   // custom evaluator). Computed first so yield_'s random leaves are cached and
   // reused.
   auto const ref = evaluate(node, target, yield_)->get<ToTArray>();
@@ -4865,10 +4869,10 @@ TEST_CASE("batched_eval_external_two_occ", "[eval][batched-external]") {
   REQUIRE(sequant::index_position(node, occ_axes[1]).has_value());
 
   // Stamp BOTH occupied indices External on the single product node.
-  node->set_batched_here({{occ_axes[0], sequant::BatchModeType::External},
-                          {occ_axes[1], sequant::BatchModeType::External}});
+  node->set_node_slice_mask({{occ_axes[0], sequant::BatchModeType::External},
+                             {occ_axes[1], sequant::BatchModeType::External}});
 
-  // Reference: plain unbatched evaluation (the OFF path -- batched_here are
+  // Reference: plain unbatched evaluation (the OFF path -- node_slice_mask are
   // ignored without a custom evaluator). Computed first so yield_'s random
   // leaf arrays are generated and cached, then reused by the batched run.
   auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
@@ -5007,7 +5011,7 @@ TEST_CASE("batched_eval_external_hadamard", "[eval][batched-external]") {
   REQUIRE(sequant::index_position(node.left(), mode).has_value());
   REQUIRE(sequant::index_position(node.right(), mode).has_value());
 
-  node->set_batched_here({{mode, sequant::BatchModeType::External}});
+  node->set_node_slice_mask({{mode, sequant::BatchModeType::External}});
 
   // Reference: plain unbatched evaluation (the OFF path).
   auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
@@ -5136,8 +5140,9 @@ TEST_CASE("batched_eval_external_nested_contracted",
 
   // Stamp the root's external mode External, the inner's contracted mode
   // Contracted.
-  node->set_batched_here({{x1_axis, sequant::BatchModeType::External}});
-  (*inner)->set_batched_here({{*x2_axis, sequant::BatchModeType::Contracted}});
+  node->set_node_slice_mask({{x1_axis, sequant::BatchModeType::External}});
+  (*inner)->set_node_slice_mask(
+      {{*x2_axis, sequant::BatchModeType::Contracted}});
 
   // Reference: plain unbatched evaluation (the OFF path). Computed first so
   // yield_'s random leaf arrays are generated and cached, then reused below.
@@ -5239,7 +5244,7 @@ TEST_CASE(
 
   auto const root_axis = sequant::batch_axis(node, accept_aux);
   REQUIRE(root_axis.has_value());
-  node->set_batched_here({{*root_axis, sequant::BatchModeType::Contracted}});
+  node->set_node_slice_mask({{*root_axis, sequant::BatchModeType::Contracted}});
 
   node_t* inner = nullptr;
   std::optional<sequant::Index> inner_axis;
@@ -5258,7 +5263,7 @@ TEST_CASE(
   REQUIRE(inner != nullptr);
   REQUIRE(inner_axis.has_value());
   REQUIRE(*inner_axis != *root_axis);
-  (*inner)->set_batched_here(
+  (*inner)->set_node_slice_mask(
       {{*inner_axis, sequant::BatchModeType::Contracted}});
 
   auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
@@ -5947,7 +5952,8 @@ namespace {
 void copy_batch_annotations(
     sequant::FullBinaryNode<sequant::EvalExpr> const& from,
     sequant::FullBinaryNode<sequant::EvalExprTA>& to) {
-  const_cast<sequant::EvalExprTA&>(*to).set_batched_here(from->batched_here());
+  const_cast<sequant::EvalExprTA&>(*to).set_node_slice_mask(
+      from->node_slice_mask());
   const_cast<sequant::EvalExprTA&>(*to).set_sliced_modes(from->sliced_modes());
   const_cast<sequant::EvalExprTA&>(*to).set_batch_order_aware(
       from->batch_order_aware());
@@ -5959,7 +5965,7 @@ void copy_batch_annotations(
   }
 }
 
-// Dump per-node annotations of a TA eval tree (result indices, batched_here
+// Dump per-node annotations of a TA eval tree (result indices, node_slice_mask
 // modes+kind, sliced_modes, order_aware) for eyeballing placement differences.
 void dump_annotations(sequant::FullBinaryNode<sequant::EvalExprTA> const& n,
                       int depth = 0) {
@@ -5971,7 +5977,7 @@ void dump_annotations(sequant::FullBinaryNode<sequant::EvalExprTA> const& n,
     res += ' ';
   }
   std::string bh;
-  for (auto const& [ix, knd] : n->batched_here()) {
+  for (auto const& [ix, knd] : n->node_slice_mask()) {
     bh += sequant::toUtf8(ix.full_label());
     bh += (knd == BatchModeType::External ? ":ext " : ":con ");
   }

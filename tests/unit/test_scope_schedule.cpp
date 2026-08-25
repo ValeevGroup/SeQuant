@@ -94,8 +94,8 @@ TEST_CASE("build_scope_schedule places values at their home scope",
   };
   auto P1 = scope_inode("P{i_1;a_3}", make_V(), scope_leaf("W{a_1;a_3}"));
   auto P2 = scope_inode("P{i_1;a_3}", make_V(), scope_leaf("W{a_1;a_3}"));
-  P1->set_batched_here({{K, BatchModeType::Contracted}});
-  P2->set_batched_here({{K, BatchModeType::Contracted}});
+  P1->set_node_slice_mask({{K, BatchModeType::Contracted}});
+  P2->set_node_slice_mask({{K, BatchModeType::Contracted}});
 
   SizeRegime r;
   r.space_extent = {{L"i", 5}, {L"a", 10}, {L"Κ", 8}};
@@ -136,7 +136,7 @@ TEST_CASE(
   auto V = scope_inode("V{i_9;a_7}", scope_leaf("V1{i_9;o_1}"),
                        scope_leaf("V2{o_1;a_7}"));
   auto Q = scope_inode("Q{a_3;a_7}", std::move(V), scope_leaf("Z{a_3;a_7}"));
-  Q->set_batched_here({{i9, BatchModeType::External}});
+  Q->set_node_slice_mask({{i9, BatchModeType::External}});
   // R (the forest ROOT) carries i_5 -- a DIFFERENT physical label of the same
   // type "i" -- on its own result: the free/spectator index the External
   // loop scatters into.

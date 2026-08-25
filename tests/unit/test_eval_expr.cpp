@@ -560,7 +560,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
   }
 }
 
-TEST_CASE("eval_expr_batched_here_typed", "[EvalExpr][batched-here]") {
+TEST_CASE("eval_expr_node_slice_mask_typed", "[EvalExpr][batched-here]") {
   using namespace sequant;
   auto const tnsr =
       parse_tensor(L"g{i_1,a_1;i_2,a_2}", {.def_perm_symm = Symmetry::Nonsymm});
@@ -568,10 +568,10 @@ TEST_CASE("eval_expr_batched_here_typed", "[EvalExpr][batched-here]") {
   container::svector<std::pair<Index, BatchModeType>> modes{
       {Index{L"a_1"}, BatchModeType::Contracted},
       {Index{L"i_1"}, BatchModeType::External}};
-  node.set_batched_here(modes);
-  REQUIRE(node.batched_here().size() == 2);
-  REQUIRE(node.batched_here()[0].second == BatchModeType::Contracted);
-  REQUIRE(node.batched_here()[1].second == BatchModeType::External);
+  node.set_node_slice_mask(modes);
+  REQUIRE(node.node_slice_mask().size() == 2);
+  REQUIRE(node.node_slice_mask()[0].second == BatchModeType::Contracted);
+  REQUIRE(node.node_slice_mask()[1].second == BatchModeType::External);
 }
 
 // Task 5 (multiroot-single-dag-eval): binarize(Sum const&, ...)'s make_sum

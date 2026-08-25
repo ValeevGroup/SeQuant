@@ -123,7 +123,7 @@ EvalNode<EvalExpr> inode_remat(std::string_view result, EvalNode<EvalExpr> l,
 
 // Stamp a single External batch loop mode at a node.
 void stamp_ext_remat(EvalNode<EvalExpr>& n, Index ix) {
-  n->set_batched_here({{std::move(ix), BatchModeType::External}});
+  n->set_node_slice_mask({{std::move(ix), BatchModeType::External}});
 }
 
 // Builds one BatchContext entry for these placement_remat unit tests. \p
@@ -148,8 +148,8 @@ BatchContextEntry remat_test_ctx_entry(Index const& ax, std::size_t lo,
 // rather than needing a separate ancestor per level.
 void stamp_ext_pair_remat(EvalNode<EvalExpr>& n, Index ix_outer,
                           Index ix_inner) {
-  n->set_batched_here({{std::move(ix_outer), BatchModeType::External},
-                       {std::move(ix_inner), BatchModeType::External}});
+  n->set_node_slice_mask({{std::move(ix_outer), BatchModeType::External},
+                          {std::move(ix_inner), BatchModeType::External}});
 }
 
 // Assert two flat Schedules are cell-for-cell identical: same cell count,
@@ -704,12 +704,12 @@ TEST_CASE(
   // SYNTHETIC: G's declared result slots {o_1;i_1} are INCONSISTENT with its
   // A{a_5;x_2}*B{x_2;a_6} subtree (which really contracts to {a_5;a_6}), a
   // shortcut that is fine for the mask/footprint machinery (it reads only
-  // canon_indices + batched_here) but hides o_1/i_1 from occurrence_key, which
-  // is built from the SUBTREE LEAVES. In a REAL eval tree an intermediate's
-  // batched result modes are genuine subtree indices, so the two occurrences
-  // would get DISTINCT keys -- that CONSISTENT case is the next test; here we
-  // just pin that the second occurrence's key still resolves to the shared
-  // home.
+  // canon_indices + node_slice_mask) but hides o_1/i_1 from occurrence_key,
+  // which is built from the SUBTREE LEAVES. In a REAL eval tree an
+  // intermediate's batched result modes are genuine subtree indices, so the two
+  // occurrences would get DISTINCT keys -- that CONSISTENT case is the next
+  // test; here we just pin that the second occurrence's key still resolves to
+  // the shared home.
   auto const& G2 = forest[1].left();
   auto const g_key2 =
       occurrence_key(G2, svector<Index>{Index{L"o_1"}, Index{L"i_1"}});

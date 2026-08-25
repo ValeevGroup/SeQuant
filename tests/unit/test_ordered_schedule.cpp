@@ -622,7 +622,7 @@ TEST_CASE(
 //   V{Κ_1;a_2} = G * R  -- Κ-local (LoopLocal): DIRECTLY READS R, the
 //                          root-homed leaf above -- the "block follows its
 //                          own input" direction.
-//   W{a_2;a_3} = V * H, with Κ realized AT W (batched_here) -- contracts Κ_1
+//   W{a_2;a_3} = V * H, with Κ realized AT W (node_slice_mask) -- contracts Κ_1
 //                          at its own node -> Reduction, AccumulateSum
 //                          output of {Κ}.
 //   Z{a_2;a_3}          -- unrelated Κ-free leaf, root-homed.
@@ -682,7 +682,7 @@ TEST_CASE(
   auto V = orderedsched_inode("V{Κ_1;a_2}", G, R);  // contracts a_1; reads R
   auto H = orderedsched_leaf("H{Κ_1;a_3}");
   auto W = orderedsched_inode("W{a_2;a_3}", V, H);  // contracts Κ_1
-  W->set_batched_here({{K, sequant::BatchModeType::Contracted}});
+  W->set_node_slice_mask({{K, sequant::BatchModeType::Contracted}});
   auto Z = orderedsched_leaf("Z{a_2;a_3}");
   auto Top = orderedsched_inode("Top{a_9;a_10}", W, Z);  // Κ-free; reads W
 
@@ -870,13 +870,14 @@ TEST_CASE(
 // formed by an aux (Κ) contraction, so it is LoopCarried on occ AND Reduction
 // on aux -- the multi-level escape (aux sum, occ scatter) plus the
 // non-innermost split. Axes are realized by hand-stamping (set_sliced_modes for
-// the external occ, set_batched_here Contracted for aux), the same way the
+// the external occ, set_node_slice_mask Contracted for aux), the same way the
 // aux-only fixtures above stamp Κ -- no optimize() run.
 namespace {
-// Stamp occ as EXTERNAL and aux (Κ) as Contracted in batched_here, sourcing the
-// Index identities from the node's OWN canon/contracted indices. sliced_modes
-// is then DERIVED by stamp_lifetime_masks (the cross-occurrence meet), never
-// hand-set -- that is how the real optimize()->binarize path realizes an axis.
+// Stamp occ as EXTERNAL and aux (Κ) as Contracted in node_slice_mask, sourcing
+// the Index identities from the node's OWN canon/contracted indices.
+// sliced_modes is then DERIVED by stamp_lifetime_masks (the cross-occurrence
+// meet), never hand-set -- that is how the real optimize()->binarize path
+// realizes an axis.
 void orderedsched_stamp_2axis(sequant::EvalNode<sequant::EvalExpr>& n) {
   using sequant::BatchModeType;
   sequant::container::svector<std::pair<Index, BatchModeType>> stamps;
@@ -886,7 +887,7 @@ void orderedsched_stamp_2axis(sequant::EvalNode<sequant::EvalExpr>& n) {
   for (auto const& ix : sequant::contracted_indices(n))
     if (ix.space().base_key() == L"Κ")
       stamps.push_back({ix, BatchModeType::Contracted});
-  if (!stamps.empty()) n->set_batched_here(stamps);
+  if (!stamps.empty()) n->set_node_slice_mask(stamps);
   // Loop-OPENS (peak_profile builds ectx from these): the aux (Κ) Contracted
   // loop opens at ITS contraction node -- this node, where contracted_indices
   // put it. The occ (i) External loop opens at the ROOT only (added below), not
@@ -897,9 +898,9 @@ void orderedsched_stamp_2axis(sequant::EvalNode<sequant::EvalExpr>& n) {
   if (!opens.empty()) n->set_batch_loops_opened_here(opens);
 }
 
-// Post-order walk stamping every node's batched_here + Contracted opens, then
-// the occ (External) loop-open at the ROOT only (external mode is on the final
-// result, so the root is its outermost carrier).
+// Post-order walk stamping every node's node_slice_mask + Contracted opens,
+// then the occ (External) loop-open at the ROOT only (external mode is on the
+// final result, so the root is its outermost carrier).
 void orderedsched_stamp_all(sequant::EvalNode<sequant::EvalExpr>& n) {
   using sequant::BatchModeType;
   std::function<void(sequant::EvalNode<sequant::EvalExpr>&)> post =
@@ -963,7 +964,7 @@ TEST_CASE(
   auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
 
   std::vector<sequant::EvalNode<sequant::EvalExpr>> forest{B};
-  // Derive sliced_modes from the batched_here stamps (the cross-occurrence
+  // Derive sliced_modes from the node_slice_mask stamps (the cross-occurrence
   // meet), realizing occ (External) + aux (Contracted) as loop axes.
   sequant::stamp_lifetime_masks(forest);
   auto const block_of = [](Index const&) -> std::size_t { return 4; };
@@ -1756,7 +1757,7 @@ TEST_CASE(
 // driver test (test_sliced_canonical_layout.cpp) leaves open: that one runs
 // populate_canonical_layouts with an EMPTY assignment (degenerate), so it
 // never materializes a NON-empty layout. Here the occ-outer/aux-inner
-// [sp2-noninner] fixture has genuine batched_here()/sliced modes, so the
+// [sp2-noninner] fixture has genuine node_slice_mask()/sliced modes, so the
 // DF-leaf P (CSE-folded across two occurrences, each carrying an aux + an occ
 // mode) gets a real 2-slot canonical_layout and two per-occurrence
 // permutations -- and the SAME hash-keyed LoopColoredSliceSeam the ordered

@@ -337,7 +337,7 @@ struct RichSchedule {
 /// \c sliced_modes, is populated), then walks every tree in post-order
 /// (children before parent),
 /// assigning each visited node -- leaves included -- a monotone static point.
-/// On descent each node's \c batched_here() loops (proto-expanded, matching
+/// On descent each node's \c node_slice_mask() loops (proto-expanded, matching
 /// \c home_scope's proto expansion) are pushed onto an enclosing-batch-context
 /// stack visible to that node's CHILDREN, and popped before the node itself is
 /// recorded: a node's own realized loop encloses its operands but not its own
@@ -396,9 +396,9 @@ RichSchedule compute_dag_boulevard(R const& forest,
     detail::BatchContext child_ectx = ectx;
     container::svector<Index> own_modes;
     // Enclosing-loop context is built from the loops OPENED at this node
-    // (batch_loops_opened_here), NOT the per-node sliced mask (batched_here).
-    // The DP stamps an external mode's sliced mask on EVERY carrying node, so
-    // reading batched_here here counted one physical loop
+    // (batch_loops_opened_here), NOT the per-node sliced mask
+    // (node_slice_mask). The DP stamps an external mode's sliced mask on EVERY
+    // carrying node, so reading node_slice_mask here counted one physical loop
     // once-per-carrying-node
     // -- ectx piled up duplicates of the same occ index (i i i ...) and no
     // longer matched the DAG scope's one-loop-one-level de-duplication. Opens
@@ -440,8 +440,8 @@ RichSchedule compute_dag_boulevard(R const& forest,
   for (auto const& tree : forest) visit(visit, tree, detail::BatchContext{});
 
   // Cross-occurrence union, per canonical value (hash), of the modes that
-  // value EVER realizes as its OWN loop (\c batched_here() at the value's own
-  // node, not an ancestor's). \c home_scope already folds a node's own
+  // value EVER realizes as its OWN loop (\c node_slice_mask() at the value's
+  // own node, not an ancestor's). \c home_scope already folds a node's own
   // batched-here contribution into its meet (stamp_lifetime_masks: "the node
   // AND all its ancestors"), which is right for OTHER consumers of that
   // meet, but wrong for THIS cell's own footprint: a mode a value realizes as

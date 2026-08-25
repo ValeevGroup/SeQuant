@@ -48,26 +48,26 @@ std::set<Index> index_set(std::initializer_list<Index> l) {
 
 // Stamp a single External occ mode at a node.
 void stamp_ext(EvalNode<EvalExpr>& n, Index ix) {
-  n->set_batched_here({{std::move(ix), BatchModeType::External}});
+  n->set_node_slice_mask({{std::move(ix), BatchModeType::External}});
 }
 
 // Stamp an External occ pair (i,j) at a node.
 void stamp_ext_pair(EvalNode<EvalExpr>& n, Index i, Index j) {
-  n->set_batched_here({{std::move(i), BatchModeType::External},
-                       {std::move(j), BatchModeType::External}});
+  n->set_node_slice_mask({{std::move(i), BatchModeType::External},
+                          {std::move(j), BatchModeType::External}});
 }
 
 // Stamp a single Contracted mode at a node (mirrors stamp_ext, but tagged
 // BatchModeType::Contracted instead of External).
 void stamp_con(EvalNode<EvalExpr>& n, Index ix) {
-  n->set_batched_here({{std::move(ix), BatchModeType::Contracted}});
+  n->set_node_slice_mask({{std::move(ix), BatchModeType::Contracted}});
 }
 
 // Stamp a Contracted occ pair (i,j) at a node (mirrors stamp_ext_pair, but
 // tagged BatchModeType::Contracted instead of External).
 void stamp_con_pair(EvalNode<EvalExpr>& n, Index i, Index j) {
-  n->set_batched_here({{std::move(i), BatchModeType::Contracted},
-                       {std::move(j), BatchModeType::Contracted}});
+  n->set_node_slice_mask({{std::move(i), BatchModeType::Contracted},
+                          {std::move(j), BatchModeType::Contracted}});
 }
 
 // Build an EvalExpr from a single-tensor spec (e.g. "R{i_1;a_5}"); its
@@ -85,7 +85,7 @@ EvalNode<EvalExpr> leaf(std::string_view tensor) {
 
 // An internal eval node whose OWN result slots are the given tensor's slots,
 // with the two supplied child subtrees. The op field is immaterial to the mask
-// pass (which reads only leaf-ness, batched_here, and canon_indices), so a
+// pass (which reads only leaf-ness, node_slice_mask, and canon_indices), so a
 // tensor-derived EvalExpr with the intended result slots is a faithful stand-in
 // for a real contraction result.
 EvalNode<EvalExpr> inode(std::string_view result, EvalNode<EvalExpr> l,
@@ -126,8 +126,8 @@ TEST_CASE("lifetime mask cross-occurrence meet", "[lifetime_mask]") {
 
 TEST_CASE("lifetime mask OFF path is all-full (no External stamps)",
           "[lifetime_mask]") {
-  // No batched_here stamps anywhere => every occurrence set empty => every mask
-  // empty => all-full (the byte-identical OFF path).
+  // No node_slice_mask stamps anywhere => every occurrence set empty => every
+  // mask empty => all-full (the byte-identical OFF path).
   auto a = head("A1{i_1;a_1} * A2{a_1;i_2}");
   auto b = head("A1{i_1;a_1} * A2{a_1;i_2}");
   std::vector<EvalNode<EvalExpr>> forest{a, b};
@@ -147,8 +147,8 @@ TEST_CASE("lifetime mask expands a batched composite index proto-aware",
   // contributes its proto pair {i_1, i_2}, not the composite label itself.
   auto n_A = head("L1{a_3<i_1,i_2>;i_3} * M1{i_3;a_4}");
   auto n_B = head("L1{a_3<i_1,i_2>;i_3} * M1{i_3;a_4}");
-  n_A->set_batched_here({{a_pno, BatchModeType::External}});
-  n_B->set_batched_here({{a_pno, BatchModeType::External}});
+  n_A->set_node_slice_mask({{a_pno, BatchModeType::External}});
+  n_B->set_node_slice_mask({{a_pno, BatchModeType::External}});
 
   std::vector<EvalNode<EvalExpr>> forest{n_A, n_B};
   stamp_lifetime_masks(forest);
@@ -336,7 +336,7 @@ TEST_CASE(
     "lifetime mask veto is byte-identical on the OFF path (no External "
     "stamps anywhere)",
     "[lifetime_mask][veto]") {
-  // No batched_here stamps anywhere => every mask is empty (all-full), the
+  // No node_slice_mask stamps anywhere => every mask is empty (all-full), the
   // SAME condition the retired per-node scalar placement level satisfied for
   // every un-annotated node. A repeated canonical node is therefore
   // registered at run scope exactly as it was before this change.
@@ -469,7 +469,7 @@ TEST_CASE(
   auto n_A = head("W1{i_1;a_1} * W2{a_1;i_2}");
   auto n_B = head("W1{i_1;a_1} * W2{a_1;i_2}");
   auto stamp_mixed = [&](EvalNode<EvalExpr>& n) {
-    n->set_batched_here(
+    n->set_node_slice_mask(
         {{i, BatchModeType::External}, {j, BatchModeType::Contracted}});
   };
   stamp_mixed(n_A);
@@ -494,8 +494,8 @@ TEST_CASE("stamp_lifetime_masks expands a batched composite index proto-aware",
   // proto pair {i_1, i_2}, not the composite label itself.
   auto n_A = head("L1{a_3<i_1,i_2>;i_3} * M1{i_3;a_4}");
   auto n_B = head("L1{a_3<i_1,i_2>;i_3} * M1{i_3;a_4}");
-  n_A->set_batched_here({{a_pno, BatchModeType::Contracted}});
-  n_B->set_batched_here({{a_pno, BatchModeType::Contracted}});
+  n_A->set_node_slice_mask({{a_pno, BatchModeType::Contracted}});
+  n_B->set_node_slice_mask({{a_pno, BatchModeType::Contracted}});
 
   std::vector<EvalNode<EvalExpr>> forest{n_A, n_B};
   stamp_lifetime_masks(forest);

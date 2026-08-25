@@ -82,15 +82,15 @@ EvalNode<EvalExpr> inode(std::string_view result, EvalNode<EvalExpr> l,
 
 // Stamp a single External batch loop mode at a node.
 void stamp_ext(EvalNode<EvalExpr>& n, Index ix) {
-  n->set_batched_here({{std::move(ix), BatchModeType::External}});
+  n->set_node_slice_mask({{std::move(ix), BatchModeType::External}});
 }
 
 // Stamp TWO External batch loop modes at a node, outer first: realizes a
 // two-level nest (ix_outer at level 0, ix_inner at level 1) in ONE node
 // rather than needing a separate ancestor per level.
 void stamp_ext_pair(EvalNode<EvalExpr>& n, Index ix_outer, Index ix_inner) {
-  n->set_batched_here({{std::move(ix_outer), BatchModeType::External},
-                       {std::move(ix_inner), BatchModeType::External}});
+  n->set_node_slice_mask({{std::move(ix_outer), BatchModeType::External},
+                          {std::move(ix_inner), BatchModeType::External}});
 }
 
 }  // namespace
@@ -392,7 +392,7 @@ TEST_CASE(
   CHECK(c_cell->footprint == 160);
   // R's OWN i_1 loop slices its OPERANDS (C, via child_ectx), never R's own
   // result -- R is the loop's full accumulated output. home_scope(R) DOES
-  // include i_1 (stamp_lifetime_masks folds a node's own batched_here into
+  // include i_1 (stamp_lifetime_masks folds a node's own node_slice_mask into
   // its own meet), but cell_footprint's home_modes excludes any mode a value
   // realizes as its OWN loop (see compute_dag_path's own_modes_union), so i_1
   // stays FULL for R => 10*10*8 = 800, NOT block-narrowed.
@@ -621,7 +621,8 @@ TEST_CASE(
   // root while the heuristic would slice it in the occurrence that carries the
   // loop). The anchor is only a valid equality where the two COINCIDE -- i.e.
   // a forest with NO batching at all, where every home_scope is empty on both
-  // sides and every value sizes FULL. This forest has zero batched_here loops.
+  // sides and every value sizes FULL. This forest has zero node_slice_mask
+  // loops.
   auto ctx = sequant::get_default_context().clone();
   ctx.set_first_dummy_index_ordinal(1000000);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));

@@ -1737,7 +1737,7 @@ void populate_occurrence_canonical_layout(
 /// ectx) that \c populate_occurrence_canonical_layout needs.
 ///
 /// \details Mirrors \c compute_dag_boulevard's own post-order walk (the same
-/// \c batched_here()-driven ambient-context threading, proto-expanded the
+/// \c node_slice_mask()-driven ambient-context threading, proto-expanded the
 /// same way -- see that function's doc comment) but does NOT re-derive value
 /// identity from scratch: \p rich already assigns every occurrence a stable
 /// \c point (its production static point), so this walk reconstructs the
@@ -1774,7 +1774,7 @@ void populate_canonical_layouts(R const& forest, RichSchedule& rich,
   auto visit = [&](auto&& self, Node const& n,
                    container::svector<Index> const& ctx_modes) -> void {
     container::svector<Index> child_ctx_modes = ctx_modes;
-    for (auto const& [ix, kind] : n->batched_here()) {
+    for (auto const& [ix, kind] : n->node_slice_mask()) {
       (void)kind;
       container::svector<Index> expanded;
       sequant::detail::proto_expand_into(expanded, ix);

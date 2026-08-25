@@ -204,13 +204,13 @@ TEST_CASE(
 
   auto n = leaf_node(t);
   // Stamp a Contracted (not External) mode on i1, which sits on n's own slot.
-  n->set_batched_here(container::svector<std::pair<Index, BatchModeType>>{
+  n->set_node_slice_mask(container::svector<std::pair<Index, BatchModeType>>{
       {i1, BatchModeType::Contracted}});
 
   // Build ctx_modes the way an all-batched-modes caller would (any
   // BatchModeType, mirroring stamp_lifetime_masks's selector).
   container::svector<Index> ctx;
-  for (auto const& [ix, kind] : n->batched_here()) ctx.push_back(ix);
+  for (auto const& [ix, kind] : n->node_slice_mask()) ctx.push_back(ix);
 
   auto named = in_scope_batched_on_node(n, ctx);
   CHECK(named.find(i1) != named.end());

@@ -14,10 +14,10 @@ namespace sequant {
 /// should be "de-nested" (flattened) to a regular tensor or kept as nested.
 enum class DeNest { True, False };
 
-/// \brief Flavor of an \c EvalExpr::batched_here entry: whether the index is
+/// \brief Flavor of an \c EvalExpr::node_slice_mask entry: whether the index is
 ///        contracted away somewhere in the term (\c Contracted), or is an
 ///        external index that survives to the term's result
-///        (\c External). See \c EvalExpr::batched_here.
+///        (\c External). See \c EvalExpr::node_slice_mask.
 enum class BatchModeType { Contracted, External };
 
 /// \brief Per-contraction-node batch annotation; defined in

@@ -127,10 +127,10 @@ std::vector<Index> node_free_indices(EvalExpr const& n) {
   return v;
 }
 
-// Local shim: BatchModeType-tagging of EvalExpr::batched_here() entries (Task
-// 1) strips this spike file's plain-Index reads down to the .first projection;
-// this test file is not committed, so keep the fix minimal rather than
-// threading BatchModeType through the trace/analysis helpers below.
+// Local shim: BatchModeType-tagging of EvalExpr::node_slice_mask() entries
+// (Task 1) strips this spike file's plain-Index reads down to the .first
+// projection; this test file is not committed, so keep the fix minimal rather
+// than threading BatchModeType through the trace/analysis helpers below.
 template <typename Range>
 container::vector<Index> batch_axes_indices(Range const& entries) {
   container::vector<Index> out;
@@ -1394,7 +1394,7 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
     // index on an intermediate is sliceable only at the ANCESTOR that contracts
     // it, so the giant's REALIZED size is its nominal size with each free index
     // that some ancestor sliced reduced to batch_target_size. Walk top-down
-    // carrying active = union of ancestor batched_here (by FULL label, so
+    // carrying active = union of ancestor node_slice_mask (by FULL label, so
     // mu~_1241 sliced above only reduces the SAME mu~_1241 below, not a
     // different mu~_j).
     auto keyof = [](Index const& ix) { return std::wstring(ix.full_label()); };
@@ -1427,11 +1427,12 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
     // nodes) -- the term-level source of "more batch groups".
     std::map<std::wstring, std::size_t> term_axis_hist;
     // active maps a sliced index's FULL label -> a descriptor of the ANCESTOR
-    // node that slices it (its result free-index signature + its batched_here).
-    // This is the node-dump: it turns "escaped={}" from an inference into a
-    // concrete "mu~_X is sliced by ancestor <node>" (or ESCAPED).
-    // nbatches carries, for each ancestor-sliced mode, its batch count
-    // (extent / batch_target_size) -- the executed-flops recompute factor.
+    // node that slices it (its result free-index signature + its
+    // node_slice_mask). This is the node-dump: it turns "escaped={}" from an
+    // inference into a concrete "mu~_X is sliced by ancestor <node>" (or
+    // ESCAPED). nbatches carries, for each ancestor-sliced mode, its batch
+    // count (extent / batch_target_size) -- the executed-flops recompute
+    // factor.
     std::function<void(std::remove_cvref_t<decltype(node)> const&,
                        std::map<std::wstring, std::wstring>,
                        std::map<std::wstring, double>)>
@@ -1510,9 +1511,9 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
               if (!touches(k)) recompute *= nb;
             term_flops_exec += nf * recompute;
             if (recompute > 1.0) ++term_recomputed_nodes;
-            if (!n->batched_here().empty()) ++term_batched_nodes;
+            if (!n->node_slice_mask().empty()) ++term_batched_nodes;
             ++term_internal_nodes;
-            for (auto const& ax : n->batched_here())
+            for (auto const& ax : n->node_slice_mask())
               term_axis_hist[std::wstring(ax.first.space().base_key())]++;
             // Forest-level CSE bookkeeping (see declarations above). The mode
             // signature includes the ancestor-sliced context, not just this
@@ -1522,7 +1523,7 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
             std::wstring axsig;
             for (auto const& [k, nb] : nbatches) axsig += k + L";";
             axsig += L"|";
-            for (auto const& ax : n->batched_here())
+            for (auto const& ax : n->node_slice_mask())
               axsig += std::wstring(ax.first.full_label()) + L",";
             auto const h = n->hash_value();
             cse_by_expr.emplace(h, nf);
@@ -1540,10 +1541,11 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
             std::map<std::wstring, std::wstring> child_active = active;
             std::wstring const self_desc =
                 L"[free={" + describe_indices(node_free_indices(*n)) +
-                L"} batched_here={" +
-                describe_indices(batch_axes_indices(n->batched_here())) + L"}]";
+                L"} node_slice_mask={" +
+                describe_indices(batch_axes_indices(n->node_slice_mask())) +
+                L"}]";
             std::map<std::wstring, double> child_nbatch = nbatches;
-            for (auto const& ax : n->batched_here()) {
+            for (auto const& ax : n->node_slice_mask()) {
               child_active[keyof(ax.first)] = self_desc;
               double const e = ext_of(ax.first);
               if (e > 0.0)
@@ -2032,11 +2034,11 @@ TEST_CASE(
 
   // Stamp External on the root and every internal node whose result carries
   // the occ, as the optimizer would for a forest-level external mode.
-  node->set_batched_here({{mode, BatchModeType::External}});
+  node->set_node_slice_mask({{mode, BatchModeType::External}});
   auto stamp_carriers = [&](auto&& self, node_t& n) -> void {
     if (n.leaf()) return;
     if (&n != &node && index_position(n, mode).has_value())
-      n->set_batched_here({{mode, BatchModeType::External}});
+      n->set_node_slice_mask({{mode, BatchModeType::External}});
     self(self, n.left());
     self(self, n.right());
   };
@@ -2044,8 +2046,8 @@ TEST_CASE(
 
   DryRunLeafEvaluator yield{cm};
 
-  // Reference: plain unbatched evaluation (batched_here are ignored without a
-  // custom evaluator).
+  // Reference: plain unbatched evaluation (node_slice_mask are ignored without
+  // a custom evaluator).
   auto const ref = evaluate(node, yield);
   REQUIRE(ref);
   auto const ref_bytes = ref->size_in_bytes();
@@ -2246,7 +2248,8 @@ TEST_CASE(
     if (bytes > giant_nominal_bytes) {
       giant_nominal_bytes = bytes;
       giant_desc = describe_indices(free_ixs);
-      giant_axes_desc = describe_indices(batch_axes_indices(n->batched_here()));
+      giant_axes_desc =
+          describe_indices(batch_axes_indices(n->node_slice_mask()));
     }
   });
   REQUIRE(giant_nominal_bytes > 0.0);
@@ -2390,7 +2393,7 @@ TEST_CASE(
              << L"optimize(): " << opt_ms << L"ms, evaluate(): " << eval_ms
              << L"ms\n"
              << L"DP-annotated giant: free={" << giant_desc << L"} nominal="
-             << (giant_nominal_bytes / 1e9) << L" GB batched_here={"
+             << (giant_nominal_bytes / 1e9) << L" GB node_slice_mask={"
              << giant_axes_desc << L"}\n"
              << L"root result size = " << root_bytes << L" bytes ("
              << (double(root_bytes) / 1e9) << L" GB)\n"
@@ -2575,8 +2578,8 @@ TEST_CASE(
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 
     // Optional full-tree dump (SEQUANT_UT_DRYRUN_PERF_TREE=1): every node's
-    // free indices and batched_here (the indices SLICED, i.e. batched, at that
-    // node), in post-order-ish indentation, so the exact schedule is
+    // free indices and node_slice_mask (the indices SLICED, i.e. batched, at
+    // that node), in post-order-ish indentation, so the exact schedule is
     // inspectable.
     if (std::getenv("SEQUANT_UT_DRYRUN_PERF_TREE")) {
       wchar_t const* on = (obj == ObjectiveFunction::DenseTimeSpaceBatched)
@@ -2588,7 +2591,7 @@ TEST_CASE(
             std::wstring const pad(2 * depth + 2, L' ');
             auto const free = node_free_indices(*n);
             container::vector<Index> const bax =
-                batch_axes_indices(n->batched_here());
+                batch_axes_indices(n->node_slice_mask());
             std::size_t nmu = 0, nk = 0, npno = 0, nosv = 0;
             for (auto const& ix : free) {
               if (ix.space().base_key() == L"μ̃") ++nmu;
@@ -2603,8 +2606,8 @@ TEST_CASE(
             std::wcerr << pad << (n.leaf() ? L"leaf  " : L"CONTRACT ")
                        << L"free={" << describe_indices(free) << L"} (mu~="
                        << nmu << L" K=" << nk << L" PNO=" << npno << L" OSV="
-                       << nosv << L")  batched_here={" << describe_indices(bax)
-                       << L"}\n";
+                       << nosv << L")  node_slice_mask={"
+                       << describe_indices(bax) << L"}\n";
             if (!n.leaf()) {
               dump(n.left(), depth + 1);
               dump(n.right(), depth + 1);
@@ -2641,7 +2644,7 @@ TEST_CASE(
           }
           if (!n.leaf()) {
             std::map<std::wstring, std::wstring> child_active = active;
-            for (auto const& ax : n->batched_here())
+            for (auto const& ax : n->node_slice_mask())
               child_active[keyof(ax.first)] = L"y";
             walk(n.left(), child_active);
             walk(n.right(), child_active);
@@ -3887,7 +3890,7 @@ TEST_CASE("dryrun water-20 occ-batching overcompute (aux-only vs occ+aux)",
 // local sliceable if no ancestor slices it)?
 //
 // Per term we: (1) optimize perf-first + binarize with node-local batch modes;
-// (2) walk every node tracking ancestor batched_here and compute each node's
+// (2) walk every node tracking ancestor node_slice_mask and compute each node's
 // REALIZED bytes (nominal shrunk by node-local mu~/K slicing already applied);
 // (3) pick the term's biggest realized node and read its anatomy -- escaped
 // (unsliced-by-ancestor) free mu~/K, and whether it carries result-external occ
@@ -4152,7 +4155,7 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
             }
             if (!n.leaf()) {
               std::map<std::wstring, int> child_active = active;
-              for (auto const& ax : n->batched_here())
+              for (auto const& ax : n->node_slice_mask())
                 child_active[keyof(ax.first)] = 1;
               walk(n.left(), child_active);
               walk(n.right(), child_active);
@@ -4412,7 +4415,7 @@ TEST_CASE("dryrun peak is co-resident sum", "[dryrun][cost_profile]") {
       break;
     }
   REQUIRE(mode.nonnull());
-  node->set_batched_here({{mode, BatchModeType::External}});
+  node->set_node_slice_mask({{mode, BatchModeType::External}});
 
   // A LEAF with a distinct tensor label ("h"), unrelated to anything in the
   // batched tree above, registered directly (not via the batched forest) as
@@ -4814,8 +4817,8 @@ TEST_CASE(
   // batches K1 (Contracted), M batches K2 (Contracted, nested one level
   // under K1). D0 is an order-aware hoist candidate with an EMPTY residency
   // (a genuine whole-nest invariant).
-  node->set_batched_here({{K1, BatchModeType::Contracted}});
-  M->set_batched_here({{K2, BatchModeType::Contracted}});
+  node->set_node_slice_mask({{K1, BatchModeType::Contracted}});
+  M->set_node_slice_mask({{K2, BatchModeType::Contracted}});
   D0->set_batch_order_aware(true);
 
   std::vector<EvalNodeDryRun> const forest{node};
@@ -4921,7 +4924,7 @@ TEST_CASE("hoist splits a divergently-sliced CSE value under a router",
   REQUIRE_FALSE(legB.leaf());
   REQUIRE(legA->hash_value() == legB->hash_value());  // CSE-folded
 
-  node->set_batched_here(
+  node->set_node_slice_mask(
       {{i3, BatchModeType::External}, {i4, BatchModeType::External}});
   legA->set_batch_order_aware(true);
   legB->set_batch_order_aware(true);
@@ -5316,9 +5319,9 @@ TEST_CASE("dryrun gated cache footprint-gates the giant", "[dryrun][cache]") {
 //                  loop TREE is unrepresentable and free-hoist vs charged-hoist
 //                  cannot be distinguished at all.
 //   representation the annotation channel is entangled with the cache veto --
-//                  cache_manager vetoes a node whose own batched_here() carries
-//                  a sliced batchable mode, so the SAME mode batched via an
-//                  annotation vs via the (now removed) heuristic yields
+//                  cache_manager vetoes a node whose own node_slice_mask()
+//                  carries a sliced batchable mode, so the SAME mode batched
+//                  via an annotation vs via the (now removed) heuristic yields
 //                  DIFFERENT CSE.
 //   processing     nested aux+occ batch-group join rejects cross-axis members,
 //                  degenerating groups to 1 member and wiping CSE.
@@ -5403,7 +5406,7 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
     double avoidable_flops = 0;  // cp.avoidable_flops: repeated recompute FLOPs
     double peak_gb = 0;
     // Task 5 acceptance gate (aux+occ leg). Counted over the EMITTED eval-node
-    // forest's batched_here() stamps, classifying occ by space base_key L"i"
+    // forest's node_slice_mask() stamps, classifying occ by space base_key L"i"
     // (the same way the external-role policy above identifies occ). These are
     // the runtime-visible role guarantees of the role split:
     //   contracted_occ_stamps -- occ stamped Contracted. MUST be 0: the fix's
@@ -5525,7 +5528,7 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
                  << L"\n[peakterm] FULL TERM (summand " << best_s << L"):\n"
                  << to_latex(flatten_product(summands[best_s])) << L"\n";
       // Factorized tree of the peak summand: per internal node, result indices
-      // and nominal footprint, plus batched_here (what the runtime slices at
+      // and nominal footprint, plus node_slice_mask (what the runtime slices at
       // that node).
       auto fp2 = sequant::opt::detail::footprint_counter(regime.idx_to_extent(),
                                                          regime.inner_pow_fn());
@@ -5538,14 +5541,14 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
           std::wstring res, bh;
           for (auto const& ix : n->canon_indices())
             res += std::wstring(ix.full_label()) + L" ";
-          for (auto const& [ix, knd] : n->batched_here())
+          for (auto const& [ix, knd] : n->node_slice_mask())
             bh += std::wstring(ix.full_label()) + L":" +
                   (knd == BatchModeType::External     ? L"EXT"
                    : knd == BatchModeType::Contracted ? L"CON"
                                                       : L"?") +
                   L" ";
-          std::wcerr << L"[peaktree] foot=" << gb << L"GB batched_here={" << bh
-                     << L"} result={" << res << L"}\n";
+          std::wcerr << L"[peaktree] foot=" << gb << L"GB node_slice_mask={"
+                     << bh << L"} result={" << res << L"}\n";
         });
       }
       // FACTORIZER's own modeled peak for the peak summand (DP estimate, NOT
@@ -5637,7 +5640,7 @@ TEST_CASE("dryrun occ batching wipes CSE (free-batchable-mode veto repro)",
     std::size_t n_contracted_occ_stamps = 0, n_external_occ_stamps = 0;
     for (auto const& root : forest) {
       root.visit_internal([&](auto const& n) {
-        for (auto const& [ix, knd] : n->batched_here()) {
+        for (auto const& [ix, knd] : n->node_slice_mask()) {
           bool const is_occ = ix.space().base_key() == L"i";
           if (knd == BatchModeType::Contracted && is_occ)
             ++n_contracted_occ_stamps;
@@ -6457,8 +6460,8 @@ TEST_CASE(
   Index const K1{L"Κ_1"};
   Index const i1{L"i_1"};
   for (auto& nd : forest) {
-    nd->set_batched_here({{K1, sequant::BatchModeType::Contracted},
-                          {i1, sequant::BatchModeType::External}});
+    nd->set_node_slice_mask({{K1, sequant::BatchModeType::Contracted},
+                             {i1, sequant::BatchModeType::External}});
     // Both loops open at this root (aux contracts here; occ external is on the
     // final result, so the root is its outermost carrier); ectx is built from
     // opens (peak_profile).
@@ -6628,8 +6631,8 @@ TEST_CASE(
   Index const K1{L"Κ_1"};
   Index const mu1{L"μ̃_1"};
   for (auto& nd : forest) {
-    nd->set_batched_here({{K1, sequant::BatchModeType::Contracted},
-                          {mu1, sequant::BatchModeType::Contracted}});
+    nd->set_node_slice_mask({{K1, sequant::BatchModeType::Contracted},
+                             {mu1, sequant::BatchModeType::Contracted}});
     nd->set_batch_order_aware(true);
   }
 
@@ -6777,7 +6780,7 @@ TEST_CASE(
       mk(L"(g{a_2;i_1;a_5} * h{i_3;a_2}) * (r{a_3;i_2;a_5} * w{i_4;a_3})")};
   Index const a5{L"a_5"};
   for (auto& nd : forest) {
-    nd->set_batched_here({{a5, sequant::BatchModeType::Contracted}});
+    nd->set_node_slice_mask({{a5, sequant::BatchModeType::Contracted}});
     nd->set_batch_order_aware(true);
   }
 

@@ -1794,7 +1794,7 @@ struct PeakBatchedModel {
       // down as `Ueff`; by the time `place` recurses into the (giant)
       // descendants their subtree_peak is already <= threshold, so the greedy
       // loop never fires for them and `placed_at_node` stays empty there. But
-      // the runtime slices a node ONLY from that node's OWN `batched_here()`
+      // the runtime slices a node ONLY from that node's OWN `node_slice_mask()`
       // External stamp, so a descendant that carries the external mode FREE is
       // never sliced and is materialized/cached at full extent. This records
       // the adopted bit on every descendant of `n` (walking the chosen
