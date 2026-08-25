@@ -1728,6 +1728,14 @@ struct PeakBatchedModel {
     // `External` per node from this (node-level placement is the whole point),
     // instead of the OLD root-global chosen_seed_mask stamp.
     std::map<std::size_t, std::size_t> placed_at_node;
+    // Loop-OPEN sites only (2026-08-25): subset n -> mask of external modes
+    // whose batch loop is INTRODUCED at n (the injection site), as opposed to a
+    // descendant that merely carries the sliced mode (which placed_at_node also
+    // records, via stamp_carrying_descendants, so the runtime slices it). Feeds
+    // NodeBatchAnnotation::opened_here so peak_profile's ectx counts each
+    // physical external loop once. On the node-level path only; the root-seed
+    // path opens at the term root (computed inline in the emit).
+    std::map<std::size_t, std::size_t> opened_at_node;
     // Phase-2 replaces the OLD root-level forest seed when the order-aware
     // model is on; both flags off (the default) => byte-identical (the OLD
     // `else if` path runs exactly as before).
@@ -1832,6 +1840,7 @@ struct PeakBatchedModel {
             if (trial < cur) {
               Ueff |= bit;
               placed_at_node[n] |= bit;
+              opened_at_node[n] |= bit;  // n is the loop-OPEN (injection) site
               // D1 fix (i): also stamp the carrying-subtree descendants so the
               // emit walk annotates (and the runtime slices) the giants that
               // carry this external mode FREE below `n`.
@@ -1974,6 +1983,38 @@ struct PeakBatchedModel {
           modes.push_back({ctx.batchable_modes[k], BatchModeType::Contracted});
       NodeBatchAnnotation ann;
       ann.axes = std::move(modes);
+      // Loop-OPEN emission (2026-08-25): the subset of axes for which THIS node
+      // introduces the physical batch loop (vs a node that only carries the
+      // sliced mode). peak_profile builds its enclosing-loop nest (ectx) from
+      // this, so one physical loop counts once instead of
+      // once-per-carrying-node.
+      //  - External, root-seed path: an external mode is on the final result,
+      //  so
+      //    its outermost carrier is the term ROOT; open there, nowhere else.
+      //  - External, node-level path: the injection site opened_at_node[n] (NOT
+      //    the D1-propagated descendants that placed_at_node also records).
+      //  - Contracted: a contracted batch loop contracts (and so opens) at its
+      //    unique node = this node's aprime, mirroring the Contracted axes
+      //    above.
+      {
+        std::size_t opened_ext_mask = 0;
+        if (place_per_node) {
+          auto it = opened_at_node.find(n);
+          if (it != opened_at_node.end()) opened_ext_mask = it->second;
+        } else if (emit_external) {
+          opened_ext_mask =
+              (n == root) ? (chosen_seed_mask & ctx.open_modes[n]) : 0;
+        }
+        container::svector<std::pair<Index, BatchModeType>> opened;
+        for (std::size_t k = 0; k < ctx.m; ++k)
+          if (opened_ext_mask & (std::size_t{1} << k))
+            opened.push_back({ctx.batchable_modes[k], BatchModeType::External});
+        for (std::size_t k = 0; k < ctx.m; ++k)
+          if (r.aprime & (std::size_t{1} << k))
+            opened.push_back(
+                {ctx.batchable_modes[k], BatchModeType::Contracted});
+        ann.opened_here = std::move(opened);
+      }
       // Order-aware placement/lifetime bridge (A4): emit this node's
       // order-aware gate and effective use count for a later runtime hoist
       // pass. Populated ONLY on the ordered (order_aware_recompute) path;
