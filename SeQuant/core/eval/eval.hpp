@@ -753,7 +753,7 @@ ResultPtr evaluate_impl(Node const& node,         //
         p_new = index_position(nd, *ctx[i].exact_axis);
       } else if (auto const* seam = cache.loop_colored_slice_seam()) {
         if (std::optional<LoopId> const loop =
-                seam->loop_of_level(ctx[i].level))
+                seam->loop_of_level(ctx[i].level)) {
           // FRAME-CORRECT (2026-08-24 slot-slicing design): mode_of returns the
           // sliced mode's PHYSICAL POSITION, computed at schedule time in the
           // fetched value's OWN index-frame -- per-occurrence via the consumer
@@ -762,6 +762,24 @@ ResultPtr evaluate_impl(Node const& node,         //
           // canonical Index label against this (differently-framed) node.
           p_new =
               seam->mode_of(nd->hash_value(), *loop, cache.current_consumer());
+          // COMPLETENESS GUARD (2026-08-25 loop-open design): the value
+          // PARTICIPATES in this loop -- the seam has a sliced-mode fact for it
+          // under `loop` for SOME consumer -- yet THIS fetch got none. That is
+          // a scheduler gap: the operand would be served UNSLICED while its
+          // contraction partner is sliced, and TA's tiled-range assert is
+          // elided in Release, so the mismatched DistEval would DEADLOCK
+          // silently instead of erroring. Fail loud. A value with NO fact under
+          // `loop` (participates() == false) is genuinely invariant to it and
+          // is correctly left unsliced -- the guard does not fire there.
+          if (!p_new && seam->participates(nd->hash_value(), *loop))
+            throw Exception(
+                "slice_to_use: value participates in a batch loop but this "
+                "fetch has no sliced-mode fact for the current consumer -- an "
+                "incomplete sliced-mode assignment (occ_facts gap) that would "
+                "leave the operand unsliced and mismatch its contraction "
+                "partner. The occurrence's slice fact must be recorded at "
+                "schedule time, never left to a silent unsliced fetch.");
+        }
       }
       // Task 7-part-2 / Task 8: the transitional equivalence assert this used
       // to cross-check against the old per-cell mode_to_level map is RETIRED,

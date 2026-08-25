@@ -184,6 +184,25 @@ struct LoopColoredSliceSeam {
     if (nmatch == 1) return first;
     return std::nullopt;  // 0 -> unsliced; >1 -> ambiguous, never guessed
   }
+
+  /// \return whether \p hash has ANY recorded sliced-mode fact under \p loop --
+  /// in either the per-occurrence (\c by_hash_consumer, for any consumer) or
+  /// the per-value (\c by_hash) map. A value that participates in a loop (some
+  /// occurrence of it is sliced there) but for which \c mode_of returns nullopt
+  /// at a particular fetch is a SCHEDULER GAP, not an invariant value: the
+  /// completeness guard in \c slice_to_use uses this to tell the two apart and
+  /// fail loud rather than silently leave an operand unsliced. A value with NO
+  /// fact under \p loop is genuinely invariant to it (correctly unsliced).
+  [[nodiscard]] bool participates(std::size_t hash, LoopId loop) const {
+    if (auto const cit = by_hash_consumer.find(hash);
+        cit != by_hash_consumer.end())
+      for (auto const& [pos, lid, ch] : cit->second)
+        if (lid == loop) return true;
+    if (auto const it = by_hash.find(hash); it != by_hash.end())
+      for (auto const& [pos, lid] : it->second)
+        if (lid == loop) return true;
+    return false;
+  }
 };
 
 }  // namespace sequant
