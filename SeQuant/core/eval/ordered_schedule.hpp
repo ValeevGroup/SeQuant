@@ -1917,40 +1917,25 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
     facts.push_back({mode, level});
   };
 
-  // (3) EXACT pass: for each consumer P and operand W of P, stamp P's
-  // enclosing blocks (axis, level) onto W's carried mode that EXACTLY equals
-  // that block's representative axis, if any (recording the Index itself,
-  // not a carried position).
-  for (auto const& [parent_vid, operands] : g.depends_on) {
-    auto const sit = build_scope.find(parent_vid);
-    if (sit == build_scope.end()) continue;  // parent has no enclosing loop
-    container::svector<detail::ScopeBlockAxisLevel> const& scope = sit->second;
-    if (scope.empty()) continue;
-    for (std::size_t w_vid : operands) {
-      ValueCell const& w = rich.cells[w_vid];
-      for (detail::ScopeBlockAxisLevel const& blk : scope) {
-        Index const* matched = nullptr;
-        for (Index const& carried_ix : w.carried) {
-          if (!(carried_ix == blk.axis)) continue;
-          stamp_raw(w_vid, carried_ix, blk.level);
-          matched = &carried_ix;
-          break;  // a block axis is one Index -> at most one carried match
-        }
-        if (_sma_diag && _sma_tgt(w.hash))
-          std::cerr << "[SMA-EXACT] W#" << (w.hash % 100000) << " consumer#"
-                    << (rich.cells[parent_vid].hash % 100000)
-                    << " block.axis=" << toUtf8(blk.axis.full_label()) << " -> "
-                    << (matched ? "MATCH " + toUtf8(matched->full_label())
-                                : std::string("nomatch"))
-                    << std::endl;
-      }
-    }
-  }
-
-  // (4) REGIME-2 RELABEL pass (occurrence-driven): recover a CSE value's
-  // OWN-labeled sliced mode from its occurrences when it was canonicalized
-  // independently of the block's representative axis (the SAME physical
-  // loop, relabeled).
+  // (3) PER-OCCURRENCE POSITIONAL pass (2026-08-25 loop-open design; replaces
+  // the former EXACT + REGIME-2 base_key passes). For each occurrence occ of a
+  // value W consumed by C, the loops the runtime crosses when fetching W are
+  // C's enclosing DAG blocks build_scope[owner(consumer_point)], outermost
+  // first. occ.ectx -- now built from loop-OPENS (peak_profile), so one
+  // physical loop appears exactly once -- names those same loops in W's OWN
+  // frame, outermost first. Pairing them by NEST POSITION gives, per realized
+  // enclosing loop, the occ-frame mode it slices; the physical slice position
+  // is that mode's index in occ.carried. Everything is in occ's own frame: no
+  // base_key, no cross-frame label match, no first-match guess. Divergent
+  // (relabeled) occurrences and the symmetric case (one value sliced on
+  // different positions by different consumers) are handled uniformly by the
+  // consumer-keyed occ_facts. The old raw_facts / by_value path is left empty:
+  // the ordered executor always fetches under a tracked consumer, so the
+  // consumer-keyed facts cover every sliced fetch, and a value sliced on one
+  // mode by two sibling loops via two consumers has no single consumer-blind
+  // answer anyway.
+  (void)g;          // dependency graph no longer consulted by this pass
+  (void)stamp_raw;  // by_value fallback intentionally left empty (see above)
   std::unordered_map<std::size_t, std::size_t> point_owner;
   for (ValueCell const& vc : rich.cells)
     for (OccurrenceRec const& occ : vc.occurrences)
@@ -1967,72 +1952,54 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
       container::svector<detail::ScopeBlockAxisLevel> const& scope =
           sit->second;
       if (scope.empty()) continue;
-      // Iterate THIS occurrence's OWN labels (occ.carried), not the value's
-      // first-occurrence frame (w.carried). For a divergent (relabeled) CSE
-      // occurrence -- carrying i_3 where the seeding occurrence carries i_2 --
-      // w.carried names labels this occurrence does not have, so its own
-      // participant slot never gets stamped and its canonical layout comes out
-      // under-colored (a different slot count than its siblings). occ.carried
-      // and occ.ectx are in the SAME (this occurrence's) index-frame, so the
-      // participant test and the stamp below stay in one frame. This is the
-      // frame the pass's doc already intends ("the value's OWN-labeled sliced
-      // mode from its occurrences").
-      for (Index const& m : occ.carried) {
-        std::wstring const space(m.space().base_key());
-        // participant? m must be an enclosing batched loop at this occurrence
-        // (i.e. appear in the occurrence's ectx -- see the REGIME-2 RELABEL
-        // pass doc above for the full reasoning).
-        bool participant = false;
+      // DIAGNOSTIC (SEQUANT_UT_SMA_DIAG): dump this occurrence's OWN enclosing
+      // nest (occ.ectx, own-frame axis + block size) SIDE BY SIDE with the
+      // consumer's build_scope blocks (scope-frame axis + DagScopeLevel), in
+      // nest order, to check whether the two enumerate the SAME loop nest 1:1
+      // (the positional-join hypothesis: ectx[k] <-> scope[k]).
+      if (_sma_diag && _sma_tgt(w.hash)) {
+        std::cerr << "[SMA-ALIGN] W#" << (w.hash % 100000)
+                  << " point=" << occ.point << " consumer#"
+                  << (rich.cells[oit->second].hash % 100000)
+                  << " |ectx|=" << occ.ectx.size()
+                  << " |scope|=" << scope.size() << "\n           ectx: ";
         for (auto const& e : occ.ectx)
-          if (e.first == m) {
-            participant = true;
-            break;
-          }
-        // the realized same-space block in the consumer's scope (unique for
-        // the one-occ-loop / occ+aux regime; a genuinely ambiguous nest --
-        // two same-space blocks -- is left unstamped, not guessed).
-        DagScopeLevel const* level = nullptr;
-        std::size_t nsame = 0;
+          std::cerr << toUtf8(e.first.full_label()) << "(sz" << e.second.second
+                    << ") ";
+        std::cerr << "\n           carried:";
+        for (Index const& c : occ.carried)
+          std::cerr << " " << toUtf8(c.full_label());
+        std::cerr << "\n           scope:";
         for (detail::ScopeBlockAxisLevel const& blk : scope)
-          if (std::wstring(blk.axis.space().base_key()) == space) {
-            level = &blk.level;
-            ++nsame;
-          }
-        // Skip when m's loop is NOT strictly outer to W's own build scope
-        // (W is home-resident INSIDE the loop, not fetched across it) -- the
-        // built-within gate for the REGIME-2 RELABEL pass above.
-        bool built_within = false;
-        if (participant && nsame == 1) {
-          auto const wsit = build_scope.find(w_vid);
-          if (wsit != build_scope.end())
-            for (detail::ScopeBlockAxisLevel const& b : wsit->second)
-              if (b.level == *level) {
-                built_within = true;
-                break;
-              }
-        }
-        bool const will_stamp = participant && nsame == 1 && !built_within;
+          std::cerr << " " << toUtf8(blk.axis.full_label()) << "@d"
+                    << blk.level.depth << ":o" << blk.level.ordinal;
+        std::cerr << std::endl;
+      }
+      // dedup(occ.ectx) preserving order: distinct enclosing loop OPENS in W's
+      // OWN frame, outermost first.
+      container::svector<Index> nest;
+      for (auto const& e : occ.ectx)
+        if (std::find(nest.begin(), nest.end(), e.first) == nest.end())
+          nest.push_back(e.first);
+      // Pair the realized enclosing blocks `scope` (outermost first) with the
+      // occurrence's own-frame loop nest by position. Any ectx open beyond
+      // `scope` is a forest loop the DAG did not realize as an enclosing block
+      // of this consumer -- not crossed at this fetch, so not sliced here.
+      std::size_t const K = std::min(scope.size(), nest.size());
+      for (std::size_t k = 0; k < K; ++k) {
+        Index const& m = nest[k];
+        auto const cit = std::find(occ.carried.begin(), occ.carried.end(), m);
+        if (cit == occ.carried.end()) continue;  // mode not on this result
+        std::size_t const pos =
+            static_cast<std::size_t>(cit - occ.carried.begin());
         if (_sma_diag && _sma_tgt(w.hash))
-          std::cerr << "[SMA-REGIME2] W#" << (w.hash % 100000) << " consumer#"
-                    << (rich.cells[oit->second].hash % 100000)
-                    << " mode=" << toUtf8(m.full_label())
-                    << " participant=" << participant << " nsame=" << nsame
-                    << " built_within=" << built_within << " -> "
-                    << (will_stamp ? "STAMP" : "skip") << std::endl;
-        if (!will_stamp) continue;
-        stamp_raw(w_vid, m, *level);
-        // PILLAR 2: attribute this stamp to the consuming use-site
-        // (oit->second == the value_id owning occ.consumer_point) so the
-        // executor can tell apart two symmetric occurrences that bind the SAME
-        // loop to DIFFERENT free modes. Record this occurrence's own PHYSICAL
-        // POSITION for the sliced mode -- m's index in occ.carried, computed
-        // HERE in the occurrence's own index-frame -- so the runtime uses it
-        // directly and never re-matches m against a differently-framed node.
-        std::size_t const occ_pos = static_cast<std::size_t>(
-            std::find(occ.carried.begin(), occ.carried.end(), m) -
-            occ.carried.begin());
+          std::cerr << "  [SMA-PAIR] W#" << (w.hash % 100000) << " consumer#"
+                    << (rich.cells[oit->second].hash % 100000) << " loop@d"
+                    << scope[k].level.depth << ":o" << scope[k].level.ordinal
+                    << " -> mode=" << toUtf8(m.full_label()) << " pos=" << pos
+                    << std::endl;
         result.occ_facts.push_back(
-            std::make_tuple(w_vid, occ_pos, id_of(*level), oit->second));
+            std::make_tuple(w_vid, pos, id_of(scope[k].level), oit->second));
       }
     }
   }
