@@ -29,6 +29,8 @@ struct ExprMatcherOptions {
   TensorComparison tensor_cmp = TensorComparison::Identity;
   /// Whether to compare expressions across different expression  types
   bool cross_comparisons = true;
+
+  bool operator==(const ExprMatcherOptions &) const = default;
 };
 
 class ExprMatcher {
@@ -40,6 +42,9 @@ class ExprMatcher {
 
   std::partial_ordering compare(const ExprPtr &other) const;
   std::partial_ordering compare(const Expr &other) const;
+
+  bool operator==(const ExprMatcher &other) const;
+  std::partial_ordering operator<=>(const ExprMatcher &other) const;
 
  private:
   ExprPtr expr_;

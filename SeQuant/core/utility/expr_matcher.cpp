@@ -68,6 +68,18 @@ std::partial_ordering ExprMatcher::compare(const Expr &other) const {
   }
 }
 
+bool ExprMatcher::operator==(const ExprMatcher &other) const {
+  return opts_ == other.opts_ && expr_ == other;
+}
+
+std::partial_ordering ExprMatcher::operator<=>(const ExprMatcher &other) const {
+  if (opts_ != other.opts_) {
+    return std::partial_ordering::unordered;
+  }
+
+  return expr_ <=> other;
+}
+
 bool operator==(const ExprMatcher &matcher, const Expr &expr) {
   return matcher.is_equal(expr);
 }
