@@ -3049,6 +3049,56 @@ TEST_CASE("binarize stamps per-node batch modes from optimize()",
   CHECK(aux_found);
 }
 
+// Loop-open vs sliced-mask (2026-08-25, Task 1): binarize() must apply
+// NodeBatchAnnotation::opened_here onto EvalExpr::batch_loops_opened_here(),
+// independently of batched_here() (axes). Hand-build node_batch_axes so the
+// single contraction node's opened_here carries one External mode while a leaf
+// stays empty -- isolates the binarize wiring from the DP emit (Task 2).
+TEST_CASE("binarize applies batch_loops_opened_here from node annotation",
+          "[optimize][annotate][loop-open]") {
+  using namespace sequant;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  mbpt::add_df_spaces(reg);
+
+  // Two-leaf single-contraction network: exactly one contraction node, so
+  // node_batch_axes needs exactly one entry (the root contraction).
+  auto expr = deserialize(L"g{a_1;i_1;Κ_1} g{a_2;i_2;Κ_1}");
+
+  Index const kappa = expr->as<Product>().factor(0)->as<Tensor>().aux().at(0);
+
+  container::vector<NodeBatchAnnotation> node_axes(1);
+  node_axes[0].axes = {{kappa, BatchModeType::Contracted}};
+  node_axes[0].opened_here = {{kappa, BatchModeType::External}};
+
+  BinarizationOptions bopts;
+  bopts.node_batch_axes = node_axes;
+
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto node = binarize(expr, {}, bopts);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+  bool root_open = false;
+  std::size_t leaves_with_open = 0;
+  node.visit([&](auto const& n) {
+    if (n.leaf()) {
+      if (!n->batch_loops_opened_here().empty()) ++leaves_with_open;
+      return;
+    }
+    // the one contraction node
+    auto const& opened = n->batch_loops_opened_here();
+    if (opened.size() == 1 && opened.front().first == kappa &&
+        opened.front().second == BatchModeType::External)
+      root_open = true;
+    // opened_here is INDEPENDENT of batched_here(): axes carried Contracted,
+    // opened_here carried External -- they must not be conflated.
+    CHECK(n->batched_here().size() == 1);
+    CHECK(n->batched_here().front().second == BatchModeType::Contracted);
+  });
+  CHECK(root_open);
+  CHECK(leaves_with_open == 0);
+}
+
 // Task 1 (multiroot-single-dag-eval): binarize() must mark the
 // accumulation-chain Sum nodes produced when folding an N-ary Sum into
 // binary Sum nodes. fold_left_to_node (binary_node.hpp) always folds the

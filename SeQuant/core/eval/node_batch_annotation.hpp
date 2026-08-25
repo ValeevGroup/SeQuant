@@ -37,6 +37,16 @@ struct NodeBatchAnnotation {
   /// Batchable indices sliced AT this node, each tagged with its
   /// \c BatchModeType (see \c EvalExpr::batched_here).
   container::svector<std::pair<Index, BatchModeType>> axes{};
+  /// Subset of \c axes for which THIS node is the loop-OPEN site (the outermost
+  /// node at which the physical batch loop over the index is introduced), as
+  /// opposed to a deeper node that merely carries the sliced mode. An external
+  /// batch loop opens once, at the term root (an external mode is on the final
+  /// result, so the root is its outermost carrier); a contracted batch loop
+  /// opens at its (unique) contraction node. Distinguished from \c axes so a
+  /// consumer that needs the loop NEST (\c peak_profile's ectx) counts each
+  /// physical loop once instead of once-per-carrying-node. Default empty (OFF
+  /// path and every non-open node). See \c EvalExpr::batch_loops_opened_here.
+  container::svector<std::pair<Index, BatchModeType>> opened_here{};
   /// Effective use count; see the class doc.
   std::size_t effective_count = 1;
   /// True iff the order-aware cost model emitted this node (set for EVERY node

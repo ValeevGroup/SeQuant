@@ -294,6 +294,32 @@ class EvalExpr {
   }
 
   ///
+  /// \brief Batch loops OPENED at this node: the subset of \c batched_here()
+  /// for which this node is the loop-open site (the outermost node introducing
+  /// the physical batch loop), as opposed to a deeper node that only carries
+  /// the sliced mode. Empty unless set by \c binarize from
+  /// \c NodeBatchAnnotation::opened_here. Unlike \c batched_here() -- which the
+  /// runtime consults per node to slice that node's operands, and which the DP
+  /// stamps on EVERY carrying node -- this names each physical loop exactly
+  /// ONCE, so a consumer reconstructing the enclosing-loop NEST (e.g.
+  /// \c peak_profile's \c OccurrenceRec::ectx) does not multi-count one loop as
+  /// one-per-carrying-node.
+  ///
+  [[nodiscard]] container::svector<std::pair<Index, BatchModeType>> const&
+  batch_loops_opened_here() const noexcept {
+    return batch_loops_opened_here_;
+  }
+
+  ///
+  /// \brief Sets the loop-open modes for this node; see
+  /// \c batch_loops_opened_here.
+  ///
+  void set_batch_loops_opened_here(
+      container::svector<std::pair<Index, BatchModeType>> modes) noexcept {
+    batch_loops_opened_here_ = std::move(modes);
+  }
+
+  ///
   /// \brief Canonical batch modes that slice this node in EVERY occurrence
   /// (the cross-occurrence meet; see \c stamp_lifetime_masks). Empty =>
   /// all-full (block-agnostic, run-scope). Proto-aware: a composite slot
@@ -388,6 +414,10 @@ class EvalExpr {
 
   /// See \c batched_here.
   container::svector<std::pair<Index, BatchModeType>> batch_axes_{};
+
+  /// See \c batch_loops_opened_here.
+  container::svector<std::pair<Index, BatchModeType>>
+      batch_loops_opened_here_{};
 
   /// See \c sliced_modes.
   container::svector<Index> sliced_modes_{};
