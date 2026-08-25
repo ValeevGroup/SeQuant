@@ -253,7 +253,8 @@ class Expr : public std::enable_shared_from_this<Expr> {
   /// @tparam T Expr or a class derived from Expr
   /// @return true if @c *this is less than @c that
   /// @note the derived class must implement Expr::static_less_than
-  template <typename T, typename = std::enable_if<is_an_expr_v<T>>>
+  template <typename T>
+    requires(is_an_expr_v<T>)
   bool operator<(const T &that) const {
     if (type_id() ==
         that.type_id()) {  // if same type, use generic (or type-specific, if
