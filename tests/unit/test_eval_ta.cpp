@@ -2394,6 +2394,10 @@ TEST_CASE(
     REQUIRE(ax.has_value());
     x1 = *ax;
     nd->set_batched_here({{*ax, sequant::BatchModeType::Contracted}});
+    // This node realizes (opens) the loop, so mirror the DP: peak_profile's
+    // ectx is now built from batch_loops_opened_here, not batched_here.
+    nd->set_batch_loops_opened_here(
+        {{*ax, sequant::BatchModeType::Contracted}});
   }
   REQUIRE(x1.space() == aux);
 
@@ -2761,8 +2765,12 @@ TEST_CASE(
   REQUIRE(TA::norm2(ref) > 0.0);
 
   // Stamp External on every node whose result carries the occ, as the optimizer
-  // would (mirrors batched_eval_external_proto_occ_scatter).
+  // would (mirrors batched_eval_external_proto_occ_scatter). The external loop
+  // OPENS once, at the root (an external mode is on the final result, so the
+  // root is its outermost carrier) -- ectx is built from opens (peak_profile).
   rootn->set_batched_here({{mode, sequant::BatchModeType::External}});
+  rootn->set_batch_loops_opened_here(
+      {{mode, sequant::BatchModeType::External}});
   auto stamp = [&](auto&& self, node_t& n) -> void {
     if (n.leaf()) return;
     if (&n != &rootn && index_position(n, mode).has_value())
@@ -2852,6 +2860,9 @@ TEST_CASE(
     auto const ax = sequant::batch_axis(nd, accept_aux);
     REQUIRE(ax.has_value());
     nd->set_batched_here({{*ax, sequant::BatchModeType::Contracted}});
+    // realizer node opens the loop; ectx is built from opens (peak_profile).
+    nd->set_batch_loops_opened_here(
+        {{*ax, sequant::BatchModeType::Contracted}});
   }
 
   std::function<bool(node_t const&)> const is_vol = [](node_t const& n) {
@@ -2994,8 +3005,11 @@ TEST_CASE(
   // result, which is exactly the LoopCarried (AccumulateScatter) shape this
   // test exists to exercise.
   sequant::Index const i1{L"i_1"};
-  for (auto& nd : forest)
+  for (auto& nd : forest) {
     nd->set_batched_here({{i1, sequant::BatchModeType::External}});
+    // each root realizes (opens) the i_1 loop; ectx is built from opens.
+    nd->set_batch_loops_opened_here({{i1, sequant::BatchModeType::External}});
+  }
 
   // SP1/SP2: i_1 (the occ space) is the only batchable index, marked
   // EXTERNAL (spectator) rather than contracted -- the natural fixture for

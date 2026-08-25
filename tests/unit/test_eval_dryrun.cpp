@@ -6459,6 +6459,11 @@ TEST_CASE(
   for (auto& nd : forest) {
     nd->set_batched_here({{K1, sequant::BatchModeType::Contracted},
                           {i1, sequant::BatchModeType::External}});
+    // Both loops open at this root (aux contracts here; occ external is on the
+    // final result, so the root is its outermost carrier); ectx is built from
+    // opens (peak_profile).
+    nd->set_batch_loops_opened_here({{K1, sequant::BatchModeType::Contracted},
+                                     {i1, sequant::BatchModeType::External}});
     nd->set_batch_order_aware(true);
   }
 
