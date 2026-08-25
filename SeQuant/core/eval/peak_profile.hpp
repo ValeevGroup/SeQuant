@@ -395,7 +395,18 @@ RichSchedule compute_dag_boulevard(R const& forest,
     // context; the node itself does NOT (it is recorded with `ectx`).
     detail::BatchContext child_ectx = ectx;
     container::svector<Index> own_modes;
-    for (auto const& [ix, kind] : n->batched_here()) {
+    // Enclosing-loop context is built from the loops OPENED at this node
+    // (batch_loops_opened_here), NOT the per-node sliced mask (batched_here).
+    // The DP stamps an external mode's sliced mask on EVERY carrying node, so
+    // reading batched_here here counted one physical loop
+    // once-per-carrying-node
+    // -- ectx piled up duplicates of the same occ index (i i i ...) and no
+    // longer matched the DAG scope's one-loop-one-level de-duplication. Opens
+    // name each physical loop exactly once, so child_ectx is a true loop nest.
+    // own_modes likewise: a value's OWN loop is the one it OPENS ("its own
+    // node, not an ancestor's" -- own_modes doc), which the sliced mask
+    // over-reported for every carried descendant.
+    for (auto const& [ix, kind] : n->batch_loops_opened_here()) {
       container::svector<Index> expanded;
       sequant::detail::proto_expand_into(expanded, ix);
       for (auto const& m : expanded) {
