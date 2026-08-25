@@ -1862,16 +1862,6 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
   SlicedModeAssignment result;
   detail::enumerate_realized_levels(ordered.root, result.levels);
 
-  // DIAGNOSTIC (SEQUANT_UT_SMA_DIAG): trace EXACT + REGIME-2 stamping decisions
-  // for two specific values (the w8 occ+aux deadlock's L and R) so it is
-  // visible WHY one operand's occ mode is sliced and the other's is not. Keyed
-  // by node hash (== ValueCell::hash == runtime cache key).
-  bool const _sma_diag = std::getenv("SEQUANT_UT_SMA_DIAG") != nullptr;
-  auto const _sma_tgt = [](std::size_t h) {
-    return h == 10093600710104183845ull || h == 16093998410023806020ull ||
-           h == 8273140793442622171ull || h == 9043826704086923374ull;
-  };
-
   std::map<std::tuple<std::size_t, std::wstring, int>, LoopId> level_id;
   for (std::size_t i = 0; i < result.levels.size(); ++i) {
     DagScopeLevel const& L = result.levels[i];
@@ -1952,29 +1942,6 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
       container::svector<detail::ScopeBlockAxisLevel> const& scope =
           sit->second;
       if (scope.empty()) continue;
-      // DIAGNOSTIC (SEQUANT_UT_SMA_DIAG): dump this occurrence's OWN enclosing
-      // nest (occ.ectx, own-frame axis + block size) SIDE BY SIDE with the
-      // consumer's build_scope blocks (scope-frame axis + DagScopeLevel), in
-      // nest order, to check whether the two enumerate the SAME loop nest 1:1
-      // (the positional-join hypothesis: ectx[k] <-> scope[k]).
-      if (_sma_diag && _sma_tgt(w.hash)) {
-        std::cerr << "[SMA-ALIGN] W#" << (w.hash % 100000)
-                  << " point=" << occ.point << " consumer#"
-                  << (rich.cells[oit->second].hash % 100000)
-                  << " |ectx|=" << occ.ectx.size()
-                  << " |scope|=" << scope.size() << "\n           ectx: ";
-        for (auto const& e : occ.ectx)
-          std::cerr << toUtf8(e.first.full_label()) << "(sz" << e.second.second
-                    << ") ";
-        std::cerr << "\n           carried:";
-        for (Index const& c : occ.carried)
-          std::cerr << " " << toUtf8(c.full_label());
-        std::cerr << "\n           scope:";
-        for (detail::ScopeBlockAxisLevel const& blk : scope)
-          std::cerr << " " << toUtf8(blk.axis.full_label()) << "@d"
-                    << blk.level.depth << ":o" << blk.level.ordinal;
-        std::cerr << std::endl;
-      }
       // dedup(occ.ectx) preserving order: distinct enclosing loop OPENS in W's
       // OWN frame, outermost first.
       container::svector<Index> nest;
@@ -1992,12 +1959,6 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
         if (cit == occ.carried.end()) continue;  // mode not on this result
         std::size_t const pos =
             static_cast<std::size_t>(cit - occ.carried.begin());
-        if (_sma_diag && _sma_tgt(w.hash))
-          std::cerr << "  [SMA-PAIR] W#" << (w.hash % 100000) << " consumer#"
-                    << (rich.cells[oit->second].hash % 100000) << " loop@d"
-                    << scope[k].level.depth << ":o" << scope[k].level.ordinal
-                    << " -> mode=" << toUtf8(m.full_label()) << " pos=" << pos
-                    << std::endl;
         result.occ_facts.push_back(
             std::make_tuple(w_vid, pos, id_of(scope[k].level), oit->second));
       }
