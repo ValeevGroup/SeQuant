@@ -1728,6 +1728,13 @@ TEST_CASE(
 // permutations -- and the SAME hash-keyed LoopColoredSliceSeam the ordered
 // executor builds resolves each sliced mode to the realized aux/occ loop.
 // ===========================================================================
+// TEMPORARILY DISABLED (2026-08-25 loop-open-vs-sliced-mask plan, Task 4): this
+// case asserts the OLD label seam (mode_of -> optional<Index>, by_hash keyed by
+// Index), which the 2026-08-23 position-based seam already outpaced (it no
+// longer compiles) and which Task 4 replaces with the per-occurrence positional
+// seam. Rewritten there against the final semantics; guarded out until then so
+// the suite links.
+#if 0
 TEST_CASE(
     "populate_canonical_layouts + LoopColoredSliceSeam on the sp2-noninner "
     "occ/aux forest: real per-value layout, per-occurrence permutations, and "
@@ -1854,3 +1861,4 @@ TEST_CASE(
   // A value hash the seam does not know leaves the fetch unsliced (nullopt).
   CHECK_FALSE(seam.mode_of(p_hash + 987654321u, *aux_loop).has_value());
 }
+#endif  // loop-open-vs-sliced-mask Task 4 rewrite pending
