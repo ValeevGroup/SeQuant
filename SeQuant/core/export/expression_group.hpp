@@ -21,7 +21,9 @@ class ExpressionGroup {
 
  public:
   using iterator = container_type::iterator;
+  using reverse_iterator = container_type::reverse_iterator;
   using const_iterator = container_type::const_iterator;
+  using const_reverse_iterator = container_type::const_reverse_iterator;
 
   explicit ExpressionGroup(std::optional<std::string> name = {})
       : ExpressionGroup(container_type{}, std::move(name)) {}
@@ -57,6 +59,20 @@ class ExpressionGroup {
   [[nodiscard]] const_iterator end() const { return m_expressions.end(); }
   [[nodiscard]] const_iterator cbegin() const { return m_expressions.cbegin(); }
   [[nodiscard]] const_iterator cend() const { return m_expressions.cend(); }
+  [[nodiscard]] reverse_iterator rbegin() { return m_expressions.rbegin(); }
+  [[nodiscard]] reverse_iterator rend() { return m_expressions.rend(); }
+  [[nodiscard]] const_reverse_iterator rbegin() const {
+    return m_expressions.rbegin();
+  }
+  [[nodiscard]] const_reverse_iterator rend() const {
+    return m_expressions.rend();
+  }
+  [[nodiscard]] const_reverse_iterator crbegin() const {
+    return m_expressions.crbegin();
+  }
+  [[nodiscard]] const_reverse_iterator crend() const {
+    return m_expressions.crend();
+  }
 
   [[nodiscard]] ExportNode<T> &front() { return m_expressions.front(); }
   [[nodiscard]] const ExportNode<T> &front() const {
@@ -70,6 +86,10 @@ class ExpressionGroup {
   [[nodiscard]] std::size_t size() const { return m_expressions.size(); }
 
   void add(ExportNode<T> expr) { m_expressions.emplace_back(std::move(expr)); }
+
+  iterator insert(const_iterator pos, ExportNode<T> expr) {
+    return m_expressions.insert(pos, std::move(expr));
+  }
 
  private:
   container::svector<ExportNode<T>> m_expressions;

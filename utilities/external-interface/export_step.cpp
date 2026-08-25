@@ -1,6 +1,7 @@
 #include "export_step.hpp"
 #include "processing_data.hpp"
 #include "processing_step_factory.hpp"
+#include "utils.hpp"
 
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/export/export.hpp>
@@ -246,6 +247,7 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
                            to_data_entry);
 
   std::vector<ExpressionGroup<>> groups;
+  std::vector<std::vector<std::pair<Tensor, Tensor>>> required_symmetrizations;
   for (std::size_t idx : access_order) {
     const ExportTreeData &current_data = to_export_data(idx);
 
@@ -276,17 +278,48 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
     if (it == groups.end()) {
       groups.emplace_back(std::move(name));
       it = groups.end() - 1;
+
+      required_symmetrizations.emplace_back();
     }
 
     ExpressionGroup<> &group = *it;
+    std::vector<std::pair<Tensor, Tensor>> &symms =
+        required_symmetrizations.at(std::ranges::distance(groups.begin(), it));
 
     for (const ExportTreeData::Entry &current : current_data.entries) {
       group.add(current.tree);
-    }
 
-    // TODO: if current_data was last in its partition (based on above sorting)
-    // we need to check if symmetrization is required and if so, generate the
-    // code snippet that does it and add it to the group
+      if (current.symm_contribution_target.has_value()) {
+        auto symm_it = std::ranges::find(
+            symms, current.tree->as_tensor(),
+            &std::remove_cvref_t<decltype(symms)>::value_type::first);
+
+        if (symm_it == symms.end()) {
+          symms.emplace_back(current.tree->as_tensor(),
+                             current.symm_contribution_target.value());
+        }
+      }
+    }
+  }
+
+  SEQUANT_ASSERT(groups.size() == required_symmetrizations.size());
+  for (std::size_t i = 0; i < groups.size(); ++i) {
+    ExpressionGroup<> &group = groups.at(i);
+
+    for (const auto &[unsymm_res, symm_res] : required_symmetrizations.at(i)) {
+      auto it = std::find_if(group.rbegin(), group.rend(),
+                             [&unsymm_res](const ExportNode<> &node) {
+                               return node->is_tensor() &&
+                                      node->as_tensor() == unsymm_res;
+                             });
+
+      SEQUANT_ASSERT(it != group.rend());
+
+      ResultExpr symmetrization(
+          symm_res, generateResultSymmetrization(symm_res, unsymm_res.label()));
+
+      group.insert(it.base(), to_export_tree(symmetrization));
+    }
   }
 
   auto perform_export = [&](auto &&generator, const auto &genctx)
