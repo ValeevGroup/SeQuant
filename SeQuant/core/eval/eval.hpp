@@ -1406,10 +1406,10 @@ template <typename F, typename IndexPredicate = accept_any_index,
     std::function<std::size_t(Index const&)> target_batch_size,
     IndexPredicate accept = {}, ScopeGuardFactory make_scope_guard = {},
     IsVolatile is_volatile = {}, bool persistent_only = false,
-    std::size_t depth = 0, PeakSink peak = nullptr) {
+    std::size_t depth = 0, PeakSink peak = nullptr, bool cobatch = true) {
   return [leaf_evaluator = std::move(leaf_evaluator),
           target_batch_size = std::move(target_batch_size), accept, is_volatile,
-          persistent_only, depth, peak,
+          persistent_only, depth, peak, cobatch,
           make_scope_guard](auto const& node, auto& cache) -> ResultPtr {
     // Runaway backstop: nesting re-enters this evaluator on the per-batch
     // scratch (see the reinstall below), incrementing depth once per nested
@@ -1791,7 +1791,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
         bs.cache.set_custom_evaluator(make_batched_custom_evaluator(
             std::function<ResultPtr(node_t const&)>{leaf_evaluator},
             target_batch_size, accept, make_scope_guard, is_volatile,
-            persistent_only, depth + 1, peak));
+            persistent_only, depth + 1, peak, cobatch));
         ResultPtr part = evaluate(node, leaf_evaluator, bs.cache);
         // Pre-size on the first block (learns the result's non-mode extents and
         // kind from the block partial; the external mode is widened to full).
@@ -1824,18 +1824,24 @@ template <typename F, typename IndexPredicate = accept_any_index,
     // The cost of considering a candidate is one leaf evaluation (the
     // mode_batches probe). With an unregistered (empty) real cache the group
     // is just the trigger.
+    // With BatchPolicy::cobatch_persistent_finals off the group is the
+    // trigger alone (per-node batching): joining every not-yet-alive
+    // persistent final materializes all of them at once, which the lazy
+    // schedule may never need (see the policy's doc).
     std::vector<member_t> group{{&node, K}};
-    cache.for_each_key([&](node_t const& k) {
-      if (!cache.persistent(k) || cache.alive(k)) return;
-      if (eq(k, node)) return;  // the trigger occupies its own slot
-      if (subtree_any(k, is_volatile)) return;  // defensive: P implies NV
-      auto const pk = pick_sliceable(k);
-      if (!pk) return;
-      // Join iff this member's first sliceable mode realizes the identical
-      // partition as the trigger (so all members stream over the same batches).
-      if (pk->second != batches) return;
-      group.emplace_back(&k, pk->first);
-    });
+    if (cobatch)
+      cache.for_each_key([&](node_t const& k) {
+        if (!cache.persistent(k) || cache.alive(k)) return;
+        if (eq(k, node)) return;  // the trigger occupies its own slot
+        if (subtree_any(k, is_volatile)) return;  // defensive: P implies NV
+        auto const pk = pick_sliceable(k);
+        if (!pk) return;
+        // Join iff this member's first sliceable mode realizes the identical
+        // partition as the trigger (so all members stream over the same
+        // batches).
+        if (pk->second != batches) return;
+        group.emplace_back(&k, pk->first);
+      });
 
     // Layer by nesting: a member whose subtree contains another member
     // evaluates in a later layer, with the inner result by then alive in the
@@ -1954,7 +1960,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
           bs.cache.set_custom_evaluator(make_batched_custom_evaluator(
               std::function<ResultPtr(node_t const&)>{leaf_evaluator},
               target_batch_size, accept, make_scope_guard, is_volatile,
-              persistent_only, depth + 1, peak));
+              persistent_only, depth + 1, peak, cobatch));
           ResultPtr part = evaluate(*mem, leaf_evaluator, bs.cache);
           if (!acc[m])
             acc[m] = std::move(part);
@@ -2053,7 +2059,8 @@ template <class F, class ScopeGuardFactory = make_no_scope_guard>
   return make_batched_custom_evaluator(
       std::move(yielder), std::move(target), std::move(accept),
       std::move(make_scope_guard), std::move(is_volatile_node),
-      policy.persistent_only, /*depth=*/0, peak);
+      policy.persistent_only, /*depth=*/0, peak,
+      policy.cobatch_persistent_finals);
 }
 
 }  // namespace sequant

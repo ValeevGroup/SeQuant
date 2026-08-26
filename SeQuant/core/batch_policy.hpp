@@ -83,6 +83,22 @@ struct BatchPolicy {
   /// Read identically by the single-term optimizer and the runtime evaluator.
   bool persistent_only = false;
 
+  /// If true (the default), a contracted-axis batch loop co-evaluates, in the
+  /// same passes as its trigger, EVERY registered persistent intermediate that
+  /// is not yet alive and slices the same axis with the identical realized
+  /// partition, so sliced sub-intermediates shared between them are evaluated
+  /// once per batch instead of once per consumer -- and stores all of them
+  /// into the cache eagerly. That trades laziness for sharing: every member's
+  /// full result is materialized at once, regardless of when the lazy
+  /// (lifetime-driven) schedule first needs it, so the group's accumulators
+  /// and the eagerly stored results can exceed by far what that schedule ever
+  /// holds (measured on a Kramers-CSV CCD residual: one trigger joined 237
+  /// finals, 124 of them 0.84 GB each). If false, a batch loop evaluates its
+  /// trigger alone (per-node batching): shared sliced sub-intermediates are
+  /// recomputed per consumer, and each persistent final is materialized only
+  /// when first needed. Read by the runtime evaluator only.
+  bool cobatch_persistent_finals = true;
+
   /// Footprint multiplier for the in-flight batch contribution that co-resides
   /// with a batch-accumulated intermediate (K += contribution). 0 = ignore
   /// (default); ~1 = full contribution materialized; backend-specific (TA's
