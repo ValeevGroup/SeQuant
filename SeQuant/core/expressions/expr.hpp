@@ -75,9 +75,7 @@ class Expr : public std::enable_shared_from_this<Expr> {
   virtual std::wstring to_latex() const;
 
   /// @return a clone of this object, i.e. an object that is equal to @c this
-  /// @note - must be overridden in the derived class.
-  ///       - the default implementation throws an exception
-  virtual ExprPtr clone() const;
+  virtual ExprPtr clone() const = 0;
 
   /// like Expr::shared_from_this, but returns ExprPtr
   /// @return a shared_ptr to this object wrapped into ExprPtr, if this object
@@ -228,9 +226,7 @@ class Expr : public std::enable_shared_from_this<Expr> {
   }
 
   /// @brief changes this to its adjoint
-  /// @note base implementation throws, must be reimplemented in the derived
-  /// class
-  virtual void adjoint();
+  virtual void adjoint() = 0;
 
   /// Computes and returns the hash value. If default @p hasher is used then the
   /// value will be memoized, otherwise @p hasher will be used to compute the
@@ -247,17 +243,9 @@ class Expr : public std::enable_shared_from_this<Expr> {
   }
 
   /// Computes and returns the derived type identifier
-  /// @note this function must be overridden in the derived class
   /// @sa Expr::get_type_id
   /// @return the hash value for this Expr
-  virtual type_id_type type_id() const
-#if __GNUG__
-  {
-    abort();
-  }
-#else
-      = 0;
-#endif
+  virtual type_id_type type_id() const = 0;
 
   friend inline bool operator==(const Expr &a, const Expr &b);
 
@@ -330,99 +318,47 @@ class Expr : public std::enable_shared_from_this<Expr> {
     return boost::core::demangle(typeid(*this).name());
   }
 
-  /** @name in-place arithmetic operators
-   *  Virtual in-place arithmetic operators to be overridden in expressions for
-   * which these make sense.
-   */
-  ///@{
-
-  /// @brief in-place multiply @c *this by @c that
-  /// @return reference to @c *this
-  /// @throw Exception if not implemented for this class, or cannot be
-  /// implemented for the particular @c that
-  virtual Expr &operator*=(const Expr &that);
-
-  /// @brief in-place non-commutatively-multiply @c *this by @c that
-  /// @return reference to @c *this
-  /// @throw Exception if not implemented for this class, or cannot be
-  /// implemented for the particular @c that
-  virtual Expr &operator^=(const Expr &that);
-
-  /// @brief in-place add @c that to @c *this
-  /// @return reference to @c *this
-  /// @throw Exception if not implemented for this class, or cannot be
-  /// implemented for the particular @c that
-  virtual Expr &operator+=(const Expr &that);
-
-  /// @brief in-place subtract @c that from @c *this
-  /// @return reference to @c *this
-  /// @throw Exception if not implemented for this class, or cannot be
-  /// implemented for the particular @c that
-  virtual Expr &operator-=(const Expr &that);
-
-  ///@}
-
-  // N.B. these are deliberately defined inline: they sit on the hottest paths
-  // in the library (Expr::is_atom(), Expr::visit(), canonicalization, ...) and
-  // out-of-line definitions would turn each of them into a non-inlinable
-  // cross-TU call on top of the virtual dispatch they already pay for
-  ExprIterator begin() { return begin_subexpr(); }
-  ExprIterator end() { return end_subexpr(); }
-  ConstExprIterator begin() const { return begin_subexpr(); }
-  ConstExprIterator end() const { return end_subexpr(); }
-  ConstExprIterator cbegin() const { return begin_subexpr(); }
-  ConstExprIterator cend() const { return end_subexpr(); }
+  ExprIterator begin();
+  ExprIterator end();
+  ConstExprIterator begin() const;
+  ConstExprIterator end() const;
+  ConstExprIterator cbegin() const;
+  ConstExprIterator cend() const;
 
   virtual ExprIterator begin_subexpr();
   virtual ExprIterator end_subexpr();
   virtual ConstExprIterator begin_subexpr() const;
   virtual ConstExprIterator end_subexpr() const;
 
-  std::size_t size() const {
-    return static_cast<std::size_t>(end_subexpr() - begin_subexpr());
-  }
+  std::size_t size() const;
 
-  bool empty() const { return begin_subexpr() == end_subexpr(); }
+  bool empty() const;
 
   /// unchecked element access
   /// @note the bounds check is only performed if `SEQUANT_ASSERT_ENABLED` is
   ///       #defined; use at() for a bounds check that is always performed
-  ExprPtr &operator[](std::size_t idx) {
-    SEQUANT_ASSERT(idx < size());
-    return begin_subexpr()[static_cast<std::ptrdiff_t>(idx)];
-  }
+  ExprPtr &operator[](std::size_t idx);
   /// @copydoc operator[](std::size_t)
-  const ExprPtr &operator[](std::size_t idx) const {
-    SEQUANT_ASSERT(idx < size());
-    return begin_subexpr()[static_cast<std::ptrdiff_t>(idx)];
-  }
+  const ExprPtr &operator[](std::size_t idx) const;
 
   /// checked element access
   /// @throw Exception if @p idx is not less than size()
-  ExprPtr &at(std::size_t idx) {
-    if (idx >= size()) throw_out_of_range(idx);
-    return begin_subexpr()[static_cast<std::ptrdiff_t>(idx)];
-  }
+  ExprPtr &at(std::size_t idx);
   /// @copydoc at(std::size_t)
-  const ExprPtr &at(std::size_t idx) const {
-    if (idx >= size()) throw_out_of_range(idx);
-    return begin_subexpr()[static_cast<std::ptrdiff_t>(idx)];
-  }
+  const ExprPtr &at(std::size_t idx) const;
 
   /// @throw Exception if this Expr is empty (e.g. is an atom)
-  ExprPtr &front() { return at(0); }
+  ExprPtr &front();
   /// @copydoc front()
-  const ExprPtr &front() const { return at(0); }
+  const ExprPtr &front() const;
 
   /// @throw Exception if this Expr is empty (e.g. is an atom)
-  ExprPtr &back() { return at(size() - 1); }
+  ExprPtr &back();
   /// @copydoc back()
-  const ExprPtr &back() const { return at(size() - 1); }
+  const ExprPtr &back() const;
 
  private:
   /// reports an out-of-range access by at()/front()/back()
-  /// @note deliberately out-of-line so that the (cold) throwing path does not
-  ///       bloat the inlined callers
   [[noreturn]] void throw_out_of_range(std::size_t idx) const;
 
   template <
@@ -475,14 +411,7 @@ class Expr : public std::enable_shared_from_this<Expr> {
   /// @note @c that is guaranteed to be of same type as @c *this, hence can be
   /// statically cast
   /// @return true if @c that is equivalent to *this
-  virtual bool static_equal([[maybe_unused]] const Expr &that) const
-#if __GNUG__
-  {
-    abort();
-  }
-#else
-      = 0;
-#endif
+  virtual bool static_equal(const Expr &that) const = 0;
 
   /// @param that an Expr object
   /// @note @c that is guaranteed to be of same type as @c *this, hence can be
@@ -517,12 +446,6 @@ class Expr : public std::enable_shared_from_this<Expr> {
     static type_id_type type_id = get_next_type_id();
     return type_id;
   }
-
- private:
-  /// @input[in] fn the name of function that is missing in this class
-  /// @return an Exception object containing a message describing that @p
-  /// fn is missing from this type
-  Exception not_implemented(const char *fn) const;
 };  // class Expr
 
 static_assert(std::ranges::sized_range<Expr>);
