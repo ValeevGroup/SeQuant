@@ -30,6 +30,8 @@ class ReadInputStep : public OneByOneProcessingStep<void> {
  private:
   std::vector<std::filesystem::path> input_paths_;
   io::serialization::DeserializationOptions options_;
+  bool simplify_ = false;
+  bool canonicalize_ = false;
 };
 
 }  // namespace sequant::util::extint

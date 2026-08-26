@@ -65,6 +65,20 @@ void ReadInputStep::set_options(const nlohmann::json &options) {
         throw Exception("Invalid value for " + kind() + " option '" + key +
                         "': '" + value.get<std::string>() + "'");
       }
+    } else if (key == "simplify") {
+      if (!value.is_boolean()) {
+        throw Exception("Value for " + kind() + " option '" + key +
+                        "' must be a boolean");
+      }
+
+      simplify_ = value.get<bool>();
+    } else if (key == "canonicalize") {
+      if (!value.is_boolean()) {
+        throw Exception("Value for " + kind() + " option '" + key +
+                        "' must be a boolean");
+      }
+
+      canonicalize_ = value.get<bool>();
     } else {
       throw Exception("Unknown option key for " + kind() + ": '" + key + "'");
     }
@@ -87,6 +101,12 @@ std::size_t ReadInputStep::process(std::string_view id_prefix,
 
     ResultExpr expr =
         io::serialization::from_string<ResultExpr>(contents, options_);
+
+    if (simplify_) {
+      simplify(expr);
+    } else if (canonicalize_) {
+      canonicalize(expr);
+    }
 
     ctx.set_data(id_prefix, id_start + counter++,
                  ExpressionData{.expressions = {std::move(expr)}});
