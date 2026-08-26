@@ -20,6 +20,7 @@
 #include <SeQuant/external/bliss/graph.hh>
 
 #include <range/v3/algorithm/contains.hpp>
+#include <range/v3/algorithm/equal.hpp>
 #include <range/v3/algorithm/find.hpp>
 #include <range/v3/view/concat.hpp>
 
@@ -148,9 +149,33 @@ auto flops_counter(has_index_extent auto&& ixex, InnerPow inner_pow = {}) {
         return i.has_proto_indices();
       };
       if (ranges::any_of(lhs, has_proto) && ranges::any_of(rhs, has_proto)) {
+        // Both operands ToT. Summing a bare shared index is fine as long as
+        // every proto-bearing index of BOTH operands carries the same proto
+        // bundle (one CSV/PNO pair): the operands then share their outer
+        // (proto-value) axes, the bare index is an ordinary mode on both, and
+        // the einsum batches the pair axes and contracts the bare one (the
+        // re-nesting Z(ij,nu;a<ij>) . C(ij,nu;b<ij>) of a flat carrier into
+        // the pair's CSV basis -- exactly how the driver g.C.C is evaluated).
+        // With DIFFERENT bundles the bare index is contracted while the two
+        // pair axes must be kept as an outer product (the inter-pair overlap
+        // C(ij,mu;a<ij>) . C(kl,mu;a'<kl>)), which the ToT einsum cannot
+        // express: cost +inf so the DP routes around it (de-nest against the
+        // amplitude first).
+        auto const bundles_differ = [&]() {
+          const Index* ref = nullptr;
+          for (auto const& operand : {std::cref(lhs), std::cref(rhs)})
+            for (auto const& j : operand.get()) {
+              if (!j.has_proto_indices()) continue;
+              if (!ref)
+                ref = &j;
+              else if (!ranges::equal(ref->proto_indices(), j.proto_indices()))
+                return true;
+            }
+          return false;
+        };
         for (auto const& k : lhs)
           if (!k.has_proto_indices() && ranges::contains(rhs, k) &&
-              !ranges::contains(result, k))
+              !ranges::contains(result, k) && bundles_differ())
             return std::numeric_limits<double>::max();
       }
       // Proto-value contraction guard (the occ analogue of the C.C case above,
