@@ -56,11 +56,15 @@ template <std::ranges::range Bra, std::ranges::range Ket,
           std::ranges::range Aux>
 ExprPtr make_tensor(const BinarizationOptions& opts, bra<Bra> b, ket<Ket> k,
                     aux<Aux> a, Symmetry symm, BraKetSymmetry bksymm,
-                    ColumnSymmetry csymm) {
+                    ColumnSymmetry csymm, bool keep_order = false) {
   // This function is creating intermediate tensors, which don't come with
   // an externally provided "correct"/canonical order of its indices.
   // Hence, we are free to define our own canonical order, which we
-  // conveniently set to the indices being sorted in each group.
+  // conveniently set to the indices being sorted in each group -- EXCEPT
+  // when the caller passes an order that must be kept (keep_order): the
+  // placeholder of an opaque node (a Sum) is what an enclosing tensor network
+  // sees, so its slots must be spelled in the order the value is laid out in
+  // (see binarize(Sum)).
   if (opts.merge_indices) {
     using std::ranges::begin;
     using std::ranges::end;
@@ -70,13 +74,15 @@ ExprPtr make_tensor(const BinarizationOptions& opts, bra<Bra> b, ket<Ket> k,
     indices.insert(indices.end(), begin(k), end(k));
     indices.insert(indices.end(), begin(a), end(a));
 
-    std::ranges::sort(indices);
+    if (!keep_order) std::ranges::sort(indices);
     return ex<Tensor>(label_tensor, bra(), ket(), aux(std::move(indices)), symm,
                       bksymm, csymm);
   } else {
-    std::ranges::sort(b);
-    std::ranges::sort(k);
-    std::ranges::sort(a);
+    if (!keep_order) {
+      std::ranges::sort(b);
+      std::ranges::sort(k);
+      std::ranges::sort(a);
+    }
 
     return ex<Tensor>(label_tensor, std::move(b), std::move(k), std::move(a),
                       symm, bksymm, csymm);
@@ -86,10 +92,11 @@ ExprPtr make_tensor(const BinarizationOptions& opts, bra<Bra> b, ket<Ket> k,
 template <std::ranges::range Bra, std::ranges::range Ket,
           std::ranges::range Aux>
 ExprPtr make_tensor_wo_symmetries(const BinarizationOptions& opts, bra<Bra>&& b,
-                                  ket<Ket>&& k, aux<Aux>&& a) {
+                                  ket<Ket>&& k, aux<Aux>&& a,
+                                  bool keep_order = false) {
   return make_tensor<Bra, Ket, Aux>(opts, b, k, a, Symmetry::Nonsymm,
                                     BraKetSymmetry::Nonsymm,
-                                    ColumnSymmetry::Nonsymm);
+                                    ColumnSymmetry::Nonsymm, keep_order);
 }
 
 ExprPtr make_tensor(Tensor const& t, bool with_symm,
@@ -540,19 +547,54 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
 
   auto make_sum = [i = 0,                    //
                    hs = imed_hashes(hvals),  //
-                   all_tensors, &opts](EvalExpr const& left,
-                                       EvalExpr const&) mutable -> EvalExpr {
+                   align = std::size_t{0},   //
+                   all_tensors,
+                   &opts](EvalExpr const& left,
+                          EvalExpr const& right) mutable -> EvalExpr {
     auto h = ranges::at(hs, ++i);
     if (all_tensors) {
+      // The summand hashes are relabeling-invariant, so their (unordered)
+      // combination cannot tell Σ_k S_k(x, y) from Σ_k S_k(σ_k(x, y)) with
+      // per-summand permutations σ_k of the named indices. Fold in each
+      // summand's alignment to the sum's frame (the first summand's canonical
+      // layout, which is also this node's layout): the position in the frame
+      // of every index of the summand's canonical layout. Relabeling-invariant
+      // like the rest of the hash, and identical for two sums that are
+      // relabelings of each other.
+      auto const& frame = left.canon_indices();
+      std::size_t a = 0;
+      for (auto const& ix : right.canon_indices()) {
+        auto const it = std::find(frame.begin(), frame.end(), ix);
+        hash::combine(a, static_cast<std::size_t>(it == frame.end()
+                                                      ? frame.size()
+                                                      : it - frame.begin()));
+      }
+      hash::combine(align, a);
+      hash::combine(h, align);
       auto const t = value_oriented(left.as_tensor());
+      // The placeholder is what an enclosing tensor network sees for this
+      // (opaque) node, so spell its slots -- within each bra/ket/aux group --
+      // in the node's canonical index order, i.e. the order the value is laid
+      // out in. Sorted by label instead, two relabeled spellings of one sum
+      // (values: transposes of each other) spelled one identical placeholder
+      // and an enclosing product got one hash and one layout for both.
+      auto in_canon_order = [&frame](auto const& group) {
+        Index::index_vector ordered;
+        for (auto const& ix : frame)
+          if (std::find(group.begin(), group.end(), ix) != group.end())
+            ordered.emplace_back(ix);
+        SEQUANT_ASSERT(ordered.size() == ranges::size(group));
+        return ordered;
+      };
       return {
           EvalOp::Sum,         //
           ResultType::Tensor,  //
-          detail::make_tensor_wo_symmetries(opts, bra(t.bra()), ket(t.ket()),
-                                            aux(t.aux())),  //
-          left.canon_indices(),                             //
-          1,                                                //
-          h,                                                //
+          detail::make_tensor_wo_symmetries(
+              opts, bra(in_canon_order(t.bra())), ket(in_canon_order(t.ket())),
+              aux(in_canon_order(t.aux())), /*keep_order=*/true),  //
+          left.canon_indices(),                                    //
+          1,                                                       //
+          h,                                                       //
           nullptr};
     } else {
       return {EvalOp::Sum,              //

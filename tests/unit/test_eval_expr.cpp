@@ -745,3 +745,73 @@ TEST_CASE("eval_expr_conjugation_marker_identity",
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   REQUIRE(D->hash_value() != A->hash_value());
 }
+
+TEST_CASE("eval_expr_opaque_factor_layout", "[EvalExpr]") {
+  // The tensor an intermediate's node spells (expr()) is what an enclosing
+  // tensor network sees when the intermediate is an opaque factor, e.g. the
+  // placeholder a Sum copies from its first summand. Its slots must be
+  // ordered as the value is laid out (the node's canonical index order), not
+  // sorted by label: P1 and P2 below are relabelings of each other
+  // (a_1 <-> a_2) whose values are transposes, and so are the sums S1, S2.
+  // Contracted with the same t, X1 = S1.t and X2 = S2.t are different
+  // scalars and must not share an eval-node identity; X3 = S2.t' with t also
+  // relabeled IS X1 and must. Regression for the Kramers-restricted CSV
+  // vv-ladder (a 16-flavor sum of C*C*gCC transforms contracted with t).
+  using namespace sequant;
+  TensorCanonicalizer::register_instance(
+      std::make_shared<DefaultTensorCanonicalizer>());
+  auto T = [](std::wstring_view lbl, std::initializer_list<std::wstring_view> b,
+              std::initializer_list<std::wstring_view> k) {
+    auto ix = [](auto const& labels) {
+      Index::index_vector v;
+      for (auto l : labels) v.emplace_back(Index{l});
+      return v;
+    };
+    return ex<Tensor>(lbl, bra(ix(b)), ket(ix(k)), Symmetry::Nonsymm,
+                      BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+  };
+  // P(x, y) = A(x;p_1) B(y;p_2) D(p_1,p_2): x and y play distinct roles
+  auto P = [&T](std::wstring_view x, std::wstring_view y) {
+    return T(L"A", {x}, {L"p_1"}) * T(L"B", {y}, {L"p_2"}) *
+           T(L"D", {L"p_1", L"p_2"}, {});
+  };
+  auto Q = [&T](std::wstring_view x, std::wstring_view y) {
+    return T(L"E", {x}, {L"p_3"}) * T(L"F", {y}, {L"p_4"}) *
+           T(L"G", {L"p_3", L"p_4"}, {});
+  };
+
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto p1 = binarize(P(L"a_1", L"a_2"));
+  auto p2 = binarize(P(L"a_2", L"a_1"));
+  // one identity (relabelings) with covariant layouts
+  REQUIRE(p1->hash_value() == p2->hash_value());
+  REQUIRE(p1->canon_indices() != p2->canon_indices());
+  // the placeholder a Sum spells for its value follows the layout
+  auto s1 = binarize(P(L"a_1", L"a_2") + Q(L"a_1", L"a_2"));
+  auto s2 = binarize(P(L"a_2", L"a_1") + Q(L"a_2", L"a_1"));
+  auto slots_follow_canon = [](auto const& node) {
+    auto const& t = node->as_tensor();
+    auto const& ci = node->canon_indices();
+    auto pos = [&ci](Index const& ix) {
+      return std::distance(ci.begin(), std::find(ci.begin(), ci.end(), ix));
+    };
+    return std::is_sorted(
+        t.bra().begin(), t.bra().end(),
+        [&pos](auto const& l, auto const& r) { return pos(l) < pos(r); });
+  };
+  REQUIRE(s1->op_type() == EvalOp::Sum);
+  REQUIRE(s1->hash_value() == s2->hash_value());
+  REQUIRE(slots_follow_canon(s1));
+  REQUIRE(slots_follow_canon(s2));
+  REQUIRE(s1->as_tensor().bra() != s2->as_tensor().bra());
+
+  auto X1 = binarize((P(L"a_1", L"a_2") + Q(L"a_1", L"a_2")) *
+                     T(L"t", {L"a_1", L"a_2"}, {}));
+  auto X2 = binarize((P(L"a_2", L"a_1") + Q(L"a_2", L"a_1")) *
+                     T(L"t", {L"a_1", L"a_2"}, {}));
+  auto X3 = binarize((P(L"a_2", L"a_1") + Q(L"a_2", L"a_1")) *
+                     T(L"t", {L"a_2", L"a_1"}, {}));
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(X1->hash_value() != X2->hash_value());  // S^T.t != S.t
+  REQUIRE(X1->hash_value() == X3->hash_value());  // full relabeling
+}
