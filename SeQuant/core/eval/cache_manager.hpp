@@ -11,6 +11,7 @@
 #include <SeQuant/core/eval/lifetime_mask.hpp>
 #include <SeQuant/core/eval/peak_monitor.hpp>
 #include <SeQuant/core/eval/result.hpp>
+#include <SeQuant/core/eval/value_id.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
@@ -610,7 +611,19 @@ struct BatchContextEntry {
 template <typename TreeNode, bool force_hash_collisions>
 class CacheManager {
  public:
+  /// The NODE type. Used for everything node-facing: the custom evaluator, the
+  /// whole-scope / multiroot drivers, the persistence predicate, and
+  /// \c for_each_key -- all of which see forest nodes, unchanged by Pillar 1.
   using key_type = TreeNode;
+
+  /// Pillar 1 (slice-colored value identity): the CACHE-MAP key. A
+  /// \c CachedValue pairs a node with its recorded home-slice coloring, so two
+  /// values of one node sliced on different slots occupy distinct entries; an
+  /// unsliced value (empty coloring) is byte-identical to keying by the node.
+  /// \c CachedValue is IMPLICITLY constructible from a node, so every existing
+  /// call site that passes a bare node keeps compiling and keys the map exactly
+  /// as before; only the ordered executor passes a genuinely colored key.
+  using cache_key_type = eval::CachedValue<TreeNode>;
 
   /// A custom evaluator type. `evaluate()` consults the cache's custom
   /// evaluator (if set) before applying its standard recursive scheme to each
@@ -741,8 +754,8 @@ class CacheManager {
   };
 
  private:
-  using hasher_type = TreeNodeHasher<TreeNode, force_hash_collisions>;
-  using comparator_type = TreeNodeEqualityComparator<TreeNode>;
+  using hasher_type = eval::CachedValueHasher<TreeNode, force_hash_collisions>;
+  using comparator_type = eval::CachedValueEqual<TreeNode>;
 
   class entry {
    private:
@@ -908,7 +921,8 @@ class CacheManager {
     return ent.access();
   }
 
-  std::unordered_map<TreeNode, entry, hasher_type, comparator_type> cache_map_;
+  std::unordered_map<cache_key_type, entry, hasher_type, comparator_type>
+      cache_map_;
 
   /// DIAGNOSTIC: per-DISTINCT-value build tally (see BuildTally), keyed by the
   /// same node identity as cache_map_. Populated by tally_build() from the eval
@@ -918,7 +932,13 @@ class CacheManager {
   /// scope- chain ROOT (tally_build routes there); scratch caches never
   /// populate it, and reset() does NOT clear it (the tally spans the whole
   /// forest replay).
-  std::unordered_map<TreeNode, BuildTally, hasher_type, comparator_type>
+  // Keyed by NODE identity (not the cache's value-id): a per-DISTINCT-value
+  // build diagnostic the dry-run costing rolls up, consumed node-by-node by the
+  // eval tests. Pillar 1's slice-colored value identity lives in cache_map_
+  // (correctness); this rollup stays node-keyed (byte-identical to before).
+  std::unordered_map<TreeNode, BuildTally,
+                     TreeNodeHasher<TreeNode, force_hash_collisions>,
+                     TreeNodeEqualityComparator<TreeNode>>
       recompute_tally_;
 
   /// Gate for tally_build(): false (default) => tally_build is a no-op, so the
@@ -1253,7 +1273,7 @@ class CacheManager {
   /// whole-nest invariant's escaped-outer set is empty, so its emitted
   /// effective_count is 1, which as a life would drain the entry on first use;
   /// reset() is the correct lifetime boundary for a hoisted invariant.
-  void ensure_hoist_slot(key_type const& key) {
+  void ensure_hoist_slot(cache_key_type const& key) {
     cache_map_.try_emplace(
         key, entry{std::numeric_limits<size_t>::max(), /*persistent=*/false});
   }
@@ -1273,7 +1293,7 @@ class CacheManager {
   /// which the plain per-forest CSE life (drained after its unbatched use
   /// count) does not, since a realized batch loop reads a root-homed invariant
   /// once per block.
-  void ensure_home_slot(key_type const& key) {
+  void ensure_home_slot(cache_key_type const& key) {
     auto [it, inserted] = cache_map_.try_emplace(
         key, entry{std::numeric_limits<size_t>::max(), /*persistent=*/false});
     if (!inserted) it->second.make_resident();
@@ -1287,7 +1307,7 @@ class CacheManager {
   /// Idempotent like \c ensure_home_slot(key): an already-present entry is
   /// upgraded in place (to persistent, or to the new bounded life) rather
   /// than replaced, preserving any stored data.
-  void ensure_home_slot(key_type const& key, std::size_t use_count,
+  void ensure_home_slot(cache_key_type const& key, std::size_t use_count,
                         bool persistent) {
     auto [it, inserted] = cache_map_.try_emplace(
         key, entry{persistent ? std::numeric_limits<size_t>::max() : use_count,
@@ -1330,7 +1350,8 @@ class CacheManager {
   ///         persistence, so it cannot over-enroll a non-volatile value that
   ///         has no volatile consumer. \c false when the key has no entry (the
   ///         shared cache chose not to register it, i.e. it is not persistent).
-  [[nodiscard]] bool entry_is_persistent(key_type const& key) const noexcept {
+  [[nodiscard]] bool entry_is_persistent(
+      cache_key_type const& key) const noexcept {
     for (CacheManager const* c = this; c; c = c->parent_) {
       auto const it = c->cache_map_.find(key);
       if (it != c->cache_map_.end()) return it->second.persistent();
@@ -1415,14 +1436,14 @@ class CacheManager {
   /// Routes to the scope-chain ROOT so every build -- from any per-batch
   /// scratch -- accumulates in ONE map keyed by node identity (see
   /// recompute_tally_). Called only in the dry-run costing replay.
-  void tally_build(key_type const& key, std::string const& slice_sig,
+  void tally_build(cache_key_type const& key, std::string const& slice_sig,
                    double flops, double exec) noexcept {
     if (parent_) {
       parent_->tally_build(key, slice_sig, flops, exec);
       return;
     }
     if (!recompute_tally_enabled_) return;  // wet path: no-op
-    auto& slice = recompute_tally_[key].slices[slice_sig];
+    auto& slice = recompute_tally_[key.node].slices[slice_sig];
     slice.count += 1;     // one more build of this exact (value, slice)
     slice.flops = flops;  // this slice's actual cost (same for repeats)
     slice.exec = exec;    // this slice's actual exec-cost (same for repeats)
@@ -1439,8 +1460,9 @@ class CacheManager {
   /// \return the per-DISTINCT-value build tally accumulated by tally_build()
   ///         on this (root) cache (see recompute_tally_). Read after the replay
   ///         to roll up avoidable recompute per node identity.
-  [[nodiscard]] std::unordered_map<TreeNode, BuildTally, hasher_type,
-                                   comparator_type> const&
+  [[nodiscard]] std::unordered_map<
+      TreeNode, BuildTally, TreeNodeHasher<TreeNode, force_hash_collisions>,
+      TreeNodeEqualityComparator<TreeNode>> const&
   recompute_tally() const noexcept {
     return recompute_tally_;
   }
@@ -1535,7 +1557,7 @@ class CacheManager {
   /// miss returns {nullptr, 0}. The hop distance surfaces the value's lifetime
   /// scope so the caller (Enter-stage slice-on-use) can slice it to exactly the
   /// batch loops the fetch crossed.
-  [[nodiscard]] AccessResult access_at(key_type const& key) noexcept {
+  [[nodiscard]] AccessResult access_at(cache_key_type const& key) noexcept {
     if (auto found =
             eval::LookupMeter::timed([&] { return cache_map_.find(key); });
         found != cache_map_.end()) {
@@ -1560,7 +1582,9 @@ class CacheManager {
   /// @param key The key that identifies the cached data.
   /// @return ResultPtr to Result. Thin forwarder to access_at() that drops the
   ///         hop distance, for the non-batched callers that do not slice.
-  ResultPtr access(key_type const& key) noexcept { return access_at(key).ptr; }
+  ResultPtr access(cache_key_type const& key) noexcept {
+    return access_at(key).ptr;
+  }
 
   /// Fetch @p key from EXACTLY @p hops scopes up the chain (walk @p hops
   /// parent links, then one LOCAL entry::access() there), rather than
@@ -1575,7 +1599,7 @@ class CacheManager {
   ///         lifetime step as access_at() (entry::access()); nullptr if the
   ///         walk runs off the root before @p hops links, or if the target
   ///         scope does not currently hold @p key.
-  [[nodiscard]] ResultPtr access_at_hops(key_type const& key,
+  [[nodiscard]] ResultPtr access_at_hops(cache_key_type const& key,
                                          std::size_t hops) noexcept {
     CacheManager* c = this;
     for (std::size_t i = 0; i < hops && c; ++i) c = c->parent_;
@@ -1608,7 +1632,7 @@ class CacheManager {
   ///         valid pointer to @c data.
   // NOT noexcept: forwards to entry::store(), which is not noexcept (see
   // there).
-  [[nodiscard]] ResultPtr store(key_type const& key, ResultPtr data) {
+  [[nodiscard]] ResultPtr store(cache_key_type const& key, ResultPtr data) {
     if (auto found =
             eval::LookupMeter::timed([&] { return cache_map_.find(key); });
         found != cache_map_.end()) {
@@ -1633,7 +1657,7 @@ class CacheManager {
   /// \brief Check if the key exists in the database: does not check if cache
   ///        exists
   ///
-  [[nodiscard]] bool exists(key_type const& key) const noexcept {
+  [[nodiscard]] bool exists(cache_key_type const& key) const noexcept {
     return cache_map_.find(key) != cache_map_.end();
   }
 
@@ -1647,12 +1671,14 @@ class CacheManager {
   template <typename F>
     requires std::invocable<F&, key_type const&>
   void for_each_key(F&& fn) const {
-    for (auto const& [k, v] : cache_map_) fn(k);
+    // The map key is a CachedValue; callers enumerate NODES (key_type), so hand
+    // them the node. The coloring is a cache-internal identity detail.
+    for (auto const& [k, v] : cache_map_) fn(k.node);
   }
 
   /// if the key exists in the database, return the current lifetime count of
   /// the cached data otherwise return -1
-  [[nodiscard]] int life(key_type const& key) const noexcept {
+  [[nodiscard]] int life(cache_key_type const& key) const noexcept {
     auto iter = cache_map_.find(key);
     auto end = cache_map_.end();
     return iter == end ? -1 : static_cast<int>(iter->second.life_count());
@@ -1661,7 +1687,7 @@ class CacheManager {
   /// if the key exists in the database, return the maximum lifetime count of
   /// the cached data that implies the maximum number of accesses allowed for
   /// this key before the cache is released. This value was set by the c'tor.
-  [[nodiscard]] int max_life(key_type const& key) const noexcept {
+  [[nodiscard]] int max_life(cache_key_type const& key) const noexcept {
     auto iter = cache_map_.find(key);
     auto end = cache_map_.end();
     return iter == end ? -1 : static_cast<int>(iter->second.max_life_count());
@@ -1670,7 +1696,7 @@ class CacheManager {
   /// \return true iff the key is registered for caching and currently holds
   ///         stored data (i.e. has been stored and not yet drained by its
   ///         final access).
-  [[nodiscard]] bool alive(key_type const& key) const noexcept {
+  [[nodiscard]] bool alive(cache_key_type const& key) const noexcept {
     auto iter = cache_map_.find(key);
     return iter != cache_map_.end() && iter->second.alive();
   }
@@ -1682,7 +1708,8 @@ class CacheManager {
   ///         already resident at its home is read from there each batch (the
   ///         parent-chain fall-through), so it is neither registered nor
   ///         rebuilt in the per-batch scratch.
-  [[nodiscard]] bool resident_in_chain(key_type const& key) const noexcept {
+  [[nodiscard]] bool resident_in_chain(
+      cache_key_type const& key) const noexcept {
     if (auto iter =
             eval::LookupMeter::timed([&] { return cache_map_.find(key); });
         iter != cache_map_.end() && iter->second.alive())
@@ -1692,7 +1719,7 @@ class CacheManager {
 
   /// \return true iff the key is registered for caching and classified
   ///         persistent (P: never released on access, survives reset()).
-  [[nodiscard]] bool persistent(key_type const& key) const noexcept {
+  [[nodiscard]] bool persistent(cache_key_type const& key) const noexcept {
     auto iter = cache_map_.find(key);
     return iter != cache_map_.end() && iter->second.persistent();
   }
@@ -1702,14 +1729,16 @@ class CacheManager {
   ///         tripwire's flag state (see \c entry::store()). Test-facing
   ///         accessor; always \c false for a persistent key or an
   ///         unregistered one.
-  [[nodiscard]] bool stored_this_eval(key_type const& key) const noexcept {
+  [[nodiscard]] bool stored_this_eval(
+      cache_key_type const& key) const noexcept {
     auto iter = cache_map_.find(key);
     return iter != cache_map_.end() && iter->second.stored_this_eval();
   }
 
   /// \return size in bytes of the data currently held for @p key, or 0 if
   ///         the key is not registered or no data is currently stored.
-  [[nodiscard]] size_t entry_size_in_bytes(key_type const& key) const noexcept {
+  [[nodiscard]] size_t entry_size_in_bytes(
+      cache_key_type const& key) const noexcept {
     auto iter = cache_map_.find(key);
     return iter == cache_map_.end() ? 0 : iter->second.size_in_bytes();
   }

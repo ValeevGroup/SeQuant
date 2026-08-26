@@ -98,6 +98,14 @@ struct CachedValue {
   Node node;                 //!< the (possibly shared) forest node
   ValueIdColoring coloring;  //!< recorded home-slice coloring; empty => full
 
+  /// Implicit from a bare node (empty coloring): every existing cache call site
+  /// that passes a node keeps compiling and, with an empty coloring, keys the
+  /// map byte-identically to the old node keying. The 2-arg form is what the
+  /// executor builds for a genuinely sliced value.
+  CachedValue(Node n) : node(std::move(n)) {}
+  CachedValue(Node n, ValueIdColoring c)
+      : node(std::move(n)), coloring(std::move(c)) {}
+
   [[nodiscard]] auto operator->() const { return node.operator->(); }
   [[nodiscard]] Node const& operator*() const { return node; }
 };
@@ -105,10 +113,11 @@ struct CachedValue {
 /// \brief Hasher for \c CachedValue: the home-slice-colored value-id. Empty
 ///        coloring => \c hash::value(*node), byte-identical to \c
 ///        TreeNodeHasher.
-template <meta::eval_node Node>
+template <meta::eval_node Node, bool force_hash_collisions = false>
 struct CachedValueHasher {
   using is_transparent = void;
   [[nodiscard]] std::size_t operator()(CachedValue<Node> const& cv) const {
+    if constexpr (force_hash_collisions) return 0;
     return value_id_hash(cv.node, &cv.coloring);
   }
 };
