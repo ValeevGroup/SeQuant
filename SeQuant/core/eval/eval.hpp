@@ -639,6 +639,39 @@ template <typename Node>
 // contained in evaluate_impl. External callers use the thin `evaluate`
 // overloads (below); internal re-entries (the scatter/contraction per-block
 // re-evaluations and the hoisted-invariant builds) call evaluate_impl directly.
+
+/// \brief Pillar 1 / B-full stage A: the single-op COMPUTE kernel.
+///
+/// \details The raw op applied to already-evaluated operand results, dispatched
+/// by \p node's op type, with the contraction annotation computed from \p node.
+/// VALUE-in, VALUE-out: it takes the operands' \c Result buffers and returns
+/// the op's raw result, touching NO cache and NO value identity. It is exactly
+/// the innermost `left->adjoint/sum/prod(...)` compute that both the
+/// tree-walking
+/// \c evaluate_impl and the value/occurrence-driven ordered executor perform,
+/// so extracting it is a byte-identical seam. NOT handled here (all
+/// caller-side): a LEAF (a \c leaf_evaluator fetch, not an op), the
+/// shaped-product hook (the caller calls this only when the hook declines), \c
+/// apply_phase + store, the in-place-Sum fast path, and all tally / trace /
+/// timing / \c last_op_flops sentinel / \c force_sync fence.
+template <meta::can_evaluate Node>
+[[nodiscard]] ResultPtr apply_one_op(Node const& node, ResultPtr const& left,
+                                     ResultPtr const& right) {
+  if (node->op_type() == EvalOp::Adjoint) {
+    // Unary: only the left operand; the right child is the Constant(1)
+    // sentinel.
+    std::array<std::any, 2> const adj_ann{node.left()->annot(), node->annot()};
+    return left->adjoint(adj_ann);
+  }
+  std::array<std::any, 3> const ann{node.left()->annot(), node.right()->annot(),
+                                    node->annot()};
+  if (node->op_type() == EvalOp::Sum) return left->sum(*right, ann);
+  SEQUANT_ASSERT(node->op_type() == EvalOp::Product);
+  bool const de_nest =
+      node.left()->tot() && node.right()->tot() && !node->tot();
+  return left->prod(*right, ann, de_nest ? DeNest::True : DeNest::False);
+}
+
 template <Trace EvalTrace = Trace::Default,
           detail::CacheCheck Cache = detail::CacheCheck::Checked,
           meta::can_evaluate Node, typename F, typename N, bool FHC>
@@ -1084,11 +1117,9 @@ ResultPtr evaluate_impl(Node const& node,         //
         // invariant, and is intentionally never pushed.
         f.left = std::move(ret);
         SEQUANT_ASSERT(f.left);
-        std::array<std::any, 2> const adj_ann{f.node.left()->annot(),
-                                              f.node->annot()};
         ResultPtr result;
         auto time = detail::timed_eval_inplace(
-            [&]() { result = f.left->adjoint(adj_ann); });
+            [&]() { result = apply_one_op(f.node, f.left, f.right); });
 
         if constexpr (detail::trace(EvalTrace)) {
           // `right` is null here (see log::bytes() null tolerance).
@@ -1252,7 +1283,7 @@ ResultPtr evaluate_impl(Node const& node,         //
         }
         if (f.node->op_type() == EvalOp::Sum) {
           time = detail::timed_eval_inplace(
-              [&]() { result = f.left->sum(*f.right, ann); });
+              [&]() { result = apply_one_op(f.node, f.left, f.right); });
         } else {
           SEQUANT_ASSERT(f.node->op_type() == EvalOp::Product);
           // Consult the shaped-product hook (if set) before evaluating the
@@ -1262,8 +1293,6 @@ ResultPtr evaluate_impl(Node const& node,         //
           // the normal product (e.g. a shape-constrained emission of it), a
           // null return declines and the standard prod() below runs. An empty
           // hook is never consulted; default-empty => byte-identical behavior.
-          auto const de_nest =
-              f.node.left()->tot() && f.node.right()->tot() && !f.node->tot();
           // DIAGNOSTIC (SEQUANT_UT_FORCE_SYNC): force the product's async
           // execution to complete INSIDE the timed region so the prod() timer
           // captures execution, not just dispatch. No-op when the gate is off.
@@ -1298,8 +1327,7 @@ ResultPtr evaluate_impl(Node const& node,         //
             // last_op_flops >= 0 only on the real contraction path.
             eval::detail::last_op_flops() = -1.0;
             time = detail::timed_eval_inplace([&]() {
-              result = f.left->prod(*f.right, ann,
-                                    de_nest ? DeNest::True : DeNest::False);
+              result = apply_one_op(f.node, f.left, f.right);
               if (force_sync && result) result->fence();
             });
             // Record this product build against f.node's IDENTITY (keyed by the
