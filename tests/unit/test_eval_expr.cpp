@@ -815,3 +815,55 @@ TEST_CASE("eval_expr_opaque_factor_layout", "[EvalExpr]") {
   REQUIRE(X1->hash_value() != X2->hash_value());  // S^T.t != S.t
   REQUIRE(X1->hash_value() == X3->hash_value());  // full relabeling
 }
+
+TEST_CASE("eval_expr_opaque_sum_factor_batch_annotation",
+          "[EvalExpr][batched-here]") {
+  using namespace sequant;
+  TensorCanonicalizer::register_instance(
+      std::make_shared<DefaultTensorCanonicalizer>());
+  auto T = [](std::wstring_view lbl, std::initializer_list<std::wstring_view> b,
+              std::initializer_list<std::wstring_view> k) {
+    auto ix = [](auto const& labels) {
+      Index::index_vector v;
+      for (auto l : labels) v.emplace_back(Index{l});
+      return v;
+    };
+    return ex<Tensor>(lbl, bra(ix(b)), ket(ix(k)), Symmetry::Nonsymm,
+                      BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+  };
+  // g(a_1;i_1) * ( f(a_2;a_1) t(i_2;a_2) + h(a_2;a_1) u(i_2;a_2) ):
+  // a Sum factor is opaque to the single-term optimizer (it is priced as a
+  // placeholder tensor), so the node_batch_axes the optimizer emits for this
+  // product describe its ONE contraction node (the root, contracting a_1) and
+  // nothing inside the Sum. The two contraction nodes inside the Sum must
+  // neither consume the post-order counter nor receive the root's annotation.
+  auto expr = T(L"g", {L"a_1"}, {L"i_1"}) *
+              (T(L"f", {L"a_2"}, {L"a_1"}) * T(L"t", {L"i_2"}, {L"a_2"}) +
+               T(L"h", {L"a_2"}, {L"a_1"}) * T(L"u", {L"i_2"}, {L"a_2"}));
+  NodeBatchAnnotation ann;
+  ann.axes = {{Index{L"a_1"}, BatchModeType::Contracted}};
+  ann.contracted_modes = {Index{L"a_1"}};
+  BinarizationOptions bopts;
+  bopts.node_batch_axes.push_back(ann);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto node = binarize(expr, {}, bopts);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(node->op_type() == EvalOp::Product);
+  REQUIRE(node->batched_here().size() == 1);
+  REQUIRE(node->batched_here().front().first == Index{L"a_1"});
+  REQUIRE(node->batched_here().front().second == BatchModeType::Contracted);
+
+  std::size_t inner_contractions = 0, inner_marked = 0;
+  auto walk = [&](auto const& self, auto const& n) -> void {
+    if (n.leaf()) return;
+    if (&n != &node) {
+      if (n->op_type() == EvalOp::Product) ++inner_contractions;
+      if (!n->batched_here().empty()) ++inner_marked;
+    }
+    self(self, n.left());
+    self(self, n.right());
+  };
+  walk(walk, node);
+  REQUIRE(inner_contractions == 2);
+  REQUIRE(inner_marked == 0);
+}

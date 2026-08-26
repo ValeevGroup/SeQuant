@@ -629,13 +629,30 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
                                                                uncontract);
   }();
 
-  auto factors = prod.factors()  //
-                 | transform([i = 0, &ltr_uncontr_idxs, &opts,
-                              &node_counter](ExprPtr const& x) mutable {
-                     return impl::binarize(x, ltr_uncontr_idxs.children[i++],
-                                           opts, node_counter);
-                   })  //
-                 | ranges::to_vector;
+  auto factors =
+      prod.factors()  //
+      | transform([i = 0, &ltr_uncontr_idxs, &opts,
+                   &node_counter](ExprPtr const& x) mutable {
+          auto const& uncontr = ltr_uncontr_idxs.children[i++];
+          if (x->is<Sum>()) {
+            // A Sum factor is opaque to the single-term optimizer
+            // (opt_mixed_product stands a placeholder tensor in
+            // for it, and puts the Sum back untouched), so the
+            // contraction nodes INSIDE it are not DP nodes and have
+            // no entry in opts.node_batch_axes: binarize them with
+            // a private counter and no axes. Consuming the shared
+            // counter here shifted every outer node's annotation
+            // onto the wrong (inner) node -- e.g. a contracted-axis
+            // batch mark onto a node whose result still carries
+            // that axis.
+            BinarizationOptions inner_opts = opts;
+            inner_opts.node_batch_axes.clear();
+            std::size_t inner_counter = 0;
+            return impl::binarize(x, uncontr, inner_opts, inner_counter);
+          }
+          return impl::binarize(x, uncontr, opts, node_counter);
+        })  //
+      | ranges::to_vector;
 
   auto hvals = factors | transform([](auto&& n) { return n->hash_value(); });
   auto const hs = imed_hashes(hvals) | ranges::to_vector;
