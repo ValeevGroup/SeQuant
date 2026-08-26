@@ -89,6 +89,30 @@ TEST_CASE("serialization", "[serialization]") {
     ctx.set(mbpt::make_sr_spaces());
     auto ctx_resetter = set_scoped_default_context(ctx);
 
+    SECTION("default symmetries follow the Context") {
+      // the deserializer sources unspecified tensor symmetries from the active
+      // Context (unlike the programmatic Tensor ctor, which uses fixed
+      // defaults -- see test_tensor "programmatic ctor defaults are
+      // Context-independent"). Flip the Context column-symmetry default and
+      // confirm parsed tensors follow it.
+      auto ctx_symm = get_default_context();
+      ctx_symm.set(ColumnSymmetry::Symm);
+      {
+        auto resetter = set_scoped_default_context(ctx_symm);
+        REQUIRE(deserialize<ExprPtr>(L"t{i1,i2;a1,a2}")
+                    ->as<Tensor>()
+                    .column_symmetry() == ColumnSymmetry::Symm);
+      }
+      auto ctx_nonsymm = get_default_context();
+      ctx_nonsymm.set(ColumnSymmetry::Nonsymm);
+      {
+        auto resetter = set_scoped_default_context(ctx_nonsymm);
+        REQUIRE(deserialize<ExprPtr>(L"t{i1,i2;a1,a2}")
+                    ->as<Tensor>()
+                    .column_symmetry() == ColumnSymmetry::Nonsymm);
+      }
+    }
+
     SECTION("Scalar tensor") {
       auto expr = deserialize<ExprPtr>(L"t{}");
       REQUIRE(expr->is<Tensor>());
@@ -500,6 +524,71 @@ TEST_CASE("serialization", "[serialization]") {
             io::serialization::SerializationError,
             serializationErrorMatches(9, 1, "Invalid symmetry specifier"));
       }
+
+      SECTION("(anti)symmetrization operators reject braket symmetry") {
+        // a reserved (anti)symmetrizer must be braket-Nonsymm; an explicit
+        // non-Nonsymm braket spec is rejected by the Tensor ctor
+        REQUIRE_THROWS(deserialize<ExprPtr>(L"Ŝ{i1,i2;a1,a2}:N-C-S"));
+        REQUIRE_THROWS(deserialize<ExprPtr>(L"Â{i1,i2;a1,a2}:A-C-S"));
+        // the default (braket-Nonsymm) form is accepted
+        REQUIRE_NOTHROW(deserialize<ExprPtr>(L"Ŝ{i1,i2;a1,a2}"));
+        REQUIRE_NOTHROW(deserialize<ExprPtr>(L"Â{i1,i2;a1,a2}"));
+        // ... and stays accepted even when the Context defaults to Hermitian:
+        // reserved (anti)symmetrizers must not inherit the Context braket
+        // default (which would otherwise derive a non-Nonsymm braket and throw)
+        {
+          auto ctx = get_default_context();
+          ctx.set(Hermiticity::Hermitian);
+          auto resetter = set_scoped_default_context(ctx);
+          REQUIRE_NOTHROW(deserialize<ExprPtr>(L"Ŝ{i1,i2;a1,a2}"));
+          REQUIRE_NOTHROW(deserialize<ExprPtr>(L"Â{i1,i2;a1,a2}"));
+        }
+      }
+
+      SECTION("(anti)symmetrization operators reject contradicting perm") {
+        // an explicitly spelled perm symmetry that contradicts the reserved
+        // label's defining one is rejected rather than silently overwritten,
+        // as for the braket and column specs
+        REQUIRE_THROWS(deserialize<ExprPtr>(L"Ŝ{i1,i2;a1,a2}:A-N-S"));
+        REQUIRE_THROWS(deserialize<ExprPtr>(L"Â{i1,i2;a1,a2}:N-N-S"));
+        // the matching spellings stay accepted
+        REQUIRE_NOTHROW(deserialize<ExprPtr>(L"Ŝ{i1,i2;a1,a2}:N-N-S"));
+        REQUIRE_NOTHROW(deserialize<ExprPtr>(L"Â{i1,i2;a1,a2}:A-N-S"));
+      }
+
+      SECTION("(anti)symmetrization operators have fixed perm symmetry") {
+        // the defining bra/ket permutational symmetry of a reserved
+        // (anti)symmetrizer is not a free parameter either, so it must not be
+        // inherited from the Context; a parsed operator must match the one
+        // built by make_(anti)symmetrizer()
+        auto ctx = get_default_context();
+        ctx.set(Symmetry::Antisymm);
+        auto resetter = set_scoped_default_context(ctx);
+        const auto S = deserialize<ExprPtr>(L"Ŝ{i1,i2;a1,a2}");
+        REQUIRE(S->as<Tensor>().symmetry() == Symmetry::Nonsymm);
+        REQUIRE(S == make_symmetrizer(bra{Index(L"i_1"), Index(L"i_2")},
+                                      ket{Index(L"a_1"), Index(L"a_2")}));
+        const auto A = deserialize<ExprPtr>(L"Â{i1,i2;a1,a2}");
+        REQUIRE(A->as<Tensor>().symmetry() == Symmetry::Antisymm);
+        REQUIRE(A == make_antisymmetrizer(bra{Index(L"i_1"), Index(L"i_2")},
+                                          ket{Index(L"a_1"), Index(L"a_2")}));
+      }
+
+      SECTION("(anti)symmetrization operators are always column symmetric") {
+        // ... including under a Context whose column default is the library
+        // default Nonsymm: the deserializer must force Symm rather than pass
+        // the (contradicting) Context default to the Tensor ctor
+        auto ctx = get_default_context();
+        ctx.set(ColumnSymmetry::Nonsymm);
+        auto resetter = set_scoped_default_context(ctx);
+        for (const auto& input :
+             {L"Ŝ{i1,i2;a1,a2}", L"Â{i1,i2;a1,a2}", L"Ŝ{i1,i2;a1,a2}:N-N-N",
+              L"Â{i1,i2;a1,a2}:A-N-N"}) {
+          ExprPtr expr;
+          REQUIRE_NOTHROW(expr = deserialize<ExprPtr>(input));
+          REQUIRE(expr->as<Tensor>().column_symmetry() == ColumnSymmetry::Symm);
+        }
+      }
     }
   }
 
@@ -533,9 +622,8 @@ TEST_CASE("serialization", "[serialization]") {
       REQUIRE(result.ket()[0].full_label() == L"e_1");
       REQUIRE(result.ket()[1].full_label() == L"e_2");
       REQUIRE(result.symmetry() == Symmetry::Antisymm);
-      // serialized form `R{...}:A` omits braket_symmetry; deserializer's
-      // legacy fallback is Conjugate (see v1/deserialize.cpp to_default_symms)
-      REQUIRE(result.braket_symmetry() == BraKetSymmetry::Conjugate);
+      REQUIRE(result.braket_symmetry() == BraKetSymmetry::Nonsymm);
+      // This column symmetry is implicit with Symmetry::Antisymm
       REQUIRE(result.column_symmetry() == ColumnSymmetry::Symm);
 
       REQUIRE(result.expression().is<Product>());

@@ -192,9 +192,12 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     res = deserialize<ResultExpr>(L"Amplitude{i1;a1} = t{a1;i1}");
     root_expr = binarize(res)->expr();
     REQUIRE(root_expr.is<Tensor>());
-    REQUIRE(root_expr.as<Tensor>() == Tensor(L"Amplitude",
-                                             bra(IndexList{L"i_1"}),
-                                             ket(IndexList{L"a_1"})));
+    // the deserialized ResultExpr's Amplitude picks up the Context's column
+    // symmetry (Symm), so the programmatic reference must request it too --
+    // programmatic ctors are Context-independent (see Tensor::Defaults)
+    REQUIRE(root_expr.as<Tensor>() ==
+            Tensor(L"Amplitude", bra(IndexList{L"i_1"}), ket(IndexList{L"a_1"}),
+                   TensorSymmetries{.column = ColumnSymmetry::Symm}));
   }
 
   SECTION(
