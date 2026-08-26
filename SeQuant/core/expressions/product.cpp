@@ -46,7 +46,15 @@ const Product::scalar_type &Product::scalar() const { return scalar_; }
 bool Product::is_zero() const { return Constant::is_zero(this->scalar()); }
 
 const Product::factors_type &Product::factors() const { return factors_; }
-Product::factors_type &Product::factors() { return factors_; }
+Product::factors_type &Product::factors() {
+  // N.B. handing out a mutable reference to factors_ invalidates the memoized
+  // hash.  Unlike begin_subexpr()/end_subexpr(), this must not be guarded by
+  // `!factors_.empty()`: those hand out iterators, and an empty range yields
+  // nothing to dereference, whereas the caller can grow an empty factors_
+  // through this reference (e.g. push_back()).
+  reset_hash_value();
+  return factors_;
+}
 
 const ExprPtr &Product::factor(size_t i) const { return factors_.at(i); }
 

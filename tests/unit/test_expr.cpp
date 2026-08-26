@@ -1035,6 +1035,31 @@ TEST_CASE("expr", "[elements]") {
     }
   }
 
+  SECTION("hash invalidation on mutable factors() access") {
+    // Product::factors() non-const hands out a mutable reference into
+    // factors_, so it must invalidate the memoized hash, exactly as the
+    // non-const begin_subexpr()/end_subexpr() do
+    auto prod =
+        ex<Product>(ExprPtrList{ex<Variable>(L"x"), ex<Variable>(L"y")});
+    const auto hash_before = prod->hash_value();
+
+    prod->as<Product>().factors()[0] = ex<Variable>(L"mutated");
+
+    REQUIRE(prod->hash_value() != hash_before);
+  }
+
+  SECTION("hash invalidation on growing an empty Product via factors()") {
+    // an empty Product can still be *grown* through the mutable factors()
+    // reference, so the invalidation must not be guarded by
+    // `!factors_.empty()` the way begin_subexpr()/end_subexpr() are
+    auto prod = ex<Product>(ExprPtrList{});
+    const auto hash_before = prod->hash_value();
+
+    prod->as<Product>().factors().push_back(ex<Variable>(L"x"));
+
+    REQUIRE(prod->hash_value() != hash_before);
+  }
+
   SECTION("commutativity") {
     const auto ex1 = std::make_shared<VecExpr<std::shared_ptr<Constant>>>(
         std::initializer_list<std::shared_ptr<Constant>>{
