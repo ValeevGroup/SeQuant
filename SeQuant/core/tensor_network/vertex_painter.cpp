@@ -9,10 +9,11 @@ namespace sequant {
 
 VertexPainterImpl::VertexPainterImpl(
     const VertexPainterImpl::NamedIndexSet &named_indices,
-    bool distinct_named_indices)
+    bool distinct_named_indices, bool color_conjugation)
     : used_colors_(),
       named_indices_(named_indices),
-      distinct_named_indices_(distinct_named_indices) {}
+      distinct_named_indices_(distinct_named_indices),
+      color_conjugation_(color_conjugation) {}
 
 std::size_t VertexPainterImpl::to_hash_value(
     const AbstractTensor &tensor) const {
@@ -37,8 +38,19 @@ std::size_t VertexPainterImpl::to_hash_value(
                  hash::value(tensor._symmetry()),
                  hash::value(tensor._column_symmetry()),
                  hash::value(tensor._braket_symmetry())};
-
-  return to_hash_value(hashes);
+  auto result = to_hash_value(hashes);
+  // The elementwise-conjugation marker is part of a tensor's value identity
+  // (T* != T unless T is real). It is left out of the color by default: the
+  // symbolic canonicalizer (TensorNetworkV3::canonicalize) toggles it while it
+  // re-orients BraKetSymmetry::Conjugate tensors, so a marker-dependent
+  // coloring there would not be a fixed point. Opt in (canonicalize_slots)
+  // once every tensor's orientation is already canonical.
+  // Only a marked tensor's color is perturbed, so that marker-free networks
+  // keep the colors (and hence the canonical slot orders) they have without
+  // the option.
+  if (color_conjugation_ && tensor._conjugated())
+    hash::combine(result, hash::value(true));
+  return result;
 }
 
 VertexPainterImpl::Color VertexPainterImpl::operator()(const BraGroup &group) {

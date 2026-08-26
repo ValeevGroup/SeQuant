@@ -686,3 +686,62 @@ TEST_CASE("eval_expr_batched_here_typed", "[EvalExpr][batched-here]") {
   REQUIRE(node.batched_here()[0].second == BatchModeType::Contracted);
   REQUIRE(node.batched_here()[1].second == BatchModeType::External);
 }
+
+TEST_CASE("eval_expr_conjugation_marker_identity",
+          "[EvalExpr][conjugate-fold]") {
+  // C(a_1;p) C*(a_2;p) and C*(a_1;p) C(a_2;p) are one tensor S up to the
+  // named relabeling a_1 <-> a_2 (its slots are "index of the unconjugated
+  // factor" and "index of the conjugated factor"), so they may share one
+  // eval-node hash and cache slot -- but only if their canonical layouts put
+  // the unconjugated factor's index in the same slot. With the conjugation
+  // marker invisible to the graph coloring, the two spellings were the same
+  // colored graph with an automorphism exchanging the factors, and bliss
+  // pinned the slot order by the index labels alone: the same buffer was then
+  // read as S by one occurrence and as S^T* by the other (identical only for
+  // real C). Regression for the Kramers-restricted CSV inter-pair overlap.
+  using namespace sequant;
+  TensorCanonicalizer::register_instance(
+      std::make_shared<DefaultTensorCanonicalizer>());
+
+  auto C = [](std::wstring_view ext) {
+    return ex<Tensor>(L"C", bra{Index{ext}}, ket{Index{L"p_1"}},
+                      Symmetry::Nonsymm, BraKetSymmetry::Conjugate,
+                      ColumnSymmetry::Symm);
+  };
+  auto Cstar = [&C](std::wstring_view ext) {
+    auto t = C(ext);
+    t->as<Tensor>().conjugate();
+    return t;
+  };
+
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto A = binarize(C(L"a_1") * Cstar(L"a_2"));  // S(a_1, a_2)
+  auto B = binarize(Cstar(L"a_1") * C(L"a_2"));  // S(a_2, a_1)
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(!A.leaf());
+  REQUIRE(!B.leaf());
+  REQUIRE(A->canon_indices().size() == 2);
+  REQUIRE(B->canon_indices().size() == 2);
+
+  // slot of the unconjugated factor's index in the canonical layout
+  auto unconj_slot = [](auto const& node, Index const& unconj_idx) {
+    auto const& ci = node->canon_indices();
+    return std::distance(ci.begin(),
+                         std::find(ci.begin(), ci.end(), unconj_idx));
+  };
+  auto const slot_A = unconj_slot(A, Index{L"a_1"});
+  auto const slot_B = unconj_slot(B, Index{L"a_2"});
+  REQUIRE(slot_A < 2);
+  REQUIRE(slot_B < 2);
+
+  // same value up to relabeling: one identity ...
+  REQUIRE(A->hash_value() == B->hash_value());
+  // ... and a layout that agrees on which slot is the unconjugated one
+  REQUIRE(slot_A == slot_B);
+
+  // the genuinely different tensor C(a_1) C(a_2) (no conjugation) is kept apart
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto D = binarize(C(L"a_1") * C(L"a_2"));
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(D->hash_value() != A->hash_value());
+}

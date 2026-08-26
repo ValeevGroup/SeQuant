@@ -718,9 +718,18 @@ TensorNetworkV3::canonicalize_slots(
   // make the graph
   // only slots (hence, attr) of named indices define their color, so
   // distinct_named_indices = false
+  // color_conjugation = true: this is the value-identity canonicalization
+  // (eval-node hash, connectivity graph, canonical slot order). Every tensor
+  // is already in its canonical orientation here (its conjugation is carried
+  // solely by Tensor::conjugated()), and without the marker in the color a
+  // network like C(x;m) C*(y;m) has an automorphism exchanging the conjugated
+  // and unconjugated factors, so its canonical slot order is pinned by the
+  // named-index labels alone and C(x)C*(y) / C*(x)C(y) -- S and S^T* -- share
+  // one hash and one graph.
   Graph graph = create_graph(
       {.named_indices = &named_indices,
        .distinct_named_indices = false,
+       .color_conjugation = true,
        .make_labels = Logger::instance().canonicalize_input_graph ||
                       Logger::instance().canonicalize_dot,
        .make_texlabels = Logger::instance().canonicalize_input_graph ||
@@ -986,8 +995,8 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
                                            ? this->ext_indices()
                                            : *(options.named_indices);
 
-  VertexPainter<TensorNetworkV3> colorizer(named_indices,
-                                           options.distinct_named_indices);
+  VertexPainter<TensorNetworkV3> colorizer(
+      named_indices, options.distinct_named_indices, options.color_conjugation);
 
   // results
   Graph graph;
