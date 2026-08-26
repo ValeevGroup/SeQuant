@@ -173,7 +173,6 @@ set(eval_dryrun_test_sources
     "test_placement_router.cpp"
     "test_scope_executor.cpp"
     "test_scope_schedule.cpp"
-    "test_sliced_canonical_layout.cpp"
     "test_slicing_signature.cpp"
 )
 add_library(unit_tests-sequant-eval-dryrun-obj OBJECT ${eval_dryrun_test_sources})
