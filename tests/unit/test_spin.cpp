@@ -735,6 +735,58 @@ SECTION("Symmetrize expression") {
   }
 }
 
+SECTION("Partial symmetrizer") {
+  auto ctx = get_default_context();
+  ctx.set(mbpt::make_mr_spaces());
+  auto resetter = set_scoped_default_context(ctx);
+
+  auto expr = deserialize<ResultExpr>(
+      L"R{a1,a2;u1,i1}:A = 2 " + reserved::antisymm_label() +
+      L"{;a1,a2} Y{u2;u1}:A g{a1;a3}:A t{a2,a3;u2,i1}:A");
+  auto equivalent = deserialize<ResultExpr>(
+      "R{a1,a2;u1,i1}:A = Y{u2;u1}:A g{a1;a3}:A t{a2,a3;u2,i1}:A - Y{u2;u1}:A "
+      "g{a2;a3}:A t{a1,a3;u2,i1}:A");
+
+  REQUIRE(expand_A_op(expr.expression()) == equivalent.expression());
+
+  SECTION("closed_shell") {
+    for (bool full_expansion : {false, true}) {
+      CAPTURE(full_expansion);
+      auto res_expr = closed_shell_spintrace(expr, full_expansion);
+      auto res_equiv = closed_shell_spintrace(equivalent, full_expansion);
+
+      REQUIRE(res_expr.size() == 1);
+      REQUIRE(res_equiv.size() == 1);
+      REQUIRE_THAT(res_expr.front(), EquivalentTo(res_equiv.front()));
+    }
+  }
+  SECTION("rigorous") {
+    auto res_expr = spintrace(expr);
+    auto res_equiv = spintrace(equivalent);
+
+    REQUIRE(res_expr.size() == 1);
+    REQUIRE(res_equiv.size() == 1);
+    REQUIRE_THAT(res_expr.front(), EquivalentTo(res_equiv.front()));
+  }
+  SECTION("consent") {
+    for (bool full_expansion : {false, true}) {
+      CAPTURE(full_expansion);
+      auto res_expr = closed_shell_spintrace(expr, full_expansion);
+      auto res_equiv = closed_shell_spintrace(equivalent, full_expansion);
+      auto res_expr_rig = spintrace(expr);
+      auto res_equiv_rig = spintrace(equivalent);
+
+      REQUIRE(res_expr.size() == 1);
+      REQUIRE(res_equiv.size() == 1);
+      REQUIRE(res_expr_rig.size() == 1);
+      REQUIRE(res_equiv_rig.size() == 1);
+
+      REQUIRE_THAT(res_expr.front(), EquivalentTo(res_expr_rig.front()));
+      REQUIRE_THAT(res_equiv.front(), EquivalentTo(res_equiv_rig.front()));
+    }
+  }
+}
+
 SECTION("Swap bra kets") {
   // Constant
   {

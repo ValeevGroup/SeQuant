@@ -655,7 +655,8 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
     }
   }
 
-  const auto nf = S ? rational{1, factorial(S->ket_rank())} : 1;
+  const rational nf = rational{
+      1, factorial(std::max(A_tensor.bra_rank(), A_tensor.ket_rank()))};
 
   // Generate replacement maps from a list of Index type (could be a bra or a
   // ket)
