@@ -269,6 +269,82 @@ TEST_CASE("expr", "[elements]") {
     }
   }
 
+  SECTION("mixed const/non-const iteration") {
+    // N.B. Sum folds Constant summands together, so use Variables to get a
+    // Sum that actually holds two subexpressions
+    auto e = ex<Sum>(ExprPtrList{ex<Variable>(L"x"), ex<Variable>(L"y")});
+
+    // a mutable iterator converts to a const iterator ...
+    ConstExprIterator cit = e->begin();
+    REQUIRE(cit == e->cbegin());
+    // ... but not the other way around
+    static_assert(!std::is_convertible_v<ConstExprIterator, ExprIterator>);
+
+    // ... and the two compare/subtract heterogeneously, in either order
+    REQUIRE(e->begin() == e->cbegin());
+    REQUIRE(e->cbegin() == e->begin());
+    REQUIRE(e->begin() != e->cend());
+    REQUIRE(e->cend() != e->begin());
+    REQUIRE(e->begin() < e->cend());
+    REQUIRE(e->cend() > e->begin());
+    REQUIRE(e->cend() - e->begin() == 2);
+    REQUIRE(e->begin() - e->cend() == -2);
+
+    // same via the free functions, which return different iterator types
+    REQUIRE(sequant::cbegin(e) != sequant::end(e));
+    REQUIRE(sequant::end(e) - sequant::cbegin(e) == 2);
+  }
+
+  SECTION("checked element access") {
+    // N.B. unlike operator[], at()/front()/back() must throw regardless of
+    // whether SEQUANT_ASSERT is enabled, so this also pins down the behavior
+    // of builds configured with SEQUANT_ASSERT_BEHAVIOR=IGNORE
+    auto sum = ex<Sum>(ExprPtrList{ex<Variable>(L"x"), ex<Variable>(L"y")});
+    const Expr &const_sum = *sum;
+
+    REQUIRE(sum->at(0) == ex<Variable>(L"x"));
+    REQUIRE(sum->at(1) == ex<Variable>(L"y"));
+    REQUIRE(sum->front() == ex<Variable>(L"x"));
+    REQUIRE(sum->back() == ex<Variable>(L"y"));
+    REQUIRE_THROWS_AS(sum->at(2), Exception);
+    REQUIRE_THROWS_AS(const_sum.at(2), Exception);
+    // ... including an index that used to be a negative one
+    REQUIRE_THROWS_AS(sum->at(static_cast<std::size_t>(-1)), Exception);
+
+    // atoms are empty, so every element access throws (in particular,
+    // back() must not compute `at(size() - 1)` == `at(SIZE_MAX)` unchecked)
+    auto atom = ex<Constant>(3);
+    const Expr &const_atom = *atom;
+    REQUIRE(atom->empty());
+    REQUIRE(atom->size() == 0);
+    REQUIRE_THROWS_AS(atom->at(0), Exception);
+    REQUIRE_THROWS_AS(atom->front(), Exception);
+    REQUIRE_THROWS_AS(atom->back(), Exception);
+    REQUIRE_THROWS_AS(const_atom.front(), Exception);
+    REQUIRE_THROWS_AS(const_atom.back(), Exception);
+  }
+
+  SECTION("hash invalidation on mutable iteration") {
+    // handing out a mutable iterator must invalidate the memoized hash no
+    // matter which end of the range it points at: `*(--end())` mutates just
+    // as `*begin()` does
+    auto check = [](ExprPtr expr, bool via_end) {
+      const auto hash_before = expr->hash_value();
+      // this is the only accessor called before the mutation, so it alone is
+      // responsible for invalidating the memoized hash
+      auto it = via_end ? expr->end() : expr->begin();
+      *(via_end ? std::prev(it) : it) = ex<Variable>(L"mutated");
+      REQUIRE(expr->hash_value() != hash_before);
+    };
+
+    for (bool via_end : {false, true}) {
+      check(ex<Sum>(ExprPtrList{ex<Variable>(L"x"), ex<Variable>(L"y")}),
+            via_end);
+      check(ex<Product>(ExprPtrList{ex<Variable>(L"x"), ex<Variable>(L"y")}),
+            via_end);
+    }
+  }
+
   SECTION("constant") {
     const auto ex = std::make_shared<Constant>(2);
     REQUIRE(ex->value() == 2);

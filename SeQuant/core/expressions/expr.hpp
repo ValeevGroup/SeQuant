@@ -334,19 +334,33 @@ class Expr : public std::enable_shared_from_this<Expr> {
 
   bool empty() const;
 
+  /// unchecked element access
+  /// @note the bounds check is only performed if `SEQUANT_ASSERT_ENABLED` is
+  ///       #defined; use at() for a bounds check that is always performed
   ExprPtr &operator[](std::size_t idx);
+  /// @copydoc operator[](std::size_t)
   const ExprPtr &operator[](std::size_t idx) const;
 
+  /// checked element access
+  /// @throw Exception if @p idx is not less than size()
   ExprPtr &at(std::size_t idx);
+  /// @copydoc at(std::size_t)
   const ExprPtr &at(std::size_t idx) const;
 
+  /// @throw Exception if this Expr is empty (e.g. is an atom)
   ExprPtr &front();
+  /// @copydoc front()
   const ExprPtr &front() const;
 
+  /// @throw Exception if this Expr is empty (e.g. is an atom)
   ExprPtr &back();
+  /// @copydoc back()
   const ExprPtr &back() const;
 
  private:
+  /// reports an out-of-range access by at()/front()/back()
+  [[noreturn]] void throw_out_of_range(std::size_t idx) const;
+
   template <
       typename E, typename Visitor,
       typename = std::enable_if_t<std::is_same_v<std::remove_cvref_t<E>, Expr>>>

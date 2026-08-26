@@ -8,6 +8,8 @@
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/product.hpp>
 
+#include <sstream>
+
 namespace sequant {
 
 ExprIterator Expr::begin() { return begin_subexpr(); }
@@ -44,9 +46,22 @@ const ExprPtr &Expr::operator[](std::size_t idx) const {
   return begin()[idx];
 }
 
-ExprPtr &Expr::at(std::size_t idx) { return (*this)[idx]; }
+void Expr::throw_out_of_range(std::size_t idx) const {
+  std::ostringstream oss;
+  oss << "Expr::at(" << idx << "): index out of range (size=" << size()
+      << ", type_name=" << type_name() << ")";
+  throw Exception(oss.str());
+}
 
-const ExprPtr &Expr::at(std::size_t idx) const { return (*this)[idx]; }
+ExprPtr &Expr::at(std::size_t idx) {
+  if (idx >= size()) throw_out_of_range(idx);
+  return begin()[static_cast<std::ptrdiff_t>(idx)];
+}
+
+const ExprPtr &Expr::at(std::size_t idx) const {
+  if (idx >= size()) throw_out_of_range(idx);
+  return begin()[static_cast<std::ptrdiff_t>(idx)];
+}
 
 ExprPtr &Expr::front() { return at(0); }
 
